@@ -21,6 +21,11 @@ final class ReconnectBackoffCoordinator {
     private(set) var attempt = 0
     private var pendingWork: DispatchWorkItem?
 
+    /// A reconnect waits for its delay; another request would only push it back.
+    var isReconnectPending: Bool {
+        return pendingWork != nil
+    }
+
     private init() {}
 
     func onConnectionRestored() {
@@ -99,6 +104,74 @@ final class ReconnectBackoffCoordinator {
         let exp = baseDelay * pow(2, Double(min(attemptIndex, 5)))
         let capped = min(exp, maxDelay)
         return capped + Double.random(in: 0...(capped * 0.1))
+    }
+}
+
+/// The offline watchdog (redesign stage 3, E4; TrifaToxService on Android): while our node stays
+/// offline on a phone that has a network, a reconnect is asked for every 15 seconds. The backoff alone
+/// only answered a network change or a rebootstrap that had just failed, and gave up after its twelve
+/// attempts, so a node that dropped while the network stayed up waited for toxcore's own slow retry.
+final class OfflineReconnectWatchdog {
+    static let interval: TimeInterval = 15
+
+    private let isOnline: () -> Bool
+    private let isReachable: () -> Bool
+    private let isReconnectPending: () -> Bool
+    private let requestReconnect: () -> Void
+    private var timer: Timer?
+    private(set) var offlineSince: Date?
+
+    init(isOnline: @escaping () -> Bool,
+         isReachable: @escaping () -> Bool,
+         isReconnectPending: @escaping () -> Bool = { ReconnectBackoffCoordinator.shared.isReconnectPending },
+         requestReconnect: @escaping () -> Void = {
+             ReconnectBackoffCoordinator.shared.scheduleReconnect(reason: .offlinePeriodic, urgent: false)
+         }) {
+        self.isOnline = isOnline
+        self.isReachable = isReachable
+        self.isReconnectPending = isReconnectPending
+        self.requestReconnect = requestReconnect
+    }
+
+    deinit {
+        timer?.invalidate()
+    }
+
+    func start() {
+        stop()
+        let timer = Timer(timeInterval: OfflineReconnectWatchdog.interval / 3, repeats: true) { [weak self] _ in
+            self?.check(now: Date())
+        }
+        RunLoop.main.add(timer, forMode: .commonModes)
+        self.timer = timer
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+        offlineSince = nil
+    }
+
+    /// One look at the node; true when it asked for a reconnect. The clock starts when the node is
+    /// first seen offline with a network, and starts again after each request.
+    @discardableResult
+    func check(now: Date) -> Bool {
+        guard !isOnline(), isReachable() else {
+            // Online, or no network at all: the network's return is a path change of its own.
+            offlineSince = nil
+            return false
+        }
+        guard let since = offlineSince else {
+            offlineSince = now
+            return false
+        }
+        guard now.timeIntervalSince(since) >= OfflineReconnectWatchdog.interval, !isReconnectPending() else {
+            return false
+        }
+        offlineSince = now
+        NetworkDiagnosticsLog.log("offline_watchdog", detail: "reconnect")
+        requestReconnect()
+        return true
     }
 }
 

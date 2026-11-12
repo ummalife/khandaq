@@ -130,7 +130,7 @@
 
         <activity
             android:name="com.zoffcc.applications.trifa.StartMainActivityWrapper"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:launchMode="singleTask"
             android:theme="@style/SplashTheme"
             android:exported="true">
@@ -142,24 +142,17 @@
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.MainActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:launchMode="singleTask">
         </activity>
         <activity
-            android:name="com.zoffcc.applications.trifa.AddFriendActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
-            android:label="@string/add_friend_activity_name"
-            android:windowSoftInputMode="adjustResize"
-            >
-        </activity>
-        <activity
             android:name="com.zoffcc.applications.trifa.ProfileFieldEditActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
         <activity
             android:name="com.zoffcc.applications.trifa.QrScanActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:exported="false"
             android:screenOrientation="portrait"
             android:theme="@style/QrScanTheme"
@@ -167,41 +160,41 @@
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.AddPrivateGroupActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:label="@string/add_group_activity_name"
             android:windowSoftInputMode="adjustResize"
             >
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.AddPublicGroupActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:label="@string/add_public_group_activity_name"
             android:windowSoftInputMode="adjustResize"
             >
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.JoinPublicGroupActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:label="@string/join_public_activity_name"
             android:windowSoftInputMode="adjustResize"
             >
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.MessageListActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize"
             android:label="@string/message_list_activity_name">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.ConferenceMessageListActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:windowSoftInputMode="adjustResize"
             android:label="@string/conference_message_list_activity_name">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.GroupMessageListActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize"
             android:label="@string/group_message_list_activity_name">
@@ -209,18 +202,18 @@
         <!-- KHANDAQ (#34): global search across all chats/groups + messages -->
         <activity
             android:name="com.zoffcc.applications.trifa.GlobalSearchActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:launchMode="singleTop"
             android:windowSoftInputMode="stateVisible|adjustResize" />
 
         <activity
             android:name="com.zoffcc.applications.trifa.ConferenceAudioActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:label="@string/conference_audio_activity_name">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.ConfGroupAudioPlayer"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:label="@string/conference_audio_activity_player_name">
         </activity>
         <activity
@@ -246,69 +239,102 @@
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.ProfileActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:label="@string/title_activity_profile">
         </activity>
+        <!-- KHANDAQ (redesign, block): Settings > Privacy > Blocked. -->
         <activity
-            android:name="com.zoffcc.applications.trifa.ProfileDetailsActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
-            android:theme="@style/AppTheme" />
-        <activity
-            android:name="com.zoffcc.applications.trifa.ChangePasswordActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:name="com.zoffcc.applications.trifa.AirBlockedActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:exported="false"
             android:theme="@style/AppTheme" />
         <activity
+            android:name="com.zoffcc.applications.trifa.AirNewContactActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
+            android:exported="false"
+            android:theme="@style/AppTheme"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name="com.zoffcc.applications.trifa.AirNetworkActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
+        <activity
+            android:name="com.zoffcc.applications.trifa.AirGroupDossierActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
+            android:exported="false"
+            android:theme="@style/AppTheme"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name="com.zoffcc.applications.trifa.AirNewGroupActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
+            android:exported="false"
+            android:theme="@style/AppTheme"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name="com.zoffcc.applications.trifa.ProfileDetailsActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
+            android:theme="@style/AppTheme" />
+        <activity
+            android:name="com.zoffcc.applications.trifa.ChangePasswordActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
+            android:exported="false"
+            android:theme="@style/AppTheme"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
             android:name="com.zoffcc.applications.trifa.PinActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:exported="false"
             android:theme="@style/AppTheme" />
         <activity
             android:name="com.zoffcc.applications.trifa.CrashActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:label="@string/title_activity_crash">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.FriendInfoActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:label="@string/title_activity_friendinfo">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.ConferenceInfoActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:label="@string/title_activity_conferenceinfo">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.GroupInfoActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
-            android:label="@string/title_activity_groupinfo">
-        </activity>
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
+            android:exported="false"
+            android:label="@string/air_group_settings"
+            android:theme="@style/AppTheme"
+            android:windowSoftInputMode="adjustResize" />
         <activity
             android:name="com.zoffcc.applications.trifa.ConferencePeerInfoActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:label="@string/title_activity_conferencepeerinfo">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.GroupPeerInfoActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
-            android:label="@string/title_activity_grouppeerinfo">
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
+            android:label="@string/title_activity_grouppeerinfo"
+            android:windowSoftInputMode="adjustResize">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.ImageviewerActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden">
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.ImageviewerActivity_SD"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden">
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.MediaViewerActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:theme="@style/KhandaqMediaTheme">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.MediaSendPreviewActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:theme="@style/KhandaqMediaTheme">
         </activity>
         <!-- uCrop (avatar crop): the library AAR does NOT declare its activity; without this
@@ -326,48 +352,62 @@
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.TrifaSetPatternActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden">
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.TrifaCheckPatternActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden">
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.OnboardingActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:launchMode="singleTask"
             android:theme="@style/AppTheme">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.ImportProfileInfoActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:launchMode="singleTask"
             android:theme="@style/AppTheme">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.SetPasswordActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:label="@string/title_activity_set_password"
             android:launchMode="singleTask">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.CreateProfileActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
         <activity
             android:name="com.zoffcc.applications.trifa.CheckPasswordActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:label="@string/title_activity_check_password"
-            android:launchMode="singleTask">
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize">
         </activity>
+        <!-- KHANDAQ (redesign stage 4, E19): first launch, its name and password steps, and "Your ID is ready". -->
+        <activity
+            android:name="com.zoffcc.applications.trifa.AirFirstLaunchActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@style/AppTheme"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name="com.zoffcc.applications.trifa.AirIdReadyActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
         <activity
             android:name="com.zoffcc.applications.trifa.FriendSelectSingleActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden">
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.SelectLanguageActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden">
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.NotificationRingtoneSettingsActivity"
@@ -397,7 +437,7 @@
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.ShareActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:excludeFromRecents="true"
             android:label="@string/title_activity_share"
             android:launchMode="singleTask"
@@ -448,7 +488,7 @@
 
         <activity
             android:name="com.zoffcc.applications.trifa.AudioRoundtripActivity"
-            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:excludeFromRecents="true"
             android:launchMode="singleTask"
             android:windowSoftInputMode="stateHidden">

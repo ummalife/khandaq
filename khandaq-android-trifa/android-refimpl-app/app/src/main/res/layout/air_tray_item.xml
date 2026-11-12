@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    KHANDAQ (redesign, stage 2): one message of the "In transit" tray, laid out like an entry of the
+    transcript (AirEntryRowView on iOS): the time column, two lines of the text, the status mark.
+    A tap offers to edit or cancel it while it has not left.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/air_bg_row"
+    android:clickable="true"
+    android:focusable="true"
+    android:minHeight="@dimen/kq_size_control"
+    android:orientation="horizontal">
+
+    <TextView
+        android:id="@+id/air_tray_item_time"
+        android:layout_width="@dimen/kq_size_time_column_phone"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/kq_space_4"
+        android:fontFeatureSettings="tnum"
+        android:importantForAccessibility="no"
+        android:maxLines="1"
+        android:textAlignment="viewStart"
+        android:textAppearance="@style/TextAppearance.KQ.Caption"
+        android:textColor="@color/kq_ink_3" />
+
+    <TextView
+        android:id="@+id/air_tray_item_text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/kq_space_10"
+        android:layout_marginTop="@dimen/kq_space_4"
+        android:layout_marginEnd="@dimen/kq_space_10"
+        android:layout_marginBottom="@dimen/kq_space_4"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:importantForAccessibility="no"
+        android:maxLines="2"
+        android:textAlignment="viewStart"
+        android:textAppearance="@style/TextAppearance.KQ.Body"
+        android:textColor="@color/kq_ink" />
+
+    <ImageView
+        android:id="@+id/air_tray_item_mark"
+        android:layout_width="@dimen/kq_size_mark"
+        android:layout_height="@dimen/kq_size_mark"
+        android:layout_marginTop="@dimen/kq_space_6"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:padding="1dp"
+        android:scaleType="fitCenter" />
+</LinearLayout>

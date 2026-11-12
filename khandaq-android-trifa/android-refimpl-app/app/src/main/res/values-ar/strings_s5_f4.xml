@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Battery (redesign, stage 5): asked once from below, after the first launch and never over it -->
+    <string name="air_battery_question">هل تسمح لـ Khandaq بالعمل في الخلفية؟</string>
+    <string name="air_battery_consequence">لتوفير البطارية قد يوقف Android تطبيق Khandaq مؤقتًا في الخلفية، فتصل الرسائل الجديدة متأخرة. في القائمة التي تُفتح، اختر Khandaq وأوقف تحسين البطارية له.</string>
+    <string name="air_battery_open">فتح إعدادات البطارية</string>
+
+    <!-- Move a profile (redesign, stage 5): the transfer dialogs of Settings as sheets from below -->
+    <string name="air_transfer_import_question">استبدال هذا الملف الشخصي بآخر من ملف؟</string>
+    <string name="air_transfer_backup_verb">إنشاء نسخة احتياطية مشفرة</string>
+    <string name="air_transfer_plain_verb">تصدير ملف &#x200E;.tox عادي</string>
+    <string name="air_backup_choose_place">اختيار مكان الحفظ</string>
+    <string name="air_import_wait">سيتوقف Khandaq، ويضع الملف الشخصي الذي في الملف مكان هذا الملف الشخصي، ثم يفتح من جديد به.</string>
+</resources>

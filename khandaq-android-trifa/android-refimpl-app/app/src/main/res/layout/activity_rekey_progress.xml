@@ -1,34 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- KHANDAQ (#10): shown while the profile databases are being re-encrypted with the new password. -->
+<!-- KHANDAQ (#10, redesign stage 4): shown at the next start while the profile is encrypted with the new
+     password. A busy state is a still dot and words; the brief bans endless animation, so no spinner.
+     When the change was rolled back, the same page says so at the operation and waits for Continue. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/onboarding_form_bg"
+    android:background="@color/kq_bg"
     android:gravity="center"
     android:orientation="vertical"
-    android:padding="32dp">
+    android:paddingStart="@dimen/kq_space_24"
+    android:paddingEnd="@dimen/kq_space_24">
 
-    <ProgressBar
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:indeterminateTint="@color/khandaq_teal" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
-        android:gravity="center"
-        android:text="@string/cp_rekey_running"
-        android:textColor="@color/onboarding_title"
-        android:textSize="16sp" />
+    <View
+        android:id="@+id/rekey_dot"
+        android:layout_width="@dimen/kq_size_dot"
+        android:layout_height="@dimen/kq_size_dot"
+        android:background="@drawable/air_bg_dot"
+        android:backgroundTint="@color/kq_ink_3"
+        android:importantForAccessibility="no" />
 
     <TextView
+        android:id="@+id/rekey_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="@dimen/kq_space_16"
+        android:accessibilityLiveRegion="polite"
         android:gravity="center"
-        android:text="@string/cp_rekey_running_hint"
-        android:textColor="@color/onboarding_hint"
-        android:textSize="13sp" />
+        android:text="@string/air_rekey_running"
+        android:textAppearance="@style/TextAppearance.KQ.Heading"
+        android:textColor="@color/kq_ink" />
+
+    <TextView
+        android:id="@+id/rekey_note"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/kq_space_8"
+        android:gravity="center"
+        android:text="@string/air_rekey_running_note"
+        android:textAppearance="@style/TextAppearance.KQ.Body"
+        android:textColor="@color/kq_ink_2" />
+
+    <TextView
+        android:id="@+id/rekey_continue"
+        style="@style/Widget.KQ.Air.Button.Ink"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/kq_space_24"
+        android:text="@string/air_rekey_continue"
+        android:visibility="gone" />
 
 </LinearLayout>

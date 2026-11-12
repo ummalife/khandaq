@@ -120,6 +120,16 @@ docs/**
 # check-policy-claims.py сверяет политику конфиденциальности там, где сборки нет (CI).
 !docs/android-merge-injected-permissions.txt
 
+# KHANDAQ (redesign 2026-11): the design language is public and tracked (design/DESIGN.md,
+# design/check.sh, design/system/). The working record behind it stays on the designer's machine,
+# like docs/**: the plan and the audit are internal, and the 60+ MB of before/after screenshots and
+# the captures of other products' pages are not ours to publish.
+design/redesign/
+# design/system/dist/ is the design system's generated output (tokens.css, tokens.js), not a
+# distribution binary: build.py --check compares it with tokens.json in CI, and the site and the store
+# frames copy from it. The dist/ rule above would leave it out of every checkout.
+!design/system/dist/
+
 # Ops scripts with credential patterns (use SSH keys locally)
 scripts/deploy-bootstrap-remote.sh
 scripts/remote-node-audit.sh

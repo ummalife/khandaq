@@ -18,16 +18,32 @@ class ProfileTabCoordinator: ActiveSessionNavigationCoordinator, UIAdaptivePrese
 
     fileprivate weak var toxManager: OCTManager!
 
-    init(theme: Theme, toxManager: OCTManager) {
+    /// `navigationController`: on the phone the stack is shared with the Air screen at its root.
+    init(theme: Theme, toxManager: OCTManager, navigationController: UINavigationController? = nil) {
         self.toxManager = toxManager
 
-        super.init(theme: theme)
+        if let navigationController = navigationController {
+            super.init(theme: theme, navigationController: navigationController)
+        }
+        else {
+            super.init(theme: theme)
+        }
     }
 
     override func startWithOptions(_ options: CoordinatorOptions?) {
+        installRootViewController(makeMainController())
+    }
+
+    /// The phone has no tabs: "You" opens above the Air screen in the shared stack.
+    func pushProfile(animated: Bool) {
+        navigationController.popToRootViewController(animated: false)
+        navigationController.pushViewController(makeMainController(), animated: animated)
+    }
+
+    private func makeMainController() -> ProfileMainController {
         let controller = ProfileMainController(theme: theme, submanagerUser: toxManager.user)
         controller.delegate = self
-        installRootViewController(controller)
+        return controller
     }
 }
 
@@ -40,46 +56,12 @@ extension ProfileTabCoordinator: ProfileMainControllerDelegate {
         delegate?.profileTabCoordinatorDelegateLogout(self)
     }
 
-    func profileMainControllerChangeUserName(_ controller: ProfileMainController) {
-        showTextEditController(title: String(localized: "name"), defaultValue: toxManager.user.userName() ?? "") {
-            [unowned self] newName -> Void in
-
-            do {
-                try self.toxManager.user.setUserName(newName)
-                self.delegate?.profileTabCoordinatorDelegateDidChangeUserName(self)
-            }
-            catch let error as NSError {
-                handleErrorWithType(.toxSetInfoCodeName, error: error)
-            }
-        }
+    func profileMainControllerDeleteProfile(_ controller: ProfileMainController) {
+        delegate?.profileTabCoordinatorDelegateDeleteProfile(self)
     }
 
-    func profileMainControllerChangeUserStatus(_ controller: ProfileMainController) {
-        let controller = ChangeUserStatusController(theme: theme, selectedStatus: toxManager.user.userStatus)
-        controller.delegate = self
-        navigationController.pushViewController(controller, animated: true)
-    }
-
-    func profileMainControllerChangeStatusMessage(_ controller: ProfileMainController) {
-        showTextEditController(title: String(localized: "status_message"), defaultValue: toxManager.user.userStatusMessage() ?? "", multiline: true) {
-            newStatusMessage -> Void in
-
-            do {
-                try self.toxManager.user.setUserStatusMessage(newStatusMessage)
-            }
-            catch let error as NSError {
-                handleErrorWithType(.toxSetInfoCodeStatusMessage, error: error)
-            }
-        }
-    }
-
-    func profileMainController(_ controller: ProfileMainController, showQRCodeWithText text: String) {
-        let controller = QRViewerController(theme: theme, text: text)
-        controller.delegate = self
-
-        let toPresent = UINavigationController(rootViewController: controller)
-
-        navigationController.present(toPresent, animated: true, completion: nil)
+    func profileMainControllerDidChangeUserName(_ controller: ProfileMainController) {
+        delegate?.profileTabCoordinatorDelegateDidChangeUserName(self)
     }
 
     func profileMainControllerShowProfileDetails(_ controller: ProfileMainController) {
@@ -118,6 +100,8 @@ extension ProfileTabCoordinator: ProfileDetailsControllerDelegate {
     func profileDetailsControllerSetPin(_ controller: ProfileDetailsController) {
         let controller = EnterPinController(theme: theme, state: .setPin)
         controller.topText = String(localized: "pin_set")
+        // What a forgotten PIN means, said before it is set (E20).
+        controller.descriptionText = String(localized: "air_pin_set_note")
         controller.delegate = self
         controller.closeHandler = makePinSheetCloseHandler()
 
@@ -145,9 +129,6 @@ extension ProfileTabCoordinator: ProfileDetailsControllerDelegate {
         navigationController.present(toPresent, animated: true, completion: nil)
     }
 
-    func profileDetailsControllerDeleteProfile(_ controller: ProfileDetailsController) {
-        delegate?.profileTabCoordinatorDelegateDeleteProfile(self)
-    }
 }
 
 extension ProfileTabCoordinator: EnterPinControllerDelegate {
@@ -184,6 +165,7 @@ extension ProfileTabCoordinator: EnterPinControllerDelegate {
 
         let setPin = EnterPinController(theme: theme, state: .setPin)
         setPin.topText = String(localized: "pin_do_not_match")
+        setPin.descriptionText = String(localized: "air_pin_set_note")
         setPin.delegate = self
         setPin.closeHandler = makePinSheetCloseHandler()
 
@@ -204,19 +186,5 @@ extension ProfileTabCoordinator: EnterPinControllerDelegate {
 extension ProfileTabCoordinator: ChangePinTimeoutControllerDelegate {
     func changePinTimeoutControllerDone(_ controller: ChangePinTimeoutController) {
         navigationController.popViewController(animated: true)
-    }
-}
-
-private extension ProfileTabCoordinator {
-    func showTextEditController(title: String, defaultValue: String, multiline: Bool = false, setValueClosure: @escaping (String) -> Void) {
-        let controller = TextEditController(theme: theme, title: title, defaultValue: defaultValue, multiline: multiline, changeTextHandler: {
-            newName -> Void in
-
-            setValueClosure(newName)
-        }, userFinishedEditing: { [unowned self] in
-            self.navigationController.popViewController(animated: true)
-        })
-
-        navigationController.pushViewController(controller, animated: true)
     }
 }

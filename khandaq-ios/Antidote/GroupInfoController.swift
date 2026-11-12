@@ -2,938 +2,40 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import UIKit
 import SnapKit
+import UIKit
 
-private enum GroupInfoSection: Int {
-    case topic = 0
-    case password = 1
-    case topicLock = 2
-    case privacy = 3
-    case voice = 4
-    case peerLimit = 5
-    case chatId = 6
-    case notifications = 7
-    case invite = 8
-    case members = 9
-    case danger = 10
-}
-
-class GroupInfoController: UIViewController {
+/// "Group settings", opened from the group dossier (E14), as the screens of Settings are drawn: your
+/// name in this group and the topic, then who can join (with the password and the member limit) and
+/// who can write (with who changes the topic). The founder changes the last two; everyone else sees
+/// what they are and who changes them. The dossier keeps the members, the key, notifications, the
+/// history and "Leave the group". The calls to objcTox are the ones the old screen made.
+final class GroupInfoController: AirScrollController {
     let chat: OCTChat
 
-    fileprivate let theme: Theme
-    fileprivate weak var submanagerGroups: OCTSubmanagerGroups!
-    fileprivate weak var submanagerObjects: OCTSubmanagerObjects!
-    fileprivate weak var submanagerChats: OCTSubmanagerChats!
-    fileprivate weak var submanagerFiles: OCTSubmanagerFiles!
-    fileprivate weak var submanagerFriends: OCTSubmanagerFriends!
+    private weak var submanagerGroups: OCTSubmanagerGroups!
 
-    fileprivate var tableView: UITableView!
-    fileprivate var peers: Results<OCTGroupPeer>
-    fileprivate var peersToken: RLMNotificationToken?
-    fileprivate var chatIdHex: String = ""
-    fileprivate var topicText: String = ""
-    fileprivate var passwordText: String = ""
-    fileprivate var topicLockEnabled: Bool = false
-    fileprivate var privacyIsPrivate: Bool = false
-    fileprivate var voiceState: OCTToxGroupVoiceState = .all
-    fileprivate var peerLimitValue: Int32 = kOCTDefaultGroupPeerLimit
-    fileprivate var canEditTopic: Bool = true
-    fileprivate var selfRole: OCTToxGroupRole = .user
-    fileprivate var isFounder: Bool = false
-    fileprivate var systemMessageCount: Int = 0
-    fileprivate var myPeerNameText: String = ""
+    private var selfName = ""
+    private var topic = ""
+    private var canEditTopic = false
+    private var isFounder = false
+    private var privacy: AirGroupPrivacy = .inviteOnly
+    private var voice: OCTToxGroupVoiceState = .all
+    private var topicLocked = false
+    private var hasPassword = false
+    private var peerLimit: Int32 = kOCTDefaultGroupPeerLimit
 
-    init(theme: Theme,
-         chat: OCTChat,
-         submanagerGroups: OCTSubmanagerGroups,
-         submanagerObjects: OCTSubmanagerObjects,
-         submanagerChats: OCTSubmanagerChats,
-         submanagerFiles: OCTSubmanagerFiles,
-         submanagerFriends: OCTSubmanagerFriends) {
-        self.theme = theme
+    private var privacyRows: [AirChoiceRow] = []
+    private var voiceRows: [AirChoiceRow] = []
+    private let joinFailure = AirKit.note("")
+    private let writeFailure = AirKit.note("")
+
+    init(chat: OCTChat, submanagerGroups: OCTSubmanagerGroups) {
         self.chat = chat
         self.submanagerGroups = submanagerGroups
-        self.submanagerObjects = submanagerObjects
-        self.submanagerChats = submanagerChats
-        self.submanagerFiles = submanagerFiles
-        self.submanagerFriends = submanagerFriends
-        self.peers = Results<OCTGroupPeer>(results: submanagerGroups.peers(for: chat))
-
         super.init(nibName: nil, bundle: nil)
-
-        title = chat.groupName ?? String(localized: "group_info_title")
-        edgesForExtendedLayout = UIRectEdge()
-    }
-
-    required convenience init?(coder aDecoder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    deinit {
-        peersToken?.invalidate()
-    }
-
-    override func loadView() {
-        loadViewWithBackgroundColor(theme.colorForType(.NormalBackground))
-
-        tableView = UITableView(frame: .zero, style: .grouped)
-        tableView.backgroundColor = theme.colorForType(.NormalBackground)
-        tableView.delegate = self
-        tableView.dataSource = self
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
-        view.addSubview(tableView)
-
-        tableView.snp.makeConstraints {
-            $0.edges.equalTo(view)
-        }
-    }
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-
-        peersToken = peers.addNotificationBlock { [weak self] _ in
-            self?.tableView?.reloadData()
-        }
-    }
-
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-    }
-
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        reloadGroupInfo()
-    }
-}
-
-extension GroupInfoController: UITableViewDataSource {
-    func numberOfSections(in tableView: UITableView) -> Int {
-        return 11
-    }
-
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        switch GroupInfoSection(rawValue: section)! {
-            case .topic:
-                return chat.groupNumber >= 0 ? 2 : 1
-            case .password:
-                return isFounder ? 1 : 0
-            case .topicLock:
-                return isFounder ? 1 : 0
-            case .privacy:
-                return isFounder ? 1 : 0
-            case .voice:
-                return isFounder ? 1 : 0
-            case .peerLimit:
-                return isFounder ? 1 : 0
-            case .chatId:
-                // KHANDAQ: hide the group chat-id section. Joining by chat-id needs UDP peer
-                // discovery (blocked on target networks); members are only added manually via
-                // friend-invite, so a non-functional ID just confuses users.
-                return 0
-            case .notifications:
-                return 1
-            case .invite:
-                return chat.groupNumber >= 0 ? 1 : 0
-            case .members:
-                return max(peers.count, 1)
-            case .danger:
-                return chat.groupNumber >= 0 ? 3 : 0
-        }
-    }
-
-    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        switch GroupInfoSection(rawValue: section)! {
-            case .topic:
-                return String(localized: "group_topic_header")
-            case .password:
-                return isFounder ? String(localized: "group_password_header") : nil
-            case .topicLock:
-                return isFounder ? String(localized: "group_topic_lock_header") : nil
-            case .privacy:
-                return isFounder ? String(localized: "group_privacy_header") : nil
-            case .voice:
-                return isFounder ? String(localized: "group_voice_header") : nil
-            case .peerLimit:
-                return isFounder ? String(localized: "group_peer_limit_header") : nil
-            case .chatId:
-                return nil // KHANDAQ: chat-id section hidden (see numberOfRows)
-            case .notifications:
-                return String(localized: "group_notifications_header")
-            case .invite:
-                return nil
-            case .members:
-                // KHANDAQ (#49): online from onlineGroupPeerCount so it matches the drawer + list row.
-                let online = Int(submanagerGroups.onlineGroupPeerCount(for: chat))
-                let total = displayMemberCount()
-                if total > online && online > 0 {
-                    // KHANDAQ (#9): show total · online from toxcore's NGC-synced counts so every
-                    // client agrees (parity with Android).
-                    return String(localized: "group_members_header_online_format", total, online)
-                }
-                if total > 0 {
-                    return String(localized: "group_members_header_format", total)
-                }
-                return String(localized: "group_members_header")
-            case .danger:
-                return String(localized: "group_danger_header")
-        }
-    }
-
-    func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        switch GroupInfoSection(rawValue: section)! {
-            case .topic:
-                if topicLockEnabled {
-                    if canEditTopic && selfRole == .moderator {
-                        return String(localized: "group_topic_footer_locked_moderator")
-                    }
-                    if !canEditTopic {
-                        return String(localized: "group_topic_footer_no_permission")
-                    }
-                    return String(localized: "group_topic_footer_locked")
-                }
-                return String(localized: "group_topic_footer")
-            case .password:
-                return String(localized: "group_password_footer")
-            case .topicLock:
-                return String(localized: "group_topic_lock_footer")
-            case .privacy:
-                return String(localized: "group_privacy_footer")
-            case .voice:
-                return String(localized: "group_voice_footer")
-            case .peerLimit:
-                if submanagerGroups.isGroupAtPeerCapacity(for: chat) {
-                    return String(localized: "group_peer_limit_at_capacity_footer")
-                }
-                return String(localized: "group_peer_limit_footer")
-            case .chatId:
-                return nil // KHANDAQ: chat-id section hidden (see numberOfRows)
-            case .danger:
-                if systemMessageCount > 0 {
-                    return String(localized: "group_danger_footer_with_system_format", systemMessageCount)
-                }
-                return String(localized: "group_danger_footer")
-            default:
-                return nil
-        }
-    }
-
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-        cell.backgroundColor = theme.colorForType(.SettingsBackground)
-        cell.textLabel?.textColor = theme.colorForType(.NormalText)
-        cell.detailTextLabel?.textColor = theme.colorForType(.FriendCellStatus)
-        cell.selectionStyle = .default
-        cell.accessoryView = nil
-        cell.accessoryType = .none
-        cell.textLabel?.text = nil
-        cell.detailTextLabel?.text = nil
-
-        switch GroupInfoSection(rawValue: indexPath.section)! {
-            case .topic:
-                cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .body)
-                cell.textLabel?.numberOfLines = 2
-                if indexPath.row == 0 {
-                    cell.textLabel?.text = topicText.isEmpty ? String(localized: "group_topic_placeholder") : topicText
-                    cell.accessoryType = canEditTopic ? .disclosureIndicator : .none
-                    cell.selectionStyle = canEditTopic ? .default : .none
-                    cell.textLabel?.textColor = canEditTopic ? theme.colorForType(.NormalText) : theme.colorForType(.FriendCellStatus)
-                }
-                else {
-                    cell.textLabel?.numberOfLines = 1
-                    cell.textLabel?.text = myPeerNameText.isEmpty ? String(localized: "group_my_peer_name_placeholder") : myPeerNameText
-                    cell.accessoryType = .disclosureIndicator
-                    cell.selectionStyle = .default
-                    cell.textLabel?.textColor = theme.colorForType(.NormalText)
-                }
-            case .password:
-                cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .body)
-                cell.textLabel?.text = passwordText.isEmpty ? String(localized: "group_password_placeholder") : String(repeating: "•", count: min(passwordText.count, 12))
-                cell.accessoryType = .disclosureIndicator
-            case .topicLock:
-                cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .body)
-                cell.textLabel?.text = String(localized: "group_topic_lock_label")
-                cell.selectionStyle = .none
-                let toggle = UISwitch()
-                toggle.isOn = topicLockEnabled
-                toggle.addTarget(self, action: #selector(GroupInfoController.groupTopicLockToggled(_:)), for: .valueChanged)
-                cell.accessoryView = toggle
-            case .privacy:
-                cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .body)
-                cell.textLabel?.text = String(localized: "group_privacy_private_label")
-                cell.selectionStyle = .none
-                let privacyToggle = UISwitch()
-                privacyToggle.isOn = privacyIsPrivate
-                privacyToggle.addTarget(self, action: #selector(GroupInfoController.groupPrivacyToggled(_:)), for: .valueChanged)
-                cell.accessoryView = privacyToggle
-            case .voice:
-                cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .body)
-                cell.textLabel?.text = String(localized: "group_voice_header")
-                cell.detailTextLabel?.text = voiceState.localizedName
-                cell.accessoryType = .disclosureIndicator
-            case .peerLimit:
-                cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .body)
-                cell.textLabel?.text = String(localized: "group_peer_limit_value_format", Int(peerLimitValue))
-                cell.accessoryType = .disclosureIndicator
-            case .chatId:
-                cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .footnote)
-                cell.textLabel?.numberOfLines = 0
-                if indexPath.row == 0 {
-                    cell.textLabel?.text = chatIdHex.isEmpty ? String(localized: "group_chat_id_loading") : chatIdHex
-                    cell.accessoryType = chatIdHex.isEmpty ? .none : .disclosureIndicator
-                }
-                else {
-                    cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .body)
-                    cell.textLabel?.numberOfLines = 1
-                    cell.textLabel?.text = String(localized: "group_show_invite_qr")
-                    cell.textLabel?.textColor = theme.colorForType(.LinkText)
-                    cell.accessoryType = .disclosureIndicator
-                }
-            case .notifications:
-                cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .body)
-                cell.textLabel?.numberOfLines = 1
-                cell.textLabel?.text = String(localized: "group_notifications_mute")
-                cell.selectionStyle = .none
-                let toggle = UISwitch()
-                toggle.isOn = chat.groupNotificationsSilent
-                toggle.addTarget(self, action: #selector(GroupInfoController.groupNotificationsToggled(_:)), for: .valueChanged)
-                cell.accessoryView = toggle
-            case .invite:
-                cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .body)
-                cell.textLabel?.numberOfLines = 1
-                cell.textLabel?.text = String(localized: "group_invite_friend_action")
-                cell.textLabel?.textColor = theme.colorForType(.LinkText)
-                cell.accessoryType = .disclosureIndicator
-            case .members:
-                // KHANDAQ (#40/#61): bounds-checked — the live peer list can shrink under the table.
-                if let peer = peers.object(at: indexPath.row) {
-                    cell.textLabel?.text = peer.peerName ?? String(localized: "group_peer_fallback_format", peer.peerId)
-                    cell.detailTextLabel?.text = peerDetailSubtitle(for: peer)
-                    cell.accessoryType = .disclosureIndicator
-                }
-                else {
-                    cell.textLabel?.text = String(localized: "group_members_empty")
-                    cell.selectionStyle = .none
-                }
-            case .danger:
-                cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .body)
-                switch indexPath.row {
-                    case 0:
-                        cell.textLabel?.text = String(localized: "group_clear_history_action")
-                        cell.textLabel?.textColor = theme.colorForType(.NormalText)
-                    case 1:
-                        cell.textLabel?.text = String(localized: "group_delete_system_msgs_action")
-                        if systemMessageCount > 0 {
-                            cell.detailTextLabel?.text = String(localized: "group_delete_system_msgs_count_format", systemMessageCount)
-                            cell.textLabel?.textColor = theme.colorForType(.NormalText)
-                        }
-                        else {
-                            cell.textLabel?.textColor = theme.colorForType(.FriendCellStatus)
-                        }
-                    default:
-                        cell.textLabel?.text = String(localized: "group_leave_action")
-                        cell.textLabel?.textColor = .systemRed
-                }
-                cell.selectionStyle = .default
-        }
-
-        return cell
-    }
-}
-
-extension GroupInfoController: UITableViewDelegate {
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
-
-        switch GroupInfoSection(rawValue: indexPath.section)! {
-            case .topic:
-                if indexPath.row == 0 {
-                    if canEditTopic {
-                        presentTopicEditor()
-                    }
-                }
-                else {
-                    presentMyPeerNameEditor()
-                }
-            case .password:
-                presentPasswordEditor()
-            case .topicLock:
-                break
-            case .privacy:
-                break
-            case .voice:
-                presentVoiceStatePicker()
-            case .peerLimit:
-                presentPeerLimitEditor()
-            case .chatId:
-                if indexPath.row == 1 {
-                    presentInviteQR()
-                    return
-                }
-
-                guard !chatIdHex.isEmpty else {
-                    return
-                }
-
-                let alert = UIAlertController(title: String(localized: "group_chat_id_header"), message: chatIdHex, preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: String(localized: "copy"), style: .default) { _ in
-                    UIPasteboard.general.string = self.chatIdHex
-                })
-                alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-                present(alert, animated: true, completion: nil)
-            case .notifications:
-                break
-            case .invite:
-                presentInviteFriendPicker()
-            case .members:
-                // KHANDAQ (#40/#61): bounds-checked — avoid trapping if the row index is stale.
-                guard let peer = peers.object(at: indexPath.row) else {
-                    return
-                }
-
-                presentPeerActions(for: peer, at: indexPath)
-            case .danger:
-                switch indexPath.row {
-                    case 0:
-                        confirmClearHistory()
-                    case 1:
-                        confirmDeleteSystemMessages()
-                    default:
-                        confirmLeaveGroup()
-                }
-        }
-    }
-}
-
-private extension GroupInfoController {
-    @objc func groupNotificationsToggled(_ sender: UISwitch) {
-        submanagerGroups.setGroupNotificationsSilent(sender.isOn, for: chat)
-    }
-
-    @objc func groupTopicLockToggled(_ sender: UISwitch) {
-        let lock: OCTToxGroupTopicLock = sender.isOn ? .enabled : .disabled
-
-        do {
-            try submanagerGroups.setGroupTopicLock(lock, for: chat)
-            topicLockEnabled = sender.isOn
-            canEditTopic = submanagerGroups.canEditGroupTopic(in: chat)
-            tableView.reloadSections(IndexSet(integer: GroupInfoSection.topic.rawValue), with: .none)
-        }
-        catch let error as NSError {
-            sender.isOn = topicLockEnabled
-            handleErrorWithType(.setGroupTopicLock, error: error)
-        }
-    }
-
-    @objc func groupPrivacyToggled(_ sender: UISwitch) {
-        let state: OCTToxGroupPrivacyState = sender.isOn ? .private : .public
-
-        do {
-            try submanagerGroups.setGroupPrivacyState(state, for: chat)
-            privacyIsPrivate = sender.isOn
-        }
-        catch let error as NSError {
-            sender.isOn = privacyIsPrivate
-            handleErrorWithType(.setGroupPrivacy, error: error)
-        }
-    }
-
-    func presentVoiceStatePicker() {
-        let alert = UIAlertController(title: String(localized: "group_voice_header"), message: nil, preferredStyle: .actionSheet)
-
-        let states: [OCTToxGroupVoiceState] = [.all, .moderator, .founder]
-        for state in states {
-            alert.addAction(UIAlertAction(title: state.localizedName, style: .default) { [unowned self] _ in
-                do {
-                    try self.submanagerGroups.setGroupVoiceState(state, for: self.chat)
-                    self.voiceState = state
-                    self.tableView.reloadSections(IndexSet(integer: GroupInfoSection.voice.rawValue), with: .none)
-                }
-                catch let error as NSError {
-                    handleErrorWithType(.setGroupVoice, error: error)
-                }
-            })
-        }
-
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-
-        if let popover = alert.popoverPresentationController {
-            popover.sourceView = tableView
-            popover.sourceRect = tableView.rectForRow(at: IndexPath(row: 0, section: GroupInfoSection.voice.rawValue))
-        }
-
-        present(alert, animated: true, completion: nil)
-    }
-
-    func presentInviteQR() {
-        guard !chatIdHex.isEmpty else {
-            return
-        }
-
-        let payload = "khandaq:group:\(chatIdHex)"
-        let controller = QRViewerController(theme: theme, text: payload)
-        navigationController?.pushViewController(controller, animated: true)
-    }
-
-    @objc func topicFieldChanged(_ sender: UITextField) {
-        topicText = sender.text ?? ""
-    }
-
-    @objc func passwordFieldChanged(_ sender: UITextField) {
-        passwordText = sender.text ?? ""
-    }
-
-    func presentTopicEditor() {
-        let alert = UIAlertController(title: String(localized: "group_topic_header"), message: nil, preferredStyle: .alert)
-        alert.addTextField { field in
-            field.text = self.topicText
-            field.placeholder = String(localized: "group_topic_placeholder")
-        }
-        alert.addAction(UIAlertAction(title: String(localized: "alert_ok"), style: .default) { [unowned self] _ in
-            self.topicText = alert.textFields?.first?.text ?? ""
-            self.saveTopicIfNeeded()
-            self.tableView.reloadData()
-        })
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-        present(alert, animated: true, completion: nil)
-    }
-
-    func presentMyPeerNameEditor() {
-        let alert = UIAlertController(title: String(localized: "group_my_peer_name_header"), message: nil, preferredStyle: .alert)
-        alert.addTextField { field in
-            field.text = self.myPeerNameText
-            field.placeholder = String(localized: "group_my_peer_name_placeholder")
-        }
-        alert.addAction(UIAlertAction(title: String(localized: "alert_ok"), style: .default) { [unowned self] _ in
-            self.myPeerNameText = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            self.saveMyPeerNameIfNeeded()
-            self.tableView.reloadSections(IndexSet(integer: GroupInfoSection.topic.rawValue), with: .none)
-        })
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-        present(alert, animated: true, completion: nil)
-    }
-
-    func saveMyPeerNameIfNeeded() {
-        guard chat.groupNumber >= 0 else {
-            return
-        }
-
-        do {
-            try submanagerGroups.setGroupSelfPeerName(myPeerNameText, for: chat)
-            submanagerGroups.refreshPeers(for: chat)
-        }
-        catch let error as NSError {
-            handleErrorWithType(.setGroupSelfPeerName, error: error)
-        }
-    }
-
-    func presentPasswordEditor() {
-        let alert = UIAlertController(title: String(localized: "group_password_header"), message: nil, preferredStyle: .alert)
-        alert.addTextField { field in
-            field.text = self.passwordText
-            field.placeholder = String(localized: "group_password_placeholder")
-            field.isSecureTextEntry = true
-        }
-        alert.addAction(UIAlertAction(title: String(localized: "alert_ok"), style: .default) { [unowned self] _ in
-            self.passwordText = alert.textFields?.first?.text ?? ""
-            self.savePasswordIfNeeded()
-            self.tableView.reloadData()
-        })
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-        present(alert, animated: true, completion: nil)
-    }
-
-    func presentPeerLimitEditor() {
-        let alert = UIAlertController(title: String(localized: "group_peer_limit_header"), message: nil, preferredStyle: .alert)
-        alert.addTextField { field in
-            field.text = String(self.peerLimitValue)
-            field.placeholder = String(localized: "group_peer_limit_placeholder")
-            field.keyboardType = .numberPad
-        }
-        alert.addAction(UIAlertAction(title: String(localized: "alert_ok"), style: .default) { [unowned self] _ in
-            if let text = alert.textFields?.first?.text, let parsed = Int32(text), parsed > 0 {
-                // KHANDAQ (#iOS group member limit): clamp to the Tox NGC ceiling (uint16 maxpeers).
-                // Values > 65535 would silently wrap in the (uint16_t) cast on the way to toxcore.
-                self.peerLimitValue = min(parsed, 65535)
-            }
-            self.savePeerLimitIfNeeded()
-            self.tableView.reloadData()
-        })
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-        present(alert, animated: true, completion: nil)
-    }
-
-    func saveTopicIfNeeded() {
-        let current = chat.groupTopic ?? chat.groupName ?? ""
-        guard topicText != current else {
-            return
-        }
-
-        do {
-            try submanagerGroups.setGroupTopic(topicText, for: chat)
-        }
-        catch let error as NSError {
-            handleErrorWithType(.setGroupTopic, error: error)
-        }
-    }
-
-    func savePasswordIfNeeded() {
-        guard isFounder else {
-            return
-        }
-
-        let current = chat.groupPassword ?? ""
-        guard passwordText != current else {
-            return
-        }
-
-        do {
-            try submanagerGroups.setGroupPassword(passwordText.isEmpty ? nil : passwordText, for: chat)
-        }
-        catch let error as NSError {
-            handleErrorWithType(.setGroupPassword, error: error)
-        }
-    }
-
-    func savePeerLimitIfNeeded() {
-        guard isFounder else {
-            return
-        }
-
-        guard peerLimitValue > 0 else {
-            handleErrorWithType(.setGroupPeerLimit, error: nil)
-            return
-        }
-
-        let current = submanagerGroups.groupPeerLimit(for: chat, error: nil)
-        guard peerLimitValue != current else {
-            return
-        }
-
-        do {
-            try submanagerGroups.setGroupPeerLimit(peerLimitValue, for: chat)
-        }
-        catch let error as NSError {
-            handleErrorWithType(.setGroupPeerLimit, error: error)
-        }
-    }
-
-    func presentPeerActions(for peer: OCTGroupPeer, at indexPath: IndexPath) {
-        GroupPeerActionsPresenter.presentActions(from: self,
-                                                 theme: theme,
-                                                 chat: chat,
-                                                 peer: peer,
-                                                 submanagerGroups: submanagerGroups,
-                                                 submanagerObjects: submanagerObjects,
-                                                 submanagerFriends: submanagerFriends,
-                                                 popoverSourceView: tableView,
-                                                 popoverSourceRect: tableView.rectForRow(at: indexPath),
-                                                 onOpenFriend: { [unowned self] friend in
-            guard let friendChat = self.submanagerChats.getOrCreateChat(with: friend) else {
-                return
-            }
-
-            let controller = ChatPrivateController(
-                    theme: self.theme,
-                    chat: friendChat,
-                    submanagerChats: self.submanagerChats,
-                    submanagerObjects: self.submanagerObjects,
-                    submanagerFiles: self.submanagerFiles,
-                    delegate: self)
-            self.navigationController?.pushViewController(controller, animated: true)
-        },
-                                                 onPeersChanged: { [unowned self] in
-            self.reloadGroupInfo()
-        })
-    }
-
-    func peerDetailSubtitle(for peer: OCTGroupPeer) -> String {
-        return GroupMemberStatusFormatter.detailSubtitle(for: peer, chat: chat, submanagerGroups: submanagerGroups)
-    }
-
-    func confirmDeleteSystemMessages() {
-        guard systemMessageCount > 0 else {
-            return
-        }
-
-        let alert = UIAlertController(title: String(localized: "group_delete_system_msgs_title"),
-                                      message: String(localized: "group_delete_system_msgs_message"),
-                                      preferredStyle: .alert)
-
-        alert.addAction(UIAlertAction(title: String(localized: "group_delete_system_msgs_confirm"), style: .destructive) { [unowned self] _ in
-            _ = self.submanagerGroups.removeGroupSystemMessages(in: self.chat)
-            self.systemMessageCount = Int(self.submanagerGroups.groupSystemMessageCount(for: self.chat))
-            self.tableView.reloadSections(IndexSet(integer: GroupInfoSection.danger.rawValue), with: .none)
-        })
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-
-        present(alert, animated: true, completion: nil)
-    }
-
-    func confirmClearHistory() {
-        let alert = UIAlertController(title: String(localized: "group_clear_history_action"),
-                                      message: String(localized: "group_clear_history_confirm_message"),
-                                      preferredStyle: .alert)
-
-        alert.addAction(UIAlertAction(title: String(localized: "group_clear_history_action"), style: .destructive) { [unowned self] _ in
-            self.submanagerGroups.removeAllMessages(in: self.chat, removeChat: false, leaveGroup: false)
-            self.navigationController?.popViewController(animated: true)
-        })
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-
-        present(alert, animated: true, completion: nil)
-    }
-
-    func confirmLeaveGroup() {
-        let alert = UIAlertController(title: String(localized: "group_leave_action"),
-                                      message: String(localized: "group_leave_confirm_message"),
-                                      preferredStyle: .alert)
-        alert.addTextField { field in
-            field.placeholder = String(localized: "group_leave_part_message_placeholder")
-        }
-
-        alert.addAction(UIAlertAction(title: String(localized: "group_leave_action"), style: .destructive) { [unowned self] _ in
-            let partMessage = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines)
-            self.leaveGroup(partMessage: partMessage?.isEmpty == false ? partMessage : nil)
-        })
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-
-        present(alert, animated: true, completion: nil)
-    }
-
-    func leaveGroup(partMessage: String?) {
-        guard chat.groupNumber >= 0 else {
-            return
-        }
-
-        do {
-            try submanagerGroups.leaveGroup(withNumber: OCTToxGroupNumber(chat.groupNumber), partMessage: partMessage)
-            submanagerGroups.removeAllMessages(in: chat, removeChat: true, leaveGroup: false)
-            navigationController?.popToRootViewController(animated: true)
-        }
-        catch let error as NSError {
-            handleErrorWithType(.leaveGroup, error: error)
-        }
-    }
-
-    func presentInviteFriendPicker() {
-        guard chat.groupNumber >= 0 else {
-            return
-        }
-
-        let friends = submanagerObjects.friends()
-        var connectedFriends: [OCTFriend] = []
-
-        for index in 0..<friends.count {
-            guard let friend = friends[index] as? OCTFriend else {
-                continue
-            }
-            if friend.connectionStatus != .none && friend.friendNumber >= 0 {
-                connectedFriends.append(friend)
-            }
-        }
-
-        if connectedFriends.isEmpty {
-            let alert = UIAlertController(title: nil, message: String(localized: "group_invite_friends_empty"), preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: String(localized: "alert_ok"), style: .default, handler: nil))
-            present(alert, animated: true, completion: nil)
-            return
-        }
-
-        // KHANDAQ (#iOS group multi-invite): pick SEVERAL connected contacts at once instead of a
-        // one-at-a-time action sheet. Uses the reliable friend-connection invite path
-        // (tox_group_invite_friend) — no UDP peer discovery needed.
-        let picker = GroupInviteFriendsController(theme: theme, friends: connectedFriends)
-        picker.onConfirm = { [weak self] chosen in
-            self?.navigationController?.popViewController(animated: true)
-            self?.inviteFriends(chosen)
-        }
-        navigationController?.pushViewController(picker, animated: true)
-    }
-
-    func inviteFriends(_ friends: [OCTFriend]) {
-        guard chat.groupNumber >= 0, !friends.isEmpty else {
-            return
-        }
-
-        var sent = 0
-        for friend in friends {
-            do {
-                try submanagerGroups.inviteFriend(withNumber: friend.friendNumber,
-                                                  toGroupNumber: OCTToxGroupNumber(chat.groupNumber))
-                sent += 1
-            }
-            catch let error as NSError {
-                handleErrorWithType(.inviteFriendToGroup, error: error)
-            }
-        }
-
-        guard sent > 0 else {
-            return
-        }
-
-        let alert = UIAlertController(title: nil,
-                                      message: String(localized: "group_invite_multi_success_format", sent),
-                                      preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: String(localized: "alert_ok"), style: .default, handler: nil))
-        presentSuccessAlert(alert)
-    }
-
-    func presentSuccessAlert(_ alert: UIAlertController) {
-        if let presented = presentedViewController {
-            presented.dismiss(animated: true) { [weak self] in
-                self?.present(alert, animated: true, completion: nil)
-            }
-            return
-        }
-        present(alert, animated: true, completion: nil)
-    }
-
-    func reloadGroupInfo() {
-        submanagerGroups.refreshPeers(for: chat)
-        submanagerGroups.refreshGroupMetadata(for: chat)
-        isFounder = submanagerGroups.selfRole(in: chat) == .founder
-        selfRole = submanagerGroups.selfRole(in: chat)
-        canEditTopic = submanagerGroups.canEditGroupTopic(in: chat)
-
-        if let topic = try? submanagerGroups.groupTopic(for: chat) {
-            topicText = topic
-        }
-        else {
-            topicText = chat.groupTopic ?? chat.groupName ?? ""
-        }
-
-        passwordText = (try? submanagerGroups.groupPassword(for: chat)) ?? chat.groupPassword ?? ""
-
-        let lock = submanagerGroups.groupTopicLock(for: chat, error: nil)
-        topicLockEnabled = lock == .enabled
-
-        let privacy = submanagerGroups.groupPrivacyState(for: chat, error: nil)
-        privacyIsPrivate = privacy == .private
-
-        voiceState = submanagerGroups.groupVoiceState(for: chat, error: nil)
-
-        peerLimitValue = submanagerGroups.groupPeerLimit(for: chat, error: nil)
-        if peerLimitValue < 1 {
-            peerLimitValue = kOCTDefaultGroupPeerLimit
-        }
-
-        do {
-            chatIdHex = try submanagerGroups.chatIdHex(for: chat)
-        }
-        catch {
-            if let stored = chat.groupChatIdHex, !stored.isEmpty {
-                chatIdHex = stored
-            }
-            else {
-                chatIdHex = ""
-            }
-        }
-
-        systemMessageCount = Int(submanagerGroups.groupSystemMessageCount(for: chat))
-
-        if chat.groupNumber >= 0 {
-            myPeerNameText = (try? submanagerGroups.groupSelfPeerName(for: chat)) ?? ""
-        }
-        else {
-            myPeerNameText = ""
-        }
-
-        tableView?.reloadData()
-    }
-
-    func displayMemberCount() -> Int {
-        // KHANDAQ (#9): total real members = online (peer count, incl. self) + saved offline members,
-        // both from toxcore's NGC-synced state — consistent across clients.
-        // KHANDAQ (#49): no offline term — keep the total equal to peerCount / listed rows so the info
-        // header, the drawer and the chat-list row all agree.
-        let fromTox = Int(submanagerGroups.peerCount(for: chat))
-        let fromRealm = peers.count
-        return max(fromTox, fromRealm, chat.groupNumber >= 0 ? 1 : 0)
-    }
-}
-
-private extension OCTToxGroupRole {
-    var localizedName: String {
-        return groupLocalizedName
-    }
-}
-
-extension GroupInfoController: ChatPrivateControllerDelegate {
-    func chatPrivateControllerWillAppear(_ controller: ChatPrivateController) {
-    }
-
-    func chatPrivateControllerWillDisappear(_ controller: ChatPrivateController) {
-    }
-
-    func chatPrivateControllerCallToChat(_ controller: ChatPrivateController, enableVideo: Bool) {
-    }
-
-    func chatPrivateControllerShowQuickLookController(_ controller: ChatPrivateController,
-                                                      dataSource: QuickLookPreviewControllerDataSource,
-                                                      selectedIndex: Int) {
-        // KHANDAQ (Figma / #204-C): media gallery for image/video; non-media (PDF, doc…) → QuickLook.
-        if let fp = dataSource as? FilePreviewControllerDataSource,
-           let start = fp.galleryStartIndex(forMessageIndex: selectedIndex) {
-            let items = fp.galleryItems(myName: "")
-            if !items.isEmpty {
-                let gallery = MediaGalleryViewController(items: items, startIndex: start)
-                navigationController?.present(gallery, animated: true, completion: nil)
-                return
-            }
-        }
-
-        let previewController = QuickLookPreviewController()
-        previewController.dataSource = dataSource
-        previewController.dataSourceStorage = dataSource
-        previewController.currentPreviewItemIndex = selectedIndex
-        navigationController?.present(previewController, animated: true, completion: nil)
-    }
-
-    // KHANDAQ (user request 17.08): the chat's attachments, split into files / audio / voice.
-    func chatPrivateControllerShowAttachments(_ controller: ChatPrivateController, forChat chat: OCTChat) {
-        let attachments = ChatAttachmentsController(theme: theme, chat: chat,
-                                                    submanagerObjects: submanagerObjects)
-        // Push onto whatever stack is showing the chat: on iPad that is the detail column, and in the
-        // group-info preview it is that screen's own navigation controller.
-        controller.navigationController?.pushViewController(attachments, animated: true)
-    }
-
-    func chatPrivateControllerShowFriendProfile(_ controller: ChatPrivateController, forFriend friend: OCTFriend) {
-        // Not applicable in the group-info hosted preview.
-    }
-}
-
-private extension OCTToxGroupVoiceState {
-    var localizedName: String {
-        switch self {
-            case .all:
-                return String(localized: "group_voice_all")
-            case .moderator:
-                return String(localized: "group_voice_moderator")
-            case .founder:
-                return String(localized: "group_voice_founder")
-        }
-    }
-}
-
-/// KHANDAQ (#iOS group multi-invite): a lightweight multi-select friend picker for inviting several
-/// connected contacts to a group at once. Defined here (not a standalone file) so it joins the app
-/// target without a project-file edit, mirroring the inline-helper pattern used elsewhere.
-private final class GroupInviteFriendsController: UIViewController, UITableViewDataSource, UITableViewDelegate {
-    var onConfirm: (([OCTFriend]) -> Void)?
-
-    private let theme: Theme
-    private let friends: [OCTFriend]
-    private var selected = Set<Int>()
-    private var tableView: UITableView!
-    private let cellReuseIdentifier = "GroupInviteFriendCell"
-
-    init(theme: Theme, friends: [OCTFriend]) {
-        self.theme = theme
-        self.friends = friends
-        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+        title = String(localized: "air_group_settings")
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -942,78 +44,524 @@ private final class GroupInviteFriendsController: UIViewController, UITableViewD
 
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        title = String(localized: "group_invite_picker_title")
-        view.backgroundColor = theme.colorForType(.NormalBackground)
-
-        tableView = UITableView(frame: .zero, style: .plain)
-        tableView.dataSource = self
-        tableView.delegate = self
-        tableView.backgroundColor = theme.colorForType(.NormalBackground)
-        tableView.separatorColor = theme.colorForType(.SeparatorsAndBorders)
-        tableView.tableFooterView = UIView()
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: cellReuseIdentifier)
-        view.addSubview(tableView)
-        tableView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-        ])
-
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: confirmTitle(),
-                                                            style: .done,
-                                                            target: self,
-                                                            action: #selector(confirmTapped))
-        updateConfirmButton()
+        view.accessibilityIdentifier = "air.group.settings"
+        for failure in [joinFailure, writeFailure] {
+            failure.textColor = KQColor.danger
+            failure.isHidden = true
+        }
     }
 
-    private func confirmTitle() -> String {
-        return String(localized: "group_invite_confirm_format", selected.count)
-    }
-
-    private func updateConfirmButton() {
-        navigationItem.rightBarButtonItem?.title = confirmTitle()
-        navigationItem.rightBarButtonItem?.isEnabled = !selected.isEmpty
-    }
-
-    @objc private func confirmTapped() {
-        guard !selected.isEmpty else {
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        guard !chat.isInvalidated else {
+            navigationController?.popToRootViewController(animated: false)
             return
         }
-        let chosen = selected.sorted().map { friends[$0] }
-        onConfirm?(chosen)
+        reload()
+        build()
     }
 
-    // MARK: UITableViewDataSource
+    // MARK: State
 
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return friends.count
+    private var isLive: Bool {
+        return chat.groupNumber >= 0
     }
 
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: cellReuseIdentifier, for: indexPath)
-        let friend = friends[indexPath.row]
-        cell.textLabel?.text = friend.name?.isEmpty == false ? friend.name! : friend.publicKey
-        cell.textLabel?.textColor = theme.colorForType(.NormalText)
-        cell.backgroundColor = theme.colorForType(.NormalBackground)
-        cell.tintColor = theme.colorForType(.LinkText)
-        cell.accessoryType = selected.contains(indexPath.row) ? .checkmark : .none
-        cell.selectionStyle = .none
-        return cell
-    }
-
-    // MARK: UITableViewDelegate
-
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: false)
-        if selected.contains(indexPath.row) {
-            selected.remove(indexPath.row)
-        } else {
-            selected.insert(indexPath.row)
+    /// What toxcore holds now, with what the profile stored as the fallback while it does not answer.
+    private func reload() {
+        submanagerGroups.refreshGroupMetadata(for: chat)
+        let role = submanagerGroups.selfRole(in: chat)
+        isFounder = role == .founder
+        canEditTopic = isLive && submanagerGroups.canEditGroupTopic(in: chat)
+        topic = (try? submanagerGroups.groupTopic(for: chat)) ?? chat.groupTopic ?? ""
+        selfName = isLive ? ((try? submanagerGroups.groupSelfPeerName(for: chat)) ?? "") : ""
+        hasPassword = !(((try? submanagerGroups.groupPassword(for: chat)) ?? chat.groupPassword) ?? "").isEmpty
+        var error: NSError?
+        privacy = AirGroupPrivacy(state: submanagerGroups.groupPrivacyState(for: chat, error: &error))
+        voice = submanagerGroups.groupVoiceState(for: chat, error: &error)
+        topicLocked = submanagerGroups.groupTopicLock(for: chat, error: &error) == .enabled
+        peerLimit = submanagerGroups.groupPeerLimit(for: chat, error: &error)
+        if peerLimit < 1 {
+            peerLimit = kOCTDefaultGroupPeerLimit
         }
-        tableView.reloadRows(at: [indexPath], with: .none)
-        updateConfirmButton()
+    }
+
+    // MARK: Building
+
+    private func build() {
+        column.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        joinFailure.isHidden = true
+        writeFailure.isHidden = true
+
+        // Your name here, then the topic.
+        let nameRow = AirSettingRow(title: String(localized: "air_group_settings_self_name"),
+                                    value: selfName.isEmpty ? nil : selfName,
+                                    opens: isLive)
+        nameRow.accessibilityIdentifier = "air.group.settings.name"
+        nameRow.isEnabled = isLive
+        if !isLive {
+            nameRow.accessibilityTraits = UIAccessibilityTraitStaticText
+        }
+        nameRow.addTarget(self, action: #selector(nameTapped), for: .touchUpInside)
+        addSection(nil, rows: [nameRow], note: String(localized: "air_group_settings_self_name_note"))
+
+        let topicRow = AirSettingRow(title: String(localized: "air_group_settings_topic"),
+                                     value: topic.isEmpty ? String(localized: "air_group_settings_topic_none") : topic,
+                                     opens: canEditTopic)
+        topicRow.accessibilityIdentifier = "air.group.settings.topic"
+        topicRow.isEnabled = canEditTopic
+        if !canEditTopic {
+            topicRow.accessibilityTraits = UIAccessibilityTraitStaticText
+        }
+        topicRow.addTarget(self, action: #selector(topicTapped), for: .touchUpInside)
+        let topicNote: String
+        if canEditTopic {
+            topicNote = "air_group_settings_topic_note"
+        }
+        else {
+            // An observer never changes it; with the topic open everyone else may.
+            topicNote = topicLocked ? "air_group_settings_topic_locked" : "air_group_settings_topic_not_observers"
+        }
+        addSection(nil, rows: [topicRow], note: String(localized: topicNote))
+
+        // Who can join.
+        if isFounder {
+            privacyRows = [AirGroupPrivacy.inviteOnly, AirGroupPrivacy.openById].map { option in
+                let row = AirChoiceRow(title: option.title, detail: option.consequence)
+                row.accessibilityIdentifier = option == .inviteOnly ? "air.group.settings.inviteOnly" : "air.group.settings.open"
+                row.addTarget(self, action: #selector(privacyTapped(_:)), for: .touchUpInside)
+                return row
+            }
+            let join = addSection(String(localized: "air_group_settings_join"), rows: privacyRows)
+            join.addArrangedSubview(joinFailure)
+            updateChoices()
+
+            let passwordRow = AirSettingRow(title: String(localized: "group_password_header"),
+                                            value: String(localized: hasPassword ? "air_group_settings_password_set" : "air_group_settings_password_none"))
+            passwordRow.accessibilityIdentifier = "air.group.settings.password"
+            passwordRow.addTarget(self, action: #selector(passwordTapped), for: .touchUpInside)
+            let limitRow = AirSettingRow(title: String(localized: "air_group_settings_limit"),
+                                         value: AirGroupSettingsText.number(Int(peerLimit)))
+            limitRow.accessibilityIdentifier = "air.group.settings.limit"
+            limitRow.addTarget(self, action: #selector(limitTapped), for: .touchUpInside)
+            var note = String(localized: "air_group_settings_password_note")
+            if submanagerGroups.isGroupAtPeerCapacity(for: chat) {
+                note += " " + String(localized: "air_group_settings_limit_full")
+            }
+            addSection(nil, rows: [passwordRow, limitRow], note: note)
+        }
+        else {
+            let row = AirSettingRow(title: privacy.title, detail: privacy.consequence, opens: false)
+            row.isUserInteractionEnabled = false
+            row.accessibilityTraits = UIAccessibilityTraitStaticText
+            row.accessibilityIdentifier = "air.group.settings.join"
+            addSection(String(localized: "air_group_settings_join"), rows: [row])
+        }
+
+        // Who can write.
+        let states: [OCTToxGroupVoiceState] = [.all, .moderator, .founder]
+        if isFounder {
+            voiceRows = states.map { state in
+                let row = AirChoiceRow(title: AirGroupSettingsText.voiceTitle(state), detail: AirGroupSettingsText.voiceDetail(state))
+                row.accessibilityIdentifier = "air.group.settings.voice.\(state.rawValue)"
+                row.addTarget(self, action: #selector(voiceTapped(_:)), for: .touchUpInside)
+                return row
+            }
+            let write = addSection(String(localized: "air_group_settings_write"), rows: voiceRows)
+            write.addArrangedSubview(writeFailure)
+            updateChoices()
+
+            let lock = AirSettingRow.toggle(title: String(localized: "air_group_settings_topic_lock"),
+                                            isOn: topicLocked,
+                                            identifier: "air.group.settings.topicLock") { [weak self] on in
+                self?.topicLockChanged(on)
+            }
+            addSection(nil, rows: [lock])
+        }
+        else {
+            let row = AirSettingRow(title: AirGroupSettingsText.voiceTitle(voice), detail: AirGroupSettingsText.voiceDetail(voice), opens: false)
+            row.isUserInteractionEnabled = false
+            row.accessibilityTraits = UIAccessibilityTraitStaticText
+            row.accessibilityIdentifier = "air.group.settings.voice"
+            addSection(String(localized: "air_group_settings_write"), rows: [row],
+                       note: String(localized: "air_group_settings_founder_only"))
+        }
+    }
+
+    private func updateChoices() {
+        for (row, option) in zip(privacyRows, [AirGroupPrivacy.inviteOnly, AirGroupPrivacy.openById]) {
+            row.isSelected = option == privacy
+        }
+        for (row, state) in zip(voiceRows, [OCTToxGroupVoiceState.all, .moderator, .founder]) {
+            row.isSelected = state == voice
+        }
+    }
+
+    // MARK: Changes on this screen
+
+    @objc private func privacyTapped(_ row: AirChoiceRow) {
+        guard let index = privacyRows.firstIndex(where: { $0 === row }) else {
+            return
+        }
+        let choice: AirGroupPrivacy = index == 0 ? .inviteOnly : .openById
+        guard choice != privacy else {
+            return
+        }
+        do {
+            try submanagerGroups.setGroupPrivacyState(choice == .inviteOnly ? .private : .public, for: chat)
+            privacy = choice
+            updateChoices()
+            joinFailure.isHidden = true
+            saved()
+        }
+        catch let error as NSError {
+            show(errorAlert(for: .setGroupPrivacy, error: error), in: joinFailure)
+        }
+    }
+
+    @objc private func voiceTapped(_ row: AirChoiceRow) {
+        guard let index = voiceRows.firstIndex(where: { $0 === row }) else {
+            return
+        }
+        let state = [OCTToxGroupVoiceState.all, .moderator, .founder][index]
+        guard state != voice else {
+            return
+        }
+        do {
+            try submanagerGroups.setGroupVoiceState(state, for: chat)
+            voice = state
+            updateChoices()
+            writeFailure.isHidden = true
+            saved()
+        }
+        catch let error as NSError {
+            show(errorAlert(for: .setGroupVoice, error: error), in: writeFailure)
+        }
+    }
+
+    private func topicLockChanged(_ on: Bool) {
+        do {
+            try submanagerGroups.setGroupTopicLock(on ? .enabled : .disabled, for: chat)
+            topicLocked = on
+            writeFailure.isHidden = true
+            saved()
+        }
+        catch let error as NSError {
+            // The switch goes back to what the group keeps.
+            reload()
+            build()
+            show(errorAlert(for: .setGroupTopicLock, error: error), in: writeFailure)
+        }
+    }
+
+    /// A failure in red under the section it happened in (E21), its code under "Details" in the words.
+    private func show(_ words: ErrorAlert?, in label: UILabel) {
+        let text = [words?.title, words?.message].compactMap { $0 }.joined(separator: " ")
+        label.text = text.isEmpty ? String(localized: "error_failed_group_settings") : text
+        label.isHidden = false
+        UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification, label.text)
+    }
+
+    private func saved() {
+        AirToast.show(String(localized: "air_group_settings_saved"), in: navigationController?.view ?? view)
+    }
+
+    // MARK: The values with a screen of their own
+
+    @objc private func nameTapped() {
+        open(.selfName, value: selfName)
+    }
+
+    @objc private func topicTapped() {
+        guard canEditTopic else {
+            return
+        }
+        open(.topic, value: topic)
+    }
+
+    @objc private func passwordTapped() {
+        let current = ((try? submanagerGroups.groupPassword(for: chat)) ?? chat.groupPassword) ?? ""
+        open(.password, value: current)
+    }
+
+    @objc private func limitTapped() {
+        open(.peerLimit, value: String(peerLimit))
+    }
+
+    private func open(_ kind: AirGroupFieldController.Kind, value: String) {
+        let controller = AirGroupFieldController(kind: kind, value: value, chat: chat, submanagerGroups: submanagerGroups)
+        controller.onSaved = { [weak self] words in
+            guard let self = self else {
+                return
+            }
+            self.navigationController?.popToViewController(self, animated: true)
+            AirToast.show(words, in: self.navigationController?.view ?? self.view)
+        }
+        navigationController?.pushViewController(controller, animated: true)
+    }
+}
+
+/// The words the group settings use for what toxcore keeps as numbers.
+enum AirGroupSettingsText {
+    static func voiceTitle(_ state: OCTToxGroupVoiceState) -> String {
+        switch state {
+            case .all:
+                return String(localized: "group_voice_all")
+            case .moderator:
+                return String(localized: "group_voice_moderator")
+            case .founder:
+                return String(localized: "group_voice_founder")
+        }
+    }
+
+    static func voiceDetail(_ state: OCTToxGroupVoiceState) -> String? {
+        switch state {
+            case .all:
+                return String(localized: "air_group_voice_all_note")
+            case .moderator, .founder:
+                return nil
+        }
+    }
+
+    /// A count as the person's region writes it ("65 535", "65,535").
+    static func number(_ value: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = AppLanguage.locale
+        formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: value)) ?? String(value)
+    }
+
+    /// The member limit as typed: digits in any script the keyboard gives, nil for anything else or a
+    /// number outside 1...65535 (NGC keeps the limit in 16 bits).
+    static func peerLimit(from text: String) -> Int32? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.count <= 6 else {
+            return nil
+        }
+        var value = 0
+        for character in trimmed {
+            // A decimal digit of any script (the Arabic keyboard gives Arabic-Indic ones).
+            guard character.unicodeScalars.count == 1, let scalar = character.unicodeScalars.first,
+                  CharacterSet.decimalDigits.contains(scalar), let digit = character.wholeNumberValue else {
+                return nil
+            }
+            value = value * 10 + digit
+        }
+        return (1...65535).contains(value) ? Int32(value) : nil
+    }
+}
+
+/// One value of the group settings on a screen of its own: the field, what the value does under it
+/// and "Save". A refusal or a failure takes the place of that line, a failure with "Details".
+final class AirGroupFieldController: AirScrollController {
+    enum Kind {
+        case selfName
+        case topic
+        case password
+        case peerLimit
+
+        var title: String {
+            switch self {
+                case .selfName:
+                    return String(localized: "air_group_settings_self_name")
+                case .topic:
+                    return String(localized: "air_group_settings_topic")
+                case .password:
+                    return String(localized: "group_password_header")
+                case .peerLimit:
+                    return String(localized: "air_group_settings_limit")
+            }
+        }
+
+        var hint: String {
+            switch self {
+                case .selfName:
+                    return String(localized: "air_group_settings_self_name_note")
+                case .topic:
+                    return String(localized: "air_group_settings_topic_note")
+                case .password:
+                    return String(localized: "air_group_settings_password_note")
+                case .peerLimit:
+                    return String(localized: "air_group_limit_range")
+            }
+        }
+
+        /// What toxcore takes at most, in bytes of UTF-8.
+        var maxBytes: Int? {
+            switch self {
+                case .selfName:
+                    return 128
+                case .topic:
+                    return 512
+                case .password:
+                    return 32
+                case .peerLimit:
+                    return nil
+            }
+        }
+
+        var errorType: ErrorHandlerType {
+            switch self {
+                case .selfName:
+                    return .setGroupSelfPeerName
+                case .topic:
+                    return .setGroupTopic
+                case .password:
+                    return .setGroupPassword
+                case .peerLimit:
+                    return .setGroupPeerLimit
+            }
+        }
+
+        var identifier: String {
+            switch self {
+                case .selfName:
+                    return "name"
+                case .topic:
+                    return "topic"
+                case .password:
+                    return "password"
+                case .peerLimit:
+                    return "limit"
+            }
+        }
+    }
+
+    /// The confirmation to show once the value is kept.
+    var onSaved: ((String) -> Void)?
+
+    private let kind: Kind
+    private let initial: String
+    private let chat: OCTChat
+    private weak var submanagerGroups: OCTSubmanagerGroups?
+    private let field: AirLineField
+    private let note: AirFieldNote
+    private let saveButton = AirButton(style: .ink, title: String(localized: "message_edit_save"))
+
+    init(kind: Kind, value: String, chat: OCTChat, submanagerGroups: OCTSubmanagerGroups) {
+        self.kind = kind
+        self.initial = value
+        self.chat = chat
+        self.submanagerGroups = submanagerGroups
+        self.field = AirLineField(placeholder: kind.title, secret: kind == .password)
+        self.note = AirFieldNote(hint: kind.hint)
+        super.init(nibName: nil, bundle: nil)
+        title = kind.title
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.accessibilityIdentifier = "air.group.field." + kind.identifier
+        field.text = initial
+        field.maxBytes = kind.maxBytes
+        field.field.accessibilityIdentifier = "air.group.field.input"
+        field.field.returnKeyType = .done
+        switch kind {
+            case .selfName:
+                field.field.textContentType = .nickname
+                field.field.autocapitalizationType = .words
+            case .topic:
+                field.field.autocapitalizationType = .sentences
+            case .password:
+                field.field.textContentType = .newPassword
+            case .peerLimit:
+                field.field.keyboardType = .numberPad
+        }
+        field.onChange = { [weak self] in
+            self?.note.clear()
+            self?.field.hasError = false
+        }
+        field.onReturn = { [weak self] in
+            self?.save()
+        }
+        addSection(nil, views: [field, note])
+
+        saveButton.accessibilityIdentifier = "air.group.field.save"
+        saveButton.addTarget(self, action: #selector(saveTapped), for: .touchUpInside)
+        var buttons: [UIView] = [saveButton]
+        if kind == .password && !initial.isEmpty {
+            let remove = AirButton(style: .normal, title: String(localized: "air_group_password_remove"))
+            remove.accessibilityIdentifier = "air.group.field.remove"
+            remove.addTarget(self, action: #selector(removeTapped), for: .touchUpInside)
+            buttons.append(remove)
+        }
+        addSection(nil, views: buttons)
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        _ = field.field.becomeFirstResponder()
+    }
+
+    @objc private func saveTapped() {
+        save()
+    }
+
+    @objc private func removeTapped() {
+        field.text = ""
+        apply("", confirmation: String(localized: "air_group_password_removed"))
+    }
+
+    private func save() {
+        let text = field.text
+        switch kind {
+            case .selfName:
+                let name = AirGroupName.clean(text)
+                guard !name.isEmpty else {
+                    refuse(String(localized: "air_group_name_empty"))
+                    return
+                }
+                apply(name, confirmation: String(localized: "air_group_settings_saved"))
+            case .topic:
+                apply(AirGroupName.clean(text), confirmation: String(localized: "air_group_settings_saved"))
+            case .password:
+                apply(text, confirmation: String(localized: text.isEmpty ? "air_group_password_removed" : "air_group_settings_saved"))
+            case .peerLimit:
+                guard AirGroupSettingsText.peerLimit(from: text) != nil else {
+                    refuse(String(localized: "air_group_limit_range"))
+                    return
+                }
+                apply(text, confirmation: String(localized: "air_group_settings_saved"))
+        }
+    }
+
+    private func refuse(_ words: String) {
+        field.hasError = true
+        field.shake()
+        note.showRefusal(words)
+    }
+
+    private func apply(_ value: String, confirmation: String) {
+        guard let submanagerGroups = submanagerGroups, !chat.isInvalidated else {
+            return
+        }
+        do {
+            switch kind {
+                case .selfName:
+                    try submanagerGroups.setGroupSelfPeerName(value, for: chat)
+                    submanagerGroups.refreshPeers(for: chat)
+                case .topic:
+                    try submanagerGroups.setGroupTopic(value, for: chat)
+                case .password:
+                    try submanagerGroups.setGroupPassword(value.isEmpty ? nil : value, for: chat)
+                case .peerLimit:
+                    try submanagerGroups.setGroupPeerLimit(AirGroupSettingsText.peerLimit(from: value) ?? kOCTDefaultGroupPeerLimit, for: chat)
+            }
+        }
+        catch let error as NSError {
+            let words = errorAlert(for: kind.errorType, error: error)
+            note.onDetails = words?.details.map { code in
+                { UIAlertController.showDetails(code) }
+            }
+            field.hasError = true
+            note.showError([words?.title, words?.message].compactMap { $0 }.joined(separator: " "), details: words?.details != nil)
+            return
+        }
+        _ = field.field.resignFirstResponder()
+        onSaved?(confirmation)
     }
 }

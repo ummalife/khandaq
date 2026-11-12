@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (redesign, stage 5): the rows and the field of the group settings (GroupInfoActivity), named
+     so that TalkBack checks and the screen walks find them. -->
+<resources>
+    <item name="air_gs_self_name_row" type="id" />
+    <item name="air_gs_topic_row" type="id" />
+    <item name="air_gs_invite_only_row" type="id" />
+    <item name="air_gs_open_row" type="id" />
+    <item name="air_gs_join_row" type="id" />
+    <item name="air_gs_password_row" type="id" />
+    <item name="air_gs_limit_row" type="id" />
+    <item name="air_gs_voice_all_row" type="id" />
+    <item name="air_gs_voice_moderator_row" type="id" />
+    <item name="air_gs_voice_founder_row" type="id" />
+    <item name="air_gs_voice_row" type="id" />
+    <item name="air_gs_topic_lock_row" type="id" />
+    <item name="air_gs_field" type="id" />
+    <item name="air_gs_field_note" type="id" />
+    <item name="air_gs_save" type="id" />
+    <item name="air_gs_password_remove" type="id" />
+</resources>

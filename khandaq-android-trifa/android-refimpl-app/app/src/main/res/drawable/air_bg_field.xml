@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The command line: sunken at rest, raised with an ink line while it has focus. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/kq_raised" />
+            <stroke android:width="@dimen/kq_stroke_hairline" android:color="@color/kq_ink" />
+            <corners android:radius="@dimen/kq_radius_field" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/kq_sunken" />
+            <stroke android:width="@dimen/kq_stroke_hairline" android:color="@color/kq_line" />
+            <corners android:radius="@dimen/kq_radius_field" />
+        </shape>
+    </item>
+</selector>

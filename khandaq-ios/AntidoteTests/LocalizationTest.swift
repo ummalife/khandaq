@@ -11,7 +11,7 @@ import XCTest
  The group header showed "3 members" with the noun in the wrong form in Russian and Arabic: each string
  had a single form, while both languages change the noun with the number. The strings go through
  String(localized:), the path the screens use, after switching the language the way the in-app picker
- does — without a restart, so the process language stays whatever the test host started with.
+ does, without a restart, so the process language stays whatever the test host started with.
  */
 class LocalizationTest: XCTestCase {
     private var savedLanguage: Any?
@@ -64,10 +64,10 @@ class LocalizationTest: XCTestCase {
 
     func testTwoNumbersKeepTheirOrder() {
         use("ru")
-        XCTAssertEqual(String(localized: "group_member_online_count_format", 3, 1), "3 участника · 1 онлайн")
-        XCTAssertEqual(String(localized: "group_member_online_count_format", 5, 2), "5 участников · 2 онлайн")
+        XCTAssertEqual(String(localized: "group_member_online_count_format", 3, 1), "3 участника, 1 в сети")
+        XCTAssertEqual(String(localized: "group_member_online_count_format", 5, 2), "5 участников, 2 в сети")
         use("ar")
-        XCTAssertEqual(String(localized: "group_member_online_count_format", 5, 2), "5 أعضاء · 2 متصل")
+        XCTAssertEqual(String(localized: "group_member_online_count_format", 5, 2), "5 أعضاء، 2 متصل")
     }
 
     func testPluralInsideASentence() {
@@ -94,6 +94,27 @@ class LocalizationTest: XCTestCase {
         formatter.timeStyle = .none
         formatter.doesRelativeDateFormatting = true
         XCTAssertEqual(formatter.string(from: Date()).lowercased(), "сегодня")
+    }
+
+    /// The forward header travels inside the message text, and the other clients look for its mark, so
+    /// it comes out byte for byte as before; the strings carry only the words (stage 3, item 9).
+    func testForwardHeaderKeepsItsMarkInTheMessageText() {
+        use("ru")
+        XCTAssertEqual(MessageReplyHelper.normalizeForwardedHeader("\u{21AA} Переслано от Амина\nсалам"),
+                       "\u{21AA} Переслано от Амина\nсалам")
+        use("en")
+        XCTAssertEqual(MessageReplyHelper.normalizeForwardedHeader("\u{21AA} Forwarded from (null)\nhi"),
+                       "\u{21AA} Forwarded\nhi")
+        XCTAssertEqual(MessageReplyHelper.stripForwardedHeader("\u{21AA} Forwarded from Amina\nhi"), "hi")
+    }
+
+    /// The group video line formatted String(localized:)'s output a second time and lost the count and
+    /// the name; it now hands both to String(localized:) the way ChatGroupController does.
+    func testGroupVideoLineNamesTheCountAndThePerson() {
+        use("ru")
+        XCTAssertEqual(String(localized: "group_live_video_streams_format", UInt64(2), "Амина" as NSString), "Видео: 2\nАмина")
+        use("zh")
+        XCTAssertEqual(String(localized: "group_live_video_streams_format", UInt64(1), "Amina" as NSString), "视频：1\nAmina")
     }
 
     func testPhoneLocaleIsKeptWhenItSpeaksTheAppLanguage() {

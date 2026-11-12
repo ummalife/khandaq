@@ -107,6 +107,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
+import androidx.annotation.Nullable;
 import androidx.annotation.Px;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
@@ -132,7 +133,6 @@ import static com.zoffcc.applications.trifa.HelperFriend.format_group_peer_list_
 import static com.zoffcc.applications.trifa.HelperFriend.friendlist_has_avatar_for_pubkey;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperGeneric.bytebuffer_to_hexstring;
-import static com.zoffcc.applications.trifa.HelperGeneric.display_toast;
 import static com.zoffcc.applications.trifa.HelperGeneric.do_fade_anim_on_fab;
 import static com.zoffcc.applications.trifa.HelperGeneric.fourbytes_of_long_to_hex;
 import static com.zoffcc.applications.trifa.HelperGeneric.get_uniq_tmp_filename;
@@ -209,7 +209,6 @@ import static com.zoffcc.applications.trifa.MainActivity.toxav_ngc_video_decode;
 import static com.zoffcc.applications.trifa.MainActivity.toxav_ngc_video_encode;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FT_OUTGOING_FILESIZE_BYTE_USE_STORAGE_FRAMEWORK;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FT_OUTGOING_FILESIZE_NGC_MAX_TOTAL;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.KHANDAQ_MAX_FILE_TRANSFER_BYTES;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.HIGHER_NGC_VIDEO_BITRATE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.HIGHER_NGC_VIDEO_QUANTIZER;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.INTERVAL_UPDATE_NGC_GROUP_ALL_USERS_MS;
@@ -244,6 +243,8 @@ public class GroupMessageListActivity extends AppCompatActivity
     EmojiPopup emojiPopup = null;
     ImageView insert_emoji = null;
     TextView ml_maintext = null;
+    /** KHANDAQ (redesign, E13): the header, the band, the line under the field and the read-only bar. */
+    AirGroupPanel airPanel = null;
     ViewGroup rootView = null;
     //
     private static Thread NGC_Group_video_check_incoming_thread = null;
@@ -289,6 +290,9 @@ public class GroupMessageListActivity extends AppCompatActivity
     static final int NGC_VIDEO_ICON_STATE_INCOMING = 1;
     static final int NGC_VIDEO_ICON_STATE_ACTIVE = 2;
     ImageButton ml_phone_icon = null;
+    ImageButton ml_search_icon = null;
+    // KHANDAQ (redesign, stage 3b): Search (slot 0) and the chevron step aside for a long name (AirHeaderFit).
+    private AirHeaderFit headerFit = null;
     ImageButton ml_button_01 = null;
     ImageButton ml_button_recaudio = null;
     static ChatVoiceRecordingUiHelper voiceRecordingUiHelper = null;
@@ -458,6 +462,9 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+        // KHANDAQ (redesign, E13): before the reply bar and the microphone are bound, both take the design's
+        // colours from it.
+        airPanel = new AirGroupPanel(this);
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         final Drawable drawer_header_icon = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_group).color(
@@ -590,7 +597,13 @@ public class GroupMessageListActivity extends AppCompatActivity
         ml_status_icon = (ImageView) findViewById(R.id.ml_status_icon);
         ml_phone_icon = (ImageButton) findViewById(R.id.ml_phone_icon);
         ml_video_icon = (ImageButton) findViewById(R.id.ml_video_icon);
+        ml_search_icon = (ImageButton) findViewById(R.id.ml_search_icon);
+        if (ml_search_icon != null)
+        {
+            ml_search_icon.setOnClickListener(v -> enterGroupSearchMode());
+        }
         apply_chat_header();
+        watchHeaderFit();
         ngc_video_view_container = findViewById(R.id.ngc_video_view_container);
         ngc_video_view = findViewById(R.id.ngc_video_view);
         ngc_video_own_view = findViewById(R.id.ngc_video_own_view);
@@ -604,7 +617,6 @@ public class GroupMessageListActivity extends AppCompatActivity
         ml_button_recaudio = (ImageButton) findViewById(R.id.ml_button_recaudio);
         ngc_audio_bar_in_v = (BarLevelDrawable) findViewById(R.id.ngc_audio_bar_in_v);
         ngc_audio_bar_out_v = (BarLevelDrawable) findViewById(R.id.ngc_audio_bar_out_v);
-        ml_button_recaudio.setBackgroundColor(Color.TRANSPARENT);
         voiceRecordingUiHelper = ChatVoiceRecordingUiHelper.bind(findViewById(R.id.emoji_bar),
                 new ChatVoiceRecordingUiHelper.RecordingActionListener()
                 {
@@ -1057,9 +1069,7 @@ public class GroupMessageListActivity extends AppCompatActivity
         ml_status_icon.setVisibility(View.INVISIBLE);
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
-        final Drawable d3 = new IconicsDrawable(this).icon(FontAwesome.Icon.faw_video).color(
-                getResources().getColor(R.color.icon_colors)).sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
-        ml_video_icon.setImageDrawable(d3);
+        applyGroupVideoIcon();
         ngc_video_view_container.setVisibility(View.GONE);
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
@@ -1189,8 +1199,8 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         final Drawable d1 = new IconicsDrawable(getBaseContext()).icon(
-                GoogleMaterial.Icon.gmd_sentiment_satisfied).color(getResources().getColor(R.color.icon_colors)).sizeDp(
-                80);
+                GoogleMaterial.Icon.gmd_sentiment_satisfied).color(ContextCompat.getColor(this, R.color.kq_ink_2)).sizeDp(
+                ChatInputBarHelper.CHAT_INPUT_ICON_DP);
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         insert_emoji.setImageDrawable(d1);
@@ -1209,11 +1219,11 @@ public class GroupMessageListActivity extends AppCompatActivity
         // KHANDAQ (18.08): one design across platforms — iOS opens the attachment menu from a "+" on the
         // LEFT of the input bar (Figma), so Android uses the same glyph in the same slot. The emoji
         // button moved to the right of the field; nothing was removed.
-        final Drawable add_attachement_icon = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_add).color(
-                getResources().getColor(R.color.icon_colors)).sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
-        // KHANDAQ (18.08): same send button as iOS — white paper plane on the brand-green circle.
-        final Drawable send_message_icon = ChatInputBarHelper.makeCircularSendIcon(this);
-        final Drawable mic_icon = getResources().getDrawable(R.drawable.baseline_keyboard_voice_24);
+        // KHANDAQ (redesign, E13): the design system's plus, tinted by the button; the send button is the ink
+        // plate with an arrow, as tall as the field, and the microphone is the design system's.
+        final Drawable add_attachement_icon = ContextCompat.getDrawable(this, R.drawable.kq_ic_plus);
+        final Drawable send_message_icon = AirChatPanel.sendIcon(this);
+        final Drawable mic_icon = AirChatPanel.micIcon(this);
 
         ChatInputBarHelper.setupAttachButton(ml_button_01, add_attachement_icon, v -> send_attatchment(v));
 
@@ -1236,6 +1246,10 @@ public class GroupMessageListActivity extends AppCompatActivity
         }
 
         ChatInputBarHelper.bindMicSendTextWatcher(ml_new_group_message, ml_button_recaudio, mic_icon, send_message_icon);
+        if (airPanel != null)
+        {
+            airPanel.start();
+        }
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         set_peer_count_header();
@@ -1295,6 +1309,18 @@ public class GroupMessageListActivity extends AppCompatActivity
             public void run()
             {
                 if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
+                final AirGroupPanel panel = airPanel;
+                if (panel != null)
+                {
+                    // KHANDAQ (redesign, E13): the name, "N members, M online now", who gets a message now
+                    // and whether this phone may write, read here and drawn in one go.
+                    final AirGroupPanel.Snapshot snapshot = AirGroupPanel.read(group_id);
+                    if (main_handler_s != null)
+                    {
+                        main_handler_s.post(() -> panel.show(snapshot));
+                    }
+                    return;
+                }
                 final long conference_num = tox_group_by_groupid__wrapper(group_id);
                 final String f_name = get_effective_group_title(conference_num, group_id);
 
@@ -1484,10 +1510,7 @@ public class GroupMessageListActivity extends AppCompatActivity
         }
         stop_group_connect_header_refresh();
 
-        ml_button_recaudio.setImageResource(R.drawable.baseline_keyboard_voice_24);
-        ChatInputBarHelper.resetMicSendIcon(ml_button_recaudio,
-                getResources().getDrawable(R.drawable.baseline_keyboard_voice_24));
-        ml_button_recaudio.setBackgroundColor(Color.TRANSPARENT);
+        ChatInputBarHelper.resetMicSendIcon(ml_button_recaudio, AirChatPanel.micIcon(this));
         stop_group_voice_recording_ui();
         ml_is_recording = false;
         ml_is_rec_ok = false;
@@ -1551,10 +1574,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             emojiPopup.dismiss();
         }
         super.onStop();
-        ml_button_recaudio.setImageResource(R.drawable.baseline_keyboard_voice_24);
-        ChatInputBarHelper.resetMicSendIcon(ml_button_recaudio,
-                getResources().getDrawable(R.drawable.baseline_keyboard_voice_24));
-        ml_button_recaudio.setBackgroundColor(Color.TRANSPARENT);
+        ChatInputBarHelper.resetMicSendIcon(ml_button_recaudio, AirChatPanel.micIcon(this));
         ml_is_recording = false;
         ml_is_rec_ok = false;
         delete_group_voice_recording_temp_file();
@@ -1562,6 +1582,12 @@ public class GroupMessageListActivity extends AppCompatActivity
 
     void apply_chat_header()
     {
+        if (airPanel != null)
+        {
+            // KHANDAQ (redesign, E13): the design's surface, inks and icons instead of the green bar.
+            airPanel.styleHeader();
+            return;
+        }
         ChatBubbleUiHelper.apply_chat_header_theme(
                 (Toolbar) findViewById(R.id.toolbar),
                 (android.view.View) null,
@@ -1622,6 +1648,11 @@ public class GroupMessageListActivity extends AppCompatActivity
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
 
         MainActivity.group_message_list_activity = this;
+        if (airPanel != null)
+        {
+            // E21: what a viewer or a picker in front could not do, said under the field now it is back.
+            AirComposerNotice.deliverOnReturn(airPanel::sayAtComposer);
+        }
         wakeup_tox_thread();
         // KHANDAQ: off the UI thread — this path bootstraps DHT nodes with BLOCKING DNS resolves
         // (getaddrinfo) and re-syncs peers to the DB; on a slow resolver it froze onResume for
@@ -1819,7 +1850,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             if (!waitForRecordedAudioFileReady(f2))
             {
                 HelperGeneric.logI(TAG, "send_group_voice_recording_file:file not ready");
-                display_toast(context.getString(R.string.group_file_prepare_failed), true, 100);
+                AirComposerNotice.say(context.getString(R.string.group_file_prepare_failed), true);
                 return;
             }
 
@@ -1889,8 +1920,9 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         if (!HelperCall.hasMicrophonePermission(v.getContext()))
         {
+            // E21: refused, the rule stands under the field once the system has answered
+            // (onRequestPermissionsResult); it used to be a toast about calls.
             HelperCall.requestCallPermissions((Activity) v.getContext(), true);
-            HelperCall.showMissingPermissionToast(v.getContext(), true);
             return false;
         }
 
@@ -2140,7 +2172,7 @@ public class GroupMessageListActivity extends AppCompatActivity
 
     private void setUpEmojiPopup()
     {
-        emojiPopup = EmojiPopup.Builder.fromRootView(rootView).setOnEmojiBackspaceClickListener(
+        final EmojiPopup.Builder emojiPopupBuilder = EmojiPopup.Builder.fromRootView(rootView).setOnEmojiBackspaceClickListener(
                 new OnEmojiBackspaceClickListener()
                 {
                     @Override
@@ -2155,7 +2187,8 @@ public class GroupMessageListActivity extends AppCompatActivity
             public void onEmojiPopupShown()
             {
                 final Drawable d1 = new IconicsDrawable(getBaseContext()).icon(FontAwesome.Icon.faw_keyboard).color(
-                        getResources().getColor(R.color.icon_colors)).sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
+                        ContextCompat.getColor(GroupMessageListActivity.this, R.color.kq_ink_2)).sizeDp(
+                        ChatInputBarHelper.CHAT_INPUT_ICON_DP);
 
                 insert_emoji.setImageDrawable(d1);
                 // insert_emoji.setImageResource(R.drawable.about_icon_email);
@@ -2174,7 +2207,8 @@ public class GroupMessageListActivity extends AppCompatActivity
             {
                 final Drawable d1 = new IconicsDrawable(getBaseContext()).icon(
                         GoogleMaterial.Icon.gmd_sentiment_satisfied).color(
-                        getResources().getColor(R.color.icon_colors)).sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
+                        ContextCompat.getColor(GroupMessageListActivity.this, R.color.kq_ink_2)).sizeDp(
+                        ChatInputBarHelper.CHAT_INPUT_ICON_DP);
 
                 insert_emoji.setImageDrawable(d1);
                 // insert_emoji.setImageResource(R.drawable.emoji_ios_category_people);
@@ -2186,7 +2220,8 @@ public class GroupMessageListActivity extends AppCompatActivity
             {
                 // Log.d(TAG, "Closed soft keyboard");
             }
-        }).build(ml_new_group_message);
+        });
+        emojiPopup = AirUi.emojiPanelColors(this, emojiPopupBuilder).build(ml_new_group_message);
     }
 
     String get_current_group_id()
@@ -2367,7 +2402,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                     }
                     else
                     {
-                        display_toast(getString(R.string.location_share_failed), true, 400);
+                        AirComposerNotice.say(getString(R.string.location_share_failed), true);
                     }
                 });
             }
@@ -2375,7 +2410,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             @Override
             public void onError(final String reason)
             {
-                runOnUiThread(() -> display_toast(getString(R.string.location_share_failed), true, 400));
+                AirComposerNotice.say(getString(R.string.location_share_failed), true);
             }
         });
     }
@@ -2387,6 +2422,10 @@ public class GroupMessageListActivity extends AppCompatActivity
         final com.google.android.material.bottomsheet.BottomSheetDialog sheet =
                 new com.google.android.material.bottomsheet.BottomSheetDialog(this);
         final View content = getLayoutInflater().inflate(R.layout.bottomsheet_attach, null);
+        // KHANDAQ (redesign, E8): the limit stands next to the choice, the same figure as the refusal.
+        final TextView attachLimit = content.findViewById(R.id.attach_sheet_limit);
+        attachLimit.setText(AirByteSize.groupLimitHint(this));
+        attachLimit.setVisibility(View.VISIBLE);
         ((ImageView) content.findViewById(R.id.attach_chip_camera_icon)).setImageDrawable(
                 new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_photo_camera).color(Color.WHITE).sizeDp(26));
         ((ImageView) content.findViewById(R.id.attach_chip_video_icon)).setImageDrawable(
@@ -2531,7 +2570,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
             if (intent.resolveActivity(getPackageManager()) == null)
             {
-                android.widget.Toast.makeText(this, R.string.attach_no_camera, android.widget.Toast.LENGTH_SHORT).show();
+                AirComposerNotice.say(getString(R.string.attach_no_camera), false);
                 return;
             }
             mediaPreviewResultHandled = false;
@@ -2582,13 +2621,31 @@ public class GroupMessageListActivity extends AppCompatActivity
                 return;
             }
 
-            final Intent intent = new Intent(this, GroupInfoActivity.class);
-            intent.putExtra("group_id", group_id);
-            startActivity(intent);
+            // KHANDAQ (redesign, stage 3b): the group dossier; the old info screen is its "Group settings".
+            AirGroupDossierActivity.open(this, group_id);
         }
         catch (Exception e)
         {
             e.printStackTrace();
+        }
+    }
+
+    /** What the group dossier asked of this conversation: its Files row, or Leave. */
+    private void on_group_dossier_result(final int resultCode, @Nullable final Intent data)
+    {
+        if (resultCode != RESULT_OK || data == null)
+        {
+            return;
+        }
+        final String action = data.getStringExtra(AirGroupDossierActivity.EXTRA_ACTION);
+        if (AirGroupDossierActivity.ACTION_LEFT.equals(action))
+        {
+            finish();
+        }
+        else if (AirGroupDossierActivity.ACTION_FILES.equals(action))
+        {
+            // onActivityResult comes before onResume, which reloads the history with the filter set here.
+            apply_group_message_filter(MessageListFragment.ATTACH_FILES);
         }
     }
 
@@ -2634,7 +2691,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             final String send_block_reason = group_send_precheck_failure_reason(group_id);
             if (send_block_reason != null)
             {
-                display_toast(send_block_reason, true, 400);
+                AirComposerNotice.say(send_block_reason, false);
                 return;
             }
 
@@ -2664,7 +2721,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             }
             if (message_id <= -1)
             {
-                display_toast(group_send_failure_reason(message_id), true, 400);
+                AirComposerNotice.say(group_send_failure_reason(message_id), true, AirErrorCode.groupSend(message_id));
                 return;
             }
 
@@ -2713,7 +2770,7 @@ public class GroupMessageListActivity extends AppCompatActivity
         }
         else
         {
-            display_toast(group_send_failure_reason(message_id), true, 400);
+            AirComposerNotice.say(group_send_failure_reason(message_id), true, AirErrorCode.groupSend(message_id));
             try
             {
                 // KHANDAQ (#T5): restore only the VISIBLE text — m.text is the raw wire form
@@ -2746,7 +2803,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             if (newBody.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
                 > HelperMessageEdit.MAX_EDIT_TEXT_BYTES)
             {
-                display_toast(getString(R.string.chat_edit_too_long), true, 400);
+                AirComposerNotice.say(getString(R.string.chat_edit_too_long), false);
                 return; // edit mode stays active so the user can shorten the text
             }
             final com.zoffcc.applications.sorm.GroupMessage egm = ChatReplyPreviewController.consumeEditGroup();
@@ -2761,7 +2818,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             }
             else
             {
-                display_toast(getString(R.string.chat_edit_failed), true, 400);
+                AirComposerNotice.say(getString(R.string.chat_edit_failed), true);
             }
             return;
         }
@@ -2781,17 +2838,33 @@ public class GroupMessageListActivity extends AppCompatActivity
                 return;
             }
 
-            final String truncated = normalized.substring(0, (int) Math.min(tox_max_message_length(), normalized.length()));
+            // KHANDAQ (redesign, E13): nothing is cut any more. toxcore refuses a group message over 1372
+            // bytes, so over that Send waits, the field and the reply stay, and the counter says by how much.
             final java.util.List<GroupMentionHelper.MentionEntry> mentions =
-                    GroupMentionHelper.collectMentionsForOutgoing(truncated, group_id);
-            final String withMentions = GroupMentionHelper.encodeMentionsBlock(truncated, mentions);
+                    GroupMentionHelper.collectMentionsForOutgoing(normalized, group_id);
+            final String withMentions = GroupMentionHelper.encodeMentionsBlock(normalized, mentions);
+            final int over_bytes = AirGroupPanel.bytesOver(
+                    MessageReplyHelper.encode(ChatReplyPreviewController.peekPending(), withMentions));
+            if (over_bytes > 0)
+            {
+                if (airPanel != null)
+                {
+                    airPanel.sayOverLimit(over_bytes);
+                }
+                else
+                {
+                    AirComposerNotice.say(getResources().getQuantityString(R.plurals.air_compose_bytes_over_group,
+                                                                           over_bytes, over_bytes), false);
+                }
+                return;
+            }
 
             msg = ChatReplyPreviewController.composeOutgoingText(withMentions);
 
             final String send_block_reason = group_send_precheck_failure_reason(group_id);
             if (send_block_reason != null)
             {
-                display_toast(send_block_reason, true, 400);
+                AirComposerNotice.say(send_block_reason, false);
                 return;
             }
 
@@ -3747,11 +3820,22 @@ public class GroupMessageListActivity extends AppCompatActivity
         startActivityForResult(intent, SelectFriendSingleActivity_ID);
     }
 
-    // KHANDAQ (Figma single-row header): search / members / add / video moved to the ⋮ overflow.
+    // KHANDAQ (redesign, stage 3): search and the live video are header icons; the members, the invitation,
+    // the log filters and, below 400dp, the video are in the overflow.
     @Override
     public boolean onCreateOptionsMenu(android.view.Menu menu)
     {
         getMenuInflater().inflate(R.menu.menu_group_chat_header, menu);
+        final android.view.MenuItem searchItem = menu.findItem(R.id.action_group_search);
+        if (searchItem != null)
+        {
+            searchItem.setVisible((headerFit != null) && headerFit.isOut(0));
+        }
+        final android.view.MenuItem videoItem = menu.findItem(R.id.action_group_video);
+        if (videoItem != null)
+        {
+            videoItem.setVisible(!getResources().getBoolean(R.bool.air_chat_video_in_header));
+        }
         return super.onCreateOptionsMenu(menu);
     }
 
@@ -3864,6 +3948,14 @@ public class GroupMessageListActivity extends AppCompatActivity
         {
             infoTap.setVisibility(View.GONE);
         }
+        if (ml_search_icon != null)
+        {
+            ml_search_icon.setVisibility(View.GONE);
+        }
+        if (ml_video_icon != null)
+        {
+            ml_video_icon.setVisibility(View.GONE);
+        }
         if (messageSearchView != null)
         {
             messageSearchView.setVisibility(View.VISIBLE);
@@ -3882,6 +3974,73 @@ public class GroupMessageListActivity extends AppCompatActivity
         if (infoTap != null)
         {
             infoTap.setVisibility(View.VISIBLE);
+        }
+        if (ml_search_icon != null)
+        {
+            ml_search_icon.setVisibility(((headerFit != null) && headerFit.isOut(0)) ? View.GONE : View.VISIBLE);
+        }
+        applyGroupVideoIcon();
+        if (headerFit != null)
+        {
+            // The search field had the row: the name may have room again, or less.
+            headerFit.post();
+        }
+    }
+
+    /** KHANDAQ (redesign, stage 3b): Search, then the chevron, step aside when the name gets too little room. */
+    private void watchHeaderFit()
+    {
+        final View chevron = findViewById(R.id.air_group_chevron);
+        if ((ml_maintext == null) || (ml_search_icon == null) || (chevron == null))
+        {
+            return;
+        }
+        headerFit = new AirHeaderFit(ml_maintext,
+                                     () -> isFinishing() || ((messageSearchView != null)
+                                                             && (messageSearchView.getVisibility() == View.VISIBLE)),
+                                     new AirHeaderFit.Slot()
+                                     {
+                                         @Override
+                                         public int width()
+                                         {
+                                             return getResources().getDimensionPixelSize(R.dimen.kq_size_target_android);
+                                         }
+
+                                         @Override
+                                         public void setOut(final boolean out)
+                                         {
+                                             ml_search_icon.setVisibility(out ? View.GONE : View.VISIBLE);
+                                             invalidateOptionsMenu();
+                                         }
+                                     },
+                                     new AirHeaderFit.Slot()
+                                     {
+                                         @Override
+                                         public int width()
+                                         {
+                                             final ViewGroup.MarginLayoutParams lp =
+                                                     (ViewGroup.MarginLayoutParams) chevron.getLayoutParams();
+                                             return lp.width + lp.getMarginStart() + lp.getMarginEnd();
+                                         }
+
+                                         @Override
+                                         public void setOut(final boolean out)
+                                         {
+                                             chevron.setVisibility(out ? View.GONE : View.VISIBLE);
+                                         }
+                                     });
+    }
+
+    /**
+     * KHANDAQ (redesign, stage 3): the live video is a header icon from 400dp up (values-w400dp), below that
+     * it is in the overflow, as the video call of a conversation with one person.
+     */
+    private void applyGroupVideoIcon()
+    {
+        if (ml_video_icon != null)
+        {
+            ml_video_icon.setVisibility(getResources().getBoolean(R.bool.air_chat_video_in_header) ? View.VISIBLE
+                                                                                                 : View.GONE);
         }
     }
 
@@ -5104,7 +5263,7 @@ public class GroupMessageListActivity extends AppCompatActivity
 
                     if (activity == null)
                     {
-                        display_toast(getString(R.string.group_video_join_failed), true, 400);
+                        AirComposerNotice.say(getString(R.string.group_video_join_failed), true);
                         return;
                     }
 
@@ -5183,7 +5342,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             }
             else
             {
-                display_toast(getString(R.string.location_share_failed), true, 400);
+                AirComposerNotice.say(getString(R.string.location_share_failed), false);
             }
             return;
         }
@@ -5193,20 +5352,31 @@ public class GroupMessageListActivity extends AppCompatActivity
             return;
         }
 
-        if (!hasNgcVideoPermissions())
-        {
-            HelperCall.showMissingPermissionToast(this, false);
-            pendingNgcPermissionAction = null;
-            return;
-        }
-
         final Runnable action = pendingNgcPermissionAction;
         pendingNgcPermissionAction = null;
 
-        if (action != null)
+        // E21: refused, the rule stands under the group's field instead of in a toast. Nothing waiting
+        // means the voice button asked for the microphone alone (start_group_voice_message_recording);
+        // before, granting it still toasted that video calls need the camera.
+        if (action == null)
         {
-            action.run();
+            if (!HelperCall.hasMicrophonePermission(this) && airPanel != null)
+            {
+                airPanel.sayAtComposer(getString(R.string.air_voice_needs_mic), false);
+            }
+            return;
         }
+
+        if (!hasNgcVideoPermissions())
+        {
+            if (airPanel != null)
+            {
+                airPanel.sayAtComposer(getString(R.string.air_group_video_needs_access), false);
+            }
+            return;
+        }
+
+        action.run();
     }
 
     // KHANDAQ (#12): any picker we launch from the group chat (file/camera/gallery) briefly sends
@@ -5223,6 +5393,12 @@ public class GroupMessageListActivity extends AppCompatActivity
     {
         super.onActivityResult(requestCode, resultCode, data);
 
+        if (requestCode == AirGroupDossierActivity.REQUEST_CODE)
+        {
+            on_group_dossier_result(resultCode, data);
+            return;
+        }
+
         if (requestCode == SelectFriendSingleActivity_ID && resultCode == RESULT_OK && data != null &&
             data.getData() != null)
         {
@@ -5236,7 +5412,8 @@ public class GroupMessageListActivity extends AppCompatActivity
                     {
                         group_id = group_id_prev;
                     }
-                    invite_friend_to_group(group_id, result_friend_pubkey);
+                    // E21: a failed invitation is said at the composer, not in a toast.
+                    invite_friend_to_group(group_id, result_friend_pubkey, text -> AirComposerNotice.say(text, true));
                 }
             }
             catch (Exception e)
@@ -5342,8 +5519,7 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         if (file_size_hint > FT_OUTGOING_FILESIZE_NGC_MAX_TOTAL)
         {
-            display_toast(c.getString(R.string.group_file_too_large,
-                    android.text.format.Formatter.formatFileSize(c, KHANDAQ_MAX_FILE_TRANSFER_BYTES)), true, 100);
+            AirComposerNotice.say(c.getString(R.string.group_file_too_large, AirByteSize.groupLimitText(c)), false);
             HelperGeneric.logI(TAG, "add_outgoing_file:documentFile:file_size=File too large");
             return null;
         }
@@ -5353,7 +5529,7 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         if (ofw == null)
         {
-            display_toast(c.getString(R.string.group_file_prepare_failed), true, 100);
+            AirComposerNotice.say(c.getString(R.string.group_file_prepare_failed), true);
             return null;
         }
 
@@ -5361,21 +5537,21 @@ public class GroupMessageListActivity extends AppCompatActivity
         if (file_size < 1)
         {
             HelperGeneric.logI(TAG, "file length 0 ?");
-            display_toast(c.getString(R.string.group_file_prepare_failed), true, 100);
+            AirComposerNotice.say(c.getString(R.string.group_file_prepare_failed), true);
             return null;
         }
 
         if (file_size > FT_OUTGOING_FILESIZE_NGC_MAX_TOTAL)
         {
-            display_toast(c.getString(R.string.group_file_too_large,
-                    android.text.format.Formatter.formatFileSize(c, KHANDAQ_MAX_FILE_TRANSFER_BYTES)), true, 100);
+            AirComposerNotice.say(c.getString(R.string.group_file_too_large, AirByteSize.groupLimitText(c)), false);
             return null;
         }
 
         if (file_size > 50L * 1024L * 1024L && startTransferImmediately)
         {
-            display_toast(c.getString(R.string.group_file_send_large_confirm_message,
-                    android.text.format.Formatter.formatFileSize(c, file_size)), false, 3500);
+            // It goes all the same: a note on the line under the field, not a question nobody can answer.
+            AirComposerNotice.say(c.getString(R.string.air_group_file_slow_format, AirByteSize.text(c, file_size)),
+                                  false);
         }
 
         if (file_size > TOX_MAX_NGC_FILESIZE)
@@ -5385,7 +5561,7 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         if ((file_size < 1) || (file_size > TRIFAGlobals.KHANDAQ_MAX_FILE_TRANSFER_BYTES))
         {
-            display_toast(c.getString(R.string.group_file_prepare_failed), true, 100);
+            AirComposerNotice.say(c.getString(R.string.group_file_prepare_failed), true);
             return null;
         }
 
@@ -5492,8 +5668,6 @@ public class GroupMessageListActivity extends AppCompatActivity
         {
             do_fade_anim_on_fab(MainActivity.group_message_list_fragment.unread_messages_notice_button, false,
                                 this.getClass().getName());
-            MainActivity.group_message_list_fragment.unread_messages_notice_button.setSupportBackgroundTintList(
-                    (ContextCompat.getColorStateList(context_s, R.color.message_list_scroll_to_bottom_fab_bg_normal)));
         }
         catch (Exception ignored)
         {

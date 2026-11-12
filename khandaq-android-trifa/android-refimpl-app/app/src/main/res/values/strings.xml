@@ -20,7 +20,7 @@
     <string name="onboarding_pw_title">Set password</string>
     <string name="onboarding_pw_label">Password</string>
     <string name="onboarding_pw_hint">Enter password</string>
-    <string name="onboarding_pw_helper">A password protects your data. At least 8 characters, letters and digits. Keep it safe — it cannot be recovered.</string>
+    <string name="onboarding_pw_helper">A password protects your data. At least 8 characters, letters and digits. Keep it safe: it cannot be recovered.</string>
     <string name="onboarding_pw_confirm_label">Confirm password</string>
     <string name="onboarding_pw_confirm_hint">Re-enter password</string>
     <string name="onboarding_create">Create</string>
@@ -31,7 +31,7 @@
     <string name="back">Back</string>
     <string name="onboarding_forgot_password">Forgot your password?</string>
     <string name="recovery_dialog_title">Forgot your password?</string>
-    <string name="recovery_dialog_message">Your profile is protected by your password, and without it the messages cannot be decrypted — that\'s how Khandaq encryption works. The password cannot be recovered or reset.\n\nYou can start over with a new profile or restore a backup (.tox). Doing so permanently deletes the current messages and contacts from this device.</string>
+    <string name="recovery_dialog_message">Your profile is protected by your password, and without it the messages cannot be decrypted: that\'s how Khandaq encryption works. The password cannot be recovered or reset.\n\nYou can start over with a new profile or restore a backup (.tox). Doing so permanently deletes the current messages and contacts from this device.</string>
     <string name="recovery_create_new">Create a new profile</string>
     <string name="recovery_import_backup">Import a profile (.tox)</string>
     <string name="recovery_confirm_wipe_title">Delete the current profile?</string>
@@ -39,20 +39,20 @@
     <string name="recovery_confirm_wipe_yes">Delete and start over</string>
     <string name="import_step_1">Save your .tox profile file to this device (e.g. in Downloads, or from email or a messenger)</string>
     <string name="import_step_2">Tap the “Import profile” button below</string>
-    <string name="import_step_3">Pick the .tox file in the file picker — your profile will be imported</string>
+    <string name="import_step_3">Pick the .tox file in the file picker: your profile will be imported</string>
     <string name="import_step_4">Check the new profile name and tap OK</string>
     <string name="chat_action_search">Search</string>
     <string name="chat_action_video">Video call</string>
     <string name="profile_label_name">Name</string>
     <string name="profile_label_status">Status</string>
-    <string name="profile_label_myid">MyID</string>
+    <string name="profile_label_myid">Your ID</string>
     <string name="profile_label_capabilities">Tox Capabilities</string>
     <string name="profile_show_qr">Show QR code</string>
     <string name="settings_export_profile">Export profile</string>
     <string name="settings_import_profile">Import profile</string>
-    <string name="settings_import_subtitle">Export or import a Tox profile (.tox). Only the Tox ID and contacts are transferred; chat history is not.</string>
+    <string name="settings_import_subtitle">An encrypted backup carries the whole profile with its chats and files. A plain .tox file, the one Import takes, carries only the Tox ID and contacts, without chat history.</string>
     <string name="settings_dark_theme">Dark theme</string>
-    <string name="myid_not_ready">Loading your ID…</string>
+    <string name="myid_not_ready">Loading your ID</string>
     <string name="settings_light_theme">Light theme</string>
     <string name="settings_notif_preview">Notification preview</string>
     <string name="settings_hide_living_emoji">Hide emoji of living beings</string>
@@ -85,22 +85,20 @@
     <string name="cp_restart_note">The profile databases will be re-encrypted with the new password. The app will restart; this can take a moment on large profiles.</string>
     <string name="cp_save">Change password</string>
     <string name="cp_confirm_text">Change the password now? The app will restart and re-encrypt your data. Make sure the battery is not about to die.</string>
-    <string name="cp_restarting">Restarting…</string>
+    <string name="cp_restarting">Restarting</string>
     <string name="cp_err_old_wrong">Current password is incorrect</string>
     <string name="cp_err_mismatch">New passwords do not match</string>
     <string name="cp_err_weak">Password too weak: at least 6 characters, letters and digits</string>
     <string name="cp_err_same">The new password matches the current one</string>
     <string name="cp_err_generic">Could not change the password</string>
-    <string name="cp_rekey_running">Re-encrypting your profile…</string>
+    <string name="cp_rekey_running">Re-encrypting your profile</string>
     <string name="cp_rekey_running_hint">Do not close the app. This can take a while on large profiles.</string>
-    <string name="cp_rekey_failed_note">Password change failed — your OLD password is still in effect.</string>
+    <string name="cp_rekey_failed_note">The password was not changed: your old password still works.</string>
     <string name="pd_delete_profile">Delete profile</string>
-    <string name="pd_delete_confirm">Delete profile? All data, chats and contacts will be permanently erased from this device. This cannot be undone.</string>
-    <string name="pd_delete_now">Delete</string>
     <string name="profile_edit_save">Save changes</string>
     <string name="profile_edit_name_hint">Your name</string>
     <string name="profile_edit_status_hint">Your status</string>
-    <string name="profile_qr_modal_title">Your account MyID</string>
+    <string name="profile_qr_modal_title">Your ID</string>
     <string name="profile_qr_modal_desc">Friends can message you by scanning your QR code.</string>
     <string name="settings_faq">FAQ</string>
     <string name="settings_about_app">About</string>
@@ -108,14 +106,12 @@
     <string name="settings_dl_never">Never</string>
     <string name="settings_dl_wifi">Wi-Fi only</string>
     <string name="settings_dl_always">Wi-Fi &amp; mobile data</string>
-    <string name="main_header_connecting">Connecting…</string>
-    <string name="connection_warn_weak">Weak connection</string>
-    <string name="connection_good">Connection stable</string>
+    <string name="main_header_connecting">Connecting</string>
     <string name="connection_quality_strong">Connection: good</string>
     <string name="connection_quality_medium">Connection: stable</string>
     <string name="connection_quality_weak">Connection: weak</string>
     <string name="connection_quality_offline">Connection: offline</string>
-    <string name="connection_reconnect_toast">Reconnecting…</string>
+    <string name="connection_reconnect_toast">Reconnecting</string>
     <string name="message_tap_failed_to_retry">Tap the red icon to retry sending</string>
     <string name="chat_date_today">Today</string>
     <string name="chat_date_yesterday">Yesterday</string>
@@ -183,7 +179,7 @@
     <string name="title_activity_conferenceinfo">Conferenceinfo</string>
     <string name="title_activity_groupinfo">Group info</string>
     <string name="title_activity_conferencepeerinfo">Peerinfo</string>
-    <string name="title_activity_grouppeerinfo">Group Peerinfo</string>
+    <string name="title_activity_grouppeerinfo">Group member</string>
     <string name="title_activity_aboutpage">About</string>
     <string name="title_activity_set_password">Set Password</string>
     <string name="title_activity_check_password">Enter Password</string>
@@ -222,23 +218,23 @@
          wording ("only Tox ID and contacts") described what is in it, not what it is, so the user
          could not weigh the decision. These strings front PlaintextExportGate. -->
     <string name="settings_export_choose_title">Export profile</string>
-    <string name="settings_export_choose_message">An encrypted backup is protected by a password you choose, and it also carries your chats and files. Choose the plain .tox file only if you are moving this account to a different Tox app — that file is your identity and has no password on it.</string>
+    <string name="settings_export_choose_message">An encrypted backup is protected by a password you choose, and it also carries your chats and files. Choose the plain .tox file only if you are moving this profile to a different Tox app: that file is your identity and has no password on it.</string>
     <string name="settings_export_choose_raw">Plain .tox file</string>
     <string name="plaintext_export_warning_title">This file is your identity</string>
-    <string name="plaintext_export_warning_message">A plain .tox file is your private key. Anyone who gets a copy becomes this account: they can sign in as you, read what is sent to you and write as you. It has no password, and it cannot be revoked afterwards.\n\nExport it only to move this account to another Tox app, and keep it out of cloud folders, shared storage and chat attachments. For a backup, use the encrypted backup instead.</string>
+    <string name="plaintext_export_warning_message">A plain .tox file is your private key. Anyone who gets a copy becomes you in Tox: they can sign in as you, read what is sent to you and write as you. It has no password, and it cannot be revoked afterwards.\n\nExport it only to move this profile to another Tox app, and keep it out of cloud folders, shared storage and chat attachments. For a backup, use the encrypted backup instead.</string>
     <string name="plaintext_export_reauth_title">Confirm it is you</string>
     <string name="plaintext_export_reauth_description">Unlock to export your identity in plain form.</string>
-    <string name="plaintext_export_not_authenticated">Export cancelled — not confirmed.</string>
+    <string name="plaintext_export_not_authenticated">Export cancelled: not confirmed.</string>
     <string name="plaintext_export_not_authorised">Export refused: this request was not confirmed.</string>
     <string name="plaintext_export_typed_confirm_word">EXPORT</string>
     <string name="plaintext_export_typed_confirm_message">This device has no screen lock, so there is nothing to unlock with. Type %1$s to confirm.</string>
     <string name="maintenance_reveal_passwords_gate_message">The next screen shows your database password in readable form, and can write a bundle that contains your private key. Anyone reading the screen or the file gets full access to this account.</string>
     <string name="settings_import_tox_profile_replace_warning">Your current profile, chats and local data will be replaced. Only Tox ID and contacts from the .tox file will remain. Chat history is not transferred.</string>
     <string name="settings_import_tox_profile_invalid_file">The selected file does not look like a valid Tox profile (.tox).</string>
-    <string name="settings_import_tox_profile_encrypted_file">This .tox profile is protected with a password. Khandaq can only import unencrypted profile exports — export the profile without a password and try again.</string>
-    <string name="voice_recording_locked">Recording locked — tap the button to send</string>
+    <string name="settings_import_tox_profile_encrypted_file">This .tox profile is protected with a password. Khandaq can only import unencrypted profile exports: export the profile without a password and try again.</string>
+    <string name="voice_recording_locked">Recording locked: tap the button to send</string>
     <string name="add_friend_paste_id">Paste ID from clipboard</string>
-    <string name="tox_profile_load_failed">Your Tox profile could not be loaded (corrupt or password-protected file). It was kept as savedata.tox.broken — the app will now restart with a new profile.</string>
+    <string name="tox_profile_load_failed">Your Tox profile could not be loaded (corrupt or password-protected file). It was kept as savedata.tox.broken: the app will now restart with a new profile.</string>
     <string name="settings_import_tox_profile_failed">Could not import the selected profile file.</string>
     <string name="layout___first_launch_import_profile_hint">Restore an existing Khandaq/Tox profile from a .tox file. Only your Tox ID and contacts are imported; chat history is not included.</string>
 
@@ -393,7 +389,7 @@
     <string name="pref_description_notification_show_content">Display the Messagetext and Sender in Notifications</string>
 
     <string name="pref_title_use_push_service">Use Push Service</string>
-    <string name="pref_description_use_push_service">WARNING: Uses Khandaq push relay (push.khandaq.org) via Google FCM to wake the app when offline.\nNo message content is sent through push — only a wake signal.\nHTTPS connections go to Khandaq relay, not through Tox P2P.</string>
+    <string name="pref_description_use_push_service">WARNING: Uses Khandaq push relay (push.khandaq.org) via Google FCM to wake the app when offline.\nNo message content is sent through push: only a wake signal.\nHTTPS connections go to Khandaq relay, not through Tox P2P.</string>
 
     <string name="pref_title_allow_push_server_ntfy">Allow ntfy.sh Server</string>
     <string name="pref_description_allow_push_server_ntfy">WARNING: Allow ntfy.sh server for push notifications, this may leak your metadata of timestamps when you receive push notifications, if a friend subscribes with your push token. ntfy.sh has NO passwords and NO authentication. you have been warned.</string>
@@ -572,7 +568,7 @@
     <string name="join_public_group_activity_help">Join a Public Group with the given Group ID.</string>
     <string name="join_public_group_activity_warning">Enter the 64-character group ID to join. Connection may take a few seconds.</string>
     <string name="group_send_observer_role">You are an observer in this group and cannot send messages. Ask a moderator to change your role to User.</string>
-    <string name="group_send_not_connected">Group is not connected yet. Reconnecting — try again in a moment.</string>
+    <string name="group_send_not_connected">Group is not connected yet. Reconnecting: try again in a moment.</string>
     <string name="group_send_group_not_found">This group is not active in Tox. Leave and re-join the group.</string>
     <string name="group_send_left_group">You left this group.</string>
     <string name="group_udp_blocked_hint">Can\'t connect to this group. Your network may be blocking peer discovery (common on mobile data or in some regions). Ask a member to add you as a contact and invite you into the group.</string>
@@ -599,7 +595,7 @@
     <string name="dm_send_failed_pending_request">Waiting for friend request to be accepted.</string>
     <string name="dm_send_failed_friend_offline">Contact is offline. The message will be delivered later.</string>
     <string name="group_invite_friend_success">Group invitation sent.</string>
-    <string name="group_invite_friend_queued">Contact is offline — invitation queued, will be sent when they reconnect.</string>
+    <string name="group_invite_friend_queued">Contact is offline: invitation queued, will be sent when they reconnect.</string>
     <string name="group_invite_friend_failed">Failed to invite contact to group.</string>
     <string name="group_invite_friend_not_found">Contact is not available in Tox.</string>
     <string name="group_invite_friend_disconnected">Group is disconnected.</string>
@@ -632,11 +628,6 @@
     <string name="call_permission_mic_required">Microphone permission is required for calls.</string>
     <string name="call_permission_camera_required">Camera permission is required for video calls.</string>
     <string name="call_start_failed">Failed to start call.</string>
-    <string name="call_log_outgoing_voice">Outgoing voice call</string>
-    <string name="call_log_outgoing_video">Outgoing video call</string>
-    <string name="call_log_incoming_voice">Incoming voice call</string>
-    <string name="call_log_incoming_video">Incoming video call</string>
-    <string name="call_log_missed">Missed call</string>
     <string name="call_log_failed">Call failed</string>
     <string name="add_group_activity_add">Create Group</string>
     <string name="join_group_activity_join">Join Group</string>
@@ -647,7 +638,7 @@
     <string name="join_public_group_failed_network">Could not reach the group on the network. Check internet and try again.</string>
     <string name="join_public_group_failed_password">This group requires a password.</string>
     <string name="join_public_group_error_no_id">Enter a Group ID</string>
-    <string name="join_public_group_error_illegal_chars">Group ID contains invalid characters. Only A–F and 0–9 are allowed.</string>
+    <string name="join_public_group_error_illegal_chars">Group ID contains invalid characters. Only A-F and 0-9 are allowed.</string>
     <string name="join_public_group_error_length">Group ID must be 64 hexadecimal characters.</string>
     <string name="join_public_group_joined">You have joined the Public Group</string>
     <string name="add_public_group_failed">Creating a Public Group failed</string>
@@ -679,8 +670,6 @@
     <string name="group_create_private_password">Optional group password</string>
     <string name="delete_group_title">Delete group?</string>
     <string name="delete_group_message">Delete this group and all messages?</string>
-    <string name="invite_join_group_success">You have been invited to a Group</string>
-    <string name="invite_join_conference_success">You have been invited to a Conference Group</string>
     <string name="FriendListHolder_toggle_notification_silent_title">toggle Notification</string>
     <string name="FriendListHolder_toggle_notification_silent_message">Do you want to toggle Notification Silence for this Friend?</string>
     <string name="MessageListHolder_file_incoming_cancel_ft_title">cancel Filetransfer</string>
@@ -691,12 +680,12 @@
     <string name="file_transfer_upload_failed">Upload failed</string>
     <string name="file_transfer_cancel">Cancel transfer</string>
     <string name="file_transfer_retry">Retry transfer</string>
-    <string name="file_transfer_progress_format">%1$s / %2$s · %3$d%%</string>
-    <string name="file_transfer_progress_with_speed">%1$s / %2$s · %3$d%% · %4$s</string>
+    <string name="file_transfer_progress_format">%1$s / %2$s, %3$d%%</string>
+    <string name="file_transfer_progress_with_speed">%1$s / %2$s, %3$d%%, %4$s</string>
     <string name="file_transfer_waiting_sender">Waiting for sender</string>
     <string name="file_transfer_sender_offline">Sender is offline. The file will download when they reconnect.</string>
-    <string name="file_transfer_connection_issue">Connection issue — tap retry</string>
-    <string name="file_transfer_downloading">Downloading…</string>
+    <string name="file_transfer_connection_issue">Connection problem. You can retry the transfer.</string>
+    <string name="file_transfer_downloading">Downloading</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_title">cancel Filetransfer</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_message">Do you want to cancel this Filetransfer?</string>
     <!-- Strings related to Settings -->
@@ -712,11 +701,11 @@
     <string name="tab_chats">Chats</string>
     <string name="chat_filter_groups">Groups</string>
     <string name="chat_filter_favorites">Favorites</string>
-    <string name="favorites_chat_title">Favorites</string>
+    <string name="favorites_chat_title">Saved Messages</string>
     <string name="favorites_chat_subtitle">Save messages and notes for yourself</string>
-    <string name="forward_to_favorites">Forward to Favorites</string>
-    <string name="forward_to_favorites_done">Saved to Favorites</string>
-    <string name="add_self_disabled_use_favorites">Use the Favorites chat at the top of your chat list</string>
+    <string name="forward_to_favorites">Forward to Saved Messages</string>
+    <string name="forward_to_favorites_done">Forwarded to Saved Messages</string>
+    <string name="add_self_disabled_use_favorites">That is your own ID: write to yourself in Saved Messages</string>
     <string name="chat_filter_add_favorite">Add to favorites</string>
     <string name="chat_filter_remove_favorite">Remove from favorites</string>
     <string name="empty_state_chats_title">No chats</string>
@@ -725,11 +714,11 @@
     <string name="empty_state_groups_title">No groups</string>
     <string name="empty_state_groups_hint">Create or join a group to get started</string>
     <string name="empty_state_groups_action">Create group</string>
-    <string name="empty_state_favorites_title">No favorites</string>
-    <string name="empty_state_favorites_hint">Pin chats from the chat menu to find them here quickly</string>
+    <string name="empty_state_favorites_title">No favorites yet</string>
+    <string name="empty_state_favorites_hint">Mark a chat in its menu and it will be here.</string>
     <string name="empty_state_contacts_title">No contacts</string>
-    <string name="empty_state_contacts_hint">You don\'t have any contacts yet — add some, or share your MyID with them</string>
-    <string name="empty_state_contacts_action">Copy MyID</string>
+    <string name="empty_state_contacts_hint">No contacts yet. Add one, or share your ID</string>
+    <string name="empty_state_contacts_action">Copy ID</string>
     <string name="tab_settings">Settings</string>
     <string name="tab_profile">Profile</string>
     <string name="theme_toggle_accessibility">Toggle dark mode</string>
@@ -753,7 +742,7 @@
     <string name="MainActivity_new_noti_token_dialog_text">New Notification Token received. Use this Token?</string>
     <string name="MainActivity_info_dialog_title">INFO</string>
     <string name="MainActivity_add_to_batt_opt">Please add Khandaq to the exception list for Batteryoptimization!</string>
-    <string name="MainActivity_friend_is_typing">typing…</string>
+    <string name="MainActivity_friend_is_typing">typing</string>
     <string name="chat_presence_online">online</string>
     <string name="chat_presence_away">away</string>
     <string name="chat_presence_busy">busy</string>
@@ -801,12 +790,12 @@
     <string name="group_open_member_list">Members</string>
     <string name="group_member_list_title">Members</string>
     <plurals name="group_header_member_count">
-        <item quantity="one">%1$d member · %2$d online</item>
-        <item quantity="other">%1$d members · %2$d online</item>
+        <item quantity="one">%1$d member, %2$d online</item>
+        <item quantity="other">%1$d members, %2$d online</item>
     </plurals>
-    <string name="group_header_discovering_peers">Discovering members…</string>
-    <string name="group_header_connecting_attempt">Connecting… (attempt %1$d/%2$d)</string>
-    <string name="group_header_reconnecting_peers">Reconnecting to peers…</string>
+    <string name="group_header_discovering_peers">Discovering members</string>
+    <string name="group_header_connecting_attempt">Connecting (attempt %1$d/%2$d)</string>
+    <string name="group_header_reconnecting_peers">Reconnecting to peers</string>
     <string name="friend_info_status_unknown">No status saved</string>
     <plurals name="friend_info_message_count">
         <item quantity="one">%1$d message</item>
@@ -838,7 +827,7 @@
     <string name="group_info_your_name_hint">Your name in this group</string>
     <string name="group_info_copy_id">Copy</string>
     <string name="group_info_copy_invite">Copy group ID</string>
-    <string name="group_info_invite_short_id">Tap to copy · ID %1$s</string>
+    <string name="group_info_invite_short_id">Tap to copy, ID %1$s</string>
     <string name="group_info_debug_section">Developer</string>
     <string name="group_info_debug_dump_peers">Dump offline peers (debug)</string>
     <string name="group_info_reconnect">Reconnect</string>
@@ -859,7 +848,7 @@
     </plurals>
     <string name="group_info_member_you">you</string>
     <string name="group_info_connection_connected">Connected</string>
-    <string name="group_info_connection_connecting">Connecting…</string>
+    <string name="group_info_connection_connecting">Connecting</string>
     <string name="group_info_connection_disconnected">Disconnected</string>
     <string name="group_info_role_founder">Founder</string>
     <string name="group_info_role_moderator">Moderator</string>
@@ -873,7 +862,7 @@
     <string name="group_delete_system_msgs_title">Delete system messages</string>
     <string name="group_delete_system_msgs_message">Delete all system messages (join/leave) in this group permanently?</string>
     <string name="group_delete_system_msgs_confirm">Delete</string>
-    <string name="group_delete_system_msgs_progress">Deleting, please wait…</string>
+    <string name="group_delete_system_msgs_progress">Deleting, please wait</string>
     <string name="group_delete_system_msgs_done">System messages deleted</string>
     <string name="group_member_probable_bot_short">bot</string>
     <string name="group_member_action_info">Info</string>
@@ -894,7 +883,7 @@
     <string name="group_member_action_kick">Remove from group</string>
     <string name="group_member_action_bot_info">What is this bot?</string>
     <string name="group_member_action_bot_info_title">Automated client</string>
-    <string name="group_member_action_bot_info_body">Not a human tester — a headless TRIfA/CI client in the public group. Names like Cameron Willis come from RandomNameGenerator in TRIfA. ID: %1$s</string>
+    <string name="group_member_action_bot_info_body">Not a human tester: a headless TRIfA/CI client in the public group. Names like Cameron Willis come from RandomNameGenerator in TRIfA. ID: %1$s</string>
     <string name="group_title_saved_toast">Group name updated</string>
     <string name="group_title_save_failed_toast">Could not update group name</string>
 
@@ -912,17 +901,16 @@
 
     <string name="Aboutpage_0">Khandaq Crashlog</string>
     <string name="Aboutpage_2">Send crash report</string>
-    <string name="Aboutpage_4">Reading crash info…</string>
+    <string name="Aboutpage_4">Reading the crash report</string>
     <string name="Aboutpage_5a">Khandaq Messenger</string>
     <string name="Aboutpage_5b">Version:</string>
     <string name="Aboutpage_6">What is Tox?</string>
     <string name="Aboutpage_protocol">Protocol: Tox</string>
     <string name="Aboutpage_license">License: GNU GPL v2+</string>
     <string name="Aboutpage_website">Website</string>
-    <string name="Aboutpage_opensource">Open Source Licenses</string>
+    <string name="Aboutpage_opensource">Open source licenses</string>
     <string name="Aboutpage_upstream">Based on TRIfA (ToxAndroidRefImpl)</string>
-    <string name="about_tagline">End-to-end encrypted messenger on the Tox network.</string>
-    <string name="about_version_format">Version %1$s · build %2$s</string>
+    <string name="about_version_format">Version %1$s, build %2$s</string>
     <string name="about_section_support">Support</string>
     <string name="about_section_legal">Legal &amp; info</string>
     <string name="about_section_debug">Build details</string>
@@ -933,12 +921,11 @@
     <string name="about_send_feedback">Send feedback</string>
     <string name="about_feedback_subject">Khandaq feedback</string>
     <string name="about_crash_report_unavailable">Open Khandaq from the chat list, then try again.</string>
-    <string name="about_debug_unlocked">Build details unlocked</string>
     <string name="about_upstream_commit">Upstream TRIfA commit</string>
     <string name="about_jni_commit">JNI commit</string>
     <string name="about_toxcore_commit">c-toxcore commit</string>
     <!-- KHANDAQ (18.08): About screen — owner/developer credit, links to https://1sa.me/ -->
-    <string name="about_credit_owner">Owner and developer — Isa Dagestani</string>
+    <string name="about_credit_owner">Owner and developer: Isa Dagestani</string>
 
     <string name="AddFriendActivity_3">incorrect ID</string>
     <string name="AddFriendActivity_4">No ID</string>
@@ -947,7 +934,7 @@
     <string name="text_copied_to_clipboard">Copied to clipboard</string>
     <string name="friend_not_online">Friend is not online</string>
 
-    <string name="maintenance_exporting">Exporting…</string>
+    <string name="maintenance_exporting">Exporting</string>
     <string name="maintenance_export_ready">Export complete</string>
     <string name="maintenance_export_failed">Export failed</string>
     <string name="maintenance_report_bug_title">Report a bug</string>
@@ -969,22 +956,22 @@
     <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
     <string name="import_toxsave_ok_title">Profile imported</string>
     <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
-    <string name="import_toxsave_in_progress">Importing profile…</string>
+    <string name="import_toxsave_in_progress">Importing the profile</string>
     <string name="backup_password_button">Encrypted backup (password)</string>
     <string name="backup_password_title">Encrypted backup</string>
     <string name="backup_password_enter">Backup password</string>
     <string name="backup_password_confirm">Repeat password</string>
-    <string name="backup_password_warning">This password protects your whole profile — messages, media and identity. If you lose it the backup cannot be opened; there is no recovery.</string>
+    <string name="backup_password_warning">This password protects the whole profile: messages, media and identity. If you lose it, the backup cannot be opened; there is no recovery.</string>
     <string name="backup_password_too_short">Password must be at least 8 characters</string>
     <string name="backup_password_mismatch">Passwords do not match</string>
-    <string name="backup_in_progress">Creating encrypted backup…</string>
+    <string name="backup_in_progress">Creating an encrypted backup</string>
     <string name="backup_done">Backup created.</string>
     <string name="backup_failed">Backup failed:</string>
     <string name="restore_password_button">Restore from backup (password)</string>
     <string name="restore_password_title">Restore backup</string>
     <string name="restore_password_enter">Backup password</string>
-    <string name="restore_confirm">This replaces your current profile — messages, media and identity — with the backup. Continue?</string>
-    <string name="restore_in_progress">Restoring backup…</string>
+    <string name="restore_confirm">This replaces your current profile (messages, media and identity) with the backup. Continue?</string>
+    <string name="restore_in_progress">Restoring the backup</string>
     <string name="restore_failed">Restore failed:</string>
     <string name="restore_too_new">This backup was made by a newer app version. Update the app first.</string>
     <string name="files_exported_to">Files exported to:\n%1$s</string>
@@ -1008,14 +995,14 @@
     <string name="chat_filter_audio_only">Audio</string>
     <string name="chat_filter_voice_only">Voice messages</string>
     <string name="chat_ft_status_confirm_send">Send this file?</string>
-    <string name="chat_ft_status_waiting_self_online">Waiting for network connection…</string>
+    <string name="chat_ft_status_waiting_self_online">Waiting for the network</string>
     <string name="chat_ft_status_waiting_friend_online">Will send when contact is online</string>
-    <string name="chat_ft_status_sending">Sending…</string>
-    <string name="chat_ft_status_waiting_friend_accept">Waiting for contact to accept…</string>
+    <string name="chat_ft_status_sending">Sending</string>
+    <string name="chat_ft_status_waiting_friend_accept">Waiting for the contact to accept</string>
     <string name="voice_message_label">Voice message</string>
     <string name="media_label_photo">Photo</string>
     <string name="emoji">Emoji</string>
-    <string name="media_send_caption_hint">Add a caption…</string>
+    <string name="media_send_caption_hint">Add a caption</string>
     <string name="media_send_edit_photo">Edit photo</string>
     <string name="media_send_edit_failed">Couldn\'t edit photo</string>
     <string name="media_send_counter_format">%1$d / %2$d</string>
@@ -1047,13 +1034,13 @@
     <string name="attach_send_selected">Send (%1$d)</string>
     <string name="attach_no_camera">No camera available</string>
     <string name="group_private_msg_label">Private message:</string>
-    <string name="group_private_msg_hint">Write a private message…</string>
+    <string name="group_private_msg_hint">Write a private message</string>
     <string name="group_private_msg_send">Send private message</string>
     <string name="group_private_msg_sent">Private message sent</string>
     <string name="group_private_msg_failed">Could not send private message</string>
-    <string name="peer_conn_direct_udp">Connection: direct (UDP) ⚡ fast</string>
-    <string name="peer_conn_relay_tcp">Connection: via relay (TCP) — slower</string>
-    <string name="peer_conn_offline">Connection: offline</string>
+    <string name="peer_conn_direct_udp">Link: direct</string>
+    <string name="peer_conn_relay_tcp">Link: via a relay, slower</string>
+    <string name="peer_conn_offline">Not online now</string>
     <string name="friend_display_name_fallback">Contact</string>
     <string name="layout___group_name">Group Name</string>
     <string name="layout___group_id">Group ID</string>
@@ -1123,7 +1110,7 @@
     <string name="layout___own_pushurl">Push URL:</string>
     <string name="layout___new_random_nospam">new Random NOSPAM</string>
     <string name="layout___own_pubkey">Own ID:</string>
-    <string name="layout___copy_toxid">Copy MyID</string>
+    <string name="layout___copy_toxid">Copy ID</string>
     <string name="layout___your_toxidenticon">Your ID icon</string>
     <string name="layout___active_network_connections">active Network Connections:</string>
     <string name="layout___error_getting_active_network_connections">*error getting active network connections*</string>
@@ -1168,17 +1155,15 @@
     <string name="message_edited_marker">edited</string>
     <string name="settings_language">Language</string>
     <string name="settings_language_title">App language</string>
-    <string name="group_msg_sender_unverified">Relayed from history — sender not verified</string>
+    <string name="group_msg_sender_unverified">Relayed from history, sender not verified</string>
     <!-- KHANDAQ (re-review 2026-08-22, KQ-03): shown INSTEAD of the claimed author name
          when relayed history names an author whose signing key is stale and the relaying
          peer is somebody else. The row is kept; the identity is not asserted. -->
-    <string name="group_msg_relayed_unattributed">Relayed history — author not verified</string>
+    <string name="group_msg_relayed_unattributed">Relayed history, author not verified</string>
     <!-- KHANDAQ (QA 02.10): call-waiting screen, share to Favorites, why a message cannot be edited -->
-    <string name="call_waiting_title_top">Waiting for</string>
-    <string name="call_waiting_title_bottom">to come online…</string>
-    <string name="share_saving_to_favorites">Saving to Favorites…</string>
+    <string name="share_saving_to_favorites">Saving to Saved Messages</string>
     <string name="share_open_app_first">Khandaq is starting. Share again once it is open</string>
-    <string name="share_favorites_failed">Could not save %1$d of %2$d files to Favorites</string>
+    <string name="share_favorites_failed">Could not save %1$d of %2$d files to Saved Messages</string>
     <string name="chat_edit_blocked_not_delivered">You can edit this message once it has been delivered</string>
     <string name="chat_edit_blocked_unsupported">This contact\'s app can\'t receive edits. Ask them to update Khandaq</string>
     <string name="chat_edit_blocked_reply">Replies can\'t be edited yet</string>

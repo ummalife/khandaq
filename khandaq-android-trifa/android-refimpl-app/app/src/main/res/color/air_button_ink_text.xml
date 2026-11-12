@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The words on the ink button: on-ink, or the quiet ink on the sunken plate of a disabled one. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/kq_ink_3" android:state_enabled="false" />
+    <item android:color="@color/kq_on_ink" />
+</selector>

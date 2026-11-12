@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- E21 (redesign, stage 3b): refusals and failures said at their place instead of in a toast -->
+    <string name="air_retry_contact_offline">They are offline now. Retry once they are online</string>
+    <string name="air_retry_group_not_connected">The group is not connected yet. Retry in a moment</string>
+    <string name="air_voice_needs_mic">Voice messages need the microphone: allow it for Khandaq in the phone\'s settings</string>
+    <string name="air_group_video_needs_access">Group video needs the camera and the microphone: allow them for Khandaq in the phone\'s settings</string>
+    <string name="air_incoming_file_over_limit_format">A file of %1$s did not come in: the limit is %2$s</string>
+    <string name="air_group_message_unreadable">A message in this group could not be read and was left out</string>
+    <string name="air_group_file_unreadable">A file in this group could not be received</string>
+    <string name="air_profile_load_failed_kept">Khandaq could not open the profile file on this device. The file is kept as it is, and Khandaq closes now</string>
+    <string name="air_profile_load_failed_parked">Khandaq could not open the profile file and set it aside. Khandaq closes now and starts with a new profile next time</string>
+    <string name="air_profile_export_failed_title">The profile was not exported</string>
+    <string name="air_profile_export_failed_message">The profile did not go into the file you chose. Try again.</string>
+    <string name="air_export_cancelled">Export cancelled: the screen lock was not confirmed</string>
+    <string name="air_group_setting_not_saved">The setting did not change. Try again once the group is connected</string>
+    <string name="air_contact_add_failed">The contact was not added. Try again</string>
+    <!-- E21 (redesign, stage 3b): more refusals and failures said at their place -->
+    <string name="air_group_private_not_sent">Not sent. The text is still in the field: send it again once they are online in the group</string>
+    <string name="air_network_log_not_shared">The log was not shared: Khandaq could not write it to a file. Try again</string>
+    <string name="air_nc_scan_needs_camera">Scanning needs the camera: allow it for Khandaq, or choose a photo of the code</string>
+    <string name="air_nc_scan_camera_failed">The camera did not start. Close other apps that use it and scan again, or choose a photo of the code</string>
+</resources>

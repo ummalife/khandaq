@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- First launch, sign-in and moving a profile in (redesign stage 4, E19 and E20); iOS keys where the meaning is the same, Android wording where Android works differently -->
+    <string name="air_first_step_format">الخطوة %1$d من %2$d</string>
+    <string name="air_first_name_title">بماذا نناديك</string>
+    <string name="air_first_name_body">لن يرى هذا الاسم إلا من تضيفهم.</string>
+    <string name="air_first_name_placeholder">الاسم</string>
+    <string name="air_first_name_first">اكتب اسمًا أولًا.</string>
+    <string name="air_first_next">التالي</string>
+    <string name="air_first_move_profile">نقل ملف شخصي من جهاز آخر</string>
+    <string name="air_first_password_title">كلمة مرور الملف الشخصي</string>
+    <string name="air_first_password_body">لا يمكن استعادة كلمة المرور: لا توجد خوادم. يُحفظ الملف الشخصي على هذا الجهاز فقط.</string>
+    <string name="air_first_password_set">تعيين كلمة مرور</string>
+    <string name="air_first_password_set_detail">يُشفَّر الملف الشخصي بكلمة المرور. بعد تسجيل الخروج لا يُفتح إلا بها.</string>
+    <string name="air_first_password_skip">المتابعة دون كلمة مرور</string>
+    <string name="air_first_password_skip_detail">يبقى الملف الشخصي مشفّرًا بمفتاح محفوظ على هذا الهاتف. يُفتح دون كلمة مرور لمن يستطيع فتح قفل هذا الهاتف، وهنا فقط.</string>
+    <string name="air_first_password_placeholder">كلمة المرور</string>
+    <string name="air_first_repeat_placeholder">كلمة المرور مرة أخرى</string>
+    <string name="air_first_password_rule">8 أحرف على الأقل، مع حرف ورقم.</string>
+    <string name="air_first_password_empty">اختر كلمة مرور أولًا.</string>
+    <string name="air_first_password_short">كلمة المرور أقصر من 8 أحرف.</string>
+    <string name="air_first_password_weak">تحتاج كلمة المرور إلى حرف ورقم.</string>
+    <string name="air_first_password_repeat_first">اكتب كلمة المرور مرة أخرى في الحقل الثاني.</string>
+    <string name="air_first_password_mismatch">كلمتا المرور غير متطابقتين.</string>
+    <string name="air_first_create">إنشاء الملف الشخصي</string>
+    <string name="air_first_creating">جارٍ إنشاء الملف الشخصي</string>
+    <string name="air_first_create_failed">لم يُنشأ الملف الشخصي. حاول مرة أخرى.</string>
+    <string name="air_first_id_title">معرّفك جاهز</string>
+    <string name="air_first_id_body">أرسل معرّفك إلى من تريد مراسلتهم، أو أرِهم رمز QR.</string>
+    <string name="air_first_share">مشاركة</string>
+    <string name="air_first_add_person">إضافة أول شخص</string>
+    <string name="air_field_show_password">إظهار كلمة المرور</string>
+    <string name="air_field_hide_password">إخفاء كلمة المرور</string>
+    <string name="air_signin_go">تسجيل الدخول</string>
+    <string name="air_signin_opening">جارٍ فتح الملف الشخصي</string>
+    <string name="air_signin_enter_password">أدخل كلمة المرور أولًا.</string>
+    <string name="air_signin_no_password">يُفتح هذا الملف الشخصي دون كلمة مرور، على هذا الهاتف فقط.</string>
+    <string name="air_signin_profile_fallback">الملف الشخصي على هذا الجهاز</string>
+    <string name="air_signin_forgot">نسيت كلمة المرور؟</string>
+    <string name="air_signin_forgot_title">لا يمكن استعادة كلمة المرور</string>
+    <string name="air_signin_forgot_message">لا توجد خوادم، ولا يعرف كلمة المرور سواك. يحصل الملف الشخصي الجديد على معرّف جديد ويحلّ محلّ هذا الملف: يُحذف هذا الملف الشخصي وجهات اتصاله وسجلّه من الهاتف.</string>
+    <string name="air_signin_start_over">حذف وإنشاء ملف جديد</string>
+    <string name="air_signin_wrong_password">كلمة المرور غير صحيحة. تحقّق من لغة لوحة المفاتيح والأحرف الكبيرة.</string>
+    <string name="air_signin_damaged">ملف الملف الشخصي تالف. إن كانت لديك نسخة مُصدَّرة، فانقل الملف الشخصي منها.</string>
+    <string name="air_signin_no_access">لا يمكن الوصول إلى ملف الملف الشخصي. أعد تشغيل الهاتف وحاول مرة أخرى.</string>
+    <string name="air_import_title">نقل ملف شخصي</string>
+    <string name="air_import_reading">جارٍ قراءة الملف</string>
+    <string name="air_import_preview_title">هل هذا ملفك الشخصي؟</string>
+    <string name="air_import_preview_body">تحقّق من الاسم والمعرّف. يحمل الملف المعرّف وجهات الاتصال، ولا يحمل سجلّ المحادثات.</string>
+    <string name="air_import_name">الاسم</string>
+    <string name="air_import_no_name">دون اسم</string>
+    <string name="air_import_confirm">نقل الملف الشخصي إلى هنا</string>
+    <string name="air_import_moving">جارٍ نقل الملف الشخصي</string>
+    <string name="air_import_other_file">اختيار ملف آخر</string>
+    <string name="air_import_not_profile">هذا ليس ملفًا شخصيًا من Khandaq. اختر ملف ‎.tox مُصدَّرًا من ملف شخصي.</string>
+    <string name="air_import_encrypted">هذا الملف محمي بكلمة مرور. لا ينقل Khandaq على Android إلا ملفًا شخصيًا محفوظًا دون كلمة مرور.</string>
+    <string name="air_import_failed_title">لم يُنقل الملف الشخصي</string>
+    <!-- Stage 4: how a moved-in profile opens on Android -->
+    <string name="air_import_device_key">على هذا الهاتف يُفتح الملف الشخصي دون كلمة مرور، بمفتاح محفوظ هنا. يمكن تعيين كلمة مرور لاحقًا من «الملف الشخصي» ثم «كلمة المرور ورمز PIN».</string>
+</resources>

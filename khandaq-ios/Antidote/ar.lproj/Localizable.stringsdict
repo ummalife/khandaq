@@ -29,7 +29,7 @@
 	<key>group_member_online_count_format</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
-		<string>%1$#@members@ · %2$d متصل</string>
+		<string>%1$#@members@، %2$d متصل</string>
 		<key>members</key>
 		<dict>
 			<key>NSStringFormatSpecTypeKey</key>
@@ -240,6 +240,246 @@
 			<string>%d ساعة</string>
 			<key>other</key>
 			<string>%d ساعة</string>
+		</dict>
+	</dict>
+	<key>air_presence_away_days</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>غير متصل منذ %#@days@</string>
+		<key>days</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>%d يوم</string>
+			<key>one</key>
+			<string>%d يوم</string>
+			<key>two</key>
+			<string>%d يومين</string>
+			<key>few</key>
+			<string>%d أيام</string>
+			<key>many</key>
+			<string>%d يومًا</string>
+			<key>other</key>
+			<string>%d يوم</string>
+		</dict>
+	</dict>
+	<key>air_presence_away_hours</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>غير متصل منذ %#@hours@</string>
+		<key>hours</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>%d ساعة</string>
+			<key>one</key>
+			<string>%d ساعة</string>
+			<key>two</key>
+			<string>%d ساعتين</string>
+			<key>few</key>
+			<string>%d ساعات</string>
+			<key>many</key>
+			<string>%d ساعة</string>
+			<key>other</key>
+			<string>%d ساعة</string>
+		</dict>
+	</dict>
+	<key>air_presence_away_minutes</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>غير متصل منذ %#@minutes@</string>
+		<key>minutes</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>%d دقيقة</string>
+			<key>one</key>
+			<string>%d دقيقة</string>
+			<key>two</key>
+			<string>%d دقيقتين</string>
+			<key>few</key>
+			<string>%d دقائق</string>
+			<key>many</key>
+			<string>%d دقيقة</string>
+			<key>other</key>
+			<string>%d دقيقة</string>
+		</dict>
+	</dict>
+	<key>air_tray_head_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>في الطريق: %#@messages@</string>
+		<key>messages</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>%d رسالة</string>
+			<key>one</key>
+			<string>%d رسالة</string>
+			<key>two</key>
+			<string>%d رسالتان</string>
+			<key>few</key>
+			<string>%d رسائل</string>
+			<key>many</key>
+			<string>%d رسالة</string>
+			<key>other</key>
+			<string>%d رسالة</string>
+		</dict>
+	</dict>
+	<key>air_nc_verdict_left</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@chars@</string>
+		<key>chars</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>بقي %d رمز.</string>
+			<key>one</key>
+			<string>بقي رمز واحد.</string>
+			<key>two</key>
+			<string>بقي رمزان.</string>
+			<key>few</key>
+			<string>بقيت %d رموز.</string>
+			<key>many</key>
+			<string>بقي %d رمزًا.</string>
+			<key>other</key>
+			<string>بقي %d رمز.</string>
+		</dict>
+	</dict>
+	<key>air_cmd_id_left</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@chars@</string>
+		<key>chars</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>ينقص %d رمز</string>
+			<key>one</key>
+			<string>ينقص رمز واحد</string>
+			<key>two</key>
+			<string>ينقص رمزان</string>
+			<key>few</key>
+			<string>تنقص %d رموز</string>
+			<key>many</key>
+			<string>ينقص %d رمزًا</string>
+			<key>other</key>
+			<string>ينقص %d رمز</string>
+		</dict>
+	</dict>
+	<key>air_group_members_count</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@members@</string>
+		<key>members</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>%d عضو</string>
+			<key>one</key>
+			<string>عضو واحد</string>
+			<key>two</key>
+			<string>عضوان</string>
+			<key>few</key>
+			<string>%d أعضاء</string>
+			<key>many</key>
+			<string>%d عضوًا</string>
+			<key>other</key>
+			<string>%d عضو</string>
+		</dict>
+	</dict>
+	<key>air_group_hint_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@reach@</string>
+		<key>reach</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>يستلمها الآن %1$d من %2$d، والباقون عند اتصالهم</string>
+			<key>one</key>
+			<string>يستلمها الآن %1$d من %2$d، والباقون عند اتصالهم</string>
+			<key>two</key>
+			<string>يستلمها الآن %1$d من %2$d، والباقون عند اتصالهم</string>
+			<key>few</key>
+			<string>يستلمها الآن %1$d من %2$d، والباقون عند اتصالهم</string>
+			<key>many</key>
+			<string>يستلمها الآن %1$d من %2$d، والباقون عند اتصالهم</string>
+			<key>other</key>
+			<string>يستلمها الآن %1$d من %2$d، والباقون عند اتصالهم</string>
+		</dict>
+	</dict>
+	<key>air_group_hint_all_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@all@</string>
+		<key>all</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>يستلمها الآن الجميع (%d): كلهم متصلون</string>
+			<key>one</key>
+			<string>يستلمها الآن الجميع (%d): كلهم متصلون</string>
+			<key>two</key>
+			<string>يستلمها الآن الاثنان: كلاهما متصل</string>
+			<key>few</key>
+			<string>يستلمها الآن الجميع (%d): كلهم متصلون</string>
+			<key>many</key>
+			<string>يستلمها الآن الجميع (%d): كلهم متصلون</string>
+			<key>other</key>
+			<string>يستلمها الآن الجميع (%d): كلهم متصلون</string>
+		</dict>
+	</dict>
+	<key>air_invite_sent</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@sent@</string>
+		<key>sent</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>أُرسلت %d دعوة</string>
+			<key>one</key>
+			<string>أُرسلت الدعوة</string>
+			<key>two</key>
+			<string>أُرسلت دعوتان</string>
+			<key>few</key>
+			<string>أُرسلت %d دعوات</string>
+			<key>many</key>
+			<string>أُرسلت %d دعوة</string>
+			<key>other</key>
+			<string>أُرسلت %d دعوة</string>
 		</dict>
 	</dict>
 </dict>

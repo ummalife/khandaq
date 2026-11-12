@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (redesign stage 4, E20): a 64dp circle of the PIN keypad: sunken at rest, the strong line
+     while pressed so the touch shows in both themes, the focus ring under a keyboard. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:exitFadeDuration="@integer/kq_dur_tap">
+    <item android:state_pressed="true">
+        <shape android:shape="oval">
+            <solid android:color="@color/kq_line_strong" />
+        </shape>
+    </item>
+    <item android:state_focused="true">
+        <shape android:shape="oval">
+            <solid android:color="@color/kq_sunken" />
+            <stroke android:width="@dimen/kq_stroke_focus" android:color="@color/kq_focus" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="@color/kq_sunken" />
+        </shape>
+    </item>
+</selector>

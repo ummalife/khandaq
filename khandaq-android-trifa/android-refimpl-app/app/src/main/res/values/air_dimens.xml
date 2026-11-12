@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Where a row's text starts: 16 to the tile, the 40dp tile, 12 after it. -->
+    <dimen name="air_text_start">68dp</dimen>
+    <!-- How far a group's second tile peeks out, to the trailing edge and up. -->
+    <dimen name="air_back_tile_offset">4dp</dimen>
+    <!-- The dashes of a tile that waits for an answer. -->
+    <dimen name="air_dash_on">4dp</dimen>
+    <dimen name="air_dash_off">2dp</dimen>
+    <!-- How far a row rises while the list comes in for the first time. -->
+    <dimen name="air_reveal_rise">8dp</dimen>
+    <!-- A horizontal swipe on the list longer than this, or faster than the velocity, changes the filter. -->
+    <dimen name="air_swipe_distance">60dp</dimen>
+    <dimen name="air_swipe_velocity">400dp</dimen>
+    <!-- The conversation: where an entry's text starts (16 to the time, the 38dp column, 10 after it), -->
+    <!-- and the room above and below an entry (4 of its own and half of the 2 between entries). -->
+    <dimen name="air_entry_text_start">64dp</dimen>
+    <dimen name="air_entry_inset">5dp</dimen>
+    <!-- The tile beside the name in the chat header: the desk tile, as on iOS, so a 360dp phone keeps
+         about ten characters of the name. -->
+    <dimen name="air_header_tile">@dimen/kq_size_tile_desk</dimen>
+    <!-- How much of the conversation the dossier leaves showing below itself at most. -->
+    <dimen name="air_dossier_gap">64dp</dimen>
+    <!-- The tile at the head of the dossier. -->
+    <dimen name="air_dossier_tile">48dp</dimen>
+    <!-- A segmented control option: the field radius less the 2dp the well pads it with. -->
+    <dimen name="air_segment_option_radius">6dp</dimen>
+    <!-- The toast's lift: the elevation token "toast" drops its shadow 10 below it. -->
+    <dimen name="air_toast_elevation">@dimen/kq_space_10</dimen>
+    <!-- You: the QR card is as wide as the phone, and no wider than this. -->
+    <dimen name="air_you_qr_max">400dp</dimen>
+</resources>

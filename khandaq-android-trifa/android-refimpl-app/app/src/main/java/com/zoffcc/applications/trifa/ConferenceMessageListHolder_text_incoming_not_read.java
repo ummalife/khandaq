@@ -22,12 +22,9 @@ package com.zoffcc.applications.trifa;
 import org.khandaq.messenger.R;
 
 import android.content.Context;
-import android.content.DialogInterface;
-import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
-import android.net.Uri;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
@@ -47,13 +44,11 @@ import com.mikepenz.iconics.IconicsDrawable;
 import com.zoffcc.applications.sorm.ConferenceMessage;
 import com.zoffcc.applications.sorm.FriendList;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.RecyclerView;
 
 import static com.zoffcc.applications.trifa.ConferenceMessageListActivity.add_quote_conf_message_text;
 import static com.zoffcc.applications.trifa.ConferenceMessageListFragment.conf_search_messages_text;
 import static com.zoffcc.applications.trifa.HelperConference.tox_conference_peer_get_name__wrapper;
-import static com.zoffcc.applications.trifa.HelperFriend.add_friend_real;
 import static com.zoffcc.applications.trifa.HelperGeneric.StringSignature2;
 import static com.zoffcc.applications.trifa.HelperGeneric.darkenColor;
 import static com.zoffcc.applications.trifa.HelperGeneric.dp2px;
@@ -126,7 +121,7 @@ public class ConferenceMessageListHolder_text_incoming_not_read extends Recycler
         swipeLayout.setShowMode(SwipeLayout.ShowMode.PullOut);
 
         // KHANDAQ (#31 leak): attach the swipe listener ONCE per ViewHolder here instead of on every
-        // bindMessageList — daimajia addSwipeListener() appends without dedup, so re-adding per bind
+        // bindMessageList: daimajia addSwipeListener() appends without dedup, so re-adding per bind
         // accumulated a listener each rebind. The body only reads instance fields (message_ is refreshed
         // on each bind), so a single registration is correct.
         swipeLayout.addSwipeListener(new SwipeLayout.SwipeListener()
@@ -400,25 +395,25 @@ public class ConferenceMessageListHolder_text_incoming_not_read extends Recycler
             {
                 if (autoLinkMode == AutoLinkMode.MODE_URL)
                 {
-                    showDialog_url(context, "open URL?", matchedText.replaceFirst("^\\s", ""));
+                    AirLinkQuestion.openLink(context, matchedText.replaceFirst("^\\s", ""));
                 }
                 else if (autoLinkMode == AutoLinkMode.MODE_EMAIL)
                 {
-                    showDialog_email(context, "send Email?", matchedText.replaceFirst("^\\s", ""));
+                    AirLinkQuestion.writeEmail(context, matchedText.replaceFirst("^\\s", ""));
                 }
                 else if (autoLinkMode == AutoLinkMode.MODE_MENTION)
                 {
-                    showDialog_url(context, "open URL?", "https://twitter.com/" +
+                    AirLinkQuestion.openLink(context, "https://twitter.com/" +
                                                          matchedText.replaceFirst("^\\s", "").replaceFirst("^@", ""));
                 }
                 else if (autoLinkMode == AutoLinkMode.MODE_HASHTAG)
                 {
-                    showDialog_url(context, "open URL?", "https://twitter.com/hashtag/" +
+                    AirLinkQuestion.openLink(context, "https://twitter.com/hashtag/" +
                                                          matchedText.replaceFirst("^\\s", "").replaceFirst("^#", ""));
                 }
                 else if (autoLinkMode == AutoLinkMode.MODE_CUSTOM) // tox: urls
                 {
-                    showDialog_tox(context, context.getString(R.string.add_id_dialog_title), matchedText.replaceFirst("^\\s", ""));
+                    AirLinkQuestion.requestContact(context, matchedText.replaceFirst("^\\s", ""));
                 }
             }
         });
@@ -729,114 +724,6 @@ public class ConferenceMessageListHolder_text_incoming_not_read extends Recycler
         return true;
     }
 
-    private void showDialog_url(final Context c, final String title, final String url1)
-    {
-        String url2 = url1;
-
-        // check to see if protocol is specified in URL, otherwise add "http://"
-        if (!url2.contains("://"))
-        {
-            url2 = "https://" + url1;
-        }
-        final String url = url2;
-
-        final AlertDialog.Builder builder = new AlertDialog.Builder(this.context);
-        builder.setMessage(url).setTitle(title).
-                setCancelable(false).
-                setPositiveButton("OK", new DialogInterface.OnClickListener()
-                {
-                    public void onClick(DialogInterface dialog, int id)
-                    {
-                        try
-                        {
-                            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                            c.startActivity(intent);
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                        dialog.dismiss();
-                    }
-                }).setNegativeButton("Cancel", new DialogInterface.OnClickListener()
-        {
-            public void onClick(DialogInterface dialog, int id)
-            {
-            }
-        });
-
-        final AlertDialog alert = builder.create();
-        alert.show();
-    }
-
-    private void showDialog_email(final Context c, final String title, final String email_addr)
-    {
-        final AlertDialog.Builder builder = new AlertDialog.Builder(this.context);
-        builder.setMessage(email_addr).setTitle(title).
-                setCancelable(false).
-                setPositiveButton("OK", new DialogInterface.OnClickListener()
-                {
-                    public void onClick(DialogInterface dialog, int id)
-                    {
-                        try
-                        {
-                            Intent emailIntent = new Intent(Intent.ACTION_SENDTO,
-                                                            Uri.fromParts("mailto", email_addr, null));
-                            emailIntent.setType("message/rfc822");
-                            // emailIntent.putExtra(Intent.EXTRA_SUBJECT, "Subject");
-                            // emailIntent.putExtra(Intent.EXTRA_TEXT, "Body");
-                            c.startActivity(Intent.createChooser(emailIntent, "Send email..."));
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                        dialog.dismiss();
-                    }
-                }).setNegativeButton("Cancel", new DialogInterface.OnClickListener()
-        {
-            public void onClick(DialogInterface dialog, int id)
-            {
-            }
-        });
-
-        final AlertDialog alert = builder.create();
-        alert.show();
-    }
-
-    private void showDialog_tox(final Context c, final String title, final String toxid)
-    {
-        final AlertDialog.Builder builder = new AlertDialog.Builder(this.context);
-        builder.setMessage(toxid.toUpperCase()).setTitle(title).
-                setCancelable(false).
-                setPositiveButton("OK", new DialogInterface.OnClickListener()
-                {
-                    public void onClick(DialogInterface dialog, int id)
-                    {
-                        try
-                        {
-                            String friend_tox_id = toxid.toUpperCase().replace(" ", "").replaceFirst("tox:",
-                                                                                                     "").replaceFirst(
-                                    "TOX:", "").replaceFirst("Tox:", "");
-                            add_friend_real(friend_tox_id);
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                        dialog.dismiss();
-                    }
-                }).setNegativeButton("Cancel", new DialogInterface.OnClickListener()
-        {
-            public void onClick(DialogInterface dialog, int id)
-            {
-            }
-        });
-
-        final AlertDialog alert = builder.create();
-        alert.show();
-    }
-
     private View.OnClickListener onclick_listener = new View.OnClickListener()
     {
         @Override
@@ -893,7 +780,7 @@ public class ConferenceMessageListHolder_text_incoming_not_read extends Recycler
 
                                 if (string_is_in_list(peer_name_corrected, PREF__toxirc_muted_peers))
                                 {
-                                    ret.text = "** muted **";
+                                    ret.text = context.getString(R.string.air_irc_message_hidden);
                                 }
                                 else
                                 {

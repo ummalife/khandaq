@@ -8,8 +8,8 @@ import ObjectiveC
 private var khandaqPopDelegateKey: UInt8 = 0
 
 /// KHANDAQ: keeps the interactive swipe-back gesture working after a custom (non-system) back button
-/// replaces it. Allows the swipe only when there is something to pop and no transition is in flight —
-/// avoids the classic "swipe on root freezes the nav" bug. One instance is retained per nav stack.
+/// replaces it. Allows the swipe only when there is something to pop and no transition is in flight,
+/// which avoids the classic "swipe on root freezes the nav" bug. One instance is retained per nav stack.
 final class KhandaqPopGestureDelegate: NSObject, UIGestureRecognizerDelegate {
     private weak var navigationController: UINavigationController?
 
@@ -36,7 +36,9 @@ extension UIViewController {
         let chevron: UIImage?
         if #available(iOS 13.0, *) {
             let config = UIImage.SymbolConfiguration(pointSize: 16.0, weight: .semibold)
-            chevron = UIImage(systemName: "chevron.left", withConfiguration: config)
+            // KHANDAQ (redesign stage 5): "backward", not "left": the symbol turns with the layout
+            // direction, so in Arabic the chevron at the right points right, as the system one does.
+            chevron = UIImage(systemName: "chevron.backward", withConfiguration: config)
         } else {
             chevron = nil
         }
@@ -47,8 +49,14 @@ extension UIViewController {
             target: self,
             action: #selector(khandaqCircleBackTapped),
             tint: theme.colorForType(.NormalText))
-        // Mirror the system back button's a11y label (the previous screen's title).
-        item.accessibilityLabel = nav.viewControllers.dropLast().last?.title
+        // Mirror the system back button's a11y label (the previous screen's title). The item wraps a
+        // custom view, and VoiceOver and UI tests read that view, so it carries the label too, the name
+        // the bar shows in the Large Content Viewer, and the identifier the system back button has.
+        let previousTitle = nav.viewControllers.dropLast().last?.title
+        item.accessibilityLabel = previousTitle
+        item.customView?.accessibilityLabel = previousTitle
+        item.customView?.largeContentTitle = previousTitle
+        item.customView?.accessibilityIdentifier = "BackButton"
         navigationItem.leftBarButtonItem = item
         navigationItem.hidesBackButton = true
 

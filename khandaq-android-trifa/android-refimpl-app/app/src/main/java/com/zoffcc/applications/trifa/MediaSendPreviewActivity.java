@@ -18,7 +18,6 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.github.chrisbanes.photoview.PhotoView;
@@ -190,8 +189,43 @@ public class MediaSendPreviewActivity extends AppCompatActivity
         {
             editingPosition = -1;
             e.printStackTrace();
+            // The editor did not open: said as a failed edit, where the edit button is.
+            sayEditFailed();
         }
     }
+
+    /**
+     * E21: an edit that failed is said at the top bar, next to the edit button, on the counter's plate,
+     * instead of in a toast; the counter (or nothing, for a single picture) comes back after the notice.
+     */
+    private void sayEditFailed()
+    {
+        if (counterView == null || isFinishing())
+        {
+            return;
+        }
+        counterView.removeCallbacks(restoreCounter);
+        final String words = getString(R.string.media_send_edit_failed);
+        counterView.setText(words);
+        counterView.setVisibility(View.VISIBLE);
+        counterView.announceForAccessibility(words);
+        counterView.postDelayed(restoreCounter, AirComposerNotice.SHOW_MS);
+    }
+
+    private final Runnable restoreCounter = () -> {
+        if (counterView == null || pager == null)
+        {
+            return;
+        }
+        if (uris != null && uris.size() > 1)
+        {
+            updateCounter(pager.getCurrentItem());
+        }
+        else
+        {
+            counterView.setVisibility(View.GONE);
+        }
+    };
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data)
@@ -221,7 +255,7 @@ public class MediaSendPreviewActivity extends AppCompatActivity
         }
         else if (data != null && com.yalantis.ucrop.UCrop.getError(data) != null)
         {
-            Toast.makeText(this, R.string.media_send_edit_failed, Toast.LENGTH_SHORT).show();
+            sayEditFailed();
         }
     }
 

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    KHANDAQ (redesign, Air): the design-system button, raised with a line or ink for the one main
+    action of a place. Plain views rather than MaterialButton, whose insets and theme overlay would
+    fight the tokens; AirViews.markAsButton tells accessibility services what they are.
+-->
+<resources>
+    <style name="Widget.KQ.Air.Button" parent="">
+        <item name="android:background">@drawable/air_bg_button</item>
+        <item name="android:minHeight">@dimen/kq_size_target_android</item>
+        <item name="android:minWidth">@dimen/kq_size_target_android</item>
+        <item name="android:gravity">center</item>
+        <item name="android:paddingStart">@dimen/kq_space_16</item>
+        <item name="android:paddingEnd">@dimen/kq_space_16</item>
+        <item name="android:textAppearance">@style/TextAppearance.KQ.Label</item>
+        <item name="android:textColor">@color/kq_ink</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
+
+    <style name="Widget.KQ.Air.Button.Ink">
+        <item name="android:background">@drawable/air_bg_button_ink</item>
+        <item name="android:textColor">@color/air_button_ink_text</item>
+    </style>
+
+    <style name="Widget.KQ.Air.ButtonRow" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">@dimen/kq_size_target_android</item>
+        <item name="android:background">@drawable/air_bg_button</item>
+        <item name="android:gravity">center</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:paddingStart">@dimen/kq_space_16</item>
+        <item name="android:paddingEnd">@dimen/kq_space_16</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
+
+    <style name="Widget.KQ.Air.ButtonRowText" parent="">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">@dimen/kq_space_6</item>
+        <item name="android:textAppearance">@style/TextAppearance.KQ.Label</item>
+        <item name="android:textColor">@color/kq_ink</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+
+    <style name="Widget.KQ.Air.IconButton" parent="">
+        <item name="android:layout_width">@dimen/kq_size_target_android</item>
+        <item name="android:layout_height">@dimen/kq_size_target_android</item>
+        <item name="android:background">@drawable/air_bg_icon_button</item>
+        <item name="android:scaleType">center</item>
+        <item name="android:tint">@color/air_icon_button_tint</item>
+    </style>
+
+    <!-- The dossier: a section heading, the words under it and a quiet note. -->
+    <style name="Widget.KQ.Air.DossierHeading" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">@dimen/kq_space_24</item>
+        <item name="android:accessibilityHeading">true</item>
+        <item name="android:textAlignment">viewStart</item>
+        <item name="android:textAppearance">@style/TextAppearance.KQ.Label</item>
+        <item name="android:textColor">@color/kq_ink_3</item>
+    </style>
+
+    <style name="Widget.KQ.Air.DossierBody" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">@dimen/kq_space_8</item>
+        <item name="android:textAlignment">viewStart</item>
+        <item name="android:textAppearance">@style/TextAppearance.KQ.Air.LabelRegular</item>
+        <item name="android:textColor">@color/kq_ink_2</item>
+    </style>
+
+    <style name="Widget.KQ.Air.DossierNote" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">@dimen/kq_space_8</item>
+        <item name="android:textAlignment">viewStart</item>
+        <item name="android:textAppearance">@style/TextAppearance.KQ.Caption</item>
+        <item name="android:textColor">@color/kq_ink_3</item>
+    </style>
+
+    <!-- The conversation's jump-to-latest button: the control radius, not a circle. -->
+    <style name="ShapeAppearanceOverlay.KQ.Air.Control" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">@dimen/kq_radius_control</item>
+    </style>
+
+    <!-- The create sheet: transparent window so the sheet's own top corners show. -->
+    <style name="ThemeOverlay.KQ.Air.Sheet" parent="ThemeOverlay.MaterialComponents.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/Widget.KQ.Air.Sheet</item>
+    </style>
+
+    <style name="Widget.KQ.Air.Sheet" parent="Widget.MaterialComponents.BottomSheet.Modal">
+        <item name="android:background">@android:color/transparent</item>
+        <item name="backgroundTint">@android:color/transparent</item>
+    </style>
+
+    <!-- The conversation bar: Back is a 48dp target like the icons beside the name, not the 56dp of
+         the platform bar, so a 360dp phone still shows about ten characters of the name. -->
+    <style name="ThemeOverlay.KQ.Air.ChatBar" parent="ThemeOverlay.AppCompat.DayNight.ActionBar">
+        <item name="toolbarNavigationButtonStyle">@style/Widget.KQ.Air.ChatBarBack</item>
+    </style>
+
+    <style name="Widget.KQ.Air.ChatBarBack" parent="Widget.AppCompat.Toolbar.Button.Navigation">
+        <item name="android:minWidth">@dimen/kq_size_target_android</item>
+    </style>
+</resources>

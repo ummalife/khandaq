@@ -102,7 +102,10 @@ class CallCoordinator: NSObject {
         ensureMicrophonePermission { [weak self] granted in
             guard let self = self else { return }
             guard granted else {
-                handleErrorWithType(.callToChat)
+                // KHANDAQ (redesign stage 3, E9): without the microphone the call is not started, and
+                // the reason is said with the way to the settings. This used to call
+                // handleErrorWithType(.callToChat) without an error, whose force unwrap crashed the app.
+                AirCallAccess.explain(.microphone, from: self.presentingController)
                 return
             }
             // KHANDAQ (#112): a video call also needs camera access. Without this gate the camera was
@@ -112,8 +115,16 @@ class CallCoordinator: NSObject {
                 self.startCallToChat(chat, enableVideo: false)
                 return
             }
-            MediaPermission.requestCameraAccess(from: self.presentingController) { [weak self] cameraGranted in
-                guard let self = self, cameraGranted else { return }
+            AirCallAccess.requestCamera { [weak self] cameraGranted in
+                guard let self = self else { return }
+                guard cameraGranted else {
+                    // The call can still go with sound alone.
+                    AirCallAccess.explain(.camera, from: self.presentingController,
+                                          alternative: (String(localized: "air_call_audio_only"), { [weak self] in
+                                              self?.startCallToChat(chat, enableVideo: false)
+                                          }))
+                    return
+                }
                 self.startCallToChat(chat, enableVideo: true)
             }
         }
@@ -130,6 +141,7 @@ class CallCoordinator: NSObject {
 
             let controller = CallActiveController(theme: theme, callerName: nickname)
             controller.delegate = self
+            controller.link = AirLinkState(friend: chat.friends.lastObject() as? OCTFriend)
 
             // CALL:
             print("cc:controler:callToChat:02")
@@ -190,6 +202,7 @@ extension CallCoordinator: OCTSubmanagerCallDelegate {
 
         let controller = CallIncomingController(theme: theme, callerName: nickname)
         controller.delegate = self
+        controller.link = AirLinkState(friend: call.caller)
 
         startActiveCallWithCall(call, controller: controller)
 
@@ -241,10 +254,11 @@ extension CallCoordinator: CallActiveControllerDelegate {
         // KHANDAQ (#112): turning the camera ON mid-call needs camera access first — the video engine
         // otherwise fails and surfaces a generic "Внутренняя ошибка". Turning it OFF needs no permission.
         if outgoingVideo {
-            MediaPermission.requestCameraAccess(from: controller) { [weak self] granted in
+            AirCallAccess.requestCamera { [weak self] granted in
                 guard let self = self else { return }
                 guard granted else {
                     controller.outgoingVideo = false
+                    AirCallAccess.explain(.camera, from: controller)
                     return
                 }
                 do {
@@ -292,7 +306,8 @@ extension CallCoordinator: CallActiveControllerDelegate {
 }
 
 extension CallCoordinator {
-    func declineCall(callWasRemoved wasRemoved: Bool) {
+    /// `then` runs once the call screen has gone, for what has to be said over the conversation.
+    func declineCall(callWasRemoved wasRemoved: Bool, then: (() -> Void)? = nil) {
         // CALL:
         print("cc:controler:declineCall:01")
 
@@ -322,7 +337,7 @@ extension CallCoordinator {
 
         let delayTime = DispatchTime.now() + Double(Int64(Constants.DeclineAfterInterval * Double(NSEC_PER_SEC))) / Double(NSEC_PER_SEC)
         DispatchQueue.main.asyncAfter(deadline: delayTime) { [weak self] in
-            self?.presentingController.dismiss(animated: true, completion: nil)
+            self?.presentingController.dismiss(animated: true, completion: then)
             self?.activeCall = nil
         }
     }
@@ -345,6 +360,10 @@ extension CallCoordinator {
         navigation.modalPresentationStyle = .overCurrentContext
         navigation.isNavigationBarHidden = true
         navigation.modalTransitionStyle = .crossDissolve
+        // KHANDAQ (redesign stage 3, E9): the call screens are dark in both themes, alerts over them too,
+        // and the status bar is light over them.
+        navigation.overrideUserInterfaceStyle = .dark
+        navigation.modalPresentationCapturesStatusBarAppearance = true
 
         activeCall = ActiveCall(call: call, navigation: navigation)
 
@@ -380,20 +399,39 @@ extension CallCoordinator {
         ensureMicrophonePermission { [weak self] granted in
             guard let self = self else { return }
             guard granted else {
-                handleErrorWithType(.answerCall, error: nil)
-                self.declineCall(callWasRemoved: false)
+                // KHANDAQ (redesign stage 3, E9): the person would hear nothing; the call is declined
+                // and the reason said over the conversation, with the way to the settings.
+                self.declineCall(callWasRemoved: false, then: { [weak self] in
+                    AirCallAccess.explain(.microphone, from: self?.presentingController)
+                })
                 return
             }
-
-            if let callKitUUID = self.incomingCallKitUUID,
-               AppDelegate.shared.callManager.callWithUUID(uuid: callKitUUID) != nil {
-                AppDelegate.shared.callManager.answerViaCallKit(uuid: callKitUUID)
+            guard enableVideo else {
+                self.continueAnswer(enableVideo: false)
                 return
             }
-
-            self.configureAudioSessionForAnswer(enableVideo: enableVideo)
-            self.performAnswerCall(enableVideo: enableVideo)
+            // Answering with video needs the camera; without it the call is answered with sound and
+            // the reason is said over the call.
+            AirCallAccess.requestCamera { [weak self] cameraGranted in
+                guard let self = self else { return }
+                self.preferredAnswerVideo = cameraGranted
+                self.continueAnswer(enableVideo: cameraGranted)
+                if !cameraGranted {
+                    AirCallAccess.explain(.camera, from: self.presentingController)
+                }
+            }
         }
+    }
+
+    private func continueAnswer(enableVideo: Bool) {
+        if let callKitUUID = incomingCallKitUUID,
+           AppDelegate.shared.callManager.callWithUUID(uuid: callKitUUID) != nil {
+            AppDelegate.shared.callManager.answerViaCallKit(uuid: callKitUUID)
+            return
+        }
+
+        configureAudioSessionForAnswer(enableVideo: enableVideo)
+        performAnswerCall(enableVideo: enableVideo)
     }
 
     func performAnswerCall(enableVideo: Bool) {
@@ -422,14 +460,32 @@ extension CallCoordinator {
 
         toxAnswerInProgress = true
 
-        do {
-            try submanagerCalls.answer(activeCall.call, enableAudio: true, enableVideo: enableVideo)
-            toxAnswerCompleted = true
-        }
-        catch let error as NSError {
-            toxAnswerInProgress = false
-            handleErrorWithType(.answerCall, error: error)
-            declineCall(callWasRemoved: false)
+        // KHANDAQ (redesign stage 3, E9): CallKit answers from the lock screen without asking the app,
+        // and objcTox then starts the call with no audio at all when the microphone is not allowed: the
+        // person would hear nothing. Such a call is declined and the reason said, with the way to the
+        // settings. The check answers at once unless the system has never asked.
+        ensureMicrophonePermission { [weak self] granted in
+            guard let self = self else { return }
+            guard granted else {
+                self.toxAnswerInProgress = false
+                self.declineCall(callWasRemoved: false, then: { [weak self] in
+                    AirCallAccess.explain(.microphone, from: self?.presentingController)
+                })
+                return
+            }
+            guard let activeCall = self.activeCall, !activeCall.call.isInvalidated, activeCall.call.status == .ringing else {
+                self.toxAnswerInProgress = false
+                return
+            }
+            do {
+                try self.submanagerCalls.answer(activeCall.call, enableAudio: true, enableVideo: enableVideo)
+                self.toxAnswerCompleted = true
+            }
+            catch let error as NSError {
+                self.toxAnswerInProgress = false
+                handleErrorWithType(.answerCall, error: error)
+                self.declineCall(callWasRemoved: false)
+            }
         }
     }
 
@@ -529,6 +585,8 @@ extension CallCoordinator {
             case .active:
                 activeController!.state = .active(duration: activeCall.call.callDuration)
         }
+        // KHANDAQ (redesign stage 3, E9): the line under the state says how the link goes right now.
+        activeController!.link = AirLinkState(friend: activeCall.call.caller ?? activeCall.call.chat.friends.firstObject() as? OCTFriend)
 
         activeController!.outgoingVideo = activeCall.call.videoIsEnabled
         // KHANDAQ: apply the speaker default (on for video, earpiece for audio) only ONCE, when the call

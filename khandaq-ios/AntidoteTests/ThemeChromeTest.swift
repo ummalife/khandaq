@@ -75,6 +75,38 @@ class ThemeChromeTest: XCTestCase {
         }
     }
 
+    /// The track of a switch that is on used to take the link colour. The link colour is ink, which is
+    /// near-white in the dark theme, and the white knob disappeared into it.
+    func testTheWhiteKnobStaysVisibleOnASwitchThatIsOn() throws {
+        ThemeChrome.applyGlobalAppearance(theme)
+        let track = try XCTUnwrap(UISwitch.appearance().onTintColor)
+
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let resolved = track.resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+            XCTAssertGreaterThanOrEqual(contrast(resolved, .white), 3, "interface style \(style.rawValue)")
+        }
+    }
+
+    /// The contrast ratio of WCAG 2, the one design/system/build.py checks the tokens with.
+    private func contrast(_ first: UIColor, _ second: UIColor) -> CGFloat {
+        let lighter = max(luminance(first), luminance(second))
+        let darker = min(luminance(first), luminance(second))
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    private func luminance(_ color: UIColor) -> CGFloat {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+
+        func linear(_ value: CGFloat) -> CGFloat {
+            return value <= 0.03928 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
+    }
+
     private func makeWindow() -> UIWindow {
         let frame = CGRect(x: 0, y: 0, width: 402, height: 874)
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else {

@@ -8,12 +8,18 @@ protocol ChatsTabCoordinatorDelegate: class {
     func chatsTabCoordinator(_ coordinator: ChatsTabCoordinator, chatWillAppear chat: OCTChat)
     func chatsTabCoordinator(_ coordinator: ChatsTabCoordinator, chatWillDisapper chat: OCTChat)
     func chatsTabCoordinator(_ coordinator: ChatsTabCoordinator, callToChat chat: OCTChat, enableVideo: Bool)
+    // The Air screen (phone): what used to be the other tabs.
+    func chatsTabCoordinatorShowProfile(_ coordinator: ChatsTabCoordinator)
+    func chatsTabCoordinatorShowSettings(_ coordinator: ChatsTabCoordinator)
+    func chatsTabCoordinator(_ coordinator: ChatsTabCoordinator, showAddContactWithAddress address: String?)
 }
 
 class ChatsTabCoordinator: ActiveSessionNavigationCoordinator {
     weak var delegate: ChatsTabCoordinatorDelegate?
     weak var externalPresentingController: UIViewController?
     var chatDisplayHandler: ((OCTChat, Bool) -> Void)?
+    /// The Air screen at the root of the stack, once started.
+    private(set) weak var listController: ChatListController?
 
     fileprivate weak var submanagerObjects: OCTSubmanagerObjects!
     fileprivate weak var submanagerChats: OCTSubmanagerChats!
@@ -28,7 +34,8 @@ class ChatsTabCoordinator: ActiveSessionNavigationCoordinator {
          submanagerGroups: OCTSubmanagerGroups,
          submanagerFiles: OCTSubmanagerFiles,
          submanagerUser: OCTSubmanagerUser,
-         submanagerFriends: OCTSubmanagerFriends) {
+         submanagerFriends: OCTSubmanagerFriends,
+         navigationController: UINavigationController? = nil) {
         self.submanagerObjects = submanagerObjects
         self.submanagerChats = submanagerChats
         self.submanagerGroups = submanagerGroups
@@ -36,7 +43,12 @@ class ChatsTabCoordinator: ActiveSessionNavigationCoordinator {
         self.submanagerUser = submanagerUser
         self.submanagerFriends = submanagerFriends
 
-        super.init(theme: theme)
+        if let navigationController = navigationController {
+            super.init(theme: theme, navigationController: navigationController)
+        }
+        else {
+            super.init(theme: theme)
+        }
     }
 
     override func startWithOptions(_ options: CoordinatorOptions?) {
@@ -44,8 +56,11 @@ class ChatsTabCoordinator: ActiveSessionNavigationCoordinator {
                 theme: theme,
                 submanagerChats: submanagerChats,
                 submanagerGroups: submanagerGroups,
-                submanagerObjects: submanagerObjects)
+                submanagerObjects: submanagerObjects,
+                submanagerFriends: submanagerFriends,
+                submanagerUser: submanagerUser)
         controller.delegate = self
+        listController = controller
 
         installRootViewController(controller)
     }
@@ -116,11 +131,27 @@ extension ChatsTabCoordinator: ChatListControllerDelegate {
     }
 
     func chatListControllerDidRequestJoinGroup(_ controller: ChatListController) {
-        presentJoinGroupAlert(from: controller)
+        presentJoinGroupSheet(key: nil, from: controller)
+    }
+
+    func chatListController(_ controller: ChatListController, didRequestJoinGroupWithKey key: String) {
+        presentJoinGroupSheet(key: key, from: controller)
     }
 
     func chatListControllerDidRequestScanGroupQR(_ controller: ChatListController) {
-        presentScanGroupQR(from: controller)
+        presentJoinGroupSheet(key: nil, from: controller)
+    }
+
+    func chatListControllerDidRequestProfile(_ controller: ChatListController) {
+        delegate?.chatsTabCoordinatorShowProfile(self)
+    }
+
+    func chatListControllerDidRequestSettings(_ controller: ChatListController) {
+        delegate?.chatsTabCoordinatorShowSettings(self)
+    }
+
+    func chatListController(_ controller: ChatListController, didRequestAddContactWithAddress address: String?) {
+        delegate?.chatsTabCoordinator(self, showAddContactWithAddress: address)
     }
 }
 
@@ -143,7 +174,7 @@ extension ChatsTabCoordinator: ChatPrivateControllerDelegate {
             selectedIndex: Int)
     {
         // KHANDAQ (Figma / #204-C): custom media gallery for image/video; a non-media tap
-        // (PDF, doc…) has no gallery index → fall through to QuickLook, which previews everything.
+        // (PDF, doc...) has no gallery index, so fall through to QuickLook, which previews everything.
         if let fp = dataSource as? FilePreviewControllerDataSource,
            let start = fp.galleryStartIndex(forMessageIndex: selectedIndex) {
             let items = fp.galleryItems(myName: submanagerUser.userName() ?? "")
@@ -169,12 +200,26 @@ extension ChatsTabCoordinator: ChatPrivateControllerDelegate {
         navigationController.pushViewController(attachments, animated: true)
     }
 
-    // KHANDAQ (Figma): chat header tap → friend profile.
+    // KHANDAQ (Figma): a tap on the chat header opens the friend profile.
     func chatPrivateControllerShowFriendProfile(_ controller: ChatPrivateController, forFriend friend: OCTFriend) {
         let card = FriendCardController(theme: theme, friend: friend, submanagerObjects: submanagerObjects)
         card.delegate = self
 
         navigationController.pushViewController(card, animated: true)
+    }
+
+    // KHANDAQ (redesign stage 2): "Remove" in the dossier. The conversation closes first; the contact
+    // and the chat go once it is off screen, so it never draws them half removed.
+    func chatPrivateControllerRemoveContact(_ controller: ChatPrivateController, friend: OCTFriend) {
+        if let index = navigationController.viewControllers.firstIndex(of: controller), index > 0 {
+            navigationController.popToViewController(navigationController.viewControllers[index - 1], animated: true)
+        }
+        AirContactRemoval.afterTransition(of: navigationController) { [weak self] in
+            guard let self = self else {
+                return
+            }
+            AirContactRemoval.remove(friend, submanagerChats: self.submanagerChats, submanagerFriends: self.submanagerFriends)
+        }
     }
 }
 
@@ -195,7 +240,7 @@ extension ChatsTabCoordinator: FriendCardControllerDelegate {
     }
 
     func friendCardControllerOpenChat(_ controller: FriendCardController, forFriend friend: OCTFriend) {
-        // We navigated here FROM the chat — pop back to it.
+        // We navigated here FROM the chat: pop back to it.
         navigationController.popViewController(animated: true)
     }
 
@@ -244,17 +289,26 @@ extension ChatsTabCoordinator {
         }
 
         if password != nil {
-            joinGroup(withChatIdHex: chatIdHex, password: password)
+            switch joinGroup(withChatIdHex: chatIdHex, password: password) {
+                case .joined(let chat):
+                    showChat(chat, animated: true)
+                case .refused(let words):
+                    UIAlertController.showErrorWithMessage(words, retryBlock: nil)
+            }
             return
         }
 
-        presentJoinGroupPasswordAlert(chatIdHex: chatIdHex)
+        // A group link or QR code from elsewhere: the join sheet with the key in it, so the password
+        // and how joining works are said before anything is sent.
+        presentJoinGroupSheet(key: chatIdHex, from: alertPresentingController())
     }
 }
 
 private extension ChatsTabCoordinator {
+    /// KHANDAQ (redesign stage 3, E14): the group dossier; the old settings screen opens from its
+    /// "Group settings" row.
     func showGroupInfo(_ chat: OCTChat, animated: Bool) {
-        let infoController = GroupInfoController(
+        let dossier = AirGroupDossierController(
                 theme: theme,
                 chat: chat,
                 submanagerGroups: submanagerGroups,
@@ -262,7 +316,13 @@ private extension ChatsTabCoordinator {
                 submanagerChats: submanagerChats,
                 submanagerFiles: submanagerFiles,
                 submanagerFriends: submanagerFriends)
-        navigationController.pushViewController(infoController, animated: animated)
+        dossier.onOpenFriend = { [weak self] friend in
+            guard let self = self, let chat = self.submanagerChats.getOrCreateChat(with: friend) else {
+                return
+            }
+            self.showChat(chat, animated: true)
+        }
+        navigationController.pushViewController(dossier, animated: animated)
     }
 
     func defaultPeerName() -> String {
@@ -271,7 +331,7 @@ private extension ChatsTabCoordinator {
         }
         // KHANDAQ (#15): the Tox self-name can be empty (e.g. an account created without an explicit
         // username), in which case we used to publish the literal app name "Khandaq" as our NGC peer
-        // name — so every group member saw "Khandaq" and messages were attributed to "Khandaq"
+        // name, so every group member saw "Khandaq" and messages were attributed to "Khandaq"
         // instead of the real profile. Fall back to the active profile name before the app name.
         if let profile = UserDefaultsManager().lastActiveProfile, !profile.isEmpty {
             return profile
@@ -279,42 +339,40 @@ private extension ChatsTabCoordinator {
         return "Khandaq"
     }
 
+    /// KHANDAQ (redesign stage 3, E15): "New group" as a sheet the height of the screen: the name, who can
+    /// join, the contacts to invite, then "Create group". Who can join is chosen on the sheet, so both
+    /// entries of the old menu open the same sheet with their choice preselected. A password is set later
+    /// in the group settings: everyone invited would need it too.
     func presentCreateGroupAlert(from controller: UIViewController, isPrivate: Bool) {
         submanagerGroups.setGroupBackgroundWorkPaused(true)
 
-        let resumeBackgroundWork: () -> Void = { [weak self] in
+        let candidates = AirInviteCandidates.load(from: submanagerObjects, memberKeys: [])
+        let newGroup = AirNewGroupController(candidates: candidates, inviteOnly: isPrivate)
+        let navigation = PortraitNavigationController(rootViewController: newGroup)
+        newGroup.onCancel = { [weak self, weak navigation] in
             self?.submanagerGroups.setGroupBackgroundWorkPaused(false)
+            navigation?.dismiss(animated: true, completion: nil)
         }
-
-        // KHANDAQ (Figma): two-step create — select contacts first, then the name/password form;
-        // selected friends are invited right after the group is created.
-        let navigation = PortraitNavigationController()
-
-        let contactsController = GroupCreateContactsController(theme: theme, submanagerObjects: submanagerObjects) {
-            [weak self, weak navigation] selectedFriends in
+        newGroup.onCreate = { [weak self, weak navigation] name, inviteOnly, invite in
             guard let self = self else {
                 return
             }
-
-            let createController = GroupCreateNameController(theme: self.theme, isPrivate: isPrivate) { [weak self] groupName, password in
-                resumeBackgroundWork()
-                self?.createGroupAndOpen(isPrivate: isPrivate, groupName: groupName, password: password, inviteFriends: selectedFriends)
+            self.submanagerGroups.setGroupBackgroundWorkPaused(false)
+            let friends = invite.compactMap { candidate -> OCTFriend? in
+                let found = self.submanagerObjects.friends(predicate: NSPredicate(format: "publicKey ==[c] %@", candidate.publicKey))
+                return found.count > 0 ? found.firstObject : nil
             }
-            createController.onCancel = resumeBackgroundWork
-            navigation?.pushViewController(createController, animated: true)
+            navigation?.dismiss(animated: true) {
+                self.createGroupAndOpen(isPrivate: inviteOnly, groupName: name, password: nil, inviteFriends: friends)
+            }
         }
-        contactsController.onCancel = resumeBackgroundWork
-
-        navigation.setViewControllers([contactsController], animated: false)
         navigation.modalPresentationStyle = .formSheet
-
-        if #available(iOS 15.0, *) {
-            if let sheet = navigation.sheetPresentationController {
-                sheet.detents = [.large()]
-                sheet.prefersGrabberVisible = true
-            }
+        if let sheet = navigation.sheetPresentationController {
+            sheet.detents = [.large()]
+            sheet.prefersGrabberVisible = true
         }
-
+        // Swiping the sheet away is a cancel too.
+        navigation.presentationController?.delegate = newGroup
         controller.present(navigation, animated: true, completion: nil)
     }
 
@@ -358,7 +416,7 @@ private extension ChatsTabCoordinator {
                 }
             }
 
-            // KHANDAQ (Figma): invite the contacts selected on step 1 (best-effort — an offline
+            // KHANDAQ (Figma): invite the contacts selected on step 1 (best-effort: an offline
             // friend's one-shot invite can fail; they can be re-invited from the group later).
             for friend in inviteFriends where friend.friendNumber >= 0 {
                 _ = try? self.submanagerGroups.inviteFriend(withNumber: friend.friendNumber,
@@ -378,57 +436,70 @@ private extension ChatsTabCoordinator {
         }
     }
 
-    func presentJoinGroupAlert(from controller: UIViewController) {
-        let clipboardGroupId = GroupJoinHelper.readGroupIdFromClipboard()
-
-        let alert = UIAlertController(title: String(localized: "group_join_by_id"), message: String(localized: "group_join_hint"), preferredStyle: .alert)
-        alert.addTextField { field in
-            field.placeholder = String(localized: "group_chat_id_placeholder")
-            field.autocapitalizationType = .none
-            field.autocorrectionType = .no
-            if let clipboardGroupId = clipboardGroupId {
-                field.text = clipboardGroupId
+    /// KHANDAQ (redesign stage 5, E15): "Join a group" as a sheet: the key (typed, pasted or scanned),
+    /// the password if the group has one, how joining works, then "Join". A refusal stays on the sheet
+    /// where the action is; once toxcore takes the key the group opens and says how it connects.
+    func presentJoinGroupSheet(key: String?, from controller: UIViewController) {
+        let join = AirJoinGroupController(key: key)
+        let navigation = PortraitNavigationController(rootViewController: join)
+        join.onCancel = { [weak navigation] in
+            navigation?.dismiss(animated: true, completion: nil)
+        }
+        join.existingGroup = { [weak self] key in
+            guard let chat = self?.existingGroupChat(for: key), chat.groupNumber >= 0 else {
+                return nil
+            }
+            return chat
+        }
+        join.onOpenExisting = { [weak self, weak navigation] chat in
+            navigation?.dismiss(animated: true) {
+                self?.showChat(chat, animated: true)
             }
         }
-        alert.addTextField { field in
-            field.placeholder = String(localized: "group_password_placeholder")
-            field.isSecureTextEntry = true
-            field.autocapitalizationType = .none
-            field.autocorrectionType = .no
-        }
-
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-        alert.addAction(UIAlertAction(title: String(localized: "group_join_action"), style: .default) { [unowned self] _ in
-            let chatIdRaw = alert.textFields?.first?.text ?? ""
-            let passwordRaw = alert.textFields?.last?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-            guard let chatIdHex = self.normalizedGroupChatIdHex(from: chatIdRaw) else {
-                UIAlertController.showErrorWithMessage(String(localized: "group_join_invalid_id"), retryBlock: nil)
+        join.onScan = { [weak self, weak navigation] found in
+            guard let self = self, let navigation = navigation else {
                 return
             }
-
-            let password = passwordRaw.isEmpty ? nil : passwordRaw
-            self.joinGroup(withChatIdHex: chatIdHex, password: password)
-        })
-
-        controller.present(alert, animated: true, completion: nil)
+            self.presentScanGroupQR(from: navigation, found: found)
+        }
+        join.onJoin = { [weak self, weak navigation] key, password in
+            guard let self = self else {
+                return nil
+            }
+            switch self.joinGroup(withChatIdHex: key, password: password) {
+                case .joined(let chat):
+                    navigation?.dismiss(animated: true) {
+                        self.showChat(chat, animated: true)
+                    }
+                    return nil
+                case .refused(let words):
+                    return words
+            }
+        }
+        navigation.modalPresentationStyle = .formSheet
+        if let sheet = navigation.sheetPresentationController {
+            sheet.detents = [.large()]
+            sheet.prefersGrabberVisible = true
+        }
+        // Swiping the sheet away is a cancel too.
+        navigation.presentationController?.delegate = join
+        controller.present(navigation, animated: true, completion: nil)
     }
 
-    func presentScanGroupQR(from controller: UIViewController) {
+    /// The camera over the join sheet; a code with a group key fills the key field.
+    func presentScanGroupQR(from controller: UIViewController, found: @escaping (String) -> Void) {
         let scanner = QRScannerController(theme: theme)
 
-        scanner.didScanStringsBlock = { [unowned self, scanner] strings in
-            let chatIdHex = strings.compactMap { self.normalizedGroupChatIdHex(from: $0) }.first
-
-            if let chatIdHex = chatIdHex {
-                self.navigationController.dismiss(animated: true) {
-                    self.presentJoinGroupPasswordAlert(chatIdHex: chatIdHex)
+        scanner.didScanStringsBlock = { [weak controller, scanner] strings in
+            if let key = strings.compactMap({ GroupJoinHelper.normalizedGroupChatIdHex(from: $0) }).first {
+                controller?.dismiss(animated: true) {
+                    found(key)
                 }
             }
             else {
                 scanner.pauseScanning = true
 
-                let alert = UIAlertController(title: String(localized: "error_title"),
+                let alert = UIAlertController(title: nil,
                                               message: String(localized: "group_join_invalid_qr"),
                                               preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: String(localized: "error_ok_button"), style: .default) { _ in
@@ -438,33 +509,12 @@ private extension ChatsTabCoordinator {
             }
         }
 
-        scanner.cancelBlock = { [unowned self] in
-            self.navigationController.dismiss(animated: true, completion: nil)
+        scanner.cancelBlock = { [weak controller] in
+            controller?.dismiss(animated: true, completion: nil)
         }
 
         let scannerNavCon = UINavigationController(rootViewController: scanner)
-        navigationController.present(scannerNavCon, animated: true, completion: nil)
-    }
-
-    func presentJoinGroupPasswordAlert(chatIdHex: String) {
-        let alert = UIAlertController(title: String(localized: "group_join_by_id"),
-                                      message: String(localized: "group_join_password_hint"),
-                                      preferredStyle: .alert)
-        alert.addTextField { field in
-            field.placeholder = String(localized: "group_password_placeholder")
-            field.isSecureTextEntry = true
-            field.autocapitalizationType = .none
-            field.autocorrectionType = .no
-        }
-
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-        alert.addAction(UIAlertAction(title: String(localized: "group_join_action"), style: .default) { [unowned self] _ in
-            let passwordRaw = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let password = passwordRaw.isEmpty ? nil : passwordRaw
-            self.joinGroup(withChatIdHex: chatIdHex, password: password)
-        })
-
-        alertPresentingController().present(alert, animated: true, completion: nil)
+        controller.present(scannerNavCon, animated: true, completion: nil)
     }
 
     func alertPresentingController() -> UIViewController {
@@ -474,29 +524,29 @@ private extension ChatsTabCoordinator {
         return navigationController.topViewController ?? navigationController
     }
 
-    func joinGroup(withChatIdHex chatIdHex: String, password: String?) {
+    enum JoinResult {
+        case joined(OCTChat)
+        case refused(String)
+    }
+
+    /// The join by key as objcTox does it: toxcore looks for the group, objcTox asks the contacts among
+    /// its members for an invitation. Only a key or a password toxcore cannot take is refused at once.
+    func joinGroup(withChatIdHex chatIdHex: String, password: String?) -> JoinResult {
         var error: NSError?
         let groupNumber = submanagerGroups.joinGroup(withChatIdHex: chatIdHex, peerName: defaultPeerName(), password: password, error: &error)
 
-        if let error = error {
-            UIAlertController.showErrorWithMessage(error.localizedDescription, retryBlock: nil)
-            return
-        }
-
-        if groupNumber == kOCTToxGroupNumberFailure {
-            UIAlertController.showErrorWithMessage(String(localized: "group_join_failed"), retryBlock: nil)
-            return
+        if error != nil || groupNumber == kOCTToxGroupNumberFailure {
+            return .refused(AirGroupJoinError.text(for: error))
         }
 
         submanagerGroups.syncGroupsWithTox()
 
         guard let chat = submanagerGroups.chat(forGroupNumber: groupNumber) else {
-            UIAlertController.showErrorWithMessage(String(localized: "group_join_failed"), retryBlock: nil)
-            return
+            return .refused(String(localized: "group_join_failed"))
         }
 
         submanagerGroups.refreshPeers(for: chat)
-        showChat(chat, animated: true)
+        return .joined(chat)
     }
 
     func normalizedGroupChatIdHex(from string: String) -> String? {

@@ -8,6 +8,8 @@ protocol FriendsTabCoordinatorDelegate: class {
     func friendsTabCoordinatorOpenChat(_ coordinator: FriendsTabCoordinator, forFriend friend: OCTFriend)
     func friendsTabCoordinatorCall(_ coordinator: FriendsTabCoordinator, toFriend friend: OCTFriend)
     func friendsTabCoordinatorVideoCall(_ coordinator: FriendsTabCoordinator, toFriend friend: OCTFriend)
+    /// The incoming requests, where they are answered (the Air list on the phone).
+    func friendsTabCoordinatorShowRequests(_ coordinator: FriendsTabCoordinator)
 }
 
 class FriendsTabCoordinator: ActiveSessionNavigationCoordinator {
@@ -15,10 +17,16 @@ class FriendsTabCoordinator: ActiveSessionNavigationCoordinator {
 
     fileprivate weak var toxManager: OCTManager!
 
-    init(theme: Theme, toxManager: OCTManager) {
+    /// `navigationController`: on the phone the stack is shared with the Air screen at its root.
+    init(theme: Theme, toxManager: OCTManager, navigationController: UINavigationController? = nil) {
         self.toxManager = toxManager
 
-        super.init(theme: theme)
+        if let navigationController = navigationController {
+            super.init(theme: theme, navigationController: navigationController)
+        }
+        else {
+            super.init(theme: theme)
+        }
     }
 
     override func startWithOptions(_ options: CoordinatorOptions?) {
@@ -26,6 +34,19 @@ class FriendsTabCoordinator: ActiveSessionNavigationCoordinator {
         controller.delegate = self
 
         installRootViewController(controller)
+    }
+
+    /// "New contact" (E11), with an ID already filled in when it came from the Air command line.
+    func showAddFriend(prefilledAddress: String?, animated: Bool) {
+        let controller = AirNewContactController(
+            submanagerFriends: toxManager.friends,
+            submanagerObjects: toxManager.objects,
+            ownAddress: toxManager.user.userAddress,
+            prefilled: prefilledAddress
+        )
+        controller.delegate = self
+
+        navigationController.pushViewController(controller, animated: animated)
     }
 
     func showRequest(_ request: OCTFriendRequest, animated: Bool) {
@@ -51,15 +72,7 @@ extension FriendsTabCoordinator: FriendListControllerDelegate {
     }
 
     func friendListControllerAddFriend(_ controller: FriendListController) {
-        let controller = AddFriendController(
-            theme: theme,
-            submanagerFriends: toxManager.friends,
-            submanagerObjects: toxManager.objects,
-            ownToxAddress: toxManager.user.userAddress
-        )
-        controller.delegate = self
-
-        navigationController.pushViewController(controller, animated: true)
+        showAddFriend(prefilledAddress: nil, animated: true)
     }
 
     func friendListController(_ controller: FriendListController, showQRCodeWithText text: String) {
@@ -113,10 +126,42 @@ extension FriendsTabCoordinator: FriendRequestControllerDelegate {
     }
 }
 
+extension FriendsTabCoordinator: AirNewContactControllerDelegate {
+    func newContactScanQR(_ controller: AirNewContactController, found: @escaping (String) -> Void) {
+        presentScanner(validateCodeHandler: { AirToxId.clean($0).count == AirToxId.length }, didScanHander: found)
+    }
+
+    func newContactOpenChat(_ controller: AirNewContactController, publicKey: String) {
+        let friends = toxManager.objects.friends(predicate: NSPredicate(format: "publicKey ==[c] %@", publicKey))
+        guard friends.count > 0 else {
+            return
+        }
+        delegate?.friendsTabCoordinatorOpenChat(self, forFriend: friends.firstObject)
+    }
+
+    func newContactOpenRequests(_ controller: AirNewContactController) {
+        delegate?.friendsTabCoordinatorShowRequests(self)
+    }
+
+    func newContactDidFinish(_ controller: AirNewContactController) {
+        navigationController.popViewController(animated: true)
+    }
+}
+
 extension FriendsTabCoordinator: AddFriendControllerDelegate {
     func addFriendControllerScanQRCode(_ controller: AddFriendController,
                                        validateCodeHandler: @escaping (String) -> Bool,
                                        didScanHander: @escaping (String) -> Void) {
+        presentScanner(validateCodeHandler: validateCodeHandler, didScanHander: didScanHander)
+    }
+
+    func addFriendControllerDidFinish(_ controller: AddFriendController) {
+        navigationController.popViewController(animated: true)
+    }
+}
+
+private extension FriendsTabCoordinator {
+    func presentScanner(validateCodeHandler: @escaping (String) -> Bool, didScanHander: @escaping (String) -> Void) {
         let scanner = QRScannerController(theme: theme)
 
         scanner.didScanStringsBlock = { [unowned self, scanner] in
@@ -149,9 +194,5 @@ extension FriendsTabCoordinator: AddFriendControllerDelegate {
 
         let scannerNavCon = UINavigationController(rootViewController: scanner)
         navigationController.present(scannerNavCon, animated: true, completion: nil)
-    }
-
-    func addFriendControllerDidFinish(_ controller: AddFriendController) {
-        navigationController.popViewController(animated: true)
     }
 }

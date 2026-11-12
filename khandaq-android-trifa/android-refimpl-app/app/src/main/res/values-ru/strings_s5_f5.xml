@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- E21 (redesign stage 5): the code for support under Details, as on iOS (error_details and the rest) -->
+    <string name="error_details">Подробности</string>
+    <string name="error_details_format">Код для поддержки: %1$s</string>
+    <string name="error_details_copy">Скопировать</string>
+    <string name="error_details_copied">Код скопирован</string>
+    <string name="error_ok_button">ОК</string>
+</resources>

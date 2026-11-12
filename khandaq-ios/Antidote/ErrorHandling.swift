@@ -42,7 +42,7 @@ func handlePasswordValidationFailure(_ failure: PasswordValidationFailure) {
     }
 }
 
-enum ErrorHandlerType {
+enum ErrorHandlerType: CaseIterable {
     case cannotLoadHTML
     case createOCTManager
     case toxSetInfoCodeName
@@ -82,8 +82,85 @@ enum ErrorHandlerType {
     case cancelFileTransfer
     case pauseFileTransfer
     case pinLogOut
+
+    /// What failed, said where nothing more specific is known (redesign stage 3, E21): the title in
+    /// place of a bare "Error".
+    var failureTitle: String {
+        switch self {
+            case .cannotLoadHTML:
+                return String(localized: "error_failed_open_page")
+            case .createOCTManager:
+                return String(localized: "error_failed_open_profile")
+            case .toxSetInfoCodeName:
+                return String(localized: "error_failed_name")
+            case .toxSetInfoCodeStatusMessage:
+                return String(localized: "error_failed_status")
+            case .toxAddFriend:
+                return String(localized: "error_failed_add_contact")
+            case .removeFriend:
+                return String(localized: "error_failed_remove_contact")
+            case .callToChat:
+                return String(localized: "error_failed_call")
+            case .exportProfile:
+                return String(localized: "error_failed_export")
+            case .deleteProfile:
+                return String(localized: "error_failed_delete_profile")
+            case .passwordIsEmpty, .wrongOldPassword, .passwordsDoNotMatch, .passwordTooShort, .passwordTooWeak:
+                return String(localized: "error_failed_password")
+            case .answerCall:
+                return String(localized: "error_failed_answer")
+            case .routeAudioToSpeaker:
+                return String(localized: "error_failed_speaker")
+            case .enableVideoSending:
+                return String(localized: "error_failed_camera")
+            case .callSwitchCamera:
+                return String(localized: "error_failed_switch_camera")
+            case .convertImageToPNG, .changeAvatar:
+                return String(localized: "error_failed_photo")
+            case .sendMessageToFriend, .sendGroupPrivateMessage:
+                return String(localized: "error_failed_send_message")
+            case .acceptGroupInvite:
+                return String(localized: "error_failed_join_group")
+            case .inviteFriendToGroup:
+                return String(localized: "error_failed_invite")
+            case .kickGroupPeer:
+                return String(localized: "error_failed_kick")
+            case .leaveGroup:
+                return String(localized: "error_failed_leave_group")
+            case .setGroupPeerRole:
+                return String(localized: "error_failed_role")
+            case .setGroupTopic:
+                return String(localized: "error_failed_topic")
+            case .setGroupSelfPeerName:
+                return String(localized: "error_failed_group_name")
+            case .setGroupPassword, .setGroupTopicLock, .setGroupPrivacy, .setGroupVoice, .setGroupPeerLimit:
+                return String(localized: "error_failed_group_settings")
+            case .sendFileToFriend:
+                return String(localized: "error_failed_send_file")
+            case .acceptIncomingFile:
+                return String(localized: "error_failed_accept_file")
+            case .cancelFileTransfer:
+                return String(localized: "error_failed_cancel_file")
+            case .pauseFileTransfer:
+                return String(localized: "error_failed_pause_file")
+            case .pinLogOut:
+                return String(localized: "error_pin_logout_title")
+        }
+    }
 }
 
+/// What an error says (redesign stage 3, E21): what failed, then what to do. The technical code is
+/// for support and lies under "Details", never in the words.
+struct ErrorAlert: Equatable {
+    let title: String
+    let message: String?
+    /// The domain and code of the error, nil without one.
+    let details: String?
+
+    static func details(of error: NSError) -> String {
+        return "\(error.domain) \(error.code)"
+    }
+}
 
 /**
     Show alert for given error.
@@ -94,216 +171,162 @@ enum ErrorHandlerType {
       - retryBlock: If set user will be asked to retry request once again.
  */
 func handleErrorWithType(_ type: ErrorHandlerType, error: NSError? = nil, retryBlock: (() -> Void)? = nil) {
+    guard let alert = errorAlert(for: type, error: error) else {
+        return
+    }
+    UIAlertController.showWithTitle(alert.title, message: alert.message, details: alert.details, retryBlock: retryBlock)
+}
+
+/// The words of an error; nil for a failure that needs none (a transfer the person cancelled). An
+/// error without a code, or with a code this build does not know, still has words: it never crashes.
+func errorAlert(for type: ErrorHandlerType, error: NSError?) -> ErrorAlert? {
+    guard let words = errorWords(for: type, error: error) else {
+        return nil
+    }
+    // A bare "Error" says nothing: the title says what failed. "Internal error" says nothing to do:
+    // the words ask to try again, and the code waits under "Details".
+    let generic = String(localized: "error_title")
+    let empty = [String(localized: "error_internal_message"), String(localized: "error_general_unknown_message")]
+    let title = (words.title.isEmpty || words.title == generic) ? type.failureTitle : words.title
+    var message = words.message
+    if let text = message, empty.contains(text) || text.isEmpty {
+        // With a code under "Details" there is something to take to support.
+        message = String(localized: error == nil ? "error_try_again_message" : "error_try_again_support_message")
+    }
+    if message == title {
+        message = nil
+    }
+    return ErrorAlert(title: title, message: message, details: error.map { ErrorAlert.details(of: $0) })
+}
+
+/// The words a system error carries are the system's own and readable; other errors' descriptions are
+/// technical, so they go no further than "Details".
+private func systemDescription(of error: NSError?) -> String? {
+    guard let error = error, error.domain == NSCocoaErrorDomain || error.domain == NSPOSIXErrorDomain else {
+        return nil
+    }
+    return error.localizedDescription
+}
+
+private func errorWords(for type: ErrorHandlerType, error: NSError?) -> (title: String, message: String?)? {
+    let generic = String(localized: "error_title")
+    let internalMessage = String(localized: "error_internal_message")
+    let code = error?.code
+
     switch type {
         case .cannotLoadHTML:
-            UIAlertController.showErrorWithMessage(String(localized: "error_internal_message"), retryBlock: retryBlock)
+            return (generic, internalMessage)
         case .createOCTManager:
-            let (title, message) = OCTManagerInitError(rawValue: error!.code)!.strings()
-            UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            return code.flatMap { OCTManagerInitError(rawValue: $0) }?.strings() ?? (generic, internalMessage)
         case .toxSetInfoCodeName:
-            let (title, message) = OCTToxErrorSetInfoCode(rawValue: error!.code)!.nameStrings()
-            UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            return code.flatMap { OCTToxErrorSetInfoCode(rawValue: $0) }?.nameStrings() ?? (generic, internalMessage)
         case .toxSetInfoCodeStatusMessage:
-            let (title, message) = OCTToxErrorSetInfoCode(rawValue: error!.code)!.statusMessageStrings()
-            UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            return code.flatMap { OCTToxErrorSetInfoCode(rawValue: $0) }?.statusMessageStrings() ?? (generic, internalMessage)
         case .toxAddFriend:
-            if let error = error, let friendAddError = OCTToxErrorFriendAdd(rawValue: error.code) {
-                let (title, message) = friendAddError.strings()
-                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-            }
-            else {
-                let message = error?.localizedDescription ?? String(localized: "error_internal_message")
-                UIAlertController.showWithTitle(String(localized: "error_title"), message: message, retryBlock: retryBlock)
-            }
+            return code.flatMap { OCTToxErrorFriendAdd(rawValue: $0) }?.strings() ?? (generic, internalMessage)
         case .removeFriend:
-            let (title, message) = OCTToxErrorFriendDelete(rawValue: error!.code)!.strings()
-            UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            return code.flatMap { OCTToxErrorFriendDelete(rawValue: $0) }?.strings() ?? (generic, internalMessage)
         case .callToChat:
-            let (title, message) = OCTToxAVErrorCall(rawValue: error!.code)!.strings()
-            UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-        case .exportProfile:
-            UIAlertController.showWithTitle(String(localized: "error_title"), message: error!.localizedDescription, retryBlock: retryBlock)
-        case .deleteProfile:
-            UIAlertController.showWithTitle(String(localized: "error_title"), message: error!.localizedDescription, retryBlock: retryBlock)
+            // KHANDAQ (redesign stage 3, E9): a call refused without a toxav code (it used to be the
+            // denied microphone) crashed here on a force unwrap.
+            return code.flatMap { OCTToxAVErrorCall(rawValue: $0) }?.strings() ?? (generic, internalMessage)
+        case .exportProfile, .deleteProfile:
+            return (generic, systemDescription(of: error) ?? internalMessage)
         case .passwordIsEmpty:
-            UIAlertController.showWithTitle(String(localized: "password_is_empty_error"), retryBlock: retryBlock)
+            return (String(localized: "password_is_empty_error"), nil)
         case .wrongOldPassword:
-            UIAlertController.showWithTitle(String(localized: "wrong_old_password"), retryBlock: retryBlock)
+            return (String(localized: "wrong_old_password"), nil)
         case .passwordsDoNotMatch:
-            UIAlertController.showWithTitle(String(localized: "passwords_do_not_match"), retryBlock: retryBlock)
+            return (String(localized: "passwords_do_not_match"), nil)
         case .passwordTooShort:
-            UIAlertController.showWithTitle(String(localized: "password_too_short_error"), retryBlock: retryBlock)
+            return (String(localized: "password_too_short_error"), nil)
         case .passwordTooWeak:
-            UIAlertController.showWithTitle(String(localized: "password_too_weak_error"), retryBlock: retryBlock)
+            return (String(localized: "password_too_weak_error"), nil)
         case .answerCall:
-            if let error = error, let answerError = OCTToxAVErrorAnswer(rawValue: error.code) {
-                let (title, message) = answerError.strings()
-                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-            } else {
-                UIAlertController.showWithTitle(
-                    String(localized: "error_title"),
-                    message: String(localized: "call_error_microphone_denied"),
-                    retryBlock: retryBlock
-                )
+            if let answerError = code.flatMap({ OCTToxAVErrorAnswer(rawValue: $0) }) {
+                return answerError.strings()
             }
-        case .routeAudioToSpeaker:
-            UIAlertController.showWithTitle(String(localized: "error_title"), message: String(localized: "error_internal_message"), retryBlock: retryBlock)
-        case .enableVideoSending:
-            UIAlertController.showWithTitle(String(localized: "error_title"), message: String(localized: "error_internal_message"), retryBlock: retryBlock)
-        case .callSwitchCamera:
-            UIAlertController.showWithTitle(String(localized: "error_title"), message: String(localized: "error_internal_message"), retryBlock: retryBlock)
+            // No toxav code: the microphone was refused.
+            return (String(localized: "air_call_mic_title"), String(localized: "call_error_microphone_denied"))
+        case .routeAudioToSpeaker, .enableVideoSending, .callSwitchCamera:
+            return (generic, internalMessage)
         case .convertImageToPNG:
-            UIAlertController.showWithTitle(String(localized: "error_title"), message: String(localized: "change_avatar_error_convert_image"), retryBlock: retryBlock)
+            return (generic, String(localized: "change_avatar_error_convert_image"))
         case .changeAvatar:
-            let (title, message) = OCTSetUserAvatarError(rawValue: error!.code)!.strings()
-            UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            return code.flatMap { OCTSetUserAvatarError(rawValue: $0) }?.strings() ?? (generic, internalMessage)
         case .sendMessageToFriend:
             if let error = error, error.domain == "OCTSubmanagerGroupsErrorDomain", error.code == 1 {
-                UIAlertController.showWithTitle(String(localized: "error_title"),
-                                                message: String(localized: "group_send_observer_role"),
-                                                retryBlock: retryBlock)
+                return (generic, String(localized: "group_send_observer_role"))
             }
-            else if let error = error, let groupError = OCTToxErrorGroupSendMessage(rawValue: error.code) {
-                let (title, message) = groupError.strings()
-                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            if let groupError = code.flatMap({ OCTToxErrorGroupSendMessage(rawValue: $0) }) {
+                return groupError.strings()
             }
-            else if let error = error, let (title, message) = OCTToxErrorFriendSendMessage(rawValue: error.code)?.strings() {
-                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-            }
-            else {
-                UIAlertController.showWithTitle(String(localized: "error_title"), message: String(localized: "error_internal_message"), retryBlock: retryBlock)
-            }
+            return code.flatMap { OCTToxErrorFriendSendMessage(rawValue: $0) }?.strings() ?? (generic, internalMessage)
         case .acceptGroupInvite:
-            if let error = error, let inviteError = OCTToxErrorGroupInviteAccept(rawValue: error.code) {
-                let (title, message) = inviteError.strings()
-                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-            }
-            else {
-                UIAlertController.showWithTitle(String(localized: "group_invite_accept_failed"), message: nil, retryBlock: retryBlock)
-            }
+            return code.flatMap { OCTToxErrorGroupInviteAccept(rawValue: $0) }?.strings()
+                ?? (String(localized: "group_invite_accept_failed"), nil)
         case .inviteFriendToGroup:
-            if let error = error, let inviteError = OCTToxErrorGroupInviteFriend(rawValue: error.code) {
-                let (title, message) = inviteError.strings()
-                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-            }
-            else {
-                UIAlertController.showWithTitle(String(localized: "group_invite_friend_failed"), message: nil, retryBlock: retryBlock)
-            }
+            return code.flatMap { OCTToxErrorGroupInviteFriend(rawValue: $0) }?.strings()
+                ?? (String(localized: "group_invite_friend_failed"), nil)
         case .kickGroupPeer:
-            if let error = error, let kickError = OCTToxErrorGroupKickPeer(rawValue: error.code) {
-                let (title, message) = kickError.strings()
-                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-            }
-            else {
-                UIAlertController.showWithTitle(String(localized: "group_peer_kick_failed"), message: nil, retryBlock: retryBlock)
-            }
+            return code.flatMap { OCTToxErrorGroupKickPeer(rawValue: $0) }?.strings()
+                ?? (String(localized: "group_peer_kick_failed"), nil)
         case .leaveGroup:
-            UIAlertController.showWithTitle(String(localized: "group_leave_failed"), message: nil, retryBlock: retryBlock)
+            return (String(localized: "group_leave_failed"), nil)
         case .setGroupPeerRole:
-            if let error = error, let roleError = OCTToxErrorGroupSetRole(rawValue: error.code) {
-                let (title, message) = roleError.strings()
-                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-            }
-            else {
-                UIAlertController.showWithTitle(String(localized: "group_role_set_failed"), message: nil, retryBlock: retryBlock)
-            }
+            return code.flatMap { OCTToxErrorGroupSetRole(rawValue: $0) }?.strings()
+                ?? (String(localized: "group_role_set_failed"), nil)
         case .setGroupTopic:
-            if let error = error, let topicError = OCTToxErrorGroupTopicSet(rawValue: error.code) {
-                let (title, message) = topicError.strings()
-                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-            }
-            else {
-                UIAlertController.showWithTitle(String(localized: "group_topic_set_failed"), message: nil, retryBlock: retryBlock)
-            }
+            return code.flatMap { OCTToxErrorGroupTopicSet(rawValue: $0) }?.strings()
+                ?? (String(localized: "group_topic_set_failed"), nil)
         case .setGroupSelfPeerName:
-            UIAlertController.showWithTitle(String(localized: "group_my_peer_name_set_failed"), message: nil, retryBlock: retryBlock)
+            return (String(localized: "group_my_peer_name_set_failed"), nil)
         case .setGroupPassword:
-            if let error = error, let passwordError = OCTToxErrorGroupFounderSetPassword(rawValue: error.code) {
-                let (title, message) = passwordError.strings()
-                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-            }
-            else {
-                UIAlertController.showWithTitle(String(localized: "group_password_set_failed"), message: nil, retryBlock: retryBlock)
-            }
+            return code.flatMap { OCTToxErrorGroupFounderSetPassword(rawValue: $0) }?.strings()
+                ?? (String(localized: "group_password_set_failed"), nil)
         case .setGroupTopicLock:
-            if let error = error, let lockError = OCTToxErrorGroupFounderSetTopicLock(rawValue: error.code) {
-                let (title, message) = lockError.strings()
-                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-            }
-            else {
-                UIAlertController.showWithTitle(String(localized: "group_topic_lock_set_failed"), message: nil, retryBlock: retryBlock)
-            }
+            return code.flatMap { OCTToxErrorGroupFounderSetTopicLock(rawValue: $0) }?.strings()
+                ?? (String(localized: "group_topic_lock_set_failed"), nil)
         case .setGroupPrivacy:
-            if let error = error, let privacyError = OCTToxErrorGroupFounderSetPrivacyState(rawValue: error.code) {
-                let (title, message) = privacyError.strings()
-                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-            }
-            else {
-                UIAlertController.showWithTitle(String(localized: "group_privacy_set_failed"), message: nil, retryBlock: retryBlock)
-            }
+            return code.flatMap { OCTToxErrorGroupFounderSetPrivacyState(rawValue: $0) }?.strings()
+                ?? (String(localized: "group_privacy_set_failed"), nil)
         case .setGroupVoice:
-            if let error = error, let voiceError = OCTToxErrorGroupFounderSetVoiceState(rawValue: error.code) {
-                let (title, message) = voiceError.strings()
-                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-            }
-            else {
-                UIAlertController.showWithTitle(String(localized: "group_voice_set_failed"), message: nil, retryBlock: retryBlock)
-            }
+            return code.flatMap { OCTToxErrorGroupFounderSetVoiceState(rawValue: $0) }?.strings()
+                ?? (String(localized: "group_voice_set_failed"), nil)
         case .setGroupPeerLimit:
-            if let error = error, let limitError = OCTToxErrorGroupFounderSetPeerLimit(rawValue: error.code) {
-                let (title, message) = limitError.strings()
-                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-            }
-            else {
-                UIAlertController.showWithTitle(String(localized: "group_peer_limit_set_failed"), message: String(localized: "group_peer_limit_invalid"), retryBlock: retryBlock)
-            }
+            return code.flatMap { OCTToxErrorGroupFounderSetPeerLimit(rawValue: $0) }?.strings()
+                ?? (String(localized: "group_peer_limit_set_failed"), String(localized: "group_peer_limit_invalid"))
         case .sendGroupPrivateMessage:
-            if let error = error, let privateError = OCTToxErrorGroupSendPrivateMessage(rawValue: error.code) {
-                let (title, message) = privateError.strings()
-                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-            }
-            else {
-                UIAlertController.showWithTitle(String(localized: "group_private_message_failed"), message: nil, retryBlock: retryBlock)
-            }
+            return code.flatMap { OCTToxErrorGroupSendPrivateMessage(rawValue: $0) }?.strings()
+                ?? (String(localized: "group_private_message_failed"), nil)
         case .sendFileToFriend:
             if let error = error, error.domain == "OCTSubmanagerGroupsErrorDomain", error.code == 1 {
-                UIAlertController.showWithTitle(String(localized: "error_title"),
-                                                message: String(localized: "group_send_observer_role"),
-                                                retryBlock: retryBlock)
+                return (generic, String(localized: "group_send_observer_role"))
             }
-            else if let error = error, error.domain == "OCTNgcGroupFileTransferErrorDomain" {
-                if error.code == 4 {
-                    // cancelled — no alert
-                }
-                else if error.code == 1 {
-                    UIAlertController.showWithTitle(String(localized: "error_title"),
-                                                    message: String(localized: "group_file_too_large"),
-                                                    retryBlock: retryBlock)
-                }
-                else {
-                    UIAlertController.showWithTitle(String(localized: "group_file_send_failed"), message: nil, retryBlock: retryBlock)
+            if let error = error, error.domain == "OCTNgcGroupFileTransferErrorDomain" {
+                switch error.code {
+                    case 4:
+                        // Cancelled by the person: nothing to say.
+                        return nil
+                    case 1:
+                        return (generic, String(localized: "group_file_too_large"))
+                    default:
+                        return (String(localized: "group_file_send_failed"), nil)
                 }
             }
-            else if let error = error, let sendError = OCTSendFileError(rawValue: error.code) {
-                let (title, message) = sendError.strings()
-                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-            }
-            else {
-                UIAlertController.showWithTitle(String(localized: "error_title"), message: String(localized: "error_internal_message"), retryBlock: retryBlock)
-            }
+            return code.flatMap { OCTSendFileError(rawValue: $0) }?.strings() ?? (generic, internalMessage)
         case .acceptIncomingFile:
-            let (title, message) = OCTAcceptFileError(rawValue: error!.code)!.strings()
-            UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-        case .cancelFileTransfer:
-            let (title, message) = OCTFileTransferError(rawValue: error!.code)!.strings()
-            UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
-        case .pauseFileTransfer:
-            let (title, message) = OCTFileTransferError(rawValue: error!.code)!.strings()
-            UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            return code.flatMap { OCTAcceptFileError(rawValue: $0) }?.strings() ?? (generic, internalMessage)
+        case .cancelFileTransfer, .pauseFileTransfer:
+            return code.flatMap { OCTFileTransferError(rawValue: $0) }?.strings() ?? (generic, internalMessage)
         case .pinLogOut:
-            UIAlertController.showWithTitle(String(localized: "error_title"), message: String(localized: "pin_logout_message"), retryBlock: retryBlock)
+            return (generic, String(localized: "pin_logout_message"))
     }
 }
+
+// KHANDAQ (redesign stage 3, E21): objcTox's enums are open. A code this build does not know (or a code
+// of another domain read as one of these) still makes a value, and a switch without "@unknown default"
+// traps on it: every switch below ends in one, so an unknown code gives words instead of a crash.
 
 extension OCTManagerInitError {
     func strings() -> (title: String, message: String) {
@@ -363,6 +386,8 @@ extension OCTManagerInitError {
             case .createToxBadFormat:
                 return (String(localized: "error_title"),
                         String(localized: "error_general_bad_format_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -376,6 +401,8 @@ extension OCTToxErrorSetInfoCode {
             case .tooLong:
                 return (String(localized: "error_title"),
                         String(localized: "error_name_too_long"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 
@@ -387,6 +414,8 @@ extension OCTToxErrorSetInfoCode {
             case .tooLong:
                 return (String(localized: "error_title"),
                         String(localized: "error_status_message_too_long"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -417,6 +446,8 @@ extension OCTToxErrorFriendAdd {
             case .unknown:
                 return (String(localized: "error_title"),
                         String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -427,6 +458,8 @@ extension OCTToxErrorFriendDelete {
             case .notFound:
                 return (String(localized: "error_title"),
                         String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -451,6 +484,8 @@ extension OCTToxAVErrorCall {
             case .unknown:
                 return (String(localized: "error_title"),
                         String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -476,6 +511,8 @@ extension OCTToxAVErrorAnswer {
             case .unknown:
                 return (String(localized: "error_title"),
                         String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -486,6 +523,8 @@ extension OCTSetUserAvatarError {
             case .tooBig:
                 return (String(localized: "error_title"),
                         String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -508,6 +547,8 @@ extension OCTToxErrorFriendSendMessage {
             case .unknown:
                 return (String(localized: "error_title"),
                         String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -537,6 +578,8 @@ extension OCTToxErrorGroupSendMessage {
             case .unknown:
                 return (String(localized: "error_title"),
                         String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -567,6 +610,8 @@ extension OCTToxErrorGroupInviteAccept {
             case .unknown:
                 return (String(localized: "group_invite_accept_failed"),
                         String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -591,6 +636,8 @@ extension OCTToxErrorGroupInviteFriend {
             case .unknown:
                 return (String(localized: "group_invite_friend_failed"),
                         String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -616,6 +663,8 @@ extension OCTToxErrorGroupKickPeer {
             case .unknown:
                 return (String(localized: "group_peer_kick_failed"),
                         String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -644,6 +693,8 @@ extension OCTToxErrorGroupSetRole {
             case .unknown:
                 return (String(localized: "group_role_set_failed"),
                         String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -663,6 +714,8 @@ extension OCTToxErrorGroupTopicSet {
                 return (String(localized: "group_topic_set_failed"), String(localized: "group_error_disconnected"))
             case .unknown:
                 return (String(localized: "group_topic_set_failed"), String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -682,6 +735,8 @@ extension OCTToxErrorGroupFounderSetPassword {
                 return (String(localized: "group_password_set_failed"), String(localized: "group_error_disconnected"))
             case .unknown:
                 return (String(localized: "group_password_set_failed"), String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -701,6 +756,8 @@ extension OCTToxErrorGroupFounderSetTopicLock {
                 return (String(localized: "group_topic_lock_set_failed"), String(localized: "group_error_disconnected"))
             case .unknown:
                 return (String(localized: "group_topic_lock_set_failed"), String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -718,6 +775,8 @@ extension OCTToxErrorGroupFounderSetPeerLimit {
                 return (String(localized: "group_peer_limit_set_failed"), String(localized: "group_error_disconnected"))
             case .unknown:
                 return (String(localized: "group_peer_limit_set_failed"), String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -735,6 +794,8 @@ extension OCTToxErrorGroupFounderSetPrivacyState {
                 return (String(localized: "group_privacy_set_failed"), String(localized: "group_error_disconnected"))
             case .unknown:
                 return (String(localized: "group_privacy_set_failed"), String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -752,6 +813,8 @@ extension OCTToxErrorGroupFounderSetVoiceState {
                 return (String(localized: "group_voice_set_failed"), String(localized: "group_error_disconnected"))
             case .unknown:
                 return (String(localized: "group_voice_set_failed"), String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -775,6 +838,8 @@ extension OCTToxErrorGroupSendPrivateMessage {
                 return (String(localized: "group_private_message_failed"), String(localized: "group_error_disconnected"))
             case .unknown:
                 return (String(localized: "group_private_message_failed"), String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -800,6 +865,8 @@ extension OCTToxErrorGroupSendCustomPacket {
             case .unknown:
                 return (String(localized: "error_title"),
                         String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -824,6 +891,8 @@ extension OCTSendFileError {
             case .tooMany:
                 return (String(localized: "error_title"),
                         String(localized: "error_too_many_files"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -843,6 +912,8 @@ extension OCTAcceptFileError {
             case .friendNotConnected:
                 return (String(localized: "error_title"),
                         String(localized: "error_contact_not_connected"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }
@@ -853,6 +924,8 @@ extension OCTFileTransferError {
             case .wrongMessage:
                 return (String(localized: "error_title"),
                         String(localized: "error_internal_message"))
+            @unknown default:
+                return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
     }
 }

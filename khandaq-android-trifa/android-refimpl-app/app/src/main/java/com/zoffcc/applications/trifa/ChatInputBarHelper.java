@@ -222,6 +222,7 @@ final class ChatInputBarHelper
         micSendButton.setScaleY(1f);
         micSendButton.setAlpha(1f);
         micSendButton.setTag(TAG_MIC_SEND_MODE, Boolean.FALSE);
+        micSendButton.setContentDescription(micSendButton.getContext().getString(R.string.air_compose_voice));
         applyIconTint(micSendButton, false);
         micSendButton.setImageDrawable(micIcon);
         micSendButton.setColorFilter(null);
@@ -241,8 +242,12 @@ final class ChatInputBarHelper
         }
         else
         {
+            // KHANDAQ (redesign, stage 2): the one-to-one chat puts its design-system tint on the button.
+            final Object airTint = button.getTag(R.id.air_mic_tint);
             androidx.core.widget.ImageViewCompat.setImageTintList(button,
-                    android.content.res.ColorStateList.valueOf(
+                    airTint instanceof android.content.res.ColorStateList
+                    ? (android.content.res.ColorStateList) airTint
+                    : android.content.res.ColorStateList.valueOf(
                             button.getResources().getColor(R.color.tg_chat_input_icon)));
         }
     }
@@ -264,7 +269,21 @@ final class ChatInputBarHelper
         }
 
         button.setTag(TAG_MIC_SEND_MODE, showSend);
+        // KHANDAQ (redesign, E13): TalkBack hears what a tap does now, in groups as in a conversation.
+        button.setContentDescription(button.getContext().getString(
+                showSend ? R.string.air_compose_send : R.string.air_compose_voice));
         button.animate().cancel();
+
+        // KHANDAQ (redesign, stage 2): with animations removed in the system settings the icon just swaps.
+        if (AirUi.reducedMotion())
+        {
+            button.setScaleX(1f);
+            button.setScaleY(1f);
+            button.setAlpha(1f);
+            applyIconTint(button, showSend);
+            button.setImageDrawable(showSend ? sendDrawable : micDrawable);
+            return;
+        }
 
         button.animate()
                 .scaleX(0.35f)

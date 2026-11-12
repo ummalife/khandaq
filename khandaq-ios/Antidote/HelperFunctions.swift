@@ -64,6 +64,29 @@ func normalizedToxAddress(from raw: String) -> String? {
     return normalizeAddressString(raw)
 }
 
+/**
+ A full 76-character Tox ID typed or pasted on its own, normalized; nil for anything else.
+
+ Spaces, line breaks, invisible formatting characters and one `tox:`-style prefix are allowed, but every
+ other character has to be part of the ID. sanitizeAddressInput keeps the hex digits out of any text, so
+ a search like "cafe bead" would turn into hex there; the Air command line must only treat a real ID as
+ one. A 64-character key is not accepted: it is also the length of a group ID.
+ */
+func standaloneToxAddress(from raw: String) -> String? {
+    var text = stripInvisibleFormattingCharacters(raw.uppercased())
+    text = text.components(separatedBy: .whitespacesAndNewlines).joined()
+
+    for prefix in ["TOX://", "KHANDAQ://"] + toxAddressInputPrefixes where text.hasPrefix(prefix) {
+        text = String(text.dropFirst(prefix.count))
+        break
+    }
+
+    guard text.count == Int(kOCTToxAddressLength), text.allSatisfy({ $0.isHexDigit }) else {
+        return nil
+    }
+    return normalizeAddressString(text)
+}
+
 /// Public key prefix (64 hex chars) from a normalized address or sanitized input.
 func toxPublicKeyPrefix(from raw: String) -> String? {
     let hex = sanitizeAddressInput(raw)

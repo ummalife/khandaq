@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The row "New contact with this ID" over the list while the command line holds the start of an ID
+    (E3, design/DESIGN.md "New contact and requests on the phone"): the dashed tile of a contact who
+    has not answered, the title, and what is missing or wrong so far. It opens New contact with it.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/air_command_id_row"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/air_bg_row"
+    android:clickable="true"
+    android:focusable="true"
+    android:minHeight="@dimen/kq_size_row_phone">
+
+    <com.zoffcc.applications.trifa.AirTileView
+        android:id="@+id/air_command_id_tile"
+        android:layout_width="@dimen/kq_size_tile_phone"
+        android:layout_height="@dimen/kq_size_tile_phone"
+        android:layout_gravity="start|center_vertical"
+        android:layout_marginStart="@dimen/kq_space_16"
+        android:importantForAccessibility="no" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_marginStart="@dimen/air_text_start"
+        android:layout_marginEnd="@dimen/kq_space_16"
+        android:importantForAccessibility="noHideDescendants"
+        android:orientation="vertical"
+        android:paddingTop="@dimen/kq_space_10"
+        android:paddingBottom="@dimen/kq_space_10">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/air_cmd_new_contact"
+            android:textAlignment="viewStart"
+            android:textAppearance="@style/TextAppearance.KQ.Air.BodyStrong"
+            android:textColor="@color/kq_ink" />
+
+        <TextView
+            android:id="@+id/air_command_id_note"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/kq_space_2"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textAlignment="viewStart"
+            android:textAppearance="@style/TextAppearance.KQ.Caption"
+            android:textColor="@color/kq_ink_3" />
+    </LinearLayout>
+</FrameLayout>

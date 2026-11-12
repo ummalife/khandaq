@@ -31,13 +31,11 @@ final class GroupMessageBubbleTextHelper
         return (autoLinkMode, matchedText) -> {
             if (autoLinkMode == AutoLinkMode.MODE_URL)
             {
-                GroupMessageListHolder_text_incoming_not_read.showDialog_url(context, "open URL?",
-                        matchedText.replaceFirst("^\\s", ""));
+                AirLinkQuestion.openLink(context, matchedText.replaceFirst("^\\s", ""));
             }
             else if (autoLinkMode == AutoLinkMode.MODE_EMAIL)
             {
-                GroupMessageListHolder_text_incoming_not_read.showDialog_email(context, "send Email?",
-                        matchedText.replaceFirst("^\\s", ""));
+                AirLinkQuestion.writeEmail(context, matchedText.replaceFirst("^\\s", ""));
             }
             else if (autoLinkMode == AutoLinkMode.MODE_MENTION)
             {
@@ -45,15 +43,12 @@ final class GroupMessageBubbleTextHelper
             }
             else if (autoLinkMode == AutoLinkMode.MODE_HASHTAG)
             {
-                GroupMessageListHolder_text_incoming_not_read.showDialog_url(context, "open URL?",
-                        "https://twitter.com/hashtag/"
+                AirLinkQuestion.openLink(context, "https://twitter.com/hashtag/"
                                 + matchedText.replaceFirst("^\\s", "").replaceFirst("^#", ""));
             }
             else if (autoLinkMode == AutoLinkMode.MODE_CUSTOM)
             {
-                GroupMessageListHolder_text_incoming_not_read.showDialog_tox(context,
-                        context.getString(org.khandaq.messenger.R.string.add_id_dialog_title),
-                        matchedText.replaceFirst("^\\s", ""));
+                AirLinkQuestion.requestContact(context, matchedText.replaceFirst("^\\s", ""));
             }
         };
     }

@@ -8,87 +8,70 @@ protocol SettingsAboutControllerDelegate: class {
     func settingsAboutControllerShowAcknowledgements(_ controller: SettingsAboutController)
 }
 
-class SettingsAboutController: StaticTableController {
+/// Settings > About (E18), drawn as the other sections of Settings (redesign stage 5): the version and
+/// the build, the site and the owner, then the toxcore version, then the licences. Rows that only say
+/// a value are read as text, not as buttons.
+class SettingsAboutController: AirScrollController {
     weak var delegate: SettingsAboutControllerDelegate?
 
-    fileprivate let khandaqVersionModel = StaticTableInfoCellModel()
-    fileprivate let khandaqBuildModel = StaticTableInfoCellModel()
-    fileprivate let websiteModel = StaticTableDefaultCellModel()
-    fileprivate let creditModel = StaticTableDefaultCellModel()
-    fileprivate let toxcoreVersionModel = StaticTableInfoCellModel()
-    fileprivate let acknowledgementsModel = StaticTableDefaultCellModel()
-
     init(theme: Theme) {
-        super.init(theme: theme, style: StaticTableController.insetGroupedStyle, model: [
-            [
-                khandaqVersionModel,
-                khandaqBuildModel,
-                websiteModel,
-                creditModel,
-            ],
-            [
-                toxcoreVersionModel,
-            ],
-            [
-                acknowledgementsModel,
-            ],
-        ])
-
+        super.init(nibName: nil, bundle: nil)
         title = String(localized: "settings_about")
-        updateModels()
     }
 
     required convenience init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.accessibilityIdentifier = "settings.about.screen"
+        let info = Bundle.main.infoDictionary
+
+        let version = valueRow("settings_khandaq_version", value: info?["CFBundleShortVersionString"] as? String)
+        let build = valueRow("settings_khandaq_build", value: info?["CFBundleVersion"] as? String)
+        // KHANDAQ (18.08): bare hosts, the same on Android; a tap opens the whole address.
+        let website = AirSettingRow(title: String(localized: "settings_website"), value: "khandaq.org")
+        website.onTap {
+            AirAboutLinks.open("https://khandaq.org")
+        }
+        // The owner and developer, under the project's own site. The identifier is the QA regression's
+        // hook: the Arabic catalogue transliterates the name, so a match on the text cannot pass there.
+        let credit = AirSettingRow(title: String(localized: "settings_credit_owner"), value: "1sa.me")
+        credit.accessibilityIdentifier = "about.ownerCredit"
+        credit.onTap {
+            AirAboutLinks.open("https://1sa.me/")
+        }
+        addSection(nil, rows: [version, build, website, credit])
+
+        addSection(nil, rows: [valueRow("settings_toxcore_version", value: OCTTox.version())])
+
+        let licences = AirSettingRow(title: String(localized: "settings_acknowledgements"))
+        licences.accessibilityIdentifier = "settings.about.licences"
+        licences.onTap { [weak self] in
+            if let self = self {
+                self.delegate?.settingsAboutControllerShowAcknowledgements(self)
+            }
+        }
+        addSection(nil, rows: [licences])
+    }
 }
 
 private extension SettingsAboutController {
-    func updateModels() {
-        khandaqVersionModel.title = String(localized: "settings_khandaq_version")
-        khandaqVersionModel.value =  Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
-
-        khandaqBuildModel.title = String(localized: "settings_khandaq_build")
-        khandaqBuildModel.value = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
-
-        websiteModel.title = String(localized: "settings_website")
-        // KHANDAQ (18.08): bare host, so this row and the credit row below read the same way
-        // (Android already shows both as bare hosts). The tap still opens the full URL.
-        websiteModel.value = "khandaq.org"
-        websiteModel.didSelectHandler = openWebsite
-        websiteModel.rightImageType = .arrow
-
-        // KHANDAQ (18.08): credit the owner/developer directly under the project's own site — the
-        // same row shape as "Website" above, so the tap opens https://1sa.me/ in the browser. The
-        // caption is a whole sentence, hence multilineTitle: one fixed line clips it in ru.
-        creditModel.title = String(localized: "settings_credit_owner")
-        // Stable hook for the QA regression: the Arabic catalogue transliterates the name, so a test
-        // matching on "Isa Dagestani" can never pass there.
-        creditModel.accessibilityIdentifier = "about.ownerCredit"
-        creditModel.multilineTitle = true
-        creditModel.value = "1sa.me"
-        creditModel.didSelectHandler = openDeveloperWebsite
-        creditModel.rightImageType = .arrow
-
-        toxcoreVersionModel.title = String(localized: "settings_toxcore_version")
-        toxcoreVersionModel.value = OCTTox.version()
-
-        acknowledgementsModel.value = String(localized: "settings_acknowledgements")
-        acknowledgementsModel.didSelectHandler = showAcknowledgements
-        acknowledgementsModel.rightImageType = .arrow
+    /// A row that only says a value: no chevron, and VoiceOver reads it as text.
+    func valueRow(_ titleKey: String, value: String?) -> AirSettingRow {
+        let row = AirSettingRow(title: String(localized: titleKey), value: value, opens: false)
+        row.isUserInteractionEnabled = false
+        row.accessibilityTraits = UIAccessibilityTraitStaticText
+        return row
     }
+}
 
-    func showAcknowledgements(_: StaticTableBaseCell) {
-        delegate?.settingsAboutControllerShowAcknowledgements(self)
-    }
-
-    func openWebsite(_: StaticTableBaseCell) {
-        guard let url = URL(string: "https://khandaq.org") else { return }
-        UIApplication.shared.open(url)
-    }
-
-    func openDeveloperWebsite(_: StaticTableBaseCell) {
-        guard let url = URL(string: "https://1sa.me/") else { return }
+private enum AirAboutLinks {
+    static func open(_ address: String) {
+        guard let url = URL(string: address) else {
+            return
+        }
         UIApplication.shared.open(url)
     }
 }

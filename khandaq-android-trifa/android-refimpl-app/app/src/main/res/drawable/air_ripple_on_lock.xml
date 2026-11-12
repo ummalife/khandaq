@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (redesign, stage 5): the touch on a control of the dark lock ground (call screens), a light
+     ripple in both themes; the theme's own ripple is dark in the light theme and does not show there. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/kq_media_control" />

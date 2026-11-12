@@ -1,92 +1,103 @@
 {
+  "_comment": "Frames of the store screenshots, rendered by render.py. 'capture' says what the raw capture must show (own demo people only; status bar 9:41); 'theme' is the theme of that capture and of the frame ground.",
   "frames": [
     {
-      "name": "chat",
-      "file": "chat.png",
+      "name": "air",
+      "file": "air.png",
+      "theme": "light",
+      "capture": "Air, light theme: the you block and the network line, a request card, Online now with a group row ('4 online') and two people, Offline with 'In transit' on one row, Just for you with Saved Messages; the In transit pill shows its count",
       "captions": {
         "en-US": {
-          "title": "Private chats, no\u00a0phone number",
-          "subtitle": "Reply with a quote, react, edit or delete on both sides"
+          "title": "Who you can reach, at a glance",
+          "subtitle": "People, groups and requests in one list, sorted by who is online now"
         },
         "ru": {
-          "title": "Приватные чаты без номера",
-          "subtitle": "Ответ с цитатой, реакции, правка и удаление у обоих"
+          "title": "Сразу видно, кто на связи",
+          "subtitle": "Люди, группы и запросы в одном списке: кто в сети сейчас, видно сразу"
         },
         "ar-SA": {
-          "title": "محادثات خاصة بلا رقم هاتف",
-          "subtitle": "رد مع اقتباس وتفاعل وتعديل وحذف لدى الطرفين"
+          "title": "من يمكنك الوصول إليه، بنظرة واحدة",
+          "subtitle": "الأشخاص والمجموعات والطلبات في قائمة واحدة، مرتبة حسب من هو متصل الآن"
+        }
+      }
+    },
+    {
+      "name": "conversation",
+      "file": "conversation.png",
+      "theme": "light",
+      "capture": "A one-to-one conversation, light theme: the time column, delivered messages, the In transit tray with one message waiting for the person who is offline, the composer with its delivery hint",
+      "captions": {
+        "en-US": {
+          "title": "See what has left",
+          "subtitle": "A message for someone offline waits in transit and goes out by itself when they are back"
+        },
+        "ru": {
+          "title": "Видно, что ушло",
+          "subtitle": "Сообщение для того, кто не в сети, ждёт в пути и уходит само, как только собеседник вернётся"
+        },
+        "ar-SA": {
+          "title": "اعرف ما الذي أُرسل",
+          "subtitle": "الرسالة لمن هو غير متصل تنتظر في الطريق، وتُرسل تلقائيًا فور عودته"
+        }
+      }
+    },
+    {
+      "name": "new-contact",
+      "file": "new-contact.png",
+      "theme": "light",
+      "capture": "New contact, light theme: a whole valid ID in groups of four, the ruler with key 64, antispam 8 and check 4 all passed, the greeting, Send request enabled on the bar above the keyboard",
+      "captions": {
+        "en-US": {
+          "title": "Add people by ID or QR code",
+          "subtitle": "Khandaq checks the ID before your request goes out, so a typo shows up right away"
+        },
+        "ru": {
+          "title": "Добавляйте по ID или QR-коду",
+          "subtitle": "Khandaq проверяет ID до отправки запроса, так что опечатка видна сразу"
+        },
+        "ar-SA": {
+          "title": "أضف جهات الاتصال بالمعرّف أو رمز QR",
+          "subtitle": "يتحقق خندق من المعرّف قبل إرسال طلبك، فيظهر الخطأ المطبعي فورًا"
         }
       }
     },
     {
       "name": "group",
       "file": "group.png",
+      "theme": "light",
+      "capture": "A group conversation, light theme: the header '9 members, 4 online now', the Get it now strip, authors named over their runs with a moderator role, the hint under the field '4 of 8 get it now, the rest when they come online'",
       "captions": {
         "en-US": {
-          "title": "Group chats",
-          "subtitle": "Member roles, replies, reactions and pinned messages"
+          "title": "Groups that show who is there",
+          "subtitle": "See who is online and who gets your message now, before you send it"
         },
         "ru": {
-          "title": "Групповые чаты",
-          "subtitle": "Роли участников, ответы, реакции и закреплённые сообщения"
+          "title": "В группе видно, кто на месте",
+          "subtitle": "Кто в сети и кто получит сообщение сейчас, видно ещё до отправки"
         },
         "ar-SA": {
-          "title": "محادثات جماعية",
-          "subtitle": "أدوار الأعضاء والردود والتفاعلات والرسائل المثبّتة"
+          "title": "مجموعات تُظهر من الحاضر",
+          "subtitle": "ترى من المتصل ومن سيستلم رسالتك الآن قبل أن ترسلها"
         }
       }
     },
     {
-      "name": "menu",
-      "file": "menu.png",
+      "name": "you",
+      "file": "you.png",
+      "theme": "dark",
+      "capture": "You, DARK theme: the QR card of your ID on its white card, Share ID and Copy ID, your name and status, the ID in its three parts",
       "captions": {
         "en-US": {
-          "title": "Everything in one tap",
-          "subtitle": "Reply, pin, forward, copy or react with emoji"
+          "title": "Your key is your account",
+          "subtitle": "No phone number, no email, no account on a server: the key is made on your iPhone"
         },
         "ru": {
-          "title": "Всё в одно касание",
-          "subtitle": "Ответить, закрепить, переслать, скопировать или поставить реакцию"
+          "title": "Ключ и есть ваш аккаунт",
+          "subtitle": "Без номера, email и аккаунта на сервере: ключ создаётся на вашем iPhone"
         },
         "ar-SA": {
-          "title": "كل شيء بلمسة واحدة",
-          "subtitle": "رد أو ثبّت أو أعد التوجيه أو انسخ أو تفاعل برمز تعبيري"
-        }
-      }
-    },
-    {
-      "name": "forward",
-      "file": "forward.png",
-      "captions": {
-        "en-US": {
-          "title": "Voice, photos, forwarding",
-          "subtitle": "Forward several messages at once. Light or dark theme"
-        },
-        "ru": {
-          "title": "Голосовые, фото, пересылка",
-          "subtitle": "Пересылайте сразу несколько сообщений. Светлая или тёмная тема"
-        },
-        "ar-SA": {
-          "title": "صوت وصور وإعادة توجيه",
-          "subtitle": "أعد توجيه عدة رسائل دفعة واحدة، بمظهر فاتح أو داكن"
-        }
-      }
-    },
-    {
-      "name": "preview",
-      "file": "preview.png",
-      "captions": {
-        "en-US": {
-          "title": "Caption before you send",
-          "subtitle": "Preview, crop and rotate photos in the built-in editor"
-        },
-        "ru": {
-          "title": "Подпись перед отправкой",
-          "subtitle": "Просмотр, обрезка и поворот фото во встроенном редакторе"
-        },
-        "ar-SA": {
-          "title": "أضف تعليقًا قبل الإرسال",
-          "subtitle": "عاين الصور وقصّها ودوّرها في المحرر المدمج"
+          "title": "مفتاحك هو حسابك",
+          "subtitle": "بلا رقم هاتف ولا بريد إلكتروني ولا حساب على خادم: يُنشأ المفتاح على جهاز iPhone الخاص بك"
         }
       }
     }

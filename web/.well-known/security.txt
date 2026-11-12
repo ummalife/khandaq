@@ -1,4 +1,4 @@
-# Khandaq — security contact (RFC 9116)
+# Khandaq: security contact (RFC 9116)
 #
 # KHANDAQ (re-audit 2026-08-22, W-03). The site pointed researchers at SECURITY.md, which is only
 # discoverable if you already know to look in the repository. This is the standard endpoint that

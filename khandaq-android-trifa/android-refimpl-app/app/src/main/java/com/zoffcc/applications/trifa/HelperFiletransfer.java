@@ -69,7 +69,6 @@ import static android.webkit.MimeTypeMap.getFileExtensionFromUrl;
 import static com.zoffcc.applications.trifa.HelperFriend.friend_call_push_url;
 import static com.zoffcc.applications.trifa.HelperFriend.is_friend_online_real;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
-import static com.zoffcc.applications.trifa.HelperGeneric.display_toast;
 import static com.zoffcc.applications.trifa.HelperGeneric.dp2px;
 import static com.zoffcc.applications.trifa.HelperGeneric.get_fileExt;
 import static com.zoffcc.applications.trifa.HelperGeneric.set_message_accepted_from_id;
@@ -1932,7 +1931,8 @@ public class HelperFiletransfer
         catch (Exception e)
         {
             e.printStackTrace();
-            display_toast(context_s.getString(R.string.chat_opening_file_failed), false, 0);
+            // E21: said under the field of the conversation the file was opened from.
+            AirComposerNotice.say(context_s.getString(R.string.chat_opening_file_failed), true);
         }
     }
 
@@ -2119,7 +2119,8 @@ public class HelperFiletransfer
         catch (Exception e)
         {
             e.printStackTrace();
-            display_toast("opening outgoing file failed", false, 0);
+            // E21: said under the field of the conversation the file was opened from, in its language.
+            AirComposerNotice.say(context.getString(R.string.chat_opening_file_failed), true);
         }
     }
 

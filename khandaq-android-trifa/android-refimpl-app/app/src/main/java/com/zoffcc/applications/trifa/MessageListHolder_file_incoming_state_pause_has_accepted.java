@@ -118,7 +118,7 @@ public class MessageListHolder_file_incoming_state_pause_has_accepted extends Re
         date_time.setText(long_date_time_format(m.rcvd_timestamp));
         // Media/file bubbles had only the near-invisible external date; show the in-bubble time like text messages.
         ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
-                HelperGeneric.format_chat_message_time(m, false), false);
+                AirTranscript.timeText(itemView.getContext(), m, false), false);
 
         try
         {

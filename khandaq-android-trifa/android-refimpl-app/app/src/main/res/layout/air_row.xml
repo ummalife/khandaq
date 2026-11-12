@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    A row of the Air list (design/redesign/02-plan.md, screen 2): tile, name with the reachability
+    mark, then time, our delivery state, the last message and the flags. 68dp high on a phone.
+    clipChildren is off so a group's second tile can peek out above its front tile.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/air_bg_row"
+    android:clickable="true"
+    android:clipChildren="false"
+    android:focusable="true"
+    android:longClickable="true"
+    android:minHeight="@dimen/kq_size_row_phone">
+
+    <com.zoffcc.applications.trifa.AirTileView
+        android:id="@+id/air_row_tile"
+        android:layout_width="@dimen/kq_size_tile_phone"
+        android:layout_height="@dimen/kq_size_tile_phone"
+        android:layout_gravity="start|center_vertical"
+        android:layout_marginStart="@dimen/kq_space_16"
+        android:importantForAccessibility="no" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_marginStart="@dimen/air_text_start"
+        android:layout_marginEnd="@dimen/kq_space_16"
+        android:importantForAccessibility="noHideDescendants"
+        android:orientation="vertical"
+        android:paddingTop="@dimen/kq_space_10"
+        android:paddingBottom="@dimen/kq_space_10">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/air_row_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textAlignment="viewStart"
+                android:textAppearance="@style/TextAppearance.KQ.Air.BodyStrong"
+                android:textColor="@color/kq_ink" />
+
+            <LinearLayout
+                android:id="@+id/air_row_reach"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/kq_space_8"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <View
+                    android:id="@+id/air_row_reach_dot"
+                    android:layout_width="@dimen/kq_size_dot"
+                    android:layout_height="@dimen/kq_size_dot"
+                    android:layout_marginEnd="@dimen/kq_space_6"
+                    android:background="@drawable/air_bg_dot" />
+
+                <TextView
+                    android:id="@+id/air_row_reach_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:maxLines="1"
+                    android:textAppearance="@style/TextAppearance.KQ.Caption" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/kq_space_2"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/air_row_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textAppearance="@style/TextAppearance.KQ.Caption"
+                android:textColor="@color/kq_ink_3" />
+
+            <ImageView
+                android:id="@+id/air_row_delivery"
+                android:layout_width="@dimen/kq_size_icon_small"
+                android:layout_height="@dimen/kq_size_icon_small"
+                android:layout_marginStart="@dimen/kq_space_8"
+                android:importantForAccessibility="no" />
+
+            <TextView
+                android:id="@+id/air_row_preview"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/kq_space_4"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textAlignment="viewStart"
+                android:textAppearance="@style/TextAppearance.KQ.Air.LabelRegular"
+                android:textColor="@color/kq_ink_2" />
+
+            <LinearLayout
+                android:id="@+id/air_row_transit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/kq_space_8"
+                android:background="@drawable/air_bg_transit_flag"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="@dimen/kq_space_6"
+                android:paddingTop="@dimen/kq_space_2"
+                android:paddingEnd="@dimen/kq_space_8"
+                android:paddingBottom="@dimen/kq_space_2">
+
+                <ImageView
+                    android:layout_width="@dimen/kq_size_icon_small"
+                    android:layout_height="@dimen/kq_size_icon_small"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/kq_ic_clock"
+                    android:tint="@color/kq_transit" />
+
+                <TextView
+                    android:id="@+id/air_row_transit_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/kq_space_4"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1"
+                    android:textAppearance="@style/TextAppearance.KQ.Air.CaptionStrong"
+                    android:textColor="@color/kq_transit" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/air_row_unread"
+                android:layout_width="wrap_content"
+                android:layout_height="@dimen/kq_size_badge"
+                android:layout_marginStart="@dimen/kq_space_6"
+                android:background="@drawable/air_bg_badge"
+                android:fontFeatureSettings="tnum"
+                android:gravity="center"
+                android:maxLines="1"
+                android:minWidth="@dimen/kq_size_badge"
+                android:paddingStart="@dimen/kq_space_6"
+                android:paddingEnd="@dimen/kq_space_6"
+                android:textAppearance="@style/TextAppearance.KQ.Air.CaptionStrong"
+                android:textColor="@color/kq_on_ink" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

@@ -312,21 +312,8 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
             else
             {
                 // KHANDAQ: don't flash the "Please wait ..." card on the list when opening a group.
-
-                if (this.group.privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
-                {
-                    Intent intent = new Intent(v.getContext(), GroupMessageListActivity.class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                    intent.putExtra("group_id", this.group.group_identifier);
-                    v.getContext().startActivity(intent);
-                }
-                else
-                {
-                    Intent intent = new Intent(v.getContext(), GroupMessageListActivity.class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                    intent.putExtra("group_id", this.group.group_identifier);
-                    v.getContext().startActivity(intent);
-                }
+                // Public and private groups open the same screen.
+                open_group_chat(v.getContext(), this.group.group_identifier);
             }
         }
         catch (Exception e)
@@ -336,12 +323,29 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
         }
     }
 
+    /** KHANDAQ (redesign): opens a group's conversation; the old list and Air share it. */
+    static void open_group_chat(final Context c, final String group_identifier)
+    {
+        final Intent intent = new Intent(c, GroupMessageListActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        intent.putExtra("group_id", group_identifier);
+        c.startActivity(intent);
+    }
+
     @Override
     public boolean onLongClick(final View v)
     {
         HelperGeneric.logI(TAG, "onLongClick");
+        return show_row_menu(v, this.group);
+    }
 
-        final GroupDB f2 = this.group;
+    /** KHANDAQ (redesign): the row's action menu, anchored to {@code v}; the old list and Air share it. */
+    static boolean show_row_menu(final View v, final GroupDB f2)
+    {
+        if (f2 == null)
+        {
+            return false;
+        }
 
         PopupMenu menu = new PopupMenu(v.getContext(), v);
         menu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener()
@@ -395,146 +399,161 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
 
     }
 
-    public void show_confirm_group_leave_dialog(final View view, final GroupDB f2)
+    static void show_confirm_group_leave_dialog(final View view, final GroupDB f2)
     {
-        AlertDialog.Builder builder = new AlertDialog.Builder(view.getContext());
-        builder.setTitle("Leave Group?");
-        builder.setMessage("Do you want to leave this Group?");
-
-        builder.setNegativeButton("Cancel", null);
-        builder.setPositiveButton("Yes", new DialogInterface.OnClickListener()
-        {
-            @Override
-            public void onClick(DialogInterface dialog, int which)
-            {
-                if (f2.group_identifier != null)
-                {
-                    final long group_num = tox_group_by_groupid__wrapper(f2.group_identifier);
-                    if (group_num >= 0)
-                    {
-                        tox_group_leave(group_num, "left");
-                    }
-                    GroupInviteAcceptPolicy.forget(f2.group_identifier);
-                    HelperGeneric.update_savedata_file_wrapper_async(); // KHANDAQ (ANR): group already left in live tox; persist off-thread
-                    set_group_group_we_left(f2.group_identifier);
-                    set_group_inactive(f2.group_identifier);
-                    try
-                    {
-                        if (group_message_list_activity != null
-                            && group_message_list_activity.get_current_group_id().equalsIgnoreCase(
-                                    f2.group_identifier))
-                        {
-                            group_message_list_activity.finish();
-                        }
-                    }
-                    catch (Exception ignored)
-                    {
-                    }
-                }
-
-                Runnable myRunnable2 = new Runnable()
-                {
-                    @Override
-                    public void run()
-                    {
-                        try
-                        {
-                            try
-                            {
-                                if (MainActivity.friend_list_fragment != null)
-                                {
-                                    // reload friendlist
-                                    MainActivity.friend_list_fragment.add_all_friends_clear(0);
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                            HelperGeneric.logI(TAG, "onMenuItemClick:8:EE:" + e.getMessage());
-                        }
-                    }
-                };
-
-                // TODO: use own handler
-                if (main_handler_s != null)
-                {
-                    main_handler_s.post(myRunnable2);
-                }
-            }
-        });
-
-        AlertDialog dialog = builder.create();
-        dialog.show();
+        // KHANDAQ (redesign, E13 and E21): the list's Leave asked in English, "Leave Group?" with Yes; it
+        // names the group and says what leaving means, in the app's language, as iOS does, and asks from
+        // below with the verb on the button.
+        final Context dialog_context = view.getContext();
+        AirQuestion.ask(dialog_context,
+                        dialog_context.getString(R.string.air_group_leave_title_format, group_title_for_dialog(f2)),
+                        dialog_context.getString(R.string.air_group_leave_message),
+                        dialog_context.getString(R.string.air_group_leave), true,
+                        () -> leave_group(f2.group_identifier));
     }
 
-    public void show_confirm_group_del_dialog(final View view, final GroupDB f2)
+    /**
+     * Leaves the group in toxcore, marks it left and inactive here, closes its conversation if it is open
+     * and reloads the list. The history stays until the group is deleted.
+     */
+    static void leave_group(final String group_identifier)
     {
-        AlertDialog.Builder builder = new AlertDialog.Builder(view.getContext());
-        builder.setTitle(R.string.delete_group_title);
-        builder.setMessage(R.string.delete_group_message);
-
-        builder.setNegativeButton(android.R.string.cancel, null);
-        builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener()
+        if (group_identifier != null)
         {
-            @Override
-            public void onClick(DialogInterface dialog, int which)
+            final long group_num = tox_group_by_groupid__wrapper(group_identifier);
+            if (group_num >= 0)
             {
-                if (f2.group_identifier != null)
+                tox_group_leave(group_num, "left");
+            }
+            GroupInviteAcceptPolicy.forget(group_identifier);
+            HelperGeneric.update_savedata_file_wrapper_async(); // KHANDAQ (ANR): group already left in live tox; persist off-thread
+            set_group_group_we_left(group_identifier);
+            set_group_inactive(group_identifier);
+            try
+            {
+                if (group_message_list_activity != null
+                    && group_message_list_activity.get_current_group_id().equalsIgnoreCase(
+                            group_identifier))
                 {
-                    final long group_num = tox_group_by_groupid__wrapper(f2.group_identifier);
-                    tox_group_leave(group_num, "bye");
-                    GroupInviteAcceptPolicy.forget(f2.group_identifier);
-                    HelperGeneric.update_savedata_file_wrapper_async(); // KHANDAQ (ANR): already left in live tox; persist off-thread
-                }
-
-                HelperGeneric.logI(TAG, "onMenuItemClick:info:33");
-                delete_group_all_files(f2.group_identifier);
-                delete_group_all_messages(f2.group_identifier);
-                delete_group(f2.group_identifier);
-                HelperGeneric.logI(TAG, "onMenuItemClick:info:34");
-
-                Runnable myRunnable2 = new Runnable()
-                {
-                    @Override
-                    public void run()
-                    {
-                        try
-                        {
-                            try
-                            {
-                                if (MainActivity.friend_list_fragment != null)
-                                {
-                                    MainActivity.friend_list_fragment.remove_group_from_list(f2.group_identifier);
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                            HelperGeneric.logI(TAG, "onMenuItemClick:8:EE:" + e.getMessage());
-                        }
-                    }
-                };
-
-                // TODO: use own handler
-                if (main_handler_s != null)
-                {
-                    main_handler_s.post(myRunnable2);
+                    group_message_list_activity.finish();
                 }
             }
-        });
+            catch (Exception ignored)
+            {
+            }
+        }
 
-        AlertDialog dialog = builder.create();
-        dialog.show();
+        Runnable myRunnable2 = new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                try
+                {
+                    try
+                    {
+                        if (MainActivity.friend_list_fragment != null)
+                        {
+                            // reload friendlist
+                            MainActivity.friend_list_fragment.add_all_friends_clear(0);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        e.printStackTrace();
+                    }
+                }
+                catch (Exception e)
+                {
+                    e.printStackTrace();
+                    HelperGeneric.logI(TAG, "onMenuItemClick:8:EE:" + e.getMessage());
+                }
+            }
+        };
+
+        if (main_handler_s != null)
+        {
+            main_handler_s.post(myRunnable2);
+        }
+    }
+
+    /** The group as its row names it, or the first characters of its ID when it has no name yet. */
+    private static String group_title_for_dialog(final GroupDB group)
+    {
+        String title = null;
+        if (group.group_identifier != null)
+        {
+            title = HelperGroup.get_effective_group_title(tox_group_by_groupid__wrapper(group.group_identifier),
+                                                          group.group_identifier);
+        }
+        if (title == null || title.trim().isEmpty())
+        {
+            title = group.name;
+        }
+        if ((title == null || title.trim().isEmpty()) && group.group_identifier != null)
+        {
+            title = group.group_identifier.substring(0, Math.min(8, group.group_identifier.length()));
+        }
+        return title == null ? "" : title;
+    }
+
+    static void show_confirm_group_del_dialog(final View view, final GroupDB f2)
+    {
+        // KHANDAQ (redesign, E21): asked from below, named, with what deleting does and the verb on the button.
+        final Context context = view.getContext();
+        AirQuestion.ask(context, context.getString(R.string.air_group_delete_title_format, group_title_for_dialog(f2)),
+                        context.getString(R.string.air_group_delete_message), context.getString(R.string.layout___delete),
+                        true, () -> delete_group_now(f2));
+    }
+
+    /** Leaves the group in toxcore and deletes it with its messages and files from this device. */
+    private static void delete_group_now(final GroupDB f2)
+    {
+        if (f2.group_identifier != null)
+        {
+            final long group_num = tox_group_by_groupid__wrapper(f2.group_identifier);
+            tox_group_leave(group_num, "bye");
+            GroupInviteAcceptPolicy.forget(f2.group_identifier);
+            HelperGeneric.update_savedata_file_wrapper_async(); // KHANDAQ (ANR): already left in live tox; persist off-thread
+        }
+
+        HelperGeneric.logI(TAG, "onMenuItemClick:info:33");
+        delete_group_all_files(f2.group_identifier);
+        delete_group_all_messages(f2.group_identifier);
+        delete_group(f2.group_identifier);
+        HelperGeneric.logI(TAG, "onMenuItemClick:info:34");
+
+        Runnable myRunnable2 = new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                try
+                {
+                    try
+                    {
+                        if (MainActivity.friend_list_fragment != null)
+                        {
+                            MainActivity.friend_list_fragment.remove_group_from_list(f2.group_identifier);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        e.printStackTrace();
+                    }
+                }
+                catch (Exception e)
+                {
+                    e.printStackTrace();
+                    HelperGeneric.logI(TAG, "onMenuItemClick:8:EE:" + e.getMessage());
+                }
+            }
+        };
+
+        if (main_handler_s != null)
+        {
+            main_handler_s.post(myRunnable2);
+        }
     }
 
 }

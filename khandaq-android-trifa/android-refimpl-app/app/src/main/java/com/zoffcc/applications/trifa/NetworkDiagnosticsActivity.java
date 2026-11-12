@@ -38,6 +38,7 @@ public class NetworkDiagnosticsActivity extends AppCompatActivity
             final android.content.Intent intent = NetworkDiagnosticsLog.createShareIntent(this);
             if (intent != null)
             {
+                AirUi.endUnder(share);
                 startActivity(android.content.Intent.createChooser(intent, getString(R.string.network_diag_export)));
             }
             else
@@ -46,8 +47,12 @@ public class NetworkDiagnosticsActivity extends AppCompatActivity
                 // for the whole life of the feature (wrong FileProvider authority) and produced no
                 // chooser, no toast and no visible error — a support request would have gone
                 // "nothing happens", which is the least actionable report there is.
-                android.widget.Toast.makeText(this, R.string.network_diag_export_failed,
-                                              android.widget.Toast.LENGTH_LONG).show();
+                // E21: said under the buttons, where it was asked for, instead of in a toast.
+                final String words = getString(R.string.air_network_log_not_shared);
+                if (!AirUi.sayUnder(share, words, true))
+                {
+                    HelperGeneric.display_toast(words, true, 0);
+                }
             }
         });
 

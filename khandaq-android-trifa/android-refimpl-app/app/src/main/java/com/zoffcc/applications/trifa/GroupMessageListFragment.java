@@ -36,7 +36,6 @@ import com.zoffcc.applications.sorm.GroupMessage;
 
 import java.util.List;
 
-import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -81,8 +80,8 @@ public class GroupMessageListFragment extends Fragment
         unread_messages_notice_button = view.findViewById(R.id.unread_messages_notice_button);
         unread_messages_notice_button.setAnimation(null);
         unread_messages_notice_button.setVisibility(View.INVISIBLE);
-        unread_messages_notice_button.setSupportBackgroundTintList(
-                (ContextCompat.getColorStateList(context_s, R.color.message_list_scroll_to_bottom_fab_bg_normal)));
+        // KHANDAQ (redesign, stage 3b): the raised ground of the layout (kq_raised), as in a conversation
+        // with one person; the old green tint is no longer set over it.
 
         GroupMessageListActivity mla = (GroupMessageListActivity) (getActivity());
         if (mla != null)
@@ -135,7 +134,7 @@ public class GroupMessageListFragment extends Fragment
         scrollDateHeader = (TextView) view.findViewById(R.id.scroll_date_header);
         scrollDateHeader.setText("");
         scrollDateHeader.setVisibility(View.INVISIBLE);
-        ChatDateSeparatorHelper.applyTheme(scrollDateHeader);
+        AirTranscript.styleFloatingDay(scrollDateHeader);
         conversationDateHeader = new ConversationDateHeader(view.getContext(), scrollDateHeader);
 
         final LinearLayoutManager linearLayoutManager = new LinearLayoutManager(getActivity());
@@ -255,9 +254,6 @@ public class GroupMessageListFragment extends Fragment
                         try
                         {
                             do_fade_anim_on_fab(unread_messages_notice_button, false, this.getClass().getName());
-                            unread_messages_notice_button.setSupportBackgroundTintList(
-                                    (ContextCompat.getColorStateList(context_s,
-                                                                     R.color.message_list_scroll_to_bottom_fab_bg_normal)));
                         }
                         catch (Exception ignored)
                         {
@@ -510,19 +506,8 @@ public class GroupMessageListFragment extends Fragment
                     {
                         listingsView.scrollToPosition(adapter.getItemCount() - 1);
                     }
-                    else
-                    {
-                        try
-                        {
-                            // set color of FAB to "red"-ish color, to indicate that there are also new messages/FTs
-                            unread_messages_notice_button.setSupportBackgroundTintList(
-                                    (ContextCompat.getColorStateList(context_s,
-                                                                     R.color.message_list_scroll_to_bottom_fab_bg_new_message)));
-                        }
-                        catch (Exception ignored)
-                        {
-                        }
-                    }
+                    // KHANDAQ (redesign, stage 3b): the jump button keeps the raised ground of the conversation
+                    // with one person; it no longer turns red for a message that came while scrolled up.
                 }
                 catch (Exception e)
                 {

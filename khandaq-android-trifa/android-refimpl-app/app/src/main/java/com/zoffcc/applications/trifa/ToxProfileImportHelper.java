@@ -3,7 +3,6 @@ package com.zoffcc.applications.trifa;
 import org.khandaq.messenger.R;
 
 import android.content.Context;
-import android.content.DialogInterface;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Handler;
@@ -20,7 +19,6 @@ import java.io.OutputStream;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import static com.zoffcc.applications.trifa.HelperGeneric.import_toxsave_file_unsecure;
@@ -96,6 +94,16 @@ public final class ToxProfileImportHelper
 
     static void handleExportDestination(@NonNull final Context context, @Nullable final Uri destinationUri)
     {
+        handleExportDestination(context, destinationUri, null);
+    }
+
+    /**
+     * As above; {@code anchor} is the row that started the export (Settings, Export profile), under which
+     * its outcome stands (E21). Without one it is said from below.
+     */
+    static void handleExportDestination(@NonNull final Context context, @Nullable final Uri destinationUri,
+                                        @Nullable final android.view.View anchor)
+    {
         if (destinationUri == null)
         {
             return;
@@ -142,7 +150,7 @@ public final class ToxProfileImportHelper
 
             if (!staging.exists() || staging.length() < MIN_SAVEDATA_BYTES)
             {
-                Toast.makeText(context, R.string.settings_export_tox_profile_failed, Toast.LENGTH_LONG).show();
+                sayExportFailed(context, anchor);
                 return;
             }
 
@@ -163,16 +171,14 @@ public final class ToxProfileImportHelper
             }
 
             final String label = resolveUriDisplayLabel(context, destinationUri);
-            new AlertDialog.Builder(context)
-                    .setTitle(R.string.settings_export_tox_profile)
-                    .setMessage(context.getString(R.string.settings_export_tox_profile_done_persists, label))
-                    .setPositiveButton(android.R.string.ok, null)
-                    .show();
+            // E21: the file and where it is stand under the row that made it, as a note, not a failure.
+            AirSheet.sayUnderOrTell(anchor, context, context.getString(R.string.settings_export_tox_profile),
+                                    context.getString(R.string.settings_export_tox_profile_done_persists, label), false);
         }
         catch (Exception e)
         {
             Log.e(TAG, "export failed: " + e.getMessage(), e);
-            Toast.makeText(context, R.string.settings_export_tox_profile_failed, Toast.LENGTH_LONG).show();
+            sayExportFailed(context, anchor);
         }
         finally
         {
@@ -183,6 +189,29 @@ public final class ToxProfileImportHelper
             //noinspection ResultOfMethodCallIgnored
             staging.delete();
         }
+    }
+
+    /**
+     * E21: the export runs as the file picker closes, so its failure is said where the person looks
+     * next: under the row that started it, else from below over the screen they came back to. A toast
+     * only when there is no such screen.
+     */
+    private static void sayExportFailed(@NonNull final Context context, @Nullable final android.view.View anchor)
+    {
+        if (context instanceof android.app.Activity && !((android.app.Activity) context).isFinishing())
+        {
+            try
+            {
+                AirSheet.sayUnderOrTell(anchor, context, context.getString(R.string.air_profile_export_failed_title),
+                                        context.getString(R.string.air_profile_export_failed_message), true);
+                return;
+            }
+            catch (Exception e)
+            {
+                Log.w(TAG, "sayExportFailed: " + e.getMessage());
+            }
+        }
+        Toast.makeText(context, R.string.air_profile_export_failed_message, Toast.LENGTH_LONG).show();
     }
 
     @NonNull
@@ -278,23 +307,36 @@ public final class ToxProfileImportHelper
 
     static void showImportError(@NonNull final Context context, @NonNull final String message)
     {
+        showImportError(context, message, null);
+    }
+
+    /** As above; the refusal stands under {@code anchor}, the row that started the import, when there is one (E21). */
+    static void showImportError(@NonNull final Context context, @NonNull final String message,
+                                @Nullable final android.view.View anchor)
+    {
         // KHANDAQ (#249 QA): every refusal here — encrypted file, bad magic, failed copy — used to
         // reach the user as a dialog and NOTHING else, so a rejected import is indistinguishable in
         // logcat from a picker whose result never came back. That cost a QA round: the staged .tox
         // had been copied straight out of app storage, where savedata is always "toxEsave"-encrypted,
         // instead of being produced by Settings → Export profile (which writes it in the clear).
         Log.i(TAG, "import refused: " + message);
-        new AlertDialog.Builder(context)
-                .setTitle(R.string.settings_import_tox_profile)
-                .setMessage(message)
-                .setPositiveButton(android.R.string.ok, null)
-                .show();
+        AirSheet.sayUnderOrTell(anchor, context, context.getString(R.string.settings_import_tox_profile), message, true);
     }
 
     static void handlePickedUri(@NonNull final AppCompatActivity activity,
                                 @Nullable final Uri uri,
                                 @NonNull final ImportMode mode,
                                 @Nullable final Runnable onFirstLaunchSuccess)
+    {
+        handlePickedUri(activity, uri, mode, onFirstLaunchSuccess, null);
+    }
+
+    /** As above; a refusal stands under {@code anchor}, the row that started the import, when there is one. */
+    static void handlePickedUri(@NonNull final AppCompatActivity activity,
+                                @Nullable final Uri uri,
+                                @NonNull final ImportMode mode,
+                                @Nullable final Runnable onFirstLaunchSuccess,
+                                @Nullable final android.view.View anchor)
     {
         if (uri == null)
         {
@@ -313,7 +355,7 @@ public final class ToxProfileImportHelper
         {
             if (!copyUriToFile(activity, uri, importStaging))
             {
-                showImportError(activity, activity.getString(R.string.settings_import_tox_profile_invalid_file));
+                showImportError(activity, activity.getString(R.string.settings_import_tox_profile_invalid_file), anchor);
                 return;
             }
 
@@ -322,7 +364,7 @@ public final class ToxProfileImportHelper
             {
                 showImportError(activity, activity.getString(
                         (validity == TOXSAVE_ENCRYPTED) ? R.string.settings_import_tox_profile_encrypted_file
-                                                        : R.string.settings_import_tox_profile_invalid_file));
+                                                        : R.string.settings_import_tox_profile_invalid_file), anchor);
                 return;
             }
 
@@ -349,7 +391,7 @@ public final class ToxProfileImportHelper
         catch (Exception e)
         {
             Log.e(TAG, "import failed: " + e.getMessage(), e);
-            showImportError(activity, activity.getString(R.string.settings_import_tox_profile_failed));
+            showImportError(activity, activity.getString(R.string.settings_import_tox_profile_failed), anchor);
         }
         finally
         {
@@ -362,40 +404,24 @@ public final class ToxProfileImportHelper
         }
     }
 
+    /**
+     * E21: moving a profile in over this one asks from below, with what it replaces; the verb opens the
+     * file picker, in the danger colour, since the profile here goes once a file is picked.
+     */
     static void showReplaceImportConfirmation(@NonNull final AppCompatActivity activity,
                                               @NonNull final Runnable onPickFile)
     {
-        new AlertDialog.Builder(activity)
-                .setTitle(R.string.settings_import_tox_profile)
-                .setMessage(buildImportDialogMessage(activity, false))
-                .setPositiveButton(R.string.settings_import_tox_profile_pick_file, new DialogInterface.OnClickListener()
-                {
-                    @Override
-                    public void onClick(DialogInterface dialog, int id)
-                    {
-                        onPickFile.run();
-                    }
-                })
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
+        AirQuestion.ask(activity, activity.getString(R.string.air_transfer_import_question),
+                        buildImportDialogMessage(activity, false),
+                        activity.getString(R.string.settings_import_tox_profile_pick_file), true, onPickFile);
     }
 
     static void showFirstLaunchImportInfo(@NonNull final AppCompatActivity activity,
                                           @NonNull final Runnable onPickFile)
     {
-        new AlertDialog.Builder(activity)
-                .setTitle(R.string.settings_import_tox_profile)
-                .setMessage(buildImportDialogMessage(activity, true))
-                .setPositiveButton(R.string.settings_import_tox_profile_pick_file, new DialogInterface.OnClickListener()
-                {
-                    @Override
-                    public void onClick(DialogInterface dialog, int id)
-                    {
-                        onPickFile.run();
-                    }
-                })
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
+        AirQuestion.ask(activity, activity.getString(R.string.settings_import_tox_profile),
+                        buildImportDialogMessage(activity, true),
+                        activity.getString(R.string.settings_import_tox_profile_pick_file), false, onPickFile);
     }
 
     @NonNull

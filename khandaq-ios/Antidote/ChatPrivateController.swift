@@ -18,7 +18,7 @@ private struct Constants {
 
     static let NewMessageViewAllowedDelta: CGFloat = 20.0
     static let NewMessageViewEdgesOffset: CGFloat = 5.0
-    static let NewMessageViewTopOffset: CGFloat = -15.0
+    static let NewMessageViewTopOffset: CGFloat = -KQSpace.x12
     static let NewMessageViewAnimationDuration = 0.2
 
     static let ResetPanAnimationDuration = 0.3
@@ -40,6 +40,9 @@ protocol ChatPrivateControllerDelegate: class {
     func chatPrivateControllerShowFriendProfile(_ controller: ChatPrivateController, forFriend friend: OCTFriend)
     // KHANDAQ (user request 17.08): everything sent in this chat, split into files / audio / voice.
     func chatPrivateControllerShowAttachments(_ controller: ChatPrivateController, forChat chat: OCTChat)
+    // KHANDAQ (redesign stage 2): "Remove" in the dossier, confirmed. The coordinator closes the
+    // conversation first and removes the contact once it is off screen (AirContactRemoval).
+    func chatPrivateControllerRemoveContact(_ controller: ChatPrivateController, friend: OCTFriend)
 }
 
 class ChatPrivateController: PortraitChatController {
@@ -57,7 +60,11 @@ class ChatPrivateController: PortraitChatController {
 
     fileprivate let messages: Results<OCTMessageAbstract>
     fileprivate var messagesToken: RLMNotificationToken?
-    fileprivate var visibleMessages: Int
+    fileprivate var visibleMessages: Int {
+        didSet {
+            displayMapCache = nil
+        }
+    }
     // KHANDAQ (Figma): first unread incoming message captured on open (before updateLastReadDate
     // marks everything read) — its cell shows the "Непрочитанные сообщения" band and the chat opens
     // scrolled to it.
@@ -81,10 +88,10 @@ class ChatPrivateController: PortraitChatController {
     fileprivate var audioButton: UIBarButtonItem!
     fileprivate var videoButton: UIBarButtonItem!
     fileprivate var locationButton: UIBarButtonItem!
-    fileprivate var CallWaitingView: UIView!
-    fileprivate var callwaiting_running: Bool!
-    fileprivate var CallWaitingCancelButton: CallButton?
-    fileprivate let linearBar: LinearProgressBar = LinearProgressBar()
+    // KHANDAQ (redesign stage 3, E9): waiting for an offline person before a call (requestCall).
+    fileprivate var callWaiting: AirCallWaitingController?
+    fileprivate var callWaitingVideo = false
+    fileprivate var callWaitingTimer: Timer?
 
     fileprivate var titleView: ChatPrivateTitleView!
     fileprivate var tableView: UITableView?
@@ -93,10 +100,8 @@ class ChatPrivateController: PortraitChatController {
     // KHANDAQ design (Figma): end-to-end encryption notice card shown at the top of an empty chat.
     fileprivate var encryptionBanner: UIView!
     fileprivate var newMessagesView: UIView!
-    // KHANDAQ design (Figma): subtle line-art doodle pattern behind the (transparent) message cells.
-    fileprivate var chatBackgroundView: UIImageView!
-    // KHANDAQ design (Figma): Telegram-style floating day chip ("Сегодня"/"Вчера"/date) that surfaces
-    // while scrolling and reflects the date of the topmost visible message, then fades out.
+    // KHANDAQ design (Figma): Telegram-style floating day chip ("Today", "Yesterday" or the date) that
+    // surfaces while scrolling and reflects the date of the topmost visible message, then fades out.
     fileprivate var floatingDateView: UIView!
     fileprivate var floatingDateLabel: UILabel!
     fileprivate var floatingDateHideTimer: Timer?
@@ -104,22 +109,58 @@ class ChatPrivateController: PortraitChatController {
     // Realm update fires if the friend stays offline — refresh it periodically so the
     // post-reconnect grace window lapses back to "last seen" and relative times stay fresh.
     fileprivate var presenceRefreshTimer: Timer?
-    fileprivate lazy var floatingDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = AppLanguage.locale
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        // Yields locale-aware "Today"/"Yesterday" for recent days, full date otherwise — no string keys.
-        formatter.doesRelativeDateFormatting = true
-        return formatter
-    }()
     fileprivate var chatInputView: ChatInputView!
     fileprivate var editMessagesToolbar: UIToolbar!
 
-    // KHANDAQ (#G5): pinned-message banner (Telegram-style) shown atop the chat.
-    fileprivate var pinnedBannerView: UIView?
-    fileprivate var pinnedBannerLabel: UILabel?
-    fileprivate static let pinnedBannerHeight: CGFloat = 56.0
+    // KHANDAQ (redesign stage 2): the parts of the conversation in the "Air conversation" extension at
+    // the end of this file. Under the header: the presence band and the pinned strip; between the log
+    // and the field: the refused messages and the "On its way" tray; over everything: the dossier.
+    fileprivate var topStack: UIStackView!
+    fileprivate var presenceBand: AirPresenceBandView?
+    fileprivate var pinnedStrip: AirPinnedStripView!
+    fileprivate var bottomStack: UIStackView!
+    fileprivate var failedList: AirFailedListView!
+    fileprivate var trayView: AirTrayView!
+    /// The room between the strips under the header and the field, shared by the log and the strips under it.
+    fileprivate let stripsRoom = UILayoutGuide()
+    /// At the accessibility text sizes the strips under the log take at most half of `stripsRoom`.
+    fileprivate var stripsHalfConstraint: Constraint?
+    fileprivate var isKeyboardUp = false
+    /// The presence band's height when it was last on the screen, for the room it would take back.
+    fileprivate var shownBandHeight: CGFloat = 0
+    /// A fold of the band decided while laying out waits for the next turn of the run loop (keepRoomForLog).
+    fileprivate var isBandFoldPending = false
+    fileprivate var dossierView: AirDossierView?
+    fileprivate var searchButton: UIBarButtonItem!
+    fileprivate var filesButton: UIBarButtonItem?
+    /// The messages in the tray, oldest first; the log leaves them out.
+    fileprivate var trayIds: [String] = []
+    fileprivate var isTrayDeparting = false
+    fileprivate var needsTrayRefresh = false
+    /// Changes of the messages that came while the tray was emptying into the log; applied once it folded.
+    fileprivate var needsLogReload = false
+    /// A progress listener for each transfer the stall watcher follows, besides the bridge of its row: a
+    /// row scrolled out of sight lets its bridge go, and the silence after that is no stall.
+    fileprivate var stallListeners: [String: ChatProgressBridge] = [:]
+    /// What the open dossier shows, so it is rebuilt only when that changes.
+    fileprivate var dossierSignature = ""
+    /// Bumped whenever the rows of the log change without the loaded window changing.
+    fileprivate var displayGeneration = 0
+    /// Storage index of every row of the log; a nil map means each loaded message has its own row.
+    fileprivate var displayMapCache: (key: DisplayMapKey, map: [Int]?)?
+    /// What each of our messages showed the last time it was drawn, so a change of state cross-fades.
+    fileprivate var statusMemory: [String: AirEntryStatus] = [:]
+    /// Messages that rise into the log when their row appears, with the delay of each.
+    fileprivate var arrivingIds: [String: TimeInterval] = [:]
+    fileprivate var wasFriendOnline: Bool?
+    fileprivate var airObservers: [NSObjectProtocol] = []
+
+    fileprivate struct DisplayMapKey: Equatable {
+        let loaded: Int
+        let total: Int
+        let query: String
+        let generation: Int
+    }
 
     fileprivate var chatInputViewManager: ChatInputViewManager!
     fileprivate let replyController = ChatReplyController()
@@ -152,7 +193,6 @@ class ChatPrivateController: PortraitChatController {
         self.submanagerFiles = submanagerFiles
         self.delegate = delegate
         self.showKeyboardOnAppear = showKeyboardOnAppear
-        self.callwaiting_running = false
 
         let predicate = NSPredicate(format: "chatUniqueIdentifier == %@", chat.uniqueIdentifier)
         // KHANDAQ (#H5): sort by sortTimestamp (sender send-time, clamped), NOT dateInterval (local
@@ -207,8 +247,10 @@ class ChatPrivateController: PortraitChatController {
         messagesToken?.invalidate()
         friendToken?.invalidate()
         presenceRefreshTimer?.invalidate()
+        callWaitingTimer?.invalidate()
         // KHANDAQ (leak): also invalidate the one-shot floating-date hide timer for consistency.
         floatingDateHideTimer?.invalidate()
+        airObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
     required convenience init?(coder aDecoder: NSCoder) {
@@ -216,79 +258,62 @@ class ChatPrivateController: PortraitChatController {
     }
 
     override func loadView() {
-        // KHANDAQ design (Figma): chat canvas uses the dedicated chat background, not NormalBackground.
-        loadViewWithBackgroundColor(theme.colorForType(.ChatBackground))
+        // KHANDAQ (redesign stage 2): the transcript sits on the plain surface: no wallpaper, no bubbles.
+        loadViewWithBackgroundColor(KQColor.surface)
 
-        createChatBackgroundView()
         createTableView()
         createTableHeaderViews()
         createNewMessagesView()
         createFloatingDateView()
         createInputView()
         createEditMessageToolbar()
+        createAirConversationViews()
         createEncryptionBanner()
         installConstraints()
     }
 
     // KHANDAQ design (Figma): encryption-info card pinned to the top of an empty chat.
+    // KHANDAQ (redesign stage 2): a quiet sunken note under the header, in the tokens of the system.
     private func createEncryptionBanner() {
         let card = UIView()
-        card.backgroundColor = theme.colorForType(.ChatIncomingBubble)
-        card.layer.cornerRadius = 16.0
+        card.backgroundColor = KQColor.sunken
+        card.layer.cornerRadius = KQRadius.card
         card.layer.masksToBounds = true
-
-        let badge = UIView()
-        badge.backgroundColor = theme.colorForType(.TabItemActive).withAlphaComponent(0.14)
-        badge.layer.cornerRadius = 10.0
-        badge.layer.masksToBounds = true
-        card.addSubview(badge)
-
-        let lock = UIImageView()
-        if #available(iOS 13.0, *) {
-            lock.image = UIImage(systemName: "lock.fill")
-        }
-        lock.tintColor = theme.colorForType(.LinkText)
-        lock.contentMode = .scaleAspectFit
-        badge.addSubview(lock)
+        card.isAccessibilityElement = true
 
         let badgeLabel = UILabel()
         badgeLabel.text = String(localized: "chat_encryption_badge")
-        badgeLabel.font = UIFont.systemFont(ofSize: 13.0, weight: .semibold)
-        badgeLabel.textColor = theme.colorForType(.LinkText)
-        badge.addSubview(badgeLabel)
+        badgeLabel.font = KQFont.font(.label, weight: 600)
+        badgeLabel.adjustsFontForContentSizeCategory = true
+        badgeLabel.textColor = KQColor.ink
+        badgeLabel.numberOfLines = 0
+        card.addSubview(badgeLabel)
 
         let info = UILabel()
         info.text = String(localized: "chat_encryption_info")
-        info.font = UIFont.systemFont(ofSize: 14.0)
-        info.textColor = theme.colorForType(.NormalText)
+        info.font = KQFont.font(.caption)
+        info.adjustsFontForContentSizeCategory = true
+        info.textColor = KQColor.ink2
         info.numberOfLines = 0
         card.addSubview(info)
+
+        card.accessibilityLabel = [badgeLabel.text, info.text].compactMap { $0 }.joined(separator: ". ")
 
         view.addSubview(card)
         encryptionBanner = card
 
-        badge.snp.makeConstraints {
-            $0.top.leading.equalTo(card).inset(12.0)
-            $0.height.equalTo(28.0)
-        }
-        lock.snp.makeConstraints {
-            $0.leading.equalTo(badge).offset(10.0)
-            $0.centerY.equalTo(badge)
-            $0.width.height.equalTo(13.0)
-        }
         badgeLabel.snp.makeConstraints {
-            $0.leading.equalTo(lock.snp.trailing).offset(6.0)
-            $0.trailing.equalTo(badge).offset(-10.0)
-            $0.centerY.equalTo(badge)
+            $0.top.equalTo(card).offset(KQSpace.x12)
+            $0.leading.trailing.equalTo(card).inset(KQSpace.x12)
         }
         info.snp.makeConstraints {
-            $0.top.equalTo(badge.snp.bottom).offset(10.0)
-            $0.leading.trailing.equalTo(card).inset(12.0)
-            $0.bottom.equalTo(card).offset(-12.0)
+            $0.top.equalTo(badgeLabel.snp.bottom).offset(KQSpace.x4)
+            $0.leading.trailing.equalTo(card).inset(KQSpace.x12)
+            $0.bottom.equalTo(card).offset(-KQSpace.x12)
         }
         card.snp.makeConstraints {
-            $0.top.equalTo(view.safeAreaLayoutGuide).offset(8.0)
-            $0.leading.trailing.equalTo(view).inset(16.0)
+            $0.top.equalTo(topStack.snp.bottom).offset(KQSpace.x8)
+            $0.leading.trailing.equalTo(view).inset(KQSpace.x16)
         }
     }
 
@@ -321,15 +346,15 @@ class ChatPrivateController: PortraitChatController {
 
         createNavigationViews()
         addFriendNotification()
-        setupMessageSearch()
-
-        self.configureLinearProgressBar()
+        // KHANDAQ (redesign stage 2): search waits behind the button in the header (searchButtonPressed).
+        startAirConversation()
     }
 
     fileprivate func setupMessageSearch() {
         let searchController = UISearchController(searchResultsController: nil)
         searchController.obscuresBackgroundDuringPresentation = false
         searchController.searchResultsUpdater = self
+        searchController.delegate = self
         searchController.searchBar.placeholder = String(localized: "group_messages_search_placeholder")
         navigationItem.searchController = searchController
         // The message table is vertically flipped, which inverts the pull-to-reveal gesture. Keep the
@@ -403,6 +428,9 @@ class ChatPrivateController: PortraitChatController {
                                                      messages: self.messages,
                                                      tableView: tableView,
                                                      submanagerObjects: self.submanagerObjects,
+                                                     displayRow: { [weak self] storageIndex in
+                                                         self?.displayIndex(forStorageIndex: storageIndex)
+                                                     },
                                                      ensureLoaded: { [weak self] targetIndex in
                                                          guard let self = self else { return }
                                                          self.visibleMessages = min(self.messages.count, targetIndex + 30)
@@ -410,13 +438,6 @@ class ChatPrivateController: PortraitChatController {
                                                      })
         }
     }
-
-    fileprivate func configureLinearProgressBar(){
-            // KHANDAQ design: brand accent progress strip (was off-accent hard-coded greens).
-            linearBar.backgroundColor = theme.colorForType(.LinkText).withAlphaComponent(0.25)
-            linearBar.progressBarColor = theme.colorForType(.LinkText)
-            linearBar.heightForLinearBar = 5
-        }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
@@ -429,6 +450,10 @@ class ChatPrivateController: PortraitChatController {
             if stack.count >= 2 {
                 stack[stack.count - 2].navigationItem.backButtonDisplayMode = .minimal
             }
+            // The screens pushed from here (Attachments, the dossier) show only the chevron too: the
+            // conversation has no title of its own, so UIKit put the system "Back" there, which does
+            // not follow the in-app language.
+            navigationItem.backButtonDisplayMode = .minimal
         }
 
         updateLastReadDate()
@@ -481,12 +506,13 @@ class ChatPrivateController: PortraitChatController {
         }
         tableView.layoutIfNeeded()
 
-        guard index < displayableRowCount() else {
+        // KHANDAQ (redesign stage 2): the index is a storage index; the log can leave messages out.
+        guard let row = displayIndex(forStorageIndex: index) else {
             return
         }
 
         DispatchQueue.main.async {
-            tableView.scrollToRow(at: IndexPath(row: index, section: 0), at: .middle, animated: false)
+            tableView.scrollToRow(at: IndexPath(row: row, section: 0), at: .middle, animated: false)
         }
     }
 
@@ -548,6 +574,11 @@ class ChatPrivateController: PortraitChatController {
 
     override func keyboardWillShowAnimated(keyboardFrame frame: CGRect) {
         super.keyboardWillShowAnimated(keyboardFrame: frame)
+        trayView?.hidesDetail = true
+        // At the accessibility text sizes the presence band and the tray fold away while the keyboard is
+        // up: the hint under the field says the same, and the log keeps some room (at AX5 it had none).
+        isKeyboardUp = true
+        keepRoomForLog()
 
         guard let constraint = chatInputViewBottomConstraint else {
             return
@@ -563,6 +594,9 @@ class ChatPrivateController: PortraitChatController {
 
     override func keyboardWillHideAnimated(keyboardFrame frame: CGRect) {
         super.keyboardWillHideAnimated(keyboardFrame: frame)
+        trayView?.hidesDetail = false
+        isKeyboardUp = false
+        keepRoomForLog()
 
         guard let constraint = chatInputViewBottomConstraint else {
             return
@@ -582,6 +616,8 @@ class ChatPrivateController: PortraitChatController {
         super.viewDidLayoutSubviews()
 
         updateInputViewMaxHeight()
+        updateTitleWidth()
+        keepRoomForLog(whileLayingOut: true)
     }
 }
 
@@ -668,185 +704,12 @@ extension ChatPrivateController {
             present(alert, animated: true, completion: nil)
         }
 
-    @objc
-    func buttonCallWaitingCancel() {
-            callwaiting_running = false
-            CallWaitingView.removeFromSuperview()
-            self.linearBar.stopAnimation()
-    }
-
     @objc func attachmentsButtonPressed() {
         delegate?.chatPrivateControllerShowAttachments(self, forChat: chat)
     }
 
     @objc func audioCallButtonPressed() {
-
-        if let friend = self.friend {
-            let connection_status = ConnectionStatus(connectionStatus: friend.connectionStatus)
-            if (connection_status != .none)
-            {
-                // HINT: friend is online, so start the call now
-                callwaiting_running = false
-                delegate?.chatPrivateControllerCallToChat(self, enableVideo: false)
-            }
-            else
-            {
-                // HINT: friend is not online, show call waiting screen
-                callwaiting_running = true
-                // KHANDAQ (audit #12): don't force-unwrap keyWindow — nil during a scene transition /
-                // interruption would crash. Bail out of the call-waiting UI instead.
-                guard let window = UIApplication.shared.keyWindow else { return }
-                CallWaitingView = UIView(frame: window.bounds)
-                window.addSubview(CallWaitingView)
-                CallWaitingView.backgroundColor = .black
-
-                CallWaitingCancelButton = CallButton(theme: theme, type: .decline, buttonSize: .big)
-                CallWaitingCancelButton!.addTarget(self,
-                                         action: #selector(buttonCallWaitingCancel),
-                                         for: .touchUpInside)
-                // CallWaitingCancelButton!.backgroundColor = .white
-
-                let lb1 = UILabel(frame: CGRect(x: 0, y: 0, width: 200, height: 80))
-                lb1.text = "Call"
-                lb1.textAlignment = .center;
-                lb1.font = lb1.font.withSize(35)
-                lb1.textColor = .white
-                lb1.backgroundColor = .black
-                lb1.numberOfLines = 0;
-                lb1.sizeToFit()
-
-                let lb2 = UILabel(frame: CGRect(x: 0, y: 0, width: 200, height: 80))
-                lb2.text = friend.nickname
-                lb2.textAlignment = .center;
-                lb2.font = lb1.font.withSize(30)
-                lb2.textColor = .white
-                lb2.backgroundColor = .black
-                lb2.numberOfLines = 0;
-                lb2.sizeToFit()
-
-                let lb3 = UILabel(frame: CGRect(x: 0, y: 0, width: 200, height: 80))
-                lb3.text = "waiting for friend to come online ..."
-                lb3.textAlignment = .center;
-                lb3.font = lb1.font.withSize(20)
-                lb3.textColor = .white
-                lb3.backgroundColor = .black
-                lb3.numberOfLines = 0;
-                lb3.lineBreakMode = .byWordWrapping
-                lb3.sizeToFit()
-
-
-                CallWaitingView.addSubview(CallWaitingCancelButton!)
-                CallWaitingView.addSubview(lb1)
-                CallWaitingView.addSubview(lb2)
-                CallWaitingView.addSubview(lb3)
-                CallWaitingCancelButton!.center = CallWaitingView.center
-                CallWaitingView.bringSubview(toFront: lb1)
-                CallWaitingView.bringSubview(toFront: lb2)
-                CallWaitingView.bringSubview(toFront: lb3)
-                CallWaitingView.bringSubview(toFront: CallWaitingCancelButton!)
-
-                let BigButtonOffset = 30.0
-
-                CallWaitingView.snp.makeConstraints { make in
-                    make.leading.trailing.bottom.equalToSuperview()
-                    // make.top.equalTo(view.safeAreaLayoutGuide) // --> that leave too much see through space at the top. strange
-                    make.top.equalToSuperview()
-                }
-
-                CallWaitingCancelButton!.snp.makeConstraints { make in
-                    make.centerX.equalToSuperview()
-                    make.top.greaterThanOrEqualToSuperview().offset(BigButtonOffset)
-                    make.bottom.equalToSuperview().offset(-BigButtonOffset)
-                }
-
-                lb1.snp.makeConstraints { make in
-                    make.centerX.equalToSuperview()
-                    make.top.equalToSuperview().offset(60)
-                    make.leading.trailing.equalToSuperview()
-                }
-
-                lb2.snp.makeConstraints { make in
-                    make.centerX.equalToSuperview()
-                    make.top.equalTo(lb1.snp.bottom).offset(35)
-                    make.leading.trailing.equalToSuperview()
-                }
-
-                lb3.snp.makeConstraints { make in
-                    make.centerX.equalToSuperview()
-                    make.top.equalTo(lb2.snp.bottom).offset(35)
-                    make.leading.trailing.equalToSuperview()
-                }
-
-                DispatchQueue.global(qos: .userInitiated).async {
-
-                    log("cc:call_waiting_bg_queue")
-                    if self.friend != nil {
-
-                        DispatchQueue.main.async {
-                            // KHANDAQ (#152): wake an offline friend before the call with a SILENT push.
-                            // We used to send a literal "calling you" TEXT message here (to trigger the
-                            // push), but it was a visible chat message that spammed both sides on every
-                            // call attempt/retry. triggerWakePush pings the friend's push token directly.
-                            self.submanagerChats.triggerWakePush(for: self.chat)
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
-                                os_log("PUSH:10_seconds")
-                                self.submanagerChats.sendMessagePush(to: self.chat)
-                            }
-
-                            self.linearBar.startAnimation(viewToAddto: self.CallWaitingView, viewToAlignToBottomOf: lb3, bottom_margin: 10)
-                            self.CallWaitingView.bringSubview(toFront: self.linearBar)
-                        }
-
-                        var connection_status2: ConnectionStatus = .none
-
-                        while true {
-
-                            // KHANDAQ (audit #12): read the Realm friend status SYNCHRONOUSLY on main —
-                            // the previous `.async` write to a var read on this background thread was a
-                            // data race and always left connection_status2 one iteration stale (first
-                            // read saw the initial .none), adding a needless extra second of waiting.
-                            DispatchQueue.main.sync {
-                                connection_status2 = ConnectionStatus(connectionStatus: friend.connectionStatus)
-                            }
-
-                            log("cc:while_friend_not_online, \(connection_status2)")
-                            if (connection_status2 != .none)
-                            {
-                                DispatchQueue.main.async {
-                                    log("cc:main_queue")
-                                    if (self.callwaiting_running)
-                                    {
-                                        self.callwaiting_running = false
-                                        self.CallWaitingView.removeFromSuperview()
-                                        self.linearBar.stopAnimation()
-                                        self.delegate?.chatPrivateControllerCallToChat(self, enableVideo: false)
-                                    }
-                                }
-                                break
-                            }
-
-                            // HINT: sleep for 1 second
-                            if (self.callwaiting_running)
-                            {
-                                sleep(1)
-                            }
-                            else
-                            {
-                                DispatchQueue.main.async {
-                                    self.CallWaitingView.removeFromSuperview()
-                                    self.linearBar.stopAnimation()
-                                }
-                                break
-                            }
-                        }
-                        log("cc:while_loop_end")
-                    }
-                }
-
-            }
-        } else {
-            log("Call_ERROR:no friend?")
-        }
+        requestCall(video: false)
     }
     
     @objc func displayalert() {
@@ -886,7 +749,7 @@ extension ChatPrivateController {
     }
 
     @objc func videoCallButtonPressed() {
-        delegate?.chatPrivateControllerCallToChat(self, enableVideo: true)
+        requestCall(video: true)
     }
 
     @objc func locationButtonPressed() {
@@ -1029,7 +892,8 @@ extension ChatPrivateController: UITableViewDataSource {
 
         if message.isOutgoing() {
             if let messageText = message.messageText {
-                let outgoingModel = ChatOutgoingTextCellModel()
+                // KHANDAQ (redesign stage 2): a transcript entry (AirEntryTextCell), not a bubble.
+                let outgoingModel = AirEntryTextCellModel()
 
                 if (UserDefaultsManager().DebugMode == false) {
                     populateTextModel(outgoingModel, text: messageText.text ?? "")
@@ -1054,8 +918,15 @@ extension ChatPrivateController: UITableViewDataSource {
                                                + "dateInterval:\n" + s9 + "\n"
                 }
 
-                outgoingModel.delivered = messageText.isDelivered
-                outgoingModel.sentpush = messageText.sentPush
+                outgoingModel.isOutgoing = true
+                outgoingModel.status = AirEntryStatus.ofOutgoingText(isSaved: chat.isSavedMessages,
+                                                                     isDelivered: messageText.isDelivered,
+                                                                     messageId: messageText.messageId,
+                                                                     personOnline: isFriendOnline)
+                if let id = message.uniqueIdentifier {
+                    outgoingModel.previousStatus = statusMemory[id]
+                    statusMemory[id] = outgoingModel.status
+                }
                 outgoingModel.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
                 attachReplyQuoteHandler(to: outgoingModel)
 
@@ -1072,7 +943,7 @@ extension ChatPrivateController: UITableViewDataSource {
 
                 model = outgoingModel
 
-                cell = tableView.dequeueReusableCell(withIdentifier: ChatOutgoingTextCell.staticReuseIdentifier) as! ChatOutgoingTextCell
+                cell = tableView.dequeueReusableCell(withIdentifier: AirEntryTextCell.staticReuseIdentifier) as! AirEntryTextCell
             }
             else if let messageCall = message.messageCall {
                 let outgoingModel = ChatOutgoingCallCellModel()
@@ -1088,7 +959,7 @@ extension ChatPrivateController: UITableViewDataSource {
         }
         else {
             if let messageText = message.messageText {
-                let incomingModel = ChatBaseTextCellModel()
+                let incomingModel = AirEntryTextCellModel()
 
                 if (UserDefaultsManager().DebugMode == false) {
                     populateTextModel(incomingModel, text: messageText.text ?? "")
@@ -1120,7 +991,7 @@ extension ChatPrivateController: UITableViewDataSource {
 
                 model = incomingModel
 
-                cell = tableView.dequeueReusableCell(withIdentifier: ChatIncomingTextCell.staticReuseIdentifier) as! ChatIncomingTextCell
+                cell = tableView.dequeueReusableCell(withIdentifier: AirEntryTextCell.staticReuseIdentifier) as! AirEntryTextCell
             }
             else if let messageCall = message.messageCall {
                 let incomingModel = ChatIncomingCallCellModel()
@@ -1155,10 +1026,7 @@ extension ChatPrivateController: UITableViewDataSource {
             model.dateString = timeFormatter.string(from: message.date())
         }
 
-        // KHANDAQ (#99): tag the row with a day separator when it begins a new calendar day.
-        model.dateSeparator = daySeparatorString(forDisplayIndex: indexPath.row)
-        // KHANDAQ (Figma): "Непрочитанные сообщения" band on the first unread incoming message.
-        model.unreadSeparator = (unreadSeparatorMessageId != nil && message.uniqueIdentifier == unreadSeparatorMessageId)
+        markTranscriptEntry(model, message: message, row: indexPath.row)
 
         cell.delegate = self
         cell.replySwipeDelegate = self
@@ -1191,53 +1059,21 @@ extension ChatPrivateController: UITableViewDelegate {
                 return nil
             }
         }
-        return floatingDateFormatter.string(from: message.date())
+        // KHANDAQ (redesign stage 2): "Today", "Yesterday" or the date, as the transcript marks a day.
+        return AirDayMark.text(for: message.date(), locale: AppLanguage.locale, calendar: calendar)
     }
 
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         let entry = messageEntry(atDisplayIndex: indexPath.row)
-        let message = entry.message
 
         // Merged caption rows are not shown on their own.
         if messageSearchQuery.isEmpty, isMergedCaptionRow(storageIndex: entry.storageIndex) {
             return 0.0
         }
 
-        guard let messageFile = message.messageFile,
-              message.isOutgoing() || messageFile.fileType == .ready,
-              let file = messageFile.filePath(),
-              messageFile.fileSize < Constants.MaxImageSizeToShowInline else {
-            return UITableViewAutomaticDimension
-        }
-
-        guard let size = inlineMediaSize(forFileAt: file, messageFile: messageFile) else {
-            return UITableViewAutomaticDimension
-        }
-        let box = LoadingImageView.previewBox(for: size)
-        var height = box.height + 16.0
-
-        // Add room for a merged caption rendered inside the media bubble.
-        if messageSearchQuery.isEmpty,
-           let captionMsg = captionMessage(forFileAtStorageIndex: entry.storageIndex),
-           let caption = MessageReplyHelper.plainBody(for: captionMsg), !caption.isEmpty {
-            // KHANDAQ (#52): height must match the stripped (markup-free) caption text.
-            height += ChatGenericFileCell.captionHeight(for: caption, width: box.width)
-        }
-        // KHANDAQ (18 Aug): same reason as the caption above — an explicit-height media row must also
-        // reserve the reaction chips line, or the reaction is stored and laid out but clipped, and
-        // reacting on a photo/video looks like it did nothing.
-        height += ChatGenericFileCell.reactionsHeight(
-                for: ChatReactionsFormat.display(from: message.reactionsJSON))
-        // KHANDAQ (#99): media rows have an explicit height (no auto-sizing), so add the separator band
-        // here when this row starts a new day — text/voice rows self-size and need no adjustment.
-        if daySeparatorString(forDisplayIndex: indexPath.row) != nil {
-            height += ChatMovableDateCell.daySeparatorReservedHeight
-        }
-        // KHANDAQ (#162): same for the «Непрочитанные сообщения» band on explicit-height media rows.
-        if unreadSeparatorMessageId != nil && message.uniqueIdentifier == unreadSeparatorMessageId {
-            height += ChatMovableDateCell.unreadSeparatorReservedHeight
-        }
-        return height
+        // KHANDAQ (redesign stage 3, E8): a photo or video entry sizes itself like every other row; its
+        // preview box has its size from the file before the image loads (prepareFileCell).
+        return UITableViewAutomaticDimension
     }
 
     @objc func handleVoicePlayerStateChange(_ notification: Notification) {
@@ -1267,6 +1103,18 @@ extension ChatPrivateController: UITableViewDelegate {
             // KHANDAQ (#36): handle-preserving refresh (see refreshVoicePlaybackState).
             fileCell.refreshVoicePlaybackState(theme: theme)
         }
+    }
+
+    /// The size of the preview of a photo or a video that can be shown inline: ours, or theirs once it
+    /// is here, and not larger than an inline preview may be.
+    func inlinePreviewSize(for message: OCTMessageAbstract) -> CGSize? {
+        guard let messageFile = message.messageFile,
+              message.isOutgoing() || messageFile.fileType == .ready,
+              let file = messageFile.filePath(),
+              messageFile.fileSize < Constants.MaxImageSizeToShowInline else {
+            return nil
+        }
+        return inlineMediaSize(forFileAt: file, messageFile: messageFile)
     }
 
     /// Pixel size of an inline photo/video, or nil if not displayable media. Probes the file directly
@@ -1327,7 +1175,7 @@ extension ChatPrivateController: UITableViewDelegate {
     }
 
     /// KHANDAQ (#122): true only if the file message is actually rendered inline (downloaded/ready,
-    /// recognized media, within the inline size limit) — mirrors the heightForRowAt gate. A caption is
+    /// recognized media, within the inline size limit), as inlinePreviewSize decides. A caption is
     /// merged into its file ONLY when this holds; otherwise the caption would vanish behind a failed /
     /// generic-file bubble.
     func isFileDisplayedInline(_ fileMessage: OCTMessageAbstract) -> Bool {
@@ -1454,6 +1302,13 @@ extension ChatPrivateController: UITableViewDelegate {
             toggleNewMessageView(show: false)
         }
 
+        // KHANDAQ (redesign stage 2): a message that just arrived or just left the tray rises into place.
+        if !arrivingIds.isEmpty, let entryCell = cell as? AirEntryTextCell,
+           let id = messageEntry(atDisplayIndex: indexPath.row).message.uniqueIdentifier,
+           let delay = arrivingIds.removeValue(forKey: id) {
+            entryCell.animateArrival(delay: delay)
+        }
+
         maybeLoadImageForCellAtPath(cell, indexPath: indexPath)
     }
 
@@ -1537,7 +1392,11 @@ extension ChatPrivateController: UIScrollViewDelegate {
         toggleNewMessageView(show: !atBottom)
 
         updateFloatingDate()
-        showFloatingDateMomentarily()
+        // Only while the person scrolls: opening the conversation, a new message or a layout pass
+        // move the log as well, and the chip would flash for nothing.
+        if scrollView.isDragging || scrollView.isDecelerating {
+            showFloatingDateMomentarily()
+        }
     }
 }
 
@@ -1617,6 +1476,8 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         }
         let message = messageEntry(atDisplayIndex: indexPath.row).message
         replyController.startReply(to: message, submanagerObjects: submanagerObjects, theme: theme)
+        // The reply header travels in the same message, so it counts against the length limit.
+        updateComposeLimit()
         _ = chatInputView.becomeFirstResponder()
     }
 
@@ -1653,26 +1514,32 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         }
 
         guard let text = preview else {
-            // No pin, or the pinned message was deleted — hide and drop a stale pin.
+            // No pin, or the pinned message was deleted: hide the strip and drop a stale pin.
             if pinnedId != nil { ChatPinStore.clearPin(forChat: chat.uniqueIdentifier) }
-            pinnedBannerView?.isHidden = true
-            // KHANDAQ (#iOS Saved gap): the table is y-flipped (d:-1), so contentInset.top renders at
-            // the VISUAL BOTTOM (the small gap above the input bar) while contentInset.BOTTOM renders at
-            // the VISUAL TOP (under the pinned banner). Reserve/clear the banner space on .bottom ONLY —
-            // the old code touched .top, which both wiped the base input gap here AND (when a pin was
-            // active) shoved the whole conversation up off the input bar, leaving a big empty band above
-            // the keyboard (tester: «в избранном большое расстояние до строки ввода»).
-            tableView?.contentInset.bottom = 0
-            tableView?.verticalScrollIndicatorInsets.bottom = 0
+            setPinnedStripVisible(false)
             return
         }
 
-        ensurePinnedBannerBuilt()
-        pinnedBannerLabel?.text = text
-        pinnedBannerView?.isHidden = false
-        view.bringSubview(toFront: pinnedBannerView!)
-        tableView?.contentInset.bottom = ChatPrivateController.pinnedBannerHeight
-        tableView?.verticalScrollIndicatorInsets.bottom = ChatPrivateController.pinnedBannerHeight
+        // KHANDAQ (redesign stage 2): the pinned message lies as a quiet strip under the header, in the
+        // stack above the log, so the log no longer needs room kept free under a floating card.
+        pinnedStrip.configure(text: text)
+        setPinnedStripVisible(true)
+    }
+
+    private func setPinnedStripVisible(_ visible: Bool) {
+        guard pinnedStrip.isHidden == visible else {
+            return
+        }
+        let changes = {
+            self.pinnedStrip.isHidden = !visible
+            self.view.layoutIfNeeded()
+        }
+        if view.window != nil {
+            UIView.animate(withDuration: KQMotion.duration(KQMotion.layout), delay: 0, options: [.curveEaseOut, .beginFromCurrentState], animations: changes, completion: nil)
+        }
+        else {
+            changes()
+        }
     }
 
     private static func pinnedPreview(for message: OCTMessageAbstract) -> String {
@@ -1681,97 +1548,11 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         }
         if let file = message.messageFile {
             if VoiceMessageHelper.isVoiceMessage(fileName: file.fileName, filePath: nil) {
-                return "🎤 " + String(localized: "voice_message_label")
+                return String(localized: "voice_message_label")
             }
-            return "📎 " + (file.fileName ?? "")
+            return file.fileName ?? String(localized: "chat_pinned_banner_title")
         }
-        return "📌"
-    }
-
-    private func ensurePinnedBannerBuilt() {
-        guard pinnedBannerView == nil else {
-            return
-        }
-        // KHANDAQ (#iOS pin polish): the pinned bar is now a floating rounded CARD (like the profile
-        // cards), not a flat full-width white strip — cleaner and consistent with the rest of the UI.
-        let banner = UIView()
-        banner.backgroundColor = .clear
-        banner.isUserInteractionEnabled = true
-        banner.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(pinnedBannerTapped)))
-
-        let card = UIView()
-        card.backgroundColor = theme.colorForType(.NormalBackground)
-        card.layer.cornerRadius = 12.0
-        card.layer.shadowColor = UIColor.black.cgColor
-        card.layer.shadowOpacity = 0.08
-        card.layer.shadowRadius = 4.0
-        card.layer.shadowOffset = CGSize(width: 0, height: 1)
-
-        let accent = UIView()
-        accent.backgroundColor = theme.colorForType(.LinkText)
-        accent.layer.cornerRadius = 1.5
-
-        let title = UILabel()
-        title.text = String(localized: "chat_pinned_banner_title")
-        title.font = UIFont.systemFont(ofSize: 11.0, weight: .semibold)
-        title.textColor = theme.colorForType(.LinkText)
-
-        let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 14.0)
-        label.textColor = theme.colorForType(.NormalText)
-        label.lineBreakMode = .byTruncatingTail
-
-        let close = UIButton(type: .system)
-        if #available(iOS 13.0, *) {
-            close.setImage(UIImage(systemName: "xmark"), for: .normal)
-        } else {
-            close.setTitle("✕", for: .normal)
-        }
-        close.tintColor = theme.colorForType(.NormalText)
-        close.addTarget(self, action: #selector(pinnedBannerClosePressed), for: .touchUpInside)
-
-        banner.addSubview(card)
-        card.addSubview(accent)
-        card.addSubview(title)
-        card.addSubview(label)
-        card.addSubview(close)
-        view.addSubview(banner)
-
-        banner.snp.makeConstraints {
-            $0.top.equalTo(view.safeAreaLayoutGuide.snp.top)
-            $0.leading.trailing.equalTo(view)
-            $0.height.equalTo(ChatPrivateController.pinnedBannerHeight)
-        }
-        card.snp.makeConstraints {
-            $0.leading.equalTo(banner).offset(8.0)
-            $0.trailing.equalTo(banner).offset(-8.0)
-            $0.top.equalTo(banner).offset(4.0)
-            $0.bottom.equalTo(banner).offset(-6.0)
-        }
-        accent.snp.makeConstraints {
-            $0.leading.equalTo(card).offset(12.0)
-            $0.top.equalTo(card).offset(8.0)
-            $0.bottom.equalTo(card).offset(-8.0)
-            $0.width.equalTo(3.0)
-        }
-        close.snp.makeConstraints {
-            $0.trailing.equalTo(card).offset(-12.0)
-            $0.centerY.equalTo(card)
-            $0.width.height.equalTo(24.0)
-        }
-        title.snp.makeConstraints {
-            $0.leading.equalTo(accent.snp.trailing).offset(10.0)
-            $0.top.equalTo(card).offset(6.0)
-            $0.trailing.lessThanOrEqualTo(close.snp.leading).offset(-10.0)
-        }
-        label.snp.makeConstraints {
-            $0.leading.equalTo(accent.snp.trailing).offset(10.0)
-            $0.top.equalTo(title.snp.bottom).offset(1.0)
-            $0.trailing.lessThanOrEqualTo(close.snp.leading).offset(-10.0)
-        }
-
-        pinnedBannerView = banner
-        pinnedBannerLabel = label
+        return String(localized: "chat_pinned_banner_title")
     }
 
     @objc private func pinnedBannerTapped() {
@@ -1819,8 +1600,12 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         guard let indexPath = tableView?.indexPath(for: cell) else {
             return
         }
-        let message = messageEntry(atDisplayIndex: indexPath.row).message
-        guard message.messageText != nil else {
+        presentMessageEditor(for: messageEntry(atDisplayIndex: indexPath.row).message)
+    }
+
+    /// The inline editor of an own text, for the log and for a message waiting in the tray.
+    fileprivate func presentMessageEditor(for message: OCTMessageAbstract) {
+        guard !message.isInvalidated, message.messageText != nil else {
             return
         }
         let current = message.messageText?.text ?? ""
@@ -1899,20 +1684,18 @@ extension ChatPrivateController: UIGestureRecognizerDelegate {
 
 private extension ChatPrivateController {
     func createNavigationViews() {
-        titleView = ChatPrivateTitleView(theme: theme)
-        // KHANDAQ (Figma): Telegram-style — avatar+name are LEFT-aligned next to the back button, so the
-        // title view is installed as a left bar item (see installTitleLeftItem) and the centered
-        // titleView slot is left empty. A nav bar only measures a custom bar-item view once, so when the
-        // title's intrinsic size changes we re-install it to force a re-measure.
+        titleView = ChatPrivateTitleView()
+        // KHANDAQ (Figma): Telegram-style, the tile and the name are LEFT-aligned next to the back
+        // button, so the title view is installed as a left bar item (see installTitleLeftItem) and the
+        // centered titleView slot is left empty. A nav bar only measures a custom bar-item view once, so
+        // when the title's size changes we re-install it to force a re-measure.
         titleView.onSizeChanged = { [weak self] in
             self?.installTitleLeftItem()
         }
 
-        // KHANDAQ (Figma): tapping the header (avatar/name) opens the friend profile. Saved Messages
-        // has no friend — the handler bails there.
-        titleView.isUserInteractionEnabled = true
-        let titleTap = UITapGestureRecognizer(target: self, action: #selector(ChatPrivateController.titleViewTapped))
-        titleView.addGestureRecognizer(titleTap)
+        // KHANDAQ (redesign stage 2): the header opens and closes the dossier. "For yourself" and a
+        // removed contact have none (opensDossier is false there).
+        titleView.addTarget(self, action: #selector(ChatPrivateController.titleViewTapped), for: .touchUpInside)
 
         // create correct navigation buttons
         toggleTableViewEditing(false, animated: false)
@@ -1929,10 +1712,7 @@ private extension ChatPrivateController {
     }
 
     @objc func titleViewTapped() {
-        guard let friend = friend else {
-            return
-        }
-        delegate?.chatPrivateControllerShowFriendProfile(self, forFriend: friend)
+        toggleDossier()
     }
 
     func createTableView() {
@@ -1948,7 +1728,7 @@ private extension ChatPrivateController {
         tableView.scrollsToTop = false
         tableView.allowsSelection = false
         tableView.estimatedRowHeight = 44.0
-        // Transparent so the doodle background view (added behind it) shows through.
+        // Transparent over the surface of the screen.
         tableView.backgroundColor = .clear
         tableView.allowsMultipleSelectionDuringEditing = true
         tableView.separatorStyle = .none
@@ -1961,6 +1741,7 @@ private extension ChatPrivateController {
         tableView.register(ChatMovableDateCell.self, forCellReuseIdentifier: ChatMovableDateCell.staticReuseIdentifier)
         tableView.register(ChatIncomingTextCell.self, forCellReuseIdentifier: ChatIncomingTextCell.staticReuseIdentifier)
         tableView.register(ChatOutgoingTextCell.self, forCellReuseIdentifier: ChatOutgoingTextCell.staticReuseIdentifier)
+        tableView.register(AirEntryTextCell.self, forCellReuseIdentifier: AirEntryTextCell.staticReuseIdentifier)
         tableView.register(ChatIncomingCallCell.self, forCellReuseIdentifier: ChatIncomingCallCell.staticReuseIdentifier)
         tableView.register(ChatOutgoingCallCell.self, forCellReuseIdentifier: ChatOutgoingCallCell.staticReuseIdentifier)
         tableView.register(ChatIncomingFileCell.self, forCellReuseIdentifier: ChatIncomingFileCell.staticReuseIdentifier)
@@ -2063,64 +1844,31 @@ private extension ChatPrivateController {
     }
 
     func createNewMessagesView() {
-        newMessagesView = UIView()
-        newMessagesView.backgroundColor = theme.colorForType(.ConnectingBackground)
-        newMessagesView.layer.cornerRadius = 5.0
-        newMessagesView.layer.masksToBounds = true
-        newMessagesView.isHidden = true
-        view.addSubview(newMessagesView)
-
-        let label = UILabel()
-        // KHANDAQ (#93-task): repurposed as a Telegram-style "jump to latest" button — shown whenever
-        // the newest message is scrolled off-screen (and on a new incoming message while scrolled up).
-        label.text = "↓"
-        label.textColor = theme.colorForType(.ConnectingText)
-        label.backgroundColor = .clear
-        label.font = UIFont.systemFont(ofSize: 18.0, weight: .semibold)
-        label.textAlignment = .center
-        newMessagesView.addSubview(label)
-
-        let button = UIButton()
+        // KHANDAQ (#93-task): a Telegram-style "jump to latest" button, shown whenever the newest
+        // message is scrolled off-screen (and on a new incoming message while scrolled up).
+        // KHANDAQ (redesign stage 2): the plate of the design system with the chevron, at the end edge.
+        let button = AirJumpButton()
+        button.isHidden = true
         button.addTarget(self, action: #selector(ChatPrivateController.newMessagesViewPressed), for: .touchUpInside)
-        newMessagesView.addSubview(button)
-
-        label.snp.makeConstraints {
-            $0.leading.equalTo(newMessagesView).offset(Constants.NewMessageViewEdgesOffset)
-            $0.trailing.equalTo(newMessagesView).offset(-Constants.NewMessageViewEdgesOffset)
-            $0.top.equalTo(newMessagesView).offset(Constants.NewMessageViewEdgesOffset)
-            $0.bottom.equalTo(newMessagesView).offset(-Constants.NewMessageViewEdgesOffset)
-        }
-
-        button.snp.makeConstraints {
-            $0.edges.equalTo(newMessagesView)
-        }
-    }
-
-    func createChatBackgroundView() {
-        // Doodle wallpaper drawn behind the y-flipped table. Added to the controller's view (NOT the
-        // table) so the doodles aren't mirrored, and the transparent cells let it show through.
-        chatBackgroundView = ThemeChrome.makeChatDoodleBackgroundView()
-        view.addSubview(chatBackgroundView)
-        chatBackgroundView.snp.makeConstraints {
-            $0.edges.equalTo(view)
-        }
+        view.addSubview(button)
+        newMessagesView = button
     }
 
     func createFloatingDateView() {
         floatingDateView = UIView()
-        // Same surface as an incoming bubble so it reads as a chat overlay in both themes.
-        floatingDateView.backgroundColor = theme.colorForType(.ChatIncomingBubble)
-        floatingDateView.layer.cornerRadius = 13.0
+        // KHANDAQ (redesign stage 2): a sunken chip in the tokens of the system, in both themes.
+        floatingDateView.backgroundColor = KQColor.sunken
+        floatingDateView.layer.cornerRadius = KQRadius.control
         floatingDateView.layer.masksToBounds = true
         floatingDateView.alpha = 0.0
         floatingDateView.isUserInteractionEnabled = false
         view.addSubview(floatingDateView)
 
         floatingDateLabel = UILabel()
-        floatingDateLabel.textColor = theme.colorForType(.ChatListCellMessage)
+        floatingDateLabel.textColor = KQColor.ink2
         floatingDateLabel.backgroundColor = .clear
         floatingDateLabel.textAlignment = .center
-        floatingDateLabel.font = UIFont.systemFont(ofSize: 12.0, weight: .semibold)
+        floatingDateLabel.font = KQFont.font(.caption, weight: 500)
         floatingDateView.addSubview(floatingDateLabel)
     }
 
@@ -2151,7 +1899,7 @@ private extension ChatPrivateController {
         let date = (message.tssent != 0)
             ? Date(timeIntervalSince1970: TimeInterval(message.tssent))
             : message.date()
-        floatingDateLabel.text = floatingDateFormatter.string(from: date)
+        floatingDateLabel.text = AirDayMark.text(for: date, locale: AppLanguage.locale)
     }
 
     /// Fades the chip in, then schedules a fade-out so it only shows during/just after scrolling.
@@ -2161,11 +1909,11 @@ private extension ChatPrivateController {
         }
 
         floatingDateHideTimer?.invalidate()
-        UIView.animate(withDuration: 0.15) {
+        UIView.animate(withDuration: KQMotion.duration(KQMotion.tap)) {
             self.floatingDateView.alpha = 1.0
         }
         floatingDateHideTimer = Timer.scheduledTimer(withTimeInterval: 1.2, repeats: false) { [weak self] _ in
-            UIView.animate(withDuration: 0.3) {
+            UIView.animate(withDuration: KQMotion.duration(KQMotion.layout)) {
                 self?.floatingDateView.alpha = 0.0
             }
         }
@@ -2202,12 +1950,33 @@ private extension ChatPrivateController {
             LocationSharingCoordinator.shared.shareCurrentLocationOnce(to: self)
         }
         replyController.install(in: view, above: chatInputView, theme: theme)
+
+        // KHANDAQ (redesign stage 2): the composer of the design system (one framed field, the send
+        // button of the same height, the line about what happens to the message), and refused texts
+        // kept on screen with "Retry" instead of an alert. A removed contact keeps the alert: nobody is
+        // there to send to again.
+        chatInputView.useAirStyle()
+        chatInputView.onTextChanged = { [weak self] _ in
+            self?.updateComposeLimit()
+        }
+        chatInputViewManager.onSendFailed = { [weak self] text, _ in
+            guard let self = self, self.friend != nil, !self.chat.isSavedMessages else {
+                return false
+            }
+            AirFailedSends.shared.add(text: text, toChat: self.chat.uniqueIdentifier)
+            return true
+        }
     }
 
     func createEditMessageToolbar() {
         editMessagesToolbar = UIToolbar()
         editMessagesToolbar.isHidden = true
-        editMessagesToolbar.tintColor = theme.colorForType(.LinkText)
+        // It lies over the composer, edge to edge (installConstraints): it takes the composer's height and
+        // never sets it. Hugging its 44 points at the default priority, it pressed the hint under the
+        // field to the room it keeps (one line of three at AX5, two of three at AX3).
+        editMessagesToolbar.setContentHuggingPriority(.defaultLow, for: .vertical)
+        // KHANDAQ (redesign stage 2): buttons are ink.
+        editMessagesToolbar.tintColor = KQColor.ink
         // KHANDAQ (#G3): selection mode offered only Delete — add Forward for the selected messages.
         let forwardItem: UIBarButtonItem
         if #available(iOS 13.0, *) {
@@ -2228,35 +1997,69 @@ private extension ChatPrivateController {
     }
 
     func installConstraints() {
-        tableView!.snp.makeConstraints {
-            $0.top.leading.trailing.equalTo(view)
-
-            tableViewToChatInputConstraint = $0.bottom.equalTo(replyController.previewView.snp.top).constraint
+        // KHANDAQ (redesign stage 2): under the header the presence band and the pinned strip, then the
+        // log, then the refused messages and the tray, then the reply preview and the field.
+        // The strips above and under the log take only the height of their content; the log gets the
+        // rest. Weaker than any content hugging, so it only settles what nothing else decides.
+        let shrinkToContent = UILayoutPriority.defaultLow.rawValue - 1
+        topStack.snp.makeConstraints {
+            $0.top.equalTo(view.safeAreaLayoutGuide.snp.top)
+            $0.leading.trailing.equalTo(view)
+            $0.height.equalTo(0).priority(shrinkToContent)
         }
+
+        tableView!.snp.makeConstraints {
+            $0.top.equalTo(topStack.snp.bottom)
+            $0.leading.trailing.equalTo(view)
+
+            tableViewToChatInputConstraint = $0.bottom.equalTo(bottomStack.snp.top).constraint
+        }
+
+        bottomStack.snp.makeConstraints {
+            $0.leading.trailing.equalTo(view)
+            $0.bottom.equalTo(replyController.previewView.snp.top)
+            $0.height.equalTo(0).priority(shrinkToContent)
+        }
+
+        // At the accessibility text sizes the refused messages and the tray take at most half of the room
+        // between the band and the field, and their messages scroll in it (keepRoomForLog). Below the
+        // compression resistance of words, so a title is never cut to keep the half.
+        view.addLayoutGuide(stripsRoom)
+        stripsRoom.snp.makeConstraints {
+            $0.top.equalTo(topStack.snp.bottom)
+            $0.bottom.equalTo(replyController.previewView.snp.top)
+            $0.leading.trailing.equalTo(view)
+        }
+        bottomStack.snp.makeConstraints {
+            stripsHalfConstraint = $0.height.lessThanOrEqualTo(stripsRoom.snp.height).multipliedBy(0.5)
+                .priority(UILayoutPriority.defaultHigh.rawValue - 10).constraint
+        }
+        stripsHalfConstraint?.isActive = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
 
         typingHeaderView.snp.makeConstraints {
             $0.leading.trailing.equalTo(view)
             $0.top.equalTo(tableView!.snp.bottom)
-            typingViewToChatInputConstraint = $0.bottom.equalTo(replyController.previewView.snp.top).constraint
+            typingViewToChatInputConstraint = $0.bottom.equalTo(bottomStack.snp.top).constraint
         }
 
         typingViewToChatInputConstraint.deactivate()
 
         newMessagesView.snp.makeConstraints {
-            $0.centerX.equalTo(tableView!)
-            newMessageViewTopConstraint = $0.top.equalTo(chatInputView.snp.top).constraint
+            $0.trailing.equalTo(view).offset(-KQSpace.x16)
+            newMessageViewTopConstraint = $0.top.equalTo(bottomStack.snp.top).constraint
         }
 
         floatingDateView.snp.makeConstraints {
-            $0.top.equalTo(view.safeAreaLayoutGuide.snp.top).offset(8.0)
+            $0.top.equalTo(topStack.snp.bottom).offset(KQSpace.x8)
             $0.centerX.equalTo(view)
-            $0.height.equalTo(26.0)
+            $0.height.greaterThanOrEqualTo(KQSize.controlSmall)
         }
 
         floatingDateLabel.snp.makeConstraints {
-            $0.top.bottom.equalTo(floatingDateView)
-            $0.leading.equalTo(floatingDateView).offset(12.0)
-            $0.trailing.equalTo(floatingDateView).offset(-12.0)
+            $0.top.equalTo(floatingDateView).offset(KQSpace.x4)
+            $0.bottom.equalTo(floatingDateView).offset(-KQSpace.x4)
+            $0.leading.equalTo(floatingDateView).offset(KQSpace.x12)
+            $0.trailing.equalTo(floatingDateView).offset(-KQSpace.x12)
         }
 
         chatInputView.snp.makeConstraints {
@@ -2277,7 +2080,7 @@ private extension ChatPrivateController {
         // background so the input bar reads as reaching the screen edge. Pinned bar-bottom → view-bottom,
         // so it also covers the hidden area behind the keyboard when it's raised (no visible effect there).
         let inputBottomFiller = UIView()
-        inputBottomFiller.backgroundColor = theme.colorForType(.ChatInputBackground)
+        inputBottomFiller.backgroundColor = KQColor.surface
         inputBottomFiller.isUserInteractionEnabled = false
         view.insertSubview(inputBottomFiller, belowSubview: chatInputView)
         inputBottomFiller.snp.makeConstraints {
@@ -2300,12 +2103,34 @@ private extension ChatPrivateController {
                 case .initial:
                     break
                 case .update(_, let deletions, let insertions, let modifications):
-                    // While searching the table shows a filtered subset, so storage-index granular
-                    // updates don't line up — keep the storage window in sync and reload.
-                    if !self.messageSearchQuery.isEmpty {
+                    // KHANDAQ (redesign stage 2): the rows of the log change with the messages; the
+                    // tray takes what waits for the person, a new message rises into the log.
+                    self.displayGeneration += 1
+                    let hadTray = !self.trayIds.isEmpty
+                    self.refreshTray(animated: true)
+                    self.refreshComposeState(animated: true)
+                    if insertions.contains(0), let newest = self.messages.object(at: 0),
+                       let id = newest.uniqueIdentifier, newest.messageText != nil {
+                        self.scheduleArrival(id: id, delay: 0)
+                    }
+                    // The tray is emptying into the log right now; the log is reloaded once it folded,
+                    // so the rising rows are not replaced halfway.
+                    if self.isTrayDeparting {
+                        self.visibleMessages = max(0, self.visibleMessages + insertions.count - deletions.count)
+                        self.needsLogReload = true
+                        return
+                    }
+                    // While searching, or while the tray keeps messages out of the log, the table
+                    // shows a subset, so storage-index granular updates don't line up: keep the
+                    // storage window in sync and reload.
+                    if !self.messageSearchQuery.isEmpty || hadTray || !self.trayIds.isEmpty {
                         self.visibleMessages = max(0, self.visibleMessages + insertions.count - deletions.count)
                         tableView.reloadData()
                         self.updateTableHeaderView()
+                        self.updateEncryptionBannerVisibility()
+                        if insertions.contains(0) {
+                            self.handleNewMessage()
+                        }
                         return
                     }
                     // A Telegram-style caption changes the height of a *separate* (file) row, which an
@@ -2439,8 +2264,12 @@ private extension ChatPrivateController {
             if index >= visibleMessages {
                 continue
             }
+            // KHANDAQ (redesign stage 2): a storage index; the log may leave messages out (the tray).
+            guard index < messages.count, let row = displayIndex(forStorageIndex: index) else {
+                continue
+            }
             let message = messages[index]
-            let indexPath = IndexPath(row: index, section: 0)
+            let indexPath = IndexPath(row: row, section: 0)
 
             if message.messageFile == nil {
                 // KHANDAQ (overlap fix): atomic, un-animated — see the insert batch above
@@ -2461,6 +2290,9 @@ private extension ChatPrivateController {
             let model: ChatGenericFileCellModel = message.isOutgoing() ? ChatOutgoingFileCellModel()
                                                                        : ChatIncomingFileCellModel()
             prepareFileCell(cell, andModel: model, withMessage: message)
+            // The time and the marks of the entry, as tableView(_:cellForRowAt:) gives a file.
+            model.dateString = timeFormatter.string(from: message.date())
+            markTranscriptEntry(model, message: message, row: row)
             cell.setupWithTheme(theme, model: model)
 
             maybeLoadImageForCellAtPath(cell, indexPath: indexPath)
@@ -2475,27 +2307,25 @@ private extension ChatPrivateController {
 
     func addFriendNotification() {
         guard let friend = self.friend else {
+            // KHANDAQ (redesign stage 2): "For yourself" and a removed contact have no dossier and no
+            // calls in the header (see toggleTableViewEditing).
+            titleView.opensDossier = false
             if chat.isSavedMessages {
-                titleView.name = String(localized: "saved_messages_title")
-                titleView.userStatus = UserStatus(connectionStatus: .none, userStatus: .none)
-                titleView.connectionStatus = ConnectionStatus(connectionStatus: .none)
-                audioButton.isEnabled = false
-                videoButton.isEnabled = false
+                titleView.configure(name: String(localized: "saved_messages_title"), style: .saved, photo: nil)
+                setBarItem(audioButton, enabled: false)
+                setBarItem(videoButton, enabled: false)
                 locationButton.isEnabled = false
                 chatInputView.cameraButtonEnabled = true
                 return
             }
-            titleView.name = String(localized: "contact_deleted")
-            titleView.userStatus = UserStatus(connectionStatus: .none, userStatus: .none)
-            titleView.connectionStatus = ConnectionStatus(connectionStatus: .none)
-            audioButton.isEnabled = true
-            videoButton.isEnabled = false
+            titleView.configure(name: String(localized: "contact_deleted"), style: .person(initials: "", tone: 0), photo: nil)
+            setBarItem(audioButton, enabled: true)
+            setBarItem(videoButton, enabled: false)
             locationButton.isEnabled = true
             chatInputView.cameraButtonEnabled = false
             return
         }
 
-        titleView.name = friend.nickname
         // KHANDAQ design (Figma): contact avatar in the chat header.
         updateTitleAvatar(for: friend)
         updateTitlePresence(for: friend)
@@ -2504,7 +2334,7 @@ private extension ChatPrivateController {
         let results = submanagerObjects.friends(predicate: predicate)
 
         friendToken = results.addNotificationBlock { [weak self] change in
-            guard let self = self, let friend = self.friend else {
+            guard let self = self, let friend = self.friend, !friend.isInvalidated else {
                 return
             }
 
@@ -2512,18 +2342,23 @@ private extension ChatPrivateController {
                 case .initial:
                     fallthrough
                 case .update:
-                    self.titleView.name = friend.nickname
                     self.updateTitleAvatar(for: friend)
                     self.updateTitlePresence(for: friend)
 
                     let isConnected = friend.isConnected
 
-                    self.audioButton.isEnabled = true
-                    self.videoButton.isEnabled = isConnected
+                    // KHANDAQ (redesign stage 3, E9): both stay enabled; for someone offline they say
+                    // the call will not get through and offer to wait (requestCall).
+                    self.setBarItem(self.audioButton, enabled: true)
+                    self.setBarItem(self.videoButton, enabled: true)
+                    if isConnected {
+                        self.checkCallWaiting()
+                    }
                     self.locationButton.isEnabled = true
                     self.chatInputView.cameraButtonEnabled = true
 
                     self.updateTableHeaderView()
+                    self.friendReachabilityChanged()
                 case .error(let error):
                     log("ChatPrivateController friend notification error: \(error)")
             }
@@ -2533,44 +2368,44 @@ private extension ChatPrivateController {
     fileprivate func hasPendingOutgoingDelivery() -> Bool {
         let textPredicate = NSPredicate(
             format: "messageText.isDelivered == NO AND senderUniqueIdentifier == nil")
+        // internalFileNumber is a signed int: a file queued for an offline friend carries
+        // kOCTToxFileNumberFailure (UINT32_MAX) stored as -1, so compare with -1 (objcTox #165).
         let filePredicate = NSPredicate(
-            format: "messageFile != nil AND messageFile.fileType == %d AND messageFile.internalFileNumber == %u AND senderUniqueIdentifier == nil",
+            format: "messageFile != nil AND messageFile.fileType == %d AND messageFile.internalFileNumber == %d AND senderUniqueIdentifier == nil",
             OCTMessageFileType.waitingConfirmation.rawValue,
-            UInt32.max)
+            Int32(bitPattern: kOCTToxFileNumberFailure))
         let compound = NSCompoundPredicate(orPredicateWithSubpredicates: [textPredicate, filePredicate])
         return messages.objects(with: compound).count > 0
     }
 
     fileprivate func updateTitleAvatar(for friend: OCTFriend) {
-        // KHANDAQ (#95): show the contact's real avatar in the chat header (mirrors FriendCardController);
-        // fall back to initials only when the contact has no avatar set.
-        if let data = friend.avatarData, let image = UIImage(data: data) {
-            titleView.avatar = image
-        } else {
-            titleView.avatar = AvatarManager(theme: theme).avatarFromString(friend.nickname, diameter: 30.0)
-        }
+        // KHANDAQ (#95): show the contact's real avatar in the chat header (mirrors FriendCardController).
+        // KHANDAQ (redesign stage 2): in the tile of the design system; initials in the person's tone
+        // when the contact has no avatar.
+        let name = personName(friend)
+        let photo = friend.avatarData.flatMap { UIImage(data: $0) }
+        titleView.configure(name: name,
+                            style: .person(initials: AirInitials.from(name), tone: AirTone.index(for: friend.publicKey)),
+                            photo: photo)
     }
 
     func updateTitlePresence(for friend: OCTFriend) {
-        // KHANDAQ (#43): Telegram-style typing — surface it in the nav subtitle instead of a bottom
-        // bubble that overlapped the last message. Resolved here (not just in the typing callback) so
-        // any presence refresh while the peer is typing keeps showing "typing…".
-        if friend.isConnected && friend.isTyping {
-            titleView.presenceText = String(localized: "chat_is_typing_text")
-            titleView.presenceIsOnline = true
+        // KHANDAQ (#43): typing shows in the presence line under the header instead of a bottom bubble
+        // that overlapped the last message. Resolved here (not just in the typing callback) so any
+        // presence refresh while the peer is typing keeps showing it.
+        // KHANDAQ (redesign stage 2): the band under the header carries the link mark, "online since
+        // 9:40, direct" or "offline for 25 minutes", and the day strip.
+        guard !friend.isInvalidated else {
             return
         }
+        updatePresenceBand(for: friend)
 
-        let presence = FriendPresenceFormatter.presence(for: friend)
-        titleView.presenceText = presence.text
-        titleView.presenceIsOnline = presence.isOnline
-
-        if presence.isOnline {
+        if friend.isConnected {
             presenceRefreshTimer?.invalidate()
             presenceRefreshTimer = nil
         } else if presenceRefreshTimer == nil {
             presenceRefreshTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
-                guard let self = self, let friend = self.friend else {
+                guard let self = self, let friend = self.friend, !friend.isInvalidated else {
                     return
                 }
                 self.updateTitlePresence(for: friend)
@@ -2598,19 +2433,26 @@ private extension ChatPrivateController {
             tableView.layoutIfNeeded()
         }
 
+        guard !friend.isInvalidated else {
+            return
+        }
+        if friend.isConnected {
+            // KHANDAQ (#43): typing shows in the presence line under the header (updateTitlePresence),
+            // set outside the animation so the band does not animate its text.
+            updateTitlePresence(for: friend)
+        }
+
         UIView.animate(withDuration: Constants.NewMessageViewAnimationDuration, animations: {
         if friend.isConnected {
             if tableView.tableHeaderView === self.fauxOfflineHeaderView {
                 tableView.tableHeaderView = nil
             }
 
-            // KHANDAQ (#43): typing now shows in the nav subtitle (updateTitlePresence). Keep the table
-            // anchored to the input bar and the old bottom typing bubble permanently hidden.
+            // Keep the table anchored to the input bar and the old bottom typing bubble permanently hidden.
             self.tableViewToChatInputConstraint.activate()
             self.typingViewToChatInputConstraint.deactivate()
             self.typingHeaderView.isHidden = true
             self.typingHeaderView.stopAnimation()
-            self.updateTitlePresence(for: friend)
 
             self.view.layoutIfNeeded()
         }
@@ -2620,7 +2462,9 @@ private extension ChatPrivateController {
             self.typingHeaderView.isHidden = true
             self.typingHeaderView.stopAnimation()
 
-            tableView.tableHeaderView = hasPendingDelivery ? self.fauxOfflineHeaderView : nil
+            // KHANDAQ (redesign stage 2): texts waiting for the person are in the tray, which says the
+            // same; the note stays for files waiting for them (they are not in the tray).
+            tableView.tableHeaderView = (hasPendingDelivery && self.trayIds.isEmpty) ? self.fauxOfflineHeaderView : nil
         }
         })
 
@@ -2737,9 +2581,17 @@ private extension ChatPrivateController {
 
         model.fileName = message.messageFile!.fileName
         model.fileSizeBytes = message.messageFile!.fileSize
-        model.fileSize = ByteCountFormatter.string(fromByteCount: message.messageFile!.fileSize, countStyle: .file)
+        // KHANDAQ (redesign stage 3, E8): in the language chosen in the app, which ByteCountFormatter ignores.
+        model.fileSize = AirByteSize.text(message.messageFile!.fileSize)
         model.fileUTI = message.messageFile!.fileUTI
         model.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
+        // KHANDAQ (redesign stage 3, E8): the preview box takes its size before the image loads, so the
+        // row sizes itself once; the person's name and presence say what a file of ours waits for.
+        model.previewSize = inlinePreviewSize(for: message)
+        if let friend = friend, !friend.isInvalidated {
+            model.personName = AirTranscript.shortName(personName(friend))
+        }
+        model.personOnline = isFriendOnline
 
         // Telegram-style merged caption (the text message sent right after this file).
         if messageSearchQuery.isEmpty {
@@ -2784,17 +2636,17 @@ private extension ChatPrivateController {
             case .paused:
                 model.state = .paused
                 if let messageId = message.uniqueIdentifier {
-                    FileTransferStallWatcher.shared.stop(messageId: messageId)
+                    self.stopWatchingStall(of: messageId)
                 }
             case .canceled:
                 model.state = .cancelled
                 if let messageId = message.uniqueIdentifier {
-                    FileTransferStallWatcher.shared.stop(messageId: messageId)
+                    self.stopWatchingStall(of: messageId)
                 }
             case .ready:
                 model.state = .done
                 if let messageId = message.uniqueIdentifier {
-                    FileTransferStallWatcher.shared.stop(messageId: messageId)
+                    self.stopWatchingStall(of: messageId)
                 }
         }
 
@@ -3001,10 +2853,31 @@ private extension ChatPrivateController {
             return
         }
 
+        // The watcher hears the transfer through a listener of its own as well, not only through the
+        // bridge of a row on screen.
+        let listener = ChatProgressBridge()
+        stallListeners[messageId] = listener
+        _ = try? submanagerFiles?.add(listener, forFileTransfer: message)
+
         FileTransferStallWatcher.shared.track(messageId: messageId) { [weak self] in
+            guard let self = self else {
+                return
+            }
+            self.stallListeners.removeValue(forKey: messageId)
+            // Only a transfer still running in the conversation on screen: one that ended meanwhile, or a
+            // conversation left or covered by another screen, is no stall to tell about (and to cancel).
+            guard self.isViewLoaded, self.view.window != nil, !message.isInvalidated,
+                  message.messageFile?.fileType == .loading else {
+                return
+            }
             UIAlertController.showErrorWithMessage(String(localized: "file_transfer_stalled"), retryBlock: nil)
-            _ = try? self?.submanagerFiles.cancelFileTransfer(message)
+            _ = try? self.submanagerFiles?.cancelFileTransfer(message)
         }
+    }
+
+    func stopWatchingStall(of messageId: String) {
+        FileTransferStallWatcher.shared.stop(messageId: messageId)
+        stallListeners.removeValue(forKey: messageId)
     }
 
     func toggleTableViewEditing(_ editing: Bool, animated: Bool) {
@@ -3029,26 +2902,9 @@ private extension ChatPrivateController {
                     action: #selector(ChatPrivateController.cancelEditingButtonPressed))]
         }
         else {
-            // KHANDAQ (Figma): the chat-header call/video actions are thin OUTLINE glyphs (the mock draws
-            // them outlined, not the teal-FILLED call icons). Colour follows the nav-bar tint (teal) to
-            // stay consistent with the back chevron — the mock's neutral/black chrome is an app-wide
-            // nav-bar-tint decision, not changed here.
-            let audioImage: UIImage
-            let videoImage: UIImage
-            if #available(iOS 13.0, *) {
-                // KHANDAQ (18.08): shared icon set — the same Material glyphs Android draws in its header.
-                audioImage = UIImage(named: "chat-header-call")?.withRenderingMode(.alwaysTemplate)
-                        ?? UIImage(systemName: "phone") ?? UIImage(named: "start-call-medium")!
-                videoImage = UIImage(named: "chat-header-video")?.withRenderingMode(.alwaysTemplate)
-                        ?? UIImage(systemName: "video") ?? UIImage(named: "video-call-medium")!
-            }
-            else {
-                audioImage = UIImage(named: "start-call-medium")!
-                videoImage = UIImage(named: "video-call-medium")!
-            }
+            // Location sharing lives in the "+" attachment menu; the item is kept for displayalert(),
+            // which redraws it, but it is not in the header.
             let locationImage = UIImage(named: "location-call-medium")!.withRenderingMode(.alwaysOriginal)
-            audioButton = UIBarButtonItem(image: audioImage, style: .plain, target: self, action: #selector(ChatPrivateController.audioCallButtonPressed))
-            videoButton = UIBarButtonItem(image: videoImage, style: .plain, target: self, action: #selector(ChatPrivateController.videoCallButtonPressed))
             locationButton = UIBarButtonItem(image: locationImage, style: .plain, target: self, action: #selector(ChatPrivateController.locationButtonPressed))
 
             if (AppDelegate.location_sharing_contact_pubkey != "-1") {
@@ -3056,32 +2912,34 @@ private extension ChatPrivateController {
                 locationButton.setBackgroundImage(locationImage, for: .normal, barMetrics: .default)
             }
 
-            // KHANDAQ (Figma): Telegram-style avatar+name, left-aligned next to the back button.
+            // KHANDAQ (redesign stage 2): the icon buttons of the design system (a 20 point glyph in a
+            // 44 point target, grey until pressed). A person: call, video call and the search behind its
+            // button; their files are in the dossier. "For yourself" and a removed contact: files and
+            // search. rightBarButtonItems[0] is the slot at the trailing edge.
+            audioButton = airBarButton(icon: "phone", label: String(localized: "air_chat_call"),
+                                       identifier: "air.chat.call", action: #selector(ChatPrivateController.audioCallButtonPressed))
+            videoButton = airBarButton(icon: "video", label: String(localized: "air_chat_video"),
+                                       identifier: "air.chat.video", action: #selector(ChatPrivateController.videoCallButtonPressed))
+            searchButton = airBarButton(icon: "search", label: String(localized: "air_chat_search"),
+                                        identifier: "air.chat.search", action: #selector(ChatPrivateController.searchButtonPressed))
+
+            // KHANDAQ (Figma): the tile and the name, left-aligned next to the back button.
             installTitleLeftItem()
-            // KHANDAQ design (Figma): the chat header shows video + call only (location sharing lives in
-            // the "+" attachment menu). Order per the mock: video on the left, call on the right — and
-            // since rightBarButtonItems[0] is the rightmost slot, call goes first.
-            let attachmentsImage: UIImage?
-            if #available(iOS 13.0, *) {
-                attachmentsImage = UIImage(named: "chat-header-attach")?.withRenderingMode(.alwaysTemplate)
-                        ?? UIImage(systemName: "paperclip")
+
+            if let friend = friend {
+                filesButton = nil
+                navigationItem.rightBarButtonItems = [audioButton, videoButton, searchButton]
+                if !friend.isInvalidated {
+                    setBarItem(videoButton, enabled: friend.isConnected)
+                }
             }
             else {
-                attachmentsImage = nil
+                let files = airBarButton(icon: "file", label: String(localized: "attachments_title"),
+                                         identifier: "air.chat.files", action: #selector(ChatPrivateController.attachmentsButtonPressed))
+                filesButton = files
+                navigationItem.rightBarButtonItems = [files, searchButton]
             }
-            let attachmentsButton = UIBarButtonItem(
-                    image: attachmentsImage,
-                    style: .plain,
-                    target: self,
-                    action: #selector(ChatPrivateController.attachmentsButtonPressed))
-            attachmentsButton.title = attachmentsImage == nil ? String(localized: "attachments_title") : nil
-            attachmentsButton.accessibilityLabel = String(localized: "attachments_title")
-
-            navigationItem.rightBarButtonItems = [
-                audioButton,
-                videoButton,
-                attachmentsButton
-            ]
+            updateTitleWidth()
         }
     }
 
@@ -3155,34 +3013,1045 @@ extension ChatPrivateController: UISearchResultsUpdating {
     }
 
     func displayableRowCount() -> Int {
-        let loadedCount = min(visibleMessages, messages.count)
-        guard !messageSearchQuery.isEmpty else {
-            return loadedCount
-        }
-
-        var count = 0
-        for index in 0..<loadedCount where MessageSearchHighlighter.messageMatches(messages[index], query: messageSearchQuery) {
-            count += 1
-        }
-        return count
+        return displayMap()?.count ?? min(visibleMessages, messages.count)
     }
 
     func messageEntry(atDisplayIndex index: Int) -> (message: OCTMessageAbstract, storageIndex: Int) {
-        let loadedCount = min(visibleMessages, messages.count)
-        guard !messageSearchQuery.isEmpty else {
+        if let map = displayMap() {
+            if index >= 0, index < map.count, map[index] < messages.count {
+                return (messages[map[index]], map[index])
+            }
+        }
+        else if index >= 0, index < messages.count {
             return (messages[index], index)
         }
 
-        var seen = 0
-        for storageIndex in 0..<loadedCount where MessageSearchHighlighter.messageMatches(messages[storageIndex], query: messageSearchQuery) {
-            if seen == index {
-                return (messages[storageIndex], storageIndex)
-            }
-            seen += 1
+        // A row the table still holds after its message went (the chat was just emptied): an empty
+        // message draws an empty row instead of reading past the end.
+        guard messages.count > 0 else {
+            return (OCTMessageAbstract(), 0)
+        }
+        let safeIndex = min(max(0, index), messages.count - 1)
+        return (messages[safeIndex], safeIndex)
+    }
+
+    /// KHANDAQ (redesign stage 2): the storage index of every row of the log, newest first. The log
+    /// leaves out the messages in the tray and, while searching, what does not match; nil when it shows
+    /// every loaded message, so a row is its storage index.
+    fileprivate func displayMap() -> [Int]? {
+        let loaded = min(visibleMessages, messages.count)
+        let key = DisplayMapKey(loaded: loaded, total: messages.count, query: messageSearchQuery, generation: displayGeneration)
+        if let cache = displayMapCache, cache.key == key {
+            return cache.map
         }
 
-        let safeIndex = min(max(0, index), max(0, messages.count - 1))
-        return (messages[safeIndex], safeIndex)
+        var map: [Int]?
+        if !messageSearchQuery.isEmpty || !trayIds.isEmpty {
+            let hidden = Set(trayIds)
+            var rows: [Int] = []
+            rows.reserveCapacity(loaded)
+            for index in 0..<loaded {
+                let message = messages[index]
+                if !hidden.isEmpty, let id = message.uniqueIdentifier, hidden.contains(id) {
+                    continue
+                }
+                if !messageSearchQuery.isEmpty, !MessageSearchHighlighter.messageMatches(message, query: messageSearchQuery) {
+                    continue
+                }
+                rows.append(index)
+            }
+            map = rows
+        }
+        displayMapCache = (key: key, map: map)
+        return map
+    }
+
+    /// The row of the log that shows the message at `storageIndex`; nil when it is not loaded or left out.
+    func displayIndex(forStorageIndex storageIndex: Int) -> Int? {
+        guard storageIndex >= 0, storageIndex < min(visibleMessages, messages.count) else {
+            return nil
+        }
+        guard let map = displayMap() else {
+            return storageIndex
+        }
+        var low = 0
+        var high = map.count - 1
+        while low <= high {
+            let middle = (low + high) / 2
+            if map[middle] == storageIndex {
+                return middle
+            }
+            if map[middle] < storageIndex {
+                low = middle + 1
+            }
+            else {
+                high = middle - 1
+            }
+        }
+        return nil
+    }
+}
+
+// MARK: - Air conversation (redesign stage 2)
+
+// The conversation as design/redesign/02-plan.md draws it (screens 5, 6, 7, 10 and 16): the band under
+// the header with the link and the day strip, the transcript, the "On its way" tray and the refused
+// messages between the log and the field, the hint under the field, and the dossier unfolded from the
+// header. The words come from AirConversationModel, the views from AirConversationViews.
+extension ChatPrivateController {
+    /// The person's name as the header, the tray and the hints show it.
+    fileprivate func personName(_ friend: OCTFriend) -> String {
+        return friend.nickname.isEmpty ? friend.publicKey : friend.nickname
+    }
+
+    fileprivate func currentReach(for friend: OCTFriend) -> AirReach {
+        return AirReach.friend(connection: friend.connectionStatus,
+                               lastSeenOnlineInterval: friend.lastSeenOnlineInterval,
+                               now: Date().timeIntervalSince1970,
+                               selfLinkSettling: SelfConnectionTracker.friendLinksMayStillBeConnecting)
+    }
+
+    /// A message sent now would arrive now.
+    fileprivate var isFriendOnline: Bool {
+        guard let friend = friend, !friend.isInvalidated else {
+            return false
+        }
+        return currentReach(for: friend).isLive
+    }
+
+    // MARK: Building
+
+    fileprivate func createAirConversationViews() {
+        pinnedStrip = AirPinnedStripView()
+        pinnedStrip.isHidden = true
+        pinnedStrip.addTarget(self, action: #selector(ChatPrivateController.pinnedBannerTapped), for: .touchUpInside)
+        pinnedStrip.closeButton.addTarget(self, action: #selector(ChatPrivateController.pinnedBannerClosePressed), for: .touchUpInside)
+
+        var topViews: [UIView] = []
+        if friend != nil {
+            let band = AirPresenceBandView()
+            band.addTarget(self, action: #selector(ChatPrivateController.presenceBandTapped), for: .touchUpInside)
+            presenceBand = band
+            topViews.append(band)
+        }
+        topViews.append(pinnedStrip)
+        topStack = UIStackView(arrangedSubviews: topViews)
+        topStack.axis = .vertical
+        view.addSubview(topStack)
+
+        failedList = AirFailedListView()
+        failedList.onRetry = { [weak self] id in
+            self?.retryFailedSend(id: id)
+        }
+        failedList.onItemTap = { [weak self] id, source in
+            self?.presentFailedSendActions(id: id, source: source)
+        }
+
+        trayView = AirTrayView()
+        trayView.isHidden = true
+        trayView.layoutHost = { [weak self] in
+            self?.view.layoutIfNeeded()
+        }
+        trayView.onItemTap = { [weak self] id, source in
+            self?.presentTrayActions(id: id, source: source)
+        }
+        trayView.onItemAction = { [weak self] id, action in
+            self?.performTrayAction(action, id: id)
+        }
+
+        bottomStack = UIStackView(arrangedSubviews: [failedList, trayView])
+        bottomStack.axis = .vertical
+        view.addSubview(bottomStack)
+    }
+
+    fileprivate func startAirConversation() {
+        let center = NotificationCenter.default
+        airObservers.append(center.addObserver(forName: .airLocalStoreDidChange, object: nil, queue: .main) { [weak self] _ in
+            self?.localMarksChanged()
+        })
+        airObservers.append(center.addObserver(forName: .airFailedSendsDidChange, object: nil, queue: .main) { [weak self] note in
+            guard let self = self, (note.userInfo?["chatId"] as? String) == self.chat.uniqueIdentifier else {
+                return
+            }
+            self.refreshFailedSends(animated: true)
+        })
+        airObservers.append(center.addObserver(forName: AirSelfNetwork.didChange, object: nil, queue: .main) { [weak self] _ in
+            // Our own node went off or came back (E4): the hint under the field says which.
+            self?.refreshComposeState(animated: true)
+        })
+        airObservers.append(center.addObserver(forName: .UIContentSizeCategoryDidChange, object: nil, queue: .main) { [weak self] _ in
+            // The time column and the fonts of the entries follow the text size; the refused messages
+            // are laid out again so "Retry" stays at the text column.
+            self?.tableView?.reloadData()
+            self?.refreshFailedSends(animated: false)
+            self?.updateTitleWidth()
+        })
+
+        wasFriendOnline = isFriendOnline
+        refreshTray(animated: false)
+        refreshFailedSends(animated: false)
+        refreshComposeState(animated: false)
+        updateComposeLimit()
+        tableView?.reloadData()
+    }
+
+    /// The header buttons: the icon button of the design system as a bar item.
+    fileprivate func airBarButton(icon: String, label: String, identifier: String, action: Selector) -> UIBarButtonItem {
+        let button = AirIconButton(icon: icon, label: label)
+        button.accessibilityIdentifier = identifier
+        button.addTarget(self, action: action, for: .touchUpInside)
+        let item = UIBarButtonItem(customView: button)
+        item.accessibilityLabel = label
+        return item
+    }
+
+    /// A bar item with a custom view is not disabled by its own isEnabled, so both are set.
+    fileprivate func setBarItem(_ item: UIBarButtonItem?, enabled: Bool) {
+        guard let item = item else {
+            return
+        }
+        item.isEnabled = enabled
+        (item.customView as? UIControl)?.isEnabled = enabled
+    }
+
+    /// At the accessibility text sizes the log keeps its room (AirLogRoom): the presence band folds away
+    /// while the keyboard is up and where the log would have less than its share with it, the tray folds
+    /// away while the keyboard is up, and the refused messages and the tray keep to half of the room
+    /// between the band and the field. The hint under the field says what the band and the tray said,
+    /// and the title opens the dossier the band opened.
+    ///
+    /// The band is arranged in a stack. Hidden in the middle of a layout pass (the tray opens inside one),
+    /// the stack gave its room back to the constraints while the screen kept the frames it had: at AX5 the
+    /// words of the band went, its 136 points stayed above a log of 145, and the open tray stood over the
+    /// field. So a fold decided while laying out is made on the next turn of the run loop, with a layout of
+    /// the whole screen.
+    fileprivate func keepRoomForLog(whileLayingOut: Bool = false) {
+        let accessible = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        if let half = stripsHalfConstraint, half.isActive != accessible {
+            half.isActive = accessible
+        }
+        trayView?.foldsAway = accessible && isKeyboardUp
+        guard let band = presenceBand, let tableView = tableView else {
+            return
+        }
+        if !band.isHidden, band.bounds.height > 0 {
+            shownBandHeight = band.bounds.height
+        }
+        var bandHeight = band.bounds.height
+        if band.isHidden {
+            let fitting = band.systemLayoutSizeFitting(CGSize(width: view.bounds.width, height: UILayoutFittingCompressedSize.height),
+                                                       withHorizontalFittingPriority: .required,
+                                                       verticalFittingPriority: .fittingSizeLevel)
+            bandHeight = max(shownBandHeight, fitting.height)
+        }
+        let folds = AirLogRoom.bandFolds(accessible: accessible, keyboardUp: isKeyboardUp, log: tableView.bounds.height,
+                                         band: bandHeight, bandShown: !band.isHidden, screen: view.bounds.height)
+        guard band.isHidden != folds else {
+            return
+        }
+        guard whileLayingOut else {
+            band.isHidden = folds
+            return
+        }
+        guard !isBandFoldPending else {
+            return
+        }
+        isBandFoldPending = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else {
+                return
+            }
+            self.isBandFoldPending = false
+            let changes = {
+                self.keepRoomForLog()
+                self.view.setNeedsLayout()
+                self.view.layoutIfNeeded()
+            }
+            guard self.view.window != nil else {
+                changes()
+                return
+            }
+            UIView.animate(withDuration: KQMotion.duration(KQMotion.layout), delay: 0, options: [.beginFromCurrentState, .curveEaseOut],
+                           animations: changes, completion: nil)
+        }
+    }
+
+    /// The name in the header runs as wide as the bar leaves it next to the back button and the buttons.
+    fileprivate func updateTitleWidth() {
+        guard titleView != nil else {
+            return
+        }
+        let slot = KQSize.targetIos + KQSpace.x8
+        let items = CGFloat(navigationItem.rightBarButtonItems?.count ?? 0)
+        let titleChrome = KQSize.tileDesk + KQSpace.x8 + KQSpace.x4 + KQSize.iconSmall + 2 * KQSpace.x4
+        let available = view.bounds.width - slot - items * slot - titleChrome - KQSpace.x16
+        titleView.maximumNameWidth = max(2 * KQSize.tilePhone, floor(available))
+    }
+
+    // MARK: Presence
+
+    fileprivate func updatePresenceBand(for friend: OCTFriend) {
+        guard !friend.isInvalidated else {
+            return
+        }
+        let reach = currentReach(for: friend)
+        let now = Date()
+        let presence = AirPresenceLine.text(reach: reach,
+                                            onlineSince: AirLocalStore.shared.onlineSince(publicKey: friend.publicKey),
+                                            isTyping: friend.isTyping,
+                                            time: timeFormatter.string(from:))
+        titleView.spokenPresence = presence
+
+        guard let band = presenceBand else {
+            return
+        }
+        let hours = AirLocalStore.shared.hours(publicKey: friend.publicKey)
+        let strip = AirDayStrip.make(hours: hours, now: now)
+        band.configure(link: AirLinkState(reach: reach),
+                       presence: presence,
+                       strip: strip,
+                       nowOnline: reach.isLive,
+                       stripHint: dayStripHint(hours: hours, strip: strip, now: now),
+                       stripSpoken: strip.spokenText(locale: AppLanguage.locale, nowOnline: reach.isLive))
+    }
+
+    /// Beside the strip: when the person is usually online, or the hours of the last day, or why it is empty.
+    fileprivate func dayStripHint(hours: Set<Int>, strip: AirDayStrip, now: Date) -> String {
+        if let best = AirBestHours.find(hours: hours, now: now) {
+            return String(localized: "air_day_best_format", best.from, best.to)
+        }
+        if strip.hasMarks {
+            let ranges = strip.ranges.map { String(localized: "air_day_range_format", $0.from, $0.to) }
+            return String(localized: "air_day_hint_ranges_format", ranges.joined(separator: ", "))
+        }
+        return String(localized: "air_day_empty")
+    }
+
+    @objc fileprivate func presenceBandTapped() {
+        toggleDossier()
+    }
+
+    /// The person came online or went away, or something about them changed: the hint, the tray, the
+    /// marks of our messages and the open dossier follow.
+    fileprivate func friendReachabilityChanged() {
+        let online = isFriendOnline
+        let onlineChanged = wasFriendOnline != nil && wasFriendOnline != online
+        wasFriendOnline = online
+        refreshComposeState(animated: true)
+        let trayChanged = refreshTray(animated: true)
+        if (trayChanged || onlineChanged) && !isTrayDeparting {
+            tableView?.reloadData()
+        }
+        refreshDossierIfNeeded()
+    }
+
+    fileprivate func localMarksChanged() {
+        guard let friend = friend, !friend.isInvalidated else {
+            return
+        }
+        updatePresenceBand(for: friend)
+        refreshDossierIfNeeded()
+    }
+
+    // MARK: Transcript
+
+    /// The marks of an entry in the transcript: its day, the unread band, the time column and the author.
+    /// A file drawn again in place takes them too: a fresh model without them hung a file that had just
+    /// been delivered under the run before it, with no time and no day, and VoiceOver read it without who
+    /// sent it and when (redesign stage 5).
+    fileprivate func markTranscriptEntry(_ model: ChatMovableDateCellModel, message: OCTMessageAbstract, row: Int) {
+        // KHANDAQ (#99): tag the row with a day separator when it begins a new calendar day.
+        model.dateSeparator = daySeparatorString(forDisplayIndex: row)
+        // KHANDAQ (Figma): the "Unread messages" band on the first unread incoming message.
+        model.unreadSeparator = (unreadSeparatorMessageId != nil && message.uniqueIdentifier == unreadSeparatorMessageId)
+        // KHANDAQ (redesign stage 2): day and unread marks as transcript marks, the author over the
+        // first entry of each run.
+        model.transcriptMarks = true
+        // Texts, files and calls alike (redesign stage 3, E8 and E9).
+        configureTranscriptEntry(model, message: message, row: row)
+    }
+
+    /// The time column, the author over the first entry of a run, and who wrote it for VoiceOver.
+    fileprivate func configureTranscriptEntry(_ entry: ChatMovableDateCellModel, message: OCTMessageAbstract, row: Int) {
+        entry.timeText = entry.dateString
+        guard !chat.isSavedMessages else {
+            // Notes to yourself: no author and no marks.
+            entry.authorText = nil
+            entry.spokenAuthor = ""
+            return
+        }
+
+        let outgoing = message.isOutgoing()
+        let fullName: String
+        if outgoing {
+            fullName = String(localized: "air_you")
+            entry.authorColor = KQColor.ink2
+        }
+        else if let friend = friend, !friend.isInvalidated {
+            fullName = personName(friend)
+            entry.authorColor = AirTone.color(at: AirTone.index(for: friend.publicKey))
+        }
+        else {
+            fullName = String(localized: "contact_deleted")
+            entry.authorColor = KQColor.ink2
+        }
+        entry.spokenAuthor = fullName
+
+        let previous = row + 1 < displayableRowCount() ? runKey(forDisplayIndex: row + 1) : nil
+        let startsRun = entry.unreadSeparator || AirTranscript.startsRun(runKey(forDisplayIndex: row), after: previous)
+        entry.authorText = startsRun ? (outgoing ? fullName : AirTranscript.shortName(fullName)) : nil
+    }
+
+    fileprivate func runKey(forDisplayIndex row: Int) -> AirRunKey {
+        let entry = messageEntry(atDisplayIndex: row)
+        let message = entry.message
+        let outgoing = message.isOutgoing()
+        let date = (!outgoing && message.tssent != 0) ? Date(timeIntervalSince1970: TimeInterval(message.tssent)) : message.date()
+        // A caption drawn inside its photo is not a text entry of its own.
+        let merged = messageSearchQuery.isEmpty && isMergedCaptionRow(storageIndex: entry.storageIndex)
+        return AirRunKey(author: outgoing ? "" : "peer", date: date, isText: message.messageText != nil && !merged)
+    }
+
+    /// The row of `id` rises into the log when it next appears; forgotten after a moment, so a row
+    /// scrolled to later does not rise.
+    fileprivate func scheduleArrival(id: String, delay: TimeInterval) {
+        arrivingIds[id] = delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1 + delay) { [weak self] in
+            self?.arrivingIds.removeValue(forKey: id)
+        }
+    }
+
+    /// The words of a text without the reply header, as one line of the tray shows them.
+    fileprivate func plainEntryText(_ raw: String) -> String {
+        let body = MessageReplyHelper.parse(raw).bodyText
+        if let location = LocationMessage.parse(body) {
+            return String(format: "%.5f, %.5f", location.latitude, location.longitude)
+        }
+        return MessageReplyHelper.normalizeForwardedHeader(body)
+    }
+
+    // MARK: Tray
+
+    /// Our texts waiting for the person, oldest first. Only while they are not online: once they are,
+    /// objcTox sends every undelivered text again and the messages belong to the log.
+    fileprivate func trayItems() -> [AirQueueItem] {
+        guard let friend = friend, !friend.isInvalidated, !chat.isSavedMessages, !isFriendOnline else {
+            return []
+        }
+        // KHANDAQ (redesign stage 3, E8): a file that could not be offered while the person is away waits
+        // in the tray too, as the list's "In transit" counts it (AirListDataSource.transitPredicate).
+        let waiting = messages.objects(with: NSPredicate(
+            format: "senderUniqueIdentifier == nil AND ((messageText != nil AND messageText.isDelivered == NO) OR (messageFile != nil AND messageFile.fileType == %d AND messageFile.internalFileNumber == %d))",
+            OCTMessageFileType.waitingConfirmation.rawValue,
+            Int32(bitPattern: kOCTToxFileNumberFailure)))
+        var items: [AirQueueItem] = []
+        for index in 0..<waiting.count {
+            guard let message = waiting.object(at: index), !message.isInvalidated, !message.isCaption,
+                  let id = message.uniqueIdentifier else {
+                continue
+            }
+            let text: String
+            if let file = message.messageFile {
+                let isVoice = VoiceMessageHelper.isVoiceMessage(fileName: file.fileName, filePath: file.filePath())
+                let name = isVoice ? String(localized: "air_voice_spoken") : (file.fileName ?? "")
+                text = String(localized: "air_tray_file_format", name, AirByteSize.text(file.fileSize))
+            }
+            else if let raw = message.messageText?.text, !raw.isEmpty {
+                text = plainEntryText(raw)
+            }
+            else {
+                continue
+            }
+            items.append(AirQueueItem(id: id, text: text, time: timeFormatter.string(from: message.date()), status: .transit))
+        }
+        return items.reversed()
+    }
+
+    /// Brings the tray in line with the messages. Returns true when the log has to show other rows.
+    @discardableResult
+    fileprivate func refreshTray(animated: Bool) -> Bool {
+        guard trayView != nil else {
+            return false
+        }
+        if isTrayDeparting {
+            needsTrayRefresh = true
+            return false
+        }
+        let items = trayItems()
+        let ids = items.map { $0.id }
+        if animated, ids.isEmpty, !trayIds.isEmpty, isFriendOnline, !trayView.isHidden, view.window != nil {
+            departTray()
+            return false
+        }
+
+        let changed = ids != trayIds
+        if changed {
+            // A message that left the tray without the person coming online (a late receipt) rises too.
+            for id in trayIds where !ids.contains(id) {
+                scheduleArrival(id: id, delay: 0)
+            }
+            trayIds = ids
+            displayGeneration += 1
+        }
+
+        var detail = ""
+        if let friend = friend, !friend.isInvalidated {
+            let name = AirTranscript.shortName(personName(friend))
+            let hasPush = !(friend.pushToken ?? "").isEmpty
+            detail = String(localized: hasPush ? "air_tray_wait_push_format" : "air_tray_wait_format", name)
+        }
+        let wasHidden = trayView.isHidden
+        trayView.configure(items: items,
+                           collapsed: String(localized: "air_transit_format", items.count),
+                           expanded: String(localized: "air_tray_head_format", items.count),
+                           detail: detail)
+        if items.isEmpty {
+            trayView.setExpanded(false, animated: false)
+        }
+        if animated, wasHidden != trayView.isHidden, view.window != nil {
+            UIView.animate(withDuration: KQMotion.duration(KQMotion.layout), delay: 0, options: [.curveEaseOut, .beginFromCurrentState], animations: {
+                self.view.layoutIfNeeded()
+            }, completion: nil)
+        }
+        updateTableHeaderView()
+        return changed
+    }
+
+    /// The person came online: the messages leave the tray one by one, 90 ms apart, and rise into the
+    /// log in the same order; then the tray folds. With Reduce Motion they fade together.
+    fileprivate func departTray() {
+        let leaving = trayIds
+        isTrayDeparting = true
+        trayIds = []
+        displayGeneration += 1
+
+        let step = UIAccessibilityIsReduceMotionEnabled() ? 0 : KQMotion.stagger
+        for (index, id) in leaving.enumerated() {
+            // The clock they had in the tray turns into the mark of the log.
+            statusMemory[id] = .transit
+            scheduleArrival(id: id, delay: step * Double(index))
+        }
+        tableView?.reloadData()
+
+        trayView.depart(ids: leaving) { [weak self] in
+            self?.trayView.fold { [weak self] in
+                guard let self = self else {
+                    return
+                }
+                self.isTrayDeparting = false
+                self.trayView.setExpanded(false, animated: false)
+                var reload = self.needsLogReload
+                self.needsLogReload = false
+                if self.needsTrayRefresh {
+                    self.needsTrayRefresh = false
+                    reload = self.refreshTray(animated: true) || reload
+                }
+                if reload {
+                    self.tableView?.reloadData()
+                    self.updateEncryptionBannerVisibility()
+                }
+                self.updateTableHeaderView()
+            }
+        }
+        UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification, String(localized: "air_tray_departed"))
+    }
+
+    fileprivate func trayMessage(id: String) -> OCTMessageAbstract? {
+        guard trayIds.contains(id),
+              let message = submanagerObjects.object(withUniqueIdentifier: id, for: .messageAbstract) as? OCTMessageAbstract,
+              !message.isInvalidated,
+              message.messageText?.isDelivered == false || message.messageFile?.fileType == .waitingConfirmation else {
+            return nil
+        }
+        return message
+    }
+
+    /// Same rule as in the log: a text with a msgV3 hash, not a reply and not a location.
+    fileprivate func canEditTrayMessage(_ message: OCTMessageAbstract) -> Bool {
+        guard let text = message.messageText?.text, (message.messageText?.msgv3HashHex ?? "").count == 64 else {
+            return false
+        }
+        let parsed = MessageReplyHelper.parse(text)
+        return parsed.reply == nil && LocationMessage.parse(parsed.bodyText) == nil
+    }
+
+    fileprivate func presentTrayActions(id: String, source: UIView) {
+        guard let message = trayMessage(id: id) else {
+            return
+        }
+        let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+        sheet.popoverPresentationController?.sourceView = source
+        sheet.popoverPresentationController?.sourceRect = source.bounds
+        if canEditTrayMessage(message) {
+            sheet.addAction(UIAlertAction(title: String(localized: "chat_edit_action"), style: .default) { [weak self] _ in
+                self?.performTrayAction(.edit, id: id)
+            })
+        }
+        sheet.addAction(UIAlertAction(title: String(localized: "air_tray_cancel"), style: .destructive) { [weak self] _ in
+            self?.performTrayAction(.cancel, id: id)
+        })
+        sheet.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        present(sheet, animated: true, completion: nil)
+    }
+
+    fileprivate func performTrayAction(_ action: AirTrayAction, id: String) {
+        guard let message = trayMessage(id: id) else {
+            return
+        }
+        switch action {
+            case .edit:
+                guard canEditTrayMessage(message) else {
+                    UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification, String(localized: "air_tray_edit_unavailable"))
+                    return
+                }
+                presentMessageEditor(for: message)
+            case .cancel:
+                if message.messageFile != nil {
+                    // A file never left: the transfer is called off and the entry says "Not sent" with
+                    // "Send again" in the log.
+                    do {
+                        try submanagerFiles.cancelFileTransfer(message)
+                    }
+                    catch let error as NSError {
+                        handleErrorWithType(.cancelFileTransfer, error: error)
+                    }
+                    return
+                }
+                // Gone here, and retracted on the person's device if a copy ever reached it.
+                submanagerChats.deleteMessage(forBoth: message)
+        }
+    }
+
+    // MARK: Refused messages
+
+    fileprivate func refreshFailedSends(animated: Bool) {
+        guard failedList != nil else {
+            return
+        }
+        let items = AirFailedSends.shared.items(forChat: chat.uniqueIdentifier).map {
+            AirQueueItem(id: $0.id, text: plainEntryText($0.text), time: timeFormatter.string(from: $0.date), status: .failed)
+        }
+        let wasHidden = failedList.isHidden
+        failedList.configure(items: items)
+        if animated, wasHidden != failedList.isHidden, view.window != nil {
+            UIView.animate(withDuration: KQMotion.duration(KQMotion.layout), delay: 0, options: [.curveEaseOut, .beginFromCurrentState], animations: {
+                self.view.layoutIfNeeded()
+            }, completion: nil)
+        }
+    }
+
+    /// "Retry": the same text through the same call as the send button.
+    fileprivate func retryFailedSend(id: String) {
+        let chatId: String = chat.uniqueIdentifier
+        guard let item = AirFailedSends.shared.items(forChat: chatId).first(where: { $0.id == id }) else {
+            return
+        }
+        AirFailedSends.shared.remove(id: id, fromChat: chatId)
+        chatInputViewManager.resend(item.text) { sent in
+            guard !sent else {
+                return
+            }
+            AirFailedSends.shared.add(text: item.text, date: item.date, toChat: chatId)
+            UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification, String(localized: "air_delivery_failed"))
+        }
+    }
+
+    fileprivate func presentFailedSendActions(id: String, source: UIView) {
+        let chatId: String = chat.uniqueIdentifier
+        guard let item = AirFailedSends.shared.items(forChat: chatId).first(where: { $0.id == id }) else {
+            return
+        }
+        let parsed = MessageReplyHelper.parse(item.text)
+        let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+        sheet.popoverPresentationController?.sourceView = source
+        sheet.popoverPresentationController?.sourceRect = source.bounds
+        sheet.addAction(UIAlertAction(title: String(localized: "air_retry"), style: .default) { [weak self] _ in
+            self?.retryFailedSend(id: id)
+        })
+        // A reply goes back to the field only with its quote, which the field cannot take back; it can
+        // be sent again or dropped.
+        if parsed.reply == nil {
+            sheet.addAction(UIAlertAction(title: String(localized: "chat_edit_action"), style: .default) { [weak self] _ in
+                guard let self = self else {
+                    return
+                }
+                AirFailedSends.shared.remove(id: id, fromChat: chatId)
+                self.chatInputView.text = parsed.bodyText
+                _ = self.chatInputView.becomeFirstResponder()
+            })
+        }
+        sheet.addAction(UIAlertAction(title: String(localized: "air_tray_cancel"), style: .destructive) { _ in
+            AirFailedSends.shared.remove(id: id, fromChat: chatId)
+        })
+        sheet.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        present(sheet, animated: true, completion: nil)
+    }
+
+    // MARK: Composer
+
+    /// The line under the field: "Will go now: Amina is online" or "Will wait on its way: Yusuf is offline".
+    fileprivate func refreshComposeState(animated: Bool) {
+        guard let hintView = chatInputView?.hintView else {
+            return
+        }
+        let hint: AirComposeHint
+        if let friend = friend, !friend.isInvalidated {
+            hint = AirComposeHint.make(isSaved: false,
+                                       contactExists: true,
+                                       name: AirTranscript.shortName(personName(friend)),
+                                       reach: currentReach(for: friend))
+        }
+        else {
+            hint = AirComposeHint.make(isSaved: chat.isSavedMessages, contactExists: false, name: "", reach: .local)
+        }
+        // Saved messages never leave the phone, so our own node has nothing to say there.
+        let ownNode = chat.isSavedMessages ? nil : AirComposeHint.ownNode(AirSelfNetwork.state)
+        hintView.setHint(ownNode ?? hint, animated: animated)
+    }
+
+    /// The length counter once a tenth of the room is left; over the limit the send button waits.
+    fileprivate func updateComposeLimit() {
+        guard let hintView = chatInputView?.hintView else {
+            return
+        }
+        let text = chatInputView.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard friend != nil, !chat.isSavedMessages, !text.isEmpty else {
+            hintView.setCounter(remaining: nil)
+            chatInputView.sendBlocked = false
+            return
+        }
+        // The reply header travels in the same message.
+        let bytes = MessageReplyHelper.encode(replyController.pendingMeta, bodyText: text).utf8.count
+        let remaining = AirComposeLimit.remaining(forBytes: bytes)
+        hintView.setCounter(remaining: remaining)
+        chatInputView.sendBlocked = (remaining ?? 0) < 0
+    }
+
+    // MARK: Search
+
+    @objc fileprivate func searchButtonPressed() {
+        if dossierView != nil {
+            closeDossier()
+        }
+        if messageSearchController == nil {
+            setupMessageSearch()
+            navigationController?.navigationBar.setNeedsLayout()
+            navigationController?.view.layoutIfNeeded()
+        }
+        // The bar has to be in the navigation bar before it can take the keyboard.
+        DispatchQueue.main.async { [weak self] in
+            guard let controller = self?.messageSearchController else {
+                return
+            }
+            controller.isActive = true
+            DispatchQueue.main.async {
+                controller.searchBar.becomeFirstResponder()
+            }
+        }
+    }
+
+    // MARK: Dossier
+
+    fileprivate func toggleDossier() {
+        if dossierView != nil {
+            closeDossier()
+        }
+        else {
+            openDossier()
+        }
+    }
+
+    fileprivate func openDossier() {
+        guard dossierView == nil, let friend = friend, !friend.isInvalidated else {
+            return
+        }
+        _ = chatInputView.resignFirstResponder()
+        if reactionPopup.isVisible {
+            reactionPopup.dismiss(animated: false)
+        }
+        if let search = messageSearchController, search.isActive {
+            search.isActive = false
+        }
+
+        let dossier = AirDossierView()
+        let content = dossierContent(for: friend)
+        dossierSignature = signature(of: content)
+        dossier.configure(content)
+        wireDossier(dossier)
+        view.addSubview(dossier)
+        dossier.snp.makeConstraints {
+            $0.top.equalTo(view.safeAreaLayoutGuide.snp.top)
+            $0.leading.trailing.bottom.equalTo(view)
+        }
+        view.layoutIfNeeded()
+        dossierView = dossier
+        dossier.open()
+        titleView.setExpanded(true, animated: true)
+    }
+
+    fileprivate func closeDossier(completion: (() -> Void)? = nil) {
+        guard let dossier = dossierView else {
+            completion?()
+            return
+        }
+        dossierView = nil
+        titleView.setExpanded(false, animated: true)
+        dossier.close { [weak dossier] in
+            dossier?.removeFromSuperview()
+            completion?()
+        }
+        UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, titleView)
+    }
+
+    fileprivate func refreshDossierIfNeeded() {
+        guard let dossier = dossierView, let friend = friend, !friend.isInvalidated else {
+            return
+        }
+        let content = dossierContent(for: friend)
+        let next = signature(of: content)
+        guard next != dossierSignature else {
+            return
+        }
+        dossierSignature = next
+        dossier.update(content)
+    }
+
+    /// Everything the dossier shows that can change while it is open. The mute switch is left out: it
+    /// already shows what was just chosen.
+    fileprivate func signature(of content: AirDossierContent) -> String {
+        let strip = content.strip.online.map { $0 ? "1" : "0" }.joined()
+        return [content.name, content.statusMessage, content.linkText, strip, String(content.strip.nowHour),
+                String(content.nowOnline), content.bestHours, content.notifications, content.verification,
+                String(content.photo != nil)].joined(separator: "|")
+    }
+
+    fileprivate func dossierContent(for friend: OCTFriend) -> AirDossierContent {
+        let name = personName(friend)
+        let shortName = AirTranscript.shortName(name)
+        let reach = currentReach(for: friend)
+        let link = AirLinkState(reach: reach)
+        let now = Date()
+        let hours = AirLocalStore.shared.hours(publicKey: friend.publicKey)
+        let strip = AirDayStrip.make(hours: hours, now: now)
+
+        let linkText: String
+        switch link {
+            case .direct:
+                linkText = String(localized: "air_dossier_link_direct")
+            case .relay:
+                linkText = String(localized: "air_dossier_link_relay")
+            case .none:
+                linkText = String(localized: "air_dossier_link_none")
+        }
+
+        var statusLines: [String] = []
+        if let ownName = friend.name, !ownName.isEmpty, ownName != name {
+            statusLines.append(ownName)
+        }
+        if let status = friend.statusMessage, !status.isEmpty {
+            statusLines.append(status)
+        }
+
+        let verifiedAt = AirLocalStore.shared.verifiedAt(publicKey: friend.publicKey)
+        let verification: String
+        if let date = verifiedAt {
+            // The month in words, as the day marks write it: a numeric date reads month-first or
+            // day-first depending on the region, and "11/8/26" is ambiguous.
+            let formatter = DateFormatter()
+            formatter.locale = AppLanguage.locale
+            formatter.setLocalizedDateFormatFromTemplate("dMMMMy")
+            verification = String(localized: "air_dossier_verified_format", formatter.string(from: date))
+        }
+        else {
+            verification = String(localized: "air_dossier_not_verified")
+        }
+
+        let hasPush = !(friend.pushToken ?? "").isEmpty
+        let initials = AirInitials.from(name)
+        return AirDossierContent(
+                name: name,
+                statusMessage: statusLines.joined(separator: "\n"),
+                tile: .person(initials: initials, tone: AirTone.index(for: friend.publicKey)),
+                photo: friend.avatarData.flatMap { UIImage(data: $0) },
+                initials: initials,
+                link: link,
+                linkText: linkText,
+                strip: strip,
+                nowOnline: reach.isLive,
+                stripSpoken: strip.spokenText(locale: AppLanguage.locale, nowOnline: reach.isLive),
+                bestHours: AirBestHours.find(hours: hours, now: now).map { String(localized: "air_dossier_best_format", $0.from, $0.to) } ?? "",
+                notifications: hasPush ? String(localized: "air_dossier_push_on_format", shortName) : String(localized: "air_dossier_push_off"),
+                muted: AirLocalStore.shared.isMuted(publicKey: friend.publicKey),
+                verification: verification,
+                isVerified: verifiedAt != nil,
+                key: friend.publicKey)
+    }
+
+    fileprivate func wireDossier(_ dossier: AirDossierView) {
+        dossier.onClose = { [weak self] in
+            self?.closeDossier()
+        }
+        dossier.onMuteChange = { [weak self] muted in
+            guard let friend = self?.friend, !friend.isInvalidated else {
+                return
+            }
+            AirLocalStore.shared.setMuted(muted, publicKey: friend.publicKey)
+        }
+        dossier.onVerify = { [weak self] in
+            self?.presentKeyCheck()
+        }
+        dossier.onUnverify = { [weak self] in
+            guard let friend = self?.friend, !friend.isInvalidated else {
+                return
+            }
+            AirLocalStore.shared.setVerified(nil, publicKey: friend.publicKey)
+        }
+        dossier.onCopyKey = { [weak self] in
+            guard let friend = self?.friend, !friend.isInvalidated else {
+                return
+            }
+            UIPasteboard.general.string = friend.publicKey
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification, String(localized: "air_dossier_key_copied"))
+        }
+        dossier.onShowQR = { [weak self] in
+            self?.showKeyQR()
+        }
+        dossier.onRename = { [weak self] in
+            self?.presentRename()
+        }
+        dossier.onAttachments = { [weak self] in
+            guard let self = self else {
+                return
+            }
+            self.delegate?.chatPrivateControllerShowAttachments(self, forChat: self.chat)
+        }
+        dossier.onRemove = { [weak self] in
+            self?.confirmContactRemoval()
+        }
+        dossier.onBlock = { [weak self] in
+            self?.confirmBlock()
+        }
+    }
+
+    /// "Check key": the person reads the first 64 characters of their ID, which is the key in the dossier.
+    fileprivate func presentKeyCheck() {
+        guard let friend = friend, !friend.isInvalidated else {
+            return
+        }
+        let message = String(localized: "air_verify_message") + "\n\n" + AirKeyFormat.lines(friend.publicKey)
+        let alert = UIAlertController(title: String(localized: "air_verify_title"), message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: String(localized: "air_verify_match"), style: .default) { [weak self] _ in
+            guard let friend = self?.friend, !friend.isInvalidated else {
+                return
+            }
+            AirLocalStore.shared.setVerified(Date(), publicKey: friend.publicKey)
+        })
+        present(alert, animated: true, completion: nil)
+    }
+
+    fileprivate func showKeyQR() {
+        guard let friend = friend, !friend.isInvalidated else {
+            return
+        }
+        let controller = QRViewerController(theme: theme,
+                                            text: friend.publicKey,
+                                            heading: String(localized: "air_qr_key_heading_format", AirTranscript.shortName(personName(friend))),
+                                            subtitle: String(localized: "air_qr_key_subtitle"))
+        navigationController?.pushViewController(controller, animated: true)
+    }
+
+    fileprivate func presentRename() {
+        guard let friend = friend, !friend.isInvalidated else {
+            return
+        }
+        let controller = TextEditController(theme: theme, title: String(localized: "nickname"), defaultValue: friend.nickname, changeTextHandler: { [weak self] newValue in
+            guard let self = self, let friend = self.friend, !friend.isInvalidated else {
+                return
+            }
+            self.submanagerObjects.change(friend, nickname: newValue)
+        }, userFinishedEditing: { [weak self] in
+            _ = self?.navigationController?.popViewController(animated: true)
+        })
+        navigationController?.pushViewController(controller, animated: true)
+    }
+
+    fileprivate func confirmContactRemoval() {
+        guard let friend = friend, !friend.isInvalidated else {
+            return
+        }
+        // E21: from below, as "Block" next to it.
+        let sheet = AirConfirm.sheet(title: String(localized: "air_dossier_remove_title_format", personName(friend)),
+                                     message: String(localized: "air_dossier_remove_message"),
+                                     verb: String(localized: "alert_delete"),
+                                     source: view) { [weak self] in
+            guard let self = self, let friend = self.friend, !friend.isInvalidated else {
+                return
+            }
+            self.prepareForContactRemoval()
+            self.delegate?.chatPrivateControllerRemoveContact(self, friend: friend)
+        }
+        present(sheet, animated: true, completion: nil)
+    }
+
+    /// "Block": one sentence says what happens, the button is the verb. The key goes into this device's
+    /// block list first, then the contact leaves through the same path as "Remove".
+    fileprivate func confirmBlock() {
+        guard let friend = friend, !friend.isInvalidated else {
+            return
+        }
+        let sheet = UIAlertController(title: String(localized: "air_dossier_block_title_format", personName(friend)),
+                                      message: String(localized: "air_dossier_block_message"),
+                                      preferredStyle: .actionSheet)
+        sheet.popoverPresentationController?.sourceView = view
+        sheet.popoverPresentationController?.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.maxY, width: 0, height: 0)
+        sheet.addAction(UIAlertAction(title: String(localized: "air_dossier_block"), style: .destructive) { [weak self] _ in
+            guard let self = self, let friend = self.friend, !friend.isInvalidated else {
+                return
+            }
+            AirLocalStore.shared.block(publicKey: friend.publicKey)
+            self.prepareForContactRemoval()
+            self.delegate?.chatPrivateControllerRemoveContact(self, friend: friend)
+        })
+        sheet.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        present(sheet, animated: true, completion: nil)
+    }
+
+    /// The conversation stops reading Realm before the coordinator removes the contact and the chat:
+    /// nothing here may touch them once they are gone.
+    fileprivate func prepareForContactRemoval() {
+        messagesToken?.invalidate()
+        messagesToken = nil
+        friendToken?.invalidate()
+        friendToken = nil
+        presenceRefreshTimer?.invalidate()
+        presenceRefreshTimer = nil
+        airObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        airObservers = []
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name.UIApplicationDidBecomeActive, object: nil)
+        if isActiveLocationSharingChat {
+            AppDelegate.location_sharing_contact_pubkey = "-1"
+            stopLocationSharing()
+        }
+        chatInputViewManager.endUserInteraction()
+        if let dossier = dossierView {
+            dossierView = nil
+            dossier.removeFromSuperview()
+        }
+    }
+}
+
+extension ChatPrivateController: UISearchControllerDelegate {
+    /// Search goes back behind its button once it is closed.
+    func didDismissSearchController(_ searchController: UISearchController) {
+        navigationItem.searchController = nil
+        messageSearchController = nil
+        guard !messageSearchQuery.isEmpty else {
+            return
+        }
+        messageSearchQuery = ""
+        tableView?.reloadData()
     }
 }
 
@@ -3201,5 +4070,96 @@ enum ChatPinStore {
 
     static func clearPin(forChat chatId: String) {
         UserDefaults.standard.removeObject(forKey: key(chatId))
+    }
+}
+
+// MARK: - Calls (redesign stage 3, E9)
+
+private extension ChatPrivateController {
+    /// A call to someone online starts at once. For someone offline the button says the call will not
+    /// get through and offers to wait for them: their phone gets a signal without text (KHANDAQ #152),
+    /// and the call starts by itself once they are online.
+    func requestCall(video: Bool) {
+        guard let friend = friend, !friend.isInvalidated else {
+            log("Call_ERROR:no friend?")
+            return
+        }
+        if friend.isConnected {
+            stopCallWaiting(dismiss: true)
+            delegate?.chatPrivateControllerCallToChat(self, enableVideo: video)
+            return
+        }
+        let name = AirTranscript.shortName(personName(friend))
+        let hasPush = !(friend.pushToken ?? "").isEmpty
+        let alert = UIAlertController(title: AirCallText.offlineTitle(name: name),
+                                      message: AirCallText.offlineDetail(hasPush: hasPush),
+                                      preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: String(localized: "air_call_wait_action"), style: .default) { [weak self] _ in
+            self?.startCallWaiting(video: video)
+        })
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        present(alert, animated: true, completion: nil)
+    }
+
+    func startCallWaiting(video: Bool) {
+        guard callWaiting == nil, let friend = friend, !friend.isInvalidated else {
+            return
+        }
+        let hasPush = !(friend.pushToken ?? "").isEmpty
+        let waiting = AirCallWaitingController(name: personName(friend),
+                                               shortName: AirTranscript.shortName(personName(friend)),
+                                               hasPush: hasPush)
+        waiting.onCancel = { [weak self] in
+            self?.stopCallWaiting(dismiss: true)
+        }
+        callWaiting = waiting
+        callWaitingVideo = video
+        present(waiting, animated: true, completion: nil)
+
+        // KHANDAQ (#152): wake an offline friend before the call with a SILENT push, then the message
+        // push 10 seconds later, as before. Never a visible "calling you" text.
+        submanagerChats.triggerWakePush(for: chat)
+        if let chats = submanagerChats {
+            let chat = self.chat
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                os_log("PUSH:10_seconds")
+                chats.sendMessagePush(to: chat)
+            }
+        }
+        // The friend notification calls checkCallWaiting too; the timer is the safety net it was before.
+        callWaitingTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            self?.checkCallWaiting()
+        }
+    }
+
+    /// The person came online while we wait: the waiting screen goes, then the call starts.
+    func checkCallWaiting() {
+        guard let waiting = callWaiting else {
+            return
+        }
+        guard let friend = friend, !friend.isInvalidated else {
+            stopCallWaiting(dismiss: true)
+            return
+        }
+        guard friend.isConnected else {
+            return
+        }
+        let video = callWaitingVideo
+        stopCallWaiting(dismiss: false)
+        waiting.dismiss(animated: true) { [weak self] in
+            guard let self = self else {
+                return
+            }
+            self.delegate?.chatPrivateControllerCallToChat(self, enableVideo: video)
+        }
+    }
+
+    func stopCallWaiting(dismiss: Bool) {
+        callWaitingTimer?.invalidate()
+        callWaitingTimer = nil
+        if dismiss {
+            callWaiting?.dismiss(animated: true, completion: nil)
+        }
+        callWaiting = nil
     }
 }

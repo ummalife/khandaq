@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The phone's main screen, "Air" (design/redesign/02-plan.md, screens 1 and 2): you and your node,
+    settings and "+", the command line, the filter pills, then one list of requests, people, groups
+    and saved messages. While the command line is in use the "you" row folds away and "Cancel" comes in.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/air_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/kq_surface"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/air_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:animateLayoutChanges="false"
+        android:background="@color/kq_surface"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:id="@+id/air_top_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/kq_space_4">
+
+            <LinearLayout
+                android:id="@+id/air_you"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="start|center_vertical"
+                android:layout_marginStart="@dimen/kq_space_16"
+                android:layout_marginEnd="112dp"
+                android:background="@drawable/air_bg_icon_button"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:minHeight="@dimen/kq_size_target_android"
+                android:orientation="horizontal">
+
+                <com.zoffcc.applications.trifa.AirTileView
+                    android:id="@+id/air_you_tile"
+                    android:layout_width="@dimen/kq_size_tile_phone"
+                    android:layout_height="@dimen/kq_size_tile_phone"
+                    android:importantForAccessibility="no" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/kq_space_10"
+                    android:importantForAccessibility="noHideDescendants"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/air_you_name"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textAlignment="viewStart"
+                        android:textAppearance="@style/TextAppearance.KQ.Air.LabelStrong"
+                        android:textColor="@color/kq_ink" />
+
+                    <!-- The state of our node in words, a target of its own a finger high: a tap opens the Network
+                         screen (E4); the tile and the name open You. TalkBack reaches it as an action of the
+                         "you" block. -->
+                    <LinearLayout
+                        android:id="@+id/air_net_row"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/air_bg_icon_button"
+                        android:clickable="true"
+                        android:gravity="center_vertical"
+                        android:minHeight="@dimen/kq_size_target_android"
+                        android:orientation="horizontal"
+                        android:paddingEnd="@dimen/kq_space_8">
+
+                        <View
+                            android:id="@+id/air_net_dot"
+                            android:layout_width="@dimen/kq_size_dot"
+                            android:layout_height="@dimen/kq_size_dot"
+                            android:background="@drawable/air_bg_dot" />
+
+                        <TextView
+                            android:id="@+id/air_net_text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/kq_space_6"
+                            android:maxLines="1"
+                            android:textAppearance="@style/TextAppearance.KQ.Caption"
+                            android:textColor="@color/kq_ink_2" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginEnd="@dimen/kq_space_8"
+                android:orientation="horizontal">
+
+                <ImageButton
+                    android:id="@+id/air_settings"
+                    style="@style/Widget.KQ.Air.IconButton"
+                    android:contentDescription="@string/tab_settings"
+                    android:src="@drawable/kq_ic_settings" />
+
+                <ImageButton
+                    android:id="@+id/air_create"
+                    style="@style/Widget.KQ.Air.IconButton"
+                    android:contentDescription="@string/air_create"
+                    android:src="@drawable/kq_ic_plus" />
+            </LinearLayout>
+        </FrameLayout>
+
+        <LinearLayout
+            android:id="@+id/air_command_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/kq_space_10"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/kq_space_16"
+            android:paddingEnd="@dimen/kq_space_16">
+
+            <LinearLayout
+                android:id="@+id/air_command_box"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:addStatesFromChildren="true"
+                android:background="@drawable/air_bg_field"
+                android:gravity="center_vertical"
+                android:minHeight="@dimen/kq_size_target_android"
+                android:orientation="horizontal"
+                android:paddingStart="@dimen/kq_space_10"
+                android:paddingEnd="@dimen/kq_space_2">
+
+                <ImageView
+                    android:layout_width="@dimen/kq_size_icon"
+                    android:layout_height="@dimen/kq_size_icon"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/kq_ic_search"
+                    android:tint="@color/kq_ink_3" />
+
+                <EditText
+                    android:id="@+id/air_command"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@null"
+                    android:hint="@string/air_command_placeholder"
+                    android:imeOptions="actionSearch|flagNoExtractUi"
+                    android:importantForAutofill="no"
+                    android:inputType="text|textNoSuggestions"
+                    android:maxLines="1"
+                    android:minHeight="@dimen/kq_size_target_android"
+                    android:paddingStart="@dimen/kq_space_8"
+                    android:paddingEnd="@dimen/kq_space_8"
+                    android:textAlignment="viewStart"
+                    android:textAppearance="@style/TextAppearance.KQ.Body"
+                    android:textColor="@color/kq_ink"
+                    android:textColorHint="@color/kq_ink_3"
+                    android:textCursorDrawable="@null" />
+
+                <ImageButton
+                    android:id="@+id/air_command_clear"
+                    style="@style/Widget.KQ.Air.IconButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:contentDescription="@string/air_clear"
+                    android:src="@drawable/kq_ic_x"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/air_cancel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/kq_space_8"
+                android:background="@drawable/air_bg_icon_button"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:minHeight="@dimen/kq_size_target_android"
+                android:paddingStart="@dimen/kq_space_8"
+                android:paddingEnd="@dimen/kq_space_8"
+                android:text="@string/cancel"
+                android:textAppearance="@style/TextAppearance.KQ.Label"
+                android:textColor="@color/kq_ink"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <HorizontalScrollView
+            android:id="@+id/air_pills_scroll"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/kq_size_target_android"
+            android:layout_marginTop="@dimen/kq_space_4"
+            android:fillViewport="true"
+            android:overScrollMode="never"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/air_pills"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="@dimen/kq_space_16"
+                android:paddingEnd="@dimen/kq_space_16" />
+        </HorizontalScrollView>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/kq_stroke_hairline"
+            android:layout_marginTop="@dimen/kq_space_6"
+            android:background="@color/kq_line" />
+    </LinearLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/air_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingBottom="@dimen/kq_space_16"
+        android:scrollbarStyle="outsideOverlay"
+        android:scrollbars="vertical" />
+</LinearLayout>

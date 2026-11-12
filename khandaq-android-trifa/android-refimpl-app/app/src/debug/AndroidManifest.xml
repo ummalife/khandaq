@@ -3,12 +3,28 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <application>
-        <!-- KHANDAQ (audit A25): debug-only QA receiver is NOT exported — an external app can no longer
+        <!-- KHANDAQ (audit A25): debug-only QA receiver is NOT exported, so an external app can no longer
              broadcast to it (it is BuildConfig.DEBUG-gated and never in release builds anyway). -->
         <receiver
             android:name="com.zoffcc.applications.trifa.QaGroupBroadcastReceiver"
             android:enabled="true"
             android:exported="false"
             tools:replace="android:enabled,android:exported" />
+
+        <!-- KHANDAQ (redesign, stage 5): the made-up demo world of the Play frames and the measurements,
+             started with adb (AirDemoWorldActivity). It refuses a profile that has contacts or groups of its
+             own, so another app starting it can touch nothing but demo rows. The provider puts the world's
+             overlay back when the process starts. Neither exists in a release build. -->
+        <activity
+            android:name="com.zoffcc.applications.trifa.AirDemoWorldActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <provider
+            android:name="com.zoffcc.applications.trifa.AirDemoWorldInstaller"
+            android:authorities="${applicationId}.airdemoworld"
+            android:exported="false" />
     </application>
 </manifest>

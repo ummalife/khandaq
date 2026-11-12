@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Password and PIN, the PIN screens and Change password (redesign stage 4, E20); iOS keys where the meaning is the same, Android wording where Android works differently -->
+    <string name="air_security_pin_section">PIN-код</string>
+    <string name="air_security_pin">Спрашивать PIN-код</string>
+    <string name="air_security_pin_note">Khandaq спросит PIN-код, когда вы вернётесь в приложение. Восстановить PIN-код нельзя.</string>
+    <string name="air_security_lock_note">Время идёт с момента, когда вы ушли из Khandaq.</string>
+    <string name="air_security_password_note">Им зашифрован профиль на этом телефоне. Восстановить пароль нельзя: серверов нет.</string>
+    <string name="air_security_device_key_note">Профиль открывается ключом, который хранится на этом телефоне. Если задать пароль, профиль будет зашифрован им и после выхода откроется только с паролем.</string>
+    <string name="air_password_set_body">Сейчас профиль открывается ключом, который хранится на этом телефоне. Если задать пароль, профиль будет зашифрован им и после выхода откроется только с паролем. Восстановить пароль нельзя: серверов нет.</string>
+    <string name="air_password_set_action">Задать пароль</string>
+    <string name="air_password_old_placeholder">Старый пароль</string>
+    <string name="air_password_old_first">Сначала введите старый пароль.</string>
+    <string name="air_password_wrong_old">Старый пароль не подошёл.</string>
+    <string name="air_password_checking">Проверяем пароль</string>
+    <string name="air_password_preparing">Готовим пароль</string>
+    <string name="air_password_change_failed">Пароль не изменился. Попробуйте ещё раз.</string>
+    <string name="air_password_set_failed">Пароль не задался: ключ, который хранится на этом телефоне, не открыл профиль. Попробуйте ещё раз.</string>
+    <string name="air_password_not_set">Пароль не задался. Попробуйте ещё раз.</string>
+    <string name="air_password_change_question">Изменить пароль?</string>
+    <string name="air_password_set_question">Задать пароль?</string>
+    <string name="air_password_restart_consequence">Khandaq закроется, а при следующем запуске зашифрует профиль новым паролем и спросит его.</string>
+    <string name="air_password_reopen">Откройте Khandaq снова, чтобы закончить.</string>
+    <string name="air_pin_enter_title">Введите PIN-код</string>
+    <string name="air_pin_repeat_title">Повторите PIN-код</string>
+    <string name="air_pin_wrong">Неверный PIN-код.</string>
+    <string name="air_pin_mismatch">PIN-коды не совпали. Задайте его ещё раз.</string>
+    <string name="air_pin_set_note">PIN-код не восстановить. Если вы его забудете, Khandaq снова откроется, только если в настройках телефона очистить данные приложения, а это удалит профиль с этого телефона.</string>
+    <string name="air_pin_entered_format">Введено %1$d из %2$d</string>
+    <string name="air_pin_delete_digit">Удалить последнюю цифру</string>
+    <!-- The page of a password change at the next start: busy, then rolled back (E20, E21). -->
+    <string name="air_rekey_running">Профиль шифруется новым паролем</string>
+    <string name="air_rekey_running_note">Не закрывайте Khandaq. Большой профиль шифруется дольше.</string>
+    <string name="air_rekey_failed_title">Пароль не изменён</string>
+    <string name="air_rekey_failed_note">Шифрование новым паролем не завершилось, поэтому ничего не изменилось: профиль открывается, как раньше.</string>
+    <string name="air_rekey_continue">Продолжить</string>
+</resources>

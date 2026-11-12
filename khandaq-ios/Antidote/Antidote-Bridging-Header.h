@@ -28,6 +28,7 @@
 #import <objcTox/OCTSubmanagerUser.h>
 #import <objcTox/OCTTox.h>
 #import <objcTox/OCTToxEncryptSave.h>
+#import <objcTox/OCTToxEncryptSaveConstants.h>
 #import <objcTox/OCTToxConstants.h>
 #import <objcTox/OCTView.h>
 

@@ -183,16 +183,7 @@ extension FriendListController: UITableViewDataSource {
                     case .request(let request):
                         self.submanagerFriends.remove(request)
                     case .friend(let friend):
-                        do {
-                            let chat = self.submanagerChats.getOrCreateChat(with: friend)
-
-                            try self.submanagerFriends.remove(friend)
-
-                            self.submanagerChats.removeAllMessages(in: chat, removeChat: true)
-                        }
-                        catch let error as NSError {
-                            handleErrorWithType(.removeFriend, error: error)
-                        }
+                        AirContactRemoval.remove(friend, submanagerChats: self.submanagerChats, submanagerFriends: self.submanagerFriends)
                 }
             })
 

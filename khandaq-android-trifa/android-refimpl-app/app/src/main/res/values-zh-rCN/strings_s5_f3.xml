@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Group settings (redesign, stage 5): GroupInfoActivity drawn as GroupInfoController on iOS, the same words -->
+    <string name="air_gs_self_name">你在群组中的名字</string>
+    <string name="air_gs_self_name_note">本群成员可以看到它，你的个人资料名称不会改变。</string>
+    <string name="air_gs_name_empty">名字不能为空。</string>
+    <string name="air_gs_topic">主题</string>
+    <string name="air_gs_topic_none">无主题</string>
+    <string name="air_gs_topic_note">所有成员都能看到主题：在列表和群组顶部，它会代替群组名称显示。</string>
+    <string name="air_gs_topic_locked">只有创建者和管理员可以更改主题。</string>
+    <string name="air_gs_topic_not_observers">除观察者外，所有成员都可以更改主题。</string>
+    <string name="air_gs_topic_empty">主题不能为空。</string>
+    <string name="air_gs_topic_lock">仅创建者和管理员可更改主题</string>
+    <string name="air_gs_join">谁可以加入</string>
+    <string name="air_gs_password">群密码</string>
+    <string name="air_gs_password_note">新成员需要输入密码，已在群组中的成员会继续留在群组中。</string>
+    <string name="air_gs_password_remove">移除密码</string>
+    <string name="air_gs_password_removed">密码已移除</string>
+    <string name="air_gs_limit">成员上限</string>
+    <string name="air_gs_limit_full">群组已满：提高上限之前，新成员无法加入。</string>
+    <string name="air_gs_limit_range">上限为 1 到 65535 之间的数字。</string>
+    <string name="air_gs_write">谁可以发言</string>
+    <string name="air_gs_voice_all">所有成员</string>
+    <string name="air_gs_voice_all_note">除观察者外的所有人。</string>
+    <string name="air_gs_voice_moderator">管理员和创建者</string>
+    <string name="air_gs_voice_founder">仅创建者</string>
+    <string name="air_gs_founder_only">此项由群组创建者更改。</string>
+    <string name="air_gs_save">保存</string>
+    <string name="air_gs_saved">已保存</string>
+    <string name="air_gs_not_here">此设备目前不在群组中，因此无法在这里更改设置。</string>
+</resources>

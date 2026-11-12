@@ -46,8 +46,6 @@ import com.zoffcc.applications.nativeaudio.NativeAudio;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.ServiceCompat;
 
-import static com.zoffcc.applications.trifa.CallingActivity.callactivity_handler_s;
-import static com.zoffcc.applications.trifa.CallingActivity.mute_button;
 import static com.zoffcc.applications.trifa.CallingActivity.stop_active_call;
 import static com.zoffcc.applications.trifa.CallingActivity.trifa_is_MicrophoneMute;
 import static com.zoffcc.applications.trifa.HelperFriend.main_get_friend;
@@ -397,7 +395,7 @@ public class CallAudioService extends Service
         {
             if (GAThread != null)
             {
-                // KHANDAQ (ANR, 2026-08-26): stop_me() — тот же путь.
+                // KHANDAQ (ANR, 2026-08-26): stop_me() takes the same path, a join with a time limit.
                 GAThread.join(HelperGeneric.AUDIO_THREAD_JOIN_TIMEOUT_MS);
             }
         }
@@ -485,56 +483,9 @@ public class CallAudioService extends Service
 
             try
             {
-                if (trifa_is_MicrophoneMute)
-                {
-                    Runnable myRunnable = new Runnable()
-                    {
-                        @Override
-                        public void run()
-                        {
-                            try
-                            {
-                                Drawable d2a = new IconicsDrawable(context_gas_static).icon(
-                                        GoogleMaterial.Icon.gmd_mic_off).backgroundColor(Color.TRANSPARENT).color(
-                                        context_gas_static.getResources().getColor(R.color.colorPrimaryDark)).sizeDp(
-                                        50);
-                                if (mute_button != null)
-                                {
-                                    mute_button.setImageDrawable(d2a);
-                                }
-                            }
-                            catch (Exception ignored)
-                            {
-                            }
-                        }
-                    };
-                    callactivity_handler_s.post(myRunnable);
-                }
-                else
-                {
-                    Runnable myRunnable = new Runnable()
-                    {
-                        @Override
-                        public void run()
-                        {
-                            try
-                            {
-                                Drawable d2a = new IconicsDrawable(context_gas_static).icon(
-                                        GoogleMaterial.Icon.gmd_mic).backgroundColor(Color.TRANSPARENT).color(
-                                        context_gas_static.getResources().getColor(R.color.colorPrimaryDark)).sizeDp(
-                                        50);
-                                if (mute_button != null)
-                                {
-                                    mute_button.setImageDrawable(d2a);
-                                }
-                            }
-                            catch (Exception ignored)
-                            {
-                            }
-                        }
-                    };
-                    callactivity_handler_s.post(myRunnable);
-                }
+                // KHANDAQ (redesign, stage 3b): the Microphone switch on the call screen follows the mute
+                // of this notification: its glyph, its fill and "on" or "off" to TalkBack.
+                CallingActivity.show_mic_switch_from_outside();
             }
             catch (Exception e)
             {

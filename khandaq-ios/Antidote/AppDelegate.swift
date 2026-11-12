@@ -98,6 +98,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func attachWindow(to windowScene: UIWindowScene, connectionOptions: UIScene.ConnectionOptions) {
         let window = UIWindow(windowScene: windowScene)
         window.backgroundColor = ThemeAppearance.placeholderBackgroundColor
+        AppLanguage.applyDirection(to: window)
 
         let launchPlaceholder = UIStoryboard(name: "LaunchPlaceholderBoard", bundle: Bundle.main)
             .instantiateViewController(withIdentifier: "LaunchPlaceholderController")
@@ -134,6 +135,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             // Speeding up animations for UI tests.
             window?.layer.speed = 1000
         }
+        #if DEBUG
+        ProfileDeviceKey.forgetKeysIfAsked()
+        #endif
 
         coordinator = AppCoordinator(window: window!)
         coordinator.startWithOptions(nil)

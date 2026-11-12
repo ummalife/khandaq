@@ -25,7 +25,7 @@
 	<key>group_member_online_count_format</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
-		<string>%1$#@members@ · %2$d онлайн</string>
+		<string>%1$#@members@, %2$d в сети</string>
 		<key>members</key>
 		<dict>
 			<key>NSStringFormatSpecTypeKey</key>
@@ -60,6 +60,246 @@
 			<string>%ld системных сообщений</string>
 			<key>other</key>
 			<string>%ld системного сообщения</string>
+		</dict>
+	</dict>
+	<key>air_compose_bytes_left</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@bytes@</string>
+		<key>bytes</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>остался %d байт</string>
+			<key>few</key>
+			<string>осталось %d байта</string>
+			<key>many</key>
+			<string>осталось %d байт</string>
+			<key>other</key>
+			<string>осталось %d байта</string>
+		</dict>
+	</dict>
+	<key>air_compose_bytes_over</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>на %#@bytes@ больше предела</string>
+		<key>bytes</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d байт</string>
+			<key>few</key>
+			<string>%d байта</string>
+			<key>many</key>
+			<string>%d байт</string>
+			<key>other</key>
+			<string>%d байта</string>
+		</dict>
+	</dict>
+	<key>air_presence_away_days</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>не в сети %#@days@</string>
+		<key>days</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d день</string>
+			<key>few</key>
+			<string>%d дня</string>
+			<key>many</key>
+			<string>%d дней</string>
+			<key>other</key>
+			<string>%d дня</string>
+		</dict>
+	</dict>
+	<key>air_presence_away_hours</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>не в сети %#@hours@</string>
+		<key>hours</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d час</string>
+			<key>few</key>
+			<string>%d часа</string>
+			<key>many</key>
+			<string>%d часов</string>
+			<key>other</key>
+			<string>%d часа</string>
+		</dict>
+	</dict>
+	<key>air_presence_away_minutes</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>не в сети %#@minutes@</string>
+		<key>minutes</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d минуту</string>
+			<key>few</key>
+			<string>%d минуты</string>
+			<key>many</key>
+			<string>%d минут</string>
+			<key>other</key>
+			<string>%d минуты</string>
+		</dict>
+	</dict>
+	<key>air_tray_head_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>В пути: %#@messages@</string>
+		<key>messages</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d сообщение</string>
+			<key>few</key>
+			<string>%d сообщения</string>
+			<key>many</key>
+			<string>%d сообщений</string>
+			<key>other</key>
+			<string>%d сообщения</string>
+		</dict>
+	</dict>
+	<key>air_nc_verdict_left</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@chars@</string>
+		<key>chars</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>Остался %d знак.</string>
+			<key>few</key>
+			<string>Осталось %d знака.</string>
+			<key>many</key>
+			<string>Осталось %d знаков.</string>
+			<key>other</key>
+			<string>Осталось %d знака.</string>
+		</dict>
+	</dict>
+	<key>air_cmd_id_left</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@chars@</string>
+		<key>chars</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>не хватает %d знака</string>
+			<key>few</key>
+			<string>не хватает %d знаков</string>
+			<key>many</key>
+			<string>не хватает %d знаков</string>
+			<key>other</key>
+			<string>не хватает %d знака</string>
+		</dict>
+	</dict>
+	<key>air_group_members_count</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@members@</string>
+		<key>members</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d участник</string>
+			<key>few</key>
+			<string>%d участника</string>
+			<key>many</key>
+			<string>%d участников</string>
+			<key>other</key>
+			<string>%d участника</string>
+		</dict>
+	</dict>
+	<key>air_group_hint_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@reach@</string>
+		<key>reach</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>Сразу получит %1$d из %2$d, остальные, когда появятся в сети</string>
+			<key>few</key>
+			<string>Сразу получат %1$d из %2$d, остальные, когда появятся в сети</string>
+			<key>many</key>
+			<string>Сразу получат %1$d из %2$d, остальные, когда появятся в сети</string>
+			<key>other</key>
+			<string>Сразу получат %1$d из %2$d, остальные, когда появятся в сети</string>
+		</dict>
+	</dict>
+	<key>air_group_hint_all_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@all@</string>
+		<key>all</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>Сразу получат все %d: все в сети</string>
+			<key>few</key>
+			<string>Сразу получат все %d: все в сети</string>
+			<key>many</key>
+			<string>Сразу получат все %d: все в сети</string>
+			<key>other</key>
+			<string>Сразу получат все %d: все в сети</string>
+		</dict>
+	</dict>
+	<key>air_invite_sent</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@sent@</string>
+		<key>sent</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>Отправлено %d приглашение</string>
+			<key>few</key>
+			<string>Отправлено %d приглашения</string>
+			<key>many</key>
+			<string>Отправлено %d приглашений</string>
+			<key>other</key>
+			<string>Отправлено %d приглашения</string>
 		</dict>
 	</dict>
 </dict>

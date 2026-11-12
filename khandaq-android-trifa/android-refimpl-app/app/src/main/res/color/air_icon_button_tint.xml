@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A bare icon button: grey at rest, ink while pressed. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/kq_ink" android:state_pressed="true" />
+    <item android:color="@color/kq_ink_2" />
+</selector>

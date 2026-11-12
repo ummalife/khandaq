@@ -27,6 +27,17 @@ final class NetworkConnectivityMonitor
 
     private static NetworkConnectivityMonitor instance;
     private static ConnectivityManager.NetworkCallback networkCallback;
+    /**
+     * KHANDAQ (redesign, stage 3b): true from the default network's onLost until a network is the default
+     * again. The Air line under your name and the Network screen say "no network" at once then, instead
+     * of waiting for Tox's own timeouts (about 25 s) to notice.
+     */
+    private static volatile boolean defaultNetworkLost = false;
+
+    static boolean defaultNetworkLost()
+    {
+        return defaultNetworkLost;
+    }
 
     private final Handler debounceHandler = new Handler(Looper.getMainLooper());
     private Runnable pendingRebootstrap;
@@ -64,6 +75,12 @@ final class NetworkConnectivityMonitor
             @Override
             public void onAvailable(final Network network)
             {
+                if (defaultNetworkLost)
+                {
+                    // Tox's own state speaks again: connecting until it finds the network.
+                    defaultNetworkLost = false;
+                    AirRepository.requestRefresh();
+                }
                 final boolean networkChanged = updateNetworkHandle(network);
                 handleNetworkEvent(appContext, "available", networkChanged);
             }
@@ -71,6 +88,9 @@ final class NetworkConnectivityMonitor
             @Override
             public void onLost(final Network network)
             {
+                // A default network callback hears onLost only when no other network took its place.
+                defaultNetworkLost = true;
+                AirRepository.requestRefresh();
                 sync_have_internet_connectivity(appContext);
                 append_logger_msg(TAG + "::onLost HAVE_INTERNET=" + HAVE_INTERNET_CONNECTIVITY);
                 if (!HAVE_INTERNET_CONNECTIVITY)

@@ -103,6 +103,10 @@ python3 "$ROOT/scripts/generate-security-headers.py"
 python3 "$ROOT/scripts/generate-security-headers.py" --check
 python3 "$ROOT/scripts/check-security-txt.py"
 python3 "$ROOT/scripts/vendor-webfonts.py" --check
+# KHANDAQ (redesign E23, 2026-11-11): /assets/ is cached for a week and /style.css for an hour. A page
+# whose ?v= stamp does not match the file it links would meet the visitor's cached copy, so the deploy
+# refuses instead of restamping on its own; scripts/version-site-assets.py restamps on purpose.
+python3 "$ROOT/scripts/version-site-assets.py" --check
 
 # KHANDAQ: Android is now distributed via Google Play (official), so the website no longer hosts a
 # sideload/debug APK. (This also closes KHQ-01: a debug-signed APK could previously be published here
@@ -321,6 +325,9 @@ ssh "$REMOTE" "rm -rf '$INCOMING' && mkdir -p '$INCOMING/downloads' '$INCOMING/.
 scp -p "$WEB/index.html" "$WEB/changelog.html" "$WEB/changelog.json" "$WEB/404.html" "$WEB/privacy.html" "$WEB/style.css" "$WEB/robots.txt" "$WEB/sitemap.xml" "$REMOTE:$INCOMING/"
 scp -p "$STAMPED" "$REMOTE:$INCOMING/release-manifest.json"
 scp -pr "$WEB/assets" "$REMOTE:$INCOMING/"
+# KHANDAQ (redesign 2026-11): the Russian site is its own folder (/ru/), so it needs its own copy;
+# verify-site-deploy.py checks the /ru/ pages and fails the deploy if this line goes missing.
+scp -pr "$WEB/ru" "$REMOTE:$INCOMING/"
 scp -p "$WEB/.well-known/security.txt" "$REMOTE:$INCOMING/.well-known/security.txt"
 scp -p "$DL"/* "$REMOTE:$INCOMING/downloads/" 2>/dev/null || true
 ssh "$REMOTE" "set -e

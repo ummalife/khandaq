@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Battery (redesign, stage 5): asked once from below, after the first launch and never over it -->
+    <string name="air_battery_question">Разрешить Khandaq работать в фоне?</string>
+    <string name="air_battery_consequence">Чтобы беречь батарею, Android может приостанавливать Khandaq в фоне, и тогда новые сообщения приходят позже. В открывшемся списке выберите Khandaq и отключите для него оптимизацию батареи.</string>
+    <string name="air_battery_open">Открыть настройки батареи</string>
+
+    <!-- Move a profile (redesign, stage 5): the transfer dialogs of Settings as sheets from below -->
+    <string name="air_transfer_import_question">Заменить этот профиль профилем из файла?</string>
+    <string name="air_transfer_backup_verb">Сделать зашифрованный бэкап</string>
+    <string name="air_transfer_plain_verb">Экспортировать обычный файл .tox</string>
+    <string name="air_backup_choose_place">Выбрать, куда сохранить</string>
+    <string name="air_import_wait">Khandaq остановится, поставит профиль из файла на место этого и откроется снова уже с ним.</string>
+</resources>

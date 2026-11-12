@@ -169,6 +169,7 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
 
     public void bindMessageList(GroupMessage m)
     {
+        AirFileEntry.setCopyActions(itemView, null);
         // KHANDAQ (#192): reaction chips under the bubble
         final GroupMessage m_react = m;
         ChatReactionsUiHelper.bind_reactions_row(itemView, m_react.reactions,
@@ -619,7 +620,8 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
         if (!previewAlreadyBuilt)
         {
             GlideApp.with(context).clear(ft_preview_image);
-            ft_preview_image.setImageResource(R.drawable.round_loading_animation);
+            // KHANDAQ (redesign, stage 3b): the still plate under the photo until its picture comes.
+            ft_preview_image.setImageDrawable(null);
             ft_preview_image.setTag(R.id.ft_preview_image, previewSig);
         }
 
@@ -787,43 +789,7 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
                     {
                         try
                         {
-                            new android.app.AlertDialog.Builder(v.getContext()).setIcon(R.mipmap.ic_launcher).setTitle(
-                                    "Сохранить файл?").setMessage(
-                                    "Фото — в Галерею (Pictures/Khandaq),\nвидео — в Фильмы (Movies/Khandaq),\nостальное — в Загрузки (Download/Khandaq).").
-                                    setCancelable(true).setNeutralButton("Сохранить", new DialogInterface.OnClickListener()
-                            {
-                                @Override
-                                public void onClick(DialogInterface dialog, int which)
-                                {
-                                    try
-                                    {
-                                        final String export_dst_pathname =
-                                                SD_CARD_FILES_EXPORT_DIR + "/" + m.group_identifier + "/";
-                                        try
-                                        {
-                                            File dir = new File(export_dst_pathname);
-                                            dir.mkdirs();
-                                        }
-                                        catch(Exception e)
-                                        {
-                                        }
-
-                                        new MainActivity.save_selected_group_message_custom_asynchtask(v.getContext(),
-                                                                                                       m.path_name,
-                                                                                                       m.file_name,
-                                                                                                       export_dst_pathname,
-                                                                                                       v).execute();
-                                    }
-                                    catch (Exception e)
-                                    {
-                                    }
-                                }
-                            }).setNegativeButton("Отмена", new DialogInterface.OnClickListener()
-                            {
-                                public void onClick(DialogInterface dialog, int id)
-                                {
-                                }
-                            }).show();
+                            ask_export(v, m);
                         }
                         catch (Exception e)
                         {
@@ -837,6 +803,29 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
         {
 
         }
+
+        // KHANDAQ (redesign, stage 3b): the entry's "Save to the phone" does what the old export button did.
+        final GroupMessage copy_m = m;
+        AirFileEntry.setCopyActions(itemView, new AirFileEntry.CopyActions()
+        {
+            @Override
+            public void save(final View anchor)
+            {
+                ask_export(anchor, copy_m);
+            }
+
+            @Override
+            public boolean canShare()
+            {
+                return false;
+            }
+
+            @Override
+            public void share(final View anchor)
+            {
+                // Never offered: a group's file had no share button here (canShare() is false).
+            }
+        });
 
         ChatBubbleUiHelper.hide_delivery_indicator(imageView);
 
@@ -878,6 +867,35 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
     public void onClick(View v)
     {
         // Log.i(TAG, "onClick");
+    }
+
+    /**
+     * KHANDAQ (redesign, stage 3b): saving a copy outside the app asks from below first, in the app's
+     * language and with the verb on the button (the copy is not encrypted); then the old export runs.
+     */
+    void ask_export(final View v, final GroupMessage m)
+    {
+        AirFileEntry.askExport(v, () -> {
+            try
+            {
+                final String export_dst_pathname = SD_CARD_FILES_EXPORT_DIR + "/" + m.group_identifier + "/";
+                try
+                {
+                    File dir = new File(export_dst_pathname);
+                    dir.mkdirs();
+                }
+                catch (Exception e)
+                {
+                }
+
+                new MainActivity.save_selected_group_message_custom_asynchtask(v.getContext(), m.path_name,
+                                                                               m.file_name, export_dst_pathname,
+                                                                               v).execute();
+            }
+            catch (Exception e)
+            {
+            }
+        });
     }
 
     void DetachedFromWindow(boolean release)
@@ -1068,7 +1086,7 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
 
                                         if (string_is_in_list(peer_name_corrected, PREF__toxirc_muted_peers))
                                         {
-                                            ret.text = "** muted **";
+                                            ret.text = context.getString(R.string.air_irc_message_hidden);
                                         }
                                         else
                                         {
@@ -1117,7 +1135,7 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
 
                                         if (string_is_in_list(peer_name_corrected, PREF__toxirc_muted_peers))
                                         {
-                                            ret.text = "** muted **";
+                                            ret.text = context.getString(R.string.air_irc_message_hidden);
                                         }
                                         else
                                         {

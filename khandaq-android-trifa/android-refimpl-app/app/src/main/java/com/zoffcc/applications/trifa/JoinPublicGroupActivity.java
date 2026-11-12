@@ -112,6 +112,19 @@ public class JoinPublicGroupActivity extends AppCompatActivity
         return null;
     }
 
+    /** E21: a failed join says why under the Join button, until the group ID changes. */
+    private void sayJoinFailure(final String words)
+    {
+        if (isFinishing() || isDestroyed())
+        {
+            return;
+        }
+        if (!AirUi.sayUnder(button_join, words, true))
+        {
+            HelperGeneric.display_toast(words, false, 300);
+        }
+    }
+
     private void validateGroupIdAndUpdateJoinButton()
     {
         if (groupid_text == null || button_join == null || join_group_inputlayout == null)
@@ -178,6 +191,7 @@ public class JoinPublicGroupActivity extends AppCompatActivity
             @Override
             public void afterTextChanged(Editable editable)
             {
+                AirUi.endUnder(button_join);
                 validateGroupIdAndUpdateJoinButton();
             }
 
@@ -261,7 +275,8 @@ public class JoinPublicGroupActivity extends AppCompatActivity
                     HelperGroup.send_group_invite_request_to_friends(group_id_final);
                     Log.i(TAG, "join_group_public_clicked:invite has inviter contact -> friend-assisted join armed");
                 }
-                final boolean joined = join_public_group_by_id(group_id_final, password_final, true);
+                final boolean joined = join_public_group_by_id(group_id_final, password_final, true,
+                                                               failure -> runOnUiThread(() -> sayJoinFailure(failure)));
                 runOnUiThread(() ->
                 {
                     join_in_progress = false;

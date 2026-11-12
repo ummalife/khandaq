@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Журнал изменений: Khandaq Messenger</title>
+  <meta name="description" content="Все выпуски Khandaq с датами: что исправлено и что изменилось, по уровням и платформам.">
+  <link rel="canonical" href="https://khandaq.org/ru/changelog.html">
+  <link rel="alternate" hreflang="en" href="https://khandaq.org/changelog">
+  <link rel="alternate" hreflang="ru" href="https://khandaq.org/ru/changelog.html">
+  <link rel="alternate" hreflang="x-default" href="https://khandaq.org/changelog">
+  <meta name="robots" content="index, follow">
+
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://khandaq.org/ru/changelog.html">
+  <meta property="og:title" content="Журнал изменений: Khandaq Messenger">
+  <meta property="og:description" content="Все выпуски Khandaq с датами: что исправлено и что изменилось, по уровням и платформам.">
+  <meta property="og:image" content="https://khandaq.org/assets/pwa-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="Значок приложения Khandaq">
+  <meta property="og:site_name" content="Khandaq Messenger">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta name="twitter:card" content="summary">
+
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/assets/favicon-48.png" sizes="48x48" type="image/png">
+  <link rel="icon" href="/assets/favicon-16.png" sizes="16x16" type="image/png">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <!-- The list below is drawn from changelog.json, so the data is fetched at once. The fonts are not
+       preloaded on this page: on a slow phone they shared the line with the data and pushed LCP past
+       2.5 s; style.css still loads them, and the swap moves nothing. -->
+  <link rel="preload" href="/changelog.json" as="fetch" type="application/json" crossorigin>
+  <script>try{var t=localStorage.getItem('kq-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
+  <link rel="stylesheet" href="/assets/tokens.css?v=9109f5fc5c">
+  <link rel="stylesheet" href="/style.css?v=ed6305eeb7">
+  <script src="/assets/site.js?v=d12f990d52" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Перейти к&nbsp;содержимому</a>
+
+  <header class="site-head">
+    <div class="wrap">
+      <a class="brand" href="/ru/">
+        <img src="/assets/app-icon-64.png" srcset="/assets/app-icon-64.png 2x, /assets/app-icon-96.png 3x" width="32" height="32" alt="">
+        <span>Khandaq</span>
+      </a>
+      <nav class="nav" aria-label="Основное">
+        <a class="nav-wide" href="/ru/#how">Как это устроено</a>
+        <a class="nav-mid" href="/ru/#download">Скачать</a>
+        <a class="nav-mid" href="/ru/changelog.html" aria-current="page">Изменения</a>
+        <a class="nav-wide" href="/ru/#source">Исходный код</a>
+        <a class="nav-lang" href="/changelog.html" hreflang="en" lang="en">English</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="wrap">
+      <div class="page-head">
+        <h1>Журнал изменений</h1>
+        <p class="lead">Каждый выпуск с&nbsp;датой: что было сломано, что изменилось и&nbsp;на&nbsp;каких платформах. Уровень показывает, насколько серьёзно изменение, от&nbsp;критичного до&nbsp;мелкого.</p>
+        <p class="small">Записи ведутся на&nbsp;английском и&nbsp;приводятся без перевода.</p>
+      </div>
+      <div class="cl-filters" data-cl-filters></div>
+      <p class="visually-hidden" role="status" data-cl-status></p>
+      <div class="cl-root" data-changelog>
+        <noscript>
+          <p class="cl-status">Этот список рисует скрипт из&nbsp;<a href="/changelog.json">changelog.json</a>, а&nbsp;скрипты в&nbsp;этом браузере выключены. Те&nbsp;же выпуски есть на&nbsp;<a href="https://github.com/ummalife/khandaq/releases">GitHub</a>.</p>
+        </noscript>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap">
+      <div class="foot-cols">
+        <div>
+          <h2>Khandaq Messenger</h2>
+          <p>Переписка со&nbsp;сквозным шифрованием в&nbsp;сети Tox. Бесплатно и&nbsp;с&nbsp;открытым кодом.</p>
+        </div>
+        <div>
+          <h2>Скачать</h2>
+          <ul>
+            <li><a href="/ru/#download">Все платформы</a></li>
+            <li><a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger">Android в&nbsp;Google Play</a></li>
+            <li><a href="https://testflight.apple.com/join/4ppS8ZN5">iPhone в&nbsp;TestFlight</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Проект</h2>
+          <ul>
+            <li><a href="https://github.com/ummalife/khandaq">Исходный код</a></li>
+            <li><a href="/ru/changelog.html">Журнал изменений</a></li>
+            <li><a href="/ru/privacy.html">Политика конфиденциальности</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/blob/master/SECURITY.md">Безопасность</a></li>
+            <li><a href="https://tox.chat">Протокол Tox</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Поддержка</h2>
+          <ul>
+            <li><a href="mailto:support@khandaq.org">support@khandaq.org</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/issues">Сообщить о&nbsp;проблеме</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/security/advisories/new">Сообщить об&nbsp;уязвимости</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="foot-base">
+        <p class="copyright">© Khandaq, <a href="https://khandaq.org/">khandaq.org</a>. Открытый код, совместим с&nbsp;Tox. <span class="credit">Владелец и&nbsp;разработчик: <a href="https://1sa.me/" target="_blank" rel="noopener">Isa Dagestani</a></span></p>
+        <fieldset class="seg" data-theme-control hidden>
+          <legend>Тема</legend>
+          <span class="seg-options">
+            <label><input type="radio" name="theme" value="system">Как в&nbsp;системе</label>
+            <label><input type="radio" name="theme" value="light">Светлая</label>
+            <label><input type="radio" name="theme" value="dark">Тёмная</label>
+          </span>
+        </fieldset>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

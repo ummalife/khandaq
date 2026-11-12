@@ -14,6 +14,9 @@ class QRViewerController: UIViewController {
 
     fileprivate let theme: Theme
     fileprivate let text: String
+    // KHANDAQ (redesign stage 2): the contact dossier shows a contact's key, not your own ID.
+    fileprivate let heading: String?
+    fileprivate let subtitle: String?
 
     fileprivate var previousBrightness: CGFloat = 1.0
 
@@ -23,9 +26,11 @@ class QRViewerController: UIViewController {
     fileprivate var cardView: UIView!
     fileprivate var imageView: UIImageView!
 
-    init(theme: Theme, text: String) {
+    init(theme: Theme, text: String, heading: String? = nil, subtitle: String? = nil) {
         self.theme = theme
         self.text = text
+        self.heading = heading
+        self.subtitle = subtitle
 
         super.init(nibName: nil, bundle: nil)
 
@@ -65,7 +70,12 @@ class QRViewerController: UIViewController {
 
 extension QRViewerController {
     @objc func closeButtonPressed() {
-        delegate?.qrViewerControllerDidFinishPresenting()
+        guard let delegate = delegate else {
+            // Pushed without a coordinator (the contact dossier): Done goes back.
+            navigationController?.popViewController(animated: true)
+            return
+        }
+        delegate.qrViewerControllerDidFinishPresenting()
     }
 }
 
@@ -81,13 +91,13 @@ private extension QRViewerController {
     func createViews() {
         // KHANDAQ design (Figma): "MyID вашего аккаунта" heading + subtitle above the QR.
         headingLabel = UILabel()
-        headingLabel.text = String(localized: "qr_my_id_heading")
+        headingLabel.text = heading ?? String(localized: "qr_my_id_heading")
         headingLabel.font = UIFont.systemFont(ofSize: 17.0, weight: .semibold)
         headingLabel.textColor = theme.colorForType(.NormalText)
         view.addSubview(headingLabel)
 
         subtitleLabel = UILabel()
-        subtitleLabel.text = String(localized: "qr_my_id_subtitle")
+        subtitleLabel.text = subtitle ?? String(localized: "qr_my_id_subtitle")
         subtitleLabel.font = UIFont.systemFont(ofSize: 14.0)
         subtitleLabel.textColor = theme.colorForType(.ChatListCellMessage)
         subtitleLabel.numberOfLines = 0

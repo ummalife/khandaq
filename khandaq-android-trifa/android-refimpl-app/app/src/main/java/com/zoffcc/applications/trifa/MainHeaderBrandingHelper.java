@@ -24,7 +24,8 @@ import static com.zoffcc.applications.trifa.TrifaToxService.manually_logged_out;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE;
 
 /**
- * Main screen toolbar: connection quality dot + title; tap dot to reconnect.
+ * Main screen toolbar: the title of the screen under it (Settings, You). KHANDAQ (redesign, E4): the
+ * connection dot and spinner it carried stay hidden; the state is said in words elsewhere.
  */
 final class MainHeaderBrandingHelper
 {
@@ -34,29 +35,11 @@ final class MainHeaderBrandingHelper
     private static TextView titleView;
     private static boolean setupDone;
 
-    // KHANDAQ: once connected, the green dot flashes briefly and then disappears (like iOS) instead of
-    // sitting permanently next to the "Khandaq" title.
-    private static final long CONNECTED_DOT_VISIBLE_MS = 1600L;
-    // How often to re-warn the user while the link stays weak/unstable.
-    private static final long WEAK_NAG_INTERVAL_MS = 30000L;
     private static final Handler uiHandler = new Handler(Looper.getMainLooper());
     private static final Runnable hideDotRunnable = () -> {
         if (connectionDot != null)
         {
             connectionDot.setVisibility(View.GONE);
-        }
-    };
-    private static final Runnable weakNagRunnable = new Runnable()
-    {
-        @Override
-        public void run()
-        {
-            final ConnectionQualityMonitor.Level level = ConnectionQualityMonitor.get().getLevel();
-            if (level == ConnectionQualityMonitor.Level.WEAK || level == ConnectionQualityMonitor.Level.MEDIUM)
-            {
-                showQualityToast(R.string.connection_warn_weak);
-                uiHandler.postDelayed(this, WEAK_NAG_INTERVAL_MS);
-            }
         }
     };
 
@@ -67,7 +50,7 @@ final class MainHeaderBrandingHelper
     static void setup(final AppCompatActivity activity, final Toolbar toolbar)
     {
         // NOTE: must re-bind the custom view on every setup (incl. config-change recreate, e.g. theme
-        // toggle) — the static view refs otherwise point at the destroyed activity and the new toolbar
+        // toggle): the static view refs otherwise point at the destroyed activity and the new toolbar
         // keeps its XML default title. The quality listener below is idempotent (setLevelListener).
         if (activity == null || toolbar == null)
         {
@@ -100,7 +83,9 @@ final class MainHeaderBrandingHelper
             connectionDot.setOnClickListener(v -> onConnectionDotClicked(activity));
         }
 
-        // Warn the user about an unstable link (yellow, periodic) and confirm recovery once (green).
+        // KHANDAQ (redesign, E4): a change of quality redraws the header; it no longer raises a toast (neither
+        // "Connection stable" nor the warning every 30 s). The line under the name on the Air screen says the
+        // state in words and opens the Network screen.
         ConnectionQualityMonitor.get().setLevelListener(MainHeaderBrandingHelper::onQualityLevelChanged);
 
         setupDone = true;
@@ -111,50 +96,7 @@ final class MainHeaderBrandingHelper
     private static void onQualityLevelChanged(final ConnectionQualityMonitor.Level oldLevel,
                                               final ConnectionQualityMonitor.Level newLevel)
     {
-        uiHandler.post(() -> {
-            updateAsync();
-
-            switch (newLevel)
-            {
-                case WEAK:
-                case MEDIUM:
-                    showQualityToast(R.string.connection_warn_weak);
-                    startWeakNag();
-                    break;
-                case STRONG:
-                    stopWeakNag();
-                    if (oldLevel != ConnectionQualityMonitor.Level.STRONG)
-                    {
-                        showQualityToast(R.string.connection_good);
-                    }
-                    break;
-                case OFFLINE:
-                default:
-                    stopWeakNag();
-                    break;
-            }
-        });
-    }
-
-    private static void showQualityToast(final int textRes)
-    {
-        final MainActivity activity = main_activity_s;
-        if (activity == null || activity.isFinishing())
-        {
-            return;
-        }
-        Toast.makeText(activity, textRes, Toast.LENGTH_SHORT).show();
-    }
-
-    private static void startWeakNag()
-    {
-        uiHandler.removeCallbacks(weakNagRunnable);
-        uiHandler.postDelayed(weakNagRunnable, WEAK_NAG_INTERVAL_MS);
-    }
-
-    private static void stopWeakNag()
-    {
-        uiHandler.removeCallbacks(weakNagRunnable);
+        uiHandler.post(MainHeaderBrandingHelper::updateAsync);
     }
 
     private static void onConnectionDotClicked(final AppCompatActivity activity)
@@ -180,8 +122,8 @@ final class MainHeaderBrandingHelper
         activity.runOnUiThread(() -> update(activity));
     }
 
-    // KHANDAQ: the header title shows the current bottom-nav tab name (Чаты/Контакты/…), matching
-    // Figma. Connection state is conveyed only by the spinner + quality dot, not the title text.
+    // KHANDAQ: the header title shows the current bottom-nav tab name (Chats, Contacts and the rest), matching
+    // Figma.
     private static int headerTitleRes = R.string.app_name;
 
     static void setTitle(@Nullable final AppCompatActivity activity, final int resId)
@@ -199,67 +141,18 @@ final class MainHeaderBrandingHelper
 
         titleView.setText(headerTitleRes);
 
-        final boolean connected = isNetworkBrandedOnline();
-        final ConnectionQualityMonitor.Level quality = ConnectionQualityMonitor.get().getLevel();
-        final boolean noNetwork = !connected && quality == ConnectionQualityMonitor.Level.OFFLINE;
-
+        // KHANDAQ (redesign, E4): the header over Settings and You carries no dot and no spinner. The
+        // spinner turned without end while connecting, which the design does not allow, and the dot
+        // flashed; the line under your name on the Air screen, the Network screen and the Connection row
+        // in Settings say the state in words (design/DESIGN.md, "Network state on the phone").
         uiHandler.removeCallbacks(hideDotRunnable);
-
-        if (connected)
+        if (connectingSpinner != null)
         {
-            // Online: flash a green dot briefly, then hide it (no permanent indicator). Weak/medium
-            // signal keeps a steady yellow dot since that's worth surfacing.
-            if (connectingSpinner != null)
-            {
-                connectingSpinner.setVisibility(View.GONE);
-            }
-
-            if (connectionDot != null)
-            {
-                connectionDot.setVisibility(View.VISIBLE);
-                if (quality == ConnectionQualityMonitor.Level.WEAK)
-                {
-                    connectionDot.setBackgroundResource(R.drawable.circle_yellow);
-                    connectionDot.setContentDescription(activity.getString(R.string.connection_quality_weak));
-                }
-                else if (quality == ConnectionQualityMonitor.Level.MEDIUM)
-                {
-                    connectionDot.setBackgroundResource(R.drawable.circle_yellow);
-                    connectionDot.setContentDescription(activity.getString(R.string.connection_quality_medium));
-                }
-                else
-                {
-                    connectionDot.setBackgroundResource(R.drawable.circle_green);
-                    connectionDot.setContentDescription(activity.getString(R.string.connection_quality_strong));
-                    uiHandler.postDelayed(hideDotRunnable, CONNECTED_DOT_VISIBLE_MS);
-                }
-            }
+            connectingSpinner.setVisibility(View.GONE);
         }
-        else if (noNetwork)
+        if (connectionDot != null)
         {
-            // No network: steady red dot, no spinner.
-            if (connectingSpinner != null)
-            {
-                connectingSpinner.setVisibility(View.GONE);
-            }
-            if (connectionDot != null)
-            {
-                connectionDot.setVisibility(View.VISIBLE);
-                connectionDot.setBackgroundResource(R.drawable.circle_red);
-                connectionDot.setContentDescription(activity.getString(R.string.connection_quality_offline));
-            }
-        }
-        else
-        {
-            // Connecting: spinner + "Connecting…", no dot.
-            if (connectingSpinner != null)
-            {
-                connectingSpinner.setVisibility(View.VISIBLE);
-            }
-            if (connectionDot != null)
-            {
-                connectionDot.setVisibility(View.GONE);
-            }
+            connectionDot.setVisibility(View.GONE);
         }
     }
 

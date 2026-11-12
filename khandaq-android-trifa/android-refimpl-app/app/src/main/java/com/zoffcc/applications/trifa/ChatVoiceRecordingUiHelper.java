@@ -26,6 +26,12 @@ final class ChatVoiceRecordingUiHelper
     private final TextView timerView;
     private final ImageButton sendButton;
     private RecordingActionListener actionListener;
+    /**
+     * KHANDAQ (redesign, stage 2): the one-to-one chat draws this bar with the design system. Its
+     * recording dot stays still, as the design system's dots never pulse (the timer running beside it
+     * already says that it records), and the send button takes the design-system glyphs.
+     */
+    boolean airStyle = false;
     private float swipeStartX;
     private boolean swipeCancelTriggered;
 
@@ -117,7 +123,7 @@ final class ChatVoiceRecordingUiHelper
         {
             recordingBar.setVisibility(View.VISIBLE);
             final View dot = recordingBar.findViewById(R.id.voice_recording_dot);
-            if (dot != null)
+            if (dot != null && !airStyle)
             {
                 final android.view.animation.AlphaAnimation blink =
                         new android.view.animation.AlphaAnimation(1f, 0.2f);
@@ -138,8 +144,15 @@ final class ChatVoiceRecordingUiHelper
     {
         if (sendButton != null)
         {
-            sendButton.setImageResource(locked ? R.drawable.baseline_arrow_upward_24
-                                               : R.drawable.baseline_keyboard_voice_24);
+            if (airStyle)
+            {
+                sendButton.setImageResource(locked ? R.drawable.kq_ic_arrow_up : R.drawable.kq_ic_mic);
+            }
+            else
+            {
+                sendButton.setImageResource(locked ? R.drawable.baseline_arrow_upward_24
+                                                   : R.drawable.baseline_keyboard_voice_24);
+            }
         }
     }
 

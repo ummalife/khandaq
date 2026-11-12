@@ -317,8 +317,6 @@
     <string name="join_public_group_activity_help">Prisijungti prie viešos grupės su nurodytu grupės ID.</string>
     <string name="add_public_group_activity_help">Sukurti naują viešą grupę su nurodytu grupės pavadinimu.</string>
     <string name="pref_title_allow_open_encrypted_file_via_intent">atidaryti failus iš užšifruotos saugyklos</string>
-    <string name="invite_join_group_success">Buvote pakviestas į grupę</string>
-    <string name="invite_join_conference_success">Jūs buvote pakviesti į konferencijų grupę</string>
     <string name="pref_description_use_incognito_keyboard2">įjungti, kad nurodytumėte klaviatūrai nesimokyti iš įvestų žodžių</string>
     <string name="layout___capabilities">Galimybės:</string>
     <string name="layout___load_network_connections">įkelti tinklo ryšius</string>

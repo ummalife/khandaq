@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- First launch, sign-in and moving a profile in (redesign stage 4, E19 and E20); iOS keys where the meaning is the same, Android wording where Android works differently -->
+    <string name="air_first_step_format">Step %1$d of %2$d</string>
+    <string name="air_first_name_title">What should we call you</string>
+    <string name="air_first_name_body">Only the people you add will see this name.</string>
+    <string name="air_first_name_placeholder">Name</string>
+    <string name="air_first_name_first">Type a name first.</string>
+    <string name="air_first_next">Next</string>
+    <string name="air_first_move_profile">Move a profile from another device</string>
+    <string name="air_first_password_title">Profile password</string>
+    <string name="air_first_password_body">A password cannot be recovered: there are no servers. The profile is kept only on this device.</string>
+    <string name="air_first_password_set">Set a password</string>
+    <string name="air_first_password_set_detail">The profile is encrypted with the password. After you log out, it opens only with the password.</string>
+    <string name="air_first_password_skip">Continue without a password</string>
+    <string name="air_first_password_skip_detail">The profile is still encrypted, with a key kept on this phone. It opens without a password for whoever can unlock this phone, and only here.</string>
+    <string name="air_first_password_placeholder">Password</string>
+    <string name="air_first_repeat_placeholder">Password again</string>
+    <string name="air_first_password_rule">At least 8 characters, with a letter and a digit.</string>
+    <string name="air_first_password_empty">Make up a password first.</string>
+    <string name="air_first_password_short">The password is shorter than 8 characters.</string>
+    <string name="air_first_password_weak">The password needs a letter and a digit.</string>
+    <string name="air_first_password_repeat_first">Type the password again in the second field.</string>
+    <string name="air_first_password_mismatch">The passwords do not match.</string>
+    <string name="air_first_create">Create profile</string>
+    <string name="air_first_creating">Creating the profile</string>
+    <string name="air_first_create_failed">The profile was not created. Try again.</string>
+    <string name="air_first_id_title">Your ID is ready</string>
+    <string name="air_first_id_body">Send your ID to the people you want to write to, or show them the QR code.</string>
+    <string name="air_first_share">Share</string>
+    <string name="air_first_add_person">Add the first person</string>
+    <string name="air_field_show_password">Show password</string>
+    <string name="air_field_hide_password">Hide password</string>
+    <string name="air_signin_go">Log in</string>
+    <string name="air_signin_opening">Opening the profile</string>
+    <string name="air_signin_enter_password">Enter the password first.</string>
+    <string name="air_signin_no_password">This profile opens without a password, on this phone only.</string>
+    <string name="air_signin_profile_fallback">Profile on this device</string>
+    <string name="air_signin_forgot">Forgot the password?</string>
+    <string name="air_signin_forgot_title">The password cannot be recovered</string>
+    <string name="air_signin_forgot_message">There are no servers, and only you know the password. A new profile gets a new ID and takes this one\'s place: this profile, its contacts and its history are deleted from the phone.</string>
+    <string name="air_signin_start_over">Delete and create new</string>
+    <string name="air_signin_wrong_password">Wrong password. Check the keyboard language and Caps Lock.</string>
+    <string name="air_signin_damaged">The profile file is damaged. If you have an exported copy, move the profile in from it.</string>
+    <string name="air_signin_no_access">No access to the profile file. Restart the phone and try again.</string>
+    <string name="air_import_title">Move a profile</string>
+    <string name="air_import_reading">Reading the file</string>
+    <string name="air_import_preview_title">Is this your profile?</string>
+    <string name="air_import_preview_body">Check the name and the ID. The file holds the ID and the contacts; the chat history is not in it.</string>
+    <string name="air_import_name">Name</string>
+    <string name="air_import_no_name">No name</string>
+    <string name="air_import_confirm">Move the profile here</string>
+    <string name="air_import_moving">Moving the profile</string>
+    <string name="air_import_other_file">Choose another file</string>
+    <string name="air_import_not_profile">This is not a Khandaq profile file. Choose a .tox file exported from a profile.</string>
+    <string name="air_import_encrypted">This file is protected by a password. Khandaq for Android can move in only a profile file saved without a password.</string>
+    <string name="air_import_failed_title">The profile was not moved</string>
+    <!-- Stage 4: how a moved-in profile opens on Android -->
+    <string name="air_import_device_key">On this phone the profile opens without a password, with a key kept here. A password can be set later in Profile, Password and PIN.</string>
+</resources>

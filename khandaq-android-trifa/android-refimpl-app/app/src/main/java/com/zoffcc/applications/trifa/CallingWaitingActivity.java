@@ -23,19 +23,16 @@ import org.khandaq.messenger.R;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.graphics.Color;
-import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.MotionEvent;
-import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
-import com.mikepenz.google_material_typeface_library.GoogleMaterial;
-import com.mikepenz.iconics.IconicsDrawable;
-
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import static com.zoffcc.applications.trifa.CallingActivity.initializeScreenshotSecurity;
 import static com.zoffcc.applications.trifa.HelperFriend.friend_call_push_url;
@@ -83,41 +80,23 @@ public class CallingWaitingActivity extends AppCompatActivity
         decline_waiting_button = findViewById(R.id.decline_waiting_button);
         call_waiting_friend_name = findViewById(R.id.call_waiting_friend_name);
         call_waiting_friend_name.setText("");
+        ViewCompat.setAccessibilityHeading(call_waiting_friend_name, true);
 
-        final Drawable d3 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_highlight_off).backgroundColor(
-                Color.TRANSPARENT).color(Color.parseColor("#A0FF0000")).sizeDp(50);
-        decline_waiting_button.setImageDrawable(d3);
+        // KHANDAQ (redesign, stage 3b; stage 5): the call screens stand on the flat lock ground (lock-top),
+        // dark in both themes as on iOS, so the bars take its colour and keep light icons.
+        final int ground = ContextCompat.getColor(this, R.color.kq_lock_top);
+        getWindow().setStatusBarColor(ground);
+        getWindow().setNavigationBarColor(ground);
+        final WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(),
+                                                                                   getWindow().getDecorView());
+        bars.setAppearanceLightStatusBars(false);
+        bars.setAppearanceLightNavigationBars(false);
 
-        decline_waiting_button.setOnTouchListener(new View.OnTouchListener()
-        {
-            @Override
-            public boolean onTouch(View v, MotionEvent event)
-            {
-                Log.i(TAG, "decline_button_pressed:000");
-
-                try
-                {
-                    if (event.getAction() == MotionEvent.ACTION_DOWN)
-                    {
-                        Log.i(TAG, "decline_button_pressed:DOWN");
-                        try
-                        {
-                            Log.i(TAG, "decline_button_pressed:stop_me()");
-                            stop_me();
-                        }
-                        catch (Exception e2)
-                        {
-                            e2.printStackTrace();
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-
-                return true;
-            }
+        // Cancel is a click, so TalkBack can press it too: the old touch listener acted on ACTION_DOWN,
+        // which TalkBack's double tap never sends.
+        decline_waiting_button.setOnClickListener(v -> {
+            Log.i(TAG, "decline_button_pressed:stop_me()");
+            stop_me();
         });
 
         try
@@ -126,19 +105,28 @@ public class CallingWaitingActivity extends AppCompatActivity
             if (extras != null)
             {
                 calling_friend_pk = extras.getString("calling_friend_pk", null);
-                if (calling_friend_pk != null)
-                {
-                    final String resolve_name = HelperFriend.resolve_name_for_pubkey(calling_friend_pk, "");
-                    if ((resolve_name.length() > 0) && (resolve_name.length() < 80))
-                    {
-                        call_waiting_friend_name.setText(resolve_name);
-                    }
-                }
             }
         }
         catch (Exception e)
         {
             calling_friend_pk = null;
+        }
+
+        if (calling_friend_pk != null)
+        {
+            String name = HelperFriend.resolve_name_for_pubkey(calling_friend_pk, "").trim();
+            if (name.isEmpty())
+            {
+                // The fallback title of a contact without a name: the start of its key.
+                name = calling_friend_pk.substring(0, Math.min(8, calling_friend_pk.length()));
+            }
+            call_waiting_friend_name.setText(name);
+            ((TextView) findViewById(R.id.call_waiting_text)).setText(
+                    getString(R.string.air_call_waiting_format, AirConversationModel.shortName(name)));
+            // What the app did: the thread below sends the wake signal at once when one can go.
+            ((TextView) findViewById(R.id.call_waiting_detail)).setText(
+                    HelperFriend.can_wake_friend_phone(calling_friend_pk) ? R.string.air_call_waiting_push
+                                                                          : R.string.air_call_waiting_no_push);
         }
 
         if (calling_friend_pk != null)
@@ -231,7 +219,7 @@ public class CallingWaitingActivity extends AppCompatActivity
         {
             if (CallWThread != null)
             {
-                // KHANDAQ (ANR, 2026-08-26): stop_me() — тот же путь.
+                // KHANDAQ (ANR, 2026-08-26): stop_me(), the same bounded join as the other audio threads.
                 CallWThread.join(HelperGeneric.AUDIO_THREAD_JOIN_TIMEOUT_MS);
                 CallWThread = null;
             }

@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Дизайн-система «Эфир»</title>
+<meta name="description" content="Токены и компоненты направления B для iOS, Android, компьютера и сайта Khandaq: обе темы, все состояния, ключевые движения.">
+<script>
+  // Resolve the theme and motion choices before the first paint, so the page never flashes.
+  (function early() {
+    var root = document.documentElement;
+    root.lang = "ru";
+    root.setAttribute("data-host-theme", root.getAttribute("data-theme") || "");
+    var theme = "system";
+    var motion = "system";
+    try {
+      theme = localStorage.getItem("kq-system-theme") || "system";
+      motion = localStorage.getItem("kq-system-motion") || "system";
+    }
+    catch (e) {
+      theme = "system";
+      motion = "system";
+    }
+    if (theme === "light" || theme === "dark") {
+      root.setAttribute("data-theme", theme);
+    }
+    var calm = motion === "calm" || (motion === "system" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    if (calm) {
+      root.classList.add("is-calm");
+    }
+  })();
+</script>
+<link rel="stylesheet" href="dist/tokens.css">
+<link rel="stylesheet" href="site/system.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6.5 4h11v16l-5.5-3.8L6.5 20z"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M5.2 4h3.6l1.8 4.6-2.3 1.4a11 11 0 0 0 5.7 5.7l1.4-2.3 4.6 1.8v3.6a1.2 1.2 0 0 1-1.2 1.2A16 16 0 0 1 4 5.2 1.2 1.2 0 0 1 5.2 4z"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2.5"/><path d="M16 10.5l5-3v9l-5-3z"/></symbol>
+    <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M15 4.5v15"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-check-double" viewBox="0 0 24 24"><path d="M2.5 12.5L7 17l9.5-9.5"/><path d="M12.6 16.2l.8.8 8.6-9"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5"/><path d="M12 16.4v.1"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14 3v5h5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-bell-off" viewBox="0 0 24 24"><path d="M6 16.5V11a6 6 0 0 1 9.4-4.9"/><path d="M18 10.6v5.9l1.5 1.5H8.5"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/><path d="M4 4l16 16"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 19.5a6.5 6.5 0 0 1 13 0"/><path d="M16 5.2a3.5 3.5 0 0 1 0 6.6M18.2 14a6.5 6.5 0 0 1 3.3 5.5"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2.5"/><path d="M15.5 8.5V6.5a2.5 2.5 0 0 0-2.5-2.5H6.5A2.5 2.5 0 0 0 4 6.5V13a2.5 2.5 0 0 0 2.5 2.5h2"/></symbol>
+    <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8.5V5.5A1.5 1.5 0 0 1 5.5 4h3M15.5 4h3A1.5 1.5 0 0 1 20 5.5v3M20 15.5v3a1.5 1.5 0 0 1-1.5 1.5h-3M8.5 20h-3A1.5 1.5 0 0 1 4 18.5v-3M7 12h10"/></symbol>
+    <symbol id="i-user-plus" viewBox="0 0 24 24"><circle cx="10" cy="8" r="4"/><path d="M3 20a7 7 0 0 1 12.3-4.5"/><path d="M19 13.5v6M16 16.5h6"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+    <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5.5M6.5 11L12 5.5 17.5 11"/></symbol>
+    <symbol id="i-paperclip" viewBox="0 0 24 24"><path d="M19.5 11.5l-7.8 7.8a5 5 0 0 1-7-7l8.3-8.3a3.3 3.3 0 0 1 4.7 4.7l-8.2 8.2a1.7 1.7 0 0 1-2.4-2.4l7.4-7.4"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h9.5M18.5 7H20M4 17h3.5M12.5 17H20"/><circle cx="16" cy="7" r="2.5"/><circle cx="10" cy="17" r="2.5"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 3.5h6l-1 5.5 3.2 3.2v2H6.8v-2L10 9z"/><path d="M12 14.2V20.5"/></symbol>
+  </defs>
+</svg>
+
+<div class="sg-safe" aria-hidden="true"></div>
+<header class="sg-head">
+  <div class="sg-brand"><b>Дизайн-система «Эфир»</b><span>Khandaq, направление B: один набор для iOS, Android, компьютера и сайта</span></div>
+  <div class="sg-head-tools">
+    <div class="kq-seg" role="group" aria-label="Тема страницы" data-seg="theme">
+      <button type="button" data-value="system" aria-pressed="true">Как в системе</button>
+      <button type="button" data-value="light" aria-pressed="false">Светлая</button>
+      <button type="button" data-value="dark" aria-pressed="false">Тёмная</button>
+    </div>
+    <div class="kq-seg" role="group" aria-label="Движение на странице" data-seg="motion">
+      <button type="button" data-value="system" aria-pressed="true">Движение как в системе</button>
+      <button type="button" data-value="calm" aria-pressed="false">Уменьшенное</button>
+    </div>
+  </div>
+</header>
+
+<div class="sg-layout">
+  <nav class="sg-nav" aria-label="Разделы">
+    <a href="#signals">Три сигнала</a>
+    <a href="#color">Цвет</a>
+    <a href="#contrast">Контраст</a>
+    <a href="#type">Шрифт</a>
+    <a href="#grid">Отступы и размеры</a>
+    <a href="#motion">Движение</a>
+    <a href="#buttons">Кнопки</a>
+    <a href="#fields">Поля</a>
+    <a href="#choice">Выбор</a>
+    <a href="#list">Список</a>
+    <a href="#link">Связь</a>
+    <a href="#conversation">Переписка</a>
+    <a href="#feedback">Отклик и ожидание</a>
+    <a href="#overlays">Наложения</a>
+  </nav>
+
+  <main class="sg-main">
+
+    <section class="sg-sec" id="signals" aria-labelledby="signals-h">
+      <h2 id="signals-h">Три сигнала</h2>
+      <p class="sg-lead">Интерфейс из бумаги и чернил. Цвет появляется, только когда сообщает о доставке, и у каждого цвета одно значение. Кнопки чернильные, поэтому сигналы не теряются среди действий.</p>
+      <dl class="sg-board sg-signals">
+        <div class="sg-signal is-live">
+          <dt><span class="kq-dot is-live"></span>В сети сейчас</dt>
+          <dd>Зелёный: человек достижим, сообщение уйдёт сразу. Больше зелёный ничего не значит.</dd>
+        </div>
+        <div class="sg-signal is-transit">
+          <dt><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>В пути</dt>
+          <dd>Янтарный: сообщение ждёт, когда собеседник появится в сети. Оно не потерялось и уйдёт само.</dd>
+        </div>
+        <div class="sg-signal is-danger">
+          <dt><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg>Не отправлено</dt>
+          <dd>Красный: сломалось, заблокировано или не ушло. Для «важно» и для украшения не используется.</dd>
+        </div>
+      </dl>
+      <p class="sg-cap">Синий используется только для кольца фокуса с клавиатуры. Шесть тонов окрашивают имена авторов в группах.</p>
+    </section>
+
+    <section class="sg-sec" id="color" aria-labelledby="color-h">
+      <h2 id="color-h">Цвет</h2>
+      <p class="sg-lead">Все значения приходят из одного файла <code class="kq-mono">design/system/tokens.json</code>. Сборщик выпускает из него CSS для сайта и страниц, темы и <code class="kq-mono">DesignTokens.swift</code> для iOS. Ниже значения текущей темы.</p>
+      <div id="swatches" class="sg-grid"></div>
+    </section>
+
+    <section class="sg-sec" id="contrast" aria-labelledby="contrast-h">
+      <h2 id="contrast-h">Контраст</h2>
+      <p class="sg-lead">Каждая пара проверяется в обеих темах. Если пара ниже порога, сборка токенов падает и цвет не попадает ни в один клиент.</p>
+      <div class="sg-board sg-board-tight">
+        <div class="sg-scroll sg-wide">
+          <table class="sg-pairs">
+            <thead>
+              <tr><th scope="col">Пример</th><th scope="col">Пара</th><th scope="col">Светлая</th><th scope="col">Тёмная</th><th scope="col">Порог</th></tr>
+            </thead>
+            <tbody id="pairs"></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="sg-cap" id="pairs-sum" aria-live="polite"></p>
+    </section>
+
+    <section class="sg-sec" id="type" aria-labelledby="type-h">
+      <h2 id="type-h">Шрифт</h2>
+      <p class="sg-lead">IBM Plex Sans для текста, Plex Sans Arabic для арабского, Plex Mono только для ID и ключей. Время, размеры и счётчики набраны Plex Sans: у него все цифры одной ширины. Китайский берётся из системного шрифта. Файлы шрифтов лежат в <code class="kq-mono">design/system/fonts</code>, лицензия OFL. На телефоне роли крупнее, на iOS они растут вместе с системной настройкой размера текста.</p>
+      <div class="sg-board" id="type-roles"></div>
+      <div class="sg-grid sg-grid-2">
+        <div class="sg-board">
+          <p class="sg-sub">Четыре языка сборки</p>
+          <div class="sg-grid" style="margin-top:var(--kq-space-12)">
+            <p style="margin:0">Сообщение уйдёт, как только Юсуф будет в сети.</p>
+            <p style="margin:0" lang="en">The message leaves as soon as Yusuf is online.</p>
+            <p style="margin:0" lang="ar" dir="rtl" class="sg-arabic">ستُرسَل الرسالة بمجرد أن يصبح يوسف متصلًا.</p>
+            <p style="margin:0" lang="zh">优素福一上线，消息就会发出。</p>
+          </div>
+        </div>
+        <div class="sg-board">
+          <p class="sg-sub">Цифры одной ширины</p>
+          <div class="sg-grid" style="margin-top:var(--kq-space-12)">
+            <div class="sg-times kq-num"><span>09:12</span><span>11:40</span><span>12:41</span><span>20:05</span></div>
+            <div class="sg-times kq-num"><span>1 248 КБ</span><span>62 %</span><span>3 в пути</span></div>
+            <code class="kq-mono">7F3A 91C0 5D2E 88B4 0C6F A1D3 2E9B 47F0</code>
+            <p class="sg-cap" style="margin:0">Время, размеры и ID не прыгают, когда меняются цифры.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sg-sec" id="grid" aria-labelledby="grid-h">
+      <h2 id="grid-h">Отступы и размеры</h2>
+      <p class="sg-lead">Отступы идут по шкале, радиус показывает уровень элемента: кнопка, поле, карточка, шторка. Каждый размер в клиентах берётся отсюда, своих чисел в разметке нет.</p>
+      <div class="sg-grid sg-grid-2">
+        <div class="sg-board">
+          <p class="sg-sub">Шкала отступов, px</p>
+          <div class="sg-space" id="space" style="margin-top:var(--kq-space-12)"></div>
+        </div>
+        <div class="sg-board">
+          <p class="sg-sub">Радиусы</p>
+          <div class="sg-radii" id="radii" style="margin-top:var(--kq-space-12)"></div>
+          <p class="sg-sub">Обводки и тени</p>
+          <p class="sg-cap" style="margin:0">Тень бывает только у того, что всплывает поверх: у покоящихся элементов её нет. Числа: сдвиг по горизонтали, по вертикали, размытие.</p>
+          <table class="sg-pairs" id="strokes"></table>
+        </div>
+      </div>
+      <div class="sg-board">
+        <p class="sg-sub">Размеры</p>
+        <div class="sg-grid sg-grid-2" style="margin-top:var(--kq-space-8)">
+          <table class="sg-pairs" id="sizes"></table>
+          <table class="sg-pairs" id="sizes-more"></table>
+        </div>
+      </div>
+    </section>
+
+    <section class="sg-sec" id="motion" aria-labelledby="motion-h">
+      <h2 id="motion-h">Движение</h2>
+      <p class="sg-lead">Быстрое и по делу: четыре длительности и одна кривая. При «Уменьшить движение» сдвиги заменяются затуханием не дольше 120 мс. Бесконечных анимаций нет: ожидание показывают слова и неподвижная точка.</p>
+      <div class="sg-grid sg-grid-2">
+        <div class="sg-board">
+          <div class="sg-moment-head"><p class="sg-sub" style="margin:0">Длительности</p><button type="button" class="kq-btn" data-act="durations">Запустить</button></div>
+          <div class="sg-durations" id="durations" style="margin-top:var(--kq-space-16)"></div>
+        </div>
+        <div class="sg-board">
+          <p class="sg-sub" style="margin:0">Кривые</p>
+          <div class="sg-grid sg-grid-2" id="curves" style="margin-top:var(--kq-space-12)"></div>
+        </div>
+      </div>
+
+      <div class="sg-grid sg-grid-2">
+        <div class="sg-moment">
+          <div class="sg-moment-head"><h3>1. Лоток «В пути» разгружается</h3><button type="button" class="kq-btn" data-act="m1">Амина в сети</button></div>
+          <div class="sg-stage" id="m1">
+            <div class="sg-dossier-head">
+              <span class="kq-tile" style="color:var(--kq-tone-3)">АС</span>
+              <div style="display:grid;gap:var(--kq-space-2);min-width:0">
+                <b style="font:var(--kq-type-heading)">Амина Сафина</b>
+                <span class="kq-presence" data-m1-presence><svg class="kq-lm kq-lm-off" viewBox="0 0 30 10" aria-hidden="true"><circle cx="4" cy="5" r="3"/><path d="M10 5h10"/><circle class="kq-lm-far" cx="26" cy="5" r="3"/></svg><span>не в сети 25 минут</span></span>
+              </div>
+            </div>
+            <div class="kq-log" data-m1-log>
+              <div class="kq-entry is-me"><span class="kq-entry-time">12:05</span><span><span class="kq-entry-who">Вы</span><span class="kq-entry-text">Хорошо, спасибо!</span></span><span class="kq-st kq-st-done" title="Доставлено"><svg class="ic"><use href="#i-check-double"/></svg></span></div>
+            </div>
+            <div class="kq-queue" data-m1-queue>
+              <div class="kq-queue-head"><b data-m1-count>В пути: 2 сообщения</b><span>Ждут Амину. Телефон получит сигнал без текста и заберёт их сам.</span></div>
+              <div class="kq-entry is-me" data-m1-item><span class="kq-entry-time">12:30</span><span class="kq-entry-text">Амина, список ещё в силе? Хочу заехать в магазин после работы</span><span class="kq-st kq-st-wait" title="В пути"><svg class="ic"><use href="#i-clock"/></svg></span></div>
+              <div class="kq-entry is-me" data-m1-item><span class="kq-entry-time">12:31</span><span class="kq-entry-text">И напомни, сколько брать воды</span><span class="kq-st kq-st-wait" title="В пути"><svg class="ic"><use href="#i-clock"/></svg></span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sg-moment">
+          <div class="sg-moment-head"><h3>2. Человек переезжает в «В сети сейчас»</h3><button type="button" class="kq-btn" data-act="m2">Хадиджа в сети</button></div>
+          <div class="sg-stage" id="m2">
+            <div class="kq-list">
+              <p class="kq-sec-head">В сети сейчас <b data-m2-online>2</b></p>
+              <div data-m2-section="online">
+                <div class="kq-row" data-m2-row="yusuf"><span class="kq-tile" style="color:var(--kq-tone-1)">ЮК</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Юсуф Каримов</span><span class="kq-reach is-live"><i></i>в сети</span></span></span></div>
+                <div class="kq-row" data-m2-row="omar"><span class="kq-tile" style="color:var(--kq-tone-2)">ОХ</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Омар Хасанов</span><span class="kq-reach is-live"><i></i>в сети</span></span></span></div>
+              </div>
+              <p class="kq-sec-head">Не в сети <b data-m2-offline>2</b></p>
+              <div data-m2-section="offline">
+                <div class="kq-row" data-m2-row="amina"><span class="kq-tile" style="color:var(--kq-tone-3)">АС</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Амина Сафина</span><span class="kq-reach">25 мин</span></span></span></div>
+                <div class="kq-row" data-m2-row="khadija"><span class="kq-tile" style="color:var(--kq-tone-4)">ХЮ</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Хадиджа Юнусова</span><span class="kq-reach" data-m2-reach>3 дн</span></span></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sg-moment">
+          <div class="sg-moment-head"><h3>3. Запрос принят: пунктир становится линией</h3><button type="button" class="kq-btn" data-act="m3">Саид принял</button></div>
+          <div class="sg-stage" id="m3">
+            <div style="display:grid;gap:var(--kq-space-12);padding:var(--kq-space-20) var(--kq-space-20)">
+              <svg class="sg-path" viewBox="0 0 352 76" aria-hidden="true">
+                <path class="sg-path-line is-off" data-m3-line d="M46 30H298"/>
+                <circle class="sg-path-end" cx="26" cy="30" r="18"/><text class="sg-path-in" x="26" y="34" text-anchor="middle">Вы</text>
+                <circle class="sg-path-end" data-m3-end cx="318" cy="30" r="18"/><text class="sg-path-in" data-m3-initials x="318" y="34" text-anchor="middle"></text>
+                <text x="318" y="68" text-anchor="middle" data-m3-name>собеседник</text>
+              </svg>
+              <b style="font:var(--kq-type-heading)" data-m3-title>Запрос в пути</b>
+              <p class="sg-cap" style="margin:0;font:var(--kq-type-label);font-weight:400;color:var(--kq-ink-2)" data-m3-text>Запрос уйдёт, как только собеседник будет в сети. Имя станет известно после того, как он примет запрос.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="sg-moment">
+          <div class="sg-moment-head"><h3>4. Досье раскрывается из шапки</h3><span class="sg-cap">Нажмите на имя</span></div>
+          <div class="sg-stage sg-dossier" id="m4">
+            <div class="sg-dossier-top">
+            <div class="sg-dossier-head">
+              <span class="kq-tile" style="color:var(--kq-tone-1)">ЮК</span>
+              <button type="button" data-act="m4" aria-expanded="false" aria-controls="m4-panel">
+                <b>Юсуф Каримов</b>
+                <span class="kq-presence"><svg class="kq-lm kq-lm-live" viewBox="0 0 30 10" aria-hidden="true"><circle cx="4" cy="5" r="3"/><path d="M7 5h16"/><circle cx="26" cy="5" r="3"/></svg><span>в сети с 11:58, напрямую</span></span>
+              </button>
+              <span class="kq-icon" aria-hidden="true" style="margin-inline-start:auto"><svg class="ic"><use href="#i-chevron-down"/></svg></span>
+            </div>
+            <div class="sg-dossier-panel" id="m4-panel" role="region" aria-label="Досье Юсуфа">
+              <div>
+                <h4>Связь</h4>
+                <p>Напрямую, без ретранслятора. Ключ сверен 12 мая при встрече.</p>
+              </div>
+              <div>
+                <h4>Сутки</h4>
+                <div class="kq-cells kq-cells-big" data-cells="7-9,11-13" data-now="12" role="img" aria-label="В сети с 7 до 9 и с 11 до 13, сейчас в сети"></div>
+                <div class="kq-axis"><span>0</span><span>6</span><span>12</span><span>18</span><span>24</span></div>
+              </div>
+              <div>
+                <h4>ID</h4>
+                <code class="kq-mono" data-demo-id="yusuf"></code>
+              </div>
+            </div>
+            </div>
+            <div class="sg-dossier-log">
+              <div class="kq-entry"><span class="kq-entry-time">12:39</span><span><span class="kq-entry-who" style="--who:var(--kq-tone-1)">Юсуф</span><span class="kq-entry-text">Да, там приют. Тогда выезжаем в 6, я возьму палатку</span></span><span></span></div>
+              <div class="kq-entry"><span class="kq-entry-time">12:41</span><span class="kq-entry-text">И горелку, если твоя на ремонте</span><span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sg-board">
+        <p class="sg-sub" style="margin:0 0 var(--kq-space-10)">Ожидание без движения</p>
+        <p class="kq-hint"><span class="kq-pulse" aria-hidden="true"></span>Подключаемся к сети Tox</p>
+        <p class="sg-cap" style="margin:var(--kq-space-8) 0 0">Точка стоит на месте, о ходе дела говорят слова. Ни одна анимация в продукте не крутится без конца.</p>
+      </div>
+    </section>
+
+    <section class="sg-sec" id="buttons" aria-labelledby="buttons-h">
+      <h2 id="buttons-h">Кнопки</h2>
+      <p class="sg-lead">Чернильная для главного действия, обычная с рамкой, тихая подчёркнутая, опасная с красным текстом. Выключенная кнопка всегда объясняет почему.</p>
+      <div class="sg-board sg-wide">
+        <div class="sg-matrix" id="button-matrix"></div>
+      </div>
+      <div class="sg-grid sg-grid-2">
+        <div class="sg-board">
+          <p class="sg-sub" style="margin:0 0 var(--kq-space-12)">Выключена с причиной</p>
+          <button type="button" class="kq-btn kq-btn-ink" disabled>Отправить запрос</button>
+          <p class="kq-why">Сначала вставьте ID целиком: 76 знаков.</p>
+        </div>
+        <div class="sg-board">
+          <p class="sg-sub" style="margin:0 0 var(--kq-space-12)">Иконочные кнопки: подсказка через 600 мс</p>
+          <div class="kq-actions">
+            <button type="button" class="kq-icon" aria-label="Позвонить"><svg class="ic"><use href="#i-phone"/></svg><span class="kq-tip" aria-hidden="true">Позвонить</span></button>
+            <button type="button" class="kq-icon" aria-label="Видеозвонок"><svg class="ic"><use href="#i-video"/></svg><span class="kq-tip" aria-hidden="true">Видеозвонок</span></button>
+            <button type="button" class="kq-icon" aria-label="Досье"><svg class="ic"><use href="#i-panel"/></svg><span class="kq-tip" aria-hidden="true">Досье</span></button>
+            <button type="button" class="kq-icon" aria-label="Поиск по переписке"><svg class="ic"><use href="#i-search"/></svg><span class="kq-tip" aria-hidden="true">Поиск по переписке</span></button>
+            <button type="button" class="kq-icon" aria-label="Прикрепить файл"><svg class="ic"><use href="#i-paperclip"/></svg><span class="kq-tip" aria-hidden="true">Прикрепить файл</span></button>
+          </div>
+          <p class="sg-cap" style="margin:var(--kq-space-10) 0 0">36 px на компьютере, 44 pt на iOS, 48 dp на Android. Метка для экранного диктора есть всегда.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sg-sec" id="fields" aria-labelledby="fields-h">
+      <h2 id="fields-h">Поля</h2>
+      <div class="sg-grid sg-grid-2">
+        <div class="sg-board sg-grid">
+          <p class="sg-sub" style="margin:0">Текстовое поле</p>
+          <div><label class="kq-label" for="f-empty">Имя в профиле</label><input id="f-empty" class="kq-input" placeholder="Как вас покажут собеседникам"></div>
+          <div><label class="kq-label" for="f-filled">Статус</label><input id="f-filled" class="kq-input" value="В дороге до вечера"></div>
+          <div><label class="kq-label" for="f-error">Имя группы</label><input id="f-error" class="kq-input" value="" aria-invalid="true" aria-describedby="f-error-text"><p class="kq-error" id="f-error-text">Имя группы не может быть пустым. Напишите хотя бы одну букву.</p></div>
+        </div>
+        <div class="sg-board sg-grid">
+          <p class="sg-sub" style="margin:0">Командная строка</p>
+          <label class="kq-cmd" for="cmd"><svg class="ic"><use href="#i-search"/></svg><input id="cmd" placeholder="Найти чат или вставить ID" autocomplete="off" spellcheck="false"><kbd>/</kbd></label>
+          <div class="kq-list" id="cmd-results" aria-live="polite"></div>
+          <p class="sg-cap" style="margin:0">Имя фильтрует список. Вставленный ID сразу открывает «Новый контакт» с этим ID.</p>
+        </div>
+      </div>
+
+      <div class="sg-grid sg-grid-2">
+        <div class="sg-board sg-grid">
+          <div class="sg-moment-head">
+            <p class="sg-sub" style="margin:0">Поле сообщения и подсказка доставки</p>
+            <div class="kq-seg" role="group" aria-label="Кому пишем" data-seg="to">
+              <button type="button" data-value="amina" aria-pressed="true">Амина</button>
+              <button type="button" data-value="yusuf" aria-pressed="false">Юсуф</button>
+              <button type="button" data-value="group" aria-pressed="false">Группа</button>
+            </div>
+          </div>
+          <div class="kq-composer">
+            <div class="kq-compose">
+              <button type="button" class="kq-icon" aria-label="Прикрепить файл"><svg class="ic"><use href="#i-paperclip"/></svg></button>
+              <textarea id="compose" rows="1" aria-label="Сообщение" placeholder="Сообщение"></textarea>
+              <button type="button" class="kq-send" data-send disabled>Отправить</button>
+            </div>
+            <p class="kq-hint" data-hint aria-live="polite"></p>
+          </div>
+          <p class="sg-cap" style="margin:0">Поле растёт до пяти строк. Подсказка меняется перекрёстным затуханием, высота не прыгает.</p>
+        </div>
+        <div class="sg-board sg-grid">
+          <p class="sg-sub" style="margin:0">Наблюдатель в группе</p>
+          <div class="kq-readonly">
+            <svg class="ic"><use href="#i-eye"/></svg>
+            <span>Только чтение. Вы наблюдатель: писать здесь могут модераторы.</span>
+            <button type="button" class="kq-btn">Написать модератору</button>
+          </div>
+          <p class="sg-cap" style="margin:0">Права видны до действия, а не после отказа.</p>
+        </div>
+      </div>
+
+      <div class="sg-grid sg-grid-2">
+        <div class="sg-board">
+          <p class="sg-sub" style="margin:0 0 var(--kq-space-10)">ID с линейкой и настоящей проверкой</p>
+          <label class="kq-label" for="tox-id">ID собеседника</label>
+          <textarea id="tox-id" class="kq-id-input" rows="3" spellcheck="false" autocomplete="off" autocapitalize="characters" placeholder="Вставьте ID: 76 знаков, цифры и буквы A-F"></textarea>
+          <div class="kq-ruler" data-ruler></div>
+          <p class="kq-verdict" data-verdict aria-live="polite"></p>
+          <div class="kq-actions" style="margin-top:var(--kq-space-12)">
+            <button type="button" class="kq-btn kq-btn-quiet" data-act="id-good">Вставить пример</button>
+            <button type="button" class="kq-btn kq-btn-quiet" data-act="id-bad">Пример с ошибкой</button>
+            <button type="button" class="kq-btn kq-btn-quiet" data-act="id-own">Свой ID</button>
+            <button type="button" class="kq-btn kq-btn-quiet" data-act="id-clear">Очистить</button>
+          </div>
+          <div style="margin-top:var(--kq-space-16)">
+            <button type="button" class="kq-btn kq-btn-ink kq-btn-wide" data-id-send disabled>Отправить запрос</button>
+            <p class="kq-why" data-id-why>Сначала вставьте ID целиком: 76 знаков.</p>
+          </div>
+        </div>
+        <div class="sg-board sg-grid" style="align-content:start">
+          <p class="sg-sub" style="margin:0">PIN</p>
+          <div class="kq-pin" role="group" aria-label="PIN из четырёх цифр" data-pin>
+            <input inputmode="numeric" maxlength="1" aria-label="Цифра 1" autocomplete="off">
+            <input inputmode="numeric" maxlength="1" aria-label="Цифра 2" autocomplete="off">
+            <input inputmode="numeric" maxlength="1" aria-label="Цифра 3" autocomplete="off">
+            <input inputmode="numeric" maxlength="1" aria-label="Цифра 4" autocomplete="off">
+          </div>
+          <p class="sg-cap" style="margin:0" data-pin-note aria-live="polite">Цифра переходит в следующую клетку сама, стирание возвращает назад.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sg-sec" id="choice" aria-labelledby="choice-h">
+      <h2 id="choice-h">Выбор</h2>
+      <div class="sg-grid sg-grid-3">
+        <div class="sg-board sg-controls">
+          <p class="sg-sub" style="margin:0">Сегмент</p>
+          <div class="kq-seg" role="group" aria-label="Тема" data-seg="theme">
+            <button type="button" data-value="system" aria-pressed="true">Как в системе</button>
+            <button type="button" data-value="light" aria-pressed="false">Светлая</button>
+            <button type="button" data-value="dark" aria-pressed="false">Тёмная</button>
+          </div>
+          <p class="sg-cap" style="margin:0">Этот сегмент переключает тему всей страницы, как настройка в приложениях.</p>
+        </div>
+        <div class="sg-board sg-controls">
+          <p class="sg-sub" style="margin:0">Переключатель и флажок</p>
+          <label class="kq-switch"><input type="checkbox" checked><span class="kq-switch-track"></span>Превью уведомлений</label>
+          <label class="kq-switch"><input type="checkbox"><span class="kq-switch-track"></span>Расширенный фоновый режим</label>
+          <label class="kq-check"><input type="checkbox" checked>Показывать время в сети</label>
+          <label class="kq-check"><input type="checkbox" disabled>Ключ сверен (нужна встреча)</label>
+        </div>
+        <div class="sg-board sg-controls">
+          <p class="sg-sub" style="margin:0">Радио</p>
+          <div role="radiogroup" aria-label="Загрузка вложений" class="sg-controls" style="gap:var(--kq-space-2)">
+            <label class="kq-radio"><input type="radio" name="dl" checked>Никогда</label>
+            <label class="kq-radio"><input type="radio" name="dl">Только по Wi-Fi</label>
+            <label class="kq-radio"><input type="radio" name="dl">Всегда</label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sg-sec" id="list" aria-labelledby="list-h">
+      <h2 id="list-h">Список</h2>
+      <p class="sg-lead">Главный экран делится по достижимости. Пилюли не меняют порядок при выборе, счётчик прокручивается.</p>
+      <div class="sg-grid sg-grid-2">
+        <div class="sg-board sg-board-tight">
+          <div style="display:grid;gap:var(--kq-space-12);padding:var(--kq-space-16) var(--kq-space-16) var(--kq-space-4)">
+            <div class="kq-pills" id="pills">
+              <button type="button" class="kq-pill" aria-pressed="false" data-pill="requests">Запросы <b>2</b></button>
+              <button type="button" class="kq-pill kq-pill-wait" aria-pressed="false" data-pill="transit">В пути <b>3</b></button>
+              <button type="button" class="kq-pill" aria-pressed="false" data-pill="saved">Избранное</button>
+            </div>
+            <div class="sg-moment-head">
+              <span class="sg-cap">Плотность на компьютере</span>
+              <div class="kq-seg" role="group" aria-label="Плотность списка" data-seg="density">
+                <button type="button" data-value="normal" aria-pressed="true">Обычная</button>
+                <button type="button" data-value="compact" aria-pressed="false">Плотная</button>
+              </div>
+            </div>
+          </div>
+          <div class="kq-list" id="air-list"></div>
+        </div>
+        <div class="sg-grid" style="align-content:start">
+          <div class="sg-board">
+            <p class="sg-sub" style="margin:0 0 var(--kq-space-12)">Плитки</p>
+            <div class="kq-actions" style="gap:var(--kq-space-16)">
+              <span class="sg-grid" style="gap:var(--kq-space-6);justify-items:center"><span class="kq-tile" style="color:var(--kq-tone-1)">ЮК</span><span class="sg-cap">человек</span></span>
+              <span class="sg-grid" style="gap:var(--kq-space-6);justify-items:center"><span class="kq-tile kq-tile-group" style="color:var(--kq-tone-2)">ПЭ</span><span class="sg-cap">группа</span></span>
+              <span class="sg-grid" style="gap:var(--kq-space-6);justify-items:center"><span class="kq-tile kq-tile-saved"><svg class="ic"><use href="#i-bookmark"/></svg></span><span class="sg-cap">Избранное</span></span>
+              <span class="sg-grid" style="gap:var(--kq-space-6);justify-items:center"><span class="kq-tile kq-tile-pending">СН</span><span class="sg-cap">запрос</span></span>
+              <span class="sg-grid" style="gap:var(--kq-space-6);justify-items:center"><span class="kq-tile kq-tile-me">БС</span><span class="sg-cap">вы</span></span>
+            </div>
+            <p class="sg-cap" style="margin:var(--kq-space-12) 0 0">Инициалы тем же Plex Sans. Фото, если собеседник его прислал, ложится в ту же плитку.</p>
+          </div>
+          <div class="sg-board">
+            <p class="sg-sub" style="margin:0 0 var(--kq-space-12)">Пустое состояние</p>
+            <div class="kq-empty" style="padding:var(--kq-space-8) 0 0">
+              <b>Запросов нет</b>
+              <p>Когда кто-то добавит вас по ID, запрос появится здесь. Принять его или отклонить решаете вы.</p>
+              <button type="button" class="kq-btn"><svg class="ic"><use href="#i-copy"/></svg>Скопировать свой ID</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sg-sec" id="link" aria-labelledby="link-h">
+      <h2 id="link-h">Связь</h2>
+      <p class="sg-lead">Собственный язык продукта: как именно вы связаны с человеком и когда он обычно в сети.</p>
+      <div class="sg-grid sg-grid-3">
+        <div class="sg-board sg-grid">
+          <p class="sg-sub" style="margin:0">Линия связи</p>
+          <span class="kq-presence"><svg class="kq-lm kq-lm-live" viewBox="0 0 30 10" aria-hidden="true"><circle cx="4" cy="5" r="3"/><path d="M7 5h16"/><circle cx="26" cy="5" r="3"/></svg>в сети, напрямую</span>
+          <span class="kq-presence"><svg class="kq-lm kq-lm-relay" viewBox="0 0 30 10" aria-hidden="true"><circle cx="4" cy="5" r="3"/><path d="M7 5h5M18 5h5"/><rect x="12.5" y="2.5" width="5" height="5" rx="1"/><circle cx="26" cy="5" r="3"/></svg>в сети, через ретранслятор</span>
+          <span class="kq-presence"><svg class="kq-lm kq-lm-off" viewBox="0 0 30 10" aria-hidden="true"><circle cx="4" cy="5" r="3"/><path d="M10 5h10"/><circle class="kq-lm-far" cx="26" cy="5" r="3"/></svg>не в сети 3 дня</span>
+        </div>
+        <div class="sg-board sg-grid">
+          <p class="sg-sub" style="margin:0">Полоса суток</p>
+          <span class="kq-presence"><span class="kq-cells" data-cells="7-9,11-13" data-now="12" role="img" aria-label="В сети с 7 до 9 и с 11 до 13, сейчас в сети"></span></span>
+          <span class="kq-presence"><span class="kq-cells" data-cells="6-8,9-12" data-now="12" role="img" aria-label="В сети с 6 до 8 и с 9 до 12"></span></span>
+          <p class="sg-cap" style="margin:0">24 клетки: когда человек был в сети за последние сутки. Обводка отмечает текущий час.</p>
+        </div>
+        <div class="sg-board sg-grid">
+          <p class="sg-sub" style="margin:0">Статусы сообщения</p>
+          <div class="kq-states" style="grid-template-columns:minmax(0,1fr)" id="statuses"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sg-sec" id="conversation" aria-labelledby="conversation-h">
+      <h2 id="conversation-h">Переписка</h2>
+      <div class="sg-grid sg-grid-2">
+        <div class="sg-board sg-board-tight">
+          <div class="kq-log">
+            <div class="kq-day">Сегодня</div>
+            <div class="kq-entry"><span class="kq-entry-time">12:10</span><span><span class="kq-entry-who" style="--who:var(--kq-tone-3)">Амина</span><span class="kq-entry-text">Список снаряжения закрепила, проверьте каждый своё</span></span><span></span></div>
+            <div class="kq-entry"><span class="kq-entry-time">12:15</span><span><span class="kq-entry-who" style="--who:var(--kq-tone-2)">Омар</span><span class="kq-entry-text"><span class="kq-at">Билал</span> возьми, пожалуйста, аптечку</span></span><span></span></div>
+            <div class="kq-entry"><span class="kq-entry-time">12:18</span><span><span class="kq-entry-who" style="--who:var(--kq-tone-1)">Юсуф</span><span class="kq-entry-text">Я беру палатку и горелку</span></span><span></span></div>
+            <div class="kq-entry is-me"><span class="kq-entry-time">12:21</span><span><span class="kq-entry-who">Вы</span><span class="kq-entry-text">Аптечка на мне</span></span><span class="kq-st kq-st-done" title="Доставлено"><svg class="ic"><use href="#i-check-double"/></svg></span></div>
+            <div class="kq-entry is-me"><span class="kq-entry-time">12:22</span><span class="kq-entry-text">Фото списка пришлю вечером</span><span class="kq-st kq-st-fail" title="Не отправлено"><svg class="ic"><use href="#i-alert"/></svg></span></div>
+            <div style="padding-inline-start:calc(var(--kq-size-time-column) + var(--kq-space-10))"><button type="button" class="kq-btn kq-btn-quiet" style="height:var(--kq-size-control-small);padding:0 var(--kq-space-4);color:var(--kq-danger)">Не отправлено. Повторить</button></div>
+          </div>
+          <div class="kq-queue">
+            <div class="kq-queue-head"><b>В пути: 1 сообщение</b><span>Ждёт Зайда. Пока не ушло, его можно изменить или отменить.</span></div>
+            <div class="kq-entry is-me"><span class="kq-entry-time">12:24</span><span class="kq-entry-text">Зайд, ты с нами в субботу?</span><span class="kq-st kq-st-wait" title="В пути"><svg class="ic"><use href="#i-clock"/></svg></span></div>
+          </div>
+        </div>
+        <div class="sg-grid" style="align-content:start">
+          <div class="kq-req">
+            <div class="kq-req-line"><span class="kq-req-tag">Входящий запрос</span><span class="kq-num">12:05</span></div>
+            <p>Ассаляму алейкум! Это Саид, мы познакомились на курсах.</p>
+            <p class="kq-req-key">Ключ <code data-demo-id="said-key"></code></p>
+            <div class="kq-actions">
+              <button type="button" class="kq-btn kq-btn-ink">Принять</button>
+              <button type="button" class="kq-btn">Отклонить</button>
+              <button type="button" class="kq-btn kq-btn-quiet kq-btn-danger">Заблокировать</button>
+            </div>
+          </div>
+          <div class="kq-req">
+            <div class="kq-req-line"><span class="kq-req-tag">Приглашение в группу</span><span class="kq-num">11:52</span></div>
+            <p><b>Омар Хасанов</b> зовёт в группу «Поход на Эльбрус»: 9 участников, 4 в сети сейчас.</p>
+            <div class="kq-actions">
+              <button type="button" class="kq-btn kq-btn-ink">Вступить</button>
+              <button type="button" class="kq-btn">Не сейчас</button>
+            </div>
+          </div>
+          <div class="sg-board">
+            <p class="sg-sub" style="margin:0 0 var(--kq-space-8)">Отказ правила стоит рядом с действием</p>
+            <button type="button" class="kq-btn kq-btn-ink" disabled>Отправить запрос</button>
+            <p class="kq-why">Это ваш собственный ID: его отправляют собеседнику, а не добавляют.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sg-sec" id="feedback" aria-labelledby="feedback-h">
+      <h2 id="feedback-h">Отклик и ожидание</h2>
+      <div class="sg-grid sg-grid-3">
+        <div class="sg-board sg-board-tight">
+          <p class="sg-sub" style="margin:0;padding:var(--kq-space-16) var(--kq-space-16) 0">Скелетон, пока стартует Tox</p>
+          <div class="kq-skel" aria-hidden="true"><i></i><span><i></i><i></i></span></div>
+          <div class="kq-skel" aria-hidden="true"><i></i><span><i></i><i></i></span></div>
+          <div class="kq-skel" aria-hidden="true"><i></i><span><i></i><i></i></span></div>
+          <p class="sg-cap" style="margin:0;padding:var(--kq-space-4) var(--kq-space-16) var(--kq-space-16)">Без мерцания: данные заменяют скелетон на месте.</p>
+        </div>
+        <div class="sg-board sg-grid">
+          <p class="sg-sub" style="margin:0">Прогресс</p>
+          <div class="kq-progress">
+            <div class="kq-progress-top"><svg class="ic"><use href="#i-file"/></svg><b>elbrus-route.gpx</b><span data-progress-text>154 из 248 КБ</span></div>
+            <div class="kq-bar" role="progressbar" aria-label="Передача файла" aria-valuemin="0" aria-valuemax="100" aria-valuenow="62"><i data-progress style="transform:scaleX(0.62)"></i></div>
+          </div>
+          <div class="kq-progress">
+            <div class="kq-progress-top"><svg class="ic"><use href="#i-mic"/></svg><b>Запись голосового</b><span>0:12</span></div>
+            <div class="kq-bar"><i style="transform:scaleX(0.2)"></i></div>
+          </div>
+          <div class="kq-actions"><button type="button" class="kq-btn" data-act="progress">Продолжить передачу</button><button type="button" class="kq-btn kq-btn-quiet">Отменить</button></div>
+        </div>
+        <div class="sg-board sg-grid">
+          <p class="sg-sub" style="margin:0">Загрузка в кнопке</p>
+          <div class="kq-actions">
+            <button type="button" class="kq-btn kq-btn-ink" data-act="busy">Экспортировать профиль</button>
+          </div>
+          <p class="sg-cap" style="margin:0">Текст остаётся на месте, справа появляется точка ожидания. Ошибка показывается в той же строке, а не окном.</p>
+          <p class="kq-error" data-busy-error hidden>Экспорт не удался: на устройстве не хватает места. Освободите 20 МБ и повторите.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sg-sec" id="overlays" aria-labelledby="overlays-h">
+      <h2 id="overlays-h">Наложения</h2>
+      <div class="sg-grid sg-grid-3">
+        <div class="sg-board sg-grid" style="align-content:start">
+          <p class="sg-sub" style="margin:0">Тост</p>
+          <p class="sg-cap" style="margin:0">Только подтверждения, с «Отменить», где отмена возможна. Уходит сам, при наведении держится.</p>
+          <div class="kq-actions">
+            <button type="button" class="kq-btn" data-act="toast-copy">Скопировать ID</button>
+            <button type="button" class="kq-btn" data-act="toast-decline">Отклонить запрос</button>
+          </div>
+        </div>
+        <div class="sg-board sg-grid" style="align-content:start">
+          <p class="sg-sub" style="margin:0">Диалог опасного действия</p>
+          <p class="sg-cap" style="margin:0">Последствие одной фразой, на кнопке глагол. Esc закрывает.</p>
+          <div class="kq-actions"><button type="button" class="kq-btn kq-btn-danger" data-act="dialog">Заблокировать Зайда</button></div>
+          <p class="sg-cap" style="margin:0" data-dialog-result aria-live="polite"></p>
+        </div>
+        <div class="sg-board sg-grid">
+          <p class="sg-sub" style="margin:0">Шторка на телефоне</p>
+          <div class="sg-phone" id="phone">
+            <div class="sg-phone-body">
+              <b style="font:var(--kq-type-heading)">Эфир</b>
+              <button type="button" class="kq-btn kq-btn-ink" data-act="sheet"><svg class="ic"><use href="#i-plus"/></svg>Новый</button>
+              <p class="sg-cap" style="margin:0">Шторку можно смахнуть вниз или закрыть нажатием на затемнение.</p>
+            </div>
+            <div class="kq-scrim" data-act="sheet-close"></div>
+            <div class="kq-sheet" role="dialog" aria-modal="true" aria-label="Создать" aria-hidden="true" data-sheet>
+              <span class="kq-sheet-grip" aria-hidden="true"></span>
+              <h3>Создать</h3>
+              <button type="button" class="kq-btn kq-btn-wide" tabindex="-1"><svg class="ic"><use href="#i-user-plus"/></svg>Новый контакт по ID</button>
+              <button type="button" class="kq-btn kq-btn-wide" tabindex="-1"><svg class="ic"><use href="#i-scan"/></svg>Сканировать QR</button>
+              <button type="button" class="kq-btn kq-btn-wide" tabindex="-1"><svg class="ic"><use href="#i-users"/></svg>Новая группа</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="sg-foot">Источник: design/system/tokens.json. Сборка: design/system/build.py. Значения на этой странице и в приложениях одни и те же.</footer>
+
+<div class="kq-toasts" id="toasts" aria-live="polite"></div>
+
+<dialog class="kq-dialog" id="dialog" aria-labelledby="dialog-h">
+  <form method="dialog">
+    <h3 id="dialog-h">Заблокировать Зайда?</h3>
+    <p>Зайд не сможет писать вам и звонить. Переписка останется на этом устройстве.</p>
+    <div class="kq-actions">
+      <button type="submit" class="kq-btn" value="cancel">Отмена</button>
+      <button type="submit" class="kq-btn kq-btn-danger" value="block">Заблокировать</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="dist/tokens.js"></script>
+<script src="site/system.js"></script>
+</body>
+</html>

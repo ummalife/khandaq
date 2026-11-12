@@ -1,0 +1,361 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    KHANDAQ (redesign, stage 2): the contact dossier (02-plan.md, screen 10), as AirDossierView on iOS. It
+    unfolds from the chat header over the conversation, which dims under it: the person, the link, the
+    last day, the notifications, the key check and the key, the files, then "Block" and "Remove". One
+    column that scrolls once it is taller than the screen allows; a grip at the foot folds it back up.
+    Push addresses and the relay's own settings are not shown.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/air_dossier"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_gravity="top"
+    android:background="@drawable/air_bg_dossier"
+    android:clickable="true"
+    android:focusable="false"
+    android:orientation="vertical"
+    android:visibility="gone">
+
+    <com.zoffcc.applications.trifa.AirCappedScrollView
+        android:id="@+id/air_dossier_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="vertical">
+
+        <LinearLayout
+            android:id="@+id/air_dossier_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/kq_space_16">
+
+            <!-- The person: the tile, the name and their own words, and "Rename". -->
+            <LinearLayout
+                android:id="@+id/air_dossier_head"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <com.zoffcc.applications.trifa.AirTileView
+                    android:id="@+id/air_dossier_tile"
+                    android:layout_width="@dimen/air_dossier_tile"
+                    android:layout_height="@dimen/air_dossier_tile" />
+
+                <LinearLayout
+                    android:id="@+id/air_dossier_names"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/kq_space_12"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/air_dossier_name"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:accessibilityHeading="true"
+                        android:ellipsize="end"
+                        android:maxLines="2"
+                        android:textAlignment="viewStart"
+                        android:textAppearance="@style/TextAppearance.KQ.Heading"
+                        android:textColor="@color/kq_ink" />
+
+                    <TextView
+                        android:id="@+id/air_dossier_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/kq_space_2"
+                        android:ellipsize="end"
+                        android:maxLines="2"
+                        android:textAlignment="viewStart"
+                        android:textAppearance="@style/TextAppearance.KQ.Caption"
+                        android:textColor="@color/kq_ink_2"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/air_dossier_rename"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/kq_space_12"
+                    android:background="@drawable/air_bg_icon_button"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:maxLines="1"
+                    android:minHeight="@dimen/kq_size_target_android"
+                    android:paddingStart="@dimen/kq_space_8"
+                    android:paddingEnd="@dimen/kq_space_8"
+                    android:text="@string/air_dossier_rename"
+                    android:textAppearance="@style/TextAppearance.KQ.Label"
+                    android:textColor="@color/kq_ink" />
+            </LinearLayout>
+
+            <!-- The link: the path picture and the same thought in words. -->
+            <TextView
+                style="@style/Widget.KQ.Air.DossierHeading"
+                android:text="@string/air_dossier_link_title" />
+
+            <com.zoffcc.applications.trifa.AirPathView
+                android:id="@+id/air_dossier_path"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/kq_space_8" />
+
+            <TextView
+                android:id="@+id/air_dossier_link_text"
+                style="@style/Widget.KQ.Air.DossierBody" />
+
+            <!-- The last day: 24 hours on the tall strip, when to write, and what the marks are. -->
+            <TextView
+                android:id="@+id/air_dossier_day_title"
+                style="@style/Widget.KQ.Air.DossierHeading"
+                android:text="@string/air_dossier_day_title" />
+
+            <com.zoffcc.applications.trifa.AirDayStripView
+                android:id="@+id/air_dossier_strip"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/kq_space_8"
+                android:tag="tall" />
+
+            <TextView
+                android:id="@+id/air_dossier_best"
+                style="@style/Widget.KQ.Air.DossierBody"
+                android:fontFeatureSettings="tnum"
+                android:visibility="gone" />
+
+            <TextView
+                style="@style/Widget.KQ.Air.DossierNote"
+                android:text="@string/air_day_note" />
+
+            <!-- Notifications: whether they reach the person and why, and this contact's own sound. -->
+            <TextView
+                style="@style/Widget.KQ.Air.DossierHeading"
+                android:text="@string/air_dossier_notifications_title" />
+
+            <TextView
+                android:id="@+id/air_dossier_push"
+                style="@style/Widget.KQ.Air.DossierBody" />
+
+            <LinearLayout
+                android:id="@+id/air_dossier_mute_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/kq_space_8"
+                android:gravity="center_vertical"
+                android:minHeight="@dimen/kq_size_target_android"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/air_dossier_mute_label"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:importantForAccessibility="no"
+                    android:text="@string/air_dossier_mute"
+                    android:textAlignment="viewStart"
+                    android:textAppearance="@style/TextAppearance.KQ.Body"
+                    android:textColor="@color/kq_ink" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/air_dossier_mute"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/kq_space_12"
+                    android:contentDescription="@string/air_dossier_mute"
+                    android:minHeight="@dimen/kq_size_target_android"
+                    app:thumbTint="@color/air_switch_thumb"
+                    app:trackTint="@color/air_switch_track" />
+            </LinearLayout>
+
+            <!-- The key check: when it was checked, or the button to check it. -->
+            <TextView
+                style="@style/Widget.KQ.Air.DossierHeading"
+                android:text="@string/air_dossier_verify_title" />
+
+            <TextView
+                android:id="@+id/air_dossier_verify_text"
+                style="@style/Widget.KQ.Air.DossierBody" />
+
+            <LinearLayout
+                android:id="@+id/air_dossier_verify"
+                style="@style/Widget.KQ.Air.ButtonRow"
+                android:layout_width="wrap_content"
+                android:layout_marginTop="@dimen/kq_space_8">
+
+                <ImageView
+                    android:layout_width="@dimen/kq_size_icon"
+                    android:layout_height="@dimen/kq_size_icon"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/kq_ic_eye"
+                    app:tint="@color/kq_ink" />
+
+                <TextView
+                    style="@style/Widget.KQ.Air.ButtonRowText"
+                    android:text="@string/air_dossier_verify" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/air_dossier_unverify"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/kq_space_4"
+                android:background="@drawable/air_bg_icon_button"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:maxLines="1"
+                android:minHeight="@dimen/kq_size_target_android"
+                android:paddingStart="@dimen/kq_space_8"
+                android:paddingEnd="@dimen/kq_space_8"
+                android:text="@string/air_dossier_unverify"
+                android:textAppearance="@style/TextAppearance.KQ.Label"
+                android:textColor="@color/kq_ink_2"
+                android:visibility="gone" />
+
+            <!-- The key itself, in groups of four, to read out; copy it or show it as a QR code. -->
+            <TextView
+                style="@style/Widget.KQ.Air.DossierHeading"
+                android:text="@string/air_dossier_key_title" />
+
+            <TextView
+                android:id="@+id/air_dossier_key"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/kq_space_8"
+                android:textAlignment="viewStart"
+                android:textAppearance="@style/TextAppearance.KQ.Mono"
+                android:textColor="@color/kq_ink"
+                android:textDirection="ltr" />
+
+            <LinearLayout
+                android:id="@+id/air_dossier_key_buttons"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/kq_space_8"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:id="@+id/air_dossier_copy"
+                    style="@style/Widget.KQ.Air.ButtonRow"
+                    android:layout_width="0dp"
+                    android:layout_weight="1">
+
+                    <ImageView
+                        android:layout_width="@dimen/kq_size_icon"
+                        android:layout_height="@dimen/kq_size_icon"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/kq_ic_copy"
+                        app:tint="@color/kq_ink" />
+
+                    <TextView
+                        style="@style/Widget.KQ.Air.ButtonRowText"
+                        android:text="@string/air_dossier_copy_key" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/air_dossier_qr"
+                    style="@style/Widget.KQ.Air.ButtonRow"
+                    android:layout_width="0dp"
+                    android:layout_marginStart="@dimen/kq_space_8"
+                    android:layout_weight="1">
+
+                    <ImageView
+                        android:layout_width="@dimen/kq_size_icon"
+                        android:layout_height="@dimen/kq_size_icon"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/kq_ic_scan"
+                        app:tint="@color/kq_ink" />
+
+                    <TextView
+                        style="@style/Widget.KQ.Air.ButtonRowText"
+                        android:text="@string/air_dossier_qr" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- The files of this conversation. -->
+            <TextView
+                style="@style/Widget.KQ.Air.DossierHeading"
+                android:text="@string/air_dossier_files_title" />
+
+            <LinearLayout
+                android:id="@+id/air_dossier_files"
+                style="@style/Widget.KQ.Air.ButtonRow"
+                android:layout_width="wrap_content"
+                android:layout_marginTop="@dimen/kq_space_8">
+
+                <ImageView
+                    android:layout_width="@dimen/kq_size_icon"
+                    android:layout_height="@dimen/kq_size_icon"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/kq_ic_paperclip"
+                    app:tint="@color/kq_ink" />
+
+                <TextView
+                    style="@style/Widget.KQ.Air.ButtonRowText"
+                    android:text="@string/air_dossier_files" />
+            </LinearLayout>
+
+            <!-- At the end: block and remove, each asks first. -->
+            <LinearLayout
+                android:id="@+id/air_dossier_danger"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/kq_space_24"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:id="@+id/air_dossier_block"
+                    style="@style/Widget.KQ.Air.ButtonRow"
+                    android:layout_width="0dp"
+                    android:layout_weight="1">
+
+                    <TextView
+                        style="@style/Widget.KQ.Air.ButtonRowText"
+                        android:layout_marginStart="0dp"
+                        android:text="@string/air_dossier_block"
+                        android:textColor="@color/kq_danger" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/air_dossier_remove"
+                    style="@style/Widget.KQ.Air.ButtonRow"
+                    android:layout_width="0dp"
+                    android:layout_marginStart="@dimen/kq_space_8"
+                    android:layout_weight="1">
+
+                    <ImageView
+                        android:layout_width="@dimen/kq_size_icon"
+                        android:layout_height="@dimen/kq_size_icon"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/kq_ic_trash"
+                        app:tint="@color/kq_danger" />
+
+                    <TextView
+                        style="@style/Widget.KQ.Air.ButtonRowText"
+                        android:text="@string/air_dossier_remove"
+                        android:textColor="@color/kq_danger" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </com.zoffcc.applications.trifa.AirCappedScrollView>
+
+    <!-- The grip: pulled up, it folds the dossier away. -->
+    <FrameLayout
+        android:id="@+id/air_dossier_grip_area"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/kq_space_24"
+        android:importantForAccessibility="no">
+
+        <View
+            android:layout_width="@dimen/kq_size_grip_width"
+            android:layout_height="@dimen/kq_size_grip_height"
+            android:layout_gravity="center"
+            android:background="@drawable/air_bg_grip"
+            android:importantForAccessibility="no" />
+    </FrameLayout>
+</LinearLayout>

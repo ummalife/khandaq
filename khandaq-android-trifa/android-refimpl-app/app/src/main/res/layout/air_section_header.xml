@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A section heading with its count: "Online now 3". The count rolls when it changes. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:accessibilityHeading="true"
+    android:background="@color/kq_surface"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="@dimen/kq_space_16"
+    android:paddingTop="@dimen/kq_space_12"
+    android:paddingEnd="@dimen/kq_space_16"
+    android:paddingBottom="@dimen/kq_space_6">
+
+    <TextView
+        android:id="@+id/air_header_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:importantForAccessibility="no"
+        android:maxLines="1"
+        android:textAlignment="viewStart"
+        android:textAppearance="@style/TextAppearance.KQ.Label"
+        android:textColor="@color/kq_ink_3" />
+
+    <com.zoffcc.applications.trifa.AirRollingLabel
+        android:id="@+id/air_header_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/kq_space_8"
+        android:importantForAccessibility="no" />
+</LinearLayout>

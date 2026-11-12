@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Redesign stage 5: Settings > About drawn as the other sections of Settings (Aboutpage), as SettingsAboutController on iOS -->
+    <!-- A row that only says the app's version, as 0.2.45 -->
+    <string name="air_about_version">Version</string>
+    <!-- A row that only says the build string: commit, toxcore and JNI hashes, Android API level and ABI -->
+    <string name="air_about_build">Build</string>
+    <!-- A row that only says the version of the toxcore library inside the app, as 0.2.21 -->
+    <string name="air_about_toxcore_version">Toxcore version</string>
+</resources>

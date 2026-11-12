@@ -28,6 +28,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.net.ConnectivityManager;
 import android.os.Build;
 import android.preference.PreferenceManager;
@@ -49,6 +50,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.multidex.MultiDex;
 
@@ -103,6 +105,9 @@ public class MainApplication extends Application
             // (English, Russian, Arabic, Chinese) and in English otherwise. Lingver only uses this
             // default until the user picks a language, after which its stored choice wins.
             Lingver.init(this, AppLocaleHelper.startupLocaleFor(Locale.getDefault()));
+            // KHANDAQ (redesign stage 5): a language set for Khandaq in the phone's settings since the
+            // last start wins over Lingver's stored one, as it does while the app runs (onConfigurationChanged).
+            AppLocaleHelper.adoptPhoneAppLanguage(this);
             AppLocaleHelper.syncAppCompatLocalesFromLingver();
         }
         catch (Throwable ignored)
@@ -141,6 +146,10 @@ public class MainApplication extends Application
         // to maximise its head start before any chat with media is opened. See warmUpMediaCodecsAsync().
         DbSecretKeyStorage.onApplicationStart(this);
         AppLockHelper.register(this);
+        // KHANDAQ (redesign, E22): the in-app band follows the screens; after the lock, so it sees the gate.
+        AirBand.register(this);
+        // KHANDAQ (redesign stage 5): the open screens are drawn again when the language moves under them.
+        AppLocaleHelper.registerRedraw(this);
         ensureFcmNotificationChannel();
         HelperToxNotification.ensureChannel(this);
         org.khandaq.messenger.HelperCallNotification.ensureChannel(this);
@@ -169,6 +178,20 @@ public class MainApplication extends Application
         Log.i(TAG, "MainApplication:" + randnum + ":" + "crashes[load]=" + crashes);
         Log.i(TAG, "MainApplication:" + randnum + ":" + "last_crash_time[load]=" + last_crash_time);
         Log.i(TAG, "MainApplication:" + randnum + ":" + "prevlast_crash_time[load]=" + prevlast_crash_time);
+    }
+
+    /**
+     * KHANDAQ (redesign stage 5): the language of Khandaq changed in the phone's settings while it runs
+     * (Android 13 and later) reaches the app here. Lingver's own callback, inside super, puts its stored
+     * language back; the phone's choice is taken after it, and the screens open now are drawn again in it.
+     */
+    @Override
+    public void onConfigurationChanged(@NonNull final Configuration newConfig)
+    {
+        final Locale before = AppLocaleHelper.lingverLocaleOrNull();
+        super.onConfigurationChanged(newConfig);
+        AppLocaleHelper.adoptPhoneAppLanguage(this);
+        AppLocaleHelper.redrawIfLanguageMoved(before);
     }
 
     @Override
@@ -559,11 +582,38 @@ public class MainApplication extends Application
     }
 
     private final SharedPreferences.OnSharedPreferenceChangeListener sp_change_listener = (sharedPreferences, key) -> {
-        if (key.equals("dark_mode_pref"))
+        // The key is null when the preferences are cleared (Android 11 and later).
+        if ("dark_mode_pref".equals(key))
         {
             updateTheme(sharedPreferences);
         }
+        else if ("global_font_size".equals(key))
+        {
+            // KHANDAQ (redesign stage 5): the text size of conversations counts from the next message drawn.
+            // MainActivity reads it only in onCreate and onResume, and Advanced is shown inside MainActivity,
+            // so a chat opened right after the change still had the old size until the main screen came back.
+            MainActivity.PREF__global_font_size = globalFontSize(sharedPreferences);
+        }
     };
+
+    /** The global_font_size preference as MainActivity reads it, kept inside the size table. */
+    private static int globalFontSize(final SharedPreferences sharedPreferences)
+    {
+        try
+        {
+            final int size = Integer.parseInt(sharedPreferences.getString(
+                    "global_font_size", "" + MainActivity.PREF_GLOBAL_FONT_SIZE_DEFAULT));
+            if (size >= 0 && size < TRIFAGlobals.MESSAGE_TEXT_SIZE.length)
+            {
+                return size;
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "global_font_size:EE:" + e.getMessage());
+        }
+        return MainActivity.PREF_GLOBAL_FONT_SIZE_DEFAULT;
+    }
 
     private void ensureFcmNotificationChannel()
     {

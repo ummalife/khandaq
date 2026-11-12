@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- KHANDAQ (redesign, E22): the in-app band and the notifications of requests and invitations; wording as on iOS -->
+    <string name="air_band_new_message">新消息</string>
+    <string name="air_band_request_title">收到的联系人请求</string>
+    <string name="air_band_invite">邀请你加入群组</string>
+    <string name="air_band_invite_format">邀请你加入群组 %1$s</string>
+    <string name="air_band_sender_text_format">%1$s：%2$s</string>
+    <string name="air_band_hint_chat">打开聊天</string>
+    <string name="air_band_hint_request">打开请求</string>
+    <string name="air_band_hint_invite">打开邀请</string>
+    <string name="air_band_dismiss">收起</string>
+    <string name="air_band_channel_requests">请求和邀请</string>
+    <string name="air_band_channel_requests_description">联系人请求和群组邀请</string>
+</resources>

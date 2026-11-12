@@ -10,10 +10,13 @@
 "NSCameraUsageDescription" = "You can use video calls, send photos and videos, scan QR codes.";
 
 /* Microphone usage alert description */
-"NSMicrophoneUsageDescription" = "You can use audio and video calls.";
+"NSMicrophoneUsageDescription" = "You can use audio and video calls, record voice messages and videos.";
 
 /* Photo library usage alert description */
 "NSPhotoLibraryUsageDescription" = "You can send photos and videos.";
 
 /* Face ID / Touch ID usage alert description */
 "NSFaceIDUsageDescription" = "Khandaq uses Face ID or Touch ID to unlock the app instead of entering your PIN.";
+
+/* Location usage alert description */
+"NSLocationWhenInUseUsageDescription" = "You can share your location with your contacts.";

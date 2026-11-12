@@ -3,8 +3,7 @@ package com.zoffcc.applications.trifa;
 import org.khandaq.messenger.R;
 
 import android.content.Context;
-import android.content.Intent;
-import android.graphics.Color;
+import android.content.res.ColorStateList;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -14,18 +13,21 @@ import java.util.ArrayList;
 import java.util.List;
 
 import androidx.annotation.NonNull;
-import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
-import static com.zoffcc.applications.trifa.HelperGroup.GroupMemberDisplay;
-import static com.zoffcc.applications.trifa.HelperGroup.format_group_member_status_line;
 import static com.zoffcc.applications.trifa.GroupMessageListActivity.open_group_peer_info_activity;
 
+/**
+ * The members of the group dossier. KHANDAQ (redesign, E14): in AirGroupModel's order (by role, online
+ * first, then the most recently seen), each with the role and the presence in words, in the design's
+ * colours.
+ */
 class GroupInfoMembersAdapter extends RecyclerView.Adapter<GroupInfoMembersAdapter.MemberHolder>
 {
     private final Context context;
     private final String group_id;
-    private final List<GroupMemberDisplay> members = new ArrayList<>();
+    private final List<AirGroupModel.Member> members = new ArrayList<>();
 
     GroupInfoMembersAdapter(final Context context, final String group_id)
     {
@@ -33,7 +35,7 @@ class GroupInfoMembersAdapter extends RecyclerView.Adapter<GroupInfoMembersAdapt
         this.group_id = group_id;
     }
 
-    void setMembers(final List<GroupMemberDisplay> items)
+    void setMembers(final List<AirGroupModel.Member> items)
     {
         members.clear();
         if (items != null)
@@ -55,37 +57,22 @@ class GroupInfoMembersAdapter extends RecyclerView.Adapter<GroupInfoMembersAdapt
     @Override
     public void onBindViewHolder(@NonNull MemberHolder holder, int position)
     {
-        final GroupMemberDisplay member = members.get(position);
+        final AirGroupModel.Member member = members.get(position);
+        final String status = AirGroupPanel.statusLine(context, member, System.currentTimeMillis());
         holder.nameView.setText(member.name);
-        holder.statusView.setText(format_group_member_status_line(context, member.online, member.last_seen_ms));
+        holder.statusView.setText(status);
         if (holder.onlineDot != null)
         {
-            holder.onlineDot.setBackgroundResource(member.online
-                    ? R.drawable.group_info_online_dot
-                    : R.drawable.group_info_offline_dot);
+            ViewCompat.setBackgroundTintList(holder.onlineDot, ColorStateList.valueOf(
+                    AirUi.color(context, member.online ? R.color.kq_live : R.color.kq_line_strong)));
         }
-        if (member.online)
-        {
-            holder.statusView.setTextColor(Color.parseColor("#64B5F6"));
-        }
-        else
-        {
-            holder.statusView.setTextColor(ContextCompat.getColor(context, R.color.tg_chat_preview));
-        }
+        holder.itemView.setContentDescription(member.name + ", " + status);
 
-        if (member.self)
-        {
-            holder.nameView.setTextColor(Color.parseColor("#FF5733"));
-        }
-        else
-        {
-            holder.nameView.setTextColor(ContextCompat.getColor(context, R.color.tg_chat_title));
-        }
-
-        holder.itemView.setOnClickListener(v -> open_group_peer_info_activity(v.getContext(), member.pubkey, group_id));
+        holder.itemView.setOnClickListener(v -> open_group_peer_info_activity(v.getContext(), member.publicKey,
+                                                                              group_id));
         holder.itemView.setOnLongClickListener(v ->
         {
-            GroupMemberActions.showActionMenu(v.getContext(), group_id, member.pubkey, member.name);
+            GroupMemberActions.showActionMenu(v.getContext(), group_id, member.publicKey, member.name);
             return true;
         });
     }

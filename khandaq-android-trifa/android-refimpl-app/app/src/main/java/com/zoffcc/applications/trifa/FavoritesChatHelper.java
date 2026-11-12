@@ -259,6 +259,16 @@ final class FavoritesChatHelper
     static long sendLocalOutgoingFile(final Context context, final String filepath, final String filename,
                                       long fileSize, final boolean updateMessageView)
     {
+        return sendLocalOutgoingFile(context, filepath, filename, fileSize, updateMessageView, true);
+    }
+
+    /**
+     * As above; {@code sayRefusal} false for a caller that says the outcome of several files itself
+     * (sharing into Saved Messages), so a file over the limit is not said twice.
+     */
+    static long sendLocalOutgoingFile(final Context context, final String filepath, final String filename,
+                                      long fileSize, final boolean updateMessageView, final boolean sayRefusal)
+    {
         if ((orma == null) || (context == null) || TextUtils.isEmpty(filename))
         {
             logI(TAG, "sendLocalOutgoingFile:invalid args");
@@ -277,7 +287,11 @@ final class FavoritesChatHelper
 
         if (fileSize > FT_OUTGOING_FILESIZE_FRIEND_MAX_TOTAL)
         {
-            display_toast(context.getString(R.string.chat_file_too_large), true, 100);
+            if (sayRefusal)
+            {
+                // E21: the rule stands under the field, as for a file sent to a person.
+                AirComposerNotice.say(context.getString(R.string.chat_file_too_large), false);
+            }
             return -1L;
         }
 

@@ -102,10 +102,9 @@ class PinAuthorizationCoordinator: NSObject {
     private static func makeLockWindow() -> UIWindow {
         let scene = AppDelegate.shared.window?.windowScene
             ?? UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-        if let scene = scene {
-            return UIWindow(windowScene: scene)
-        }
-        return UIWindow(frame: UIScreen.main.bounds)
+        let window = scene.map { UIWindow(windowScene: $0) } ?? UIWindow(frame: UIScreen.main.bounds)
+        AppLanguage.applyDirection(to: window)
+        return window
     }
 
     /// KHANDAQ (Figma): the lock screen now uses theme backgrounds/keys (no more fixed teal
@@ -270,7 +269,7 @@ private extension PinAuthorizationCoordinator {
         // KHANDAQ (audit #11): single keychain read per presentation, the tick uses the cached value.
         lockedUntil = KeychainManager().pinLockedUntil.map { TimeInterval($0) }
 
-        let controller = EnterPinController(theme: theme, state: .validatePin(validPin: pin))
+        let controller = EnterPinController(theme: theme, state: .validatePin(validPin: pin), lock: true)
         // KHANDAQ (Figma): the unlock screen shows the Khandaq wordmark on top.
         controller.showLogo = true
         controller.delegate = self

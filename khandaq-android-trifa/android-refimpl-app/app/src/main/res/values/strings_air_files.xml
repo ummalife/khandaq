@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Redesign stage 3b: files, photos and voice notes as entries of the transcript (E8); iOS wording where iOS has it -->
+    <string name="air_file_accept">Accept</string>
+    <string name="air_file_decline">Decline</string>
+    <string name="air_file_cancel">Cancel</string>
+    <string name="air_file_retry_incoming">Download again</string>
+    <string name="air_file_retry_outgoing">Send again</string>
+    <string name="air_file_left_format">%s left</string>
+    <string name="air_file_paused">Paused</string>
+    <string name="air_file_failed_incoming">The download stopped</string>
+    <string name="air_file_failed_outgoing">Not sent</string>
+    <string name="air_file_waits_accept_format">Waits for %s to accept it</string>
+    <string name="air_file_waits_online_format">Goes when %s is online</string>
+    <string name="air_voice_listen">Listen</string>
+    <string name="air_voice_pause">Pause</string>
+    <string name="air_voice_spoken">Voice message</string>
+    <string name="air_file_saved_format">Saved to %s</string>
+    <string name="air_file_saved_app_folder_format">Saved in the app\'s folder: %s</string>
+    <string name="air_file_save_failed">The file was not saved. Try again</string>
+    <string name="air_file_export_title">Save a copy to the phone?</string>
+    <string name="air_file_export_message">The copy is kept outside Khandaq and is not encrypted.</string>
+    <string name="air_file_export_action">Save</string>
+    <string name="air_file_saving">Saving the file</string>
+    <string name="air_file_save">Save to the phone</string>
+    <string name="air_file_share">Share</string>
+    <!-- Redesign stage 3b: the question before a file of theirs is declined, and a group file that waits for the group -->
+    <string name="air_file_decline_title">Decline the file?</string>
+    <string name="air_file_decline_message">It does not download to this phone. The sender sees that it did not go through.</string>
+    <string name="air_file_waits_group">Goes when the group is online</string>
+</resources>

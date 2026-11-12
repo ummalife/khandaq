@@ -199,7 +199,9 @@ private extension LoadingImageView {
 
     func installConstraints() {
         snp.makeConstraints {
-            self.widthConstraint = $0.width.equalTo(Constants.ImageButtonSize).constraint
+            // The width gives way where the entry has less room than the box (a narrow row): otherwise
+            // Auto Layout breaks whichever constraint it likes and may lay the box over the time column.
+            self.widthConstraint = $0.width.equalTo(Constants.ImageButtonSize).priority(999).constraint
             self.heightConstraint = $0.height.equalTo(Constants.ImageButtonSize).constraint
         }
 

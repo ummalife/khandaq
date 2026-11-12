@@ -1,89 +1,92 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    KHANDAQ (redesign, stage 3b): a voice note is a player, as ChatVoiceMessageView on iOS (design/DESIGN.md,
+    "Files, voice and calls on the phone"): Listen and Pause in words, the wave that fills in ink as it
+    plays, and the length in tabular figures at the end, the time played while it plays.
+    The ids the player classes look up are kept.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:background="@android:color/transparent"
-    android:gravity="center_horizontal"
-    android:orientation="horizontal"
-    android:layout_height="wrap_content"
+    android:id="@+id/collectorLinearLayout"
     android:layout_width="match_parent"
-    android:id="@+id/collectorLinearLayout">
+    android:layout_height="wrap_content"
+    android:background="@android:color/transparent"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <LinearLayout
+        android:id="@+id/paddedLinearLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:minHeight="@dimen/kq_size_target_android"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/imgPlay"
+            style="@style/Widget.KQ.Air.VoiceButton"
+            android:text="@string/air_voice_listen" />
+
+        <ProgressBar
+            android:id="@+id/pb_play"
+            android:layout_width="@dimen/kq_size_control"
+            android:layout_height="@dimen/kq_size_control"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/imgPause"
+            style="@style/Widget.KQ.Air.VoiceButton"
+            android:text="@string/air_voice_pause"
+            android:visibility="gone" />
+
         <LinearLayout
-            android:id="@+id/paddedLinearLayout"
-            android:layout_width="match_parent"
+            android:id="@+id/containerLinearLayout"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="5dp">
-            <ImageView
-                android:clickable="true"
-                android:id="@+id/imgPlay"
-                android:layout_width="45dp"
-                android:layout_height="45dp"
-                android:background="@drawable/play_pause_bg"
-                android:src="@drawable/ic_play_arrow_white_24dp"
-                android:focusable="true" />
-            <ProgressBar
-                android:visibility="gone"
-                android:clickable="true"
-                android:id="@+id/pb_play"
-                android:layout_width="45dp"
-                android:layout_height="45dp"
-                android:focusable="true" />
-            <ImageView
-                android:clickable="true"
-                android:id="@+id/imgPause"
-                android:layout_width="45dp"
-                android:layout_height="45dp"
-                android:background="@drawable/play_pause_bg"
-                android:src="@drawable/ic_pause_white_24dp"
-                android:visibility="gone"
-                android:focusable="true" />
-            <LinearLayout
-                android:id="@+id/containerLinearLayout"
+            android:layout_marginStart="@dimen/kq_space_10"
+            android:layout_marginEnd="@dimen/kq_space_10"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="vertical">
+
+            <SeekBar
+                android:id="@+id/seekBar"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="vertical">
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:id="@+id/txtTime"
-                    android:padding="1dp"
-                    android:layout_gravity="end"
-                    android:layout_marginEnd="16dp"
-                    android:textSize="12sp"
-                    android:text="00:00:00 / 00:00:00"
-                    android:layout_marginRight="16dp" />
-                <SeekBar
-                    android:id="@+id/seekBar"
-                    android:layout_width="fill_parent"
-                    android:layout_marginStart="0dp"
-                    android:layout_marginEnd="4dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginRight="4dp"
-                    android:layout_marginLeft="0dp" />
-                <me.jagar.chatvoiceplayerlibrary.PlayerVisualizerSeekbar
-                    android:id="@+id/seekBarV"
-                    android:visibility="gone"
-                    android:layout_gravity="center"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginRight="8dp"
-                    android:layout_marginLeft="8dp" />
-            </LinearLayout>
-            <ImageView
-                android:id="@+id/imgShare"
-                android:layout_width="1dp"
-                android:layout_height="45dp"
-                android:layout_gravity="center_horizontal"
-                android:background="@drawable/play_pause_bg"
-                android:src="@drawable/ic_share_white_24dp"
-                android:textColor="@color/md_white_1000"
-                android:clickable="true"
-                android:textStyle="bold"
-                android:focusable="true" />
-            <ProgressBar
-                android:layout_width="45dp"
-                android:layout_height="45dp"
-                android:layout_gravity="center_horizontal"
-                android:id="@+id/progressBar"
-                android:visibility="gone"/>
+                android:layout_height="wrap_content" />
+
+            <me.jagar.chatvoiceplayerlibrary.PlayerVisualizerSeekbar
+                android:id="@+id/seekBarV"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/kq_size_control_small"
+                android:layout_gravity="center"
+                android:visibility="gone" />
         </LinearLayout>
+
+        <TextView
+            android:id="@+id/txtTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFeatureSettings="tnum"
+            android:importantForAccessibility="no"
+            android:maxLines="1"
+            android:textAppearance="@style/TextAppearance.KQ.Caption"
+            android:textColor="@color/kq_ink_3" />
+
+        <ImageView
+            android:id="@+id/imgShare"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:clickable="true"
+            android:contentDescription="@null"
+            android:focusable="true"
+            android:importantForAccessibility="no"
+            android:visibility="gone" />
+
+        <ProgressBar
+            android:id="@+id/progressBar"
+            android:layout_width="@dimen/kq_size_control"
+            android:layout_height="@dimen/kq_size_control"
+            android:visibility="gone" />
+    </LinearLayout>
 </LinearLayout>

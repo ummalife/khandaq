@@ -9,138 +9,164 @@ font files from fonts.gstatic.com. Two consequences, and the second is the one t
   * the Content-Security-Policy had to allow a foreign origin for both style-src and font-src,
     which is precisely the hole a strict CSP exists to close.
 
-So the fonts are fetched once, committed, and served from the site's own origin. `style-src` and
-`font-src` then reduce to 'self' with no exceptions.
+So the fonts are committed and served from the site's own origin. `style-src` and `font-src` then
+reduce to 'self' with no exceptions.
 
-Idempotent: re-running downloads nothing new unless upstream changed, and prints what moved.
+KHANDAQ (redesign E23, 2026-11-11). The site now sets IBM Plex Sans and IBM Plex Mono, the faces of
+the design system, so the files no longer come from Google at all: design/system/fonts holds the
+TTFs, and this script converts the five weights the site uses into WOFF2 next to the pages. Nothing
+is fetched. The OFL reserves the name "Plex", and its FAQ allows a web format under that name only
+when the font data is unchanged apart from the compression, so the fonts are converted whole,
+without subsetting, and the licence travels with them.
 
-    scripts/vendor-webfonts.py            # fetch/refresh into web/assets/fonts/
-    scripts/vendor-webfonts.py --check    # verify the committed files match fonts.css, no network
+Idempotent: a file is rewritten only when its bytes change, and the run prints what moved.
+
+    scripts/vendor-webfonts.py            # convert design/system/fonts into web/assets/fonts/
+                                          # (needs fontTools and brotli: pip install fonttools brotli)
+    scripts/vendor-webfonts.py --check    # verify the set against style.css: stdlib only, no network
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
+import io
 import re
 import sys
-import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-FONT_DIR = ROOT / "web" / "assets" / "fonts"
-CSS_OUT = FONT_DIR / "fonts.css"
+WEB = ROOT / "web"
+FONT_DIR = WEB / "assets" / "fonts"
+SOURCE_DIR = ROOT / "design" / "system" / "fonts"
+STYLESHEET = WEB / "style.css"
+LICENCE_SOURCE = SOURCE_DIR / "OFL.txt"
+LICENCE = "IBM-Plex-OFL.txt"
 
-# The exact families the pages ask for, together. One request keeps the @font-face ordering stable,
-# which keeps the generated CSS diff-free between runs.
-CSS_URL = (
-    "https://fonts.googleapis.com/css2"
-    "?family=Inter:wght@400;500;600;700"
-    "&family=JetBrains+Mono:wght@400;500"
-    "&family=Sora:wght@600;700"
-    "&display=swap"
+# Source TTF in design/system/fonts -> the WOFF2 file style.css asks for. These are the weights the
+# site sets: Sans 400/500/600 for text, Mono 400/500 for IDs and keys.
+FONTS = {
+    "IBMPlexSans-Regular.ttf": "ibm-plex-sans-400.woff2",
+    "IBMPlexSans-Medium.ttf": "ibm-plex-sans-500.woff2",
+    "IBMPlexSans-SemiBold.ttf": "ibm-plex-sans-600.woff2",
+    "IBMPlexMono-Regular.ttf": "ibm-plex-mono-400.woff2",
+    "IBMPlexMono-Medium.ttf": "ibm-plex-mono-500.woff2",
+}
+
+# Font services a page could be pointed back at. Matched as URLs (after "//"), so prose that names
+# one of them is not a failure; a link, an @import or a script that loads from one is.
+FONT_HOSTS = re.compile(
+    r"//(?:fonts\.googleapis\.com|fonts\.gstatic\.com|use\.typekit\.net|p\.typekit\.net|"
+    r"fonts\.bunny\.net|fast\.fonts\.net|cloud\.typography\.com)"
 )
 
-# Google serves a different stylesheet per browser. Without a modern UA it returns .ttf instead of
-# .woff2 — three times the bytes, and a different set of files every time the fetcher changes.
-UA = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-)
 
-# Latin plus Cyrillic: the site is English with Russian content, and shipping every subset Google
-# offers (greek, vietnamese, ...) would triple the committed bytes for glyphs no page renders.
-KEEP_SUBSETS = {"latin", "latin-ext", "cyrillic", "cyrillic-ext"}
+def rel(path: Path) -> str:
+    return path.relative_to(ROOT).as_posix()
 
 
-def fetch(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310 - fixed https host
-        return resp.read()
+def check() -> int:
+    failures: list[str] = []
+    vendored = set(FONTS.values())
+
+    # 1. Every face the stylesheet declares loads a vendored WOFF2 from web/assets/fonts/.
+    css = STYLESHEET.read_text(encoding="utf-8")
+    urls: list[str] = []
+    for face in re.findall(r"@font-face\s*\{[^}]*\}", css):
+        urls += re.findall(r"url\(\s*[\"']?([^\"')]+?)[\"']?\s*\)", face)
+    if not urls:
+        failures.append("style.css declares no @font-face with a url(): the stylesheet changed shape, "
+                        "and this check would pass vacuously")
+    used: set[str] = set()
+    for url in urls:
+        if "//" in url or url.startswith("data:"):
+            failures.append(f"style.css loads a font from {url}: fonts must be files in web/assets/fonts/")
+            continue
+        # style.css is served from the site root, so a relative url() resolves against the root.
+        target = WEB / url.split("?", 1)[0].split("#", 1)[0].lstrip("/")
+        if target.parent != FONT_DIR:
+            failures.append(f"style.css loads {url}, which is not in web/assets/fonts/")
+            continue
+        if target.name not in vendored:
+            failures.append(f"style.css loads {url}, which this script does not vendor: add it to FONTS")
+        if not target.is_file():
+            failures.append(f"style.css loads {url}, which does not exist")
+            continue
+        if target.read_bytes()[:4] != b"wOF2":
+            failures.append(f"{rel(target)} is not a WOFF2 file")
+        used.add(target.name)
+
+    # 2. The folder holds the vendored set, its licence and nothing else.
+    for name in sorted(vendored - used):
+        failures.append(f"web/assets/fonts/{name} is vendored, but no @font-face in style.css uses it")
+    for path in sorted(FONT_DIR.iterdir()) if FONT_DIR.is_dir() else []:
+        if path.name != LICENCE and path.name not in vendored:
+            failures.append(f"{rel(path)} is not part of the vendored set and nothing loads it: remove it")
+    if not (FONT_DIR / LICENCE).is_file():
+        failures.append(f"web/assets/fonts/{LICENCE} is missing: the OFL must travel with the fonts")
+
+    # 3. A font preload must name a file a face uses, or the browser downloads it for nothing.
+    pages = sorted(WEB.rglob("*.html"))
+    for page in pages:
+        for tag in re.findall(r"<link\b[^>]*>", page.read_text(encoding="utf-8")):
+            if not (re.search(r"\brel=[\"']preload[\"']", tag) and re.search(r"\bas=[\"']font[\"']", tag)):
+                continue
+            href = re.search(r"\bhref=[\"']([^\"']+)[\"']", tag)
+            path = href.group(1).split("?", 1)[0] if href else ""
+            if not path.startswith("/assets/fonts/") or path.rsplit("/", 1)[-1] not in used:
+                failures.append(f"{rel(page)}: preloads {path or 'a font without href'}, which no "
+                                f"@font-face in style.css uses")
+
+    # 4. Nothing the browser runs or renders points back at a font service.
+    for path in pages + sorted(WEB.rglob("*.css")) + sorted(WEB.rglob("*.js")):
+        for m in FONT_HOSTS.finditer(path.read_text(encoding="utf-8", errors="replace")):
+            failures.append(f"{rel(path)} still loads from {m.group(0)[2:]}")
+
+    if failures:
+        print("FAIL: the site's webfonts are not self-contained:", file=sys.stderr)
+        for line in failures:
+            print(f"  - {line}", file=sys.stderr)
+        return 1
+    print(f"ok: {len(used)} self-hosted WOFF2 files used by style.css, the OFL beside them, "
+          f"no other font files and no font service")
+    return 0
 
 
-def parse_blocks(css: str) -> list[tuple[str, str]]:
-    """Return (subset-comment, @font-face block) pairs, in source order."""
-    out = []
-    for m in re.finditer(r"/\*\s*([a-z-]+)\s*\*/\s*(@font-face\s*\{[^}]*\})", css):
-        out.append((m.group(1), m.group(2)))
-    return out
+def vendor() -> int:
+    try:
+        from fontTools.ttLib import TTFont
+        import brotli  # noqa: F401  fontTools needs it to write WOFF2
+    except ImportError as err:
+        print(f"{err.name} is needed to write WOFF2: pip install fonttools brotli", file=sys.stderr)
+        return 1
+
+    FONT_DIR.mkdir(parents=True, exist_ok=True)
+    written = unchanged = 0
+    outputs = [(SOURCE_DIR / source, FONT_DIR / name, None) for source, name in FONTS.items()]
+    outputs.append((LICENCE_SOURCE, FONT_DIR / LICENCE, LICENCE_SOURCE.read_bytes()))
+    for source, dest, data in outputs:
+        if data is None:
+            # As read: fontTools would otherwise stamp head.modified with the time of this run and
+            # recompute bounding boxes, so every run would differ and the data would not be the source's.
+            font = TTFont(source, recalcBBoxes=False, recalcTimestamp=False)
+            font.flavor = "woff2"
+            buffer = io.BytesIO()
+            font.save(buffer)
+            data = buffer.getvalue()
+        if dest.is_file() and dest.read_bytes() == data:
+            unchanged += 1
+            continue
+        dest.write_bytes(data)
+        written += 1
+        print(f"written: {rel(dest)} ({len(data) // 1024} KiB, from {rel(source)})")
+    print(f"vendored {len(outputs)} files: {written} written, {unchanged} unchanged")
+    return check()
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     ap.add_argument("--check", action="store_true",
-                    help="verify committed files against fonts.css without touching the network")
+                    help="verify the vendored set against style.css without writing (no network, stdlib only)")
     args = ap.parse_args()
-
-    if args.check:
-        if not CSS_OUT.is_file():
-            print(f"ОШИБКА: {CSS_OUT.relative_to(ROOT)} отсутствует", file=sys.stderr)
-            return 1
-        css = CSS_OUT.read_text(encoding="utf-8")
-        refs = re.findall(r"url\(([^)]+)\)", css)
-        missing = []
-        for ref in refs:
-            name = ref.strip("'\"").rsplit("/", 1)[-1]
-            if not (FONT_DIR / name).is_file():
-                missing.append(name)
-        if missing:
-            print("ОШИБКА: fonts.css ссылается на файлы, которых нет в репозитории:", file=sys.stderr)
-            for name in missing:
-                print(f"  {name}", file=sys.stderr)
-            return 1
-        # Nothing may point outside the origin: that is the whole reason this file exists.
-        external = [r for r in refs if "//" in r]
-        if external:
-            print("ОШИБКА: fonts.css всё ещё ссылается наружу:", file=sys.stderr)
-            for r in external:
-                print(f"  {r}", file=sys.stderr)
-            return 1
-        print(f"ок: {len(refs)} локальных файлов шрифтов, внешних ссылок нет")
-        return 0
-
-    FONT_DIR.mkdir(parents=True, exist_ok=True)
-    css = fetch(CSS_URL).decode("utf-8")
-    blocks = parse_blocks(css)
-    if not blocks:
-        print("ОШИБКА: в ответе Google нет ни одного @font-face — формат изменился", file=sys.stderr)
-        return 1
-
-    kept, out_blocks, downloaded, unchanged = 0, [], 0, 0
-    for subset, block in blocks:
-        if subset not in KEEP_SUBSETS:
-            continue
-        kept += 1
-        m = re.search(r"url\((https://fonts\.gstatic\.com/[^)]+)\)", block)
-        if not m:
-            print(f"ОШИБКА: в блоке {subset} нет ссылки на gstatic", file=sys.stderr)
-            return 1
-        url = m.group(1)
-        family = re.search(r"font-family:\s*'([^']+)'", block).group(1).replace(" ", "-").lower()
-        weight = re.search(r"font-weight:\s*(\d+)", block).group(1)
-        data = fetch(url)
-        # The name is derived, not taken from Google's opaque hashed filename: upstream rotates
-        # those on every font revision, which would otherwise churn the repo on every refresh.
-        name = f"{family}-{weight}-{subset}.woff2"
-        dest = FONT_DIR / name
-        if dest.is_file() and hashlib.sha256(dest.read_bytes()).digest() == hashlib.sha256(data).digest():
-            unchanged += 1
-        else:
-            dest.write_bytes(data)
-            downloaded += 1
-        out_blocks.append(f"/* {subset} */\n" + block.replace(url, f"/assets/fonts/{name}"))
-
-    header = (
-        "/* Generated by scripts/vendor-webfonts.py — do not edit by hand.\n"
-        "   Self-hosted so the site makes no third-party request to render text, and so the CSP\n"
-        "   can keep style-src/font-src at 'self'. Re-run the script to refresh. */\n"
-    )
-    CSS_OUT.write_text(header + "\n".join(out_blocks) + "\n", encoding="utf-8")
-
-    total = sum(f.stat().st_size for f in FONT_DIR.glob("*.woff2"))
-    print(f"блоков оставлено: {kept} (из {len(blocks)}); скачано: {downloaded}, без изменений: {unchanged}")
-    print(f"итого шрифтов: {len(list(FONT_DIR.glob('*.woff2')))} файлов, {total // 1024} КиБ")
-    print(f"написано: {CSS_OUT.relative_to(ROOT)}")
-    return 0
+    return check() if args.check else vendor()
 
 
 if __name__ == "__main__":

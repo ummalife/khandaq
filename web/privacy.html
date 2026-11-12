@@ -1,48 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Privacy Policy — Khandaq</title>
-<meta name="description" content="Khandaq privacy policy. Khandaq is a peer-to-peer, end-to-end encrypted messenger built on Tox. No accounts, no phone numbers, no ads, no behavioural analytics.">
-<style>
-  :root { --teal:#10b981; --teal2:#2dd4bf; --bg:#0b0f14; --panel:#111820; --text:#e6edf3; --muted:#9aa7b4; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
-  .wrap { max-width: 820px; margin:0 auto; padding: 48px 20px 80px; }
-  header { display:flex; align-items:center; gap:14px; margin-bottom:8px; }
-  header .logo { width:44px; height:44px; border-radius:11px; background:linear-gradient(135deg,var(--teal),var(--teal2)); display:flex; align-items:center; justify-content:center; }
-  header .logo span { color:#052018; font-weight:800; font-size:22px; }
-  header strong { font-size:18px; }   /* moved out of a markup attribute; see W-01 */
-  h1 { font-size: 30px; margin: 18px 0 2px; letter-spacing:-.02em; }
-  .sub { color:var(--muted); margin:0 0 32px; }
-  h2 { font-size: 20px; margin: 36px 0 10px; color:var(--teal2); }
-  p, li { color:var(--text); }
-  ul { padding-left: 22px; }
-  li { margin: 6px 0; }
-  a { color: var(--teal2); }
-  .card { background:var(--panel); border:1px solid #1c2733; border-radius:14px; padding:18px 22px; margin:18px 0; }
-  strong { color:#fff; }
-  footer { margin-top:48px; color:var(--muted); font-size:14px; border-top:1px solid #1c2733; padding-top:20px; }
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy: Khandaq</title>
+  <meta name="description" content="Khandaq privacy policy. Khandaq is a peer-to-peer, end-to-end encrypted messenger built on Tox. No accounts, no phone numbers, no ads, no behavioural analytics.">
+  <link rel="canonical" href="https://khandaq.org/privacy.html">
+  <link rel="alternate" hreflang="en" href="https://khandaq.org/privacy.html">
+  <link rel="alternate" hreflang="ru" href="https://khandaq.org/ru/privacy.html">
+  <link rel="alternate" hreflang="x-default" href="https://khandaq.org/privacy.html">
+  <meta name="robots" content="index, follow">
+
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://khandaq.org/privacy.html">
+  <meta property="og:title" content="Privacy Policy: Khandaq">
+  <meta property="og:description" content="Khandaq privacy policy. Khandaq is a peer-to-peer, end-to-end encrypted messenger built on Tox. No accounts, no phone numbers, no ads, no behavioural analytics.">
+  <meta property="og:image" content="https://khandaq.org/assets/pwa-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="The Khandaq app icon">
+  <meta property="og:site_name" content="Khandaq Messenger">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="ru_RU">
+  <meta name="twitter:card" content="summary">
+
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/assets/favicon-48.png" sizes="48x48" type="image/png">
+  <link rel="icon" href="/assets/favicon-16.png" sizes="16x16" type="image/png">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <link rel="preload" href="/assets/fonts/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/assets/fonts/ibm-plex-sans-600.woff2" as="font" type="font/woff2" crossorigin>
+  <script>try{var t=localStorage.getItem('kq-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
+  <link rel="stylesheet" href="/assets/tokens.css?v=9109f5fc5c">
+  <link rel="stylesheet" href="/style.css?v=ed6305eeb7">
+  <script src="/assets/site.js?v=d12f990d52" defer></script>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div class="logo"><span>K</span></div>
-    <div><strong>Khandaq</strong></div>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="site-head">
+    <div class="wrap">
+      <a class="brand" href="/">
+        <img src="/assets/app-icon-64.png" srcset="/assets/app-icon-64.png 2x, /assets/app-icon-96.png 3x" width="32" height="32" alt="">
+        <span>Khandaq</span>
+      </a>
+      <nav class="nav" aria-label="Main">
+        <a class="nav-wide" href="/#how">How it works</a>
+        <a class="nav-mid" href="/#download">Download</a>
+        <a class="nav-mid" href="/changelog.html">Changelog</a>
+        <a class="nav-wide" href="/#source">Source</a>
+        <a class="nav-lang" href="/ru/privacy.html" hreflang="ru" lang="ru">Русский</a>
+      </nav>
+    </div>
   </header>
+
+  <main id="main">
+    <article class="wrap doc">
   <h1>Privacy Policy</h1>
-  <p class="sub">Last updated: 9 August 2026</p>
+  <p class="doc-date">Last updated: 9 August 2026</p>
 
   <p>Khandaq is a free, open-source, peer-to-peer messenger built on the <a href="https://tox.chat/" target="_blank" rel="noopener">Tox</a> protocol. It is engineered so that <strong>we cannot read your messages even if we wanted to</strong>. This policy explains, in plain language, what that means.</p>
 
-  <div class="card">
-    <strong>The short version.</strong> No account. No phone number. No email. No advertising. No behavioural analytics. Your messages, calls, and files are end-to-end encrypted and travel directly between you and the people you talk to. Khandaq operates no central server that stores your conversations. The one exception to “no servers” is notifications: waking a phone requires Google’s push service and a small Khandaq wake relay, which see delivery data but never message content — see <a href="#push">Push notifications</a>.
+  <div class="doc-note">
+    <strong>The short version.</strong> No account. No phone number. No email. No advertising. No behavioural analytics. Your messages, calls, and files are end-to-end encrypted and travel directly between you and the people you talk to. Khandaq operates no central server that stores your conversations. The one exception to “no servers” is notifications: waking a phone requires Google’s push service and a small Khandaq wake relay, which see delivery data but never message content (see <a href="#push">Push notifications</a>).
   </div>
 
   <!-- DEPLOY ORDER: the "Firebase diagnostics is switched off" claim below is true only from the NEXT
-       iOS build onward — FirebaseDataCollectionDefaultEnabled was added to Antidote-Info.plist after
+       iOS build onward: FirebaseDataCollectionDefaultEnabled was added to Antidote-Info.plist after
        TF 142972 / the current App Store binary were cut, and those still report core telemetry.
        Publish this page WITH or AFTER that iOS submission, never before it. -->
   <h2>What we do NOT collect</h2>
@@ -56,41 +81,41 @@
   <h2>Data stored on your device</h2>
   <ul>
     <li>Your profile, contacts, message history, and received files are stored <strong>locally on your device only</strong>, in a database that can be encrypted with a password you choose. Deleting the app removes all of it.</li>
-    <li>Media you explicitly <strong>save to your gallery</strong> is the exception. It is written into the phone’s shared photo and file storage — <em>Pictures/Khandaq</em>, <em>Movies/Khandaq</em> and <em>Download/Khandaq</em> on Android, the Photos app on iOS — which is outside the app and therefore survives uninstalling Khandaq. Delete those items from your gallery or file manager if you want them gone.</li>
+    <li>Media you explicitly <strong>save to your gallery</strong> is the exception. It is written into the phone’s shared photo and file storage (<em>Pictures/Khandaq</em>, <em>Movies/Khandaq</em> and <em>Download/Khandaq</em> on Android, the Photos app on iOS), which is outside the app and therefore survives uninstalling Khandaq. Delete those items from your gallery or file manager if you want them gone.</li>
     <li>You can set a passphrase/PIN so that the local database is encrypted at rest. Khandaq never transmits this passphrase anywhere.</li>
   </ul>
 
   <h2>How the network works</h2>
   <ul>
-    <li>Khandaq connects through the <strong>decentralized Tox DHT</strong> — a network made up of its own users and volunteer bootstrap/relay nodes that we do not control. These nodes help two devices find each other; they cannot read the end-to-end encrypted traffic that flows between you.</li>
+    <li>Khandaq connects through the <strong>decentralized Tox DHT</strong>: a network made up of its own users and volunteer bootstrap/relay nodes that we do not control. These nodes help two devices find each other; they cannot read the end-to-end encrypted traffic that flows between you.</li>
     <li>As with any internet communication, network intermediaries (such as your ISP or a Tox relay) can observe that a connection exists and basic technical metadata (e.g. IP address), but not the content of your conversations.</li>
   </ul>
 
   <h2 id="push">Push notifications</h2>
   <p>Because Khandaq is peer-to-peer, no server is holding your messages and no server can tell your phone that one is waiting. To make notifications work at all, two things are involved.</p>
   <ul>
-    <li><strong>Google Firebase Cloud Messaging (FCM)</strong> delivers the notification to your device. It is used on <strong>both Android and iOS</strong>; on iOS, FCM passes the notification on to Apple’s APNs for the final hop to your phone. Google processes a per-device registration token — an identifier for the app installation, not for you — and, like any network service, sees your device’s IP address while the push connection is up. Google does not receive anything you have written. It does see one identifier beyond the token: the wake push carries the <em>sender’s</em> Tox public key so the receiving app can open the right chat, and that value passes through Google’s servers on its way to the device.</li>
+    <li><strong>Google Firebase Cloud Messaging (FCM)</strong> delivers the notification to your device. It is used on <strong>both Android and iOS</strong>; on iOS, FCM passes the notification on to Apple’s APNs for the final hop to your phone. Google processes a per-device registration token (an identifier for the app installation, not for you) and, like any network service, sees your device’s IP address while the push connection is up. Google does not receive anything you have written. It does see one identifier beyond the token: the wake push carries the <em>sender’s</em> Tox public key so the receiving app can open the right chat, and that value passes through Google’s servers on its way to the device.</li>
     <li><strong>A wake relay operated by Khandaq</strong> at push.khandaq.org. When you send a message to someone who is offline, <em>your</em> device calls the relay so that their device is woken up and can fetch the message peer-to-peer.</li>
   </ul>
-  <p>The relay receives: the recipient’s push token (so it knows which device to wake), optionally the sender’s Tox public key (so the app can open the right chat — this is the public key only, not the full Tox ID), and the IP address of the sender’s device, as any web server would see. It does <strong>not</strong> receive message text, files, call audio or video, or the recipient’s Tox identity.</p>
-  <p>The wake notification itself carries a fixed “Khandaq — New message”, never anything you wrote. Once the app has fetched and decrypted the message peer-to-peer it posts its own notification with the real sender and text. On iOS, if the app was still running in the background, it then removes the generic wake banner, so you are left with the one contentful notification; if you had force-quit the app, the banner stays generic until you open Khandaq. On Android the generic banner is posted by Google’s messaging component under an identifier the app does not know, so the app cannot take it away — there you briefly see two notifications, the generic wake one and the contentful one, until you tap or dismiss them.</p>
-  <p>Your own wake address is a URL that contains your notification token, and <strong>your device sends it to your contacts</strong> over the encrypted Tox link, because their devices are the ones that have to wake yours. So each contact you add holds an identifier for your app installation, and your device in turn calls the wake addresses your contacts gave it. Both apps refuse to call anything outside a fixed list. That list is the Khandaq relay plus legacy relay addresses inherited from the upstream project the apps are built on: two of them on Android (<em>tox.zoff.xyz</em> and <em>toxcon2020.zoff.cc</em>) and one on iOS (<em>tox.zoff.xyz</em>). Those are only ever reached if a contact’s app handed you a wake address hosted there; Khandaq itself only ever issues addresses on its own relay. On Android you can additionally switch on a third-party push server (ntfy, UnifiedPush or Mozilla’s) in the settings — it is off unless you turn it on. The token changes if you reinstall the app or clear its data.</p>
-  <p>The relay keeps one piece of state: a truncated hash of the push token together with the time it last woke that device. This is used only to suppress duplicates — without it, a sender retrying delivery produces a stream of identical banners. These rows are deleted once they are older than 24 hours, are not linked to an account or a Tox ID, and are not used for statistics. Separately, the relay’s web server writes ordinary access logs — the calling IP address, the time, the request and its result — as any web server does. The server is configured to strip secret parameters out of the logged line. From Android 0.2.42 and iOS build 142986 the apps send the wake as a POST whose body carries the token and whose signature travels in a header, so the token is not part of the request line a web server writes down at all. Installations still on an older build use the earlier form, where the token and the sender’s public key sit in the URL and therefore do appear in that log line; that endpoint is scheduled for retirement and the schedule is published in the project repository. These logs are rotated off the server in the normal course, are never joined to the wake table, and are used only for fault-finding and abuse handling.</p>
+  <p>The relay receives: the recipient’s push token (so it knows which device to wake), optionally the sender’s Tox public key (so the app can open the right chat; this is the public key only, not the full Tox ID), and the IP address of the sender’s device, as any web server would see. It does <strong>not</strong> receive message text, files, call audio or video, or the recipient’s Tox identity.</p>
+  <p>The wake notification itself carries a fixed title, “Khandaq”, and a fixed text, “New message”, never anything you wrote. Once the app has fetched and decrypted the message peer-to-peer it posts its own notification with the real sender and text. On iOS, if the app was still running in the background, it then removes the generic wake banner, so you are left with the one contentful notification; if you had force-quit the app, the banner stays generic until you open Khandaq. On Android the generic banner is posted by Google’s messaging component under an identifier the app does not know, so the app cannot take it away; there you briefly see two notifications, the generic wake one and the contentful one, until you tap or dismiss them.</p>
+  <p>Your own wake address is a URL that contains your notification token, and <strong>your device sends it to your contacts</strong> over the encrypted Tox link, because their devices are the ones that have to wake yours. So each contact you add holds an identifier for your app installation, and your device in turn calls the wake addresses your contacts gave it. Both apps refuse to call anything outside a fixed list. That list is the Khandaq relay plus legacy relay addresses inherited from the upstream project the apps are built on: two of them on Android (<em>tox.zoff.xyz</em> and <em>toxcon2020.zoff.cc</em>) and one on iOS (<em>tox.zoff.xyz</em>). Those are only ever reached if a contact’s app handed you a wake address hosted there; Khandaq itself only ever issues addresses on its own relay. On Android you can additionally switch on a third-party push server (ntfy, UnifiedPush or Mozilla’s) in the settings; it is off unless you turn it on. The token changes if you reinstall the app or clear its data.</p>
+  <p>The relay keeps one piece of state: a truncated hash of the push token together with the time it last woke that device. This is used only to suppress duplicates: without it, a sender retrying delivery produces a stream of identical banners. These rows are deleted once they are older than 24 hours, are not linked to an account or a Tox ID, and are not used for statistics. Separately, the relay’s web server writes ordinary access logs (the calling IP address, the time, the request and its result), as any web server does. The server is configured to strip secret parameters out of the logged line. From Android 0.2.42 and iOS build 142986 the apps send the wake as a POST whose body carries the token and whose signature travels in a header, so the token is not part of the request line a web server writes down at all. Installations still on an older build use the earlier form, where the token and the sender’s public key sit in the URL and therefore do appear in that log line; that endpoint is scheduled for retirement and the schedule is published in the project repository. These logs are rotated off the server in the normal course, are never joined to the wake table, and are used only for fault-finding and abuse handling.</p>
   <p>You can turn notifications off at any time in your device’s system settings.</p>
 
   <h2>Device permissions</h2>
   <p>Khandaq asks for a permission only when you use the feature that needs it. The full list of permissions you are prompted for:</p>
   <ul>
-    <li><strong>Microphone</strong> — voice and video calls, and voice messages.</li>
-    <li><strong>Camera</strong> — video calls, taking a photo to send, and scanning a Tox ID QR code.</li>
-    <li><strong>Photos and media</strong> — two separate things: reading your gallery so you can pick an image or video to send, and adding to it so you can save a file someone sent you. On Android these are the photo/video and storage permissions; on iOS they are the two photo-library permissions.</li>
-    <li><strong>Location</strong> — only when you choose to send your position to a chat.</li>
-    <li><strong>Notifications</strong> — on iOS, and on Android 13 and later, to show message notifications at all.</li>
-    <li><strong>Face ID or Touch ID</strong> — on iOS, to unlock the app instead of typing your PIN. The check happens on the device; Khandaq never sees biometric data.</li>
+    <li><strong>Microphone</strong>: voice and video calls, and voice messages.</li>
+    <li><strong>Camera</strong>: video calls, taking a photo to send, and scanning a Tox ID QR code.</li>
+    <li><strong>Photos and media</strong>: two separate things, reading your gallery so you can pick an image or video to send, and adding to it so you can save a file someone sent you. On Android these are the photo/video and storage permissions; on iOS they are the two photo-library permissions.</li>
+    <li><strong>Location</strong>: only when you choose to send your position to a chat.</li>
+    <li><strong>Notifications</strong>: on iOS, and on Android 13 and later, to show message notifications at all.</li>
+    <li><strong>Face ID or Touch ID</strong>: on iOS, to unlock the app instead of typing your PIN. The check happens on the device; Khandaq never sees biometric data.</li>
   </ul>
   <p>All of these are used on the device. None of the data they give access to is sent to us.</p>
-  <p>Android also declares permissions the system never puts a prompt in front of. Naming all of them, so the list above is not read as the whole story: <em>internet</em> and <em>network state</em>; <em>wake lock</em>, <em>foreground service</em>, <em>special-use foreground service</em> and <em>run at boot</em>, which keep the peer-to-peer connection alive in the background; <em>modify audio settings</em> for calls; <em>full-screen intent</em>, so an incoming call can take over the lock screen; <em>exact alarm</em>, so the background connection is re-established on schedule rather than whenever the system feels like it; the Google messaging receive permission that Firebase Cloud Messaging needs; <em>Bluetooth</em> and <em>nearby devices</em>, so a call can be routed to a connected headset — declared, but the app never puts a prompt in front of you for them; and a signature-level permission the app defines for its own internal broadcasts. None of these read personal data. Khandaq does <strong>not</strong> declare “all files access” or “ignore battery optimisations”.</p>
-  <p>Location deserves a note: your position is read only when you choose to send it, and it then travels end-to-end encrypted like any other message. Both apps draw a small map preview for a location message, which means the map provider — OpenStreetMap on Android, Apple Maps on iOS — receives a request for the map imagery around those coordinates, and with it your device’s IP address. Khandaq does not receive either.</p>
+  <p>Android also declares permissions the system never puts a prompt in front of. Naming all of them, so the list above is not read as the whole story: <em>internet</em> and <em>network state</em>; <em>wake lock</em>, <em>foreground service</em>, <em>special-use foreground service</em> and <em>run at boot</em>, which keep the peer-to-peer connection alive in the background; <em>modify audio settings</em> for calls; <em>full-screen intent</em>, so an incoming call can take over the lock screen; <em>exact alarm</em>, so the background connection is re-established on schedule rather than whenever the system feels like it; the Google messaging receive permission that Firebase Cloud Messaging needs; <em>Bluetooth</em> and <em>nearby devices</em>, so a call can be routed to a connected headset (declared, but the app never puts a prompt in front of you for them); and a signature-level permission the app defines for its own internal broadcasts. None of these read personal data. Khandaq does <strong>not</strong> declare “all files access” or “ignore battery optimisations”.</p>
+  <p>Location deserves a note: your position is read only when you choose to send it, and it then travels end-to-end encrypted like any other message. Both apps draw a small map preview for a location message, which means the map provider (OpenStreetMap on Android, Apple Maps on iOS) receives a request for the map imagery around those coordinates, and with it your device’s IP address. Khandaq does not receive either.</p>
 
   <h2>Children</h2>
   <p>Khandaq is not directed to children under 17. Because it provides unrestricted, unmoderated communication, it is rated accordingly on the App Store.</p>
@@ -98,13 +123,13 @@
   <h2>Third parties</h2>
   <p>Khandaq does not sell or rent personal data to anyone, and it runs no advertising or analytics business. There is no profile to sell: we hold no account, no contact list, and no message content. A small number of services are unavoidably involved in making the app work, and each of them is listed here.</p>
   <ul>
-    <li><strong>Google (Firebase Cloud Messaging)</strong> — delivers notifications on Android and iOS. Handles a per-device registration token, your IP address, and the sender’s Tox public key carried inside the wake push; no message content. Governed by Google’s own privacy policy. Google’s ML Kit barcode scanner is also in the Android app, but it runs on-device and sends nothing.</li>
-    <li><strong>Apple (APNs)</strong> — the final delivery hop for notifications on iOS, reached through FCM. Same limits: no message content.</li>
-    <li><strong>The Khandaq wake relay</strong> (push.khandaq.org) — see <a href="#push">Push notifications</a> for exactly what it receives and keeps. Run by us, not by a third party.</li>
-    <li><strong>Legacy wake relays and optional push servers</strong> — the upstream relay addresses listed under <a href="#push">Push notifications</a>, and, on Android only if you switch one on yourself, ntfy / UnifiedPush / Mozilla’s push service. They receive the same wake call the Khandaq relay would, and nothing more.</li>
-    <li><strong>OpenStreetMap and Apple Maps</strong> — only when a location message is displayed, to fetch the map preview. They see the requested coordinates and your IP address.</li>
-    <li><strong>Tox bootstrap and relay nodes</strong> — run by volunteers, not by us. They help devices find each other and cannot read end-to-end encrypted traffic.</li>
-    <li><strong>The App Store and Google Play</strong> — distribute the app and report their own aggregate install statistics to us. We do not add any identifier of our own to those.</li>
+    <li><strong>Google (Firebase Cloud Messaging)</strong>: delivers notifications on Android and iOS. Handles a per-device registration token, your IP address, and the sender’s Tox public key carried inside the wake push; no message content. Governed by Google’s own privacy policy. Google’s ML Kit barcode scanner is also in the Android app, but it runs on-device and sends nothing.</li>
+    <li><strong>Apple (APNs)</strong>: the final delivery hop for notifications on iOS, reached through FCM. Same limits: no message content.</li>
+    <li><strong>The Khandaq wake relay</strong> (push.khandaq.org): see <a href="#push">Push notifications</a> for exactly what it receives and keeps. Run by us, not by a third party.</li>
+    <li><strong>Legacy wake relays and optional push servers</strong>: the upstream relay addresses listed under <a href="#push">Push notifications</a>, and, on Android only if you switch one on yourself, ntfy / UnifiedPush / Mozilla’s push service. They receive the same wake call the Khandaq relay would, and nothing more.</li>
+    <li><strong>OpenStreetMap and Apple Maps</strong>: only when a location message is displayed, to fetch the map preview. They see the requested coordinates and your IP address.</li>
+    <li><strong>Tox bootstrap and relay nodes</strong>: run by volunteers, not by us. They help devices find each other and cannot read end-to-end encrypted traffic.</li>
+    <li><strong>The App Store and Google Play</strong>: distribute the app and report their own aggregate install statistics to us. We do not add any identifier of our own to those.</li>
   </ul>
   <p>Khandaq is open source, and the Tox protocol libraries it builds on are open source and community-audited, so these claims can be checked against the code rather than taken on trust.</p>
 
@@ -114,10 +139,58 @@
   <h2>Contact</h2>
   <p>Questions about privacy? Email <a href="mailto:support@khandaq.org">support@khandaq.org</a>.</p>
 
-  <!-- KHANDAQ (18.08): same owner/developer credit as the other pages; this page carries its own inline styles (no style.css, no ".copyright" strip), so it is phrased as prose to match the running sentence. -->
-  <footer>
-    © 2026 Khandaq. Khandaq is free and open-source software. Portions of this text are derived from <a href="https://tox.chat/" target="_blank" rel="noopener">tox.chat</a>, licensed under CC BY-SA 4.0. <span class="credit">Owner and developer — <a href="https://1sa.me/" target="_blank" rel="noopener">Isa Dagestani</a></span>
+  <!-- KHANDAQ (18.08): same owner/developer credit as the other pages, phrased as prose after the licence sentence. -->
+  <p class="doc-foot">© 2026 Khandaq. Khandaq is free and open-source software. Portions of this text are derived from <a href="https://tox.chat/" target="_blank" rel="noopener">tox.chat</a>, licensed under CC BY-SA 4.0. <span class="credit">Owner and developer: <a href="https://1sa.me/" target="_blank" rel="noopener">Isa Dagestani</a></span></p>
+    </article>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap">
+      <div class="foot-cols">
+        <div>
+          <h2>Khandaq Messenger</h2>
+          <p>Encrypted messaging on the Tox network. Free and open source.</p>
+        </div>
+        <div>
+          <h2>Download</h2>
+          <ul>
+            <li><a href="/#download">All platforms</a></li>
+            <li><a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger">Android on Google Play</a></li>
+            <li><a href="https://testflight.apple.com/join/4ppS8ZN5">iPhone on TestFlight</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Project</h2>
+          <ul>
+            <li><a href="https://github.com/ummalife/khandaq">Source code</a></li>
+            <li><a href="/changelog.html">Changelog</a></li>
+            <li><a href="/privacy.html">Privacy policy</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/blob/master/SECURITY.md">Security</a></li>
+            <li><a href="https://tox.chat">Tox protocol</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Support</h2>
+          <ul>
+            <li><a href="mailto:support@khandaq.org">support@khandaq.org</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/issues">Report a problem</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/security/advisories/new">Report a vulnerability</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="foot-base">
+        <!-- KHANDAQ (18.08): the owner and developer credit lives on the copyright strip, the one line every page shares, so attribution stays identical site-wide. -->
+        <p class="copyright">© Khandaq, <a href="https://khandaq.org/">khandaq.org</a>. Open source, Tox-compatible. <span class="credit">Owner and developer: <a href="https://1sa.me/" target="_blank" rel="noopener">Isa Dagestani</a></span></p>
+        <fieldset class="seg" data-theme-control hidden>
+          <legend>Theme</legend>
+          <span class="seg-options">
+            <label><input type="radio" name="theme" value="system">Match system</label>
+            <label><input type="radio" name="theme" value="light">Light</label>
+            <label><input type="radio" name="theme" value="dark">Dark</label>
+          </span>
+        </fieldset>
+      </div>
+    </div>
   </footer>
-</div>
 </body>
 </html>

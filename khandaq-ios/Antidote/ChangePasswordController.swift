@@ -2,264 +2,184 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import UIKit
 import SnapKit
-
-private struct Constants {
-    static let HorizontalOffset = 40.0
-    static let ButtonVerticalOffset = 20.0
-    static let FieldsOffset = 10.0
-
-    static let MaxFormWidth = 350.0
-}
+import UIKit
 
 protocol ChangePasswordControllerDelegate: class {
     func changePasswordControllerDidFinishPresenting(_ controller: ChangePasswordController)
 }
 
-class ChangePasswordController: KeyboardNotificationController {
+/// The password of the profile open now (redesign stage 4, E20). A profile with a password changes it:
+/// the old one, then the new one twice. A profile made without one opens with a key kept in this
+/// iPhone's keychain; here it gets a password, and from then on its file opens with that password on
+/// another device too. Refusals stand under the fields, never in an alert.
+class ChangePasswordController: AirStepController {
     weak var delegate: ChangePasswordControllerDelegate?
 
-    fileprivate let theme: Theme
+    private weak var toxManager: OCTManager!
+    private let profilePath: String?
+    /// The key the profile opens with while it has no password.
+    private let deviceKey: String?
 
-    fileprivate weak var toxManager: OCTManager!
+    private let oldField = AirLineField(placeholder: String(localized: "air_password_old_placeholder"), secret: true)
+    private let newField = AirLineField(placeholder: String(localized: "air_password_new_placeholder"), secret: true)
+    private let repeatField = AirLineField(placeholder: String(localized: "air_first_repeat_placeholder"), secret: true)
+    private let note = AirFieldNote(hint: String(localized: "air_first_password_rule"))
+    private var fields: UIStackView!
 
-    fileprivate var scrollView: UIScrollView!
-    fileprivate var containerView: IncompressibleView!
-
-    fileprivate var oldPasswordField: ExtendedTextField!
-    fileprivate var newPasswordField: ExtendedTextField!
-    fileprivate var repeatPasswordField: ExtendedTextField!
-    fileprivate var button: RoundedButton!
-
-    init(theme: Theme, toxManager: OCTManager) {
-        self.theme = theme
-        self.toxManager = toxManager
-
-        super.init()
-
-        edgesForExtendedLayout = UIRectEdge()
-        addNavigationButtons()
-
-        title = String(localized: "change_password")
+    private var setsPassword: Bool {
+        return deviceKey != nil
     }
 
-    required convenience init?(coder aDecoder: NSCoder) {
+    init(theme: Theme, toxManager: OCTManager) {
+        self.toxManager = toxManager
+        let path = ProfileDeviceKey.activeProfilePath
+        profilePath = path
+        if let path = path, ProfileDeviceKey.hasKey(profilePath: path) {
+            deviceKey = ProfileDeviceKey.key(profilePath: path)
+        }
+        else {
+            deviceKey = nil
+        }
+        let sets = deviceKey != nil
+        super.init(title: String(localized: sets ? "air_password_set_title" : "change_password"),
+                   body: sets ? String(localized: "air_password_set_body") : nil,
+                   mainTitle: String(localized: sets ? "air_password_set_action" : "air_password_change_action"))
+    }
+
+    required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override func loadView() {
-        loadViewWithBackgroundColor(theme.colorForType(.NormalBackground))
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.accessibilityIdentifier = "air.password.screen"
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: String(localized: "alert_cancel"),
+                                                           style: .plain,
+                                                           target: self,
+                                                           action: #selector(cancelTapped))
 
-        createViews()
-        installConstraints()
-    }
+        oldField.field.accessibilityIdentifier = "air.password.old"
+        oldField.field.textContentType = .password
+        newField.field.accessibilityIdentifier = "air.password.new"
+        repeatField.field.accessibilityIdentifier = "air.password.repeat"
+        AirNewPassword.prepare(newField)
+        AirNewPassword.prepare(repeatField)
 
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-
-        if let old = oldPasswordField {
-            _ = old.becomeFirstResponder()
+        var parts: [UIView] = [newField, repeatField, note]
+        if !setsPassword {
+            parts.insert(oldField, at: 0)
         }
-        else if let new = newPasswordField {
-            _ = new.becomeFirstResponder()
+        for field in [oldField, newField, repeatField] {
+            field.field.returnKeyType = .next
+            field.onChange = { [weak self] in
+                self?.update()
+            }
+        }
+        repeatField.field.returnKeyType = .done
+        oldField.onReturn = { [weak self] in
+            self?.newField.field.becomeFirstResponder()
+        }
+        newField.onReturn = { [weak self] in
+            self?.repeatField.field.becomeFirstResponder()
+        }
+        repeatField.onReturn = { [weak self] in
+            self?.mainTapped()
+        }
+        fields = AirKit.column(parts, spacing: KQSpace.x8)
+        fields.setCustomSpacing(KQSpace.x6, after: repeatField)
+        column.addArrangedSubview(fields)
+        update()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        let first = setsPassword ? newField : oldField
+        if first.text.isEmpty {
+            first.field.becomeFirstResponder()
         }
     }
 
-    override func keyboardWillShowAnimated(keyboardFrame frame: CGRect) {
-        scrollView.contentInset.bottom = frame.size.height
-        scrollView.scrollIndicatorInsets.bottom = frame.size.height
+    private var reason: String? {
+        if !setsPassword, oldField.text.isEmpty {
+            return String(localized: "air_password_old_first")
+        }
+        return AirNewPassword.reason(newField.text, repeated: repeatField.text)
     }
 
-    override func keyboardWillHideAnimated(keyboardFrame frame: CGRect) {
-        scrollView.contentInset.bottom = 0.0
-        scrollView.scrollIndicatorInsets.bottom = 0.0
+    private func update() {
+        setWaiting(reason)
+        note.clear()
+        oldField.hasError = false
     }
 
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-
-        scrollView.contentSize.width = scrollView.frame.size.width
-        scrollView.contentSize.height = containerView.frame.maxY
+    private func setBusy(_ busy: Bool) {
+        mainButton.setBusy(busy ? String(localized: "air_password_saving") : nil)
+        fields.isUserInteractionEnabled = !busy
+        navigationItem.leftBarButtonItem?.isEnabled = !busy
+        isModalInPresentation = busy
     }
-}
 
-// MARK: Actions
-extension ChangePasswordController {
-    @objc func cancelButtonPressed() {
+    @objc private func cancelTapped() {
         delegate?.changePasswordControllerDidFinishPresenting(self)
     }
 
-    @objc func buttonPressed() {
-        guard validatePasswordFields() else {
+    override func mainTapped() {
+        guard reason == nil, let manager = toxManager else {
+            update()
             return
         }
+        view.endEditing(true)
+        let oldPassword = deviceKey ?? oldField.text
+        let newPassword = newField.text
+        let sets = setsPassword
+        let path = profilePath
+        setBusy(true)
 
-        let oldPassword = oldPasswordField.text!
-        let newPassword = newPasswordField.text!
-
-        let hud = JGProgressHUD(style: .dark)
-        hud?.show(in: view)
-
-        // KHANDAQ (audit #15): re-encrypting a large Tox savedata takes seconds; the nav-bar Cancel
-        // button (outside the HUD-covered view) can pop+dealloc this controller mid-op. [unowned self]
-        // would then EXC_BAD_ACCESS — use [weak self] and bail if it's gone.
-        DispatchQueue.global(qos: .default).async { [weak self] in
-            guard let self = self else { return }
-            let result = self.toxManager.changeEncryptPassword(newPassword, oldPassword: oldPassword)
-
-            if result {
-                let keychainManager = KeychainManager()
-                if keychainManager.toxPasswordForActiveAccount != nil {
-                    keychainManager.toxPasswordForActiveAccount = newPassword
+        // KHANDAQ (audit #15): re-encrypting a large save takes seconds; the sheet holds still meanwhile
+        // (no Cancel, no swipe), and a controller gone by then is simply not told.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let changed = manager.changeEncryptPassword(newPassword, oldPassword: oldPassword)
+            DispatchQueue.main.async {
+                guard changed else {
+                    self?.showWrongOld()
+                    return
+                }
+                let keychain = KeychainManager()
+                if sets || keychain.toxPasswordForActiveAccount != nil {
+                    keychain.toxPasswordForActiveAccount = newPassword
+                }
+                if sets, let path = path {
+                    // Opened with the password from now on: the key has nothing left to open.
+                    ProfileDeviceKey.remove(profilePath: path)
+                    // The security page and You say what the password changes.
+                    NotificationCenter.default.post(name: .khandaqProfileSettingsDidChange, object: nil)
+                }
+                guard let self = self else {
+                    return
+                }
+                let host = self.presentingViewController?.view
+                self.delegate?.changePasswordControllerDidFinishPresenting(self)
+                if let host = host {
+                    AirToast.show(String(localized: sets ? "air_password_set_done" : "air_password_changed"), in: host)
                 }
             }
-
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                hud?.dismiss()
-
-                if result {
-                    self.delegate?.changePasswordControllerDidFinishPresenting(self)
-                }
-                else {
-                    handleErrorWithType(.wrongOldPassword)
-                }
-            }
-        }
-    }
-}
-
-extension ChangePasswordController: ExtendedTextFieldDelegate {
-    func loginExtendedTextFieldReturnKeyPressed(_ field: ExtendedTextField) {
-        if field === oldPasswordField {
-            _ = newPasswordField!.becomeFirstResponder()
-        }
-        else if field === newPasswordField {
-            _ = repeatPasswordField!.becomeFirstResponder()
-        }
-        else if field === repeatPasswordField {
-            buttonPressed()
-        }
-    }
-}
-
-private extension ChangePasswordController {
-    func addNavigationButtons() {
-        navigationItem.leftBarButtonItem = UIBarButtonItem(
-                title: String(localized: "alert_cancel"),
-                style: .plain,
-                target: self,
-                action: #selector(ChangePasswordController.cancelButtonPressed))
-    }
-
-    func createViews() {
-        scrollView = UIScrollView()
-        view.addSubview(scrollView)
-
-        containerView = IncompressibleView()
-        containerView.backgroundColor = .clear
-        scrollView.addSubview(containerView)
-
-        button = RoundedButton(theme: theme, type: .runningPositive)
-        button.setTitle(String(localized: "change_password_done"), for: UIControlState())
-        button.addTarget(self, action: #selector(ChangePasswordController.buttonPressed), for: .touchUpInside)
-        containerView.addSubview(button)
-
-        oldPasswordField = createPasswordFieldWithTitle(String(localized: "old_password"))
-        newPasswordField = createPasswordFieldWithTitle(String(localized: "new_password"))
-        repeatPasswordField = createPasswordFieldWithTitle(String(localized: "repeat_password"))
-
-        oldPasswordField.returnKeyType = .next
-        newPasswordField.returnKeyType = .next
-        repeatPasswordField.returnKeyType = .done
-    }
-
-    func createPasswordFieldWithTitle(_ title: String) -> ExtendedTextField {
-        let field = ExtendedTextField(theme: theme, type: .normal)
-        field.delegate = self
-        field.title = title
-        field.secureTextEntry = true
-        containerView.addSubview(field)
-
-        return field
-    }
-
-    func installConstraints() {
-        scrollView.snp.makeConstraints {
-            $0.edges.equalTo(view)
-        }
-
-        containerView.customIntrinsicContentSize.width = CGFloat(Constants.MaxFormWidth)
-        containerView.snp.makeConstraints {
-            $0.top.equalTo(scrollView)
-            $0.centerX.equalTo(scrollView)
-            $0.width.lessThanOrEqualTo(Constants.MaxFormWidth)
-            $0.width.lessThanOrEqualTo(scrollView).offset(-2 * Constants.HorizontalOffset)
-        }
-
-        var topConstraint = containerView.snp.top
-
-        if installConstraintsForField(oldPasswordField, topConstraint: topConstraint) {
-            topConstraint = oldPasswordField!.snp.bottom
-        }
-
-        if installConstraintsForField(newPasswordField, topConstraint: topConstraint) {
-            topConstraint = newPasswordField!.snp.bottom
-        }
-
-        if installConstraintsForField(repeatPasswordField, topConstraint: topConstraint) {
-            topConstraint = repeatPasswordField!.snp.bottom
-        }
-
-        button.snp.makeConstraints {
-            $0.top.equalTo(topConstraint).offset(Constants.ButtonVerticalOffset)
-            $0.leading.trailing.equalTo(containerView)
-            $0.bottom.equalTo(containerView)
         }
     }
 
-    /**
-        Returns true if field exists, no otherwise.
-     */
-    func installConstraintsForField(_ field: ExtendedTextField?, topConstraint: ConstraintItem) -> Bool {
-        guard let field = field else {
-            return false
+    private func showWrongOld() {
+        setBusy(false)
+        if setsPassword {
+            // The key of this iPhone did not open the profile: nothing the person typed was wrong.
+            note.onDetails = nil
+            note.showError(String(localized: "air_password_set_failed"), details: false)
+            return
         }
-
-        field.snp.makeConstraints {
-            $0.top.equalTo(topConstraint).offset(Constants.FieldsOffset)
-            $0.leading.trailing.equalTo(containerView)
-        }
-
-        return true
-    }
-
-    func validatePasswordFields() -> Bool {
-        guard let oldText = oldPasswordField.text, !oldText.isEmpty else {
-            handleErrorWithType(.passwordIsEmpty)
-            return false
-        }
-        guard let newText = newPasswordField.text, !newText.isEmpty else {
-            handleErrorWithType(.passwordIsEmpty)
-            return false
-        }
-
-        guard let repeatText = repeatPasswordField.text, !repeatText.isEmpty else {
-            handleErrorWithType(.passwordIsEmpty)
-            return false
-        }
-
-        if let failure = PasswordPolicy.validate(newText) {
-            handlePasswordValidationFailure(failure)
-            return false
-        }
-
-        guard newText == repeatText else {
-            handleErrorWithType(.passwordsDoNotMatch)
-            return false
-        }
-
-        return true
+        note.onDetails = nil
+        note.showError(String(localized: "air_password_wrong_old"), details: false)
+        oldField.hasError = true
+        oldField.shake()
+        oldField.field.becomeFirstResponder()
+        oldField.field.selectAll(nil)
     }
 }

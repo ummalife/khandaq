@@ -52,3 +52,63 @@
 "app_store_screenshot_chat_message_4" = "Sure, thanks!";
 /* Demo chat message for the App Store screenshot */
 "app_store_screenshot_chat_message_5" = "yep";
+
+/* Stage 2 of the redesign: the demo world of the UI tests' mock profile (OCTManagerMock). Made-up people. */
+"demo_s2_amina" = "Амина Сафина";
+"demo_s2_amina_status" = "По выходным в горах";
+"demo_s2_yusuf" = "Юсуф Каримов";
+"demo_s2_bilal" = "Билал Хаддад";
+"demo_s2_long" = "Максимилиан Александр фон Гогенцоллерн-Зигмаринген";
+"demo_s2_leila" = "Лейла Насер";
+"demo_s2_group_founder" = "Походный клуб";
+"demo_s2_group_observer" = "Объявления мечети";
+"demo_s2_group_peer_imam" = "Имам Халид";
+"demo_s2_bulk_format" = "Контакт %d";
+"demo_s2_bulk_message" = "До встречи";
+"demo_s2_amina_1" = "Привет! В субботу идём в горы?";
+"demo_s2_amina_2" = "Да, если погода не подведёт";
+"demo_s2_amina_3" = "Прогноз хороший, солнце весь день";
+"demo_s2_amina_4" = "Тогда выезжаем в 6, я возьму палатку";
+"demo_s2_amina_5" = "Отлично. Я возьму горелку и воду";
+"demo_s2_amina_6" = "Список вещей пришлю вечером";
+"demo_s2_amina_7" = "Договорились";
+"demo_s2_amina_8" = "Встречаемся у станции в 5:45";
+"demo_s2_yusuf_1" = "Завтра заберу ключи от гаража";
+"demo_s2_yusuf_2" = "Хорошо, я дома после семи";
+"demo_s2_yusuf_3" = "Юсуф, список ещё в силе? Хочу заехать в магазин после работы";
+"demo_s2_yusuf_4" = "И напомни, сколько брать воды";
+"demo_s2_yusuf_5" = "Я буду у тебя в 19:30";
+"demo_s2_bilal_1" = "Скинул тебе план маршрута";
+"demo_s2_bilal_2" = "Спасибо, посмотрю";
+"demo_s2_bilal_failed" = "Во сколько обратный поезд?";
+"demo_s2_long_1" = "Спасибо за книгу!";
+"demo_s2_saved_1" = "Код домофона у мамы: 2741";
+"demo_s2_saved_2" = "Купить: хлеб, финики, чай";
+"demo_s2_group_1" = "Кто едет в субботу? Отметьтесь до вечера";
+"demo_s2_group_2" = "Пятничная проповедь начнётся в 13:00";
+
+/* Stage 3 of the redesign: more of the demo world (requests, invitations, groups). Made-up people. */
+"demo_s3_request_1" = "Ас-саляму алейкум! Это Тимур, мы познакомились на лекции в субботу.";
+"demo_s3_invite_book" = "Книжный клуб";
+"demo_s3_invite_family" = "Семья";
+"demo_s3_timur" = "Тимур Ахмедов";
+"demo_s3_self" = "Самир Валиев";
+"demo_s3_peer_khadija" = "Хадиджа Нуриева";
+"demo_s3_peer_omar" = "Омар Саидов";
+"demo_s3_peer_zaynab" = "Зайнаб Алиева";
+"demo_s3_peer_ibrahim" = "Ибрагим Гасанов";
+"demo_s3_peer_maryam" = "Марьям Халилова";
+"demo_s3_peer_hamza" = "Хамза Рашидов";
+"demo_s3_listener_format" = "Слушатель %d";
+"demo_s3_group_bilal" = "Маршрут на субботу: 14 км, один крутой подъём в начале";
+"demo_s3_group_omar" = "У меня две лишние горелки, если кому-то нужно";
+"demo_s3_group_khadija_format" = "@%@, можно я возьму с собой сестру? Ей 16";
+"demo_s3_group_self" = "Конечно, чем больше, тем лучше. Сбор у станции в 5:45";
+"demo_s3_group_hamza" = "Со следующей недели пятничные уроки начинаются в 19:00";
+"demo_s3_bilal_caption" = "Сбор здесь, у северного выхода";
+"demo_s3_self_status" = "Отвечаю по вечерам";
+"demo_s3_band_message" = "Фото с субботы уже в группе, посмотри";
+"demo_s3_band_invite_group" = "Суббота у реки";
+
+/* Redesign stage 5: the private messages with the moderator */
+"demo_s5_private_hamza" = "Ассаламу алейкум! После урока вы спрашивали, можно ли вам писать в группе. Спрошу имама: он основатель.";

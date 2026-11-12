@@ -5,62 +5,56 @@
 import UIKit
 import SnapKit
 
+/// A file, a photo or a video, or a voice note as an entry of the transcript (redesign stage 3, E8):
+/// the time column and the author as for a text (AirEntryFrame), then the attachment. A photo or a
+/// video shows its preview with the caption under it; a file shows its name and size, and while it
+/// moves the bar, what is left and the actions (AirFileRowView); a voice note shows "Listen", its wave
+/// and its length. Our own entries carry the status mark at the far end. ChatIncomingFileCell and
+/// ChatOutgoingFileCell only say which way the file goes.
 class ChatGenericFileCell: ChatMovableDateCell {
+    /// The preview of a photo or a video.
     var loadingView: LoadingImageView!
+    /// The name, the size and the transfer of a file; under a preview, the transfer alone.
+    var fileRow: AirFileRowView!
     var voiceMessageView: ChatVoiceMessageView!
-    var cancelButton: UIButton!
-    var retryButton: UIButton!
-    // KHANDAQ: Telegram-style caption shown directly under the media, inside the same cell.
+    // KHANDAQ: the caption sent with a photo, shown under it in the same entry.
     var captionLabel: UILabel!
-    var captionTopConstraint: Constraint?
-    // KHANDAQ (#192): reaction chips line ("❤️ 2  👍") under the media/file/voice bubble.
+    // KHANDAQ (#192): the reactions line under the attachment.
     var reactionsLabel: UILabel!
     var onReactionsTap: (() -> Void)?
-    // Bottom-of-bubble ownership: normally the caption (media/file) or the voice view owns
-    // movableContentView's bottom; when reactions are visible they sit below and own it instead.
-    var captionBottomConstraint: Constraint?
-    var voiceBottomConstraint: Constraint?
 
-    // KHANDAQ (#36): remembered after a full voice configure so a lightweight player-state refresh
-    // (timer/notification driven) can update the play/pause icon + progress WITHOUT rebuilding the
-    // model — rebuilding would drop `onPlayTapped` and kill the button after the first tick.
+    let entry = AirEntryFrame()
+    /// The attachment, top to bottom: the preview or the voice note, the file row (under them, only the
+    /// transfer), the caption and the reactions. A hidden part takes no room.
+    private let body = UIStackView()
+    private let previewHolder = UIView()
+    private let videoBadge = UIView()
+    private let videoBadgeLabel = UILabel()
+    private lazy var summaryElement = ChatFileEntryElement(cell: self)
+    private var fileModel: ChatGenericFileCellModel?
+    /// The height of the first line of the body, for the time column and the mark.
+    private var firstLine: CGFloat = 0
+    private var personName: String?
+    private var personOnline = true
+
+    /// The way the file goes; ChatOutgoingFileCell says false.
+    var isIncoming: Bool {
+        return true
+    }
+
+    // KHANDAQ (#36): remembered after a full voice configure, so a refresh driven by the player (timer
+    // or notification) changes the button and the wave without building the model again, which would
+    // drop `onPlayTapped` after the first tick.
     private var voicePlaybackMessageId: String?
     private var voicePlaybackDuration: TimeInterval = 0
     private var voicePlaybackEnabled = false
 
-    static let captionFont = UIFont.systemFont(ofSize: 15)
-    static let captionTopSpacing: CGFloat = 5.0
-
-    // KHANDAQ (#192 follow-up, reported 18 Aug "reactions don't stick on media"): the chips line and
-    // the gaps bindReactions() puts around it. Media rows get an EXPLICIT height (they don't
-    // self-size), so this has to be added there — otherwise the chips are laid out but clipped away
-    // and reacting on a photo looks like nothing happened.
-    static let reactionsFont = UIFont.systemFont(ofSize: 13.0)
-    static let reactionsTopSpacing: CGFloat = 4.0
-    static let reactionsBottomSpacing: CGFloat = 8.0
-
-    static func reactionsHeight(for display: String?) -> CGFloat {
-        guard let display = display, !display.isEmpty else {
-            return 0
-        }
-        let bounding = (display as NSString).boundingRect(
-            with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: reactionsFont],
-            context: nil)
-        return ceil(bounding.height) + reactionsTopSpacing + reactionsBottomSpacing
+    static var captionFont: UIFont {
+        return KQFont.font(.body)
     }
 
-    static func captionHeight(for text: String, width: CGFloat) -> CGFloat {
-        guard !text.isEmpty, width > 0 else {
-            return 0
-        }
-        let bounding = (text as NSString).boundingRect(
-            with: CGSize(width: width, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: captionFont],
-            context: nil)
-        return ceil(bounding.height) + captionTopSpacing
+    static var reactionsFont: UIFont {
+        return KQFont.font(.label)
     }
 
     var progressObject: ChatProgressProtocol? {
@@ -85,30 +79,45 @@ class ChatGenericFileCell: ChatMovableDateCell {
     var pauseOrResumeHandle: (() -> Void)?
     var openHandle: (() -> Void)?
 
-    /**
-        This method should be called after setupWithTheme:model:
-     */
+    /// The preview has come: the photo or the first frame of the video, filling its box. Call it after
+    /// setupWithTheme(_:model:).
     func setButtonImage(_ image: UIImage) {
         canBeCopied = true
 
-        // KHANDAQ (#15): show the photo preview aspect-FILLED in the square preview box. The old code
-        // center-cropped the source to a square and set it as a button BACKGROUND image, which UIKit
-        // then STRETCHED to the button bounds — producing a distorted wide/short strip. Using the
-        // button's imageView with scaleAspectFill keeps the aspect ratio (cropped, not squished).
+        // KHANDAQ (#15): aspect-filled in a box of the media's own shape, neither stretched nor squashed.
         loadingView.imageButton.setBackgroundImage(nil, for: UIControlState())
         loadingView.imageButton.imageView?.contentMode = .scaleAspectFill
         loadingView.imageButton.imageView?.clipsToBounds = true
         loadingView.imageButton.contentHorizontalAlignment = .fill
         loadingView.imageButton.contentVerticalAlignment = .fill
         loadingView.imageButton.setImage(image, for: UIControlState())
+        loadingView.centerImageView.image = nil
+        loadingView.progressView.isHidden = true
+        loadingView.topLabel.isHidden = true
+        loadingView.bottomLabel.isHidden = true
 
-        // KHANDAQ (#15): shape the bubble to the photo/video aspect ratio (the box now matches the
-        // image, so scaleAspectFill neither crops nor stretches).
-        loadingView.setPreviewSize(image.size)
-
-        if state == .waitingConfirmation || state == .done {
-            loadingView.centerImageView.image = nil
+        // The box was sized from the file before the image came; an image of another shape (a photo
+        // turned by its EXIF orientation) reshapes it only when no size was known.
+        if fileModel?.previewSize == nil {
+            loadingView.setPreviewSize(image.size)
         }
+        previewHolder.isHidden = false
+        if fileModel?.isVoiceMessage == false, state == .done {
+            fileRow.isHidden = true
+        }
+    }
+
+    /// A video: the play mark in the middle of its preview.
+    func setVideoPlayOverlay() {
+        loadingView.centerImageView.image = UIImage.templateNamed("chat-file-play-big")
+        loadingView.centerImageView.tintColor = KQColor.fixedWhite
+    }
+
+    /// A video: its length in the corner of its preview.
+    func setVideoDurationLabel(_ text: String) {
+        videoBadgeLabel.text = text
+        videoBadge.isHidden = text.isEmpty
+        refreshSpokenText()
     }
 
     override func setupWithTheme(_ theme: Theme, model: BaseCellModel) {
@@ -118,9 +127,7 @@ class ChatGenericFileCell: ChatMovableDateCell {
             assert(false, "Wrong model \(model) passed to cell \(self)")
             return
         }
-
-        // KHANDAQ (#15): reset to the square box; setButtonImage() re-sizes to aspect for media.
-        loadingView.resetPreviewSize()
+        self.fileModel = fileModel
 
         state = fileModel.state
         transferBytesTotal = fileModel.fileSizeBytes
@@ -129,90 +136,106 @@ class ChatGenericFileCell: ChatMovableDateCell {
         retryHandle = fileModel.retryHandle
         pauseOrResumeHandle = fileModel.pauseOrResumeHandle
         openHandle = fileModel.openHandle
+        personName = fileModel.personName
+        personOnline = fileModel.personOnline
 
-        configureVoiceMessagePresentation(fileModel: fileModel, theme: theme)
+        let isVoice = fileModel.isVoiceMessage
+        let previewSize = isVoice ? nil : fileModel.previewSize
 
-        // Merged caption (Telegram-style). Hidden for voice notes and when there is no caption.
-        let captionText = fileModel.isVoiceMessage ? nil : fileModel.caption
-        if let captionText = captionText, !captionText.isEmpty {
-            captionLabel.text = captionText
-            captionLabel.textColor = theme.colorForType(.NormalText)
-            captionLabel.isHidden = false
-            captionTopConstraint?.update(offset: ChatGenericFileCell.captionTopSpacing)
+        // The preview: sized now, the image comes with setButtonImage.
+        loadingView.imageButton.setImage(nil, for: UIControlState())
+        loadingView.imageButton.setBackgroundImage(nil, for: UIControlState())
+        loadingView.centerImageView.image = nil
+        loadingView.progressView.isHidden = true
+        loadingView.topLabel.isHidden = true
+        loadingView.bottomLabel.isHidden = true
+        loadingView.backgroundColor = KQColor.sunken
+        videoBadgeLabel.text = nil
+        videoBadge.isHidden = true
+        if let size = previewSize {
+            loadingView.setPreviewSize(size)
         }
         else {
-            captionLabel.text = nil
-            captionLabel.isHidden = true
-            captionTopConstraint?.update(offset: 0)
+            loadingView.resetPreviewSize()
         }
+        previewHolder.isHidden = previewSize == nil
+
+        // The file row: the whole row for a file, the transfer alone under a preview or a voice note.
+        let showsHead = previewSize == nil && !isVoice
+        let text = entryText(progress: fileModel.transferProgress)
+        let saysSomething = text.progress != nil || !(text.note ?? "").isEmpty || !text.actions.isEmpty
+        fileRow.isHidden = !showsHead && (state == .done || !saysSomething)
+        fileRow.configure(name: fileModel.fileName ?? "",
+                          size: fileModel.fileSize ?? "",
+                          text: text,
+                          incoming: isIncoming,
+                          showsHead: showsHead)
+
+        voiceMessageView.isHidden = !isVoice
+        configureVoiceMessagePresentation(fileModel: fileModel, theme: theme)
+
+        // KHANDAQ: the caption sent with a photo; none for a voice note.
+        let caption = isVoice ? nil : fileModel.caption
+        captionLabel.text = caption
+        captionLabel.font = ChatGenericFileCell.captionFont
+        captionLabel.textColor = KQColor.ink
+        captionLabel.isHidden = (caption ?? "").isEmpty
 
         canBeCopied = false
-        // KHANDAQ (#192): allow reactions on files / media / voice notes too.
+        // KHANDAQ (#192): files, photos and voice notes take reactions too.
         canBeReacted = true
-        reactionsLabel.textColor = theme.colorForType(.NormalText)
         bindReactions(fileModel.reactionsDisplay)
         onReactionsTap = { [weak self] in
-            guard let cell = self else { return }
+            guard let cell = self else {
+                return
+            }
             cell.delegate?.chatMovableDateCellReactPressed(cell)
         }
 
-        switch state {
-            case .loading:
-                loadingView.centerImageView.image = UIImage.templateNamed("chat-file-pause-big")
-            case .paused:
-                loadingView.centerImageView.image = UIImage.templateNamed("chat-file-play-big")
-            case .waitingConfirmation:
-                fallthrough
-            case .cancelled:
-                fallthrough
-            case .done:
-                var fileExtension: String? = nil
-
-                if let fileName = fileModel.fileName {
-                    fileExtension = (fileName as NSString).pathExtension
-                }
-
-                loadingView.setImageWithUti(fileModel.fileUTI, fileExtension: fileExtension)
+        if previewSize != nil {
+            firstLine = ceil(KQFont.lineHeight(.caption))
         }
+        else if isVoice {
+            firstLine = KQSize.targetIos
+        }
+        else {
+            firstLine = AirFileRowView.firstLineHeight
+        }
+        entry.configure(fileModel, firstLine: firstLine)
+        let status = entryStatus()
+        entry.mark.set(status, animated: false)
+        entry.mark.isHidden = isIncoming || status == .none
 
-        updateViewsWithState(fileModel.state, fileModel: fileModel)
-
-        loadingView.imageButton.setImage(nil, for: UIControlState())
-
-        let backgroundColor = theme.colorForType(.FileImageBackgroundActive)
-        let backgroundImage = UIImage.imageWithColor(backgroundColor, size: CGSize(width: 1.0, height: 1.0))
-        loadingView.imageButton.setBackgroundImage(backgroundImage, for: UIControlState())
-
-        loadingView.progressView.backgroundLineColor = theme.colorForType(.FileImageAcceptButtonTint).withAlphaComponent(0.3)
-        loadingView.progressView.lineColor = theme.colorForType(.FileImageAcceptButtonTint)
-
-        loadingView.centerImageView.tintColor = theme.colorForType(.FileImageAcceptButtonTint)
-
-        loadingView.topLabel.textColor = theme.colorForType(.FileImageCancelledText)
-        loadingView.bottomLabel.textColor = theme.colorForType(.FileImageCancelledText)
-
-        cancelButton.tintColor = theme.colorForType(.FileImageCancelButtonTint)
-        retryButton.tintColor = theme.colorForType(.FileImageCancelButtonTint)
+        refreshSpokenText()
     }
 
     override func createViews() {
+        revealsTime = false
         super.createViews()
 
         loadingView = LoadingImageView()
-        loadingView.pressedHandle = loadingViewPressed
+        loadingView.layer.cornerRadius = KQRadius.card
+        loadingView.clipsToBounds = true
+        loadingView.pressedHandle = { [weak self] in
+            self?.loadingViewPressed()
+        }
+        // For the UI tests only: VoiceOver reaches the preview through the entry.
+        loadingView.imageButton.accessibilityIdentifier = "air.file.preview"
+        previewHolder.addSubview(loadingView)
 
-        captionLabel = UILabel()
-        captionLabel.font = ChatGenericFileCell.captionFont
-        captionLabel.numberOfLines = 0
-        captionLabel.isHidden = true
+        videoBadge.backgroundColor = KQColor.mediaShade
+        videoBadge.layer.cornerRadius = KQRadius.small
+        videoBadge.isUserInteractionEnabled = false
+        videoBadge.isHidden = true
+        videoBadgeLabel.font = KQFont.tabular(KQFont.font(.caption))
+        videoBadgeLabel.textColor = KQColor.fixedWhite
+        videoBadge.addSubview(videoBadgeLabel)
+        previewHolder.addSubview(videoBadge)
 
-        reactionsLabel = UILabel()
-        reactionsLabel.font = ChatGenericFileCell.reactionsFont
-        reactionsLabel.numberOfLines = 1
-        reactionsLabel.isHidden = true
-        reactionsLabel.isUserInteractionEnabled = true
-        reactionsLabel.addGestureRecognizer(
-            UITapGestureRecognizer(target: self, action: #selector(ChatGenericFileCell.reactionsLabelTapped)))
+        fileRow = AirFileRowView()
+        fileRow.onAction = { [weak self] action in
+            self?.perform(action)
+        }
 
         voiceMessageView = ChatVoiceMessageView()
         voiceMessageView.isHidden = true
@@ -220,168 +243,141 @@ class ChatGenericFileCell: ChatMovableDateCell {
             self?.voicePlayTogglePressed()
         }
 
-        let cancelImage = UIImage.templateNamed("chat-file-cancel")
+        captionLabel = UILabel()
+        captionLabel.font = ChatGenericFileCell.captionFont
+        captionLabel.adjustsFontForContentSizeCategory = true
+        captionLabel.numberOfLines = 0
+        captionLabel.isHidden = true
+        captionLabel.isAccessibilityElement = false
 
-        cancelButton = UIButton()
-        cancelButton.setImage(cancelImage, for: UIControlState())
-        cancelButton.addTarget(self, action: #selector(ChatGenericFileCell.cancelButtonPressed), for: .touchUpInside)
+        reactionsLabel = UILabel()
+        reactionsLabel.font = ChatGenericFileCell.reactionsFont
+        reactionsLabel.adjustsFontForContentSizeCategory = true
+        reactionsLabel.numberOfLines = 1
+        reactionsLabel.isHidden = true
+        reactionsLabel.isUserInteractionEnabled = true
+        reactionsLabel.isAccessibilityElement = false
+        reactionsLabel.addGestureRecognizer(
+            UITapGestureRecognizer(target: self, action: #selector(ChatGenericFileCell.reactionsLabelTapped)))
 
-        let retryImage = UIImage.templateNamed("chat-file-retry")
+        body.axis = .vertical
+        body.alignment = .fill
+        body.spacing = KQSpace.x6
+        [previewHolder, voiceMessageView, fileRow, captionLabel, reactionsLabel].forEach {
+            body.addArrangedSubview($0)
+        }
+        movableContentView.addSubview(body)
+    }
 
-        retryButton = UIButton()
-        retryButton.setImage(retryImage, for: UIControlState())
-        retryButton.addTarget(self, action: #selector(ChatGenericFileCell.retryButtonPressed), for: .touchUpInside)
+    override func installConstraints() {
+        super.installConstraints()
+
+        entry.install(in: self, body: body)
+        loadingView.snp.makeConstraints {
+            $0.top.leading.equalToSuperview()
+            $0.trailing.lessThanOrEqualToSuperview()
+            // Gives way while the stack hides the preview, instead of fighting its zero height.
+            $0.bottom.equalToSuperview().priority(999)
+        }
+        videoBadge.snp.makeConstraints {
+            $0.leading.equalTo(loadingView).offset(KQSpace.x8)
+            $0.bottom.equalTo(loadingView).offset(-KQSpace.x8)
+        }
+        videoBadgeLabel.snp.makeConstraints {
+            $0.top.bottom.equalToSuperview().inset(KQSpace.x2)
+            $0.leading.trailing.equalToSuperview().inset(KQSpace.x6)
+        }
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        progressObject = nil
+        fileModel = nil
     }
 
     override func setEditing(_ editing: Bool, animated: Bool) {
         super.setEditing(editing, animated: animated)
 
         loadingView.isUserInteractionEnabled = !editing
-        cancelButton.isUserInteractionEnabled = !editing
-        retryButton.isUserInteractionEnabled = !editing
+        fileRow.isUserInteractionEnabled = !editing
+        voiceMessageView.isUserInteractionEnabled = !editing
     }
 
     func updateProgress(_ progress: CGFloat) {
-        loadingView.progressView.progress = progress
-
-        guard state == .loading, progress > 0.001 else {
+        guard state == .loading else {
             return
         }
-
-        loadingView.bottomLabel.isHidden = false
-        let pct = Int(progress * 100)
-
-        if transferBytesTotal > 0 {
-            let done = Int64(Double(transferBytesTotal) * Double(progress))
-            let doneStr = ByteCountFormatter.string(fromByteCount: done, countStyle: .file)
-            let totalStr = ByteCountFormatter.string(fromByteCount: transferBytesTotal, countStyle: .file)
-            loadingView.bottomLabel.text = "\(doneStr) / \(totalStr) · \(pct)%"
-        }
-        else {
-            loadingView.bottomLabel.text = "\(pct)%"
-        }
+        let share = Float(progress)
+        fileModel?.transferProgress = share
+        fileRow.updateProgress(share, note: AirFileEntryText.leftText(bytesTotal: transferBytesTotal, progress: share))
+        refreshSpokenText()
     }
 
-    func updateEta(_ eta: String) {
-        loadingView.topLabel.isHidden = false
-        loadingView.topLabel.text = eta
-    }
+    // The note says what is left; the time left and the speed would change it every second.
+    func updateEta(_ eta: String) {}
 
-    func updateBytesPerSecond(_ bytesPerSecond: OCTToxFileSize) {
-        guard state == .loading, bytesPerSecond > 0 else {
-            return
-        }
+    func updateBytesPerSecond(_ bytesPerSecond: OCTToxFileSize) {}
 
-        let speed = ByteCountFormatter.string(fromByteCount: Int64(bytesPerSecond), countStyle: .file) + "/s"
-        loadingView.topLabel.isHidden = false
-        loadingView.topLabel.text = speed
-    }
-
-    // KHANDAQ (#192): show/hide the reaction chips under the bubble and reroute the bottom.
-    // Anchors to the *visible* container (voice view vs media/caption) so a hidden 180px media
-    // box never leaves a phantom gap above the chips on voice notes.
+    // KHANDAQ (#192): the reactions under the attachment, or none.
     func bindReactions(_ display: String?) {
         let text = display ?? ""
         reactionsLabel.font = ChatGenericFileCell.reactionsFont
+        reactionsLabel.textColor = KQColor.ink2
         reactionsLabel.text = text
-        let hasReactions = !text.isEmpty
-        reactionsLabel.isHidden = !hasReactions
-
-        // Preserve today's exact no-reaction layout: both caption & voice bottoms stay active.
-        // Only when reactions are visible do we hand the bubble bottom to the chips line.
-        if hasReactions {
-            captionBottomConstraint?.deactivate()
-            voiceBottomConstraint?.deactivate()
-        }
-        else {
-            captionBottomConstraint?.activate()
-            voiceBottomConstraint?.activate()
-        }
-
-        let isVoice = !voiceMessageView.isHidden
-        let anchorBottom = isVoice ? voiceMessageView.snp.bottom : captionLabel.snp.bottom
-
-        reactionsLabel.snp.remakeConstraints {
-            $0.top.equalTo(anchorBottom).offset(hasReactions ? 4.0 : 0.0)
-            makeReactionsHorizontalConstraints($0)
-            if hasReactions {
-                $0.bottom.equalTo(movableContentView).offset(-8.0)
-            }
-        }
-    }
-
-    /// Horizontal placement of the reaction chips; overridden per direction (incoming left / outgoing right).
-    func makeReactionsHorizontalConstraints(_ make: ConstraintMaker) {
-        make.leading.equalTo(contentView).offset(20.0)
-        make.trailing.lessThanOrEqualTo(contentView).offset(-20.0)
+        reactionsLabel.isHidden = text.isEmpty
     }
 
     @objc func reactionsLabelTapped() {
         onReactionsTap?()
     }
 
-    @objc func cancelButtonPressed() {
-        cancelHandle?()
+    /// A tap on the preview: open it once it is here.
+    func loadingViewPressed() {
+        guard state == .done else {
+            return
+        }
+        openHandle?()
     }
-
-    @objc func retryButtonPressed() {
-        retryHandle?()
-    }
-
-    /// Override in subclass
-    func updateViewsWithState(_ state: ChatGenericFileCellModel.State, fileModel: ChatGenericFileCellModel) {}
-
-    /// Override in subclass
-    func loadingViewPressed() {}
 
     func voicePlayTogglePressed() {
-        // Subclasses wire model.voicePlayToggleHandle
+        guard state == .done else {
+            return
+        }
+        fileModel?.voicePlayToggleHandle?()
     }
 
     func configureVoiceMessagePresentation(fileModel: ChatGenericFileCellModel, theme: Theme) {
-        let showVoice = fileModel.isVoiceMessage
-        voiceMessageView.isHidden = !showVoice
-        loadingView.isHidden = showVoice
-        // KHANDAQ (#15): the cancel/retry (⊗) buttons belong to the file box; hide them for voice
-        // notes so they don't overlap the player's timer.
-        if showVoice {
-            cancelButton.isHidden = true
-            retryButton.isHidden = true
-        }
-
-        guard showVoice else {
+        guard fileModel.isVoiceMessage else {
             return
         }
 
         let enabled = fileModel.state == .done
-        voiceMessageView.apply(theme: theme, enabled: enabled)
-        voiceMessageView.onPlayTapped = fileModel.voicePlayToggleHandle
-        // KHANDAQ (Android parity): scrub support (only for downloaded/ready notes)
+        voiceMessageView.unknownLengthText = fileModel.fileSize
+        voiceMessageView.onPlayTapped = { [weak self] in
+            self?.voicePlayTogglePressed()
+        }
+        // KHANDAQ (Android parity): scrub only a note that is here.
         voiceMessageView.onSeek = enabled ? fileModel.voiceSeekHandle : nil
 
-        // KHANDAQ (#36): remember for the lightweight, handle-preserving state refresh.
+        // KHANDAQ (#36): remembered for the refresh that keeps the handles.
         voicePlaybackMessageId = fileModel.voiceMessageId
         voicePlaybackDuration = fileModel.voiceDuration
         voicePlaybackEnabled = enabled
 
         if let messageId = fileModel.voiceMessageId,
            let state = ChatVoiceMessagePlayer.shared.state(for: messageId) {
-            voiceMessageView.update(
-                isPlaying: state.isPlaying,
-                progress: state.progress,
-                currentTime: state.currentTime,
-                duration: state.duration,
-                enabled: enabled
-            )
+            voiceMessageView.update(isPlaying: state.isPlaying,
+                                    progress: state.progress,
+                                    currentTime: state.currentTime,
+                                    duration: state.duration,
+                                    enabled: enabled)
         }
         else {
-            voiceMessageView.update(
-                isPlaying: false,
-                progress: fileModel.state == .loading ? fileModel.voiceTransferProgress : 0,
-                currentTime: 0,
-                duration: fileModel.voiceDuration,
-                enabled: enabled
-            )
+            voiceMessageView.update(isPlaying: false,
+                                    progress: 0,
+                                    currentTime: 0,
+                                    duration: fileModel.voiceDuration,
+                                    enabled: enabled)
         }
     }
 
@@ -391,35 +387,199 @@ class ChatGenericFileCell: ChatMovableDateCell {
         }
 
         configureVoiceMessagePresentation(fileModel: fileModel, theme: theme)
+        refreshSpokenText()
     }
 
-    /// KHANDAQ (#36): update ONLY the play/pause icon + progress from the shared player, reusing the
-    /// already-configured `onPlayTapped`. Driven by the player's timer/notifications. Rebuilding the
-    /// model here (the old path) reset `onPlayTapped` to nil, so the button died after the first tick
-    /// and a finished/paused note could only be replayed by leaving and re-entering the chat.
+    /// KHANDAQ (#36): only the button and the wave, from the shared player, keeping `onPlayTapped`.
+    /// Driven by the player's timer and notifications.
     func refreshVoicePlaybackState(theme: Theme) {
         guard !voiceMessageView.isHidden, let messageId = voicePlaybackMessageId else {
             return
         }
 
         if let state = ChatVoiceMessagePlayer.shared.state(for: messageId) {
-            voiceMessageView.update(
-                isPlaying: state.isPlaying,
-                progress: state.progress,
-                currentTime: state.currentTime,
-                duration: state.duration,
-                enabled: voicePlaybackEnabled
-            )
+            voiceMessageView.update(isPlaying: state.isPlaying,
+                                    progress: state.progress,
+                                    currentTime: state.currentTime,
+                                    duration: state.duration,
+                                    enabled: voicePlaybackEnabled)
         }
         else {
-            voiceMessageView.update(
-                isPlaying: false,
-                progress: 0,
-                currentTime: 0,
-                duration: voicePlaybackDuration,
-                enabled: voicePlaybackEnabled
-            )
+            voiceMessageView.update(isPlaying: false,
+                                    progress: 0,
+                                    currentTime: 0,
+                                    duration: voicePlaybackDuration,
+                                    enabled: voicePlaybackEnabled)
         }
+        refreshSpokenText()
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard let model = fileModel else {
+            return
+        }
+        // The fixed-size font of the time is made again for a new text size.
+        entry.configure(model, firstLine: firstLine)
+    }
+}
+
+// The transfer.
+private extension ChatGenericFileCell {
+    func availableActions() -> Set<AirFileAction> {
+        var actions = Set<AirFileAction>()
+        if startLoadingHandle != nil {
+            actions.insert(.accept)
+        }
+        if cancelHandle != nil {
+            actions.formUnion([.decline, .cancel])
+        }
+        if pauseOrResumeHandle != nil {
+            actions.formUnion([.pause, .resume])
+        }
+        if retryHandle != nil {
+            actions.insert(.retry)
+        }
+        return actions
+    }
+
+    func entryText(progress: Float) -> AirFileEntryText {
+        return AirFileEntryText.make(state: state,
+                                     incoming: isIncoming,
+                                     bytesTotal: transferBytesTotal,
+                                     progress: progress,
+                                     available: availableActions(),
+                                     personName: personName,
+                                     personOnline: personOnline)
+    }
+
+    func entryStatus() -> AirEntryStatus {
+        guard !isIncoming else {
+            return .none
+        }
+        let delivered = (fileModel as? ChatOutgoingFileCellModel)?.delivered ?? false
+        return AirFileEntryText.status(state: state, delivered: delivered, personOnline: personOnline)
+    }
+
+    func perform(_ action: AirFileAction) {
+        switch action {
+            case .accept:
+                startLoadingHandle?()
+            case .decline, .cancel:
+                cancelHandle?()
+            case .pause, .resume:
+                pauseOrResumeHandle?()
+            case .retry:
+                retryHandle?()
+        }
+    }
+
+    /// One entry for VoiceOver: who and when, then what the file is and how it goes; the voice note's
+    /// button and the actions of the transfer follow as their own buttons, in the order they are seen.
+    func refreshSpokenText() {
+        guard let model = fileModel else {
+            return
+        }
+        var value: [String] = []
+        if let marks = transcriptMarksSpoken {
+            value.append(marks)
+        }
+        if model.isVoiceMessage {
+            value.append(String(localized: "air_voice_spoken"))
+            value.append(voiceMessageView.spokenText)
+        }
+        else if !previewHolder.isHidden {
+            value.append(model.fileName ?? "")
+            if let length = videoBadgeLabel.text, !videoBadge.isHidden {
+                value.append(length)
+            }
+        }
+        let row = fileRow.isHidden ? "" : fileRow.spokenText
+        if !row.isEmpty {
+            value.append(row)
+        }
+        if let caption = captionLabel.text, !captionLabel.isHidden {
+            value.append(caption)
+        }
+        if let reactions = reactionsLabel.text, !reactionsLabel.isHidden {
+            value.append(reactions)
+        }
+        if !isIncoming, let spoken = entryStatus().spokenText {
+            value.append(spoken)
+        }
+        summaryElement.accessibilityLabel = entry.spokenLabel(model)
+        summaryElement.accessibilityValue = value.filter { !$0.isEmpty }.joined(separator: ", ")
+        summaryElement.accessibilityTraits = state == .done && !model.isVoiceMessage ? UIAccessibilityTraitButton : UIAccessibilityTraitNone
+    }
+}
+
+// Accessibility: the entry, then the buttons of the voice note and of the transfer.
+extension ChatGenericFileCell {
+    override var isAccessibilityElement: Bool {
+        get {
+            return false
+        }
+        set {}
+    }
+
+    override var accessibilityElements: [Any]? {
+        get {
+            summaryElement.accessibilityFrameInContainerSpace = bounds
+            var elements: [Any] = [summaryElement]
+            if !voiceMessageView.isHidden {
+                elements.append(voiceMessageView)
+            }
+            if !fileRow.isHidden {
+                elements.append(fileRow)
+            }
+            return elements
+        }
+        set {}
+    }
+
+    override func accessibilityActivate() -> Bool {
+        guard state == .done, fileModel?.isVoiceMessage == false else {
+            return false
+        }
+        openHandle?()
+        return true
+    }
+
+    /// Where a tap on the entry acts, on the screen: the middle of the preview, or of the attachment. The
+    /// entry is the whole row, so its own middle could fall beside the preview (at the large text sizes).
+    /// A voice note keeps the middle of the row: its button is an element of its own.
+    fileprivate var entryActivationPoint: CGPoint? {
+        guard let window = window, voiceMessageView.isHidden else {
+            return nil
+        }
+        let target: UIView = previewHolder.isHidden ? body : loadingView
+        let frame = window.convert(target.convert(target.bounds, to: nil), to: window.screen.coordinateSpace)
+        return CGPoint(x: frame.midX, y: frame.midY)
+    }
+}
+
+/// The spoken entry of a file. On a double tap VoiceOver asks the focused element, this one, to act, not
+/// the cell: unanswered, it tapped the middle of the row, which opened nothing where that middle fell
+/// beside the preview (at the large text sizes). The entry now gives the cell's own answer.
+private final class ChatFileEntryElement: UIAccessibilityElement {
+    private weak var cell: ChatGenericFileCell?
+
+    init(cell: ChatGenericFileCell) {
+        self.cell = cell
+        super.init(accessibilityContainer: cell)
+    }
+
+    override var accessibilityActivationPoint: CGPoint {
+        get {
+            return cell?.entryActivationPoint ?? super.accessibilityActivationPoint
+        }
+        set {
+            super.accessibilityActivationPoint = newValue
+        }
+    }
+
+    override func accessibilityActivate() -> Bool {
+        return cell?.accessibilityActivate() ?? false
     }
 }
 
@@ -430,7 +590,6 @@ extension ChatGenericFileCell {
     }
 
     override func menuTargetRect() -> CGRect {
-        // Voice notes hide the media box; anchor the menu/reaction bar to the visible player.
-        return voiceMessageView.isHidden ? loadingView.frame : voiceMessageView.frame
+        return body.frame
     }
 }

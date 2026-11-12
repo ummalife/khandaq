@@ -4,13 +4,12 @@
 
 import UIKit
 
-private struct Constants {
-    static let SmallSize: CGFloat = 60.0
-    static let BigSize: CGFloat = 80.0
-    static let ImageSize: CGFloat = 30.0
-}
-
+/// A button of the call screens (redesign stage 3, E9): a 64 pt circle for the thumb. Answer is filled
+/// green and decline or end filled red, both with a white icon; the switches (microphone, speaker,
+/// camera) are translucent over the dark ground and turn white with a dark icon while they are on.
+/// AirCallControl puts its word under it.
 class CallButton: UIButton {
+    /// Both sizes are 64 pt now; the size is kept for the callers.
     enum ButtonSize {
         case small
         case big
@@ -25,108 +24,122 @@ class CallButton: UIButton {
         case video
     }
 
+    let type: ButtonType
+
     override var isSelected: Bool {
         didSet {
-            if let selectedTintColor = selectedTintColor {
-                tintColor = isSelected ? selectedTintColor : normalTintColor
-            }
+            applyState()
         }
     }
 
     override var isHighlighted: Bool {
         didSet {
-            if isHighlighted {
-                tintColor = normalTintColor
-            }
-            else {
-                if let selectedTintColor = selectedTintColor {
-                    tintColor = isSelected ? selectedTintColor : normalTintColor
-                }
-            }
+            applyState()
         }
     }
 
-    fileprivate let buttonSize: ButtonSize
-    fileprivate let normalTintColor: UIColor
-    fileprivate var selectedTintColor: UIColor?
-
-    init(theme: Theme, type: ButtonType, buttonSize: ButtonSize) {
-        self.buttonSize = buttonSize
-        self.normalTintColor = theme.colorForType(.CallButtonIconColor)
-
-        super.init(frame: CGRect.zero)
-
-        switch buttonSize {
-            case .small:
-                layer.cornerRadius = Constants.SmallSize / 2
-            case .big:
-                layer.cornerRadius = Constants.BigSize / 2
+    override var isEnabled: Bool {
+        didSet {
+            applyState()
         }
-        layer.masksToBounds = true
+    }
 
-        let imageName: String
-        let backgroundColor: UIColor
-        var selectedBackgroundColor: UIColor? = nil
+    /// `theme` is no longer read: the colours come from the design tokens.
+    init(theme: Theme?, type: ButtonType, buttonSize: ButtonSize) {
+        self.type = type
+        super.init(frame: .zero)
+
+        layer.cornerRadius = KQSpace.x64 / 2
+        layer.masksToBounds = true
 
         switch type {
             case .decline:
-                imageName = "end-call"
-                backgroundColor = theme.colorForType(.CallDeclineButtonBackground)
+                setImage(UIImage.templateNamed("end-call"), for: .normal)
             case .answerAudio:
-                imageName = "start-call-30"
-                backgroundColor = theme.colorForType(.CallAnswerButtonBackground)
-            case .answerVideo:
-                imageName = "video-call-30"
-                backgroundColor = theme.colorForType(.CallAnswerButtonBackground)
+                setImage(UIImage.templateNamed("start-call-30"), for: .normal)
+            case .answerVideo, .video:
+                setImage(UIImage.templateNamed("video-call-30"), for: .normal)
             case .mute:
-                imageName = "mute"
-                backgroundColor = theme.colorForType(.CallControlBackground)
-                selectedTintColor = theme.colorForType(.CallButtonSelectedIconColor)
-                selectedBackgroundColor = theme.colorForType(.CallControlSelectedBackground)
+                setImage(UIImage.templateNamed("mute"), for: .normal)
+                setImage(UIImage.templateNamed("mute-selected"), for: .selected)
             case .speaker:
-                imageName = "speaker"
-                backgroundColor = theme.colorForType(.CallControlBackground)
-                selectedTintColor = theme.colorForType(.CallButtonSelectedIconColor)
-                selectedBackgroundColor = theme.colorForType(.CallControlSelectedBackground)
-            case .video:
-                imageName = "video-call-30"
-                backgroundColor = theme.colorForType(.CallControlBackground)
-                selectedTintColor = theme.colorForType(.CallButtonSelectedIconColor)
-                selectedBackgroundColor = theme.colorForType(.CallControlSelectedBackground)
+                setImage(UIImage.templateNamed("speaker"), for: .normal)
         }
-
-        tintColor = normalTintColor
-
-        switch type {
-            case .mute:
-                let image = UIImage.templateNamed("mute")
-                setImage(image, for: .normal)
-                let image2 = UIImage.templateNamed("mute-selected")
-                setImage(image2, for: .selected)
-            default:
-                let image = UIImage.templateNamed(imageName)
-                setImage(image, for: UIControlState())
-        }
-
-        let backgroundImage = UIImage.imageWithColor(backgroundColor, size: CGSize(width: 1.0, height: 1.0))
-        setBackgroundImage(backgroundImage, for:UIControlState())
-
-        if let selected = selectedBackgroundColor {
-            let backgroundImage = UIImage.imageWithColor(selected, size: CGSize(width: 1.0, height: 1.0))
-            setBackgroundImage(backgroundImage, for:UIControlState.selected)
-        }
+        accessibilityLabel = CallButton.title(for: type)
+        applyState()
     }
 
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override var intrinsicContentSize : CGSize {
-        switch buttonSize {
-            case .small:
-                return CGSize(width: Constants.SmallSize, height: Constants.SmallSize)
-            case .big:
-                return CGSize(width: Constants.BigSize, height: Constants.BigSize)
+    override var intrinsicContentSize: CGSize {
+        return CGSize(width: KQSpace.x64, height: KQSpace.x64)
+    }
+
+    /// The word for the button where nothing more particular is said.
+    static func title(for type: ButtonType) -> String {
+        switch type {
+            case .decline:
+                return String(localized: "air_call_end")
+            case .answerAudio:
+                return String(localized: "air_call_answer")
+            case .answerVideo:
+                return String(localized: "air_call_answer_video")
+            case .mute:
+                return String(localized: "air_call_mic")
+            case .speaker:
+                return String(localized: "air_call_speaker")
+            case .video:
+                return String(localized: "air_call_camera")
+        }
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        applyState()
+    }
+
+    private var isSwitch: Bool {
+        switch type {
+            case .mute, .speaker, .video:
+                return true
+            case .decline, .answerAudio, .answerVideo:
+                return false
+        }
+    }
+
+    private func applyState() {
+        switch type {
+            case .decline:
+                backgroundColor = KQColor.dangerFill
+                tintColor = KQColor.fixedWhite
+            case .answerAudio, .answerVideo:
+                backgroundColor = KQColor.liveFill
+                tintColor = KQColor.fixedWhite
+            case .mute, .speaker, .video:
+                backgroundColor = isSelected ? KQColor.fixedWhite : KQColor.mediaControl
+                tintColor = isSelected ? KQColor.lockTop : KQColor.fixedWhite
+        }
+        alpha = isEnabled ? 1 : 0.4
+        transform = isHighlighted ? CGAffineTransform(scaleX: 0.97, y: 0.97) : .identity
+
+        if isSwitch {
+            accessibilityValue = switchValue()
+        }
+    }
+
+    /// The microphone switch is on while the microphone is off (muted); the others while they work.
+    private func switchValue() -> String {
+        switch type {
+            case .mute:
+                return String(localized: isSelected ? "air_call_mic_off" : "air_call_mic_on")
+            case .speaker:
+                return String(localized: isSelected ? "air_call_speaker_on" : "air_call_speaker_off")
+            case .video:
+                return String(localized: isSelected ? "air_call_camera_on" : "air_call_camera_off")
+            case .decline, .answerAudio, .answerVideo:
+                return ""
         }
     }
 }

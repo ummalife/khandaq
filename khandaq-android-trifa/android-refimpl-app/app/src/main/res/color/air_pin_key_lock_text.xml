@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (redesign, stage 5): the digit of a PIN key on the lock ground, white, and lock-top on the
+     white circle while pressed, as AirPinKey on iOS. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/kq_lock_top" android:state_pressed="true" />
+    <item android:color="@color/kq_fixed_white" />
+</selector>

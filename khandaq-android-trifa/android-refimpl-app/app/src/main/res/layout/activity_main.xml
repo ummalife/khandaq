@@ -69,6 +69,16 @@
 
         <include layout="@layout/chat_list_filter_tabs" />
 
+        <!-- KHANDAQ (redesign, before the release): the line that closes the header of You and Settings,
+             as air_screen_rule closes the header of an Air screen and as the opaque navigation bar on iOS
+             draws it: what the keyboard lifts, or the list scrolls, slides under an edge. This header, and
+             so its line, is shown only over those two (MainActivity.updateMainToolbarForTab). -->
+        <View
+            android:id="@+id/main_header_rule"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/kq_stroke_hairline"
+            android:background="@color/kq_line" />
+
     </LinearLayout>
 
     <com.google.android.material.bottomnavigation.BottomNavigationView

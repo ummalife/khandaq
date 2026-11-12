@@ -86,55 +86,15 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
         switch (viewType)
         {
             case Message_model.TEXT_INCOMING_NOT_READ:
-                if (PREF__compact_chatlist)
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_entry_read_compact,
-                                                                            parent, false);
-                }
-                else
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_entry_read, parent,
-                                                                            false);
-                }
-                return new GroupMessageListHolder_text_incoming_not_read(view, this.context);
-
             case Message_model.TEXT_INCOMING_HAVE_READ:
-                if (PREF__compact_chatlist)
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_entry_read_compact,
-                                                                            parent, false);
-                }
-                else
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_entry_read, parent,
-                                                                            false);
-                }
+                // KHANDAQ (redesign, stage 3b): every text of the group is an entry of the transcript, as in a
+                // conversation with one person, compact list or not.
+                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.air_entry_text, parent, false);
                 return new GroupMessageListHolder_text_incoming_not_read(view, this.context);
 
             case Message_model.TEXT_OUTGOING_NOT_READ:
-                if (PREF__compact_chatlist)
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(
-                            R.layout.message_list_self_entry_read_compact, parent, false);
-                }
-                else
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_self_entry_read,
-                                                                            parent, false);
-                }
-                return new GroupMessageListHolder_text_outgoing_read(view, this.context);
-
             case Message_model.TEXT_OUTGOING_HAVE_READ:
-                if (PREF__compact_chatlist)
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(
-                            R.layout.message_list_self_entry_read_compact, parent, false);
-                }
-                else
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_self_entry_read,
-                                                                            parent, false);
-                }
+                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.air_entry_text, parent, false);
                 return new GroupMessageListHolder_text_outgoing_read(view, this.context);
 
             case Message_model.FILE_INCOMING_STATE_CANCEL:
@@ -235,6 +195,8 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
 
         // KHANDAQ: Telegram-style captions — merge an adjacent TEXT into its media bubble.
         ChatCaptionHelper.apply_group_caption_state(context, this.messagelistitems, position, holder);
+        // KHANDAQ (redesign, stage 3b): a file, a photo or a voice note is an entry of the transcript.
+        AirFileEntry.bindGroup(holder.itemView, m2, position);
     }
 
     private void bindViewHolderForType(final RecyclerView.ViewHolder holder, final GroupMessage message)
@@ -489,6 +451,11 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
             }
         }
 
+        if (selection && AirTranscript.isEntry(holder.itemView))
+        {
+            // An entry's ground also says whether it mentions you: the full bind draws both.
+            partial = false;
+        }
         if (partial)
         {
             try
@@ -503,7 +470,8 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
                     final View container = holder.itemView.findViewById(R.id.layout_message_container);
                     if (container != null)
                     {
-                        if (MainActivity.selected_messages.contains(m.id))
+                        // The group's selection, not the conversation's with one person.
+                        if (MainActivity.selected_group_messages.contains(m.id))
                         {
                             container.setBackgroundResource(R.drawable.bg_message_selection);
                         }
@@ -516,6 +484,8 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
                 if (caption)
                 {
                     ChatCaptionHelper.apply_group_caption_state(context, this.messagelistitems, position, holder);
+                    // A file entry: its author over a run follows its neighbours (no-op for a text).
+                    AirFileEntry.bindGroup(holder.itemView, m, position);
                 }
                 return;
             }

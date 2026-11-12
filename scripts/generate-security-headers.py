@@ -65,7 +65,10 @@ def inline_hashes() -> tuple[list[str], list[str], list[str]]:
     scripts: list[str] = []
     styles: list[str] = []
     notes: list[str] = []
-    for page in sorted(WEB.glob("*.html")):
+    # KHANDAQ (redesign E23, 2026-11-11): the Russian pages under web/ru/ are served with the same
+    # header and carry the same kinds of inline block, so they are hashed exactly like the top level.
+    for page in sorted(WEB.glob("*.html")) + sorted((WEB / "ru").glob("*.html")):
+        name = page.relative_to(WEB).as_posix()
         html = page.read_text(encoding="utf-8")
         for tag, bucket in (("script", scripts), ("style", styles)):
             # Only blocks with a body: <script src=...> loads a file and is covered by 'self'.
@@ -79,13 +82,13 @@ def inline_hashes() -> tuple[list[str], list[str], list[str]]:
                 if h not in bucket:
                     bucket.append(h)
                 line = html[: m.start()].count("\n") + 1
-                notes.append(f"#   {page.name}:{line}  <{tag}>  {h}")
+                notes.append(f"#   {name}:{line}  <{tag}>  {h}")
         # An inline style="" attribute cannot be hashed — it would force 'unsafe-inline' back into
         # style-src (style-src-attr is not carried by every supported browser). They were moved into
         # the stylesheets; this keeps them from creeping back.
         if re.search(r"<[^>]+\sstyle\s*=", html):
             raise SystemExit(
-                f"ОШИБКА: {page.name} содержит инлайновый атрибут style= — он не хешируется и "
+                f"ОШИБКА: {name} содержит инлайновый атрибут style= — он не хешируется и "
                 f"потребовал бы 'unsafe-inline' в style-src. Перенесите объявление в CSS."
             )
     return scripts, styles, notes

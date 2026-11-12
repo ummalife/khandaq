@@ -52,6 +52,9 @@ public class ChatReactionsUiHelper
             final int padH = (int) (8 * d);
             final int padV = (int) (3 * d);
             final int margin = (int) (4 * d);
+            // KHANDAQ (redesign, stage 2): an entry of the transcript (no bubble) takes the design-system
+            // chips: a raised plate with a hairline, ink text, the count in tabular figures.
+            final boolean air = AirTranscript.isEntry(itemView);
             for (int i = 0; i < arr.length(); i++)
             {
                 final JSONObject entry = arr.getJSONObject(i);
@@ -74,10 +77,17 @@ public class ChatReactionsUiHelper
 
                 final TextView chip = new TextView(row.getContext());
                 chip.setText(count > 1 ? (emoji + " " + count) : emoji);
-                chip.setTextSize(13);
-                chip.setTextColor(0xFFFFFFFF);
-                chip.setPadding(padH, padV, padH, padV);
-                chip.setBackgroundResource(own ? R.drawable.reaction_chip_bg_own : R.drawable.reaction_chip_bg);
+                if (air)
+                {
+                    AirTranscript.styleReactionChip(chip, own);
+                }
+                else
+                {
+                    chip.setTextSize(13);
+                    chip.setTextColor(0xFFFFFFFF);
+                    chip.setPadding(padH, padV, padH, padV);
+                    chip.setBackgroundResource(own ? R.drawable.reaction_chip_bg_own : R.drawable.reaction_chip_bg);
+                }
                 final LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                 lp.setMargins(0, 0, margin, 0);

@@ -284,19 +284,7 @@ public class ConferenceListHolder extends RecyclerView.ViewHolder implements Vie
             else
             {
                 // KHANDAQ: don't flash the "Please wait ..." card on the list when opening a conference.
-
-                if (this.conference.kind == TOX_CONFERENCE_TYPE_AV.value)
-                {
-                    Intent intent = new Intent(v.getContext(), ConferenceAudioActivity.class);
-                    intent.putExtra("conf_id", this.conference.conference_identifier);
-                    v.getContext().startActivity(intent);
-                }
-                else
-                {
-                    Intent intent = new Intent(v.getContext(), ConferenceMessageListActivity.class);
-                    intent.putExtra("conf_id", this.conference.conference_identifier);
-                    v.getContext().startActivity(intent);
-                }
+                open_conference(v.getContext(), this.conference);
             }
         }
         catch (Exception e)
@@ -306,12 +294,29 @@ public class ConferenceListHolder extends RecyclerView.ViewHolder implements Vie
         }
     }
 
+    /** KHANDAQ (redesign): opens an audio conference or a text one; the old list and Air share it. */
+    static void open_conference(final Context c, final ConferenceDB conference)
+    {
+        final Intent intent = new Intent(c, conference.kind == TOX_CONFERENCE_TYPE_AV.value
+                                            ? ConferenceAudioActivity.class : ConferenceMessageListActivity.class);
+        intent.putExtra("conf_id", conference.conference_identifier);
+        c.startActivity(intent);
+    }
+
     @Override
     public boolean onLongClick(final View v)
     {
         Log.i(TAG, "onLongClick");
+        return show_row_menu(v, this.conference);
+    }
 
-        final ConferenceDB f2 = this.conference;
+    /** KHANDAQ (redesign): the row's action menu, anchored to {@code v}; the old list and Air share it. */
+    static boolean show_row_menu(final View v, final ConferenceDB f2)
+    {
+        if (f2 == null)
+        {
+            return false;
+        }
 
         PopupMenu menu = new PopupMenu(v.getContext(), v);
         menu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener()
@@ -377,7 +382,7 @@ public class ConferenceListHolder extends RecyclerView.ViewHolder implements Vie
 
     }
 
-    public void show_confirm_conference_leave_dialog(final View view, final ConferenceDB f2)
+    static void show_confirm_conference_leave_dialog(final View view, final ConferenceDB f2)
     {
         AlertDialog.Builder builder = new AlertDialog.Builder(view.getContext());
         builder.setTitle("Leave Conference?");
@@ -439,7 +444,7 @@ public class ConferenceListHolder extends RecyclerView.ViewHolder implements Vie
         dialog.show();
     }
 
-    public void show_confirm_conference_del_dialog(final View view, final ConferenceDB f2)
+    static void show_confirm_conference_del_dialog(final View view, final ConferenceDB f2)
     {
         AlertDialog.Builder builder = new AlertDialog.Builder(view.getContext());
         builder.setTitle("Delete Conference?");

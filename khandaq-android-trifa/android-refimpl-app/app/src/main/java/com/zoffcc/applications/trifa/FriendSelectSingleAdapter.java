@@ -181,7 +181,10 @@ public class FriendSelectSingleAdapter extends ArrayAdapter<FriendSelectSingle>
             f_relay_icon.setVisibility(View.INVISIBLE);
             if (textViewStatus != null)
             {
-                textViewStatus.setVisibility(View.GONE);
+                // KHANDAQ (stage 5): the kind of row in words, where the name used to carry "NGC Group: ".
+                textViewStatus.setText(R.string.air_group_dossier_title);
+                textViewStatus.setTextColor(context.getResources().getColor(R.color.tg_chat_preview));
+                textViewStatus.setVisibility(View.VISIBLE);
             }
             textViewName.setText(friend_entry.getName());
         }

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    KHANDAQ (redesign, stage 3b): the 6dp bar of a file on its way (design/DESIGN.md, "Files, voice and
+    calls on the phone"): a sunken track, the part moved in ink, round ends. The fill grows from the
+    start of the line, the right in Arabic, with the bar's layout direction.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <shape android:shape="rectangle">
+            <corners android:radius="3dp" />
+            <solid android:color="@color/kq_sunken" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress">
+        <scale
+            android:scaleGravity="start"
+            android:scaleWidth="100%">
+            <shape android:shape="rectangle">
+                <corners android:radius="3dp" />
+                <solid android:color="@color/kq_ink" />
+            </shape>
+        </scale>
+    </item>
+</layer-list>

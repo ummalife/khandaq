@@ -12,7 +12,7 @@ import UIKit
 enum MediaSendPreviewItem {
     case image(UIImage, fileName: String?)
     // KHANDAQ (#204-B): carry the picked video's ORIGINAL name (PHPicker suggestedName /
-    // PHAssetResource.originalFilename) — the staged URL is a UUID temp, so lastPathComponent
+    // PHAssetResource.originalFilename): the staged URL is a UUID temp, so lastPathComponent
     // would surface a UUID in Saved Messages instead of the real filename.
     case video(URL, fileName: String?)
 }
@@ -40,7 +40,7 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
 
     private let closeButton = UIButton(type: .system)
     private let checkButton = UIButton(type: .system)
-    // KHANDAQ (iOS photo editor): crop/rotate/aspect-ratio editor (TOCropViewController) — parity with
+    // KHANDAQ (iOS photo editor): crop/rotate/aspect-ratio editor (TOCropViewController), parity with
     // Android's uCrop. Shown only for photos.
     private let editButton = UIButton(type: .system)
     private let counterLabel = UILabel()
@@ -95,22 +95,28 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
         imageView.clipsToBounds = true
         imageView.isUserInteractionEnabled = true
 
-        playIconView.text = "▶"
-        playIconView.font = .systemFont(ofSize: 48, weight: .bold)
-        playIconView.textColor = UIColor.white.withAlphaComponent(0.92)
+        // The marks on this screen are icons, not text glyphs (redesign stage 3: no arrows, check marks
+        // or triangles typed into the interface).
+        let play = NSTextAttachment()
+        play.image = UIImage(systemName: "play.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 40, weight: .bold))?
+            .withTintColor(UIColor.white.withAlphaComponent(0.92), renderingMode: .alwaysOriginal)
+        playIconView.attributedText = NSAttributedString(attachment: play)
         playIconView.textAlignment = .center
         playIconView.isHidden = true
 
-        closeButton.setTitle("‹", for: .normal)
-        closeButton.setTitleColor(.white, for: .normal)
-        closeButton.titleLabel?.font = .systemFont(ofSize: 30, weight: .medium)
+        // "Backward" turns with the layout in Arabic; a typed angle mark had no name for VoiceOver.
+        closeButton.setImage(UIImage(systemName: "chevron.backward",
+                                     withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)), for: .normal)
+        closeButton.tintColor = .white
+        closeButton.accessibilityLabel = String(localized: "alert_cancel")
         closeButton.backgroundColor = UIColor.black.withAlphaComponent(0.35)
         closeButton.layer.cornerRadius = 22
 
         // KHANDAQ (Figma): round teal confirm-check, top-right.
-        checkButton.setTitle("✓", for: .normal)
-        checkButton.setTitleColor(.white, for: .normal)
-        checkButton.titleLabel?.font = .systemFont(ofSize: 22, weight: .bold)
+        checkButton.setImage(AirIcon.image("check"), for: .normal)
+        checkButton.tintColor = .white
+        checkButton.accessibilityLabel = String(localized: "air_compose_send")
+        checkButton.accessibilityIdentifier = "media.preview.check"
         checkButton.backgroundColor = Self.brandTeal
         checkButton.layer.cornerRadius = 22
 
@@ -125,6 +131,7 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
             editButton.setTitleColor(.white, for: .normal)
             editButton.titleLabel?.font = .systemFont(ofSize: 20, weight: .medium)
         }
+        editButton.accessibilityLabel = String(localized: "chat_edit_action")
         editButton.backgroundColor = UIColor.black.withAlphaComponent(0.35)
         editButton.layer.cornerRadius = 22
         editButton.isHidden = true
@@ -151,12 +158,16 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
         bottomBar.backgroundColor = UIColor(white: 0.08, alpha: 0.95)
 
         // KHANDAQ (Figma): emoji icon focuses the caption; round teal send arrow.
-        emojiButton.setTitle("😊", for: .normal)
-        emojiButton.titleLabel?.font = .systemFont(ofSize: 24)
+        emojiButton.setImage(UIImage(systemName: "face.smiling",
+                                     withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)), for: .normal)
+        emojiButton.tintColor = .white
+        // It only focuses the caption, which VoiceOver reaches by itself.
+        emojiButton.isAccessibilityElement = false
 
-        sendButton.setTitle("↑", for: .normal)
-        sendButton.setTitleColor(.white, for: .normal)
-        sendButton.titleLabel?.font = .systemFont(ofSize: 24, weight: .bold)
+        sendButton.setImage(AirIcon.image("arrow-up"), for: .normal)
+        sendButton.tintColor = .white
+        sendButton.accessibilityLabel = String(localized: "air_compose_send")
+        sendButton.accessibilityIdentifier = "media.preview.send"
         sendButton.backgroundColor = Self.brandTeal
         sendButton.layer.cornerRadius = 24
 
@@ -406,7 +417,7 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
     }
 }
 
-// KHANDAQ (iOS photo editor): TOCropViewController parity with Android's uCrop — crop/rotate/aspect ratios
+// KHANDAQ (iOS photo editor): TOCropViewController parity with Android's uCrop: crop/rotate/aspect ratios
 // on a photo before sending. The edited image is written back into the (now var) items array and flows out
 // through the existing confirm path, so both 1:1 and group send get it with no send-path changes.
 extension MediaSendPreviewController: TOCropViewControllerDelegate {

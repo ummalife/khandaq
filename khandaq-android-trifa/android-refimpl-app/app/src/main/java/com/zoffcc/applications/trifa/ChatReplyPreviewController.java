@@ -335,6 +335,14 @@ final class ChatReplyPreviewController
         {
             return;
         }
+        // KHANDAQ (redesign, stage 2): the one-to-one chat tags its bar for the design-system colours.
+        if (bar.getTag(R.id.air_reply_style) != null)
+        {
+            bar.setBackgroundColor(androidx.core.content.ContextCompat.getColor(context, R.color.kq_sunken));
+            headerView.setTextColor(androidx.core.content.ContextCompat.getColor(context, R.color.kq_ink));
+            previewView.setTextColor(androidx.core.content.ContextCompat.getColor(context, R.color.kq_ink_2));
+            return;
+        }
         bar.setBackgroundColor(androidx.core.content.ContextCompat.getColor(context, R.color.tg_reply_preview_bg));
         headerView.setTextColor(androidx.core.content.ContextCompat.getColor(context, R.color.tg_reply_preview_header));
         previewView.setTextColor(androidx.core.content.ContextCompat.getColor(context, R.color.tg_reply_preview_text));

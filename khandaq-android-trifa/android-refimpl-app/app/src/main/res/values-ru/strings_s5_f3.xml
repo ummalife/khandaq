@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Group settings (redesign, stage 5): GroupInfoActivity drawn as GroupInfoController on iOS, the same words -->
+    <string name="air_gs_self_name">Ваше имя в группе</string>
+    <string name="air_gs_self_name_note">Его видят участники этой группы. Имя профиля остаётся прежним.</string>
+    <string name="air_gs_name_empty">Имя не может быть пустым.</string>
+    <string name="air_gs_topic">Тема</string>
+    <string name="air_gs_topic_none">Нет темы</string>
+    <string name="air_gs_topic_note">Тему видят все участники: в списке и в шапке группы она стоит вместо названия.</string>
+    <string name="air_gs_topic_locked">Тему меняют только основатель и модераторы.</string>
+    <string name="air_gs_topic_not_observers">Тему меняют все, кроме наблюдателей.</string>
+    <string name="air_gs_topic_empty">Тема не может быть пустой.</string>
+    <string name="air_gs_topic_lock">Тему меняют только основатель и модераторы</string>
+    <string name="air_gs_join">Кто может войти</string>
+    <string name="air_gs_password">Пароль группы</string>
+    <string name="air_gs_password_note">Пароль понадобится новым участникам. Кто уже в группе, останется в ней.</string>
+    <string name="air_gs_password_remove">Убрать пароль</string>
+    <string name="air_gs_password_removed">Пароль убран</string>
+    <string name="air_gs_limit">Предел участников</string>
+    <string name="air_gs_limit_full">Группа заполнена: новые участники не войдут, пока предел не вырастет.</string>
+    <string name="air_gs_limit_range">Предел: число от 1 до 65 535.</string>
+    <string name="air_gs_write">Кто может писать</string>
+    <string name="air_gs_voice_all">Все участники</string>
+    <string name="air_gs_voice_all_note">Все, кроме наблюдателей.</string>
+    <string name="air_gs_voice_moderator">Модераторы и основатель</string>
+    <string name="air_gs_voice_founder">Только основатель</string>
+    <string name="air_gs_founder_only">Это меняет основатель группы.</string>
+    <string name="air_gs_save">Сохранить</string>
+    <string name="air_gs_saved">Сохранено</string>
+    <string name="air_gs_not_here">Это устройство сейчас не в группе, поэтому настройки здесь не меняются.</string>
+</resources>

@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Advanced settings (stage 3b): the sections by task, the dialog buttons and the start-on-boot note -->
+    <string name="air_pref_section_chats">المحادثات</string>
+    <string name="air_pref_section_files">الملفات</string>
+    <string name="air_pref_section_call_sound">الصوت في المكالمات</string>
+    <string name="air_pref_section_call_video">الفيديو في المكالمات</string>
+    <string name="air_pref_section_system">النظام</string>
+    <string name="air_pref_ok">موافق</string>
+    <string name="air_pref_boot_title">التشغيل بعد إعادة تشغيل الهاتف</string>
+    <string name="air_pref_boot_message">لا يسمح Android 10 والإصدارات الأحدث للتطبيق بأن يفتح نفسه بعد إعادة تشغيل الهاتف، لذلك لا يغيّر هذا المفتاح شيئًا على هذا الهاتف. بعد إعادة التشغيل افتح Khandaq مرة لتكون متصلًا.</string>
+    <!-- The command line (E3, stage 3b): Paste ID and joining a group by its key or link -->
+    <string name="air_cmd_paste_id">لصق المعرّف</string>
+    <string name="air_cmd_paste_none">لا تحتوي الحافظة على معرّف أو مفتاح مجموعة</string>
+    <string name="air_cmd_join_group">الانضمام إلى المجموعة بهذا المفتاح</string>
+    <string name="air_cmd_group_open">فتح المجموعة</string>
+    <string name="air_cmd_group_member">أنت في هذه المجموعة</string>
+    <string name="air_cmd_group_note_nobody">لا توجد جهة اتصال متصلة لتُدخلك بعد؛ سينتظر الانضمام حتى تتصل إحداها. للمجموعات المفتوحة فقط.</string>
+    <string name="air_cmd_group_joining">جارٍ الانضمام إلى المجموعة</string>
+    <string name="air_cmd_group_failed">تعذّر الانضمام إلى المجموعة. حاول مرة أخرى.</string>
+    <plurals name="air_cmd_group_note_online">
+        <item quantity="zero">جهات الاتصال المتصلة التي سنطلب منها إدخالك: %1$d. للمجموعات المفتوحة فقط.</item>
+        <item quantity="one">جهات الاتصال المتصلة التي سنطلب منها إدخالك: %1$d. للمجموعات المفتوحة فقط.</item>
+        <item quantity="two">جهات الاتصال المتصلة التي سنطلب منها إدخالك: %1$d. للمجموعات المفتوحة فقط.</item>
+        <item quantity="few">جهات الاتصال المتصلة التي سنطلب منها إدخالك: %1$d. للمجموعات المفتوحة فقط.</item>
+        <item quantity="many">جهات الاتصال المتصلة التي سنطلب منها إدخالك: %1$d. للمجموعات المفتوحة فقط.</item>
+        <item quantity="other">جهات الاتصال المتصلة التي سنطلب منها إدخالك: %1$d. للمجموعات المفتوحة فقط.</item>
+    </plurals>
+    <!-- Advanced settings rows (stage 3b): titles and summaries in plain words, for the keys of pref_general.xml -->
+    <string name="air_pref_font_size_title">حجم النص في المحادثات</string>
+    <string name="air_pref_font_size_summary">حجم نص الرسائل في المحادثات. أما بقية Khandaq فتتبع حجم النص المضبوط في الهاتف.</string>
+    <string name="air_pref_incognito_title">لوحة المفاتيح المتخفية</string>
+    <string name="air_pref_incognito_summary">تطلب من لوحة المفاتيح ألا تتعلم مما تكتبه في الرسائل، والالتزام بذلك يعود إلى لوحة المفاتيح.</string>
+    <string name="air_pref_screenshots_title">منع لقطات الشاشة</string>
+    <string name="air_pref_screenshots_summary">لا تظهر قائمة المحادثات والمحادثات والمكالمات في لقطات الشاشة وتسجيلاتها، وتبدو فارغة في التطبيقات الأخيرة.</string>
+    <string name="air_pref_page_size_title">الرسائل في الصفحة</string>
+    <string name="air_pref_page_size_summary">تعرض المحادثة هذا العدد من الرسائل في كل مرة، والأقدم منها بلمسة. القيمة 0 تعرضها كلها دفعة واحدة، وقد يبطئ ذلك المحادثات الطويلة.</string>
+    <string name="air_pref_group_notes_title">إظهار الانضمام والمغادرة</string>
+    <string name="air_pref_group_notes_summary">في محادثات المجموعات يظهر سطر عندما ينضم أحد أو يغادر أو يغيّر اسمه.</string>
+    <string name="air_pref_irc_name_1_title">أول اسم IRC مخفي</string>
+    <string name="air_pref_irc_name_2_title">ثاني اسم IRC مخفي</string>
+    <string name="air_pref_irc_name_3_title">ثالث اسم IRC مخفي</string>
+    <string name="air_pref_irc_name_1_summary">في مجموعة فيها جسر IRC تُخفى الرسائل التي ينقلها من هذا الاسم. اتركه فارغًا إذا لم تستخدم جسرًا.</string>
+    <string name="air_pref_irc_name_more_summary">اسم آخر لإخفائه، أو اتركه فارغًا.</string>
+    <string name="air_pref_accept_pictures_title">قبول الصور تلقائيًا</string>
+    <string name="air_pref_accept_pictures_summary">تُنزَّل الصور حتى 12 م.ب دون سؤال.</string>
+    <string name="air_pref_accept_videos_title">قبول الفيديو تلقائيًا</string>
+    <string name="air_pref_accept_videos_summary">تُنزَّل مقاطع الفيديو حتى 200 م.ب دون سؤال.</string>
+    <string name="air_pref_accept_files_title">قبول كل الملفات تلقائيًا</string>
+    <string name="air_pref_accept_files_summary">يُنزَّل أي ملف حتى 200 م.ب دون سؤال، وهذا يستهلك مساحة التخزين والبيانات.</string>
+    <string name="air_pref_share_in_title">المشاركة من تطبيقات أخرى</string>
+    <string name="air_pref_share_in_summary">يتيح إرسال الصور والملفات إلى محادثة من قائمة المشاركة في تطبيق آخر.</string>
+    <string name="air_pref_open_out_title">فتح الملفات في تطبيقات أخرى</string>
+    <string name="air_pref_open_out_summary">يُفتح الملف المستلم مباشرة في تطبيق آخر دون حفظه في الهاتف أولًا. وقد يتمكن تطبيق ضار حينها من قراءة ملفات أخرى يحفظها Khandaq مشفّرة.</string>
+    <string name="air_pref_screen_off_title">إطفاء الشاشة عند الأذن</string>
+    <string name="air_pref_screen_off_summary">أثناء المكالمة الصوتية تنطفئ الشاشة حين يكون الهاتف عند أذنك. إذا لم تعد تضيء بعد ذلك، أوقف هذا الخيار: ستصبح الشاشة فارغة فقط.</string>
+    <string name="air_pref_auto_level_title">مستوى الميكروفون التلقائي</string>
+    <string name="air_pref_auto_level_summary">يرفع الصوت الخافت تلقائيًا في المكالمات. إذا بدا الصوت مشوّهًا، أوقف هذا الخيار.</string>
+    <string name="air_pref_mic_boost_title">تقوية الميكروفون</string>
+    <string name="air_pref_mic_boost_summary">تجعل صوتك أعلى في المكالمات إذا كان الميكروفون خافتًا. القيمة 1 تعني بلا تقوية.</string>
+    <string name="air_pref_boost_lowers_title">التقوية تخفض الصوت</string>
+    <string name="air_pref_boost_lowers_summary">لميكروفون عالٍ جدًا: تجعل التقوية أعلاه صوتك أخفض بدل أن ترفعه.</string>
+    <string name="air_pref_noise_title">تقليل ضوضاء الخلفية</string>
+    <string name="air_pref_noise_summary">يزيل من صوتك في المكالمات ضوضاء الخلفية مثل حركة المرور أو المروحة. يستهلك البطارية أكثر قليلًا.</string>
+    <string name="air_pref_call_quality_title">جودة صوت المكالمات</string>
+    <string name="air_pref_call_quality_summary">الجودة الأعلى أوضح صوتًا وتستهلك بيانات أكثر. تسري من المكالمة التالية.</string>
+    <string name="air_pref_swap_colours_title">تبديل ألوان الكاميرا</string>
+    <string name="air_pref_swap_colours_summary">إذا ظهر الفيديو منك بألوان خاطئة، كبشرة زرقاء، فبدّل هذا الخيار.</string>
+    <string name="air_pref_picture_format_title">تنسيق صورة الكاميرا</string>
+    <string name="air_pref_picture_format_summary">إذا ظهر الفيديو منك مشوّهًا أو مخططًا، جرّب التنسيق الآخر.</string>
+    <string name="air_pref_video_chip_title">شريحة الفيديو في الهاتف</string>
+    <string name="air_pref_video_chip_summary">في مكالمات الفيديو تضغط شريحة الفيديو في الهاتف الصورة بدلًا من Khandaq. هذا يوفر البطارية، لكن الصورة تتقطع في بعض الهواتف.</string>
+    <string name="air_pref_resolution_title">دقة الكاميرا</string>
+    <string name="air_pref_resolution_summary">مدى وضوح صورتك في مكالمات الفيديو. الصورة الأوضح تحتاج إلى اتصال أسرع.</string>
+    <string name="air_pref_gradual_refresh_title">تحديث الصورة تدريجيًا</string>
+    <string name="air_pref_gradual_refresh_summary">مع شريحة الفيديو في الهاتف تتجدد الصورة جزءًا بعد جزء لا دفعة واحدة، فيبقى الفيديو أثبت عند ضعف الاتصال.</string>
+    <string name="air_pref_fewer_frames_title">إطارات فيديو أقل</string>
+    <string name="air_pref_fewer_frames_summary">يرسل نصف عدد الإطارات في الثانية، نحو 12 بدل 25: حركة أقل سلاسة لكن بيانات أقل.</string>
+    <string name="air_pref_camera_fps_title">15 إطارًا في الثانية</string>
+    <string name="air_pref_camera_fps_summary">يطلب من الكاميرا 15 إطارًا في الثانية. في بعض الهواتف قد يُغلق Khandaq حينها عند تشغيل الكاميرا.</string>
+    <string name="air_pref_direct_only_title">اتصالات مباشرة فقط</string>
+    <string name="air_pref_direct_only_summary">يتصل Khandaq مباشرة فقط ولا يمر عبر خادم وسيط، فلا يمكن الوصول إلى جهات الاتصال في الشبكات التي تغلق الطريق المباشر. يسري عند تشغيل Khandaq في المرة القادمة.</string>
+    <string name="air_pref_tor_title">الاتصال عبر Tor</string>
+    <string name="air_pref_tor_summary">تمر بياناتك عبر شبكة Tor، فلا ترى جهات الاتصال عنوانك على الإنترنت. يحتاج إلى تطبيق Orbot، وهو أبطأ، ويسري عند تشغيل Khandaq في المرة القادمة.</string>
+    <string name="air_pref_start_after_restart_title">البدء بعد إعادة تشغيل الهاتف</string>
+    <string name="air_pref_start_after_restart_summary">يفتح Khandaq بعد إعادة تشغيل الهاتف على Android 9 والإصدارات الأقدم. لا يسمح Android 10 والإصدارات الأحدث بذلك: افتح Khandaq مرة بعد إعادة التشغيل.</string>
+    <!-- The shown choices of the Advanced lists; their stored values stay the arrays of strings.xml -->
+    <string-array name="air_pref_font_size_entries">
+        <item>الأصغر</item>
+        <item>صغير</item>
+        <item>افتراضي</item>
+        <item>كبير</item>
+        <item>أكبر</item>
+        <item>كبير جدًا</item>
+        <item>الأكبر</item>
+    </string-array>
+    <string-array name="air_pref_call_quality_entries">
+        <item>منخفضة</item>
+        <item>عادية</item>
+        <item>عالية</item>
+    </string-array>
+    <string-array name="air_pref_picture_format_entries">
+        <item>القياسي</item>
+        <item>البديل</item>
+    </string-array>
+    <string-array name="air_pref_resolution_entries">
+        <item>عادية</item>
+        <item>عالية الدقة (HD)</item>
+        <item>عالية الدقة الكاملة (Full HD)</item>
+    </string-array>
+</resources>

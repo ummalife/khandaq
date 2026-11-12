@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- KHANDAQ group chat header overflow (Figma: only ⋮; search/members/add/video live inside). -->
+<!-- KHANDAQ group chat header overflow (redesign, stage 3): search and the live video are header icons;
+     the overflow keeps the members, the invitation, the log filters, and the video below 400dp where the
+     header has no room. Search joins them when the name would show fewer than about ten characters
+     (AirHeaderFit). -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
         android:id="@+id/action_group_search"
         android:title="@string/chat_action_search"
+        android:visible="false"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_group_members"
@@ -16,7 +20,7 @@
         app:showAsAction="never" />
     <item
         android:id="@+id/action_group_video"
-        android:title="@string/chat_action_video"
+        android:title="@string/group_live_video_toggle"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_group_filter_all"

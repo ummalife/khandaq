@@ -12,8 +12,8 @@
         <SwitchPreference
             android:defaultValue="false"
             android:key="start_on_boot"
-            android:summary="@string/pref_description_start_on_boot"
-            android:title="@string/pref_title_start_on_boot" />
+            android:summary="@string/air_pref_start_after_restart_summary"
+            android:title="@string/air_pref_start_after_restart_title" />
 
         <SwitchPreference
             android:defaultValue="false"
@@ -24,14 +24,14 @@
         <SwitchPreference
             android:defaultValue="true"
             android:key="use_incognito_keyboard"
-            android:summary="@string/pref_description_use_incognito_keyboard2"
-            android:title="@string/pref_title_use_incognito_keyboard2" />
+            android:summary="@string/air_pref_incognito_summary"
+            android:title="@string/air_pref_incognito_title" />
 
         <SwitchPreference
             android:defaultValue="false"
             android:key="window_security"
-            android:summary="@string/pref_description_window_security"
-            android:title="@string/pref_title_window_security" />
+            android:summary="@string/air_pref_screenshots_summary"
+            android:title="@string/air_pref_screenshots_title" />
 
         <EditTextPreference
             android:defaultValue="50"
@@ -39,71 +39,71 @@
             android:key="message_paging_num_msgs_per_page"
             android:maxLength="3"
             android:numeric="integer"
-            android:summary="@string/pref_description_message_paging_num_msgs_per_page"
-            android:title="@string/pref_title_message_paging_num_msgs_per_page" />
+            android:summary="@string/air_pref_page_size_summary"
+            android:title="@string/air_pref_page_size_title" />
 
         <SwitchPreference
             android:defaultValue="true"
             android:key="auto_accept_image"
-            android:summary="@string/pref_description_auto_accept_image"
-            android:title="@string/pref_title_auto_accept_image" />
+            android:summary="@string/air_pref_accept_pictures_summary"
+            android:title="@string/air_pref_accept_pictures_title" />
 
         <SwitchPreference
             android:defaultValue="false"
             android:key="auto_accept_video"
-            android:summary="@string/pref_description_auto_accept_video"
-            android:title="@string/pref_title_auto_accept_video" />
+            android:summary="@string/air_pref_accept_videos_summary"
+            android:title="@string/air_pref_accept_videos_title" />
 
         <SwitchPreference
             android:defaultValue="false"
             android:key="auto_accept_all_upto"
-            android:summary="@string/pref_description_auto_accept_all_upto"
-            android:title="@string/pref_title_auto_accept_all_upto" />
+            android:summary="@string/air_pref_accept_files_summary"
+            android:title="@string/air_pref_accept_files_title" />
 
         <!-- set default value to PREF_GLOBAL_FONT_SIZE_DEFAULT -->
         <ListPreference
             android:defaultValue="2"
-            android:entries="@array/pref_global_font_size_titles"
+            android:entries="@array/air_pref_font_size_entries"
             android:entryValues="@array/pref_global_font_size_values"
             android:key="global_font_size"
             android:negativeButtonText="@null"
             android:positiveButtonText="@null"
-            android:summary="@string/pref_description_global_font_size"
-            android:title="@string/pref_title_global_font_size" />
+            android:summary="@string/air_pref_font_size_summary"
+            android:title="@string/air_pref_font_size_title" />
 
         <SwitchPreference
             android:defaultValue="true"
             android:key="allow_file_sharing_to_trifa_via_intent"
-            android:summary="@string/pref_description_allow_file_sharing_to_trifa_via_intent"
-            android:title="@string/pref_title_allow_file_sharing_to_trifa_via_intent" />
+            android:summary="@string/air_pref_share_in_summary"
+            android:title="@string/air_pref_share_in_title" />
 
         <SwitchPreference
             android:defaultValue="false"
             android:key="allow_open_encrypted_file_via_intent"
-            android:summary="@string/pref_description_allow_open_encrypted_file_via_intent"
-            android:title="@string/pref_title_allow_open_encrypted_file_via_intent" />
+            android:summary="@string/air_pref_open_out_summary"
+            android:title="@string/air_pref_open_out_title" />
 
         <SwitchPreference
             android:defaultValue="true"
             android:key="video_uv_reversed"
-            android:summary="@string/pref_description_video_uv_reversed"
-            android:title="@string/pref_title_video_uv_reversed" />
+            android:summary="@string/air_pref_swap_colours_summary"
+            android:title="@string/air_pref_swap_colours_title" />
 
         <ListPreference
             android:defaultValue="YV12"
-            android:entries="@array/pref_camera_get_preview_format_titles"
+            android:entries="@array/air_pref_picture_format_entries"
             android:entryValues="@array/pref_camera_get_preview_format_values"
             android:key="camera_get_preview_format"
             android:negativeButtonText="@null"
             android:positiveButtonText="@null"
-            android:summary="@string/pref_description_camera_get_preview_format"
-            android:title="@string/pref_title_camera_get_preview_format" />
+            android:summary="@string/air_pref_picture_format_summary"
+            android:title="@string/air_pref_picture_format_title" />
 
         <SwitchPreference
             android:defaultValue="false"
             android:key="use_H264_hw_encoding"
-            android:summary="@string/pref_description_use_H264_hw_encoding"
-            android:title="@string/pref_title_use_H264_hw_encoding" />
+            android:summary="@string/air_pref_video_chip_summary"
+            android:title="@string/air_pref_video_chip_title" />
 
         <!--<SwitchPreference-->
         <!--android:defaultValue="true"-->
@@ -114,36 +114,36 @@
         <SwitchPreference
             android:defaultValue="false"
             android:key="orbot_enabled"
-            android:summary="@string/pref_description_orbot_enabled"
-            android:title="@string/pref_title_orbot_enabled" />
+            android:summary="@string/air_pref_tor_summary"
+            android:title="@string/air_pref_tor_title" />
 
         <ListPreference
             android:defaultValue="0"
-            android:entries="@array/pref_video_cam_resolution_titles"
+            android:entries="@array/air_pref_resolution_entries"
             android:entryValues="@array/pref_video_cam_resolution_values"
             android:key="video_cam_resolution"
             android:negativeButtonText="@null"
             android:positiveButtonText="@null"
-            android:summary="@string/pref_description_video_cam_resolution"
-            android:title="@string/pref_title_video_cam_resolution" />
+            android:summary="@string/air_pref_resolution_summary"
+            android:title="@string/air_pref_resolution_title" />
 
         <SwitchPreference
             android:defaultValue="true"
             android:key="h264_encoder_use_intra_refresh"
-            android:summary="@string/pref_description_h264_encoder_use_intra_refresh"
-            android:title="@string/pref_title_h264_encoder_use_intra_refresh" />
+            android:summary="@string/air_pref_gradual_refresh_summary"
+            android:title="@string/air_pref_gradual_refresh_title" />
 
         <SwitchPreference
             android:defaultValue="false"
             android:key="fps_half"
-            android:summary="@string/pref_description_fps_half"
-            android:title="@string/pref_title_fps_half" />
+            android:summary="@string/air_pref_fewer_frames_summary"
+            android:title="@string/air_pref_fewer_frames_title" />
 
         <SwitchPreference
             android:defaultValue="false"
             android:key="set_fps"
-            android:summary="@string/pref_description_set_fps"
-            android:title="@string/pref_title_set_fps" />
+            android:summary="@string/air_pref_camera_fps_summary"
+            android:title="@string/air_pref_camera_fps_title" />
 
         <SwitchPreference
             android:defaultValue="false"
@@ -154,44 +154,44 @@
         <SwitchPreference
             android:defaultValue="true"
             android:key="allow_screen_off_in_audio_call"
-            android:summary="@string/pref_description_allow_screen_off_in_audio_call"
-            android:title="@string/pref_title_allow_screen_off_in_audio_call" />
+            android:summary="@string/air_pref_screen_off_summary"
+            android:title="@string/air_pref_screen_off_title" />
 
         <SeekBarPreference
             android:defaultValue="1"
             android:key="mic_gain_factor"
             android:max="30"
             android:min="1"
-            android:summary="@string/pref_description_mic_gain_factor"
-            android:title="@string/pref_title_mic_gain_factor" />
+            android:summary="@string/air_pref_mic_boost_summary"
+            android:title="@string/air_pref_mic_boost_title" />
 
         <SwitchPreference
             android:defaultValue="false"
             android:key="mic_gain_factor_toggle"
-            android:summary="@string/pref_description_mic_gain_factor_toggle"
-            android:title="@string/pref_title_mic_gain_factor_toggle" />
+            android:summary="@string/air_pref_boost_lowers_summary"
+            android:title="@string/air_pref_boost_lowers_title" />
 
         <SwitchPreference
             android:defaultValue="true"
             android:key="gainprocessing_active"
-            android:summary="@string/pref_description_gainprocessing_active"
-            android:title="@string/pref_title_gainprocessing_active" />
+            android:summary="@string/air_pref_auto_level_summary"
+            android:title="@string/air_pref_auto_level_title" />
 
         <SwitchPreference
             android:defaultValue="false"
             android:key="rnnoise_active"
-            android:summary="@string/pref_description_rnnoise_active"
-            android:title="@string/pref_title_rnnoise_active" />
+            android:summary="@string/air_pref_noise_summary"
+            android:title="@string/air_pref_noise_title" />
 
         <ListPreference
             android:defaultValue="2"
-            android:entries="@array/pref_higher_audio_quality_titles"
+            android:entries="@array/air_pref_call_quality_entries"
             android:entryValues="@array/pref_higher_audio_quality_values"
             android:key="higher_audio_quality"
             android:negativeButtonText="@null"
             android:positiveButtonText="@null"
-            android:summary="@string/pref_description_higher_audio_quality"
-            android:title="@string/pref_title_higher_audio_quality" />
+            android:summary="@string/air_pref_call_quality_summary"
+            android:title="@string/air_pref_call_quality_title" />
         <ListPreference
             android:defaultValue="48000"
             android:entries="@array/pref_min_audio_samplingrate_out_titles"
@@ -205,8 +205,8 @@
         <SwitchPreference
             android:defaultValue="false"
             android:key="conference_show_system_messages"
-            android:summary="@string/pref_description_conference_show_system_messages"
-            android:title="@string/pref_title_conference_show_system_messages" />
+            android:summary="@string/air_pref_group_notes_summary"
+            android:title="@string/air_pref_group_notes_title" />
 
         <SwitchPreference
             android:defaultValue="false"
@@ -223,32 +223,32 @@
         <SwitchPreference
             android:defaultValue="false"
             android:key="force_udp_only"
-            android:summary="@string/pref_description_force_udp_only"
-            android:title="@string/pref_title_force_udp_only" />
+            android:summary="@string/air_pref_direct_only_summary"
+            android:title="@string/air_pref_direct_only_title" />
 
         <EditTextPreference
             android:defaultValue=""
             android:key="toxirc_muted_peers_01"
             android:maxLength="100"
             android:singleLine="true"
-            android:summary="@string/pref_description_toxirc_muted_peers_01"
-            android:title="@string/pref_title_toxirc_muted_peers_01" />
+            android:summary="@string/air_pref_irc_name_1_summary"
+            android:title="@string/air_pref_irc_name_1_title" />
 
         <EditTextPreference
             android:defaultValue=""
             android:key="toxirc_muted_peers_02"
             android:maxLength="100"
             android:singleLine="true"
-            android:summary="@string/pref_description_toxirc_muted_peers_02"
-            android:title="@string/pref_title_toxirc_muted_peers_01" />
+            android:summary="@string/air_pref_irc_name_more_summary"
+            android:title="@string/air_pref_irc_name_2_title" />
 
         <EditTextPreference
             android:defaultValue=""
             android:key="toxirc_muted_peers_03"
             android:maxLength="100"
             android:singleLine="true"
-            android:summary="@string/pref_description_toxirc_muted_peers_03"
-            android:title="@string/pref_title_toxirc_muted_peers_01" />
+            android:summary="@string/air_pref_irc_name_more_summary"
+            android:title="@string/air_pref_irc_name_3_title" />
 
     </PreferenceCategory>
 
@@ -340,7 +340,7 @@
     <PreferenceCategory android:title="@string/pref_header_general">
         <Preference
             android:key="network_diagnostics"
-            android:summary="@string/network_diag_summary"
-            android:title="@string/pref_title_network_diagnostics" />
+            android:summary="@string/air_network_log_note"
+            android:title="@string/air_network_log" />
     </PreferenceCategory>
 </PreferenceScreen>

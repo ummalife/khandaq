@@ -3,228 +3,123 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Changelog — Khandaq Messenger</title>
-  <meta name="description" content="Khandaq changelog: fixes and updates by date and severity level.">
+  <title>Changelog: Khandaq Messenger</title>
+  <meta name="description" content="Every Khandaq release with its date: what was fixed and changed, by level and platform.">
   <link rel="canonical" href="https://khandaq.org/changelog">
+  <link rel="alternate" hreflang="en" href="https://khandaq.org/changelog">
+  <link rel="alternate" hreflang="ru" href="https://khandaq.org/ru/changelog.html">
+  <link rel="alternate" hreflang="x-default" href="https://khandaq.org/changelog">
   <meta name="robots" content="index, follow">
-  <meta name="theme-color" content="#0b0f0e">
-  <link rel="icon" href="/assets/favicon-32.png" sizes="32x32">
-  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
-  <!-- Self-hosted: see the note in index.html and scripts/vendor-webfonts.py. -->
-  <link href="/assets/fonts/fonts.css" rel="stylesheet">
-  <script>try{var t=localStorage.getItem('kq-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
-  <link rel="stylesheet" href="/style.css">
-</head>
-<body class="changelog-body">
-  <a class="skip-link" href="#main">Skip to content</a>
 
-  <header class="site-header">
-    <div class="container header-inner">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://khandaq.org/changelog">
+  <meta property="og:title" content="Changelog: Khandaq Messenger">
+  <meta property="og:description" content="Every Khandaq release with its date: what was fixed and changed, by level and platform.">
+  <meta property="og:image" content="https://khandaq.org/assets/pwa-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="The Khandaq app icon">
+  <meta property="og:site_name" content="Khandaq Messenger">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="ru_RU">
+  <meta name="twitter:card" content="summary">
+
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/assets/favicon-48.png" sizes="48x48" type="image/png">
+  <link rel="icon" href="/assets/favicon-16.png" sizes="16x16" type="image/png">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <!-- The list below is drawn from changelog.json, so the data is fetched at once. The fonts are not
+       preloaded on this page: on a slow phone they shared the line with the data and pushed LCP past
+       2.5 s; style.css still loads them, and the swap moves nothing. -->
+  <link rel="preload" href="/changelog.json" as="fetch" type="application/json" crossorigin>
+  <script>try{var t=localStorage.getItem('kq-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
+  <link rel="stylesheet" href="/assets/tokens.css?v=9109f5fc5c">
+  <link rel="stylesheet" href="/style.css?v=ed6305eeb7">
+  <script src="/assets/site.js?v=d12f990d52" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="site-head">
+    <div class="wrap">
       <a class="brand" href="/">
-        <img src="/assets/logo.svg" alt="" width="36" height="36">
+        <img src="/assets/app-icon-64.png" srcset="/assets/app-icon-64.png 2x, /assets/app-icon-96.png 3x" width="32" height="32" alt="">
         <span>Khandaq</span>
       </a>
-      <nav class="nav" aria-label="Primary">
-        <a href="/#features">Features</a>
-        <a href="/#download">Download</a>
-        <a href="/changelog" aria-current="page">Changelog</a>
-        <a class="nav-cta" href="/#download">Get the app</a>
-        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch theme">☾</button>
+      <nav class="nav" aria-label="Main">
+        <a class="nav-wide" href="/#how">How it works</a>
+        <a class="nav-mid" href="/#download">Download</a>
+        <a class="nav-mid" href="/changelog.html" aria-current="page">Changelog</a>
+        <a class="nav-wide" href="/#source">Source</a>
+        <a class="nav-lang" href="/ru/changelog.html" hreflang="ru" lang="ru">Русский</a>
       </nav>
     </div>
   </header>
 
-  <main id="main" class="changelog-page">
-    <section class="container cl-hero">
-      <p class="eyebrow">Release history</p>
-      <h1>Changelog</h1>
-      <p class="cl-hero-lead">
-        Security fixes and updates from <a id="gh-link" href="https://github.com/ummalife/khandaq">GitHub</a>.
-        <span class="cl-legend-inline">
-          <span class="cl-dot critical"></span> critical
-          <span class="cl-dot important"></span> important
-          <span class="cl-dot medium"></span> medium
-          <span class="cl-dot low"></span> low
-        </span>
-      </p>
-    </section>
-
-    <section class="container cl-content">
-      <div class="cl-toolbar">
-        <div class="cl-filters" role="group" aria-label="Filter by severity">
-          <button type="button" class="cl-filter active" data-filter="all">All</button>
-          <button type="button" class="cl-filter" data-filter="critical">Critical</button>
-          <button type="button" class="cl-filter" data-filter="important">Important</button>
-          <button type="button" class="cl-filter" data-filter="medium">Medium</button>
-          <button type="button" class="cl-filter" data-filter="low">Low</button>
-        </div>
-        <p class="cl-meta" id="changelog-meta"></p>
+  <main id="main">
+    <div class="wrap">
+      <div class="page-head">
+        <h1>Changelog</h1>
+        <p class="lead">Every release with its date: what was broken, what changed and on which platforms. The level says how serious a change is, from critical to low.</p>
       </div>
-
-      <div id="changelog-root" class="cl-root" aria-live="polite">
-        <p class="cl-loading">Loading…</p>
-      </div>
-    </section>
-  </main>
-
-  <footer class="site-footer container">
-    <div class="footer-grid">
-      <div>
-        <h4>Khandaq Messenger</h4>
-        <p>Decentralized encrypted chat on the Tox network.</p>
-      </div>
-      <div>
-        <h4>Download</h4>
-        <ul>
-          <li><a href="/#download">All platforms</a></li>
-        </ul>
-      </div>
-      <div>
-        <h4>Project</h4>
-        <ul>
-          <li><a href="https://github.com/ummalife/khandaq">Source code</a></li>
-          <li><a href="/changelog">Changelog</a></li>
-        </ul>
+      <div class="cl-filters" data-cl-filters></div>
+      <p class="visually-hidden" role="status" data-cl-status></p>
+      <div class="cl-root" data-changelog>
+        <noscript>
+          <p class="cl-status">This list is drawn from <a href="/changelog.json">changelog.json</a> by a script, and scripts are off in this browser. The same releases are on <a href="https://github.com/ummalife/khandaq/releases">GitHub</a>.</p>
+        </noscript>
       </div>
     </div>
-    <!-- KHANDAQ (18.08): same owner/developer credit as index.html, so the copyright strip reads identically on every page. -->
-    <p class="copyright">© Khandaq · <a href="https://khandaq.org/">khandaq.org</a> · <span class="credit">Owner and developer — <a href="https://1sa.me/" target="_blank" rel="noopener">Isa Dagestani</a></span></p>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap">
+      <div class="foot-cols">
+        <div>
+          <h2>Khandaq Messenger</h2>
+          <p>Encrypted messaging on the Tox network. Free and open source.</p>
+        </div>
+        <div>
+          <h2>Download</h2>
+          <ul>
+            <li><a href="/#download">All platforms</a></li>
+            <li><a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger">Android on Google Play</a></li>
+            <li><a href="https://testflight.apple.com/join/4ppS8ZN5">iPhone on TestFlight</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Project</h2>
+          <ul>
+            <li><a href="https://github.com/ummalife/khandaq">Source code</a></li>
+            <li><a href="/changelog.html">Changelog</a></li>
+            <li><a href="/privacy.html">Privacy policy</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/blob/master/SECURITY.md">Security</a></li>
+            <li><a href="https://tox.chat">Tox protocol</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Support</h2>
+          <ul>
+            <li><a href="mailto:support@khandaq.org">support@khandaq.org</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/issues">Report a problem</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/security/advisories/new">Report a vulnerability</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="foot-base">
+        <!-- KHANDAQ (18.08): the owner and developer credit lives on the copyright strip, the one line every page shares, so attribution stays identical site-wide. -->
+        <p class="copyright">© Khandaq, <a href="https://khandaq.org/">khandaq.org</a>. Open source, Tox-compatible. <span class="credit">Owner and developer: <a href="https://1sa.me/" target="_blank" rel="noopener">Isa Dagestani</a></span></p>
+        <fieldset class="seg" data-theme-control hidden>
+          <legend>Theme</legend>
+          <span class="seg-options">
+            <label><input type="radio" name="theme" value="system">Match system</label>
+            <label><input type="radio" name="theme" value="light">Light</label>
+            <label><input type="radio" name="theme" value="dark">Dark</label>
+          </span>
+        </fieldset>
+      </div>
+    </div>
   </footer>
-
-  <script>
-    (function () {
-      var SEV = ['critical', 'important', 'medium', 'low'];
-      var SEV_LABEL = { critical: 'Critical', important: 'Important', medium: 'Medium', low: 'Low' };
-      var PLAT = {
-        android: 'Android', ios: 'iOS', desktop: 'Desktop', infra: 'Infra',
-        windows: 'Windows', macos: 'macOS', linux: 'Linux', web: 'Website', network: 'Network'
-      };
-      var activeFilter = 'all';
-      var data = null;
-
-      function esc(s) {
-        if (!s) return '';
-        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-      }
-
-      function matches(sev) {
-        return activeFilter === 'all' || sev === activeFilter;
-      }
-
-      function sortChanges(changes) {
-        return (changes || []).slice().sort(function (a, b) {
-          return SEV.indexOf(a.severity) - SEV.indexOf(b.severity);
-        });
-      }
-
-      function countSummary(changes) {
-        var c = { critical: 0, important: 0, medium: 0, low: 0 };
-        (changes || []).forEach(function (ch) {
-          if (c[ch.severity] !== undefined) c[ch.severity]++;
-        });
-        var parts = SEV.filter(function (s) { return c[s] > 0; }).map(function (s) {
-          return c[s] + ' ' + SEV_LABEL[s].toLowerCase();
-        });
-        var total = c.critical + c.important + c.medium + c.low;
-        return { total: total, parts: parts };
-      }
-
-      function itemHtml(ch) {
-        if (!matches(ch.severity)) return '';
-        var plats = (ch.platforms || []).map(function (p) { return PLAT[p] || p; }).join(' · ');
-        return '<li class="cl-entry cl-entry--' + esc(ch.severity) + '">' +
-          '<div class="cl-entry-marker" aria-hidden="true"><span class="cl-dot ' + esc(ch.severity) + '"></span></div>' +
-          '<div class="cl-entry-main">' +
-            '<p class="cl-entry-meta">' + esc(SEV_LABEL[ch.severity]) +
-              (plats ? ' · <span class="cl-entry-plat">' + esc(plats) + '</span>' : '') + '</p>' +
-            '<h3 class="cl-entry-title">' + esc(ch.title) + '</h3>' +
-            (ch.description ? '<p class="cl-entry-desc">' + esc(ch.description) + '</p>' : '') +
-          '</div>' +
-        '</li>';
-      }
-
-      function releaseHtml(rel) {
-        var visible = sortChanges(rel.changes).filter(function (ch) { return matches(ch.severity); });
-        if (!visible.length && activeFilter !== 'all') return '';
-
-        var summary = countSummary(rel.changes);
-        var items = visible.map(itemHtml).join('');
-
-        return '<article class="cl-release">' +
-          '<header class="cl-release-head">' +
-            '<div class="cl-release-meta">' +
-              '<time datetime="' + esc(rel.date) + '">' + formatDate(rel.date) + '</time>' +
-              (rel.version ? '<span class="cl-version">v' + esc(rel.version) + '</span>' : '') +
-            '</div>' +
-            '<h2 class="cl-release-title">' + esc(rel.title) + '</h2>' +
-            (rel.summary ? '<p class="cl-release-summary">' + esc(rel.summary) + '</p>' : '') +
-            (summary.total ? '<p class="cl-release-count">' + summary.total + ' fixes' +
-              (summary.parts.length ? ' — ' + esc(summary.parts.join(', ')) : '') + '</p>' : '') +
-          '</header>' +
-          '<ol class="cl-list">' + (items || '<li class="cl-empty">No entries for this filter.</li>') + '</ol>' +
-          (rel.commits && rel.commits.length ?
-            '<footer class="cl-release-foot">' +
-              '<span class="cl-foot-label">Commits</span> ' +
-              rel.commits.map(function (c) {
-                return '<a class="cl-commit" href="' + esc(c.url) + '" rel="noopener noreferrer">' + esc(c.hash) + '</a>';
-              }).join('') +
-            '</footer>' : '') +
-        '</article>';
-      }
-
-      function formatDate(iso) {
-        try {
-          return new Date(iso + 'T12:00:00').toLocaleDateString('en-US', {
-            month: 'long', day: 'numeric', year: 'numeric'
-          });
-        } catch (e) { return iso; }
-      }
-
-      function render() {
-        var root = document.getElementById('changelog-root');
-        if (!data) return;
-
-        var parts = (data.releases || []).map(releaseHtml).filter(Boolean);
-        (data.days || []).forEach(function (day) {
-          var visible = sortChanges(day.changes).filter(function (ch) { return matches(ch.severity); });
-          if (!visible.length) return;
-          parts.push('<article class="cl-release cl-release--day">' +
-            '<header class="cl-release-head"><time datetime="' + esc(day.date) + '">' + formatDate(day.date) + '</time></header>' +
-            '<ol class="cl-list">' + visible.map(itemHtml).join('') + '</ol></article>');
-        });
-
-        root.innerHTML = parts.length
-          ? parts.join('')
-          : '<p class="cl-empty">No entries yet.</p>';
-      }
-
-      function setMeta() {
-        var el = document.getElementById('changelog-meta');
-        if (data && el) {
-          el.textContent = 'Updated ' + (data.generated_at || '').replace('T', ' ').replace('Z', ' UTC');
-        }
-        var gh = document.getElementById('gh-link');
-        if (gh && data && data.github_url) gh.href = data.github_url;
-      }
-
-      document.querySelectorAll('.cl-filter').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          document.querySelectorAll('.cl-filter').forEach(function (b) { b.classList.remove('active'); });
-          btn.classList.add('active');
-          activeFilter = btn.getAttribute('data-filter');
-          render();
-        });
-      });
-
-      fetch('/changelog.json', { cache: 'no-cache' })
-        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-        .then(function (json) { data = json; setMeta(); render(); })
-        .catch(function () {
-          document.getElementById('changelog-root').innerHTML =
-            '<p class="cl-error">Could not load data. <a href="https://github.com/ummalife/khandaq/commits/master">View on GitHub</a>.</p>';
-        });
-    })();
-  </script>
-  <script src="/assets/theme.js" defer></script>
 </body>
 </html>

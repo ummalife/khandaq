@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- E21 (redesign, stage 3b): refusals and failures said at their place instead of in a toast -->
+    <string name="air_retry_contact_offline">对方现在不在线。等对方上线后再重试</string>
+    <string name="air_retry_group_not_connected">群组尚未连接。请稍后重试</string>
+    <string name="air_voice_needs_mic">语音消息需要麦克风：请在手机设置中允许 Khandaq 使用麦克风</string>
+    <string name="air_group_video_needs_access">群组视频需要摄像头和麦克风：请在手机设置中允许 Khandaq 使用</string>
+    <string name="air_incoming_file_over_limit_format">未接收 %1$s 的文件：上限为 %2$s</string>
+    <string name="air_group_message_unreadable">此群组中的一条消息无法读取，已跳过</string>
+    <string name="air_group_file_unreadable">无法接收此群组中的一个文件</string>
+    <string name="air_profile_load_failed_kept">Khandaq 无法打开此设备上的档案文件。文件原样保留，Khandaq 即将关闭</string>
+    <string name="air_profile_load_failed_parked">Khandaq 无法打开档案文件，已将其移到一旁。Khandaq 即将关闭，下次启动时将使用新档案</string>
+    <string name="air_profile_export_failed_title">档案未导出</string>
+    <string name="air_profile_export_failed_message">档案未能写入你选择的文件。请重试。</string>
+    <string name="air_export_cancelled">已取消导出：未确认屏幕锁定</string>
+    <string name="air_group_setting_not_saved">设置未更改。请在群组连接后重试</string>
+    <string name="air_contact_add_failed">未能添加联系人。请重试</string>
+    <!-- E21 (redesign, stage 3b): more refusals and failures said at their place -->
+    <string name="air_group_private_not_sent">未发送。文字仍在输入框中：等对方在群组中上线后再发送</string>
+    <string name="air_network_log_not_shared">日志未分享：Khandaq 无法将其写入文件。请重试</string>
+    <string name="air_nc_scan_needs_camera">扫描需要相机：请允许 Khandaq 使用相机，或选择一张二维码照片</string>
+    <string name="air_nc_scan_camera_failed">相机未能启动。请关闭正在使用相机的其他应用后重新扫描，或选择一张二维码照片</string>
+</resources>

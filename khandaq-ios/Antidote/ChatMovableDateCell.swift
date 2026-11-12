@@ -52,6 +52,11 @@ class ChatMovableDateCell: BaseCell {
     // KHANDAQ (#208): gates the "Изменить" menu item; set for own outgoing text messages only
     var canBeEdited = false
 
+    /// KHANDAQ (redesign stage 2): false for a transcript entry, which shows its time in its own column,
+    /// so the pan that reveals the time and the permanent shift of "time on every message" do nothing.
+    /// Set it in createViews of the subclass, before the constraints are installed.
+    var revealsTime = true
+
     /**
         Superview for content that should move while panning table to the left.
      */
@@ -59,6 +64,9 @@ class ChatMovableDateCell: BaseCell {
 
     var movableOffset: CGFloat = 0 {
         didSet {
+            guard revealsTime else {
+                return
+            }
             var offset = movableOffset
 
             if (UserDefaultsManager().DateonmessageMode == true) {
@@ -103,6 +111,29 @@ class ChatMovableDateCell: BaseCell {
     fileprivate var unreadSeparatorContainer: UIView!
     fileprivate var unreadSeparatorLabel: UILabel!
     fileprivate var unreadSeparatorTopConstraint: Constraint!
+    // KHANDAQ (redesign stage 2): the transcript marks, created on first use.
+    fileprivate var transcriptDayLabel: UILabel?
+    fileprivate var transcriptUnreadLabel: UILabel?
+    fileprivate var transcriptUnreadTopConstraint: Constraint?
+    fileprivate var transcriptLeadingConstraints: [Constraint] = []
+
+    /// Room above the entry for the transcript day mark: 10 above the words, 4 below, as .kq-day.
+    static func transcriptDayReservedHeight() -> CGFloat {
+        return 14.0 + ceil(KQFont.lineHeight(.caption))
+    }
+
+    /// Room above the entry for the transcript unread mark.
+    static func transcriptUnreadReservedHeight() -> CGFloat {
+        return 12.0 + ceil(KQFont.lineHeight(.caption))
+    }
+
+    /// The room a row needs above its content for the marks it carries.
+    static func reservedMarksHeight(day: Bool, unread: Bool, transcript: Bool) -> CGFloat {
+        if transcript {
+            return (day ? transcriptDayReservedHeight() : 0) + (unread ? transcriptUnreadReservedHeight() : 0)
+        }
+        return (day ? daySeparatorReservedHeight : 0) + (unread ? unreadSeparatorReservedHeight : 0)
+    }
 
     fileprivate var isShowingMenu: Bool = false
     fileprivate static var setupOnceToken: Int = 0
@@ -131,6 +162,14 @@ class ChatMovableDateCell: BaseCell {
         dateLabel.text = movableModel.dateString
         dateLabel.numberOfLines = 0 // --> multiline label
         dateLabel.textColor = theme.colorForType(.ChatListCellMessage)
+        dateLabel.isHidden = !revealsTime
+
+        if movableModel.transcriptMarks {
+            setupTranscriptMarks(movableModel)
+            return
+        }
+        transcriptDayLabel?.isHidden = true
+        transcriptUnreadLabel?.isHidden = true
 
         // KHANDAQ (#99): show/hide the day separator and reserve top space only when present. The
         // reserved offset is reset on every reuse, so a recycled separator cell lays out cleanly.
@@ -198,6 +237,23 @@ class ChatMovableDateCell: BaseCell {
         unreadSeparatorLabel.textAlignment = .center
         unreadSeparatorContainer.addSubview(unreadSeparatorLabel)
 
+        // KHANDAQ (redesign stage 2): the transcript marks, hidden until a model asks for them.
+        let dayLabel = UILabel()
+        dayLabel.font = KQFont.font(.caption, weight: 500)
+        dayLabel.adjustsFontForContentSizeCategory = true
+        dayLabel.isHidden = true
+        dayLabel.isAccessibilityElement = false
+        contentView.addSubview(dayLabel)
+        transcriptDayLabel = dayLabel
+
+        let unreadLabel = UILabel()
+        unreadLabel.font = KQFont.font(.caption, weight: 600)
+        unreadLabel.adjustsFontForContentSizeCategory = true
+        unreadLabel.isHidden = true
+        unreadLabel.isAccessibilityElement = false
+        contentView.addSubview(unreadLabel)
+        transcriptUnreadLabel = unreadLabel
+
         let swipeReply = UISwipeGestureRecognizer(target: self, action: #selector(handleReplySwipe))
         swipeReply.direction = .right
         movableContentView.addGestureRecognizer(swipeReply)
@@ -213,7 +269,7 @@ class ChatMovableDateCell: BaseCell {
             // KHANDAQ (#99): split the old `size.equalTo(contentView)` into width + bottom so the TOP can
             // be pushed down by the day-separator's reserved height (0 by default → identical layout).
             movableContentViewTopConstraint = $0.top.equalTo(contentView).constraint
-            if (UserDefaultsManager().DateonmessageMode == true) {
+            if revealsTime && UserDefaultsManager().DateonmessageMode == true {
                 movableContentViewLeftConstraint = $0.leading.equalTo(contentView).constraint.update(offset: -39)
             } else {
                 movableContentViewLeftConstraint = $0.leading.equalTo(contentView).constraint
@@ -248,6 +304,65 @@ class ChatMovableDateCell: BaseCell {
         unreadSeparatorLabel.snp.makeConstraints {
             $0.edges.equalTo(unreadSeparatorContainer)
         }
+
+        if let dayLabel = transcriptDayLabel, let unreadLabel = transcriptUnreadLabel {
+            dayLabel.snp.makeConstraints {
+                $0.top.equalTo(contentView).offset(10.0)
+                transcriptLeadingConstraints.append($0.leading.equalTo(contentView).constraint)
+                $0.trailing.lessThanOrEqualTo(contentView).offset(-KQSpace.x16)
+            }
+            unreadLabel.snp.makeConstraints {
+                transcriptUnreadTopConstraint = $0.top.equalTo(contentView).offset(8.0).constraint
+                transcriptLeadingConstraints.append($0.leading.equalTo(contentView).constraint)
+                $0.trailing.lessThanOrEqualTo(contentView).offset(-KQSpace.x16)
+            }
+        }
+    }
+
+    /// The day ("Today", "Yesterday", "12 March") heads its messages where their text starts, in grey
+    /// words without a plate or rules; the unread mark sits the same way, in ink.
+    fileprivate func setupTranscriptMarks(_ model: ChatMovableDateCellModel) {
+        daySeparatorContainer.isHidden = true
+        unreadSeparatorContainer.isHidden = true
+
+        let textStart = AirEntryMetrics.textStart()
+        transcriptLeadingConstraints.forEach { $0.update(offset: textStart) }
+
+        let dayVisible: Bool
+        if let separator = model.dateSeparator, !separator.isEmpty {
+            transcriptDayLabel?.text = separator
+            transcriptDayLabel?.textColor = KQColor.ink3
+            transcriptDayLabel?.isHidden = false
+            dayVisible = true
+        }
+        else {
+            transcriptDayLabel?.isHidden = true
+            dayVisible = false
+        }
+
+        if model.unreadSeparator {
+            transcriptUnreadLabel?.text = String(localized: "unread_messages_separator")
+            transcriptUnreadLabel?.textColor = KQColor.ink
+            transcriptUnreadLabel?.isHidden = false
+        }
+        else {
+            transcriptUnreadLabel?.isHidden = true
+        }
+
+        let dayHeight = dayVisible ? ChatMovableDateCell.transcriptDayReservedHeight() : 0.0
+        transcriptUnreadTopConstraint?.update(offset: dayHeight + 8.0)
+        movableContentViewTopConstraint.update(offset: ChatMovableDateCell.reservedMarksHeight(day: dayVisible,
+                                                                                            unread: model.unreadSeparator,
+                                                                                            transcript: true))
+    }
+
+    /// What the marks above the entry say, for VoiceOver.
+    var transcriptMarksSpoken: String? {
+        let parts = [transcriptDayLabel, transcriptUnreadLabel]
+            .compactMap { $0 }
+            .filter { !$0.isHidden }
+            .compactMap { $0.text }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
     override func setSelected(_ selected: Bool, animated: Bool) {
@@ -507,8 +622,9 @@ enum MessageForwarder {
             // stack headers (and don't carry a stale "(null)" from a cross-platform/legacy sender).
             let body = MessageReplyHelper.stripForwardedHeader(MessageReplyHelper.plainBody(for: message) ?? raw)
             // KHANDAQ (#39): Telegram-style "Forwarded from <name>" attribution line above the body.
-            let header = String(format: String(localized: "chat_forwarded_from_format"),
-                                forwardSourceName(for: message, manager: manager))
+            // String(localized:) formats by itself; formatting its result again sent "(null)" for the name.
+            let header = MessageReplyHelper.forwardMark + String(localized: "chat_forwarded_from_format",
+                                                                 forwardSourceName(for: message, manager: manager) as NSString)
             let text = header + "\n" + body
             if chat.isGroup {
                 manager.groups.sendMessage(to: chat, text: text, type: .normal, successBlock: { _ in }, failureBlock: { _ in })

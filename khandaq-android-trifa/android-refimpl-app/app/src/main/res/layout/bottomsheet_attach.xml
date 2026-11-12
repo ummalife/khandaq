@@ -25,6 +25,19 @@
         android:textSize="18sp"
         android:textStyle="bold" />
 
+    <!-- KHANDAQ (redesign, E8): a group says its file limit before a file is chosen. -->
+    <TextView
+        android:id="@+id/attach_sheet_limit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="22dp"
+        android:layout_marginTop="-8dp"
+        android:layout_marginEnd="22dp"
+        android:layout_marginBottom="16dp"
+        android:textAppearance="@style/TextAppearance.KQ.Caption"
+        android:textColor="@color/kq_ink_2"
+        android:visibility="gone" />
+
     <!-- Figma attachments grid: recent device media; tap routes into the send preview. -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/attach_media_grid"

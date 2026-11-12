@@ -18,24 +18,31 @@ class GroupSmokeUITests: XCTestCase {
         dismissSystemAlerts(in: app)
         createAccountIfNeeded(in: app)
 
-        app.tabBars.buttons.element(boundBy: 1).tap()
+        XCTAssertTrue(app.returnToAir(timeout: 30), "Air screen missing")
         dismissSystemAlerts(in: app)
 
-        let addButton = app.navigationBars[localizedString("chats_title")].buttons[localizedString("group_add_button")]
-        XCTAssertTrue(addButton.waitForExistence(timeout: 15), "Add group button missing")
-        addButton.tap()
+        let createButton = app.buttons["air.create"]
+        XCTAssertTrue(createButton.waitForExistence(timeout: 15), "Create button missing")
+        createButton.tap()
 
-        app.buttons[localizedString("group_create_public")].tap()
+        let newGroup = app.buttons["air.newGroup"]
+        XCTAssertTrue(newGroup.waitForExistence(timeout: 5), "New group action missing")
+        newGroup.tap()
 
-        let createNav = app.navigationBars[localizedString("group_create_public")]
-        XCTAssertTrue(createNav.waitForExistence(timeout: 5), "Group create screen missing")
-
-        let nameField = app.textFields[localizedString("group_name_placeholder")]
-        XCTAssertTrue(nameField.waitForExistence(timeout: 5))
+        // One sheet: the name, who can join (open by the group key here), nobody to invite.
+        let nameField = app.textViews["air.newGroup.name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 5), "New group sheet missing")
         nameField.tap()
         nameField.typeText("QA NGC Group")
 
-        createNav.buttons[localizedString("alert_create")].tap()
+        let open = app.descendants(matching: .any)["air.newGroup.privacy.open"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5), "Privacy choice missing")
+        open.tap()
+
+        let create = app.buttons["air.newGroup.create"]
+        XCTAssertTrue(create.waitForExistence(timeout: 5))
+        XCTAssertTrue(create.isEnabled, "Create group waits for nothing once the group is named")
+        create.tap()
 
         let input = app.textViews.element(boundBy: 0)
         XCTAssertTrue(input.waitForExistence(timeout: 30), "Group chat input not visible")
@@ -64,40 +71,14 @@ private extension GroupSmokeUITests {
             }
             return false
         }
-        app.tap()
+        app.tapNeutralPoint()
     }
 
     func createAccountIfNeeded(in app: XCUIApplication) {
-        let create = app.buttons[localizedString("create_account")]
-        guard create.waitForExistence(timeout: 8) else {
+        guard app.textFields["air.first.name"].waitForExistence(timeout: 8) else {
             return
         }
-
-        create.tap()
-
-        let usernameField = app.textFields[localizedString("create_account_username_placeholder")]
-        XCTAssertTrue(usernameField.waitForExistence(timeout: 5))
-        usernameField.tap()
-        usernameField.typeText("qa_user")
-
-        let profileField = app.textFields[localizedString("create_account_profile_placeholder")]
-        profileField.tap()
-        profileField.typeText(profileName)
-
-        app.keyboards.buttons["Next"].tap()
-
-        let passwordField = app.secureTextFields[localizedString("password")]
-        XCTAssertTrue(passwordField.waitForExistence(timeout: 5))
-        passwordField.tap()
-        passwordField.typeText("qa_pass_1")
-
-        let repeatField = app.secureTextFields[localizedString("repeat_password")]
-        repeatField.tap()
-        repeatField.typeText("qa_pass_1")
-
-        app.keyboards.buttons["Go"].tap()
-
-        let chatsTab = app.tabBars.buttons.element(boundBy: 1)
-        XCTAssertTrue(chatsTab.waitForExistence(timeout: 60), "Main UI did not appear after signup")
+        XCTAssertTrue(app.createFirstProfile(name: profileName, password: "qa_pass_1"),
+                      "Main UI did not appear after signup")
     }
 }

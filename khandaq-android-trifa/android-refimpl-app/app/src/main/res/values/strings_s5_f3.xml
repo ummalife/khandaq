@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Group settings (redesign, stage 5): GroupInfoActivity drawn as GroupInfoController on iOS, the same words -->
+    <string name="air_gs_self_name">Your name in the group</string>
+    <string name="air_gs_self_name_note">Members of this group see it. Your profile name stays as it is.</string>
+    <string name="air_gs_name_empty">The name cannot be empty.</string>
+    <string name="air_gs_topic">Topic</string>
+    <string name="air_gs_topic_none">No topic</string>
+    <string name="air_gs_topic_note">Every member sees the topic: in the list and at the top of the group it stands in place of the name.</string>
+    <string name="air_gs_topic_locked">Only the founder and the moderators change the topic.</string>
+    <string name="air_gs_topic_not_observers">Everyone but observers can change the topic.</string>
+    <string name="air_gs_topic_empty">The topic cannot be empty.</string>
+    <string name="air_gs_topic_lock">Only the founder and moderators change the topic</string>
+    <string name="air_gs_join">Who can join</string>
+    <string name="air_gs_password">Group password</string>
+    <string name="air_gs_password_note">New members will need the password. Those already in the group stay in it.</string>
+    <string name="air_gs_password_remove">Remove the password</string>
+    <string name="air_gs_password_removed">Password removed</string>
+    <string name="air_gs_limit">Member limit</string>
+    <string name="air_gs_limit_full">The group is full: new members cannot join until the limit is raised.</string>
+    <string name="air_gs_limit_range">The limit is a number from 1 to 65,535.</string>
+    <string name="air_gs_write">Who can write</string>
+    <string name="air_gs_voice_all">All members</string>
+    <string name="air_gs_voice_all_note">Everyone except observers.</string>
+    <string name="air_gs_voice_moderator">Moderators and founder</string>
+    <string name="air_gs_voice_founder">Founder only</string>
+    <string name="air_gs_founder_only">The group\'s founder changes this.</string>
+    <string name="air_gs_save">Save</string>
+    <string name="air_gs_saved">Saved</string>
+    <string name="air_gs_not_here">This device is not in the group now, so its settings cannot change here.</string>
+</resources>

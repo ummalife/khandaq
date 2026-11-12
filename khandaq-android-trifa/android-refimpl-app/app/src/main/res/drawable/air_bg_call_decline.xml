@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (redesign, E9; stage 5): the 64dp circle of Cancel (and Decline, End) on the call screens, in
+     danger-fill; the focus ring under a keyboard is white, so it shows on the lock ground. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:exitFadeDuration="@integer/kq_dur_tap">
+    <item android:state_focused="true">
+        <shape android:shape="oval">
+            <solid android:color="@color/kq_danger_fill" />
+            <stroke android:width="@dimen/kq_stroke_focus" android:color="@color/kq_fixed_white" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="@color/kq_danger_fill" />
+        </shape>
+    </item>
+</selector>

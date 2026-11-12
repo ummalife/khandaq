@@ -179,7 +179,7 @@ public final class ChatMediaHelper
             catch (Exception e)
             {
                 Log.i(TAG, "openMessageMedia:fallback:EE:" + e.getMessage());
-                HelperGeneric.display_toast(context.getString(R.string.chat_opening_file_failed), false, 0);
+                AirComposerNotice.say(context.getString(R.string.chat_opening_file_failed), true);
             }
         }
     }
@@ -293,7 +293,7 @@ public final class ChatMediaHelper
         catch (Exception e)
         {
             e.printStackTrace();
-            HelperGeneric.display_toast(context.getString(R.string.chat_opening_file_failed), false, 0);
+            AirComposerNotice.say(context.getString(R.string.chat_opening_file_failed), true);
         }
     }
 
@@ -360,7 +360,7 @@ public final class ChatMediaHelper
             catch (Exception e)
             {
                 Log.i(TAG, "openGroupMessageMedia:fallback:EE:" + e.getMessage());
-                HelperGeneric.display_toast(context.getString(R.string.chat_opening_file_failed), false, 0);
+                AirComposerNotice.say(context.getString(R.string.chat_opening_file_failed), true);
             }
         }
     }
@@ -376,7 +376,7 @@ public final class ChatMediaHelper
         final String mediaPath = HelperFiletransfer.resolveGroupMessageMediaPath(message);
         if ((mediaPath == null) || mediaPath.isEmpty())
         {
-            HelperGeneric.display_toast(context.getString(R.string.chat_opening_file_failed), false, 0);
+            AirComposerNotice.say(context.getString(R.string.chat_opening_file_failed), true);
             return;
         }
 
@@ -418,12 +418,12 @@ public final class ChatMediaHelper
                 return;
             }
 
-            HelperGeneric.display_toast(context.getString(R.string.chat_opening_file_failed), false, 0);
+            AirComposerNotice.say(context.getString(R.string.chat_opening_file_failed), true);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            HelperGeneric.display_toast(context.getString(R.string.chat_opening_file_failed), false, 0);
+            AirComposerNotice.say(context.getString(R.string.chat_opening_file_failed), true);
         }
     }
 
@@ -484,7 +484,7 @@ public final class ChatMediaHelper
         catch (Exception e)
         {
             e.printStackTrace();
-            HelperGeneric.display_toast(context.getString(R.string.chat_opening_file_failed), false, 0);
+            AirComposerNotice.say(context.getString(R.string.chat_opening_file_failed), true);
         }
     }
 

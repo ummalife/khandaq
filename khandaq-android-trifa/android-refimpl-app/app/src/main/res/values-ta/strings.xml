@@ -88,8 +88,6 @@
     <string name="group_create_private_password">விருப்ப குழு கடவுச்சொல்</string>
 
     <string name="invite_friend_success">நீங்கள் ஒரு நண்பர் கோரிக்கையைப் பெற்றுள்ளீர்கள்</string>
-    <string name="invite_join_group_success">நீங்கள் ஒரு குழுவிற்கு அழைக்கப்பட்டுள்ளீர்கள்</string>
-    <string name="invite_join_conference_success">நீங்கள் ஒரு மாநாட்டு குழுவுக்கு அழைக்கப்பட்டுள்ளீர்கள்</string>
     <string name="FriendListHolder_toggle_notification_silent_title">அறிவிப்பை மாற்றவும்</string>
     <string name="MessageListHolder_file_incoming_cancel_ft_title">FileTransfer ஐ ரத்துசெய்</string>
     <string name="MessageListHolder_file_incoming_cancel_ft_message">இந்த ஃபைல்ட்ரான்ச்ஃபரை ரத்து செய்ய விரும்புகிறீர்களா?</string>

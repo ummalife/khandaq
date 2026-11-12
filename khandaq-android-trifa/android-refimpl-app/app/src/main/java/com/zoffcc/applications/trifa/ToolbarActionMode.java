@@ -227,7 +227,8 @@ public class ToolbarActionMode implements ActionMode.Callback
                 final int editBlockReason = HelperMessageEdit.editBlockReasonForCurrentSelection();
                 if (editBlockReason != 0)
                 {
-                    android.widget.Toast.makeText(context, editBlockReason, android.widget.Toast.LENGTH_LONG).show();
+                    // E21: why it cannot be edited stands under the field, where the edit would go.
+                    AirComposerNotice.say(context.getString(editBlockReason), false);
                 }
                 else if ((selected_group_messages.isEmpty()) && (MainActivity.group_message_list_activity == null))
                 {

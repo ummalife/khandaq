@@ -9,9 +9,9 @@
 /* Login screen text */
 "login_or_label" = "or";
 /* Login screen text */
-"create_account" = "Create Account";
+"create_account" = "Create account";
 /* Login screen text */
-"import_profile" = "Import Profile";
+"import_profile" = "Import profile";
 /* Import profile instruction steps (Figma) */
 "import_step_1" = "Send the .tox file to your device (using email, Dropbox, or another method)";
 "import_step_2" = "Tap \"Open\"";
@@ -26,13 +26,13 @@
 "onboarding_decentralized_subtitle" = "Your messages are not stored on servers. Enjoy full decentralization";
 "onboarding_next" = "Next";
 "onboarding_create_account" = "Create account";
-"contacts_copy_myid" = "Copy MyID";
+"contacts_copy_myid" = "Copy ID";
 "chat_encryption_badge" = "Tox protocol";
 "chat_encryption_info" = "All chat data is protected by Tox end-to-end encryption and is accessible to no one but you and your recipient";
 /* Password field */
 "password" = "Password";
 /* Login button */
-"log_in" = "Log In";
+"log_in" = "Log in";
 /* Login screen text */
 "create_profile" = "Create profile";
 "create_account_screen_title" = "Create profile";
@@ -51,7 +51,7 @@
 /* Login screen text */
 "set_password_title" = "Set Password";
 /* Login screen text */
-"set_password_hint" = "Password is required to protect your data. Use at least 8 characters with letters and numbers. Keep it safe - once lost it cannot be restored.";
+"set_password_hint" = "Password is required to protect your data. Use at least 8 characters with letters and numbers. Keep it safe: once lost, it cannot be restored.";
 /* Login button */
 "create_account_next_button" = "Next";
 /* Login button */
@@ -142,7 +142,7 @@
 /* No contacts placeholder text */
 "contact_no_contacts_add_contact" = "Add a contact\nor\n";
 /* No contacts placeholder text */
-"contact_no_contacts_share_tox_id" = "share your MyID";
+"contact_no_contacts_share_tox_id" = "share your ID";
 /* Contact request section title */
 "contact_requests_section" = "Contact Requests";
 /* Contact last seen status */
@@ -165,12 +165,12 @@
 
 /* Add contat screen name */
 "add_contact_title" = "Add Contact";
-"add_contact_own_id_error" = "You cannot add your own Tox ID. Use a different profile on the second device, or export/import the same profile (only one device can be online at a time).";
+"add_contact_own_id_error" = "You cannot add your own ID. Use a different profile on the second device, or export/import the same profile (only one device can be online at a time).";
 /* Add contat button */
 "add_contact_send" = "Send";
 /* Add contat placeholder text */
-"add_contact_tox_id_placeholder" = "Enter MyID";
-"add_contact_myid_label" = "User's MyID";
+"add_contact_tox_id_placeholder" = "Enter the ID";
+"add_contact_myid_label" = "Their ID";
 /* Add contat placeholder text */
 "add_contact_or_label" = "or";
 /* Add contat button */
@@ -184,11 +184,11 @@
 /* Add contat default text sended to contact */
 "add_contact_default_message_text" = "Hello! Could you please add me to your contact list?";
 /* Add contat error */
-"add_contact_wrong_qr" = "Wrong QR code. It should contain MyID";
+"add_contact_wrong_qr" = "This QR code holds no ID";
 "add_contact_invalid_id_format" = "Invalid ID format";
 "add_contact_already_friend" = "This contact is already in your list.";
 "add_contact_request_already_pending" = "A friend request to this contact is already pending.";
-"add_contact_public_key_only_hint" = "Only the public key was entered. The request will use nospam=0 and may not reach the contact unless they use that exact ID. Prefer the full 76-character MyID from their profile.";
+"add_contact_public_key_only_hint" = "Only the public key was entered. The request may not arrive: ask the person for the full 76-character ID from their profile.";
 
 /* User name text */
 "name" = "Name";
@@ -199,9 +199,9 @@
 /* User status text */
 "status_title" = "Status";
 /* User Tox ID text */
-"my_tox_id" = "MyID";
+"my_tox_id" = "Your ID";
 "qr_screen_title" = "My QR code";
-"qr_my_id_heading" = "Your account's MyID";
+"qr_my_id_heading" = "Your ID";
 "qr_my_id_subtitle" = "Friends can message you by scanning your QR code";
 /* User public key text */
 "public_key" = "Public Key";
@@ -228,7 +228,7 @@
 /* Chat button */
 "chat_send_button" = "Send";
 /* Chat notification toast */
-"chat_new_messages" = "↓ New messages";
+"chat_new_messages" = "New messages";
 /* Chat call information */
 "chat_call_message" = "Call, ";
 /* Chat call information */
@@ -280,12 +280,12 @@
 /* About screen menu */
 "settings_acknowledgements" = "Acknowledgements";
 /* Settings screen menu */
-"settings_autodownload_images" = "Autodownload files";
+"settings_autodownload_images" = "Download attachments";
 /* Settings screen menu */
 "settings_autodownload_images_description" = "Automatically download incoming files.";
-"settings_longer_bg_mode" = "Longer Background Mode";
-"settings_longer_bg_mode_description" = "This will keep the Application running for longer in the background to finish sending messages, but this will also reveal more meta data about you. It will link your IP address and your PUSH token. It's a tradeoff between convenience and metadata privacy.\n\nYou can use a VPN to prevent that.";
-"settings_profile_backup_description" = "Export or import your Tox profile (.tox). Only your Tox ID and contacts are included; chat history is not transferred.";
+"settings_longer_bg_mode" = "Longer background mode";
+"settings_longer_bg_mode_description" = "Messages get more time to go out after you leave the app, but the notification server learns which network this phone is on.";
+"settings_profile_backup_description" = "Export or import your Tox profile (.tox). Only your ID and contacts are included; chat history is not transferred.";
 "settings_import_profile_invalid_file" = "The selected file is not a valid Tox profile (.tox).";
 /* Settings screen menu */
 "settings_dark_theme" = "Dark theme";
@@ -295,16 +295,16 @@
 /* Settings screen menu */
 "settings_notifications_description" = "When application goes to background, you will still receive notifications up to 10 minutes.";
 /* Settings screen menu */
-"settings_udp_enabled" = "Enable UDP";
-"settings_call_audio_vpio" = "New call audio engine (echo & volume fix)";
-/* Advanced settings — UDP restart confirmation */
+"settings_udp_enabled" = "Use UDP";
+"settings_call_audio_vpio" = "Echo and volume correction";
+/* Advanced settings, UDP restart confirmation */
 "settings_udp_restart_title" = "Restart Required";
 "settings_udp_restart_enable_message" = "UDP is experimental on iOS and may cause crashes. The app will restart to apply this setting. Stay in Khandaq until restart completes.";
 "settings_udp_restart_disable_message" = "The app will restart to apply network settings. Stay in Khandaq until restart completes.";
 "settings_udp_restart_confirm" = "Restart";
 "settings_udp_restart_failed_message" = "Could not restart the network stack. Tap OK to try again.";
 /* Settings screen menu */
-"settings_restore_default" = "Restore Default Settings";
+"settings_restore_default" = "Restore default settings";
 /* Settings screen autodownload images option */
 "settings_never" = "Never";
 /* Settings screen autodownload images option */
@@ -313,7 +313,6 @@
 "settings_using_wifi" = "Using Wi-Fi";
 /* Settings screen autodownload images option */
 "settings_always" = "Always";
-
 /* Profile settings menu */
 "change_password" = "Change Password";
 /* Profile settings menu */
@@ -345,18 +344,17 @@
 "attach_file" = "File";
 "attach_location" = "Location";
 /* Error while converting avatar image */
-"change_avatar_error_convert_image" = "Cannot convert image";
-
+"change_avatar_error_convert_image" = "Couldn't prepare the image. Choose another photo.";
 /* Alert text when sending file to contacts */
 "file_send_to_contact" = "Send to contact";
 "file_send_to_group" = "Send to group";
 "group_select_no_groups" = "No groups yet";
-"share_extension_preparing" = "Preparing share…";
-"share_extension_open_app" = "Opening Khandaq…";
+"share_extension_preparing" = "Preparing share...";
+"share_extension_open_app" = "Opening Khandaq...";
 "share_extension_failed" = "Could not share to Khandaq";
 
 /* Profile menu item */
-"export_profile" = "Export Profile";
+"export_profile" = "Export profile";
 /* Profile menu item */
 "delete_profile" = "Delete Profile";
 /* Delete profile confirmation */
@@ -405,7 +403,7 @@
 "nav_edit_done" = "Done";
 "message_edit_save" = "Save";
 "message_edited_marker" = "edited";
-"group_msg_sender_unverified" = "Relayed from history — sender not verified";
+"group_msg_sender_unverified" = "Relayed from history, sender not verified";
 /* Delete button */
 "alert_delete" = "Delete";
 /* Delete button */
@@ -431,7 +429,7 @@
 /* Error */
 "error_internal_message" = "Internal error";
 /* Video send */
-"video_send_preparing" = "Preparing video…";
+"video_send_preparing" = "Preparing video...";
 "video_send_preparation_failed" = "Could not prepare video for sending.";
 "video_send_too_large" = "Video is too large (max 500 MB).";
 "video_send_busy" = "Another video is still being prepared. Please wait.";
@@ -439,7 +437,7 @@
 "video_send_cancel" = "Cancel";
 "file_transfer_stalled" = "File transfer stalled. You can cancel and try again.";
 "media_send_button" = "Send";
-"media_send_caption_hint" = "Add a caption…";
+"media_send_caption_hint" = "Add a caption...";
 "media_send_counter_format" = "%1$d / %2$d";
 /* Error */
 "error_wrong_password_title" = "Wrong password";
@@ -490,9 +488,9 @@
 /* Error */
 "error_contact_request_already_sent" = "Request already sent. If the other person did not receive it, ensure both are online and try again";
 /* Error */
-"error_contact_request_bad_checksum" = "Bad checksum, please check entered MyID";
+"error_contact_request_bad_checksum" = "The ID has a typo or was not copied whole. Copy it again.";
 /* Error */
-"error_contact_request_new_nospam" = "Bad nospam value, please check entered MyID";
+"error_contact_request_new_nospam" = "This contact has a new antispam: check the ID again";
 
 /* Call error */
 "call_error_already_in_call" = "Already in a call";
@@ -559,8 +557,8 @@
 "group_join_action" = "Join";
 "group_join_invalid_id" = "Chat ID must be 64 hex characters.";
 "group_create_failed" = "Could not create group.";
-"group_create_in_progress" = "Creating group…";
-"launch_loading" = "Loading…";
+"group_create_in_progress" = "Creating group...";
+"launch_loading" = "Loading...";
 "group_join_failed" = "Could not join group.";
 "group_join_fail_peer_limit" = "This group is full. The peer limit has been reached.";
 "group_join_fail_invalid_password" = "Invalid group password.";
@@ -570,12 +568,12 @@
 "group_chat_default_title" = "Group";
 "group_chat_list_subtitle" = "Group chat";
 "group_chat_list_private" = "Private";
-"group_chat_list_disconnected" = "Connecting…";
+"group_chat_list_disconnected" = "Connecting...";
 "group_chat_list_private_unread_format" = "%d private unread";
-"group_disconnected_banner" = "Connecting to group… Messages will send when connected.";
-"group_connecting_banner_format" = "Connecting to group… (attempt %d)";
+"group_disconnected_banner" = "Connecting to the group. Messages go once it connects.";
+"group_connecting_banner_format" = "Connecting to the group, attempt %d";
 "group_member_count_format" = "%d members";
-"group_member_online_count_format" = "%d members · %d online";
+"group_member_online_count_format" = "%d members, %d online";
 "group_send_observer_role" = "You are an observer in this group and cannot send messages. Ask a moderator to change your role to Member.";
 "group_my_peer_name_header" = "Your name in group";
 "group_my_peer_name_placeholder" = "Enter display name";
@@ -588,10 +586,10 @@
 "group_info_title" = "Group info";
 "group_chat_id_header" = "Chat ID";
 "group_chat_id_footer" = "Share this ID so others can join the group.";
-"group_chat_id_loading" = "Loading…";
+"group_chat_id_loading" = "Loading...";
 "group_members_header" = "Members";
 "group_members_header_format" = "Members (%d)";
-"group_members_header_online_format" = "Members: %1$d · %2$d online";
+"group_members_header_online_format" = "Members: %1$d, online: %2$d";
 "group_members_empty" = "No members yet";
 "group_member_list_title" = "Members";
 "group_member_status_offline" = "Offline";
@@ -609,8 +607,8 @@
 "chat_pinned_banner_title" = "Pinned message";
 "chat_copy_action" = "Copy";
 "chat_select_action" = "Select";
-"chat_forwarded_from_format" = "↪ Forwarded from %@";
-"chat_forwarded_noname" = "↪ Forwarded";
+"chat_forwarded_from_format" = "Forwarded from %@";
+"chat_forwarded_noname" = "Forwarded";
 "saved_messages_title" = "Saved Messages";
 "chat_reply_cancel" = "Cancel reply";
 "chat_reply_header" = "In reply to %@";
@@ -620,7 +618,7 @@
 "group_messages_copy_action" = "Copy";
 "network_connections_title" = "Network connections";
 "network_connections_summary" = "DHT, relays, reconnect log";
-"network_connections_loading" = "Loading network status…";
+"network_connections_loading" = "Loading network status...";
 "network_connections_beta_notice" = "Connection event log and runtime quality metrics. Full UDP/TCP dump is not available on iOS yet.";
 "group_peer_fallback_format" = "Peer %d";
 "group_error_disconnected" = "Group is not connected yet. Wait a moment and try again.";
@@ -651,8 +649,8 @@
 "group_live_video_quality_high" = "HD";
 "group_live_video_toggle_active" = "Live video active";
 "group_live_video_toggle_incoming" = "Incoming live video";
-"group_live_video_streams_empty" = "streams:0";
-"group_live_video_streams_format" = "streams:%llu\n%@";
+"group_live_video_streams_empty" = "No video yet";
+"group_live_video_streams_format" = "Videos: %llu\n%@";
 "group_video_join_title" = "Join group video?";
 "group_video_join_message" = "Send your video and audio to everyone in this group?";
 "group_video_join_confirm" = "Yes, start video";
@@ -774,7 +772,7 @@
 "settings_language" = "Language";
 "settings_language_title" = "App language";
 
-/* KHANDAQ (user request 17.08): the attachments screen — files / audio / voice notes */
+/* KHANDAQ (user request 17.08): the attachments screen, files / audio / voice notes */
 "attachments_title" = "Attachments";
 "attachments_documents" = "Files";
 "attachments_audio" = "Audio";
@@ -782,9 +780,688 @@
 "attachments_empty" = "Nothing here yet";
 "attachments_not_downloaded" = "This file has not been downloaded yet.";
 
-/* KHANDAQ (18.08): About screen — owner/developer credit, links to https://1sa.me/ */
-"settings_credit_owner" = "Owner and developer — Isa Dagestani";
+/* KHANDAQ (18.08): About screen, owner/developer credit, links to https://1sa.me/ */
+"settings_credit_owner" = "Owner and developer: Isa Dagestani";
 
 /* KHANDAQ (re-review 2026-08-22, KQ-03): shown INSTEAD of the sender name when relayed
    history names an author whose signing key is stale. The row is kept; the identity is not. */
-"group_msg_relayed_unattributed" = "Relayed history — author not verified";
+"group_msg_relayed_unattributed" = "Relayed history, author not verified";
+
+/* KHANDAQ redesign (B): the theme is a choice of three; a sheet names the current choice. */
+"settings_theme" = "Theme";
+"settings_theme_system" = "Match system";
+"settings_theme_light" = "Light";
+"settings_theme_dark" = "Dark";
+"settings_choice_current" = "Now: %@";
+
+/* KHANDAQ redesign (B): the Air screen, one list for people, groups and requests. */
+"air_command_placeholder" = "Find a chat or paste an ID";
+"air_create" = "Create";
+"air_new_contact" = "New contact";
+"air_you" = "You";
+"air_you_hint" = "Opens your profile";
+"air_net_direct" = "online, direct";
+"air_net_relay" = "online, via a relay";
+"air_net_connecting" = "connecting";
+"air_net_offline" = "no network: messages wait";
+"air_filter_all" = "All";
+"air_filter_requests" = "Requests";
+"air_filter_transit" = "In transit";
+"air_section_live" = "Online now";
+"air_section_away" = "Offline";
+"air_section_saved" = "Just for you";
+"air_section_messages" = "Messages";
+"air_request_tag" = "Incoming request";
+"air_request_key_format" = "key %@. You will see the name once you accept the request";
+"air_reach_live" = "online";
+"air_reach_relay" = "online, relay";
+"air_reach_pending" = "waiting for reply";
+"air_reach_connecting" = "connecting";
+"air_reach_group_online" = "%d online";
+"air_reach_group_none" = "nobody online";
+"air_reach_just_now" = "just now";
+"air_reach_minutes" = "%d min ago";
+"air_reach_hours" = "%d h ago";
+"air_reach_days" = "%d d ago";
+"air_reach_long_ago" = "a while ago";
+"air_delivery_transit" = "in transit";
+"air_delivery_sent" = "sent";
+"air_delivery_delivered" = "delivered";
+"air_transit_format" = "%d in transit";
+"air_unread_a11y" = "unread: %d";
+"air_hint_request_sent" = "request sent";
+"air_hint_saved" = "only on this device";
+"air_hint_no_messages" = "no messages yet";
+"air_menu_select" = "Select";
+"air_menu_remove_contact" = "Remove contact";
+"air_selected_format" = "Selected: %d";
+"air_empty_nothing_title" = "Nobody here yet";
+"air_empty_nothing_body" = "Paste a person’s ID into the line at the top or open “New contact”.";
+"air_empty_no_match_title" = "Nothing found";
+"air_empty_no_match_body" = "No names or messages match. If it is an ID, check that it is complete: 76 characters.";
+"air_empty_no_requests_title" = "No requests";
+"air_empty_no_requests_body" = "Incoming requests appear here, and yours that are still waiting for a reply.";
+"air_empty_no_transit_title" = "Everything delivered";
+"air_empty_no_transit_body" = "Messages waiting for someone to come online gather here.";
+"air_empty_no_favorites_title" = "No favorites yet";
+"air_empty_no_favorites_body" = "Mark a chat in its menu and it will be here.";
+"air_empty_show_all" = "Show all chats";
+
+/* KHANDAQ redesign (B), stage 2: the conversation, the tray, the composer and the dossier. */
+"air_chat_call" = "Call";
+"air_chat_dossier_hint" = "Opens the dossier: link, last 24 hours, key";
+"air_chat_jump_latest" = "To the latest messages";
+"air_chat_search" = "Search the conversation";
+"air_chat_video" = "Video call";
+"air_compose_attach" = "Attach a file";
+"air_compose_bytes_left" = "%d bytes left";
+"air_compose_bytes_over" = "%d bytes over the limit";
+"air_compose_hint_live_format" = "Goes right away: %@ is online";
+"air_compose_hint_saved" = "The note stays only on this device";
+"air_compose_hint_wait_format" = "Waits in transit: %@ is offline. It will go on its own";
+"air_compose_placeholder" = "Message";
+"air_compose_send" = "Send";
+"air_compose_send_blocked" = "The message is over the limit. Shorten it to send it";
+"air_compose_voice" = "Voice message";
+"air_day_a11y_format" = "online %@";
+"air_day_a11y_none" = "no marks";
+"air_day_best_format" = "usually %d:00 to %d:00";
+"air_day_empty" = "no marks yet";
+"air_day_hint_ranges_format" = "past day: %@";
+"air_day_note" = "This phone marks the hours it sees the person online. The marks stay only here, for seven days.";
+"air_day_now_online" = "Online now";
+"air_day_range_format" = "%d:00 to %d:00";
+"air_day_title" = "Last 24 hours";
+"air_delivery_failed" = "not sent";
+"air_delivery_sending" = "sending";
+"air_dossier_best_format" = "Best time to write: %d:00 to %d:00, when they are online most often.";
+"air_dossier_block" = "Block";
+"air_dossier_close_hint" = "Closes the dossier";
+"air_dossier_copy_key" = "Copy key";
+"air_dossier_day_title" = "Last 24 hours";
+"air_dossier_files_title" = "Files";
+"air_dossier_key_copied" = "Key copied";
+"air_dossier_key_title" = "Key";
+"air_dossier_link_direct" = "Direct, with no relay.";
+"air_dossier_link_none" = "No link right now. Messages wait in transit and go on their own.";
+"air_dossier_link_relay" = "Via a relay. It passes on encrypted messages and cannot see what they say.";
+"air_dossier_link_title" = "Link";
+"air_dossier_mute" = "Mute";
+"air_dossier_not_verified" = "The key is not verified.";
+"air_dossier_notifications_title" = "Notifications";
+"air_dossier_push_off" = "No notifications: the other person's app has not turned them on. Messages arrive when they open Khandaq.";
+"air_dossier_push_on_format" = "Notifications get through. When %@ is offline, the phone gets a signal with no text and fetches the messages itself.";
+"air_dossier_qr" = "QR code";
+"air_dossier_remove" = "Remove";
+"air_dossier_remove_message" = "The conversation is deleted from this device. To write to each other again, you will need a new request.";
+"air_dossier_remove_title_format" = "Remove %@ from contacts?";
+"air_dossier_rename" = "Rename";
+"air_dossier_unverify" = "Undo verification";
+"air_dossier_verified_format" = "Key verified on %@.";
+"air_dossier_verify" = "Verify";
+"air_dossier_verify_title" = "Key check";
+"air_failed_item_hint" = "Opens actions for the message";
+"air_failed_retry" = "Not sent. Retry";
+"air_failed_retry_hint" = "Sends the message again";
+"air_link_direct" = "direct link";
+"air_link_none" = "no link";
+"air_link_relay" = "link via a relay";
+"air_path_relay" = "relay";
+"air_pin_jump_hint" = "Shows the pinned message in the conversation";
+"air_pin_remove" = "Unpin";
+"air_presence_away_days" = "offline for %d days";
+"air_presence_away_hours" = "offline for %d hours";
+"air_presence_away_just_now" = "offline for under a minute";
+"air_presence_away_long" = "offline for over a week";
+"air_presence_away_minutes" = "offline for %d minutes";
+"air_presence_direct" = "online, direct link";
+"air_presence_direct_since_format" = "online since %@, direct link";
+"air_presence_pending" = "waiting for a reply to the request";
+"air_presence_relay" = "online, via a relay";
+"air_presence_relay_since_format" = "online since %@, via a relay";
+"air_presence_typing" = "typing";
+"air_qr_key_heading_format" = "Key: %@";
+"air_qr_key_subtitle" = "Compare it with the ID in their profile: the first 64 characters must match.";
+"air_retry" = "Retry";
+"air_tray_cancel" = "Cancel sending";
+"air_tray_collapse_hint" = "Collapses the tray";
+"air_tray_departed" = "The messages in transit have gone";
+"air_tray_edit_unavailable" = "This message cannot be edited";
+"air_tray_expand_hint" = "Shows the messages in transit";
+"air_tray_head_format" = "In transit: %d messages";
+"air_tray_item_hint" = "You can edit or cancel it until it goes";
+"air_tray_wait_format" = "They go on their own once %@ comes online.";
+"air_tray_wait_push_format" = "They go on their own once %@ comes online. The phone gets a signal with no text and fetches them itself.";
+"air_verify_match" = "It matches";
+"air_verify_message" = "Ask the other person to read their ID from their profile. If its first 64 characters match the key below, you are talking to the right person.";
+"air_verify_title" = "Key check";
+"air_day_today" = "Today";
+"air_day_yesterday" = "Yesterday";
+
+/* KHANDAQ redesign (B), stage 3: block, privacy, refused messages. */
+"air_dossier_block_title_format" = "Block %@?";
+"air_dossier_block_message" = "The contact and the conversation are deleted from this device, and new requests from this key will not be shown.";
+"air_dossier_block_hint" = "Asks first, then deletes the contact and hides requests from this key";
+"air_privacy_title" = "Privacy";
+"air_blocked_title" = "Blocked";
+"air_blocked_none" = "None";
+"air_blocked_count_format" = "%d";
+"air_blocked_section_note" = "Requests from blocked keys are not shown. The list is kept on this device only.";
+"air_blocked_empty" = "Keys you block from a contact's dossier appear here.";
+"air_blocked_note" = "Requests from these keys are not shown. Unblocking does not bring the contact back: that takes a new request.";
+"air_blocked_unblock" = "Unblock";
+"air_blocked_unblocked" = "Key unblocked";
+
+/* KHANDAQ redesign (B), stage 3: new contact and the command line. */
+"air_nc_id_label" = "Their ID";
+"air_nc_id_placeholder" = "Paste the ID: 76 characters, digits and letters A to F";
+"air_nc_ruler_key" = "key";
+"air_nc_ruler_antispam" = "antispam";
+"air_nc_ruler_check" = "check";
+"air_nc_ruler_part_format" = "%1$@: %2$d of %3$d";
+"air_nc_verdict_empty" = "Spaces, line breaks and a tox: prefix can stay: the field cleans them up.";
+"air_nc_verdict_left" = "%d characters left.";
+"air_nc_verdict_bad" = "The check does not match: the ID has a typo or was not copied whole. Copy it again.";
+"air_nc_verdict_own" = "This is your own ID: you send it to others, you do not add it.";
+"air_nc_verdict_contact_format" = "%@ is already in your contacts.";
+"air_nc_verdict_they_asked" = "This person has already sent you a request. It is waiting in Requests.";
+"air_nc_verdict_blocked" = "This key is blocked on this device. Sending the request lifts the block.";
+"air_nc_verdict_ok" = "The ID is fine. The request goes as soon as they are online.";
+"air_nc_why_whole" = "Paste the whole ID first: 76 characters.";
+"air_nc_why_own" = "You cannot add your own ID.";
+"air_nc_why_fix" = "Fix the ID first.";
+"air_nc_why_contact" = "They are already in your contacts.";
+"air_nc_why_they_asked" = "Accept their request in Requests.";
+"air_nc_open_chat" = "Open chat";
+"air_nc_open_requests" = "Open Requests";
+"air_nc_paste" = "Paste";
+"air_nc_scan" = "Scan QR";
+"air_nc_scan_photo" = "QR from a photo";
+"air_nc_wrong_qr" = "There is no ID in this QR code.";
+"air_nc_message_label" = "Message with the request";
+"air_nc_message_note" = "They read it before they accept. Left empty, the greeting in the field goes.";
+"air_nc_message_too_long" = "Too long for a request: shorten the message.";
+"air_nc_send" = "Send request";
+"air_nc_own_title" = "Your ID";
+"air_nc_own_note" = "Send it to people who want to add you.";
+"air_nc_copy" = "Copy";
+"air_nc_copied" = "ID copied";
+"air_nc_sent_title" = "Request on its way";
+"air_nc_sent_text" = "The request goes as soon as they are online. Their name becomes known once they accept it. Until then they are in the list as waiting for reply.";
+"air_nc_accepted_title" = "Request accepted";
+"air_nc_accepted_text_format" = "%@ is in your contacts: you can write now.";
+"air_nc_them" = "them";
+"air_nc_done" = "Done";
+"air_nc_path_label_format" = "You and %@, the link is not there yet";
+"air_nc_path_live_format" = "You and %@, connected";
+"air_cmd_new_contact" = "New contact with this ID";
+"air_cmd_id_ok" = "the ID is fine";
+"air_cmd_id_left" = "%d characters missing";
+"air_cmd_id_own" = "this is your ID";
+"air_cmd_id_bad" = "the check does not match";
+"air_cmd_id_contact" = "already in contacts";
+"air_nc_clear" = "Clear";
+
+/* KHANDAQ redesign (B), stage 3: requests and group invitations. */
+"air_invite_tag" = "Group invitation";
+"air_invite_from_format" = "%@ invites you.";
+"air_invite_wait_format" = "You can join once %@ is online.";
+"air_invite_join" = "Join";
+"air_request_declined" = "Request declined";
+"air_invite_declined" = "Invitation declined";
+"air_undo" = "Undo";
+
+/* Redesign stage 3, E13 to E15: groups */
+"air_group_role_founder" = "founder";
+"air_group_role_moderator" = "moderator";
+"air_group_role_user" = "member";
+"air_group_role_observer" = "observer";
+"air_group_you_founder" = "You founded the group. You name moderators, make anyone a member or an observer, remove members and change the group settings.";
+"air_group_you_moderator" = "You are a moderator. You make members observers and observers members, and you can remove them from the group.";
+"air_group_you_user" = "You are a member. You write in the group; the founder and the moderators manage it.";
+"air_group_you_observer" = "You are an observer. You read the group but cannot write; a moderator can give you the right to write.";
+"air_group_members_count" = "%d members";
+"air_group_header_format" = "%1$@, %2$d online now";
+"air_group_header_none_format" = "%@, nobody online now";
+"air_group_header_offline_format" = "%@, not connected to the group";
+"air_group_hint_offline" = "No connection to the group: messages wait on this device and go once it connects";
+"air_group_hint_alone" = "Only you are in the group so far: invite people from the group dossier";
+"air_group_hint_none" = "Nobody is online: members get it when they come online";
+"air_group_hint_all_format" = "All %d get it now: everyone is online";
+"air_group_hint_format" = "%1$d of %2$d get it now, the rest when they come online";
+"air_group_get_now" = "Get it now";
+"air_group_get_now_spoken_format" = "Get it now: %@";
+"air_group_dossier_hint" = "Opens the group dossier";
+"air_group_read_only_observer" = "Read only. You are an observer: a moderator can give you the right to write.";
+"air_group_read_only_moderators" = "Read only. Here only the moderators and the founder write.";
+"air_group_read_only_founder" = "Read only. Here only the founder writes.";
+"air_group_ask_moderator" = "Write to a moderator";
+"air_group_ask_founder" = "Write to the founder";
+"air_group_ask_nobody" = "No moderator of this group is known yet";
+"air_group_observer_no_private" = "An observer cannot write here, not even privately: ask a moderator outside the group.";
+"air_group_member_status_format" = "%1$@, %2$@";
+"air_group_member_offline" = "offline";
+"air_group_member_you_format" = "%@ (you)";
+"air_group_member_hint" = "Opens the actions for this member";
+"air_group_dossier_title" = "Group";
+"air_group_your_role" = "Your role";
+"air_group_who_gets_now" = "Who gets a message now";
+"air_group_who_gets_now_note_format" = "Online now: %1$d of %2$d. The others get messages when they come online.";
+"air_group_members" = "Members";
+"air_group_search_members" = "Find a member";
+"air_group_nobody_found" = "Nobody with that name";
+"air_group_key" = "Group key";
+"air_group_copy_key" = "Copy";
+"air_group_invite" = "Invite";
+"air_group_key_copied" = "Group key copied";
+"air_group_qr_heading_format" = "Group %@";
+"air_group_qr_subtitle" = "Scan to find the group by its key";
+"air_group_muted_note" = "No notifications for new messages of this group; the unread count stays in the list.";
+"air_group_unmuted_note" = "New messages of this group come with a notification.";
+"air_group_history" = "History";
+"air_group_history_note" = "Messages written while you were away are passed on by other members. If the author's signature does not check out, the message says the sender is not confirmed.";
+"air_group_remove_system_format" = "Remove service messages: %d";
+"air_group_remove_system_message" = "Notes about joins, leaves and changes of the group are removed from this device.";
+"air_group_remove_system_action" = "Remove";
+"air_group_clear_history" = "Clear history";
+"air_group_clear_history_title" = "Clear the history of this group?";
+"air_group_clear_history_message" = "The messages are removed from this device only; the members keep theirs.";
+"air_group_settings" = "Group settings";
+"air_group_settings_detail" = "Your name in the group, the topic, who joins and who writes";
+"air_group_leave" = "Leave the group";
+"air_group_leave_note" = "Its messages stop coming, and the history leaves this device.";
+"air_group_leave_title_format" = "Leave %@?";
+"air_group_leave_message" = "The members see that you left. To come back you need an invitation or the group key.";
+"air_group_write_privately" = "Write privately";
+"air_group_add_contact" = "Add to contacts";
+"air_group_contact_added_format" = "%@ added to contacts";
+"air_group_copy_member_key" = "Copy key";
+"air_group_member_key_copied" = "Key copied";
+"air_group_member_mute" = "Mute in this group";
+"air_group_member_unmute" = "Unmute in this group";
+"air_group_member_muted_format" = "%@ muted in this group";
+"air_group_member_unmuted_format" = "%@ unmuted";
+"air_group_make_moderator" = "Make moderator";
+"air_group_make_user" = "Make member";
+"air_group_make_observer" = "Make observer";
+"air_group_kick" = "Remove from the group";
+"air_group_make_moderator_title_format" = "Make %@ a moderator?";
+"air_group_make_moderator_message" = "A moderator makes members observers and back and can remove them.";
+"air_group_make_user_title_format" = "Make %@ a member?";
+"air_group_make_user_message" = "A member writes in the group and manages nothing.";
+"air_group_make_observer_title_format" = "Make %@ an observer?";
+"air_group_make_observer_message" = "An observer reads the group but cannot write.";
+"air_group_kick_title_format" = "Remove %@ from the group?";
+"air_group_kick_message" = "The group's messages stop coming. Coming back takes a new invitation or, in an open group, its key.";
+"air_group_now_moderator_format" = "%@ is a moderator now";
+"air_group_now_user_format" = "%@ is a member now";
+"air_group_now_observer_format" = "%@ is an observer now";
+"air_group_kicked_format" = "%@ is no longer in the group";
+"air_group_invite_title" = "Invite to the group";
+"air_invite_online_note" = "An invitation goes over your connection with the contact, so only contacts online now can be invited.";
+"air_invite_choose_first" = "Choose whom to invite";
+"air_invite_send_format" = "Invite %d";
+"air_invite_sent" = "%d invitations sent";
+"air_invite_already_member" = "already in the group";
+"air_invite_when_online" = "can be invited once online";
+"air_invite_no_contacts" = "No contacts yet: add someone first.";
+"air_invite_nobody_found" = "No contact with that name";
+"air_invite_search" = "Find a contact";
+"air_new_group_title" = "New group";
+"air_new_group_name" = "Name";
+"air_new_group_name_placeholder" = "For example, Book club";
+"air_new_group_name_note" = "Everyone you invite sees it. Later the topic can change, the name cannot.";
+"air_new_group_privacy" = "Who can join";
+"air_group_privacy_invite_only" = "By invitation only";
+"air_group_privacy_invite_only_note" = "Only people invited by a member can join.";
+"air_group_privacy_open" = "Open to anyone with the group key";
+"air_group_privacy_open_note" = "Anyone who has the group key can join, no invitation needed.";
+"air_new_group_invite_note" = "Invitations go at once, so only contacts online can be invited here. Invite the others later from the group dossier.";
+"air_new_group_create" = "Create group";
+"air_new_group_create_invite_format" = "Create and invite %d";
+"air_new_group_name_first" = "Name the group to create it";
+"air_new_group_name_too_long" = "The name is too long for a group: shorten it";
+"air_group_author_role_format" = "%1$@, %2$@";
+"air_group_author_unconfirmed" = "Author not confirmed";
+"air_group_mentions_you" = "Mentions you";
+"air_group_live_on" = "on";
+"air_group_hint_one_other" = "The other member is online and gets it now";
+"air_group_open_chat" = "Open the conversation";
+"air_group_author_unknown" = "A member";
+
+/* Redesign stage 3: files, photos and voice notes in the transcript (E8) */
+"air_file_accept" = "Accept";
+"air_file_decline" = "Decline";
+"air_file_pause" = "Pause";
+"air_file_resume" = "Resume";
+"air_file_cancel" = "Cancel";
+"air_file_retry_incoming" = "Download again";
+"air_file_retry_outgoing" = "Send again";
+"air_file_left_format" = "%@ left";
+"air_file_paused" = "Paused";
+"air_file_failed_incoming" = "The download stopped";
+"air_file_failed_outgoing" = "Not sent";
+"air_file_waits_accept_format" = "Waits for %@ to accept it";
+"air_file_waits_online_format" = "Goes when %@ is online";
+"air_size_bytes_format" = "%@ B";
+"air_size_kb_format" = "%@ KB";
+"air_size_mb_format" = "%@ MB";
+"air_size_gb_format" = "%@ GB";
+"air_group_file_limit_format" = "A group takes files up to %@";
+"air_voice_listen" = "Listen";
+"air_voice_pause" = "Pause";
+"air_voice_spoken" = "Voice message";
+"air_tray_file_format" = "%1$@, %2$@";
+
+/* Redesign stage 3: calls, their screens and their entries in the transcript (E9) */
+"air_call_entry_format" = "Call, %@";
+"air_call_missed" = "Missed call";
+"air_call_no_answer" = "No answer";
+"air_call_offline_title_format" = "%@ is offline: the call will not get through";
+"air_call_offline_push" = "You can wait here: their phone gets a signal with no text, and the call starts once they are online.";
+"air_call_offline_wait" = "You can wait here: the call starts once they are online.";
+"air_call_wait_action" = "Wait and call";
+"air_call_waiting_format" = "Waiting for %@ to come online";
+"air_call_waiting_push" = "A signal with no text went to their phone. The call starts on its own once they are online.";
+"air_call_waiting_no_push" = "The call starts on its own once they are online.";
+"air_call_cancel" = "Cancel";
+"air_call_mic_title" = "No access to the microphone";
+"air_call_mic_message" = "Without the microphone the other person will not hear you. Allow it in Settings: Khandaq, Microphone.";
+"air_call_camera_title" = "No access to the camera";
+"air_call_camera_message" = "Without the camera the other person will not see you; the call can go with sound. Allow it in Settings: Khandaq, Camera.";
+"air_call_open_settings" = "Open Settings";
+"air_call_audio_only" = "Call without video";
+"air_call_calling" = "Calling";
+"air_call_incoming" = "Incoming call";
+"air_call_ended" = "Call ended";
+"air_call_line_direct" = "Direct link";
+"air_call_line_relay" = "Via a relay";
+"air_call_line_none" = "No link right now";
+"air_call_decline" = "Decline";
+"air_call_answer" = "Answer";
+"air_call_answer_video" = "With video";
+"air_call_end" = "End";
+"air_call_mic" = "Microphone";
+"air_call_mic_on" = "on";
+"air_call_mic_off" = "off";
+"air_call_speaker" = "Speaker";
+"air_call_speaker_on" = "on";
+"air_call_speaker_off" = "off";
+"air_call_camera" = "Camera";
+"air_call_camera_on" = "on";
+"air_call_camera_off" = "off";
+"air_call_switch_camera" = "Switch camera";
+
+/* Redesign stage 3, E17: You */
+"air_you_share" = "Share ID";
+"air_you_copy" = "Copy ID";
+"air_you_copied" = "ID copied";
+"air_you_qr" = "QR code of your ID";
+"air_you_qr_hint" = "Scanned in New contact on another phone";
+"air_you_photo" = "Profile photo";
+"air_you_photo_hint" = "Changes the photo";
+"air_you_name" = "Name";
+"air_you_name_placeholder" = "Your name";
+"air_you_status" = "Status";
+"air_you_status_placeholder" = "A line your contacts see";
+"air_you_saved" = "Saved";
+"air_you_details" = "Details";
+"air_you_part_key" = "Key";
+"air_you_part_antispam" = "Antispam";
+"air_you_part_check" = "Check";
+"air_you_antispam" = "Change antispam";
+"air_you_antispam_title" = "Change antispam?";
+"air_you_antispam_message" = "Your old ID will stop taking new requests. Contacts stay; the ID and the QR code change.";
+"air_you_antispam_action" = "Change";
+"air_you_antispam_done" = "Antispam changed: share the new ID";
+"air_you_security" = "Password and PIN";
+"air_you_logout" = "Log out";
+"air_you_logout_title" = "Log out of the profile?";
+"air_you_logout_message" = "The profile stays on this device; you can log in again with its password.";
+"air_you_delete" = "Delete the profile from this device";
+"air_you_delete_title" = "Delete the profile from this device?";
+"air_you_delete_message_format" = "%@: the profile, its contacts and history are erased from this phone. Without an exported copy they cannot be brought back.";
+"air_you_delete_action" = "Delete";
+
+/* Settings by task (redesign stage 3, E18) */
+"air_settings_appearance" = "Appearance";
+"air_settings_notifications" = "Notifications";
+"air_settings_transfer" = "Profile transfer";
+"air_settings_network" = "Network";
+"air_settings_debug" = "Debugging";
+"air_settings_group_events_detail" = "Who joined, left or changed their name";
+"air_settings_preview" = "Show message text";
+"air_settings_preview_note" = "Message text and file names show on the lock screen. Turned off, a notification says only “New message”.";
+"air_settings_transfer_note" = "The profile file holds your ID and contacts. Chat history stays on this device.";
+"air_settings_import_message" = "The app logs out of this profile and opens the one from the file. This profile stays on the device; you can log in again with its password.";
+"air_settings_import_action" = "Choose a file";
+"air_settings_attachments_note" = "Files that do not download by themselves wait for Accept in the chat.";
+"air_settings_calls" = "Calls";
+
+/* Network state and in-app band (redesign stage 3, E4 and E22) */
+"air_network_title_direct" = "Online, direct";
+"air_network_title_relay" = "Online, via a relay";
+"air_network_title_connecting" = "Connecting";
+"air_network_title_offline" = "No network";
+"air_network_meaning_direct" = "Messages go at once, straight to the other phone.";
+"air_network_meaning_relay" = "Messages go at once through a relay: this network closes the direct path, and delivery does not suffer.";
+"air_network_meaning_connecting" = "The phone has internet and the app is looking for the network. New messages wait in transit and go on their own.";
+"air_network_meaning_offline" = "The phone has no internet. New messages wait in transit and go once it is back.";
+"air_network_internet" = "Internet";
+"air_network_internet_yes" = "Available";
+"air_network_internet_no" = "None";
+"air_network_link" = "Link";
+"air_network_link_direct" = "Direct";
+"air_network_link_relay" = "Via a relay";
+"air_network_link_none" = "Not yet";
+"air_network_reconnect" = "Connect again";
+"air_network_reconnect_toast" = "Connecting again";
+"air_network_log" = "Log for support";
+"air_network_log_note" = "Technical details of the connection, if support asks for them.";
+"air_net_hint" = "Opens the state of the network";
+"air_compose_hint_self_connecting" = "Waits in transit: the app is connecting. It will go on its own";
+"air_compose_hint_self_offline" = "Waits in transit: this phone has no network. It will go on its own";
+"air_banner_hint" = "Opens the chat";
+"air_banner_hint_request" = "Opens the request";
+"notification_group_invite" = "Invites you to a group";
+"notification_group_invite_format" = "Invites you to the group %@";
+"air_banner_hint_invite" = "Opens the invitation";
+
+/* Errors and confirmations (redesign stage 3, E21) */
+"error_failed_open_page" = "Couldn't open the page";
+"error_failed_open_profile" = "Couldn't open the profile";
+"error_failed_name" = "Couldn't change the name";
+"error_failed_status" = "Couldn't change the status";
+"error_failed_add_contact" = "Couldn't add the contact";
+"error_failed_remove_contact" = "Couldn't remove the contact";
+"error_failed_call" = "Couldn't start the call";
+"error_failed_export" = "Couldn't export the profile";
+"error_failed_delete_profile" = "Couldn't delete the profile";
+"error_failed_password" = "The password doesn't fit";
+"error_failed_answer" = "Couldn't answer the call";
+"error_failed_speaker" = "Couldn't turn on the speaker";
+"error_failed_camera" = "Couldn't turn on the camera";
+"error_failed_switch_camera" = "Couldn't switch the camera";
+"error_failed_photo" = "Couldn't change the photo";
+"error_failed_send_message" = "The message wasn't sent";
+"error_failed_join_group" = "Couldn't join the group";
+"error_failed_invite" = "Couldn't invite to the group";
+"error_failed_kick" = "Couldn't remove the member";
+"error_failed_leave_group" = "Couldn't leave the group";
+"error_failed_role" = "Couldn't change the role";
+"error_failed_topic" = "Couldn't change the topic";
+"error_failed_group_name" = "Couldn't change your name in the group";
+"error_failed_group_settings" = "Couldn't change the group's settings";
+"error_failed_send_file" = "The file wasn't sent";
+"error_failed_accept_file" = "Couldn't accept the file";
+"error_failed_cancel_file" = "Couldn't cancel the transfer";
+"error_failed_pause_file" = "Couldn't pause the transfer";
+"error_failed_pick_media" = "Couldn't take the file";
+"error_failed_generic" = "That didn't work";
+"error_pin_logout_title" = "You were logged out";
+"error_try_again_message" = "Try again.";
+"error_details" = "Details";
+"error_details_format" = "Code for support: %@";
+"error_details_copy" = "Copy";
+"error_try_again_support_message" = "Try again. If it fails again, write to support and attach the details.";
+"air_delete_chat_title" = "Delete the chat?";
+"air_delete_chat_message" = "The conversation will be deleted from this device; the contact stays.";
+"air_delete_chats_message" = "The conversations will be deleted from this device, and you will leave the selected groups.";
+
+/* A message in markup this build cannot read (redesign stage 3, item 10) */
+"air_message_unknown_format" = "This message is in a form this app cannot show yet";
+
+/* The play control of a video in the media gallery, for VoiceOver (redesign stage 3, item 9) */
+"air_media_play_video" = "Play the video";
+
+/* First launch, sign-in, password, PIN and moving a profile in (redesign stage 4, E19 and E20) */
+"air_first_step_format" = "Step %1$ld of %2$ld";
+"air_first_name_title" = "What should we call you";
+"air_first_name_body" = "Only the people you add will see this name.";
+"air_first_name_placeholder" = "Name";
+"air_first_name_first" = "Type a name first.";
+"air_first_next" = "Next";
+"air_first_move_profile" = "Move a profile from another device";
+"air_first_default_folder" = "Profile";
+"air_first_password_title" = "Profile password";
+"air_first_password_body" = "A password cannot be recovered: there are no servers. The profile is kept only on this device.";
+"air_first_password_set" = "Set a password";
+"air_first_password_set_detail" = "The profile opens only with the password. With it, the profile can be moved to another device.";
+"air_first_password_skip" = "Continue without a password";
+"air_first_password_skip_detail" = "The profile is still encrypted: its key is kept in this iPhone's keychain. It opens without a password, but only here. To move it, set a password first.";
+"air_first_password_placeholder" = "Password";
+"air_first_repeat_placeholder" = "Password again";
+"air_first_password_rule" = "At least 8 characters, with a letter and a digit.";
+"air_first_password_empty" = "Make up a password first.";
+"air_first_password_short" = "The password is shorter than 8 characters.";
+"air_first_password_weak" = "The password needs a letter and a digit.";
+"air_first_password_repeat_first" = "Type the password again in the second field.";
+"air_first_password_mismatch" = "The passwords do not match.";
+"air_first_create" = "Create profile";
+"air_first_creating" = "Creating the profile";
+"air_first_create_failed" = "The profile was not created. Try again.";
+"air_first_keychain_failed" = "This iPhone's keychain did not take the key. Set a password: with it, the profile can be created.";
+"air_first_id_title" = "Your ID is ready";
+"air_first_id_body" = "Send your ID to the people you want to write to, or show them the QR code.";
+"air_first_share" = "Share";
+"air_first_add_person" = "Add the first person";
+"air_field_show_password" = "Show password";
+"air_field_hide_password" = "Hide password";
+"air_signin_go" = "Log in";
+"air_signin_opening" = "Opening the profile";
+"air_signin_enter_password" = "Enter the password first.";
+"air_signin_no_password" = "This profile opens without a password, on this iPhone only.";
+"air_signin_no_password_short" = "No password";
+"air_signin_profiles" = "Profiles on this device";
+"air_signin_profiles_note" = "Touch and hold a profile to delete it.";
+"air_signin_forgot" = "Forgot the password?";
+"air_signin_forgot_title" = "The password cannot be recovered";
+"air_signin_forgot_message" = "There are no servers, and only you know the password. You can create a new profile with a new ID: this one stays on the device and opens if you remember the password. Or delete this profile from the device.";
+"air_signin_create" = "Create a new profile";
+"air_signin_delete" = "Delete this profile";
+"air_signin_delete_short" = "Delete";
+"air_signin_wrong_password" = "Wrong password. Check the keyboard language and Caps Lock.";
+"air_signin_damaged" = "The profile file is damaged. If you have an exported copy, move the profile in from it.";
+"air_signin_no_access" = "No access to the profile file. Unlock the iPhone and try again.";
+"air_signin_failed_title" = "The profile did not open";
+"air_import_title" = "Move a profile";
+"air_import_password_body_format" = "The file \"%@\" is protected by a password. Enter the password the profile was saved with.";
+"air_import_reading" = "Reading the file";
+"air_import_wrong_password" = "This password does not open the file. It takes the profile's password on the device the file came from.";
+"air_import_preview_title" = "Is this your profile?";
+"air_import_preview_body" = "Check the name and the ID: the profile will be added to this device.";
+"air_import_name" = "Name";
+"air_import_no_name" = "No name";
+"air_import_confirm" = "Move the profile here";
+"air_import_moving" = "Moving the profile";
+"air_import_other_file" = "Choose another file";
+"air_import_not_profile" = "This is not a Khandaq profile file. Choose a .tox file exported from a profile.";
+"air_import_failed_title" = "The profile was not moved";
+"air_share_import_action" = "Move the profile from this file";
+"air_share_import_verb" = "Move";
+"air_share_in_title" = "Send to";
+"air_share_ext_preparing" = "Preparing to send";
+"air_share_ext_open_app" = "Ready. Open Khandaq and choose who gets it.";
+"air_share_ext_failed" = "This could not be passed to Khandaq.";
+"air_settings_import_message_device" = "The app logs out of this profile and opens the one from the file. This profile stays on the device and opens again without a password.";
+"air_password_set_title" = "Set a password";
+"air_password_set_body" = "The profile opens now with a key from this iPhone's keychain. With a password, it can be moved to another device. A password cannot be recovered: there are no servers.";
+"air_password_set_action" = "Set password";
+"air_password_change_action" = "Change password";
+"air_password_old_first" = "Enter the old password first.";
+"air_password_saving" = "Saving the password";
+"air_password_wrong_old" = "The old password is wrong.";
+"air_password_set_failed" = "The password was not set: this iPhone's key did not open the profile. Try again.";
+"air_password_changed" = "Password changed";
+"air_password_set_done" = "Password set";
+"air_password_old_placeholder" = "Old password";
+"air_password_new_placeholder" = "New password";
+"air_export_needs_password_title" = "Set a password first";
+"air_export_needs_password_message" = "A profile without a password opens only with this iPhone's key, so its file would not open on another device. Set a password, and the file opens with it.";
+"air_you_logout_message_device" = "The profile stays on this device and opens again without a password, on this iPhone only.";
+"air_pin_set_note" = "A PIN cannot be recovered. After ten wrong tries, entry is closed for a while, longer each time.";
+"air_pin_entered_format" = "%1$ld of %2$ld entered";
+
+/* Redesign stage 5: group settings, joining by key, private messages in a group */
+"air_group_private_note_format" = "Private messages in the group “%1$@”: only you and %2$@ see them.";
+"air_group_private_hint_away_format" = "%@ is offline: write when they are back";
+"air_group_settings_self_name" = "Your name in the group";
+"air_group_settings_self_name_note" = "Members of this group see it. Your profile name stays as it is.";
+"air_group_settings_topic" = "Topic";
+"air_group_settings_topic_none" = "No topic";
+"air_group_settings_topic_note" = "Every member sees the topic: in the list and at the top of the group it stands in place of the name.";
+"air_group_settings_topic_locked" = "Only the founder and the moderators change the topic.";
+"air_group_settings_topic_not_observers" = "Everyone but observers can change the topic.";
+"air_group_settings_topic_lock" = "Only the founder and moderators change the topic";
+"air_group_settings_join" = "Who can join";
+"air_group_settings_password_set" = "Set";
+"air_group_settings_password_none" = "None";
+"air_group_settings_password_note" = "New members will need the password. Those already in the group stay in it.";
+"air_group_settings_limit" = "Member limit";
+"air_group_settings_limit_full" = "The group is full: new members cannot join until the limit is raised.";
+"air_group_settings_write" = "Who can write";
+"air_group_voice_all_note" = "Everyone except observers.";
+"air_group_settings_founder_only" = "The group's founder changes this.";
+"air_group_settings_saved" = "Saved";
+"air_group_password_remove" = "Remove the password";
+"air_group_password_removed" = "Password removed";
+"air_group_name_empty" = "The name cannot be empty.";
+"air_group_limit_range" = "The limit is a number from 1 to 65,535.";
+"air_join_title" = "Join a group";
+"air_join_key_placeholder" = "A key of 64 characters";
+"air_join_key_hint" = "The group key is in its dossier: ask a member to tap Copy there or show the QR code.";
+"air_join_key_partial_format" = "%d of 64 characters";
+"air_join_key_not_key" = "This is not a group key: a key has 64 characters, digits and the letters A to F.";
+"air_join_key_person" = "This is a person's ID, not a group key. A person is added with New contact.";
+"air_join_key_member" = "You are already in this group.";
+"air_join_open_group" = "Open the group";
+"air_join_password_placeholder" = "If the founder set one";
+"air_join_password_note" = "Leave it empty if the group has none.";
+"air_join_how" = "The group is found once one of its members is online. If a contact of yours is among them, Khandaq asks them to send you an invitation.";
+"air_join_why_key" = "The group key first";
+"air_cmd_join_group" = "Join the group with this key";
+"air_cmd_group_note" = "64 characters, as many as a group key has";
+
+/* Stage 5: Password and PIN */
+"air_security_pin_section" = "PIN";
+"air_security_pin" = "Ask for a PIN";
+"air_security_pin_note" = "Khandaq asks for the PIN when you come back to it. A PIN cannot be recovered.";
+"air_security_lock" = "Lock";
+"air_security_lock_now" = "At once";
+"air_security_lock_30s" = "After 30 seconds";
+"air_security_lock_1m" = "After 1 minute";
+"air_security_lock_2m" = "After 2 minutes";
+"air_security_lock_5m" = "After 5 minutes";
+"air_security_lock_note" = "Counted from the moment you leave Khandaq.";
+"air_security_face_id" = "Unlock with Face ID";
+"air_security_touch_id" = "Unlock with Touch ID";
+"air_security_biometrics_note" = "Instead of the PIN. The PIN opens Khandaq too.";
+"air_security_password_section" = "Profile password";
+"air_security_password_note" = "The profile on this iPhone is encrypted with it. A password cannot be recovered: there are no servers.";
+"air_security_device_key_note" = "The profile opens with a key from this iPhone's keychain. With a password, it can be moved to another device.";
+
+/* Stage 5: a profile whose key is not on this iPhone */
+"air_signin_key_missing" = "This profile opened without a password, with the key of the iPhone it was made on. That key is not on this iPhone, so the profile will not open here.";
+"air_signin_key_missing_note" = "If that iPhone is at hand, set a password there in Password and PIN, export the profile and move the file here.";
+"air_signin_key_missing_short" = "No key on this iPhone";
+"air_signin_key_missing_move" = "Move a profile";

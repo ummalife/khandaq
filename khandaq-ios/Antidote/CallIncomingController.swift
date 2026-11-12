@@ -5,31 +5,23 @@
 import UIKit
 import SnapKit
 
-private struct Constants {
-    static let AvatarSize: CGFloat = 140.0
-
-    static let ButtonContainerTopMinOffset = 10.0
-    static let ButtonContainerBottomOffset = -50.0
-
-    static let ButtonHorizontalOffset = 20.0
-}
-
 protocol CallIncomingControllerDelegate: class {
     func callIncomingControllerDecline(_ controller: CallIncomingController)
     func callIncomingControllerAnswerAudio(_ controller: CallIncomingController)
     func callIncomingControllerAnswerVideo(_ controller: CallIncomingController)
 }
 
+/// An incoming call (redesign stage 3, E9): it comes down from the top like a shade, the person and the
+/// link first, Decline, Answer and Answer with video at the bottom. Once answered the whole screen
+/// gives way to the call (CallCoordinator puts CallActiveController in its place).
 class CallIncomingController: CallBaseController {
     weak var delegate: CallIncomingControllerDelegate?
 
-    fileprivate var avatarView: UIImageView!
-
-    fileprivate var buttonContainer: UIView!
     fileprivate var declineButton: CallButton!
     fileprivate var audioButton: CallButton!
     fileprivate var videoButton: CallButton!
-    fileprivate var uuid_call: UUID!
+    fileprivate let controls = UIStackView()
+    fileprivate var hasAppeared = false
 
     override func loadView() {
         super.loadView()
@@ -37,11 +29,28 @@ class CallIncomingController: CallBaseController {
         createViews()
         installConstraints()
 
-        infoLabel.text = String(localized: "call_incoming")
+        setInfo(String(localized: "air_call_incoming"), isTimer: false)
     }
 
-    override func viewDidLoad() {
-        super.viewDidLoad()
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+
+        guard !hasAppeared else {
+            return
+        }
+        hasAppeared = true
+        // The shade: from above the screen down into place; with reduced motion it only fades in, with
+        // the presentation.
+        guard animated, !UIAccessibilityIsReduceMotionEnabled() else {
+            return
+        }
+        let height = max(view.bounds.height, UIScreen.main.bounds.height)
+        view.transform = CGAffineTransform(translationX: 0, y: -height)
+        let animator = UIViewPropertyAnimator(duration: KQMotion.reveal, timingParameters: KQMotion.easeOut)
+        animator.addAnimations {
+            self.view.transform = .identity
+        }
+        animator.startAnimation()
     }
 
     override func prepareForRemoval() {
@@ -56,8 +65,6 @@ class CallIncomingController: CallBaseController {
 // MARK: Actions
 extension CallIncomingController {
     @objc func declineButtonPressed() {
-
-        // CALL: end incoming call
         delegate?.callIncomingControllerDecline(self)
     }
 
@@ -72,54 +79,32 @@ extension CallIncomingController {
 
 private extension CallIncomingController {
     func createViews() {
-        let avatarManager = AvatarManager(theme: theme)
-
-        avatarView = UIImageView()
-        avatarView.image = avatarManager.avatarFromString(callerName, diameter: Constants.AvatarSize, type: .Call)
-        view.addSubview(avatarView)
-
-        buttonContainer = UIView()
-        buttonContainer.backgroundColor = .clear
-        view.addSubview(buttonContainer)
-
-        declineButton = CallButton(theme: theme, type: .decline, buttonSize: .small)
+        declineButton = CallButton(theme: theme, type: .decline, buttonSize: .big)
+        declineButton.accessibilityIdentifier = "air.call.decline"
         declineButton.addTarget(self, action: #selector(CallIncomingController.declineButtonPressed), for: .touchUpInside)
-        buttonContainer.addSubview(declineButton)
 
-        audioButton = CallButton(theme: theme, type: .answerAudio, buttonSize: .small)
+        audioButton = CallButton(theme: theme, type: .answerAudio, buttonSize: .big)
+        audioButton.accessibilityIdentifier = "air.call.answer"
         audioButton.addTarget(self, action: #selector(CallIncomingController.audioButtonPressed), for: .touchUpInside)
-        buttonContainer.addSubview(audioButton)
 
-        videoButton = CallButton(theme: theme, type: .answerVideo, buttonSize: .small)
+        videoButton = CallButton(theme: theme, type: .answerVideo, buttonSize: .big)
+        videoButton.accessibilityIdentifier = "air.call.answer.video"
         videoButton.addTarget(self, action: #selector(CallIncomingController.videoButtonPressed), for: .touchUpInside)
-        buttonContainer.addSubview(videoButton)
+
+        controls.axis = .horizontal
+        controls.alignment = .top
+        controls.distribution = .fillEqually
+        controls.addArrangedSubview(AirCallControl(button: declineButton, title: String(localized: "air_call_decline")))
+        controls.addArrangedSubview(AirCallControl(button: videoButton, title: String(localized: "air_call_answer_video")))
+        controls.addArrangedSubview(AirCallControl(button: audioButton, title: String(localized: "air_call_answer")))
+        view.addSubview(controls)
     }
 
     func installConstraints() {
-        avatarView.snp.makeConstraints {
-            $0.center.equalTo(view)
-        }
-
-        buttonContainer.snp.makeConstraints {
-            $0.centerX.equalTo(view)
-            $0.top.greaterThanOrEqualTo(avatarView.snp.bottom).offset(Constants.ButtonContainerTopMinOffset)
-            $0.bottom.equalTo(view).offset(Constants.ButtonContainerBottomOffset).priority(250)
-        }
-
-        declineButton.snp.makeConstraints {
-            $0.top.bottom.equalTo(buttonContainer)
-            $0.leading.equalTo(buttonContainer)
-        }
-
-        audioButton.snp.makeConstraints {
-            $0.top.bottom.equalTo(buttonContainer)
-            $0.leading.equalTo(declineButton.snp.trailing).offset(Constants.ButtonHorizontalOffset)
-        }
-
-        videoButton.snp.makeConstraints {
-            $0.top.bottom.equalTo(buttonContainer)
-            $0.leading.equalTo(audioButton.snp.trailing).offset(Constants.ButtonHorizontalOffset)
-            $0.trailing.equalTo(buttonContainer)
+        controls.snp.makeConstraints {
+            $0.leading.trailing.equalTo(view.safeAreaLayoutGuide).inset(KQSpace.x32)
+            $0.top.greaterThanOrEqualTo(topContainer.snp.bottom).offset(KQSpace.x24)
+            $0.bottom.equalTo(view.safeAreaLayoutGuide).offset(-KQSpace.x32)
         }
     }
 }

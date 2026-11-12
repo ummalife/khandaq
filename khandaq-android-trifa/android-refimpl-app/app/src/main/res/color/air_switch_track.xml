@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The design-system switch: an ink track when on, a strong line when off. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/kq_switch_on" android:state_checked="true" />
+    <item android:color="@color/kq_line_strong" />
+</selector>

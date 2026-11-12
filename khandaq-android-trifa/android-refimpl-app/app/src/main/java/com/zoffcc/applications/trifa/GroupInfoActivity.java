@@ -19,895 +19,290 @@
 
 package com.zoffcc.applications.trifa;
 
-import org.khandaq.messenger.BuildConfig;
-import org.khandaq.messenger.R;
-
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.DialogInterface;
-import android.content.Intent;
-import android.database.Cursor;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Looper;
+import android.os.Process;
+import android.text.Editable;
+import android.text.InputFilter;
+import android.text.InputType;
+import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
-import android.widget.Button;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
-import android.widget.Toast;
-
-import com.zoffcc.applications.sorm.GroupPeerDB;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.AppCompatButton;
-import androidx.appcompat.widget.AppCompatSpinner;
+import androidx.activity.OnBackPressedCallback;
+import androidx.annotation.Nullable;
+import androidx.annotation.StringRes;
+import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.widget.SwitchCompat;
-import androidx.appcompat.widget.Toolbar;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
+import androidx.core.view.ViewCompat;
 
-import static com.zoffcc.applications.trifa.CameraWrapper.YUV420rotate90;
-import static com.zoffcc.applications.trifa.HelperGeneric.display_toast;
-import static com.zoffcc.applications.trifa.HelperGeneric.update_savedata_file_wrapper;
-import static com.zoffcc.applications.trifa.HelperGroup.clear_group_group_we_left;
-import static com.zoffcc.applications.trifa.HelperGroup.ensure_group_in_tox;
-import static com.zoffcc.applications.trifa.HelperGroup.collect_group_members_for_display;
-import static com.zoffcc.applications.trifa.HelperGroup.format_group_list_status_subtitle;
-import static com.zoffcc.applications.trifa.HelperGroup.get_display_peer_limit;
-import static com.zoffcc.applications.trifa.HelperGroup.get_effective_group_title;
-import static com.zoffcc.applications.trifa.HelperGroup.humanize_group_connection_status;
-import static com.zoffcc.applications.trifa.HelperGroup.humanize_group_privacy;
-import static com.zoffcc.applications.trifa.HelperGroup.humanize_group_role;
-import static com.zoffcc.applications.trifa.HelperGroup.sanitize_group_peer_name;
-import static com.zoffcc.applications.trifa.HelperGroup.save_group_title_if_changed;
-import static com.zoffcc.applications.trifa.HelperGroup.sanitize_group_topic;
-import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_db_privacy_state;
-import static com.zoffcc.applications.trifa.HelperGroup.get_group_peernum_from_peer_pubkey;
-import static com.zoffcc.applications.trifa.HelperGroup.is_group_we_left;
-import static com.zoffcc.applications.trifa.HelperGroup.set_group_group_we_left;
-import static com.zoffcc.applications.trifa.HelperGroup.tox_group_by_groupid__wrapper;
-import static com.zoffcc.applications.trifa.HelperGroup.tox_group_by_groupnum__wrapper;
-import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_groupmessagelist;
-import static com.zoffcc.applications.trifa.HelperGroup.update_group_peer_in_db;
-import static com.zoffcc.applications.trifa.MainActivity.SD_CARD_ENC_FILES_EXPORT_DIR;
-import static com.zoffcc.applications.trifa.MainActivity.context_s;
-import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
-import static com.zoffcc.applications.trifa.HelperGroup.tox_group_founder_set_password__wrapper;
-import static com.zoffcc.applications.trifa.HelperGroup.tox_group_founder_set_privacy_state__wrapper;
-import static com.zoffcc.applications.trifa.HelperGroup.tox_group_founder_set_topic_lock__wrapper;
-import static com.zoffcc.applications.trifa.HelperGroup.tox_group_get_topic_lock__wrapper;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_founder_set_peer_limit;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_founder_set_voice_state;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_name;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_voice_state;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_is_connected;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_mod_set_role;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_offline_peer_count;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_count;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_get_name;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_reconnect;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_savedpeer_get_public_key;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_self_get_peer_id;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_self_get_role;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_self_set_name;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.NGC_NEW_PEERS_TIMEDELTA_IN_MS;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY;
-import static com.zoffcc.applications.trifa.ToxVars.GC_MAX_SAVED_PEERS;
-import static com.zoffcc.applications.trifa.TrifaToxService.orma;
+import com.zoffcc.applications.sorm.GroupDB;
 
-public class GroupInfoActivity extends AppCompatActivity
+import java.text.NumberFormat;
+import java.util.List;
+import java.util.Locale;
+
+import org.khandaq.messenger.R;
+
+/**
+ * KHANDAQ (redesign, stage 5): the group settings, opened from the group dossier and from the menu of a
+ * group in the list, drawn as GroupInfoController on iOS (design/DESIGN.md, "Groups on the phone"): your
+ * name in this group and the topic, each with what it does; who can join, with the password and the
+ * member limit; who can write, with whether only the founder and the moderators change the topic. The
+ * founder changes the last two; everyone else reads them with "The group's founder changes this.". A
+ * value with a page of its own (name, topic, password, limit) opens on this screen in place of the list,
+ * with its field, what it does under it and Save; a refusal or a failure takes the place of that line, a
+ * failure with its code under Details. Toasts only confirm.
+ *
+ * <p>Who may change what, the toxcore calls and the database writes are the old screen's: the founder
+ * sets who can join, the password and the topic lock (when the native library has those calls), the
+ * member limit and who can write; everyone sets their own name in the group; the topic goes to toxcore,
+ * which takes it from the founder and the moderators and, while the topic is not locked, from members
+ * too, never from an observer, so its row opens only where toxcore would take it. Reads and writes run
+ * on a worker, never on the main thread, and nothing changes by leaving the screen: only Save, a choice
+ * or the switch change a setting. The members stay in the dossier.
+ */
+public class GroupInfoActivity extends AirScreenActivity
 {
     static final String TAG = "trifa.GrpInfoActy";
-    TextView this_group_id = null;
-    EditText this_title = null;
-    EditText group_myname_text = null;
-    EditText peer_limit_text = null;
-    TextView this_privacy_status_text = null;
-    TextView group_connection_status_text = null;
-    TextView group_myrole_text = null;
-    AppCompatButton group_copy_id_button = null;
-    static TextView group_num_msgs_text = null;
-    static TextView group_num_system_msgs_text = null;
-    Button group_reconnect_button = null;
-    Button group_dumpofflinepeers_button = null;
-    Button group_del_sysmsgs_button = null;
-    AppCompatSpinner group_voicestate_select = null;
-    private AppCompatButton group_voicestate_set_button = null;
-    EditText group_password_text = null;
-    Button group_password_set_button = null;
-    SwitchCompat group_topic_lock_switch = null;
-    AppCompatSpinner group_privacy_select = null;
-    private AppCompatButton group_privacy_set_button = null;
-    private String[] tox_ngc_group_voicestate_items;
-    private String[] tox_ngc_group_privacy_items;
-    private boolean group_topic_lock_switch_programmatic = false;
-    String group_id = "-1";
-    TextView group_info_summary_text = null;
-    TextView group_info_header_title = null;
-    TextView group_info_header_subtitle = null;
-    TextView group_info_header_status = null;
-    TextView group_info_members_header = null;
-    TextView group_info_members_empty = null;
-    View group_info_settings_section = null;
-    View group_info_founder_section = null;
-    View group_info_full_id_section = null;
-    View group_info_peer_limit_section = null;
-    RecyclerView group_info_members_list = null;
-    GroupInfoMembersAdapter group_info_members_adapter = null;
-    private String group_chat_id_for_copy = "";
+    /** The group's key in hexadecimal, as every caller puts it. */
+    static final String EXTRA_GROUP_ID = "group_id";
+
+    private static final String STATE_FIELD = "air_gs_field";
+    private static final String STATE_TEXT = "air_gs_text";
+    /** How many lines a name or a topic wraps to in its field before the field scrolls. */
+    private static final int FIELD_MAX_LINES = 4;
+    private static final int PRIVACY_PUBLIC = ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value;
+    private static final int PRIVACY_PRIVATE = ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PRIVATE.value;
+    /** Who can write, in the order the choices stand (AirGroupSettingsModel.voiceChoice). */
+    private static final int[] VOICE_STATES = {ToxVars.Tox_Group_Voice_State.TOX_GROUP_VOICE_STATE_ALL.value,
+                                               ToxVars.Tox_Group_Voice_State.TOX_GROUP_VOICE_STATE_MODERATOR.value,
+                                               ToxVars.Tox_Group_Voice_State.TOX_GROUP_VOICE_STATE_FOUNDER.value};
+    private static final int[] VOICE_TITLES = {R.string.air_gs_voice_all, R.string.air_gs_voice_moderator,
+                                               R.string.air_gs_voice_founder};
+    private static final int[] VOICE_ROWS = {R.id.air_gs_voice_all_row, R.id.air_gs_voice_moderator_row,
+                                             R.id.air_gs_voice_founder_row};
+    private static final Object WORKER_LOCK = new Object();
+    private static Handler worker = null;
+
+    /** A value with a page of its own, and the row of the list that opens it. */
+    private enum Field
+    {
+        SELF_NAME(R.string.air_gs_self_name, R.id.air_gs_self_name_row),
+        TOPIC(R.string.air_gs_topic, R.id.air_gs_topic_row),
+        PASSWORD(R.string.air_gs_password, R.id.air_gs_password_row),
+        PEER_LIMIT(R.string.air_gs_limit, R.id.air_gs_limit_row);
+
+        @StringRes
+        final int title;
+        final int row;
+
+        Field(@StringRes final int title, final int row)
+        {
+            this.title = title;
+            this.row = row;
+        }
+    }
+
+    /** What the screen shows, read off the main thread; the screen writes its own changes into it. */
+    private static final class State
+    {
+        /** toxcore has the group now, so its settings can change here. */
+        boolean live;
+        /** The native library has the founder's calls for who can join, the password and the topic lock. */
+        boolean extended;
+        /** Your role, -1 while toxcore does not say. */
+        int selfRole = -1;
+        /** Your name in this group; empty while toxcore does not say. */
+        String selfName = "";
+        /** The topic; empty when there is none. */
+        String topic = "";
+        /** TOPIC_LOCK_ENABLED or TOPIC_LOCK_DISABLED, -1 while toxcore does not say. */
+        int topicLock = -1;
+        /** The privacy state toxcore gives, else the stored one; -1 when neither says. */
+        int privacy = -1;
+        /** Who can write as toxcore gives it, -1 while it does not say. */
+        int voice = -1;
+        int peerLimit = HelperGroup.DEFAULT_GROUP_PEER_LIMIT;
+        /** The peers in the group now, -1 while toxcore does not say. */
+        long peers = -1;
+
+        boolean founder()
+        {
+            return live && selfRole == AirGroupModel.ROLE_FOUNDER;
+        }
+
+        boolean topicOpens()
+        {
+            return live && AirGroupSettingsModel.canEditTopic(selfRole, topicLock);
+        }
+
+        boolean full()
+        {
+            return AirGroupSettingsModel.isFull(peers, peerLimit);
+        }
+
+        /** The same screen: a member coming or going changes nothing here unless the group fills up. */
+        boolean sameAs(@Nullable final State other)
+        {
+            return other != null && live == other.live && extended == other.extended && selfRole == other.selfRole
+                   && selfName.equals(other.selfName) && topic.equals(other.topic) && topicLock == other.topicLock
+                   && privacy == other.privacy && voice == other.voice && peerLimit == other.peerLimit
+                   && full() == other.full();
+        }
+    }
+
+    /** How a change went: done, or failed with the code for support when the call gave one. */
+    private static final class Outcome
+    {
+        static final Outcome DONE = new Outcome(true, null);
+
+        final boolean done;
+        @Nullable
+        final String code;
+
+        private Outcome(final boolean done, @Nullable final String code)
+        {
+            this.done = done;
+            this.code = code;
+        }
+
+        static Outcome failed(@Nullable final String code)
+        {
+            return new Outcome(false, code);
+        }
+    }
+
+    /** A change, run on the worker. */
+    private interface Write
+    {
+        Outcome run();
+    }
+
+    /** One toxcore call on the group's number, with the JNI bridge's result: 0 or more when it went through. */
+    private interface ToxCall
+    {
+        int run(long groupNum);
+    }
+
+    private interface Failure
+    {
+        void say(@Nullable String code);
+    }
+
+    /** What a change that went through writes into the shown state. */
+    private interface Update
+    {
+        void apply(State s);
+    }
+
+    private interface Query<T>
+    {
+        T get();
+    }
+
+    private final Handler main = new Handler(Looper.getMainLooper());
+    /** Back on the page of one value goes back to the list, once the change on its way is done. */
+    private final OnBackPressedCallback fieldBack = new OnBackPressedCallback(false)
+    {
+        @Override
+        public void handleOnBackPressed()
+        {
+            if (!busy)
+            {
+                closeField();
+            }
+        }
+    };
+
+    private String groupId = "";
+    private boolean destroyed = false;
+    /** A change is on its way to toxcore: further taps wait for it. */
+    private boolean busy = false;
+    /** What the screen shows; null until the first read. */
+    @Nullable
+    private State shown = null;
+    /** The reads asked for, so a slower earlier one never draws over a later one. */
+    private int reads = 0;
+
+    // The list.
+    @Nullable
+    private LinearLayout inviteOnlyRow;
+    @Nullable
+    private LinearLayout openRow;
+    /** E21: why who can join did not change, under the two choices. */
+    @Nullable
+    private TextView joinNote;
+    @Nullable
+    private LinearLayout[] voiceRows;
+    @Nullable
+    private TextView writeNote;
+    @Nullable
+    private SwitchCompat lockSwitch;
+    @Nullable
+    private TextView lockNote;
+    /** The switch is set back by the screen, not by a tap. */
+    private boolean lockQuiet = false;
+
+    // The page of one value.
+    @Nullable
+    private Field open;
+    @Nullable
+    private AirStepKit.LineField field;
+    @Nullable
+    private TextView fieldNote;
+    @Nullable
+    private AirStepKit.MainBar saveBar;
+    /** The line under the field says a refusal or a failure instead of what the value does. */
+    private boolean noteSays = false;
+
+    // A page of one value to open again once the group is read, after the process was gone.
+    @Nullable
+    private Field pendingField;
+    @Nullable
+    private String pendingText;
 
     @Override
-    protected void onCreate(Bundle savedInstanceState)
+    protected int screenTitle()
+    {
+        return R.string.air_group_settings;
+    }
+
+    @Override
+    protected void onCreate(@Nullable final Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_groupinfo);
-
-        Intent intent = getIntent();
-        group_id = intent.getStringExtra("group_id");
-
-        this_group_id = (TextView) findViewById(R.id.group_id_text);
-        group_copy_id_button = findViewById(R.id.group_copy_id_button);
-        this_title = (EditText) findViewById(R.id.group_name_text);
-        group_myname_text = (EditText) findViewById(R.id.group_myname_text);
-        peer_limit_text = (EditText) findViewById(R.id.peer_limit_text);
-        this_privacy_status_text = (TextView) findViewById(R.id.group_privacy_status_text);
-        group_connection_status_text = (TextView) findViewById(R.id.group_connection_status_text);
-        group_myrole_text = (TextView) findViewById(R.id.group_myrole_text);
-        group_voicestate_select = findViewById(R.id.group_voicestate_select);
-        group_voicestate_set_button = findViewById(R.id.group_voicestate_set_button);
-        group_password_text = findViewById(R.id.group_password_text);
-        group_password_set_button = findViewById(R.id.group_password_set_button);
-        group_topic_lock_switch = findViewById(R.id.group_topic_lock_switch);
-        group_privacy_select = findViewById(R.id.group_privacy_select);
-        group_privacy_set_button = findViewById(R.id.group_privacy_set_button);
-        group_info_summary_text = findViewById(R.id.group_info_summary_text);
-        group_info_header_title = findViewById(R.id.group_info_header_title);
-        group_info_header_subtitle = findViewById(R.id.group_info_header_subtitle);
-        group_info_header_status = findViewById(R.id.group_info_header_status);
-        group_info_members_header = findViewById(R.id.group_info_members_header);
-        group_info_members_empty = findViewById(R.id.group_info_members_empty);
-        group_info_settings_section = findViewById(R.id.group_info_settings_section);
-        group_info_founder_section = findViewById(R.id.group_info_founder_section);
-        group_info_full_id_section = findViewById(R.id.group_info_full_id_section);
-        // KHANDAQ: hide the group ID / chat-id section. Joining a group by this ID needs UDP peer
-        // discovery, which is blocked on the target networks, so members are only ever added manually
-        // via friend-invite. Showing a non-functional ID just confuses users.
-        if (group_info_full_id_section != null)
+        final String id = getIntent().getStringExtra(EXTRA_GROUP_ID);
+        if (!GroupMessageListActivity.is_valid_group_id(id))
         {
-            group_info_full_id_section.setVisibility(View.GONE);
-        }
-        group_info_peer_limit_section = findViewById(R.id.group_info_peer_limit_section);
-        group_info_members_list = findViewById(R.id.group_info_members_list);
-
-        if (group_info_members_list != null)
-        {
-            group_info_members_list.setLayoutManager(new LinearLayoutManager(this));
-            group_info_members_adapter = new GroupInfoMembersAdapter(this, group_id);
-            group_info_members_list.setAdapter(group_info_members_adapter);
-        }
-
-        configure_release_ui();
-
-        this.tox_ngc_group_voicestate_items = new String[]{"---", "FOUNDER", "MODERATOR", "ALL"};
-        ArrayAdapter<CharSequence> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item,
-                                                                tox_ngc_group_voicestate_items);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        group_voicestate_select.setAdapter(adapter);
-
-        int current_voicestate = 0;
-        try
-        {
-            current_voicestate = tox_group_get_voice_state(tox_group_by_groupid__wrapper(group_id));
-            HelperGeneric.logI(TAG, "current_voicestate:" + current_voicestate);
-            if (current_voicestate == ToxVars.Tox_Group_Voice_State.TOX_GROUP_VOICE_STATE_FOUNDER.value)
-            {
-                group_voicestate_select.setSelection(1);
-            }
-            else if (current_voicestate == ToxVars.Tox_Group_Voice_State.TOX_GROUP_VOICE_STATE_MODERATOR.value)
-            {
-                group_voicestate_select.setSelection(2);
-            }
-            else if (current_voicestate == ToxVars.Tox_Group_Voice_State.TOX_GROUP_VOICE_STATE_ALL.value)
-            {
-                group_voicestate_select.setSelection(3);
-            }
-            else
-            {
-                // nothing valid selected
-                group_voicestate_select.setSelection(0);
-            }
-        }
-        catch(Exception e)
-        {
-        }
-
-        group_voicestate_select.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener()
-        {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id)
-            {
-                HelperGeneric.logI(TAG, "selected_new_voicestate:" + parent.getItemAtPosition(position));
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> parent)
-            {
-
-            }
-        });
-
-        group_voicestate_set_button.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(View view)
-            {
-                try
-                {
-                    String role_str = (String) group_voicestate_select.getSelectedItem();
-                    int new_role = ToxVars.Tox_Group_Voice_State.TOX_GROUP_VOICE_STATE_ALL.value;
-                    if (role_str.equals("FOUNDER"))
-                    {
-                        new_role = ToxVars.Tox_Group_Voice_State.TOX_GROUP_VOICE_STATE_FOUNDER.value;
-                    }
-                    else if (role_str.equals("MODERATOR"))
-                    {
-                        new_role = ToxVars.Tox_Group_Voice_State.TOX_GROUP_VOICE_STATE_MODERATOR.value;
-                    }
-                    else if (role_str.equals("ALL"))
-                    {
-                        new_role = ToxVars.Tox_Group_Voice_State.TOX_GROUP_VOICE_STATE_ALL.value;
-                    }
-                    else
-                    {
-                        // nothing valid selected
-                        return;
-                    }
-
-                    int result = tox_group_founder_set_voice_state(tox_group_by_groupid__wrapper(group_id), new_role);
-                    HelperGeneric.logI(TAG, "setting new voicestate to: " + new_role + " result=" + result);
-                    HelperGeneric.update_savedata_file_wrapper_async();
-                }
-                catch (Exception ignored)
-                {
-                }
-            }
-        });
-
-        this.tox_ngc_group_privacy_items = new String[]{"---", "PUBLIC", "PRIVATE"};
-        if (group_privacy_select != null)
-        {
-            final ArrayAdapter<CharSequence> privacyAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item, tox_ngc_group_privacy_items);
-            privacyAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            group_privacy_select.setAdapter(privacyAdapter);
-        }
-
-        if (group_privacy_set_button != null)
-        {
-            group_privacy_set_button.setOnClickListener(new View.OnClickListener()
-            {
-                @Override
-                public void onClick(View view)
-                {
-                    try
-                    {
-                        final String privacy_str = (String) group_privacy_select.getSelectedItem();
-                        int new_privacy = -1;
-                        if ("PUBLIC".equals(privacy_str))
-                        {
-                            new_privacy = ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value;
-                        }
-                        else if ("PRIVATE".equals(privacy_str))
-                        {
-                            new_privacy = ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PRIVATE.value;
-                        }
-                        else
-                        {
-                            return;
-                        }
-
-                        final long group_num = tox_group_by_groupid__wrapper(group_id);
-                        final int result = tox_group_founder_set_privacy_state__wrapper(group_num, new_privacy);
-                        if (result >= 0)
-                        {
-                            update_group_in_db_privacy_state(group_id, new_privacy);
-                            this_privacy_status_text.setText(humanize_group_privacy(GroupInfoActivity.this, new_privacy));
-                            HelperGeneric.update_savedata_file_wrapper_async();
-                            apply_user_facing_group_info(group_num);
-                            Toast.makeText(GroupInfoActivity.this, getString(R.string.group_privacy_set), Toast.LENGTH_SHORT).show();
-                        }
-                        else
-                        {
-                            Toast.makeText(GroupInfoActivity.this, getString(R.string.group_title_save_failed_toast), Toast.LENGTH_SHORT).show();
-                        }
-                    }
-                    catch (Exception ignored)
-                    {
-                    }
-                }
-            });
-        }
-
-        if (group_password_set_button != null)
-        {
-            group_password_set_button.setOnClickListener(new View.OnClickListener()
-            {
-                @Override
-                public void onClick(View view)
-                {
-                    try
-                    {
-                        final long group_num = tox_group_by_groupid__wrapper(group_id);
-                        String password = null;
-                        if (group_password_text != null && group_password_text.getText() != null)
-                        {
-                            password = group_password_text.getText().toString();
-                        }
-                        final int result = tox_group_founder_set_password__wrapper(group_num,
-                                (password == null || password.isEmpty()) ? null : password);
-                        if (result >= 0)
-                        {
-                            HelperGeneric.update_savedata_file_wrapper_async();
-                            Toast.makeText(GroupInfoActivity.this, getString(R.string.group_password_set), Toast.LENGTH_SHORT).show();
-                        }
-                        else
-                        {
-                            Toast.makeText(GroupInfoActivity.this, getString(R.string.group_title_save_failed_toast), Toast.LENGTH_SHORT).show();
-                        }
-                    }
-                    catch (Exception ignored)
-                    {
-                    }
-                }
-            });
-        }
-
-        if (group_topic_lock_switch != null)
-        {
-            group_topic_lock_switch.setOnCheckedChangeListener((buttonView, isChecked) ->
-            {
-                if (group_topic_lock_switch_programmatic)
-                {
-                    return;
-                }
-                try
-                {
-                    final long group_num = tox_group_by_groupid__wrapper(group_id);
-                    final int lock_state = isChecked
-                            ? ToxVars.Tox_Group_Topic_Lock.TOX_GROUP_TOPIC_LOCK_ENABLED.value
-                            : ToxVars.Tox_Group_Topic_Lock.TOX_GROUP_TOPIC_LOCK_DISABLED.value;
-                    final int result = tox_group_founder_set_topic_lock__wrapper(group_num, lock_state);
-                    if (result >= 0)
-                    {
-                        HelperGeneric.update_savedata_file_wrapper_async();
-                    }
-                    else
-                    {
-                        group_topic_lock_switch_programmatic = true;
-                        group_topic_lock_switch.setChecked(!isChecked);
-                        group_topic_lock_switch_programmatic = false;
-                        Toast.makeText(GroupInfoActivity.this, getString(R.string.group_title_save_failed_toast), Toast.LENGTH_SHORT).show();
-                    }
-                }
-                catch (Exception ignored)
-                {
-                }
-            });
-        }
-
-        try
-        {
-            update_reconnect_button_visibility(false);
-        }
-        catch(Exception ignored)
-        {
-        }
-
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-        HelperToolbar.enableUpNavigation(this, toolbar);
-        if (getSupportActionBar() != null)
-        {
-            getSupportActionBar().setTitle(getString(R.string.title_activity_groupinfo));
-        }
-
-        this_title.setText("*error*");
-
-        long group_num = -1;
-
-        try
-        {
-            group_num = tox_group_by_groupid__wrapper(group_id);
-            if (group_num < 0)
-            {
-                group_num = ensure_group_in_tox(group_id);
-            }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-
-        populate_group_chat_id_text(group_num);
-
-        try
-        {
-            peer_limit_text.setText("" + get_display_peer_limit(group_num));
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-
-        try
-        {
-            group_myname_text.setText(tox_group_peer_get_name(group_num, tox_group_self_get_peer_id(group_num)));
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-
-        try
-        {
-            this_title.setText(get_effective_group_title(group_num, group_id));
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-
-        if (group_copy_id_button != null)
-        {
-            group_copy_id_button.setOnClickListener(new View.OnClickListener()
-            {
-                @Override
-                public void onClick(final View v)
-                {
-                    copy_group_chat_id_to_clipboard(v);
-                }
-            });
-            // Long-press shares a richer invite (group id + my Tox ID + how-to) so that a joiner on a
-            // UDP-blocked network can add me as a contact and be invited in via the friend path.
-            group_copy_id_button.setOnLongClickListener(new View.OnLongClickListener()
-            {
-                @Override
-                public boolean onLongClick(final View v)
-                {
-                    share_group_invite(v);
-                    return true;
-                }
-            });
-        }
-
-        int privacy_state = -1;
-        try
-        {
-            privacy_state = orma.selectFromGroupDB().
-                    group_identifierEq(group_id.toLowerCase()).
-                    toList().get(0).privacy_state;
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-
-        this_privacy_status_text.setText(humanize_group_privacy(this, privacy_state));
-
-        if (group_privacy_select != null)
-        {
-            if (privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
-            {
-                group_privacy_select.setSelection(1);
-            }
-            else if (privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PRIVATE.value)
-            {
-                group_privacy_select.setSelection(2);
-            }
-            else
-            {
-                group_privacy_select.setSelection(0);
-            }
-        }
-
-        if (group_topic_lock_switch != null && group_num >= 0)
-        {
-            try
-            {
-                final int topic_lock = tox_group_get_topic_lock__wrapper(group_num);
-                if (topic_lock >= 0)
-                {
-                    group_topic_lock_switch_programmatic = true;
-                    group_topic_lock_switch.setChecked(
-                            topic_lock == ToxVars.Tox_Group_Topic_Lock.TOX_GROUP_TOPIC_LOCK_ENABLED.value);
-                    group_topic_lock_switch_programmatic = false;
-                }
-                else
-                {
-                    group_topic_lock_switch.setVisibility(View.GONE);
-                }
-            }
-            catch (Exception ignored)
-            {
-                group_topic_lock_switch.setVisibility(View.GONE);
-            }
-        }
-
-        group_update_connected_status_on_groupinfo(group_num);
-
-        final long group_num_ = group_num;
-        if (group_reconnect_button != null)
-        {
-            group_reconnect_button.setOnClickListener(new View.OnClickListener()
-            {
-                @Override
-                public void onClick(View v)
-                {
-                    try
-                    {
-                        long active_group_num = group_num_;
-                        if (active_group_num < 0)
-                        {
-                            active_group_num = ensure_group_in_tox(group_id);
-                        }
-                        if (active_group_num >= 0)
-                        {
-                            tox_group_reconnect(active_group_num);
-                            HelperGeneric.update_savedata_file_wrapper_async();
-                            clear_group_group_we_left(group_id);
-                            group_update_connected_status_on_groupinfo(active_group_num);
-                            peer_limit_text.setText("" + get_display_peer_limit(active_group_num));
-                        }
-                        else
-                        {
-                            Toast.makeText(GroupInfoActivity.this,
-                                           getString(R.string.group_send_group_not_found), Toast.LENGTH_LONG).show();
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        e.printStackTrace();
-                    }
-                }
-            });
-        }
-
-
-        if (group_dumpofflinepeers_button != null)
-        {
-            group_dumpofflinepeers_button.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(View v)
-            {
-                try
-                {
-                    long offline_num_peers = tox_group_offline_peer_count(group_num_);
-
-                    if (offline_num_peers > 0)
-                    {
-                        List<GroupMessageListActivity.group_list_peer> group_peers_offline = new ArrayList<>();
-                        long i = 0;
-                        for (i = 0; i < GC_MAX_SAVED_PEERS; i++)
-                        {
-                            try
-                            {
-                                String peer_pubkey_temp = tox_group_savedpeer_get_public_key(group_num_, i);
-                                if (peer_pubkey_temp.compareToIgnoreCase("-1") == 0)
-                                {
-                                    continue;
-                                }
-                                String peer_name = "zzzzzoffline " + i;
-                                GroupPeerDB peer_from_db = null;
-                                try
-                                {
-                                    peer_from_db = (GroupPeerDB) orma.selectFromGroupPeerDB().group_identifierEq(
-                                            group_id).tox_group_peer_pubkeyEq(peer_pubkey_temp).toList().get(0);
-                                }
-                                catch (Exception e)
-                                {
-                                }
-
-                                String peerrole = "";
-
-                                if (peer_from_db != null)
-                                {
-                                    peer_name = peer_from_db.peer_name;
-                                    if ((peer_from_db.first_join_timestamp + NGC_NEW_PEERS_TIMEDELTA_IN_MS) >
-                                        System.currentTimeMillis())
-                                    {
-                                        peer_name = "_NEW_ " + peer_name;
-                                    }
-                                    peerrole = ToxVars.Tox_Group_Role.value_char(peer_from_db.Tox_Group_Role) + " ";
-                                }
-
-                                // HelperGeneric.logI(TAG, "groupnum=" + conference_num + " peernum=" + offline_peers[(int) i] + " peer_name=" +
-                                //           peer_name);
-                                String peer_name_temp =  peerrole + peer_name + " :" + i + ": " + peer_pubkey_temp.substring(0, 6);
-
-                                GroupMessageListActivity.group_list_peer glp3 = new GroupMessageListActivity.group_list_peer();
-                                glp3.peer_pubkey = peer_pubkey_temp;
-                                glp3.peer_num = i;
-                                glp3.peer_name = peer_name_temp;
-                                glp3.peer_connection_status = ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value;
-                                group_peers_offline.add(glp3);
-                            }
-                            catch (Exception ignored)
-                            {
-                            }
-                        }
-
-                        try
-                        {
-                            Collections.sort(group_peers_offline, new Comparator<GroupMessageListActivity.group_list_peer>()
-                            {
-                                @Override
-                                public int compare(GroupMessageListActivity.group_list_peer p1, GroupMessageListActivity.group_list_peer p2)
-                                {
-                                    String name1 = p1.peer_pubkey;
-                                    String name2 = p2.peer_pubkey;
-                                    return name1.compareToIgnoreCase(name2);
-                                }
-                            });
-                        }
-                        catch (Exception ignored)
-                        {
-                        }
-
-                        StringBuilder logstr = new StringBuilder();
-                        for (GroupMessageListActivity.group_list_peer peerloffline : group_peers_offline)
-                        {
-                            logstr.append(peerloffline.peer_pubkey).append(":").append(peerloffline.peer_num).append("\n");
-                        }
-                        HelperGeneric.logI(TAG, "\n\nNGC_GROUP_OFFLINE_PEERLIST:\n" + logstr + "\n\n");
-
-                    }
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-            }
-        });
-        }
-
-        if (group_del_sysmsgs_button != null)
-        {
-            group_del_sysmsgs_button.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(View v)
-            {
-                try
-                {
-                    AlertDialog.Builder builder = new AlertDialog.Builder(v.getContext());
-                    builder.setTitle(getString(R.string.group_delete_system_msgs_title));
-                    builder.setMessage(getString(R.string.group_delete_system_msgs_message));
-
-                    builder.setPositiveButton(getString(R.string.group_delete_system_msgs_confirm), new DialogInterface.OnClickListener()
-                    {
-                        public void onClick(DialogInterface dialog, int id)
-                        {
-                            try
-                            {
-                                final Thread t2 = new Thread()
-                                {
-                                    @Override
-                                    public void run()
-                                    {
-                                        try
-                                        {
-                                            HelperGeneric.logI(TAG, "del_group_system_messages:START:");
-                                            display_toast(getString(R.string.group_delete_system_msgs_progress), true, 0);
-                                            orma.deleteFromGroupMessage().
-                                                    group_identifierEq(group_id).
-                                                    tox_group_peer_pubkeyEq(TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY).
-                                                    execute();
-                                            HelperGeneric.logI(TAG, "del_group_system_messages:DONE:");
-                                            display_toast(getString(R.string.group_delete_system_msgs_done), true, 0);
-                                            reload_message_counts(group_id);
-                                        }
-                                        catch (Exception e2)
-                                        {
-                                            e2.printStackTrace();
-                                            HelperGeneric.logI(TAG, "del_group_system_messages:EE:" + e2.getMessage());
-                                        }
-                                    }
-                                };
-                                t2.start();
-                            }
-                            catch (Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-                        }
-                    });
-                    builder.setNegativeButton(getString(R.string.cancel), null);
-
-                    AlertDialog dialog = builder.create();
-                    dialog.show();
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-            }
-        });
-        }
-
-        try
-        {
-            final int myrole = tox_group_self_get_role(group_num);
-            if (group_myrole_text != null)
-            {
-                group_myrole_text.setText(humanize_group_role(this, myrole));
-            }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-
-        apply_user_facing_group_info(group_num);
-        reload_group_members_list();
-    }
-
-    private void group_update_connected_status_on_groupinfo(final long group_num)
-    {
-        try
-        {
-            if (group_num < 0)
-            {
-                if (group_connection_status_text != null)
-                {
-                    group_connection_status_text.setText(getString(R.string.group_info_connection_disconnected));
-                }
-                update_reconnect_button_visibility(true);
-                apply_user_facing_group_info(group_num);
-                return;
-            }
-
-            final int is_connected = tox_group_is_connected(group_num);
-            if (is_group_we_left(group_id))
-            {
-                if (group_connection_status_text != null)
-                {
-                    group_connection_status_text.setText(getString(R.string.group_info_connection_disconnected));
-                }
-                update_reconnect_button_visibility(true);
-            }
-            else
-            {
-                if (group_connection_status_text != null)
-                {
-                    group_connection_status_text.setText(humanize_group_connection_status(this, is_connected, group_id));
-                }
-                update_reconnect_button_visibility(
-                        is_connected != TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value);
-            }
-            apply_user_facing_group_info(group_num);
-        }
-        catch(Exception ignored)
-        {
-        }
-    }
-
-    private void update_reconnect_button_visibility(final boolean show)
-    {
-        if (group_reconnect_button == null)
-        {
+            finish();
             return;
         }
-        if (!BuildConfig.DEBUG)
+        groupId = id;
+        getOnBackPressedDispatcher().addCallback(this, fieldBack);
+        if (savedInstanceState != null)
         {
-            group_reconnect_button.setVisibility(View.GONE);
-            return;
-        }
-        group_reconnect_button.setVisibility(show ? View.VISIBLE : View.GONE);
-    }
-
-    static void reload_message_counts(final String group_id)
-    {
-        try
-        {
-            Thread t = new Thread()
+            final String name = savedInstanceState.getString(STATE_FIELD);
+            if (name != null)
             {
-                @Override
-                public void run()
+                try
                 {
-                    String num_str1 = "*ERROR*";
-                    String num_str2 = "*ERROR*";
-                    try
-                    {
-                        num_str1 = "" + orma.selectFromGroupMessage().group_identifierEq(group_id).tox_group_peer_pubkeyNotEq(TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY).count();
-                    }
-                    catch (Exception e)
-                    {
-                        e.printStackTrace();
-                    }
-
-                    try
-                    {
-                        num_str2 = "" + orma.selectFromGroupMessage().group_identifierEq(group_id).tox_group_peer_pubkeyEq(
-                                TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY).count();
-                    }
-                    catch (Exception e)
-                    {
-                        e.printStackTrace();
-                    }
-
-                    final String num_str_1 = num_str1;
-                    final String num_str_2 = num_str2;
-
-                    Runnable myRunnable = new Runnable()
-                    {
-                        @Override
-                        public void run()
-                        {
-                            try
-                            {
-                                if (group_num_msgs_text == null && group_num_system_msgs_text == null)
-                                {
-                                    return;
-                                }
-                                try
-                                {
-                                    if (group_num_msgs_text != null)
-                                    {
-                                        group_num_msgs_text.setText(context_s.getString(R.string.group_info_message_count_user,
-                                                Integer.parseInt(num_str_1)));
-                                    }
-                                }
-                                catch (Exception ignored)
-                                {
-                                    if (group_num_msgs_text != null)
-                                    {
-                                        group_num_msgs_text.setText(num_str_1);
-                                    }
-                                }
-                                try
-                                {
-                                    if (group_num_system_msgs_text != null)
-                                    {
-                                        group_num_system_msgs_text.setText(
-                                                context_s.getString(R.string.group_info_system_message_count,
-                                                        Integer.parseInt(num_str_2)));
-                                    }
-                                }
-                                catch (Exception ignored)
-                                {
-                                    if (group_num_system_msgs_text != null)
-                                    {
-                                        group_num_system_msgs_text.setText(num_str_2);
-                                    }
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-                        }
-                    };
-
-                    if (main_handler_s != null)
-                    {
-                        main_handler_s.post(myRunnable);
-                    }
+                    pendingField = Field.valueOf(name);
+                    pendingText = savedInstanceState.getString(STATE_TEXT);
                 }
-            };
-            t.start();
-        }
-        catch(Exception e)
-        {
-            e.printStackTrace();
+                catch (IllegalArgumentException ignored)
+                {
+                    pendingField = null;
+                }
+            }
         }
     }
 
@@ -915,373 +310,997 @@ public class GroupInfoActivity extends AppCompatActivity
     protected void onResume()
     {
         super.onResume();
-        final long group_num = ensure_group_in_tox(group_id);
-        if (group_num >= 0)
+        // As the old screen did on every return: a group that dropped out of toxcore is brought back,
+        // unless this device left it. A page of one value stays as it is.
+        if (open == null && !groupId.isEmpty())
         {
-            group_update_connected_status_on_groupinfo(group_num);
-            peer_limit_text.setText("" + get_display_peer_limit(group_num));
-            this_title.setText(get_effective_group_title(group_num, group_id));
-            populate_group_chat_id_text(group_num);
+            refresh(true);
         }
-        reload_message_counts(group_id);
-        apply_user_facing_group_info(group_num);
-        reload_group_members_list();
-    }
-
-    private void populate_group_chat_id_text(final long group_num)
-    {
-        if (this_group_id == null)
-        {
-            return;
-        }
-
-        String chat_id = null;
-        if (group_num >= 0)
-        {
-            try
-            {
-                chat_id = tox_group_by_groupnum__wrapper(group_num);
-            }
-            catch (Exception ignored)
-            {
-            }
-        }
-        if ((chat_id == null || chat_id.length() == 0) && group_id != null && !group_id.equals("-1"))
-        {
-            chat_id = group_id;
-        }
-
-        if (chat_id == null || chat_id.length() == 0)
-        {
-            group_chat_id_for_copy = "";
-            this_group_id.setText("*error*");
-            if (group_copy_id_button != null)
-            {
-                group_copy_id_button.setEnabled(false);
-            }
-            return;
-        }
-
-        group_chat_id_for_copy = chat_id.toUpperCase();
-        this_group_id.setText(group_chat_id_for_copy.toLowerCase());
-        if (group_copy_id_button != null)
-        {
-            group_copy_id_button.setEnabled(true);
-        }
-    }
-
-    private void copy_group_chat_id_to_clipboard(final View v)
-    {
-        if (group_chat_id_for_copy == null || group_chat_id_for_copy.length() == 0)
-        {
-            return;
-        }
-        try
-        {
-            final ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-            if (clipboard != null)
-            {
-                clipboard.setPrimaryClip(ClipData.newPlainText("", group_chat_id_for_copy));
-                Toast.makeText(v.getContext(), getString(R.string.id_copied_to_clipboard), Toast.LENGTH_SHORT).show();
-            }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-    }
-
-    /**
-     * Build and share a rich group invite: the public chat-id plus my own Tox ID and a short how-to.
-     * This operationalizes the friend-assisted-join workaround at scale — a joiner whose network
-     * blocks UDP peer discovery (so a plain chat-id join can never complete) can add the inviter as
-     * a contact, after which the existing friend-invite path pulls them into the group over TCP.
-     */
-    private void share_group_invite(final View v)
-    {
-        if (group_chat_id_for_copy == null || group_chat_id_for_copy.length() == 0)
-        {
-            return;
-        }
-        try
-        {
-            String my_toxid = "";
-            try
-            {
-                my_toxid = MainActivity.get_my_toxid();
-            }
-            catch (Exception ignored)
-            {
-            }
-            if (my_toxid == null)
-            {
-                my_toxid = "";
-            }
-            final String invite_text = getString(R.string.group_share_invite_template,
-                    group_chat_id_for_copy.toLowerCase(), my_toxid.toUpperCase());
-            final android.content.Intent send = new android.content.Intent(android.content.Intent.ACTION_SEND);
-            send.setType("text/plain");
-            send.putExtra(android.content.Intent.EXTRA_TEXT, invite_text);
-            startActivity(android.content.Intent.createChooser(send,
-                    getString(R.string.group_share_invite_chooser)));
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-    }
-
-    private void configure_release_ui()
-    {
-        boolean founder = false;
-        try
-        {
-            final long group_num = tox_group_by_groupid__wrapper(group_id);
-            founder = tox_group_self_get_role(group_num) == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_FOUNDER.value;
-        }
-        catch (Exception ignored)
-        {
-        }
-        final int founder_visibility = founder ? View.VISIBLE : View.GONE;
-        final int extended_founder_visibility = (founder && HelperGroup.is_tox_group_extended_state_jni_supported())
-                ? View.VISIBLE : View.GONE;
-
-        if (group_info_founder_section != null)
-        {
-            group_info_founder_section.setVisibility(founder_visibility);
-        }
-        if (group_voicestate_select != null)
-        {
-            group_voicestate_select.setVisibility(founder_visibility);
-        }
-        if (group_voicestate_set_button != null)
-        {
-            group_voicestate_set_button.setVisibility(founder_visibility);
-        }
-        if (group_info_peer_limit_section != null)
-        {
-            group_info_peer_limit_section.setVisibility(founder_visibility);
-        }
-        if (group_password_text != null)
-        {
-            final View passwordField = (View) group_password_text.getParent();
-            if (passwordField != null)
-            {
-                passwordField.setVisibility(extended_founder_visibility);
-            }
-        }
-        if (group_password_set_button != null)
-        {
-            group_password_set_button.setVisibility(extended_founder_visibility);
-        }
-        if (group_topic_lock_switch != null)
-        {
-            group_topic_lock_switch.setVisibility(extended_founder_visibility);
-        }
-        if (group_privacy_select != null)
-        {
-            final View privacyRow = (View) group_privacy_select.getParent();
-            if (privacyRow != null)
-            {
-                privacyRow.setVisibility(extended_founder_visibility);
-            }
-        }
-    }
-
-    private void apply_user_facing_group_info(final long group_num)
-    {
-        try
-        {
-            configure_release_ui();
-
-            int privacy_state = -1;
-            try
-            {
-                privacy_state = orma.selectFromGroupDB().
-                        group_identifierEq(group_id.toLowerCase()).
-                        toList().get(0).privacy_state;
-            }
-            catch (Exception ignored)
-            {
-            }
-
-            final String title = get_effective_group_title(group_num, group_id);
-            final String members = format_group_list_status_subtitle(this, group_id);
-            final String privacy = humanize_group_privacy(this, privacy_state);
-            final String connection = (group_connection_status_text != null)
-                    ? group_connection_status_text.getText().toString()
-                    : humanize_group_connection_status(this,
-                    group_num >= 0 ? tox_group_is_connected(group_num) : -1, group_id);
-
-            if (this_privacy_status_text != null)
-            {
-                this_privacy_status_text.setText(privacy);
-            }
-            if (group_info_header_title != null)
-            {
-                group_info_header_title.setText(title);
-            }
-            if (group_info_header_subtitle != null)
-            {
-                group_info_header_subtitle.setText(members);
-            }
-            if (group_info_header_status != null)
-            {
-                group_info_header_status.setText(privacy + " · " + connection);
-            }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-    }
-
-    private void reload_group_members_list()
-    {
-        if (group_info_members_adapter == null)
-        {
-            return;
-        }
-
-        new Thread()
-        {
-            @Override
-            public void run()
-            {
-                try
-                {
-                    final List<HelperGroup.GroupMemberDisplay> members =
-                            HelperGroup.dedupe_group_members_for_display(
-                                    HelperGroup.collect_group_members_for_display(group_id));
-                    if (main_handler_s == null)
-                    {
-                        return;
-                    }
-                    main_handler_s.post(new Runnable()
-                    {
-                        @Override
-                        public void run()
-                        {
-                            try
-                            {
-                                group_info_members_adapter.setMembers(members);
-                                if (group_info_members_header != null)
-                                {
-                                    // KHANDAQ (#21): use the same authoritative toxcore count as the
-                                    // in-group header (peer_count + offline_peer_count) so the info
-                                    // screen and the chat header never disagree. Falls back to the
-                                    // rendered list size if toxcore has no count yet.
-                                    final long[] auth = HelperGroup.count_authoritative_group_members(group_id);
-                                    final long total = Math.max(auth[0] + auth[1], members.size());
-                                    group_info_members_header.setText(
-                                            getString(R.string.group_info_members_header, (int) total));
-                                }
-                                if (group_info_members_empty != null)
-                                {
-                                    group_info_members_empty.setVisibility(
-                                            members.isEmpty() ? View.VISIBLE : View.GONE);
-                                }
-                                if (group_info_members_list != null)
-                                {
-                                    group_info_members_list.setVisibility(
-                                            members.isEmpty() ? View.GONE : View.VISIBLE);
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-                        }
-                    });
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-            }
-        }.start();
     }
 
     @Override
-    protected void onPause()
+    protected void onSaveInstanceState(final Bundle outState)
     {
-        super.onPause();
+        super.onSaveInstanceState(outState);
+        final Field kept = open != null ? open : pendingField;
+        if (kept == null)
+        {
+            return;
+        }
+        outState.putString(STATE_FIELD, kept.name());
+        // A password never goes into the saved state.
+        if (kept != Field.PASSWORD)
+        {
+            final AirStepKit.LineField line = field;
+            outState.putString(STATE_TEXT, open != null && line != null ? line.text() : pendingText);
+        }
+    }
 
-        final long group_num;
+    @Override
+    protected void onDestroy()
+    {
+        destroyed = true;
+        main.removeCallbacksAndMessages(null);
+        super.onDestroy();
+    }
+
+    // ---- reading ----
+
+    private static Handler worker()
+    {
+        synchronized (WORKER_LOCK)
+        {
+            if (worker == null)
+            {
+                final HandlerThread thread = new HandlerThread("air-group-settings", Process.THREAD_PRIORITY_BACKGROUND);
+                thread.start();
+                worker = new Handler(thread.getLooper());
+            }
+            return worker;
+        }
+    }
+
+    /** Reads the group on the worker and shows it; {@code ensure} brings it back into toxcore first. */
+    private void refresh(final boolean ensure)
+    {
+        final String id = groupId;
+        final int read = ++reads;
+        worker().post(() -> {
+            final State state = read(id, ensure);
+            main.post(() -> show(state, read));
+        });
+    }
+
+    /** toxcore and the database, so never on the main thread. */
+    private static State read(final String groupId, final boolean ensure)
+    {
+        final State s = new State();
+        final Long found = ask("group", () -> ensure ? HelperGroup.ensure_group_in_tox(groupId)
+                                                      : HelperGroup.tox_group_by_groupid__wrapper(groupId));
+        final long num = found == null ? -1 : found;
+        s.live = num >= 0;
+        s.extended = Boolean.TRUE.equals(ask("extended", HelperGroup::is_tox_group_extended_state_jni_supported));
+        String topic = null;
+        if (s.live)
+        {
+            final Integer role = ask("role", () -> MainActivity.tox_group_self_get_role(num));
+            s.selfRole = role != null && AirGroupModel.isKnownRole(role) ? role : -1;
+            final String name = ask("name", () -> MainActivity.tox_group_self_get_name(num));
+            s.selfName = isKnown(name) ? name : "";
+            topic = ask("topic", () -> MainActivity.tox_group_get_topic(num));
+            if (s.extended)
+            {
+                final Integer lock = ask("lock", () -> HelperGroup.tox_group_get_topic_lock__wrapper(num));
+                s.topicLock = lock != null && isLock(lock) ? lock : -1;
+            }
+            final Integer privacy = ask("privacy", () -> MainActivity.tox_group_get_privacy_state(num));
+            s.privacy = privacy != null && isPrivacy(privacy) ? privacy : -1;
+            final Integer voice = ask("voice", () -> MainActivity.tox_group_get_voice_state(num));
+            s.voice = voice != null && AirGroupSettingsModel.voiceChoice(voice) >= 0 ? voice : -1;
+            final Integer limit = ask("limit", () -> HelperGroup.get_display_peer_limit(num));
+            s.peerLimit = limit != null ? limit : HelperGroup.DEFAULT_GROUP_PEER_LIMIT;
+            final Long peers = ask("peers", () -> MainActivity.tox_group_peer_count(num));
+            s.peers = peers != null && peers >= 0 ? peers : -1;
+        }
+        // What toxcore does not give, the profile stored: the topic and who can join.
+        final GroupDB row = ask("stored", () -> stored(groupId));
+        if (!isKnown(topic) && row != null)
+        {
+            topic = row.topic;
+        }
+        s.topic = isKnown(topic) ? topic : "";
+        if (s.privacy < 0 && row != null && isPrivacy(row.privacy_state))
+        {
+            s.privacy = row.privacy_state;
+        }
+        return s;
+    }
+
+    @Nullable
+    private static GroupDB stored(final String groupId)
+    {
+        final List<GroupDB> rows = TrifaToxService.orma.selectFromGroupDB()
+                                                       .group_identifierEq(groupId.toLowerCase(Locale.ROOT))
+                                                       .toList();
+        return rows == null || rows.isEmpty() ? null : rows.get(0);
+    }
+
+    /** One read; null when it threw (an older native library, no profile open yet). */
+    @Nullable
+    private static <T> T ask(final String what, final Query<T> query)
+    {
         try
         {
-            group_num = tox_group_by_groupid__wrapper(group_id);
+            return query.get();
         }
-        catch (Exception e)
+        catch (Throwable e)
+        {
+            Log.i(TAG, "read:" + what + ":EE:" + e.getMessage());
+            return null;
+        }
+    }
+
+    /** The JNI bridge gives null without toxcore and "-1" for a text it could not read. */
+    private static boolean isKnown(@Nullable final String text)
+    {
+        return text != null && !"-1".equals(text);
+    }
+
+    private static boolean isPrivacy(final int state)
+    {
+        return state == PRIVACY_PUBLIC || state == PRIVACY_PRIVATE;
+    }
+
+    private static boolean isLock(final int lock)
+    {
+        return lock == AirGroupSettingsModel.TOPIC_LOCK_ENABLED || lock == AirGroupSettingsModel.TOPIC_LOCK_DISABLED;
+    }
+
+    // ---- the list ----
+
+    private void show(final State s, final int read)
+    {
+        if (destroyed || isFinishing() || read != reads)
+        {
+            return;
+        }
+        final boolean changed = !s.sameAs(shown);
+        shown = s;
+        if (open != null)
+        {
+            // The list is drawn again when the page of one value closes.
+            return;
+        }
+        if (changed || column.getChildCount() == 0)
+        {
+            build(s);
+        }
+        final Field pending = pendingField;
+        if (pending != null)
+        {
+            final String text = pendingText;
+            pendingField = null;
+            pendingText = null;
+            if (opens(s, pending))
+            {
+                openField(pending, text);
+            }
+        }
+    }
+
+    /** Whether the row of {@code f} opens its page: the rights of the old screen, as toxcore checks them. */
+    private static boolean opens(final State s, final Field f)
+    {
+        switch (f)
+        {
+            case SELF_NAME:
+                return s.live;
+            case TOPIC:
+                return s.topicOpens();
+            case PASSWORD:
+                return s.founder() && s.extended;
+            default:
+                return s.founder();
+        }
+    }
+
+    private void build(final State s)
+    {
+        column.removeAllViews();
+        inviteOnlyRow = null;
+        openRow = null;
+        joinNote = null;
+        voiceRows = null;
+        writeNote = null;
+        lockSwitch = null;
+        lockNote = null;
+
+        if (!s.live)
+        {
+            AirScreenKit.addSection(column, null, null, AirScreenKit.body(this, getString(R.string.air_gs_not_here)));
+        }
+        buildNames(s);
+        buildJoin(s);
+        buildWrite(s);
+    }
+
+    /** Your name in this group, then the topic, each with what it does. */
+    private void buildNames(final State s)
+    {
+        // Under the title, not at the trailing side: a name of 128 bytes or a topic of 512 wraps there.
+        final String nameTitle = getString(R.string.air_gs_self_name);
+        final AirSettingRow name = new AirSettingRow(this, nameTitle, s.live).detail(s.selfName);
+        name.setId(R.id.air_gs_self_name_row);
+        if (s.live)
+        {
+            name.setOnClickListener(v -> openField(Field.SELF_NAME, null));
+        }
+        else
+        {
+            staticRow(name, nameTitle, s.selfName);
+        }
+        AirScreenKit.addSection(column, null, getString(R.string.air_gs_self_name_note), AirScreenKit.plateOf(this, name));
+
+        final String topicTitle = getString(R.string.air_gs_topic);
+        final String topicWords = s.topic.isEmpty() ? getString(R.string.air_gs_topic_none) : s.topic;
+        final boolean topicOpens = s.topicOpens();
+        final AirSettingRow topic = new AirSettingRow(this, topicTitle, topicOpens).detail(topicWords);
+        topic.setId(R.id.air_gs_topic_row);
+        if (topicOpens)
+        {
+            topic.setOnClickListener(v -> openField(Field.TOPIC, null));
+        }
+        else
+        {
+            staticRow(topic, topicTitle, topicWords);
+        }
+        AirScreenKit.addSection(column, null, getString(topicNote(s)), AirScreenKit.plateOf(this, topic));
+    }
+
+    @StringRes
+    private static int topicNote(final State s)
+    {
+        if (!s.live || s.topicOpens())
+        {
+            return R.string.air_gs_topic_note;
+        }
+        // An observer never changes it; while the topic is not locked everyone else may.
+        return s.topicLock == AirGroupSettingsModel.TOPIC_LOCK_ENABLED ? R.string.air_gs_topic_locked
+                                                                        : R.string.air_gs_topic_not_observers;
+    }
+
+    /** Who can join; for the founder also the password and the member limit. */
+    private void buildJoin(final State s)
+    {
+        final String heading = getString(R.string.air_gs_join);
+        if (s.founder() && s.extended)
+        {
+            final LinearLayout inviteOnly = AirScreenKit.choiceRow(this, getString(R.string.air_group_privacy_invite_only),
+                                                                   getString(R.string.air_group_privacy_invite_only_note));
+            inviteOnly.setId(R.id.air_gs_invite_only_row);
+            inviteOnly.setOnClickListener(v -> setPrivacy(PRIVACY_PRIVATE));
+            final LinearLayout openToAll = AirScreenKit.choiceRow(this, getString(R.string.air_group_privacy_open),
+                                                                  getString(R.string.air_group_privacy_open_note));
+            openToAll.setId(R.id.air_gs_open_row);
+            openToAll.setOnClickListener(v -> setPrivacy(PRIVACY_PUBLIC));
+            inviteOnlyRow = inviteOnly;
+            openRow = openToAll;
+            joinNote = failureLine();
+            AirScreenKit.addSection(column, heading, null, choices(inviteOnly, openToAll), joinNote);
+            showPrivacy(s.privacy);
+        }
+        else
+        {
+            final AirSettingRow row = privacyRow(s.privacy);
+            if (row != null)
+            {
+                AirScreenKit.addSection(column, heading, null, AirScreenKit.plateOf(this, row));
+            }
+        }
+        if (!s.founder())
         {
             return;
         }
 
-        if (group_num < 0)
+        AirSettingRow password = null;
+        if (s.extended)
+        {
+            // toxcore gives no way to read the password back, so the row says nothing of it.
+            password = new AirSettingRow(this, getString(R.string.air_gs_password), true);
+            password.setId(R.id.air_gs_password_row);
+            password.setOnClickListener(v -> openField(Field.PASSWORD, null));
+        }
+        final AirSettingRow limit = new AirSettingRow(this, getString(R.string.air_gs_limit), true);
+        limit.setId(R.id.air_gs_limit_row);
+        limit.setValue(NumberFormat.getIntegerInstance(AirUi.locale(this)).format(s.peerLimit));
+        limit.setOnClickListener(v -> openField(Field.PEER_LIMIT, null));
+        String note = s.extended ? getString(R.string.air_gs_password_note) : null;
+        if (s.full())
+        {
+            final String full = getString(R.string.air_gs_limit_full);
+            note = note == null ? full : note + " " + full;
+        }
+        AirScreenKit.addSection(column, null, note, AirScreenKit.plateOf(this, password, limit));
+    }
+
+    /** Who can write; for the founder also whether only the founder and the moderators change the topic. */
+    private void buildWrite(final State s)
+    {
+        final String heading = getString(R.string.air_gs_write);
+        if (!s.founder())
+        {
+            final AirSettingRow row = voiceRow(s.voice);
+            if (row != null)
+            {
+                AirScreenKit.addSection(column, heading, getString(R.string.air_gs_founder_only),
+                                        AirScreenKit.plateOf(this, row));
+            }
+            return;
+        }
+        final LinearLayout[] rows = new LinearLayout[VOICE_STATES.length];
+        for (int i = 0; i < rows.length; i++)
+        {
+            final int state = VOICE_STATES[i];
+            rows[i] = AirScreenKit.choiceRow(this, getString(VOICE_TITLES[i]),
+                                             i == 0 ? getString(R.string.air_gs_voice_all_note) : null);
+            rows[i].setId(VOICE_ROWS[i]);
+            rows[i].setOnClickListener(v -> setVoice(state));
+        }
+        voiceRows = rows;
+        writeNote = failureLine();
+        AirScreenKit.addSection(column, heading, null, choices(rows), writeNote);
+        showVoice(s.voice);
+
+        // The old screen showed the switch only while toxcore answered for the lock.
+        if (s.extended && isLock(s.topicLock))
+        {
+            final AirSettingRow lock = new AirSettingRow(this, getString(R.string.air_gs_topic_lock), false);
+            lock.setId(R.id.air_gs_topic_lock_row);
+            lockSwitch = lock.withSwitch(s.topicLock == AirGroupSettingsModel.TOPIC_LOCK_ENABLED,
+                                         (button, checked) -> setTopicLock(checked));
+            lockNote = failureLine();
+            AirScreenKit.addSection(column, null, null, AirScreenKit.plateOf(this, lock), lockNote);
+        }
+    }
+
+    /** Who can join as it is, for a member: the choice in words, with what it means. */
+    @Nullable
+    private AirSettingRow privacyRow(final int privacy)
+    {
+        final int title;
+        final int detail;
+        if (privacy == PRIVACY_PRIVATE)
+        {
+            title = R.string.air_group_privacy_invite_only;
+            detail = R.string.air_group_privacy_invite_only_note;
+        }
+        else if (privacy == PRIVACY_PUBLIC)
+        {
+            title = R.string.air_group_privacy_open;
+            detail = R.string.air_group_privacy_open_note;
+        }
+        else
+        {
+            return null;
+        }
+        final AirSettingRow row = new AirSettingRow(this, getString(title), false).detail(getString(detail));
+        row.setId(R.id.air_gs_join_row);
+        staticRow(row, getString(title), getString(detail));
+        return row;
+    }
+
+    /** Who can write as it is, for a member. */
+    @Nullable
+    private AirSettingRow voiceRow(final int voice)
+    {
+        final int choice = AirGroupSettingsModel.voiceChoice(voice);
+        if (choice < 0)
+        {
+            return null;
+        }
+        final String title = getString(VOICE_TITLES[choice]);
+        final String detail = choice == 0 ? getString(R.string.air_gs_voice_all_note) : null;
+        final AirSettingRow row = new AirSettingRow(this, title, false).detail(detail);
+        row.setId(R.id.air_gs_voice_row);
+        staticRow(row, title, detail);
+        return row;
+    }
+
+    /** A row that only says how a setting is: no button to TalkBack, its words read as one. */
+    private static void staticRow(final AirSettingRow row, final CharSequence title, @Nullable final CharSequence words)
+    {
+        row.setClickable(false);
+        row.setFocusable(false);
+        ViewCompat.setAccessibilityDelegate(row, null);
+        ViewCompat.setScreenReaderFocusable(row, true);
+        row.setContentDescription(TextUtils.isEmpty(words) ? title : title + ". " + words);
+    }
+
+    /** Choice rows on one plate with a hairline between them, as on New group. */
+    private LinearLayout choices(final LinearLayout... rows)
+    {
+        final LinearLayout plate = AirScreenKit.plate(this);
+        for (int i = 0; i < rows.length; i++)
+        {
+            if (i > 0)
+            {
+                plate.addView(rule());
+            }
+            plate.addView(rows[i], AirScreenKit.matchWidth());
+        }
+        return plate;
+    }
+
+    private View rule()
+    {
+        final View rule = new View(this);
+        rule.setBackgroundColor(AirUi.color(this, R.color.kq_line));
+        final LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, getResources().getDimensionPixelSize(R.dimen.kq_stroke_hairline));
+        params.setMarginStart(getResources().getDimensionPixelSize(R.dimen.kq_space_16));
+        rule.setLayoutParams(params);
+        return rule;
+    }
+
+    /** E21: the line a failure stands on under its section, hidden until there is one. */
+    private TextView failureLine()
+    {
+        final TextView line = AirScreenKit.note(this, "");
+        line.setVisibility(View.GONE);
+        return line;
+    }
+
+    private void showPrivacy(final int privacy)
+    {
+        if (inviteOnlyRow != null && openRow != null)
+        {
+            AirScreenKit.applyChoice(inviteOnlyRow, privacy == PRIVACY_PRIVATE);
+            AirScreenKit.applyChoice(openRow, privacy == PRIVACY_PUBLIC);
+        }
+    }
+
+    private void showVoice(final int voice)
+    {
+        final LinearLayout[] rows = voiceRows;
+        if (rows == null)
         {
             return;
         }
-
-        try
+        final int choice = AirGroupSettingsModel.voiceChoice(voice);
+        for (int i = 0; i < rows.length; i++)
         {
-            if (this_title != null)
+            AirScreenKit.applyChoice(rows[i], i == choice);
+        }
+    }
+
+    // ---- changes on the list ----
+
+    private void setPrivacy(final int privacy)
+    {
+        final State s = shown;
+        if (busy || s == null || s.privacy == privacy)
+        {
+            return;
+        }
+        final String id = groupId;
+        change(() -> writePrivacy(id, privacy), () -> {
+            final State now = shown;
+            if (now != null)
             {
-                TrifaToxService.wakeup_tox_thread();
-                final String new_title = sanitize_group_topic(this_title.getText().toString());
-                if (new_title.length() > 0)
+                now.privacy = privacy;
+            }
+            showPrivacy(privacy);
+            endLine(joinNote);
+            toast(R.string.air_gs_saved);
+        }, code -> sayFailure(joinNote, code));
+    }
+
+    private void setVoice(final int voice)
+    {
+        final State s = shown;
+        if (busy || s == null || s.voice == voice)
+        {
+            return;
+        }
+        final String id = groupId;
+        change(() -> writeVoice(id, voice), () -> {
+            final State now = shown;
+            if (now != null)
+            {
+                now.voice = voice;
+            }
+            showVoice(voice);
+            endLine(writeNote);
+            toast(R.string.air_gs_saved);
+        }, code -> sayFailure(writeNote, code));
+    }
+
+    private void setTopicLock(final boolean on)
+    {
+        if (lockQuiet)
+        {
+            return;
+        }
+        if (busy || shown == null)
+        {
+            setLockQuietly(!on);
+            return;
+        }
+        final int lock = on ? AirGroupSettingsModel.TOPIC_LOCK_ENABLED : AirGroupSettingsModel.TOPIC_LOCK_DISABLED;
+        final String id = groupId;
+        change(() -> writeTopicLock(id, lock), () -> {
+            final State now = shown;
+            if (now != null)
+            {
+                now.topicLock = lock;
+            }
+            endLine(lockNote);
+            toast(R.string.air_gs_saved);
+        }, code -> {
+            // The switch goes back to what the group keeps.
+            setLockQuietly(!on);
+            sayFailure(lockNote, code);
+        });
+    }
+
+    private void setLockQuietly(final boolean on)
+    {
+        final SwitchCompat view = lockSwitch;
+        if (view == null)
+        {
+            return;
+        }
+        lockQuiet = true;
+        view.setChecked(on);
+        lockQuiet = false;
+    }
+
+    private void sayFailure(@Nullable final TextView line, @Nullable final String code)
+    {
+        if (line != null)
+        {
+            AirUi.sayOnLine(line, getString(R.string.air_group_setting_not_saved), true, code);
+        }
+    }
+
+    private static void endLine(@Nullable final TextView line)
+    {
+        if (line != null && line.getVisibility() != View.GONE)
+        {
+            AirUi.endLine(line);
+        }
+    }
+
+    /** Runs {@code write} on the worker; one change at a time, its outcome back on the main thread. */
+    private void change(final Write write, final Runnable done, final Failure failed)
+    {
+        busy = true;
+        setSaveButtonEnabled(false);
+        worker().post(() -> {
+            Outcome outcome;
+            try
+            {
+                outcome = write.run();
+            }
+            catch (Throwable e)
+            {
+                Log.i(TAG, "change:EE:" + e.getMessage());
+                outcome = Outcome.failed(null);
+            }
+            final Outcome result = outcome;
+            main.post(() -> {
+                busy = false;
+                setSaveButtonEnabled(true);
+                if (destroyed || isFinishing())
                 {
-                    final String current_title = get_effective_group_title(group_num, group_id);
-                    if (!new_title.equals(current_title))
-                    {
-                        final boolean saved = save_group_title_if_changed(group_id, new_title);
-                        final int toastRes = saved
-                                ? R.string.group_title_saved_toast
-                                : R.string.group_title_save_failed_toast;
-                        // Application context: activity may already be finishing in onPause.
-                        display_toast(getString(toastRes), false, 0);
-                    }
+                    return;
+                }
+                if (result.done)
+                {
+                    done.run();
+                }
+                else
+                {
+                    failed.say(result.code);
+                }
+            });
+        });
+    }
+
+    // ---- the page of one value ----
+
+    private void openField(final Field f, @Nullable final String restored)
+    {
+        final State s = shown;
+        if (busy || s == null || open != null || !opens(s, f))
+        {
+            return;
+        }
+        open = f;
+        fieldBack.setEnabled(true);
+        setBarTitle(f.title);
+        column.removeAllViews();
+
+        final AirStepKit.LineField line = new AirStepKit.LineField(this, getString(f.title), f == Field.PASSWORD);
+        final EditText edit = line.edit;
+        edit.setId(R.id.air_gs_field);
+        // A group's name, topic or password is no account: password managers leave these alone, and what
+        // is typed goes into the saved state only through onSaveInstanceState, never a password.
+        edit.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+        edit.setSaveEnabled(false);
+        switch (f)
+        {
+            case SELF_NAME:
+                // A name is not prose: no spell-check underlines and no suggestions.
+                edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PERSON_NAME
+                                  | InputType.TYPE_TEXT_FLAG_CAP_WORDS | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+                line.limitBytes(ToxVars.TOX_GROUP_MAX_PART_LENGTH);
+                wrap(edit);
+                break;
+            case TOPIC:
+                edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+                line.limitBytes(ToxVars.TOX_GROUP_MAX_TOPIC_LENGTH);
+                wrap(edit);
+                break;
+            case PASSWORD:
+                line.limitBytes(ToxVars.TOX_GROUP_MAX_PASSWORD_SIZE);
+                break;
+            default:
+                edit.setInputType(InputType.TYPE_CLASS_NUMBER);
+                edit.setFilters(new InputFilter[]{new InputFilter.LengthFilter(AirGroupSettingsModel.PEER_LIMIT_MAX_CHARS)});
+                break;
+        }
+        // The password cannot be read back from toxcore, so its field starts empty.
+        final String value = f == Field.PASSWORD ? "" : (restored != null ? restored : initialValue(s, f));
+        edit.setText(value);
+        edit.setSelection(edit.length());
+
+        final CharSequence hint = hint(f);
+        final TextView note = AirStepKit.fieldNote(this, hint);
+        note.setId(R.id.air_gs_field_note);
+        noteSays = false;
+        edit.addTextChangedListener(new TextWatcher()
+        {
+            @Override
+            public void beforeTextChanged(final CharSequence text, final int start, final int count, final int after)
+            {
+            }
+
+            @Override
+            public void onTextChanged(final CharSequence text, final int start, final int before, final int count)
+            {
+            }
+
+            @Override
+            public void afterTextChanged(final Editable text)
+            {
+                if (noteSays)
+                {
+                    noteSays = false;
+                    AirStepKit.showHint(note, hint);
                 }
             }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
+        });
+        AirStepKit.chain(edit, null, this::saveField);
 
-        try
+        TextView remove = null;
+        if (f == Field.PASSWORD)
         {
-            if (group_myname_text != null)
+            remove = AirStepKit.quietButton(this, getString(R.string.air_gs_password_remove));
+            remove.setId(R.id.air_gs_password_remove);
+            remove.setOnClickListener(v -> removePassword());
+        }
+        AirScreenKit.addSection(column, null, null, line, note, remove == null ? null : AirScreenKit.leading(remove));
+
+        field = line;
+        fieldNote = note;
+        saveBar = new AirStepKit.MainBar(this, getString(R.string.air_gs_save), this::saveField);
+        saveBar.button.setId(R.id.air_gs_save);
+        scrollToTop();
+        AirStepKit.showKeyboard(edit);
+    }
+
+    private void closeField()
+    {
+        final Field f = open;
+        if (f == null)
+        {
+            return;
+        }
+        AirStepKit.hideKeyboard(this, column);
+        open = null;
+        field = null;
+        fieldNote = null;
+        saveBar = null;
+        noteSays = false;
+        fieldBack.setEnabled(false);
+        final LinearLayout bottom = findViewById(R.id.air_screen_bottom);
+        bottom.removeAllViews();
+        bottom.setVisibility(View.GONE);
+        setBarTitle(R.string.air_group_settings);
+        scrollToTop();
+        final State s = shown;
+        if (s != null)
+        {
+            build(s);
+        }
+        else
+        {
+            column.removeAllViews();
+        }
+        // TalkBack comes back to the row the page was opened from.
+        final View row = column.findViewById(f.row);
+        if (row != null)
+        {
+            row.post(() -> row.performAccessibilityAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null));
+        }
+    }
+
+    private static String initialValue(final State s, final Field f)
+    {
+        switch (f)
+        {
+            case SELF_NAME:
+                return s.selfName;
+            case TOPIC:
+                return s.topic;
+            case PEER_LIMIT:
+                // Digits as iOS puts them in the field; any script's digits are read back.
+                return String.valueOf(s.peerLimit);
+            default:
+                return "";
+        }
+    }
+
+    /** What the value does, under its field until something is refused or fails. */
+    private CharSequence hint(final Field f)
+    {
+        switch (f)
+        {
+            case SELF_NAME:
+                return getString(R.string.air_gs_self_name_note);
+            case TOPIC:
+                return getString(R.string.air_gs_topic_note);
+            case PASSWORD:
+                return getString(R.string.air_gs_password_note);
+            default:
+                return limitRange();
+        }
+    }
+
+    private String limitRange()
+    {
+        return AirUi.localDigits(this, getString(R.string.air_gs_limit_range));
+    }
+
+    private void saveField()
+    {
+        final Field f = open;
+        final AirStepKit.LineField line = field;
+        if (busy || f == null || line == null)
+        {
+            return;
+        }
+        final String text = line.text();
+        final String id = groupId;
+        switch (f)
+        {
+            case SELF_NAME:
             {
-                String my_new_name = sanitize_group_peer_name(group_myname_text.getText().toString());
-                if (my_new_name.length() > 0)
+                final String name = AirGroupModel.cleanName(text);
+                if (name.isEmpty())
                 {
-                    tox_group_self_set_name(group_num, my_new_name);
-                    HelperGeneric.update_savedata_file_wrapper_async();
+                    refuse(getString(R.string.air_gs_name_empty));
+                    return;
                 }
+                final String sent = HelperGroup.sanitize_group_peer_name(name);
+                change(() -> writeSelfName(id, sent), () -> fieldSaved(s -> s.selfName = sent, R.string.air_gs_saved),
+                       this::fieldFailed);
+                break;
+            }
+            case TOPIC:
+            {
+                // The old screen never cleared the topic: an empty one is not sent.
+                final String topic = AirGroupModel.cleanName(text);
+                if (topic.isEmpty())
+                {
+                    refuse(getString(R.string.air_gs_topic_empty));
+                    return;
+                }
+                final String sent = HelperGroup.sanitize_group_topic(topic);
+                change(() -> writeTopic(id, sent), () -> fieldSaved(s -> s.topic = sent, R.string.air_gs_saved),
+                       this::fieldFailed);
+                break;
+            }
+            case PASSWORD:
+            {
+                // An empty field removes the password, as on the old screen.
+                final String password = text.isEmpty() ? null : text;
+                change(() -> writePassword(id, password),
+                       () -> fieldSaved(null, password == null ? R.string.air_gs_password_removed : R.string.air_gs_saved),
+                       this::fieldFailed);
+                break;
+            }
+            default:
+            {
+                final int limit = AirGroupSettingsModel.peerLimit(text);
+                if (limit == 0)
+                {
+                    refuse(limitRange());
+                    return;
+                }
+                change(() -> writePeerLimit(id, limit), () -> fieldSaved(s -> s.peerLimit = limit, R.string.air_gs_saved),
+                       this::fieldFailed);
+                break;
             }
         }
-        catch (Exception ignored)
-        {
-        }
+    }
 
-        try
+    private void removePassword()
+    {
+        final AirStepKit.LineField line = field;
+        if (busy || line == null)
         {
-            if (tox_group_self_get_role(group_num) == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_FOUNDER.value)
-            {
-                String new_peer_limit = peer_limit_text.getText().toString();
-                if ((new_peer_limit != null) && (new_peer_limit.length() > 0))
-                {
-                    int parsed_limit = Integer.parseInt(new_peer_limit);
-                    if (parsed_limit >= 1 && parsed_limit <= 65535)
-                    {
-                        tox_group_founder_set_peer_limit(group_num, parsed_limit);
-                        HelperGeneric.update_savedata_file_wrapper_async();
-                    }
-                }
-            }
+            return;
         }
-        catch (Exception ignored)
+        line.edit.setText("");
+        saveField();
+    }
+
+    /** The value went through: back to the list with it, the toast, then what toxcore keeps now. */
+    private void fieldSaved(@Nullable final Update update, @StringRes final int confirmation)
+    {
+        final State s = shown;
+        if (s != null && update != null)
         {
+            update.apply(s);
         }
+        closeField();
+        toast(confirmation);
+        refresh(false);
+    }
+
+    private void fieldFailed(@Nullable final String code)
+    {
+        final TextView note = fieldNote;
+        if (note == null)
+        {
+            return;
+        }
+        noteSays = true;
+        AirUi.sayOnLine(note, getString(R.string.air_group_setting_not_saved), true, code);
+    }
+
+    /** E21: a rule the value breaks, in place of what it does, with one shake of the field. */
+    private void refuse(final CharSequence words)
+    {
+        final TextView note = fieldNote;
+        final AirStepKit.LineField line = field;
+        if (note == null || line == null)
+        {
+            return;
+        }
+        noteSays = true;
+        AirUi.sayOnLine(note, words, false);
+        AirStepKit.shakeOnce(line);
+    }
+
+    private void setSaveButtonEnabled(final boolean enabled)
+    {
+        final AirStepKit.MainBar bar = saveBar;
+        if (bar != null)
+        {
+            bar.button.setEnabled(enabled);
+        }
+    }
+
+    private void setBarTitle(@StringRes final int title)
+    {
+        final ActionBar bar = getSupportActionBar();
+        if (bar != null)
+        {
+            bar.setTitle(title);
+        }
+    }
+
+    private void scrollToTop()
+    {
+        final ScrollView scroll = findViewById(R.id.air_screen_scroll);
+        if (scroll != null)
+        {
+            scroll.scrollTo(0, 0);
+        }
+    }
+
+    /** One paragraph that wraps instead of scrolling sideways, so a long name or topic stays in view. */
+    private static void wrap(final EditText edit)
+    {
+        edit.setHorizontallyScrolling(false);
+        edit.setMaxLines(FIELD_MAX_LINES);
+    }
+
+    // ---- the writes, on the worker: the old screen's calls and database writes ----
+
+    private static Outcome writeSelfName(final String groupId, final String name)
+    {
+        return call(groupId, null, "self name", num -> MainActivity.tox_group_self_set_name(num, name), null);
+    }
+
+    private static Outcome writeTopic(final String groupId, final String topic)
+    {
+        // Checks it, sets it and stores it as the old screen did: the database, the lists and the save.
+        if (!HelperGroup.save_group_title_if_changed(groupId, topic))
+        {
+            Log.i(TAG, "topic: not saved");
+            return Outcome.failed(null);
+        }
+        AirRepository.requestRefresh();
+        return Outcome.DONE;
+    }
+
+    private static Outcome writePassword(final String groupId, @Nullable final String password)
+    {
+        return call(groupId, AirErrorCode.Call.GROUP_FOUNDER_SET_PASSWORD, password == null ? "password removed" : "password",
+                    num -> HelperGroup.tox_group_founder_set_password__wrapper(num, password), null);
+    }
+
+    private static Outcome writePeerLimit(final String groupId, final int limit)
+    {
+        return call(groupId, AirErrorCode.Call.GROUP_FOUNDER_SET_PEER_LIMIT, "peer limit " + limit,
+                    num -> MainActivity.tox_group_founder_set_peer_limit(num, limit), null);
+    }
+
+    private static Outcome writePrivacy(final String groupId, final int privacy)
+    {
+        return call(groupId, AirErrorCode.Call.GROUP_FOUNDER_SET_PRIVACY_STATE, "privacy " + privacy,
+                    num -> HelperGroup.tox_group_founder_set_privacy_state__wrapper(num, privacy),
+                    () -> HelperGroup.update_group_in_db_privacy_state(groupId, privacy));
+    }
+
+    private static Outcome writeVoice(final String groupId, final int voice)
+    {
+        return call(groupId, AirErrorCode.Call.GROUP_FOUNDER_SET_VOICE_STATE, "voice " + voice,
+                    num -> MainActivity.tox_group_founder_set_voice_state(num, voice), null);
+    }
+
+    private static Outcome writeTopicLock(final String groupId, final int lock)
+    {
+        return call(groupId, AirErrorCode.Call.GROUP_FOUNDER_SET_TOPIC_LOCK, "topic lock " + lock,
+                    num -> HelperGroup.tox_group_founder_set_topic_lock__wrapper(num, lock), null);
+    }
+
+    /**
+     * One toxcore call on the group as toxcore has it now. When it goes through, {@code stored} writes what
+     * the profile keeps besides the save, and the save follows; when it fails, the code is the one iOS gives
+     * for the same failure ({@code code} null: a call iOS gives no code for here).
+     */
+    private static Outcome call(final String groupId, @Nullable final AirErrorCode.Call code, final String what,
+                                final ToxCall toxCall, @Nullable final Runnable stored)
+    {
+        final long num = groupNumber(groupId);
+        if (num < 0)
+        {
+            Log.i(TAG, what + ": the group is not in toxcore");
+            return Outcome.failed(code == null ? null : AirErrorCode.tox(code, AirErrorCode.TOX_GROUP_NOT_FOUND));
+        }
+        TrifaToxService.wakeup_tox_thread();
+        final int result = toxCall.run(num);
+        Log.i(TAG, what + ": result=" + result);
+        if (result < 0)
+        {
+            return Outcome.failed(code == null ? null : AirErrorCode.toxResult(code, result));
+        }
+        if (stored != null)
+        {
+            stored.run();
+        }
+        HelperGeneric.update_savedata_file_wrapper_async();
+        return Outcome.DONE;
+    }
+
+    private static long groupNumber(final String groupId)
+    {
+        final Long num = ask("number", () -> HelperGroup.tox_group_by_groupid__wrapper(groupId));
+        return num == null ? -1 : num;
     }
 }

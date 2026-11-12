@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Redesign stage 3b: files, photos and voice notes as entries of the transcript (E8); iOS wording where iOS has it -->
+    <string name="air_file_accept">قبول</string>
+    <string name="air_file_decline">رفض</string>
+    <string name="air_file_cancel">إلغاء</string>
+    <string name="air_file_retry_incoming">التنزيل مجددًا</string>
+    <string name="air_file_retry_outgoing">الإرسال مجددًا</string>
+    <string name="air_file_left_format">المتبقي %s</string>
+    <string name="air_file_paused">متوقف مؤقتًا</string>
+    <string name="air_file_failed_incoming">توقف التنزيل</string>
+    <string name="air_file_failed_outgoing">لم يُرسل</string>
+    <string name="air_file_waits_accept_format">بانتظار أن يقبله %s</string>
+    <string name="air_file_waits_online_format">سيُرسل عندما يتصل %s</string>
+    <string name="air_voice_listen">استماع</string>
+    <string name="air_voice_pause">إيقاف مؤقت</string>
+    <string name="air_voice_spoken">رسالة صوتية</string>
+    <string name="air_file_saved_format">حُفظ في %s</string>
+    <string name="air_file_saved_app_folder_format">حُفظ في مجلد التطبيق: %s</string>
+    <string name="air_file_save_failed">لم يُحفظ الملف. حاول مرة أخرى</string>
+    <string name="air_file_export_title">حفظ نسخة على الهاتف؟</string>
+    <string name="air_file_export_message">تُحفظ النسخة خارج Khandaq وهي غير مشفرة.</string>
+    <string name="air_file_export_action">حفظ</string>
+    <string name="air_file_saving">جارٍ حفظ الملف</string>
+    <string name="air_file_save">حفظ على الهاتف</string>
+    <string name="air_file_share">مشاركة</string>
+    <!-- Redesign stage 3b: the question before a file of theirs is declined, and a group file that waits for the group -->
+    <string name="air_file_decline_title">رفض الملف؟</string>
+    <string name="air_file_decline_message">لن يُنزَّل الملف على هذا الهاتف، وسيرى المرسل أنه لم يصل.</string>
+    <string name="air_file_waits_group">سيُرسل عندما تكون المجموعة متصلة</string>
+</resources>

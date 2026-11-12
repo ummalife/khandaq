@@ -76,6 +76,8 @@ public class Callstate
 
     static void reset_values()
     {
+        // KHANDAQ (redesign, E9): the one-to-one call that ends gets its entry while its times are here.
+        HelperCall.callEnds();
         Callstate.state = 0;
         audio_call = false;
         set_debug_text("VIDEO");

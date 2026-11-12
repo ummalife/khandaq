@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Battery (redesign, stage 5): asked once from below, after the first launch and never over it -->
+    <string name="air_battery_question">Let Khandaq work in the background?</string>
+    <string name="air_battery_consequence">To save battery, Android may pause Khandaq in the background, and new messages then come in later. In the list that opens, choose Khandaq and turn battery optimization off for it.</string>
+    <string name="air_battery_open">Open battery settings</string>
+
+    <!-- Move a profile (redesign, stage 5): the transfer dialogs of Settings as sheets from below -->
+    <string name="air_transfer_import_question">Replace this profile with one from a file?</string>
+    <string name="air_transfer_backup_verb">Make an encrypted backup</string>
+    <string name="air_transfer_plain_verb">Export the plain .tox file</string>
+    <string name="air_backup_choose_place">Choose where to save</string>
+    <string name="air_import_wait">Khandaq stops, puts the profile from the file in place of this one and opens again with it.</string>
+</resources>

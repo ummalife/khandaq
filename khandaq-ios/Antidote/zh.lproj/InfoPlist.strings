@@ -7,10 +7,16 @@
 */
 
 /* Camera usage alert description */
-"NSCameraUsageDescription" = "You can use video calls, send photos and videos, scan QR codes.";
+"NSCameraUsageDescription" = "你可以进行视频通话、发送照片和视频、扫描二维码。";
 
 /* Microphone usage alert description */
-"NSMicrophoneUsageDescription" = "You can use audio and video calls.";
+"NSMicrophoneUsageDescription" = "你可以进行语音和视频通话，录制语音消息和视频。";
 
 /* Photo library usage alert description */
-"NSPhotoLibraryUsageDescription" = "You can send photos and videos.";
+"NSPhotoLibraryUsageDescription" = "你可以发送照片和视频。";
+
+/* Face ID / Touch ID usage alert description */
+"NSFaceIDUsageDescription" = "你可以用 Face ID 或触控 ID 解锁 Khandaq，无需输入 PIN 码。";
+
+/* Location usage alert description */
+"NSLocationWhenInUseUsageDescription" = "你可以向联系人发送你的位置。";

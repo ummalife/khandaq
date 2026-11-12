@@ -9,8 +9,10 @@ nil makes the `khandaq://share` deep link a no-op.
 
 Fixing it needs the App Group created in the Apple Developer portal and enabled on both App IDs;
 adding the entitlement without that makes signing fail outright (verified: "Provisioning profile
-doesn't include the App Groups capability"). That is an owner action, so the gap is RECORDED here
-with an expiry rather than left to be rediscovered by the next audit — and any NEW mismatch fails.
+doesn't include the App Groups capability"). The gap was recorded below with an expiry until the
+owner did so; on 2026-11-12 the group was registered and enabled on org.khandaq.messenger and
+org.khandaq.messenger.shareextension, both entitlements declare it, and KNOWN_GAPS is empty again.
+Any mismatch fails.
 
     scripts/check-ios-app-groups.py
 """
@@ -26,17 +28,7 @@ IOS = ROOT / "khandaq-ios"
 
 # Известные пробелы: группа используется кодом, но не объявлена, и закрыть это может только владелец
 # в портале разработчика. Дата — чтобы пробел не стал вечным.
-KNOWN_GAPS = {
-    "group.org.khandaq.messenger": {
-        "why": ("App Group не заведён в портале Apple и не включён у обоих App ID. Добавление "
-                "entitlement без этого ломает подпись целиком (проверено сборкой), поэтому код "
-                "оставлен как есть: расширение «Поделиться» не работает, но релизы собираются. "
-                "Действие владельца: Developer portal -> Identifiers -> App Groups -> создать "
-                "group.org.khandaq.messenger и включить у org.khandaq.messenger и "
-                "org.khandaq.messenger.shareextension, затем вернуть entitlement обоим таргетам."),
-        "expires": "2027-02-08",
-    },
-}
+KNOWN_GAPS: dict[str, dict[str, str]] = {}
 
 
 def main() -> int:

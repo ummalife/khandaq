@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Redesign stage 5: a group member's own screen and the sheet of a member (GroupPeerInfoActivity, GroupMemberActions) -->
+    <string name="air_group_member_title">Group member</string>
+    <!-- Joined to the member's role and presence with air_group_member_status_format -->
+    <string name="air_group_member_muted">muted</string>
+    <!-- The sheet's way to the member's own screen, which shows their key in full and how this phone reaches them -->
+    <string name="air_group_member_details">Key and link</string>
+</resources>

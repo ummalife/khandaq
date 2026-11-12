@@ -137,7 +137,7 @@ public class MessageListHolder_file_outgoing_state_resume extends RecyclerView.V
         date_time.setText(long_date_time_format(m.sent_timestamp));
         // Media/file bubbles had only the near-invisible external date; show the in-bubble time like text messages.
         ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
-                HelperGeneric.format_chat_message_time(m, true), true);
+                AirTranscript.timeText(itemView.getContext(), m, true), true);
 
         // KHANDAQ #23: actively transferring -> single check (sent, bytes in flight).
         ChatBubbleUiHelper.bind_outgoing_file_status(m_status, MessageStatusHelper.OutgoingStatus.SENT);
@@ -258,7 +258,7 @@ public class MessageListHolder_file_outgoing_state_resume extends RecyclerView.V
 
         if (is_image)
         {
-            ft_preview_image.setImageResource(R.drawable.round_loading_animation);
+            ft_preview_image.setImageDrawable(null); // KHANDAQ (redesign, stage 3b): the still plate, no spinner
 
             ft_preview_image.setOnTouchListener(new View.OnTouchListener()
             {
@@ -316,7 +316,7 @@ public class MessageListHolder_file_outgoing_state_resume extends RecyclerView.V
                             diskCacheStrategy(DiskCacheStrategy.RESOURCE).
                             skipMemoryCache(false).
                             priority(Priority.LOW).
-                            placeholder(R.drawable.round_loading_animation).
+                            placeholder(R.drawable.air_file_photo_ground).
                             into(ft_preview_image);
                 }
                 catch (Exception e)
@@ -341,7 +341,7 @@ public class MessageListHolder_file_outgoing_state_resume extends RecyclerView.V
                             diskCacheStrategy(DiskCacheStrategy.RESOURCE).
                             skipMemoryCache(false).
                             priority(Priority.LOW).
-                            placeholder(R.drawable.round_loading_animation).
+                            placeholder(R.drawable.air_file_photo_ground).
                             into(ft_preview_image);
                 }
                 catch (Exception e)
@@ -364,7 +364,7 @@ public class MessageListHolder_file_outgoing_state_resume extends RecyclerView.V
                     diskCacheStrategy(DiskCacheStrategy.NONE).
                     skipMemoryCache(false).
                     priority(Priority.LOW).
-                    placeholder(R.drawable.round_loading_animation).
+                    placeholder(R.drawable.air_file_photo_ground).
                     into(ft_preview_image);
         }
 

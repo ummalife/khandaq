@@ -3,471 +3,587 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Khandaq Messenger — Decentralized Encrypted Chat on Tox</title>
-  <meta name="description" content="Download Khandaq Messenger for Android, iOS, Windows, macOS, and Linux. Open-source, peer-to-peer messaging with end-to-end encryption. No phone number required.">
-  <meta name="keywords" content="Khandaq, Tox messenger, encrypted chat, decentralized messenger, open source, TestFlight, Google Play, privacy">
-  <meta name="author" content="Khandaq">
+  <title>Khandaq Messenger: private chat on Tox, no phone number</title>
+  <meta name="description" content="Open-source messenger for Android, iPhone, Windows, macOS and Linux. End-to-end encrypted over the Tox network. No phone number, no account, no message server.">
   <link rel="canonical" href="https://khandaq.org/">
+  <link rel="alternate" hreflang="en" href="https://khandaq.org/">
+  <link rel="alternate" hreflang="ru" href="https://khandaq.org/ru/">
+  <link rel="alternate" hreflang="x-default" href="https://khandaq.org/">
   <meta name="robots" content="index, follow">
 
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://khandaq.org/">
-  <meta property="og:title" content="Khandaq Messenger — Decentralized Encrypted Chat">
-  <meta property="og:description" content="Open-source Tox clients for every platform. No central message server. End-to-end encrypted.">
+  <meta property="og:title" content="Khandaq Messenger: no phone number, no message server">
+  <meta property="og:description" content="Messages go end-to-end encrypted from your device straight to the other person’s, over the open Tox network. Android, iPhone, Windows, macOS, Linux.">
   <meta property="og:image" content="https://khandaq.org/assets/pwa-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="The Khandaq app icon">
   <meta property="og:site_name" content="Khandaq Messenger">
-
-  <meta name="twitter:card" content="summary_large_image">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="ru_RU">
+  <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Khandaq Messenger">
-  <meta name="twitter:description" content="Decentralized encrypted messenger built on the Tox protocol. Download for all platforms.">
+  <meta name="twitter:description" content="An open-source messenger on the Tox network: no phone number, no message server.">
   <meta name="twitter:image" content="https://khandaq.org/assets/pwa-512.png">
 
-  <meta name="theme-color" content="#0b0f0e">
-  <link rel="icon" href="assets/favicon-32.png" sizes="32x32">
-  <link rel="icon" href="assets/favicon-16.png" sizes="16x16">
-  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-
-  <!-- Self-hosted (scripts/vendor-webfonts.py). The site used to fetch these from Google, which
-       handed every visitor's IP to a third party just to render text and forced the CSP to allow a
-       foreign origin for style-src and font-src. Both are now 'self'. -->
-  <link href="/assets/fonts/fonts.css" rel="stylesheet">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/assets/favicon-48.png" sizes="48x48" type="image/png">
+  <link rel="icon" href="/assets/favicon-16.png" sizes="16x16" type="image/png">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <link rel="preload" href="/assets/fonts/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/assets/fonts/ibm-plex-sans-600.woff2" as="font" type="font/woff2" crossorigin>
   <script>try{var t=localStorage.getItem('kq-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="/assets/tokens.css?v=9109f5fc5c">
+  <link rel="stylesheet" href="/style.css?v=ed6305eeb7">
+  <script src="/assets/site.js?v=d12f990d52" defer></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
+  <a class="skip" href="#main">Skip to content</a>
 
-  <header class="site-header">
-    <div class="container header-inner">
+  <svg class="visually-hidden" aria-hidden="true" focusable="false">
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-double" viewBox="0 0 24 24"><path d="M2.5 12.5L7 17l9.5-9.5"/><path d="M12.6 16.2l.8.8 8.6-9"/></symbol>
+  </svg>
+
+  <header class="site-head">
+    <div class="wrap">
       <a class="brand" href="/">
-        <img src="assets/logo.svg" alt="" width="36" height="36">
+        <img src="/assets/app-icon-64.png" srcset="/assets/app-icon-64.png 2x, /assets/app-icon-96.png 3x" width="32" height="32" alt="">
         <span>Khandaq</span>
       </a>
-      <nav class="nav" aria-label="Primary">
-        <a href="#features">Features</a>
-        <a href="#download">Download</a>
-        <a href="/changelog">Changelog</a>
-        <a href="#start">Get started</a>
-        <a href="#open-source">Source</a>
-        <a class="nav-cta" href="#download">Get the app</a>
-        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch theme">☾</button>
+      <nav class="nav" aria-label="Main">
+        <a class="nav-wide" href="#how">How it works</a>
+        <a class="nav-mid" href="#download">Download</a>
+        <a class="nav-mid" href="/changelog.html">Changelog</a>
+        <a class="nav-wide" href="#source">Source</a>
+        <a class="nav-lang" href="/ru/" hreflang="ru" lang="ru">Русский</a>
       </nav>
     </div>
   </header>
 
   <main id="main">
-    <section class="hero container">
-      <div class="hero-text">
-        <p class="eyebrow">Public beta · Tox network</p>
-        <h1>Private messaging without a central server</h1>
-        <p class="lead">
-          Khandaq Messenger is an open-source client for the <a href="https://tox.chat">Tox</a> protocol.
-          Messages are end-to-end encrypted and routed peer-to-peer. No phone number, no account database, no message store on our servers.
-        </p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="#download">Download for your device</a>
-          <a class="btn btn-secondary" href="https://github.com/ummalife/khandaq" rel="noopener noreferrer">View on GitHub</a>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="wrap">
+        <div class="hero-text">
+          <h1 class="hero-title" id="hero-title">A messenger with no phone number and no servers</h1>
+          <p class="hero-lead">There is no Khandaq server between you: messages go end-to-end encrypted from your device straight to the other person’s, over the open Tox network. If they are offline, the message waits on your device and leaves by itself when they come online.</p>
+          <div class="hero-actions">
+            <a class="btn btn-ink" href="#download" data-hero-cta>Download Khandaq</a>
+            <a class="btn-quiet" href="#how">How it works</a>
+          </div>
+          <p class="hero-facts" data-hero-facts>Free and open source, for Android, iPhone, Windows, macOS and Linux.</p>
         </div>
-        <div class="hero-badges">
-          <span class="badge">Android · iOS · Windows · macOS · Linux</span>
-          <span class="badge">Open source</span>
-          <span class="badge">E2E encrypted</span>
-        </div>
-      </div>
-      <div class="hero-visual" aria-hidden="true">
-        <div class="hero-logo-wrap">
-          <img src="assets/logo.svg" alt="" class="hero-logo">
-        </div>
+
+        <figure class="air" data-air>
+          <div class="air-window" aria-hidden="true">
+            <div class="air-list">
+              <div class="air-swap is-cover" data-swap="reached">
+                <div class="is-before">
+                  <p class="kq-sec-head" data-k="live">Online now <b>2</b></p>
+                  <div class="kq-row" data-k="yusuf"><span class="kq-tile tone-1">YK</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Yusuf Karimov</span><span class="kq-reach is-live">online</span></span><span class="kq-row-last">And the stove, if yours is in for repair</span></span></div>
+                  <div class="kq-row" data-k="omar"><span class="kq-tile tone-2">OK</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Omar Khasanov</span><span class="kq-reach is-live">online, relay</span></span><span class="kq-row-last">Voice message, 0:42</span></span></div>
+                  <p class="kq-sec-head" data-k="away">Offline <b>2</b></p>
+                  <div class="kq-row is-current" data-k="amina"><span class="kq-tile tone-3">AS</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Amina Safina</span><span class="kq-reach">25 min ago</span></span><span class="kq-row-last is-wait">2 in transit</span></span></div>
+                  <div class="kq-row" data-k="khadija"><span class="kq-tile tone-4">KY</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Khadija Yunusova</span><span class="kq-reach">3 d ago</span></span><span class="kq-row-last">no messages yet</span></span></div>
+                </div>
+                <div class="is-after">
+                  <p class="kq-sec-head" data-k="live">Online now <b>3</b></p>
+                  <div class="kq-row" data-k="yusuf"><span class="kq-tile tone-1">YK</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Yusuf Karimov</span><span class="kq-reach is-live">online</span></span><span class="kq-row-last">And the stove, if yours is in for repair</span></span></div>
+                  <div class="kq-row" data-k="omar"><span class="kq-tile tone-2">OK</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Omar Khasanov</span><span class="kq-reach is-live">online, relay</span></span><span class="kq-row-last">Voice message, 0:42</span></span></div>
+                  <div class="kq-row is-current" data-k="amina"><span class="kq-tile tone-3">AS</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Amina Safina</span><span class="kq-reach is-live">online</span></span><span class="kq-row-last">And remind me how much water to take</span></span></div>
+                  <p class="kq-sec-head" data-k="away">Offline <b>1</b></p>
+                  <div class="kq-row" data-k="khadija"><span class="kq-tile tone-4">KY</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Khadija Yunusova</span><span class="kq-reach">3 d ago</span></span><span class="kq-row-last">no messages yet</span></span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="air-chat">
+              <div class="air-chat-head">
+                <span class="kq-tile tone-3">AS</span>
+                <span class="air-chat-who">
+                  <b>Amina Safina</b>
+                  <span class="air-swap" data-swap="reached">
+                    <span class="kq-hint is-before"><svg class="kq-lm" viewBox="0 0 30 10"><circle cx="4" cy="5" r="3"/><path class="gap" d="M10 5h10"/><circle class="far" cx="26" cy="5" r="3"/></svg>offline for 25 minutes</span>
+                    <span class="kq-hint is-after"><svg class="kq-lm is-live" viewBox="0 0 30 10"><circle cx="4" cy="5" r="3"/><path d="M7 5h16"/><circle cx="26" cy="5" r="3"/></svg>online, direct</span>
+                  </span>
+                </span>
+              </div>
+
+              <div class="air-chat-body">
+                <div class="air-swap is-cover" data-swap="delivered">
+                  <div class="is-before">
+                    <div class="kq-log">
+                      <p class="kq-day" data-k="day1">Yesterday</p>
+                      <div class="kq-entry" data-k="m1"><span class="kq-entry-time">21:03</span><span><span class="kq-entry-who tone-3">Amina</span><span class="kq-entry-text">I will send the packing list tonight</span></span><span></span></div>
+                      <div class="kq-entry" data-k="m2"><span class="kq-entry-time">21:05</span><span><span class="kq-entry-who">You</span><span class="kq-entry-text">Fine, thanks!</span></span><span class="kq-st is-done"><svg class="ic st-clock"><use href="#i-clock"/></svg><svg class="ic st-check"><use href="#i-check"/></svg><svg class="ic st-double"><use href="#i-double"/></svg></span></div>
+                    </div>
+                    <div class="kq-queue">
+                      <span class="kq-queue-ground"></span>
+                      <div class="kq-queue-head"><b>In transit: 2 messages</b><span>Waiting for Amina. Her phone will get a wake signal without your text and pick them up itself.</span></div>
+                      <div class="kq-entry" data-k="m3"><span class="kq-entry-time">12:30</span><span class="kq-entry-text">Amina, is the list still on? I want to stop by the shop after work</span><span class="kq-st is-wait"><svg class="ic st-clock"><use href="#i-clock"/></svg><svg class="ic st-check"><use href="#i-check"/></svg><svg class="ic st-double"><use href="#i-double"/></svg></span></div>
+                      <div class="kq-entry" data-k="m4"><span class="kq-entry-time">12:31</span><span class="kq-entry-text">And remind me how much water to take</span><span class="kq-st is-wait"><svg class="ic st-clock"><use href="#i-clock"/></svg><svg class="ic st-check"><use href="#i-check"/></svg><svg class="ic st-double"><use href="#i-double"/></svg></span></div>
+                    </div>
+                  </div>
+                  <div class="is-after">
+                    <div class="kq-log">
+                      <p class="kq-day" data-k="day1">Yesterday</p>
+                      <div class="kq-entry" data-k="m1"><span class="kq-entry-time">21:03</span><span><span class="kq-entry-who tone-3">Amina</span><span class="kq-entry-text">I will send the packing list tonight</span></span><span></span></div>
+                      <div class="kq-entry" data-k="m2"><span class="kq-entry-time">21:05</span><span><span class="kq-entry-who">You</span><span class="kq-entry-text">Fine, thanks!</span></span><span class="kq-st is-done"><svg class="ic st-clock"><use href="#i-clock"/></svg><svg class="ic st-check"><use href="#i-check"/></svg><svg class="ic st-double"><use href="#i-double"/></svg></span></div>
+                      <p class="kq-day">Today</p>
+                      <div class="kq-entry" data-k="m3"><span class="kq-entry-time">12:30</span><span class="kq-entry-text">Amina, is the list still on? I want to stop by the shop after work</span><span class="kq-st is-done"><svg class="ic st-clock"><use href="#i-clock"/></svg><svg class="ic st-check"><use href="#i-check"/></svg><svg class="ic st-double"><use href="#i-double"/></svg></span></div>
+                      <div class="kq-entry" data-k="m4"><span class="kq-entry-time">12:31</span><span class="kq-entry-text">And remind me how much water to take</span><span class="kq-st is-done"><svg class="ic st-clock"><use href="#i-clock"/></svg><svg class="ic st-check"><use href="#i-check"/></svg><svg class="ic st-double"><use href="#i-double"/></svg></span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="air-composer">
+                <div class="air-compose"><span>Message</span><span class="air-send">Send</span></div>
+                <div class="air-swap" data-swap="reached">
+                  <span class="kq-hint is-before"><span class="kq-dot is-wait"></span>Will wait in transit: Amina is offline. It leaves by itself once there is a link</span>
+                  <span class="kq-hint is-after"><span class="kq-dot is-live"></span>Leaves at once: Amina is online</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>An example chat, drawn with the app’s own parts; the people in it are made up. While Amina is offline, two messages wait in the In transit tray on your device. When she comes online, they leave by themselves, one after another, and get the delivered mark.</figcaption>
+        </figure>
       </div>
     </section>
 
-    <section id="features" class="section container">
-      <h2 class="section-title">Why Khandaq</h2>
-      <p class="section-lead">A private messenger with no accounts and no message servers. Group chats, replies, edits, reactions, voice messages and calls on iPhone and Android, plus desktop apps — all on the open Tox network.</p>
-      <div class="feature-grid">
-        <article class="feature-card">
-          <h3>No phone number</h3>
-          <p>Sign up with a Tox ID only. Share your ID as text or QR code to add contacts.</p>
-        </article>
-        <article class="feature-card">
-          <h3>End-to-end encryption</h3>
-          <p>Message content is encrypted by the Tox protocol. Khandaq servers never see your chats.</p>
-        </article>
-        <article class="feature-card">
-          <h3>Truly decentralized</h3>
-          <p>No central message server. Clients connect to the public Tox DHT, made up of nodes run by volunteers — we operate none of them.</p>
-        </article>
-        <article class="feature-card">
-          <h3>Transparent &amp; auditable</h3>
-          <p>Full source code on GitHub. Public endpoints, checksums, and security policy are documented in the repo.</p>
-        </article>
-      </div>
-    </section>
-
-    <section id="download" class="section container">
-      <h2 class="section-title">Download</h2>
-      <p class="section-lead">Pick your platform. Verify downloads with SHA-256 checksums before installing.</p>
-
-      <div class="checksum-box">
-        <strong>Verify integrity:</strong>
-        <a id="sha-github" href="#">SHA256SUMS.txt on GitHub</a> or
-        <a id="sha-mirror" href="/downloads/SHA256SUMS.txt">mirror on khandaq.org</a>.
-        <br>
-        <code>shasum -a 256 -c SHA256SUMS.txt</code>
-      </div>
-
-      <div class="download-grid">
-        <article class="card">
-          <div class="card-icon android" aria-hidden="true"></div>
-          <h3>Android</h3>
-          <p>Install from Google Play. Android 8+. Package <code>com.khandaq.messenger</code>.</p>
-          <a class="btn btn-primary" href="https://play.google.com/store/apps/details?id=com.khandaq.messenger" target="_blank" rel="noopener">Google Play</a>
-          <span class="meta">v0.2.45 · GPL-3.0</span>
-        </article>
-
-        <article class="card">
-          <div class="card-icon ios" aria-hidden="true"></div>
-          <h3>iOS</h3>
-          <p>Install via Apple TestFlight. Requires iOS 16+. Not distributed as a public IPA.</p>
-          <a class="btn btn-primary" href="https://testflight.apple.com/join/4ppS8ZN5" rel="noopener noreferrer">Open TestFlight</a>
-          <span class="meta">1.4.33 · TestFlight build 142992 · MPL-2.0</span>
-        </article>
-
-        <article class="card">
-          <div class="card-icon windows" aria-hidden="true"></div>
-          <h3>Windows</h3>
-          <p>x64 portable build for Windows 10 and 11. Unzip and run — no installer needed.</p>
-          <a class="btn btn-primary dl-windows" href="#">Download .zip</a>
-          <span class="meta">v0.2.12 release · desktop app 1.17.6 · security-patched libs · GPL-3.0</span>
-        </article>
-
-        <article class="card">
-          <div class="card-icon macos" aria-hidden="true"></div>
-          <h3>macOS</h3>
-          <p><code>khandaq.app</code> in a zip archive. Apple Silicon and Intel builds in one bundle.</p>
-          <a class="btn btn-primary dl-macos" href="#">Download .zip</a>
-          <span class="meta">v0.2.12 release · desktop app 1.17.6 · GPL-3.0</span>
-        </article>
-
-        <article class="card">
-          <div class="card-icon linux" aria-hidden="true"></div>
-          <h3>Linux</h3>
-          <p>Debian/Ubuntu: <code>.deb</code> package. Other distros: portable tarball with bundled libraries.</p>
-          <a class="btn btn-primary dl-linux-deb" href="#">Download .deb</a>
-          <a class="btn btn-secondary dl-linux" href="#" class="tight-top">Portable .tar.gz</a>
-          <span class="meta">v0.2.12 release · desktop app 1.17.6 · amd64 · GPL-3.0</span>
-        </article>
-      </div>
-
-      <p class="section-lead" class="fine-print">
-        Primary hosting: <a href="https://github.com/ummalife/khandaq/releases/latest">GitHub Releases</a>.
-        Direct mirror: <a href="/downloads/">khandaq.org/downloads/</a>.
-      </p>
-    </section>
-
-    <section id="start" class="section container">
-      <h2 class="section-title">Get started in three steps</h2>
-      <div class="split-grid">
-        <div class="panel">
-          <ol>
-            <li><strong>Install</strong> the client for your platform and create a profile. Write down your password — it cannot be recovered.</li>
-            <li><strong>Share your Tox ID</strong> with someone you trust (copy from profile or show QR).</li>
-            <li><strong>Add a contact</strong> by ID or QR, then send a test message.</li>
-          </ol>
+    <section class="band band-surface" id="how" aria-labelledby="how-title">
+      <div class="wrap">
+        <div class="band-head" id="features">
+          <h2 class="title" id="how-title">How it works without a server</h2>
+          <p class="lead">Where other messengers have a phone number and a server, Khandaq has an ID and a path between two devices.</p>
         </div>
-        <div class="panel">
-          <h3>Recent beta improvements</h3>
-          <p class="lead-sub">Highlights from recent builds — see the <a href="/changelog">full changelog →</a></p>
-          <ul class="highlights">
-            <li><strong>A relayed message cannot borrow an absent person's name.</strong> When you join a group and other members send you the history you missed, a message is now shown as relayed content of unknown authorship unless its author can actually be vouched for. Text and files, both platforms.</li>
-            <li><strong>Each contact gets its own key to wake your phone, and you can revoke one.</strong> Knowing your notification address used to be enough. Wake requests are now signed by the device that sends them, and your token no longer travels in the web address where servers write it down.</li>
-            <li><strong>Fewer permissions, and a higher floor.</strong> Android drops three permissions the app never used and bounds two more to the versions that need them. Android 8 is now the minimum — below that the app had depended on behaviour the system did not provide.</li>
-            <li><strong>Desktop downloads are signed.</strong> Every download has a detached signature beside it, and the key that made it lives in the project's git repository rather than on this web server — so the file and the means of checking it arrive by different routes.</li>
-            <li><strong>Earlier builds.</strong> Cross-platform 1:1 video calls between Android and iPhone; edit sent messages; reactions, delete-for-everyone and swipe-to-reply on photos, videos, voice and files; voice notes fixed on older iPhones (TestFlight build 142980).</li>
+
+        <div class="chapters">
+          <article class="chapter" aria-labelledby="ch-id">
+            <div class="chapter-text">
+              <h3 id="ch-id">An ID instead of a phone number</h3>
+              <p>Nobody asks for your number, email or name. On first launch the app makes a key pair on your device; the public half is the first part of your ID, and the secret half never leaves the device. You give the ID to the people you want to hear from, as text or as a QR code.</p>
+              <figure class="id">
+                <dl class="id-parts">
+                  <div class="id-part">
+                    <dt><span>F610</span> <span>617C</span> <span>CC60</span> <span>B3AA</span> <span>6703</span> <span>9463</span> <span>B622</span> <span>30D6</span> <span>717F</span> <span>C3A1</span> <span>3586</span> <span>2473</span> <span>5A49</span> <span>5F21</span> <span>C365</span> <span>CD47</span></dt>
+                    <dd><b>Key</b>, 64 characters. People compare it to be sure it is really you.</dd>
+                  </div>
+                  <div class="id-part">
+                    <dt><span>B209</span> <span>C87B</span></dt>
+                    <dd><b>Anti-spam</b>, 8 characters. Change them, and your old ID stops accepting new requests.</dd>
+                  </div>
+                  <div class="id-part">
+                    <dt><span>4F21</span></dt>
+                    <dd><b>Checksum</b>, 4 characters. It shows a typo.</dd>
+                  </div>
+                </dl>
+                <div class="id-ruler" aria-hidden="true" data-ruler><i></i><i></i><i></i></div>
+                <figcaption class="id-note">An example ID. Its last four characters really are its checksum, worked out from the first 72.</figcaption>
+              </figure>
+              <ol class="steps">
+                <li>Install Khandaq and create a profile. A password is optional: without one, the profile simply opens on this device. If you set one, write it down: nobody can reset it, us included.</li>
+                <li>Send your ID to someone you trust, or let them scan your QR code.</li>
+                <li>They paste it into the line at the top and send a request. Once you accept, you are contacts.</li>
+              </ol>
+            </div>
+            <div class="shots" role="region" aria-labelledby="ch-id" tabindex="0">
+              <figure class="shot">
+                <picture>
+                  <source type="image/webp" srcset="/assets/shots/search-id-en-360.webp 360w, /assets/shots/search-id-en-540.webp 540w, /assets/shots/search-id-en-720.webp 720w" sizes="(max-width: 760px) 240px, 300px">
+                  <img src="/assets/shots/search-id-en-720.jpg" width="720" height="1040" loading="lazy" decoding="async" alt="Search on iPhone: no match for zzqx, a note that a whole ID is 76 characters, and a button that shows all chats again.">
+                </picture>
+                <figcaption>One line at the top searches your chats and takes an ID. With no match, it reminds you that a whole ID is 76 characters.</figcaption>
+              </figure>
+              <figure class="shot">
+                <picture>
+                  <source type="image/webp" srcset="/assets/shots/favorites-en-360.webp 360w, /assets/shots/favorites-en-540.webp 540w, /assets/shots/favorites-en-720.webp 720w" sizes="(max-width: 760px) 240px, 300px">
+                  <img src="/assets/shots/favorites-en-720.jpg" width="720" height="1040" loading="lazy" decoding="async" alt="The chat list on iPhone with the Favorites filter on: Amina and the Hiking club are online now, and Saved Messages sits below, just for you.">
+                </picture>
+                <figcaption>Filters over the list: Requests, In transit, Favorites. Below, under Just for you, is Saved Messages.</figcaption>
+              </figure>
+            </div>
+          </article>
+
+          <article class="chapter is-flipped" aria-labelledby="ch-path">
+            <div class="chapter-text">
+              <h3 id="ch-path">A path instead of a server</h3>
+              <p>No Khandaq server receives or stores your messages. Devices find each other through the public Tox network, which volunteers run, and then talk directly. The app shows which of three paths a message has right now.</p>
+              <ul class="paths">
+                <li class="path is-live">
+                  <svg class="kq-lm is-live" viewBox="0 0 30 10" aria-hidden="true"><circle cx="4" cy="5" r="3"/><path d="M7 5h16"/><circle cx="26" cy="5" r="3"/></svg>
+                  <b>Direct</b>
+                  <p>Your device and theirs, with nothing in between.</p>
+                </li>
+                <li class="path is-live">
+                  <svg class="kq-lm is-relay" viewBox="0 0 30 10" aria-hidden="true"><circle cx="4" cy="5" r="3"/><path d="M7 5h5M18 5h5"/><rect x="12.5" y="2.5" width="5" height="5" rx="1"/><circle cx="26" cy="5" r="3"/></svg>
+                  <b>Via a relay</b>
+                  <p>When a direct link cannot be made, a volunteer’s node passes the encrypted traffic along. It can see that two devices talk, not what they say.</p>
+                </li>
+                <li class="path is-off">
+                  <svg class="kq-lm" viewBox="0 0 30 10" aria-hidden="true"><circle cx="4" cy="5" r="3"/><path class="gap" d="M10 5h10"/><circle class="far" cx="26" cy="5" r="3"/></svg>
+                  <b>Offline</b>
+                  <p>No path yet. Messages wait in transit on your device and leave by themselves when the person comes online.</p>
+                </li>
+              </ul>
+              <p>To reach a phone that is asleep, Khandaq runs one small service, the wake relay at push.khandaq.org. It sends a signal with no message text in it; the phone wakes up and fetches the message from the sender. The <a href="/privacy.html#push">privacy policy</a> lists exactly what it sees.</p>
+            </div>
+            <div class="shots" role="region" aria-labelledby="ch-path" tabindex="0">
+              <figure class="shot">
+                <picture>
+                  <source type="image/webp" srcset="/assets/shots/transit-light-en-360.webp 360w, /assets/shots/transit-light-en-540.webp 540w, /assets/shots/transit-light-en-720.webp 720w" sizes="(max-width: 760px) 240px, 300px">
+                  <img src="/assets/shots/transit-light-en-720.jpg" width="720" height="1040" loading="lazy" decoding="async" alt="The top of the chat list on iPhone: your own link reads online, via a relay, and the In transit filter shows four messages waiting for Yusuf, who is offline.">
+                </picture>
+                <figcaption>Your own link, at the top: online, via a relay. Yusuf is offline, so four messages wait in transit.</figcaption>
+              </figure>
+              <figure class="shot">
+                <picture>
+                  <source type="image/webp" srcset="/assets/shots/transit-dark-en-360.webp 360w, /assets/shots/transit-dark-en-540.webp 540w, /assets/shots/transit-dark-en-720.webp 720w" sizes="(max-width: 760px) 240px, 300px">
+                  <img src="/assets/shots/transit-dark-en-720.jpg" width="720" height="1040" loading="lazy" decoding="async" alt="The same chat list in the dark theme: the In transit filter with everything delivered.">
+                </picture>
+                <figcaption>In transit, dark theme: everything delivered.</figcaption>
+              </figure>
+            </div>
+          </article>
+
+          <article class="chapter" aria-labelledby="ch-device">
+            <div class="chapter-text">
+              <h3 id="ch-device">Your profile lives on your device</h3>
+              <p>Your profile, contacts, history and received files are kept in a database on your device, and you can lock it with a password. There is no copy anywhere else.</p>
+              <p>That has two sides. A forgotten password cannot be reset by anyone. And moving to a new phone means exporting the profile as a file and importing it there: the ID and contacts come along, the chat history stays behind. A profile runs on one device at a time.</p>
+            </div>
+            <div class="shots" role="region" aria-labelledby="ch-device" tabindex="0">
+              <figure class="shot">
+                <picture>
+                  <source type="image/webp" srcset="/assets/shots/settings-light-en-360.webp 360w, /assets/shots/settings-light-en-540.webp 540w, /assets/shots/settings-light-en-720.webp 720w" sizes="(max-width: 760px) 240px, 300px">
+                  <img src="/assets/shots/settings-light-en-720.jpg" width="720" height="1040" loading="lazy" decoding="async" alt="Profile transfer in the iPhone settings: export and import of the profile, and a note that the file holds your ID and contacts while the chat history stays on the device.">
+                </picture>
+                <figcaption>Profile transfer in Settings: export and import.</figcaption>
+              </figure>
+              <figure class="shot">
+                <picture>
+                  <source type="image/webp" srcset="/assets/shots/settings-dark-en-360.webp 360w, /assets/shots/settings-dark-en-540.webp 540w, /assets/shots/settings-dark-en-720.webp 720w" sizes="(max-width: 760px) 240px, 300px">
+                  <img src="/assets/shots/settings-dark-en-720.jpg" width="720" height="1040" loading="lazy" decoding="async" alt="Appearance in the iPhone settings, in the dark theme: the theme matches the system or is set to light or dark, then the language and group system messages.">
+                </picture>
+                <figcaption>The dark theme follows the system or your choice.</figcaption>
+              </figure>
+            </div>
+          </article>
+        </div>
+        <p class="shots-note">All six screens are from the iPhone app; the people in them are made up.</p>
+      </div>
+    </section>
+
+    <section class="band" id="download" aria-labelledby="download-title">
+      <div class="wrap dl">
+        <div class="band-head" id="start">
+          <h2 class="title" id="download-title">Download Khandaq</h2>
+          <p class="lead">Free on every platform. Phones install it from Google Play or TestFlight; computers download it from GitHub, with a signature you can check.</p>
+          <p class="small">Every desktop file is also on the <a href="/downloads/">khandaq.org mirror</a>.</p>
+        </div>
+        <div>
+          <ul class="dl-list" data-dl-list>
+            <li class="dl-row" id="dl-android" data-platform="android" data-cta="Install from Google Play" data-note="Android 8 or later, from Google Play. The other platforms are below.">
+              <div class="dl-info">
+                <p class="dl-yours" hidden>Your device</p>
+                <h3>Android</h3>
+                <p>From Google Play, which also keeps it up to date. Android 8+. Package <code>com.khandaq.messenger</code>.</p>
+                <span class="meta">v0.2.46, GPL-3.0</span>
+              </div>
+              <div class="dl-actions">
+                <a class="btn btn-ink" href="https://play.google.com/store/apps/details?id=com.khandaq.messenger" data-primary>Open Google Play</a>
+              </div>
+            </li>
+            <li class="dl-row" id="dl-ios" data-platform="ios" data-cta="Install with TestFlight" data-note="A public beta on TestFlight: install TestFlight first, then open the invitation.">
+              <div class="dl-info">
+                <p class="dl-yours" hidden>Your device</p>
+                <h3>iPhone and iPad</h3>
+                <p>A public beta through Apple TestFlight. Install TestFlight from the App Store, then open the invitation on your phone. iOS 15 or later.</p>
+                <span class="meta">1.4.33, TestFlight build 142993, MPL-2.0</span>
+              </div>
+              <div class="dl-actions">
+                <a class="btn btn-ink" href="https://testflight.apple.com/join/4ppS8ZN5" data-primary>Open TestFlight</a>
+              </div>
+            </li>
+            <li class="dl-row" id="dl-windows" data-platform="windows" data-cta="Download for Windows" data-note="Windows 10 and 11, x64. The file is not Authenticode-signed yet: check its signature as shown below.">
+              <div class="dl-info">
+                <p class="dl-yours" hidden>Your device</p>
+                <h3>Windows</h3>
+                <p>A portable build for Windows 10 and 11, x64. Unzip it and run <code>Khandaq.exe</code>; no installer needed.</p>
+                <span class="meta">v0.2.12 release on GitHub, GPL-3.0</span>
+              </div>
+              <div class="dl-actions">
+                <a class="btn btn-ink" href="/downloads/khandaq-windows-x86_64.zip" data-asset="khandaq-windows-x86_64.zip" data-primary>Download .zip</a>
+                <a class="btn-quiet" href="/downloads/khandaq-windows-x86_64.zip">Mirror on khandaq.org</a>
+              </div>
+            </li>
+            <li class="dl-row" id="dl-macos" data-platform="macos" data-cta="Download for macOS" data-note="Apple Silicon and Intel in one app. Not notarized yet: the first time, open it from the context menu.">
+              <div class="dl-info">
+                <p class="dl-yours" hidden>Your device</p>
+                <h3>macOS</h3>
+                <p><code>khandaq.app</code> in a zip archive, Apple Silicon and Intel in one bundle.</p>
+                <span class="meta">v0.2.12 release on GitHub, GPL-3.0</span>
+              </div>
+              <div class="dl-actions">
+                <a class="btn btn-ink" href="/downloads/khandaq-macos.zip" data-asset="khandaq-macos.zip" data-primary>Download .zip</a>
+                <a class="btn-quiet" href="/downloads/khandaq-macos.zip">Mirror on khandaq.org</a>
+              </div>
+            </li>
+            <li class="dl-row" id="dl-linux" data-platform="linux" data-cta="Download for Linux" data-cta-href="#dl-linux" data-note="A .deb package for Debian and Ubuntu, a portable archive for the other distributions.">
+              <div class="dl-info">
+                <p class="dl-yours" hidden>Your device</p>
+                <h3>Linux</h3>
+                <p>Debian and Ubuntu: a <code>.deb</code> package. Other distributions: a portable archive with its own libraries. amd64.</p>
+                <span class="meta">v0.2.12 release on GitHub, GPL-3.0</span>
+              </div>
+              <div class="dl-actions">
+                <a class="btn btn-ink" href="/downloads/khandaq-messenger_amd64.deb" data-asset="khandaq-messenger_amd64.deb" data-primary>Download .deb</a>
+                <a class="btn btn-plain" href="/downloads/khandaq-linux-x86_64-portable.tar.gz" data-asset="khandaq-linux-x86_64-portable.tar.gz">Portable .tar.gz</a>
+                <a class="btn-quiet" href="/downloads/">Mirror on khandaq.org</a>
+              </div>
+            </li>
           </ul>
-        </div>
-      </div>
-    </section>
 
-    <section class="section container">
-      <h2 class="section-title">Installation notes</h2>
-      <details class="install">
-        <summary>Android — Google Play</summary>
-        <ol>
-          <li>Open <a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger" target="_blank" rel="noopener">Khandaq on Google Play</a>.</li>
-          <li>Tap Install. Updates arrive automatically through Google Play.</li>
-          <li><strong>Coming from an old sideloaded/debug build?</strong> Export your Tox profile → uninstall the old app → install from Google Play → import the profile (the signing key is different).</li>
-        </ol>
-      </details>
-      <details class="install">
-        <summary>Verify a download before you run it</summary>
-        <p class="lead-sub">Every desktop file is signed with a key published in the source repository — a different place from this website. A checksum alone cannot help you here: whoever could replace the download could replace the checksum beside it. A signature made with a key we do not serve from this server can.</p>
-        <ol>
-          <li>Get the signing key and the signer list from the repository (not from this page):<br>
-            <code>curl -O https://raw.githubusercontent.com/ummalife/khandaq/master/web/downloads/allowed_signers</code></li>
-          <li>Download the file and its <code>.sig</code>, then check them:<br>
-            <code>ssh-keygen -Y verify -f allowed_signers -I releases@khandaq.org -n khandaq-release -s khandaq-messenger_amd64.deb.sig &lt; khandaq-messenger_amd64.deb</code></li>
-          <li><code>Good "khandaq-release" signature</code> means the file is the one we built. Anything else means do not run it, and please tell us.</li>
-        </ol>
-        <p class="fine-print"><code>ssh-keygen</code> is already on macOS and Linux, and comes with Git for Windows. <code>SHA256SUMS.txt</code> is still published for convenience, but it is an integrity check, not a trust anchor.</p>
-      </details>
-      <details class="install">
-        <summary>Windows</summary>
-        <ol>
-          <li>Verify the signature as above, then unzip the archive and run <code>Khandaq.exe</code>.</li>
-          <li>Windows will warn that the publisher is unknown: the desktop build is <strong>not yet Authenticode-signed</strong>, and we are not going to pretend that is fine. Verifying the signature above is what tells you the file is genuine; the Windows warning is telling you something true, which is that it cannot check that for you.</li>
-          <li>We are not asking you to add antivirus exceptions. If your antivirus objects to a file whose signature verifies, please report it to us — that is a false positive worth chasing, not something to switch off.</li>
-        </ol>
-      </details>
-      <details class="install">
-        <summary>macOS</summary>
-        <ol>
-          <li>Verify the signature as above, then unzip and move <code>khandaq.app</code> to Applications.</li>
-          <li>The build is <strong>not yet notarized by Apple</strong>, so Gatekeeper will not open it on a first double-click. Right-click the app → <strong>Open</strong> → confirm: that is the documented way to run an app Gatekeeper cannot vouch for, and it keeps the rest of Gatekeeper working.</li>
-          <li>Previous versions of this page suggested <code>xattr -cr</code>. It is no longer recommended: it strips the quarantine flag from everything in the bundle and turns off exactly the check you would want on the day a download is not genuine.</li>
-        </ol>
-      </details>
-      <details class="install" open>
-        <summary>Debian / Ubuntu — .deb package</summary>
-        <ol>
-          <li>Download <code>khandaq-messenger_amd64.deb</code> and verify SHA-256.</li>
-          <li><code>sudo apt install ./khandaq-messenger_amd64.deb</code></li>
-          <li>Launch <strong>Khandaq</strong> from the app menu or run <code>khandaq</code>.</li>
-        </ol>
-      </details>
-      <details class="install">
-        <summary>Linux — portable bundle (Arch, Fedora, …)</summary>
-        <ol>
-          <li><code>tar -xzf khandaq-linux-x86_64-portable.tar.gz</code></li>
-          <li>Keep <code>khandaq</code>, <code>khandaq.bin</code>, and <code>lib/</code> together — see <code>INSTALL.txt</code> in the archive.</li>
-          <li>Recommended: install under <code>~/.local/share/khandaq/</code> and symlink <code>~/.local/bin/khandaq</code>.</li>
-        </ol>
-      </details>
-      <details class="install">
-        <summary>iOS — TestFlight</summary>
-        <ol>
-          <li>Install <strong>TestFlight</strong> from the App Store.</li>
-          <li>Open the <a href="https://testflight.apple.com/join/4ppS8ZN5">public TestFlight link</a> on your iPhone or iPad.</li>
-          <li>Accept the invite and install Khandaq. Updates arrive through TestFlight.</li>
-        </ol>
-      </details>
-    </section>
+          <div class="verify" id="verify">
+            <h3 id="sha-github">Check a download before you run it</h3>
+            <p>Every desktop file is signed with a key published in the source repository, a different place from this website. A checksum alone cannot help here: whoever could replace the download could replace the checksum beside it. A signature made with a key this server does not hold can.</p>
+            <ol>
+              <li>Get the signer list from the repository, not from this page:
+                <pre tabindex="0"><code>curl -O https://raw.githubusercontent.com/ummalife/khandaq/master/web/downloads/allowed_signers</code></pre></li>
+              <li>Download the file and its <code>.sig</code>, then check them:
+                <pre tabindex="0"><code>ssh-keygen -Y verify -f allowed_signers -I releases@khandaq.org -n khandaq-release -s khandaq-messenger_amd64.deb.sig &lt; khandaq-messenger_amd64.deb</code></pre></li>
+              <li><code>Good "khandaq-release" signature</code> means the file is the one we built. Anything else means: do not run it, and please tell us.</li>
+            </ol>
+            <p class="small" id="sha-mirror"><code>ssh-keygen</code> is already on macOS and Linux and comes with Git for Windows. <code>SHA256SUMS.txt</code> is still published, <a href="https://github.com/ummalife/khandaq/releases/latest" data-asset="SHA256SUMS.txt">on GitHub</a> and <a href="/downloads/SHA256SUMS.txt">on this site</a>, as an integrity check rather than a trust anchor: <code>shasum -a 256 -c SHA256SUMS.txt</code>.</p>
+          </div>
 
-    <section id="open-source" class="section container">
-      <h2 class="section-title">Open source &amp; transparency</h2>
-      <p class="section-lead">Khandaq is open source. It builds on the open Tox protocol and the open-source qTox, TRIfA and Antidote clients, and adds its own group chats, message editing and deletion for both sides, reactions, voice messages, signed group history and a content-free push relay. It stays compatible with the public Tox network.</p>
-      <div class="split-grid">
-        <div class="panel">
-          <h3>Repository &amp; releases</h3>
-          <div class="link-row">
-            <a class="link-chip" href="https://github.com/ummalife/khandaq" rel="noopener noreferrer">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-              GitHub repo
-            </a>
-            <a class="link-chip" href="https://github.com/ummalife/khandaq/releases/latest" rel="noopener noreferrer">Latest release</a>
-            <a class="link-chip" href="https://github.com/ummalife/khandaq/blob/master/SECURITY.md" rel="noopener noreferrer">Security policy</a>
+          <div class="notes">
+            <h3>Installation notes</h3>
+            <details class="qa">
+              <summary>Android: Google Play</summary>
+              <div class="qa-body">
+                <ol>
+                  <li>Open <a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger">Khandaq on Google Play</a>.</li>
+                  <li>Tap Install. Updates arrive through Google Play.</li>
+                  <li>Coming from an old sideloaded or debug build? Export your profile, uninstall the old app, install from Google Play and import the profile. The signing key is different, so the new app cannot update the old one in place.</li>
+                </ol>
+              </div>
+            </details>
+            <details class="qa">
+              <summary>Windows: the unknown publisher warning</summary>
+              <div class="qa-body">
+                <ol>
+                  <li>Check the signature as shown above, then unzip the archive and run <code>Khandaq.exe</code>.</li>
+                  <li>Windows will warn that the publisher is unknown: the desktop build is <strong>not yet Authenticode-signed</strong>, and we are not going to pretend that is fine. Checking the signature is what tells you the file is genuine; the Windows warning says something true, which is that Windows cannot check that for you.</li>
+                  <li>We are not asking you to add antivirus exceptions. If your antivirus objects to a file whose signature checks out, please tell us: that is a false positive worth chasing, not something to switch off.</li>
+                </ol>
+              </div>
+            </details>
+            <details class="qa">
+              <summary>macOS: an app that is not notarized</summary>
+              <div class="qa-body">
+                <ol>
+                  <li>Check the signature as shown above, then unzip and move <code>khandaq.app</code> to Applications.</li>
+                  <li>The build is <strong>not yet notarized by Apple</strong>, so Gatekeeper will not open it on a first double-click. Right-click the app, choose <strong>Open</strong> and confirm: that is the documented way to run an app Gatekeeper cannot vouch for, and it keeps the rest of Gatekeeper working.</li>
+                  <li>Earlier versions of this page suggested <code>xattr -cr</code>. It is no longer recommended: it strips the quarantine flag from everything in the bundle and turns off exactly the check you would want on the day a download is not genuine.</li>
+                </ol>
+              </div>
+            </details>
+            <details class="qa">
+              <summary>Debian and Ubuntu: the .deb package</summary>
+              <div class="qa-body">
+                <ol>
+                  <li>Download <code>khandaq-messenger_amd64.deb</code> and check its signature.</li>
+                  <li><code>sudo apt install ./khandaq-messenger_amd64.deb</code></li>
+                  <li>Start <strong>Khandaq</strong> from the app menu or run <code>khandaq</code>.</li>
+                </ol>
+              </div>
+            </details>
+            <details class="qa">
+              <summary>Other Linux: the portable archive</summary>
+              <div class="qa-body">
+                <ol>
+                  <li><code>tar -xzf khandaq-linux-x86_64-portable.tar.gz</code></li>
+                  <li>Keep <code>khandaq</code>, <code>khandaq.bin</code> and <code>lib/</code> together; <code>INSTALL.txt</code> in the archive explains why.</li>
+                  <li>Recommended: install under <code>~/.local/share/khandaq/</code> and link <code>~/.local/bin/khandaq</code> to it.</li>
+                </ol>
+              </div>
+            </details>
+            <details class="qa">
+              <summary>iPhone and iPad: TestFlight</summary>
+              <div class="qa-body">
+                <ol>
+                  <li>Install <strong>TestFlight</strong> from the App Store.</li>
+                  <li>Open the <a href="https://testflight.apple.com/join/4ppS8ZN5">public TestFlight link</a> on your iPhone or iPad.</li>
+                  <li>Accept the invitation and install Khandaq. Updates arrive through TestFlight.</li>
+                </ol>
+              </div>
+            </details>
           </div>
         </div>
-        <div class="panel">
-          <h3>Public infrastructure</h3>
-          <ul>
-            <li>Bootstrap: the public Tox DHT (nodes.tox.chat) — no self-hosted bootstrap nodes</li>
-            <li><a href="https://push.khandaq.org">push.khandaq.org</a> — wake-only push relay (no message body)</li>
+      </div>
+    </section>
+
+    <section class="band band-surface" id="changes" aria-labelledby="changes-title">
+      <div class="wrap">
+        <div class="band-head">
+          <h2 class="title" id="changes-title">Recent releases</h2>
+          <p class="lead">Every release is written up with its date: what was broken, what changed and on which platforms.</p>
+        </div>
+        <ol class="recent-list" data-recent hidden></ol>
+        <p class="recent-more"><a class="btn btn-plain" href="/changelog.html">Open the changelog</a></p>
+      </div>
+    </section>
+
+    <section class="band" id="source" aria-labelledby="source-title">
+      <div class="wrap source">
+        <div class="source-text" id="open-source">
+          <h2 class="title" id="source-title">Open source</h2>
+          <p>The Android, iPhone and desktop apps, the wake relay and this website are all on GitHub. Khandaq speaks the open Tox protocol and stays compatible with the public Tox network. It adds group chats, editing and deleting messages for both sides, reactions, voice messages, signed group history and a wake relay that carries no message content.</p>
+          <ul class="link-list">
+            <li><a href="https://github.com/ummalife/khandaq">Source code on GitHub</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/releases/latest">Latest release</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/blob/master/SECURITY.md">Security policy</a></li>
+          </ul>
+        </div>
+        <div class="source-text">
+          <h3 class="sub">Public infrastructure</h3>
+          <ul class="link-list">
+            <li>Bootstrap: the public Tox DHT (nodes.tox.chat), with no bootstrap nodes of our own</li>
+            <li><a href="https://push.khandaq.org">push.khandaq.org</a>: the wake-only push relay, no message body</li>
             <li>Open-source foundations: qTox (desktop), TRIfA (Android), Antidote (iOS)</li>
           </ul>
         </div>
       </div>
     </section>
 
-    <section class="section container">
-      <h2 class="section-title">FAQ</h2>
-      <details class="install">
-        <summary>Is Khandaq the same as Matrix / Element?</summary>
-        <p class="note-sub">No. Khandaq uses the <strong>Tox</strong> protocol (peer-to-peer, no homeserver). This website now hosts the Khandaq Messenger download page.</p>
-      </details>
-      <details class="install">
-        <summary>Do you store my messages?</summary>
-        <p class="note-sub">No. Message content stays on your devices. The only Khandaq-operated service is the push <em>wake</em> relay — documented in the <a href="https://github.com/ummalife/khandaq/blob/master/docs/PUSH_RELAY.md">repository</a> and in the <a href="/privacy.html">privacy policy</a>. Bootstrap discovery runs on the public Tox DHT, which we do not operate.</p>
-      </details>
-      <details class="install">
-        <summary>How do I report a bug?</summary>
-        <p class="note-sub">Open an issue on <a href="https://github.com/ummalife/khandaq/issues">GitHub Issues</a> or use the security advisory flow for vulnerabilities (<a href="https://github.com/ummalife/khandaq/security/advisories/new">private report</a>).</p>
-      </details>
-      <details class="install">
-        <summary>Where do I download Khandaq?</summary>
-        <p class="note-sub"><strong>Android:</strong> the official <a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger" target="_blank" rel="noopener">Google Play</a> listing (install and auto-update from there). <strong>iPhone/iPad:</strong> via <a href="https://testflight.apple.com/join/4ppS8ZN5">TestFlight</a> while iOS is in beta. <strong>Windows, macOS, Linux:</strong> from the <a href="#download">Download</a> section above.</p>
-      </details>
-      <details class="install">
-        <summary>Do I need a phone number or email to sign up?</summary>
-        <p class="note-sub">No. There is no account and no sign-up. You create a local profile and get a <strong>Tox ID</strong> — share it with people you trust to connect. No phone number, email or any personal detail is required or collected.</p>
-      </details>
-      <details class="install">
-        <summary>Why don't I get notifications when the app is closed?</summary>
-        <p class="note-sub">Because Khandaq is peer-to-peer, a closed app has no live connection. A lightweight push <em>wake</em> service nudges your device to reconnect and fetch the message — it never carries the message content, only a wake signal. Make sure notifications are allowed for Khandaq in system settings and that the app isn't force-stopped or battery-restricted. On Android, Google Play builds get these wakes automatically.</p>
-      </details>
-      <details class="install">
-        <summary>I sent a message but it wasn't delivered — why?</summary>
-        <p class="note-sub">There is no central server holding your messages. A message is delivered when your contact's device is reachable. If they're offline it is queued and sent automatically once either of you reconnects — so a message can take a while if the other person hasn't opened the app. Keeping the app open (or allowing background/push) makes delivery near-instant.</p>
-      </details>
-      <details class="install">
-        <summary>I forgot my profile password — can you reset it?</summary>
-        <p class="note-sub">No — and no one can. Your profile's encryption keys are derived from that password, and there is no server that stores it, so there is no reset. If it's lost you'll need to create a new profile (and a new Tox ID). Write your password down somewhere safe when you create the profile.</p>
-      </details>
-      <details class="install">
-        <summary>How do I move my profile to a new phone?</summary>
-        <p class="note-sub">Export your Tox profile from the old device (Profile → export) and import it on the new one, so you keep the same Tox ID and contacts. A profile is meant for one active device at a time — running the same one on two devices simultaneously isn't supported by the Tox protocol.</p>
-      </details>
-      <details class="install">
-        <summary>Do voice and video calls work between Android and iPhone?</summary>
-        <p class="note-sub">Yes. 1:1 audio and video calls work across Android and iOS — both sides see each other's camera, upright and full-screen. Calls are peer-to-peer and end-to-end encrypted like messages.</p>
-      </details>
-      <details class="install">
-        <summary>Is it really end-to-end encrypted?</summary>
-        <p class="note-sub">Yes. Every message, file and call is end-to-end encrypted by the <a href="https://tox.chat">Tox</a> protocol (NaCl cryptography), directly between devices. No one in the middle — including us — can read your messages or see your contacts.</p>
-      </details>
+    <section class="band band-surface" id="questions" aria-labelledby="questions-title">
+      <div class="wrap">
+        <div class="band-head">
+          <h2 class="title" id="questions-title">Questions</h2>
+        </div>
+        <div class="faq-cols">
+          <div>
+            <details class="qa">
+              <summary>Do I need a phone number or email to sign up?</summary>
+              <div class="qa-body"><p>No. There is no account and no sign-up. You create a profile on your device and get an ID; share it with people you trust to connect. No phone number, email or other personal detail is asked for or collected.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Do you store my messages?</summary>
+              <div class="qa-body"><p>No. Message content stays on your devices. The only service Khandaq runs is the push wake relay, described in the <a href="https://github.com/ummalife/khandaq/blob/master/docs/PUSH_RELAY.md">repository</a> and in the <a href="/privacy.html">privacy policy</a>. Bootstrap discovery runs on the public Tox DHT, which we do not operate.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Is it really end-to-end encrypted?</summary>
+              <div class="qa-body"><p>Yes. Every message, file and call is end-to-end encrypted by the <a href="https://tox.chat">Tox</a> protocol (NaCl cryptography), directly between devices. No one in the middle, us included, can read your messages or see your contacts.</p></div>
+            </details>
+            <details class="qa">
+              <summary>I sent a message but it was not delivered. Why?</summary>
+              <div class="qa-body"><p>There is no central server holding your messages. A message is delivered when your contact’s device is reachable. If they are offline, it waits in transit and is sent automatically once either of you reconnects, so a message can take a while if the other person has not opened the app. Keeping the app open, or allowing background work and push, makes delivery near-instant.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Why don’t I get notifications when the app is closed?</summary>
+              <div class="qa-body"><p>Because Khandaq is peer-to-peer, a closed app has no live connection. A small push wake service nudges your device to reconnect and fetch the message; it never carries the message content, only a wake signal. Make sure notifications are allowed for Khandaq in system settings and that the app is not force-stopped or battery-restricted. On Android, Google Play builds get these wakes automatically.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Do voice and video calls work between Android and iPhone?</summary>
+              <div class="qa-body"><p>Yes. One-to-one audio and video calls work across Android and iOS: both sides see each other’s camera, upright and full-screen. Calls are peer-to-peer and end-to-end encrypted like messages.</p></div>
+            </details>
+          </div>
+          <div>
+            <details class="qa">
+              <summary>I forgot my profile password. Can you reset it?</summary>
+              <div class="qa-body"><p>No, and no one can. Your profile’s encryption keys are derived from that password, and no server stores it, so there is no reset. If it is lost, you will need a new profile and a new ID. Write the password down somewhere safe when you create the profile.</p></div>
+            </details>
+            <details class="qa">
+              <summary>How do I move my profile to a new phone?</summary>
+              <div class="qa-body"><p>Export your profile on the old device and import it on the new one, so you keep the same ID and contacts. A profile is meant for one active device at a time: running the same one on two devices at once is not supported by the Tox protocol.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Where do I download Khandaq?</summary>
+              <div class="qa-body"><p><strong>Android:</strong> the official <a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger">Google Play</a> listing, which also keeps it updated. <strong>iPhone and iPad:</strong> <a href="https://testflight.apple.com/join/4ppS8ZN5">TestFlight</a>, while iOS is in beta. <strong>Windows, macOS, Linux:</strong> the <a href="#download">Download</a> section above.</p></div>
+            </details>
+            <details class="qa">
+              <summary>How do I report a bug?</summary>
+              <div class="qa-body"><p>Write to <a href="mailto:support@khandaq.org">support@khandaq.org</a> or open an issue on <a href="https://github.com/ummalife/khandaq/issues">GitHub Issues</a>. For a vulnerability, use the <a href="https://github.com/ummalife/khandaq/security/advisories/new">private security advisory form</a>.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Is Khandaq the same as Matrix or Element?</summary>
+              <div class="qa-body"><p>No. Khandaq uses the <strong>Tox</strong> protocol: peer-to-peer, with no homeserver. This website now hosts the Khandaq Messenger download page.</p></div>
+            </details>
+          </div>
+        </div>
+      </div>
     </section>
+
+    <div class="thumb-bar" data-thumb-bar>
+      <a class="btn btn-ink" href="#download" data-thumb-cta>Download Khandaq</a>
+    </div>
   </main>
 
-  <footer class="site-footer">
-    <div class="container footer-grid">
-      <div>
-        <h4>Khandaq Messenger</h4>
-        <p>Decentralized encrypted messaging on the Tox protocol. Public beta — your feedback helps us ship a stable release.</p>
+  <footer class="site-foot">
+    <div class="wrap">
+      <div class="foot-cols">
+        <div>
+          <h2>Khandaq Messenger</h2>
+          <p>Encrypted messaging on the Tox network. Free and open source.</p>
+        </div>
+        <div>
+          <h2>Download</h2>
+          <ul>
+            <li><a href="#download">All platforms</a></li>
+            <li><a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger">Android on Google Play</a></li>
+            <li><a href="https://testflight.apple.com/join/4ppS8ZN5">iPhone on TestFlight</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Project</h2>
+          <ul>
+            <li><a href="https://github.com/ummalife/khandaq">Source code</a></li>
+            <li><a href="/changelog.html">Changelog</a></li>
+            <li><a href="/privacy.html">Privacy policy</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/blob/master/SECURITY.md">Security</a></li>
+            <li><a href="https://tox.chat">Tox protocol</a></li>
+          </ul>
+        </div>
+        <!-- KHANDAQ (02.09): this page is the support URL given to both stores, and Guideline 1.5 asks
+             that address to carry working contact information, so the address stays visible here. -->
+        <div>
+          <h2>Support</h2>
+          <ul>
+            <li><a href="mailto:support@khandaq.org">support@khandaq.org</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/issues">Report a problem</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/security/advisories/new">Report a vulnerability</a></li>
+            <li><a href="/privacy.html">Privacy questions</a></li>
+          </ul>
+        </div>
       </div>
-      <div>
-        <h4>Download</h4>
-        <ul>
-          <li><a href="#download">All platforms</a></li>
-          <li><a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger" target="_blank" rel="noopener">Android on Google Play</a></li>
-          <li><a href="https://testflight.apple.com/join/4ppS8ZN5">iOS TestFlight</a></li>
-        </ul>
-      </div>
-      <div>
-        <h4>Project</h4>
-        <ul>
-          <li><a href="https://github.com/ummalife/khandaq">Source code</a></li>
-          <li><a href="/changelog">Changelog</a></li>
-          <li><a href="/privacy.html">Privacy policy</a></li>
-          <li><a href="https://github.com/ummalife/khandaq/blob/master/SECURITY.md">Security</a></li>
-          <li><a href="https://tox.chat">Tox protocol</a></li>
-        </ul>
-      </div>
-      <!-- KHANDAQ (02.09): this page is the support URL given to both stores, and Guideline 1.5
-           asks that address to carry working contact information. It carried none — the only
-           address on the site sat on the privacy page. A reviewer looking for how to reach us
-           found a product page. -->
-      <div>
-        <h4>Support</h4>
-        <ul>
-          <li><a href="mailto:support@khandaq.org">support@khandaq.org</a></li>
-          <li><a href="https://github.com/ummalife/khandaq/issues" target="_blank" rel="noopener">Report a problem</a></li>
-          <li><a href="https://github.com/ummalife/khandaq/security/advisories/new" target="_blank" rel="noopener">Report a vulnerability</a></li>
-          <li><a href="/privacy.html">Privacy questions</a></li>
-        </ul>
+      <div class="foot-base">
+        <!-- KHANDAQ (18.08): the owner and developer credit lives on the copyright strip, the one line every page shares, so attribution stays identical site-wide. -->
+        <p class="copyright">© Khandaq, <a href="https://khandaq.org/">khandaq.org</a>. Open source, Tox-compatible. <span class="credit">Owner and developer: <a href="https://1sa.me/" target="_blank" rel="noopener">Isa Dagestani</a></span></p>
+        <fieldset class="seg" data-theme-control hidden>
+          <legend>Theme</legend>
+          <span class="seg-options">
+            <label><input type="radio" name="theme" value="system">Match system</label>
+            <label><input type="radio" name="theme" value="light">Light</label>
+            <label><input type="radio" name="theme" value="dark">Dark</label>
+          </span>
+        </fieldset>
       </div>
     </div>
-    <!-- KHANDAQ (18.08): the owner/developer credit lives on the copyright strip — the one line every page shares — so attribution stays identical site-wide and survives edits to the footer columns above. Name + its domain mirrors the existing "Khandaq · khandaq.org" pair. -->
-    <p class="copyright">© Khandaq · <a href="https://khandaq.org/">khandaq.org</a> · Open source · Tox-compatible · <span class="credit">Owner and developer — <a href="https://1sa.me/" target="_blank" rel="noopener">Isa Dagestani</a></span></p>
   </footer>
 
   <script>
     (function () {
       var release = 'v0.2.12';
       var gh = 'https://github.com/ummalife/khandaq/releases/download/' + release + '/';
-      var mirror = '/downloads/';
-
-      document.getElementById('sha-github').href = gh + 'SHA256SUMS.txt';
-      document.getElementById('sha-mirror').href = mirror + 'SHA256SUMS.txt';
-
-      var links = {
-        '.dl-windows': ['khandaq-windows-x86_64.zip', gh, mirror],
-        '.dl-macos': ['khandaq-macos.zip', gh, mirror],
-        '.dl-linux': ['khandaq-linux-x86_64-portable.tar.gz', gh, mirror],
-        '.dl-linux-deb': ['khandaq-messenger_amd64.deb', gh, mirror]
-      };
-
-      var debMirror = document.querySelector('.dl-linux-deb');
-      if (debMirror) {
-        debMirror.setAttribute('data-mirror', mirror + 'khandaq-messenger_amd64.deb');
+      var links = document.querySelectorAll('[data-asset]');
+      for (var i = 0; i < links.length; i++) {
+        links[i].href = gh + links[i].getAttribute('data-asset');
       }
-
-      Object.keys(links).forEach(function (sel) {
-        var el = document.querySelector(sel);
-        if (!el) return;
-        var file = links[sel][0];
-        el.href = links[sel][1] + file;
-        el.setAttribute('data-mirror', links[sel][2] + file);
-      });
     })();
   </script>
-
-  <script>
-    // Smooth accordion for <details class="install"> (FAQ + install notes): animate the height on
-    // open AND close so the page never jumps, and rotate the chevron. Falls back to the native
-    // instant toggle if the browser lacks Web Animations or the user prefers reduced motion.
-    (function () {
-      var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      var items = Array.prototype.slice.call(document.querySelectorAll('details.install'));
-
-      items.forEach(function (det) {
-        var summary = det.querySelector('summary');
-        if (!summary) return;
-
-        // Wrap everything after <summary> into an animatable body element.
-        var body = document.createElement('div');
-        body.className = 'faq-body';
-        var node = summary.nextSibling;
-        while (node) {
-          var next = node.nextSibling;
-          body.appendChild(node);
-          node = next;
-        }
-        det.appendChild(body);
-
-        if (reduce || typeof body.animate !== 'function') return; // native toggle
-
-        var animating = false;
-        summary.addEventListener('click', function (e) {
-          e.preventDefault();
-          if (animating) return;
-          animating = true;
-
-          if (!det.open) {
-            // OPEN: close any sibling that's open (single-open accordion), then grow 0 → height.
-            items.forEach(function (other) {
-              if (other !== det && other.open) closeItem(other);
-            });
-            det.open = true;
-            var target = body.offsetHeight;
-            body.animate(
-              [{ height: '0px', opacity: 0 }, { height: target + 'px', opacity: 1 }],
-              { duration: 260, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' }
-            ).onfinish = function () { animating = false; };
-          } else {
-            var start = body.offsetHeight;
-            var anim = body.animate(
-              [{ height: start + 'px', opacity: 1 }, { height: '0px', opacity: 0 }],
-              { duration: 200, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' }
-            );
-            anim.onfinish = function () { det.open = false; animating = false; };
-          }
-        });
-
-        // Close helper used when another item opens (no lock needed — quick collapse).
-        function closeItem(other) {
-          var ob = other.querySelector('.faq-body');
-          if (!ob) { other.open = false; return; }
-          var h = ob.offsetHeight;
-          var a = ob.animate(
-            [{ height: h + 'px', opacity: 1 }, { height: '0px', opacity: 0 }],
-            { duration: 180, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' }
-          );
-          a.onfinish = function () { other.open = false; };
-        }
-      });
-    })();
-  </script>
-  <script src="assets/theme.js" defer></script>
 </body>
 </html>

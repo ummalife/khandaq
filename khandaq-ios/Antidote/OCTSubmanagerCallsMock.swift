@@ -13,8 +13,18 @@ class OCTSubmanagerCallsMock: NSObject, OCTSubmanagerCalls {
         // nop
     }
     
+    /// How long the demo call has been on when its screen opens.
+    static let demoDuration: TimeInterval = 42
+
+    /// The demo call is already on (UI tests only): its screen shows the timer and the controls, and
+    /// nothing rings out of the simulator, which a call still being placed would.
     func call(to chat: OCTChat, enableAudio: Bool, enableVideo: Bool) throws -> OCTCall {
-        return OCTCall()
+        let call = OCTCall()
+        call.chat = chat
+        call.status = .active
+        call.callDuration = OCTSubmanagerCallsMock.demoDuration
+        call.videoIsEnabled = enableVideo
+        return call
     }
     
     func enableVideoSending(_ enable: Bool, for call: OCTCall) throws {

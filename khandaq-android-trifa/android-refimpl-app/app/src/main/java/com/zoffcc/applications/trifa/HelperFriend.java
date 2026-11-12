@@ -84,6 +84,7 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.global_my_toxid;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_self_connection_status;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_ERR_FRIEND_ADD;
+import static com.zoffcc.applications.trifa.ToxVars.TOX_ADDRESS_SIZE;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_PUBLIC_KEY_SIZE;
 import static com.zoffcc.applications.trifa.TrifaToxService.is_tox_started;
 import static com.zoffcc.applications.trifa.TrifaToxService.orma;
@@ -1385,6 +1386,12 @@ public class HelperFriend
         }
 
         final String pk = friend_public_key.trim().toUpperCase(Locale.ROOT);
+        // A contact another live source answers for (AirLiveOverride, debug builds only) lives in the
+        // database only and is never added to toxcore.
+        if (AirLiveOverride.ownsFriend(pk))
+        {
+            return -1;
+        }
         long fn = tox_friend_by_public_key__wrapper(pk);
         if (fn >= 0)
         {
@@ -1543,7 +1550,12 @@ public class HelperFriend
         {
             return;
         }
+        display_toast(friend_add_error_text(friendnum), false, 300);
+    }
 
+    /** KHANDAQ (redesign, E11): the words for a failed tox_friend_add, for a toast or for the screen. */
+    static String friend_add_error_text(final long friendnum)
+    {
         final int errCode = (int) (-friendnum);
         String message = context_s.getString(R.string.add_friend_failed);
 
@@ -1572,11 +1584,67 @@ public class HelperFriend
             message = context_s.getString(R.string.add_friend_failed_memory);
         }
 
-        Log.i(TAG, "show_friend_add_error:friendnum=" + friendnum + " errCode=" + errCode);
-        display_toast(message, false, 300);
+        Log.i(TAG, "friend_add_error_text:friendnum=" + friendnum + " errCode=" + errCode);
+        return message;
+    }
+
+    /**
+     * KHANDAQ (redesign, E11): the request New contact sends: a whole ID whose check the screen has
+     * verified, with the typed message or the greeting. Nothing is toasted: the screen says what went
+     * wrong where the action is. Returns null when the request went, otherwise those words. A key that
+     * was blocked on this device is unblocked once the request goes (design/DESIGN.md, Block).
+     */
+    static String send_friend_request(final String address, final String message)
+    {
+        if (!is_tox_profile_ready())
+        {
+            return context_s.getString(R.string.add_friend_failed_not_ready);
+        }
+        final String friend_tox_id = HelperGeneric.normalize_tox_address(address);
+        if (friend_tox_id == null || friend_tox_id.length() != TOX_ADDRESS_SIZE * 2)
+        {
+            return context_s.getString(R.string.add_friend_failed_invalid_id);
+        }
+        final String friend_public_key = friend_tox_id.substring(0, (TOX_PUBLIC_KEY_SIZE * 2));
+        if (is_own_public_key(friend_public_key))
+        {
+            return context_s.getString(R.string.add_friend_failed_own_key);
+        }
+        if (lookup_friendlist_by_pubkey(friend_public_key) != null || sync_tox_friend_to_contacts(friend_public_key))
+        {
+            return context_s.getString(R.string.add_friend_already_in_contacts);
+        }
+        final long friendnum = MainActivity.tox_friend_add(friend_tox_id, message);
+        Log.i(TAG, "send_friend_request:friend #:" + friendnum);
+        if (friendnum >= 0)
+        {
+            HelperGeneric.update_savedata_file_wrapper_async();
+            if (!persist_new_friend_contact(friend_public_key, friendnum))
+            {
+                return context_s.getString(R.string.add_friend_failed);
+            }
+            AirBlockList.unblock(friend_public_key);
+            AirRepository.requestRefresh();
+            return null;
+        }
+        if ((-friendnum) == TOX_ERR_FRIEND_ADD.TOX_ERR_FRIEND_ADD_ALREADY_SENT.ordinal()
+            && sync_tox_friend_to_contacts(friend_public_key))
+        {
+            return context_s.getString(R.string.add_friend_already_in_contacts);
+        }
+        return friend_add_error_text(friendnum);
     }
 
     static void add_friend_real(String friend_tox_id)
+    {
+        add_friend_real(friend_tox_id, null);
+    }
+
+    /**
+     * E21: as above; with {@code refusals}, what stopped the add (a rule, or a failure) goes to the
+     * caller's place for it instead of a toast. A contact added is still confirmed by a toast.
+     */
+    static void add_friend_real(String friend_tox_id, @Nullable final AirComposerNotice.Field refusals)
     {
         if (friend_tox_id == null)
         {
@@ -1586,7 +1654,7 @@ public class HelperFriend
 
         if (!is_tox_profile_ready())
         {
-            display_toast(context_s.getString(R.string.add_friend_failed_not_ready), false, 300);
+            refuse_friend_add(context_s.getString(R.string.add_friend_failed_not_ready), false, refusals);
             return;
         }
 
@@ -1594,7 +1662,7 @@ public class HelperFriend
         if (friend_tox_id == null)
         {
             Log.i(TAG, "add_friend_real:invalid friend ID");
-            display_toast(context_s.getString(R.string.add_friend_failed_invalid_id), false, 300);
+            refuse_friend_add(context_s.getString(R.string.add_friend_failed_invalid_id), false, refusals);
             return;
         }
 
@@ -1602,25 +1670,26 @@ public class HelperFriend
 
         if (is_own_public_key(friend_public_key))
         {
-            display_toast(context_s.getString(R.string.add_self_disabled_use_favorites), false, 300);
+            refuse_friend_add(context_s.getString(R.string.add_self_disabled_use_favorites), false, refusals);
             FavoritesChatHelper.openChat(context_s);
             return;
         }
 
         if (lookup_friendlist_by_pubkey(friend_public_key) != null)
         {
-            display_toast(context_s.getString(R.string.add_friend_already_in_contacts), false, 300);
+            refuse_friend_add(context_s.getString(R.string.add_friend_already_in_contacts), false, refusals);
             return;
         }
 
         if (sync_tox_friend_to_contacts(friend_public_key))
         {
-            display_toast(context_s.getString(R.string.add_friend_already_in_contacts), false, 300);
+            refuse_friend_add(context_s.getString(R.string.add_friend_already_in_contacts), false, refusals);
             return;
         }
 
         Log.i(TAG, "add_friend_real:add friend ID len:" + friend_tox_id.length());
-        long friendnum = MainActivity.tox_friend_add(friend_tox_id, "Hi");
+        // KHANDAQ (redesign, E11): the greeting of New contact instead of the fork's "Hi".
+        long friendnum = MainActivity.tox_friend_add(friend_tox_id, context_s.getString(R.string.air_nc_greeting));
         Log.i(TAG, "add_friend_real:add friend #:" + friendnum);
 
         if (friendnum >= 0)
@@ -1628,31 +1697,52 @@ public class HelperFriend
             // KHANDAQ (ANR): tox_friend_add above stays on this (UI) thread; only offload the slow
             // PBKDF2 savedata persist off-main (fire-and-forget, matches GroupMemberActions pattern).
             HelperGeneric.update_savedata_file_wrapper_async();
+            // Asking a blocked key again lifts the block (design/DESIGN.md, Block).
+            AirBlockList.unblock(friend_public_key);
             if (persist_new_friend_contact(friend_public_key, friendnum))
             {
                 display_toast(context_s.getString(R.string.add_friend_success), false, 300);
             }
             else
             {
-                display_toast(context_s.getString(R.string.add_friend_failed), false, 300);
+                refuse_friend_add(context_s.getString(R.string.air_contact_add_failed), true, refusals);
             }
             return;
         }
 
+        // toxcore refused it: the words, and the code iOS gives for the same refusal under Details.
+        final String code = AirErrorCode.toxResult(AirErrorCode.Call.FRIEND_ADD, friendnum);
         if ((-friendnum) == TOX_ERR_FRIEND_ADD.TOX_ERR_FRIEND_ADD_ALREADY_SENT.ordinal())
         {
             if (sync_tox_friend_to_contacts(friend_public_key))
             {
-                display_toast(context_s.getString(R.string.add_friend_already_in_contacts), false, 300);
+                refuse_friend_add(context_s.getString(R.string.add_friend_already_in_contacts), false, refusals);
             }
             else
             {
-                show_friend_add_error(friendnum);
+                refuse_friend_add(friend_add_error_text(friendnum), true, refusals, code);
             }
             return;
         }
 
-        show_friend_add_error(friendnum);
+        refuse_friend_add(friend_add_error_text(friendnum), true, refusals, code);
+    }
+
+    /** What stopped add_friend_real, at the caller's place for it, or as the toast it was before. */
+    private static void refuse_friend_add(final String text, final boolean failed,
+                                          @Nullable final AirComposerNotice.Field refusals)
+    {
+        refuse_friend_add(text, failed, refusals, null);
+    }
+
+    /** As above, for a refusal of toxcore's: its code goes to a place that shows Details, never to a toast. */
+    private static void refuse_friend_add(final String text, final boolean failed,
+                                          @Nullable final AirComposerNotice.Field refusals, @Nullable final String code)
+    {
+        if (refusals == null || !refusals.say(text, failed, code))
+        {
+            display_toast(text, false, 300);
+        }
     }
 
     static boolean is_placeholder_friend_name(String name, String friend_pubkey)
@@ -1701,6 +1791,13 @@ public class HelperFriend
             {
                 return true;
             }
+        }
+
+        // KHANDAQ (redesign, E11): the name a new contact is stored with before theirs arrives is the
+        // six-character short ID (peer_pubkey_short_id), not only the five-character suffix above.
+        if (friend_pubkey.length() >= 6 && trimmed.equalsIgnoreCase(peer_pubkey_short_id(friend_pubkey)))
+        {
+            return true;
         }
 
         return false;
@@ -2538,43 +2635,64 @@ public class HelperFriend
         return false;
     }
 
+    /** The push address a wake signal for this friend goes to, or null when none can go. */
+    private static String wake_url_for_friend(final String friend_pubkey)
+    {
+        if (!PREF__use_push_service)
+        {
+            return null;
+        }
+
+        final String pushurl_for_friend = get_pushurl_for_friend(friend_pubkey);
+        if ((pushurl_for_friend == null) || (pushurl_for_friend.length() <= "https://".length())
+            || !is_valid_pushurl_for_friend_with_whitelist(pushurl_for_friend))
+        {
+            return null;
+        }
+        return pushurl_for_friend;
+    }
+
+    /**
+     * KHANDAQ (redesign, E9): whether friend_call_push_url sends this friend's phone a wake signal, so a
+     * call to someone offline can say what the app does while it waits.
+     */
+    static boolean can_wake_friend_phone(final String friend_pubkey)
+    {
+        try
+        {
+            return wake_url_for_friend(friend_pubkey) != null;
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+    }
+
     static void friend_call_push_url(final String friend_pubkey, final long message_timestamp_circa)
     {
         try
         {
-            if (!PREF__use_push_service)
-            {
-                return;
-            }
-
-            final String pushurl_for_friend = get_pushurl_for_friend(friend_pubkey);
+            final String pushurl_for_friend = wake_url_for_friend(friend_pubkey);
 
             if (pushurl_for_friend != null)
             {
-                if (pushurl_for_friend.length() > "https://".length())
+                Thread t = new Thread()
                 {
-                    if (is_valid_pushurl_for_friend_with_whitelist(pushurl_for_friend))
+                    @Override
+                    public void run()
                     {
-
-                        Thread t = new Thread()
+                        try
                         {
-                            @Override
-                            public void run()
-                            {
-                                try
-                                {
-                                    friend_do_actual_weburl_call(friend_pubkey, pushurl_for_friend,
-                                                                 message_timestamp_circa, true);
-                                }
-                                catch (Exception e)
-                                {
-                                    Log.i(TAG, "friend_call_push_url:EE2:" + e.getMessage());
-                                }
-                            }
-                        };
-                        t.start();
+                            friend_do_actual_weburl_call(friend_pubkey, pushurl_for_friend,
+                                                         message_timestamp_circa, true);
+                        }
+                        catch (Exception e)
+                        {
+                            Log.i(TAG, "friend_call_push_url:EE2:" + e.getMessage());
+                        }
                     }
-                }
+                };
+                t.start();
             }
         }
         catch (Exception ignored)
@@ -2957,8 +3075,9 @@ public class HelperFriend
         if (is_same_calendar_day(now, seen))
         {
             final Date seen_date = seen.getTime();
+            // The clock in the digits of the app's language, as the transcript writes it.
             return context.getString(R.string.chat_presence_last_seen_at_time,
-                    MainActivity.df_time_only.format(seen_date));
+                    AirUi.localDigits(context, MainActivity.df_time_only.format(seen_date)));
         }
         final Calendar yesterday = (Calendar) now.clone();
         yesterday.add(Calendar.DAY_OF_YEAR, -1);

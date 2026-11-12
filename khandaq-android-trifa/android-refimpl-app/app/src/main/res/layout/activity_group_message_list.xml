@@ -1,30 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    KHANDAQ (redesign, stage 3, E13): the group conversation. From the top: the header (the group's tile
+    and name, a chevron for the group dossier, the overflow menu), the band (how many are in the group
+    and online now, and the tiles of who gets a message right now), the group video, the transcript, the
+    composer with the line about who gets it and the length counter, and, when you may only read, a bar
+    that says why and whom to write to instead of the composer. Every id and onClick handler of the old
+    layout is kept, so the activity and its helpers find the views they always did.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/kq_surface"
     android:fitsSystemWindows="true"
     android:orientation="vertical"
     tools:context="com.zoffcc.applications.trifa.GroupMessageListActivity">
 
-    <!-- KHANDAQ: single-row group chat header (Figma): back(nav) + avatar + name/count + ⋮ overflow.
-         Members / add-person / video / search live in the ⋮ menu (menu_group_chat_header). -->
     <androidx.appcompat.widget.Toolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/tg_chat_header_bg"
+        android:background="@color/kq_surface"
         android:minHeight="?attr/actionBarSize"
         app:contentInsetStartWithNavigation="0dp"
         app:popupTheme="@style/KhandaqPopupOverlay"
-        app:theme="@style/ThemeOverlay.AppCompat.DayNight.ActionBar">
+        app:theme="@style/ThemeOverlay.KQ.Air.ChatBar">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:minHeight="?attr/actionBarSize"
             android:gravity="center_vertical"
+            android:minHeight="?attr/actionBarSize"
             android:orientation="horizontal">
 
             <LinearLayout
@@ -32,52 +39,92 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:background="@android:color/transparent"
+                android:background="@drawable/air_bg_icon_button"
                 android:clickable="true"
                 android:contentDescription="@string/group_open_group_info"
                 android:focusable="true"
                 android:gravity="center_vertical"
+                android:minHeight="@dimen/kq_size_target_android"
                 android:orientation="horizontal">
 
                 <de.hdodenhof.circleimageview.CircleImageView
                     android:id="@+id/ml_group_avatar"
-                    android:layout_width="38dp"
-                    android:layout_height="38dp"
-                    android:layout_gravity="center_vertical"
-                    android:layout_marginEnd="8dp"
-                    app:civ_circle_background_color="@color/khandaq_teal" />
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:visibility="gone" />
 
                 <ImageView
                     android:id="@+id/ml_icon"
                     android:layout_width="0dp"
                     android:layout_height="0dp"
-                    android:src="@drawable/circle_red"
                     android:visibility="gone" />
 
                 <ImageView
                     android:id="@+id/ml_status_icon"
                     android:layout_width="0dp"
                     android:layout_height="0dp"
-                    android:src="@drawable/circle_green"
                     android:visibility="gone" />
+
+                <com.zoffcc.applications.trifa.AirTileView
+                    android:id="@+id/air_group_tile"
+                    android:layout_width="@dimen/air_header_tile"
+                    android:layout_height="@dimen/air_header_tile"
+                    android:layout_gravity="center_vertical" />
 
                 <TextView
                     android:id="@+id/ml_maintext"
-                    android:layout_width="match_parent"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/kq_space_8"
+                    android:layout_weight="1"
                     android:ellipsize="end"
-                    android:includeFontPadding="false"
-                    android:maxLines="2"
-                    android:paddingStart="2dp"
-                    android:paddingEnd="6dp"
+                    android:maxLines="1"
                     android:text="@string/layout___name"
                     android:textAlignment="viewStart"
-                    android:textColor="@color/tg_chat_header_title"
-                    android:textSize="16sp" />
+                    android:textAppearance="@style/TextAppearance.KQ.Heading"
+                    android:textColor="@color/kq_ink" />
 
+                <ImageView
+                    android:id="@+id/air_group_chevron"
+                    android:layout_width="@dimen/kq_size_icon_small"
+                    android:layout_height="@dimen/kq_size_icon_small"
+                    android:layout_marginStart="@dimen/kq_space_4"
+                    android:layout_marginEnd="@dimen/kq_space_4"
+                    android:contentDescription="@null"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/kq_ic_chevron_down"
+                    app:tint="@color/kq_ink_3" />
             </LinearLayout>
 
-            <!-- search revealed from the ⋮ overflow; fills the row when active -->
+            <!-- As on iOS and in the conversation with one person: search and the group's live video are
+                 icons in the header. Below 400dp the video moves to the overflow; when the name would still
+                 show fewer than about ten characters, search moves there too and then the chevron goes
+                 (AirHeaderFit). -->
+            <ImageButton
+                android:id="@+id/ml_search_icon"
+                android:layout_width="@dimen/kq_size_target_android"
+                android:layout_height="@dimen/kq_size_target_android"
+                android:layout_gravity="center_vertical"
+                android:background="@drawable/air_bg_icon_button"
+                android:contentDescription="@string/chat_action_search"
+                android:scaleType="center"
+                android:src="@drawable/kq_ic_search"
+                app:tint="@color/air_icon_button_tint" />
+
+            <ImageButton
+                android:id="@+id/ml_video_icon"
+                android:layout_width="@dimen/kq_size_target_android"
+                android:layout_height="@dimen/kq_size_target_android"
+                android:layout_gravity="center_vertical"
+                android:background="@drawable/air_bg_icon_button"
+                android:contentDescription="@string/group_live_video_toggle"
+                android:onClick="toggle_group_video"
+                android:scaleType="center"
+                android:src="@drawable/kq_ic_video"
+                android:visibility="gone"
+                app:tint="@color/air_icon_button_tint" />
+
+            <!-- Search opens from its icon and fills the row while it is open. -->
             <androidx.appcompat.widget.SearchView
                 android:id="@+id/group_search_view_messages"
                 android:layout_width="match_parent"
@@ -87,7 +134,7 @@
                 android:visibility="gone"
                 app:iconifiedByDefault="false" />
 
-            <!-- moved to the ⋮ overflow (kept, hidden, for their ids/onClick) -->
+            <!-- Members and invite live in the overflow; kept hidden for their ids and handlers. -->
             <ImageButton
                 android:id="@+id/ml_members_icon"
                 android:layout_width="0dp"
@@ -111,24 +158,86 @@
                 android:background="@null"
                 android:visibility="gone" />
 
-            <ImageButton
-                android:id="@+id/ml_video_icon"
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:background="@null"
-                android:onClick="toggle_group_video"
-                android:visibility="gone" />
-
         </LinearLayout>
     </androidx.appcompat.widget.Toolbar>
+
+    <!-- The band: how many are in the group and online now, then the tiles of who gets a message right
+         now. A tap anywhere opens the group dossier. -->
+    <LinearLayout
+        android:id="@+id/air_group_band"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/air_bg_band"
+        android:clickable="true"
+        android:focusable="true"
+        android:orientation="vertical"
+        android:paddingStart="@dimen/kq_space_16"
+        android:paddingTop="@dimen/kq_space_6"
+        android:paddingEnd="@dimen/kq_space_16"
+        android:paddingBottom="@dimen/kq_space_8">
+
+        <TextView
+            android:id="@+id/air_group_counts"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:fontFeatureSettings="tnum"
+            android:importantForAccessibility="no"
+            android:maxLines="2"
+            android:textAlignment="viewStart"
+            android:textAppearance="@style/TextAppearance.KQ.Caption"
+            android:textColor="@color/kq_ink_2" />
+
+        <LinearLayout
+            android:id="@+id/air_group_reach_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/kq_space_6"
+            android:gravity="center_vertical"
+            android:importantForAccessibility="noHideDescendants"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/air_group_get_now"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="@string/air_group_get_now"
+                android:textAppearance="@style/TextAppearance.KQ.Caption"
+                android:textColor="@color/kq_ink_3" />
+
+            <HorizontalScrollView
+                android:id="@+id/air_group_tiles_scroll"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/kq_space_8"
+                android:layout_weight="1"
+                android:fillViewport="true"
+                android:overScrollMode="never"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/air_group_tiles"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+        </LinearLayout>
+    </LinearLayout>
+
+    <View
+        android:id="@+id/air_group_rule"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/kq_stroke_hairline"
+        android:background="@color/kq_line" />
 
     <!-- the layout which will contain (host) the drawerLayout -->
     <FrameLayout
         android:id="@+id/drawer_container"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_below="@id/toolbar">
-
+        android:layout_height="match_parent">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -324,24 +433,20 @@
 
             <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_weight="1"
-                android:layout_height="0dp">
+                android:layout_height="0dp"
+                android:layout_weight="1">
 
                 <fragment
                     android:id="@+id/ml_fragment"
                     android:name="com.zoffcc.applications.trifa.GroupMessageListFragment"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:layout_height="match_parent"
                     tools:layout="@layout/group_message_list_layout" />
-
             </FrameLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="15dp"
-                android:layout_gravity="bottom"
-                android:layout_weight="0"
+                android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:visibility="gone">
 
@@ -349,126 +454,222 @@
                     android:id="@+id/ml_friend_typing"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
-                    android:layout_marginLeft="8dp"
                     android:layout_weight="1"
-                    android:cursorVisible="true"
                     android:singleLine="true"
                     android:text=""
-                    android:textColor="@android:color/primary_text_light"
-                    android:textSize="12sp"
-                    tools:ignore="NestedWeights" />
+                    android:textColor="@color/kq_ink_2" />
             </LinearLayout>
 
             <include layout="@layout/chat_reply_preview_bar" />
 
+            <!-- The buttons are 48dp touch targets whose plates (air_bg_composer_button, the send plate) are
+                 as tall as the 40dp field; the field's 4dp margins line it up with those plates. -->
             <FrameLayout
                 android:id="@+id/emoji_bar"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="bottom"
-                android:layout_marginStart="@dimen/chat_input_bar_margin_h"
-                android:layout_marginEnd="@dimen/chat_input_bar_margin_h"
-                android:layout_marginBottom="@dimen/chat_input_bar_margin_bottom"
-                android:layout_weight="0"
-                android:background="@drawable/bg_chat_input_bar"
-                android:paddingStart="@dimen/chat_input_bar_padding_h"
-                android:paddingTop="@dimen/chat_input_bar_padding_v"
-                android:paddingEnd="@dimen/chat_input_bar_padding_h"
-                android:paddingBottom="@dimen/chat_input_bar_padding_v">
+                android:background="@drawable/air_bg_composer"
+                android:paddingStart="@dimen/kq_space_4"
+                android:paddingTop="@dimen/kq_space_4"
+                android:paddingEnd="@dimen/kq_space_4">
 
                 <LinearLayout
                     android:id="@+id/emoji_bar_input"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
+                    android:gravity="bottom"
                     android:orientation="horizontal">
 
-                <ImageButton
-                    android:id="@+id/ml_button_01"
-                    android:layout_width="@dimen/chat_input_icon_size"
-                    android:layout_height="@dimen/chat_input_icon_size"
-                    android:layout_gravity="center_vertical"
-                    android:layout_margin="@dimen/chat_input_icon_margin"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:clickable="true"
-                    android:padding="@dimen/chat_input_icon_padding"
-                    android:scaleType="fitCenter"
-                    tools:ignore="ContentDescription"
-                    app:tint="@color/tg_chat_input_icon"
-                    />
+                    <ImageButton
+                        android:id="@+id/ml_button_01"
+                        android:layout_width="@dimen/kq_size_target_android"
+                        android:layout_height="@dimen/kq_size_target_android"
+                        android:background="@drawable/air_bg_composer_button"
+                        android:clickable="true"
+                        android:contentDescription="@string/air_compose_attach"
+                        android:scaleType="center"
+                        android:src="@drawable/kq_ic_plus"
+                        app:tint="@color/air_icon_button_tint" />
 
-                <FrameLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center_vertical"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_chat_message_field">
+                    <FrameLayout
+                        android:id="@+id/air_compose_field"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/kq_space_4"
+                        android:layout_marginBottom="@dimen/kq_space_4"
+                        android:layout_weight="1"
+                        android:addStatesFromChildren="true"
+                        android:background="@drawable/air_bg_field"
+                        android:minHeight="@dimen/kq_size_field">
 
-                <com.vanniktech.emoji.EmojiEditText
-                    android:id="@+id/ml_new_message"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center_vertical"
-                    android:background="@android:color/transparent"
-                    android:backgroundTint="@null"
-                    android:cursorVisible="true"
-                    android:gravity="center_vertical"
-                    android:imeOptions="flagNoPersonalizedLearning|actionSend"
-                    android:includeFontPadding="false"
-                    android:inputType="textCapSentences|textMultiLine"
-                    android:maxLines="5"
-                    android:paddingStart="@dimen/chat_input_field_padding_h"
-                    android:paddingTop="@dimen/chat_input_field_padding_v"
-                    android:paddingEnd="@dimen/chat_input_field_padding_h"
-                    android:paddingBottom="@dimen/chat_input_field_padding_v"
-                    android:singleLine="false"
-                    android:text=""
-                    android:textColor="@color/tg_chat_input_text"
-                    android:textColorHint="@color/tg_chat_input_hint"
-                    android:textSize="@dimen/chat_input_text_size"
-                    tools:ignore="NestedWeights" />
+                        <com.vanniktech.emoji.EmojiEditText
+                            android:id="@+id/ml_new_message"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center_vertical"
+                            android:background="@android:color/transparent"
+                            android:backgroundTint="@null"
+                            android:cursorVisible="true"
+                            android:gravity="center_vertical|start"
+                            android:hint="@string/air_compose_placeholder"
+                            android:imeOptions="flagNoPersonalizedLearning|actionSend"
+                            android:includeFontPadding="false"
+                            android:inputType="textCapSentences|textMultiLine"
+                            android:maxLines="5"
+                            android:minHeight="@dimen/kq_size_field"
+                            android:paddingStart="@dimen/kq_space_12"
+                            android:paddingTop="@dimen/kq_space_8"
+                            android:paddingEnd="@dimen/kq_space_12"
+                            android:paddingBottom="@dimen/kq_space_8"
+                            android:singleLine="false"
+                            android:text=""
+                            android:textAlignment="viewStart"
+                            android:textAppearance="@style/TextAppearance.KQ.Body"
+                            android:textColor="@color/kq_ink"
+                            android:textColorHint="@color/kq_ink_3" />
+                    </FrameLayout>
 
-                </FrameLayout>
+                    <ImageButton
+                        android:id="@+id/insert_emoji"
+                        android:layout_width="@dimen/kq_size_target_android"
+                        android:layout_height="@dimen/kq_size_target_android"
+                        android:background="@drawable/air_bg_composer_button"
+                        android:scaleType="center"
+                        app:srcCompat="@drawable/i_emoji_google_category_people"
+                        app:tint="@color/air_icon_button_tint"
+                        tools:ignore="ContentDescription" />
 
-                <ImageButton
-                    android:id="@+id/insert_emoji"
-                    android:layout_width="@dimen/chat_input_icon_size"
-                    android:layout_height="@dimen/chat_input_icon_size"
-                    android:layout_gravity="center_vertical"
-                    android:layout_margin="@dimen/chat_input_icon_margin"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:padding="@dimen/chat_input_icon_padding"
-                    android:scaleType="fitCenter"
-                    app:srcCompat="@drawable/i_emoji_google_category_people"
-                    tools:ignore="ContentDescription"
-                    app:tint="@color/tg_chat_input_icon"
-                    />
-
-                <ImageButton
-                    android:id="@+id/ml_button_recaudio"
-                    android:layout_width="@dimen/chat_input_icon_size"
-                    android:layout_height="@dimen/chat_input_icon_size"
-                    android:layout_gravity="center_vertical"
-                    android:layout_margin="@dimen/chat_input_icon_margin"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:padding="@dimen/chat_input_icon_padding"
-                    android:scaleType="fitCenter"
-                    android:src="@drawable/baseline_keyboard_voice_24"
-                    app:tint="@color/tg_chat_input_icon"
-                    />
-
+                    <ImageButton
+                        android:id="@+id/ml_button_recaudio"
+                        android:layout_width="@dimen/kq_size_target_android"
+                        android:layout_height="@dimen/kq_size_target_android"
+                        android:background="@drawable/air_bg_composer_button"
+                        android:contentDescription="@string/air_compose_voice"
+                        android:scaleType="center"
+                        android:src="@drawable/kq_ic_mic"
+                        app:tint="@color/kq_ink_2" />
                 </LinearLayout>
 
                 <include layout="@layout/chat_voice_recording_bar" />
-
             </FrameLayout>
 
+            <!-- Who gets a message sent now, and the room left in it once it runs short. -->
+            <LinearLayout
+                android:id="@+id/air_compose_hint_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/kq_surface"
+                android:gravity="center_vertical"
+                android:minHeight="@dimen/kq_size_control_small"
+                android:orientation="horizontal"
+                android:paddingStart="@dimen/kq_space_16"
+                android:paddingEnd="@dimen/kq_space_16"
+                android:paddingBottom="@dimen/kq_space_4">
+
+                <View
+                    android:id="@+id/air_compose_dot"
+                    android:layout_width="@dimen/kq_size_dot"
+                    android:layout_height="@dimen/kq_size_dot"
+                    android:layout_marginEnd="@dimen/kq_space_8"
+                    android:background="@drawable/air_bg_dot"
+                    android:importantForAccessibility="no" />
+
+                <TextView
+                    android:id="@+id/air_compose_hint"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:accessibilityLiveRegion="polite"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:textAlignment="viewStart"
+                    android:textAppearance="@style/TextAppearance.KQ.Caption"
+                    android:textColor="@color/kq_ink_2" />
+
+                <TextView
+                    android:id="@+id/air_compose_counter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/kq_space_8"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="2"
+                    android:textAlignment="viewEnd"
+                    android:textAppearance="@style/TextAppearance.KQ.Caption"
+                    android:textColor="@color/kq_ink_3"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <!-- In place of the composer when you may only read: why, and whom to write to instead. -->
+            <LinearLayout
+                android:id="@+id/air_group_read_only"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/kq_surface"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/kq_stroke_hairline"
+                    android:background="@color/kq_line" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingStart="@dimen/kq_space_16"
+                    android:paddingTop="@dimen/kq_space_12"
+                    android:paddingEnd="@dimen/kq_space_16">
+
+                    <ImageView
+                        android:layout_width="@dimen/kq_size_icon"
+                        android:layout_height="@dimen/kq_size_icon"
+                        android:contentDescription="@null"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/kq_ic_eye"
+                        app:tint="@color/kq_ink_3" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="@dimen/kq_space_8"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/air_group_read_only_text"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:accessibilityLiveRegion="polite"
+                            android:textAlignment="viewStart"
+                            android:textAppearance="@style/TextAppearance.KQ.Air.LabelRegular"
+                            android:textColor="@color/kq_ink_2" />
+
+                        <!-- An observer's bar, in place of the button below: toxcore takes no private
+                             message from an observer either (AirGroupModel.ComposeRight.asks). -->
+                        <TextView
+                            android:id="@+id/air_group_read_only_why"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/kq_space_4"
+                            android:layout_marginBottom="@dimen/kq_space_12"
+                            android:textAlignment="viewStart"
+                            android:textAppearance="@style/TextAppearance.KQ.Caption"
+                            android:textColor="@color/kq_ink_2"
+                            android:visibility="gone" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/air_group_ask"
+                    style="@style/Widget.KQ.Air.Button"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/kq_space_16"
+                    android:layout_marginTop="@dimen/kq_space_10"
+                    android:layout_marginEnd="@dimen/kq_space_16"
+                    android:layout_marginBottom="@dimen/kq_space_12" />
+            </LinearLayout>
         </LinearLayout>
-
-        <!--<include layout="@layout/floating_action_button_group" />-->
-
     </FrameLayout>
-
 </LinearLayout>
-
-

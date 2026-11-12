@@ -73,7 +73,7 @@ public class MediaViewerActivity extends AppCompatActivity
 
     private void failOpenAndFinish()
     {
-        HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+        AirComposerNotice.sayOnReturn(getString(R.string.chat_opening_file_failed), true);
         finish();
     }
 
@@ -230,7 +230,7 @@ public class MediaViewerActivity extends AppCompatActivity
     {
         if (!HelperFiletransfer.isMediaFileReadyToView(vfsPath, storageFramework, exportPath))
         {
-            HelperGeneric.display_toast(getString(R.string.chat_media_still_downloading), false, 0);
+            AirComposerNotice.sayOnReturn(getString(R.string.chat_media_still_downloading), false);
             finish();
             return;
         }
@@ -267,7 +267,7 @@ public class MediaViewerActivity extends AppCompatActivity
                         public void run()
                         {
                             loadingView.setVisibility(View.GONE);
-                            HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+                            AirComposerNotice.sayOnReturn(getString(R.string.chat_opening_file_failed), true);
                             finish();
                         }
                     });
@@ -330,7 +330,7 @@ public class MediaViewerActivity extends AppCompatActivity
             public void onPlayerError(PlaybackException error)
             {
                 Log.i(TAG, "onPlayerError:" + error.getMessage());
-                HelperGeneric.display_toast("opening file failed", false, 0);
+                AirComposerNotice.sayOnReturn(getString(R.string.chat_opening_file_failed), true);
                 finish();
             }
         });

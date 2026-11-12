@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- E21 (redesign stage 5): a line or a row that opens a code under Details, and what it was before (AirErrorDetails). -->
+    <item name="air_error_details" type="id" />
+</resources>

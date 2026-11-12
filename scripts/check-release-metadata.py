@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 MANIFEST = os.path.join(ROOT, "web", "release-manifest.json")
 SITE = os.path.join(ROOT, "web", "index.html")
+SITE_RU = os.path.join(ROOT, "web", "ru", "index.html")
 DOWNLOADS = os.path.join(ROOT, "web", "downloads", "index.html")
 README = os.path.join(ROOT, "README.md")
 
@@ -82,6 +83,10 @@ def check_manifest_is_current(manifest):
 
 CLAIMS = []
 
+# KHANDAQ (release 0.2.40): the "Recent beta improvements" list is a HISTORY of past builds, so it
+# is cut out before scanning (see main()). Shared by both language versions of the home page.
+HISTORY = r'<ul class="highlights">.*?</ul>'
+
 
 def claim(rel, text, pattern, what, expected):
     """Record every published statement of a fact. A pattern that matches nothing is a failure."""
@@ -94,6 +99,16 @@ def claim(rel, text, pattern, what, expected):
             "passed vacuously. Fix the pattern rather than deleting it." % (rel, what))
     for n, got, line in hits:
         CLAIMS.append((rel, n, what, got, expected, line))
+
+
+def android_card(rel, text, expected):
+    """The Android card's version line, which states the Play versionName."""
+    m = re.search(r"<h3>Android</h3>.*?<span class=\"meta\">v([0-9.]+)", text, re.S)
+    if not m:
+        die("%s: the Android card's version line no longer matches — refusing to pass "
+            "vacuously on the one number Play users compare against" % rel)
+    CLAIMS.append((rel, text[:m.start(1)].count("\n") + 1, "Android card version",
+                   m.group(1), expected, "<span class=\"meta\">v%s ..." % m.group(1)))
 
 
 def main():
@@ -129,7 +144,7 @@ def main():
     # Only CURRENT claims are checked, so that block is excluded before scanning. Everything outside
     # it -- the download cards, the Play link, the README table -- is still required to match, and the
     # per-claim "matched nothing" failure below still guarantees this cannot silently cover the page.
-    site_current = re.sub(r'<ul class="highlights">.*?</ul>', "", site, flags=re.S)
+    site_current = re.sub(HISTORY, "", site, flags=re.S)
     # KHANDAQ (audit round 3, F-24): required, not optional.
     #
     # This was `required=False` with an `if downloads:` guard below, so moving or renaming the
@@ -156,12 +171,27 @@ def main():
     claim("web/index.html", site_current, r"(v[0-9.]+) release ", "desktop card release tag", tag)
 
     # The Android card states the PLAY version, which is versionName — not the desktop release tag.
-    m = re.search(r"<h3>Android</h3>.*?<span class=\"meta\">v([0-9.]+)", site_current, re.S)
-    if not m:
-        die("web/index.html: the Android card's version line no longer matches — refusing to pass "
-            "vacuously on the one number Play users compare against")
-    CLAIMS.append(("web/index.html", site_current[:m.start(1)].count("\n") + 1, "Android card version",
-                   m.group(1), android["versionName"], "<span class=\"meta\">v%s ..." % m.group(1)))
+    android_card("web/index.html", site_current, android["versionName"])
+
+    # --- the Russian home page ---------------------------------------------------------------
+    # KHANDAQ (redesign E23, 2026-11-11): web/ru/index.html states the same facts in Russian, so it
+    # drifts the same way and is held to the same standard: the page is required, every pattern must
+    # match at least once, and the history list is cut out first, exactly as for the English page.
+    # The patterns are the Russian wording of the same claims; the numbers they capture are compared
+    # with the same manifest fields.
+    site_ru = re.sub(HISTORY, "", read(SITE_RU), flags=re.S)
+    claim("web/ru/index.html", site_ru, r"Пакет <code>([a-z0-9_.]+)</code>",
+          "Android package", android["applicationId"])
+    claim("web/ru/index.html", site_ru, r"play\.google\.com/store/apps/details\?id=([a-z0-9_.]+)",
+          "Play listing id", android["applicationId"])
+    claim("web/ru/index.html", site_ru, r"Android (\d+)\+",
+          "minimum Android release", min_android)
+    claim("web/ru/index.html", site_ru, r"сборка TestFlight (\d+)",
+          "iOS build number", ios["buildNumber"])
+    claim("web/ru/index.html", site_ru, r"var release = '(v[0-9.]+)'",
+          "desktop release tag", tag)
+    claim("web/ru/index.html", site_ru, r"Релиз (v[0-9.]+) ", "desktop card release tag", tag)
+    android_card("web/ru/index.html", site_ru, android["versionName"])
 
     claim("web/downloads/index.html", downloads,
           r"play\.google\.com/store/apps/details\?id=([a-z0-9_.]+)",

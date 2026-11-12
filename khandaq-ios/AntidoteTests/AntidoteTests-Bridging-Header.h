@@ -30,6 +30,16 @@
 #import <objcTox/OCTToxConstants.h>
 #import <objcTox/OCTView.h>
 
+// Redesign stage 3, item 10: the receive paths of the KQ packets (1:1 186, 187, 188 and group 0x41,
+// 0x42, 0x43), declared here so the tests can hand them the bytes Android sends. objcTox is unchanged.
+void friendLosslessPacketCallback(void *cTox, uint32_t friendNumber, const uint8_t *data, size_t length, void *userData);
+
+@interface OCTSubmanagerGroupsImpl : NSObject
+- (BOOL)handleIncomingGroupEditPacketWithGroupNumber:(OCTToxGroupNumber)groupNumber peerId:(uint32_t)peerId data:(NSData *)data;
+- (BOOL)handleIncomingGroupDeletePacketWithGroupNumber:(OCTToxGroupNumber)groupNumber peerId:(uint32_t)peerId data:(NSData *)data;
+- (BOOL)handleIncomingGroupReactionPacketWithGroupNumber:(OCTToxGroupNumber)groupNumber peerId:(uint32_t)peerId data:(NSData *)data;
+@end
+
 #undef LOG_INFO
 #undef LOG_DEBUG
 #import "DDLog.h"

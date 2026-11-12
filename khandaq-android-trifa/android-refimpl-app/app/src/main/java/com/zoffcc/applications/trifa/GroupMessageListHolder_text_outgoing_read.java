@@ -89,6 +89,12 @@ public class GroupMessageListHolder_text_outgoing_read extends RecyclerView.View
         img_corner = (ImageView) itemView.findViewById(R.id.img_corner);
         text_block_group = (LinearLayout) itemView.findViewById(R.id.text_block_group);
         layout_message_container = (ViewGroup) itemView.findViewById(R.id.layout_message_container);
+
+        // KHANDAQ (redesign, stage 3b): the group conversation's text rows are entries of the transcript.
+        if (AirTranscript.isEntry(itemView))
+        {
+            AirTranscript.prepare(itemView, textView);
+        }
     }
 
     public void bindMessageList(GroupMessage m)
@@ -104,6 +110,13 @@ public class GroupMessageListHolder_text_outgoing_read extends RecyclerView.View
         {
             GroupMessageLayoutHelper.applyRowVisibility(itemView, layout_message_container,
                     GroupMessageLayoutHelper.hiddenRowLayout());
+            return;
+        }
+
+        // KHANDAQ (redesign, stage 3b): as in a conversation with one person, no bubble and our mark.
+        if (AirTranscript.isEntry(itemView))
+        {
+            bindEntry(m);
             return;
         }
 
@@ -234,6 +247,97 @@ public class GroupMessageListHolder_text_outgoing_read extends RecyclerView.View
                 meta -> HelperReply.scrollToReplyTargetInGroupChat(meta));
 
         HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+    }
+
+    /**
+     * KHANDAQ (redesign, stage 3b): this row as an entry of the transcript (AirTranscript.bindGroupText):
+     * "You" over a run, the line naming the member a private message went to, and our mark: the transit
+     * mark while the group is not connected, a clock while it leaves, one check sent, two confirmed.
+     */
+    private void bindEntry(final GroupMessage m)
+    {
+        final int position = this.getAdapterPosition();
+        final GroupMessageLayoutHelper.RowLayout rowLayout = GroupMessageLayoutHelper.layoutFor(m, position, context);
+        GroupMessageLayoutHelper.applyRowVisibility(itemView, layout_message_container, rowLayout);
+        if (rowLayout.hideEntireRow)
+        {
+            return;
+        }
+        if (MainActivity.group_message_list_fragment != null
+            && MainActivity.group_message_list_fragment.adapter != null)
+        {
+            ChatDateSeparatorHelper.bindInlineDateHeader(itemView, position,
+                                                         MainActivity.group_message_list_fragment.adapter);
+        }
+
+        is_selected = !selected_group_messages.isEmpty() && selected_group_messages.contains(m.id);
+        layout_message_container.setOnClickListener(onclick_listener);
+        layout_message_container.setOnLongClickListener(onlongclick_listener);
+        textView.setOnLongClickListener(view -> {
+            layout_message_container.performLongClick();
+            return true;
+        });
+
+        textView.setCustomRegex(TOXURL_PATTERN);
+        final GroupMentionHelper.ParsedGroupText parsedGroup = GroupMentionHelper.parse(m.text);
+        final boolean locationBound = HelperLocationMessage.bind(itemView, textView, parsedGroup.bodyText, true);
+        if (!locationBound)
+        {
+            GroupMessageBubbleTextHelper.bind(textView, parsedGroup, m.group_identifier, context,
+                                              group_search_messages_text);
+        }
+        if (text_block_group != null)
+        {
+            ChatBubbleUiHelper.bind_reply_quote(text_block_group, parsedGroup.reply,
+                                                meta -> HelperReply.scrollToReplyTargetInGroupChat(meta));
+        }
+
+        final AirTranscript.GroupEntry entry = new AirTranscript.GroupEntry();
+        entry.author = context.getString(R.string.air_you);
+        entry.authorColor = AirUi.color(context, R.color.kq_ink_2);
+        if (m.private_message == 1)
+        {
+            entry.privateNote = context.getString(R.string.air_group_private_to_format, privateRecipientName(m));
+        }
+        final boolean leaving = MessageStatusHelper.resolveGroupOutgoing(m) == MessageStatusHelper.OutgoingStatus.SENDING;
+        entry.status = AirTranscript.groupStatus(m, !leaving || groupConnected(m.group_identifier));
+        AirTranscript.bindGroupText(itemView, position, m, parsedGroup, locationBound, is_selected, entry);
+    }
+
+    /** The member a private message of ours went to, by the name the group knows, else "A member". */
+    private String privateRecipientName(final GroupMessage m)
+    {
+        final String key = m.sent_privately_to_tox_group_peer_pubkey;
+        if ((key != null) && (key.length() >= 10))
+        {
+            try
+            {
+                final String name = resolve_name_for_pubkey(key, tox_group_peer_get_name__wrapper(m.group_identifier, key));
+                if ((name != null) && !name.trim().isEmpty() && !"-1".equals(name))
+                {
+                    return name;
+                }
+            }
+            catch (Exception ignored)
+            {
+                // No name for that key now.
+            }
+        }
+        return context.getString(R.string.air_group_author_unknown);
+    }
+
+    private static boolean groupConnected(final String groupId)
+    {
+        try
+        {
+            final long groupNum = HelperGroup.tox_group_by_groupid__wrapper(groupId);
+            return (groupNum >= 0) && (MainActivity.tox_group_is_connected(groupNum)
+                                       == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value);
+        }
+        catch (Throwable ignored)
+        {
+            return false;
+        }
     }
 
     @Override

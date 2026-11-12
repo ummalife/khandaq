@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Review fixes (redesign, stage 5): the line over the first-launch password, Share, a message from a hidden IRC name, a profile whose files do not open -->
+    <string name="air_first_password_for_profile">Для профиля %1$s</string>
+    <string name="share_choose_target">Выберите, куда отправить</string>
+    <string name="share_turned_off">Отправка из других приложений выключена. Включить её можно в настройках, в разделе «Расширенные настройки».</string>
+    <string name="share_no_targets">Пока некуда отправить: нет ни одного чата.</string>
+    <string name="air_irc_message_hidden">Сообщение от скрытого имени IRC</string>
+    <string name="air_signin_not_opened">Файлы профиля на этом телефоне не открываются ключом этого профиля. Чтобы снова пользоваться Khandaq, удалите их и создайте новый профиль.</string>
+    <string name="air_signin_not_opened_title">Профиль не открывается</string>
+    <string name="air_signin_not_opened_message">Новый профиль получит новый ID и займёт место этого: этот профиль, его контакты и история удалятся с телефона.</string>
+</resources>

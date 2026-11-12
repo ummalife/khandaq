@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Redesign stage 3b: files, photos and voice notes as entries of the transcript (E8); iOS wording where iOS has it -->
+    <string name="air_file_accept">接收</string>
+    <string name="air_file_decline">拒绝</string>
+    <string name="air_file_cancel">取消</string>
+    <string name="air_file_retry_incoming">重新下载</string>
+    <string name="air_file_retry_outgoing">重新发送</string>
+    <string name="air_file_left_format">剩余 %s</string>
+    <string name="air_file_paused">已暂停</string>
+    <string name="air_file_failed_incoming">下载已中断</string>
+    <string name="air_file_failed_outgoing">未发送</string>
+    <string name="air_file_waits_accept_format">等待 %s 接收</string>
+    <string name="air_file_waits_online_format">%s 上线后发送</string>
+    <string name="air_voice_listen">收听</string>
+    <string name="air_voice_pause">暂停</string>
+    <string name="air_voice_spoken">语音消息</string>
+    <string name="air_file_saved_format">已保存到 %s</string>
+    <string name="air_file_saved_app_folder_format">已保存到应用文件夹：%s</string>
+    <string name="air_file_save_failed">文件未保存，请重试</string>
+    <string name="air_file_export_title">将副本保存到手机？</string>
+    <string name="air_file_export_message">副本存放在 Khandaq 之外，未加密。</string>
+    <string name="air_file_export_action">保存</string>
+    <string name="air_file_saving">正在保存文件</string>
+    <string name="air_file_save">保存到手机</string>
+    <string name="air_file_share">分享</string>
+    <!-- Redesign stage 3b: the question before a file of theirs is declined, and a group file that waits for the group -->
+    <string name="air_file_decline_title">拒绝这个文件？</string>
+    <string name="air_file_decline_message">文件不会下载到这部手机，发送方会看到它没有送达。</string>
+    <string name="air_file_waits_group">群组连上后发送</string>
+</resources>

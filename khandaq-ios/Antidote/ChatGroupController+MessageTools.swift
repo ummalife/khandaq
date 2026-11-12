@@ -24,15 +24,38 @@ extension ChatGroupController {
             editMessagesToolbarBottomConstraint = $0.bottom.equalTo(chatInputView.snp.top).constraint
         }
 
-        if #available(iOS 11.0, *) {
-            let searchController = UISearchController(searchResultsController: nil)
-            searchController.obscuresBackgroundDuringPresentation = false
-            searchController.searchResultsUpdater = self
-            searchController.searchBar.placeholder = String(localized: "group_messages_search_placeholder")
-            navigationItem.searchController = searchController
-            navigationItem.hidesSearchBarWhenScrolling = true
-            definesPresentationContext = true
-            messageSearchController = searchController
+        // KHANDAQ (redesign stage 3, E13): search waits behind its button in the header
+        // (groupSearchButtonPressed) and goes back behind it once closed.
+    }
+
+    func setupGroupMessageSearch() {
+        let searchController = UISearchController(searchResultsController: nil)
+        searchController.obscuresBackgroundDuringPresentation = false
+        searchController.searchResultsUpdater = self
+        searchController.delegate = self
+        searchController.searchBar.placeholder = String(localized: "group_messages_search_placeholder")
+        navigationItem.searchController = searchController
+        // The log is vertically flipped, which inverts the pull-to-reveal gesture: the bar stays put.
+        navigationItem.hidesSearchBarWhenScrolling = false
+        definesPresentationContext = true
+        messageSearchController = searchController
+    }
+
+    @objc func groupSearchButtonPressed() {
+        if messageSearchController == nil {
+            setupGroupMessageSearch()
+            navigationController?.navigationBar.setNeedsLayout()
+            navigationController?.view.layoutIfNeeded()
+        }
+        // The bar has to be in the navigation bar before it can take the keyboard.
+        DispatchQueue.main.async { [weak self] in
+            guard let controller = self?.messageSearchController else {
+                return
+            }
+            controller.isActive = true
+            DispatchQueue.main.async {
+                controller.searchBar.becomeFirstResponder()
+            }
         }
     }
 
@@ -75,6 +98,10 @@ extension ChatGroupController {
     }
 
     func startReply(to message: OCTMessageAbstract) {
+        // KHANDAQ (redesign stage 3, E13): no reply where you may only read; the field is not there.
+        guard groupComposeRight == .write else {
+            return
+        }
         replyController.startReply(to: message, submanagerObjects: submanagerObjects, theme: theme)
         _ = chatInputView.becomeFirstResponder()
     }
@@ -193,6 +220,19 @@ extension ChatGroupController {
 extension ChatGroupController: ChatReplySwipeDelegate {
     func chatCellDidRequestReply(_ cell: ChatMovableDateCell) {
         chatMovableDateCellReplyPressed(cell)
+    }
+}
+
+extension ChatGroupController: UISearchControllerDelegate {
+    /// Search goes back behind its button once it is closed.
+    func didDismissSearchController(_ searchController: UISearchController) {
+        navigationItem.searchController = nil
+        messageSearchController = nil
+        guard !messageSearchQuery.isEmpty else {
+            return
+        }
+        messageSearchQuery = ""
+        tableView?.reloadData()
     }
 }
 

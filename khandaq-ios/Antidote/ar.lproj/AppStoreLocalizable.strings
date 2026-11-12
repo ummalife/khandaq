@@ -1,0 +1,59 @@
+/* Stage 2 of the redesign: the demo world of the UI tests' mock profile (OCTManagerMock). Made-up people. */
+"demo_s2_amina" = "أمينة صافي";
+"demo_s2_amina_status" = "في الجبال في عطلة نهاية الأسبوع";
+"demo_s2_yusuf" = "يوسف كريم";
+"demo_s2_bilal" = "بلال حداد";
+"demo_s2_long" = "عبد الرحمن بن عبد العزيز بن محمد آل الحسيني الهاشمي";
+"demo_s2_leila" = "ليلى ناصر";
+"demo_s2_group_founder" = "نادي المشي";
+"demo_s2_group_observer" = "إعلانات المسجد";
+"demo_s2_group_peer_imam" = "الإمام خالد";
+"demo_s2_bulk_format" = "جهة اتصال %d";
+"demo_s2_bulk_message" = "إلى اللقاء";
+"demo_s2_amina_1" = "مرحبًا! هل نذهب إلى الجبال يوم السبت؟";
+"demo_s2_amina_2" = "نعم، إن بقي الطقس جيدًا";
+"demo_s2_amina_3" = "التوقعات جيدة، شمس طوال اليوم";
+"demo_s2_amina_4" = "إذن ننطلق في السادسة، سآخذ الخيمة";
+"demo_s2_amina_5" = "رائع. سأحضر الموقد والماء";
+"demo_s2_amina_6" = "سأرسل قائمة الأغراض مساءً";
+"demo_s2_amina_7" = "اتفقنا";
+"demo_s2_amina_8" = "نلتقي عند المحطة في 5:45";
+"demo_s2_yusuf_1" = "سآخذ مفاتيح المرآب غدًا";
+"demo_s2_yusuf_2" = "حسنًا، أكون في البيت بعد السابعة";
+"demo_s2_yusuf_3" = "يوسف، هل القائمة ما زالت قائمة؟ أريد المرور على المتجر بعد العمل";
+"demo_s2_yusuf_4" = "وذكّرني كم ماءً نأخذ";
+"demo_s2_yusuf_5" = "سأكون عندك في 19:30";
+"demo_s2_bilal_1" = "أرسلت لك خطة المسار";
+"demo_s2_bilal_2" = "شكرًا، سألقي نظرة";
+"demo_s2_bilal_failed" = "متى قطار العودة؟";
+"demo_s2_long_1" = "شكرًا على الكتاب!";
+"demo_s2_saved_1" = "رمز الباب عند أمي: 2741";
+"demo_s2_saved_2" = "شراء: خبز، تمر، شاي";
+"demo_s2_group_1" = "من سيأتي يوم السبت؟ سجّلوا قبل المساء";
+"demo_s2_group_2" = "تبدأ خطبة الجمعة الساعة 13:00";
+
+/* Stage 3 of the redesign: more of the demo world (requests, invitations, groups). Made-up people. */
+"demo_s3_request_1" = "السلام عليكم! أنا تيمور، تعارفنا في المحاضرة يوم السبت.";
+"demo_s3_invite_book" = "نادي الكتاب";
+"demo_s3_invite_family" = "العائلة";
+"demo_s3_timur" = "تيمور أحمدوف";
+"demo_s3_self" = "سمير ولييف";
+"demo_s3_peer_khadija" = "خديجة نورييفا";
+"demo_s3_peer_omar" = "عمر سعيدوف";
+"demo_s3_peer_zaynab" = "زينب علييفا";
+"demo_s3_peer_ibrahim" = "إبراهيم حسنوف";
+"demo_s3_peer_maryam" = "مريم خليلوفا";
+"demo_s3_peer_hamza" = "حمزة رشيدوف";
+"demo_s3_listener_format" = "مستمع %d";
+"demo_s3_group_bilal" = "مسار السبت: 14 كم، مع صعود حاد واحد في البداية";
+"demo_s3_group_omar" = "عندي موقدان إضافيان إن احتاج أحد";
+"demo_s3_group_khadija_format" = "@%@، هل يمكنني إحضار أختي؟ عمرها 16 سنة";
+"demo_s3_group_self" = "بالطبع، كلما زاد العدد كان أفضل. نلتقي عند المحطة الساعة 5:45";
+"demo_s3_group_hamza" = "ابتداءً من الأسبوع القادم تبدأ دروس الجمعة الساعة 19:00";
+"demo_s3_bilal_caption" = "نلتقي هنا، عند المخرج الشمالي";
+"demo_s3_self_status" = "أرد في المساء";
+"demo_s3_band_message" = "صور يوم السبت في المجموعة، ألقِ نظرة";
+"demo_s3_band_invite_group" = "السبت عند النهر";
+
+/* Redesign stage 5: the private messages with the moderator */
+"demo_s5_private_hamza" = "السلام عليكم! سألتني بعد الدرس هل يمكنك الكتابة في المجموعة. سأسأل الإمام، فهو المؤسس.";

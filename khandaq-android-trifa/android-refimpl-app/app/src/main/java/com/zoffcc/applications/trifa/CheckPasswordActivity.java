@@ -19,153 +19,506 @@
 
 package com.zoffcc.applications.trifa;
 
-import org.khandaq.messenger.R;
-
 import android.content.Context;
 import android.content.Intent;
-import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.Editable;
 import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.util.Log;
-import android.view.KeyEvent;
 import android.view.View;
-import android.view.View.OnClickListener;
-import android.widget.Button;
-import android.widget.ProgressBar;
+import android.view.animation.AnimationUtils;
+import android.view.autofill.AutofillManager;
+import android.view.inputmethod.EditorInfo;
+import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
-import androidx.appcompat.app.AppCompatActivity;
+import androidx.activity.OnBackPressedCallback;
+import androidx.annotation.Nullable;
+import androidx.annotation.StringRes;
+import androidx.appcompat.app.ActionBar;
+import androidx.core.view.ViewCompat;
+import androidx.preference.PreferenceManager;
 
-import com.google.android.material.textfield.TextInputEditText;
+import org.khandaq.messenger.R;
+
+import java.io.File;
 
 import static com.zoffcc.applications.trifa.TRIFAGlobals.PREF__DB_secrect_key__user_hash;
 
-public class CheckPasswordActivity extends AppCompatActivity
+/**
+ * KHANDAQ (redesign stage 4, E20): sign-in, as AirSignInController on iOS. The profile's name stands as
+ * the title and is the username half of the form, so a password manager saves and offers the pair; the
+ * password field carries the password autofill hint. Why the profile did not open stands under the field
+ * in red, never in a dialog: a wrong password (the field shakes once, not with reduced motion), a damaged
+ * file, or no access to it. A profile without a password shows its name and Log in only.
+ *
+ * What opens a profile is unchanged: a session still logged in opens by itself with the key kept for it,
+ * a typed password is checked by DbSecretKeyStorage against the database, and "Forgot the password?"
+ * deletes the profile only after a sheet has said so and the verb on its button was tapped. Android
+ * keeps one profile, so the new profile takes the place of this one.
+ */
+public class CheckPasswordActivity extends AirScreenActivity
 {
     private static final String TAG = "trifa.CheckPasswordActy";
+    /**
+     * KHANDAQ (stage 5): set when the database, the file store or the Tox save of this profile would not
+     * open with its key (noteProfileNotOpened), and cleared when the profile is opened again or deleted.
+     * While it is set, this page says so and offers Delete and create new instead of opening by itself
+     * into the same failure.
+     */
+    static final String PREF_PROFILE_NOT_OPENED = "kq_profile_not_opened";
+    /** The Tox save next to the database; read only to tell a damaged profile from a wrong password. */
+    private static final String SAVEDATA_NAME = "savedata.tox";
+    /** The sign-in page grows by this much as it lifts away into Air (design/DESIGN.md). */
+    private static final float LIFT_SCALE = 1.04f;
 
-    // UI references.
-    private TextInputEditText mPasswordView1;
-    private View mLoginFormView;
-    private ProgressBar mProgressView;
-    private UnlockTask mUnlockTask;
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private AirStepKit.MainBar bar;
+    @Nullable
+    private AirStepKit.LineField passwordField;
+    @Nullable
+    private TextView note;
+    @Nullable
+    private TextView forgotButton;
+    /** Delete and create new, shown only while this profile's files do not open (PREF_PROFILE_NOT_OPENED). */
+    @Nullable
+    private TextView startOverButton;
+    private boolean busy = false;
+    private boolean opening = false;
+    private boolean destroyed = false;
 
     @Override
-    protected void onCreate(Bundle savedInstanceState)
+    protected int screenTitle()
+    {
+        return R.string.air_signin_go;
+    }
+
+    @Override
+    protected boolean headerRule()
+    {
+        return false;
+    }
+
+    @Override
+    protected void onCreate(@Nullable final Bundle savedInstanceState)
     {
         Log.i(TAG, "onCreate");
-
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_check_password);
 
-        mPasswordView1 = findViewById(R.id.password_1_c);
-        mLoginFormView = findViewById(R.id.login_form_2);
-        mProgressView = findViewById(R.id.login_progress_2);
-        if (mPasswordView1 == null)
-        {
-            Log.e(TAG, "password field missing from layout");
-            Toast.makeText(this, R.string.wrong_credentials_error, Toast.LENGTH_LONG).show();
-            finish();
-            return;
-        }
-        mPasswordView1.requestFocus();
-        mPasswordView1.setOnEditorActionListener(new TextView.OnEditorActionListener()
-        {
-            @Override
-            public boolean onEditorAction(TextView textView, int id, KeyEvent keyEvent)
-            {
-                return true;
-            }
-        });
-
-        Button SignInButton = (Button) findViewById(R.id.set_button_2);
-        SignInButton.setOnClickListener(new OnClickListener()
-        {
-            @Override
-            public void onClick(View view)
-            {
-                Log.i(TAG, "unlock:002");
-                attemptUnlock_new(view.getContext(), false, mPasswordView1.getText().toString());
-            }
-        });
-
-        // KHANDAQ (#9): Back on the login screen — single-profile app has nowhere to navigate back to,
-        // so minimise the app instead of leaving it sitting unlocked-but-visible.
-        final View backButton = findViewById(R.id.login_back);
-        if (backButton != null)
-        {
-            backButton.setOnClickListener(v -> moveTaskToBack(true));
-        }
-
-        // KHANDAQ (#5a): recovery entry point for a forgotten password.
-        final View forgotLink = findViewById(R.id.forgot_password_link);
-        if (forgotLink != null)
-        {
-            forgotLink.setOnClickListener(v -> showRecoveryDialog());
-        }
-
+        String key = null;
         try
         {
             /* if the database secret key is saved in preferences, it means the user did NOT want to set a password.
              * and for our purpose we can also skip the password enter screen
              */
-            String DB_secrect_key__tmp = DbSecretKeyStorage.loadAutoGeneratedKey(this);
-            if (TextUtils.isEmpty(DB_secrect_key__tmp))
+            key = DbSecretKeyStorage.loadAutoGeneratedKey(this);
+            if (TextUtils.isEmpty(key))
             {
-                DB_secrect_key__tmp = DbSecretKeyStorage.resolveDbSecretKey(this);
-            }
-
-            Log.i(TAG, "001");
-
-            // KHANDAQ (session persistence): a manual-password user who is still LOGGED IN (never
-            // pressed «Выйти») must not be re-asked the password just because the OS killed the idle
-            // process — the app-lock PIN is the idle gate. The Keystore-wrapped last-working key is
-            // probed against the real DB, so a wrong key can never auto-unlock by construction.
-            if (!TextUtils.isEmpty(DB_secrect_key__tmp)
-                    && (!DbSecretKeyStorage.prefersManualPasswordUnlock(this)
-                        || DbSecretKeyStorage.isSessionLoggedIn(this)))
-            {
-                Log.i(TAG, "auto_generated_password:true");
-                Log.i(TAG, "003");
-                attemptUnlock_new(this, true, DB_secrect_key__tmp);
-                Log.i(TAG, "004");
+                key = DbSecretKeyStorage.resolveDbSecretKey(this);
             }
         }
         catch (Exception e)
         {
             Log.i(TAG, "EE:002");
         }
-        Log.i(TAG, "006");
+
+        // KHANDAQ (session persistence): a profile still LOGGED IN (never Log out) is not asked again just
+        // because the OS killed the idle process; the app-lock PIN is the idle gate. The Keystore-wrapped
+        // last-working key is probed against the real DB, so a wrong key can never auto-unlock.
+        // KHANDAQ (redesign stage 4, E20): after an explicit Log out a profile without a password waits for
+        // Log in on this page instead of opening by itself (it used to be routed to onboarding).
+        // KHANDAQ (stage 5): a profile whose files did not open last time waits here with the reason, even when
+        // its session was never logged out, so a start never runs into the same failure by itself again.
+        final boolean notOpened = PreferenceManager.getDefaultSharedPreferences(this)
+                                                   .getBoolean(PREF_PROFILE_NOT_OPENED, false);
+        // KHANDAQ (stage 5): a profile file the app cannot read stops the start on this page with the reason
+        // and its code, as iOS does (ProfileOpening 1 and 2); opening on would start Tox without its save,
+        // under an ID that is not this profile's. Nothing is written, so the next start looks again.
+        final AirProfileCheck.Verdict noAccess = AirProfileCheck.unreadable(databaseFile(this), saveFile(this));
+        if (noAccess != null)
+        {
+            // A warning, so release builds log it too.
+            Log.w(TAG, "profile files not readable: " + noAccess.code);
+        }
+        if (!notOpened && noAccess == null && !TextUtils.isEmpty(key) && DbSecretKeyStorage.isSessionLoggedIn(this))
+        {
+            Log.i(TAG, "auto_generated_password:true");
+            finishUnlock(key);
+            return;
+        }
+        final boolean needsPassword = TextUtils.isEmpty(key) || DbSecretKeyStorage.prefersManualPasswordUnlock(this);
+
+        final ActionBar actionBar = getSupportActionBar();
+        if (actionBar != null)
+        {
+            // Sign-in is the first page of the app: there is nothing behind it to go back to.
+            actionBar.setDisplayHomeAsUpEnabled(false);
+            actionBar.setTitle(null);
+        }
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true)
+        {
+            @Override
+            public void handleOnBackPressed()
+            {
+                // KHANDAQ (#9): a single-profile app has nowhere to navigate back to, so the app goes to
+                // the background instead of leaving this page sitting on the screen.
+                moveTaskToBack(true);
+            }
+        });
+        // Done in the field hands the focus to the column, so the field does not raise the keyboard again.
+        column.setFocusableInTouchMode(true);
+        column.setDefaultFocusHighlightEnabled(false);
+
+        final String name = DbSecretKeyStorage.loadProfileName(this);
+        final boolean named = !TextUtils.isEmpty(name);
+        final CharSequence title = named ? name : getString(R.string.air_signin_profile_fallback);
+        setTitle(title);
+        // The name is the username half of the password form; a profile whose name is not known yet (one
+        // logged out before this version wrote it down) is not offered to password managers under a stand-in.
+        final TextView nameView = named && needsPassword
+                                  ? new AirStepKit.UsernameText(this, R.style.TextAppearance_KQ_Display, R.color.kq_ink)
+                                  : AirScreenKit.text(this, R.style.TextAppearance_KQ_Display, R.color.kq_ink);
+        nameView.setText(title);
+        nameView.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        nameView.setTextDirection(View.TEXT_DIRECTION_LOCALE);
+        ViewCompat.setAccessibilityHeading(nameView, true);
+        column.addView(nameView, AirScreenKit.matchWidth());
+
+        if (!needsPassword)
+        {
+            final String profileKey = key;
+            column.addView(AirScreenKit.body(this, getString(R.string.air_signin_no_password)),
+                           spaced(R.dimen.kq_space_8));
+            TextView why = null;
+            if (notOpened)
+            {
+                // No password to forget, so the way out stands here: the reason, then Delete and create new.
+                why = AirStepKit.fieldNote(this, null);
+                column.addView(why, spaced(R.dimen.kq_space_16));
+                AirUi.sayOnLine(why, getString(R.string.air_signin_not_opened), true);
+                addStartOverButton();
+            }
+            else if (noAccess != null)
+            {
+                why = AirStepKit.fieldNote(this, null);
+                column.addView(why, spaced(R.dimen.kq_space_16));
+                AirUi.sayOnLine(why, getString(R.string.air_signin_no_access), true, noAccess.code);
+            }
+            final TextView reason = why;
+            bar = new AirStepKit.MainBar(this, getString(R.string.air_signin_go),
+                                         () -> logInWithoutPassword(profileKey, reason));
+            return;
+        }
+
+        final AirStepKit.LineField field = new AirStepKit.LineField(this, getString(R.string.air_first_password_placeholder),
+                                                                    true);
+        field.edit.setAutofillHints(View.AUTOFILL_HINT_PASSWORD);
+        field.edit.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_YES);
+        // The password never goes into the saved state of the page.
+        field.edit.setSaveEnabled(false);
+        field.edit.setContentDescription(getString(R.string.air_first_password_placeholder));
+        field.edit.setImeOptions(EditorInfo.IME_ACTION_GO);
+        field.edit.setOnEditorActionListener((v, actionId, event) -> {
+            if (AirStepKit.enterArming(actionId, event))
+            {
+                return true;
+            }
+            if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE
+                || actionId == EditorInfo.IME_NULL)
+            {
+                signIn();
+                return true;
+            }
+            return false;
+        });
+        field.edit.addTextChangedListener(new TextWatcher()
+        {
+            @Override
+            public void beforeTextChanged(final CharSequence s, final int start, final int count, final int after)
+            {
+            }
+
+            @Override
+            public void onTextChanged(final CharSequence s, final int start, final int before, final int count)
+            {
+            }
+
+            @Override
+            public void afterTextChanged(final Editable s)
+            {
+                passwordChanged();
+            }
+        });
+        passwordField = field;
+        column.addView(field, spaced(R.dimen.kq_space_24));
+        note = AirStepKit.fieldNote(this, null);
+        column.addView(note, spaced(R.dimen.kq_space_6));
+        forgotButton = AirStepKit.quietButton(this, getString(R.string.air_signin_forgot));
+        forgotButton.setOnClickListener(v -> forgotTapped());
+        column.addView(AirScreenKit.leading(forgotButton), spaced(R.dimen.kq_space_2));
+        if (notOpened)
+        {
+            // The right password opens the database but not the files left with it: the reason stands under
+            // the field, and Delete and create new under Forgot the password?, which leads to the same.
+            AirUi.sayOnLine(note, getString(R.string.air_signin_not_opened), true);
+            addStartOverButton();
+        }
+        else if (noAccess != null)
+        {
+            // No password opens a file that does not read: the reason and its code stand under the field.
+            AirUi.sayOnLine(note, getString(R.string.air_signin_no_access), true, noAccess.code);
+        }
+
+        bar = new AirStepKit.MainBar(this, getString(R.string.air_signin_go), this::signIn);
+        updateWaiting();
+        AirStepKit.showKeyboard(field.edit);
     }
 
-    // KHANDAQ (#5a): explain why a lost password can't be recovered (data is password-encrypted) and
-    // offer to start over. The profile is single-instance, so "start over" wipes the current DB.
-    private void showRecoveryDialog()
+    @Override
+    protected void onStop()
     {
-        new androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle(R.string.recovery_dialog_title)
-                .setMessage(R.string.recovery_dialog_message)
-                .setPositiveButton(R.string.recovery_create_new, (d, w) -> confirmWipeAndRestart())
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
+        super.onStop();
+        if (!opening && !isChangingConfigurations() && isFinishing())
+        {
+            // Left another way than into the profile: a typed password is not offered for saving.
+            forgetPassword();
+        }
     }
 
-    private void confirmWipeAndRestart()
+    @Override
+    protected void onDestroy()
     {
-        new androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle(R.string.recovery_confirm_wipe_title)
-                .setMessage(R.string.recovery_confirm_wipe_message)
-                .setPositiveButton(R.string.recovery_confirm_wipe_yes, (d, w) -> performRecoveryWipe())
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
+        destroyed = true;
+        main.removeCallbacksAndMessages(null);
+        super.onDestroy();
     }
 
-    // KHANDAQ (#5a): mirror ProfileDetailsActivity.performProfileWipe — flag a pending wipe, then end
-    // the process so StartMainActivityWrapper deletes the encrypted DB in a fresh process (no open
-    // file handles) and routes into the onboarding (create / import) flow. Existing DB gone → set_pattern.
+    // ---- the password ----
+
+    private void passwordChanged()
+    {
+        if (busy)
+        {
+            return;
+        }
+        if (note != null)
+        {
+            AirStepKit.showHint(note, null);
+        }
+        updateWaiting();
+    }
+
+    private void updateWaiting()
+    {
+        if (bar == null || busy || passwordField == null)
+        {
+            return;
+        }
+        bar.setWaiting(passwordField.text().isEmpty() ? getString(R.string.air_signin_enter_password) : null);
+    }
+
+    private void signIn()
+    {
+        final AirStepKit.LineField field = passwordField;
+        if (busy || opening || field == null)
+        {
+            return;
+        }
+        final String password = field.text();
+        if (password.isEmpty())
+        {
+            updateWaiting();
+            return;
+        }
+        setBusy(true);
+        final Context app = getApplicationContext();
+        new Thread(() -> {
+            final File database = databaseFile(app);
+            final File save = saveFile(app);
+            // A file that does not read fails before the password is tried: no password opens it.
+            AirProfileCheck.Verdict failure = AirProfileCheck.unreadable(database, save);
+            String hash = null;
+            if (failure == null)
+            {
+                try
+                {
+                    hash = DbSecretKeyStorage.unlockManualPasswordHash(app, password);
+                }
+                catch (Exception e)
+                {
+                    Log.i(TAG, "unlock:EE:" + e.getMessage());
+                }
+                if (TextUtils.isEmpty(hash))
+                {
+                    failure = AirProfileCheck.check(database, save);
+                }
+            }
+            final String opened = hash;
+            final AirProfileCheck.Verdict why = failure;
+            main.post(() -> unlockDone(opened, why));
+        }, "kq-signin").start();
+    }
+
+    private void unlockDone(@Nullable final String hash, @Nullable final AirProfileCheck.Verdict verdict)
+    {
+        if (destroyed || passwordField == null || note == null)
+        {
+            return;
+        }
+        if (TextUtils.isEmpty(hash))
+        {
+            setBusy(false);
+            final AirProfileCheck.Failure why = verdict == null ? AirProfileCheck.Failure.WRONG_PASSWORD
+                                                                : verdict.failure;
+            // A file it cannot read or a damaged save ends in Details with the code iOS gives (AirErrorCode).
+            final String code = verdict == null ? null : verdict.code;
+            final @StringRes int words = why == AirProfileCheck.Failure.DAMAGED ? R.string.air_signin_damaged
+                                         : why == AirProfileCheck.Failure.NO_ACCESS ? R.string.air_signin_no_access
+                                         : R.string.air_signin_wrong_password;
+            Log.i(TAG, "unlock: not opened: " + why + (code == null ? "" : " (" + code + ")"));
+            AirUi.sayOnLine(note, getString(words), true, code);
+            AirStepKit.showKeyboard(passwordField.edit);
+            if (why == AirProfileCheck.Failure.WRONG_PASSWORD)
+            {
+                AirStepKit.shakeOnce(passwordField);
+                passwordField.edit.selectAll();
+            }
+            return;
+        }
+        // KHANDAQ (audit #8): the user just TYPED the profile password; that is an authentication, so the
+        // cold-start gate must not ask for the PIN on top of it (one gate, as before). Only this path marks
+        // it: the auto-unlock in onCreate() and Log in without a password take no secret at all.
+        AppLockHelper.markProcessUnlocked();
+        // The password opened the profile: a password manager may save it with the name.
+        final AutofillManager autofill = getSystemService(AutofillManager.class);
+        if (autofill != null)
+        {
+            autofill.commit();
+        }
+        openProfile(hash);
+    }
+
+    private void setBusy(final boolean on)
+    {
+        busy = on;
+        if (bar != null)
+        {
+            bar.setBusy(on ? getString(R.string.air_signin_opening) : null);
+        }
+        if (passwordField != null)
+        {
+            passwordField.edit.setEnabled(!on);
+        }
+        if (forgotButton != null)
+        {
+            forgotButton.setEnabled(!on);
+            forgotButton.setAlpha(on ? 0.5f : 1f);
+        }
+        if (startOverButton != null)
+        {
+            startOverButton.setEnabled(!on);
+            startOverButton.setAlpha(on ? 0.5f : 1f);
+        }
+        if (!on)
+        {
+            updateWaiting();
+        }
+    }
+
+    private void forgetPassword()
+    {
+        if (passwordField != null)
+        {
+            passwordField.clear();
+        }
+        final AutofillManager autofill = getSystemService(AutofillManager.class);
+        if (autofill != null)
+        {
+            autofill.cancel();
+        }
+    }
+
+    // ---- forgot the password ----
+
+    // KHANDAQ (#5a): a lost password cannot be recovered (the data is encrypted with it). The sheet says what
+    // starting over does to this profile before anything is deleted; the verb on its button does it.
+    private void forgotTapped()
+    {
+        if (busy || opening)
+        {
+            return;
+        }
+        AirStepKit.hideKeyboard(this, column);
+        AirQuestion.ask(this, getString(R.string.air_signin_forgot_title), getString(R.string.air_signin_forgot_message),
+                        getString(R.string.air_signin_start_over), true, this::performRecoveryWipe);
+    }
+
+    /** KHANDAQ (stage 5): Delete and create new for a profile whose files do not open, under the reason. */
+    private void addStartOverButton()
+    {
+        startOverButton = AirStepKit.quietButton(this, getString(R.string.air_signin_start_over));
+        startOverButton.setOnClickListener(v -> startOverTapped());
+        column.addView(AirScreenKit.leading(startOverButton), spaced(R.dimen.kq_space_2));
+    }
+
+    // The same consequence as Forgot the password?, asked from below before anything is deleted.
+    private void startOverTapped()
+    {
+        if (busy || opening)
+        {
+            return;
+        }
+        AirStepKit.hideKeyboard(this, column);
+        AirQuestion.ask(this, getString(R.string.air_signin_not_opened_title), getString(R.string.air_signin_not_opened_message),
+                        getString(R.string.air_signin_start_over), true, this::performRecoveryWipe);
+    }
+
+    /**
+     * Notes that this profile's files did not open and ends the remembered session, so the next start stops
+     * on this page with the reason instead of opening by itself into the same failure.
+     */
+    static void noteProfileNotOpened(final Context context)
+    {
+        if (context == null)
+        {
+            return;
+        }
+        // A warning, so release builds log it too: it is the trace of this route on a phone.
+        Log.w(TAG, "profile not opened: the next start stops on sign-in");
+        try
+        {
+            PreferenceManager.getDefaultSharedPreferences(context).edit()
+                             .putBoolean(PREF_PROFILE_NOT_OPENED, true)
+                             .commit();
+            DbSecretKeyStorage.setSessionLoggedIn(context, false);
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "profile not opened:EE:" + e.getMessage());
+        }
+    }
+
+    /** Opening again or deleting the profile ends the "did not open" state; a new failure sets it again. */
+    private void forgetNotOpened()
+    {
+        try
+        {
+            PreferenceManager.getDefaultSharedPreferences(this).edit().remove(PREF_PROFILE_NOT_OPENED).commit();
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
+
+    // KHANDAQ (#5a): as ProfileDetailsActivity.wipeProfile, flag a pending wipe and end the process, so
+    // StartMainActivityWrapper deletes the profile in a fresh process (no open file handles). The wrapper is
+    // started first, so the app comes back by itself on the first step of first launch.
     private void performRecoveryWipe()
     {
+        forgetPassword();
         try
         {
             MainActivity.manually_log_out();
@@ -175,150 +528,141 @@ public class CheckPasswordActivity extends AppCompatActivity
         }
         try
         {
-            android.preference.PreferenceManager.getDefaultSharedPreferences(this).edit()
+            PreferenceManager.getDefaultSharedPreferences(this).edit()
                     .putBoolean(ProfileDetailsActivity.PREF__pending_profile_wipe, true)
                     .putBoolean("PW_SET_SCREEN_DONE", false)
+                    .remove(PREF_PROFILE_NOT_OPENED)
                     .commit();
-            TRIFAGlobals.PREF__DB_secrect_key__user_hash = "";
+            PREF__DB_secrect_key__user_hash = "";
         }
         catch (Exception ignored)
         {
         }
         try
         {
-            finishAffinity();
+            final Intent restart = new Intent(getApplicationContext(), StartMainActivityWrapper.class);
+            restart.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(restart);
         }
-        catch (Exception ignored)
+        catch (Exception e)
         {
+            Log.i(TAG, "recovery: restart:EE:" + e.getMessage());
+            try
+            {
+                finishAffinity();
+            }
+            catch (Exception ignored)
+            {
+            }
         }
         System.exit(0);
     }
 
-    private void attemptUnlock_new(Context c, boolean auto_generated_pass, String pass)
+    // ---- into the profile ----
+
+    /** The profile's history database, the file the password opens. */
+    private static File databaseFile(final Context context)
     {
-        if (mUnlockTask != null)
-        {
-            return;
-        }
-
-        if (mPasswordView1 != null)
-        {
-            mPasswordView1.setError(null);
-        }
-
-        if (TextUtils.isEmpty(pass))
-        {
-            if (mPasswordView1 != null)
-            {
-                mPasswordView1.setError(getString(R.string.set_password_message_empty));
-                mPasswordView1.requestFocus();
-            }
-            return;
-        }
-
-        if (auto_generated_pass)
-        {
-            finishUnlock(pass);
-            return;
-        }
-
-        showProgress(true);
-        mUnlockTask = new UnlockTask(c);
-        mUnlockTask.execute(pass);
+        return new File(context.getDir("dbs", Context.MODE_PRIVATE), MainActivity.MAIN_DB_NAME);
     }
 
-    private void finishUnlock(String try_password_hash)
+    /** The profile's Tox save, with its ID and contacts. */
+    private static File saveFile(final Context context)
     {
-        if (TextUtils.isEmpty(try_password_hash))
+        return new File(context.getFilesDir(), SAVEDATA_NAME);
+    }
+
+    /**
+     * Log in of a profile without a password. The files are looked at again first, since a restart of the
+     * phone may have given them back; while one does not read, the reason stands on the page, or the page
+     * is built again to show it.
+     */
+    private void logInWithoutPassword(final String key, @Nullable final TextView why)
+    {
+        if (busy || opening)
         {
-            if (mPasswordView1 != null)
-            {
-                mPasswordView1.setError(getString(R.string.wrong_credentials_error));
-                mPasswordView1.requestFocus();
-            }
             return;
         }
+        final AirProfileCheck.Verdict noAccess = AirProfileCheck.unreadable(databaseFile(this), saveFile(this));
+        if (noAccess == null)
+        {
+            openProfile(key);
+            return;
+        }
+        Log.w(TAG, "profile files not readable: " + noAccess.code);
+        if (why == null)
+        {
+            recreate();
+            return;
+        }
+        AirUi.sayOnLine(why, getString(R.string.air_signin_no_access), true, noAccess.code);
+    }
 
+    /**
+     * The profile opens into Air: the session is marked logged in at once, then the page lifts away (scale
+     * 1.04 and a fade in the reveal time, a fade alone with reduced motion) and Air comes in.
+     */
+    private void openProfile(final String key)
+    {
+        if (opening)
+        {
+            return;
+        }
+        opening = true;
+        busy = true;
+        if (bar != null)
+        {
+            bar.setBusy(getString(R.string.air_signin_opening));
+        }
+        AirStepKit.hideKeyboard(this, column);
+        PREF__DB_secrect_key__user_hash = key;
+        // KHANDAQ (session persistence): unlock succeeded; mark the session logged in (re-arms after an
+        // explicit logout; also reached by the auto-unlock path for skip-password users).
+        DbSecretKeyStorage.setSessionLoggedIn(this, true);
+        forgetNotOpened();
+        final View page = findViewById(R.id.air_screen_root);
+        final Runnable enter = () -> {
+            if (destroyed)
+            {
+                return;
+            }
+            startActivity(new Intent(this, MainActivity.class));
+            finish();
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+        };
+        if (page == null)
+        {
+            enter.run();
+            return;
+        }
+        page.animate().cancel();
+        page.setPivotX(page.getWidth() / 2f);
+        page.setPivotY(page.getHeight() / 2f);
+        final float scale = AirUi.reducedMotion() ? 1f : LIFT_SCALE;
+        page.animate().alpha(0f).scaleX(scale).scaleY(scale)
+            .setDuration(AirUi.duration(this, R.integer.kq_dur_reveal))
+            .setInterpolator(AnimationUtils.loadInterpolator(this, R.interpolator.kq_ease_out))
+            .withEndAction(enter).start();
+    }
+
+    private void finishUnlock(final String try_password_hash)
+    {
         PREF__DB_secrect_key__user_hash = try_password_hash;
 
-        // KHANDAQ (session persistence): unlock succeeded — mark the session logged in (re-arms
-        // after an explicit logout; also reached by the auto-unlock path for skip-password users).
+        // KHANDAQ (session persistence): unlock succeeded; mark the session logged in (re-arms after an
+        // explicit logout; also reached by the auto-unlock path for skip-password users).
         DbSecretKeyStorage.setSessionLoggedIn(this, true);
+        forgetNotOpened();
 
         Intent main_act = new Intent(this, MainActivity.class);
         startActivity(main_act);
         finish();
     }
 
-    private void showProgress(final boolean show)
+    private LinearLayout.LayoutParams spaced(final int topDimen)
     {
-        if (mLoginFormView == null || mProgressView == null)
-        {
-            return;
-        }
-
-        mLoginFormView.setVisibility(show ? View.GONE : View.VISIBLE);
-        mProgressView.setVisibility(show ? View.VISIBLE : View.GONE);
+        final LinearLayout.LayoutParams params = AirScreenKit.matchWidth();
+        params.topMargin = getResources().getDimensionPixelSize(topDimen);
+        return params;
     }
-
-    private class UnlockTask extends AsyncTask<String, Void, String>
-    {
-        private final Context context;
-
-        UnlockTask(Context context)
-        {
-            this.context = context.getApplicationContext();
-        }
-
-        @Override
-        protected String doInBackground(String... params)
-        {
-            if (params == null || params.length == 0)
-            {
-                return null;
-            }
-
-            return DbSecretKeyStorage.unlockManualPasswordHash(context, params[0]);
-        }
-
-        @Override
-        protected void onPostExecute(String try_password_hash)
-        {
-            mUnlockTask = null;
-            showProgress(false);
-
-            if (try_password_hash == null)
-            {
-                if (mPasswordView1 != null)
-                {
-                    mPasswordView1.setError(getString(R.string.wrong_credentials_error));
-                    mPasswordView1.requestFocus();
-                }
-                return;
-            }
-
-            // KHANDAQ (audit #8): the user just TYPED the profile password — that is an authentication,
-            // so the cold-start gate must not ask for the PIN on top of it (one gate, as before).
-            // Only this path marks it: the auto-unlock in onCreate() takes no user input at all and is
-            // exactly the hole the cold-start gate exists to cover.
-            AppLockHelper.markProcessUnlocked();
-            finishUnlock(try_password_hash);
-        }
-
-        @Override
-        protected void onCancelled()
-        {
-            mUnlockTask = null;
-            showProgress(false);
-        }
-    }
-
-    /*
-    @Override
-    public void onBackPressed()
-    {
-        // super.onBackPressed();
-        // do nothing!!
-    }
-     */
 }

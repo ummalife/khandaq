@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A still dot; its colour comes from a background tint. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="@color/kq_live" />
+    <size android:width="@dimen/kq_size_dot" android:height="@dimen/kq_size_dot" />
+</shape>

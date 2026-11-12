@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Review fixes (redesign, stage 5): the line over the first-launch password, Share, a message from a hidden IRC name, a profile whose files do not open -->
+    <string name="air_first_password_for_profile">للملف الشخصي %1$s</string>
+    <string name="share_choose_target">اختر وجهة الإرسال</string>
+    <string name="share_turned_off">المشاركة من تطبيقات أخرى متوقفة. يمكنك تشغيلها من الإعدادات، في إعدادات متقدمة.</string>
+    <string name="share_no_targets">لا توجد محادثة لإرسالها إليها بعد.</string>
+    <string name="air_irc_message_hidden">رسالة من اسم IRC مخفي</string>
+    <string name="air_signin_not_opened">ملفات الملف الشخصي على هذا الهاتف لا تُفتح بمفتاح هذا الملف الشخصي. لتستخدم Khandaq من جديد، احذفها وأنشئ ملفًا شخصيًا جديدًا.</string>
+    <string name="air_signin_not_opened_title">لا يمكن فتح الملف الشخصي</string>
+    <string name="air_signin_not_opened_message">يحصل الملف الشخصي الجديد على معرّف جديد ويحلّ محلّ هذا الملف: يُحذف هذا الملف الشخصي وجهات اتصاله وسجلّه من الهاتف.</string>
+</resources>

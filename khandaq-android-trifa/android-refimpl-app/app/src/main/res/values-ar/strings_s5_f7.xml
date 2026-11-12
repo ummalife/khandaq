@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Redesign stage 5: a group member's own screen and the sheet of a member (GroupPeerInfoActivity, GroupMemberActions) -->
+    <string name="air_group_member_title">عضو المجموعة</string>
+    <string name="air_group_member_muted">مكتوم</string>
+    <string name="air_group_member_details">المفتاح والاتصال</string>
+</resources>

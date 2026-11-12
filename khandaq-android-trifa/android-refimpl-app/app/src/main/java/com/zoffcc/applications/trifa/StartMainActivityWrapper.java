@@ -21,14 +21,20 @@ package com.zoffcc.applications.trifa;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.text.TextUtils;
+import android.view.View;
+import android.widget.TextView;
 
 import org.khandaq.messenger.R;
 import android.util.Log;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import static com.zoffcc.applications.trifa.HelperMsgNotification.change_msg_notification;
 import static com.zoffcc.applications.trifa.HelperMsgNotification.extract_open_chat_key_from_intent;
@@ -104,7 +110,7 @@ public class StartMainActivityWrapper extends AppCompatActivity
         // a progress screen — an ANR-kill mid-rekey would needlessly widen the crash windows.
         if (DbRekeyHelper.hasPendingRekey(this))
         {
-            setContentView(R.layout.activity_rekey_progress);
+            showRekeyPage();
             new Thread(() -> {
                 try
                 {
@@ -127,22 +133,58 @@ public class StartMainActivityWrapper extends AppCompatActivity
         continueStartup();
     }
 
+    /** The page of a password change: a still dot and words on the theme ground, the bars on it too. */
+    @SuppressWarnings("deprecation")
+    private void showRekeyPage()
+    {
+        if (findViewById(R.id.rekey_title) != null)
+        {
+            return;
+        }
+        setContentView(R.layout.activity_rekey_progress);
+        final int page = AirUi.color(this, R.color.kq_bg);
+        final boolean night = HelperGeneric.is_nightmode_active(this);
+        getWindow().setStatusBarColor(page);
+        getWindow().setNavigationBarColor(page);
+        final WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(),
+                                                                                   getWindow().getDecorView());
+        bars.setAppearanceLightStatusBars(!night);
+        bars.setAppearanceLightNavigationBars(!night);
+    }
+
     private void continueStartup()
     {
-        // KHANDAQ (#10): a rolled-back password change must never be silent — the user could be
-        // relying on the old password being retired.
+        // KHANDAQ (#10, redesign E21): a rolled-back password change must never be silent: the user
+        // could be relying on the old password being retired. It is said on the page of the operation,
+        // which waits for Continue, instead of in a toast that is gone before it is read.
+        boolean rekeyAborted = false;
         try
         {
-            if (DbRekeyHelper.consumeRekeyAbortedFlag(this))
-            {
-                android.widget.Toast.makeText(this, R.string.cp_rekey_failed_note,
-                                              android.widget.Toast.LENGTH_LONG).show();
-            }
+            rekeyAborted = DbRekeyHelper.consumeRekeyAbortedFlag(this);
         }
         catch (Exception ignored)
         {
         }
+        if (rekeyAborted)
+        {
+            showRekeyPage();
+            final View dot = findViewById(R.id.rekey_dot);
+            ViewCompat.setBackgroundTintList(dot, ColorStateList.valueOf(AirUi.color(this, R.color.kq_danger)));
+            ((TextView) findViewById(R.id.rekey_title)).setText(R.string.air_rekey_failed_title);
+            ((TextView) findViewById(R.id.rekey_note)).setText(R.string.air_rekey_failed_note);
+            final View go = findViewById(R.id.rekey_continue);
+            go.setVisibility(View.VISIBLE);
+            go.setOnClickListener(v -> {
+                v.setEnabled(false);
+                proceedStartup();
+            });
+            return;
+        }
+        proceedStartup();
+    }
 
+    private void proceedStartup()
+    {
         boolean already_mounted = false;
 
         Log.i(TAG, "0001");
@@ -216,12 +258,20 @@ public class StartMainActivityWrapper extends AppCompatActivity
 
             Log.i(TAG, "0011");
 
-            if (set_pattern || loggedOutNoPw)
+            if (set_pattern)
             {
                 /* this is the first time the user starts this app
-                 * show the KHANDAQ onboarding intro, which leads into SetPasswordActivity
+                 * KHANDAQ (redesign stage 4, E19): first launch in three steps (name, password, ID)
                  */
-                Intent pattern = new Intent(this, OnboardingActivity.class);
+                Intent pattern = new Intent(this, AirFirstLaunchActivity.class);
+                startActivity(pattern);
+                finish();
+            }
+            else if (loggedOutNoPw)
+            {
+                // KHANDAQ (redesign stage 4, E20): a logged-out profile without a password shows its name
+                // and Log in on the sign-in page, which waits for the tap instead of opening by itself.
+                Intent pattern = new Intent(this, CheckPasswordActivity.class);
                 startActivity(pattern);
                 finish();
             }

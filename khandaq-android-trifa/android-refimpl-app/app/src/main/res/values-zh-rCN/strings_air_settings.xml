@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Advanced settings (stage 3b): the sections by task, the dialog buttons and the start-on-boot note -->
+    <string name="air_pref_section_chats">聊天</string>
+    <string name="air_pref_section_files">文件</string>
+    <string name="air_pref_section_call_sound">通话声音</string>
+    <string name="air_pref_section_call_video">通话视频</string>
+    <string name="air_pref_section_system">系统</string>
+    <string name="air_pref_ok">确定</string>
+    <string name="air_pref_boot_title">重启后启动</string>
+    <string name="air_pref_boot_message">Android 10 及更高版本不允许应用在手机重启后自行打开，因此这个开关在这部手机上不起作用。重启后请打开一次 Khandaq 以保持在线。</string>
+    <!-- The command line (E3, stage 3b): Paste ID and joining a group by its key or link -->
+    <string name="air_cmd_paste_id">粘贴 ID</string>
+    <string name="air_cmd_paste_none">剪贴板中没有 ID 或群组密钥</string>
+    <string name="air_cmd_join_group">用此密钥加入群组</string>
+    <string name="air_cmd_group_open">打开群组</string>
+    <string name="air_cmd_group_member">你已在此群组中</string>
+    <string name="air_cmd_group_note_nobody">暂无在线联系人可以让你加入，加入会等到有人上线。仅限公开群组。</string>
+    <string name="air_cmd_group_joining">正在加入群组</string>
+    <string name="air_cmd_group_failed">无法加入群组。请再试一次。</string>
+    <plurals name="air_cmd_group_note_online">
+        <item quantity="other">将请 %1$d 位在线联系人让你加入。仅限公开群组。</item>
+    </plurals>
+    <!-- Advanced settings rows (stage 3b): titles and summaries in plain words, for the keys of pref_general.xml -->
+    <string name="air_pref_font_size_title">对话文字大小</string>
+    <string name="air_pref_font_size_summary">对话中消息文字的大小。Khandaq 的其他部分跟随手机设置的文字大小。</string>
+    <string name="air_pref_incognito_title">无痕键盘</string>
+    <string name="air_pref_incognito_summary">请求键盘不要从你在消息中输入的内容里学习。是否照做取决于键盘。</string>
+    <string name="air_pref_screenshots_title">禁止截屏</string>
+    <string name="air_pref_screenshots_summary">聊天列表、对话和通话不会出现在截屏和录屏中，在最近使用的应用里也显示为空白。</string>
+    <string name="air_pref_page_size_title">每页消息数</string>
+    <string name="air_pref_page_size_summary">对话每次显示这么多条消息，更早的消息点一下即可查看。0 表示一次全部显示，长对话可能因此变慢。</string>
+    <string name="air_pref_group_notes_title">显示成员进出</string>
+    <string name="air_pref_group_notes_summary">在群组对话中，有人加入、离开或改名时会显示一行提示。</string>
+    <string name="air_pref_irc_name_1_title">第一个隐藏的 IRC 名称</string>
+    <string name="air_pref_irc_name_2_title">第二个隐藏的 IRC 名称</string>
+    <string name="air_pref_irc_name_3_title">第三个隐藏的 IRC 名称</string>
+    <string name="air_pref_irc_name_1_summary">在接入 IRC 桥接的群组中，桥接转发的这个名称的消息会被隐藏。不使用桥接就留空。</string>
+    <string name="air_pref_irc_name_more_summary">另一个要隐藏的名称，或留空。</string>
+    <string name="air_pref_accept_pictures_title">自动接收图片</string>
+    <string name="air_pref_accept_pictures_summary">12 MB 以内的图片无需确认即自动下载。</string>
+    <string name="air_pref_accept_videos_title">自动接收视频</string>
+    <string name="air_pref_accept_videos_summary">200 MB 以内的视频无需确认即自动下载。</string>
+    <string name="air_pref_accept_files_title">自动接收所有文件</string>
+    <string name="air_pref_accept_files_summary">200 MB 以内的任何文件都会无需确认自动下载，会占用存储空间和流量。</string>
+    <string name="air_pref_share_in_title">从其他应用分享</string>
+    <string name="air_pref_share_in_summary">可以通过其他应用的分享菜单，把照片和文件发到对话中。</string>
+    <string name="air_pref_open_out_title">在其他应用中打开文件</string>
+    <string name="air_pref_open_out_summary">收到的文件可直接在其他应用中打开，无需先保存到手机。恶意应用也可能借此读取 Khandaq 加密保存的其他文件。</string>
+    <string name="air_pref_screen_off_title">贴耳时熄屏</string>
+    <string name="air_pref_screen_off_summary">语音通话时，手机贴近耳朵屏幕会熄灭。如果之后屏幕亮不起来，请关闭此项：屏幕只会变为空白。</string>
+    <string name="air_pref_auto_level_title">自动调节麦克风音量</string>
+    <string name="air_pref_auto_level_summary">通话中自动放大较轻的声音。如果声音失真，请关闭此项。</string>
+    <string name="air_pref_mic_boost_title">麦克风增强</string>
+    <string name="air_pref_mic_boost_summary">麦克风声音较小时，让你在通话中的声音更大。1 表示不增强。</string>
+    <string name="air_pref_boost_lowers_title">增强改为降低音量</string>
+    <string name="air_pref_boost_lowers_summary">适用于声音过大的麦克风：上面的增强会让你的声音变小，而不是变大。</string>
+    <string name="air_pref_noise_title">降低背景噪音</string>
+    <string name="air_pref_noise_summary">在通话中滤除你声音里的背景噪音，比如车流声或风扇声。会多耗一点电。</string>
+    <string name="air_pref_call_quality_title">通话音质</string>
+    <string name="air_pref_call_quality_summary">音质越高声音越清晰，流量也越多。从下一次通话起生效。</string>
+    <string name="air_pref_swap_colours_title">交换摄像头颜色</string>
+    <string name="air_pref_swap_colours_summary">如果你的视频颜色不对，比如肤色发蓝，请切换此项。</string>
+    <string name="air_pref_picture_format_title">摄像头画面格式</string>
+    <string name="air_pref_picture_format_summary">如果你的视频花屏或有条纹，请试试另一种格式。</string>
+    <string name="air_pref_video_chip_title">使用手机视频芯片</string>
+    <string name="air_pref_video_chip_summary">视频通话时由手机自带的视频芯片压缩画面，而不是由 Khandaq。这样更省电，但在部分手机上画面会碎裂。</string>
+    <string name="air_pref_resolution_title">摄像头分辨率</string>
+    <string name="air_pref_resolution_summary">视频通话中你的画面有多清晰。画面越清晰，需要的网速越快。</string>
+    <string name="air_pref_gradual_refresh_title">逐步刷新画面</string>
+    <string name="air_pref_gradual_refresh_summary">使用手机视频芯片时，画面逐块更新而不是整帧一次更新，网络较差时视频更稳定。</string>
+    <string name="air_pref_fewer_frames_title">减少视频帧数</string>
+    <string name="air_pref_fewer_frames_summary">每秒发送的帧数减半，约 12 帧而不是 25 帧：不那么流畅，但更省流量。</string>
+    <string name="air_pref_camera_fps_title">每秒 15 帧</string>
+    <string name="air_pref_camera_fps_summary">要求摄像头每秒拍摄 15 帧。在部分手机上，Khandaq 可能会在摄像头启动时关闭。</string>
+    <string name="air_pref_direct_only_title">仅直连</string>
+    <string name="air_pref_direct_only_summary">Khandaq 只直接连接，不经中继服务器，因此联系不上所在网络禁止直连的联系人。下次启动 Khandaq 时生效。</string>
+    <string name="air_pref_tor_title">通过 Tor 连接</string>
+    <string name="air_pref_tor_summary">你的流量经过 Tor 网络，联系人看不到你的网络地址。需要安装 Orbot 应用，速度较慢，下次启动 Khandaq 时生效。</string>
+    <string name="air_pref_start_after_restart_title">手机重启后启动</string>
+    <string name="air_pref_start_after_restart_summary">在 Android 9 及更早版本上，手机重启后会打开 Khandaq。Android 10 及更高版本不允许这样做：重启后请打开一次 Khandaq。</string>
+    <!-- The shown choices of the Advanced lists; their stored values stay the arrays of strings.xml -->
+    <string-array name="air_pref_font_size_entries">
+        <item>最小</item>
+        <item>小</item>
+        <item>默认</item>
+        <item>大</item>
+        <item>较大</item>
+        <item>很大</item>
+        <item>最大</item>
+    </string-array>
+    <string-array name="air_pref_call_quality_entries">
+        <item>低</item>
+        <item>标准</item>
+        <item>高</item>
+    </string-array>
+    <string-array name="air_pref_picture_format_entries">
+        <item>标准</item>
+        <item>备用</item>
+    </string-array>
+    <string-array name="air_pref_resolution_entries">
+        <item>标清</item>
+        <item>高清</item>
+        <item>全高清</item>
+    </string-array>
+</resources>

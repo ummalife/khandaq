@@ -257,8 +257,6 @@
     <string name="pref_description_notification_show_content">Показване на изпращача и съдържанието в известията</string>
     <string name="pref_title_allow_open_encrypted_file_via_intent">Отваряне на файлове от шифрованото хранилище</string>
     <string name="pref_description_allow_open_encrypted_file_via_intent">Отваряне на файлове директно от шифрованото хранилище чрез „намерение“. Може да бъде опасно, тъй като злонамерени приложения могат да отворят всякакви файлове от шифрованото хранилище на TRIfA.</string>
-    <string name="invite_join_conference_success">Получихте покана за присъединяване към групов разговор</string>
-    <string name="invite_join_group_success">Получихте покана за присъединяване към група</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_title">Отказ от файла</string>
     <string name="pref_description_enable_ngc_features">Нови групови чатове (NGC) с подобрени съобщения, глас и видео.</string>
     <string name="FriendListHolder_toggle_notification_silent_title">Превключване на известия</string>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    KHANDAQ (redesign, stage 3b): the ground a photo or a video stands on until its picture is there:
+    a still sunken plate the size of the box, so the row has its height before the image loads.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="@dimen/kq_radius_card" />
+    <solid android:color="@color/kq_sunken" />
+</shape>

@@ -1,371 +1,277 @@
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    KHANDAQ (redesign, stage 3b): a file, a photo, a video or a voice note as an entry of the transcript
+    (design/DESIGN.md, "Files, voice and calls on the phone"), framed like air_entry_text: the time in
+    its column, the author over the first entry of a run, the content, and the mark of our own at the
+    far end. No bubble, no avatar and no wallpaper. AirFileEntry draws it after the row holder; every id
+    the holders and the transfer helpers look up is kept, the old chrome stays hidden.
+    The compact layout is the same entry: an entry is already compact.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:layout_width="fill_parent"
+    android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:padding="@dimen/message_entry_padding">
-
-    <LinearLayout
-        android:id="@+id/layout_message_container"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/message_text_date"
-        android:orientation="vertical"
-        android:padding="0dp">
-
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_margin="0dp"
-            android:orientation="horizontal"
-            android:padding="0dp">
-
-            <LinearLayout
-                android:id="@+id/layout_peer_name_container"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="bottom"
-                android:layout_marginTop="@dimen/message_entry_datetime_bottom_padding_small"
-                android:orientation="horizontal"
-                android:visibility="gone">
-
-                <TextView
-                    android:id="@+id/peer_name_text"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:layout_marginLeft="40dp"
-                    android:layout_marginStart="40dp"
-                    android:layout_marginRight="40dp"
-                    android:layout_marginEnd="40dp"
-                    android:gravity="start"
-                    android:maxLength="20"
-                    android:text="@string/layout___peer_name"
-                    android:textColor="#EFEFEF"
-                    android:textSize="9sp" />
-
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="10"
-                android:visibility="invisible" />
-
-            <TextView
-                android:id="@+id/date_time"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="top"
-                android:layout_marginTop="@dimen/message_entry_datetime_bottom_padding_small"
-                android:layout_marginRight="20dp"
-                android:layout_marginEnd="20dp"
-                android:layout_marginBottom="7dp"
-                android:gravity="top"
-                android:padding="0dp"
-                android:text="2017-06-20 14:00:12"
-                android:textAlignment="gravity"
-                android:textColor="#EFEFEF"
-                android:textSize="9sp"
-                android:visibility="gone" />
-
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/layout2"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <de.hdodenhof.circleimageview.CircleImageView
-                android:id="@+id/img_avatar"
-                android:layout_width="@dimen/tg_chat_avatar_in_bubble"
-                android:layout_height="@dimen/tg_chat_avatar_in_bubble"
-                android:layout_gravity="bottom"
-                android:layout_marginEnd="@dimen/tg_avatar_bubble_gap"
-                android:gravity="top"
-                android:src="@drawable/user_pratikshya"
-                app:civ_border_color="#50000000"
-                app:civ_border_width="0dp"
-                app:civ_fill_color="@color/md_grey_400" />
-
-            <ImageView
-                android:id="@+id/img_corner"
-                android:layout_width="30dp"
-                android:layout_height="30dp"
-                android:layout_marginTop="14dp"
-                android:layout_marginRight="0dp"
-                android:layout_marginEnd="0dp"
-                android:layout_weight="1"
-                android:alpha="0.5"
-                android:src="@drawable/arrow_bg2"
-                android:visibility="gone" />
-
-            <LinearLayout
-                android:id="@+id/m_container"
-                android:layout_width="fill_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="0dp"
-                android:layout_marginStart="0dp"
-                android:layout_marginRight="20dp"
-                android:layout_marginEnd="20dp"
-                android:layout_weight="6"
-                android:minHeight="0dp"
-                android:orientation="vertical">
-
-                <ImageView
-                    android:id="@+id/m_icon"
-                    android:layout_width="25dp"
-                    android:layout_height="25dp"
-                    android:layout_alignParentTop="true"
-                    android:layout_marginRight="0dip"
-                    android:layout_marginEnd="0dip"
-                    android:padding="2dp"
-                    android:scaleType="centerInside"
-                    android:src="@drawable/circle_red"
-                    android:visibility="gone" />
-
-                <TextView
-                    android:id="@+id/dummy2"
-                    android:layout_width="6dp"
-                    android:layout_height="wrap_content"
-                    android:text=""
-                    android:visibility="gone" />
-
-                <com.luseen.autolinklibrary.EmojiTextViewLinks
-                    android:id="@+id/m_text"
-                    android:layout_width="0dp"
-                    android:layout_height="0dp"
-                    android:paddingBottom="3dp"
-                    android:text=""
-                    android:textColor="@color/message_bubble_text"
-                    android:textColorLink="@color/textblock_link_color_for_orange"
-                    android:textSize="1sp"
-                    app:emojiSize="@dimen/emoji_size_in_textview" />
-
-                <com.daimajia.numberprogressbar.NumberProgressBar
-                    android:id="@+id/ft_progressbar"
-                    android:layout_width="match_parent"
-                    android:layout_height="24dp"
-                    android:layout_gravity="center_vertical|center_horizontal"
-                    android:minHeight="24dp"
-                    android:paddingLeft="10dp"
-                    android:paddingStart="10dp"
-                    android:paddingRight="10dp"
-                    android:paddingEnd="10dp"
-                    android:visibility="gone"
-
-                    app:progress_max="100"
-                    app:progress_reached_bar_height="15dp"
-                    app:progress_reached_color="@color/khandaq_teal"
-                    app:progress_text_color="@color/md_always_black_1000"
-                    app:progress_text_offset="5dp"
-                    app:progress_text_size="12sp"
-                    app:progress_text_visibility="visible"
-                    app:progress_unreached_bar_height="4dp"
-                    app:progress_unreached_color="#66CCCCCC" />
-
-                <LinearLayout
-                    android:id="@+id/ft_preview_container"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="visible">
-
-                    <me.jagar.chatvoiceplayerlibrary.vVoicePlayerView
-                        android:id="@+id/ft_audio_player"
-                        android:layout_width="fill_parent"
-                        android:layout_height="wrap_content"
-                        app:enableVisualizer="true"
-                        app:visualizationPlayedColor="@color/khandaq_teal"
-                        app:visualizationNotPlayedColor="@color/voice_wave_unplayed"
-                        app:playPauseBackgroundColor="@color/khandaq_teal"
-                        app:seekBarProgressColor="#000000"
-                        app:showShareButton="false"
-                        app:shareCornerRadius="100"
-                        app:playPauseCornerRadius="100"
-                        app:showTiming="true"
-                        app:viewCornerRadius="16"
-                        app:viewBackground="@color/tg_bubble_incoming"
-                        app:progressTimeColor="@color/tg_bubble_time_incoming"
-                        app:timingBackgroundColor="@android:color/transparent"
-                        app:seekBarThumbColor="@color/khandaq_teal"
-                        app:shareBackgroundColor="@color/khandaq_teal"
-                        app:playProgressbarColor="@color/khandaq_teal"
-                        app:shareText="SHARE ME"
-                        android:visibility="gone" />
-
-                    <ImageButton
-                        android:id="@+id/ft_preview_image"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:background="@android:color/transparent"
-                        android:minHeight="1dp"
-                        android:padding="0dp"
-                        android:scaleType="fitCenter"
-                        android:src="@null"
-                        android:visibility="gone" />
-
-                    <com.luseen.autolinklibrary.EmojiTextViewLinks
-                        android:id="@+id/ft_caption_text"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginLeft="10dp"
-                        android:layout_marginStart="10dp"
-                        android:layout_marginTop="4dp"
-                        android:layout_marginRight="10dp"
-                        android:layout_marginEnd="10dp"
-                        android:layout_marginBottom="6dp"
-                        android:autoLink="web"
-                        android:textColor="@color/message_bubble_text"
-                        android:textSize="16sp"
-                        android:visibility="gone" />
-
-
-                    <include layout="@layout/chat_file_attachment_row" />
-
-                </LinearLayout>
-
-                <!-- KHANDAQ (#206 parity): reactions row hoisted OUT of the gone-by-default
-                     ft_preview_container to bubble level (was nested here, mispositioning chips far
-                     below on voice / non-image files in the compact group layout). Mirrors the fix
-                     already in message_group_list_ft_incoming.xml. -->
-                <include layout="@layout/chat_reactions_row" />
-
-                <TextView
-                    android:id="@+id/bubble_time"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="end"
-                    android:includeFontPadding="false"
-                    android:text="02:09"
-                    android:textColor="@color/tg_bubble_time_incoming"
-                    android:textSize="@dimen/tg_bubble_time_size"
-                    android:visibility="gone" />
-
-                <TextView
-                    android:id="@+id/dummy"
-                    android:layout_width="8dp"
-                    android:layout_height="wrap_content"
-                    android:text=""
-                    android:visibility="gone" />
-
-            </LinearLayout>
-
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_margin="0dp"
-            android:orientation="horizontal"
-            android:padding="0dp">
-
-            <LinearLayout
-                android:id="@+id/ft_export_button_container"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginRight="0dp"
-                android:layout_marginEnd="0dp"
-                android:orientation="horizontal"
-                android:visibility="visible">
-
-                <ImageButton
-                    android:id="@+id/ft_export_button"
-                    android:layout_width="40dp"
-                    android:layout_height="28dp"
-                    android:layout_gravity="start"
-                    android:layout_marginLeft="25dp"
-                    android:layout_marginStart="25dp"
-                    android:layout_marginRight="0dp"
-                    android:layout_marginEnd="0dp"
-                    android:layout_marginBottom="1dp"
-                    android:layout_weight="1"
-                    android:background="@android:color/transparent"
-                    android:contentDescription="export"
-                    android:elevation="4dp"
-                    android:padding="0dp"
-                    android:scaleType="fitCenter"
-                    android:src="@android:drawable/ic_menu_save"
-                    android:visibility="gone"
-                    tools:ignore="HardcodedText" />
-
-                <ImageButton
-                    android:id="@+id/ft_share_button"
-                    android:layout_width="40dp"
-                    android:layout_height="28dp"
-                    android:layout_gravity="start"
-                    android:layout_marginLeft="15dp"
-                    android:layout_marginStart="15dp"
-                    android:layout_marginRight="0dp"
-                    android:layout_marginEnd="0dp"
-                    android:layout_marginBottom="1dp"
-                    android:layout_weight="1"
-                    android:background="@android:color/transparent"
-                    android:contentDescription="share"
-                    android:elevation="4dp"
-                    android:padding="0dp"
-                    android:scaleType="fitCenter"
-                    android:src="@android:drawable/ic_menu_share"
-                    android:visibility="gone"
-                    tools:ignore="HardcodedText" />
-            </LinearLayout>
-
-        </LinearLayout>
-
-    </LinearLayout>
+    android:orientation="vertical">
 
     <LinearLayout
         android:id="@+id/message_text_date"
         android:layout_width="match_parent"
-        android:layout_height="35dp"
-        android:layout_alignParentTop="true"
-        android:layout_centerInParent="true"
+        android:layout_height="wrap_content"
         android:orientation="horizontal"
+        android:paddingStart="@dimen/air_entry_text_start"
+        android:paddingTop="@dimen/kq_space_12"
+        android:paddingEnd="@dimen/kq_space_16"
+        android:paddingBottom="@dimen/kq_space_4"
         android:visibility="gone">
-
-        <ImageView
-            android:layout_width="wrap_content"
-            android:layout_height="2dp"
-            android:layout_gravity="center_vertical"
-            android:layout_marginLeft="10dp"
-            android:layout_marginStart="10dp"
-            android:layout_marginRight="10dp"
-            android:layout_marginEnd="10dp"
-            android:layout_weight="100"
-            android:background="@color/tg_date_separator_line" />
 
         <TextView
             android:id="@+id/message_text_date_string"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="5dp"
-            android:layout_marginBottom="5dp"
+            android:accessibilityHeading="true"
+            android:textAlignment="viewStart"
+            android:textAppearance="@style/TextAppearance.KQ.Air.CaptionMedium"
+            android:textColor="@color/kq_ink_3" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/layout_message_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/kq_space_16"
+        android:paddingTop="@dimen/air_entry_inset"
+        android:paddingEnd="@dimen/kq_space_16"
+        android:paddingBottom="@dimen/air_entry_inset">
+
+        <TextView
+            android:id="@+id/date_time"
+            android:layout_width="@dimen/kq_size_time_column_phone"
+            android:layout_height="wrap_content"
+            android:fontFeatureSettings="tnum"
+            android:importantForAccessibility="no"
+            android:maxLines="1"
+            android:textAlignment="viewStart"
+            android:textAppearance="@style/TextAppearance.KQ.Caption"
+            android:textColor="@color/kq_ink_3" />
+
+        <LinearLayout
+            android:id="@+id/air_file_body"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/kq_space_10"
+            android:layout_marginEnd="@dimen/kq_space_10"
             android:layout_weight="1"
-            android:background="@drawable/rounded_date_bg"
-            android:paddingStart="@dimen/padding_small"
-            android:paddingLeft="@dimen/padding_small"
-            android:paddingTop="2dp"
-            android:paddingEnd="@dimen/padding_small"
-            android:paddingRight="@dimen/padding_small"
-            android:paddingBottom="2dp"
-            android:text="2017-05-14"
-            android:textColor="@color/message_text_date_string_color"
-            android:textSize="@dimen/text_small" />
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/air_file_author"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:importantForAccessibility="no"
+                android:maxLines="1"
+                android:textAlignment="viewStart"
+                android:textAppearance="@style/TextAppearance.KQ.Air.LabelStrong"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/layout_peer_name_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/peer_name_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:importantForAccessibility="no"
+                    android:maxLines="1"
+                    android:textAppearance="@style/TextAppearance.KQ.Air.LabelStrong" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/air_file_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <de.hdodenhof.circleimageview.CircleImageView
+                    android:id="@+id/img_avatar"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:importantForAccessibility="no"
+                    android:visibility="gone" />
+
+                <ImageView
+                    android:id="@+id/img_corner"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:importantForAccessibility="no"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:id="@+id/m_container"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <com.luseen.autolinklibrary.EmojiTextViewLinks
+                        android:id="@+id/m_text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textAlignment="viewStart"
+                        android:textAppearance="@style/TextAppearance.KQ.Body"
+                        android:textColor="@color/kq_ink"
+                        android:textColorLink="@color/kq_ink"
+                        android:visibility="gone"
+                        app:emojiSize="@dimen/emoji_size_in_textview" />
+
+                    <com.daimajia.numberprogressbar.NumberProgressBar
+                        android:id="@+id/ft_progressbar"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:visibility="gone"
+                        app:progress_max="100"
+                        app:progress_reached_bar_height="@dimen/kq_size_bar"
+                        app:progress_reached_color="@color/kq_ink"
+                        app:progress_text_visibility="invisible"
+                        app:progress_unreached_bar_height="@dimen/kq_size_bar"
+                        app:progress_unreached_color="@color/kq_sunken" />
+
+                    <LinearLayout
+                        android:id="@+id/ft_preview_container"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <me.jagar.chatvoiceplayerlibrary.vVoicePlayerView
+                            android:id="@+id/ft_audio_player"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:visibility="gone"
+                            app:enableVisualizer="true"
+                            app:playPauseBackgroundColor="@android:color/transparent"
+                            app:playPauseCornerRadius="0"
+                            app:playProgressbarColor="@color/kq_ink_3"
+                            app:progressTimeColor="@color/kq_ink_3"
+                            app:seekBarProgressColor="@color/kq_ink"
+                            app:seekBarThumbColor="@color/kq_ink"
+                            app:shareBackgroundColor="@android:color/transparent"
+                            app:shareCornerRadius="0"
+                            app:showShareButton="false"
+                            app:showTiming="true"
+                            app:timingBackgroundColor="@android:color/transparent"
+                            app:viewBackground="@android:color/transparent"
+                            app:viewCornerRadius="0"
+                            app:visualizationNotPlayedColor="@color/kq_line_strong"
+                            app:visualizationPlayedColor="@color/kq_ink" />
+
+                        <ImageButton
+                            android:id="@+id/ft_preview_image"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:adjustViewBounds="false"
+                            android:background="@drawable/air_file_photo_ground"
+                            android:contentDescription="@null"
+                            android:minHeight="1dp"
+                            android:padding="0dp"
+                            android:scaleType="centerCrop"
+                            android:src="@null"
+                            android:visibility="gone" />
+
+                        <include layout="@layout/chat_file_attachment_row" />
+
+                        <com.luseen.autolinklibrary.EmojiTextViewLinks
+                            android:id="@+id/ft_caption_text"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/kq_space_6"
+                            android:autoLink="web"
+                            android:textAlignment="viewStart"
+                            android:textAppearance="@style/TextAppearance.KQ.Body"
+                            android:textColor="@color/kq_ink"
+                            android:textColorLink="@color/kq_ink"
+                            android:visibility="gone" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/ft_export_button_container"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <ImageButton
+                            android:id="@+id/ft_export_button"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:background="@null"
+                            android:contentDescription="@null"
+                            android:importantForAccessibility="no"
+                            android:visibility="gone" />
+
+                        <ImageButton
+                            android:id="@+id/ft_share_button"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:background="@null"
+                            android:contentDescription="@null"
+                            android:importantForAccessibility="no"
+                            android:visibility="gone" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/ft_buttons_container"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <ImageButton
+                            android:id="@+id/ft_button_ok"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:background="@null"
+                            android:contentDescription="@null"
+                            android:importantForAccessibility="no"
+                            android:visibility="gone" />
+
+                        <ImageButton
+                            android:id="@+id/ft_dummy1"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:background="@null"
+                            android:contentDescription="@null"
+                            android:importantForAccessibility="no"
+                            android:visibility="gone" />
+
+                        <ImageButton
+                            android:id="@+id/ft_button_cancel"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:background="@null"
+                            android:contentDescription="@null"
+                            android:importantForAccessibility="no"
+                            android:visibility="gone" />
+                    </LinearLayout>
+
+                    <include layout="@layout/chat_reactions_row" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
 
         <ImageView
-            android:layout_width="wrap_content"
-            android:layout_height="2dp"
-            android:layout_gravity="center_vertical"
-            android:layout_marginLeft="10dp"
-            android:layout_marginStart="10dp"
-            android:layout_marginRight="10dp"
-            android:layout_marginEnd="10dp"
-            android:layout_weight="100"
-            android:background="@color/tg_date_separator_line" />
-
+            android:id="@+id/m_icon"
+            android:layout_width="@dimen/kq_size_mark"
+            android:layout_height="@dimen/kq_size_mark"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
+            android:padding="1dp"
+            android:scaleType="fitCenter"
+            android:visibility="invisible" />
     </LinearLayout>
-</RelativeLayout>
-
-
+</LinearLayout>

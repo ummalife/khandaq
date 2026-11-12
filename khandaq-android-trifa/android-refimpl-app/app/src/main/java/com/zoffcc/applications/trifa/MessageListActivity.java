@@ -198,6 +198,9 @@ public class MessageListActivity extends AppCompatActivity
     ImageView ml_status_icon = null;
     ImageButton ml_phone_icon = null;
     ImageButton ml_video_icon = null;
+    ImageButton ml_search_icon = null;
+    // KHANDAQ (redesign, stage 3b): Search (slot 0) and the chevron step aside for a long name (AirHeaderFit).
+    private AirHeaderFit headerFit = null;
     ImageButton ml_attach_button_01 = null;
     ImageButton ml_button_recaudio = null;
     static ChatVoiceRecordingUiHelper voiceRecordingUiHelper = null;
@@ -221,9 +224,10 @@ public class MessageListActivity extends AppCompatActivity
     final static int TYPING_FLAG_DEACTIVATE_DELAY_IN_MILLIS = 1000; // 1 second
     static boolean attachemnt_instead_of_send = true;
     static boolean friend_is_typing = false;
-    private Runnable typing_anim_runnable = null;
-    private int typing_dot_frame = 0;
-    private static final int TYPING_ANIM_INTERVAL_MS = 450;
+    // KHANDAQ (redesign, stage 2): the header band, the tray, the line under the field and the dossier.
+    AirChatPanel airPanel = null;
+    /** KHANDAQ (redesign, E10): the chat opens with its dossier unfolded (Information in a row's menu). */
+    static final String EXTRA_OPEN_DOSSIER = "open_dossier";
     static ActionMode amode = null;
     static MenuItem amode_save_menu_item = null;
     static MenuItem amode_info_menu_item = null;
@@ -306,6 +310,12 @@ public class MessageListActivity extends AppCompatActivity
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
         HelperToolbar.enableUpNavigation(this, toolbar);
+        // Before the reply bar and the microphone are bound: both take the design's colours from it.
+        airPanel = new AirChatPanel(this, friend_pubkey);
+        if (intent.getBooleanExtra(EXTRA_OPEN_DOSSIER, false))
+        {
+            airPanel.openDossierWhenShown();
+        }
 
         rootView = (ViewGroup) findViewById(R.id.emoji_bar);
         ml_new_message = (com.vanniktech.emoji.EmojiEditText) findViewById(R.id.ml_new_message);
@@ -423,19 +433,21 @@ public class MessageListActivity extends AppCompatActivity
         ml_status_icon = (ImageView) findViewById(R.id.ml_status_icon);
         ml_phone_icon = (ImageButton) findViewById(R.id.ml_phone_icon);
         ml_video_icon = (ImageButton) findViewById(R.id.ml_video_icon);
+        ml_search_icon = (ImageButton) findViewById(R.id.ml_search_icon);
+        if (ml_search_icon != null)
+        {
+            ml_search_icon.setOnClickListener(v -> enterChatSearchMode());
+        }
         // KHANDAQ (#4): Saved Messages (Избранное) is a self-chat — no call affordance at all. The
         // header phone icon defaults to VISIBLE in the layout and was only hidden by the async
-        // presence update, so a call button flashed (and stayed) in Saved. Hide both header call
-        // icons immediately here, before first draw.
-        if (FavoritesChatHelper.isFavoritesChat(friend_pubkey))
-        {
-            ml_phone_icon.setVisibility(View.GONE);
-            ml_video_icon.setVisibility(View.GONE);
-        }
+        // presence update, so a call button flashed (and stayed) in Saved. Set the header call
+        // icons here, before first draw.
+        applyHeaderCallIcons(friend_pubkey);
         apply_chat_header();
+        watchHeaderFit();
         ml_attach_button_01 = (ImageButton) findViewById(R.id.ml_button_01);
         ml_button_recaudio = (ImageButton) findViewById(R.id.ml_button_recaudio);
-        ml_button_recaudio.setBackgroundColor(Color.TRANSPARENT);
+        ml_button_recaudio.setBackgroundResource(R.drawable.air_bg_composer_button);
         voiceRecordingUiHelper = ChatVoiceRecordingUiHelper.bind(findViewById(R.id.emoji_bar),
                 new ChatVoiceRecordingUiHelper.RecordingActionListener()
                 {
@@ -467,7 +479,18 @@ public class MessageListActivity extends AppCompatActivity
         final View profileHeaderTap = findViewById(R.id.ml_header_profile_tap);
         if (profileHeaderTap != null)
         {
-            profileHeaderTap.setOnClickListener(v -> open_friend_info_activity());
+            // KHANDAQ (redesign, stage 2): the name opens the dossier over the conversation, as on iOS.
+            // FriendInfoActivity stays reachable from the contacts list.
+            profileHeaderTap.setOnClickListener(v -> {
+                if (airPanel != null && airPanel.hasDossier())
+                {
+                    airPanel.toggleDossier();
+                }
+                else if (airPanel == null)
+                {
+                    open_friend_info_activity();
+                }
+            });
         }
 
         messageSearchView.setOnQueryTextListener(new SearchView.OnQueryTextListener()
@@ -552,8 +575,7 @@ public class MessageListActivity extends AppCompatActivity
 
         final Drawable d1 = new IconicsDrawable(getBaseContext()).
                 icon(GoogleMaterial.Icon.gmd_sentiment_satisfied).
-                color(getResources().
-                        getColor(R.color.icon_colors)).
+                color(ContextCompat.getColor(this, R.color.kq_ink_2)).
                 sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
 
         insert_emoji.setImageDrawable(d1);
@@ -571,11 +593,11 @@ public class MessageListActivity extends AppCompatActivity
         // KHANDAQ (18.08): one design across platforms — iOS opens the attachment menu from a "+" on the
         // LEFT of the input bar (Figma), so Android uses the same glyph in the same slot. The emoji
         // button moved to the right of the field; nothing was removed.
-        final Drawable add_attachement_icon = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_add).color(
-                getResources().getColor(R.color.icon_colors)).sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
-        // KHANDAQ (18.08): same send button as iOS — white paper plane on the brand-green circle.
-        final Drawable send_message_icon = ChatInputBarHelper.makeCircularSendIcon(this);
-        final Drawable mic_icon = getResources().getDrawable(R.drawable.baseline_keyboard_voice_24);
+        // KHANDAQ (redesign, stage 2): the design system's plus, tinted by the button; the send button is the
+        // ink plate with an arrow, as tall as the field, and the microphone is the design system's.
+        final Drawable add_attachement_icon = ContextCompat.getDrawable(this, R.drawable.kq_ic_plus);
+        final Drawable send_message_icon = AirChatPanel.sendIcon(this);
+        final Drawable mic_icon = AirChatPanel.micIcon(this);
 
         ml_friend_typing.setText("");
         ChatInputBarHelper.setupAttachButton(ml_attach_button_01, add_attachement_icon, v -> send_attatchment(v));
@@ -764,8 +786,9 @@ public class MessageListActivity extends AppCompatActivity
                 // Direct/Favorites chat recording needs RECORD_AUDIO too — request it instead of failing silently.
                 if (!HelperCall.hasMicrophonePermission(v.getContext()))
                 {
+                    // E21: refused, the rule stands under the field once the system has answered
+                    // (onRequestPermissionsResult); it used to be a toast about calls.
                     HelperCall.requestCallPermissions((Activity) v.getContext(), true);
-                    HelperCall.showMissingPermissionToast(v.getContext(), true);
                     return false;
                 }
 
@@ -1065,6 +1088,12 @@ public class MessageListActivity extends AppCompatActivity
             }
         });
 
+        // KHANDAQ (redesign, stage 2): once the activity's own helpers are bound, the panel styles them and
+        // reads the first look of the band, the tray and the line under the field.
+        if (airPanel != null)
+        {
+            airPanel.start();
+        }
         HelperGeneric.logI(TAG, "onCreate:099");
         oncreate_finished = true;
     }
@@ -1083,17 +1112,18 @@ public class MessageListActivity extends AppCompatActivity
         HelperGeneric.logI(TAG, "onPause");
         super.onPause();
 
-        ml_button_recaudio.setImageResource(R.drawable.baseline_keyboard_voice_24);
-        ChatInputBarHelper.resetMicSendIcon(ml_button_recaudio,
-                getResources().getDrawable(R.drawable.baseline_keyboard_voice_24));
-        ml_button_recaudio.setBackgroundColor(Color.TRANSPARENT);
+        ChatInputBarHelper.resetMicSendIcon(ml_button_recaudio, AirChatPanel.micIcon(this));
+        ml_button_recaudio.setBackgroundResource(R.drawable.air_bg_composer_button);
         set_recording_pop_visibilty_s(false);
         ml_is_recording = false;
         ml_is_rec_ok = false;
 
         stop_self_typing_indicator_s();
-        stop_typing_animation();
         friend_is_typing = false;
+        if (airPanel != null)
+        {
+            airPanel.onPause();
+        }
 
         if (emojiPopup != null)
         {
@@ -1128,10 +1158,8 @@ public class MessageListActivity extends AppCompatActivity
     protected void onStop()
     {
         super.onStop();
-        ml_button_recaudio.setImageResource(R.drawable.baseline_keyboard_voice_24);
-        ChatInputBarHelper.resetMicSendIcon(ml_button_recaudio,
-                getResources().getDrawable(R.drawable.baseline_keyboard_voice_24));
-        ml_button_recaudio.setBackgroundColor(Color.TRANSPARENT);
+        ChatInputBarHelper.resetMicSendIcon(ml_button_recaudio, AirChatPanel.micIcon(this));
+        ml_button_recaudio.setBackgroundResource(R.drawable.air_bg_composer_button);
         ml_is_recording = false;
         ml_is_rec_ok = false;
     }
@@ -1238,6 +1266,10 @@ public class MessageListActivity extends AppCompatActivity
         message_list_activity = this;
         apply_chat_header();
         refresh_chat_header();
+        if (airPanel != null)
+        {
+            airPanel.onResume();
+        }
         wakeup_tox_thread();
         schedule_delayed_message_refresh();
     }
@@ -1493,7 +1525,7 @@ public class MessageListActivity extends AppCompatActivity
         //            Log.d(TAG, "Clicked on emoji");
         //        }})
 
-        emojiPopup = EmojiPopup.Builder.fromRootView(rootView).setOnEmojiBackspaceClickListener(
+        final EmojiPopup.Builder emojiPopupBuilder = EmojiPopup.Builder.fromRootView(rootView).setOnEmojiBackspaceClickListener(
                 new OnEmojiBackspaceClickListener()
                 {
                     @Override
@@ -1509,8 +1541,7 @@ public class MessageListActivity extends AppCompatActivity
             {
                 final Drawable d1 = new IconicsDrawable(getBaseContext()).
                         icon(FontAwesome.Icon.faw_keyboard).
-                        color(getResources().
-                                getColor(R.color.icon_colors)).
+                        color(ContextCompat.getColor(MessageListActivity.this, R.color.kq_ink_2)).
                         sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
 
                 insert_emoji.setImageDrawable(d1);
@@ -1530,8 +1561,7 @@ public class MessageListActivity extends AppCompatActivity
             {
                 final Drawable d1 = new IconicsDrawable(getBaseContext()).
                         icon(GoogleMaterial.Icon.gmd_sentiment_satisfied).
-                        color(getResources().
-                                getColor(R.color.icon_colors)).
+                        color(ContextCompat.getColor(MessageListActivity.this, R.color.kq_ink_2)).
                         sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
 
                 insert_emoji.setImageDrawable(d1);
@@ -1544,9 +1574,8 @@ public class MessageListActivity extends AppCompatActivity
             {
                 // Log.d(TAG, "Closed soft keyboard");
             }
-        }).
-                setBackgroundColor(getResources().getColor(R.color.md_grey_800)).
-                build(ml_new_message);
+        });
+        emojiPopup = AirUi.emojiPanelColors(this, emojiPopupBuilder).build(ml_new_message);
     }
 
     long get_current_friendnum()
@@ -1583,13 +1612,13 @@ public class MessageListActivity extends AppCompatActivity
             @Override
             public void run()
             {
-                if (friend_is_typing)
+                // KHANDAQ (redesign, stage 2): "typing" is a word in the presence line, not animated dots.
+                if (airPanel != null)
                 {
-                    start_typing_animation();
+                    airPanel.onTypingChanged();
                 }
-                else
+                else if (!friend_is_typing)
                 {
-                    stop_typing_animation();
                     apply_friend_presence_status_ui();
                 }
             }
@@ -1602,6 +1631,23 @@ public class MessageListActivity extends AppCompatActivity
 
     private void apply_friend_presence_status_ui()
     {
+        if (airPanel != null)
+        {
+            // KHANDAQ (redesign, stage 2): the band under the header says it; the old subtitle stays hidden.
+            if (FavoritesChatHelper.isFavoritesChat(get_friend_pubkey()))
+            {
+                if (ml_phone_icon != null)
+                {
+                    ml_phone_icon.setVisibility(View.GONE);
+                }
+                if (ml_video_icon != null)
+                {
+                    ml_video_icon.setVisibility(View.GONE);
+                }
+            }
+            airPanel.requestUpdate();
+            return;
+        }
         if (ml_presence_status == null)
         {
             return;
@@ -1648,52 +1694,14 @@ public class MessageListActivity extends AppCompatActivity
         }
     }
 
-    private void start_typing_animation()
-    {
-        stop_typing_animation();
-        if (ml_presence_status == null || main_handler_s == null)
-        {
-            return;
-        }
-        typing_dot_frame = 0;
-        ml_presence_status.setVisibility(View.VISIBLE);
-        ml_presence_status.setTextColor(ContextCompat.getColor(this, R.color.tg_chat_header_presence_online));
-        typing_anim_runnable = new Runnable()
-        {
-            @Override
-            public void run()
-            {
-                if (!friend_is_typing || ml_presence_status == null)
-                {
-                    return;
-                }
-                final String base = getString(R.string.chat_presence_typing);
-                final String dots = typing_dot_frame == 0 ? "…" : typing_dot_frame == 1 ? "." : "..";
-                ml_presence_status.setText(base + dots);
-                typing_dot_frame = (typing_dot_frame + 1) % 3;
-                if (main_handler_s != null)
-                {
-                    main_handler_s.postDelayed(this, TYPING_ANIM_INTERVAL_MS);
-                }
-            }
-        };
-        main_handler_s.post(typing_anim_runnable);
-    }
-
-    private void stop_typing_animation()
-    {
-        if (typing_anim_runnable != null && main_handler_s != null)
-        {
-            main_handler_s.removeCallbacks(typing_anim_runnable);
-        }
-        typing_anim_runnable = null;
-    }
-
     @Override
     protected void onDestroy()
     {
-        stop_typing_animation();
         friend_is_typing = false;
+        if (airPanel != null)
+        {
+            airPanel.onDestroy();
+        }
         if (this == message_list_activity)
         {
             message_list_activity = null;
@@ -1710,6 +1718,12 @@ public class MessageListActivity extends AppCompatActivity
 
     void apply_chat_header()
     {
+        if (airPanel != null)
+        {
+            // KHANDAQ (redesign, stage 2): the design's surface, inks and icons instead of the green bar.
+            airPanel.styleHeader();
+            return;
+        }
         ChatBubbleUiHelper.apply_chat_header_theme(
                 (Toolbar) findViewById(R.id.toolbar),
                 (android.view.View) null,
@@ -1750,7 +1764,8 @@ public class MessageListActivity extends AppCompatActivity
             ml_maintext.setText(FavoritesChatHelper.displayName(this));
             apply_chat_header();
             apply_friend_presence_status_ui();
-            if (ml_avatar != null)
+            // KHANDAQ (redesign, stage 2): the panel's tile replaces the round avatar.
+            if (ml_avatar != null && airPanel == null)
             {
                 ml_avatar.setVisibility(View.VISIBLE);
                 FavoritesChatHelper.bindListAvatar(ml_avatar);
@@ -1782,6 +1797,13 @@ public class MessageListActivity extends AppCompatActivity
                     public void run()
                     {
                         apply_chat_header();
+                        if (airPanel != null)
+                        {
+                            // KHANDAQ (redesign, stage 2): the panel names the person (a nickname
+                            // first, as the list does) and draws the tile in place of the avatar.
+                            airPanel.requestUpdate();
+                            return;
+                        }
                         ml_maintext.setText(f_name);
                         update_friend_presence_status();
 
@@ -2012,7 +2034,7 @@ public class MessageListActivity extends AppCompatActivity
 
             if (intent.resolveActivity(getPackageManager()) == null)
             {
-                Toast.makeText(this, R.string.attach_no_camera, Toast.LENGTH_SHORT).show();
+                AirComposerNotice.say(getString(R.string.attach_no_camera), false);
                 return;
             }
 
@@ -2023,13 +2045,18 @@ public class MessageListActivity extends AppCompatActivity
         catch (Exception e)
         {
             HelperGeneric.logI(TAG, "open_camera_capture:EE:" + e.getMessage());
-            Toast.makeText(this, R.string.attach_no_camera, Toast.LENGTH_SHORT).show();
+            AirComposerNotice.say(getString(R.string.attach_no_camera), false);
         }
     }
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event)
     {
+        // KHANDAQ (redesign, stage 2): Esc on a hardware keyboard closes the open dossier first.
+        if (airPanel != null && airPanel.handleKey(event))
+        {
+            return true;
+        }
         // Only a physical keyboard's Enter (or the IME's explicit send action) sends; the soft
         // keyboard's Enter falls through to the multi-line field as a line break.
         if (ChatInputBarHelper.isSendKeyEvent(event))
@@ -2100,7 +2127,7 @@ public class MessageListActivity extends AppCompatActivity
             @Override
             public void onError(final String reason)
             {
-                runOnUiThread(() -> display_toast(getString(R.string.location_share_failed), true, 400));
+                AirComposerNotice.say(getString(R.string.location_share_failed), true);
             }
         });
     }
@@ -2126,7 +2153,7 @@ public class MessageListActivity extends AppCompatActivity
             if (newBody.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
                 > HelperMessageEdit.MAX_EDIT_TEXT_BYTES)
             {
-                display_toast(getString(R.string.chat_edit_too_long), true, 400);
+                AirComposerNotice.say(getString(R.string.chat_edit_too_long), false);
                 return; // edit mode stays active so the user can shorten the text
             }
             final com.zoffcc.applications.sorm.Message em = ChatReplyPreviewController.consumeEditDirect();
@@ -2150,7 +2177,7 @@ public class MessageListActivity extends AppCompatActivity
             }
             else
             {
-                display_toast(getString(R.string.chat_edit_failed), true, 400);
+                AirComposerNotice.say(getString(R.string.chat_edit_failed), true);
             }
             return;
         }
@@ -2170,7 +2197,7 @@ public class MessageListActivity extends AppCompatActivity
             final long rowId = FavoritesChatHelper.sendTextMessage(fullText, true);
             if (rowId <= 0)
             {
-                display_toast(getString(R.string.dm_send_failed_friend), true, 400);
+                AirComposerNotice.say(getString(R.string.dm_send_failed_friend), true);
                 return;
             }
 
@@ -2181,6 +2208,30 @@ public class MessageListActivity extends AppCompatActivity
                 emojiPopup.dismiss();
             }
             stop_self_typing_indicator_s();
+            return;
+        }
+
+        // KHANDAQ (redesign, stage 2): nothing is refused for being offline. Before Tox runs, the text is
+        // stored as unsent (message_id -1) without touching toxcore; the service loop sends it once the
+        // node is up, as it does for a friend who is offline, and the tray shows it meanwhile.
+        if (!is_tox_started)
+        {
+            final String queued = trim_to_utf8_length_bytes(fullText, TOX_MSGV3_MAX_MESSAGE_LENGTH);
+            if ((queued == null) || queued.isEmpty())
+            {
+                return;
+            }
+            if (AirChatPanel.queueUnsentText(friend_pubkey, queued) <= 0)
+            {
+                AirComposerNotice.say(getString(R.string.dm_send_failed_not_ready), true);
+                return;
+            }
+            HelperGeneric.clear_chat_input_field(ml_new_message);
+            ChatDraftHelper.clear_friend_draft(friend_pubkey);
+            if (emojiPopup != null)
+            {
+                emojiPopup.dismiss();
+            }
             return;
         }
 
@@ -2204,19 +2255,9 @@ public class MessageListActivity extends AppCompatActivity
             return;
         }
 
-        if (!is_tox_started)
-        {
-            display_toast(getString(R.string.dm_send_failed_not_ready), true, 400);
-            return;
-        }
-
-        final String dm_precheck = HelperFriend.dm_send_precheck_failure_reason(friend_pubkey);
-        if (dm_precheck != null)
-        {
-            display_toast(dm_precheck, true, 400);
-            return;
-        }
-
+        // KHANDAQ (redesign, stage 2): no early return when our own node is offline any more (it was
+        // dm_send_precheck_failure_reason). The send below fails with "friend offline", the text is
+        // stored as unsent and waits in the tray; the service loop sends it when the link is back.
         wakeup_tox_thread();
 
         Message m = new Message();
@@ -2241,7 +2282,7 @@ public class MessageListActivity extends AppCompatActivity
 
         if (result == null)
         {
-            display_toast(getString(R.string.dm_send_failed_friend), true, 400);
+            AirComposerNotice.say(getString(R.string.dm_send_failed_friend), true);
             return;
         }
 
@@ -2256,7 +2297,12 @@ public class MessageListActivity extends AppCompatActivity
         {
             m.resend_count = 0; // sending was NOT successfull
             m.message_id = -1;
-            display_toast(HelperFriend.dm_send_failure_reason(res, friend_pubkey), true, 400);
+            // KHANDAQ (redesign, stage 2): a message that waits for the person (or for our own link) is
+            // not an error: the tray and the hint under the field say it. Other refusals still speak up.
+            if ((res != -3L) && HelperFriend.is_self_tox_connected_to_dht())
+            {
+                AirComposerNotice.say(HelperFriend.dm_send_failure_reason(res, friend_pubkey), true);
+            }
         }
 
         if (result.msg_v2)
@@ -2320,7 +2366,7 @@ public class MessageListActivity extends AppCompatActivity
                 final String pk = get_friend_pubkey();
                 if ((pk == null) || pk.isEmpty())
                 {
-                    display_toast(getString(R.string.dm_send_failed_friend), true, 400);
+                    AirComposerNotice.say(getString(R.string.dm_send_failed_friend), true);
                     return;
                 }
                 if (FavoritesChatHelper.isFavoritesChat(pk))
@@ -2341,7 +2387,7 @@ public class MessageListActivity extends AppCompatActivity
             }
             else if (friendnum < 0)
             {
-                display_toast(getString(R.string.dm_send_failed_friend), true, 400);
+                AirComposerNotice.say(getString(R.string.dm_send_failed_friend), true);
             }
             else if (view != null)
             {
@@ -2902,7 +2948,7 @@ public class MessageListActivity extends AppCompatActivity
             HelperGeneric.logI(TAG, "file length 0 ?");
             // KHANDAQ: Tox cannot transfer a 0-byte file (size 0 is the special streaming/avatar
             // mode), so empty files were silently dropped. Tell the user instead of doing nothing.
-            display_toast(c.getString(R.string.chat_file_empty), true, 100);
+            AirComposerNotice.say(c.getString(R.string.chat_file_empty), false);
             return -1L;
         }
 
@@ -2912,7 +2958,7 @@ public class MessageListActivity extends AppCompatActivity
 
         if (file_size > FT_OUTGOING_FILESIZE_FRIEND_MAX_TOTAL)
         {
-            display_toast(c.getString(R.string.chat_file_too_large), true, 100);
+            AirComposerNotice.say(c.getString(R.string.chat_file_too_large), false);
             HelperGeneric.logI(TAG, "add_outgoing_file:documentFile:file_size=File too large");
             return -1L;
         }
@@ -3107,22 +3153,44 @@ public class MessageListActivity extends AppCompatActivity
         }
     }
 
-    // KHANDAQ: chat-header overflow (⋮) — search / video call / message filter (Figma).
+    // KHANDAQ (redesign, stage 3): the overflow keeps what has no icon in the header: the log filters,
+    // and the video call below 400dp, where the header has no room for its icon.
     @Override
     public boolean onCreateOptionsMenu(Menu menu)
     {
         getMenuInflater().inflate(R.menu.menu_chat_header, menu);
-        // KHANDAQ: Saved Messages (Избранное) is a local self-chat — a video call to yourself
-        // makes no sense, so hide that overflow item there.
-        if (FavoritesChatHelper.isFavoritesChat(get_friend_pubkey()))
+        final MenuItem searchItem = menu.findItem(R.id.action_chat_search);
+        if (searchItem != null)
         {
-            final MenuItem videoItem = menu.findItem(R.id.action_chat_video);
-            if (videoItem != null)
-            {
-                videoItem.setVisible(false);
-            }
+            searchItem.setVisible(headerSearchInOverflow());
+        }
+        // KHANDAQ: Saved Messages is a local self-chat; a video call to yourself makes no sense, so hide
+        // that overflow item there.
+        final MenuItem videoItem = menu.findItem(R.id.action_chat_video);
+        if (videoItem != null)
+        {
+            videoItem.setVisible(!FavoritesChatHelper.isFavoritesChat(get_friend_pubkey())
+                                 && !getResources().getBoolean(R.bool.air_chat_video_in_header));
         }
         return true;
+    }
+
+    /**
+     * KHANDAQ (redesign, stage 3): the call icons of the header. None in Saved messages; the video call
+     * only from 400dp up (values-w400dp), below that it is in the overflow.
+     */
+    private void applyHeaderCallIcons(final String pubkey)
+    {
+        final boolean saved = FavoritesChatHelper.isFavoritesChat(pubkey);
+        if (ml_phone_icon != null)
+        {
+            ml_phone_icon.setVisibility(saved ? View.GONE : View.VISIBLE);
+        }
+        if (ml_video_icon != null)
+        {
+            ml_video_icon.setVisibility(saved || !getResources().getBoolean(R.bool.air_chat_video_in_header)
+                                        ? View.GONE : View.VISIBLE);
+        }
     }
 
     @Override
@@ -3134,7 +3202,7 @@ public class MessageListActivity extends AppCompatActivity
             enterChatSearchMode();
             return true;
         }
-        else if (id == R.id.action_chat_video)
+        if (id == R.id.action_chat_video)
         {
             // KHANDAQ (#4): never place a (video) call to Saved Messages, even if the overflow item
             // ever slips through the onCreateOptionsMenu gate (e.g. a menu built before the pubkey).
@@ -3192,8 +3260,33 @@ public class MessageListActivity extends AppCompatActivity
         }
     }
 
+    /**
+     * KHANDAQ (redesign, stage 2): the dossier's "Files": every attachment of the chat, as the overflow's
+     * filters show them; "All messages" in the overflow brings the whole log back.
+     */
+    void show_all_attachments()
+    {
+        try
+        {
+            messageSearchView.setQuery("", false);
+            messageSearchView.setIconified(true);
+            show_only_files = true;
+            MessageListFragment.attachment_filter_kind = MessageListFragment.ATTACH_ALL;
+            search_messages_text = null;
+            MainActivity.message_list_fragment.update_all_messages(false, false, PREF__messageview_paging);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
     private void enterChatSearchMode()
     {
+        if (airPanel != null)
+        {
+            airPanel.closeDossier(true);
+        }
         final View profileTap = findViewById(R.id.ml_header_profile_tap);
         if (profileTap != null)
         {
@@ -3202,6 +3295,14 @@ public class MessageListActivity extends AppCompatActivity
         if (ml_phone_icon != null)
         {
             ml_phone_icon.setVisibility(View.GONE);
+        }
+        if (ml_video_icon != null)
+        {
+            ml_video_icon.setVisibility(View.GONE);
+        }
+        if (ml_search_icon != null)
+        {
+            ml_search_icon.setVisibility(View.GONE);
         }
         if (messageSearchView != null)
         {
@@ -3222,11 +3323,73 @@ public class MessageListActivity extends AppCompatActivity
         {
             profileTap.setVisibility(View.VISIBLE);
         }
-        // KHANDAQ (#4): don't resurrect the call icon in Saved Messages when leaving search.
-        if (ml_phone_icon != null && !FavoritesChatHelper.isFavoritesChat(get_friend_pubkey()))
+        if (ml_search_icon != null)
         {
-            ml_phone_icon.setVisibility(View.VISIBLE);
+            ml_search_icon.setVisibility(headerSearchInOverflow() ? View.GONE : View.VISIBLE);
         }
+        if (headerFit != null)
+        {
+            // The search field had the row: the name may have room again, or less.
+            headerFit.post();
+        }
+        // KHANDAQ (#4): don't resurrect the call icons in Saved Messages when leaving search.
+        applyHeaderCallIcons(get_friend_pubkey());
+    }
+
+    /** KHANDAQ (redesign, stage 3b): Search, then the chevron, step aside when the name gets too little room. */
+    private void watchHeaderFit()
+    {
+        if ((ml_maintext == null) || (ml_search_icon == null))
+        {
+            return;
+        }
+        headerFit = new AirHeaderFit(ml_maintext,
+                                     () -> isFinishing() || ((messageSearchView != null)
+                                                             && (messageSearchView.getVisibility() == View.VISIBLE)),
+                                     new AirHeaderFit.Slot()
+                                     {
+                                         @Override
+                                         public int width()
+                                         {
+                                             return getResources().getDimensionPixelSize(R.dimen.kq_size_target_android);
+                                         }
+
+                                         @Override
+                                         public void setOut(final boolean out)
+                                         {
+                                             ml_search_icon.setVisibility(out ? View.GONE : View.VISIBLE);
+                                             invalidateOptionsMenu();
+                                         }
+                                     },
+                                     new AirHeaderFit.Slot()
+                                     {
+                                         @Override
+                                         public int width()
+                                         {
+                                             final View chevron = findViewById(R.id.air_chat_chevron);
+                                             if ((chevron == null) || (airPanel == null) || !airPanel.hasDossier())
+                                             {
+                                                 return 0;
+                                             }
+                                             final ViewGroup.MarginLayoutParams lp =
+                                                     (ViewGroup.MarginLayoutParams) chevron.getLayoutParams();
+                                             return lp.width + lp.getMarginStart() + lp.getMarginEnd();
+                                         }
+
+                                         @Override
+                                         public void setOut(final boolean out)
+                                         {
+                                             if (airPanel != null)
+                                             {
+                                                 airPanel.setChevronDropped(out);
+                                             }
+                                         }
+                                     });
+    }
+
+    private boolean headerSearchInOverflow()
+    {
+        return (headerFit != null) && headerFit.isOut(0);
     }
 
     public void start_audio_call_to_friend(View view)
@@ -3258,16 +3421,40 @@ public class MessageListActivity extends AppCompatActivity
 
         if (is_friend_online_real(friendnum) == 0)
         {
-            final long fn = friendnum;
-            final String calling_friend_pk = tox_friend_get_public_key__wrapper(fn);
-            Intent intent = new Intent(context_s, CallingWaitingActivity.class);
-            intent.putExtra("calling_friend_pk", calling_friend_pk);
-            startActivityForResult(intent, CallingWaitingActivity_ID);
+            offer_wait_and_call();
         }
         else
         {
             start_call_to_friend_real(view);
         }
+    }
+
+    /**
+     * KHANDAQ (redesign, E9): a call to someone offline first says that it will not get through, and
+     * whether a wake signal goes to their phone, then offers Wait and call. The wait used to open at
+     * once, with a spinner and no word on what the app does.
+     */
+    private void offer_wait_and_call()
+    {
+        final String calling_friend_pk = tox_friend_get_public_key__wrapper(friendnum);
+        String name = get_friend_name_from_pubkey(calling_friend_pk);
+        if ((name == null) || name.trim().isEmpty())
+        {
+            name = calling_friend_pk == null ? "" : calling_friend_pk.substring(0, Math.min(8, calling_friend_pk.length()));
+        }
+        final androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(getString(R.string.air_call_offline_title_format, AirConversationModel.shortName(name)))
+                .setMessage(HelperFriend.can_wake_friend_phone(calling_friend_pk) ? R.string.air_call_offline_push
+                                                                                  : R.string.air_call_offline_wait)
+                .setPositiveButton(R.string.air_call_wait_action, (d, which) ->
+                {
+                    final Intent intent = new Intent(context_s, CallingWaitingActivity.class);
+                    intent.putExtra("calling_friend_pk", calling_friend_pk);
+                    startActivityForResult(intent, CallingWaitingActivity_ID);
+                })
+                .setNegativeButton(R.string.air_call_cancel, null)
+                .create();
+        AirUi.showDialog(this, dialog, false);
     }
 
     @Override
@@ -3287,7 +3474,7 @@ public class MessageListActivity extends AppCompatActivity
             }
             else
             {
-                display_toast(getString(R.string.location_share_failed), true, 400);
+                AirComposerNotice.say(getString(R.string.location_share_failed), false);
             }
             return;
         }
@@ -3299,7 +3486,20 @@ public class MessageListActivity extends AppCompatActivity
 
         if (!pendingCallAfterPermission)
         {
+            // Asked for by the voice button, not by a call: refused, the rule stands under the field. The
+            // screen is paused while the system asks, so the panel says it, not the static router.
+            if (!HelperCall.hasMicrophonePermission(this) && airPanel != null)
+            {
+                airPanel.sayAtComposer(getString(R.string.air_voice_needs_mic), false);
+            }
             return;
+        }
+
+        // The permission dialog paused this screen, and onPause forgot the friend; the answer comes before
+        // onResume puts it back, so the call went to friend -1 ("Unknown is offline").
+        if (friendnum < 0 && friendnum_prev >= 0 && !FavoritesChatHelper.isFavoritesChat(friend_pubkey))
+        {
+            friendnum = friendnum_prev;
         }
 
         if (HelperCall.hasRequiredCallPermissions(this, Callstate.audio_call))
@@ -3309,7 +3509,13 @@ public class MessageListActivity extends AppCompatActivity
         else
         {
             pendingCallAfterPermission = false;
-            HelperCall.showMissingPermissionToast(this, Callstate.audio_call);
+            // KHANDAQ (redesign, E9): say why the call does not start, with the settings one tap away; a
+            // video call without the camera may go with sound alone.
+            HelperCall.explainMissingPermission(this, Callstate.audio_call, () ->
+            {
+                Callstate.audio_call = true;
+                start_call_to_friend_internal(null);
+            });
         }
     }
 
@@ -3330,7 +3536,7 @@ public class MessageListActivity extends AppCompatActivity
             HelperGeneric.logI(TAG, "TOX:friend offline");
             try
             {
-                Toast.makeText(this, R.string.friend_not_online, Toast.LENGTH_SHORT).show();
+                AirComposerNotice.say(getString(R.string.friend_not_online), false);
             }
             catch (Exception e)
             {
@@ -3467,16 +3673,15 @@ public class MessageListActivity extends AppCompatActivity
                                     if (call_res == 1)
                                     {
                                         friend_call_push_url(friend_pk, System.currentTimeMillis());
-                                        HelperCall.logCallEvent(friend_pk,
-                                                Callstate.audio_call ? R.string.call_log_outgoing_voice
-                                                                     : R.string.call_log_outgoing_video);
+                                        // KHANDAQ (redesign, E9): the entry is written as the call ends.
+                                        HelperCall.callBegins(friend_pk, false);
                                     }
                                     else
                                     {
                                         HelperCall.logCallEvent(friend_pk, R.string.call_log_failed);
                                         try
                                         {
-                                            Toast.makeText(context_s, R.string.call_start_failed, LENGTH_LONG).show();
+                                            AirComposerNotice.say(context_s.getString(R.string.call_start_failed), true);
                                         }
                                         catch (Exception e)
                                         {
@@ -3759,7 +3964,7 @@ public class MessageListActivity extends AppCompatActivity
             {
                 if (!selected_messages.isEmpty())
                 {
-                    v.setBackgroundResource(R.drawable.bg_message_selection); // KHANDAQ (#4): translucent teal selection (was opaque gray)
+                    v.setBackgroundResource(AirTranscript.selectionPlate(v)); // KHANDAQ (#4, redesign stage 2): the plate of the screen the row is on
                     is_selected = true;
                     selected_messages.add(message_.id);
                     if (message_.TRIFA_MESSAGE_TYPE == TRIFA_MSG_TYPE_TEXT.value)
@@ -3845,7 +4050,7 @@ public class MessageListActivity extends AppCompatActivity
                         amode = message_list_activity.startSupportActionMode(new ToolbarActionMode(context));
                         amode_save_menu_item = amode.getMenu().findItem(R.id.action_save);
                         amode_info_menu_item = amode.getMenu().findItem(R.id.action_info);
-                        v.setBackgroundResource(R.drawable.bg_message_selection); // KHANDAQ (#4): translucent teal selection (was opaque gray)
+                        v.setBackgroundResource(AirTranscript.selectionPlate(v)); // KHANDAQ (#4, redesign stage 2): the plate of the screen the row is on
                         ret.is_selected = true;
                         selected_messages.add(message_.id);
                         if (message_.TRIFA_MESSAGE_TYPE == TRIFA_MSG_TYPE_TEXT.value)
@@ -3928,6 +4133,10 @@ public class MessageListActivity extends AppCompatActivity
         final String new_friend_pubkey = intent.getStringExtra("friend_pubkey");
         if ((new_friend_pubkey == null) || new_friend_pubkey.equalsIgnoreCase(friend_pubkey))
         {
+            if (airPanel != null && intent.getBooleanExtra(EXTRA_OPEN_DOSSIER, false))
+            {
+                airPanel.openDossierWhenShown();
+            }
             return;
         }
         try

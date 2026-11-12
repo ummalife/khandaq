@@ -37,7 +37,6 @@ import androidx.annotation.Nullable;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import static com.zoffcc.applications.trifa.HelperGeneric.format_chat_date_header;
 import static com.zoffcc.applications.trifa.HelperGeneric.only_date_time_format;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__compact_chatlist;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.MESSAGE_PAGING_SHOW_NEWER_HASH;
@@ -91,16 +90,9 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                                                                         false);
                 return new MessageListHolder_paging(view, this.context);
             case Message_model.TEXT_INCOMING_NOT_READ:
-                if (PREF__compact_chatlist)
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_entry_read_compact,
-                                                                            parent, false);
-                }
-                else
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_entry_read, parent,
-                                                                            false);
-                }
+                // KHANDAQ (redesign, stage 2): every text of the conversation is an entry of the transcript,
+                // compact list or not (the entry is already as dense as the compact bubble was).
+                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.air_entry_text, parent, false);
                 return new MessageListHolder_text_incoming_not_read(view, this.context);
             case Message_model.TEXT_INCOMING_HAVE_READ:
                 view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_entry_read, parent,
@@ -109,28 +101,10 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                 return new MessageListHolder_error(view, this.context);
 
             case Message_model.TEXT_OUTGOING_NOT_READ:
-                if (PREF__compact_chatlist)
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_self_entry_compact,
-                                                                            parent, false);
-                }
-                else
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_self_entry, parent,
-                                                                            false);
-                }
+                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.air_entry_text, parent, false);
                 return new MessageListHolder_text_outgoing_not_read(view, this.context);
             case Message_model.TEXT_OUTGOING_HAVE_READ:
-                if (PREF__compact_chatlist)
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(
-                            R.layout.message_list_self_entry_read_compact, parent, false);
-                }
-                else
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_self_entry_read,
-                                                                            parent, false);
-                }
+                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.air_entry_text, parent, false);
                 return new MessageListHolder_text_outgoing_read(view, this.context);
 
             case Message_model.FILE_INCOMING_STATE_CANCEL:
@@ -456,6 +430,8 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
 
             // KHANDAQ: Telegram-style captions — merge an adjacent TEXT into its media bubble.
             ChatCaptionHelper.apply_caption_state(context, this.messagelistitems, position, holder);
+            // KHANDAQ (redesign, stage 3b): a file, a photo or a voice note is an entry of the transcript.
+            AirFileEntry.bindDirect(holder.itemView, m2, position);
         }
         catch (Exception e)
         {
@@ -618,6 +594,9 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
     // KHANDAQ (QA 02.10): payload marker for re-applying only the media-caption merge of a row
     // (ChatCaptionHelper) after its NEIGHBOUR changed — touches no ImageView, so no Glide reload.
     static final Object PAYLOAD_CAPTION = new Object();
+    // KHANDAQ (redesign, stage 2): the person came online or went away, or their name changed: an entry
+    // of the transcript redraws its author and mark (AirTranscript.refreshState), never its text.
+    static final Object PAYLOAD_AIR = new Object();
 
     @Override
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -632,6 +611,7 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
         boolean progress = false;
         boolean selection = false;
         boolean caption = false;
+        boolean air = false;
         boolean partial = !payloads.isEmpty();
         for (Object p : payloads)
         {
@@ -646,6 +626,10 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
             else if (p == PAYLOAD_CAPTION)
             {
                 caption = true;
+            }
+            else if (p == PAYLOAD_AIR)
+            {
+                air = true;
             }
             else
             {
@@ -674,7 +658,7 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                     {
                         if (MainActivity.selected_messages.contains(m.id))
                         {
-                            container.setBackgroundResource(R.drawable.bg_message_selection);
+                            container.setBackgroundResource(AirTranscript.SELECTED_BG);
                         }
                         else
                         {
@@ -685,6 +669,20 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                 if (caption)
                 {
                     ChatCaptionHelper.apply_caption_state(context, this.messagelistitems, position, holder);
+                }
+                // A neighbour that changed or went can start or end a run of one author, and a day.
+                if ((air || caption) && AirTranscript.isEntry(holder.itemView))
+                {
+                    AirTranscript.refreshState(holder.itemView, m, position);
+                    if (caption)
+                    {
+                        ChatDateSeparatorHelper.bindInlineDateHeader(holder.itemView, position, this);
+                    }
+                }
+                // A file entry: its author over a run, its words and its mark follow its neighbours too.
+                if ((air || caption) && AirFileEntry.isEntry(holder.itemView))
+                {
+                    AirFileEntry.bindDirect(holder.itemView, m, position);
                 }
                 return;
             }
@@ -923,7 +921,8 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
         {
             Message m = (Message) messagelistitems.get(position);
             final long ts = m.direction == 0 ? m.rcvd_timestamp : m.sent_timestamp;
-            return format_chat_date_header(context, ts);
+            // KHANDAQ (redesign, stage 2): the day words of the transcript, as on iOS.
+            return AirTranscript.dayText(context, ts);
         }
         catch (Exception e)
         {

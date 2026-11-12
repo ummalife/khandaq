@@ -3,7 +3,6 @@ package com.zoffcc.applications.trifa;
 import android.app.Activity;
 import android.app.KeyguardManager;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Build;
 import android.os.SystemClock;
@@ -11,9 +10,6 @@ import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
 import android.util.Log;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -22,7 +18,6 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
 
 import org.khandaq.messenger.R;
 
@@ -110,11 +105,12 @@ final class PlaintextExportGate
                     }
 
                     // Cancelled, or the wrong credential. Say so: a silently dropped tap reads as a bug
-                    // and invites the user to keep pressing.
+                    // and invites the user to keep pressing. E21: it stays a toast, since it confirms
+                    // what the person did on the lock screen (the system asks again on a wrong try).
                     final Activity a = host.get();
                     if (a != null)
                     {
-                        Toast.makeText(a, R.string.plaintext_export_not_authenticated, Toast.LENGTH_LONG).show();
+                        Toast.makeText(a, R.string.air_export_cancelled, Toast.LENGTH_LONG).show();
                     }
                 });
     }
@@ -144,19 +140,8 @@ final class PlaintextExportGate
             return;
         }
 
-        new AlertDialog.Builder(a)
-                .setTitle(title)
-                .setMessage(message)
-                .setPositiveButton(confirm, new DialogInterface.OnClickListener()
-                {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which)
-                    {
-                        reauthenticate(onGranted);
-                    }
-                })
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
+        // E21: from below, the verb in the danger colour: a plain copy of the key cannot be taken back.
+        AirQuestion.ask(a, title, message, confirm, true, () -> reauthenticate(onGranted));
     }
 
     private void reauthenticate(@NonNull final Runnable onGranted)
@@ -224,61 +209,43 @@ final class PlaintextExportGate
     {
         final String word = a.getString(R.string.plaintext_export_typed_confirm_word);
 
-        final LinearLayout box = new LinearLayout(a);
-        box.setOrientation(LinearLayout.VERTICAL);
-        final int pad = (int) (a.getResources().getDisplayMetrics().density * 20);
-        box.setPadding(pad, pad / 2, pad, 0);
-
-        final TextView explain = new TextView(a);
-        explain.setText(a.getString(R.string.plaintext_export_typed_confirm_message, word));
-
-        final EditText input = new EditText(a);
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        input.setHint(word);
-
-        box.addView(explain);
-        box.addView(input);
-
-        final AlertDialog dialog = new AlertDialog.Builder(a)
-                .setTitle(R.string.plaintext_export_reauth_title)
-                .setView(box)
-                .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener()
-                {
-                    @Override
-                    public void onClick(DialogInterface d, int which)
-                    {
-                        authorise();
-                        onGranted.run();
-                    }
-                })
-                .setNegativeButton(android.R.string.cancel, null)
-                .create();
-
-        dialog.setOnShowListener(d ->
+        // E21: a small form from below; the verb waits until the word is typed.
+        final AirSheet sheet = AirSheet.create(a, a.getString(R.string.plaintext_export_reauth_title),
+                                               a.getString(R.string.plaintext_export_typed_confirm_message, word));
+        if (sheet == null)
         {
-            final Button ok = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
-            ok.setEnabled(false);
-            input.addTextChangedListener(new TextWatcher()
+            return;
+        }
+        final AirStepKit.LineField field = new AirStepKit.LineField(sheet.context, word, false);
+        field.edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        sheet.add(field, R.dimen.kq_space_16);
+        final TextView ok = sheet.verb(a.getString(R.string.settings_export_tox_profile_confirm_yes), true, v -> sheet.dismissThen(() ->
+        {
+            authorise();
+            onGranted.run();
+        }));
+        ok.setEnabled(false);
+        field.edit.addTextChangedListener(new TextWatcher()
+        {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after)
             {
-                @Override
-                public void beforeTextChanged(CharSequence s, int start, int count, int after)
-                {
-                }
+            }
 
-                @Override
-                public void onTextChanged(CharSequence s, int start, int before, int count)
-                {
-                }
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count)
+            {
+            }
 
-                @Override
-                public void afterTextChanged(Editable s)
-                {
-                    ok.setEnabled(word.contentEquals(s.toString().trim()));
-                }
-            });
+            @Override
+            public void afterTextChanged(Editable s)
+            {
+                ok.setEnabled(word.contentEquals(s.toString().trim()));
+            }
         });
-
-        dialog.show();
+        sheet.cancel(null);
+        sheet.withKeyboard().show();
+        AirStepKit.showKeyboard(field.edit);
     }
 
     private static void authorise()

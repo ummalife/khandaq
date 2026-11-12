@@ -2,43 +2,41 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import Foundation
-
-private struct Constants {
-    static let DotsSize: CGFloat = 16
-    static let DotsSpacing: CGFloat = 10
-    static let ButtonSize: CGFloat = 75
-    static let VerticalOffsetSmall: CGFloat = 12
-    static let VerticalOffsetBig: CGFloat = 17
-    static let HorizontalOffset: CGFloat = 17
-}
+import SnapKit
+import UIKit
 
 protocol PinInputViewDelegate: class {
     func pinInputView(_ view: PinInputView, numericButtonPressed i: Int)
     func pinInputViewDeleteButtonPressed(_ view: PinInputView)
 }
 
-// KHANDAQ (Figma): flat PIN pad — plain background, light-grey circular keys, teal outline/filled
-// dots. Replaces the old full-screen teal gradient styling.
+/// The PIN pad (redesign stage 4, E20): the title and the line under it, the cells of the PIN
+/// (.kq-pin) that take a dot for each digit, and the keypad of 64 pt circles in the thumb's reach.
+/// On the lock ground, dark in both themes, it is white on the translucent controls of the call
+/// screens; in a sheet it is ink on the sunken colour. The keypad keeps its order in every language.
 class PinInputView: UIView {
+    enum Ground {
+        case lock
+        case sheet
+    }
+
     weak var delegate: PinInputViewDelegate?
 
     /// Entered numbers. Must be in 0...pinLength range.
     var enteredNumbersCount: Int = 0 {
         didSet {
-            enteredNumbersCount = max(enteredNumbersCount, 0)
-            enteredNumbersCount = min(enteredNumbersCount, pinLength)
-
-            updateDotsImages()
+            enteredNumbersCount = min(max(enteredNumbersCount, 0), pinLength)
+            updateCells()
         }
     }
 
     var topText: String {
         get {
-            return topLabel.text!
+            return titleLabel.text ?? ""
         }
         set {
-            topLabel.text = newValue
+            titleLabel.text = newValue
+            cellsView.accessibilityLabel = newValue
         }
     }
 
@@ -48,245 +46,274 @@ class PinInputView: UIView {
         }
         set {
             descriptionLabel.text = newValue
+            descriptionLabel.isHidden = (newValue ?? "").isEmpty
         }
     }
 
-    fileprivate let pinLength: Int
+    /// Off while a lockout runs: the keys stand dimmed and take no taps.
+    var keysEnabled = true {
+        didSet {
+            for key in keys {
+                key.isEnabled = keysEnabled
+            }
+            deleteButton.isEnabled = keysEnabled
+        }
+    }
 
-    fileprivate let textColor: UIColor
-    fileprivate let secondaryTextColor: UIColor
-    fileprivate let accentColor: UIColor
-    fileprivate let keyFillColor: UIColor
+    private let pinLength: Int
+    private let ground: Ground
+    private let titleLabel: UILabel
+    private let descriptionLabel: UILabel
+    private let cellsView = UIStackView()
+    private var cells = [AirPinCell]()
+    private var keys = [AirPinKey]()
+    private let deleteButton = UIButton(type: .system)
 
-    fileprivate var topLabel: UILabel!
-    fileprivate var descriptionLabel: UILabel!
-    fileprivate var dotsContainer: UIView!
-    fileprivate var dotsImageViews = [UIImageView]()
-    fileprivate var numericButtons = [UIButton]()
-    fileprivate var deleteButton: UIButton!
-
-    init(pinLength: Int, theme: Theme) {
+    init(pinLength: Int, ground: Ground) {
         self.pinLength = pinLength
-        self.textColor = theme.colorForType(.NormalText)
-        self.secondaryTextColor = theme.colorForType(.ChatInformationText)
-        self.accentColor = theme.colorForType(.LinkText)
-        self.keyFillColor = theme.colorForType(.ChatInputBackground)
+        self.ground = ground
+        let ink = ground == .lock ? KQColor.fixedWhite : KQColor.ink
+        titleLabel = AirKit.label(.heading, color: ink, lines: 0)
+        descriptionLabel = AirKit.label(.label, color: ground == .lock ? KQColor.fixedWhite : KQColor.ink2, lines: 0)
+        super.init(frame: .zero)
 
-        super.init(frame: CGRect.zero)
+        titleLabel.textAlignment = .center
+        titleLabel.accessibilityTraits = UIAccessibilityTraitHeader
+        titleLabel.accessibilityIdentifier = "air.pin.title"
+        descriptionLabel.textAlignment = .center
+        descriptionLabel.isHidden = true
+        descriptionLabel.accessibilityIdentifier = "air.pin.note"
 
-        createLabels()
-        createDotsImageViews()
-        createNumericButtons()
-        createDeleteButton()
+        for _ in 0..<pinLength {
+            cells.append(AirPinCell(ground: ground))
+        }
+        cellsView.axis = .horizontal
+        cellsView.spacing = KQSpace.x8
+        cellsView.semanticContentAttribute = .forceLeftToRight
+        cells.forEach { cellsView.addArrangedSubview($0) }
+        cellsView.isAccessibilityElement = true
+        cellsView.accessibilityIdentifier = "air.pin.cells"
 
-        installConstraints()
-
-        updateDotsImages()
+        let words = AirKit.column([titleLabel, descriptionLabel], spacing: KQSpace.x6)
+        words.alignment = .fill
+        let column = AirKit.column([words, cellsView, makeKeypad()], spacing: KQSpace.x24)
+        column.alignment = .center
+        column.setCustomSpacing(KQSpace.x32, after: cellsView)
+        addSubview(column)
+        column.snp.makeConstraints {
+            $0.edges.equalToSuperview()
+        }
+        words.snp.makeConstraints {
+            $0.width.equalToSuperview()
+        }
+        updateCells()
     }
 
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /**
-        Refreshes dots state. Kept for compatibility with the previous (gradient) implementation,
-        colors are now static and applied at creation.
-    */
+    /// Kept for the callers of the old pad: the colours follow the traits by themselves.
     func applyColors() {
-        updateDotsImages()
-    }
-}
-
-extension PinInputView {
-    @objc func numericButtonPressed(_ button: UIButton) {
-        guard let i = numericButtons.index(of: button) else {
-            return
-        }
-
-        delegate?.pinInputView(self, numericButtonPressed: i)
+        updateCells()
     }
 
-    @objc func deleteButtonPressed(_ button: UIButton) {
+    /// A wrong PIN: the cells shake once.
+    func shake() {
+        cellsView.airShakeOnce()
+    }
+
+    @objc private func keyTapped(_ key: AirPinKey) {
+        delegate?.pinInputView(self, numericButtonPressed: key.digit)
+    }
+
+    @objc private func deleteTapped() {
         delegate?.pinInputViewDeleteButtonPressed(self)
     }
+
+    private func updateCells() {
+        for (index, cell) in cells.enumerated() {
+            cell.isFilled = index < enteredNumbersCount
+            cell.isCurrent = index == enteredNumbersCount
+        }
+        cellsView.accessibilityValue = String(localized: "air_pin_entered_format", enteredNumbersCount, pinLength)
+    }
+
+    /// 1 to 9 in three rows, then 0 with Delete after it.
+    private func makeKeypad() -> UIView {
+        var rows = [UIStackView]()
+        for row in 0..<3 {
+            let digits = (1...3).map { row * 3 + $0 }
+            rows.append(keyRow(digits.map { makeKey($0) }))
+        }
+
+        deleteButton.setTitle(String(localized: "pin_delete"), for: .normal)
+        deleteButton.titleLabel?.font = KQFont.font(.label)
+        deleteButton.titleLabel?.adjustsFontForContentSizeCategory = true
+        deleteButton.titleLabel?.adjustsFontSizeToFitWidth = true
+        deleteButton.titleLabel?.minimumScaleFactor = 0.6
+        deleteButton.tintColor = ground == .lock ? KQColor.fixedWhite : KQColor.ink
+        deleteButton.accessibilityIdentifier = "air.pin.delete"
+        deleteButton.addTarget(self, action: #selector(deleteTapped), for: .touchUpInside)
+        let blank = UIView()
+        rows.append(keyRow([blank, makeKey(0), deleteButton]))
+        for view in [blank, deleteButton] {
+            view.snp.makeConstraints {
+                $0.size.equalTo(KQSpace.x64)
+            }
+        }
+
+        let keypad = AirKit.column(rows, spacing: KQSpace.x12)
+        keypad.semanticContentAttribute = .forceLeftToRight
+        return keypad
+    }
+
+    private func makeKey(_ digit: Int) -> AirPinKey {
+        let key = AirPinKey(digit: digit, ground: ground)
+        key.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
+        keys.append(key)
+        return key
+    }
+
+    private func keyRow(_ views: [UIView]) -> UIStackView {
+        let row = UIStackView(arrangedSubviews: views)
+        row.axis = .horizontal
+        row.spacing = KQSpace.x24
+        row.semanticContentAttribute = .forceLeftToRight
+        return row
+    }
 }
 
-private extension PinInputView {
-    func createLabels() {
-        topLabel = UILabel()
-        topLabel.font = UIFont.khandaqFontWithSize(18.0, weight: .medium)
-        topLabel.textColor = textColor
-        addSubview(topLabel)
-
-        descriptionLabel = UILabel()
-        descriptionLabel.font = UIFont.khandaqFontWithSize(16.0, weight: .light)
-        descriptionLabel.textColor = secondaryTextColor
-        addSubview(descriptionLabel)
-    }
-
-    func createDotsImageViews() {
-        for _ in 0..<pinLength {
-            dotsContainer = UIView()
-            dotsContainer.backgroundColor = .clear
-            addSubview(dotsContainer)
-
-            let imageView = UIImageView()
-            dotsContainer.addSubview(imageView)
-
-            dotsImageViews.append(imageView)
+/// A cell of the PIN (.kq-pin): a dot for an entered digit, the strong edge on the one that comes next.
+final class AirPinCell: UIView {
+    var isFilled = false {
+        didSet {
+            dot.isHidden = !isFilled
         }
     }
 
-    func createNumericButtons() {
-        let normalImage = circleImage(color: keyFillColor, size: Constants.ButtonSize, filled: true)
-        let highlightedImage = circleImage(color: accentColor, size: Constants.ButtonSize, filled: true)
-
-        for i in 0...9 {
-            let button = UIButton()
-            button.setTitle("\(i)", for: UIControlState())
-            button.titleLabel?.font = UIFont.khandaqFontWithSize(26.0, weight: .light)
-            button.setBackgroundImage(normalImage, for: UIControlState())
-            button.setBackgroundImage(highlightedImage, for: .highlighted)
-            button.setTitleColor(textColor, for: UIControlState())
-            button.setTitleColor(.white, for: .highlighted)
-            button.addTarget(self, action: #selector(PinInputView.numericButtonPressed(_:)), for: .touchUpInside)
-            addSubview(button)
-
-            numericButtons.append(button)
+    var isCurrent = false {
+        didSet {
+            applyColors()
         }
     }
 
-    func createDeleteButton() {
-        deleteButton = UIButton(type: .system)
-        deleteButton.setTitle(String(localized: "pin_delete"), for: UIControlState())
-        deleteButton.titleLabel?.font = UIFont.khandaqFontWithSize(17.0, weight: .light)
-        deleteButton.setTitleColor(secondaryTextColor, for: UIControlState())
-        deleteButton.addTarget(self, action: #selector(PinInputView.deleteButtonPressed(_:)), for: .touchUpInside)
-        addSubview(deleteButton)
+    private let ground: PinInputView.Ground
+    private let dot = UIView()
+
+    init(ground: PinInputView.Ground) {
+        self.ground = ground
+        super.init(frame: .zero)
+        layer.cornerRadius = KQRadius.field
+        layer.borderWidth = KQStroke.hairline
+        dot.layer.cornerRadius = KQSize.dot / 2
+        dot.isHidden = true
+        addSubview(dot)
+        dot.snp.makeConstraints {
+            $0.center.equalToSuperview()
+            $0.size.equalTo(KQSize.dot)
+        }
+        snp.makeConstraints {
+            $0.width.equalTo(KQSize.targetIos)
+            $0.height.equalTo(KQSize.pinCell)
+        }
+        applyColors()
     }
 
-    func installConstraints() {
-        topLabel.snp.makeConstraints {
-            $0.top.equalTo(self)
-            $0.centerX.equalTo(self)
-        }
-
-        descriptionLabel.snp.makeConstraints {
-            $0.top.equalTo(topLabel.snp.bottom).offset(Constants.VerticalOffsetSmall)
-            $0.centerX.equalTo(self)
-        }
-
-        installConstraintsForDotsViews()
-        installConstraintsForZeroButton()
-        installConstraintsForNumericButtons()
-
-        deleteButton.snp.makeConstraints {
-            $0.centerX.equalTo(numericButtons[9])
-            $0.centerY.equalTo(numericButtons[0])
-        }
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 
-    func installConstraintsForDotsViews() {
-        dotsContainer.snp.makeConstraints {
-            $0.top.equalTo(descriptionLabel.snp.bottom).offset(Constants.VerticalOffsetBig)
-            $0.centerX.equalTo(self)
-        }
-
-        for i in 0..<dotsImageViews.count {
-            let imageView = dotsImageViews[i]
-
-            imageView.snp.makeConstraints {
-                $0.top.equalTo(dotsContainer)
-                $0.bottom.equalTo(dotsContainer)
-                $0.size.equalTo(Constants.DotsSize)
-
-                if i == 0 {
-                    $0.left.equalTo(dotsContainer)
-                }
-                else {
-                    $0.left.equalTo(dotsImageViews[i - 1].snp.right).offset(Constants.DotsSpacing)
-                }
-
-                if i == (dotsImageViews.count - 1) {
-                    $0.right.equalTo(dotsContainer)
-                }
-            }
-        }
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        applyColors()
     }
 
-    func installConstraintsForZeroButton() {
-        numericButtons[0].snp.makeConstraints {
-            $0.top.equalTo(numericButtons[8].snp.bottom).offset(Constants.VerticalOffsetSmall)
-            $0.bottom.equalTo(self)
-
-            $0.centerX.equalTo(numericButtons[8])
-            $0.size.equalTo(Constants.ButtonSize)
+    private func applyColors() {
+        switch ground {
+            case .lock:
+                backgroundColor = KQColor.mediaControl
+                dot.backgroundColor = KQColor.fixedWhite
+                layer.borderColor = airCGColor(isCurrent ? KQColor.fixedWhite : UIColor.clear)
+            case .sheet:
+                backgroundColor = KQColor.surface
+                dot.backgroundColor = KQColor.ink
+                layer.borderColor = airCGColor(isCurrent ? KQColor.ink : KQColor.lineStrong)
         }
     }
+}
 
-    func installConstraintsForNumericButtons() {
-        for i in 1...9 {
-            let button = numericButtons[i]
+/// A key of the PIN keypad: a 64 pt circle with its digit. Pressed, it turns over like a call control.
+final class AirPinKey: UIControl {
+    let digit: Int
+    private let ground: PinInputView.Ground
+    private let label = UILabel()
 
-            button.snp.makeConstraints {
-                $0.size.equalTo(Constants.ButtonSize)
+    init(digit: Int, ground: PinInputView.Ground) {
+        self.digit = digit
+        self.ground = ground
+        super.init(frame: .zero)
+        layer.cornerRadius = KQSpace.x64 / 2
+        label.font = KQFont.tabular(KQFont.font(.display))
+        label.adjustsFontForContentSizeCategory = true
+        // At the largest text sizes the digit shrinks to stay inside its circle.
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.5
+        label.text = AirPinKey.numeral(digit)
+        label.textAlignment = .center
+        label.isUserInteractionEnabled = false
+        addSubview(label)
+        label.snp.makeConstraints {
+            $0.center.equalToSuperview()
+            $0.width.lessThanOrEqualToSuperview().offset(-KQSpace.x16)
+        }
+        snp.makeConstraints {
+            $0.size.equalTo(KQSpace.x64)
+        }
+        isAccessibilityElement = true
+        accessibilityLabel = String(digit)
+        accessibilityTraits = UIAccessibilityTraitButton | UIAccessibilityTraitKeyboardKey
+        accessibilityIdentifier = String(digit)
+        applyColors()
+    }
 
-                switch i % 3 {
-                case 1:
-                    $0.left.equalTo(self)
-                case 2:
-                    $0.left.equalTo(numericButtons[i - 1].snp.right).offset(Constants.HorizontalOffset)
-                default:
-                    $0.left.equalTo(numericButtons[i - 1].snp.right).offset(Constants.HorizontalOffset)
-                    $0.right.equalTo(self)
-                }
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 
-                if i <= 3 {
-                    $0.top.equalTo(dotsContainer.snp.bottom).offset(Constants.VerticalOffsetBig)
-                }
-                else if i <= 6 {
-                    $0.top.equalTo(numericButtons[i - 3].snp.bottom).offset(Constants.VerticalOffsetSmall)
-                }
-                else {
-                    $0.top.equalTo(numericButtons[i - 3].snp.bottom).offset(Constants.VerticalOffsetSmall)
-                }
-            }
+    override var isHighlighted: Bool {
+        didSet {
+            applyColors()
         }
     }
 
-    func updateDotsImages() {
-        guard !dotsImageViews.isEmpty else {
-            return
-        }
-
-        let empty = circleImage(color: accentColor, size: Constants.DotsSize, filled: false)
-        let filled = circleImage(color: accentColor, size: Constants.DotsSize, filled: true)
-
-        for i in 0..<dotsImageViews.count {
-            let imageView = dotsImageViews[i]
-            imageView.image = (i < enteredNumbersCount) ? filled : empty
-        }
-    }
-
-    func circleImage(color: UIColor, size: CGFloat, filled: Bool) -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
-
-        return renderer.image { _ in
-            if filled {
-                let path = UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: size, height: size))
-                color.setFill()
-                path.fill()
+    override var isEnabled: Bool {
+        didSet {
+            alpha = isEnabled ? 1 : 0.4
+            if isEnabled {
+                accessibilityTraits &= ~UIAccessibilityTraitNotEnabled
             }
             else {
-                let lineWidth: CGFloat = 1.5
-                let path = UIBezierPath(ovalIn: CGRect(x: lineWidth / 2,
-                                                       y: lineWidth / 2,
-                                                       width: size - lineWidth,
-                                                       height: size - lineWidth))
-                path.lineWidth = lineWidth
-                color.setStroke()
-                path.stroke()
+                accessibilityTraits |= UIAccessibilityTraitNotEnabled
             }
+        }
+    }
+
+    /// The digit as the app's language writes it (Arabic-Indic digits in Arabic).
+    static func numeral(_ digit: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: AppLanguage.current)
+        return formatter.string(from: NSNumber(value: digit)) ?? String(digit)
+    }
+
+    private func applyColors() {
+        switch ground {
+            case .lock:
+                backgroundColor = isHighlighted ? KQColor.fixedWhite : KQColor.mediaControl
+                label.textColor = isHighlighted ? KQColor.lockTop : KQColor.fixedWhite
+            case .sheet:
+                backgroundColor = isHighlighted ? KQColor.selected : KQColor.sunken
+                label.textColor = KQColor.ink
         }
     }
 }

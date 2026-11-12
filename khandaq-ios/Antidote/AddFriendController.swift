@@ -38,6 +38,9 @@ class AddFriendController: UIViewController {
 
     fileprivate var cachedMessage: String?
 
+    /// An ID to start with: one pasted into the Air command line. Read once, when the view loads.
+    var prefilledAddress: String?
+
     init(theme: Theme, submanagerFriends: OCTSubmanagerFriends, submanagerObjects: OCTSubmanagerObjects, ownToxAddress: String) {
         self.theme = theme
         self.submanagerFriends = submanagerFriends
@@ -68,6 +71,12 @@ class AddFriendController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         installKhandaqCircleBackButton(theme: theme)
+
+        if let address = prefilledAddress {
+            let value = normalizedIdFieldText(from: address)
+            applyIdFieldText(value, cursorOffset: (value as NSString).length)
+            updatePasteIconVisibility()
+        }
     }
 }
 
@@ -153,7 +162,7 @@ extension AddFriendController {
     }
 
     func presentMessageAlert(for address: String) {
-        // KHANDAQ (#G1): no intermediate "enter a request message" dialog — send the request straight
+        // KHANDAQ (#G1): no intermediate "enter a request message" dialog: send the request straight
         // away with the default greeting. The "request sent" toast (in sendFriendRequest) is enough.
         let cached = cachedMessage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let message = cached.isEmpty ? String(localized: "add_contact_default_message_text") : cached
@@ -254,7 +263,7 @@ extension AddFriendController: UITextFieldDelegate {
             newText = String(sanitizeAddressInput(merged).prefix(maxHex))
             cursorOffset = min(range.location + 1, (newText as NSString).length)
         } else {
-            // Backspace / delete — apply as-is; validation only on Send.
+            // Backspace or delete: apply as-is; validation only on Send.
             newText = merged
             cursorOffset = range.location
         }
@@ -317,7 +326,7 @@ private extension AddFriendController {
         idTextField.leftViewMode = .always
         idTextField.addTarget(self, action: #selector(AddFriendController.idTextFieldEditingChanged), for: .editingChanged)
 
-        // Tester request: one-tap paste of a copied MyID. Modern pattern (wallet/address fields —
+        // Tester request: one-tap paste of a copied MyID. Modern pattern (wallet and address fields,
         // Binance/Trust style): a small text "Вставить" button INSIDE the field, trailing edge;
         // it yields to the clear button once the field has text (see updatePasteIconVisibility).
         let pasteIcon = UIButton(type: .system)

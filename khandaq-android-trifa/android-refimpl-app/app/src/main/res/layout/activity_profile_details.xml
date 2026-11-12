@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- KHANDAQ Профиль → Детали (Figma 2031:12605 frame "Детали"): app bar + app-lock toggle +
-     lock timeout + change password (card 1) + delete profile (card 2, destructive). -->
+     lock timeout + change password. KHANDAQ (redesign, E17): the screen is "Password and PIN" of the
+     You screen, as on iOS; deleting the profile moved to the bottom of You. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -30,7 +31,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="4dp"
-            android:text="@string/profile_details"
+            android:text="@string/air_you_security"
             android:textColor="@color/onboarding_title"
             android:textSize="20sp"
             android:textStyle="bold" />
@@ -167,29 +168,6 @@
                         android:src="@drawable/ic_chevron_right"
                         app:tint="@color/onboarding_desc" />
                 </LinearLayout>
-            </LinearLayout>
-
-            <!-- Card 2: delete profile (destructive) -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:background="@drawable/bg_profile_card"
-                android:orientation="vertical"
-                android:paddingHorizontal="16dp">
-
-                <TextView
-                    android:id="@+id/pd_delete_row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:gravity="center_vertical"
-                    android:minHeight="56dp"
-                    android:text="@string/pd_delete_profile"
-                    android:textColor="#C80606"
-                    android:textSize="16sp" />
             </LinearLayout>
 
         </LinearLayout>

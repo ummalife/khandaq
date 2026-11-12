@@ -2,176 +2,190 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import UIKit
 import SnapKit
+import UIKit
 
-private struct Constants {
-    static let StatusViewLeftOffset: CGFloat = 5.0
-    static let StatusViewSize: CGFloat = 10.0
-    // KHANDAQ design (Figma): contact avatar to the left of the name in the chat header.
-    static let AvatarSize: CGFloat = 30.0
-    static let AvatarGap: CGFloat = 8.0
-}
-
-class ChatPrivateTitleView: UIView {
-    // KHANDAQ (Figma): the header lives as a LEFT bar item (Telegram-style avatar+name next to the back
-    // button), but a navigation bar only measures a custom bar-item view once. Whenever our content
-    // changes the intrinsic size, fire this so the controller can re-install the item and force a
-    // re-measure. No-op / no re-install when the size is unchanged (avoids flicker on status ticks).
+/// The header of the conversation with one person, next to the back button: the person's tile, the
+/// name on one line and a chevron that turns over while the dossier is open. The whole view is one
+/// button that opens and closes the dossier; the presence line lives in the band under the bar.
+final class ChatPrivateTitleView: UIControl {
+    /// A navigation bar measures a custom bar item once; the controller re-installs the item when the
+    /// size of this view changes.
     var onSizeChanged: (() -> Void)?
 
-    var name: String {
-        get {
-            return nameLabel.text ?? ""
-        }
-        set {
-            nameLabel.text = newValue
-            reportSizeIfChanged()
-        }
-    }
-
-    var userStatus: UserStatus {
-        get {
-            return statusView.userStatus
-        }
-        set {
-            statusView.userStatus = newValue
-        }
-    }
-
-    var presenceText: String {
-        get {
-            return statusLabel.text ?? ""
-        }
-        set {
-            statusLabel.text = newValue
-            reportSizeIfChanged()
-        }
-    }
-
-    var presenceIsOnline: Bool = false {
+    /// False for "For yourself" and for a removed contact: nothing to unfold, so no chevron and no
+    /// button.
+    var opensDossier = true {
         didSet {
-            updatePresenceColor()
-        }
-    }
-
-    var connectionStatus: ConnectionStatus {
-        get {
-            return statusView.connectionStatus
-        }
-        set {
-            statusView.connectionStatus = newValue
-        }
-    }
-
-    var avatar: UIImage? {
-        get {
-            return avatarView.image
-        }
-        set {
-            avatarView.image = newValue
-            avatarView.isHidden = newValue == nil
+            chevron.isHidden = !opensDossier
+            isUserInteractionEnabled = opensDossier
+            updateAccessibility()
             reportSizeIfChanged()
         }
     }
 
-    fileprivate var avatarView: UIImageView!
-    fileprivate var nameLabel: UILabel!
-    fileprivate var statusView: UserStatusView!
-    fileprivate var statusLabel: UILabel!
-    fileprivate var theme: Theme!
-    fileprivate var lastReportedSize: CGSize = .zero
-
-    init(theme: Theme) {
-        super.init(frame: CGRect.zero)
-
-        self.theme = theme
-        backgroundColor = .clear
-
-        createViews(theme)
+    /// What the band under the header says, read with the name.
+    var spokenPresence = "" {
+        didSet {
+            updateAccessibility()
+        }
     }
 
-    required convenience init?(coder aDecoder: NSCoder) {
+    /// The widest the name may run before it is cut short, so the buttons on the right keep their room.
+    var maximumNameWidth: CGFloat = 160 {
+        didSet {
+            guard abs(maximumNameWidth - oldValue) > 0.5 else {
+                return
+            }
+            nameWidthConstraint?.update(offset: maximumNameWidth)
+            reportSizeIfChanged()
+        }
+    }
+
+    private(set) var isExpanded = false
+    private(set) var name = ""
+
+    private let tile = AirTileView(side: KQSize.tileDesk)
+    private let nameLabel = UILabel()
+    private let chevron = UIImageView(image: AirIcon.image("chevron-down"))
+    private var nameWidthConstraint: Constraint?
+    private var lastReportedSize: CGSize = .zero
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+        layer.cornerRadius = KQRadius.control
+        isAccessibilityElement = true
+        accessibilityTraits = UIAccessibilityTraitButton
+        accessibilityIdentifier = "air.chat.title"
+
+        nameLabel.font = ChatPrivateTitleView.nameFont()
+        nameLabel.textColor = KQColor.ink
+        nameLabel.numberOfLines = 1
+        nameLabel.lineBreakMode = .byTruncatingTail
+        nameLabel.textAlignment = .natural
+
+        chevron.tintColor = KQColor.ink3
+        chevron.contentMode = .scaleAspectFit
+
+        let stack = UIStackView(arrangedSubviews: [tile, nameLabel, chevron])
+        stack.axis = .horizontal
+        stack.alignment = .center
+        stack.spacing = KQSpace.x8
+        stack.setCustomSpacing(KQSpace.x4, after: nameLabel)
+        stack.isUserInteractionEnabled = false
+        addSubview(stack)
+
+        stack.snp.makeConstraints {
+            $0.top.bottom.equalToSuperview()
+            $0.leading.equalToSuperview().offset(KQSpace.x4)
+            $0.trailing.equalToSuperview().offset(-KQSpace.x4)
+        }
+        tile.snp.makeConstraints {
+            $0.size.equalTo(KQSize.tileDesk)
+        }
+        chevron.snp.makeConstraints {
+            $0.size.equalTo(KQSize.iconSmall)
+        }
+        nameLabel.snp.makeConstraints {
+            nameWidthConstraint = $0.width.lessThanOrEqualTo(maximumNameWidth).constraint
+        }
+        snp.makeConstraints {
+            $0.height.equalTo(KQSize.targetIos)
+        }
+        // The name grows only as far as the bar has room for and is cut short with "...": at the
+        // accessibility text sizes a long press shows it whole (the Large Content Viewer). A tap still opens
+        // the dossier.
+        AirLargeContent.show(on: self, title: nil, image: nil)
+        updateAccessibility()
+    }
+
+    required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-}
 
-private extension ChatPrivateTitleView {
-    // KHANDAQ (Figma): Telegram-style header — [avatar][name / status] laid out left-to-right with
-    // stack views so the view has a real intrinsicContentSize. That lets it live as a LEFT bar item
-    // (avatar+name pinned next to the back button) and a hidden avatar collapses cleanly (stack views
-    // drop hidden arranged subviews). Replaces the old manual frame sizing, which broke outside the
-    // centered titleView slot.
-    func createViews(_ theme: Theme) {
-        avatarView = UIImageView()
-        avatarView.contentMode = .scaleAspectFill
-        avatarView.layer.cornerRadius = Constants.AvatarSize / 2.0
-        avatarView.layer.masksToBounds = true
-        avatarView.isHidden = true
-
-        nameLabel = UILabel()
-        nameLabel.textAlignment = .natural
-        nameLabel.textColor = theme.colorForType(.NormalText)
-        nameLabel.font = UIFont.khandaqFontWithSize(16.0, weight: .bold)
-
-        statusView = UserStatusView()
-        statusView.showExternalCircle = false
-        statusView.theme = theme
-        statusView.isHidden = true
-
-        statusLabel = UILabel()
-        statusLabel.textAlignment = .natural
-        statusLabel.textColor = theme.colorForType(.NormalText)
-        statusLabel.font = UIFont.khandaqFontWithSize(12.0, weight: .light)
-
-        let nameRow = UIStackView(arrangedSubviews: [nameLabel, statusView])
-        nameRow.axis = .horizontal
-        nameRow.alignment = .center
-        nameRow.spacing = Constants.StatusViewLeftOffset
-
-        let textStack = UIStackView(arrangedSubviews: [nameRow, statusLabel])
-        textStack.axis = .vertical
-        textStack.alignment = .leading
-        textStack.spacing = 0
-
-        let mainStack = UIStackView(arrangedSubviews: [avatarView, textStack])
-        mainStack.axis = .horizontal
-        mainStack.alignment = .center
-        mainStack.spacing = Constants.AvatarGap
-        addSubview(mainStack)
-
-        mainStack.snp.makeConstraints {
-            $0.edges.equalTo(self)
-        }
-        avatarView.snp.makeConstraints {
-            $0.size.equalTo(Constants.AvatarSize)
-        }
-        statusView.snp.makeConstraints {
-            $0.size.equalTo(Constants.StatusViewSize)
-        }
-
-        updatePresenceColor()
+    /// The view of a bar item: the bar shows the viewer from the properties of the view.
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        AirLargeContent.placeInteraction(on: self)
     }
 
-    func updatePresenceColor() {
-        guard let theme = theme else {
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        AirLargeContent.placeInteraction(on: self)
+    }
+
+    override var isHighlighted: Bool {
+        didSet {
+            backgroundColor = isHighlighted ? KQColor.selected : .clear
+        }
+    }
+
+    func configure(name: String, style: AirTileView.Style, photo: UIImage?) {
+        self.name = name
+        nameLabel.text = name
+        largeContentTitle = name
+        tile.configure(style: style, photo: photo)
+        updateAccessibility()
+        reportSizeIfChanged()
+    }
+
+    /// The chevron turns over with the dossier, over the same 440 ms (a fade of 120 ms with Reduce Motion).
+    func setExpanded(_ expanded: Bool, animated: Bool) {
+        guard expanded != isExpanded else {
             return
         }
-
-        statusLabel.textColor = presenceIsOnline
-            ? theme.colorForType(.OnlineStatus)
-            : theme.colorForType(.NormalText)
+        isExpanded = expanded
+        let turn = {
+            self.chevron.transform = expanded ? CGAffineTransform(rotationAngle: .pi) : .identity
+        }
+        if animated {
+            if UIAccessibilityIsReduceMotionEnabled() {
+                UIView.transition(with: chevron, duration: KQMotion.duration(KQMotion.reveal), options: [.transitionCrossDissolve], animations: turn, completion: nil)
+            }
+            else {
+                UIView.animate(withDuration: KQMotion.reveal, delay: 0, options: [.curveEaseOut, .beginFromCurrentState], animations: turn, completion: nil)
+            }
+        }
+        else {
+            turn()
+        }
+        updateAccessibility()
     }
 
-    // Recompute intrinsic size; only ask the controller to re-install (re-measure) if it actually moved.
-    func reportSizeIfChanged() {
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory {
+            nameLabel.font = ChatPrivateTitleView.nameFont()
+            reportSizeIfChanged()
+        }
+    }
+
+    /// The heading role, grown with the text size only as far as the 44 point bar has room for.
+    private static func nameFont() -> UIFont {
+        let font = KQFont.font(.heading)
+        return font.pointSize > 22 ? font.withSize(22) : font
+    }
+
+    private func updateAccessibility() {
+        accessibilityLabel = name
+        accessibilityValue = spokenPresence.isEmpty ? nil : spokenPresence
+        accessibilityTraits = opensDossier ? UIAccessibilityTraitButton : UIAccessibilityTraitHeader
+        if opensDossier {
+            accessibilityHint = String(localized: isExpanded ? "air_dossier_close_hint" : "air_chat_dossier_hint")
+        }
+        else {
+            accessibilityHint = nil
+        }
+    }
+
+    private func reportSizeIfChanged() {
         invalidateIntrinsicContentSize()
         setNeedsLayout()
         layoutIfNeeded()
 
         let newSize = systemLayoutSizeFitting(UILayoutFittingCompressedSize)
-        if abs(newSize.width - lastReportedSize.width) > 0.5
-            || abs(newSize.height - lastReportedSize.height) > 0.5 {
+        if abs(newSize.width - lastReportedSize.width) > 0.5 || abs(newSize.height - lastReportedSize.height) > 0.5 {
             lastReportedSize = newSize
             onSizeChanged?()
         }

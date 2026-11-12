@@ -40,7 +40,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-import static com.zoffcc.applications.trifa.HelperGeneric.display_toast;
 import static com.zoffcc.applications.trifa.TrifaToxService.orma;
 
 public class FriendSelectSingleActivity extends ListActivity
@@ -76,6 +75,10 @@ public class FriendSelectSingleActivity extends ListActivity
         {
             also_favorites = extras.getInt("favorites", 0);
         }
+        // KHANDAQ (stage 5): only the Share menu offers the saved chat as a target; when nothing can be chosen,
+        // the words say what this list was for, sending something or inviting someone.
+        final String nothing_to_choose = getString(also_favorites == 1 ? R.string.share_no_targets
+                                                                       : R.string.group_invite_no_friends_available);
 
         String exclude_group_id = null;
         if (extras != null)
@@ -140,7 +143,7 @@ public class FriendSelectSingleActivity extends ListActivity
 
             if (also_ngc_groups == 0 && fl.size() < 1)
             {
-                display_toast(getString(R.string.group_invite_no_friends_available), false, 300);
+                AirComposerNotice.sayOnReturn(nothing_to_choose, false);
                 finish();
                 return;
             }
@@ -150,7 +153,7 @@ public class FriendSelectSingleActivity extends ListActivity
             e.printStackTrace();
             if (also_ngc_groups == 0)
             {
-                display_toast(getString(R.string.group_invite_no_friends_available), false, 300);
+                AirComposerNotice.sayOnReturn(nothing_to_choose, false);
                 finish();
                 return;
             }
@@ -232,7 +235,10 @@ public class FriendSelectSingleActivity extends ListActivity
                 for (GroupDB g : gr)
                 {
                     // Log.i(TAG, "g___:" + g);
-                    friends_list.add(new FriendSelectSingle("NGC Group: " + g.name, g.group_identifier, 2));
+                    // The row says "Group" under the name in the app's language (FriendSelectSingleAdapter).
+                    final String group_name = (g.name != null && g.name.length() > 0) ? g.name
+                            : (g.group_identifier == null ? "" : g.group_identifier.substring(0, Math.min(8, g.group_identifier.length())));
+                    friends_list.add(new FriendSelectSingle(group_name, g.group_identifier, 2));
                 }
             }
             catch(Exception e)
@@ -240,9 +246,10 @@ public class FriendSelectSingleActivity extends ListActivity
                 Log.i(TAG, "onCreate:EE001:add:gr:" +e.getMessage());
             }
 
-            if (also_ngc_groups == 0 && friends_list.size() < 1)
+            // An empty list says why instead of standing empty, for sharing as for inviting.
+            if (friends_list.size() < 1)
             {
-                display_toast(getString(R.string.group_invite_no_friends_available), false, 300);
+                AirComposerNotice.sayOnReturn(nothing_to_choose, false);
                 finish();
                 return;
             }

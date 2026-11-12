@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Review fixes (redesign, stage 5): the line over the first-launch password, Share, a message from a hidden IRC name, a profile whose files do not open -->
+    <string name="air_first_password_for_profile">档案 %1$s 的密码</string>
+    <string name="share_choose_target">选择发送到哪里</string>
+    <string name="share_turned_off">从其他应用分享已关闭。可以在“设置”的“高级设置”中打开。</string>
+    <string name="share_no_targets">还没有可以发送到的聊天。</string>
+    <string name="air_irc_message_hidden">来自隐藏的 IRC 名称的消息</string>
+    <string name="air_signin_not_opened">这部手机上的档案文件无法用这个档案的密钥打开。要继续使用 Khandaq，请删除它们并新建一个档案。</string>
+    <string name="air_signin_not_opened_title">无法打开档案</string>
+    <string name="air_signin_not_opened_message">新档案会有新的 ID，并取代这个档案：这个档案及其联系人和历史记录会从手机上删除。</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Redesign stage 5: what a tap on a link, a mail address or a Tox ID in a message asks first (AirLinkQuestion) -->
+    <string name="air_text_link_question">هل تفتح هذا الرابط؟</string>
+    <string name="air_text_link_open">فتح</string>
+    <string name="air_text_email_question">هل تكتب إلى هذا العنوان؟</string>
+    <string name="air_text_email_write">كتابة</string>
+    <string name="air_text_email_chooser">الكتابة عبر</string>
+    <string name="air_text_id_question">هل ترسل طلب اتصال إلى هذا المعرّف؟</string>
+</resources>

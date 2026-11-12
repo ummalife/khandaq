@@ -142,6 +142,31 @@ final class GroupVoiceMessageRecorder: NSObject, AVAudioRecorderDelegate {
     }
 }
 
+/// KHANDAQ (redesign stage 5): the hold of a microphone button. The first hold asks iOS for the microphone,
+/// and the answer comes after the finger has left the button: allowed then, the recording started on the
+/// answer went on with nobody holding it and nothing on screen, until the next hold. A recording starts
+/// only for the hold that is still on.
+struct VoiceHoldGate {
+    private(set) var isHeld = false
+    private var current = 0
+
+    /// A hold begins; the answer about the microphone brings the number back.
+    mutating func begin() -> Int {
+        isHeld = true
+        current += 1
+        return current
+    }
+
+    mutating func end() {
+        isHeld = false
+    }
+
+    /// Whether the answer for `hold` may start a recording: that hold is still on.
+    func mayRecord(for hold: Int) -> Bool {
+        return isHeld && hold == current
+    }
+}
+
 /// TEMPORARY on-screen diagnostic overlay for voice-note send failures on real devices
 /// (esp. iPhone 11 / A13) where there is no Mac/Xcode console. The tester reads the trace off the
 /// screen — start → finalized file size → sent/dropped — and sends a screenshot, or taps the panel

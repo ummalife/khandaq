@@ -193,7 +193,7 @@ public class AppLockHelper
         return (a instanceof CheckPasswordActivity) || (a instanceof SetPasswordActivity)
                 || (a instanceof PinActivity)
                 || (a instanceof StartMainActivityWrapper) || (a instanceof OnboardingActivity)
-                || (a instanceof CreateProfileActivity);
+                || (a instanceof CreateProfileActivity) || (a instanceof AirFirstLaunchActivity);
     }
 
     /**

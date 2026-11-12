@@ -377,7 +377,9 @@ final class GroupMentionHelper
 
         final String body = parsed.bodyText == null ? "" : parsed.bodyText;
         textView.setCustomRegex(TOXURL_PATTERN);
-        textView.setMentionModeColor(ContextCompat.getColor(context, R.color.khandaq_primary));
+        // KHANDAQ (redesign, stage 5): a mention in ink, bold, as iOS draws it (link-text is ink there); the old
+        // dark green vanished on the dark theme, on the selected ground of a message that mentions you.
+        textView.setMentionModeColor(ContextCompat.getColor(context, R.color.kq_ink));
         textView.addAutoLinkMode(AutoLinkMode.MODE_URL, AutoLinkMode.MODE_EMAIL, AutoLinkMode.MODE_HASHTAG,
                 AutoLinkMode.MODE_MENTION, AutoLinkMode.MODE_CUSTOM);
 
@@ -449,7 +451,7 @@ final class GroupMentionHelper
         }
 
         final Spannable spannable = (Spannable) current;
-        final int mentionColor = ContextCompat.getColor(context, R.color.khandaq_primary);
+        final int mentionColor = ContextCompat.getColor(context, R.color.kq_ink);
 
         for (int i = 0; i < effectiveMentions.size(); i++)
         {

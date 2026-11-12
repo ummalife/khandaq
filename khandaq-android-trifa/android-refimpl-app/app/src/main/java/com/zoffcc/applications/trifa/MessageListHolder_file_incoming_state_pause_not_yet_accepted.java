@@ -22,7 +22,6 @@ package com.zoffcc.applications.trifa;
 import org.khandaq.messenger.R;
 
 import android.content.Context;
-import android.content.DialogInterface;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.util.Log;
@@ -39,7 +38,6 @@ import com.mikepenz.google_material_typeface_library.GoogleMaterial;
 import com.mikepenz.iconics.IconicsDrawable;
 import com.zoffcc.applications.sorm.Message;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -114,7 +112,7 @@ public class MessageListHolder_file_incoming_state_pause_not_yet_accepted extend
         date_time.setText(long_date_time_format(m.rcvd_timestamp));
         // Media/file bubbles had only the near-invisible external date; show the in-bubble time like text messages.
         ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
-                HelperGeneric.format_chat_message_time(m, false), false);
+                AirTranscript.timeText(itemView.getContext(), m, false), false);
 
         try
         {
@@ -178,8 +176,8 @@ public class MessageListHolder_file_incoming_state_pause_not_yet_accepted extend
         button_ok.setVisibility(View.VISIBLE);
         button_cancel.setVisibility(View.VISIBLE);
 
-        // TODO: make text better
-        textView.setText("" + message.text + "\n Accept File?");
+        // KHANDAQ (redesign, stage 3b): the entry asks in words (Accept, Decline); the text is the name.
+        textView.setText(message.text);
 
         // ft_progressbar.setIndeterminate(true);
         ft_progressbar.setVisibility(View.VISIBLE);
@@ -191,31 +189,7 @@ public class MessageListHolder_file_incoming_state_pause_not_yet_accepted extend
             {
                 if (event.getAction() == MotionEvent.ACTION_DOWN)
                 {
-                    try
-                    {
-                        // accept FT
-                        set_filetransfer_accepted_from_id(message.filetransfer_id);
-                        set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_RESUME.value);
-                        set_message_accepted_from_id(message.id);
-                        set_message_state_from_id(message.id, TOX_FILE_CONTROL_RESUME.value);
-                        tox_file_control(tox_friend_by_public_key__wrapper(message.tox_friendpubkey),
-                                         get_filetransfer_filenum_from_id(message.filetransfer_id),
-                                         TOX_FILE_CONTROL_RESUME.value);
-
-                        ft_progressbar.setProgress(0);
-                        ft_progressbar.setMax(100);
-                        // ft_progressbar.setIndeterminate(true);
-                        ft_progressbar.setVisibility(View.VISIBLE);
-                        button_ok.setVisibility(View.GONE);
-
-                        // update message view
-                        update_single_message_from_messge_id(message.id, true);
-
-                        Log.i(TAG, "button_ok:OnTouch:009");
-                    }
-                    catch (Exception e)
-                    {
-                    }
+                    accept_incoming_filetransfer(message);
                 }
                 else
                 {
@@ -232,25 +206,7 @@ public class MessageListHolder_file_incoming_state_pause_not_yet_accepted extend
             {
                 if (event.getAction() == MotionEvent.ACTION_DOWN)
                 {
-                    AlertDialog.Builder builder = new AlertDialog.Builder(v.getContext());
-                    builder.setTitle(
-                            v.getContext().getString(R.string.MessageListHolder_file_incoming_cancel_ft_title));
-                    builder.setMessage(
-                            v.getContext().getString(R.string.MessageListHolder_file_incoming_cancel_ft_message));
-
-                    builder.setNegativeButton(v.getContext().getString(R.string.MainActivity_no_button), null);
-                    builder.setPositiveButton(v.getContext().getString(R.string.MainActivity_yes_button),
-                                              new DialogInterface.OnClickListener()
-                                              {
-                                                  @Override
-                                                  public void onClick(DialogInterface dialog, int which)
-                                                  {
-                                                      cancel_incoming_filetransfer(message);
-                                                  }
-                                              });
-
-                    AlertDialog dialog = builder.create();
-                    dialog.show();
+                    AirFileEntry.askDecline(v, () -> cancel_incoming_filetransfer(message));
                 }
                 else
                 {
@@ -261,6 +217,50 @@ public class MessageListHolder_file_incoming_state_pause_not_yet_accepted extend
 
         HelperGeneric.fill_friend_avatar_icon(m, context, img_avatar);
         HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+
+        // KHANDAQ (redesign, stage 3b): the entry's Accept and Decline do what the old buttons did.
+        AirFileEntry.setAcceptActions(itemView, new AirFileEntry.AcceptActions()
+        {
+            @Override
+            public void accept()
+            {
+                accept_incoming_filetransfer(message);
+            }
+
+            @Override
+            public void decline(final View anchor)
+            {
+                AirFileEntry.askDecline(anchor, () -> cancel_incoming_filetransfer(message));
+            }
+        });
+    }
+
+    private void accept_incoming_filetransfer(final Message message)
+    {
+        try
+        {
+            // accept FT
+            set_filetransfer_accepted_from_id(message.filetransfer_id);
+            set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_RESUME.value);
+            set_message_accepted_from_id(message.id);
+            set_message_state_from_id(message.id, TOX_FILE_CONTROL_RESUME.value);
+            tox_file_control(tox_friend_by_public_key__wrapper(message.tox_friendpubkey),
+                             get_filetransfer_filenum_from_id(message.filetransfer_id),
+                             TOX_FILE_CONTROL_RESUME.value);
+
+            ft_progressbar.setProgress(0);
+            ft_progressbar.setMax(100);
+            ft_progressbar.setVisibility(View.VISIBLE);
+            button_ok.setVisibility(View.GONE);
+
+            // update message view
+            update_single_message_from_messge_id(message.id, true);
+
+            Log.i(TAG, "button_ok:OnTouch:009");
+        }
+        catch (Exception e)
+        {
+        }
     }
 
     private void cancel_incoming_filetransfer(final Message message)

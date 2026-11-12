@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    KHANDAQ (redesign, stage 2): a text message of the conversation with one person as an entry of the
+    transcript in design/system/index.html, as AirEntryTextCell on iOS: the time in a column of tabular
+    figures, the author over the first entry of a run, the text, and the mark of our own messages at
+    the far end. No bubble and no wallpaper; the day heads its messages where their text starts.
+    Every id the row holders and their helpers look up is kept (m_text, m_icon, date_time,
+    text_block_group, layout_message_container, the day mark, the reply quote and the reactions).
+    Stage 3b: the group conversation uses the same entry; only a group shows the private-message line
+    over the text and the "sender not verified" line under it.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/message_text_date"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/air_entry_text_start"
+        android:paddingTop="@dimen/kq_space_12"
+        android:paddingEnd="@dimen/kq_space_16"
+        android:paddingBottom="@dimen/kq_space_4"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/message_text_date_string"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:accessibilityHeading="true"
+            android:textAlignment="viewStart"
+            android:textAppearance="@style/TextAppearance.KQ.Air.CaptionMedium"
+            android:textColor="@color/kq_ink_3" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/layout_message_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/kq_space_16"
+        android:paddingTop="@dimen/air_entry_inset"
+        android:paddingEnd="@dimen/kq_space_16"
+        android:paddingBottom="@dimen/air_entry_inset">
+
+        <TextView
+            android:id="@+id/date_time"
+            android:layout_width="@dimen/kq_size_time_column_phone"
+            android:layout_height="wrap_content"
+            android:fontFeatureSettings="tnum"
+            android:importantForAccessibility="no"
+            android:maxLines="1"
+            android:textAlignment="viewStart"
+            android:textAppearance="@style/TextAppearance.KQ.Caption"
+            android:textColor="@color/kq_ink_3" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/kq_space_10"
+            android:layout_marginEnd="@dimen/kq_space_10"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/air_entry_author"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:importantForAccessibility="no"
+                android:maxLines="1"
+                android:textAlignment="viewStart"
+                android:textAppearance="@style/TextAppearance.KQ.Air.LabelStrong"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/air_entry_note"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:importantForAccessibility="no"
+                android:textAlignment="viewStart"
+                android:textAppearance="@style/TextAppearance.KQ.Caption"
+                android:textColor="@color/kq_ink_2"
+                android:visibility="gone" />
+            <LinearLayout
+                android:id="@+id/text_block_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <include layout="@layout/chat_message_reply_quote" />
+
+                <com.luseen.autolinklibrary.EmojiTextViewLinks
+                    android:id="@+id/m_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textAlignment="viewStart"
+                    android:textAppearance="@style/TextAppearance.KQ.Body"
+                    android:textColor="@color/kq_ink"
+                    android:textColorLink="@color/kq_ink"
+                    app:emojiSize="@dimen/emoji_size_in_textview" />
+
+                <include layout="@layout/chat_reactions_row" />
+            </LinearLayout>
+            <TextView
+                android:id="@+id/air_entry_unverified"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:importantForAccessibility="no"
+                android:textAlignment="viewStart"
+                android:textAppearance="@style/TextAppearance.KQ.Caption"
+                android:textColor="@color/kq_transit"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/air_entry_meta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/air_entry_edited"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="@dimen/kq_space_8"
+                    android:importantForAccessibility="no"
+                    android:textAppearance="@style/TextAppearance.KQ.Caption"
+                    android:textColor="@color/kq_ink_3"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/air_entry_retry"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/air_bg_icon_button"
+                    android:gravity="center_vertical"
+                    android:minHeight="@dimen/kq_size_control"
+                    android:paddingStart="@dimen/kq_space_4"
+                    android:paddingEnd="@dimen/kq_space_4"
+                    android:text="@string/air_failed_retry"
+                    android:textAppearance="@style/TextAppearance.KQ.Label"
+                    android:textColor="@color/kq_danger"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/m_icon"
+            android:layout_width="@dimen/kq_size_mark"
+            android:layout_height="@dimen/kq_size_mark"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
+            android:padding="1dp"
+            android:scaleType="fitCenter"
+            android:visibility="invisible" />
+    </LinearLayout>
+</LinearLayout>

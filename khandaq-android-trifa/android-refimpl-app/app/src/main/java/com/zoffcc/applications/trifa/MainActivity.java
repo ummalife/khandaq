@@ -431,7 +431,6 @@ public class MainActivity extends AppCompatActivity
     static String SD_CARD_ENC_CHATS_EXPORT_DIR = "/unenc_chats/";
     static String SD_CARD_FULL_FILES_EXPORT_DIR = "/fullexport/";
     static String SD_CARD_TMP_DUMMYFILE = null;
-    final static int AddFriendActivity_ID = 10001;
     final static int CallingActivity_ID = 10002;
     final static int ProfileActivity_ID = 10003;
     final static int SettingsActivity_ID = 10004;
@@ -497,7 +496,7 @@ public class MainActivity extends AppCompatActivity
     static int PREF__min_audio_samplingrate_out = SAMPLE_RATE_FIXED;
     static String PREF__DB_secrect_key = "98rj93ßjw3j8j4vj9w8p9eüiü9aci092"; // this is just a dummy, this value is not used!
     static boolean PREF__DB_wal_mode = true;
-    private static final String ALLOWED_CHARACTERS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!§$%&()=?,.;:-_+";
+    private static final String ALLOWED_CHARACTERS = SecureRandomString.ALLOWED_CHARACTERS;
     static boolean PREF__software_echo_cancel = false;
     static int PREF__higher_video_quality = 0;
     static int PREF__higher_audio_quality = 2;
@@ -644,7 +643,14 @@ public class MainActivity extends AppCompatActivity
     private FriendListFragment chatsFragment = null;
     private SettingsTabFragment settingsFragment = null;
     private ProfileTabFragment profileFragment = null;
-    private int currentMainTab = R.id.bottom_nav_chats;
+    // KHANDAQ (redesign, Air): the one main screen. The old chats and contacts lists stay as hidden
+    // fragments: they still receive every toxcore change, and each change tells Air to refresh.
+    private AirFragment airFragment = null;
+    private int currentMainTab = R.id.main_screen_air;
+    /** KHANDAQ (redesign, E18): start on Settings, after the language was changed there. */
+    static final String EXTRA_OPEN_SETTINGS = "org.khandaq.messenger.OPEN_SETTINGS";
+    /** KHANDAQ (redesign, E11): Air with the Requests filter, from New contact's "Open Requests". */
+    static final String EXTRA_OPEN_REQUESTS = "org.khandaq.messenger.OPEN_REQUESTS";
     private static final String PREF_CHAT_FILTER_TAB = "chat_list_filter_tab";
     private View chatFilterTabsContainer = null;
     private View chatFilterTabDirect = null;
@@ -831,8 +837,7 @@ public class MainActivity extends AppCompatActivity
                             @Override
                             public void run()
                             {
-                                show_wrong_credentials();
-                                finish();
+                                show_profile_not_opened();
                             }
                         });
                         return;
@@ -1629,8 +1634,7 @@ public class MainActivity extends AppCompatActivity
                     {
                         e2.printStackTrace();
                         HelperGeneric.logI(TAG, "vfs:EE4:" + e2.getMessage());
-                        show_wrong_credentials();
-                        finish();
+                        show_profile_not_opened();
                         return;
                     }
                 }
@@ -2920,7 +2924,7 @@ public class MainActivity extends AppCompatActivity
 
     private void apply_main_header_icon_tint(final Toolbar toolbar)
     {
-        final int iconTint = ContextCompat.getColor(this, R.color.tg_chat_title);
+        final int iconTint = ContextCompat.getColor(this, R.color.kq_ink);
         if (toolbar != null)
         {
             final Drawable nav = toolbar.getNavigationIcon();
@@ -2968,16 +2972,18 @@ public class MainActivity extends AppCompatActivity
     {
         switch (item.getItemId())
         {
+            case android.R.id.home:
+                // KHANDAQ (redesign, Air): the up arrow over settings and the profile goes back to Air.
+                switchMainTab(R.id.main_screen_air);
+                break;
             case R.id.item_addfriend:
-                final Intent intent = new Intent(this, AddFriendActivity.class);
-                startActivityForResult(intent, AddFriendActivity_ID);
+                open_add_friend(null);
                 break;
             case R.id.item_create_group_private:
                 show_create_private_group(null);
                 break;
             case R.id.item_create_group_public:
-                final Intent intent3 = new Intent(this, AddPublicGroupActivity.class);
-                startActivityForResult(intent3, AddPublicGroupActivity_ID);
+                open_create_public_group();
                 break;
             case R.id.item_join_group_public:
                 final Intent intent4 = new Intent(this, JoinPublicGroupActivity.class);
@@ -3067,6 +3073,15 @@ public class MainActivity extends AppCompatActivity
         }
 
         return sb.toString();
+    }
+
+    /**
+     * KHANDAQ (stage 5): the same alphabet and length rules as {@link #getRandomString(int)}, drawn by
+     * SecureRandom. Use it for secrets, such as the database key of a profile without a password.
+     */
+    static String getSecureRandomString(final int sizeOfRandomString)
+    {
+        return SecureRandomString.next(sizeOfRandomString);
     }
 
     void tox_thread_start()
@@ -3318,6 +3333,7 @@ public class MainActivity extends AppCompatActivity
         }
 
         HelperGeneric.logI(TAG, "init_tox_with_heal: could not load identity with any key candidate");
+        savedata_not_opened = sd_existed;
         return false;
     }
 
@@ -3345,6 +3361,10 @@ public class MainActivity extends AppCompatActivity
      *  HelperGeneric.update_savedata_file_wrapper) so a half-started session cannot overwrite a
      *  recoverable profile. */
     static volatile boolean identity_load_blocked = false;
+
+    /** KHANDAQ (stage 5): savedata.tox holds a profile that no key on this phone opens; the Tox service
+     *  then sends the next start to the sign-in page (CheckPasswordActivity.noteProfileNotOpened). */
+    static volatile boolean savedata_not_opened = false;
 
     private static boolean is_usable_savedata(final java.io.File f)
     {
@@ -3716,6 +3736,8 @@ public class MainActivity extends AppCompatActivity
         refreshFriendListFragmentReferences();
         ProfileTabConnectionIndicator.updateAsync();
         MainHeaderBrandingHelper.update(this);
+        // Read before Air resumes and takes it: Add the first person puts the command line in focus.
+        final boolean commandWanted = AirFragment.focusCommandOnResume;
 
         if (main_handler_s != null)
         {
@@ -3725,6 +3747,10 @@ public class MainActivity extends AppCompatActivity
                 public void run()
                 {
                     HelperMsgNotification.consume_pending_open_chat(MainActivity.this);
+                    // KHANDAQ (redesign stage 4, E19): the third step of first launch, once, over Air.
+                    final boolean idPageNext = AirIdReadyActivity.openIfPending(MainActivity.this);
+                    // KHANDAQ (redesign stage 5): the battery question, once, never over the first launch.
+                    AirBatteryQuestion.askOnceIfDue(MainActivity.this, idPageNext, commandWanted);
                     if (is_tox_started)
                     {
                         resume_stalled_incoming_filetransfers();
@@ -4368,51 +4394,6 @@ public class MainActivity extends AppCompatActivity
         // just in case, update own activity pointer!
         main_activity_s = this;
 
-        try
-        {
-            // ask user to whitelist app from DozeMode/BatteryOptimizations
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-            {
-                SharedPreferences settings2 = PreferenceManager.getDefaultSharedPreferences(this);
-                boolean asked_for_whitelist_doze_already = settings2.getBoolean("asked_whitelist_doze", false);
-
-                if (!asked_for_whitelist_doze_already)
-                {
-                    settings2.edit().putBoolean("asked_whitelist_doze", true).commit();
-                    final Intent intent = new Intent();
-                    intent.setAction(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
-                    ResolveInfo resolve_activity = getPackageManager().resolveActivity(intent, 0);
-
-                    if (resolve_activity != null)
-                    {
-                        AlertDialog ad = new AlertDialog.Builder(this).setNegativeButton(
-                                R.string.MainActivity_no_button, new DialogInterface.OnClickListener()
-                                {
-                                    public void onClick(DialogInterface dialog, int id)
-                                    {
-                                    }
-                                }).setPositiveButton(R.string.MainActivity_ok_take_me_there_button,
-                                                     new DialogInterface.OnClickListener()
-                                                     {
-                                                         public void onClick(DialogInterface dialog, int id)
-                                                         {
-                                                             startActivity(intent);
-                                                         }
-                                                     }).create();
-                        ad.setTitle(getString(R.string.MainActivity_info_dialog_title));
-                        ad.setMessage(getString(R.string.MainActivity_add_to_batt_opt));
-                        ad.setCancelable(false);
-                        ad.setCanceledOnTouchOutside(false);
-                        ad.show();
-                    }
-                }
-            }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-
         // Pending FCM token from legacy NEED_ACK row (auto-apply, no dialog)
         try
         {
@@ -4433,6 +4414,10 @@ public class MainActivity extends AppCompatActivity
         HelperGeneric.logI(TAG, "onNewIntent:i=" + i);
         super.onNewIntent(i);
         setIntent(i);
+        if (i != null && i.getBooleanExtra(EXTRA_OPEN_REQUESTS, false))
+        {
+            openRequests();
+        }
         final String open_chat_key = HelperMsgNotification.extract_open_chat_key_from_intent(i);
         if (open_chat_key != null)
         {
@@ -4455,6 +4440,17 @@ public class MainActivity extends AppCompatActivity
     public void onBackPressed()
     {
         if (currentMainTab == R.id.bottom_nav_settings && settingsFragment != null && settingsFragment.handleBackPress())
+        {
+            return;
+        }
+        // KHANDAQ (redesign, Air): Back from settings or the profile returns to Air; on Air it first
+        // ends a search or a filter, the way Cancel does.
+        if (airFragment != null && currentMainTab != R.id.main_screen_air)
+        {
+            switchMainTab(R.id.main_screen_air);
+            return;
+        }
+        if (airFragment != null && airFragment.isVisible() && airFragment.handleBackPress())
         {
             return;
         }
@@ -5339,9 +5335,8 @@ public class MainActivity extends AppCompatActivity
                         Callstate.other_audio_enabled = f_audio_enabled;
                         Callstate.other_video_enabled = f_video_enabled;
                         Callstate.call_init_timestamp = System.currentTimeMillis();
-                        HelperCall.logCallEvent(Callstate.friend_pubkey,
-                                f_video_enabled == 0 ? R.string.call_log_incoming_voice
-                                                     : R.string.call_log_incoming_video);
+                        // KHANDAQ (redesign, E9): the entry is written as the call ends.
+                        HelperCall.callBegins(Callstate.friend_pubkey, true);
                         launch_incoming_call_activity(f_video_enabled != 0);
                     }
                 }
@@ -6434,6 +6429,7 @@ public class MainActivity extends AppCompatActivity
         tox_notification_change_wrapper(a_TOX_CONNECTION, "");
         ProfileTabConnectionIndicator.updateAsync();
         MainHeaderBrandingHelper.updateAsync();
+        AirRepository.requestRefresh();
         // -- notification ------------------
         // -- notification ------------------
     }
@@ -6513,6 +6509,12 @@ public class MainActivity extends AppCompatActivity
         if (f != null)
         {
             ConnectionHealthMonitor.onFriendConnectionChanged(friend_number, a_TOX_CONNECTION);
+            // KHANDAQ (redesign, stage 2): the hours this contact is online, for the chat's day strip.
+            if (!is_any_relay(f.tox_public_key_string))
+            {
+                AirContactMarks.onConnectionChanged(f.tox_public_key_string,
+                                                    a_TOX_CONNECTION != TOX_CONNECTION_NONE.value);
+            }
 
             if (f.TOX_CONNECTION_real != a_TOX_CONNECTION)
             {
@@ -6767,6 +6769,8 @@ public class MainActivity extends AppCompatActivity
     static void android_tox_callback_friend_typing_cb_method(long friend_number, final int typing)
     {
         // HelperGeneric.logI(TAG, "friend_typing_cb:fn=" + friend_number + " typing=" + typing);
+        // KHANDAQ (redesign, Air): the main list says "typing" for a chat that is not open.
+        AirRepository.onFriendTyping(friend_number, typing);
         final long friend_number_ = friend_number;
         Runnable myRunnable = new Runnable()
         {
@@ -6991,44 +6995,25 @@ public class MainActivity extends AppCompatActivity
         final String friend_public_key__ = friend_public_key.substring(0, TOX_PUBLIC_KEY_SIZE * 2).toUpperCase();
         final String message = (friend_request_message != null) ? friend_request_message : "";
 
-        if (main_handler_s == null || main_activity_s == null)
+        // KHANDAQ (redesign, block): a request from a key blocked on this device is dropped as it lands,
+        // the way Decline drops one: no card, no count, no notification, and nothing goes back.
+        if (AirBlockList.isBlocked(friend_public_key__))
         {
+            Log.i(TAG, "friend_request: dropped, the key is blocked on this device");
             return;
         }
 
-        main_handler_s.post(new Runnable()
+        // KHANDAQ (redesign, Air): the request waits as a card at the top of the main list until it is
+        // accepted or declined. It is kept in the encrypted database, so one that arrives while the main
+        // window is closed is no longer lost (the old dialog dropped it then).
+        // KHANDAQ (redesign, E22): a new request is told once, as the band or a notification of its own; a
+        // repeat of one that already waits is not.
+        final boolean told_before = HelperMsgNotification.is_request_waiting(friend_public_key__);
+        AirRequestStore.add(friend_public_key__, message, System.currentTimeMillis());
+        if (!told_before)
         {
-            @Override
-            public void run()
-            {
-                showIncomingFriendRequestDialog(friend_public_key__, message);
-            }
-        });
-    }
-
-    private static void showIncomingFriendRequestDialog(final String friendPublicKey, final String message)
-    {
-        if (main_activity_s == null || main_activity_s.isFinishing())
-        {
-            return;
+            HelperMsgNotification.notify_incoming_request(friend_public_key__, message);
         }
-
-        String body = message.length() > 0 ? message : friendPublicKey;
-
-        new AlertDialog.Builder(main_activity_s)
-                .setTitle(R.string.friend_request_dialog_title)
-                .setMessage(body)
-                .setNegativeButton(R.string.friend_request_decline, null)
-                .setPositiveButton(R.string.friend_request_accept, new DialogInterface.OnClickListener()
-                {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which)
-                    {
-                        HelperFriend.add_friend_to_system(friendPublicKey, false, null);
-                        display_toast(context_s.getString(R.string.invite_friend_success), false, 300);
-                    }
-                })
-                .show();
     }
 
     static void android_tox_callback_friend_message_v2_cb_method(long friend_number, String friend_message, long length, long ts_sec, long ts_ms, byte[] raw_message, long raw_message_length)
@@ -7988,7 +7973,21 @@ public class MainActivity extends AppCompatActivity
                 e.printStackTrace();
             }
 
-            display_toast(context_s.getString(R.string.chat_incoming_file_too_large), false, 800);
+            // E21: said under the field of that person's conversation while it is on screen, else as a
+            // toast; no entry is made for a file that never came in.
+            try
+            {
+                AirComposerNotice.sayInChat(tox_friend_get_public_key__wrapper(friend_number),
+                                            context_s.getString(R.string.air_incoming_file_over_limit_format,
+                                                                AirByteSize.text(context_s, file_size),
+                                                                AirByteSize.text(context_s,
+                                                                                 MAX_ALLOWED_INCOMING_FILESIZE_BYTES)),
+                                            false);
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "file_recv_cb:too_large:EE:" + e.getMessage());
+            }
             return;
         }
 
@@ -8653,16 +8652,28 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_conference_invite_cb_method(final long friend_number, final int a_TOX_CONFERENCE_TYPE, final byte[] cookie_buffer, final long cookie_length)
     {
-        // HelperGeneric.logI(TAG, "conference_invite_cb:fn=" + friend_number + " type=" + a_TOX_CONFERENCE_TYPE + " cookie_length=" +
-        //            cookie_length + " cookie=" + bytes_to_hex(cookie_buffer));
+        // KHANDAQ (redesign, E12): nothing is joined without consent. The invitation waits as a card in
+        // Requests until Join or Decline (AirInviteStore); Join runs join_conference_invite.
+        final String inviter_key = HelperFriend.tox_friend_get_public_key__wrapper(friend_number);
+        final byte[] cookie = Arrays.copyOf(cookie_buffer, (int) Math.min(cookie_length, cookie_buffer.length));
+        // KHANDAQ (redesign, E22): a new invitation is told once, as the band or a notification of its own.
+        final boolean told_before = HelperMsgNotification.is_invite_waiting(AirInviteStore.Kind.CONFERENCE,
+                                                                            inviter_key, cookie);
+        final AirInviteStore.Invite invite = AirInviteStore.add(AirInviteStore.Kind.CONFERENCE, inviter_key, "", cookie,
+                                                                a_TOX_CONFERENCE_TYPE, System.currentTimeMillis());
+        if (invite == null)
+        {
+            HelperGeneric.logI(TAG, "conference_invite_cb:an invitation without a contact key or cookie, dropped");
+        }
+        else if (!told_before)
+        {
+            HelperMsgNotification.notify_group_invite(invite);
+        }
+    }
 
-        //try
-        //{
-        //Thread t = new Thread()
-        //{
-        // @Override
-        //public void run()
-        //{
+    /** Joins an old conference from its invitation card (E12); the conference ID, or null when it failed. */
+    static String join_conference_invite(final long friend_number, final int a_TOX_CONFERENCE_TYPE, final byte[] cookie_buffer, final long cookie_length)
+    {
         ByteBuffer cookie_buf2 = ByteBuffer.allocateDirect((int) cookie_length);
         cookie_buf2.put(cookie_buffer);
         HelperGeneric.logI(TAG, "conference_invite_cb:bytebuffer offset=" + cookie_buf2.arrayOffset());
@@ -8680,7 +8691,11 @@ public class MainActivity extends AppCompatActivity
             HelperGeneric.logI(TAG, "conference_invite_cb:toxav_groupchat_disable_av result=" + result);
         }
 
-        display_toast(context_s.getString(R.string.invite_join_conference_success), false, 300);
+        if (conference_num < 0 || conference_num >= UINT32_MAX_JAVA)
+        {
+            HelperGeneric.logI(TAG, "conference_invite:join failed res=" + conference_num);
+            return null;
+        }
 
         cache_confid_confnum.clear();
 
@@ -8705,6 +8720,7 @@ public class MainActivity extends AppCompatActivity
         HelperConference.add_conference_wrapper(friend_number, conference_num, conference_identifier,
                                                 a_TOX_CONFERENCE_TYPE, true);
         HelperGeneric.update_savedata_file_wrapper();
+        return conference_identifier;
     }
 
     static void android_tox_callback_conference_message_cb_method(long conference_number, long peer_number, int a_TOX_MESSAGE_TYPE, String message_orig, long length)
@@ -9177,6 +9193,54 @@ public class MainActivity extends AppCompatActivity
               "group_invite_cb:fn=" + friend_number + " invite_data_length=" + invite_data_length + " invite_data=" +
               bytes_to_hex(invite_data) + " groupname=" + group_name);
 
+        // KHANDAQ (redesign, E12): nothing is joined without consent. Only an invitation that answers our
+        // own join by ID (we asked friends for it) is taken at once; any other waits as a card in Requests
+        // until Join or Decline. One to a group we are already in says nothing new: a card would ask to
+        // join a group we are in, and taking it would replace our membership (and a founder's key) with a
+        // new one, so it is dropped and toxcore reconnects on its own.
+        String incoming_id = null;
+        try
+        {
+            incoming_id = bytes_to_hex(Arrays.copyOfRange(invite_data, 0, GROUP_ID_LENGTH)).toLowerCase();
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "group_invite_cb:no chat id:EE:" + e.getMessage());
+        }
+        if (incoming_id == null || !HelperGroup.is_pending_friend_assisted_join(incoming_id))
+        {
+            if (incoming_id != null && HelperGroup.is_member(incoming_id))
+            {
+                HelperGeneric.logI(TAG, "group_invite_cb:already a member of this group, ignoring invite");
+                return;
+            }
+            final String inviter_key = HelperFriend.tox_friend_get_public_key__wrapper(friend_number);
+            final byte[] data = Arrays.copyOf(invite_data, (int) Math.min(invite_data_length, invite_data.length));
+            // KHANDAQ (redesign, E22): a new invitation is told once, as the band or a notification of its own.
+            final boolean told_before = HelperMsgNotification.is_invite_waiting(AirInviteStore.Kind.GROUP, inviter_key,
+                                                                                data);
+            final AirInviteStore.Invite invite = AirInviteStore.add(AirInviteStore.Kind.GROUP, inviter_key, group_name,
+                                                                    data, 0, System.currentTimeMillis());
+            if (invite == null)
+            {
+                HelperGeneric.logI(TAG, "group_invite_cb:an invitation without a contact key or chat id, dropped");
+            }
+            else if (!told_before)
+            {
+                HelperMsgNotification.notify_group_invite(invite);
+            }
+            return;
+        }
+        join_group_invite(friend_number, invite_data, invite_data_length, false);
+    }
+
+    /**
+     * Accepts an invitation to a group: from the card (E12), or at once when it answers our own join by
+     * ID. Returns the group's ID, or null when toxcore refused it.
+     */
+    static String join_group_invite(long friend_number, final byte[] invite_data, final long invite_data_length,
+                                    final boolean from_card)
+    {
         // friend-assisted join: if we already created a stuck (peerless) instance of
         // this group via tox_group_join, drop it first — tox_group_invite_accept
         // would otherwise create a duplicate instance of the same chat id.
@@ -9187,10 +9251,10 @@ public class MainActivity extends AppCompatActivity
             // KHANDAQ (join by ID): several friends answer one invite request. Take the first invite and
             // drop the rest for a minute: toxcore replaces a chat no peer has answered yet, so every
             // accept would start the join over.
-            if (GroupInviteAcceptPolicy.recentlyAccepted(incoming_chat_id, System.currentTimeMillis()))
+            if (!from_card && GroupInviteAcceptPolicy.recentlyAccepted(incoming_chat_id, System.currentTimeMillis()))
             {
                 HelperGeneric.logI(TAG, "group_invite_cb:an invite to this group was taken less than a minute ago, ignoring");
-                return;
+                return null;
             }
             final long existing_gn = HelperGroup.tox_group_by_groupid__wrapper(incoming_chat_id);
             if (existing_gn >= 0)
@@ -9201,7 +9265,7 @@ public class MainActivity extends AppCompatActivity
                     && existing_peers > 1L)
                 {
                     HelperGeneric.logI(TAG, "group_invite_cb:already in group with peers, ignoring invite gn=" + existing_gn);
-                    return;
+                    return from_card ? incoming_chat_id : null;
                 }
                 HelperGeneric.logI(TAG, "group_invite_cb:leaving stuck instance gn=" + existing_gn + " peers=" + existing_peers
                            + " conn=" + existing_conn + " before invite accept");
@@ -9225,10 +9289,19 @@ public class MainActivity extends AppCompatActivity
 
         if ((new_group_num >= 0) && (new_group_num < UINT32_MAX_JAVA))
         {
-            display_toast(context_s.getString(R.string.invite_join_group_success), false, 300);
+            if (!from_card)
+            {
+                // The join by ID ends here; from a card the group opens instead.
+                display_toast(context_s.getString(R.string.air_group_joined), false, 300);
+            }
 
-            // TODO: get real group_identifier and privacy_state, get it via API call
+            // The group's ID is the first GROUP_ID_LENGTH bytes of the invite data.
             String group_identifier = bytes_to_hex(Arrays.copyOfRange(invite_data, 0, GROUP_ID_LENGTH));
+            // KHANDAQ (redesign, E12): joining again a group we left ends its "left" mark. The mark stayed,
+            // so the next start left the group again (prune_stale_tox_groups) and the inviter's next
+            // invitation came back as a card.
+            HelperGroup.clear_group_group_we_left(group_identifier);
+            HelperGroup.set_group_active(group_identifier);
             HelperGroup.clear_pending_friend_assisted_join(group_identifier);
             GroupInviteAcceptPolicy.noteAccepted(group_identifier, System.currentTimeMillis());
             HelperGroup.add_group_wrapper(friend_number, new_group_num, group_identifier, 0);
@@ -9245,6 +9318,42 @@ public class MainActivity extends AppCompatActivity
             {
                 invite_to_group_own_relay(new_group_num);
             }
+            return group_identifier.toLowerCase();
+        }
+        return null;
+    }
+
+    /** Join from an invitation card, off the main thread: the group's or conference's ID, or null. */
+    static String join_invite(final AirInviteStore.Invite invite)
+    {
+        if (invite == null)
+        {
+            return null;
+        }
+        final long friend_number = HelperFriend.tox_friend_by_public_key__wrapper(invite.inviterKey);
+        if (friend_number < 0 || friend_number >= UINT32_MAX_JAVA
+            || tox_friend_get_connection_status(friend_number) == 0)
+        {
+            return null;
+        }
+        final byte[] data = invite.dataBytes();
+        try
+        {
+            if (invite.kind == AirInviteStore.Kind.CONFERENCE)
+            {
+                return join_conference_invite(friend_number, invite.conferenceType, data, data.length);
+            }
+            final String group_identifier = join_group_invite(friend_number, data, data.length, true);
+            if (group_identifier != null)
+            {
+                HelperGroup.name_group_from_invitation(group_identifier, invite.groupName);
+            }
+            return group_identifier;
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "join_invite:EE:" + e.getMessage());
+            return null;
         }
     }
 
@@ -9911,14 +10020,48 @@ public class MainActivity extends AppCompatActivity
 
     public void show_add_friend(View view)
     {
-        Intent intent = new Intent(this, AddFriendActivity.class);
-        // intent.putExtra("key", value);
-        startActivityForResult(intent, AddFriendActivity_ID);
+        open_add_friend(null);
     }
 
+    /** KHANDAQ (redesign, E11): Air with its Requests filter. */
+    private void openRequests()
+    {
+        if (currentMainTab != R.id.main_screen_air)
+        {
+            switchMainTab(R.id.main_screen_air);
+        }
+        if (airFragment != null)
+        {
+            airFragment.showRequests();
+        }
+    }
+
+    /** KHANDAQ (redesign, E11): New contact, filled with an ID typed on Air's command line. */
+    void open_add_friend(@Nullable final String prefillToxId)
+    {
+        final Intent intent = new Intent(this, AirNewContactActivity.class);
+        if (prefillToxId != null && !prefillToxId.isEmpty())
+        {
+            intent.putExtra(AirNewContactActivity.EXTRA_ID, prefillToxId);
+        }
+        startActivity(intent);
+    }
+
+    /** KHANDAQ (redesign, E15): New group, with "Open to anyone with the group key" chosen. */
+    void open_create_public_group()
+    {
+        AirNewGroupActivity.open(this, false);
+    }
+
+    void open_settings_screen()
+    {
+        switchMainTab(R.id.bottom_nav_settings);
+    }
+
+    /** KHANDAQ (redesign, E15): New group, with "By invitation only" chosen. */
     public void show_create_private_group(@Nullable View view)
     {
-        startActivityForResult(new Intent(this, AddPrivateGroupActivity.class), AddPrivateGroupActivity_ID);
+        AirNewGroupActivity.open(this, true);
     }
 
     void open_profile_activity()
@@ -9930,10 +10073,7 @@ public class MainActivity extends AppCompatActivity
                 return;
             }
 
-            if (bottomNavigationView != null)
-            {
-                bottomNavigationView.setSelectedItemId(R.id.bottom_nav_profile);
-            }
+            switchMainTab(R.id.bottom_nav_profile);
         }
         catch (Exception e)
         {
@@ -10000,13 +10140,16 @@ public class MainActivity extends AppCompatActivity
             chatsFragment = FriendListFragment.newInstance(FriendListFragment.LIST_MODE_CHATS);
             settingsFragment = new SettingsTabFragment();
             profileFragment = new ProfileTabFragment();
+            airFragment = new AirFragment();
 
             getSupportFragmentManager().beginTransaction()
                     .add(R.id.main_fragment_container, contactsFragment, "tab_contacts")
                     .add(R.id.main_fragment_container, chatsFragment, "tab_chats")
                     .add(R.id.main_fragment_container, settingsFragment, "tab_settings")
                     .add(R.id.main_fragment_container, profileFragment, "tab_profile")
+                    .add(R.id.main_fragment_container, airFragment, "tab_air")
                     .hide(contactsFragment)
+                    .hide(chatsFragment)
                     .hide(settingsFragment)
                     .hide(profileFragment)
                     // KHANDAQ: onCreateContinue() may run from the async DB-init callback AFTER the
@@ -10022,7 +10165,15 @@ public class MainActivity extends AppCompatActivity
             chatsFragment = (FriendListFragment) getSupportFragmentManager().findFragmentByTag("tab_chats");
             settingsFragment = (SettingsTabFragment) getSupportFragmentManager().findFragmentByTag("tab_settings");
             profileFragment = (ProfileTabFragment) getSupportFragmentManager().findFragmentByTag("tab_profile");
-            currentMainTab = savedInstanceState.getInt("current_main_tab", R.id.bottom_nav_chats);
+            airFragment = (AirFragment) getSupportFragmentManager().findFragmentByTag("tab_air");
+            if (airFragment == null)
+            {
+                airFragment = new AirFragment();
+                getSupportFragmentManager().beginTransaction()
+                        .add(R.id.main_fragment_container, airFragment, "tab_air")
+                        .commitAllowingStateLoss();
+            }
+            currentMainTab = savedInstanceState.getInt("current_main_tab", R.id.main_screen_air);
             bindChatFilterPagerListener();
         }
 
@@ -10030,17 +10181,17 @@ public class MainActivity extends AppCompatActivity
             switchMainTab(item.getItemId());
             return true;
         });
+        // KHANDAQ (redesign, Air): no tab bar. Air is the main screen; settings and the profile open from
+        // its header and come back with the up arrow or Back.
+        bottomNavigationView.setVisibility(View.GONE);
 
-        if (savedInstanceState == null)
+        if (savedInstanceState == null && getIntent() != null
+            && getIntent().getBooleanExtra(EXTRA_OPEN_SETTINGS, false))
         {
-            bottomNavigationView.setSelectedItemId(R.id.bottom_nav_chats);
-            currentMainTab = R.id.bottom_nav_chats;
+            currentMainTab = R.id.bottom_nav_settings;
         }
-        else
-        {
-            bottomNavigationView.setSelectedItemId(currentMainTab);
-        }
-
+        switchMainTab(savedInstanceState == null && currentMainTab != R.id.bottom_nav_settings
+                      ? R.id.main_screen_air : currentMainTab);
         updateMainToolbarForTab(currentMainTab);
         applyChatFilterTabSelection(currentChatFilterTab, false, false);
         ProfileTabConnectionIndicator.updateAsync();
@@ -10199,27 +10350,38 @@ public class MainActivity extends AppCompatActivity
     public void onChatFavoriteChanged()
     {
         refreshChatFilterTabBadges();
+        AirRepository.requestRefresh();
         if (chatsFragment != null && currentMainTab == R.id.bottom_nav_chats)
         {
             chatsFragment.add_all_friends_clear(0);
         }
     }
 
-    private void switchMainTab(final int tabId)
+    private void switchMainTab(final int requestedTabId)
     {
-        if (contactsFragment == null || chatsFragment == null || settingsFragment == null || profileFragment == null)
+        if (contactsFragment == null || chatsFragment == null || settingsFragment == null || profileFragment == null
+            || airFragment == null)
         {
             return;
         }
 
+        // KHANDAQ (redesign, Air): chats and contacts are one list now. Settings and the profile are the only
+        // other screens; anything else (the old tabs, a state saved by an older build) lands on Air.
+        final int tabId = (requestedTabId == R.id.bottom_nav_settings || requestedTabId == R.id.bottom_nav_profile)
+                          ? requestedTabId : R.id.main_screen_air;
         currentMainTab = tabId;
         final FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
         transaction.hide(contactsFragment);
         transaction.hide(chatsFragment);
         transaction.hide(settingsFragment);
         transaction.hide(profileFragment);
+        transaction.hide(airFragment);
 
-        if (tabId == R.id.bottom_nav_contacts)
+        if (tabId == R.id.main_screen_air)
+        {
+            transaction.show(airFragment);
+        }
+        else if (tabId == R.id.bottom_nav_contacts)
         {
             transaction.show(contactsFragment);
             contactsFragment.add_all_friends_clear_force(0);
@@ -10246,7 +10408,30 @@ public class MainActivity extends AppCompatActivity
 
     private void updateMainToolbarForTab(final int tabId)
     {
-        // KHANDAQ: header title = current tab name (Figma); connection state stays in the spinner/dot.
+        // KHANDAQ (redesign, Air): Air draws its own header, so the toolbar shows only over settings and
+        // the profile, with an up arrow back to Air.
+        final boolean air = tabId == R.id.main_screen_air;
+        final View header = findViewById(R.id.main_header_container);
+        if (header != null)
+        {
+            header.setVisibility(air ? View.GONE : View.VISIBLE);
+            final int page = ContextCompat.getColor(this, R.color.kq_bg);
+            header.setBackgroundColor(page);
+            final View toolbarView = findViewById(R.id.toolbar);
+            if (toolbarView != null)
+            {
+                toolbarView.setBackgroundColor(page);
+            }
+        }
+        if (getSupportActionBar() != null)
+        {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(!air);
+            apply_main_header_icon_tint(findViewById(R.id.toolbar));
+        }
+        applyMainSystemBars(air);
+
+        // KHANDAQ: header title = current tab name (Figma). The connection state is said in words on Air,
+        // on the Network screen and in the Connection row of Settings, not in this header.
         final int tabTitleRes;
         if (tabId == R.id.bottom_nav_contacts)
         {
@@ -10258,7 +10443,9 @@ public class MainActivity extends AppCompatActivity
         }
         else if (tabId == R.id.bottom_nav_profile)
         {
-            tabTitleRes = R.string.tab_profile;
+            // KHANDAQ (redesign, E17): the profile tab is the You screen, titled as on iOS and as the
+            // "you" block that opens it.
+            tabTitleRes = R.string.air_you;
         }
         else
         {
@@ -10289,6 +10476,28 @@ public class MainActivity extends AppCompatActivity
         }
 
         invalidateOptionsMenu();
+    }
+
+    /**
+     * KHANDAQ (redesign, Air): the system bars take the colour of the screen under them, so Air reads as
+     * one surface from the top edge to the bottom one. The status bar matches the toolbar elsewhere; the
+     * navigation bar is the surface on every main screen now that the tab bar is gone.
+     */
+    private void applyMainSystemBars(final boolean air)
+    {
+        final android.view.Window window = getWindow();
+        if (window == null)
+        {
+            return;
+        }
+        // Settings and the profile sit on the page colour, header included (redesign, E18).
+        final int bars = ContextCompat.getColor(this, air ? R.color.kq_surface : R.color.kq_bg);
+        window.setStatusBarColor(bars);
+        window.setNavigationBarColor(bars);
+        final androidx.core.view.WindowInsetsControllerCompat insets =
+                androidx.core.view.WindowCompat.getInsetsController(window, window.getDecorView());
+        insets.setAppearanceLightStatusBars(!is_nightmode_active(this));
+        insets.setAppearanceLightNavigationBars(!is_nightmode_active(this));
     }
 
     void toggleDarkModeFromToolbar()
@@ -10370,6 +10579,8 @@ public class MainActivity extends AppCompatActivity
             }
 
             ProfileTabAvatarHelper.updateAsync();
+            // KHANDAQ (redesign, Air): our name and photo sit in Air's header.
+            AirRepository.requestRefresh();
         }
         catch (Throwable ignored)
         {
@@ -10382,6 +10593,34 @@ public class MainActivity extends AppCompatActivity
         startActivity(intent);
     }
 
+    /**
+     * KHANDAQ (stage 5): the database or the file store of this profile did not open with its key. Before,
+     * Wrong Credentials stood there with no way on, and every start came back to it: the "Forgot password"
+     * of 0.2.45 left the deleted profile's file store and Tox save behind, so the next profile met exactly
+     * this. Now the session is logged out and the failure is noted, so the next start shows the sign-in
+     * page with the reason and Delete and create new instead of opening into the same failure. The process
+     * ends so that start is a fresh one, with nothing half-open; the start wrapper comes back by itself.
+     */
+    void show_profile_not_opened()
+    {
+        Log.w(TAG, "profile not opened: back to sign-in");
+        CheckPasswordActivity.noteProfileNotOpened(this);
+        try
+        {
+            final Intent restart = new Intent(getApplicationContext(), StartMainActivityWrapper.class);
+            restart.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(restart);
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "profile not opened: restart:EE:" + e.getMessage());
+            show_wrong_credentials();
+            finish();
+            return;
+        }
+        System.exit(0);
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data)
     {
@@ -10389,19 +10628,7 @@ public class MainActivity extends AppCompatActivity
         HelperGeneric.logI(TAG, "onActivityResult:req=" + requestCode + " res=" + resultCode +
                                 " data=" + (data != null));
 
-        if (requestCode == AddFriendActivity_ID)
-        {
-            if (resultCode == RESULT_OK)
-            {
-                String friend_tox_id1 = data.getStringExtra("toxid");
-                HelperFriend.add_friend_real(friend_tox_id1);
-            }
-            else
-            {
-                // (resultCode == RESULT_CANCELED)
-            }
-        }
-        else if (requestCode == AddPrivateGroupActivity_ID)
+        if (requestCode == AddPrivateGroupActivity_ID)
         {
             if (resultCode == RESULT_OK && data != null)
             {
@@ -10429,6 +10656,7 @@ public class MainActivity extends AppCompatActivity
                         R.string.add_public_group_success,
                         R.string.add_public_group_failed,
                         "You created the Group (as Public Group)");
+                AirRepository.requestRefresh();
             }
         }
         else if (requestCode == JoinPublicGroupActivity_ID)
@@ -10919,7 +11147,8 @@ public class MainActivity extends AppCompatActivity
                 }
                 else
                 {
-                    Toast.makeText(c, c.getString(R.string.files_export_failed), Toast.LENGTH_SHORT).show();
+                    // E21: a failure stands under the field of the conversation, as for one file.
+                    AirComposerNotice.say(c.getString(R.string.air_file_save_failed), true);
                 }
             }
             catch (Exception e4)
@@ -11026,18 +11255,21 @@ public class MainActivity extends AppCompatActivity
 
                 if ((result == null) || (result.isEmpty()))
                 {
-                    display_toast_with_context_custom_duration(c, "Не удалось сохранить файл", 3500, 0);
+                    // KHANDAQ (redesign, stage 3b): a failure stands at the composer; a success is confirmed.
+                    AirComposerNotice.say(c.getString(R.string.air_file_save_failed), true);
                 }
                 else if (result.contains("/Khandaq/") ||
                          result.startsWith(Environment.DIRECTORY_PICTURES) ||
                          result.startsWith(Environment.DIRECTORY_DOWNLOADS) ||
                          result.startsWith(Environment.DIRECTORY_MOVIES))
                 {
-                    display_toast_with_context_custom_duration(c, "Сохранено:\n" + result, 4500, 0);
+                    display_toast_with_context_custom_duration(c, c.getString(R.string.air_file_saved_format, result),
+                                                               4500, 0);
                 }
                 else
                 {
-                    display_toast_with_context_custom_duration(c, "Сохранено (папка приложения):\n" + result, 4500, 0);
+                    display_toast_with_context_custom_duration(c, c.getString(R.string.air_file_saved_app_folder_format,
+                                                                              result), 4500, 0);
                 }
             }
             catch (Exception e4)
@@ -11135,8 +11367,8 @@ public class MainActivity extends AppCompatActivity
 
                 if ((result == null) || (result.isEmpty()))
                 {
-                    display_toast_with_context_custom_duration(c,
-                            "Не удалось сохранить файл", 3500, 0);
+                    // KHANDAQ (redesign, stage 3b): a failure stands at the composer; a success is confirmed.
+                    AirComposerNotice.say(c.getString(R.string.air_file_save_failed), true);
                 }
                 else if (result.contains("/Khandaq/") ||
                          result.startsWith(Environment.DIRECTORY_PICTURES) ||
@@ -11144,12 +11376,12 @@ public class MainActivity extends AppCompatActivity
                          result.startsWith(Environment.DIRECTORY_MOVIES))
                 {
                     display_toast_with_context_custom_duration(c,
-                            "Сохранено:\n" + result, 4500, 0);
+                            c.getString(R.string.air_file_saved_format, result), 4500, 0);
                 }
                 else
                 {
                     display_toast_with_context_custom_duration(c,
-                            "Сохранено (папка приложения):\n" + result, 4500, 0);
+                            c.getString(R.string.air_file_saved_app_folder_format, result), 4500, 0);
                 }
             }
             catch (Exception e4)

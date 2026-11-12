@@ -136,8 +136,9 @@ final class ChatPreviewController: UIViewController {
             let key = message.isOutgoing() ? "chat_outgoing_file" : "chat_incoming_file"
             return String(localized: key) + " \(fileName)"
         }
-        if message.messageCall != nil {
-            return String(localized: message.isOutgoing() ? "chat_unanwered_call" : "chat_missed_call_message")
+        if let call = message.messageCall {
+            // As in the list and the transcript; an answered call read "No answer" or "Missed call" here (stage 5).
+            return ChatListContent.callPreview(call, outgoing: message.isOutgoing()).text
         }
         return ""
     }

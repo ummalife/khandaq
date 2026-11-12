@@ -94,25 +94,35 @@ public class HelperMessage
             @Override
             public void run()
             {
-                try
-                {
-                    orma.updateMessage().
-                            idEq(m.id).
-                            text(m.text).
-                            sent_timestamp(m.sent_timestamp).
-                            msg_version(m.msg_version).
-                            filename_fullpath(m.filename_fullpath).
-                            raw_msgv2_bytes(m.raw_msgv2_bytes).
-                            msg_id_hash(m.msg_id_hash).
-                            execute();
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
+                update_message_in_db_no_read_recvedts_now(m);
             }
         };
         t.start();
+    }
+
+    /**
+     * The same write on the caller's thread. KHANDAQ (redesign, stage 2): the resend of a queued text
+     * makes it while it holds the tray's lock, so an edit or a cancel from the tray cannot land between
+     * the send and the write and be overwritten by the text that already left.
+     */
+    static void update_message_in_db_no_read_recvedts_now(final Message m)
+    {
+        try
+        {
+            orma.updateMessage().
+                    idEq(m.id).
+                    text(m.text).
+                    sent_timestamp(m.sent_timestamp).
+                    msg_version(m.msg_version).
+                    filename_fullpath(m.filename_fullpath).
+                    raw_msgv2_bytes(m.raw_msgv2_bytes).
+                    msg_id_hash(m.msg_id_hash).
+                    execute();
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
     }
 
     static void update_message_in_db_filename_fullpath_friendnum_and_filenum(long friend_number, long file_number, String filename_fullpath)
@@ -405,6 +415,8 @@ public class HelperMessage
 
     public static void update_single_message_from_messge_id(final long message_id, final boolean force)
     {
+        // KHANDAQ (redesign): Air's row and its delivery mark follow this change.
+        AirRepository.requestRefresh();
         try
         {
             if (MainActivity.message_list_fragment != null)
@@ -448,6 +460,9 @@ public class HelperMessage
 
     public static void update_single_message_from_ftid(final long filetransfer_id, final boolean force)
     {
+        // KHANDAQ (redesign): Air's row and its delivery mark follow this change. Transfer progress
+        // comes through here many times a second, so Air takes it at a slower pace.
+        AirRepository.requestRefreshLowPriority();
         try
         {
             if (MainActivity.message_list_fragment != null)
@@ -491,6 +506,8 @@ public class HelperMessage
 
     public static void update_single_message(Message m, boolean force)
     {
+        // KHANDAQ (redesign): a delivery state changed; the Air row's mark and "in transit" count follow.
+        AirRepository.requestRefresh();
         try
         {
             if (MainActivity.message_list_fragment != null)
@@ -702,6 +719,8 @@ public class HelperMessage
 
     static long insert_into_message_db(final Message m, final boolean update_message_view_flag)
     {
+        // KHANDAQ (redesign): Air's row and its delivery mark follow this change.
+        AirRepository.requestRefresh();
         // Thread t = new Thread()
         //{
         //    @Override

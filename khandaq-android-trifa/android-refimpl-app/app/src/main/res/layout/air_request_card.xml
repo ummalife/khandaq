@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    An incoming request, above the sections: who is asking (only the key is known until it is
+    accepted), what they wrote, and the two answers.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingStart="@dimen/kq_space_16"
+    android:paddingTop="@dimen/kq_space_8"
+    android:paddingEnd="@dimen/kq_space_16"
+    android:paddingBottom="@dimen/kq_space_4">
+
+    <LinearLayout
+        android:id="@+id/air_request_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/air_bg_card"
+        android:orientation="vertical"
+        android:padding="@dimen/kq_space_16">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:baselineAligned="true"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/air_request_tag"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:accessibilityHeading="true"
+                android:text="@string/air_request_tag"
+                android:textAppearance="@style/TextAppearance.KQ.Air.LabelStrong"
+                android:textColor="@color/kq_ink" />
+
+            <TextView
+                android:id="@+id/air_request_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/kq_space_8"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textAppearance="@style/TextAppearance.KQ.Caption"
+                android:textColor="@color/kq_ink_3" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/air_request_message"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/kq_space_8"
+            android:textAlignment="viewStart"
+            android:textAppearance="@style/TextAppearance.KQ.Body"
+            android:textColor="@color/kq_ink" />
+
+        <TextView
+            android:id="@+id/air_request_key"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/kq_space_8"
+            android:textAlignment="viewStart"
+            android:textAppearance="@style/TextAppearance.KQ.Caption"
+            android:textColor="@color/kq_ink_3" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/kq_space_8"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/air_request_accept"
+                style="@style/Widget.KQ.Air.Button.Ink"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/friend_request_accept" />
+
+            <TextView
+                android:id="@+id/air_request_decline"
+                style="@style/Widget.KQ.Air.Button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/kq_space_8"
+                android:text="@string/friend_request_decline" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

@@ -154,6 +154,11 @@ jobs:
         run: python3 scripts/check-security-txt.py
       - name: Webfonts must be self-hosted, with no third-party origin
         run: python3 scripts/vendor-webfonts.py --check
+      # KHANDAQ (redesign E23, 2026-11-11): /assets/ is cached for a week and /style.css for an hour,
+      # so every page links site.js, tokens.css and style.css with a version taken from their content.
+      # A stale stamp would pair new pages with the old file still sitting in the visitor's cache.
+      - name: Long-cached site files must be linked with their current version
+        run: python3 scripts/version-site-assets.py --check
       - name: nginx must accept the generated config
         run: |
           set -euo pipefail
@@ -171,6 +176,18 @@ jobs:
             echo '}'
           } | sudo tee /etc/nginx/khandaq-test.conf >/dev/null
           sudo nginx -t -c /etc/nginx/khandaq-test.conf
+
+  design-system:
+    # KHANDAQ (redesign 2026-11): design/system/build.py writes colour, type and icon files into all
+    # four clients from one tokens.json and enforces its contrast rules. Without this gate a hand edit
+    # of a generated file, or a token change that was never rebuilt, would ship one client in a
+    # different palette from the others, and nothing would say so until the screens disagreed.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Generated client files, contrast rules and forbidden glyphs
+        run: bash design/check.sh
 
   android-unit-tests:
     # KHANDAQ (re-audit 2026-08-22, S-01). The 172 JVM tests existed and ran only on a TAG, inside

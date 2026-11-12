@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- E21 (redesign, stage 3b): refusals and failures said at their place instead of in a toast -->
+    <string name="air_retry_contact_offline">جهة الاتصال غير متصلة الآن. أعد المحاولة عندما تتصل</string>
+    <string name="air_retry_group_not_connected">المجموعة غير متصلة بعد. أعد المحاولة بعد قليل</string>
+    <string name="air_voice_needs_mic">الرسائل الصوتية تحتاج إلى الميكروفون: اسمح لـ Khandaq باستخدامه في إعدادات الهاتف</string>
+    <string name="air_group_video_needs_access">فيديو المجموعة يحتاج إلى الكاميرا والميكروفون: اسمح لـ Khandaq باستخدامهما في إعدادات الهاتف</string>
+    <string name="air_incoming_file_over_limit_format">لم يُستقبل ملف حجمه %1$s: الحد الأقصى %2$s</string>
+    <string name="air_group_message_unreadable">تعذّرت قراءة رسالة في هذه المجموعة فتم تخطيها</string>
+    <string name="air_group_file_unreadable">تعذّر استقبال ملف في هذه المجموعة</string>
+    <string name="air_profile_load_failed_kept">تعذّر على Khandaq فتح ملف الملف الشخصي على هذا الجهاز. بقي الملف كما هو، وسيُغلق Khandaq الآن</string>
+    <string name="air_profile_load_failed_parked">تعذّر على Khandaq فتح ملف الملف الشخصي فوضعه جانبًا. سيُغلق Khandaq الآن ويبدأ بملف شخصي جديد في المرة القادمة</string>
+    <string name="air_profile_export_failed_title">لم يُصدَّر الملف الشخصي</string>
+    <string name="air_profile_export_failed_message">لم يُحفَظ الملف الشخصي في الملف الذي اخترته. حاول مرة أخرى.</string>
+    <string name="air_export_cancelled">أُلغي التصدير: لم يتم تأكيد قفل الشاشة</string>
+    <string name="air_group_setting_not_saved">لم يتغيّر الإعداد. حاول مرة أخرى عندما تتصل المجموعة</string>
+    <string name="air_contact_add_failed">لم تُضف جهة الاتصال. حاول مرة أخرى</string>
+    <!-- E21 (redesign, stage 3b): more refusals and failures said at their place -->
+    <string name="air_group_private_not_sent">لم تُرسل. النص ما زال في الحقل: أرسله مجددًا عندما يكون العضو متصلًا في المجموعة</string>
+    <string name="air_network_log_not_shared">لم تتم مشاركة السجل: تعذّر على Khandaq كتابته في ملف. حاول مرة أخرى</string>
+    <string name="air_nc_scan_needs_camera">المسح يحتاج إلى الكاميرا: اسمح لـ Khandaq باستخدامها، أو اختر صورة للرمز</string>
+    <string name="air_nc_scan_camera_failed">لم تعمل الكاميرا. أغلق التطبيقات الأخرى التي تستخدمها وامسح مجددًا، أو اختر صورة للرمز</string>
+</resources>

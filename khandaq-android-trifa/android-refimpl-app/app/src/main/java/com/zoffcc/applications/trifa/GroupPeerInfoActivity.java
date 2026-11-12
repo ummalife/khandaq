@@ -21,572 +21,618 @@ package com.zoffcc.applications.trifa;
 
 import org.khandaq.messenger.R;
 
-import android.content.DialogInterface;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
-import android.graphics.Color;
-import android.graphics.drawable.Drawable;
-import android.graphics.drawable.GradientDrawable;
+import android.content.res.Resources;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Looper;
+import android.os.Process;
+import android.text.Editable;
+import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
+import android.widget.CompoundButton;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
-import com.mikepenz.google_material_typeface_library.GoogleMaterial;
-import com.mikepenz.iconics.IconicsDrawable;
-import com.zoffcc.applications.sorm.GroupMessage;
-import com.zoffcc.applications.sorm.GroupPeerDB;
+import java.util.List;
+import java.util.Locale;
 
-import java.util.Random;
+import androidx.annotation.Nullable;
+import androidx.appcompat.widget.SwitchCompat;
+import androidx.core.view.ViewCompat;
 
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.AppCompatButton;
-import androidx.appcompat.widget.AppCompatSpinner;
-import androidx.appcompat.widget.Toolbar;
-
-import static com.zoffcc.applications.trifa.HelperGeneric.dp2px;
-import static com.zoffcc.applications.trifa.HelperGeneric.hash_to_bucket;
-import static com.zoffcc.applications.trifa.HelperGeneric.long_date_time_format;
-import static com.zoffcc.applications.trifa.HelperGeneric.update_savedata_file_wrapper;
-import static com.zoffcc.applications.trifa.HelperGroup.get_group_peernum_from_peer_pubkey;
+import static com.zoffcc.applications.trifa.HelperFriend.lookup_friendlist_by_pubkey;
 import static com.zoffcc.applications.trifa.HelperGroup.group_notification_silent_peer_get;
-import static com.zoffcc.applications.trifa.HelperGroup.group_notification_silent_peer_set;
-import static com.zoffcc.applications.trifa.HelperGroup.insert_into_group_message_db;
 import static com.zoffcc.applications.trifa.HelperGroup.tox_group_by_groupid__wrapper;
 import static com.zoffcc.applications.trifa.HelperGroup.tox_group_peer_get_name__wrapper;
-import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_groupmessagelist;
-import static com.zoffcc.applications.trifa.HelperGroup.update_group_peer_in_db;
-import static com.zoffcc.applications.trifa.MainActivity.context_s;
-import static com.zoffcc.applications.trifa.MainActivity.group_message_list_activity;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_mod_kick_peer;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_mod_set_role;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_get_role;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_self_get_public_key;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_self_get_role;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_send_custom_private_packet;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_send_private_message_by_peerpubkey;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_TYPE_TEXT;
-import static com.zoffcc.applications.trifa.TrifaToxService.orma;
 
-public class GroupPeerInfoActivity extends AppCompatActivity
+/**
+ * KHANDAQ (redesign, stage 5): a member of a group, in the frame of the Air screens. Who they are: the
+ * name, then the role, presence and mute in one line, as their row in the group dossier and
+ * GroupMemberStatusFormatter on iOS say it; a private message; what may be done with them
+ * (AirGroupMemberChoices.screen: the direct chat or adding them, muting them in this group, the changes
+ * of role and removing them, only those this phone's role allows); how this phone reaches them while
+ * they are online; their key in this group with Copy. Opened from the member's sheet ("Key and link"),
+ * from an author or a mention in the group conversation, and from the old member drawer. The screen
+ * follows the member while it is open; another member's role shows only while the group is connected
+ * (AirGroupModel.shownRole), as in the dossier.
+ */
+public class GroupPeerInfoActivity extends AirScreenActivity
 {
     static final String TAG = "trifa.GrpPeerInfoActy";
-    de.hdodenhof.circleimageview.CircleImageView profile_icon = null;
-    TextView peer_toxid = null;
-    TextView peer_name = null;
-    EditText group_send_private_message = null;
+    /** How often the open screen reads the member again: presence and roles have no broadcast here. */
+    private static final long POLL_MS = 3000L;
+    private static final Object WORKER_LOCK = new Object();
+    private static Handler worker = null;
+
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private final Runnable poll = new Runnable()
+    {
+        @Override
+        public void run()
+        {
+            refresh();
+            main.postDelayed(this, POLL_MS);
+        }
+    };
+
     String peer_pubkey = null;
-    TextView group_peerrole_text = null;
-    TextView peer_first_join_text = null;
-    TextView peer_connection_type_text = null;
-    AppCompatButton group_kickpeer_button = null;
-    TextView group_kickpeer_hint = null;
-    AppCompatButton group_notification_silent_button = null;
-    long group_num = -1;
-    int peer_role = -1;
-    int self_role = -1;
-    boolean is_self_peer = false;
-    AppCompatSpinner group_peerrole_select = null;
     String group_id = null;
-    private String[] tox_ngc_group_role_items;
-    private AppCompatButton group_peerrole_set_button = null;
+    private boolean destroyed = false;
+    @Nullable
+    private State shown = null;
+    /** How many times the mute switch was turned here: a read begun before the last turn does not undo it. */
+    private int muteTurns = 0;
+    /** The rows the actions plate shows now, so an unchanged read leaves them, and TalkBack, alone. */
+    private String actionsShown = null;
+
+    /** The member's name as this device last had it, empty for none. */
+    private String knownName = "";
+    private TextView name;
+    private TextView status;
+    private View messageSection;
+    private TextView messageHeading;
+    private EditText messageField;
+    private TextView send;
+    /** Whether the field and Send are on now; null before the first read. */
+    @Nullable
+    private Boolean writesShown = null;
+    private View actionsSection;
+    private LinearLayout actionsPlate;
+    /** E21: what an action on the member could not do (a role, a removal, adding them), under the actions. */
+    private TextView actionNote;
+    @Nullable
+    private SwitchCompat muteSwitch;
+    private View linkSection;
+    private TextView linkText;
+
+    /** What the screen shows, read off the main thread. */
+    private static final class State
+    {
+        /** As the dossier's row has them: the role only where a row shows one. */
+        final AirGroupModel.Member member;
+        final boolean friend;
+        /** Your role, -1 while toxcore does not say. */
+        final int selfRole;
+        /** False where you are an observer: toxcore takes no private message from you (AirGroupModel). */
+        final boolean writesPrivately;
+        /** toxcore's link to the member while they are online (TOX_CONNECTION), NONE otherwise. */
+        final int link;
+        final boolean muted;
+        /** muteTurns when the read began. */
+        final int muteTurns;
+
+        State(final AirGroupModel.Member member, final boolean friend, final int selfRole,
+              final boolean writesPrivately, final int link, final boolean muted, final int muteTurns)
+        {
+            this.member = member;
+            this.friend = friend;
+            this.selfRole = selfRole;
+            this.writesPrivately = writesPrivately;
+            this.link = link;
+            this.muted = muted;
+            this.muteTurns = muteTurns;
+        }
+    }
 
     @Override
-    protected void onCreate(Bundle savedInstanceState)
+    protected int screenTitle()
+    {
+        return R.string.air_group_member_title;
+    }
+
+    @Override
+    protected void onCreate(@Nullable final Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_group_peer_info);
-
-        Intent intent = getIntent();
+        final Intent intent = getIntent();
         peer_pubkey = intent.getStringExtra("peer_pubkey");
         group_id = intent.getStringExtra("group_id");
-        group_num = tox_group_by_groupid__wrapper(group_id);
-
-        profile_icon = (de.hdodenhof.circleimageview.CircleImageView) findViewById(R.id.pi_profile_icon);
-        peer_toxid = (TextView) findViewById(R.id.pi_toxprvkey_textview);
-        peer_name = (TextView) findViewById(R.id.pi_nick_text);
-        group_peerrole_text = (TextView) findViewById(R.id.group_peerrole_text);
-        group_send_private_message = (EditText) findViewById(R.id.group_send_private_message);
-        group_kickpeer_button = findViewById(R.id.group_kickpeer_button);
-        group_kickpeer_hint = findViewById(R.id.group_kickpeer_hint);
-        group_notification_silent_button = findViewById(R.id.group_notification_silent_button);
-        group_peerrole_select = findViewById(R.id.group_peerrole_select);
-        group_peerrole_set_button = findViewById(R.id.group_peerrole_set_button);
-        peer_first_join_text = findViewById(R.id.peer_first_join_text);
-        peer_connection_type_text = findViewById(R.id.peer_connection_type_text);
-
-        // KHANDAQ (#15): explicit Send button for the private (in-group direct) message, instead of the
-        // old behaviour of only firing on onPause (which the user couldn't discover).
-        final View send_private_btn = findViewById(R.id.group_send_private_message_button);
-        if (send_private_btn != null)
+        if (!GroupMessageListActivity.is_valid_group_id(group_id) || TextUtils.isEmpty(peer_pubkey))
         {
-            send_private_btn.setOnClickListener(v ->
-            {
-                final String text = group_send_private_message.getText().toString();
-                if (text == null || text.trim().length() == 0)
-                {
-                    return;
-                }
-                if (send_private_message_text(text))
-                {
-                    group_send_private_message.setText("");
-                    Toast.makeText(GroupPeerInfoActivity.this, R.string.group_private_msg_sent, Toast.LENGTH_SHORT).show();
-                }
-                else
-                {
-                    Toast.makeText(GroupPeerInfoActivity.this, R.string.group_private_msg_failed, Toast.LENGTH_SHORT).show();
-                }
-            });
+            finish();
+            return;
         }
-
-        this.tox_ngc_group_role_items = new String[]{"---", "MODERATOR", "USER", "OBSERVER"};
-        ArrayAdapter<CharSequence> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item,
-                                                                tox_ngc_group_role_items);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        group_peerrole_select.setAdapter(adapter);
-
-        group_peerrole_select.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener()
-        {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id)
-            {
-                Log.i(TAG, "selected_new_role:" + parent.getItemAtPosition(position));
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> parent)
-            {
-
-            }
-        });
-
-        group_peerrole_set_button.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(View view)
-            {
-                try
-                {
-                    String role_str = (String) group_peerrole_select.getSelectedItem();
-                    int new_role = ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_USER.value;
-                    if (role_str.equals("MODERATOR"))
-                    {
-                        new_role = ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_MODERATOR.value;
-                    }
-                    else if (role_str.equals("USER"))
-                    {
-                        new_role = ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_USER.value;
-                    }
-                    else if (role_str.equals("OBSERVER"))
-                    {
-                        new_role = ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value;
-                    }
-                    else
-                    {
-                        // nothing valid selected
-                        return;
-                    }
-
-                    int result = tox_group_mod_set_role(group_num,
-                                                        get_group_peernum_from_peer_pubkey(group_id, peer_pubkey),
-                                                        new_role);
-                    Log.i(TAG, "setting new role to: " + new_role + " result=" + result);
-                    HelperGeneric.update_savedata_file_wrapper_async(); // KHANDAQ (ANR): role/kick already applied to live tox; persist off-thread
-
-                    if (result == 1)
-                    {
-                        update_group_peer_in_db(group_num, group_id,
-                                                get_group_peernum_from_peer_pubkey(group_id, peer_pubkey),
-                                                peer_pubkey, new_role);
-                        update_group_in_groupmessagelist(group_id);
-                    }
-                }
-                catch (Exception ignored)
-                {
-                }
-            }
-        });
-
-        updateNotificationSilentButtonText();
-        group_notification_silent_button.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(View view)
-            {
-                try
-                {
-                    final boolean currently_silent = group_notification_silent_peer_get(group_id, peer_pubkey);
-                    group_notification_silent_peer_set(group_id, peer_pubkey, !currently_silent);
-                    updateNotificationSilentButtonText();
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-            }
-        });
-
-
-        group_kickpeer_button.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(View view)
-            {
-                if (!canKickPeer(self_role, peer_role, is_self_peer))
-                {
-                    showKickDisabledHint();
-                    return;
-                }
-
-                final String peer_display_name = peer_name.getText().toString();
-                new AlertDialog.Builder(GroupPeerInfoActivity.this)
-                        .setTitle(R.string.group_peer_kick_confirm_title)
-                        .setMessage(getString(R.string.group_peer_kick_confirm_message, peer_display_name))
-                        .setPositiveButton(R.string.layout___delete, new DialogInterface.OnClickListener()
-                        {
-                            @Override
-                            public void onClick(DialogInterface dialog, int which)
-                            {
-                                kickPeerFromGroup(peer_display_name);
-                            }
-                        })
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .show();
-            }
-        });
-
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-        HelperToolbar.enableUpNavigation(this, toolbar);
-
-        final Drawable d1 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_face).color(
-                getResources().getColor(R.color.colorPrimaryDark)).sizeDp(200);
-        profile_icon.setImageDrawable(d1);
-
-        String peer_name_txt = tox_group_peer_get_name__wrapper(group_id, peer_pubkey);
-
-        if ((peer_name_txt == null) || (peer_name_txt.equals("")) || (peer_name_txt.equals("-1")))
-        {
-            peer_name_txt = "Unknown";
-        }
-
-        peer_toxid.setText(peer_pubkey);
-        peer_name.setText(peer_name_txt);
-
-        peer_first_join_text.setText("unknown");
+        build();
+        // The first frame has the name this device knows now; the first read brings the rest.
+        String known = null;
         try
         {
-           GroupPeerDB peer_from_db = (GroupPeerDB) orma.selectFromGroupPeerDB().group_identifierEq(group_id).
-                    tox_group_peer_pubkeyEq(peer_pubkey).toList().get(0);
-            peer_first_join_text.setText(long_date_time_format(peer_from_db.first_join_timestamp));
+            known = tox_group_peer_get_name__wrapper(group_id, peer_pubkey);
         }
         catch (Exception e)
         {
+            Log.i(TAG, "onCreate:name:EE:" + e.getMessage());
         }
-
-        // KHANDAQ (#18A): show whether this peer is reached directly (UDP) or via a TCP relay server.
-        // Group file transfers run over these per-peer NGC connections, so this tells you why a
-        // transfer with this peer is fast (direct) or slow (relayed).
-        if (peer_connection_type_text != null)
+        setNames(usableName(known), false);
+        // KHANDAQ (stage 5): words typed on an earlier visit, or in the member's sheet, are still here;
+        // only Send sends them.
+        final String draft = GroupMemberActions.privateDraft(group_id, peer_pubkey);
+        if (draft != null && messageField.length() == 0)
         {
-            try
-            {
-                final long pid = MainActivity.tox_group_peer_by_public_key(group_num, peer_pubkey);
-                final int conn = (pid >= 0) ? MainActivity.tox_group_peer_get_connection_status(group_num, pid)
-                                            : ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value;
-                final int key;
-                if (conn == ToxVars.TOX_CONNECTION.TOX_CONNECTION_UDP.value)
-                {
-                    key = R.string.peer_conn_direct_udp;
-                }
-                else if (conn == ToxVars.TOX_CONNECTION.TOX_CONNECTION_TCP.value)
-                {
-                    key = R.string.peer_conn_relay_tcp;
-                }
-                else
-                {
-                    key = R.string.peer_conn_offline;
-                }
-                peer_connection_type_text.setText(getString(key));
-            }
-            catch (Exception e)
-            {
-                peer_connection_type_text.setText("");
-            }
+            messageField.setText(draft);
+            messageField.setSelection(messageField.length());
         }
-
-        try
-        {
-            final String self_pubkey = tox_group_self_get_public_key(group_num);
-            is_self_peer = (peer_pubkey != null) && (self_pubkey != null)
-                           && peer_pubkey.equalsIgnoreCase(self_pubkey);
-            self_role = tox_group_self_get_role(group_num);
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-
-        try
-        {
-            peer_role = tox_group_peer_get_role(group_num,
-                                                get_group_peernum_from_peer_pubkey(group_id, peer_pubkey));
-            group_peerrole_text.setText(ToxVars.Tox_Group_Role.value_str(peer_role));
-            if (peer_role == 1)
-            {
-                group_peerrole_select.setSelection(1);
-            }
-            else if (peer_role == 2)
-            {
-                group_peerrole_select.setSelection(2);
-            }
-            else if (peer_role == 3)
-            {
-                group_peerrole_select.setSelection(3);
-            }
-            else
-            {
-                group_peerrole_select.setSelection(0);
-            }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-            try
-            {
-                group_peerrole_select.setSelection(0);
-            }
-            catch (Exception e2)
-            {
-            }
-        }
-
-        updateKickPeerButtonState();
-
-        try
-        {
-            int peer_color_fg = getResources().getColor(R.color.colorPrimaryDark);
-            int peer_color_bg = ChatColors.get_shade(
-                    ChatColors.PeerAvatarColors[hash_to_bucket(peer_pubkey, ChatColors.get_size())], peer_pubkey);
-
-            final Drawable smiley_face = new IconicsDrawable(context_s).icon(
-                    GoogleMaterial.Icon.gmd_sentiment_satisfied).backgroundColor(Color.TRANSPARENT).color(
-                    peer_color_fg).sizeDp(70);
-
-            profile_icon.setPadding((int) dp2px(0), (int) dp2px(0), (int) dp2px(0), (int) dp2px(0));
-            profile_icon.setImageDrawable(smiley_face);
-
-            // we need to do the rounded corner background manually here, to change the color ---------------
-            GradientDrawable shape = new GradientDrawable();
-            shape.setShape(GradientDrawable.OVAL);
-            shape.setColor(peer_color_bg);
-            profile_icon.setBackground(shape);
-            // we need to do the rounded corner background manually here, to change the color ---------------
-
-        }
-        catch (Exception e2)
-        {
-            e2.printStackTrace();
-        }
-    }
-
-    @Override
-    protected void onPause()
-    {
-        super.onPause();
-
-        // KHANDAQ (#15): if the user typed a private message but left without tapping Send, still
-        // send it so nothing is lost. The Send button clears the field, so this never double-sends.
-        try
-        {
-            final String text = group_send_private_message.getText().toString();
-            if (text != null && text.length() > 0)
-            {
-                send_private_message_text(text);
-                group_send_private_message.setText("");
-            }
-        }
-        catch (Exception ignored)
-        {
-        }
-    }
-
-    // KHANDAQ (#15): send a private (in-group direct) message to this peer. Returns true on success.
-    private boolean send_private_message_text(final String private_message_text)
-    {
-        if (private_message_text == null || private_message_text.length() == 0)
-        {
-            return false;
-        }
-        try
-        {
-            int res = tox_group_send_private_message_by_peerpubkey(tox_group_by_groupid__wrapper(group_id),
-                                                                   peer_pubkey, 0, private_message_text);
-            Log.i(TAG, "send_private_message_text:res=" + res);
-
-            if (res == 0)
-            {
-                GroupMessage m = new GroupMessage();
-                m.is_new = false; // own messages are always "not new"
-                m.tox_group_peer_pubkey = tox_group_self_get_public_key(
-                        tox_group_by_groupid__wrapper(group_id)).toUpperCase();
-                m.direction = 1; // msg sent
-                m.TOX_MESSAGE_TYPE = 0;
-                m.read = true; // !!!! there is not "read status" with conferences in Tox !!!!
-                m.tox_group_peername = null;
-                m.sent_privately_to_tox_group_peer_pubkey = peer_pubkey;
-                m.private_message = 1;
-                m.group_identifier = group_id;
-                m.TRIFA_MESSAGE_TYPE = TRIFA_MSG_TYPE_TEXT.value;
-                m.sent_timestamp = System.currentTimeMillis();
-                m.rcvd_timestamp = System.currentTimeMillis();
-                m.text = private_message_text;
-                m.was_synced = false;
-                m.TRIFA_SYNC_TYPE = TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NONE.value;
-
-                insert_into_group_message_db(m, true);
-                return true;
-            }
-        }
-        catch (Exception ignored)
-        {
-        }
-        return false;
     }
 
     @Override
     protected void onResume()
     {
         super.onResume();
-        updateNotificationSilentButtonText();
+        // At once, then on the dossier's beat: back from the direct chat, a new contact shows as one.
+        main.removeCallbacks(poll);
+        main.post(poll);
     }
 
-    private void updateNotificationSilentButtonText()
+    @Override
+    protected void onPause()
     {
-        if (group_notification_silent_peer_get(group_id, peer_pubkey))
+        main.removeCallbacks(poll);
+        // KHANDAQ (stage 5): leaving the screen never sends. It used to send whatever was typed and clear
+        // the field even when that send failed, so words went without a tap or were lost. Now they stay as
+        // a draft for the next visit, and only Send sends them.
+        if (messageField != null)
         {
-            group_notification_silent_button.setText("activate Notifications for Peer");
+            GroupMemberActions.keepPrivateDraft(group_id, peer_pubkey, messageField.getText());
         }
-        else
-        {
-            group_notification_silent_button.setText("mute Notifications for Peer");
-        }
+        super.onPause();
     }
 
-    private static boolean canKickPeer(final int selfRole, final int peerRole, final boolean isSelfPeer)
+    @Override
+    protected void onDestroy()
     {
-        if (isSelfPeer)
-        {
-            return false;
-        }
-
-        if (peerRole == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_FOUNDER.value)
-        {
-            return false;
-        }
-
-        if (selfRole == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_FOUNDER.value)
-        {
-            return true;
-        }
-
-        if (selfRole == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_MODERATOR.value)
-        {
-            return peerRole == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_USER.value
-                   || peerRole == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value;
-        }
-
-        return false;
+        destroyed = true;
+        main.removeCallbacksAndMessages(null);
+        super.onDestroy();
     }
 
-    private String getKickDisabledHintText()
+    // ---- reading ----
+
+    private static Handler worker()
     {
-        if (is_self_peer)
+        synchronized (WORKER_LOCK)
         {
-            return getString(R.string.group_peer_kick_hint_cannot_self);
-        }
-
-        if (peer_role == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_FOUNDER.value)
-        {
-            return getString(R.string.group_peer_kick_hint_cannot_founder);
-        }
-
-        if (self_role != ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_FOUNDER.value
-            && self_role != ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_MODERATOR.value)
-        {
-            return getString(R.string.group_peer_kick_hint_no_permission);
-        }
-
-        if (self_role == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_MODERATOR.value
-            && peer_role == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_MODERATOR.value)
-        {
-            return getString(R.string.group_peer_kick_hint_moderator_limit);
-        }
-
-        return getString(R.string.group_peer_kick_hint_no_permission);
-    }
-
-    private void updateKickPeerButtonState()
-    {
-        final boolean kickAllowed = canKickPeer(self_role, peer_role, is_self_peer);
-        group_kickpeer_button.setEnabled(kickAllowed);
-        group_kickpeer_button.setAlpha(kickAllowed ? 1.0f : 0.45f);
-
-        if (kickAllowed)
-        {
-            group_kickpeer_hint.setVisibility(View.GONE);
-        }
-        else
-        {
-            group_kickpeer_hint.setText(getKickDisabledHintText());
-            group_kickpeer_hint.setVisibility(View.VISIBLE);
+            if (worker == null)
+            {
+                final HandlerThread thread = new HandlerThread("air-group-member", Process.THREAD_PRIORITY_BACKGROUND);
+                thread.start();
+                worker = new Handler(thread.getLooper());
+            }
+            return worker;
         }
     }
 
-    private void showKickDisabledHint()
+    /** Reads the member on the worker and shows them. */
+    private void refresh()
     {
-        Toast.makeText(this, getKickDisabledHintText(), Toast.LENGTH_LONG).show();
+        final String id = group_id;
+        final String key = peer_pubkey;
+        if (destroyed || id == null || key == null)
+        {
+            return;
+        }
+        final int turns = muteTurns;
+        worker().post(() -> {
+            final State state = read(id, key, turns);
+            main.post(() -> show(state));
+        });
     }
 
-    private void kickPeerFromGroup(final String peerDisplayName)
+    /** toxcore and the database, so never on the main thread. */
+    private static State read(final String groupId, final String peerKey, final int muteTurns)
     {
+        // The dossier's own reading, so the role, presence and name are the ones the member's row shows.
+        AirGroupModel.Member member = null;
+        // Your right as the group's own bar has it, the stand-in of a debug build included.
+        boolean writesPrivately = true;
         try
         {
-            final long peer_num = get_group_peernum_from_peer_pubkey(group_id, peer_pubkey);
-            if (peer_num < 0)
+            final AirGroupPanel.Snapshot group = AirGroupPanel.read(groupId);
+            writesPrivately = group.right.writesPrivately();
+            for (final AirGroupModel.Member candidate : group.members)
             {
-                Toast.makeText(this, R.string.group_peer_kick_failed, Toast.LENGTH_LONG).show();
-                return;
+                if (candidate.publicKey.equalsIgnoreCase(peerKey))
+                {
+                    member = candidate;
+                    break;
+                }
+            }
+        }
+        catch (Throwable e)
+        {
+            Log.i(TAG, "read:group:EE:" + e.getMessage());
+        }
+
+        final long groupNum = tox_group_by_groupid__wrapper(groupId);
+        int selfRole = -1;
+        boolean self = member != null && member.self;
+        int link = ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value;
+        if (groupNum >= 0)
+        {
+            try
+            {
+                selfRole = MainActivity.tox_group_self_get_role(groupNum);
+                final String selfKey = MainActivity.tox_group_self_get_public_key(groupNum);
+                self = self || (selfKey != null && selfKey.equalsIgnoreCase(peerKey));
+                if (!self && member != null && member.online)
+                {
+                    final long peerId = MainActivity.tox_group_peer_by_public_key(groupNum, peerKey);
+                    if (peerId >= 0)
+                    {
+                        link = MainActivity.tox_group_peer_get_connection_status(groupNum, peerId);
+                    }
+                }
+            }
+            catch (Throwable e)
+            {
+                Log.i(TAG, "read:tox:EE:" + e.getMessage());
+            }
+        }
+
+        if (member == null || member.self != self || member.name.isEmpty())
+        {
+            // Not among the members this device has now (they left, or the group is not in toxcore), or
+            // without a name there: the name this device knows, not online unless the row said so, and a
+            // role only by the rule of the rows.
+            String known = member == null ? null : member.name;
+            if (TextUtils.isEmpty(known))
+            {
+                try
+                {
+                    known = tox_group_peer_get_name__wrapper(groupId, peerKey);
+                }
+                catch (Throwable e)
+                {
+                    Log.i(TAG, "read:name:EE:" + e.getMessage());
+                }
+            }
+            member = new AirGroupModel.Member(peerKey, usableName(known),
+                                              AirGroupPanel.roleOf(groupId, groupNum, peerKey),
+                                              member != null && member.online, member == null ? 0L : member.lastSeenMs,
+                                              self);
+        }
+
+        boolean friend = false;
+        boolean muted = false;
+        try
+        {
+            friend = lookup_friendlist_by_pubkey(peerKey) != null;
+            muted = group_notification_silent_peer_get(groupId, peerKey);
+        }
+        catch (Throwable e)
+        {
+            Log.i(TAG, "read:db:EE:" + e.getMessage());
+        }
+        return new State(member, friend, selfRole, writesPrivately, link, muted, muteTurns);
+    }
+
+    /** A name toxcore or the database gave; empty for none ("-1" is the old code's none). */
+    private static String usableName(@Nullable final String raw)
+    {
+        return raw == null || raw.isEmpty() || "-1".equals(raw) ? "" : raw;
+    }
+
+    // ---- drawing ----
+
+    /** The screen's parts, once; {@link #show} fills them in on every read. */
+    private void build()
+    {
+        column.removeAllViews();
+        final Resources res = getResources();
+
+        // Who they are: the name, then the role, presence and mute in one line.
+        final LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.VERTICAL);
+        name = AirScreenKit.text(this, R.style.TextAppearance_KQ_Display, R.color.kq_ink);
+        ViewCompat.setAccessibilityHeading(name, true);
+        head.addView(name, AirScreenKit.matchWidth());
+        status = AirScreenKit.text(this, R.style.TextAppearance_KQ_Air_LabelRegular, R.color.kq_ink_2);
+        status.setFontFeatureSettings("tnum");
+        final LinearLayout.LayoutParams statusParams = AirScreenKit.matchWidth();
+        statusParams.topMargin = res.getDimensionPixelSize(R.dimen.kq_space_4);
+        head.addView(status, statusParams);
+        AirScreenKit.addSection(column, null, null, head);
+
+        // A private message: only Send sends it, and what came of it stands under the field (E21). An
+        // observer reads what a moderator writes to them in the group, but the field and Send are off.
+        messageHeading = AirScreenKit.heading(this, "");
+        messageField = GroupMemberActions.privateMessageField(this);
+        messageField.addTextChangedListener(new TextWatcher()
+        {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after)
+            {
             }
 
-            final int result = tox_group_mod_kick_peer(group_num, peer_num);
-            Log.i(TAG, "kicking peer. result=" + result);
-            HelperGeneric.update_savedata_file_wrapper_async(); // KHANDAQ (ANR): kick already applied to live tox; persist off-thread
-
-            if (result >= 0)
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count)
             {
-                peer_role = ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value;
-                group_peerrole_text.setText(ToxVars.Tox_Group_Role.value_str(peer_role));
-                group_peerrole_select.setSelection(3);
-                update_group_peer_in_db(group_num, group_id, peer_num, peer_pubkey, peer_role);
-                update_group_in_groupmessagelist(group_id);
-                updateKickPeerButtonState();
-                Toast.makeText(this, getString(R.string.group_peer_kick_success, peerDisplayName),
-                               Toast.LENGTH_LONG).show();
+            }
+
+            @Override
+            public void afterTextChanged(Editable s)
+            {
+                // The words under the field were about the text before this change.
+                AirUi.endUnder(messageField);
+            }
+        });
+        send = AirScreenKit.button(this, getString(R.string.group_member_action_send), true);
+        send.setOnClickListener(v -> sendTyped());
+        messageSection = AirScreenKit.addSection(column, null, null, messageHeading, messageField,
+                                                 AirScreenKit.leading(send));
+
+        // What may be done with them; a refusal stands under the rows.
+        actionsPlate = AirScreenKit.plate(this);
+        actionNote = AirScreenKit.note(this, "");
+        actionNote.setVisibility(View.GONE);
+        actionsSection = AirScreenKit.addSection(column, null, null, actionsPlate, actionNote);
+        actionsSection.setVisibility(View.GONE);
+
+        // How this phone reaches them, while they are online.
+        linkText = AirScreenKit.body(this, "");
+        linkSection = AirScreenKit.addSection(column, getString(R.string.air_dossier_link_title), null, linkText);
+        linkSection.setVisibility(View.GONE);
+
+        // Their key in this group, in groups of four, with Copy.
+        final String key = peer_pubkey.toUpperCase(Locale.ROOT);
+        final View copy = AirScreenKit.iconButton(this, getString(R.string.air_dossier_copy_key), R.drawable.kq_ic_copy);
+        copy.setOnClickListener(v -> copyKey(key));
+        AirScreenKit.addSection(column, getString(R.string.air_dossier_key_title), null,
+                                AirScreenKit.keyText(this, key), AirScreenKit.leading(copy));
+    }
+
+    private void show(final State s)
+    {
+        if (destroyed || isFinishing())
+        {
+            return;
+        }
+        shown = s;
+        final AirGroupModel.Member member = s.member;
+        setNames(member.name, member.self);
+
+        // The mute turned here last stands until a read begun after it says the same.
+        final boolean muted = (s.muteTurns == muteTurns || muteSwitch == null) ? s.muted : muteSwitch.isChecked();
+        String line = AirGroupPanel.statusLine(this, member, System.currentTimeMillis());
+        if (muted && !member.self)
+        {
+            line = getString(R.string.air_group_member_status_format, line, getString(R.string.air_group_member_muted));
+        }
+        setText(status, line);
+
+        messageSection.setVisibility(member.self ? View.GONE : View.VISIBLE);
+        showWritesPrivately(s.writesPrivately);
+
+        final List<AirGroupMemberChoices.Choice> rows = AirGroupMemberChoices.screen(member.self, s.friend,
+                                                                                     member.role, s.selfRole);
+        final String next = rows.toString();
+        if (!next.equals(actionsShown))
+        {
+            actionsShown = next;
+            fillActions(rows, muted);
+        }
+        else if (muteSwitch != null && s.muteTurns == muteTurns && muteSwitch.isChecked() != s.muted)
+        {
+            // Muted or unmuted elsewhere meanwhile: the switch follows without acting again.
+            muteSwitch.setOnCheckedChangeListener(null);
+            muteSwitch.setChecked(s.muted);
+            muteSwitch.setOnCheckedChangeListener(this::onMuteTurned);
+        }
+        actionsSection.setVisibility(rows.isEmpty() ? View.GONE : View.VISIBLE);
+
+        final int linkWords;
+        if (s.link == ToxVars.TOX_CONNECTION.TOX_CONNECTION_UDP.value)
+        {
+            linkWords = R.string.air_dossier_link_direct;
+        }
+        else if (s.link == ToxVars.TOX_CONNECTION.TOX_CONNECTION_TCP.value)
+        {
+            linkWords = R.string.air_dossier_link_relay;
+        }
+        else
+        {
+            linkWords = 0;
+        }
+        linkSection.setVisibility(linkWords == 0 ? View.GONE : View.VISIBLE);
+        if (linkWords != 0)
+        {
+            setText(linkText, getString(linkWords));
+        }
+    }
+
+    /** The name as the screen's heading, yours with "(you)", and in the private message's heading. */
+    private void setNames(final String known, final boolean self)
+    {
+        knownName = known == null ? "" : known;
+        final String who = displayName();
+        setText(name, self ? getString(R.string.air_group_member_you_format, who) : who);
+        setText(messageHeading, getString(R.string.air_group_private_to_format, who));
+    }
+
+    /** The member's name for the questions and the headings; "Unknown" while this device has none. */
+    private String displayName()
+    {
+        return knownName.isEmpty() ? getString(R.string.group_peer_unknown) : knownName;
+    }
+
+    /** The rows of the choices, built again only when they change. */
+    private void fillActions(final List<AirGroupMemberChoices.Choice> rows, final boolean muted)
+    {
+        actionsPlate.removeAllViews();
+        muteSwitch = null;
+        for (final AirGroupMemberChoices.Choice choice : rows)
+        {
+            final AirSettingRow row = new AirSettingRow(this, getString(GroupMemberActions.choiceLabel(choice)),
+                                                        choice == AirGroupMemberChoices.Choice.OPEN_CHAT);
+            final AirGroupModel.MemberAction action = AirGroupMemberChoices.action(choice);
+            if (choice == AirGroupMemberChoices.Choice.OPEN_CHAT)
+            {
+                row.setOnClickListener(v -> FriendListHolder.show_messagelist_acticvity_for_friend(this, peer_pubkey));
+            }
+            else if (choice == AirGroupMemberChoices.Choice.ADD_FRIEND)
+            {
+                row.setOnClickListener(v -> {
+                    AirUi.endLine(actionNote);
+                    GroupMemberActions.addFriend(this, peer_pubkey);
+                });
+            }
+            else if (choice == AirGroupMemberChoices.Choice.MUTE)
+            {
+                muteSwitch = row.withSwitch(muted, this::onMuteTurned);
+            }
+            else if (action != null)
+            {
+                if (action == AirGroupModel.MemberAction.KICK)
+                {
+                    row.danger();
+                }
+                row.setOnClickListener(v -> {
+                    // A new choice: what the last one could not do is no longer the news.
+                    AirUi.endLine(actionNote);
+                    final State s = shown;
+                    GroupMemberActions.confirmMemberAction(this, group_id, peer_pubkey, displayName(), action,
+                                                           s == null ? AirGroupModel.ROLE_UNKNOWN : s.member.role,
+                                                           this::refresh);
+                });
             }
             else
             {
-                Toast.makeText(this, R.string.group_peer_kick_failed, Toast.LENGTH_LONG).show();
+                continue;
             }
+            actionsPlate.addView(row, AirScreenKit.matchWidth());
         }
-        catch (Exception e)
+    }
+
+    private void onMuteTurned(final CompoundButton button, final boolean checked)
+    {
+        muteTurns++;
+        GroupMemberActions.setMemberMuted(group_id, peer_pubkey, checked);
+        refresh();
+    }
+
+    /**
+     * E21: what an action on this member could not do, under the actions, a failure in red with Details
+     * for its code and a rule in the second ink. False when this screen is going or shows no actions, so
+     * the caller says it elsewhere.
+     */
+    boolean sayAtActions(final CharSequence text, final boolean failed, @Nullable final String code)
+    {
+        final TextView note = actionNote;
+        if (note == null || destroyed || isFinishing() || TextUtils.isEmpty(text)
+            || actionsSection.getVisibility() != View.VISIBLE)
         {
-            e.printStackTrace();
-            Toast.makeText(this, R.string.group_peer_kick_failed, Toast.LENGTH_LONG).show();
+            return false;
+        }
+        AirUi.sayOnLine(note, text, failed, code);
+        note.post(() -> note.requestRectangleOnScreen(new android.graphics.Rect(0, 0, note.getWidth(),
+                                                                                note.getHeight()), false));
+        return true;
+    }
+
+    // ---- actions ----
+
+    /**
+     * The field and Send, on or off as your role allows, changed only when that changes: off, the reason
+     * stands under the field (GroupMemberActions.cannotWritePrivately); on again, it goes.
+     */
+    private void showWritesPrivately(final boolean writes)
+    {
+        if (writesShown != null && writesShown == writes)
+        {
+            return;
+        }
+        writesShown = writes;
+        if (writes)
+        {
+            messageField.setEnabled(true);
+            send.setEnabled(true);
+            AirUi.endUnder(messageField);
+        }
+        else
+        {
+            GroupMemberActions.cannotWritePrivately(messageField, send);
+        }
+    }
+
+    /** Send: the words go as they stand; a failure stays under the field with the words in it (E21). */
+    private void sendTyped()
+    {
+        final String text = messageField.getText().toString();
+        if (text.trim().isEmpty())
+        {
+            return;
+        }
+        if (!AirGroupModel.writesPrivately(AirGroupPanel.selfRole(group_id)))
+        {
+            // Made an observer since the last read: the words stay, nothing tries to go.
+            showWritesPrivately(false);
+            return;
+        }
+        if (GroupMemberActions.sendPrivateGroupMessage(group_id, peer_pubkey, text))
+        {
+            GroupMemberActions.keepPrivateDraft(group_id, peer_pubkey, null);
+            messageField.setText("");
+            AirUi.sayUnder(messageField, getString(R.string.group_member_action_private_msg_sent), false);
+        }
+        else
+        {
+            AirUi.sayUnder(messageField, getString(R.string.air_group_private_not_sent), true);
+        }
+    }
+
+    private void copyKey(final String key)
+    {
+        final ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboard == null)
+        {
+            return;
+        }
+        clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.air_dossier_key_title), key));
+        // From Android 13 the system shows its own "copied" confirmation.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU)
+        {
+            toast(R.string.air_dossier_key_copied);
+        }
+        else
+        {
+            column.announceForAccessibility(getString(R.string.air_dossier_key_copied));
+        }
+    }
+
+    /** Sets a text only when it differs, so an unchanged read neither lays out nor speaks. */
+    private static void setText(final TextView view, final CharSequence text)
+    {
+        if (view != null && !TextUtils.equals(view.getText(), text))
+        {
+            view.setText(text);
         }
     }
 }

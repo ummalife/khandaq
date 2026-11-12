@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (redesign, stage 5): a 64dp key of the PIN keypad on the lock ground, as AirPinKey on iOS:
+     translucent white (media-control) with no outline, white while pressed (the digit turns lock-top,
+     air_pin_key_lock_text), and a white focus ring under a keyboard. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:exitFadeDuration="@integer/kq_dur_tap">
+    <item android:state_pressed="true">
+        <shape android:shape="oval">
+            <solid android:color="@color/kq_fixed_white" />
+        </shape>
+    </item>
+    <item android:state_focused="true">
+        <shape android:shape="oval">
+            <solid android:color="@color/kq_media_control" />
+            <stroke android:width="@dimen/kq_stroke_focus" android:color="@color/kq_fixed_white" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="@color/kq_media_control" />
+        </shape>
+    </item>
+</selector>

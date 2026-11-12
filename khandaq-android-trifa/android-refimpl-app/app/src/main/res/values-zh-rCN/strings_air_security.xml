@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Password and PIN, the PIN screens and Change password (redesign stage 4, E20); iOS keys where the meaning is the same, Android wording where Android works differently -->
+    <string name="air_security_pin_section">PIN 码</string>
+    <string name="air_security_pin">需要 PIN 码</string>
+    <string name="air_security_pin_note">回到 Khandaq 时会要求输入 PIN 码。PIN 码无法找回。</string>
+    <string name="air_security_lock_note">从离开 Khandaq 时开始计时。</string>
+    <string name="air_security_password_note">这部手机上的档案用它加密。密码无法找回：没有服务器。</string>
+    <string name="air_security_device_key_note">档案用保存在这部手机上的密钥打开。设置密码后，档案会用密码加密，退出登录后只能用密码打开。</string>
+    <string name="air_password_set_body">这个档案目前用保存在这部手机上的密钥打开。设置密码后，档案会用密码加密，退出登录后只能用密码打开。密码无法找回：没有服务器。</string>
+    <string name="air_password_set_action">设置密码</string>
+    <string name="air_password_old_placeholder">旧密码</string>
+    <string name="air_password_old_first">请先输入旧密码。</string>
+    <string name="air_password_wrong_old">旧密码不正确。</string>
+    <string name="air_password_checking">正在检查密码</string>
+    <string name="air_password_preparing">正在准备密码</string>
+    <string name="air_password_change_failed">密码没有更改成功。请再试一次。</string>
+    <string name="air_password_set_failed">密码没有设置成功：保存在这部手机上的密钥没能打开档案。请再试一次。</string>
+    <string name="air_password_not_set">密码没有设置成功。请再试一次。</string>
+    <string name="air_password_change_question">更改密码？</string>
+    <string name="air_password_set_question">设置密码？</string>
+    <string name="air_password_restart_consequence">Khandaq 会关闭；再次打开时，它会用新密码加密档案，然后要求输入新密码。</string>
+    <string name="air_password_reopen">再次打开 Khandaq 以完成。</string>
+    <string name="air_pin_enter_title">输入 PIN 码</string>
+    <string name="air_pin_repeat_title">再次输入 PIN 码</string>
+    <string name="air_pin_wrong">PIN 码错误。</string>
+    <string name="air_pin_mismatch">两次输入的 PIN 码不一致，请重新设置。</string>
+    <string name="air_pin_set_note">PIN 码无法找回。如果忘记了，只有在手机设置中清除 Khandaq 的数据后才能再次打开它，而这会从这部手机上删除档案。</string>
+    <string name="air_pin_entered_format">已输入 %1$d 位，共 %2$d 位</string>
+    <string name="air_pin_delete_digit">删除最后一位</string>
+    <!-- The page of a password change at the next start: busy, then rolled back (E20, E21). -->
+    <string name="air_rekey_running">正在用新密码加密档案</string>
+    <string name="air_rekey_running_note">请保持 Khandaq 打开。档案越大，用时越长。</string>
+    <string name="air_rekey_failed_title">密码没有更改</string>
+    <string name="air_rekey_failed_note">用新密码加密档案没有完成，所以什么都没有改变：档案仍按原来的方式打开。</string>
+    <string name="air_rekey_continue">继续</string>
+</resources>

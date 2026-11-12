@@ -103,6 +103,7 @@ final class ChatReplyController {
                              messages: Results<OCTMessageAbstract>,
                              tableView: UITableView,
                              submanagerObjects: OCTSubmanagerObjects,
+                             displayRow: ((Int) -> Int?)? = nil,
                              ensureLoaded: (Int) -> Void) {
         // KHANDAQ (#100): search the FULL history, not just the currently loaded window — replying to
         // an older (paginated-out) message must still jump to it.
@@ -150,11 +151,14 @@ final class ChatReplyController {
             ensureLoaded(index)
             tableView.layoutIfNeeded()
         }
-        guard index < tableView.numberOfRows(inSection: 0) else {
+        // KHANDAQ (redesign stage 2): the 1:1 log can leave rows out (messages in the tray), so its
+        // caller maps the storage index to the row on screen; nil there means it is not in the log.
+        guard let row = displayRow.map({ $0(index) }) ?? index,
+              row < tableView.numberOfRows(inSection: 0) else {
             return
         }
 
-        let indexPath = IndexPath(row: index, section: 0)
+        let indexPath = IndexPath(row: row, section: 0)
         tableView.scrollToRow(at: indexPath, at: .middle, animated: true)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Password and PIN, the PIN screens and Change password (redesign stage 4, E20); iOS keys where the meaning is the same, Android wording where Android works differently -->
+    <string name="air_security_pin_section">رمز PIN</string>
+    <string name="air_security_pin">طلب رمز PIN</string>
+    <string name="air_security_pin_note">يطلب Khandaq رمز PIN عند عودتك إليه. لا يمكن استعادة الرمز.</string>
+    <string name="air_security_lock_note">يبدأ العدّ من لحظة مغادرتك Khandaq.</string>
+    <string name="air_security_password_note">بها يُشفَّر الملف الشخصي على هذا الهاتف. لا يمكن استعادة كلمة المرور: لا توجد خوادم.</string>
+    <string name="air_security_device_key_note">يُفتح الملف الشخصي بمفتاح محفوظ على هذا الهاتف. مع كلمة مرور يُشفَّر بها، وبعد تسجيل الخروج لا يُفتح إلا بها.</string>
+    <string name="air_password_set_body">يُفتح الملف الشخصي الآن بمفتاح محفوظ على هذا الهاتف. مع كلمة مرور يُشفَّر بها، وبعد تسجيل الخروج لا يُفتح إلا بها. لا يمكن استعادة كلمة المرور: لا توجد خوادم.</string>
+    <string name="air_password_set_action">تعيين كلمة المرور</string>
+    <string name="air_password_old_placeholder">كلمة المرور القديمة</string>
+    <string name="air_password_old_first">أدخل كلمة المرور القديمة أولًا.</string>
+    <string name="air_password_wrong_old">كلمة المرور القديمة غير صحيحة.</string>
+    <string name="air_password_checking">جارٍ التحقق من كلمة المرور</string>
+    <string name="air_password_preparing">جارٍ تجهيز كلمة المرور</string>
+    <string name="air_password_change_failed">لم تُغيَّر كلمة المرور. حاول مرة أخرى.</string>
+    <string name="air_password_set_failed">لم تُعيَّن كلمة المرور: لم يفتح المفتاح المحفوظ على هذا الهاتف الملف الشخصي. حاول مرة أخرى.</string>
+    <string name="air_password_not_set">لم تُعيَّن كلمة المرور. حاول مرة أخرى.</string>
+    <string name="air_password_change_question">تغيير كلمة المرور؟</string>
+    <string name="air_password_set_question">تعيين كلمة المرور؟</string>
+    <string name="air_password_restart_consequence">سيُغلق Khandaq، وعند فتحه مرة أخرى يشفّر الملف الشخصي بكلمة المرور الجديدة ثم يطلبها.</string>
+    <string name="air_password_reopen">افتح Khandaq مرة أخرى لإكمال العملية.</string>
+    <string name="air_pin_enter_title">أدخل رمز PIN</string>
+    <string name="air_pin_repeat_title">أعد إدخال رمز PIN</string>
+    <string name="air_pin_wrong">رمز PIN غير صحيح.</string>
+    <string name="air_pin_mismatch">رمزا PIN غير متطابقين. عيّنه من جديد.</string>
+    <string name="air_pin_set_note">لا يمكن استعادة رمز PIN. إذا نسيته، فلن يُفتح Khandaq مجددًا إلا بعد مسح بياناته من إعدادات الهاتف، وهذا يحذف الملف الشخصي من هذا الهاتف.</string>
+    <string name="air_pin_entered_format">أُدخل %1$d من %2$d</string>
+    <string name="air_pin_delete_digit">حذف آخر رقم</string>
+    <!-- The page of a password change at the next start: busy, then rolled back (E20, E21). -->
+    <string name="air_rekey_running">يجري تشفير الملف الشخصي بكلمة المرور الجديدة</string>
+    <string name="air_rekey_running_note">أبقِ Khandaq مفتوحًا. يستغرق الملف الشخصي الكبير وقتًا أطول.</string>
+    <string name="air_rekey_failed_title">لم تتغير كلمة المرور</string>
+    <string name="air_rekey_failed_note">لم يكتمل تشفير الملف الشخصي بكلمة المرور الجديدة، لذلك لم يتغير شيء: يُفتح الملف الشخصي كما كان من قبل.</string>
+    <string name="air_rekey_continue">متابعة</string>
+</resources>

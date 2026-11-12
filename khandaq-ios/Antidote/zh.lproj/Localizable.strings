@@ -16,7 +16,7 @@
 /* Login screen text */
 "create_account" = "创建账户";
 /* Login screen text */
-"import_profile" = "导入用户档案";
+"import_profile" = "导入档案";
 /* Password field */
 "password" = "密码";
 /* Login button */
@@ -36,54 +36,54 @@
 /* Login screen text */
 "create_account_profile_hint" = "例如：家庭，iPhone";
 /* Login screen text */
-"set_password_title" = "Set Password";
+"set_password_title" = "设置密码";
 /* Login screen text */
-"set_password_hint" = "Password is required to protect your data. Keep it safe - once lost it cannot be restored.";
+"set_password_hint" = "密码用于保护你的数据。至少 8 个字符，包含字母和数字。请妥善保管：一旦丢失将无法恢复。";
 /* Login button */
-"create_account_next_button" = "Next";
+"create_account_next_button" = "下一步";
 /* Login button */
 "create_account_go_button" = "前进";
 /* Default status message */
 "default_user_status_message" = "Khandaq is Tox";
 
 /* PIN screen text */
-"pin_enter_to_unlock" = "Enter your PIN to unlock";
+"pin_enter_to_unlock" = "输入 PIN 码解锁";
 /* PIN screen text */
-"pin_set" = "Set PIN";
+"pin_set" = "设置 PIN 码";
 /* PIN screen text */
-"pin_confirm" = "Confirm PIN";
+"pin_confirm" = "确认 PIN 码";
 /* PIN screen error */
-"pin_do_not_match" = "PINs did not match. Try again";
+"pin_do_not_match" = "两次输入的 PIN 码不一致，请重试";
 /* PIN screen error */
-"pin_incorrect" = "Incorrect PIN";
+"pin_incorrect" = "PIN 码错误";
 /* PIN screen error details */
-"pin_failed_attempts" = "Failed attempts: %@";
+"pin_failed_attempts" = "失败次数：%@";
 /* PIN screen message shown on log out */
-"pin_logout_message" = "Too many failed attempts. You have been logged out.";
+"pin_logout_message" = "失败次数过多，你已退出登录。";
 /* PIN screen text shown while entering is blocked after too many failed attempts */
 "pin_locked_out" = "PIN 码输入已被锁定";
 /* PIN screen details, %@ is the remaining time */
 "pin_locked_out_remaining" = "请在 %@ 后重试";
 /* PIN screen screen */
-"pin_enabled" = "Enable PIN";
+"pin_enabled" = "启用 PIN 码";
 /* PIN screen screen */
-"pin_touch_id_enabled" = "Enable Touch ID";
+"pin_touch_id_enabled" = "启用触控 ID";
 /* PIN screen screen */
-"pin_description" = "Prevent unauthorized access to Khandaq with a PIN.";
+"pin_description" = "用 PIN 码防止他人未经允许打开 Khandaq。";
 /* PIN screen screen */
-"pin_touch_id_description" = "Use your fingerprint as an alternative to entering a PIN.";
+"pin_touch_id_description" = "可以用指纹代替输入 PIN 码。";
 /* PIN screen screen */
-"pin_lock_timeout" = "Lock Timeout";
+"pin_lock_timeout" = "自动锁定";
 /* PIN screen screen */
-"pin_lock_immediately" = "Immediately";
+"pin_lock_immediately" = "立即";
 /* PIN screen screen */
-"pin_lock_30_seconds" = "30 Seconds";
+"pin_lock_30_seconds" = "30 秒";
 /* PIN screen screen */
-"pin_lock_1_minute" = "1 Minute";
+"pin_lock_1_minute" = "1 分钟";
 /* PIN screen screen */
-"pin_lock_2_minutes" = "2 Minutes";
+"pin_lock_2_minutes" = "2 分钟";
 /* PIN screen screen */
-"pin_lock_5_minutes" = "5 Minutes";
+"pin_lock_5_minutes" = "5 分钟";
 
 /* Label shown when connecting to Tox network */
 "connecting_label" = "连接中 ...";
@@ -102,7 +102,7 @@
 /* No contacts placeholder text */
 "contact_no_contacts_add_contact" = "添加联系人\n或\n";
 /* No contacts placeholder text */
-"contact_no_contacts_share_tox_id" = "分享你的 Tox ID";
+"contact_no_contacts_share_tox_id" = "分享你的 ID";
 /* Contact request section title */
 "contact_requests_section" = "联系人请求";
 /* Contact last seen status */
@@ -116,7 +116,7 @@
 /* Contact request confirmation */
 "contact_request_delete_title" = "删除联系人请求？";
 /* Text shown when contact was deleted */
-"contact_deleted" = "Deleted contact";
+"contact_deleted" = "已删除的联系人";
 
 /* Share Tox ID text */
 "show_qr_code" = "显示二维码";
@@ -128,7 +128,7 @@
 /* Add contat button */
 "add_contact_send" = "发送";
 /* Add contat placeholder text */
-"add_contact_tox_id_placeholder" = "输入 Tox ID";
+"add_contact_tox_id_placeholder" = "输入 ID";
 /* Add contat placeholder text */
 "add_contact_or_label" = "或";
 /* Add contat button */
@@ -138,7 +138,7 @@
 /* Add contat default text sended to contact */
 "add_contact_default_message_text" = "你好，请问可以成为你的联系人吗？";
 /* Add contat error */
-"add_contact_wrong_qr" = "无法从此二维码中找到 Tox ID";
+"add_contact_wrong_qr" = "这个二维码里没有 ID";
 
 /* User name text */
 "name" = "姓名";
@@ -149,7 +149,7 @@
 /* User status text */
 "status_title" = "状态";
 /* User Tox ID text */
-"my_tox_id" = "我的 Tox ID";
+"my_tox_id" = "你的 ID";
 /* User public key text */
 "public_key" = "公钥";
 /* Share Tox ID text */
@@ -175,7 +175,7 @@
 /* Chat button */
 "chat_send_button" = "发送";
 /* Chat notification toast */
-"chat_new_messages" = "↓ 新的消息";
+"chat_new_messages" = "新的消息";
 /* Chat call information */
 "chat_call_message" = "呼叫， ";
 /* Chat call information */
@@ -204,7 +204,7 @@
 /* Settings menu / screen name */
 "settings_about" = "关于";
 /* Settings menu / screen name */
-"settings_faq" = "FAQ";
+"settings_faq" = "常见问题";
 /* Settings menu / screen name */
 "settings_advanced_settings" = "高级设置";
 /* About screen menu */
@@ -214,9 +214,9 @@
 /* About screen menu */
 "settings_toxcore_version" = "Toxcore 版本";
 /* About screen menu */
-"settings_acknowledgements" = "Acknowledgements";
+"settings_acknowledgements" = "许可协议";
 /* Settings screen menu */
-"settings_autodownload_images" = "自动下载文件";
+"settings_autodownload_images" = "下载附件";
 /* Settings screen menu */
 "settings_autodownload_images_description" = "自动下载收到的文件。";
 /* Settings screen menu */
@@ -224,7 +224,7 @@
 /* Settings screen menu */
 "settings_notifications_description" = "当应用程序进入后台之后，您仍会接收到 10 分钟以内的通知。";
 /* Settings screen menu */
-"settings_udp_enabled" = "Enable UDP";
+"settings_udp_enabled" = "使用 UDP";
 /* Settings screen menu */
 "settings_restore_default" = "恢复默认设置";
 /* Settings screen autodownload images option */
@@ -232,10 +232,9 @@
 /* Settings screen autodownload images option */
 "settings_wifi" = "无线网络";
 /* Settings screen autodownload images option */
-"settings_using_wifi" = "使用无线网络";
+"settings_using_wifi" = "仅限 Wi-Fi";
 /* Settings screen autodownload images option */
-"settings_always" = "永远";
-
+"settings_always" = "始终";
 /* Profile settings menu */
 "change_password" = "修改密码";
 /* Profile settings menu */
@@ -260,13 +259,12 @@
 /* Source of photo to take */
 "photo_from_photo_library" = "图片库";
 /* Error while converting avatar image */
-"change_avatar_error_convert_image" = "无法转换图像";
-
+"change_avatar_error_convert_image" = "无法处理这张图片。请换一张照片。";
 /* Alert text when sending file to contacts */
 "file_send_to_contact" = "发送给联系人";
 
 /* Profile menu item */
-"export_profile" = "导出用户档案";
+"export_profile" = "导出档案";
 /* Profile menu item */
 "delete_profile" = "删除用户档案";
 /* Delete profile confirmation */
@@ -297,11 +295,11 @@
 /* Deleting contat request confirmation */
 "delete_contact_request_title" = "删除这个联系人请求？";
 /* Deleting single message in chat */
-"delete_single_message" = "Delete Message";
+"delete_single_message" = "删除消息";
 /* Deleting multiple messages in chat. */
-"delete_multiple_messages" = "Delete Messages";
+"delete_multiple_messages" = "删除消息";
 /* Deleting all messages in chat. */
-"delete_all_messages" = "Delete All";
+"delete_all_messages" = "全部删除";
 /* Delete button */
 "alert_delete" = "删除";
 /* Delete button */
@@ -373,9 +371,9 @@
 /* Error */
 "error_contact_request_already_sent" = "联系人请求已发送";
 /* Error */
-"error_contact_request_bad_checksum" = "无效的校验值，请检查你输入的 Tox ID";
+"error_contact_request_bad_checksum" = "ID 有错字或没有完整复制。请重新复制。";
 /* Error */
-"error_contact_request_new_nospam" = "该 Tox ID 已更改反垃圾设置，请核实";
+"error_contact_request_new_nospam" = "该联系人已更换防骚扰码，请核对 ID";
 
 /* Call error */
 "call_error_already_in_call" = "正在通话中";
@@ -388,31 +386,31 @@
 "theme_error_cannot_open" = "无法开启主题，格式错误";
 
 /* Tab chats badge ending */
-"accessibility_chats_ending" = "unread chats";
+"accessibility_chats_ending" = "个未读聊天";
 /* Avatar button label in settings */
-"accessibility_avatar_button_label" = "Avatar";
+"accessibility_avatar_button_label" = "头像";
 /* Avatar button hint in settings */
-"accessibility_avatar_button_hint" = "Sets or removes avatar.";
+"accessibility_avatar_button_hint" = "设置或移除头像。";
 /* Chat button label in contact screen */
-"accessibility_chat_button_label" = "Chat";
+"accessibility_chat_button_label" = "聊天";
 /* Chat button hint in contact screen */
-"accessibility_chat_button_hint" = "Opens chat dialog.";
+"accessibility_chat_button_hint" = "打开聊天。";
 /* Call button label in contact screen */
-"accessibility_call_button_label" = "Audio call";
+"accessibility_call_button_label" = "语音通话";
 /* Call button hint in contact screen */
-"accessibility_call_button_hint" = "Makes audio call.";
+"accessibility_call_button_hint" = "发起语音通话。";
 /* Video button label in contact screen */
-"accessibility_video_button_label" = "Video call";
+"accessibility_video_button_label" = "视频通话";
 /* Video button hint in contact screen */
-"accessibility_video_button_hint" = "Makes video call.";
+"accessibility_video_button_hint" = "发起视频通话。";
 /* Tap to copy hint */
-"accessibility_show_copy_hint" = "Shows copy menu.";
+"accessibility_show_copy_hint" = "显示复制菜单。";
 /* Tap to edit value hint */
-"accessibility_edit_value_hint" = "Edits value.";
+"accessibility_edit_value_hint" = "编辑此项。";
 /* Incoming message label */
-"accessibility_incoming_message_label" = "Message";
+"accessibility_incoming_message_label" = "消息";
 /* Outgoing message label */
-"accessibility_outgoing_message_label" = "Your message";
+"accessibility_outgoing_message_label" = "你的消息";
 /* Text shown in chat when there are undelivered faux offline messages */
 "chat_pending_faux_offline_messages" = "当您和朋友都在线时，将发送未送达的消息。";
 /* Message shown on chat list when contact is typing */
@@ -425,9 +423,8 @@
 "group_voice_hold_to_record" = "按住麦克风按钮录制语音消息";
 "group_live_video_toggle_active" = "实时视频已开启";
 "group_live_video_toggle_incoming" = "有实时视频传入";
-"group_live_video_streams_empty" = "streams:0";
-"group_live_video_streams_format" = "streams:%llu
-%@";
+"group_live_video_streams_empty" = "暂无视频";
+"group_live_video_streams_format" = "视频：%llu\n%@";
 "group_video_join_title" = "加入群组视频？";
 "group_video_join_message" = "向群组中的所有人发送您的视频和音频？";
 "group_video_join_confirm" = "是，开始视频";
@@ -459,7 +456,7 @@
 "onboarding_decentralized_subtitle" = "消息不会存在服务器上，完全去中心化";
 "onboarding_next" = "下一步";
 "onboarding_create_account" = "创建账号";
-"contacts_copy_myid" = "复制 MyID";
+"contacts_copy_myid" = "复制 ID";
 "chat_encryption_badge" = "Tox 协议";
 "chat_encryption_info" = "所有聊天数据都受 Tox 端到端加密保护，除了你和对方，谁都看不到";
 "create_account_screen_title" = "创建资料";
@@ -489,8 +486,8 @@
 "global_search_section_chats" = "联系人和群组：";
 "global_search_section_messages" = "消息：";
 "global_search_no_results" = "未找到结果";
-"add_contact_own_id_error" = "不能添加自己的 Tox ID。请在第二台设备上使用另一个资料，或者导出／导入同一个资料（同一时间只能有一台设备在线）。";
-"add_contact_myid_label" = "对方的 MyID";
+"add_contact_own_id_error" = "不能添加自己的 ID。请在第二台设备上使用另一个资料，或者导出／导入同一个资料（同一时间只能有一台设备在线）。";
+"add_contact_myid_label" = "对方的 ID";
 "add_contact_use_qr_gallery" = "从相册选取 QR 码";
 "add_contact_paste" = "从剪贴板粘贴";
 "add_contact_paste_short" = "粘贴";
@@ -498,9 +495,9 @@
 "add_contact_invalid_id_format" = "ID 格式无效";
 "add_contact_already_friend" = "该联系人已在你的列表中。";
 "add_contact_request_already_pending" = "已向该联系人发送过好友请求，正在等待对方确认。";
-"add_contact_public_key_only_hint" = "你只输入了公钥。请求会使用 nospam=0，除非对方正好使用这个 ID，否则可能收不到。建议使用对方资料里完整的 76 位 MyID。";
+"add_contact_public_key_only_hint" = "你只输入了公钥。请求可能送不到：请向对方要他资料里完整的 76 位 ID。";
 "qr_screen_title" = "我的二维码";
-"qr_my_id_heading" = "你账号的 MyID";
+"qr_my_id_heading" = "你的 ID";
 "qr_my_id_subtitle" = "好友扫描你的 QR 码就能给你发消息";
 "chat_draft_prefix" = "草稿：%@";
 "status_last_seen_just_now" = "刚刚在线";
@@ -509,13 +506,13 @@
 "status_last_seen_long_ago" = "很久没上线了";
 "settings_website" = "官网";
 "settings_longer_bg_mode" = "延长后台运行";
-"settings_longer_bg_mode_description" = "开启后，应用会在后台运行更久，以便把消息发完，但也会暴露更多与你有关的元数据：你的 IP 地址会和你的 PUSH 令牌关联起来。这是便利与元数据隐私之间的取舍。\n\n你可以使用 VPN 来避免这一点。";
-"settings_profile_backup_description" = "导出或导入你的 Tox 资料（.tox）。其中只包含你的 Tox ID 和联系人，聊天记录不会一起转移。";
+"settings_longer_bg_mode_description" = "离开应用后，消息有更多时间发出，但通知服务器会知道这部手机连接的网络。";
+"settings_profile_backup_description" = "导出或导入你的 Tox 资料（.tox）。其中只包含你的 ID 和联系人，聊天记录不会一起转移。";
 "settings_import_profile_invalid_file" = "所选文件不是有效的 Tox 资料（.tox）。";
 "settings_dark_theme" = "深色主题";
 "settings_group_system_messages" = "群组系统消息";
 "settings_group_system_messages_description" = "在群聊中显示加入、退出等系统提示。";
-"settings_call_audio_vpio" = "新版通话音频引擎（修复回声和音量）";
+"settings_call_audio_vpio" = "回声消除和音量均衡";
 "settings_udp_restart_title" = "需要重启";
 "settings_udp_restart_enable_message" = "UDP 在 iOS 上还是实验功能，可能导致崩溃。应用将重启以应用此设置。重启完成前请留在 Khandaq 中。";
 "settings_udp_restart_disable_message" = "应用将重启以应用网络设置。重启完成前请留在 Khandaq 中。";
@@ -529,8 +526,8 @@
 "attach_location" = "位置";
 "file_send_to_group" = "发送到群组";
 "group_select_no_groups" = "暂无群组";
-"share_extension_preparing" = "正在准备分享…";
-"share_extension_open_app" = "正在打开 Khandaq…";
+"share_extension_preparing" = "正在准备分享...";
+"share_extension_open_app" = "正在打开 Khandaq...";
 "share_extension_failed" = "无法分享到 Khandaq";
 "chat_file_download_failed" = "下载失败";
 "delete_selected_chats_title" = "删除所选的 %d 个聊天？";
@@ -541,9 +538,9 @@
 "chat_edit_action" = "编辑";
 "message_edit_save" = "保存";
 "message_edited_marker" = "已编辑";
-"group_msg_sender_unverified" = "来自历史转发 — 发送者未验证";
+"group_msg_sender_unverified" = "来自历史转发，发送者未验证";
 "alert_ok" = "确定";
-"video_send_preparing" = "正在准备视频…";
+"video_send_preparing" = "正在准备视频...";
 "video_send_preparation_failed" = "无法准备要发送的视频。";
 "video_send_too_large" = "视频太大（最大 500 MB）。";
 "video_send_busy" = "还有一个视频正在准备中，请稍候。";
@@ -551,7 +548,7 @@
 "video_send_cancel" = "取消";
 "file_transfer_stalled" = "文件传输卡住了，可以取消后重试。";
 "media_send_button" = "发送";
-"media_send_caption_hint" = "添加说明…";
+"media_send_caption_hint" = "添加说明...";
 "media_send_counter_format" = "%1$d / %2$d";
 "call_error_codec" = "无法初始化音频或视频编解码器";
 "call_error_connection" = "无法与对方同步，请重试。";
@@ -574,8 +571,8 @@
 "group_join_action" = "加入";
 "group_join_invalid_id" = "聊天ID必须是64位十六进制字符。";
 "group_create_failed" = "无法创建群组。";
-"group_create_in_progress" = "正在创建群组…";
-"launch_loading" = "加载中…";
+"group_create_in_progress" = "正在创建群组...";
+"launch_loading" = "加载中...";
 "group_join_failed" = "无法加入群组。";
 "group_join_fail_peer_limit" = "该群组已满，人数已达上限。";
 "group_join_fail_invalid_password" = "群组密码不正确。";
@@ -585,12 +582,12 @@
 "group_chat_default_title" = "群组";
 "group_chat_list_subtitle" = "群聊";
 "group_chat_list_private" = "私密";
-"group_chat_list_disconnected" = "连接中…";
+"group_chat_list_disconnected" = "连接中...";
 "group_chat_list_private_unread_format" = "%d条私信未读";
-"group_disconnected_banner" = "正在连接群组…连接成功后消息将自动发送。";
-"group_connecting_banner_format" = "正在连接群组…（第%d次尝试）";
+"group_disconnected_banner" = "正在连接群组。连接后消息会发出。";
+"group_connecting_banner_format" = "正在连接群组，第 %d 次尝试";
 "group_member_count_format" = "%d名成员";
-"group_member_online_count_format" = "%d名成员 · %d人在线";
+"group_member_online_count_format" = "%d名成员，%d人在线";
 "group_send_observer_role" = "你在该群组中是观察者，无法发送消息。请让管理员将你的角色改为成员。";
 "group_my_peer_name_header" = "你在群组中的名称";
 "group_my_peer_name_placeholder" = "输入显示名称";
@@ -603,10 +600,10 @@
 "group_info_title" = "群组信息";
 "group_chat_id_header" = "聊天ID";
 "group_chat_id_footer" = "分享此ID，其他人即可加入群组。";
-"group_chat_id_loading" = "加载中…";
+"group_chat_id_loading" = "加载中...";
 "group_members_header" = "成员";
 "group_members_header_format" = "成员（%d）";
-"group_members_header_online_format" = "成员：%1$d · %2$d人在线";
+"group_members_header_online_format" = "成员：%1$d，在线：%2$d";
 "group_members_empty" = "暂无成员";
 "group_member_list_title" = "成员";
 "group_member_status_offline" = "离线";
@@ -624,8 +621,8 @@
 "chat_pinned_banner_title" = "置顶消息";
 "chat_copy_action" = "复制";
 "chat_select_action" = "选择";
-"chat_forwarded_from_format" = "↪ 转发自%@";
-"chat_forwarded_noname" = "↪ 已转发";
+"chat_forwarded_from_format" = "转发自%@";
+"chat_forwarded_noname" = "已转发";
 "saved_messages_title" = "收藏夹";
 "chat_reply_cancel" = "取消回复";
 "chat_reply_header" = "回复%@";
@@ -635,7 +632,7 @@
 "group_messages_copy_action" = "复制";
 "network_connections_title" = "网络连接";
 "network_connections_summary" = "DHT、中继、重连日志";
-"network_connections_loading" = "正在加载网络状态…";
+"network_connections_loading" = "正在加载网络状态...";
 "network_connections_beta_notice" = "连接事件日志与运行质量指标。iOS上暂不支持完整的UDP/TCP转储。";
 "group_peer_fallback_format" = "成员%d";
 "group_error_disconnected" = "群组尚未连接，请稍等片刻再试。";
@@ -764,7 +761,7 @@
 "nav_edit_start" = "编辑";
 "nav_edit_done" = "完成";
 
-/* KHANDAQ (user request 17.08): the attachments screen — files / audio / voice notes */
+/* KHANDAQ (user request 17.08): the attachments screen, files / audio / voice notes */
 "attachments_title" = "附件";
 "attachments_documents" = "文件";
 "attachments_audio" = "音频";
@@ -772,9 +769,688 @@
 "attachments_empty" = "这里还没有内容";
 "attachments_not_downloaded" = "此文件尚未下载。";
 
-/* KHANDAQ (18.08): About screen — owner/developer credit, links to https://1sa.me/ */
+/* KHANDAQ (18.08): About screen, owner/developer credit, links to https://1sa.me/ */
 "settings_credit_owner" = "所有者与开发者：Isa Dagestani";
 
 /* KHANDAQ (re-review 2026-08-22, KQ-03): shown INSTEAD of the sender name when relayed
    history names an author whose signing key is stale. The row is kept; the identity is not. */
-"group_msg_relayed_unattributed" = "转发的历史记录 — 作者未验证";
+"group_msg_relayed_unattributed" = "转发的历史记录，作者未验证";
+
+/* KHANDAQ redesign (B): the theme is a choice of three; a sheet names the current choice. */
+"settings_theme" = "主题";
+"settings_theme_system" = "跟随系统";
+"settings_theme_light" = "浅色";
+"settings_theme_dark" = "深色";
+"settings_choice_current" = "当前：%@";
+
+/* KHANDAQ redesign (B): the Air screen, one list for people, groups and requests. */
+"air_command_placeholder" = "查找聊天或粘贴 ID";
+"air_create" = "创建";
+"air_new_contact" = "新联系人";
+"air_you" = "你";
+"air_you_hint" = "打开你的个人资料";
+"air_net_direct" = "在线，直连";
+"air_net_relay" = "在线，经中继服务器";
+"air_net_connecting" = "连接中";
+"air_net_offline" = "无网络：消息将等待发送";
+"air_filter_all" = "全部";
+"air_filter_requests" = "请求";
+"air_filter_transit" = "传送中";
+"air_section_live" = "当前在线";
+"air_section_away" = "离线";
+"air_section_saved" = "仅自己";
+"air_section_messages" = "消息";
+"air_request_tag" = "收到的请求";
+"air_request_key_format" = "密钥 %@。接受请求后即可看到对方的名字";
+"air_reach_live" = "在线";
+"air_reach_relay" = "在线，经中继";
+"air_reach_pending" = "等待回复";
+"air_reach_connecting" = "连接中";
+"air_reach_group_online" = "%d 人在线";
+"air_reach_group_none" = "无人在线";
+"air_reach_just_now" = "刚刚";
+"air_reach_minutes" = "%d 分钟前";
+"air_reach_hours" = "%d 小时前";
+"air_reach_days" = "%d 天前";
+"air_reach_long_ago" = "很久以前";
+"air_delivery_transit" = "传送中";
+"air_delivery_sent" = "已发送";
+"air_delivery_delivered" = "已送达";
+"air_transit_format" = "%d 条传送中";
+"air_unread_a11y" = "未读：%d";
+"air_hint_request_sent" = "请求已发送";
+"air_hint_saved" = "仅保存在此设备上";
+"air_hint_no_messages" = "暂无消息";
+"air_menu_select" = "选择";
+"air_menu_remove_contact" = "删除联系人";
+"air_selected_format" = "已选择：%d";
+"air_empty_nothing_title" = "这里还没有人";
+"air_empty_nothing_body" = "把对方的 ID 粘贴到顶部的输入框，或打开“新联系人”。";
+"air_empty_no_match_title" = "没有找到";
+"air_empty_no_match_body" = "名字和消息内容都没有匹配项。如果这是一个 ID，请确认它是完整的：76 个字符。";
+"air_empty_no_requests_title" = "没有请求";
+"air_empty_no_requests_body" = "收到的请求，以及你发出但仍在等待回复的请求，会显示在这里。";
+"air_empty_no_transit_title" = "全部已送达";
+"air_empty_no_transit_body" = "等待对方上线的消息会集中在这里。";
+"air_empty_no_favorites_title" = "收藏为空";
+"air_empty_no_favorites_body" = "在聊天的菜单中标记它，它就会出现在这里。";
+"air_empty_show_all" = "显示全部聊天";
+
+/* KHANDAQ redesign (B), stage 2: the conversation, the tray, the composer and the dossier. */
+"air_chat_call" = "语音通话";
+"air_chat_dossier_hint" = "打开档案：连接、过去 24 小时、密钥";
+"air_chat_jump_latest" = "跳到最新消息";
+"air_chat_search" = "搜索聊天记录";
+"air_chat_video" = "视频通话";
+"air_compose_attach" = "附加文件";
+"air_compose_bytes_left" = "还剩 %d 字节";
+"air_compose_bytes_over" = "超出上限 %d 字节";
+"air_compose_hint_live_format" = "会立即发出：%@ 在线";
+"air_compose_hint_saved" = "笔记只保存在此设备上";
+"air_compose_hint_wait_format" = "将在传送中等待：%@ 不在线，之后会自动发出";
+"air_compose_placeholder" = "消息";
+"air_compose_send" = "发送";
+"air_compose_send_blocked" = "消息超出长度上限，请缩短后再发送";
+"air_compose_voice" = "语音消息";
+"air_day_a11y_format" = "在线时段：%@";
+"air_day_a11y_none" = "没有记录";
+"air_day_best_format" = "通常 %d:00 至 %d:00";
+"air_day_empty" = "暂无记录";
+"air_day_hint_ranges_format" = "过去 24 小时：%@";
+"air_day_note" = "此手机会记下看到对方在线的小时。记录只保存在这里，保留七天。";
+"air_day_now_online" = "现在在线";
+"air_day_range_format" = "%d:00 至 %d:00";
+"air_day_title" = "过去 24 小时";
+"air_delivery_failed" = "未发送";
+"air_delivery_sending" = "发送中";
+"air_dossier_best_format" = "最佳联系时间：%d:00 至 %d:00，对方通常在这段时间在线。";
+"air_dossier_block" = "屏蔽";
+"air_dossier_close_hint" = "关闭档案";
+"air_dossier_copy_key" = "复制密钥";
+"air_dossier_day_title" = "过去 24 小时";
+"air_dossier_files_title" = "文件";
+"air_dossier_key_copied" = "密钥已复制";
+"air_dossier_key_title" = "密钥";
+"air_dossier_link_direct" = "直连，不经中继服务器。";
+"air_dossier_link_none" = "当前未连接。消息会在传送中等待，之后自动发出。";
+"air_dossier_link_relay" = "经中继服务器。它只转发加密消息，看不到内容。";
+"air_dossier_link_title" = "连接";
+"air_dossier_mute" = "静音";
+"air_dossier_not_verified" = "尚未核对密钥。";
+"air_dossier_notifications_title" = "通知";
+"air_dossier_push_off" = "不会有通知：对方的应用没有开启通知。对方打开 Khandaq 时消息才会送达。";
+"air_dossier_push_on_format" = "通知可以送达。%@ 不在线时，手机会收到不含文字的信号，并自行取回消息。";
+"air_dossier_qr" = "二维码";
+"air_dossier_remove" = "删除";
+"air_dossier_remove_message" = "聊天记录会从此设备删除。若要再次互发消息，需要重新发送请求。";
+"air_dossier_remove_title_format" = "删除联系人 %@？";
+"air_dossier_rename" = "重命名";
+"air_dossier_unverify" = "取消核对";
+"air_dossier_verified_format" = "已于 %@ 核对密钥。";
+"air_dossier_verify" = "核对";
+"air_dossier_verify_title" = "核对密钥";
+"air_failed_item_hint" = "打开此消息的操作";
+"air_failed_retry" = "未发送。重试";
+"air_failed_retry_hint" = "再次发送此消息";
+"air_link_direct" = "直连";
+"air_link_none" = "未连接";
+"air_link_relay" = "经中继连接";
+"air_path_relay" = "中继";
+"air_pin_jump_hint" = "在聊天中显示置顶消息";
+"air_pin_remove" = "取消置顶";
+"air_presence_away_days" = "已离线 %d 天";
+"air_presence_away_hours" = "已离线 %d 小时";
+"air_presence_away_just_now" = "刚刚离线";
+"air_presence_away_long" = "已离线超过一周";
+"air_presence_away_minutes" = "已离线 %d 分钟";
+"air_presence_direct" = "在线，直连";
+"air_presence_direct_since_format" = "%@ 起在线，直连";
+"air_presence_pending" = "等待对方回应请求";
+"air_presence_relay" = "在线，经中继";
+"air_presence_relay_since_format" = "%@ 起在线，经中继";
+"air_presence_typing" = "正在输入";
+"air_qr_key_heading_format" = "密钥：%@";
+"air_qr_key_subtitle" = "请与对方个人资料中的 ID 核对：前 64 个字符应一致。";
+"air_retry" = "重试";
+"air_tray_cancel" = "取消发送";
+"air_tray_collapse_hint" = "收起列表";
+"air_tray_departed" = "传送中的消息已发出";
+"air_tray_edit_unavailable" = "此消息无法编辑";
+"air_tray_expand_hint" = "显示传送中的消息";
+"air_tray_head_format" = "传送中：%d 条消息";
+"air_tray_item_hint" = "发出前可以编辑或取消";
+"air_tray_wait_format" = "%@ 上线后会自动发出。";
+"air_tray_wait_push_format" = "%@ 上线后会自动发出。对方手机会收到不含文字的信号，并自行取回。";
+"air_verify_match" = "一致";
+"air_verify_message" = "请对方读出其个人资料中的 ID。如果前 64 个字符与下方密钥一致，说明你联系的就是本人。";
+"air_verify_title" = "核对密钥";
+"air_day_today" = "今天";
+"air_day_yesterday" = "昨天";
+
+/* KHANDAQ redesign (B), stage 3: block, privacy, refused messages. */
+"air_dossier_block_title_format" = "屏蔽 %@？";
+"air_dossier_block_message" = "联系人和对话将从此设备删除，此密钥发来的新请求也不会再显示。";
+"air_dossier_block_hint" = "会先确认，然后删除联系人并隐藏此密钥的请求";
+"air_privacy_title" = "隐私";
+"air_blocked_title" = "已屏蔽";
+"air_blocked_none" = "无";
+"air_blocked_count_format" = "%d";
+"air_blocked_section_note" = "不会显示来自已屏蔽密钥的请求。此列表只保存在这台设备上。";
+"air_blocked_empty" = "你在联系人档案中屏蔽的密钥会显示在这里。";
+"air_blocked_note" = "不会显示来自这些密钥的请求。取消屏蔽不会恢复联系人，需要重新发送请求。";
+"air_blocked_unblock" = "取消屏蔽";
+"air_blocked_unblocked" = "已取消屏蔽此密钥";
+
+/* KHANDAQ redesign (B), stage 3: new contact and the command line. */
+"air_nc_id_label" = "对方的 ID";
+"air_nc_id_placeholder" = "粘贴 ID：76 个字符，由数字和字母 A 到 F 组成";
+"air_nc_ruler_key" = "公钥";
+"air_nc_ruler_antispam" = "防骚扰码";
+"air_nc_ruler_check" = "校验";
+"air_nc_ruler_part_format" = "%1$@：%2$d/%3$d";
+"air_nc_verdict_empty" = "空格、换行和 tox: 前缀都可以保留，输入框会自动清理。";
+"air_nc_verdict_left" = "还差 %d 个字符。";
+"air_nc_verdict_bad" = "校验不符：ID 有错字或没有完整复制。请重新复制。";
+"air_nc_verdict_own" = "这是您自己的 ID：应把它发给对方，而不是添加。";
+"air_nc_verdict_contact_format" = "%@ 已在联系人中。";
+"air_nc_verdict_they_asked" = "此人已向您发送了请求，它在「请求」中等待。";
+"air_nc_verdict_blocked" = "此公钥已在本设备上被屏蔽。发送请求将解除屏蔽。";
+"air_nc_verdict_ok" = "ID 无误。对方一上线，请求就会发出。";
+"air_nc_why_whole" = "请先粘贴完整的 ID：76 个字符。";
+"air_nc_why_own" = "不能添加自己的 ID。";
+"air_nc_why_fix" = "请先更正 ID。";
+"air_nc_why_contact" = "此人已在联系人中。";
+"air_nc_why_they_asked" = "请在「请求」中接受对方的请求。";
+"air_nc_open_chat" = "打开聊天";
+"air_nc_open_requests" = "打开「请求」";
+"air_nc_paste" = "粘贴";
+"air_nc_scan" = "扫描二维码";
+"air_nc_scan_photo" = "从照片识别二维码";
+"air_nc_wrong_qr" = "此二维码中没有 ID。";
+"air_nc_message_label" = "随请求发送的消息";
+"air_nc_message_note" = "对方会在接受请求前看到它。留空则发送框中的问候语。";
+"air_nc_message_too_long" = "对请求来说太长了，请缩短消息。";
+"air_nc_send" = "发送请求";
+"air_nc_own_title" = "您的 ID";
+"air_nc_own_note" = "把它发给想添加您的人。";
+"air_nc_copy" = "复制";
+"air_nc_copied" = "ID 已复制";
+"air_nc_sent_title" = "请求正在路上";
+"air_nc_sent_text" = "对方一上线，请求就会发出。对方接受后才会显示其名字。在此之前，对方在列表中显示为「等待回复」。";
+"air_nc_accepted_title" = "请求已接受";
+"air_nc_accepted_text_format" = "%@ 已在联系人中，现在可以发消息了。";
+"air_nc_them" = "对方";
+"air_nc_done" = "完成";
+"air_nc_path_label_format" = "您和%@，尚未连接";
+"air_nc_path_live_format" = "您和%@，已连接";
+"air_cmd_new_contact" = "用此 ID 新建联系人";
+"air_cmd_id_ok" = "ID 无误";
+"air_cmd_id_left" = "还差 %d 个字符";
+"air_cmd_id_own" = "这是您的 ID";
+"air_cmd_id_bad" = "校验不符";
+"air_cmd_id_contact" = "已在联系人中";
+"air_nc_clear" = "清除";
+
+/* KHANDAQ redesign (B), stage 3: requests and group invitations. */
+"air_invite_tag" = "群组邀请";
+"air_invite_from_format" = "%@ 邀请你加入。";
+"air_invite_wait_format" = "%@ 在线时才能加入。";
+"air_invite_join" = "加入";
+"air_request_declined" = "已拒绝请求";
+"air_invite_declined" = "已拒绝邀请";
+"air_undo" = "撤销";
+
+/* Redesign stage 3, E13 to E15: groups */
+"air_group_role_founder" = "创建者";
+"air_group_role_moderator" = "管理员";
+"air_group_role_user" = "成员";
+"air_group_role_observer" = "旁观者";
+"air_group_you_founder" = "你创建了这个群组：可以任命管理员，把任何人设为成员或旁观者，移除成员，并更改群组设置。";
+"air_group_you_moderator" = "你是管理员：可以把成员设为旁观者、把旁观者设为成员，也可以将他们移出群组。";
+"air_group_you_user" = "你是成员：可以在群组中发言，群组由创建者和管理员管理。";
+"air_group_you_observer" = "你是旁观者：可以阅读群组，但不能发言。管理员可以授予你发言权。";
+"air_group_members_count" = "%d 位成员";
+"air_group_header_format" = "%1$@，%2$d 人在线";
+"air_group_header_none_format" = "%@，当前无人在线";
+"air_group_header_offline_format" = "%@，未连接到群组";
+"air_group_hint_offline" = "未连接到群组：消息会留在本设备，连接后发出";
+"air_group_hint_alone" = "群组里目前只有你：可在群组资料中邀请他人";
+"air_group_hint_none" = "当前无人在线：成员上线后会收到";
+"air_group_hint_all_format" = "%d 人全部在线，会立即收到";
+"air_group_hint_format" = "现在有 %1$d 人（共 %2$d 人）会收到，其他人上线后收到";
+"air_group_get_now" = "立即收到";
+"air_group_get_now_spoken_format" = "立即收到：%@";
+"air_group_dossier_hint" = "打开群组资料";
+"air_group_read_only_observer" = "只读。你是旁观者：管理员可以授予你发言权。";
+"air_group_read_only_moderators" = "只读。这里只有管理员和创建者可以发言。";
+"air_group_read_only_founder" = "只读。这里只有创建者可以发言。";
+"air_group_ask_moderator" = "联系管理员";
+"air_group_ask_founder" = "联系创建者";
+"air_group_ask_nobody" = "暂不知道该群组的管理员";
+"air_group_observer_no_private" = "旁观者不能在这里发言，私信也不行：请在群组之外联系管理员。";
+"air_group_member_status_format" = "%1$@，%2$@";
+"air_group_member_offline" = "离线";
+"air_group_member_you_format" = "%@（你）";
+"air_group_member_hint" = "打开对该成员的操作";
+"air_group_dossier_title" = "群组";
+"air_group_your_role" = "你的角色";
+"air_group_who_gets_now" = "谁会立即收到消息";
+"air_group_who_gets_now_note_format" = "当前在线 %1$d 人（共 %2$d 人），其他人上线后会收到消息。";
+"air_group_members" = "成员";
+"air_group_search_members" = "查找成员";
+"air_group_nobody_found" = "没有这个名字的成员";
+"air_group_key" = "群组密钥";
+"air_group_copy_key" = "复制";
+"air_group_invite" = "邀请";
+"air_group_key_copied" = "群组密钥已复制";
+"air_group_qr_heading_format" = "群组 %@";
+"air_group_qr_subtitle" = "扫描即可按密钥找到群组";
+"air_group_muted_note" = "不会通知此群组的新消息，未读数仍显示在列表中。";
+"air_group_unmuted_note" = "此群组的新消息会通知你。";
+"air_group_history" = "历史";
+"air_group_history_note" = "你不在时写的消息由其他成员转交。如果作者签名无法验证，消息会标注发送者未确认。";
+"air_group_remove_system_format" = "删除系统消息：%d 条";
+"air_group_remove_system_message" = "将从本设备删除加入、退出和群组变更的通知。";
+"air_group_remove_system_action" = "删除";
+"air_group_clear_history" = "清空历史";
+"air_group_clear_history_title" = "清空此群组的历史？";
+"air_group_clear_history_message" = "消息只会从本设备删除，成员那里仍会保留。";
+"air_group_settings" = "群组设置";
+"air_group_settings_detail" = "你在群组中的名字、主题、谁能加入、谁能发言";
+"air_group_leave" = "退出群组";
+"air_group_leave_note" = "将不再收到群组消息，历史记录会从本设备删除。";
+"air_group_leave_title_format" = "退出 %@？";
+"air_group_leave_message" = "成员会看到你已退出。要回来，需要邀请或群组密钥。";
+"air_group_write_privately" = "私信";
+"air_group_add_contact" = "添加为联系人";
+"air_group_contact_added_format" = "已将 %@ 添加为联系人";
+"air_group_copy_member_key" = "复制密钥";
+"air_group_member_key_copied" = "密钥已复制";
+"air_group_member_mute" = "在此群组中静音";
+"air_group_member_unmute" = "在此群组中取消静音";
+"air_group_member_muted_format" = "已在此群组中将 %@ 静音";
+"air_group_member_unmuted_format" = "已取消 %@ 的静音";
+"air_group_make_moderator" = "设为管理员";
+"air_group_make_user" = "设为成员";
+"air_group_make_observer" = "设为旁观者";
+"air_group_kick" = "移出群组";
+"air_group_make_moderator_title_format" = "将 %@ 设为管理员？";
+"air_group_make_moderator_message" = "管理员可以把成员设为旁观者或恢复为成员，也可以移除他们。";
+"air_group_make_user_title_format" = "将 %@ 设为成员？";
+"air_group_make_user_message" = "成员可以在群组中发言，但不能管理群组。";
+"air_group_make_observer_title_format" = "将 %@ 设为旁观者？";
+"air_group_make_observer_message" = "旁观者可以阅读群组，但不能发言。";
+"air_group_kick_title_format" = "将 %@ 移出群组？";
+"air_group_kick_message" = "将不再收到群组消息。要回来需要新的邀请，或在开放群组中使用群组密钥。";
+"air_group_now_moderator_format" = "%@ 现在是管理员";
+"air_group_now_user_format" = "%@ 现在是成员";
+"air_group_now_observer_format" = "%@ 现在是旁观者";
+"air_group_kicked_format" = "%@ 已不在群组中";
+"air_group_invite_title" = "邀请加入群组";
+"air_invite_online_note" = "邀请通过你与联系人的连接发送，因此只能邀请当前在线的联系人。";
+"air_invite_choose_first" = "请选择要邀请的人";
+"air_invite_send_format" = "邀请 %d 人";
+"air_invite_sent" = "已发送 %d 份邀请";
+"air_invite_already_member" = "已在群组中";
+"air_invite_when_online" = "上线后可邀请";
+"air_invite_no_contacts" = "还没有联系人：请先添加联系人。";
+"air_invite_nobody_found" = "没有这个名字的联系人";
+"air_invite_search" = "查找联系人";
+"air_new_group_title" = "新建群组";
+"air_new_group_name" = "名称";
+"air_new_group_name_placeholder" = "例如：读书会";
+"air_new_group_name_note" = "所有受邀者都会看到。之后可以修改主题，但不能修改名称。";
+"air_new_group_privacy" = "谁可以加入";
+"air_group_privacy_invite_only" = "仅限邀请";
+"air_group_privacy_invite_only_note" = "只有成员邀请的人才能加入。";
+"air_group_privacy_open" = "持有群组密钥即可加入";
+"air_group_privacy_open_note" = "任何持有群组密钥的人都可以加入，无需邀请。";
+"air_new_group_invite_note" = "邀请会立即发送，因此这里只能邀请在线的联系人。其他人可稍后在群组资料中邀请。";
+"air_new_group_create" = "创建群组";
+"air_new_group_create_invite_format" = "创建并邀请 %d 人";
+"air_new_group_name_first" = "请先为群组命名";
+"air_new_group_name_too_long" = "群组名称过长：请缩短";
+"air_group_author_role_format" = "%1$@，%2$@";
+"air_group_author_unconfirmed" = "作者未确认";
+"air_group_mentions_you" = "提到了你";
+"air_group_live_on" = "已开启";
+"air_group_hint_one_other" = "另一位成员在线，会立即收到";
+"air_group_open_chat" = "打开聊天";
+"air_group_author_unknown" = "群成员";
+
+/* Redesign stage 3: files, photos and voice notes in the transcript (E8) */
+"air_file_accept" = "接收";
+"air_file_decline" = "拒绝";
+"air_file_pause" = "暂停";
+"air_file_resume" = "继续";
+"air_file_cancel" = "取消";
+"air_file_retry_incoming" = "重新下载";
+"air_file_retry_outgoing" = "重新发送";
+"air_file_left_format" = "剩余 %@";
+"air_file_paused" = "已暂停";
+"air_file_failed_incoming" = "下载已中断";
+"air_file_failed_outgoing" = "未发送";
+"air_file_waits_accept_format" = "等待 %@ 接收";
+"air_file_waits_online_format" = "%@ 上线后发送";
+"air_size_bytes_format" = "%@ 字节";
+"air_size_kb_format" = "%@ KB";
+"air_size_mb_format" = "%@ MB";
+"air_size_gb_format" = "%@ GB";
+"air_group_file_limit_format" = "群组可接收不超过 %@ 的文件";
+"air_voice_listen" = "收听";
+"air_voice_pause" = "暂停";
+"air_voice_spoken" = "语音消息";
+"air_tray_file_format" = "%1$@，%2$@";
+
+/* Redesign stage 3: calls, their screens and their entries in the transcript (E9) */
+"air_call_entry_format" = "通话，%@";
+"air_call_missed" = "未接来电";
+"air_call_no_answer" = "无人接听";
+"air_call_offline_title_format" = "%@ 不在线：电话打不通";
+"air_call_offline_push" = "可以在这里等待：对方手机会收到一个不含文字的信号，对方上线后通话自动开始。";
+"air_call_offline_wait" = "可以在这里等待：对方上线后通话自动开始。";
+"air_call_wait_action" = "等待并呼叫";
+"air_call_waiting_format" = "正在等待 %@ 上线";
+"air_call_waiting_push" = "已向对方手机发送不含文字的信号。对方上线后通话会自动开始。";
+"air_call_waiting_no_push" = "对方上线后通话会自动开始。";
+"air_call_cancel" = "取消";
+"air_call_mic_title" = "没有麦克风权限";
+"air_call_mic_message" = "没有麦克风，对方听不到你。请在设置中允许：Khandaq，麦克风。";
+"air_call_camera_title" = "没有相机权限";
+"air_call_camera_message" = "没有相机，对方看不到你，通话可以只用声音进行。请在设置中允许：Khandaq，相机。";
+"air_call_open_settings" = "打开设置";
+"air_call_audio_only" = "不开视频呼叫";
+"air_call_calling" = "正在呼叫";
+"air_call_incoming" = "来电";
+"air_call_ended" = "通话已结束";
+"air_call_line_direct" = "直连";
+"air_call_line_relay" = "经中继连接";
+"air_call_line_none" = "当前没有连接";
+"air_call_decline" = "拒绝";
+"air_call_answer" = "接听";
+"air_call_answer_video" = "视频接听";
+"air_call_end" = "挂断";
+"air_call_mic" = "麦克风";
+"air_call_mic_on" = "已开启";
+"air_call_mic_off" = "已关闭";
+"air_call_speaker" = "扬声器";
+"air_call_speaker_on" = "已开启";
+"air_call_speaker_off" = "已关闭";
+"air_call_camera" = "相机";
+"air_call_camera_on" = "已开启";
+"air_call_camera_off" = "已关闭";
+"air_call_switch_camera" = "切换摄像头";
+
+/* Redesign stage 3, E17: You */
+"air_you_share" = "分享 ID";
+"air_you_copy" = "复制 ID";
+"air_you_copied" = "ID 已复制";
+"air_you_qr" = "你的 ID 二维码";
+"air_you_qr_hint" = "在另一部手机的“新联系人”中扫描";
+"air_you_photo" = "头像";
+"air_you_photo_hint" = "更换头像";
+"air_you_name" = "名字";
+"air_you_name_placeholder" = "你的名字";
+"air_you_status" = "状态";
+"air_you_status_placeholder" = "联系人能看到的一句话";
+"air_you_saved" = "已保存";
+"air_you_details" = "详细信息";
+"air_you_part_key" = "公钥";
+"air_you_part_antispam" = "防骚扰码";
+"air_you_part_check" = "校验";
+"air_you_antispam" = "更换防骚扰码";
+"air_you_antispam_title" = "更换防骚扰码？";
+"air_you_antispam_message" = "旧 ID 将不再接收新的请求。联系人会保留，ID 和二维码会更换。";
+"air_you_antispam_action" = "更换";
+"air_you_antispam_done" = "防骚扰码已更换：请分享新的 ID";
+"air_you_security" = "密码和 PIN 码";
+"air_you_logout" = "退出登录";
+"air_you_logout_title" = "退出此档案？";
+"air_you_logout_message" = "档案会留在这台设备上，之后可以用密码重新登录。";
+"air_you_delete" = "从这台设备删除档案";
+"air_you_delete_title" = "从这台设备删除档案？";
+"air_you_delete_message_format" = "%@：档案及其联系人和聊天记录会从这部手机上抹除。没有导出的副本就无法恢复。";
+"air_you_delete_action" = "删除";
+
+/* Settings by task (redesign stage 3, E18) */
+"air_settings_appearance" = "外观";
+"air_settings_notifications" = "通知";
+"air_settings_transfer" = "迁移档案";
+"air_settings_network" = "网络";
+"air_settings_debug" = "调试";
+"air_settings_group_events_detail" = "谁加入、离开或改了名字";
+"air_settings_preview" = "显示消息内容";
+"air_settings_preview_note" = "消息内容和文件名会显示在锁屏上。关闭后，通知只显示“新消息”。";
+"air_settings_transfer_note" = "档案文件包含你的 ID 和联系人。聊天记录留在这台设备上。";
+"air_settings_import_message" = "应用会退出此档案并打开文件中的档案。此档案会留在设备上，之后可以用密码重新登录。";
+"air_settings_import_action" = "选择文件";
+"air_settings_attachments_note" = "没有自动下载的文件会在聊天中等待“接收”。";
+"air_settings_calls" = "通话";
+
+/* Network state and in-app band (redesign stage 3, E4 and E22) */
+"air_network_title_direct" = "在线，直连";
+"air_network_title_relay" = "在线，经中继服务器";
+"air_network_title_connecting" = "连接中";
+"air_network_title_offline" = "无网络";
+"air_network_meaning_direct" = "消息立即发出，直接到达对方的手机。";
+"air_network_meaning_relay" = "消息立即发出，经中继服务器转发：当前网络不允许直连，但不影响送达。";
+"air_network_meaning_connecting" = "手机已联网，应用正在寻找网络。新消息在传送中等待，之后会自动发出。";
+"air_network_meaning_offline" = "手机没有网络。新消息在传送中等待，网络恢复后会发出。";
+"air_network_internet" = "互联网";
+"air_network_internet_yes" = "已连接";
+"air_network_internet_no" = "未连接";
+"air_network_link" = "连接方式";
+"air_network_link_direct" = "直连";
+"air_network_link_relay" = "经中继服务器";
+"air_network_link_none" = "暂无";
+"air_network_reconnect" = "重新连接";
+"air_network_reconnect_toast" = "正在重新连接";
+"air_network_log" = "供客服查看的日志";
+"air_network_log_note" = "连接的技术细节，客服需要时可查看。";
+"air_net_hint" = "打开网络状态";
+"air_compose_hint_self_connecting" = "将在传送中等待：应用正在连接，之后会自动发出";
+"air_compose_hint_self_offline" = "将在传送中等待：这台手机没有网络，之后会自动发出";
+"air_banner_hint" = "打开聊天";
+"air_banner_hint_request" = "打开请求";
+"notification_group_invite" = "邀请你加入群组";
+"notification_group_invite_format" = "邀请你加入群组 %@";
+"air_banner_hint_invite" = "打开邀请";
+
+/* Errors and confirmations (redesign stage 3, E21) */
+"error_failed_open_page" = "无法打开页面";
+"error_failed_open_profile" = "无法打开个人资料";
+"error_failed_name" = "无法更改名字";
+"error_failed_status" = "无法更改状态";
+"error_failed_add_contact" = "无法添加联系人";
+"error_failed_remove_contact" = "无法删除联系人";
+"error_failed_call" = "无法发起通话";
+"error_failed_export" = "无法导出个人资料";
+"error_failed_delete_profile" = "无法删除个人资料";
+"error_failed_password" = "密码不符合要求";
+"error_failed_answer" = "无法接听通话";
+"error_failed_speaker" = "无法打开扬声器";
+"error_failed_camera" = "无法打开摄像头";
+"error_failed_switch_camera" = "无法切换摄像头";
+"error_failed_photo" = "无法更换照片";
+"error_failed_send_message" = "消息未发送";
+"error_failed_join_group" = "无法加入群组";
+"error_failed_invite" = "无法邀请加入群组";
+"error_failed_kick" = "无法移除成员";
+"error_failed_leave_group" = "无法退出群组";
+"error_failed_role" = "无法更改角色";
+"error_failed_topic" = "无法更改话题";
+"error_failed_group_name" = "无法更改你在群组中的名字";
+"error_failed_group_settings" = "无法更改群组设置";
+"error_failed_send_file" = "文件未发送";
+"error_failed_accept_file" = "无法接收文件";
+"error_failed_cancel_file" = "无法取消传输";
+"error_failed_pause_file" = "无法暂停传输";
+"error_failed_pick_media" = "无法读取文件";
+"error_failed_generic" = "操作未成功";
+"error_pin_logout_title" = "你已退出个人资料";
+"error_try_again_message" = "请再试一次。";
+"error_details" = "详情";
+"error_details_format" = "支持代码：%@";
+"error_details_copy" = "复制";
+"error_try_again_support_message" = "请再试一次。如果仍然不行，请联系支持并附上详情。";
+"air_delete_chat_title" = "删除聊天？";
+"air_delete_chat_message" = "对话将从这台设备上删除，联系人会保留。";
+"air_delete_chats_message" = "这些对话将从这台设备上删除，你也会退出所选的群组。";
+
+/* A message in markup this build cannot read (redesign stage 3, item 10) */
+"air_message_unknown_format" = "这条消息的格式本应用暂时无法显示";
+
+/* The play control of a video in the media gallery, for VoiceOver (redesign stage 3, item 9) */
+"air_media_play_video" = "播放视频";
+
+/* First launch, sign-in, password, PIN and moving a profile in (redesign stage 4, E19 and E20) */
+"air_first_step_format" = "第 %1$ld 步，共 %2$ld 步";
+"air_first_name_title" = "怎么称呼你";
+"air_first_name_body" = "只有你添加的人能看到这个名字。";
+"air_first_name_placeholder" = "名字";
+"air_first_name_first" = "请先填写名字。";
+"air_first_next" = "下一步";
+"air_first_move_profile" = "从其他设备转移档案";
+"air_first_default_folder" = "档案";
+"air_first_password_title" = "档案密码";
+"air_first_password_body" = "密码无法找回：没有服务器。档案只保存在这台设备上。";
+"air_first_password_set" = "设置密码";
+"air_first_password_set_detail" = "档案只能用密码打开。有了密码，档案也可以转移到其他设备。";
+"air_first_password_skip" = "不设密码继续";
+"air_first_password_skip_detail" = "档案仍然是加密的：密钥保存在这部 iPhone 的钥匙串中。不需要密码就能打开，但只能在这里打开。要转移档案，请先设置密码。";
+"air_first_password_placeholder" = "密码";
+"air_first_repeat_placeholder" = "再次输入密码";
+"air_first_password_rule" = "至少 8 个字符，包含字母和数字。";
+"air_first_password_empty" = "请先设置一个密码。";
+"air_first_password_short" = "密码少于 8 个字符。";
+"air_first_password_weak" = "密码需要包含字母和数字。";
+"air_first_password_repeat_first" = "请在第二个输入框中再输入一次密码。";
+"air_first_password_mismatch" = "两次输入的密码不一致。";
+"air_first_create" = "创建档案";
+"air_first_creating" = "正在创建档案";
+"air_first_create_failed" = "档案没有创建成功。请再试一次。";
+"air_first_keychain_failed" = "这部 iPhone 的钥匙串没有接受密钥。请设置密码，用密码即可创建档案。";
+"air_first_id_title" = "你的 ID 已准备好";
+"air_first_id_body" = "把 ID 发给想联系的人，或者让他们扫描二维码。";
+"air_first_share" = "分享";
+"air_first_add_person" = "添加第一个人";
+"air_field_show_password" = "显示密码";
+"air_field_hide_password" = "隐藏密码";
+"air_signin_go" = "登录";
+"air_signin_opening" = "正在打开档案";
+"air_signin_enter_password" = "请先输入密码。";
+"air_signin_no_password" = "这个档案无需密码即可打开，但只能在这部 iPhone 上。";
+"air_signin_no_password_short" = "无密码";
+"air_signin_profiles" = "这台设备上的档案";
+"air_signin_profiles_note" = "按住档案即可删除。";
+"air_signin_forgot" = "忘记密码？";
+"air_signin_forgot_title" = "密码无法找回";
+"air_signin_forgot_message" = "没有服务器，只有你知道密码。你可以创建一个带新 ID 的新档案：这个档案会留在设备上，想起密码后仍可打开。也可以从设备上删除这个档案。";
+"air_signin_create" = "创建新档案";
+"air_signin_delete" = "删除这个档案";
+"air_signin_delete_short" = "删除";
+"air_signin_wrong_password" = "密码不正确。请检查键盘语言和大小写。";
+"air_signin_damaged" = "档案文件已损坏。如果有导出的副本，请从副本转移档案。";
+"air_signin_no_access" = "无法访问档案文件。请解锁 iPhone 后再试一次。";
+"air_signin_failed_title" = "档案没有打开";
+"air_import_title" = "转移档案";
+"air_import_password_body_format" = "文件“%@”受密码保护。请输入保存档案时使用的密码。";
+"air_import_reading" = "正在读取文件";
+"air_import_wrong_password" = "这个密码打不开该文件。需要的是文件来源设备上该档案的密码。";
+"air_import_preview_title" = "这是你的档案吗？";
+"air_import_preview_body" = "请核对名字和 ID：档案将添加到这台设备上。";
+"air_import_name" = "名字";
+"air_import_no_name" = "无名字";
+"air_import_confirm" = "把档案转移到这里";
+"air_import_moving" = "正在转移档案";
+"air_import_other_file" = "选择其他文件";
+"air_import_not_profile" = "这不是 Khandaq 档案文件。请选择从档案导出的 .tox 文件。";
+"air_import_failed_title" = "档案没有转移成功";
+"air_share_import_action" = "从这个文件转移档案";
+"air_share_import_verb" = "转移";
+"air_share_in_title" = "发送给";
+"air_share_ext_preparing" = "正在准备发送";
+"air_share_ext_open_app" = "已准备好。打开 Khandaq，选择发送给谁。";
+"air_share_ext_failed" = "无法把它交给 Khandaq。";
+"air_settings_import_message_device" = "应用会退出此档案并打开文件中的档案。此档案会留在设备上，之后无需密码即可再次打开。";
+"air_password_set_title" = "设置密码";
+"air_password_set_body" = "这个档案目前用这部 iPhone 钥匙串中的密钥打开。设置密码后，可以把它转移到其他设备。密码无法找回：没有服务器。";
+"air_password_set_action" = "设置密码";
+"air_password_change_action" = "修改密码";
+"air_password_old_first" = "请先输入旧密码。";
+"air_password_saving" = "正在保存密码";
+"air_password_wrong_old" = "旧密码不正确。";
+"air_password_set_failed" = "密码没有设置成功：这部 iPhone 的密钥没能打开档案。请再试一次。";
+"air_password_changed" = "密码已修改";
+"air_password_set_done" = "密码已设置";
+"air_password_old_placeholder" = "旧密码";
+"air_password_new_placeholder" = "新密码";
+"air_export_needs_password_title" = "请先设置密码";
+"air_export_needs_password_message" = "没有密码的档案只能用这部 iPhone 的密钥打开，它的文件在其他设备上打不开。设置密码后，文件就能用密码打开。";
+"air_you_logout_message_device" = "档案会留在这台设备上，之后无需密码即可再次打开，但只能在这部 iPhone 上。";
+"air_pin_set_note" = "PIN 码无法找回。连续输错十次后，会暂时无法输入，且每次锁定时间更长。";
+"air_pin_entered_format" = "已输入 %1$ld 位，共 %2$ld 位";
+
+/* Redesign stage 5: group settings, joining by key, private messages in a group */
+"air_group_private_note_format" = "群组“%1$@”中的私信：只有你和%2$@能看到。";
+"air_group_private_hint_away_format" = "%@ 不在线：请等对方上线后再写";
+"air_group_settings_self_name" = "你在群组中的名字";
+"air_group_settings_self_name_note" = "本群成员可以看到它，你的个人资料名称不会改变。";
+"air_group_settings_topic" = "主题";
+"air_group_settings_topic_none" = "无主题";
+"air_group_settings_topic_note" = "所有成员都能看到主题：在列表和群组顶部，它会代替群组名称显示。";
+"air_group_settings_topic_locked" = "只有创建者和管理员可以更改主题。";
+"air_group_settings_topic_not_observers" = "除观察者外，所有成员都可以更改主题。";
+"air_group_settings_topic_lock" = "仅创建者和管理员可更改主题";
+"air_group_settings_join" = "谁可以加入";
+"air_group_settings_password_set" = "已设置";
+"air_group_settings_password_none" = "无";
+"air_group_settings_password_note" = "新成员需要输入密码，已在群组中的成员会继续留在群组中。";
+"air_group_settings_limit" = "成员上限";
+"air_group_settings_limit_full" = "群组已满：提高上限之前，新成员无法加入。";
+"air_group_settings_write" = "谁可以发言";
+"air_group_voice_all_note" = "除旁观者外的所有人。";
+"air_group_settings_founder_only" = "此项由群组创建者更改。";
+"air_group_settings_saved" = "已保存";
+"air_group_password_remove" = "移除密码";
+"air_group_password_removed" = "密码已移除";
+"air_group_name_empty" = "名字不能为空。";
+"air_group_limit_range" = "上限为 1 到 65535 之间的数字。";
+"air_join_title" = "加入群组";
+"air_join_key_placeholder" = "64 个字符的密钥";
+"air_join_key_hint" = "群组密钥在群组资料中：请成员在那里点“复制”或出示二维码。";
+"air_join_key_partial_format" = "已输入 %d/64 个字符";
+"air_join_key_not_key" = "这不是群组密钥：密钥共 64 个字符，只含数字和字母 A 到 F。";
+"air_join_key_person" = "这是个人 ID，不是群组密钥。添加联系人请用“新联系人”。";
+"air_join_key_member" = "你已经在这个群组中。";
+"air_join_open_group" = "打开群组";
+"air_join_password_placeholder" = "如果创建者设置了密码";
+"air_join_password_note" = "如果群组没有密码，请留空。";
+"air_join_how" = "只要有群组成员在线，就能找到这个群组。如果其中有你的联系人，Khandaq 会请对方给你发送邀请。";
+"air_join_why_key" = "请先输入群组密钥";
+"air_cmd_join_group" = "用此密钥加入群组";
+"air_cmd_group_note" = "64 个字符，与群组密钥长度相同";
+
+/* Stage 5: Password and PIN */
+"air_security_pin_section" = "PIN 码";
+"air_security_pin" = "需要 PIN 码";
+"air_security_pin_note" = "回到 Khandaq 时会要求输入 PIN 码。PIN 码无法找回。";
+"air_security_lock" = "锁定";
+"air_security_lock_now" = "立即";
+"air_security_lock_30s" = "30 秒后";
+"air_security_lock_1m" = "1 分钟后";
+"air_security_lock_2m" = "2 分钟后";
+"air_security_lock_5m" = "5 分钟后";
+"air_security_lock_note" = "从离开 Khandaq 时开始计时。";
+"air_security_face_id" = "使用面容 ID 解锁";
+"air_security_touch_id" = "使用触控 ID 解锁";
+"air_security_biometrics_note" = "代替 PIN 码。PIN 码也能打开 Khandaq。";
+"air_security_password_section" = "档案密码";
+"air_security_password_note" = "这台 iPhone 上的档案用它加密。密码无法找回：没有服务器。";
+"air_security_device_key_note" = "档案用这台 iPhone 钥匙串中的密钥打开。设置密码后，可以把它迁移到其他设备。";
+
+/* Stage 5: a profile whose key is not on this iPhone */
+"air_signin_key_missing" = "这个档案原本无需密码，用创建它的那部 iPhone 上的密钥打开。这部 iPhone 上没有那把密钥，所以档案在这里打不开。";
+"air_signin_key_missing_note" = "如果那部 iPhone 还在手边，请在它的“密码和 PIN 码”中设置密码，导出档案，再把文件转移到这里。";
+"air_signin_key_missing_short" = "这部 iPhone 上没有密钥";
+"air_signin_key_missing_move" = "转移档案";

@@ -422,8 +422,6 @@
 \nl\'adesione a un gruppo pubblico tramite ID gruppo non funziona ancora in modo affidabile!!</string>
     <string name="add_private_group_success">Hai creato un gruppo privato</string>
     <string name="invite_friend_success">Hai ricevuto una richiesta di amicizia</string>
-    <string name="invite_join_group_success">Sei stato invitato a far parte di un gruppo</string>
-    <string name="invite_join_conference_success">Siete stati invitati a una conferenza di gruppo</string>
     <string name="layout___group_id">ID di gruppo</string>
     <string name="layout___group_id2">ID di gruppo:</string>
     <string name="MainActivity_join_trifa_groupchat">Khandaq Community</string>

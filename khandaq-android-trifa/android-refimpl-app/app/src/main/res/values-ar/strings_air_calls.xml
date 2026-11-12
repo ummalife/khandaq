@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- KHANDAQ (redesign, stage 3b): the call screens, with the iOS keys and wording (CallBaseController, CallButton, AirCallText). -->
+    <string name="air_call_incoming">مكالمة واردة</string>
+    <string name="air_call_calling">جارٍ الاتصال</string>
+    <string name="air_call_ended">انتهت المكالمة</string>
+    <string name="air_call_decline">رفض</string>
+    <string name="air_call_answer">رد</string>
+    <string name="air_call_answer_video">بالفيديو</string>
+    <string name="air_call_end">إنهاء</string>
+    <string name="air_call_mic">الميكروفون</string>
+    <string name="air_call_mic_on">مفعّل</string>
+    <string name="air_call_mic_off">متوقف</string>
+    <string name="air_call_speaker">مكبر الصوت</string>
+    <string name="air_call_speaker_on">مفعّل</string>
+    <string name="air_call_speaker_off">متوقف</string>
+    <string name="air_call_switch_camera">تبديل الكاميرا</string>
+    <string name="air_call_line_direct">اتصال مباشر</string>
+    <string name="air_call_line_relay">عبر مُرحِّل</string>
+    <string name="air_call_line_none">لا اتصال الآن</string>
+</resources>

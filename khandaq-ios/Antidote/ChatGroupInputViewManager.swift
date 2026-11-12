@@ -17,6 +17,7 @@ class ChatGroupInputViewManager: NSObject {
     fileprivate weak var presentingViewController: UIViewController!
     fileprivate var isVideoSendInProgress = false
     fileprivate let voiceRecorder = GroupVoiceMessageRecorder()
+    fileprivate var voiceHold = VoiceHoldGate()
 
     var outgoingTextComposer: ((String) -> String)?
 
@@ -43,8 +44,12 @@ class ChatGroupInputViewManager: NSObject {
 
 extension ChatGroupInputViewManager: ChatInputViewDelegate {
     func chatInputViewVoiceRecordDidStart(_ view: ChatInputView) {
-        requestMicrophoneAccess { [weak self] granted in
-            guard granted, let self = self else {
+        // Stage 5: with the microphone denied the hold sent nothing, without a word; it says why and
+        // offers Settings, as a call does (E9, E21). The first hold asks iOS, and the answer comes after
+        // the hold: the recording starts only while the hold is on (VoiceHoldGate).
+        let hold = voiceHold.begin()
+        MediaPermission.requestMicrophoneAccess(from: presentingViewController) { [weak self] granted in
+            guard granted, let self = self, self.voiceHold.mayRecord(for: hold) else {
                 return
             }
 
@@ -58,6 +63,7 @@ extension ChatGroupInputViewManager: ChatInputViewDelegate {
     }
 
     func chatInputViewVoiceRecordDidEnd(_ view: ChatInputView, cancelled: Bool) {
+        voiceHold.end()
         if cancelled {
             voiceRecorder.cancelRecording()
             return
@@ -78,7 +84,9 @@ extension ChatGroupInputViewManager: ChatInputViewDelegate {
     }
 
     func chatInputViewCameraButtonPressed(_ view: ChatInputView, cameraView: UIView) {
-        let alert = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+        // KHANDAQ (redesign stage 3, E8): the size a group takes is said before a file is chosen, not
+        // only in the refusal after it.
+        let alert = UIAlertController(title: nil, message: AirFileLimits.groupHint, preferredStyle: .actionSheet)
         alert.popoverPresentationController?.sourceView = cameraView
         alert.popoverPresentationController?.sourceRect = CGRect(x: cameraView.frame.size.width / 2,
                                                                  y: cameraView.frame.size.height / 2,
@@ -133,12 +141,8 @@ extension ChatGroupInputViewManager: ChatInputViewDelegate {
             }
         }, failureBlock: { error in
             DispatchQueue.main.async {
-                if let error = error as NSError? {
-                    handleErrorWithType(.sendMessageToFriend, error: error)
-                }
-                else {
-                    UIAlertController.showErrorWithMessage(String(localized: "error_internal_message"), retryBlock: nil)
-                }
+                // E21: without an error the words still say what failed.
+                handleErrorWithType(.sendMessageToFriend, error: error as NSError?)
             }
         })
     }

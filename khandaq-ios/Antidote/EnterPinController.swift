@@ -2,8 +2,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import Foundation
 import SnapKit
+import UIKit
 
 private struct Constants {
     static let PinLength = 4
@@ -16,6 +16,9 @@ protocol EnterPinControllerDelegate: class {
     func enterPinControllerFailure(_ controller: EnterPinController)
 }
 
+/// A PIN screen (redesign stage 4, E20): the lock that opens the app, on the lock ground of the call
+/// screens, or the sheet that sets the PIN and confirms it. What the PIN does, how it is checked and
+/// Face ID or Touch ID before it stay as they were; only the screens changed.
 class EnterPinController: UIViewController {
     enum State {
         case validatePin(validPin: String)
@@ -31,7 +34,7 @@ class EnterPinController: UIViewController {
             return pinInputView.topText
         }
         set {
-            customLoadView()
+            loadViewIfNeeded()
             pinInputView.topText = newValue
         }
     }
@@ -41,25 +44,31 @@ class EnterPinController: UIViewController {
             return pinInputView.descriptionText
         }
         set {
-            customLoadView()
+            loadViewIfNeeded()
             pinInputView.descriptionText = newValue
         }
     }
 
-    // KHANDAQ (Figma): the unlock screen shows the Khandaq wordmark above the title.
+    /// The wordmark above the title, on the lock.
     var showLogo: Bool = false {
         didSet {
             if isViewLoaded {
-                logoImageView.isHidden = !showLogo
+                logoView.isHidden = !showLogo
             }
         }
     }
 
     // KHANDAQ (audit #11): the coordinator switches the keypad off while a brute-force lockout is
     // running and back on when it expires, so the wait cannot be skipped by tapping through.
-    var inputEnabled: Bool = true
+    var inputEnabled: Bool = true {
+        didSet {
+            if isViewLoaded {
+                pinInputView.keysEnabled = inputEnabled
+            }
+        }
+    }
 
-    // KHANDAQ (Figma): the set-PIN sheet (from profile) has a круглая close (X) button top-left.
+    /// The close button of the set-PIN sheet; the lock has none.
     var closeHandler: (() -> Void)? {
         didSet {
             if isViewLoaded {
@@ -68,17 +77,18 @@ class EnterPinController: UIViewController {
         }
     }
 
-    fileprivate let theme: Theme
+    private let isLock: Bool
+    private var pinInputView: PinInputView!
+    private let logoView = UIImageView()
+    private let closeButton = AirIconButton(icon: "x", label: String(localized: "alert_cancel"))
+    private let scroll = UIScrollView()
 
-    fileprivate var pinInputView: PinInputView!
-    fileprivate var logoImageView: UIImageView!
-    fileprivate var closeButton: UIButton!
+    private var enteredString: String = ""
 
-    fileprivate var enteredString: String = ""
-
-    init(theme: Theme, state: State) {
-        self.theme = theme
+    /// `lock`: the screen that opens the app, dark in both themes. Without it, a sheet in the app.
+    init(theme: Theme, state: State, lock: Bool = false) {
         self.state = state
+        self.isLock = lock
 
         super.init(nibName: nil, bundle: nil)
     }
@@ -88,25 +98,89 @@ class EnterPinController: UIViewController {
     }
 
     override func loadView() {
-        loadViewWithBackgroundColor(theme.colorForType(.NormalBackground))
+        if isLock {
+            view = AirCallBackdropView()
+        }
+        else {
+            view = UIView()
+            view.backgroundColor = KQColor.bg
+        }
+        view.accessibilityIdentifier = isLock ? "air.pin.lock" : "air.pin.sheet"
 
-        createViews()
-        installConstraints()
+        pinInputView = PinInputView(pinLength: Constants.PinLength, ground: isLock ? .lock : .sheet)
+        pinInputView.delegate = self
+        pinInputView.keysEnabled = inputEnabled
 
-        pinInputView.applyColors()
+        // The wordmark in its dark form (white letters): the lock ground is dark in both themes. An image
+        // view picks the variant by its own traits, so the traits are what is set.
+        logoView.overrideUserInterfaceStyle = .dark
+        logoView.image = UIImage(named: "login-logo")
+        logoView.contentMode = .scaleAspectFit
+        logoView.isHidden = !showLogo
+        logoView.isAccessibilityElement = false
+
+        let column = AirKit.column([logoView, pinInputView], spacing: KQSpace.x32)
+        column.alignment = .center
+        let content = UIView()
+        content.addSubview(column)
+        scroll.addSubview(content)
+        scroll.alwaysBounceVertical = false
+        view.addSubview(scroll)
+
+        closeButton.restingTint = KQColor.ink
+        closeButton.accessibilityIdentifier = "air.pin.close"
+        closeButton.isHidden = (closeHandler == nil)
+        closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
+        view.addSubview(closeButton)
+
+        scroll.snp.makeConstraints {
+            $0.edges.equalTo(view.safeAreaLayoutGuide)
+        }
+        content.snp.makeConstraints {
+            $0.edges.equalTo(scroll.contentLayoutGuide)
+            $0.width.equalTo(scroll.frameLayoutGuide)
+            $0.height.greaterThanOrEqualTo(scroll.frameLayoutGuide)
+        }
+        // In the middle while it fits; scrolls at the largest text sizes.
+        column.snp.makeConstraints {
+            $0.centerX.equalToSuperview()
+            $0.centerY.equalToSuperview().priority(.medium)
+            $0.top.greaterThanOrEqualToSuperview().offset(KQSpace.x48)
+            $0.bottom.lessThanOrEqualToSuperview().offset(-KQSpace.x24)
+            $0.leading.greaterThanOrEqualToSuperview().offset(KQSpace.x16)
+            $0.trailing.lessThanOrEqualToSuperview().offset(-KQSpace.x16)
+        }
+        logoView.snp.makeConstraints {
+            $0.height.equalTo(KQSpace.x40)
+            if let size = logoView.image?.size, size.height > 0 {
+                $0.width.equalTo(logoView.snp.height).multipliedBy(size.width / size.height)
+            }
+        }
+        closeButton.snp.makeConstraints {
+            $0.top.equalTo(view.safeAreaLayoutGuide).offset(KQSpace.x8)
+            $0.leading.equalTo(view.safeAreaLayoutGuide).offset(KQSpace.x8)
+        }
     }
 
-    override var shouldAutorotate : Bool {
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        return isLock ? .lightContent : .default
+    }
+
+    override var shouldAutorotate: Bool {
         return false
     }
 
-    override var supportedInterfaceOrientations : UIInterfaceOrientationMask {
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         return UIInterfaceOrientationMask.portrait
     }
 
     func resetEnteredPin() {
         enteredString = ""
         pinInputView.enteredNumbersCount = enteredString.count
+    }
+
+    @objc private func closeTapped() {
+        closeHandler?()
     }
 }
 
@@ -126,12 +200,13 @@ extension EnterPinController: PinInputViewDelegate {
         if enteredString.count == Constants.PinLength {
             switch state {
                 case .validatePin(let validPin):
-                     if enteredString == validPin {
-                         delegate?.enterPinController(self, successWithPin: enteredString)
-                     }
-                     else {
-                         delegate?.enterPinControllerFailure(self)
-                     }
+                    if enteredString == validPin {
+                        delegate?.enterPinController(self, successWithPin: enteredString)
+                    }
+                    else {
+                        pinInputView.shake()
+                        delegate?.enterPinControllerFailure(self)
+                    }
                 case .setPin:
                     delegate?.enterPinController(self, successWithPin: enteredString)
             }
@@ -145,69 +220,5 @@ extension EnterPinController: PinInputViewDelegate {
 
         enteredString = String(enteredString.dropLast())
         view.enteredNumbersCount = enteredString.count
-    }
-}
-
-private extension EnterPinController {
-    func createViews() {
-        pinInputView = PinInputView(pinLength: Constants.PinLength, theme: theme)
-        pinInputView.delegate = self
-        view.addSubview(pinInputView)
-
-        logoImageView = UIImageView(image: UIImage(named: "login-logo"))
-        logoImageView.contentMode = .scaleAspectFit
-        logoImageView.isHidden = !showLogo
-        view.addSubview(logoImageView)
-
-        closeButton = UIButton()
-        if #available(iOS 13.0, *) {
-            let config = UIImage.SymbolConfiguration(pointSize: 15.0, weight: .medium)
-            closeButton.setImage(UIImage(systemName: "xmark", withConfiguration: config), for: UIControlState())
-        }
-        else {
-            closeButton.setTitle("✕", for: UIControlState())
-            closeButton.setTitleColor(theme.colorForType(.NormalText), for: UIControlState())
-        }
-        closeButton.tintColor = theme.colorForType(.NormalText)
-        closeButton.backgroundColor = theme.colorForType(.ChatInputBackground)
-        closeButton.layer.cornerRadius = 20.0
-        closeButton.layer.masksToBounds = true
-        closeButton.isHidden = (closeHandler == nil)
-        closeButton.addTarget(self, action: #selector(EnterPinController.closeButtonPressed), for: .touchUpInside)
-        view.addSubview(closeButton)
-    }
-
-    @objc func closeButtonPressed() {
-        closeHandler?()
-    }
-
-    func installConstraints() {
-        pinInputView.snp.makeConstraints {
-            $0.center.equalTo(view)
-        }
-
-        logoImageView.snp.makeConstraints {
-            $0.centerX.equalTo(view)
-            $0.top.equalTo(view.safeAreaLayoutGuide.snp.top).offset(48.0)
-            $0.width.equalTo(190.0)
-            $0.height.equalTo(76.0)
-        }
-
-        closeButton.snp.makeConstraints {
-            $0.top.equalTo(view.safeAreaLayoutGuide.snp.top).offset(16.0)
-            $0.left.equalTo(view).offset(16.0)
-            $0.size.equalTo(40.0)
-        }
-    }
-
-    func customLoadView() {
-        if #available(iOS 9.0, *) {
-            loadViewIfNeeded()
-        } else {
-            if !isViewLoaded {
-                // creating view
-                view.setNeedsDisplay()
-            }
-        }
     }
 }

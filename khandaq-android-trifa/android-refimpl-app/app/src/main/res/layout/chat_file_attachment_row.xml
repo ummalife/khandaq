@@ -1,116 +1,154 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    KHANDAQ (redesign, stage 3b): a file in the transcript, as AirFileRowView on iOS (design/DESIGN.md,
+    "Files, voice and calls on the phone"): the file glyph, the name and the size on one line; under
+    them the 6dp bar while it moves, one line of state in words and the actions in words. Under a photo
+    or a voice note the first line is gone: the preview already says what the file is.
+    The ids the transfer helpers look up are kept (ft_file_attachment_row, ft_file_icon, ft_file_name,
+    ft_file_size, ft_file_progress, ft_file_progress_detail, ft_file_error, and the old ft_file_cancel
+    and ft_file_retry buttons, which stay hidden); AirFileEntry draws the row and wires its actions.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/ft_file_attachment_row"
-    android:layout_width="wrap_content"
+    android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/tg_file_attachment_bg"
-    android:gravity="center_vertical"
-    android:minHeight="40dp"
-    android:maxWidth="280dp"
     android:orientation="vertical"
-    android:paddingStart="8dp"
-    android:paddingTop="6dp"
-    android:paddingEnd="8dp"
-    android:paddingBottom="6dp"
-    android:visibility="gone"
-    tools:visibility="visible">
+    android:visibility="gone">
 
     <LinearLayout
-        android:layout_width="wrap_content"
+        android:id="@+id/air_file_head"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
+        android:minHeight="@dimen/kq_size_icon"
         android:orientation="horizontal">
 
         <ImageView
             android:id="@+id/ft_file_icon"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="@dimen/kq_size_icon"
+            android:layout_height="@dimen/kq_size_icon"
             android:importantForAccessibility="no"
-            android:scaleType="centerInside"
-            tools:src="@android:drawable/ic_menu_save" />
+            android:scaleType="fitCenter"
+            android:src="@drawable/kq_ic_file"
+            android:tint="@color/kq_ink_2" />
 
         <TextView
             android:id="@+id/ft_file_name"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="@dimen/kq_space_10"
             android:layout_weight="1"
             android:ellipsize="middle"
-            android:maxLines="1"
-            android:textColor="@color/message_bubble_text"
-            android:textSize="14sp"
-            tools:text="cd91_ui.xml" />
+            android:importantForAccessibility="no"
+            android:singleLine="true"
+            android:textAlignment="viewStart"
+            android:textAppearance="@style/TextAppearance.KQ.Air.LabelStrong"
+            android:textColor="@color/kq_ink" />
 
         <TextView
             android:id="@+id/ft_file_size"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="@dimen/kq_space_10"
+            android:fontFeatureSettings="tnum"
+            android:importantForAccessibility="no"
             android:maxLines="1"
-            android:textColor="@color/tg_chat_input_hint"
-            android:textSize="12sp"
-            tools:text="9,92 КБ" />
-
-        <ImageButton
-            android:id="@+id/ft_file_cancel"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:layout_gravity="center_vertical"
-            android:layout_marginStart="4dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/file_transfer_cancel"
-            android:padding="4dp"
-            android:scaleType="centerInside"
-            android:src="@android:drawable/ic_menu_close_clear_cancel"
-            android:visibility="gone"
-            tools:visibility="visible" />
-
-        <ImageButton
-            android:id="@+id/ft_file_retry"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:layout_gravity="center_vertical"
-            android:layout_marginStart="4dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/file_transfer_retry"
-            android:padding="4dp"
-            android:scaleType="centerInside"
-            android:src="@android:drawable/ic_menu_rotate"
-            android:visibility="gone" />
-
+            android:textAppearance="@style/TextAppearance.KQ.Caption"
+            android:textColor="@color/kq_ink_3" />
     </LinearLayout>
 
     <ProgressBar
         android:id="@+id/ft_file_progress"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
-        android:layout_height="3dp"
-        android:layout_marginTop="4dp"
-        android:max="100"
-        android:visibility="gone"
-        tools:progress="40"
-        tools:visibility="visible" />
+        android:layout_height="@dimen/kq_size_bar"
+        android:layout_marginTop="@dimen/kq_space_6"
+        android:importantForAccessibility="no"
+        android:indeterminate="false"
+        android:max="1000"
+        android:progressDrawable="@drawable/air_file_bar"
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/ft_file_progress_detail"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:textColor="@color/tg_chat_input_hint"
-        android:textSize="11sp"
-        android:visibility="gone"
-        tools:text="2.3 MB / 8.1 MB · 28%"
-        tools:visibility="visible" />
+        android:layout_marginTop="@dimen/kq_space_6"
+        android:fontFeatureSettings="tnum"
+        android:importantForAccessibility="no"
+        android:textAlignment="viewStart"
+        android:textAppearance="@style/TextAppearance.KQ.Caption"
+        android:textColor="@color/kq_ink_3"
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/ft_file_error"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:text="@string/file_transfer_download_failed"
-        android:textColor="#E53935"
-        android:textSize="11sp"
+        android:layout_marginTop="@dimen/kq_space_6"
+        android:importantForAccessibility="no"
+        android:textAlignment="viewStart"
+        android:textAppearance="@style/TextAppearance.KQ.Caption"
+        android:textColor="@color/kq_danger"
         android:visibility="gone" />
 
+    <LinearLayout
+        android:id="@+id/air_file_actions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/air_file_accept"
+            style="@style/Widget.KQ.Air.FileAction"
+            android:text="@string/air_file_accept"
+            android:textColor="@color/kq_ink" />
+
+        <TextView
+            android:id="@+id/air_file_retry"
+            style="@style/Widget.KQ.Air.FileAction"
+            android:text="@string/air_file_retry_incoming"
+            android:textColor="@color/kq_ink" />
+
+        <TextView
+            android:id="@+id/air_file_decline"
+            style="@style/Widget.KQ.Air.FileAction"
+            android:text="@string/air_file_decline" />
+
+        <TextView
+            android:id="@+id/air_file_cancel"
+            style="@style/Widget.KQ.Air.FileAction"
+            android:text="@string/air_file_cancel" />
+
+        <TextView
+            android:id="@+id/air_file_save"
+            style="@style/Widget.KQ.Air.FileAction"
+            android:text="@string/air_file_save"
+            android:textColor="@color/kq_ink" />
+
+        <TextView
+            android:id="@+id/air_file_share"
+            style="@style/Widget.KQ.Air.FileAction"
+            android:text="@string/air_file_share" />
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/ft_file_cancel"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@null"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:visibility="gone" />
+
+    <ImageButton
+        android:id="@+id/ft_file_retry"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@null"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:visibility="gone" />
 </LinearLayout>

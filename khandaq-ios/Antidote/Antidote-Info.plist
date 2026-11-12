@@ -20,6 +20,18 @@
 				<string>public.data</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeIconFiles</key>
+			<array/>
+			<key>CFBundleTypeName</key>
+			<string>Tox profile</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>org.khandaq.tox-profile</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleExecutable</key>
 	<string>${EXECUTABLE_NAME}</string>
@@ -78,7 +90,7 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Used to share your location with your contacts</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>You can use audio and video calls.</string>
+	<string>You can use audio and video calls, record voice messages and videos.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save received photos and videos to your gallery.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
@@ -107,6 +119,17 @@
 		<string>remote-notification</string>
 		<string>voip</string>
 	</array>
+	<key>UIAppFonts</key>
+	<array>
+		<string>IBMPlexMono-Medium.ttf</string>
+		<string>IBMPlexMono-Regular.ttf</string>
+		<string>IBMPlexSans-Medium.ttf</string>
+		<string>IBMPlexSans-Regular.ttf</string>
+		<string>IBMPlexSans-SemiBold.ttf</string>
+		<string>IBMPlexSansArabic-Medium.ttf</string>
+		<string>IBMPlexSansArabic-Regular.ttf</string>
+		<string>IBMPlexSansArabic-SemiBold.ttf</string>
+	</array>
 	<key>UIDesignRequiresCompatibility</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -127,6 +150,30 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+	</array>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Tox profile</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.khandaq.tox-profile</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>tox</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>application/x-tox</string>
+				</array>
+			</dict>
+		</dict>
 	</array>
 	<key>UISupportsDocumentBrowser</key>
 	<false/>

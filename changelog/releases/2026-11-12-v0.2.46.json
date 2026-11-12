@@ -1,0 +1,142 @@
+{
+  "version": "0.2.46",
+  "date": "2026-11-12",
+  "title": "A new look built around one question: will your message get through",
+  "summary": "Khandaq on iPhone and Android has a new look. The main screen puts the people who are online now first, a message to someone who is offline waits in transit and leaves on its own once they are back, and the line under the message field says which will happen before you send. Rebuilding every screen turned up older problems as well, fixed here: on iPhone a voice message could go on recording after you let go of the button, and on Android a profile file that could not be read made the app start under a new ID. The desktop app gets the same look in its own release.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "One list, with the people online now first",
+      "description": "Chats, contacts and requests are one list instead of tabs. People who are online now come first, then everyone else, and your notes for yourself stay last. Requests, messages in transit and Favorites each have a filter over the list. The line under your name says how your phone is connected: directly, through a relay, or not at all. The interface is set in IBM Plex Sans, in a light and a dark theme that follows the system unless you choose one.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "A message to someone offline waits in transit and goes on its own",
+      "description": "Before you send, the line under the message field says whether the message goes right away or waits because the person is offline. A waiting message stays on your phone in a tray above the field and leaves on its own when they come online; the tray says how many are waiting. A message the network refused is marked Not sent, with Retry.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "The contact card shows how you are connected",
+      "description": "Tapping a name in a conversation opens its card: whether your devices reach each other directly or through a relay right now, when the person was online over the last day as seen from this device, their key for verification, the files you exchanged, Mute, and Block and Remove behind a confirmation. Mute and Block stay on this device.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "A voice message records only while you hold the button",
+      "description": "The first time you held the microphone button, iPhone asked for access to the microphone. The answer came after your finger had left the button, and the recording started anyway and went on with nothing on screen until the next hold. A recording now starts only while the button is still held, and with access denied a hold says why and offers Settings.",
+      "platforms": [
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Sharing into Khandaq works on iPhone",
+      "description": "Choosing Khandaq in another app's share sheet never got past Preparing share: the extension had no storage shared with the app to leave things in. It now passes on a link, text, photo or file, and Khandaq asks which chat it goes to, in the order of Forward. A long text goes in parts that each fit a message. iOS does not let a share extension open its app, so it says to open Khandaq.",
+      "platforms": [
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "An unreadable profile file no longer starts the app under a new ID",
+      "description": "When the profile file could not be read, a saved session still opened by itself and the network started without your profile, under a new ID with no contacts. The app now checks the profile files before it opens them, stops on sign-in with No access to the profile file and a code for support, and writes nothing to the disk.",
+      "platforms": [
+        "android"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Forgot the password removes everything it should",
+      "description": "Forgot the password left the stored files and the network save behind, so the next profile stopped on Wrong credentials. It now removes them, sign-in explains what happened, and Delete and create new starts a clean profile with a new ID. A phone that is stuck after the old flow gets out the same way.",
+      "platforms": [
+        "android"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "A profile without a password is sealed with a key from a secure source",
+      "description": "Khandaq on Android seals a profile created without a password with a random key that the Android Keystore protects. That key came from a general-purpose random generator; it now comes from SecureRandom. Profiles created earlier keep the key they have; setting a password in Settings seals such a profile again with your password.",
+      "platforms": [
+        "android"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Group headers show who is online as it changes",
+      "description": "On iPhone the network engine reported changes in a group, such as members joining or coming online, where no screen was listening. A group opened on a real profile kept the members and presence it found on opening, so right after joining it said 1 member. The header, the member list and the chat list now follow those changes.",
+      "platforms": [
+        "ios"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Screens adapt to the largest text sizes",
+      "description": "Every screen was checked at the largest accessibility text sizes and in Arabic and Chinese. Text wraps at its words instead of being cut or broken inside a word. On iPhone the time moves above the message and secondary lines fold away so the conversation keeps room, and holding a button or a cut name shows it large, as the system bars do.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "No network shows within seconds",
+      "description": "On Android the line under your name said No network only once the network engine gave up, about 25 seconds after the phone lost its connection. It now follows the phone's own network and says so in about 2.5 seconds.",
+      "platforms": [
+        "android"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Leaving a member's screen keeps your draft",
+      "description": "Leaving the screen of a group member sent whatever was typed in the private message field, even half a sentence, and cleared it even when sending failed. Leaving now keeps the draft; only Send sends.",
+      "platforms": [
+        "android"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Replies from iPhone read as replies",
+      "description": "A reply whose header arrived without its closing marker showed on Android as plain text with the header in it. It is now read as a reply, as iPhone reads it.",
+      "platforms": [
+        "android"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "Permission requests name every use, in your language",
+      "description": "The microphone request on iPhone named only calls; it now names voice messages and videos too. In Arabic and Chinese the camera, microphone, photos, Face ID and location requests were in English and are now translated.",
+      "platforms": [
+        "ios"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "Smaller fixes found while rebuilding the screens",
+      "description": "In Arabic the back arrows on iPhone point the right way and About names Khandaq. On Android a group joined from an invitation shows its name before it connects instead of a code, a mention stays visible in the dark theme, and a link in an older group chat asks in your language before it opens.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "khandaq.org has the new look",
+      "description": "The site shares the apps' colours and type, works without JavaScript, follows the system theme, and shows screens of the new app in English and Russian.",
+      "platforms": [
+        "web"
+      ]
+    }
+  ]
+}

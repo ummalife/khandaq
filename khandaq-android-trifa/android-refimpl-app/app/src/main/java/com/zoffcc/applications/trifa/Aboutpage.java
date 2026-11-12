@@ -25,7 +25,6 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.util.Log;
-import android.view.View;
 import android.widget.TextView;
 
 import com.zoffcc.applications.logging.Logging;
@@ -35,146 +34,182 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.Toolbar;
+import androidx.annotation.Nullable;
+import androidx.annotation.StringRes;
+import androidx.core.text.BidiFormatter;
+import androidx.core.text.TextDirectionHeuristicsCompat;
+import androidx.core.view.ViewCompat;
 
 import static com.zoffcc.applications.trifa.HelperGeneric.display_toast_with_context;
 import static com.zoffcc.applications.trifa.HelperGeneric.get_trifa_build_str;
 import static com.zoffcc.applications.trifa.MainActivity.main_activity_s;
 
-public class Aboutpage extends AppCompatActivity implements Logging.AsyncResponse
+/**
+ * Settings > About (E18). Since redesign stage 5 it is drawn as the other sections of Settings, in the
+ * order of SettingsAboutController on iOS: the version and the build, the site and the owner, then
+ * toxcore's version, then the licences; after them what only Android has here, the support rows, and in
+ * a debug build the build details. Rows that only say a value are read as text, not as buttons.
+ */
+public class Aboutpage extends AirScreenActivity implements Logging.AsyncResponse
 {
     private static final String TAG = "trifa.Aboutpage";
-    private static final int DEBUG_TAP_COUNT = 7;
 
     ProgressDialog progressDialog2 = null;
-    private int versionTapCount = 0;
-    private boolean debugSectionUnlocked = false;
+    /** Send crash report: a refusal stands under it. */
+    private AirSettingRow crashRow;
 
     @Override
-    protected void onCreate(Bundle savedInstanceState)
+    protected int screenTitle()
+    {
+        return R.string.settings_about_app;
+    }
+
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_about);
-
-        Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-        HelperToolbar.enableUpNavigation(this, toolbar);
-
-        bindHeader();
-        bindActionRows();
-        configureDebugSection(BuildConfig.DEBUG);
-    }
-
-    private void bindHeader()
-    {
-        TextView versionView = findViewById(R.id.about_version);
-        String versionText = getString(R.string.about_version_format,
-                BuildConfig.VERSION_NAME,
-                get_trifa_build_str());
-        versionView.setText(versionText);
-        versionView.setOnClickListener(v -> onVersionTapped());
-    }
-
-    private void onVersionTapped()
-    {
-        versionTapCount++;
-        if (debugSectionUnlocked || versionTapCount < DEBUG_TAP_COUNT)
+        addVersionSections();
+        addLegalSection();
+        addSupportSection();
+        // KHANDAQ (redesign, E18): the build details belong to debug builds only; seven taps on the
+        // version no longer open them in a release (design/DESIGN.md, "Settings on the phone").
+        if (BuildConfig.DEBUG)
         {
-            return;
+            addDebugSection();
         }
-
-        debugSectionUnlocked = true;
-        configureDebugSection(true);
-        display_toast_with_context(this, getString(R.string.about_debug_unlocked), false, 0);
     }
 
-    private void bindActionRows()
+    /** The version, the build, the site and the owner; then toxcore's version, as on iOS. */
+    private void addVersionSections()
     {
-        bindActionRow(findViewById(R.id.about_crash_report_row),
-                getString(R.string.Aboutpage_2),
-                getString(R.string.about_crash_report_subtitle),
-                this::sendCrashReport);
+        final String build = get_trifa_build_str();
+        final AirSettingRow version = valueRow(R.string.air_about_version, BuildConfig.VERSION_NAME,
+                                               BuildConfig.VERSION_NAME);
+        final AirSettingRow buildRow = valueRow(R.string.air_about_build, AirAboutText.breakableAtSeparators(build),
+                                                build);
 
-        bindActionRow(findViewById(R.id.about_copy_diagnostics_row),
-                getString(R.string.about_copy_diagnostics),
-                getString(R.string.about_copy_diagnostics_subtitle),
-                this::copyDiagnostics);
-
-        bindActionRow(findViewById(R.id.about_feedback_row),
-                getString(R.string.about_send_feedback),
-                KhandaqSupport.FEEDBACK_EMAIL,
-                this::sendFeedbackEmail);
-
-        bindActionRow(findViewById(R.id.about_website_row),
-                getString(R.string.Aboutpage_website),
-                "khandaq.org",
-                () -> openUrl(KhandaqSupport.WEBSITE_URL));
+        final AirSettingRow website = new AirSettingRow(this, getString(R.string.Aboutpage_website), true);
+        website.setValue(ltr("khandaq.org"));
+        website.setOnClickListener(v -> openUrl(KhandaqSupport.WEBSITE_URL));
 
         // KHANDAQ (18.08): credit the owner/developer on the same openUrl() path as the website and
         // licenses rows, so the link opens in the system browser and a missing browser stays swallowed.
-        bindActionRow(findViewById(R.id.about_developer_row),
-                getString(R.string.about_credit_owner),
-                "1sa.me",
-                () -> openUrl(KhandaqSupport.DEVELOPER_URL));
+        final AirSettingRow credit = new AirSettingRow(this, getString(R.string.about_credit_owner), true);
+        credit.setValue(ltr("1sa.me"));
+        credit.setOnClickListener(v -> openUrl(KhandaqSupport.DEVELOPER_URL));
 
-        bindActionRow(findViewById(R.id.about_licenses_row),
-                getString(R.string.Aboutpage_opensource),
-                null,
-                () -> openUrl(KhandaqSupport.LICENSES_URL));
+        AirScreenKit.addSection(column, null, null, AirScreenKit.plateOf(this, version, buildRow, website, credit));
 
-        bindActionRow(findViewById(R.id.about_tox_row),
-                getString(R.string.Aboutpage_6),
-                null,
-                () -> openUrl(KhandaqSupport.TOX_INFO_URL));
-
-        String gitHash = BuildConfig.GitHash;
-        bindActionRow(findViewById(R.id.about_upstream_row),
-                getString(R.string.about_upstream_commit),
-                gitHash,
-                () -> openUrl("https://github.com/zoff99/ToxAndroidRefImpl/commit/" + gitHash));
-
-        String jniHash = MainActivity.getNativeLibGITHASH();
-        bindActionRow(findViewById(R.id.about_jni_row),
-                getString(R.string.about_jni_commit),
-                jniHash,
-                () -> openUrl("https://github.com/zoff99/ToxAndroidRefImpl/commit/" + jniHash));
-
-        String toxcoreHash = MainActivity.getNativeLibTOXGITHASH();
-        bindActionRow(findViewById(R.id.about_toxcore_row),
-                getString(R.string.about_toxcore_commit),
-                toxcoreHash,
-                () -> openUrl("https://github.com/zoff99/c-toxcore/commit/" + toxcoreHash));
+        final String toxcore = toxcoreVersion();
+        if (toxcore != null)
+        {
+            AirScreenKit.addSection(column, null, null,
+                                    AirScreenKit.plateOf(this, valueRow(R.string.air_about_toxcore_version, toxcore,
+                                                                        toxcore)));
+        }
     }
 
-    private void configureDebugSection(boolean visible)
+    /** The licences and what Tox is, with the licence of Khandaq itself under them. */
+    private void addLegalSection()
     {
-        View debugSection = findViewById(R.id.about_debug_section);
-        debugSection.setVisibility(visible ? View.VISIBLE : View.GONE);
-        if (!visible)
-        {
-            return;
-        }
+        final AirSettingRow licences = new AirSettingRow(this, getString(R.string.Aboutpage_opensource), true);
+        licences.setOnClickListener(v -> openUrl(KhandaqSupport.LICENSES_URL));
+        final AirSettingRow tox = new AirSettingRow(this, getString(R.string.Aboutpage_6), true);
+        tox.setOnClickListener(v -> openUrl(KhandaqSupport.TOX_INFO_URL));
+        AirScreenKit.addSection(column, getString(R.string.about_section_legal), getString(R.string.Aboutpage_license),
+                                AirScreenKit.plateOf(this, licences, tox));
+    }
 
-        TextView details = findViewById(R.id.about_debug_details);
+    /**
+     * Android only: the crash report, the diagnostics for support and the feedback address. The two rows
+     * that hand over to a mail app carry the chevron; copying stays on this screen and has none.
+     */
+    private void addSupportSection()
+    {
+        crashRow = new AirSettingRow(this, getString(R.string.Aboutpage_2), true)
+                .detail(getString(R.string.about_crash_report_subtitle));
+        crashRow.setOnClickListener(v -> sendCrashReport());
+
+        final AirSettingRow diagnostics = new AirSettingRow(this, getString(R.string.about_copy_diagnostics), false)
+                .detail(getString(R.string.about_copy_diagnostics_subtitle));
+        diagnostics.setOnClickListener(v -> copyDiagnostics());
+
+        final AirSettingRow feedback = new AirSettingRow(this, getString(R.string.about_send_feedback), true)
+                .detail(ltr(KhandaqSupport.FEEDBACK_EMAIL));
+        feedback.setOnClickListener(v -> sendFeedbackEmail());
+
+        AirScreenKit.addSection(column, getString(R.string.about_section_support), null,
+                                AirScreenKit.plateOf(this, crashRow, diagnostics, feedback));
+    }
+
+    /** Debug builds only: what the diagnostics say with the commits, and a row for each commit. */
+    private void addDebugSection()
+    {
+        // Each line takes its own direction, so a translated line reads right to left and the Latin ones
+        // keep their order; the words stay selectable for support, as before.
+        final TextView details = AirScreenKit.text(this, R.style.TextAppearance_KQ_Caption, R.color.kq_ink_2);
+        details.setTextIsSelectable(true);
         details.setText(buildDiagnosticsText(true));
+
+        final String gitHash = BuildConfig.GitHash;
+        final String jniHash = MainActivity.getNativeLibGITHASH();
+        final String toxcoreHash = MainActivity.getNativeLibTOXGITHASH();
+        AirScreenKit.addSection(column, getString(R.string.about_section_debug), null, details,
+                                AirScreenKit.plateOf(this,
+                                                     commitRow(R.string.about_upstream_commit, gitHash,
+                                                               "https://github.com/zoff99/ToxAndroidRefImpl/commit/"
+                                                               + gitHash),
+                                                     commitRow(R.string.about_jni_commit, jniHash,
+                                                               "https://github.com/zoff99/ToxAndroidRefImpl/commit/"
+                                                               + jniHash),
+                                                     commitRow(R.string.about_toxcore_commit, toxcoreHash,
+                                                               "https://github.com/zoff99/c-toxcore/commit/"
+                                                               + toxcoreHash)));
     }
 
-    private void bindActionRow(View row, String title, String subtitle, Runnable action)
+    private AirSettingRow commitRow(@StringRes final int title, final String hash, final String url)
     {
-        TextView titleView = row.findViewById(R.id.group_info_action_title);
-        TextView subtitleView = row.findViewById(R.id.group_info_action_subtitle);
-        titleView.setText(title);
-        if (subtitle == null || subtitle.isEmpty())
+        final AirSettingRow row = new AirSettingRow(this, getString(title), true).detail(ltr(hash));
+        row.setOnClickListener(v -> openUrl(url));
+        return row;
+    }
+
+    /**
+     * A row that only says a value, as valueRow on iOS: no chevron, not a button to TalkBack, its title
+     * and value read as one; {@code spoken} is the value without the line breaks of {@code shown}.
+     */
+    private AirSettingRow valueRow(@StringRes final int title, final String shown, final String spoken)
+    {
+        final AirSettingRow row = new AirSettingRow(this, getString(title), false);
+        row.setValue(ltr(shown));
+        row.setClickable(false);
+        row.setFocusable(false);
+        ViewCompat.setAccessibilityDelegate(row, null);
+        ViewCompat.setScreenReaderFocusable(row, true);
+        row.setContentDescription(getString(title) + ". " + spoken);
+        return row;
+    }
+
+    /** A Latin value (a version, a host, an address) keeps its order inside a right-to-left line. */
+    private static String ltr(final String value)
+    {
+        return BidiFormatter.getInstance().unicodeWrap(value == null ? "" : value, TextDirectionHeuristicsCompat.LTR);
+    }
+
+    /** toxcore's version, or null when the native library does not answer. */
+    @Nullable
+    private static String toxcoreVersion()
+    {
+        try
         {
-            subtitleView.setVisibility(View.GONE);
+            return AirAboutText.toxcoreVersion(MainActivity.tox_version_major(), MainActivity.tox_version_minor(),
+                                               MainActivity.tox_version_patch());
         }
-        else
+        catch (Throwable e)
         {
-            subtitleView.setVisibility(View.VISIBLE);
-            subtitleView.setText(subtitle);
+            Log.i(TAG, "toxcoreVersion:EE1:" + e.getMessage());
+            return null;
         }
-        row.setOnClickListener(v -> action.run());
     }
 
     private void openUrl(String url)
@@ -340,7 +375,12 @@ public class Aboutpage extends AppCompatActivity implements Logging.AsyncRespons
             }
             else
             {
-                display_toast_with_context(this, getString(R.string.about_crash_report_unavailable), true, 0);
+                // E21: the refusal stands under the row that was tapped, a toast only without one.
+                final String words = getString(R.string.about_crash_report_unavailable);
+                if (!AirUi.sayUnder(crashRow, words, false))
+                {
+                    display_toast_with_context(this, words, true, 0);
+                }
             }
         }
         catch (Exception ee3)

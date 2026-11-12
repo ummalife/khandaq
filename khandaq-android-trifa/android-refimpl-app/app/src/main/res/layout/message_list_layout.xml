@@ -1,86 +1,72 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    KHANDAQ (redesign, stage 2): the transcript of the conversation with one person. The surface of the
+    screen with no wallpaper under it; the day floats over the top edge while the list scrolls. Every id
+    and onClick handler of the old layout except the wallpaper is kept.
+-->
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/tg_chat_screen_bg"
-    android:orientation="vertical">
-
-    <!-- Figma chat doodle wallpaper (light); night variant = solid dark -->
-    <ImageView
-        android:id="@+id/chat_wallpaper"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:contentDescription="@null"
-        android:scaleType="centerCrop"
-        android:src="@drawable/chat_wallpaper" />
-
-    <!--android:scrollbarAlwaysDrawVerticalTrack="true"-->
-    <!--android:scrollbars="vertical"-->
+    android:background="@color/kq_surface">
 
     <com.l4digital.fastscroll.FastScrollRecyclerView
         android:id="@+id/msg_rv_list"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginRight="5dp"
-        android:layout_marginEnd="5dp"
-        android:divider="@null"
-        android:dividerHeight="2dp"
-        app:bubbleColor="@color/fast_scroller_color"
-        app:bubbleSize="normal"
-        app:bubbleTextColor="#ffffff"
-        app:bubbleTextSize="20sp"
-        app:handleColor="@color/fast_scroller_color"
+        android:clipToPadding="false"
+        android:paddingTop="@dimen/kq_space_4"
+        android:paddingBottom="@dimen/kq_space_8"
+        app:bubbleColor="@color/kq_ink"
+        app:bubbleSize="small"
+        app:bubbleTextColor="@color/kq_on_ink"
+        app:bubbleTextSize="14sp"
+        app:handleColor="@color/kq_line_strong"
         app:hideScrollbar="true"
         app:showTrack="false"
-        app:trackColor="@color/fast_scroller_color" />
+        app:trackColor="@color/kq_line" />
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:orientation="horizontal"
+        android:layout_height="wrap_content"
         android:gravity="center_horizontal"
-        android:layout_height="wrap_content">
+        android:orientation="horizontal">
+
         <TextView
             android:id="@+id/scroll_date_header"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_alignParentTop="true"
-            android:layout_centerInParent="false"
             android:layout_gravity="center_horizontal|top"
-            android:layout_marginTop="3dp"
-            android:layout_marginRight="6dp"
-            android:layout_marginEnd="6dp"
-            android:background="@drawable/rounded_date_bg"
+            android:layout_marginTop="@dimen/kq_space_6"
+            android:background="@drawable/air_bg_day_float"
             android:gravity="center"
-            android:paddingLeft="6dp"
-            android:paddingStart="6dp"
-            android:paddingTop="3dp"
-            android:paddingRight="6dp"
-            android:paddingEnd="6dp"
-            android:paddingBottom="3dp"
-            android:text="March 1, 2015"
-            android:textColor="@color/scroll_date_header_color"
-            android:textSize="14sp"
+            android:paddingStart="@dimen/kq_space_8"
+            android:paddingTop="@dimen/kq_space_2"
+            android:paddingEnd="@dimen/kq_space_8"
+            android:paddingBottom="@dimen/kq_space_2"
+            android:text=""
+            android:textAppearance="@style/TextAppearance.KQ.Air.CaptionMedium"
+            android:textColor="@color/kq_ink_2"
             android:visibility="invisible" />
     </LinearLayout>
 
-
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/unread_messages_notice_button"
-        android:translationY="-18dp"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentRight="true"
         android:layout_alignParentEnd="true"
         android:layout_alignParentBottom="true"
-        android:layout_marginRight="30dp"
-        android:layout_marginEnd="30dp"
-        android:layout_marginBottom="46dp"
+        android:layout_marginEnd="@dimen/kq_space_16"
+        android:layout_marginBottom="@dimen/kq_space_16"
+        android:contentDescription="@string/air_chat_jump_latest"
         android:onClick="scroll_to_bottom"
-        android:textSize="15sp"
         android:visibility="invisible"
-        app:backgroundTint="@color/message_list_scroll_to_bottom_fab_bg_normal"
+        app:backgroundTint="@color/kq_raised"
+        app:borderWidth="0dp"
+        app:elevation="2dp"
         app:fabSize="mini"
-        app:srcCompat="@drawable/ic_baseline_keyboard_arrow_down_24" />
+        app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.KQ.Air.Control"
+        app:srcCompat="@drawable/kq_ic_chevron_down"
+        app:tint="@color/kq_ink_2" />
 
 </RelativeLayout>

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (redesign, stage 5): the Russian demo world, debug builds only (AirDemoWorld), from
+     khandaq-ios/Antidote/ru.lproj/AppStoreLocalizable.strings. The same names as values/air_demo_world.xml. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="air_demo_name_self">Самир Валиев</string>
+    <string name="air_demo_self_status">Отвечаю по вечерам</string>
+
+    <string name="air_demo_name_amina">Амина Сафина</string>
+    <string name="air_demo_amina_status">По выходным в горах</string>
+    <string name="air_demo_amina_1">Привет! В субботу идём в горы?</string>
+    <string name="air_demo_amina_2">Да, если погода не подведёт</string>
+    <string name="air_demo_amina_3">Прогноз хороший, солнце весь день</string>
+    <string name="air_demo_amina_4">Тогда выезжаем в 6, я возьму палатку</string>
+    <string name="air_demo_amina_5">Отлично. Я возьму горелку и воду</string>
+    <string name="air_demo_amina_6">Список вещей пришлю вечером</string>
+    <string name="air_demo_amina_7">Договорились</string>
+    <string name="air_demo_amina_8">Встречаемся у станции в 5:45</string>
+
+    <string name="air_demo_name_yusuf">Юсуф Каримов</string>
+    <string name="air_demo_yusuf_1">Завтра заберу ключи от гаража</string>
+    <string name="air_demo_yusuf_2">Хорошо, я дома после семи</string>
+    <string name="air_demo_yusuf_3">Юсуф, список ещё в силе? Хочу заехать в магазин после работы</string>
+    <string name="air_demo_yusuf_4">И напомни, сколько брать воды</string>
+    <string name="air_demo_yusuf_5">Я буду у тебя в 19:30</string>
+
+    <string name="air_demo_name_ibrahim">Ибрагим Гасанов</string>
+    <string name="air_demo_ibrahim_1">Скинул тебе план маршрута</string>
+    <string name="air_demo_ibrahim_2">Спасибо, посмотрю</string>
+
+    <string name="air_demo_name_long">Максимилиан Александр фон Гогенцоллерн-Зигмаринген</string>
+    <string name="air_demo_long_1">Спасибо за книгу!</string>
+
+    <string name="air_demo_name_leila">Лейла Насер</string>
+
+    <string name="air_demo_request_1">Ас-саляму алейкум! Это Тимур, мы познакомились на лекции в субботу.</string>
+
+    <string name="air_demo_saved_1">Код домофона у мамы: 2741</string>
+    <string name="air_demo_saved_2">Купить: хлеб, финики, чай</string>
+
+    <string name="air_demo_name_hiking">Походный клуб</string>
+    <string name="air_demo_name_khadija">Хадиджа Нуриева</string>
+    <string name="air_demo_name_omar">Омар Саидов</string>
+    <string name="air_demo_name_zaynab">Зайнаб Алиева</string>
+    <string name="air_demo_name_hamza">Хамза Рашидов</string>
+    <string name="air_demo_name_maryam">Марьям Халилова</string>
+    <string name="air_demo_group_1">Кто едет в субботу? Отметьтесь до вечера</string>
+    <string name="air_demo_group_ibrahim">Маршрут на субботу: 14 км, один крутой подъём в начале</string>
+    <string name="air_demo_group_omar">У меня две лишние горелки, если кому-то нужно</string>
+    <string name="air_demo_group_khadija_format">\@%1$s, можно я возьму с собой сестру? Ей 16</string>
+    <string name="air_demo_group_self">Конечно, чем больше, тем лучше. Сбор у станции в 5:45</string>
+
+    <string name="air_demo_name_mosque">Объявления мечети</string>
+    <string name="air_demo_name_imam">Имам Халид</string>
+    <string name="air_demo_listener_format">Слушатель %1$d</string>
+    <string name="air_demo_group_2">Пятничная проповедь начнётся в 13:00</string>
+    <string name="air_demo_group_hamza">Со следующей недели пятничные уроки начинаются в 19:00</string>
+
+    <string name="air_demo_contact_format">Контакт %1$d</string>
+    <string name="air_demo_bulk_message">До встречи</string>
+</resources>

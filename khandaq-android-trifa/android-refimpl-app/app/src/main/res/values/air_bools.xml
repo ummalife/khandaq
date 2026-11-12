@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The video call as an icon in the conversation header. Below 400dp it sits in the overflow menu:
+         with search, video and call side by side, a 360dp screen left the name about five characters. -->
+    <bool name="air_chat_video_in_header">false</bool>
+</resources>

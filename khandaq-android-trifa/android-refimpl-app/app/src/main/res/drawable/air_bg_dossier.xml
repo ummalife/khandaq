@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The dossier that drops from the chat header: the surface, ending in a hairline over the dimmed chat. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <color android:color="@color/kq_line" />
+    </item>
+    <item android:bottom="@dimen/kq_stroke_hairline">
+        <color android:color="@color/kq_surface" />
+    </item>
+</layer-list>

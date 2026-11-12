@@ -17,16 +17,16 @@ private struct Constants {
     static let BigCenterContainerTopOffset = 50.0
     static let BigButtonOffset = 30.0
 
-    static let SmallButtonOffset = 20.0
-    static let SmallBottomOffset: CGFloat = -20.0
+    static let SmallBottomOffset: CGFloat = -KQSpace.x32
 
     static let VideoPreviewOffset = -20.0
     static let VideoPreviewSize = CGSize(width: 150.0, height: 110)
-    static let SwitchCameraOffset = 5.0
-
-    static let ControlsAnimationDuration = 0.3
+    static let SwitchCameraOffset = KQSpace.x6
 }
 
+/// A call that is ringing out or going on (redesign stage 3, E9): the person, "Calling" or the timer in
+/// tabular figures, the link, and the row of 64 pt controls at the bottom with their words: microphone,
+/// speaker, camera and end.
 class CallActiveController: CallBaseController {
     enum State {
         case none
@@ -43,10 +43,10 @@ class CallActiveController: CallBaseController {
 
             switch state {
                 case .none:
-                    infoLabel.text = nil
+                    setInfo(nil, isTimer: false)
                     stopCallDurationTimer()
                 case .reaching:
-                    infoLabel.text = String(localized: "call_reaching")
+                    setInfo(String(localized: "air_call_calling"), isTimer: false)
                     stopCallDurationTimer()
 
                     bigVideoButton?.isEnabled = false
@@ -63,7 +63,7 @@ class CallActiveController: CallBaseController {
                     if callDurationTimer == nil {
                         callDurationBase = duration
                         callDurationBaseTime = ProcessInfo.processInfo.systemUptime
-                        infoLabel.text = String(timeInterval: duration)
+                        setInfo(AirCallText.duration(duration), isTimer: true)
                         startCallDurationTimer()
                     }
             }
@@ -149,9 +149,9 @@ class CallActiveController: CallBaseController {
 
             toggleTopContainer(hidden: !showControls)
 
-            UIView.animate(withDuration: Constants.ControlsAnimationDuration, animations: { [unowned self] in
+            UIView.animate(withDuration: KQMotion.duration(KQMotion.layout), animations: { [unowned self] in
                 self.view.layoutIfNeeded()
-            }) 
+            })
         }
     }
 
@@ -246,7 +246,7 @@ class CallActiveController: CallBaseController {
 extension CallActiveController {
     @objc func tapOnView() {
         // KHANDAQ: the bottom row is now the ONLY layout, so tap-to-hide must stay a video-call
-        // feature — otherwise any stray tap during an audio call hides the controls.
+        // feature; otherwise any stray tap during an audio call hides the controls.
         guard videoFeed != nil || videoPreviewLayer != nil else {
             return
         }
@@ -287,7 +287,7 @@ private extension CallActiveController {
                 return
             }
             let elapsed = self.callDurationBase + (ProcessInfo.processInfo.systemUptime - self.callDurationBaseTime)
-            self.infoLabel.text = String(timeInterval: elapsed)
+            self.setInfo(AirCallText.duration(elapsed), isTimer: true)
         }
     }
 
@@ -303,7 +303,9 @@ private extension CallActiveController {
 
     func createVideoPreviewView() {
         videoPreviewView = UIView()
-        videoPreviewView.backgroundColor = theme.colorForType(.CallVideoPreviewBackground)
+        videoPreviewView.backgroundColor = KQColor.lockBottom
+        videoPreviewView.layer.cornerRadius = KQRadius.card
+        videoPreviewView.clipsToBounds = true
         view.addSubview(videoPreviewView)
 
         videoPreviewView.isHidden = !outgoingVideo
@@ -311,8 +313,11 @@ private extension CallActiveController {
         let image = UIImage.templateNamed("switch-camera")
 
         switchCameraButton = UIButton()
-        switchCameraButton.tintColor = theme.colorForType(.CallButtonIconColor)
+        switchCameraButton.tintColor = KQColor.fixedWhite
+        switchCameraButton.backgroundColor = KQColor.mediaControl
+        switchCameraButton.layer.cornerRadius = KQSize.targetIos / 2
         switchCameraButton.setImage(image, for: UIControlState())
+        switchCameraButton.accessibilityLabel = String(localized: "air_call_switch_camera")
         switchCameraButton.addTarget(self, action: #selector(CallActiveController.switchCameraButtonPressed), for: .touchUpInside)
         videoPreviewView.addSubview(switchCameraButton)
     }
@@ -332,15 +337,32 @@ private extension CallActiveController {
         bigDeclineButton = addButtonWithType(.decline, buttonSize: .small, action: #selector(CallActiveController.declineButtonPressed), container: bigContainerView)
     }
 
+    /// The row at the bottom, in the thumb zone: microphone, speaker, camera, end, each with its word.
     func createSmallViews() {
-        smallContainerView = UIView()
-        smallContainerView.backgroundColor = .clear
+        let row = UIStackView()
+        row.axis = .horizontal
+        row.alignment = .top
+        // Equal columns: four words under the circles fit on the narrowest phone.
+        row.distribution = .fillEqually
+        smallContainerView = row
         view.addSubview(smallContainerView)
 
-        smallMuteButton = addButtonWithType(.mute, buttonSize: .small, action: #selector(CallActiveController.muteButtonPressed(_:)), container: smallContainerView)
-        smallSpeakerButton = addButtonWithType(.speaker, buttonSize: .small, action: #selector(CallActiveController.speakerButtonPressed(_:)), container: smallContainerView)
-        smallVideoButton = addButtonWithType(.video, buttonSize: .small, action: #selector(CallActiveController.videoButtonPressed(_:)), container: smallContainerView)
-        smallDeclineButton = addButtonWithType(.decline, buttonSize: .small, action: #selector(CallActiveController.declineButtonPressed), container: smallContainerView)
+        smallMuteButton = addControl(.mute, action: #selector(CallActiveController.muteButtonPressed(_:)), to: row,
+                                     identifier: "air.call.mic")
+        smallSpeakerButton = addControl(.speaker, action: #selector(CallActiveController.speakerButtonPressed(_:)), to: row,
+                                        identifier: "air.call.speaker")
+        smallVideoButton = addControl(.video, action: #selector(CallActiveController.videoButtonPressed(_:)), to: row,
+                                      identifier: "air.call.camera")
+        smallDeclineButton = addControl(.decline, action: #selector(CallActiveController.declineButtonPressed), to: row,
+                                        identifier: "air.call.end")
+    }
+
+    func addControl(_ type: CallButton.ButtonType, action: Selector, to row: UIStackView, identifier: String) -> CallButton {
+        let button = CallButton(theme: theme, type: type, buttonSize: .small)
+        button.accessibilityIdentifier = identifier
+        button.addTarget(self, action: action, for: .touchUpInside)
+        row.addArrangedSubview(AirCallControl(button: button, title: CallButton.title(for: type)))
+        return button
     }
 
     func createDebugLabel() {
@@ -378,6 +400,7 @@ private extension CallActiveController {
         switchCameraButton.snp.makeConstraints {
             $0.top.equalTo(videoPreviewView).offset(Constants.SwitchCameraOffset)
             $0.trailing.equalTo(videoPreviewView).offset(-Constants.SwitchCameraOffset)
+            $0.size.equalTo(KQSize.targetIos)
         }
 
         bigContainerView.snp.makeConstraints {
@@ -415,30 +438,9 @@ private extension CallActiveController {
 
         smallContainerView.snp.makeConstraints {
             // KHANDAQ: pin the control row above the home indicator (safe area), not the raw
-            // screen bottom — on notch devices the row used to sit under the gesture bar.
+            // screen bottom; on notch devices the row used to sit under the gesture bar.
             smallContainerViewBottomConstraint = $0.bottom.equalTo(view.safeAreaLayoutGuide.snp.bottom).offset(Constants.SmallBottomOffset).constraint
-            $0.centerX.equalTo(view)
-        }
-
-        smallMuteButton!.snp.makeConstraints {
-            $0.top.bottom.equalTo(smallContainerView)
-            $0.leading.equalTo(smallContainerView)
-        }
-
-        smallSpeakerButton!.snp.makeConstraints {
-            $0.top.bottom.equalTo(smallContainerView)
-            $0.leading.equalTo(smallMuteButton!.snp.trailing).offset(Constants.SmallButtonOffset)
-        }
-
-        smallVideoButton!.snp.makeConstraints {
-            $0.top.bottom.equalTo(smallContainerView)
-            $0.leading.equalTo(smallSpeakerButton!.snp.trailing).offset(Constants.SmallButtonOffset)
-        }
-
-        smallDeclineButton!.snp.makeConstraints {
-            $0.top.bottom.equalTo(smallContainerView)
-            $0.leading.equalTo(smallVideoButton!.snp.trailing).offset(Constants.SmallButtonOffset)
-            $0.trailing.equalTo(smallContainerView)
+            $0.leading.trailing.equalTo(view.safeAreaLayoutGuide).inset(KQSpace.x16)
         }
     }
 

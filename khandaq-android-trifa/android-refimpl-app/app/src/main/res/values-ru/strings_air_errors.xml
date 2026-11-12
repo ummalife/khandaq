@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- E21 (redesign, stage 3b): refusals and failures said at their place instead of in a toast -->
+    <string name="air_retry_contact_offline">Собеседник сейчас не в сети. Повторите, когда он появится</string>
+    <string name="air_retry_group_not_connected">Группа ещё не подключена. Повторите чуть позже</string>
+    <string name="air_voice_needs_mic">Для голосовых сообщений нужен микрофон: разрешите его Khandaq в настройках телефона</string>
+    <string name="air_group_video_needs_access">Для видео в группе нужны камера и микрофон: разрешите их Khandaq в настройках телефона</string>
+    <string name="air_incoming_file_over_limit_format">Файл размером %1$s не принят: предел %2$s</string>
+    <string name="air_group_message_unreadable">Сообщение в этой группе не удалось прочитать, оно пропущено</string>
+    <string name="air_group_file_unreadable">Файл в этой группе не удалось принять</string>
+    <string name="air_profile_load_failed_kept">Khandaq не смог открыть файл профиля на этом устройстве. Файл сохранён как есть, Khandaq сейчас закроется</string>
+    <string name="air_profile_load_failed_parked">Khandaq не смог открыть файл профиля и отложил его. Khandaq сейчас закроется, а при следующем запуске начнёт с нового профиля</string>
+    <string name="air_profile_export_failed_title">Профиль не экспортирован</string>
+    <string name="air_profile_export_failed_message">Профиль не записался в выбранный файл. Попробуйте ещё раз.</string>
+    <string name="air_export_cancelled">Экспорт отменён: блокировка экрана не подтверждена</string>
+    <string name="air_group_setting_not_saved">Настройка не изменилась. Попробуйте ещё раз, когда группа подключится</string>
+    <string name="air_contact_add_failed">Контакт не добавлен. Попробуйте ещё раз</string>
+    <!-- E21 (redesign, stage 3b): more refusals and failures said at their place -->
+    <string name="air_group_private_not_sent">Не отправлено. Текст остался в поле: отправьте его снова, когда участник будет в сети в группе</string>
+    <string name="air_network_log_not_shared">Журнал не отправлен: Khandaq не смог записать его в файл. Попробуйте ещё раз</string>
+    <string name="air_nc_scan_needs_camera">Для сканирования нужна камера: разрешите её Khandaq или выберите фото кода</string>
+    <string name="air_nc_scan_camera_failed">Камера не запустилась. Закройте другие приложения, которые её используют, и сканируйте снова или выберите фото кода</string>
+</resources>

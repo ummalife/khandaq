@@ -8,8 +8,8 @@ EXTRACT="$ROOT/brand/_pack"
 ANDROID_RES="$ROOT/khandaq-android-trifa/android-refimpl-app/app/src/main/res"
 IOS_ICON="$ROOT/khandaq-ios/Antidote/Images.xcassets/AppIcon.appiconset"
 DESKTOP_ICONS="$ROOT/khandaq-desktop/img/icons"
-# Live site root (the standalone web/messenger/ site was retired). Brand assets and
-# the favicon patch must land on the published site under web/assets + web/index.html.
+# Live site root (the standalone web/messenger/ site was retired). Site icons land on
+# the published site under web/assets; the pages already link them by fixed names.
 WEB="$ROOT/web"
 
 [[ -f "$ZIP" ]] || { echo "Missing brand zip: $ZIP"; exit 1; }
@@ -68,17 +68,22 @@ for size in 14 16 22 24 32 36 48 64 72 96 128 192 256 512; do
   copy_linux_size "$size"
 done
 
-echo "==> Website logo + favicons"
-mkdir -p "$WEB/assets"
-cp -f "$B/Logo/khandaq-icon-editable.svg" "$WEB/assets/logo.svg"
-cp -f "$B/Favicons/favicon-16.png" "$WEB/assets/favicon-16.png"
-cp -f "$B/Favicons/favicon-32.png" "$WEB/assets/favicon-32.png"
-cp -f "$B/Favicons/apple-touch-icon-180.png" "$WEB/assets/apple-touch-icon.png"
-cp -f "$B/PWA/pwa-192.png" "$WEB/assets/pwa-192.png"
-cp -f "$B/PWA/pwa-512.png" "$WEB/assets/pwa-512.png"
-
-if ! grep -q 'favicon-32.png' "$WEB/index.html" 2>/dev/null; then
-  perl -0pi -e 's|<link rel="icon" href="assets/logo.svg" type="image/svg\+xml">|<link rel="icon" href="assets/favicon-32.png" sizes="32x32">\n  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">\n  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">|' "$WEB/index.html"
+echo "==> Website icons, scaled from the app icon"
+# KHANDAQ (redesign E23, 2026-11-11): the site shows the icon people get on their phone, so every site
+# icon is scaled from the iOS AppIcon-1024.png put in place above. The pack's Favicons/ and PWA/ files
+# are the bare mark on a transparent background: copying them here put a different icon on the site
+# than on the device. The old logo.svg, and the <link> patch that pointed at it, went with the old
+# pages; nothing in web/ loads an SVG logo any more.
+SITE_ICON="$IOS_ICON/AppIcon-1024.png"
+if command -v sips >/dev/null 2>&1 && [[ -f "$SITE_ICON" ]]; then
+  mkdir -p "$WEB/assets"
+  for spec in app-icon-64:64 app-icon-96:96 favicon-16:16 favicon-32:32 favicon-48:48 \
+              apple-touch-icon:180 pwa-192:192 pwa-512:512; do
+    size="${spec#*:}"
+    sips -s format png -z "$size" "$size" "$SITE_ICON" --out "$WEB/assets/${spec%%:*}.png" >/dev/null
+  done
+else
+  echo "    skipped: needs sips (macOS) and $SITE_ICON; the site keeps the icons it has" >&2
 fi
 
 echo "==> Store assets (reference)"

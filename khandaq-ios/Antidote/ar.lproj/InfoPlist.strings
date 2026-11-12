@@ -7,10 +7,16 @@
 */
 
 /* Camera usage alert description */
-"NSCameraUsageDescription" = "You can use video calls, send photos and videos, scan QR codes.";
+"NSCameraUsageDescription" = "يمكنك إجراء مكالمات مرئية، وإرسال الصور ومقاطع الفيديو، ومسح رموز QR.";
 
 /* Microphone usage alert description */
-"NSMicrophoneUsageDescription" = "You can use audio and video calls.";
+"NSMicrophoneUsageDescription" = "يمكنك إجراء مكالمات صوتية ومرئية، وتسجيل رسائل صوتية ومقاطع فيديو.";
 
 /* Photo library usage alert description */
-"NSPhotoLibraryUsageDescription" = "You can send photos and videos.";
+"NSPhotoLibraryUsageDescription" = "يمكنك إرسال الصور ومقاطع الفيديو.";
+
+/* Face ID / Touch ID usage alert description */
+"NSFaceIDUsageDescription" = "يمكنك فتح Khandaq باستخدام Face ID أو Touch ID بدلًا من إدخال رمز PIN.";
+
+/* Location usage alert description */
+"NSLocationWhenInUseUsageDescription" = "يمكنك مشاركة موقعك مع جهات الاتصال.";

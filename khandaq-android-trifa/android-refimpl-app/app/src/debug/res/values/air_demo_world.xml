@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (redesign, stage 5): the made-up demo world of the Play frames and of the measurements with
+     hundreds of chats, debug builds only (AirDemoWorld). The people and texts of the iOS store frames
+     (khandaq-ios/Antidote/en.lproj/AppStoreLocalizable.strings), with Ibrahim Gasanov where iOS has Bilal
+     Haddad and Maryam Khalilova in the slot iOS gives Ibrahim. No real people. Every air_demo_name_* value
+     must stay out of src/main (AirLiveOverrideTest). -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="air_demo_name_self">Samir Valiev</string>
+    <string name="air_demo_self_status">Replying in the evening</string>
+
+    <string name="air_demo_name_amina">Amina Safina</string>
+    <string name="air_demo_amina_status">Out on the trail on weekends</string>
+    <string name="air_demo_amina_1">Hi! Are we going to the mountains on Saturday?</string>
+    <string name="air_demo_amina_2">Yes, if the weather holds</string>
+    <string name="air_demo_amina_3">The forecast is good, sun all day</string>
+    <string name="air_demo_amina_4">Then we leave at 6, I will take the tent</string>
+    <string name="air_demo_amina_5">Great. I will bring the stove and water</string>
+    <string name="air_demo_amina_6">I will send the packing list tonight</string>
+    <string name="air_demo_amina_7">Deal</string>
+    <string name="air_demo_amina_8">Meet at the station at 5:45</string>
+
+    <string name="air_demo_name_yusuf">Yusuf Karimov</string>
+    <string name="air_demo_yusuf_1">I will pick up the garage keys tomorrow</string>
+    <string name="air_demo_yusuf_2">OK, I am home after seven</string>
+    <string name="air_demo_yusuf_3">Yusuf, is the list still on? I want to stop by the shop after work</string>
+    <string name="air_demo_yusuf_4">And remind me how much water to take</string>
+    <string name="air_demo_yusuf_5">I will be at yours at 19:30</string>
+
+    <string name="air_demo_name_ibrahim">Ibrahim Gasanov</string>
+    <string name="air_demo_ibrahim_1">Sent you the route plan</string>
+    <string name="air_demo_ibrahim_2">Thanks, I will take a look</string>
+
+    <string name="air_demo_name_long">Maximilian Alexander von Hohenzollern-Sigmaringen</string>
+    <string name="air_demo_long_1">Thank you for the book!</string>
+
+    <string name="air_demo_name_leila">Leila Nasser</string>
+
+    <string name="air_demo_request_1">Assalamu alaykum! It is Timur, we met at the lecture on Saturday.</string>
+
+    <string name="air_demo_saved_1">Intercom code at mum\'s: 2741</string>
+    <string name="air_demo_saved_2">Buy: bread, dates, tea</string>
+
+    <string name="air_demo_name_hiking">Hiking club</string>
+    <string name="air_demo_name_khadija">Khadija Nurieva</string>
+    <string name="air_demo_name_omar">Omar Saidov</string>
+    <string name="air_demo_name_zaynab">Zaynab Alieva</string>
+    <string name="air_demo_name_hamza">Hamza Rashidov</string>
+    <string name="air_demo_name_maryam">Maryam Khalilova</string>
+    <string name="air_demo_group_1">Who is coming on Saturday? Sign up by tonight</string>
+    <string name="air_demo_group_ibrahim">Route for Saturday: 14 km, one steep climb at the start</string>
+    <string name="air_demo_group_omar">I have two spare stoves if anyone needs one</string>
+    <string name="air_demo_group_khadija_format">\@%1$s, may I bring my sister? She is 16</string>
+    <string name="air_demo_group_self">Of course, the more the better. We meet at the station at 5:45</string>
+
+    <string name="air_demo_name_mosque">Mosque announcements</string>
+    <string name="air_demo_name_imam">Imam Khalid</string>
+    <string name="air_demo_listener_format">Listener %1$d</string>
+    <string name="air_demo_group_2">The Friday sermon starts at 13:00</string>
+    <string name="air_demo_group_hamza">From next week the Friday lessons start at 19:00</string>
+
+    <string name="air_demo_contact_format">Contact %1$d</string>
+    <string name="air_demo_bulk_message">See you</string>
+</resources>

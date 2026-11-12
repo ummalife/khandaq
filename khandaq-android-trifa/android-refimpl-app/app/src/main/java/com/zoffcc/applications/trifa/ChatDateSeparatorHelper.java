@@ -58,7 +58,16 @@ final class ChatDateSeparatorHelper
         if (source.shouldShowDateHeader(position))
         {
             dateLabel.setText(source.getDateHeaderText(position));
-            applyTheme(dateLabel);
+            // KHANDAQ (redesign, stage 2): an entry of the transcript heads its day with a quiet mark
+            // where the text starts, not a pill.
+            if (AirTranscript.isEntry(itemView))
+            {
+                AirTranscript.styleDayMark(dateLabel);
+            }
+            else
+            {
+                applyTheme(dateLabel);
+            }
             dateRow.setVisibility(View.VISIBLE);
         }
     }

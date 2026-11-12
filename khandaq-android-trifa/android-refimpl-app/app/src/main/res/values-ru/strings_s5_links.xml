@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Redesign stage 5: what a tap on a link, a mail address or a Tox ID in a message asks first (AirLinkQuestion) -->
+    <string name="air_text_link_question">Открыть эту ссылку?</string>
+    <string name="air_text_link_open">Открыть</string>
+    <string name="air_text_email_question">Написать на этот адрес?</string>
+    <string name="air_text_email_write">Написать</string>
+    <string name="air_text_email_chooser">Написать через</string>
+    <string name="air_text_id_question">Отправить запрос в контакты на этот ID?</string>
+</resources>

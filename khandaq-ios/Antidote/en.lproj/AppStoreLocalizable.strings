@@ -52,3 +52,63 @@
 "app_store_screenshot_chat_message_4" = "Sure, thanks!";
 /* Demo chat message for the App Store screenshot */
 "app_store_screenshot_chat_message_5" = "yep";
+
+/* Stage 2 of the redesign: the demo world of the UI tests' mock profile (OCTManagerMock). Made-up people. */
+"demo_s2_amina" = "Amina Safina";
+"demo_s2_amina_status" = "Out on the trail on weekends";
+"demo_s2_yusuf" = "Yusuf Karimov";
+"demo_s2_bilal" = "Bilal Haddad";
+"demo_s2_long" = "Maximilian Alexander von Hohenzollern-Sigmaringen";
+"demo_s2_leila" = "Leila Nasser";
+"demo_s2_group_founder" = "Hiking club";
+"demo_s2_group_observer" = "Mosque announcements";
+"demo_s2_group_peer_imam" = "Imam Khalid";
+"demo_s2_bulk_format" = "Contact %d";
+"demo_s2_bulk_message" = "See you";
+"demo_s2_amina_1" = "Hi! Are we going to the mountains on Saturday?";
+"demo_s2_amina_2" = "Yes, if the weather holds";
+"demo_s2_amina_3" = "The forecast is good, sun all day";
+"demo_s2_amina_4" = "Then we leave at 6, I will take the tent";
+"demo_s2_amina_5" = "Great. I will bring the stove and water";
+"demo_s2_amina_6" = "I will send the packing list tonight";
+"demo_s2_amina_7" = "Deal";
+"demo_s2_amina_8" = "Meet at the station at 5:45";
+"demo_s2_yusuf_1" = "I will pick up the garage keys tomorrow";
+"demo_s2_yusuf_2" = "OK, I am home after seven";
+"demo_s2_yusuf_3" = "Yusuf, is the list still on? I want to stop by the shop after work";
+"demo_s2_yusuf_4" = "And remind me how much water to take";
+"demo_s2_yusuf_5" = "I will be at yours at 19:30";
+"demo_s2_bilal_1" = "Sent you the route plan";
+"demo_s2_bilal_2" = "Thanks, I will take a look";
+"demo_s2_bilal_failed" = "What time is the train back?";
+"demo_s2_long_1" = "Thank you for the book!";
+"demo_s2_saved_1" = "Intercom code at mum's: 2741";
+"demo_s2_saved_2" = "Buy: bread, dates, tea";
+"demo_s2_group_1" = "Who is coming on Saturday? Sign up by tonight";
+"demo_s2_group_2" = "The Friday sermon starts at 13:00";
+
+/* Stage 3 of the redesign: more of the demo world (requests, invitations, groups). Made-up people. */
+"demo_s3_request_1" = "Assalamu alaykum! It is Timur, we met at the lecture on Saturday.";
+"demo_s3_invite_book" = "Book club";
+"demo_s3_invite_family" = "Family";
+"demo_s3_timur" = "Timur Akhmedov";
+"demo_s3_self" = "Samir Valiev";
+"demo_s3_peer_khadija" = "Khadija Nurieva";
+"demo_s3_peer_omar" = "Omar Saidov";
+"demo_s3_peer_zaynab" = "Zaynab Alieva";
+"demo_s3_peer_ibrahim" = "Ibrahim Gasanov";
+"demo_s3_peer_maryam" = "Maryam Khalilova";
+"demo_s3_peer_hamza" = "Hamza Rashidov";
+"demo_s3_listener_format" = "Listener %d";
+"demo_s3_group_bilal" = "Route for Saturday: 14 km, one steep climb at the start";
+"demo_s3_group_omar" = "I have two spare stoves if anyone needs one";
+"demo_s3_group_khadija_format" = "@%@, may I bring my sister? She is 16";
+"demo_s3_group_self" = "Of course, the more the better. We meet at the station at 5:45";
+"demo_s3_group_hamza" = "From next week the Friday lessons start at 19:00";
+"demo_s3_bilal_caption" = "We meet here, at the north exit";
+"demo_s3_self_status" = "Replying in the evening";
+"demo_s3_band_message" = "The photos from Saturday are in the group, have a look";
+"demo_s3_band_invite_group" = "Saturday by the river";
+
+/* Redesign stage 5: the private messages with the moderator */
+"demo_s5_private_hamza" = "Assalamu alaikum! After the lesson you asked me whether you may write in the group. I will ask the imam, he is the founder.";

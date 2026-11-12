@@ -43,6 +43,30 @@ class BubbleView: UIView {
     }
     var onLocationTap: (() -> Void)?
 
+    /// KHANDAQ (redesign stage 2): a transcript entry rather than a bubble: no plate and no corner, the
+    /// text flush with the text column, the notes under it in grey caption type.
+    private(set) var isTranscript = false
+
+    private var verticalInset: Double {
+        return isTranscript ? 0 : Constants.TextViewVerticalOffset
+    }
+
+    private var horizontalInset: Double {
+        return isTranscript ? 0 : Constants.TextViewHorizontalOffset
+    }
+
+    private var noteInset: Double {
+        return isTranscript ? 0 : Constants.TextViewHorizontalOffset + 4.0
+    }
+
+    private var noteBottomInset: Double {
+        return isTranscript ? 0 : 4.0
+    }
+
+    private var maxTextWidth: Double {
+        return isTranscript ? Double(KQSize.textMeasure) : Constants.TextViewMaxWidth
+    }
+
     var text: String? {
         get {
             return textView.text
@@ -67,6 +91,11 @@ class BubbleView: UIView {
         }
         set {
             textView.textColor = newValue
+            if isTranscript {
+                reactionsLabel.textColor = KQColor.ink2
+                editedLabel.textColor = KQColor.ink3
+                return
+            }
             reactionsLabel.textColor = newValue.withAlphaComponent(0.9)
             // subdued so «изменено» reads as metadata (mirrors the timestamp/status tint intent).
             editedLabel.textColor = newValue.withAlphaComponent(0.5)
@@ -98,6 +127,31 @@ class BubbleView: UIView {
         set {
             textView.isSelectable = newValue
         }
+    }
+
+    /// Switches this view to the transcript look; a cell calls it once, when it creates the view.
+    func useTranscriptStyle() {
+        guard !isTranscript else {
+            return
+        }
+        isTranscript = true
+        layer.cornerRadius = 0
+        layer.masksToBounds = false
+        backgroundColor = .clear
+        textView.textContainerInset = .zero
+        textView.textContainer.lineFragmentPadding = 0
+        textView.font = KQFont.font(.body)
+        textView.adjustsFontForContentSizeCategory = true
+        reactionsLabel.font = KQFont.font(.label, weight: 400)
+        reactionsLabel.adjustsFontForContentSizeCategory = true
+        editedLabel.font = KQFont.font(.caption)
+        editedLabel.adjustsFontForContentSizeCategory = true
+        unverifiedLabel.font = KQFont.font(.caption)
+        unverifiedLabel.adjustsFontForContentSizeCategory = true
+        unverifiedLabel.textColor = KQColor.transit
+        mapImageView?.layer.cornerRadius = KQRadius.card
+        replyQuoteView.useTranscriptStyle()
+        updateTextConstraints(hasMap: mapImageView?.isHidden == false)
     }
 
     func setLocationMapImage(_ image: UIImage?) {
@@ -134,14 +188,18 @@ class BubbleView: UIView {
 
     // KHANDAQ (#iOS edited-marker): show/hide the «изменено» metadata row (its own bottom sub-row).
     func bindEdited(_ isEdited: Bool) {
-        editedLabel.text = String(localized: "message_edited_marker")
+        // A hidden label still takes the width of its text in the layout: without text it asks for
+        // none, so a short message keeps a short bubble.
+        editedLabel.text = isEdited ? String(localized: "message_edited_marker") : nil
         editedLabel.isHidden = !isEdited
         updateTextConstraints(hasMap: mapImageView?.isHidden == false)
     }
 
     // KHANDAQ (audit#2 finding 1): show/hide the "sender not verified" note on relayed history rows.
     func bindUnverifiedSender(_ isUnverified: Bool) {
-        unverifiedLabel.text = String(localized: "group_msg_sender_unverified")
+        // The note is the widest line of a bubble: hidden with its text, it held every bubble at its
+        // width (bindEdited).
+        unverifiedLabel.text = isUnverified ? String(localized: "group_msg_sender_unverified") : nil
         unverifiedLabel.isHidden = !isUnverified
         // Read out by VoiceOver as part of the bubble: the wording IS the feature, an icon alone
         // would say nothing to anyone who cannot see it.
@@ -158,13 +216,22 @@ class BubbleView: UIView {
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         imageView.isUserInteractionEnabled = true
+        if isTranscript {
+            imageView.layer.cornerRadius = KQRadius.card
+        }
         addSubview(imageView)
         mapImageView = imageView
 
         imageView.snp.makeConstraints {
-            $0.top.equalTo(self).offset(Constants.TextViewVerticalOffset)
-            $0.leading.equalTo(self).offset(Constants.TextViewHorizontalOffset)
-            $0.trailing.equalTo(self).offset(-Constants.TextViewHorizontalOffset)
+            $0.top.equalTo(self).offset(verticalInset)
+            $0.leading.equalTo(self).offset(horizontalInset)
+            if isTranscript {
+                $0.trailing.lessThanOrEqualTo(self)
+                $0.width.equalTo(Constants.TextViewMaxWidth)
+            }
+            else {
+                $0.trailing.equalTo(self).offset(-horizontalInset)
+            }
             $0.width.lessThanOrEqualTo(Constants.TextViewMaxWidth)
             $0.height.equalTo(Constants.MapHeight)
         }
@@ -172,45 +239,47 @@ class BubbleView: UIView {
 
     fileprivate func updateTextConstraints(hasMap: Bool) {
         replyQuoteView.snp.remakeConstraints {
-            $0.top.equalTo(self).offset(Constants.TextViewVerticalOffset)
-            $0.leading.equalTo(self).offset(Constants.TextViewHorizontalOffset)
-            $0.trailing.equalTo(self).offset(-Constants.TextViewHorizontalOffset)
+            $0.top.equalTo(self).offset(verticalInset)
+            $0.leading.equalTo(self).offset(horizontalInset)
+            $0.trailing.equalTo(self).offset(-horizontalInset)
         }
 
         textView.snp.remakeConstraints {
+            // Transcript entries keep a small gap under a quote or a map; bubbles keep theirs.
+            let gapBelow = isTranscript ? Double(KQSpace.x4) : Constants.TextViewVerticalOffset
             if replyQuoteView.isHidden {
                 if hasMap, let mapImageView = mapImageView {
-                    $0.top.equalTo(mapImageView.snp.bottom).offset(Constants.TextViewVerticalOffset)
+                    $0.top.equalTo(mapImageView.snp.bottom).offset(gapBelow)
                 }
                 else {
-                    $0.top.equalTo(self).offset(Constants.TextViewVerticalOffset)
+                    $0.top.equalTo(self).offset(verticalInset)
                 }
             }
             else {
-                $0.top.equalTo(replyQuoteView.snp.bottom).offset(Constants.TextViewVerticalOffset)
+                $0.top.equalTo(replyQuoteView.snp.bottom).offset(gapBelow)
             }
 
             // KHANDAQ (#iOS edited-marker): the bubble bottom is now the lowest visible of
             // {textView, reactionsLabel, editedLabel, unverifiedLabel} — only pin textView to the
             // bottom when every one of them is hidden.
             if reactionsLabel.isHidden && editedLabel.isHidden && unverifiedLabel.isHidden {
-                $0.bottom.equalTo(self).offset(-Constants.TextViewVerticalOffset)
+                $0.bottom.equalTo(self).offset(-verticalInset)
             }
-            $0.leading.equalTo(self).offset(Constants.TextViewHorizontalOffset)
-            $0.trailing.equalTo(self).offset(-Constants.TextViewHorizontalOffset)
+            $0.leading.equalTo(self).offset(horizontalInset)
+            $0.trailing.equalTo(self).offset(-horizontalInset)
 
             $0.width.greaterThanOrEqualTo(Constants.TextViewMinWidth)
-            $0.width.lessThanOrEqualTo(Constants.TextViewMaxWidth)
+            $0.width.lessThanOrEqualTo(maxTextWidth)
             $0.height.greaterThanOrEqualTo(Constants.TextViewMinHeight)
         }
 
         reactionsLabel.snp.remakeConstraints {
             $0.top.equalTo(textView.snp.bottom)
-            $0.leading.equalTo(self).offset(Constants.TextViewHorizontalOffset + 4.0)
-            $0.trailing.lessThanOrEqualTo(self).offset(-Constants.TextViewHorizontalOffset)
+            $0.leading.equalTo(self).offset(noteInset)
+            $0.trailing.lessThanOrEqualTo(self).offset(-horizontalInset)
             // pin to bottom only when it's the last visible row (nothing below it).
             if !reactionsLabel.isHidden && editedLabel.isHidden && unverifiedLabel.isHidden {
-                $0.bottom.equalTo(self).offset(-4.0)
+                $0.bottom.equalTo(self).offset(-noteBottomInset)
             }
         }
 
@@ -223,10 +292,10 @@ class BubbleView: UIView {
             else {
                 $0.top.equalTo(reactionsLabel.snp.bottom).offset(1.0)
             }
-            $0.leading.equalTo(self).offset(Constants.TextViewHorizontalOffset + 4.0)
-            $0.trailing.lessThanOrEqualTo(self).offset(-Constants.TextViewHorizontalOffset)
+            $0.leading.equalTo(self).offset(noteInset)
+            $0.trailing.lessThanOrEqualTo(self).offset(-horizontalInset)
             if !editedLabel.isHidden && unverifiedLabel.isHidden {
-                $0.bottom.equalTo(self).offset(-4.0)
+                $0.bottom.equalTo(self).offset(-noteBottomInset)
             }
         }
 
@@ -242,10 +311,10 @@ class BubbleView: UIView {
             else {
                 $0.top.equalTo(textView.snp.bottom).offset(1.0)
             }
-            $0.leading.equalTo(self).offset(Constants.TextViewHorizontalOffset + 4.0)
-            $0.trailing.lessThanOrEqualTo(self).offset(-Constants.TextViewHorizontalOffset)
+            $0.leading.equalTo(self).offset(noteInset)
+            $0.trailing.lessThanOrEqualTo(self).offset(-horizontalInset)
             if !unverifiedLabel.isHidden {
-                $0.bottom.equalTo(self).offset(-4.0)
+                $0.bottom.equalTo(self).offset(-noteBottomInset)
             }
         }
     }

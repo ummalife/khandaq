@@ -65,11 +65,41 @@ class OCTSubmanagerObjectsMock: NSObject, OCTSubmanagerObjects {
     }
 
     func getOrCreateSavedMessagesChat() -> OCTChat! {
-        return nil
+        if let chat = OCTChat.objects(in: realm, with: NSPredicate(format: "isSavedMessages == YES")).firstObject() as? OCTChat {
+            return chat
+        }
+        let chat = OCTChat()
+        chat.isSavedMessages = true
+        chat.lastActivityDateInterval = Date().timeIntervalSince1970
+        realm.beginWriteTransaction()
+        realm.add(chat)
+        try? realm.commitWriteTransaction()
+        return chat
     }
 
+    /// A note "For yourself", stored as objcTox stores it: delivered, never sent anywhere.
     func addSavedTextMessage(_ text: String!, to chat: OCTChat!) -> OCTMessageAbstract! {
-        return nil
+        guard let chat = chat, !chat.isInvalidated else {
+            return nil
+        }
+        let now = Date().timeIntervalSince1970
+        let messageText = OCTMessageText()
+        messageText.text = text ?? ""
+        messageText.isDelivered = true
+
+        let message = OCTMessageAbstract()
+        message.chatUniqueIdentifier = chat.uniqueIdentifier
+        message.dateInterval = now
+        message.sortTimestamp = now
+        message.messageText = messageText
+
+        realm.beginWriteTransaction()
+        realm.add(message)
+        chat.lastMessage = message
+        chat.lastActivityDateInterval = now
+        chat.lastReadDateInterval = now
+        try? realm.commitWriteTransaction()
+        return message
     }
 
     func addSavedFileMessage(withPath filePath: String!, fileName: String!, fileSize: OCTToxFileSize, fileUTI: String?, to chat: OCTChat!) -> OCTMessageAbstract! {

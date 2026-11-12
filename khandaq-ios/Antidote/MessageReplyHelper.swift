@@ -83,8 +83,32 @@ enum MessageReplyHelper {
             return parsed
         }
 
-        parsed.bodyText = rawText
+        parsed.bodyText = readableBody(rawText)
         return parsed
+    }
+
+    /// Khandaq markup this build cannot read (a newer reply form, a block another client added) is not
+    /// shown as a service string (redesign stage 3, item 10). A message shaped like a reply keeps its
+    /// body; one that is nothing but such markup says so in words. Mention blocks pass untouched: the
+    /// group parser reads them after this.
+    static func readableBody(_ rawText: String) -> String {
+        guard rawText.hasPrefix(headerPrefix),
+              !rawText.hasPrefix(GroupMentionHelper.mentionBlockPrefix),
+              !rawText.hasPrefix("[KQ|m]") else {
+            return rawText
+        }
+        let rest: String
+        if let footerRange = rawText.range(of: footer) {
+            rest = String(rawText[footerRange.upperBound...])
+        }
+        else if let headerEnd = rawText.range(of: headerSuffix) {
+            rest = String(rawText[headerEnd.upperBound...])
+        }
+        else {
+            rest = ""
+        }
+        let body = trimLeading(rest)
+        return body.isEmpty ? String(localized: "air_message_unknown_format") : body
     }
 
     static func encode(_ meta: ReplyMeta?, bodyText: String?) -> String {
@@ -168,6 +192,11 @@ enum MessageReplyHelper {
         return t
     }
 
+    /// The mark that opens a forward header inside the message text. It travels on the wire and the
+    /// other clients look for it, so it stays exactly this; only the words after it come from the
+    /// strings, which carry no arrow (redesign stage 3).
+    static let forwardMark = "\u{21AA} "
+
     // KHANDAQ (#iOS forward): the "↪ Переслано от …" attribution is plain text baked into the body at
     // send time. Drop ALL contiguous leading "↪ " header lines, returning the real body — used before
     // RE-forwarding so headers never stack ("↪ … \n ↪ … \n body").
@@ -204,10 +233,12 @@ enum MessageReplyHelper {
         }
         let header: String
         if let name = name {
-            header = String(format: String(localized: "chat_forwarded_from_format"), name)
+            // String(localized:) formats by itself; formatting its result again had already lost the
+            // name, so every forward read "(null)".
+            header = forwardMark + String(localized: "chat_forwarded_from_format", name as NSString)
         }
         else {
-            header = String(localized: "chat_forwarded_noname")
+            header = forwardMark + String(localized: "chat_forwarded_noname")
         }
         return body.isEmpty ? header : header + "\n" + body
     }

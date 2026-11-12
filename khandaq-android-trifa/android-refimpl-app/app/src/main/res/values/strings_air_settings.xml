@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Advanced settings (stage 3b): the sections by task, the dialog buttons and the start-on-boot note -->
+    <string name="air_pref_section_chats">Chats</string>
+    <string name="air_pref_section_files">Files</string>
+    <string name="air_pref_section_call_sound">Call sound</string>
+    <string name="air_pref_section_call_video">Call video</string>
+    <string name="air_pref_section_system">System</string>
+    <string name="air_pref_ok">OK</string>
+    <string name="air_pref_boot_title">Starting after a restart</string>
+    <string name="air_pref_boot_message">Android 10 and later do not let an app open itself after the phone restarts, so on this phone the switch changes nothing. After a restart, open Khandaq once to be online.</string>
+    <!-- The command line (E3, stage 3b): Paste ID and joining a group by its key or link -->
+    <string name="air_cmd_paste_id">Paste ID</string>
+    <string name="air_cmd_paste_none">The clipboard holds no ID or group key</string>
+    <string name="air_cmd_join_group">Join the group with this key</string>
+    <string name="air_cmd_group_open">Open the group</string>
+    <string name="air_cmd_group_member">You are in this group</string>
+    <string name="air_cmd_group_note_nobody">No contact is online to let you in yet; joining waits for one. Open groups only.</string>
+    <string name="air_cmd_group_joining">Joining the group</string>
+    <string name="air_cmd_group_failed">Couldn\'t join the group. Try again.</string>
+    <plurals name="air_cmd_group_note_online">
+        <item quantity="one">%1$d contact online will be asked to let you in. Open groups only.</item>
+        <item quantity="other">%1$d contacts online will be asked to let you in. Open groups only.</item>
+    </plurals>
+    <!-- Advanced settings rows (stage 3b): titles and summaries in plain words, for the keys of pref_general.xml -->
+    <string name="air_pref_font_size_title">Text size in conversations</string>
+    <string name="air_pref_font_size_summary">The size of message text in conversations. The rest of Khandaq follows the text size set on the phone.</string>
+    <string name="air_pref_incognito_title">Incognito keyboard</string>
+    <string name="air_pref_incognito_summary">Asks the keyboard not to learn from what you type in messages. Whether it does is up to the keyboard.</string>
+    <string name="air_pref_screenshots_title">Block screenshots</string>
+    <string name="air_pref_screenshots_summary">The chat list, conversations and calls stay out of screenshots and screen recordings, and recent apps show them blank.</string>
+    <string name="air_pref_page_size_title">Messages per page</string>
+    <string name="air_pref_page_size_summary">A conversation shows this many messages at a time, and earlier ones are a tap away. 0 shows them all at once, which can be slow in a long conversation.</string>
+    <string name="air_pref_group_notes_title">Show who joins and leaves</string>
+    <string name="air_pref_group_notes_summary">In group conversations, a line says when someone joins, leaves or changes their name.</string>
+    <string name="air_pref_irc_name_1_title">First hidden IRC name</string>
+    <string name="air_pref_irc_name_2_title">Second hidden IRC name</string>
+    <string name="air_pref_irc_name_3_title">Third hidden IRC name</string>
+    <string name="air_pref_irc_name_1_summary">In a group with an IRC bridge, the messages it relays from this name are hidden. Leave empty if you do not use one.</string>
+    <string name="air_pref_irc_name_more_summary">Another name to hide, or leave empty.</string>
+    <string name="air_pref_accept_pictures_title">Accept pictures automatically</string>
+    <string name="air_pref_accept_pictures_summary">Pictures up to 12 MB download without asking.</string>
+    <string name="air_pref_accept_videos_title">Accept videos automatically</string>
+    <string name="air_pref_accept_videos_summary">Videos up to 200 MB download without asking.</string>
+    <string name="air_pref_accept_files_title">Accept all files automatically</string>
+    <string name="air_pref_accept_files_summary">Any file up to 200 MB downloads without asking, which takes storage and data.</string>
+    <string name="air_pref_share_in_title">Sharing from other apps</string>
+    <string name="air_pref_share_in_summary">Lets you send photos and files to a conversation from the Share menu of another app.</string>
+    <string name="air_pref_open_out_title">Open files in other apps</string>
+    <string name="air_pref_open_out_summary">A received file opens straight in another app, without being saved to the phone first. A harmful app could then also read other files that Khandaq keeps encrypted.</string>
+    <string name="air_pref_screen_off_title">Screen off at your ear</string>
+    <string name="air_pref_screen_off_summary">In a voice call the screen turns off while the phone is at your ear. If it then does not come back on, turn this off: the screen only goes blank instead.</string>
+    <string name="air_pref_auto_level_title">Automatic microphone level</string>
+    <string name="air_pref_auto_level_summary">Raises a quiet voice automatically in calls. If calls sound distorted, turn this off.</string>
+    <string name="air_pref_mic_boost_title">Microphone boost</string>
+    <string name="air_pref_mic_boost_summary">Makes your voice louder in calls when your microphone is quiet. 1 means no boost.</string>
+    <string name="air_pref_boost_lowers_title">Boost lowers the volume</string>
+    <string name="air_pref_boost_lowers_summary">For a microphone that is too loud: the boost above then makes your voice quieter instead of louder.</string>
+    <string name="air_pref_noise_title">Reduce background noise</string>
+    <string name="air_pref_noise_summary">Filters background noise, such as traffic or a fan, out of your voice in calls. Uses a little more battery.</string>
+    <string name="air_pref_call_quality_title">Call sound quality</string>
+    <string name="air_pref_call_quality_summary">Higher quality sounds clearer and uses more data. Applies from the next call.</string>
+    <string name="air_pref_swap_colours_title">Swap camera colours</string>
+    <string name="air_pref_swap_colours_summary">If your video comes out in the wrong colours, such as blue skin, switch this the other way.</string>
+    <string name="air_pref_picture_format_title">Camera picture format</string>
+    <string name="air_pref_picture_format_summary">If your video comes out garbled or striped, try the other format.</string>
+    <string name="air_pref_video_chip_title">Use the phone\'s video chip</string>
+    <string name="air_pref_video_chip_summary">Video calls are encoded by the phone\'s own video chip instead of by Khandaq. That saves battery, but on some phones the picture breaks up.</string>
+    <string name="air_pref_resolution_title">Camera resolution</string>
+    <string name="air_pref_resolution_summary">How sharp your picture is in video calls. A sharper picture needs a faster connection.</string>
+    <string name="air_pref_gradual_refresh_title">Gradual picture refresh</string>
+    <string name="air_pref_gradual_refresh_summary">With the phone\'s video chip, the picture is renewed bit by bit instead of all at once, which keeps video steadier on a weak connection.</string>
+    <string name="air_pref_fewer_frames_title">Fewer video frames</string>
+    <string name="air_pref_fewer_frames_summary">Sends half as many frames per second, about 12 instead of 25: less smooth, but it uses less data.</string>
+    <string name="air_pref_camera_fps_title">15 frames per second</string>
+    <string name="air_pref_camera_fps_summary">Asks the camera for 15 frames per second. On some phones Khandaq may then close when the camera starts.</string>
+    <string name="air_pref_direct_only_title">Direct connections only</string>
+    <string name="air_pref_direct_only_summary">Khandaq connects only directly, never through a relay, so contacts on networks that block direct paths cannot be reached. Applies the next time Khandaq starts.</string>
+    <string name="air_pref_tor_title">Connect through Tor</string>
+    <string name="air_pref_tor_summary">Your traffic goes through the Tor network, so contacts do not see your internet address. It needs the Orbot app, is slower, and applies the next time Khandaq starts.</string>
+    <string name="air_pref_start_after_restart_title">Start after a restart</string>
+    <string name="air_pref_start_after_restart_summary">Opens Khandaq after the phone restarts, on Android 9 and earlier. Android 10 and later do not allow it: open Khandaq once after a restart.</string>
+    <!-- The shown choices of the Advanced lists; their stored values stay the arrays of strings.xml -->
+    <string-array name="air_pref_font_size_entries">
+        <item>Smallest</item>
+        <item>Small</item>
+        <item>Default</item>
+        <item>Large</item>
+        <item>Larger</item>
+        <item>Very large</item>
+        <item>Largest</item>
+    </string-array>
+    <string-array name="air_pref_call_quality_entries">
+        <item>Low</item>
+        <item>Normal</item>
+        <item>High</item>
+    </string-array>
+    <string-array name="air_pref_picture_format_entries">
+        <item>Standard</item>
+        <item>Alternative</item>
+    </string-array>
+    <string-array name="air_pref_resolution_entries">
+        <item>Standard</item>
+        <item>HD</item>
+        <item>Full HD</item>
+    </string-array>
+</resources>

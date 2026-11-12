@@ -19,6 +19,7 @@
 
 package com.zoffcc.applications.trifa;
 
+import org.khandaq.messenger.BuildConfig;
 import org.khandaq.messenger.R;
 
 import android.content.Intent;
@@ -39,6 +40,7 @@ import com.zoffcc.applications.sorm.FriendList;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.widget.TextViewCompat;
 
 import static com.zoffcc.applications.trifa.HelperFriend.count_friend_messages;
 import static com.zoffcc.applications.trifa.HelperFriend.get_friend_capabilities_from_pubkey;
@@ -179,6 +181,10 @@ public class FriendInfoActivity extends AppCompatActivity
                                                 msgv3_single_cap);
         }
 
+        // KHANDAQ (redesign, E10): the friend's push address and relay key are tools for developers, as on
+        // the profile; this screen says in words whether notifications get through, as the dossier does.
+        final boolean developerDetails = BuildConfig.DEBUG && MainActivity.INSANE_TRACE_LOGGING;
+
         String friend_relay_pubkey = friend_pubkey != null ? get_relay_for_friend(friend_pubkey) : null;
 
         fi_relay_pubkey_textview.setText("");
@@ -303,6 +309,14 @@ public class FriendInfoActivity extends AppCompatActivity
         catch (Exception e)
         {
             e.printStackTrace();
+        }
+
+        if (!developerDetails)
+        {
+            fi_relay_text.setVisibility(View.GONE);
+            fi_relay_pubkey_textview.setVisibility(View.GONE);
+            remove_friend_relay_button.setVisibility(View.GONE);
+            showNotificationsInWords(pushurl_for_friend);
         }
 
         try
@@ -529,5 +543,20 @@ public class FriendInfoActivity extends AppCompatActivity
         {
             e.printStackTrace();
         }
+    }
+
+    /** Whether notifications reach this person, in the dossier's words, in place of their push address. */
+    private void showNotificationsInWords(final String pushurl_for_friend)
+    {
+        final String name = HelperFriend.resolve_name_for_pubkey(friend_pubkey, "");
+        fi_pushurl_text.setText(R.string.air_dossier_notifications_title);
+        fi_pushurl_text.setVisibility(View.VISIBLE);
+        TextViewCompat.setTextAppearance(fi_pushurl_textview, R.style.TextAppearance_KQ_Body);
+        fi_pushurl_textview.setTextColor(AirUi.color(this, R.color.kq_ink));
+        fi_pushurl_textview.setText((pushurl_for_friend != null) && !pushurl_for_friend.isEmpty()
+                                    ? getString(R.string.air_dossier_push_on_format, AirConversationModel.shortName(name))
+                                    : getString(R.string.air_dossier_push_off));
+        fi_pushurl_textview.setVisibility(View.VISIBLE);
+        remove_friend_pushurl_button.setVisibility(View.GONE);
     }
 }

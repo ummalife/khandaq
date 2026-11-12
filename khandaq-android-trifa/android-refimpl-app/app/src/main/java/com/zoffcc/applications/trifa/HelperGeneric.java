@@ -4272,7 +4272,8 @@ public class HelperGeneric
 
             if (do_notification)
             {
-                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.tox_friendpubkey, friendname, m.text);
+                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.tox_friendpubkey, friendname, m.text,
+                                        m.sent_timestamp, null);
             }
 
             if (msgV3hash_hex_string != null)
@@ -4416,7 +4417,8 @@ public class HelperGeneric
 
             if (do_notification)
             {
-                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.tox_friendpubkey, friendname, m.text);
+                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.tox_friendpubkey, friendname, m.text,
+                                        m.sent_timestamp, null);
             }
         }
         else if (msg_type == 2)
@@ -4561,7 +4563,8 @@ public class HelperGeneric
 
             if (do_notification)
             {
-                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.tox_friendpubkey, friendname, m.text);
+                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.tox_friendpubkey, friendname, m.text,
+                                        m.sent_timestamp, null);
             }
         }
     }
@@ -4968,22 +4971,23 @@ public class HelperGeneric
                 f_src.delete();
             }
 
-            AlertDialog.Builder builder = new AlertDialog.Builder(context);
-            builder.setTitle(context.getString(R.string.settings_import_tox_profile));
-            builder.setMessage(context.getString(R.string.settings_import_tox_profile_invalid_file));
-            builder.setPositiveButton(android.R.string.ok, null);
-            builder.create().show();
+            // E21 (redesign stage 5): said from below, as the other refusals of an import.
+            AirSheet.sayUnderOrTell(null, context, context.getString(R.string.settings_import_tox_profile),
+                                    context.getString(R.string.settings_import_tox_profile_invalid_file), true);
             return;
         }
 
         // KHANDAQ #24: the stop-tox wait + DB wipe + savedata copy used to run on the UI thread
-        // (a busy-wait loop), freezing the app for the whole import ("очень долго"). Run it on a
+        // (a busy-wait loop), freezing the app for the whole import ("very slow", as reported). Run it on a
         // background thread behind a progress dialog; only touch the UI from the main handler.
-        final android.app.ProgressDialog progress = new android.app.ProgressDialog(context);
-        progress.setMessage(context.getString(R.string.import_toxsave_in_progress));
-        progress.setCancelable(false);
-        progress.setIndeterminate(true);
-        try { progress.show(); } catch (Exception ignored) {}
+        // E21 (redesign stage 5): the wait is a sheet that holds while the work runs, in words and with
+        // no spinner (no endless motion); the work has no steps to count.
+        final AirSheet progress = AirSheet.create(context, context.getString(R.string.import_toxsave_in_progress),
+                                                  context.getString(R.string.air_import_wait));
+        if (progress != null)
+        {
+            progress.holdOpen().show();
+        }
 
         MainActivity.global_stop_tox();
 
@@ -5119,9 +5123,13 @@ public class HelperGeneric
             }
 
             // back on the UI thread: dismiss progress and show the final restart dialog
+            final boolean copy_ok = copied;
             final Runnable finalUi = () ->
             {
-                try { if (progress.isShowing()) { progress.dismiss(); } } catch (Exception ignored) {}
+                if (progress != null)
+                {
+                    progress.dismiss();
+                }
 
                 if (restart_in_process)
                 {
@@ -5145,26 +5153,30 @@ public class HelperGeneric
 
                 try
                 {
-                    final AlertDialog.Builder builder = new AlertDialog.Builder(context);
-                    builder.setTitle(context.getString(R.string.import_toxsave_ok_title));
-                    builder.setMessage(context.getString(R.string.import_toxsave_ok_message));
-                    builder.setCancelable(false);
-                    builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener()
+                    // E21 (redesign stage 5): from below and held: OK is the one way on, and it ends the
+                    // process as before. A copy that did not go through no longer says "Profile imported".
+                    final AirSheet done = AirSheet.create(context, context.getString(
+                            copy_ok ? R.string.import_toxsave_ok_title : R.string.settings_import_tox_profile),
+                                                          context.getString(copy_ok ? R.string.import_toxsave_ok_message
+                                                                                    : R.string.settings_import_tox_profile_failed));
+                    if (done == null)
                     {
-                        public void onClick(DialogInterface dialog, int id)
-                        {
-                            try
-                            {
-                                Log.i(TAG, "Import ToxSaveFile complete, now exiting the application.");
-                                System.exit(0);
-                            }
-                            catch (Exception ignored)
-                            {
-                            }
-                        }
+                        Log.i(TAG, "Import ToxSaveFile: no screen for the final sheet, exiting the application.");
+                        System.exit(0);
+                        return;
+                    }
+                    done.verb(context.getString(android.R.string.ok), false, v ->
+                    {
+                        Log.i(TAG, "Import ToxSaveFile complete, now exiting the application.");
+                        System.exit(0);
                     });
+                    done.holdOpen();
                     Log.i(TAG, "Import ToxSaveFile: show final Dialog.");
-                    builder.create().show();
+                    if (!done.show())
+                    {
+                        Log.i(TAG, "Import ToxSaveFile: final sheet not shown, exiting the application.");
+                        System.exit(0);
+                    }
                 }
                 catch (Exception e)
                 {

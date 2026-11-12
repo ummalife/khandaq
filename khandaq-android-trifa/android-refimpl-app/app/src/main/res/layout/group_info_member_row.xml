@@ -1,41 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (redesign, E14): a member of the group dossier: the presence dot, the name, then the role and
+     the presence in words ("moderator, online"). The row opens the member; a long press their actions. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/tg_chat_item_ripple"
+    android:background="@drawable/air_bg_row"
     android:clickable="true"
     android:focusable="true"
     android:gravity="center_vertical"
-    android:minHeight="48dp"
+    android:minHeight="@dimen/kq_size_target_android"
     android:orientation="horizontal"
-    android:paddingStart="16dp"
-    android:paddingTop="10dp"
-    android:paddingEnd="16dp"
-    android:paddingBottom="10dp">
+    android:paddingStart="@dimen/kq_space_16"
+    android:paddingTop="@dimen/kq_space_10"
+    android:paddingEnd="@dimen/kq_space_16"
+    android:paddingBottom="@dimen/kq_space_10">
 
     <View
         android:id="@+id/group_member_online_dot"
-        android:layout_width="8dp"
-        android:layout_height="8dp"
-        android:layout_marginEnd="12dp"
-        android:background="@drawable/group_info_online_dot" />
+        android:layout_width="@dimen/kq_size_dot"
+        android:layout_height="@dimen/kq_size_dot"
+        android:layout_marginEnd="@dimen/kq_space_12"
+        android:background="@drawable/air_bg_dot"
+        android:importantForAccessibility="no" />
 
-    <TextView
-        android:id="@+id/group_member_name"
+    <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="@color/tg_chat_title"
-        android:textSize="16sp" />
+        android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/group_member_status"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:textColor="@color/tg_chat_preview"
-        android:textSize="12sp" />
+        <TextView
+            android:id="@+id/group_member_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textAlignment="viewStart"
+            android:textAppearance="@style/TextAppearance.KQ.Body"
+            android:textColor="@color/kq_ink" />
+
+        <TextView
+            android:id="@+id/group_member_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFeatureSettings="tnum"
+            android:textAlignment="viewStart"
+            android:textAppearance="@style/TextAppearance.KQ.Caption"
+            android:textColor="@color/kq_ink_3" />
+    </LinearLayout>
 
 </LinearLayout>

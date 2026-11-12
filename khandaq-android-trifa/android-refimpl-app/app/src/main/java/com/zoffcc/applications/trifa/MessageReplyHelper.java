@@ -5,12 +5,16 @@ import android.text.TextUtils;
 
 import androidx.annotation.Nullable;
 
+import org.khandaq.messenger.R;
+
 /** Encode/decode Telegram-style reply metadata embedded in plain message text. */
 final class MessageReplyHelper
 {
     static final String HEADER_PREFIX = "[KQ|";
     static final String HEADER_SUFFIX = "]";
     static final String FOOTER = "[KQ/end]";
+    /** The mention block of older iOS builds; like the current one, it is not unknown markup. */
+    private static final String LEGACY_MENTION_PREFIX = "[KQ|m]";
 
     static final class ReplyMeta
     {
@@ -47,23 +51,43 @@ final class MessageReplyHelper
         if (rawText.startsWith(HEADER_PREFIX))
         {
             final int headerEnd = rawText.indexOf(HEADER_SUFFIX);
-            final int footerStart = rawText.indexOf(FOOTER);
-            if (headerEnd > 0 && footerStart > headerEnd)
+            final ReplyMeta meta = headerEnd > 0
+                    ? parseHeader(rawText.substring(HEADER_PREFIX.length(), headerEnd)) : null;
+            if (meta != null)
             {
-                final ReplyMeta meta = parseHeader(rawText.substring(HEADER_PREFIX.length(), headerEnd));
-                if (meta != null)
+                final int previewStart = headerEnd + HEADER_SUFFIX.length();
+                final int footerStart = rawText.indexOf(FOOTER);
+                if (footerStart >= previewStart)
                 {
-                    final int previewStart = headerEnd + HEADER_SUFFIX.length();
+                    // The normal form: the preview stands between the header and the [KQ/end] footer, the
+                    // body follows the footer.
                     if (previewStart < footerStart)
                     {
                         meta.previewText = rawText.substring(previewStart, footerStart).trim();
                     }
-                    parsed.reply = meta;
-                    final int bodyStart = footerStart + FOOTER.length();
-                    parsed.bodyText = bodyStart < rawText.length()
-                            ? trimLeading(rawText.substring(bodyStart)) : "";
-                    return parsed;
+                    parsed.bodyText = bodyStart(rawText, footerStart + FOOTER.length());
                 }
+                else
+                {
+                    // KHANDAQ (#146, as iOS): the footer is missing (a peer build that leaves it out, or a
+                    // message cut short). parseHeader has read the message ID and the time as numbers, so
+                    // this is a reply, and its marker is not shown as the body: the first line after the
+                    // header is the quoted preview, the rest is the body.
+                    int start = previewStart;
+                    while (start < rawText.length() && isLineBreak(rawText.charAt(start)))
+                    {
+                        start++;
+                    }
+                    int lineEnd = start;
+                    while (lineEnd < rawText.length() && !isLineBreak(rawText.charAt(lineEnd)))
+                    {
+                        lineEnd++;
+                    }
+                    meta.previewText = rawText.substring(start, lineEnd).trim();
+                    parsed.bodyText = bodyStart(rawText, lineEnd + 1);
+                }
+                parsed.reply = meta;
+                return parsed;
             }
         }
 
@@ -86,8 +110,78 @@ final class MessageReplyHelper
             }
         }
 
-        parsed.bodyText = rawText;
+        parsed.bodyText = readableBody(rawText);
         return parsed;
+    }
+
+    /**
+     * Khandaq markup this build cannot read (a newer reply form, a block another client added) is not
+     * shown as a service string (redesign stage 3, item 10; design/DESIGN.md, "Unknown markup, on every
+     * client"). A message that opens with it keeps the text after the markup; one that is nothing but
+     * markup says so in words. The rows, the chat list and the notifications all read the body here.
+     */
+    static String readableBody(final String rawText)
+    {
+        final String body = textAfterUnknownMarkup(rawText);
+        if (body == null)
+        {
+            return rawText;
+        }
+        return body.isEmpty() ? unknownFormatSentence() : body;
+    }
+
+    /**
+     * The text after markup this build cannot read, taken as iOS takes it: after the [KQ/end] footer when
+     * there is one, otherwise after the first "]". Empty when nothing follows the markup; null when the
+     * text does not open with such markup. Mention blocks are not unknown: the group parser reads them.
+     */
+    @Nullable
+    static String textAfterUnknownMarkup(@Nullable final String rawText)
+    {
+        if (rawText == null || !rawText.startsWith(HEADER_PREFIX)
+            || rawText.startsWith(GroupMentionHelper.MENTION_BLOCK_PREFIX)
+            || rawText.startsWith(LEGACY_MENTION_PREFIX))
+        {
+            return null;
+        }
+        final int footerStart = rawText.indexOf(FOOTER);
+        final int headerEnd = rawText.indexOf(HEADER_SUFFIX);
+        final String rest;
+        if (footerStart >= 0)
+        {
+            rest = rawText.substring(footerStart + FOOTER.length());
+        }
+        else if (headerEnd >= 0)
+        {
+            rest = rawText.substring(headerEnd + HEADER_SUFFIX.length());
+        }
+        else
+        {
+            rest = "";
+        }
+        return withoutControlCharacters(rest).trim();
+    }
+
+    /** The sentence for a message that is nothing but markup this build cannot read, in the app's language. */
+    private static String unknownFormatSentence()
+    {
+        final Context context = MainActivity.context_s;
+        return context == null ? "" : context.getString(R.string.air_message_unknown_format);
+    }
+
+    /** Control characters out, line breaks kept, as iOS cleans a body before showing it. */
+    private static String withoutControlCharacters(final String value)
+    {
+        final StringBuilder kept = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++)
+        {
+            final char c = value.charAt(i);
+            if (!Character.isISOControl(c) || c == '\n' || c == '\r')
+            {
+                kept.append(c);
+            }
+        }
+        return kept.toString();
     }
 
     static String encode(final ReplyMeta meta, final String bodyText)
@@ -165,6 +259,17 @@ final class MessageReplyHelper
         // or a '[KQ..' token can't truncate the header early on parse (indexOf(']')) or forge a quote.
         return value.replace(FOOTER, "").replace(HEADER_PREFIX, "").replace(HEADER_SUFFIX, "")
                 .replace('|', ' ').replace('\n', ' ').replace('\r', ' ').trim();
+    }
+
+    /** The body from index start on, without the white space it opens with; empty past the end. */
+    private static String bodyStart(final String rawText, final int start)
+    {
+        return start < rawText.length() ? trimLeading(rawText.substring(start)) : "";
+    }
+
+    private static boolean isLineBreak(final char c)
+    {
+        return c == '\n' || c == '\r';
     }
 
     private static String trimLeading(final String value)

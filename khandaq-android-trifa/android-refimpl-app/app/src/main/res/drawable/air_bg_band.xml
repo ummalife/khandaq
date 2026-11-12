@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The presence band under the chat header: the surface, the selected plate while pressed. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:exitFadeDuration="@integer/kq_dur_tap">
+    <item android:state_pressed="true">
+        <color android:color="@color/kq_selected" />
+    </item>
+    <item android:state_focused="true">
+        <inset android:inset="@dimen/kq_space_2">
+            <shape android:shape="rectangle">
+                <solid android:color="@android:color/transparent" />
+                <stroke android:width="@dimen/kq_stroke_focus" android:color="@color/kq_focus" />
+                <corners android:radius="@dimen/kq_radius_field" />
+            </shape>
+        </inset>
+    </item>
+    <item>
+        <color android:color="@color/kq_surface" />
+    </item>
+</selector>

@@ -151,6 +151,81 @@ final class ProfileTabAvatarHelper
         }
     }
 
+    /** Air: where our photo lives and a cache key that changes with the file. */
+    static final class OwnPhoto
+    {
+        final String path;
+        final String signature;
+
+        private OwnPhoto(final String path, final String signature)
+        {
+            this.path = path;
+            this.signature = signature;
+        }
+
+        @Override
+        public boolean equals(final Object other)
+        {
+            return other instanceof OwnPhoto && signature.equals(((OwnPhoto) other).signature);
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return signature.hashCode();
+        }
+    }
+
+    /** Air: our photo, or null when there is none. Reads the database and stats the file: off the main thread. */
+    static OwnPhoto ownPhoto()
+    {
+        if (!VFS_ENCRYPT || TrifaToxService.vfs == null)
+        {
+            return null;
+        }
+        try
+        {
+            final String fname = get_vfs_image_filename_own_avatar();
+            if (fname == null)
+            {
+                return null;
+            }
+            final info.guardianproject.iocipher.File avatarFile = new info.guardianproject.iocipher.File(fname);
+            if (!avatarFile.exists() || avatarFile.length() <= 0)
+            {
+                return null;
+            }
+            // The path never changes when the user picks a new photo, so the key carries length and mtime.
+            return new OwnPhoto(fname, fname + "_" + avatarFile.length() + "_" + avatarFile.lastModified());
+        }
+        catch (Throwable ignored)
+        {
+            return null;
+        }
+    }
+
+    /** Air: loads {@link #ownPhoto()} into a square tile, cropped to fill it. */
+    static void loadOwnPhotoInto(final ImageView target, final Context context, final OwnPhoto photo)
+    {
+        GlideApp.with(context).clear(target);
+        if (photo == null || TrifaToxService.vfs == null)
+        {
+            target.setImageDrawable(null);
+            return;
+        }
+        try
+        {
+            GlideApp.with(context).load(new info.guardianproject.iocipher.File(photo.path))
+                    .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+                    .signature(new com.bumptech.glide.signature.StringSignatureZ(photo.signature))
+                    .centerCrop().into(target);
+        }
+        catch (Throwable ignored)
+        {
+            target.setImageDrawable(null);
+        }
+    }
+
     private static void loadOwnAvatarInto(final CircleImageView avatarView, final Context context)
     {
         if (TrifaToxService.vfs == null)

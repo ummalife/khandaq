@@ -89,15 +89,15 @@ public class PluralResourcesTest
     {
         final Map<String, String> ru = plurals("values-ru").get("group_header_member_count");
         assertNotNull("values-ru: group_header_member_count is not a <plurals>", ru);
-        assertEquals("%1$d участник · %2$d онлайн", ru.get("one"));
-        assertEquals("%1$d участника · %2$d онлайн", ru.get("few"));
-        assertEquals("%1$d участников · %2$d онлайн", ru.get("many"));
+        assertEquals("%1$d участник, %2$d онлайн", ru.get("one"));
+        assertEquals("%1$d участника, %2$d онлайн", ru.get("few"));
+        assertEquals("%1$d участников, %2$d онлайн", ru.get("many"));
 
         final Map<String, String> ar = plurals("values-ar").get("group_header_member_count");
         assertNotNull("values-ar: group_header_member_count is not a <plurals>", ar);
-        assertEquals("%1$d عضوان · %2$d متصل", ar.get("two"));
-        assertEquals("%1$d أعضاء · %2$d متصل", ar.get("few"));
-        assertEquals("%1$d عضوًا · %2$d متصل", ar.get("many"));
+        assertEquals("%1$d عضوان، %2$d متصل", ar.get("two"));
+        assertEquals("%1$d أعضاء، %2$d متصل", ar.get("few"));
+        assertEquals("%1$d عضوًا، %2$d متصل", ar.get("many"));
     }
 
     private static Set<String> formatArguments(String text)

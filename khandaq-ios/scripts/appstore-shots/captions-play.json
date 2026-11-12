@@ -1,0 +1,85 @@
+{
+  "_comment": "Google Play frames (render.py --profile play --locales en-US,ru-RU --captions captions-play.json): the same screens as captions.json, captured on the Android emulator at 1080x2400.",
+  "frames": [
+    {
+      "name": "air",
+      "file": "air.png",
+      "theme": "light",
+      "capture": "Air, light theme: the you block and the network line, a request card, Online now with a group row ('4 online') and two people, Offline with 'In transit' on one row, Just for you with Saved Messages; the In transit pill shows its count",
+      "captions": {
+        "en-US": {
+          "title": "Who you can reach, at a glance",
+          "subtitle": "People, groups and requests in one list, sorted by who is online now"
+        },
+        "ru-RU": {
+          "title": "Сразу видно, кто на связи",
+          "subtitle": "Люди, группы и запросы в одном списке: кто в сети сейчас, видно сразу"
+        }
+      }
+    },
+    {
+      "name": "conversation",
+      "file": "conversation.png",
+      "theme": "light",
+      "capture": "A one-to-one conversation, light theme: the time column, delivered messages, the In transit tray with one message waiting for the person who is offline, the composer with its delivery hint",
+      "captions": {
+        "en-US": {
+          "title": "See what has left",
+          "subtitle": "A message for someone offline waits in transit and goes out by itself when they are back"
+        },
+        "ru-RU": {
+          "title": "Видно, что ушло",
+          "subtitle": "Сообщение для того, кто не в сети, ждёт в пути и уходит само, как только собеседник вернётся"
+        }
+      }
+    },
+    {
+      "name": "new-contact",
+      "file": "new-contact.png",
+      "theme": "light",
+      "capture": "New contact, light theme: a whole valid ID in groups of four, the ruler with key 64, antispam 8 and check 4 all passed, the greeting, Send request enabled on the bar above the keyboard",
+      "captions": {
+        "en-US": {
+          "title": "Add people by ID or QR code",
+          "subtitle": "Khandaq checks the ID before your request goes out, so a typo shows up right away"
+        },
+        "ru-RU": {
+          "title": "Добавляйте по ID или QR-коду",
+          "subtitle": "Khandaq проверяет ID до отправки запроса, так что опечатка видна сразу"
+        }
+      }
+    },
+    {
+      "name": "group",
+      "file": "group.png",
+      "theme": "light",
+      "capture": "A group conversation, light theme: the header '9 members, 4 online now', the Get it now strip, authors named over their runs with a moderator role, the hint under the field '4 of 8 get it now, the rest when they come online'",
+      "captions": {
+        "en-US": {
+          "title": "Groups that show who is there",
+          "subtitle": "See who is online and who gets your message now, before you send it"
+        },
+        "ru-RU": {
+          "title": "В группе видно, кто на месте",
+          "subtitle": "Кто в сети и кто получит сообщение сейчас, видно ещё до отправки"
+        }
+      }
+    },
+    {
+      "name": "you",
+      "file": "you.png",
+      "theme": "dark",
+      "capture": "You, DARK theme: the QR card of your ID on its white card, Share ID and Copy ID, your name and status, the ID in its three parts",
+      "captions": {
+        "en-US": {
+          "title": "Your key is your account",
+          "subtitle": "No phone number, no email, no account on a server: the key is made on your phone"
+        },
+        "ru-RU": {
+          "title": "Ключ и есть ваш аккаунт",
+          "subtitle": "Без номера, email и аккаунта на сервере: ключ создаётся на вашем телефоне"
+        }
+      }
+    }
+  ]
+}

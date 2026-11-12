@@ -112,9 +112,12 @@ final class MediaGalleryViewController: UIViewController {
             make.top.leading.trailing.equalToSuperview()
         }
 
-        backButton.setTitle("‹", for: .normal)
-        backButton.setTitleColor(.white, for: .normal)
-        backButton.titleLabel?.font = .systemFont(ofSize: 30, weight: .medium)
+        // "Backward" turns with the layout in Arabic; a typed angle mark had no name for VoiceOver.
+        backButton.setImage(UIImage(systemName: "chevron.backward",
+                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)), for: .normal)
+        backButton.tintColor = .white
+        backButton.accessibilityLabel = String(localized: "qr_close_button")
+        backButton.accessibilityIdentifier = "media.gallery.close"
         backButton.backgroundColor = UIColor.black.withAlphaComponent(0.35)
         backButton.layer.cornerRadius = 20
         backButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
@@ -150,9 +153,10 @@ final class MediaGalleryViewController: UIViewController {
         }
 
         // Bottom controls: forward (left) + delete (right), thumbnails above
-        forwardButton.setTitle("↪", for: .normal)
-        forwardButton.setTitleColor(.white, for: .normal)
-        forwardButton.titleLabel?.font = .systemFont(ofSize: 22)
+        // Icons, not text glyphs (redesign stage 3: no arrows or emoji typed into the interface).
+        forwardButton.setImage(UIImage(systemName: "arrowshape.turn.up.right"), for: .normal)
+        forwardButton.tintColor = .white
+        forwardButton.accessibilityLabel = String(localized: "chat_forward_action")
         forwardButton.backgroundColor = UIColor.black.withAlphaComponent(0.35)
         forwardButton.layer.cornerRadius = 22
         forwardButton.addTarget(self, action: #selector(forwardTapped), for: .touchUpInside)
@@ -163,8 +167,9 @@ final class MediaGalleryViewController: UIViewController {
             make.width.height.equalTo(44)
         }
 
-        deleteButton.setTitle("🗑", for: .normal)
-        deleteButton.titleLabel?.font = .systemFont(ofSize: 20)
+        deleteButton.setImage(AirIcon.image("trash"), for: .normal)
+        deleteButton.tintColor = .white
+        deleteButton.accessibilityLabel = String(localized: "alert_delete")
         deleteButton.backgroundColor = UIColor.black.withAlphaComponent(0.35)
         deleteButton.layer.cornerRadius = 22
         deleteButton.addTarget(self, action: #selector(deleteTapped), for: .touchUpInside)
@@ -274,7 +279,7 @@ extension MediaGalleryViewController: UICollectionViewDataSource, UICollectionVi
         syncThumbStrip()
     }
 
-    // Telegram-style: the strip follows the page — selection ring + keep the
+    // Telegram-style: the strip follows the page: selection ring + keep the
     // current thumb centered/visible (reloadData alone never scrolls the strip).
     private func syncThumbStrip() {
         thumbsCollection.reloadData()

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A button beside the composer's field: a 48dp touch target that presses as a plate the height of the
+     40dp field, so the plates and the field line up. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/air_bg_icon_button"
+    android:inset="@dimen/kq_space_4" />

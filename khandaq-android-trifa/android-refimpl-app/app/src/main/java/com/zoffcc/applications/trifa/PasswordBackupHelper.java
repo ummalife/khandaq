@@ -3,13 +3,15 @@ package com.zoffcc.applications.trifa;
 import android.app.Activity;
 import android.app.ProgressDialog;
 import android.content.Context;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.TextWatcher;
 import android.util.Log;
+import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.TextView;
-import android.widget.Toast;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 
 import org.khandaq.messenger.R;
@@ -41,60 +43,68 @@ final class PasswordBackupHelper
     }
 
     /**
-     * Show a "set a password (twice) + warning" dialog. On confirm with a valid, matching passphrase
-     * it calls {@code consumer}; the caller then launches the SAF create-document picker.
+     * The "set a password (twice) + warning" sheet from below (E21). On the verb with a valid, matching
+     * passphrase it calls {@code consumer}; the caller then launches the SAF create-document picker.
      */
     static void promptForBackupPassphrase(final Activity activity, final PassphraseConsumer consumer)
     {
-        final LinearLayout box = new LinearLayout(activity);
-        box.setOrientation(LinearLayout.VERTICAL);
-        final int pad = (int) (activity.getResources().getDisplayMetrics().density * 20);
-        box.setPadding(pad, pad / 2, pad, 0);
+        final AirSheet sheet = AirSheet.create(activity, activity.getString(R.string.backup_password_title),
+                                               activity.getString(R.string.backup_password_warning));
+        if (sheet == null)
+        {
+            return;
+        }
+        final AirStepKit.LineField pass1 = new AirStepKit.LineField(
+                sheet.context, activity.getString(R.string.backup_password_enter), true);
+        final AirStepKit.LineField pass2 = new AirStepKit.LineField(
+                sheet.context, activity.getString(R.string.backup_password_confirm), true);
+        sheet.add(pass1, R.dimen.kq_space_16);
+        sheet.add(pass2, R.dimen.kq_space_12);
 
-        final EditText pass1 = passwordField(activity, activity.getString(R.string.backup_password_enter));
-        final EditText pass2 = passwordField(activity, activity.getString(R.string.backup_password_confirm));
-        final TextView warn = new TextView(activity);
-        warn.setText(activity.getString(R.string.backup_password_warning));
-        warn.setPadding(0, pad / 2, 0, 0);
+        // E21: a refusal stands under the field it is about, and goes once that field changes.
+        final TextWatcher endRefusals = new TextWatcher()
+        {
+            @Override
+            public void beforeTextChanged(final CharSequence s, final int start, final int count, final int after)
+            {
+            }
 
-        box.addView(pass1);
-        box.addView(pass2);
-        box.addView(warn);
+            @Override
+            public void onTextChanged(final CharSequence s, final int start, final int before, final int count)
+            {
+            }
 
-        final AlertDialog dialog = new AlertDialog.Builder(activity)
-                .setTitle(R.string.backup_password_title)
-                .setView(box)
-                .setPositiveButton(android.R.string.ok, null)   // overridden below to keep dialog open on error
-                .setNegativeButton(android.R.string.cancel, null)
-                .create();
+            @Override
+            public void afterTextChanged(final Editable s)
+            {
+                AirUi.endUnder(pass1);
+                AirUi.endUnder(pass2);
+            }
+        };
+        pass1.edit.addTextChangedListener(endRefusals);
+        pass2.edit.addTextChangedListener(endRefusals);
 
-        dialog.setOnShowListener(d ->
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v ->
-                {
-                    final String p1 = pass1.getText().toString();
-                    final String p2 = pass2.getText().toString();
-                    if (p1.length() < MIN_PASSPHRASE_LEN)
-                    {
-                        Toast.makeText(activity, R.string.backup_password_too_short, Toast.LENGTH_LONG).show();
-                        return;
-                    }
-                    if (!p1.equals(p2))
-                    {
-                        Toast.makeText(activity, R.string.backup_password_mismatch, Toast.LENGTH_LONG).show();
-                        return;
-                    }
-                    dialog.dismiss();
-                    consumer.onPassphrase(p1.toCharArray());
-                }));
-        dialog.show();
-    }
-
-    private static EditText passwordField(final Context context, final String hint)
-    {
-        final EditText e = new EditText(context);
-        e.setHint(hint);
-        e.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        return e;
+        // The verb says what comes next; a refusal keeps the sheet open with what was typed.
+        sheet.verb(activity.getString(R.string.air_backup_choose_place), false, v ->
+        {
+            final String p1 = pass1.text();
+            final String p2 = pass2.text();
+            if (p1.length() < MIN_PASSPHRASE_LEN)
+            {
+                AirUi.sayUnder(pass1, activity.getString(R.string.backup_password_too_short), false);
+                return;
+            }
+            if (!p1.equals(p2))
+            {
+                AirUi.sayUnder(pass2, activity.getString(R.string.backup_password_mismatch), false);
+                return;
+            }
+            final char[] passphrase = p1.toCharArray();
+            sheet.dismissThen(() -> consumer.onPassphrase(passphrase));
+        });
+        sheet.cancel(null);
+        sheet.withKeyboard().show();
+        AirStepKit.showKeyboard(pass1.edit);
     }
 
     /**
@@ -104,24 +114,38 @@ final class PasswordBackupHelper
      */
     static void performBackup(final Activity activity, final android.net.Uri uri, final char[] passphrase)
     {
+        performBackup(activity, uri, passphrase, null);
+    }
+
+    /**
+     * As above; {@code anchor} is the row that started it (Settings, Export profile): what came of the
+     * backup stands under it (E21), and without one it is said from below.
+     */
+    static void performBackup(final Activity activity, final android.net.Uri uri, final char[] passphrase,
+                              @Nullable final View anchor)
+    {
         if (uri == null)
         {
             scrub(passphrase);
             return;
         }
 
-        final ProgressDialog progress = new ProgressDialog(activity);
-        progress.setTitle(R.string.backup_password_title);
-        progress.setMessage(activity.getString(R.string.backup_in_progress));
-        progress.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
-        progress.setCancelable(false);
-        progress.setMax(100);
-        try { progress.show(); } catch (Exception ignored) {}
+        // E21: a sheet that waits on the work, with a still bar that moves only as the work does.
+        final AirSheet progress = AirSheet.create(activity, activity.getString(R.string.backup_password_title),
+                                                  activity.getString(R.string.backup_in_progress));
+        final AirSheet.Progress bar = progress == null ? null
+                                                       : progress.add(new AirSheet.Progress(progress.context),
+                                                                      R.dimen.kq_space_24);
+        if (progress != null)
+        {
+            progress.holdOpen().show();
+        }
 
         new Thread(() ->
         {
             File tmpTox = null;
             String error = null;
+            boolean failed = false;
             try
             {
                 final String dbKey = MainActivity.PREF__DB_secrect_key;
@@ -152,13 +176,16 @@ final class PasswordBackupHelper
                 {
                 }
 
+                final int[] shown = {-1};
                 final BackupHelper.ProgressListener listener = (done, total) ->
                 {
                     final int pct = total > 0 ? (int) (done * 100L / total) : 0;
-                    activity.runOnUiThread(() ->
+                    // Once per percent, not once per 8 KiB block.
+                    if (bar != null && pct != shown[0])
                     {
-                        try { progress.setProgress(pct); } catch (Exception ignored) {}
-                    });
+                        shown[0] = pct;
+                        activity.runOnUiThread(() -> bar.set(pct));
+                    }
                     return true;
                 };
 
@@ -174,7 +201,10 @@ final class PasswordBackupHelper
             }
             catch (Exception e)
             {
-                error = e.getMessage();
+                // Failure is the catch itself, not a message: an EOFException has none, and a backup
+                // that did not finish must never be reported as made.
+                failed = true;
+                error = describe(e);
                 Log.w(TAG, "performBackup failed: " + error);
             }
             finally
@@ -183,22 +213,44 @@ final class PasswordBackupHelper
                 scrub(passphrase);
             }
 
+            final boolean ok = !failed;
             final String finalError = error;
             activity.runOnUiThread(() ->
             {
-                try { if (progress.isShowing()) { progress.dismiss(); } } catch (Exception ignored) {}
-                final boolean ok = finalError == null;
-                new AlertDialog.Builder(activity)
-                        .setTitle(R.string.backup_password_title)
-                        .setMessage(ok ? activity.getString(R.string.backup_done)
-                                       : activity.getString(R.string.backup_failed) + "\n" + finalError)
-                        .setPositiveButton(android.R.string.ok, null)
-                        .show();
+                if (progress != null)
+                {
+                    progress.dismiss();
+                }
+                final String title = activity.getString(R.string.backup_password_title);
+                if (ok)
+                {
+                    AirSheet.sayUnderOrTell(anchor, activity, title, activity.getString(R.string.backup_done), false);
+                }
+                else
+                {
+                    AirSheet.sayUnderOrTell(anchor, activity, title,
+                                            activity.getString(R.string.backup_failed) + "\n" + finalError, true);
+                }
             });
         }, "kbk-backup").start();
     }
 
-    /** Single-field passphrase prompt for restore. */
+    /** The reason of a failure for its line: the exception's message, or its kind when it has none. */
+    private static String describe(final Exception e)
+    {
+        final String message = e.getMessage();
+        return message == null || message.isEmpty() ? e.getClass().getSimpleName() : message;
+    }
+
+    private static EditText passwordField(final Context context, final String hint)
+    {
+        final EditText e = new EditText(context);
+        e.setHint(hint);
+        e.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        return e;
+    }
+
+    /** Single-field passphrase prompt for restore (the maintenance screen; it keeps its old dialogs). */
     static void promptPassphraseForRestore(final Activity activity, final PassphraseConsumer consumer)
     {
         final LinearLayout box = new LinearLayout(activity);
@@ -241,6 +293,7 @@ final class PasswordBackupHelper
             final File stagedDb = new File(activity.getCacheDir(), "restore_db.tmp");
             final File stagedVfs = new File(activity.getCacheDir(), "restore_vfs.tmp");
             String error = null;
+            boolean failed = false;
             BackupHelper.Manifest manifest = null;
             try (InputStream in = activity.getContentResolver().openInputStream(uri))
             {
@@ -278,16 +331,21 @@ final class PasswordBackupHelper
             }
             catch (Exception e)
             {
-                error = e.getMessage();
+                // KHANDAQ (stage 5): the catch decides, not the message. readLong() at the end of a backup
+                // cut right after its database throws an EOFException with no message, and a null message
+                // used to read as success and hand half-extracted staging to the destructive apply.
+                failed = true;
+                error = describe(e);
                 Log.w(TAG, "performRestore decrypt/verify failed: " + error);
             }
 
             final String finalError = error;
+            final boolean finalFailed = failed;
             final BackupHelper.Manifest finalManifest = manifest;
             activity.runOnUiThread(() ->
             {
                 try { if (progress.isShowing()) { progress.dismiss(); } } catch (Exception ignored) {}
-                if (finalError != null || finalManifest == null)
+                if (finalFailed || finalManifest == null)
                 {
                     try { stagedDb.delete(); stagedVfs.delete(); } catch (Exception ignored) {}
                     scrub(passphrase);

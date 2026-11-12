@@ -81,6 +81,20 @@ Full SPDX: `khandaq-desktop/LICENSES/`
 
 ---
 
+## Fonts (all clients and the site)
+
+| Component | License | Copies |
+|-----------|---------|--------|
+| IBM Plex Sans, IBM Plex Sans Arabic, IBM Plex Mono (Copyright 2017 IBM Corp., Reserved Font Name "Plex") | SIL Open Font License 1.1 | `design/system/fonts/`, `khandaq-desktop/res/font/plex/`, Android `app/src/main/res/font/ibm_plex_*.ttf`, iOS `khandaq-ios/Antidote/Fonts/`, site `web/assets/fonts/ibm-plex-*.woff2` |
+
+The license text ships next to the fonts in `design/system/fonts/OFL.txt`,
+`khandaq-desktop/res/font/plex/OFL.txt` and `web/assets/fonts/IBM-Plex-OFL.txt`, and the iOS app shows
+it in `antidote-acknowledgements.html`. Every font file also carries the copyright and the license in
+its `name` table (IDs 0, 13 and 14); that is what travels with the Android copies, because `res/font/`
+accepts font files only.
+
+---
+
 ## Source offers (GPL)
 
 Binary distributions of GPL components must include or offer corresponding source:

@@ -31,7 +31,8 @@ enum GroupMemberStatusFormatter {
             parts.append(String(localized: "group_peer_notifications_muted"))
         }
 
-        return parts.joined(separator: " · ")
+        // A comma, not a middle dot: the brief bans pseudo-graphics in the interface (E21 pass).
+        return parts.joined(separator: ", ")
     }
 
     static func formatLastSeen(_ dateInterval: TimeInterval) -> String {
@@ -99,25 +100,18 @@ enum GroupPeerActionsPresenter {
                         // 76-hex Tox ID, so sendFriendRequest(toAddress:) rejected it ("ошибка на всех").
                         // Add by public key (tox_friend_add_norequest) instead.
                         try submanagerFriends.addFriend(byPublicKey: pubkey.uppercased())
-                        let toast = UIAlertController(title: nil,
-                                                      message: String(localized: "group_member_action_add_friend_sent"),
-                                                      preferredStyle: .alert)
-                        toast.addAction(UIAlertAction(title: String(localized: "alert_ok"), style: .default, handler: nil))
-                        viewController.present(toast, animated: true, completion: nil)
+                        // E21: a confirmation is a toast, not a dialog to dismiss.
+                        AirToast.show(String(localized: "group_member_action_add_friend_sent"), in: viewController.view)
                     }
                     catch let error as NSError {
-                        presentError(error, on: viewController)
+                        handleErrorWithType(.toxAddFriend, error: error)
                     }
                 })
             }
 
             alert.addAction(UIAlertAction(title: String(localized: "group_member_action_copy_id"), style: .default) { _ in
                 UIPasteboard.general.string = pubkey.uppercased()
-                let toast = UIAlertController(title: nil,
-                                              message: String(localized: "group_member_action_copy_done"),
-                                              preferredStyle: .alert)
-                toast.addAction(UIAlertAction(title: String(localized: "alert_ok"), style: .default, handler: nil))
-                viewController.present(toast, animated: true, completion: nil)
+                AirToast.show(String(localized: "group_member_action_copy_done"), in: viewController.view)
             })
         }
 
@@ -203,7 +197,7 @@ enum GroupPeerActionsPresenter {
                     onPeersChanged?()
                 }
                 catch let error as NSError {
-                    presentError(error, on: viewController)
+                    handleErrorWithType(.setGroupPeerRole, error: error)
                 }
             })
         }
@@ -215,27 +209,23 @@ enum GroupPeerActionsPresenter {
                                     chat: OCTChat,
                                     submanagerGroups: OCTSubmanagerGroups,
                                     onPeersChanged: (() -> Void)?) {
-        let message = String(localized: "group_peer_kick_confirm_format", displayName)
-        let alert = UIAlertController(title: String(localized: "group_peer_kick"), message: message, preferredStyle: .alert)
-
-        alert.addAction(UIAlertAction(title: String(localized: "group_peer_kick"), style: .destructive) { _ in
+        // E21: from below, what happens in one sentence, the verb on the button; the words of the
+        // group dossier (E14).
+        let words = AirGroupMemberAction.kick.confirmation(name: displayName)
+        let sheet = AirConfirm.sheet(title: words.title,
+                                     message: words.message,
+                                     verb: AirGroupMemberAction.kick.title,
+                                     source: viewController.view) {
             do {
                 try submanagerGroups.kickPeer(withId: UInt32(peer.peerId), in: chat)
                 onPeersChanged?()
             }
             catch let error as NSError {
-                presentError(error, on: viewController)
+                handleErrorWithType(.kickGroupPeer, error: error)
             }
-        })
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        }
 
-        viewController.present(alert, animated: true, completion: nil)
-    }
-
-    private static func presentError(_ error: NSError, on viewController: UIViewController) {
-        let alert = UIAlertController(title: nil, message: error.localizedDescription, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: String(localized: "alert_ok"), style: .default, handler: nil))
-        viewController.present(alert, animated: true, completion: nil)
+        viewController.present(sheet, animated: true, completion: nil)
     }
 }
 

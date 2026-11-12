@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- KHANDAQ (redesign, E22): the in-app band and the notifications of requests and invitations; wording as on iOS -->
+    <string name="air_band_new_message">New message</string>
+    <string name="air_band_request_title">Incoming contact request</string>
+    <string name="air_band_invite">Invites you to a group</string>
+    <string name="air_band_invite_format">Invites you to the group %1$s</string>
+    <string name="air_band_sender_text_format">%1$s: %2$s</string>
+    <string name="air_band_hint_chat">Opens the chat</string>
+    <string name="air_band_hint_request">Opens the request</string>
+    <string name="air_band_hint_invite">Opens the invitation</string>
+    <string name="air_band_dismiss">Put away</string>
+    <string name="air_band_channel_requests">Requests and invitations</string>
+    <string name="air_band_channel_requests_description">Contact requests and invitations to groups</string>
+</resources>

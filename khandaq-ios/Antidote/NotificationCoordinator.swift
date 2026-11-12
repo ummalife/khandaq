@@ -9,6 +9,7 @@ import UserNotifications
 private enum NotificationType {
     case newMessage(OCTMessageAbstract)
     case friendRequest(OCTFriendRequest)
+    case groupInvite(AirGroupInvite)
 }
 
 private struct Constants {
@@ -18,10 +19,40 @@ private struct Constants {
 protocol NotificationCoordinatorDelegate: class {
     func notificationCoordinator(_ coordinator: NotificationCoordinator, showChat chat: OCTChat)
     func notificationCoordinatorShowFriendRequest(_ coordinator: NotificationCoordinator, showRequest request: OCTFriendRequest)
+    /// Requests, where the invitations to groups wait.
+    func notificationCoordinatorShowGroupInvites(_ coordinator: NotificationCoordinator)
     func notificationCoordinatorAnswerIncomingCall(_ coordinator: NotificationCoordinator, userInfo: String)
 
     func notificationCoordinator(_ coordinator: NotificationCoordinator, updateFriendsBadge badge: Int)
     func notificationCoordinator(_ coordinator: NotificationCoordinator, updateChatsBadge badge: Int)
+}
+
+/// What was notified while away neither rings nor comes as a band (E22): only a message that arrived
+/// just now does.
+enum NotificationFreshness {
+    /// KHANDAQ (#H3): the backlog Realm flushes right after the app comes to the foreground arrived
+    /// while away (already push-notified); it rang "on entry with nothing new visible". A message
+    /// arriving while the app is already open, past this short grace window, rings normally.
+    static let entryGrace: TimeInterval = 3
+
+    /// KHANDAQ (#H3): the sound is gated only on "inserted at index 0 of the global dateInterval-DESC
+    /// list", so a 1:1 message that was offline-QUEUED and flushed on reconnect (old send time, stored
+    /// now) inserted at 0 and rang with no visible new message ("звук на входе, а сообщений нет"). A
+    /// genuinely-live message has tssent ≈ now; a flushed/backfilled one has an old tssent. 45s absorbs
+    /// sender clock skew. Non-msgv3 peers have tssent==0 (can't be offline-queued) and ring normally.
+    static let lateDelivery: TimeInterval = 45
+
+    static func isPastEntryGrace(becameActive: Date, now: Date) -> Bool {
+        return now.timeIntervalSince(becameActive) >= entryGrace
+    }
+
+    /// `tssent` is the sender's send time (0 without msgV3).
+    static func arrivedJustNow(sentAt tssent: TimeInterval, becameActive: Date, now: Date) -> Bool {
+        if tssent > 0, now.timeIntervalSince1970 - tssent > lateDelivery {
+            return false
+        }
+        return isPastEntryGrace(becameActive: becameActive, now: now)
+    }
 }
 
 class NotificationCoordinator: NSObject {
@@ -64,7 +95,7 @@ class NotificationCoordinator: NSObject {
 
     init(theme: Theme, submanagerObjects: OCTSubmanagerObjects) {
         self.theme = theme
-        self.notificationWindow = NotificationWindow(theme: theme)
+        self.notificationWindow = NotificationWindow()
 
         self.submanagerObjects = submanagerObjects
         self.avatarManager = AvatarManager(theme: theme)
@@ -96,15 +127,13 @@ class NotificationCoordinator: NSObject {
         requestsToken?.invalidate()
     }
 
-    /**
-        Show or hide connnecting view.
-     */
+    /// The connection pill is retired (redesign stage 3, E4): our own node is told by the quiet line
+    /// under the name on the Air screen and by the hint under the message field, without colour
+    /// flashes. The pill never showed anyway (its window had no scene), so nothing visible goes away.
     func toggleConnectingView(show: Bool, animated: Bool) {
-        notificationWindow.showConnectingView(show, animated: animated)
     }
 
     func setConnectionState(_ state: NotificationWindow.ConnectionPillState, animated: Bool) {
-        notificationWindow.setConnectionState(state, animated: animated)
     }
 
     /**
@@ -118,7 +147,7 @@ class NotificationCoordinator: NSObject {
             switch $0 {
                 case .newMessage(let messageAbstract):
                     return messageAbstract.chatUniqueIdentifier != chat.uniqueIdentifier
-                case .friendRequest:
+                case .friendRequest, .groupInvite:
                     return true
             }
         }
@@ -145,13 +174,29 @@ class NotificationCoordinator: NSObject {
         performAction(action)
     }
 
+    /// An invitation to a group came from a contact (E22): it rings and comes as a band of its own, or as
+    /// a system notification while the app is away; its card waits in Requests either way. The
+    /// invitation of a muted contact waits there without a sound or a band.
+    func notifyGroupInvite(_ invite: AirGroupInvite) {
+        guard !AirLocalStore.shared.isMuted(publicKey: invite.inviterKey),
+              !AirLocalStore.shared.isBlocked(publicKey: invite.inviterKey) else {
+            return
+        }
+        // As for a request: what Realm flushes on the way back in was notified while away.
+        if isPastEntryGrace {
+            audioPlayer.playSound(.NewMessage)
+        }
+        enqueueNotification(.groupInvite(invite))
+    }
+
     func showCallNotificationWithCaller(_ caller: String, userInfo: String) {
         let object = NotificationObject(
                 title: caller,
                 body: String(localized: "notification_is_calling"),
                 action: .answerIncomingCall(userInfo: userInfo),
                 soundName: "isotoxin_Ringtone.aac",
-                icon: avatarManager.avatarFromString(caller, diameter: 44, type: .Call))
+                icon: avatarManager.avatarFromString(caller, diameter: 44, type: .Call),
+                tile: nil)
 
         showLocalNotificationObject(object)
     }
@@ -245,10 +290,14 @@ private extension NotificationCoordinator {
                     }
                     for index in insertions {
                         let request = requests[index]
+                        // KHANDAQ (redesign stage 3): a blocked key neither rings nor shows.
+                        guard !AirLocalStore.shared.isBlocked(publicKey: request.publicKey) else {
+                            continue
+                        }
 
                         // KHANDAQ (#H3 parity): don't ring for friend-requests flushed from the Realm backlog
                         // during the first 3s after the app became active (was ringing "on entry").
-                        if Date().timeIntervalSince(self.lastBecameActiveDate) >= 3.0 {
+                        if self.isPastEntryGrace {
                             self.audioPlayer.playSound(.NewMessage)
                         }
                         self.enqueueNotification(.friendRequest(request))
@@ -261,26 +310,14 @@ private extension NotificationCoordinator {
     }
 
     func playSoundForMessageIfNeeded(_ message: OCTMessageAbstract) {
-        // KHANDAQ: incoming private (in-group direct) messages DO alert now — they are addressed
+        // KHANDAQ: incoming private (in-group direct) messages DO alert now: they are addressed
         // personally to the recipient, so they should be surfaced, not silently filed in the per-peer
         // thread. isOutgoing() still suppresses our own sent private messages.
         if message.isOutgoing() || message.groupHistorySync || message.groupSystemMessage || areNotificationsMuted(for: message) {
             return
         }
 
-        // KHANDAQ (#H3): the sound is gated only on "inserted at index 0 of the global dateInterval-DESC
-        // list", so a 1:1 message that was offline-QUEUED and flushed on reconnect (old send time, stored
-        // now) inserted at 0 and rang with no visible new message ("звук на входе, а сообщений нет"). A
-        // genuinely-live message has tssent ≈ now; a flushed/backfilled one has an old tssent. 45s absorbs
-        // sender clock skew. Non-msgv3 peers have tssent==0 (can't be offline-queued) → ring normally.
-        if message.tssent > 0, Date().timeIntervalSince1970 - message.tssent > 45 {
-            return
-        }
-        // KHANDAQ (#H3): don't ring for the backlog Realm flushes right after the app comes to the
-        // foreground — those arrived while away (already push-notified) and rang "on entry with nothing
-        // new visible". A message arriving while the app is already open (past this short grace window)
-        // still rings normally.
-        if Date().timeIntervalSince(lastBecameActiveDate) < 3.0 {
+        guard arrivedJustNow(message) else {
             return
         }
         // Don't ring for the chat that's already open in the foreground (mirror shouldEnqueueMessage).
@@ -291,6 +328,14 @@ private extension NotificationCoordinator {
         if message.messageText != nil || message.messageFile != nil {
             audioPlayer.playSound(.NewMessage)
         }
+    }
+
+    var isPastEntryGrace: Bool {
+        return NotificationFreshness.isPastEntryGrace(becameActive: lastBecameActiveDate, now: Date())
+    }
+
+    func arrivedJustNow(_ message: OCTMessageAbstract) -> Bool {
+        return NotificationFreshness.arrivedJustNow(sentAt: message.tssent, becameActive: lastBecameActiveDate, now: Date())
     }
 
     func shouldEnqueueMessage(_ message: OCTMessageAbstract) -> Bool {
@@ -327,12 +372,24 @@ private extension NotificationCoordinator {
 
         if UIApplication.isActive {
             switch notification {
-                case .newMessage:
-                    // Sound already played in playSoundForMessageIfNeeded.
-                    // LN banner overlaps the status bar on modern iOS — skip in foreground.
-                    showNextNotification()
-                case .friendRequest:
-                    showInAppNotificationObject(object, chatUniqueIdentifier: nil)
+                case .newMessage(let message):
+                    // E22: a message from another chat comes as a band under the safe area (sender,
+                    // then the text when previews are on); a tap opens the chat. The open chat sends
+                    // none (shouldEnqueueMessage), and the sound was played already. The backlog and
+                    // late deliveries were notified before and come without a band, as without a sound.
+                    if arrivedJustNow(message) {
+                        showInAppNotificationObject(object, chatUniqueIdentifier: message.chatUniqueIdentifier)
+                    }
+                    else {
+                        showNextNotification()
+                    }
+                case .friendRequest, .groupInvite:
+                    if isPastEntryGrace {
+                        showInAppNotificationObject(object, chatUniqueIdentifier: nil)
+                    }
+                    else {
+                        showNextNotification()
+                    }
             }
         }
         else {
@@ -343,7 +400,8 @@ private extension NotificationCoordinator {
     func showInAppNotificationObject(_ object: NotificationObject, chatUniqueIdentifier: String?) {
         // KHANDAQ: custom safe-area banner instead of LNNotificationsUI (which rendered under the
         // Dynamic Island / notch and got clipped). Presented in the existing NotificationWindow.
-        notificationWindow.showBanner(title: object.title, body: object.body, icon: object.icon) { [weak self] in
+        notificationWindow.showBanner(title: object.title, body: object.body, tile: object.tile, photo: object.icon,
+                                      hint: object.action.bandHint) { [weak self] in
             self?.performAction(object.action)
         }
 
@@ -354,7 +412,7 @@ private extension NotificationCoordinator {
         let body = "\(object.title): \(object.body)"
 
         // KHANDAQ (#G6): drop a duplicate of the SAME contentful notification fired within a short
-        // window (Realm observer can re-emit) so "ISA: …" doesn't show twice.
+        // window (Realm observer can re-emit) so "ISA: ..." doesn't show twice.
         let now = Date().timeIntervalSince1970
         if body == lastLocalNotificationBody, now - lastLocalNotificationTime < 4.0 {
             showNextNotification()
@@ -371,7 +429,7 @@ private extension NotificationCoordinator {
         UIApplication.shared.presentLocalNotificationNow(local)
 
         // KHANDAQ (#G6): the push-extension already delivered a GENERIC wake banner ("Khandaq" /
-        // "New activity" / empty) for this same message — clear those so the contentful one we just
+        // "New activity" / empty) for this same message; clear those so the contentful one we just
         // posted isn't shadowed by a "New message" duplicate.
         removeGenericPushNotifications()
 
@@ -400,7 +458,29 @@ private extension NotificationCoordinator {
                 return notificationObjectFromRequest(request)
             case .newMessage(let message):
                 return notificationObjectFromMessage(message)
+            case .groupInvite(let invite):
+                return notificationObjectFromGroupInvite(invite)
         }
+    }
+
+    /// The contact who invites, then what they invite to: "Amina Safina", "Invites you to the group
+    /// Book club". The group's name is not a message, so it shows with the previews off too, as a
+    /// group's name does in the title of its messages.
+    func notificationObjectFromGroupInvite(_ invite: AirGroupInvite) -> NotificationObject {
+        let friends = submanagerObjects.friends(predicate: NSPredicate(format: "publicKey ==[c] %@", invite.inviterKey))
+        let friend: OCTFriend? = friends.count > 0 ? friends[0] : nil
+        let name = friend.map { $0.nickname.isEmpty ? $0.publicKey : $0.nickname } ?? invite.inviterKey
+        let body = invite.groupName.isEmpty
+            ? String(localized: "notification_group_invite")
+            : String(localized: "notification_group_invite_format", invite.groupName)
+        let tile = AirTileView.Style.person(initials: AirInitials.from(name), tone: AirTone.index(for: friend?.publicKey ?? invite.inviterKey))
+
+        return NotificationObject(title: name,
+                                  body: body,
+                                  action: .openGroupInvite(inviteIdentifier: invite.id),
+                                  soundName: "isotoxin_NewMessage.aac",
+                                  icon: friend?.avatarData.flatMap { UIImage(data: $0) },
+                                  tile: tile)
     }
 
     func notificationObjectFromRequest(_ request: OCTFriendRequest) -> NotificationObject {
@@ -408,15 +488,19 @@ private extension NotificationCoordinator {
         let body = request.message ?? ""
         let action = NotificationAction.openRequest(requestUniqueIdentifier: request.uniqueIdentifier)
 
-        return NotificationObject(title: title, body: body, action: action, soundName: "isotoxin_NewMessage.aac", icon: nil)
+        return NotificationObject(title: title, body: body, action: action, soundName: "isotoxin_NewMessage.aac", icon: nil, tile: .pending)
     }
 
     func notificationObjectFromMessage(_ message: OCTMessageAbstract) -> NotificationObject {
         let title: String
         var icon: UIImage?
+        var tile: AirTileView.Style?
         let chat = submanagerObjects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat
         let isGroup = chat?.isGroup ?? false
         let isGroupPrivate = isGroup && message.groupPrivateMessage
+        // The band shows the tile the Air screen shows for this chat (E22).
+        let groupTile = AirTileView.Style.group(initials: AirInitials.from(chat?.groupName ?? String(localized: "group_chat_default_title")),
+                                                tone: AirTone.index(for: message.chatUniqueIdentifier))
 
         // Sender display name for a group peer (used both for the private-message title and the
         // regular in-group peer prefix).
@@ -431,19 +515,22 @@ private extension NotificationCoordinator {
         }()
 
         if isGroupPrivate {
-            // A direct (private) message sent to you inside a group — title it so it's unmistakably
+            // A direct (private) message sent to you inside a group: title it so it's unmistakably
             // addressed to you personally, not a normal group post (Android parity).
             let sender = groupPeerName.isEmpty
                 ? (chat?.groupName ?? String(localized: "group_chat_default_title"))
                 : groupPeerName
             title = String(localized: "group_private_message_notification_title_format", sender)
+            tile = groupTile
         }
         else if isGroup {
             title = chat?.groupName ?? String(localized: "group_chat_default_title")
+            tile = groupTile
         }
         else if let friend = submanagerObjects.object(withUniqueIdentifier: message.senderUniqueIdentifier, for: .friend) as? OCTFriend {
             title = friend.nickname
-            icon = friendNotificationIcon(friend)
+            icon = friend.avatarData.flatMap { UIImage(data: $0) }
+            tile = .person(initials: AirInitials.from(friend.nickname), tone: AirTone.index(for: friend.publicKey))
         }
         else {
             title = ""
@@ -482,25 +569,7 @@ private extension NotificationCoordinator {
             }
         }
 
-        return NotificationObject(title: title, body: body, action: action, soundName: "isotoxin_NewMessage.aac", icon: icon)
-    }
-
-    func friendNotificationIcon(_ friend: OCTFriend) -> UIImage {
-        let diameter: CGFloat = 44
-        if let data = friend.avatarData, let image = UIImage(data: data) {
-            return circularImage(image, diameter: diameter)
-        }
-        return avatarManager.avatarFromString(friend.nickname, diameter: diameter)
-    }
-
-    func circularImage(_ image: UIImage, diameter: CGFloat) -> UIImage {
-        let frame = CGRect(x: 0, y: 0, width: diameter, height: diameter)
-        UIGraphicsBeginImageContextWithOptions(frame.size, false, 0)
-        UIBezierPath(ovalIn: frame).addClip()
-        image.draw(in: frame)
-        let result = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-        return result ?? image
+        return NotificationObject(title: title, body: body, action: action, soundName: "isotoxin_NewMessage.aac", icon: icon, tile: tile)
     }
 
     func performAction(_ action: NotificationAction) {
@@ -518,6 +587,9 @@ private extension NotificationCoordinator {
                 }
 
                 delegate?.notificationCoordinatorShowFriendRequest(self, showRequest: request)
+            case .openGroupInvite:
+                // The invitation may have been answered meanwhile; Requests shows what still waits.
+                delegate?.notificationCoordinatorShowGroupInvites(self)
             case .answerIncomingCall(let userInfo):
                 delegate?.notificationCoordinatorAnswerIncomingCall(self, userInfo: userInfo)
         }
@@ -525,7 +597,10 @@ private extension NotificationCoordinator {
 
     func updateBadges() {
         let chatsCount = chats.count
-        let requestsCount = requests.count
+        var requestsCount = 0
+        for index in 0..<requests.count where !AirLocalStore.shared.isBlocked(publicKey: requests[index].publicKey) {
+            requestsCount += 1
+        }
 
         delegate?.notificationCoordinator(self, updateChatsBadge: chatsCount)
         delegate?.notificationCoordinator(self, updateFriendsBadge: requestsCount)
@@ -538,9 +613,16 @@ private extension NotificationCoordinator {
     }
 
     func areNotificationsMuted(for message: OCTMessageAbstract) -> Bool {
-        guard let chat = submanagerObjects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat,
-              chat.isGroup else {
+        guard let chat = submanagerObjects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat else {
             return false
+        }
+
+        // KHANDAQ (redesign stage 2): "Mute" in the contact dossier, kept on this device only.
+        guard chat.isGroup else {
+            guard let friend = chat.friends.lastObject() as? OCTFriend else {
+                return false
+            }
+            return AirLocalStore.shared.isMuted(publicKey: friend.publicKey)
         }
 
         if chat.groupNotificationsSilent {

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (redesign stage 4, E20): one cell of the PIN (kq-pin): the surface with a strong hairline, and
+     an ink hairline on the cell the next digit goes into (activated), as the focus of kq-pin. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_activated="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/kq_surface" />
+            <stroke android:width="@dimen/kq_stroke_hairline" android:color="@color/kq_ink" />
+            <corners android:radius="@dimen/kq_radius_field" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/kq_surface" />
+            <stroke android:width="@dimen/kq_stroke_hairline" android:color="@color/kq_line_strong" />
+            <corners android:radius="@dimen/kq_radius_field" />
+        </shape>
+    </item>
+</selector>

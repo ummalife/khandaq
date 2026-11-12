@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Review fixes (redesign, stage 5): the line over the first-launch password, Share, a message from a hidden IRC name, a profile whose files do not open -->
+    <string name="air_first_password_for_profile">For the profile %1$s</string>
+    <string name="share_choose_target">Choose where to send it</string>
+    <string name="share_turned_off">Sharing from other apps is turned off. You can turn it on in Settings, under Advanced settings.</string>
+    <string name="share_no_targets">There is no conversation to send it to yet.</string>
+    <string name="air_irc_message_hidden">A message from a hidden IRC name</string>
+    <string name="air_signin_not_opened">The profile files on this phone do not open with this profile\'s key. To use Khandaq again, delete them and create a new profile.</string>
+    <string name="air_signin_not_opened_title">The profile cannot be opened</string>
+    <string name="air_signin_not_opened_message">A new profile gets a new ID and takes this one\'s place: this profile, its contacts and its history are deleted from the phone.</string>
+</resources>

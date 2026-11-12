@@ -54,7 +54,7 @@ public class ImageviewerActivity_SD extends AppCompatActivity
 
         if (image_filename == null || image_filename.isEmpty())
         {
-            HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+            AirComposerNotice.sayOnReturn(getString(R.string.chat_opening_file_failed), true);
             finish();
             return;
         }
@@ -62,7 +62,7 @@ public class ImageviewerActivity_SD extends AppCompatActivity
         if (!storage_frame_work.equals("1")
                 && !HelperFiletransfer.isMediaFileReadyToView(image_filename, false, null))
         {
-            HelperGeneric.display_toast(getString(R.string.chat_media_still_downloading), false, 0);
+            AirComposerNotice.sayOnReturn(getString(R.string.chat_media_still_downloading), false);
             finish();
             return;
         }
@@ -89,7 +89,7 @@ public class ImageviewerActivity_SD extends AppCompatActivity
                         final java.io.File plainFile = new java.io.File(image_filename_);
                         if (!plainFile.isFile() || plainFile.length() <= 0L)
                         {
-                            HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+                            AirComposerNotice.sayOnReturn(getString(R.string.chat_opening_file_failed), true);
                             finish();
                             return;
                         }
@@ -113,7 +113,7 @@ public class ImageviewerActivity_SD extends AppCompatActivity
                                                                 com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target,
                                                                 boolean isFirstResource)
                                     {
-                                        HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+                                        AirComposerNotice.sayOnReturn(getString(R.string.chat_opening_file_failed), true);
                                         finish();
                                         return false;
                                     }
@@ -136,7 +136,7 @@ public class ImageviewerActivity_SD extends AppCompatActivity
                             new info.guardianproject.iocipher.File(image_filename_);
                     if (!vfsFile.exists() || vfsFile.length() <= 0L)
                     {
-                        HelperGeneric.display_toast(getString(R.string.chat_media_still_downloading), false, 0);
+                        AirComposerNotice.sayOnReturn(getString(R.string.chat_media_still_downloading), false);
                         finish();
                         return;
                     }
@@ -157,7 +157,7 @@ public class ImageviewerActivity_SD extends AppCompatActivity
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+                    AirComposerNotice.sayOnReturn(getString(R.string.chat_opening_file_failed), true);
                     finish();
                 }
             }
@@ -182,7 +182,7 @@ public class ImageviewerActivity_SD extends AppCompatActivity
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+                    AirComposerNotice.sayOnReturn(getString(R.string.chat_opening_file_failed), true);
                     finish();
                 }
             }
@@ -192,7 +192,7 @@ public class ImageviewerActivity_SD extends AppCompatActivity
             final java.io.File f2 = new java.io.File(image_filename);
             if (!f2.exists() || f2.length() <= 0L)
             {
-                HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+                AirComposerNotice.sayOnReturn(getString(R.string.chat_opening_file_failed), true);
                 finish();
                 return;
             }
@@ -215,7 +215,7 @@ public class ImageviewerActivity_SD extends AppCompatActivity
             catch (Exception e)
             {
                 e.printStackTrace();
-                HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+                AirComposerNotice.sayOnReturn(getString(R.string.chat_opening_file_failed), true);
                 finish();
             }
         }
@@ -231,7 +231,7 @@ public class ImageviewerActivity_SD extends AppCompatActivity
                                         com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target,
                                         boolean isFirstResource)
             {
-                HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+                AirComposerNotice.sayOnReturn(getString(R.string.chat_opening_file_failed), true);
                 finish();
                 return false;
             }

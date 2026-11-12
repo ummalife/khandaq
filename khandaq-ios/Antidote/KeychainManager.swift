@@ -11,6 +11,7 @@ private struct Constants {
     static let toxPasswordForActiveAccount = "toxPasswordForActiveAccount"
     static let failedPinAttemptsNumber = "failedPinAttemptsNumber"
     static let pinLockedUntil = "pinLockedUntil"
+    static let deviceKeyPrefix = "profileDeviceKey."
 }
 
 class KeychainManager {
@@ -49,11 +50,54 @@ class KeychainManager {
     }
 
     /// Removes all data related to active account.
+    ///
+    /// The key of a profile made without a password is not account data: it is the only way into that
+    /// profile, so it stays until the profile is deleted or gets a password (ProfileDeviceKey).
     func deleteActiveAccountData() {
         toxPasswordForActiveAccount = nil
         failedPinAttemptsNumber = nil
         pinLockedUntil = nil
     }
+
+    /// The key of a profile made without a password (redesign stage 4, E19), one item per profile, in
+    /// the same service and with the same protection as the password above: after the first unlock,
+    /// this device only.
+    func deviceKey(forIdentifier identifier: String) -> String? {
+        return getStringForKey(Constants.deviceKeyPrefix + identifier)
+    }
+
+    /// Stores the key, or removes it with nil. False when the keychain refused the write.
+    @discardableResult
+    func setDeviceKey(_ key: String?, forIdentifier identifier: String) -> Bool {
+        return setData(key?.data(using: .utf8), forKey: Constants.deviceKeyPrefix + identifier)
+    }
+
+    /// The key with the keychain's answer kept apart (redesign stage 5): an item that is not there
+    /// will never be, while a keychain that cannot be read now opens once the iPhone is unlocked.
+    func lookUpDeviceKey(forIdentifier identifier: String) -> DeviceKeyLookup {
+        switch readKeychainData(forKey: Constants.deviceKeyPrefix + identifier) {
+            case .found(let data):
+                // An item that holds no key opens nothing, as if it were not there.
+                guard let key = String(data: data, encoding: .utf8), !key.isEmpty else {
+                    return .missing
+                }
+                return .found(key)
+            case .notFound:
+                return .missing
+            case .failed:
+                return .unavailable
+        }
+    }
+}
+
+/// What the keychain says about the key of a profile made without a password.
+enum DeviceKeyLookup: Equatable {
+    case found(String)
+    /// The keychain answered and holds no such key: it was reset, or the profile came from another
+    /// iPhone (a key kept for this device only never leaves it, not even in a backup).
+    case missing
+    /// The keychain did not answer, as before the first unlock after a restart.
+    case unavailable
 }
 
 /// KHANDAQ (audit #2, finding 9): a keychain read has THREE outcomes, not two. Collapsing them into

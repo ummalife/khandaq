@@ -28,6 +28,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.media.AudioAttributes;
 import android.media.Ringtone;
@@ -36,9 +37,14 @@ import android.net.Uri;
 import android.os.Build;
 import android.util.Log;
 
+import androidx.annotation.Nullable;
 import androidx.preference.PreferenceManager;
 
+import com.zoffcc.applications.sorm.FriendList;
+
 import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import androidx.core.app.NotificationCompat;
 
@@ -215,6 +221,27 @@ public class HelperMsgNotification
         silent.enableVibration(false);
         nm.createNotificationChannel(silent);
         MainActivity.notification_channel_newmessage_silent = silent;
+
+        ensure_request_channel(context, nm);
+    }
+
+    /**
+     * KHANDAQ (redesign, E22): the channel of requests and invitations, a kind of their own. Since they
+     * became cards in Requests (E12) nothing told of them and no channel was theirs, so this ID is new;
+     * the message channels above keep theirs, and with them the user's settings.
+     */
+    static void ensure_request_channel(final Context context, final NotificationManager nm)
+    {
+        if ((context == null) || (nm == null))
+        {
+            return;
+        }
+        final NotificationChannel requests = new NotificationChannel(CHANNEL_ID_REQUESTS,
+                context.getString(R.string.air_band_channel_requests), NotificationManager.IMPORTANCE_HIGH);
+        requests.setDescription(context.getString(R.string.air_band_channel_requests_description));
+        requests.setSound(get_message_notification_sound_uri(context), notification_sound_attributes());
+        requests.enableVibration(true);
+        nm.createNotificationChannel(requests);
     }
 
     /*
@@ -223,6 +250,19 @@ public class HelperMsgNotification
      */
     static synchronized void change_msg_notification(final int action, final String key,
                                                      final String notification_title, final String notification_text)
+    {
+        change_msg_notification(action, key, notification_title, notification_text, 0L, null);
+    }
+
+    /**
+     * KHANDAQ (redesign, E22): as above, with what the in-app band needs to know of a new message: the
+     * sender's send time ({@code sent_at_ms}, 0 when unknown), so that a late delivery comes without a
+     * band, and the member who wrote in a group ({@code group_peer_key}, null otherwise), whose name
+     * leads the text.
+     */
+    static synchronized void change_msg_notification(final int action, final String key,
+                                                     final String notification_title, final String notification_text,
+                                                     final long sent_at_ms, @Nullable final String group_peer_key)
     {
         if (action == NOTIFICATION_EDIT_ACTION_CLEAR.value)
         {
@@ -247,7 +287,7 @@ public class HelperMsgNotification
                     global_active_notifications.add(key);
                 }
             }
-            show_msg_notification(notification_title, notification_text, key);
+            show_msg_notification(notification_title, notification_text, key, sent_at_ms, group_peer_key);
         }
         else if (action == NOTIFICATION_EDIT_ACTION_REMOVE.value)
         {
@@ -324,7 +364,7 @@ public class HelperMsgNotification
         }
     }
 
-    private static String resolve_sender_label(String name, String key)
+    static String resolve_sender_label(String name, String key)
     {
         if (name != null)
         {
@@ -356,7 +396,7 @@ public class HelperMsgNotification
         return null;
     }
 
-    private static String trim_message_preview(String text)
+    static String trim_message_preview(String text)
     {
         if (text == null)
         {
@@ -448,7 +488,29 @@ public class HelperMsgNotification
 
     static void show_msg_notification(final String nf_title, final String nf_text, final String nf_key)
     {
+        show_msg_notification(nf_title, nf_text, nf_key, 0L, null);
+    }
+
+    static void show_msg_notification(final String nf_title, final String nf_text, final String nf_key,
+                                      final long sent_at_ms, @Nullable final String group_peer_key)
+    {
         Log.i(TAG, "noti_and_badge:show_notification:");
+        // KHANDAQ (redesign, E22): while a screen of the app is in front the message may come as the
+        // in-app band instead. What the band says reads the database, so it is put together here, before
+        // the hop to the main thread, and only when a band could come down at all.
+        AirBand.Content band_content = null;
+        if (PREF__notification && (context_s != null) && AirBand.mayShow())
+        {
+            try
+            {
+                band_content = AirBand.forMessage(context_s, nf_key, nf_title, nf_text, group_peer_key);
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "show_msg_notification:band:EE:" + e.getMessage());
+            }
+        }
+        final AirBand.Content band = band_content;
         Runnable myRunnable = new Runnable()
         {
             @Override
@@ -459,6 +521,33 @@ public class HelperMsgNotification
                     final boolean appInForeground = MainActivity.main_activity_resumed &&
                                                     (MainActivity.main_activity_s != null) &&
                                                     (!MainActivity.main_activity_s.isFinishing());
+
+                    // KHANDAQ (redesign, E22): the band takes the place of the notification and of the
+                    // sound-only path below; a gate, a call or a locked phone keep those paths.
+                    if (band != null)
+                    {
+                        switch (AirBand.messageOutcome(nf_key, sent_at_ms))
+                        {
+                            case BAND:
+                                if (AirBand.show(band))
+                                {
+                                    play_message_sound_only();
+                                    return;
+                                }
+                                // It could not come down: as before the band.
+                                break;
+                            case QUIET:
+                                if (!is_viewing_friend_chat(nf_key))
+                                {
+                                    // The backlog of coming back and a late delivery: no band, no sound.
+                                    return;
+                                }
+                                // The chat on screen keeps its sound, below.
+                                break;
+                            default:
+                                break;
+                        }
+                    }
 
                     if (appInForeground || is_viewing_friend_chat(nf_key))
                     {
@@ -571,7 +660,7 @@ public class HelperMsgNotification
                                 }
                                 else
                                 {
-                                    // KHANDAQ #200: an empty preview is almost always a media/file message —
+                                    // KHANDAQ #200: an empty preview is almost always a media/file message:
                                     // show an attachment label instead of the generic "new message" body.
                                     b.setContentText(context_s.getString(R.string.notification_media_generic));
                                 }
@@ -673,7 +762,7 @@ public class HelperMsgNotification
         {
             return;
         }
-        // KHANDAQ (audit #8): a stale deferral must not surface later out of context — the tap that
+        // KHANDAQ (audit #8): a stale deferral must not surface later out of context: the tap that
         // stored this key already dismissed the notification, so an expired key is dropped and the user
         // reopens the chat from the list.
         if ((System.currentTimeMillis() - pending_notification_chat_key_ts) > PENDING_OPEN_CHAT_MAX_AGE_MS)
@@ -683,7 +772,7 @@ public class HelperMsgNotification
         }
         // KHANDAQ (audit #8): a notification tap on a locked app runs this from MainActivity.onResume,
         // which would open the chat ON TOP of the PIN screen the app-lock just raised. The question is
-        // "is a gate up / owed right now", not "was this process ever unlocked" — on a warm process the
+        // "is a gate up / owed right now", not "was this process ever unlocked": on a warm process the
         // background gate fires with process_unlocked already true. Keep the key pending instead of
         // dropping it: MainActivity resumes again when the PIN screen finishes, and the chat opens then.
         if (AppLockHelper.isGateUp(c))
@@ -698,6 +787,12 @@ public class HelperMsgNotification
     {
         if ((c == null) || (key == null) || (key.length() < 2))
         {
+            return;
+        }
+        // KHANDAQ (redesign, E22): the notification of a request or an invitation opens Requests.
+        if (OPEN_REQUESTS_KEY.equals(key))
+        {
+            AirBand.openRequests(c);
             return;
         }
         try
@@ -740,6 +835,219 @@ public class HelperMsgNotification
         }
         catch (Exception ignored)
         {
+        }
+    }
+
+    // ---- KHANDAQ (redesign, E22): requests and invitations, a kind of their own ----
+
+    /** Their channel, created next to the message channels (ensure_request_channel). */
+    static final String CHANNEL_ID_REQUESTS = "khandaq_requests";
+    /** The chat key of a notification that opens Requests rather than a chat. */
+    static final String OPEN_REQUESTS_KEY = "air:requests";
+    /** They post under a tag of their own, clear of the message ids that remove_msg_notification takes back. */
+    private static final String REQUEST_NOTIFICATION_TAG = "khandaq_request";
+    /** The cards whose notification is up, so that an answer takes it back. */
+    private static final Set<String> posted_request_cards = ConcurrentHashMap.newKeySet();
+
+    private static String request_card(final String public_key)
+    {
+        return "request:" + public_key;
+    }
+
+    /** One card per kind, contact and group, as AirInviteStore keeps them: a repeat replaces the card. */
+    private static String invite_card(final AirInviteStore.Invite invite)
+    {
+        return "invite:" + invite.kind.name() + ":" + invite.inviterKey + ":" + invite.groupId();
+    }
+
+    /** True when a request from this key already waits as a card, so a repeat is not told again. */
+    static boolean is_request_waiting(final String public_key)
+    {
+        final AirRequestStore.Pending probe = AirRequestStore.Pending.of(public_key, "", 0L);
+        if (probe == null)
+        {
+            return false;
+        }
+        for (final AirRequestStore.Pending waiting : AirRequestStore.snapshot())
+        {
+            if (waiting.publicKey.equals(probe.publicKey))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** True when this contact's invitation to this group already waits as a card. */
+    static boolean is_invite_waiting(final AirInviteStore.Kind kind, final String inviter_key, final byte[] data)
+    {
+        final AirInviteStore.Invite probe = AirInviteStore.Invite.of("probe", kind, inviter_key, "",
+                                                                     AirInviteStore.hex(data), 0, 0L);
+        if (probe == null)
+        {
+            return false;
+        }
+        final String card = invite_card(probe);
+        for (final AirInviteStore.Invite waiting : AirInviteStore.snapshot())
+        {
+            if (invite_card(waiting).equals(card))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * A new contact request, from the toxcore callback: the band while a screen of the app is in front,
+     * otherwise a notification of its own. The card waits in Requests either way.
+     */
+    static void notify_incoming_request(final String public_key, final String message)
+    {
+        final AirRequestStore.Pending request = AirRequestStore.Pending.of(public_key, message, 0L);
+        if ((request == null) || (!PREF__notification) || (context_s == null))
+        {
+            return;
+        }
+        tell_request(request_card(request.publicKey), AirBand.forRequest(context_s, request.publicKey, request.message),
+                     null);
+    }
+
+    /**
+     * A new invitation to a group, kept as a card: who invites, then the group. As on iOS, the invitation
+     * of a muted contact waits in Requests without a sound, a band or a notification.
+     */
+    static void notify_group_invite(final AirInviteStore.Invite invite)
+    {
+        if ((invite == null) || (!PREF__notification) || (context_s == null))
+        {
+            return;
+        }
+        final FriendList inviter = HelperFriend.lookup_friendlist_by_pubkey(invite.inviterKey);
+        if ((inviter != null) && inviter.notification_silent)
+        {
+            return;
+        }
+        Bitmap photo = null;
+        try
+        {
+            photo = get_friend_notification_large_icon(context_s, invite.inviterKey);
+        }
+        catch (Exception ignored)
+        {
+        }
+        tell_request(invite_card(invite), AirBand.forInvite(context_s, invite, inviter), photo);
+    }
+
+    /**
+     * On the main thread: the band once past the grace of coming back while a screen with content is in
+     * front; nothing within that grace, which is the backlog; the notification while the app is away,
+     * locked, on a gate or in a call, or when the band could not come down.
+     */
+    private static void tell_request(final String card, final AirBand.Content content, @Nullable final Bitmap photo)
+    {
+        if (main_handler_s == null)
+        {
+            return;
+        }
+        main_handler_s.post(() -> {
+            try
+            {
+                switch (AirBand.requestOutcome())
+                {
+                    case QUIET:
+                        return;
+                    case BAND:
+                        if (AirBand.show(content))
+                        {
+                            play_message_sound_only();
+                            return;
+                        }
+                        break;
+                    default:
+                        break;
+                }
+                post_request_notification(card, content, photo);
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "tell_request:EE:" + e.getMessage());
+            }
+        });
+    }
+
+    private static void post_request_notification(final String card, final AirBand.Content content,
+                                                  @Nullable final Bitmap photo)
+    {
+        final Context c = context_s;
+        final NotificationManager nm = (c == null) ? null
+                                                   : (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null)
+        {
+            return;
+        }
+        ensure_request_channel(c, nm);
+        final Intent open = new Intent(c, StartMainActivityWrapper.class);
+        open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        // An action of its own per card, so that no two cards share one PendingIntent.
+        open.setAction("com.zoffcc.applications.trifa.open_requests." + card.hashCode());
+        open.putExtra(EXTRA_OPEN_CHAT_KEY, OPEN_REQUESTS_KEY);
+        final PendingIntent tap = PendingIntent.getActivity(c, card.hashCode(), open,
+                                                            PendingIntent.FLAG_UPDATE_CURRENT |
+                                                            PendingIntent.FLAG_IMMUTABLE);
+        final NotificationCompat.Builder b = new NotificationCompat.Builder(c, CHANNEL_ID_REQUESTS);
+        b.setSmallIcon(R.drawable.ic_stat_khandaq);
+        b.setContentTitle(content.title);
+        if (!content.body.isEmpty())
+        {
+            b.setContentText(content.body);
+            b.setStyle(new NotificationCompat.BigTextStyle().bigText(content.body));
+        }
+        if (photo != null)
+        {
+            b.setLargeIcon(photo);
+        }
+        b.setCategory(NotificationCompat.CATEGORY_SOCIAL);
+        b.setPriority(NotificationCompat.PRIORITY_HIGH);
+        b.setAutoCancel(true);
+        b.setContentIntent(tap);
+        if (!PREF__notification_sound)
+        {
+            // The channel rings; the app's own sound setting still keeps this one quiet.
+            b.setSilent(true);
+        }
+        nm.notify(REQUEST_NOTIFICATION_TAG, card.hashCode(), b.build());
+        posted_request_cards.add(card);
+    }
+
+    /** Takes back the notification of a request or an invitation once its card is answered (main thread). */
+    static void forget_answered_requests()
+    {
+        final Context c = context_s;
+        if (posted_request_cards.isEmpty() || (c == null))
+        {
+            return;
+        }
+        final Set<String> waiting = new HashSet<>();
+        for (final AirRequestStore.Pending request : AirRequestStore.snapshot())
+        {
+            waiting.add(request_card(request.publicKey));
+        }
+        for (final AirInviteStore.Invite invite : AirInviteStore.snapshot())
+        {
+            waiting.add(invite_card(invite));
+        }
+        final NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+        for (final String card : posted_request_cards)
+        {
+            if (!waiting.contains(card))
+            {
+                posted_request_cards.remove(card);
+                if (nm != null)
+                {
+                    nm.cancel(REQUEST_NOTIFICATION_TAG, card.hashCode());
+                }
+            }
         }
     }
 }

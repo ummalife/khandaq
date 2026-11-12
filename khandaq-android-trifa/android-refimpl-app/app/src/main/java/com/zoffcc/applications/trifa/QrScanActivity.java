@@ -11,7 +11,6 @@ import android.os.Bundle;
 import android.util.Log;
 import android.content.Intent;
 import android.widget.ImageButton;
-import android.widget.Toast;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.mlkit.vision.barcode.BarcodeScanner;
@@ -41,6 +40,13 @@ public class QrScanActivity extends AppCompatActivity
 {
     private static final String TAG = "trifa.QrScanActivity";
     public static final String EXTRA_RESULT = "qr_result";
+    /**
+     * E21: why the scanner closed without a code, for the screen that opened it to say under its Scan
+     * row (this screen is gone by then, so a toast here would float over the next one).
+     */
+    public static final String EXTRA_ERROR = "qr_error";
+    static final String ERROR_PERMISSION = "permission";
+    static final String ERROR_CAMERA = "camera";
 
     private PreviewView previewView;
     private boolean scanned = false;
@@ -57,8 +63,7 @@ public class QrScanActivity extends AppCompatActivity
                 }
                 else
                 {
-                    Toast.makeText(this, R.string.qr_scan_permission_denied, Toast.LENGTH_LONG).show();
-                    finish();
+                    finishWithError(ERROR_PERMISSION);
                 }
             });
 
@@ -231,10 +236,18 @@ public class QrScanActivity extends AppCompatActivity
 
     private void showCameraError()
     {
-        runOnUiThread(() ->
+        runOnUiThread(() -> finishWithError(ERROR_CAMERA));
+    }
+
+    private void finishWithError(final String error)
+    {
+        if (isFinishing())
         {
-            Toast.makeText(this, R.string.qr_scan_camera_error, Toast.LENGTH_LONG).show();
-            finish();
-        });
+            return;
+        }
+        final Intent result = new Intent();
+        result.putExtra(EXTRA_ERROR, error);
+        setResult(RESULT_CANCELED, result);
+        finish();
     }
 }

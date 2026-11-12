@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (redesign, stage 3b): the tags AirFileEntry keeps on a file entry of the transcript. -->
+<resources>
+    <item name="air_file_accept_actions" type="id" />
+    <item name="air_file_copy_actions" type="id" />
+    <item name="air_file_aspect_key" type="id" />
+    <item name="air_file_spoken_author" type="id" />
+    <item name="air_file_group_snapshot" type="id" />
+</resources>

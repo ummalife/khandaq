@@ -3,7 +3,6 @@ package com.zoffcc.applications.trifa;
 import org.khandaq.messenger.R;
 
 import android.util.Log;
-import android.widget.Toast;
 
 import com.zoffcc.applications.sorm.GroupMessage;
 import com.zoffcc.applications.sorm.Message;
@@ -89,7 +88,9 @@ public final class MessageDeliveryRetryHelper
         final long fn = tox_friend_by_public_key__wrapper(message.tox_friendpubkey);
         if (fn < 0 || is_friend_online_real(fn) == 0)
         {
-            Toast.makeText(context, R.string.chat_ft_status_waiting_self_online, Toast.LENGTH_SHORT).show();
+            // E21: the rule stands under the field (this runs on a worker thread too, where a toast threw);
+            // the old words blamed the network when it was the person who was offline.
+            AirComposerNotice.say(context.getString(R.string.air_retry_contact_offline), false);
             TrifaToxService.requestManualReconnect();
             return;
         }
@@ -145,7 +146,8 @@ public final class MessageDeliveryRetryHelper
         final long groupNum = HelperGroup.tox_group_by_groupid__wrapper(message.group_identifier);
         if (groupNum < 0)
         {
-            Toast.makeText(context, R.string.chat_ft_status_waiting_self_online, Toast.LENGTH_SHORT).show();
+            // E21: the rule stands under the group's field instead of in a toast.
+            AirComposerNotice.say(context.getString(R.string.air_retry_group_not_connected), false);
             TrifaToxService.requestManualReconnect();
             return;
         }

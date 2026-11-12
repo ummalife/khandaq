@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Battery (redesign, stage 5): asked once from below, after the first launch and never over it -->
+    <string name="air_battery_question">允许 Khandaq 在后台运行吗？</string>
+    <string name="air_battery_consequence">为了省电，Android 可能会在后台暂停 Khandaq，新消息会因此晚到。在打开的列表中选择 Khandaq，并关闭它的电池优化。</string>
+    <string name="air_battery_open">打开电池设置</string>
+
+    <!-- Move a profile (redesign, stage 5): the transfer dialogs of Settings as sheets from below -->
+    <string name="air_transfer_import_question">用文件中的档案替换当前档案吗？</string>
+    <string name="air_transfer_backup_verb">创建加密备份</string>
+    <string name="air_transfer_plain_verb">导出普通 .tox 文件</string>
+    <string name="air_backup_choose_place">选择保存位置</string>
+    <string name="air_import_wait">Khandaq 会停止运行，用文件中的档案替换当前档案，然后以新档案重新打开。</string>
+</resources>

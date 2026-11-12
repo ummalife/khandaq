@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- First launch, sign-in and moving a profile in (redesign stage 4, E19 and E20); iOS keys where the meaning is the same, Android wording where Android works differently -->
+    <string name="air_first_step_format">第 %1$d 步，共 %2$d 步</string>
+    <string name="air_first_name_title">怎么称呼你</string>
+    <string name="air_first_name_body">只有你添加的人能看到这个名字。</string>
+    <string name="air_first_name_placeholder">名字</string>
+    <string name="air_first_name_first">请先填写名字。</string>
+    <string name="air_first_next">下一步</string>
+    <string name="air_first_move_profile">从其他设备转移档案</string>
+    <string name="air_first_password_title">档案密码</string>
+    <string name="air_first_password_body">密码无法找回：没有服务器。档案只保存在这台设备上。</string>
+    <string name="air_first_password_set">设置密码</string>
+    <string name="air_first_password_set_detail">档案用密码加密。退出登录后，只能用密码打开。</string>
+    <string name="air_first_password_skip">不设密码继续</string>
+    <string name="air_first_password_skip_detail">档案仍然是加密的，密钥保存在这部手机上。任何能解锁这部手机的人都能无需密码打开它，而且只能在这部手机上打开。</string>
+    <string name="air_first_password_placeholder">密码</string>
+    <string name="air_first_repeat_placeholder">再次输入密码</string>
+    <string name="air_first_password_rule">至少 8 个字符，包含字母和数字。</string>
+    <string name="air_first_password_empty">请先设置一个密码。</string>
+    <string name="air_first_password_short">密码少于 8 个字符。</string>
+    <string name="air_first_password_weak">密码需要包含字母和数字。</string>
+    <string name="air_first_password_repeat_first">请在第二个输入框中再输入一次密码。</string>
+    <string name="air_first_password_mismatch">两次输入的密码不一致。</string>
+    <string name="air_first_create">创建档案</string>
+    <string name="air_first_creating">正在创建档案</string>
+    <string name="air_first_create_failed">档案没有创建成功。请再试一次。</string>
+    <string name="air_first_id_title">你的 ID 已准备好</string>
+    <string name="air_first_id_body">把 ID 发给想联系的人，或者让他们扫描二维码。</string>
+    <string name="air_first_share">分享</string>
+    <string name="air_first_add_person">添加第一个人</string>
+    <string name="air_field_show_password">显示密码</string>
+    <string name="air_field_hide_password">隐藏密码</string>
+    <string name="air_signin_go">登录</string>
+    <string name="air_signin_opening">正在打开档案</string>
+    <string name="air_signin_enter_password">请先输入密码。</string>
+    <string name="air_signin_no_password">这个档案无需密码即可打开，但只能在这部手机上。</string>
+    <string name="air_signin_profile_fallback">这台设备上的档案</string>
+    <string name="air_signin_forgot">忘记密码？</string>
+    <string name="air_signin_forgot_title">密码无法找回</string>
+    <string name="air_signin_forgot_message">没有服务器，只有你知道密码。新档案会有新的 ID，并取代这个档案：这个档案及其联系人和历史记录会从手机上删除。</string>
+    <string name="air_signin_start_over">删除并新建档案</string>
+    <string name="air_signin_wrong_password">密码不正确。请检查键盘语言和大小写。</string>
+    <string name="air_signin_damaged">档案文件已损坏。如果有导出的副本，请从副本转移档案。</string>
+    <string name="air_signin_no_access">无法访问档案文件。请重启手机后再试一次。</string>
+    <string name="air_import_title">转移档案</string>
+    <string name="air_import_reading">正在读取文件</string>
+    <string name="air_import_preview_title">这是你的档案吗？</string>
+    <string name="air_import_preview_body">请核对名字和 ID。文件里有 ID 和联系人，没有聊天记录。</string>
+    <string name="air_import_name">名字</string>
+    <string name="air_import_no_name">无名字</string>
+    <string name="air_import_confirm">把档案转移到这里</string>
+    <string name="air_import_moving">正在转移档案</string>
+    <string name="air_import_other_file">选择其他文件</string>
+    <string name="air_import_not_profile">这不是 Khandaq 档案文件。请选择从档案导出的 .tox 文件。</string>
+    <string name="air_import_encrypted">这个文件受密码保护。安卓版 Khandaq 只能转移未设密码保存的档案文件。</string>
+    <string name="air_import_failed_title">档案没有转移成功</string>
+    <!-- Stage 4: how a moved-in profile opens on Android -->
+    <string name="air_import_device_key">在这部手机上，档案无需密码即可打开，密钥保存在这里。之后可以在“个人资料”的“密码和 PIN 码”中设置密码。</string>
+</resources>

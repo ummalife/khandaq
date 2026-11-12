@@ -22,12 +22,9 @@ package com.zoffcc.applications.trifa;
 import org.khandaq.messenger.R;
 
 import android.content.Context;
-import android.content.DialogInterface;
-import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
-import android.net.Uri;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
@@ -46,12 +43,10 @@ import com.mikepenz.iconics.IconicsDrawable;
 import com.zoffcc.applications.sorm.FriendList;
 import com.zoffcc.applications.sorm.GroupMessage;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.RecyclerView;
 
 import static com.zoffcc.applications.trifa.GroupMessageListActivity.add_quote_group_message_text;
 import static com.zoffcc.applications.trifa.GroupMessageListFragment.group_search_messages_text;
-import static com.zoffcc.applications.trifa.HelperFriend.add_friend_real;
 import static com.zoffcc.applications.trifa.HelperGeneric.darkenColor;
 import static com.zoffcc.applications.trifa.HelperGeneric.dp2px;
 import static com.zoffcc.applications.trifa.HelperGeneric.hash_to_bucket;
@@ -59,6 +54,7 @@ import static com.zoffcc.applications.trifa.HelperGeneric.isColorDarkBrightness;
 import static com.zoffcc.applications.trifa.HelperGeneric.lightenColor;
 import static com.zoffcc.applications.trifa.HelperGeneric.long_date_time_format;
 import static com.zoffcc.applications.trifa.HelperGeneric.string_is_in_list;
+import static com.zoffcc.applications.trifa.HelperGroup.tox_group_by_groupid__wrapper;
 import static com.zoffcc.applications.trifa.HelperGroup.tox_group_peer_get_name__wrapper;
 import static com.zoffcc.applications.trifa.Identicon.bytesToHex;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__compact_chatlist;
@@ -117,10 +113,21 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
         layout_message_container = (ViewGroup) itemView.findViewById(R.id.layout_message_container);
         img_corner = (ImageView) itemView.findViewById(R.id.img_corner);
 
+        // KHANDAQ (redesign, stage 3b): the group conversation's text rows are entries of the transcript.
+        if (AirTranscript.isEntry(itemView))
+        {
+            AirTranscript.prepare(itemView, textView);
+        }
+
         swipe_state = 0;
         swipe_state_done = 0;
 
         swipeLayout = (SwipeLayout) itemView.findViewById(R.id.msg_swipe_container);
+        // An entry has no swipe container; swipe to reply runs through the list's ItemTouchHelper (#T3).
+        if (swipeLayout == null)
+        {
+            return;
+        }
         swipeLayout.setShowMode(SwipeLayout.ShowMode.PullOut);
         // KHANDAQ (#T3): swipe-to-reply for incoming group text now goes through the RecyclerView-level
         // ItemTouchHelper (reliable from the first open) like every other row type. Disable the old
@@ -209,6 +216,13 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
         {
             GroupMessageLayoutHelper.applyRowVisibility(itemView, layout_message_container,
                     GroupMessageLayoutHelper.hiddenRowLayout());
+            return;
+        }
+
+        // KHANDAQ (redesign, stage 3b): as in a conversation with one person, no bubble and no avatar.
+        if (AirTranscript.isEntry(itemView))
+        {
+            bindEntry(m);
             return;
         }
 
@@ -519,6 +533,179 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
     }
 
     /**
+     * KHANDAQ (redesign, stage 3b): this row as an entry of the transcript (AirTranscript.bindGroupText).
+     * The text keeps its mentions, links, location and quote. The author is named in full, in the tone of
+     * their key, with the founder's or a moderator's role; relayed history naming an author whose signing
+     * key went stale reads "Author not confirmed" instead of the name (KQ-03), and relayed history without
+     * a signature carries the "sender not verified" line (audit2 #1).
+     */
+    private void bindEntry(final GroupMessage m)
+    {
+        String peerName = m.tox_group_peername;
+        String peerPubkey = m.tox_group_peer_pubkey;
+        final name_test_pk corrected = correct_pubkey(m);
+        if (corrected.changed)
+        {
+            peerName = corrected.tox_peername;
+            peerPubkey = corrected.tox_peerpubkey;
+        }
+        is_system_message = TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY.equals(peerPubkey);
+
+        final int position = this.getAdapterPosition();
+        final GroupMessageLayoutHelper.RowLayout rowLayout = GroupMessageLayoutHelper.layoutFor(m, position, context);
+        GroupMessageLayoutHelper.applyRowVisibility(itemView, layout_message_container, rowLayout);
+        if (rowLayout.hideEntireRow)
+        {
+            return;
+        }
+        if (MainActivity.group_message_list_fragment != null
+            && MainActivity.group_message_list_fragment.adapter != null)
+        {
+            ChatDateSeparatorHelper.bindInlineDateHeader(itemView, position,
+                                                         MainActivity.group_message_list_fragment.adapter);
+        }
+
+        is_selected = !selected_group_messages.isEmpty() && selected_group_messages.contains(m.id);
+        layout_message_container.setOnClickListener(onclick_listener);
+        layout_message_container.setOnLongClickListener(onlongclick_listener);
+        textView.setOnLongClickListener(view -> {
+            layout_message_container.performLongClick();
+            return true;
+        });
+
+        final AirTranscript.GroupEntry entry = new AirTranscript.GroupEntry();
+        entry.system = is_system_message;
+        if (!is_system_message)
+        {
+            if (should_hide_claimed_author(false, m))
+            {
+                entry.author = context.getString(R.string.air_group_author_unconfirmed);
+                entry.authorColor = AirUi.color(context, R.color.kq_ink_2);
+            }
+            else
+            {
+                final String name = entryAuthorName(m, peerName, peerPubkey);
+                final int role = entryAuthorRole(m, peerPubkey);
+                entry.author = (role == AirGroupModel.ROLE_FOUNDER || role == AirGroupModel.ROLE_MODERATOR)
+                               ? context.getString(R.string.air_group_author_role_format, name,
+                                                   AirGroupPanel.roleName(context, role)) : name;
+                final boolean keyless = (peerPubkey == null) || peerPubkey.isEmpty();
+                entry.authorColor = AirUi.toneColor(context, AirModel.Tone.index(keyless ? name : peerPubkey));
+            }
+            entry.senderUnverified = should_mark_unverified_sender(false, m, NgcSignedHistory.isAuthorVerified(m));
+            if (m.private_message == 1)
+            {
+                entry.privateNote = context.getString(R.string.air_group_private_to_you);
+            }
+        }
+
+        textView.setCustomRegex(TOXURL_PATTERN);
+        final String displayText = GroupMessageLayoutHelper.displayTextForMessage(context, m);
+        final GroupMentionHelper.ParsedGroupText parsedGroup = GroupMentionHelper.parse(displayText);
+        entry.mentionsYou = !is_system_message && mentionsSelf(parsedGroup, m);
+        final boolean locationBound = HelperLocationMessage.bind(itemView, textView, parsedGroup.bodyText, true);
+        if (!locationBound)
+        {
+            GroupMessageBubbleTextHelper.bind(textView, parsedGroup, m.group_identifier, context,
+                                              group_search_messages_text);
+        }
+        final View quoteHolder = itemView.findViewById(R.id.text_block_group);
+        if (quoteHolder != null)
+        {
+            ChatBubbleUiHelper.bind_reply_quote(quoteHolder, parsedGroup.reply,
+                                                meta -> HelperReply.scrollToReplyTargetInGroupChat(meta));
+        }
+        AirTranscript.bindGroupText(itemView, position, m, parsedGroup, locationBound, is_selected, entry);
+    }
+
+    /** The member's name as the group knows it now, else the one frozen on the message, else "A member". */
+    private String entryAuthorName(final GroupMessage m, final String frozenName, final String peerPubkey)
+    {
+        String name = null;
+        try
+        {
+            name = tox_group_peer_get_name__wrapper(m.group_identifier, peerPubkey);
+        }
+        catch (Exception ignored)
+        {
+            // Not in the peer list now: the frozen name below.
+        }
+        final String shortPeerId = HelperFriend.peer_pubkey_short_id(peerPubkey);
+        final boolean live = (name != null) && !name.isEmpty() && !"-1".equals(name)
+                             && !shortPeerId.equalsIgnoreCase(name);
+        if (live)
+        {
+            return name;
+        }
+        if ((frozenName != null) && !frozenName.trim().isEmpty() && !"-1".equals(frozenName))
+        {
+            return frozenName;
+        }
+        return context.getString(R.string.air_group_author_unknown);
+    }
+
+    /** The member's role from toxcore while they are in the peer list, else the one stored on the message. */
+    private static int entryAuthorRole(final GroupMessage m, final String peerPubkey)
+    {
+        try
+        {
+            final long groupNum = tox_group_by_groupid__wrapper(m.group_identifier);
+            if ((groupNum >= 0) && (peerPubkey != null))
+            {
+                final long peerId = MainActivity.tox_group_peer_by_public_key(groupNum, peerPubkey);
+                if (peerId >= 0)
+                {
+                    final int role = MainActivity.tox_group_peer_get_role(groupNum, peerId);
+                    if (AirGroupModel.isKnownRole(role))
+                    {
+                        return role;
+                    }
+                }
+            }
+        }
+        catch (Throwable ignored)
+        {
+            // Not in the peer list now: the stored role below.
+        }
+        return AirGroupModel.isKnownRole(m.tox_group_peer_role) ? m.tox_group_peer_role : -1;
+    }
+
+    /**
+     * Whether a message names you: by your key in this group, or, from an older client that sends no key,
+     * by the handle of your name in the text. The second check reads the member list, so it runs only
+     * for a text with an "@" in it.
+     */
+    private static boolean mentionsSelf(final GroupMentionHelper.ParsedGroupText parsed, final GroupMessage m)
+    {
+        if ((parsed == null) || (m.group_identifier == null))
+        {
+            return false;
+        }
+        try
+        {
+            final AirLiveOverride.Source standIn = AirLiveOverride.group(m.group_identifier);
+            final String selfKey = standIn != null
+                                   ? standIn.groupSelfPublicKey(m.group_identifier)
+                                   : MainActivity.tox_group_self_get_public_key(
+                                           tox_group_by_groupid__wrapper(m.group_identifier));
+            for (final GroupMentionHelper.MentionEntry mention : parsed.mentions)
+            {
+                if ((mention != null) && (mention.pubkey != null) && (selfKey != null)
+                    && mention.pubkey.equalsIgnoreCase(selfKey))
+                {
+                    return true;
+                }
+            }
+        }
+        catch (Throwable ignored)
+        {
+            // No key for this group now: only the handle check below.
+        }
+        return (parsed.bodyText != null) && (parsed.bodyText.indexOf('@') >= 0)
+               && GroupMentionHelper.isSelfMentioned(m.text, m.group_identifier);
+    }
+
+    /**
      * Whether a row must carry the "sender not verified" marker — pure, so it can be unit tested.
      *
      * The positive case is awkward to see on a device: it needs an incoming row that arrived via
@@ -612,114 +799,6 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
         return true;
     }
 
-    static void showDialog_url(final Context c, final String title, final String url1)
-    {
-        String url2 = url1;
-
-        // check to see if protocol is specified in URL, otherwise add "http://"
-        if (!url2.contains("://"))
-        {
-            url2 = "https://" + url1;
-        }
-        final String url = url2;
-
-        final AlertDialog.Builder builder = new AlertDialog.Builder(c);
-        builder.setMessage(url).setTitle(title).
-                setCancelable(false).
-                setPositiveButton("OK", new DialogInterface.OnClickListener()
-                {
-                    public void onClick(DialogInterface dialog, int id)
-                    {
-                        try
-                        {
-                            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                            c.startActivity(intent);
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                        dialog.dismiss();
-                    }
-                }).setNegativeButton("Cancel", new DialogInterface.OnClickListener()
-        {
-            public void onClick(DialogInterface dialog, int id)
-            {
-            }
-        });
-
-        final AlertDialog alert = builder.create();
-        alert.show();
-    }
-
-    static void showDialog_email(final Context c, final String title, final String email_addr)
-    {
-        final AlertDialog.Builder builder = new AlertDialog.Builder(c);
-        builder.setMessage(email_addr).setTitle(title).
-                setCancelable(false).
-                setPositiveButton("OK", new DialogInterface.OnClickListener()
-                {
-                    public void onClick(DialogInterface dialog, int id)
-                    {
-                        try
-                        {
-                            Intent emailIntent = new Intent(Intent.ACTION_SENDTO,
-                                                            Uri.fromParts("mailto", email_addr, null));
-                            emailIntent.setType("message/rfc822");
-                            // emailIntent.putExtra(Intent.EXTRA_SUBJECT, "Subject");
-                            // emailIntent.putExtra(Intent.EXTRA_TEXT, "Body");
-                            c.startActivity(Intent.createChooser(emailIntent, "Send email..."));
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                        dialog.dismiss();
-                    }
-                }).setNegativeButton("Cancel", new DialogInterface.OnClickListener()
-        {
-            public void onClick(DialogInterface dialog, int id)
-            {
-            }
-        });
-
-        final AlertDialog alert = builder.create();
-        alert.show();
-    }
-
-    static void showDialog_tox(final Context c, final String title, final String toxid)
-    {
-        final AlertDialog.Builder builder = new AlertDialog.Builder(c);
-        builder.setMessage(toxid.toUpperCase()).setTitle(title).
-                setCancelable(false).
-                setPositiveButton("OK", new DialogInterface.OnClickListener()
-                {
-                    public void onClick(DialogInterface dialog, int id)
-                    {
-                        try
-                        {
-                            String friend_tox_id = toxid.toUpperCase().replace(" ", "").replaceFirst("tox:",
-                                                                                                     "").replaceFirst(
-                                    "TOX:", "").replaceFirst("Tox:", "");
-                            add_friend_real(friend_tox_id);
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                        dialog.dismiss();
-                    }
-                }).setNegativeButton("Cancel", new DialogInterface.OnClickListener()
-        {
-            public void onClick(DialogInterface dialog, int id)
-            {
-            }
-        });
-
-        final AlertDialog alert = builder.create();
-        alert.show();
-    }
-
     private View.OnClickListener onclick_listener = new View.OnClickListener()
     {
         @Override
@@ -780,7 +859,7 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
 
                                         if (string_is_in_list(peer_name_corrected, PREF__toxirc_muted_peers))
                                         {
-                                            ret.text = "** muted **";
+                                            ret.text = context.getString(R.string.air_irc_message_hidden);
                                         }
                                         else
                                         {
@@ -829,7 +908,7 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
 
                                         if (string_is_in_list(peer_name_corrected, PREF__toxirc_muted_peers))
                                         {
-                                            ret.text = "** muted **";
+                                            ret.text = context.getString(R.string.air_irc_message_hidden);
                                         }
                                         else
                                         {

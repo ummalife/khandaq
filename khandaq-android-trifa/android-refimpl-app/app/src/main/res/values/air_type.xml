@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    KHANDAQ (redesign, Air): the weights the generated type scale (kq_type.xml) has no style for.
+    Same sizes and line heights as their parents, another face of the same family. values-ar holds
+    the Arabic faces, as kq_type.xml does.
+-->
+<resources>
+    <style name="TextAppearance.KQ.Air.BodyStrong" parent="TextAppearance.KQ.Body">
+        <item name="android:fontFamily">@font/ibm_plex_sans_semibold</item>
+        <item name="fontFamily">@font/ibm_plex_sans_semibold</item>
+    </style>
+    <style name="TextAppearance.KQ.Air.LabelStrong" parent="TextAppearance.KQ.Label">
+        <item name="android:fontFamily">@font/ibm_plex_sans_semibold</item>
+        <item name="fontFamily">@font/ibm_plex_sans_semibold</item>
+    </style>
+    <style name="TextAppearance.KQ.Air.LabelRegular" parent="TextAppearance.KQ.Label">
+        <item name="android:fontFamily">@font/ibm_plex_sans_regular</item>
+        <item name="fontFamily">@font/ibm_plex_sans_regular</item>
+    </style>
+    <style name="TextAppearance.KQ.Air.CaptionMedium" parent="TextAppearance.KQ.Caption">
+        <item name="android:fontFamily">@font/ibm_plex_sans_medium</item>
+        <item name="fontFamily">@font/ibm_plex_sans_medium</item>
+    </style>
+    <style name="TextAppearance.KQ.Air.CaptionStrong" parent="TextAppearance.KQ.Caption">
+        <item name="android:fontFamily">@font/ibm_plex_sans_semibold</item>
+        <item name="fontFamily">@font/ibm_plex_sans_semibold</item>
+    </style>
+</resources>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Политика конфиденциальности: Khandaq</title>
+  <meta name="description" content="Политика конфиденциальности Khandaq: мессенджер со сквозным шифрованием через сеть Tox. Без аккаунтов, номеров телефонов, рекламы и поведенческой аналитики.">
+  <link rel="canonical" href="https://khandaq.org/ru/privacy.html">
+  <link rel="alternate" hreflang="en" href="https://khandaq.org/privacy.html">
+  <link rel="alternate" hreflang="ru" href="https://khandaq.org/ru/privacy.html">
+  <link rel="alternate" hreflang="x-default" href="https://khandaq.org/privacy.html">
+  <meta name="robots" content="index, follow">
+
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://khandaq.org/ru/privacy.html">
+  <meta property="og:title" content="Политика конфиденциальности: Khandaq">
+  <meta property="og:description" content="Политика конфиденциальности Khandaq: мессенджер со сквозным шифрованием через сеть Tox. Без аккаунтов, номеров телефонов, рекламы и поведенческой аналитики.">
+  <meta property="og:image" content="https://khandaq.org/assets/pwa-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="Значок приложения Khandaq">
+  <meta property="og:site_name" content="Khandaq Messenger">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta name="twitter:card" content="summary">
+
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/assets/favicon-48.png" sizes="48x48" type="image/png">
+  <link rel="icon" href="/assets/favicon-16.png" sizes="16x16" type="image/png">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <link rel="preload" href="/assets/fonts/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/assets/fonts/ibm-plex-sans-600.woff2" as="font" type="font/woff2" crossorigin>
+  <script>try{var t=localStorage.getItem('kq-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
+  <link rel="stylesheet" href="/assets/tokens.css?v=9109f5fc5c">
+  <link rel="stylesheet" href="/style.css?v=ed6305eeb7">
+  <script src="/assets/site.js?v=d12f990d52" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Перейти к&nbsp;содержимому</a>
+
+  <header class="site-head">
+    <div class="wrap">
+      <a class="brand" href="/ru/">
+        <img src="/assets/app-icon-64.png" srcset="/assets/app-icon-64.png 2x, /assets/app-icon-96.png 3x" width="32" height="32" alt="">
+        <span>Khandaq</span>
+      </a>
+      <nav class="nav" aria-label="Основное">
+        <a class="nav-wide" href="/ru/#how">Как это устроено</a>
+        <a class="nav-mid" href="/ru/#download">Скачать</a>
+        <a class="nav-mid" href="/ru/changelog.html">Изменения</a>
+        <a class="nav-wide" href="/ru/#source">Исходный код</a>
+        <a class="nav-lang" href="/privacy.html" hreflang="en" lang="en">English</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <article class="wrap doc">
+  <h1>Политика конфиденциальности</h1>
+  <p class="doc-date">Обновлено: 9&nbsp;августа 2026. Это перевод <a href="/privacy.html" hreflang="en">английской версии</a>; если тексты расходятся, действует английский.</p>
+
+  <p>Бесплатный мессенджер Khandaq с&nbsp;открытым кодом работает от&nbsp;устройства к&nbsp;устройству по&nbsp;протоколу <a href="https://tox.chat/" target="_blank" rel="noopener">Tox</a>. Он устроен так, что <strong>мы не&nbsp;можем прочитать ваши сообщения, даже если&nbsp;бы захотели</strong>. Эта политика простыми словами объясняет, что это значит.</p>
+
+  <div class="doc-note">
+    <strong>Коротко.</strong> Ни&nbsp;аккаунта. Ни&nbsp;номера телефона. Ни&nbsp;почты. Ни&nbsp;рекламы. Ни&nbsp;поведенческой аналитики. Сообщения, звонки и&nbsp;файлы зашифрованы из&nbsp;конца в&nbsp;конец и&nbsp;идут напрямую между вами и&nbsp;теми, с&nbsp;кем вы общаетесь. У&nbsp;Khandaq нет центрального сервера, который хранил&nbsp;бы ваши разговоры. Единственное исключение из&nbsp;«никаких серверов» касается уведомлений: чтобы разбудить телефон, нужны служба push-уведомлений Google и&nbsp;небольшая служба пробуждения Khandaq. Они видят данные о&nbsp;доставке, но&nbsp;никогда не&nbsp;видят содержимое сообщений (см. <a href="#push">Push-уведомления</a>).
+  </div>
+
+  <!-- DEPLOY ORDER: the "Firebase diagnostics is switched off" claim below is true only from the NEXT
+       iOS build onward: FirebaseDataCollectionDefaultEnabled was added to Antidote-Info.plist after
+       TF 142972 / the current App Store binary were cut, and those still report core telemetry.
+       Publish this page WITH or AFTER that iOS submission, never before it. -->
+  <h2>Что мы НЕ&nbsp;собираем</h2>
+  <ul>
+    <li><strong>Никаких регистрационных данных.</strong> Khandaq не&nbsp;просит имя, номер телефона, почту или другой личный идентификатор, чтобы создать профиль. Ваша личность здесь задаётся парой ключей Tox, созданной на&nbsp;устройстве; секретная половина никогда не&nbsp;покидает устройство, а&nbsp;кому дать открытую половину, решаете вы.</li>
+    <li><strong>Никакого содержимого сообщений.</strong> Сообщения, голосовые и&nbsp;видеозвонки и&nbsp;передача файлов зашифрованы из&nbsp;конца в&nbsp;конец протоколом Tox (NaCl/libsodium). Прочитать их можете только вы и&nbsp;ваш собеседник. У&nbsp;нас нет серверов, которые получали&nbsp;бы или хранили их.</li>
+    <li><strong>Никакой рекламы и&nbsp;поведенческой аналитики.</strong> В&nbsp;Khandaq нет рекламных SDK, аналитики использования или поведения, отправки отчётов о&nbsp;сбоях и&nbsp;сторонних трекеров. Код Google в&nbsp;приложении есть, и&nbsp;он нужен для двух вещей. Первая: <strong>Firebase Cloud Messaging</strong>, которая доставляет уведомления; она описана в&nbsp;разделе <a href="#push">Push-уведомления</a>. Вторая, только на&nbsp;Android: <strong>сканер штрихкодов Google ML Kit</strong>, который читает QR-код с&nbsp;ID с&nbsp;камеры или с&nbsp;выбранной вами картинки. Это полностью локальная сборка сканера: модель распознавания упакована в&nbsp;само приложение, а&nbsp;не&nbsp;загружается из&nbsp;сервисов Google Play, и&nbsp;ни&nbsp;изображение, ни&nbsp;кадр с&nbsp;камеры, ни&nbsp;результат сканирования не&nbsp;покидают телефон. Обе библиотеки тянут за&nbsp;собой базовую библиотеку сервисов Google Play. Ещё одна библиотека, собственный диагностический компонент Firebase на&nbsp;iOS, иначе отправляла&nbsp;бы в&nbsp;Google сведения о&nbsp;настройке и&nbsp;использовании SDK; мы выключаем её в&nbsp;настройках приложения, поэтому она ничего не&nbsp;отправляет.</li>
+    <li><strong>Никакой загрузки адресной книги.</strong> Khandaq не&nbsp;читает и&nbsp;не&nbsp;загружает контакты вашего устройства. Контакты вы добавляете вручную, обмениваясь ID.</li>
+  </ul>
+
+  <h2>Данные на&nbsp;вашем устройстве</h2>
+  <ul>
+    <li>Профиль, контакты, история сообщений и&nbsp;полученные файлы хранятся <strong>только локально на&nbsp;вашем устройстве</strong>, в&nbsp;базе данных, которую можно зашифровать выбранным вами паролем. Если удалить приложение, удалится и&nbsp;всё это.</li>
+    <li>Исключение составляют медиафайлы, которые вы сами <strong>сохранили в&nbsp;галерею</strong>. Они записываются в&nbsp;общее хранилище фото и&nbsp;файлов телефона (<em>Pictures/Khandaq</em>, <em>Movies/Khandaq</em> и&nbsp;<em>Download/Khandaq</em> на&nbsp;Android, приложение «Фото» на&nbsp;iOS), которое находится вне приложения и&nbsp;поэтому переживает его удаление. Если хотите избавиться от&nbsp;них, удалите их из&nbsp;галереи или файлового менеджера.</li>
+    <li>Можно задать парольную фразу или PIN-код, чтобы локальная база данных хранилась зашифрованной. Khandaq никуда не&nbsp;передаёт эту фразу.</li>
+  </ul>
+
+  <h2>Как устроена сеть</h2>
+  <ul>
+    <li>Khandaq подключается через <strong>децентрализованную сеть Tox DHT</strong>: её образуют сами пользователи и&nbsp;узлы добровольцев (начальные узлы и&nbsp;ретрансляторы), которые мы не&nbsp;контролируем. Эти узлы помогают двум устройствам найти друг друга; прочитать трафик, зашифрованный из&nbsp;конца в&nbsp;конец, они не&nbsp;могут.</li>
+    <li>Как и&nbsp;при любом общении через интернет, посредники в&nbsp;сети (например, ваш провайдер или ретранслятор Tox) могут видеть, что соединение существует, и&nbsp;базовые технические метаданные (например, IP-адрес), но&nbsp;не&nbsp;содержимое разговоров.</li>
+  </ul>
+
+  <h2 id="push">Push-уведомления</h2>
+  <p>Khandaq работает от&nbsp;устройства к&nbsp;устройству, поэтому никакой сервер не&nbsp;держит ваши сообщения и&nbsp;никакой сервер не&nbsp;может сообщить телефону, что сообщение ждёт. Чтобы уведомления вообще работали, участвуют две вещи.</p>
+  <ul>
+    <li><strong>Google Firebase Cloud Messaging (FCM)</strong> доставляет уведомление на&nbsp;ваше устройство. Она используется <strong>и&nbsp;на&nbsp;Android, и&nbsp;на&nbsp;iOS</strong>; на&nbsp;iOS FCM передаёт уведомление дальше, в&nbsp;Apple APNs, для последнего шага до&nbsp;телефона. Google обрабатывает регистрационный токен устройства (идентификатор установки приложения, а&nbsp;не&nbsp;ваш) и, как любой сетевой сервис, видит IP-адрес устройства, пока открыто push-соединение. Ничего из&nbsp;написанного вами Google не&nbsp;получает. Но&nbsp;кроме токена он видит ещё один идентификатор: сигнал пробуждения несёт открытый ключ Tox <em>отправителя</em>, чтобы приложение получателя открыло нужный чат, и&nbsp;это значение проходит через серверы Google по&nbsp;пути к&nbsp;устройству.</li>
+    <li><strong>Служба пробуждения, которую держит Khandaq</strong>, на&nbsp;push.khandaq.org. Когда вы пишете тому, кто не&nbsp;в&nbsp;сети, <em>ваше</em> устройство обращается к&nbsp;службе, чтобы устройство собеседника проснулось и&nbsp;забрало сообщение напрямую.</li>
+  </ul>
+  <p>Служба получает: push-токен получателя (чтобы знать, какое устройство будить), по&nbsp;желанию открытый ключ Tox отправителя (чтобы приложение открыло нужный чат; это только открытый ключ, а&nbsp;не&nbsp;полный ID) и&nbsp;IP-адрес устройства отправителя, который увидел&nbsp;бы любой веб-сервер. Она <strong>не</strong>&nbsp;получает текст сообщений, файлы, звук и&nbsp;видео звонков и&nbsp;ID получателя.</p>
+  <p>Само уведомление о&nbsp;пробуждении всегда одно и&nbsp;то&nbsp;же: заголовок «Khandaq» и&nbsp;текст «New message», и&nbsp;никогда ничего из&nbsp;написанного вами. Когда приложение забрало и&nbsp;расшифровало сообщение, оно показывает собственное уведомление с&nbsp;настоящим отправителем и&nbsp;текстом. На&nbsp;iOS, если приложение ещё работало в&nbsp;фоне, оно затем убирает общий баннер пробуждения, и&nbsp;остаётся одно содержательное уведомление; если приложение было закрыто принудительно, баннер остаётся общим, пока вы не&nbsp;откроете Khandaq. На&nbsp;Android общий баннер выводит компонент сообщений Google под идентификатором, которого приложение не&nbsp;знает, поэтому убрать его приложение не&nbsp;может; там вы недолго видите два уведомления, общее и&nbsp;содержательное, пока не&nbsp;нажмёте на&nbsp;них или не&nbsp;смахнёте.</p>
+  <p>Ваш собственный адрес пробуждения представляет собой URL с&nbsp;вашим токеном уведомлений, и&nbsp;<strong>ваше устройство отправляет его вашим контактам</strong> по&nbsp;зашифрованному каналу Tox, потому что будить ваше устройство приходится именно их устройствам. Так что у&nbsp;каждого добавленного вами контакта есть идентификатор вашей установки приложения, а&nbsp;ваше устройство, в&nbsp;свою очередь, обращается по&nbsp;адресам пробуждения, которые дали ему ваши контакты. Оба приложения отказываются обращаться к&nbsp;чему-либо вне фиксированного списка. В&nbsp;этом списке служба Khandaq и&nbsp;унаследованные адреса ретрансляторов от&nbsp;исходного проекта, на&nbsp;котором построены приложения: два на&nbsp;Android (<em>tox.zoff.xyz</em> и&nbsp;<em>toxcon2020.zoff.cc</em>) и&nbsp;один на&nbsp;iOS (<em>tox.zoff.xyz</em>). К&nbsp;ним обращаются, только если приложение контакта передало вам адрес пробуждения, размещённый там; сам Khandaq выдаёт адреса только на&nbsp;своей службе. На&nbsp;Android можно дополнительно включить в&nbsp;настройках сторонний push-сервер (ntfy, UnifiedPush или сервер Mozilla); пока вы его не&nbsp;включите, он выключен. Токен меняется, если переустановить приложение или очистить его данные.</p>
+  <p>Служба хранит одну вещь: усечённый хеш push-токена вместе со&nbsp;временем, когда она последний раз будила это устройство. Это нужно только для подавления повторов: без этого отправитель, повторяя доставку, вызывал&nbsp;бы поток одинаковых баннеров. Эти записи удаляются, когда становятся старше 24&nbsp;часов, не&nbsp;связаны ни&nbsp;с&nbsp;аккаунтом, ни&nbsp;с&nbsp;ID и&nbsp;не&nbsp;используются для статистики. Отдельно веб-сервер службы ведёт обычные журналы доступа (IP-адрес обратившегося, время, запрос и&nbsp;его результат), как любой веб-сервер. Сервер настроен вырезать секретные параметры из&nbsp;записываемой строки. Начиная с&nbsp;Android 0.2.42 и&nbsp;сборки iOS 142986 приложения отправляют сигнал пробуждения POST-запросом: токен лежит в&nbsp;теле, а&nbsp;подпись в&nbsp;заголовке, поэтому токен вообще не&nbsp;попадает в&nbsp;строку запроса, которую записывает веб-сервер. Установки на&nbsp;более старых сборках используют прежнюю форму, где токен и&nbsp;открытый ключ отправителя стоят в&nbsp;URL и&nbsp;поэтому попадают в&nbsp;эту строку журнала; этот адрес запланирован к&nbsp;отключению, и&nbsp;расписание опубликовано в&nbsp;репозитории проекта. Эти журналы в&nbsp;обычном порядке ротируются и&nbsp;удаляются с&nbsp;сервера, никогда не&nbsp;сопоставляются с&nbsp;таблицей пробуждений и&nbsp;используются только для поиска неисправностей и&nbsp;борьбы со&nbsp;злоупотреблениями.</p>
+  <p>Уведомления можно выключить в&nbsp;любой момент в&nbsp;системных настройках устройства.</p>
+
+  <h2>Разрешения устройства</h2>
+  <p>Khandaq просит разрешение только тогда, когда вы пользуетесь функцией, которой оно нужно. Полный список разрешений, которые у&nbsp;вас запрашивают:</p>
+  <ul>
+    <li><strong>Микрофон</strong>: голосовые и&nbsp;видеозвонки, голосовые сообщения.</li>
+    <li><strong>Камера</strong>: видеозвонки, снимок для отправки и&nbsp;сканирование QR-кода с&nbsp;ID.</li>
+    <li><strong>Фото и&nbsp;медиа</strong>: две разные вещи, чтение галереи, чтобы выбрать изображение или видео для отправки, и&nbsp;запись в&nbsp;неё, чтобы сохранить присланный файл. На&nbsp;Android это разрешения на&nbsp;фото и&nbsp;видео и&nbsp;на&nbsp;хранилище; на&nbsp;iOS это два разрешения медиатеки.</li>
+    <li><strong>Геопозиция</strong>: только когда вы сами решаете отправить своё местоположение в&nbsp;чат.</li>
+    <li><strong>Уведомления</strong>: на&nbsp;iOS и&nbsp;на&nbsp;Android&nbsp;13 и&nbsp;новее, чтобы вообще показывать уведомления о&nbsp;сообщениях.</li>
+    <li><strong>Face ID или Touch ID</strong>: на&nbsp;iOS, чтобы открывать приложение без ввода PIN-кода. Проверка идёт на&nbsp;устройстве; биометрические данные Khandaq никогда не&nbsp;видит.</li>
+  </ul>
+  <p>Всё это используется на&nbsp;устройстве. Никакие данные, к&nbsp;которым эти разрешения дают доступ, нам не&nbsp;отправляются.</p>
+  <p>Android также объявляет разрешения, перед которыми система никогда не&nbsp;показывает запрос. Перечисляем их все, чтобы список выше не&nbsp;приняли за&nbsp;полную картину: <em>интернет</em> и&nbsp;<em>состояние сети</em>; <em>отключение спящего режима</em>, <em>активная служба</em>, <em>активная служба особого типа</em> и&nbsp;<em>запуск при включении</em>, которые держат прямое соединение в&nbsp;фоне; <em>изменение настроек звука</em> для звонков; <em>полноэкранное уведомление</em>, чтобы входящий звонок мог занять экран блокировки; <em>точный будильник</em>, чтобы фоновое соединение восстанавливалось по&nbsp;расписанию, а&nbsp;не&nbsp;когда вздумается системе; разрешение на&nbsp;получение сообщений Google, которое нужно Firebase Cloud Messaging; <em>Bluetooth</em> и&nbsp;<em>устройства поблизости</em>, чтобы звонок можно было вывести на&nbsp;подключённую гарнитуру (они объявлены, но&nbsp;приложение никогда не&nbsp;показывает вам запрос на&nbsp;них); и&nbsp;разрешение уровня подписи, которое приложение определяет для своих внутренних широковещательных сообщений. Ни&nbsp;одно из&nbsp;них не&nbsp;читает личные данные. Khandaq <strong>не</strong>&nbsp;объявляет «доступ ко&nbsp;всем файлам» и&nbsp;«игнорирование оптимизации батареи».</p>
+  <p>Отдельно о&nbsp;геопозиции: ваше местоположение считывается, только когда вы сами решаете его отправить, и&nbsp;потом идёт со&nbsp;сквозным шифрованием, как любое другое сообщение. Оба приложения рисуют небольшое превью карты для сообщения с&nbsp;геопозицией, а&nbsp;значит, поставщик карт (OpenStreetMap на&nbsp;Android, Apple Maps на&nbsp;iOS) получает запрос изображения карты вокруг этих координат и&nbsp;вместе с&nbsp;ним IP-адрес вашего устройства. Khandaq не&nbsp;получает ни&nbsp;того, ни&nbsp;другого.</p>
+
+  <h2>Дети</h2>
+  <p>Khandaq не&nbsp;предназначен для детей младше 17&nbsp;лет. Поскольку он даёт неограниченное общение без модерации, в&nbsp;App Store у&nbsp;него соответствующий возрастной рейтинг.</p>
+
+  <h2>Третьи стороны</h2>
+  <p>Khandaq не&nbsp;продаёт и&nbsp;не&nbsp;сдаёт в&nbsp;аренду персональные данные и&nbsp;не&nbsp;ведёт рекламного или аналитического бизнеса. Продавать нечего: у&nbsp;нас нет ни&nbsp;аккаунта, ни&nbsp;списка контактов, ни&nbsp;содержимого сообщений. Несколько сервисов неизбежно участвуют в&nbsp;работе приложения, и&nbsp;каждый из&nbsp;них перечислен здесь.</p>
+  <ul>
+    <li><strong>Google (Firebase Cloud Messaging)</strong>: доставляет уведомления на&nbsp;Android и&nbsp;iOS. Обрабатывает регистрационный токен устройства, ваш IP-адрес и&nbsp;открытый ключ Tox отправителя внутри сигнала пробуждения; содержимого сообщений не&nbsp;получает. Действует собственная политика конфиденциальности Google. Сканер штрихкодов Google ML Kit тоже есть в&nbsp;приложении для Android, но&nbsp;работает на&nbsp;устройстве и&nbsp;ничего не&nbsp;отправляет.</li>
+    <li><strong>Apple (APNs)</strong>: последний шаг доставки уведомлений на&nbsp;iOS, через FCM. Те&nbsp;же ограничения: никакого содержимого сообщений.</li>
+    <li><strong>Служба пробуждения Khandaq</strong> (push.khandaq.org): что именно она получает и&nbsp;хранит, описано в&nbsp;разделе <a href="#push">Push-уведомления</a>. Её держим мы, а&nbsp;не&nbsp;третья сторона.</li>
+    <li><strong>Унаследованные службы пробуждения и&nbsp;необязательные push-серверы</strong>: адреса из&nbsp;исходного проекта, перечисленные в&nbsp;разделе <a href="#push">Push-уведомления</a>, и, только на&nbsp;Android и&nbsp;только если вы сами его включили, ntfy, UnifiedPush или push-сервис Mozilla. Они получают тот&nbsp;же сигнал пробуждения, что и&nbsp;служба Khandaq, и&nbsp;ничего больше.</li>
+    <li><strong>OpenStreetMap и&nbsp;Apple Maps</strong>: только когда показывается сообщение с&nbsp;геопозицией, чтобы загрузить превью карты. Они видят запрошенные координаты и&nbsp;ваш IP-адрес.</li>
+    <li><strong>Начальные узлы и&nbsp;ретрансляторы Tox</strong>: их держат добровольцы, а&nbsp;не&nbsp;мы. Они помогают устройствам найти друг друга и&nbsp;не&nbsp;могут прочитать трафик, зашифрованный из&nbsp;конца в&nbsp;конец.</li>
+    <li><strong>App Store и&nbsp;Google Play</strong>: распространяют приложение и&nbsp;сообщают нам собственную сводную статистику установок. Своих идентификаторов мы к&nbsp;ней не&nbsp;добавляем.</li>
+  </ul>
+  <p>Код Khandaq открыт, и&nbsp;библиотеки протокола Tox, на&nbsp;которых он построен, тоже открыты и&nbsp;проверены сообществом, поэтому всё сказанное здесь можно сверить с&nbsp;кодом, а&nbsp;не&nbsp;принимать на&nbsp;веру.</p>
+
+  <h2>Изменения этой политики</h2>
+  <p>Если политика изменится, новая версия появится на&nbsp;этой странице с&nbsp;новой датой обновления.</p>
+
+  <h2>Связаться с&nbsp;нами</h2>
+  <p>Вопросы о&nbsp;приватности? Пишите на&nbsp;<a href="mailto:support@khandaq.org">support@khandaq.org</a>.</p>
+
+  <!-- KHANDAQ: the same licence attribution and owner/developer credit as the English policy. The
+       translation is a derivative of that text, so the CC BY-SA attribution to tox.chat carries over. -->
+  <p class="doc-foot">© 2026 Khandaq. Khandaq распространяется как свободное программное обеспечение с&nbsp;открытым кодом. Части этого текста основаны на&nbsp;материалах <a href="https://tox.chat/" target="_blank" rel="noopener">tox.chat</a>, которые распространяются по&nbsp;лицензии CC BY-SA 4.0. <span class="credit">Владелец и&nbsp;разработчик: <a href="https://1sa.me/" target="_blank" rel="noopener">Isa Dagestani</a></span></p>
+    </article>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap">
+      <div class="foot-cols">
+        <div>
+          <h2>Khandaq Messenger</h2>
+          <p>Переписка со&nbsp;сквозным шифрованием в&nbsp;сети Tox. Бесплатно и&nbsp;с&nbsp;открытым кодом.</p>
+        </div>
+        <div>
+          <h2>Скачать</h2>
+          <ul>
+            <li><a href="/ru/#download">Все платформы</a></li>
+            <li><a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger">Android в&nbsp;Google Play</a></li>
+            <li><a href="https://testflight.apple.com/join/4ppS8ZN5">iPhone в&nbsp;TestFlight</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Проект</h2>
+          <ul>
+            <li><a href="https://github.com/ummalife/khandaq">Исходный код</a></li>
+            <li><a href="/ru/changelog.html">Журнал изменений</a></li>
+            <li><a href="/ru/privacy.html">Политика конфиденциальности</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/blob/master/SECURITY.md">Безопасность</a></li>
+            <li><a href="https://tox.chat">Протокол Tox</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Поддержка</h2>
+          <ul>
+            <li><a href="mailto:support@khandaq.org">support@khandaq.org</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/issues">Сообщить о&nbsp;проблеме</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/security/advisories/new">Сообщить об&nbsp;уязвимости</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="foot-base">
+        <p class="copyright">© Khandaq, <a href="https://khandaq.org/">khandaq.org</a>. Открытый код, совместим с&nbsp;Tox. <span class="credit">Владелец и&nbsp;разработчик: <a href="https://1sa.me/" target="_blank" rel="noopener">Isa Dagestani</a></span></p>
+        <fieldset class="seg" data-theme-control hidden>
+          <legend>Тема</legend>
+          <span class="seg-options">
+            <label><input type="radio" name="theme" value="system">Как в&nbsp;системе</label>
+            <label><input type="radio" name="theme" value="light">Светлая</label>
+            <label><input type="radio" name="theme" value="dark">Тёмная</label>
+          </span>
+        </fieldset>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

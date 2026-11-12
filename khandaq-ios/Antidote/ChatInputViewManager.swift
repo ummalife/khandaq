@@ -34,12 +34,19 @@ class ChatInputViewManager: NSObject {
     fileprivate var inactivityTimer: Timer?
     fileprivate var isVideoSendInProgress = false
     fileprivate let voiceRecorder = GroupVoiceMessageRecorder()
+    fileprivate var voiceHold = VoiceHoldGate()
 
     var outgoingTextComposer: ((String) -> String)?
 
     // KHANDAQ design (Figma): set by the chat controller to share the current location once from the
     // "+" attachment menu. When nil (e.g. groups), the Геолокация item is hidden.
     var onShareLocation: (() -> Void)?
+
+    /// KHANDAQ (redesign stage 2): called on the main queue when the network refuses a text outright
+    /// (a message for a person who is offline is not refused: the core keeps it for them). Return true
+    /// when the screen keeps the text with "Not sent. Retry" itself; the field is then cleared and no
+    /// alert is shown. The text is the one that went out, with its reply header.
+    var onSendFailed: ((String, NSError?) -> Bool)?
 
     init(inputView: ChatInputView,
          theme: Theme,
@@ -148,16 +155,49 @@ extension ChatInputViewManager: ChatInputViewDelegate {
                 self.endUserInteraction()
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                // The contact (and with it the chat) may have been removed in the meantime.
+                guard !self.chat.isInvalidated else {
+                    return
+                }
                 os_log("PUSH:10_seconds")
                 self.submanagerChats.sendMessagePush(to: self.chat)
             }
         }, failureBlock: { error in
             DispatchQueue.main.async {
-                if let error = error as NSError? {
-                    handleErrorWithType(.sendMessageToFriend, error: error)
-                } else {
-                    UIAlertController.showErrorWithMessage(String(localized: "error_internal_message"), retryBlock: nil)
+                if let keep = self.onSendFailed, keep(outgoing, error as NSError?) {
+                    view.text = ""
+                    self.endUserInteraction()
+                    return
                 }
+                // E21: without an error the words still say what failed.
+                handleErrorWithType(.sendMessageToFriend, error: error as NSError?)
+            }
+        })
+    }
+
+    /// KHANDAQ (redesign stage 2): "Retry" for a refused text: the same call as the send button, with
+    /// the same wake-up signal ten seconds later. `completion` runs on the main queue with true once the
+    /// core has taken the message.
+    func resend(_ outgoing: String, completion: @escaping (Bool) -> Void) {
+        guard !chat.isSavedMessages else {
+            completion(false)
+            return
+        }
+        submanagerChats.sendMessage(to: chat, text: outgoing, type: .normal, successBlock: { _ in
+            DispatchQueue.main.async {
+                completion(true)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                // The contact (and with it the chat) may have been removed in the meantime.
+                guard !self.chat.isInvalidated else {
+                    return
+                }
+                os_log("PUSH:10_seconds")
+                self.submanagerChats.sendMessagePush(to: self.chat)
+            }
+        }, failureBlock: { _ in
+            DispatchQueue.main.async {
+                completion(false)
             }
         })
     }
@@ -172,11 +212,19 @@ extension ChatInputViewManager: ChatInputViewDelegate {
     }
 
     // KHANDAQ (#15): hold-to-record voice for 1:1 chats (mirrors the group input bar).
+    // Stage 5: with the microphone denied the hold showed its recording bar and sent nothing, without a
+    // word; it says why and offers Settings, as a call does (E9, E21). The first hold asks iOS, and the
+    // answer comes after the hold: the recording starts only while the hold is on (VoiceHoldGate).
     func chatInputViewVoiceRecordDidStart(_ view: ChatInputView) {
-        requestMicrophoneAccess { [weak self] granted in
+        let hold = voiceHold.begin()
+        MediaPermission.requestMicrophoneAccess(from: presentingViewController) { [weak self] granted in
             guard let self = self else { return }
             guard granted else {
                 VoiceDebugHUD.shared.log("✖︎ mic DENIED")
+                return
+            }
+            guard self.voiceHold.mayRecord(for: hold) else {
+                VoiceDebugHUD.shared.log("mic allowed after the hold ended: not recording")
                 return
             }
 
@@ -191,6 +239,7 @@ extension ChatInputViewManager: ChatInputViewDelegate {
     }
 
     func chatInputViewVoiceRecordDidEnd(_ view: ChatInputView, cancelled: Bool) {
+        voiceHold.end()
         if cancelled {
             VoiceDebugHUD.shared.log("• record ended: CANCELLED (slide/short)")
             voiceRecorder.cancelRecording()
@@ -297,6 +346,11 @@ extension ChatInputViewManager: PHPickerViewControllerDelegate {
 
 extension ChatInputViewManager {
     func endUserInteraction() {
+        // After the contact is removed from the conversation the chat is gone from Realm.
+        guard !chat.isInvalidated else {
+            inactivityTimer?.invalidate()
+            return
+        }
         try? submanagerChats.setIsTyping(false, in: chat)
         inactivityTimer?.invalidate()
 
@@ -328,6 +382,29 @@ extension ChatInputViewManager: UIDocumentPickerDelegate {
         submanagerFiles.sendFile(atPath: url.path, moveToUploads: true, to: chat) { error in
             handleErrorWithType(.sendFileToFriend, error: error as NSError)
         }
+    }
+}
+
+/// Saved Messages keeps its files on this device, in a folder of their own; a file shared from another
+/// app into Saved Messages goes there too (stage 5).
+extension ChatInputViewManager {
+    /// Persistent dir for files kept only in Saved Messages (no Tox transfer).
+    static func savedFilesDirectory() -> URL? {
+        guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let dir = base.appendingPathComponent("KhandaqSaved", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+        return dir
+    }
+
+    /// A file already in the folder of Saved files, recorded as a message of the Saved Messages `chat`.
+    static func recordSavedFile(atPath path: String, fileName: String, to chat: OCTChat, objects: OCTSubmanagerObjects) {
+        let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? NSNumber)??.int64Value ?? 0
+        let uti = (fileName as NSString).pathExtension.isEmpty ? nil :
+            UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension,
+                                                  (fileName as NSString).pathExtension as CFString, nil)?.takeRetainedValue() as String?
+        objects.addSavedFileMessage(withPath: path, fileName: fileName, fileSize: size, fileUTI: uti, to: chat)
     }
 }
 
@@ -561,16 +638,6 @@ fileprivate extension ChatInputViewManager {
         }
     }
 
-    /// Persistent dir for files kept only in Saved Messages (no Tox transfer).
-    static func savedFilesDirectory() -> URL? {
-        guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            return nil
-        }
-        let dir = base.appendingPathComponent("KhandaqSaved", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
-        return dir
-    }
-
     /// Copy `path` into the persistent saved dir and record a local file message. Returns true if stored.
     @discardableResult
     func storeSavedFileByCopying(atPath path: String, fileName: String) -> Bool {
@@ -582,11 +649,7 @@ fileprivate extension ChatInputViewManager {
     }
 
     private func storeSavedFile(atPath path: String, fileName: String) {
-        let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? NSNumber)??.int64Value ?? 0
-        let uti = (fileName as NSString).pathExtension.isEmpty ? nil :
-            UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension,
-                                                  (fileName as NSString).pathExtension as CFString, nil)?.takeRetainedValue() as String?
-        submanagerObjects.addSavedFileMessage(withPath: path, fileName: fileName, fileSize: size, fileUTI: uti, to: chat)
+        Self.recordSavedFile(atPath: path, fileName: fileName, to: chat, objects: submanagerObjects)
     }
 
     func sendImageFromPHAsset(_ asset: PHAsset, fallbackFileName: String?) {
@@ -701,7 +764,9 @@ fileprivate extension ChatInputViewManager {
     }
 
     func showMediaPickFailed() {
-        UIAlertController.showErrorWithMessage(String(localized: "error_internal_message"), retryBlock: nil)
+        UIAlertController.showWithTitle(String(localized: "error_failed_pick_media"),
+                                        message: String(localized: "error_try_again_message"),
+                                        retryBlock: nil)
     }
 
     func presentMediaPreview(items: [MediaSendPreviewItem]) {
@@ -889,11 +954,8 @@ fileprivate extension ChatInputViewManager {
             }
         }, failureBlock: { error in
             DispatchQueue.main.async {
-                if let error = error as NSError? {
-                    handleErrorWithType(.sendMessageToFriend, error: error)
-                } else {
-                    UIAlertController.showErrorWithMessage(String(localized: "error_internal_message"), retryBlock: nil)
-                }
+                // E21: without an error the words still say what failed.
+                handleErrorWithType(.sendMessageToFriend, error: error as NSError?)
             }
         })
     }

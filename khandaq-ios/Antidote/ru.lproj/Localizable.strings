@@ -30,9 +30,9 @@
 "onboarding_decentralized_subtitle" = "Ваши сообщения не хранятся на серверах. Наслаждайтесь полной децентрализацией";
 "onboarding_next" = "Далее";
 "onboarding_create_account" = "Создать аккаунт";
-"contacts_copy_myid" = "Копировать MyID";
-"chat_encryption_badge" = "Tox protocol";
-"chat_encryption_info" = "Все данные в чатах защищены протоколом сквозного шифрования Tox и недоступны никому кроме вас и вашего собеседника";
+"contacts_copy_myid" = "Копировать ID";
+"chat_encryption_badge" = "Протокол Tox";
+"chat_encryption_info" = "Все данные в чатах защищены протоколом сквозного шифрования Tox и недоступны никому, кроме вас и вашего собеседника";
 /* Password field */
 "password" = "Пароль";
 /* Login button */
@@ -55,7 +55,7 @@
 /* Login screen text */
 "set_password_title" = "Установить пароль";
 /* Login screen text */
-"set_password_hint" = "Пароль нужен для защиты данных. Минимум 8 символов, буквы и цифры. Храните его в безопасности — восстановить нельзя.";
+"set_password_hint" = "Пароль нужен для защиты данных. Минимум 8 символов, буквы и цифры. Храните его в безопасности: восстановить его нельзя.";
 /* Login button */
 "create_account_next_button" = "Далее";
 /* Login button */
@@ -123,9 +123,9 @@
 /* Tab name and screen name */
 "chats_title" = "Чаты";
 "chat_filter_groups" = "Группы";
-"chat_filter_favorites" = "Избранное";
-"chat_filter_add_favorite" = "В избранное";
-"chat_filter_remove_favorite" = "Убрать из избранного";
+"chat_filter_favorites" = "Избранные";
+"chat_filter_add_favorite" = "Добавить в избранные";
+"chat_filter_remove_favorite" = "Убрать из избранных";
 "theme_toggle_accessibility" = "Переключить тёмную тему";
 "voice_recording_cancel" = "Отмена";
 "voice_recording_send" = "Отправить голосовое сообщение";
@@ -146,7 +146,7 @@
 /* No contacts placeholder text */
 "contact_no_contacts_add_contact" = "Добавьте друзей\nили\n";
 /* No contacts placeholder text */
-"contact_no_contacts_share_tox_id" = "дайте им свой MyID";
+"contact_no_contacts_share_tox_id" = "дайте им свой ID";
 /* Contact request section title */
 "contact_requests_section" = "Запросы";
 /* Contact last seen status */
@@ -169,12 +169,12 @@
 
 /* Add contat screen name */
 "add_contact_title" = "Добавить контакт";
-"add_contact_own_id_error" = "Нельзя добавить свой Tox ID. На втором устройстве нужен другой профиль, либо импорт того же профиля (одновременно онлайн может быть только одно устройство).";
+"add_contact_own_id_error" = "Нельзя добавить свой ID. На втором устройстве нужен другой профиль, либо импорт того же профиля (одновременно онлайн может быть только одно устройство).";
 /* Add contat button */
 "add_contact_send" = "Отправить";
 /* Add contat placeholder text */
-"add_contact_tox_id_placeholder" = "Введите MyID";
-"add_contact_myid_label" = "MyID пользователя";
+"add_contact_tox_id_placeholder" = "Введите ID";
+"add_contact_myid_label" = "ID собеседника";
 /* Add contat placeholder text */
 "add_contact_or_label" = "или";
 /* Add contat button */
@@ -186,13 +186,13 @@
 /* Add contat placeholder text */
 "add_contact_default_message_title" = "Сообщение";
 /* Add contat default text sended to contact */
-"add_contact_default_message_text" = "Мир тебе! Пожалуйста, добавьте меня в список своих контактов?";
+"add_contact_default_message_text" = "Мир тебе! Добавьте меня, пожалуйста, в контакты.";
 /* Add contat error */
-"add_contact_wrong_qr" = "QR-код должен содержать MyID";
+"add_contact_wrong_qr" = "В этом QR-коде нет ID";
 "add_contact_invalid_id_format" = "Неверный формат ID";
 "add_contact_already_friend" = "Этот контакт уже есть в списке.";
 "add_contact_request_already_pending" = "Запрос этому контакту уже отправлен.";
-"add_contact_public_key_only_hint" = "Введён только публичный ключ. Запрос уйдёт с nospam=0 и может не дойти до адресата — нужен полный MyID из 76 символов из профиля.";
+"add_contact_public_key_only_hint" = "Введён только публичный ключ. Запрос может не дойти: попросите у человека полный ID из 76 знаков из его профиля.";
 
 /* User name text */
 "name" = "Имя";
@@ -203,9 +203,9 @@
 /* User status text */
 "status_title" = "Статус подключения";
 /* User Tox ID text */
-"my_tox_id" = "MyID";
+"my_tox_id" = "Ваш ID";
 "qr_screen_title" = "Мой QR-код";
-"qr_my_id_heading" = "MyID вашего аккаунта";
+"qr_my_id_heading" = "Ваш ID";
 "qr_my_id_subtitle" = "Друзья могут написать вам, отсканировав ваш QR-код";
 /* User public key text */
 "public_key" = "Публичный ключ";
@@ -232,7 +232,7 @@
 /* Chat button */
 "chat_send_button" = "Отпр.";
 /* Chat notification toast */
-"chat_new_messages" = "↓ Новые сообщения";
+"chat_new_messages" = "Новые сообщения";
 /* Chat call information */
 "chat_call_message" = "Звонок, ";
 /* Chat call information */
@@ -265,7 +265,7 @@
 /* Settings menu / screen name */
 "settings_about" = "О приложении";
 /* Settings menu / screen name */
-"settings_faq" = "FAQ";
+"settings_faq" = "Вопросы и ответы";
 /* Settings menu / screen name */
 "settings_advanced_settings" = "Расширенные настройки";
 /* About screen menu */
@@ -283,8 +283,8 @@
 /* Settings screen menu */
 "settings_autodownload_images_description" = "Автоматически загружать входящие изображения.";
 "settings_longer_bg_mode" = "Расширенный фоновый режим";
-"settings_longer_bg_mode_description" = "Приложение будет дольше работать в фоне, чтобы завершить отправку сообщений, но это раскрывает больше метаданных о вас — свяжет ваш IP-адрес и PUSH-токен. Это компромисс между удобством и приватностью метаданных.\n\nЧтобы этого избежать, можно использовать VPN.";
-"settings_profile_backup_description" = "Экспорт или импорт профиля Tox (.tox). Переносятся только Tox ID и контакты; история чатов не переносится.";
+"settings_longer_bg_mode_description" = "Сообщения успевают уйти после сворачивания приложения, но сервер уведомлений узнаёт, к какой сети подключён этот телефон.";
+"settings_profile_backup_description" = "Экспорт или импорт профиля Tox (.tox). Переносятся только ID и контакты; история чатов не переносится.";
 "settings_import_profile_invalid_file" = "Выбранный файл не является профилем Tox (.tox).";
 /* Settings screen menu */
 "settings_dark_theme" = "Тёмная тема";
@@ -295,8 +295,8 @@
 "settings_notifications_description" = "Вы будете получать уведомления в течении 10 минут после сворачивания Khandaq.";
 /* Settings screen menu */
 "settings_udp_enabled" = "Использовать UDP";
-"settings_call_audio_vpio" = "Новый аудиодвижок звонков (эхо и громкость)";
-/* Advanced settings — UDP restart confirmation */
+"settings_call_audio_vpio" = "Подавление эха и выравнивание громкости";
+/* Advanced settings, UDP restart confirmation */
 "settings_udp_restart_title" = "Нужен перезапуск";
 "settings_udp_restart_enable_message" = "UDP на iOS нестабилен и может вызывать вылеты. Приложение перезапустится для применения настройки. Не сворачивайте Khandaq до завершения перезапуска.";
 "settings_udp_restart_disable_message" = "Приложение перезапустится для применения сетевых настроек. Не сворачивайте Khandaq до завершения перезапуска.";
@@ -312,7 +312,6 @@
 "settings_using_wifi" = "Через Wi-Fi";
 /* Settings screen autodownload images option */
 "settings_always" = "Всегда";
-
 /* Profile settings menu */
 "change_password" = "Изменить пароль";
 /* Profile settings menu */
@@ -344,14 +343,13 @@
 "attach_file" = "Файл";
 "attach_location" = "Геолокация";
 /* Error while converting avatar image */
-"change_avatar_error_convert_image" = "Ошибка конвертации изображения";
-
+"change_avatar_error_convert_image" = "Не удалось подготовить изображение. Выберите другое фото.";
 /* Alert text when sending file to contacts */
 "file_send_to_contact" = "Отправить контакту";
 "file_send_to_group" = "Отправить в группу";
 "group_select_no_groups" = "Групп пока нет";
-"share_extension_preparing" = "Подготовка…";
-"share_extension_open_app" = "Открываем Khandaq…";
+"share_extension_preparing" = "Подготовка...";
+"share_extension_open_app" = "Открываем Khandaq...";
 "share_extension_failed" = "Не удалось поделиться через Khandaq";
 
 /* Profile menu item */
@@ -402,7 +400,7 @@
 "chat_edit_action" = "Изменить";
 "message_edit_save" = "Сохранить";
 "message_edited_marker" = "изменено";
-"group_msg_sender_unverified" = "Получено из истории — отправитель не подтверждён";
+"group_msg_sender_unverified" = "Получено из истории, отправитель не подтверждён";
 /* Delete button */
 "alert_delete" = "Удалить";
 /* Delete button */
@@ -428,7 +426,7 @@
 "error_too_many_files" = "Слишком много активных загрузок";
 /* Error */
 "error_internal_message" = "Внутренняя ошибка";
-"video_send_preparing" = "Подготовка видео…";
+"video_send_preparing" = "Подготовка видео...";
 "video_send_preparation_failed" = "Не удалось подготовить видео к отправке.";
 "video_send_too_large" = "Видео слишком большое (макс. 500 МБ).";
 "video_send_busy" = "Другое видео ещё обрабатывается. Подождите.";
@@ -436,7 +434,7 @@
 "video_send_cancel" = "Отмена";
 "file_transfer_stalled" = "Передача файла зависла. Отмените и попробуйте снова.";
 "media_send_button" = "Отправить";
-"media_send_caption_hint" = "Добавить подпись…";
+"media_send_caption_hint" = "Добавить подпись...";
 "media_send_counter_format" = "%1$d / %2$d";
 /* Error */
 "error_wrong_password_title" = "Неверный пароль";
@@ -485,11 +483,11 @@
 /* Error */
 "error_contact_request_own_key" = "Нельзя добавить себя в Контакты";
 /* Error */
-"error_contact_request_already_sent" = "Запрос уже отправлен. Если собеседник не видит его — убедитесь, что оба онлайн, и отправьте снова";
+"error_contact_request_already_sent" = "Запрос уже отправлен. Если собеседник не видит его, убедитесь, что оба в сети, и отправьте снова";
 /* Error */
-"error_contact_request_bad_checksum" = "Неверная контрольная сумма, перепроверьте MyID";
+"error_contact_request_bad_checksum" = "В ID опечатка или он скопирован не целиком. Скопируйте его ещё раз.";
 /* Error */
-"error_contact_request_new_nospam" = "Неверный nospam, перепроверьте MyID";
+"error_contact_request_new_nospam" = "У этого контакта новый антиспам: перепроверьте ID";
 
 /* Call error */
 "call_error_already_in_call" = "Абонент занят";
@@ -550,7 +548,7 @@
 "group_add_button" = "Добавить группу";
 "group_create_public" = "Создать публичную группу";
 "group_create_private" = "Создать приватную группу";
-"group_create_private_hint" = "Задайте пароль — без него войти смогут только приглашённые.";
+"group_create_private_hint" = "Задайте пароль: без него войти смогут только приглашённые.";
 "group_create_private_failed" = "Не удалось создать приватную группу.";
 "group_join_by_id" = "Войти по ID чата";
 "group_name_placeholder" = "Название группы";
@@ -560,8 +558,8 @@
 "group_join_action" = "Войти";
 "group_join_invalid_id" = "ID чата должен содержать 64 hex-символа.";
 "group_create_failed" = "Не удалось создать группу.";
-"group_create_in_progress" = "Создание группы…";
-"launch_loading" = "Загрузка…";
+"group_create_in_progress" = "Создание группы...";
+"launch_loading" = "Загрузка...";
 "group_join_failed" = "Не удалось войти в группу.";
 "group_join_fail_peer_limit" = "Группа заполнена. Достигнут лимит участников.";
 "group_join_fail_invalid_password" = "Неверный пароль группы.";
@@ -571,12 +569,12 @@
 "group_chat_default_title" = "Группа";
 "group_chat_list_subtitle" = "Групповой чат";
 "group_chat_list_private" = "Приватная";
-"group_chat_list_disconnected" = "Подключение…";
+"group_chat_list_disconnected" = "Подключение...";
 "group_chat_list_private_unread_format" = "%d личных непрочит.";
-"group_disconnected_banner" = "Подключение к группе… Сообщения отправятся после соединения.";
-"group_connecting_banner_format" = "Подключение к группе… (попытка %d)";
+"group_disconnected_banner" = "Подключаемся к группе. Сообщения уйдут, когда связь появится.";
+"group_connecting_banner_format" = "Подключаемся к группе, попытка %d";
 "group_member_count_format" = "%d участников";
-"group_member_online_count_format" = "%d участников · %d онлайн";
+"group_member_online_count_format" = "%d участников, %d в сети";
 "group_send_observer_role" = "Вы наблюдатель в этой группе и не можете отправлять сообщения. Попросите модератора сменить вашу роль на «Участник».";
 "group_my_peer_name_header" = "Ваше имя в группе";
 "group_my_peer_name_placeholder" = "Введите отображаемое имя";
@@ -589,10 +587,10 @@
 "group_info_title" = "О группе";
 "group_chat_id_header" = "ID чата";
 "group_chat_id_footer" = "Поделитесь этим ID, чтобы другие могли войти в группу.";
-"group_chat_id_loading" = "Загрузка…";
+"group_chat_id_loading" = "Загрузка...";
 "group_members_header" = "Участники";
 "group_members_header_format" = "Участники (%d)";
-"group_members_header_online_format" = "Участников: %1$d · %2$d онлайн";
+"group_members_header_online_format" = "Участников: %1$d, в сети: %2$d";
 "group_members_empty" = "Пока нет участников";
 "group_member_list_title" = "Участники";
 "group_member_status_offline" = "Не в сети";
@@ -610,8 +608,8 @@
 "chat_pinned_banner_title" = "Закреплённое сообщение";
 "chat_copy_action" = "Скопировать";
 "chat_select_action" = "Выбрать";
-"chat_forwarded_from_format" = "↪ Переслано от %@";
-"chat_forwarded_noname" = "↪ Переслано";
+"chat_forwarded_from_format" = "Переслано от %@";
+"chat_forwarded_noname" = "Переслано";
 "saved_messages_title" = "Избранное";
 "chat_reply_cancel" = "Отменить ответ";
 "chat_reply_header" = "В ответ %@";
@@ -621,7 +619,7 @@
 "group_messages_copy_action" = "Копировать";
 "network_connections_title" = "Сетевые подключения";
 "network_connections_summary" = "DHT, реле, журнал переподключений";
-"network_connections_loading" = "Загрузка сетевого статуса…";
+"network_connections_loading" = "Загрузка сетевого статуса...";
 "network_connections_beta_notice" = "Журнал событий и метрики качества соединения. Полный дамп UDP/TCP на iOS пока недоступен.";
 "group_peer_fallback_format" = "Участник %d";
 "group_error_disconnected" = "Группа ещё не подключена. Подождите и попробуйте снова.";
@@ -652,8 +650,8 @@
 "group_live_video_quality_high" = "HD";
 "group_live_video_toggle_active" = "Живое видео активно";
 "group_live_video_toggle_incoming" = "Входящее живое видео";
-"group_live_video_streams_empty" = "streams:0";
-"group_live_video_streams_format" = "streams:%llu\n%@";
+"group_live_video_streams_empty" = "Видео пока нет";
+"group_live_video_streams_format" = "Видео: %llu\n%@";
 "group_video_join_title" = "Присоединиться к групповому видео?";
 "group_video_join_message" = "Отправить своё видео и аудио всем в группе?";
 "group_video_join_confirm" = "Да, начать видео";
@@ -738,7 +736,7 @@
 "group_topic_too_long" = "Тема слишком длинная.";
 "group_password_header" = "Пароль группы";
 "group_password_placeholder" = "Задать или изменить пароль";
-"group_password_footer" = "Только основатель. Пусто — удалить пароль.";
+"group_password_footer" = "Только основатель. Пустое поле удаляет пароль.";
 "group_password_set_failed" = "Не удалось обновить пароль.";
 "group_password_too_long" = "Пароль слишком длинный.";
 "group_topic_lock_header" = "Блокировка темы";
@@ -776,7 +774,7 @@
 "nav_edit_start" = "Править";
 "nav_edit_done" = "Готово";
 
-/* KHANDAQ (user request 17.08): the attachments screen — files / audio / voice notes */
+/* KHANDAQ (user request 17.08): the attachments screen, files / audio / voice notes */
 "attachments_title" = "Вложения";
 "attachments_documents" = "Файлы";
 "attachments_audio" = "Аудио";
@@ -784,9 +782,688 @@
 "attachments_empty" = "Здесь пока пусто";
 "attachments_not_downloaded" = "Этот файл ещё не загружен.";
 
-/* KHANDAQ (18.08): About screen — owner/developer credit, links to https://1sa.me/ */
-"settings_credit_owner" = "Владелец и разработчик — Isa Dagestani";
+/* KHANDAQ (18.08): About screen, owner/developer credit, links to https://1sa.me/ */
+"settings_credit_owner" = "Владелец и разработчик: Isa Dagestani";
 
 /* KHANDAQ (re-review 2026-08-22, KQ-03): shown INSTEAD of the sender name when relayed
    history names an author whose signing key is stale. The row is kept; the identity is not. */
-"group_msg_relayed_unattributed" = "Пересланная история — автор не подтверждён";
+"group_msg_relayed_unattributed" = "Пересланная история, автор не подтверждён";
+
+/* KHANDAQ redesign (B): the theme is a choice of three; a sheet names the current choice. */
+"settings_theme" = "Тема";
+"settings_theme_system" = "Как в системе";
+"settings_theme_light" = "Светлая";
+"settings_theme_dark" = "Тёмная";
+"settings_choice_current" = "Сейчас: %@";
+
+/* KHANDAQ redesign (B): the Air screen, one list for people, groups and requests. */
+"air_command_placeholder" = "Найти чат или вставить ID";
+"air_create" = "Создать";
+"air_new_contact" = "Новый контакт";
+"air_you" = "Вы";
+"air_you_hint" = "Открывает ваш профиль";
+"air_net_direct" = "в сети, напрямую";
+"air_net_relay" = "в сети, через ретранслятор";
+"air_net_connecting" = "подключаемся";
+"air_net_offline" = "нет сети: сообщения ждут";
+"air_filter_all" = "Все";
+"air_filter_requests" = "Запросы";
+"air_filter_transit" = "В пути";
+"air_section_live" = "В сети сейчас";
+"air_section_away" = "Не в сети";
+"air_section_saved" = "Для себя";
+"air_section_messages" = "Сообщения";
+"air_request_tag" = "Входящий запрос";
+"air_request_key_format" = "ключ %@. Имя станет известно, когда вы примете запрос";
+"air_reach_live" = "в сети";
+"air_reach_relay" = "в сети, узел";
+"air_reach_pending" = "ждёт ответа";
+"air_reach_connecting" = "подключаемся";
+"air_reach_group_online" = "%d в сети";
+"air_reach_group_none" = "никого";
+"air_reach_just_now" = "только что";
+"air_reach_minutes" = "%d мин назад";
+"air_reach_hours" = "%d ч назад";
+"air_reach_days" = "%d дн назад";
+"air_reach_long_ago" = "давно";
+"air_delivery_transit" = "в пути";
+"air_delivery_sent" = "отправлено";
+"air_delivery_delivered" = "доставлено";
+"air_transit_format" = "%d в пути";
+"air_unread_a11y" = "непрочитанных: %d";
+"air_hint_request_sent" = "запрос отправлен";
+"air_hint_saved" = "только на этом устройстве";
+"air_hint_no_messages" = "сообщений пока нет";
+"air_menu_select" = "Выбрать";
+"air_menu_remove_contact" = "Удалить контакт";
+"air_selected_format" = "Выбрано: %d";
+"air_empty_nothing_title" = "Пока никого нет";
+"air_empty_nothing_body" = "Вставьте ID человека в строку сверху или откройте «Новый контакт».";
+"air_empty_no_match_title" = "Ничего не нашлось";
+"air_empty_no_match_body" = "По имени и тексту сообщений совпадений нет. Если это ID, проверьте, что он целиком: 76 знаков.";
+"air_empty_no_requests_title" = "Запросов нет";
+"air_empty_no_requests_body" = "Здесь появятся входящие запросы и ваши, которые ещё ждут ответа.";
+"air_empty_no_transit_title" = "Всё доставлено";
+"air_empty_no_transit_body" = "Сообщения, которые ждут, пока человек появится в сети, собираются здесь.";
+"air_empty_no_favorites_title" = "Нет избранных чатов";
+"air_empty_no_favorites_body" = "Отметьте чат в его меню, и он будет здесь.";
+"air_empty_show_all" = "Показать все чаты";
+
+/* KHANDAQ redesign (B), stage 2: the conversation, the tray, the composer and the dossier. */
+"air_chat_call" = "Позвонить";
+"air_chat_dossier_hint" = "Открывает досье: связь, сутки, ключ";
+"air_chat_jump_latest" = "К последним сообщениям";
+"air_chat_search" = "Поиск по переписке";
+"air_chat_video" = "Видеозвонок";
+"air_compose_attach" = "Прикрепить файл";
+"air_compose_bytes_left" = "осталось %d байта";
+"air_compose_bytes_over" = "на %d байта больше предела";
+"air_compose_hint_live_format" = "Уйдёт сразу: %@ в сети";
+"air_compose_hint_saved" = "Заметка останется только на этом устройстве";
+"air_compose_hint_wait_format" = "Подождёт в пути: %@ не в сети. Уйдёт само";
+"air_compose_placeholder" = "Сообщение";
+"air_compose_send" = "Отправить";
+"air_compose_send_blocked" = "Сообщение длиннее предела. Сократите его, чтобы отправить";
+"air_compose_voice" = "Голосовое сообщение";
+"air_day_a11y_format" = "в сети %@";
+"air_day_a11y_none" = "отметок нет";
+"air_day_best_format" = "обычно с %d до %d";
+"air_day_empty" = "отметок пока нет";
+"air_day_hint_ranges_format" = "за сутки: %@";
+"air_day_note" = "Отметки ставит этот телефон, когда видит человека в сети. Они хранятся только здесь, семь дней.";
+"air_day_now_online" = "Сейчас в сети";
+"air_day_range_format" = "с %d до %d";
+"air_day_title" = "Сутки";
+"air_delivery_failed" = "не отправлено";
+"air_delivery_sending" = "отправляется";
+"air_dossier_best_format" = "Лучше писать с %d до %d: в эти часы человек чаще всего в сети.";
+"air_dossier_block" = "Заблокировать";
+"air_dossier_close_hint" = "Закрывает досье";
+"air_dossier_copy_key" = "Копировать ключ";
+"air_dossier_day_title" = "Последние сутки";
+"air_dossier_files_title" = "Файлы";
+"air_dossier_key_copied" = "Ключ скопирован";
+"air_dossier_key_title" = "Ключ";
+"air_dossier_link_direct" = "Напрямую, без ретранслятора.";
+"air_dossier_link_none" = "Связи сейчас нет. Сообщения подождут в пути и уйдут сами.";
+"air_dossier_link_relay" = "Через ретранслятор. Он передаёт зашифрованные сообщения и не видит, что в них.";
+"air_dossier_link_title" = "Связь";
+"air_dossier_mute" = "Без звука";
+"air_dossier_not_verified" = "Ключ не сверен.";
+"air_dossier_notifications_title" = "Уведомления";
+"air_dossier_push_off" = "Уведомлений не будет: приложение собеседника их не подключило. Сообщения дойдут, когда собеседник откроет Khandaq.";
+"air_dossier_push_on_format" = "Доходят. Когда %@ не в сети, телефон получает сигнал без текста и сам забирает сообщения.";
+"air_dossier_qr" = "QR-код";
+"air_dossier_remove" = "Удалить";
+"air_dossier_remove_message" = "Переписка удалится с этого устройства. Чтобы снова писать друг другу, понадобится новый запрос.";
+"air_dossier_remove_title_format" = "Удалить контакт %@?";
+"air_dossier_rename" = "Переименовать";
+"air_dossier_unverify" = "Отменить сверку";
+"air_dossier_verified_format" = "Ключ сверен %@";
+"air_dossier_verify" = "Сверить";
+"air_dossier_verify_title" = "Сверка ключа";
+"air_failed_item_hint" = "Открывает действия с сообщением";
+"air_failed_retry" = "Не отправлено. Повторить";
+"air_failed_retry_hint" = "Отправляет сообщение ещё раз";
+"air_link_direct" = "связь напрямую";
+"air_link_none" = "связи нет";
+"air_link_relay" = "связь через ретранслятор";
+"air_path_relay" = "ретранслятор";
+"air_pin_jump_hint" = "Показывает закреплённое сообщение в переписке";
+"air_pin_remove" = "Открепить";
+"air_presence_away_days" = "не в сети %d дня";
+"air_presence_away_hours" = "не в сети %d часа";
+"air_presence_away_just_now" = "не в сети меньше минуты";
+"air_presence_away_long" = "не в сети больше недели";
+"air_presence_away_minutes" = "не в сети %d минуты";
+"air_presence_direct" = "в сети, связь напрямую";
+"air_presence_direct_since_format" = "в сети с %@, связь напрямую";
+"air_presence_pending" = "ждёт ответа на запрос";
+"air_presence_relay" = "в сети, через ретранслятор";
+"air_presence_relay_since_format" = "в сети с %@, через ретранслятор";
+"air_presence_typing" = "печатает";
+"air_qr_key_heading_format" = "Ключ: %@";
+"air_qr_key_subtitle" = "Сверьте его с ID в профиле собеседника: первые 64 знака должны совпасть.";
+"air_retry" = "Повторить";
+"air_tray_cancel" = "Отменить отправку";
+"air_tray_collapse_hint" = "Сворачивает лоток";
+"air_tray_departed" = "Сообщения в пути ушли";
+"air_tray_edit_unavailable" = "Это сообщение нельзя изменить";
+"air_tray_expand_hint" = "Показывает сообщения в пути";
+"air_tray_head_format" = "В пути: %d сообщения";
+"air_tray_item_hint" = "Пока не ушло, можно изменить или отменить";
+"air_tray_wait_format" = "Уйдут сами, как только %@ появится в сети.";
+"air_tray_wait_push_format" = "Уйдут сами, как только %@ появится в сети. Телефон получит сигнал без текста и заберёт их сам.";
+"air_verify_match" = "Совпадает";
+"air_verify_message" = "Попросите собеседника прочитать свой ID из профиля. Если первые 64 знака совпадают с ключом ниже, вы говорите с нужным человеком.";
+"air_verify_title" = "Сверка ключа";
+"air_day_today" = "Сегодня";
+"air_day_yesterday" = "Вчера";
+
+/* KHANDAQ redesign (B), stage 3: block, privacy, refused messages. */
+"air_dossier_block_title_format" = "Заблокировать контакт %@?";
+"air_dossier_block_message" = "Контакт и переписка удалятся с этого устройства, а новые запросы с этого ключа показываться не будут.";
+"air_dossier_block_hint" = "Сначала спросит, потом удалит контакт и скроет запросы с этого ключа";
+"air_privacy_title" = "Приватность";
+"air_blocked_title" = "Заблокированные";
+"air_blocked_none" = "Нет";
+"air_blocked_count_format" = "%d";
+"air_blocked_section_note" = "Запросы с заблокированных ключей не показываются. Список хранится только на этом устройстве.";
+"air_blocked_empty" = "Здесь появятся ключи, которые вы заблокируете из досье контакта.";
+"air_blocked_note" = "Запросы с этих ключей не показываются. Разблокировка не возвращает контакт: для этого нужен новый запрос.";
+"air_blocked_unblock" = "Разблокировать";
+"air_blocked_unblocked" = "Ключ разблокирован";
+
+/* KHANDAQ redesign (B), stage 3: new contact and the command line. */
+"air_nc_id_label" = "ID собеседника";
+"air_nc_id_placeholder" = "Вставьте ID: 76 знаков, цифры и буквы от A до F";
+"air_nc_ruler_key" = "ключ";
+"air_nc_ruler_antispam" = "антиспам";
+"air_nc_ruler_check" = "проверка";
+"air_nc_ruler_part_format" = "%1$@: %2$d из %3$d";
+"air_nc_verdict_empty" = "Пробелы, переносы строк и приставку tox: можно не убирать, поле почистит само.";
+"air_nc_verdict_left" = "Осталось %d знаков.";
+"air_nc_verdict_bad" = "Проверка не сошлась: в ID опечатка или он скопирован не целиком. Скопируйте его ещё раз.";
+"air_nc_verdict_own" = "Это ваш собственный ID: его отправляют собеседнику, а не добавляют.";
+"air_nc_verdict_contact_format" = "%@ уже в контактах.";
+"air_nc_verdict_they_asked" = "Этот человек уже прислал вам запрос. Он ждёт в «Запросах».";
+"air_nc_verdict_blocked" = "Этот ключ заблокирован на этом устройстве. Запрос снимет блокировку.";
+"air_nc_verdict_ok" = "ID в порядке. Запрос уйдёт, как только собеседник будет в сети.";
+"air_nc_why_whole" = "Сначала вставьте ID целиком: 76 знаков.";
+"air_nc_why_own" = "Свой ID добавить нельзя.";
+"air_nc_why_fix" = "Сначала исправьте ID.";
+"air_nc_why_contact" = "Этот человек уже в контактах.";
+"air_nc_why_they_asked" = "Примите его запрос в «Запросах».";
+"air_nc_open_chat" = "Открыть чат";
+"air_nc_open_requests" = "Открыть «Запросы»";
+"air_nc_paste" = "Вставить";
+"air_nc_scan" = "Сканировать QR";
+"air_nc_scan_photo" = "QR из фото";
+"air_nc_wrong_qr" = "В этом QR-коде нет ID.";
+"air_nc_message_label" = "Сообщение к запросу";
+"air_nc_message_note" = "Его прочтут до того, как примут запрос. Если оставить поле пустым, уйдёт приветствие из поля.";
+"air_nc_message_too_long" = "Слишком длинно для запроса: сократите сообщение.";
+"air_nc_send" = "Отправить запрос";
+"air_nc_own_title" = "Ваш ID";
+"air_nc_own_note" = "Его отправляют тем, кто хочет вас добавить.";
+"air_nc_copy" = "Копировать";
+"air_nc_copied" = "ID скопирован";
+"air_nc_sent_title" = "Запрос в пути";
+"air_nc_sent_text" = "Запрос уйдёт, как только собеседник будет в сети. Имя станет известно после того, как он примет запрос. Пока что он в списке со строкой «ждёт ответа».";
+"air_nc_accepted_title" = "Запрос принят";
+"air_nc_accepted_text_format" = "%@ в контактах, можно писать.";
+"air_nc_them" = "собеседник";
+"air_nc_done" = "Готово";
+"air_nc_path_label_format" = "Вы и %@, связи пока нет";
+"air_nc_path_live_format" = "Вы и %@, связь есть";
+"air_cmd_new_contact" = "Новый контакт с этим ID";
+"air_cmd_id_ok" = "ID в порядке";
+"air_cmd_id_left" = "не хватает %d знаков";
+"air_cmd_id_own" = "это ваш ID";
+"air_cmd_id_bad" = "проверка не сошлась";
+"air_cmd_id_contact" = "уже в контактах";
+"air_nc_clear" = "Очистить";
+
+/* KHANDAQ redesign (B), stage 3: requests and group invitations. */
+"air_invite_tag" = "Приглашение в группу";
+"air_invite_from_format" = "Приглашает %@.";
+"air_invite_wait_format" = "Вступить получится, когда %@ будет в сети.";
+"air_invite_join" = "Вступить";
+"air_request_declined" = "Запрос отклонён";
+"air_invite_declined" = "Приглашение отклонено";
+"air_undo" = "Отменить";
+
+/* Redesign stage 3, E13 to E15: groups */
+"air_group_role_founder" = "основатель";
+"air_group_role_moderator" = "модератор";
+"air_group_role_user" = "участник";
+"air_group_role_observer" = "наблюдатель";
+"air_group_you_founder" = "Вы основали группу: назначаете модераторов, делаете любого участником или наблюдателем, исключаете и меняете настройки группы.";
+"air_group_you_moderator" = "Вы модератор: делаете участников наблюдателями и наоборот и можете исключать их из группы.";
+"air_group_you_user" = "Вы участник: пишете в группе, а управляют ею основатель и модераторы.";
+"air_group_you_observer" = "Вы наблюдатель: читаете группу, но писать не можете. Право писать может дать модератор.";
+"air_group_members_count" = "%d участника";
+"air_group_header_format" = "%1$@, %2$d в сети сейчас";
+"air_group_header_none_format" = "%@, сейчас никого в сети";
+"air_group_header_offline_format" = "%@, нет связи с группой";
+"air_group_hint_offline" = "Нет связи с группой: сообщения подождут на этом устройстве и уйдут, когда связь появится";
+"air_group_hint_alone" = "В группе пока только вы: пригласите людей из досье группы";
+"air_group_hint_none" = "Сейчас никого нет в сети: участники получат сообщение, когда появятся";
+"air_group_hint_all_format" = "Сразу получат все %d: все в сети";
+"air_group_hint_format" = "Сразу получат %1$d из %2$d, остальные, когда появятся в сети";
+"air_group_get_now" = "Получат сразу";
+"air_group_get_now_spoken_format" = "Получат сразу: %@";
+"air_group_dossier_hint" = "Открывает досье группы";
+"air_group_read_only_observer" = "Только чтение. Вы наблюдатель: право писать может дать модератор.";
+"air_group_read_only_moderators" = "Только чтение. Здесь пишут только модераторы и основатель.";
+"air_group_read_only_founder" = "Только чтение. Здесь пишет только основатель.";
+"air_group_ask_moderator" = "Написать модератору";
+"air_group_ask_founder" = "Написать основателю";
+"air_group_ask_nobody" = "Модераторы этой группы пока не известны";
+"air_group_observer_no_private" = "Наблюдатель не может писать здесь, даже лично: попросите модератора вне группы.";
+"air_group_member_status_format" = "%1$@, %2$@";
+"air_group_member_offline" = "не в сети";
+"air_group_member_you_format" = "%@ (вы)";
+"air_group_member_hint" = "Открывает действия с участником";
+"air_group_dossier_title" = "Группа";
+"air_group_your_role" = "Ваша роль";
+"air_group_who_gets_now" = "Кто получит сообщение сейчас";
+"air_group_who_gets_now_note_format" = "В сети сейчас %1$d из %2$d. Остальные получат сообщения, когда появятся.";
+"air_group_members" = "Участники";
+"air_group_search_members" = "Найти участника";
+"air_group_nobody_found" = "Никого с таким именем";
+"air_group_key" = "Ключ группы";
+"air_group_copy_key" = "Копировать";
+"air_group_invite" = "Пригласить";
+"air_group_key_copied" = "Ключ группы скопирован";
+"air_group_qr_heading_format" = "Группа %@";
+"air_group_qr_subtitle" = "Отсканируйте, чтобы найти группу по ключу";
+"air_group_muted_note" = "Уведомлений о новых сообщениях группы не будет, непрочитанные останутся видны в списке.";
+"air_group_unmuted_note" = "О новых сообщениях группы придёт уведомление.";
+"air_group_history" = "История";
+"air_group_history_note" = "Сообщения, написанные без вас, пересылают другие участники. Если подпись автора не подтверждается, у сообщения стоит пометка, что отправитель не подтверждён.";
+"air_group_remove_system_format" = "Удалить служебные сообщения: %d";
+"air_group_remove_system_message" = "Сообщения о входе, выходе и изменениях группы удалятся с этого устройства.";
+"air_group_remove_system_action" = "Удалить";
+"air_group_clear_history" = "Очистить историю";
+"air_group_clear_history_title" = "Очистить историю группы?";
+"air_group_clear_history_message" = "Сообщения удалятся только с этого устройства, у участников они останутся.";
+"air_group_settings" = "Настройки группы";
+"air_group_settings_detail" = "Ваше имя в группе, тема, кто входит и кто пишет";
+"air_group_leave" = "Выйти из группы";
+"air_group_leave_note" = "Сообщения группы перестанут приходить, а история удалится с этого устройства.";
+"air_group_leave_title_format" = "Выйти из группы «%@»?";
+"air_group_leave_message" = "Участники увидят, что вы вышли. Чтобы вернуться, понадобится приглашение или ключ группы.";
+"air_group_write_privately" = "Написать лично";
+"air_group_add_contact" = "Добавить в контакты";
+"air_group_contact_added_format" = "%@ теперь в контактах";
+"air_group_copy_member_key" = "Копировать ключ";
+"air_group_member_key_copied" = "Ключ скопирован";
+"air_group_member_mute" = "Без звука в этой группе";
+"air_group_member_unmute" = "Со звуком в этой группе";
+"air_group_member_muted_format" = "%@: без звука в этой группе";
+"air_group_member_unmuted_format" = "%@: снова со звуком";
+"air_group_make_moderator" = "Назначить модератором";
+"air_group_make_user" = "Сделать участником";
+"air_group_make_observer" = "Сделать наблюдателем";
+"air_group_kick" = "Исключить из группы";
+"air_group_make_moderator_title_format" = "%@: назначить модератором?";
+"air_group_make_moderator_message" = "Модератор делает участников наблюдателями и обратно и может исключать их.";
+"air_group_make_user_title_format" = "%@: сделать участником?";
+"air_group_make_user_message" = "Участник пишет в группе, но ничем не управляет.";
+"air_group_make_observer_title_format" = "%@: сделать наблюдателем?";
+"air_group_make_observer_message" = "Наблюдатель читает группу, но писать не может.";
+"air_group_kick_title_format" = "%@: исключить из группы?";
+"air_group_kick_message" = "Сообщения группы перестанут приходить. Вернуться можно будет по новому приглашению или, если группа открыта, по её ключу.";
+"air_group_now_moderator_format" = "%@ теперь модератор";
+"air_group_now_user_format" = "%@ теперь участник";
+"air_group_now_observer_format" = "%@ теперь наблюдатель";
+"air_group_kicked_format" = "%@ больше не в группе";
+"air_group_invite_title" = "Пригласить в группу";
+"air_invite_online_note" = "Приглашение уходит по связи с контактом, поэтому пригласить можно тех, кто сейчас в сети.";
+"air_invite_choose_first" = "Выберите, кого пригласить";
+"air_invite_send_format" = "Пригласить %d";
+"air_invite_sent" = "Отправлено приглашений: %d";
+"air_invite_already_member" = "уже в группе";
+"air_invite_when_online" = "пригласить можно, когда будет в сети";
+"air_invite_no_contacts" = "Контактов пока нет: сначала добавьте человека.";
+"air_invite_nobody_found" = "Нет контакта с таким именем";
+"air_invite_search" = "Найти контакт";
+"air_new_group_title" = "Новая группа";
+"air_new_group_name" = "Название";
+"air_new_group_name_placeholder" = "Например, Книжный клуб";
+"air_new_group_name_note" = "Его увидят все приглашённые. Потом можно будет менять тему, но не название.";
+"air_new_group_privacy" = "Кто может войти";
+"air_group_privacy_invite_only" = "Только по приглашению";
+"air_group_privacy_invite_only_note" = "Войти можно только по приглашению кого-то из участников.";
+"air_group_privacy_open" = "Открыта по ключу группы";
+"air_group_privacy_open_note" = "Войти может любой, у кого есть ключ группы, без приглашения.";
+"air_new_group_invite_note" = "Приглашения уходят сразу, поэтому здесь можно пригласить только тех, кто в сети. Остальных пригласите позже из досье группы.";
+"air_new_group_create" = "Создать группу";
+"air_new_group_create_invite_format" = "Создать и пригласить %d";
+"air_new_group_name_first" = "Назовите группу, чтобы создать её";
+"air_new_group_name_too_long" = "Название слишком длинное для группы: сократите его";
+"air_group_author_role_format" = "%1$@, %2$@";
+"air_group_author_unconfirmed" = "Автор не подтверждён";
+"air_group_mentions_you" = "Упоминает вас";
+"air_group_live_on" = "включено";
+"air_group_hint_one_other" = "Второй участник в сети и получит сразу";
+"air_group_open_chat" = "Открыть переписку";
+"air_group_author_unknown" = "Участник группы";
+
+/* Redesign stage 3: files, photos and voice notes in the transcript (E8) */
+"air_file_accept" = "Принять";
+"air_file_decline" = "Отклонить";
+"air_file_pause" = "Пауза";
+"air_file_resume" = "Продолжить";
+"air_file_cancel" = "Отменить";
+"air_file_retry_incoming" = "Скачать снова";
+"air_file_retry_outgoing" = "Отправить снова";
+"air_file_left_format" = "Осталось %@";
+"air_file_paused" = "На паузе";
+"air_file_failed_incoming" = "Загрузка прервалась";
+"air_file_failed_outgoing" = "Не отправлено";
+"air_file_waits_accept_format" = "Ждёт, когда %@ примет файл";
+"air_file_waits_online_format" = "Уйдёт, когда %@ будет в сети";
+"air_size_bytes_format" = "%@ Б";
+"air_size_kb_format" = "%@ КБ";
+"air_size_mb_format" = "%@ МБ";
+"air_size_gb_format" = "%@ ГБ";
+"air_group_file_limit_format" = "В группу можно отправить файл до %@";
+"air_voice_listen" = "Слушать";
+"air_voice_pause" = "Пауза";
+"air_voice_spoken" = "Голосовое сообщение";
+"air_tray_file_format" = "%1$@, %2$@";
+
+/* Redesign stage 3: calls, their screens and their entries in the transcript (E9) */
+"air_call_entry_format" = "Звонок, %@";
+"air_call_missed" = "Пропущенный звонок";
+"air_call_no_answer" = "Без ответа";
+"air_call_offline_title_format" = "%@ не в сети: звонок не дойдёт";
+"air_call_offline_push" = "Можно подождать здесь: на телефон собеседника уйдёт сигнал без текста, и звонок начнётся, когда он появится в сети.";
+"air_call_offline_wait" = "Можно подождать здесь: звонок начнётся, когда собеседник появится в сети.";
+"air_call_wait_action" = "Ждать и позвонить";
+"air_call_waiting_format" = "Ждём, когда %@ появится в сети";
+"air_call_waiting_push" = "На телефон собеседника ушёл сигнал без текста. Звонок начнётся сам, когда он появится в сети.";
+"air_call_waiting_no_push" = "Звонок начнётся сам, когда собеседник появится в сети.";
+"air_call_cancel" = "Отменить";
+"air_call_mic_title" = "Нет доступа к микрофону";
+"air_call_mic_message" = "Без микрофона собеседник вас не услышит. Разрешите его в настройках: Khandaq, Микрофон.";
+"air_call_camera_title" = "Нет доступа к камере";
+"air_call_camera_message" = "Без камеры собеседник вас не увидит, звонок может идти со звуком. Разрешите её в настройках: Khandaq, Камера.";
+"air_call_open_settings" = "Открыть настройки";
+"air_call_audio_only" = "Позвонить без видео";
+"air_call_calling" = "Вызываем";
+"air_call_incoming" = "Входящий звонок";
+"air_call_ended" = "Звонок окончен";
+"air_call_line_direct" = "Прямая связь";
+"air_call_line_relay" = "Через ретранслятор";
+"air_call_line_none" = "Связи сейчас нет";
+"air_call_decline" = "Отклонить";
+"air_call_answer" = "Ответить";
+"air_call_answer_video" = "С видео";
+"air_call_end" = "Завершить";
+"air_call_mic" = "Микрофон";
+"air_call_mic_on" = "включён";
+"air_call_mic_off" = "выключен";
+"air_call_speaker" = "Динамик";
+"air_call_speaker_on" = "включён";
+"air_call_speaker_off" = "выключен";
+"air_call_camera" = "Камера";
+"air_call_camera_on" = "включена";
+"air_call_camera_off" = "выключена";
+"air_call_switch_camera" = "Сменить камеру";
+
+/* Redesign stage 3, E17: You */
+"air_you_share" = "Поделиться ID";
+"air_you_copy" = "Копировать ID";
+"air_you_copied" = "ID скопирован";
+"air_you_qr" = "QR-код вашего ID";
+"air_you_qr_hint" = "Его сканируют в «Новом контакте» на другом телефоне";
+"air_you_photo" = "Фото профиля";
+"air_you_photo_hint" = "Меняет фото";
+"air_you_name" = "Имя";
+"air_you_name_placeholder" = "Ваше имя";
+"air_you_status" = "Статус";
+"air_you_status_placeholder" = "Строка, которую видят контакты";
+"air_you_saved" = "Сохранено";
+"air_you_details" = "Подробности";
+"air_you_part_key" = "Ключ";
+"air_you_part_antispam" = "Антиспам";
+"air_you_part_check" = "Проверка";
+"air_you_antispam" = "Сменить антиспам";
+"air_you_antispam_title" = "Сменить антиспам?";
+"air_you_antispam_message" = "Старый ID перестанет принимать новые запросы. Контакты останутся, ID и QR-код сменятся.";
+"air_you_antispam_action" = "Сменить";
+"air_you_antispam_done" = "Антиспам сменён: делитесь новым ID";
+"air_you_security" = "Пароль и PIN-код";
+"air_you_logout" = "Выйти";
+"air_you_logout_title" = "Выйти из профиля?";
+"air_you_logout_message" = "Профиль останется на этом устройстве, войти снова можно паролем.";
+"air_you_delete" = "Удалить профиль с устройства";
+"air_you_delete_title" = "Удалить профиль с устройства?";
+"air_you_delete_message_format" = "%@: профиль, контакты и история сотрутся с этого телефона. Без экспортированной копии их не вернуть.";
+"air_you_delete_action" = "Удалить";
+
+/* Settings by task (redesign stage 3, E18) */
+"air_settings_appearance" = "Оформление";
+"air_settings_notifications" = "Уведомления";
+"air_settings_transfer" = "Перенос профиля";
+"air_settings_network" = "Сеть";
+"air_settings_debug" = "Отладка";
+"air_settings_group_events_detail" = "Кто вошёл, вышел и сменил имя";
+"air_settings_preview" = "Показывать текст сообщений";
+"air_settings_preview_note" = "Текст сообщений и имена файлов видны на заблокированном экране. Без них уведомление скажет только «Новое сообщение».";
+"air_settings_transfer_note" = "В файле профиля ваш ID и контакты. История чатов остаётся на этом устройстве.";
+"air_settings_import_message" = "Приложение выйдет из этого профиля и откроет профиль из файла. Этот профиль останется на устройстве, войти снова можно паролем.";
+"air_settings_import_action" = "Выбрать файл";
+"air_settings_attachments_note" = "Файлы, которые не загрузились сами, ждут «Принять» в чате.";
+"air_settings_calls" = "Звонки";
+
+/* Network state and in-app band (redesign stage 3, E4 and E22) */
+"air_network_title_direct" = "В сети, напрямую";
+"air_network_title_relay" = "В сети, через ретранслятор";
+"air_network_title_connecting" = "Подключаемся";
+"air_network_title_offline" = "Нет сети";
+"air_network_meaning_direct" = "Сообщения уходят сразу, прямо на телефон собеседника.";
+"air_network_meaning_relay" = "Сообщения уходят сразу, через ретранслятор: эта сеть закрывает прямой путь, на доставку это не влияет.";
+"air_network_meaning_connecting" = "Интернет есть, приложение ищет сеть. Новые сообщения ждут в пути и уйдут сами.";
+"air_network_meaning_offline" = "У телефона нет интернета. Новые сообщения ждут в пути и уйдут, когда он появится.";
+"air_network_internet" = "Интернет";
+"air_network_internet_yes" = "Есть";
+"air_network_internet_no" = "Нет";
+"air_network_link" = "Связь";
+"air_network_link_direct" = "Напрямую";
+"air_network_link_relay" = "Через ретранслятор";
+"air_network_link_none" = "Пока нет";
+"air_network_reconnect" = "Подключиться заново";
+"air_network_reconnect_toast" = "Подключаемся заново";
+"air_network_log" = "Журнал для поддержки";
+"air_network_log_note" = "Технические подробности подключения, если о них спросит поддержка.";
+"air_net_hint" = "Открывает состояние сети";
+"air_compose_hint_self_connecting" = "Подождёт в пути: приложение подключается. Уйдёт само";
+"air_compose_hint_self_offline" = "Подождёт в пути: у телефона нет сети. Уйдёт само";
+"air_banner_hint" = "Открывает чат";
+"air_banner_hint_request" = "Открывает запрос";
+"notification_group_invite" = "Приглашает в группу";
+"notification_group_invite_format" = "Приглашает в группу «%@»";
+"air_banner_hint_invite" = "Открывает приглашение";
+
+/* Errors and confirmations (redesign stage 3, E21) */
+"error_failed_open_page" = "Не удалось открыть страницу";
+"error_failed_open_profile" = "Не удалось открыть профиль";
+"error_failed_name" = "Не удалось сменить имя";
+"error_failed_status" = "Не удалось сменить статус";
+"error_failed_add_contact" = "Не удалось добавить контакт";
+"error_failed_remove_contact" = "Не удалось удалить контакт";
+"error_failed_call" = "Не удалось позвонить";
+"error_failed_export" = "Не удалось экспортировать профиль";
+"error_failed_delete_profile" = "Не удалось удалить профиль";
+"error_failed_password" = "Пароль не подходит";
+"error_failed_answer" = "Не удалось ответить на звонок";
+"error_failed_speaker" = "Не удалось включить динамик";
+"error_failed_camera" = "Не удалось включить камеру";
+"error_failed_switch_camera" = "Не удалось сменить камеру";
+"error_failed_photo" = "Не удалось сменить фото";
+"error_failed_send_message" = "Сообщение не отправлено";
+"error_failed_join_group" = "Не удалось вступить в группу";
+"error_failed_invite" = "Не удалось пригласить в группу";
+"error_failed_kick" = "Не удалось удалить участника";
+"error_failed_leave_group" = "Не удалось выйти из группы";
+"error_failed_role" = "Не удалось сменить роль";
+"error_failed_topic" = "Не удалось сменить тему";
+"error_failed_group_name" = "Не удалось сменить имя в группе";
+"error_failed_group_settings" = "Не удалось изменить настройки группы";
+"error_failed_send_file" = "Файл не отправлен";
+"error_failed_accept_file" = "Не удалось принять файл";
+"error_failed_cancel_file" = "Не удалось отменить передачу";
+"error_failed_pause_file" = "Не удалось приостановить передачу";
+"error_failed_pick_media" = "Не удалось взять файл";
+"error_failed_generic" = "Не получилось";
+"error_pin_logout_title" = "Вы вышли из профиля";
+"error_try_again_message" = "Попробуйте ещё раз.";
+"error_details" = "Подробности";
+"error_details_format" = "Код для поддержки: %@";
+"error_details_copy" = "Скопировать";
+"error_try_again_support_message" = "Попробуйте ещё раз. Если снова не выйдет, напишите в поддержку и приложите подробности.";
+"air_delete_chat_title" = "Удалить чат?";
+"air_delete_chat_message" = "Переписка удалится с этого устройства, контакт останется.";
+"air_delete_chats_message" = "Переписки удалятся с этого устройства, из выбранных групп вы выйдете.";
+
+/* A message in markup this build cannot read (redesign stage 3, item 10) */
+"air_message_unknown_format" = "Это сообщение в формате, который приложение пока не умеет показать";
+
+/* The play control of a video in the media gallery, for VoiceOver (redesign stage 3, item 9) */
+"air_media_play_video" = "Смотреть видео";
+
+/* First launch, sign-in, password, PIN and moving a profile in (redesign stage 4, E19 and E20) */
+"air_first_step_format" = "Шаг %1$ld из %2$ld";
+"air_first_name_title" = "Как вас называть";
+"air_first_name_body" = "Имя увидят только те, кого вы добавите.";
+"air_first_name_placeholder" = "Имя";
+"air_first_name_first" = "Сначала впишите имя.";
+"air_first_next" = "Дальше";
+"air_first_move_profile" = "Перенести профиль с другого устройства";
+"air_first_default_folder" = "Профиль";
+"air_first_password_title" = "Пароль профиля";
+"air_first_password_body" = "Восстановить пароль нельзя: серверов нет. Профиль хранится только на этом устройстве.";
+"air_first_password_set" = "Задать пароль";
+"air_first_password_set_detail" = "Профиль откроется только с паролем. С этим паролем его можно перенести на другое устройство.";
+"air_first_password_skip" = "Продолжить без пароля";
+"air_first_password_skip_detail" = "Профиль всё равно зашифрован: ключ хранится в связке ключей этого iPhone. Он откроется без пароля, но только здесь. Чтобы перенести его, сначала задайте пароль.";
+"air_first_password_placeholder" = "Пароль";
+"air_first_repeat_placeholder" = "Пароль ещё раз";
+"air_first_password_rule" = "Не короче 8 знаков, с буквой и цифрой.";
+"air_first_password_empty" = "Сначала придумайте пароль.";
+"air_first_password_short" = "Пароль короче 8 знаков.";
+"air_first_password_weak" = "В пароле нужны буква и цифра.";
+"air_first_password_repeat_first" = "Повторите пароль во втором поле.";
+"air_first_password_mismatch" = "Пароли не совпадают.";
+"air_first_create" = "Создать профиль";
+"air_first_creating" = "Создаём профиль";
+"air_first_create_failed" = "Профиль не создался. Попробуйте ещё раз.";
+"air_first_keychain_failed" = "Связка ключей этого iPhone не приняла ключ. Задайте пароль: с ним профиль создастся.";
+"air_first_id_title" = "Ваш ID готов";
+"air_first_id_body" = "Отправьте ID тем, с кем хотите переписываться, или покажите им QR-код.";
+"air_first_share" = "Поделиться";
+"air_first_add_person" = "Добавить первого человека";
+"air_field_show_password" = "Показать пароль";
+"air_field_hide_password" = "Скрыть пароль";
+"air_signin_go" = "Войти";
+"air_signin_opening" = "Открываем профиль";
+"air_signin_enter_password" = "Сначала введите пароль.";
+"air_signin_no_password" = "Этот профиль открывается без пароля, только на этом iPhone.";
+"air_signin_no_password_short" = "Без пароля";
+"air_signin_profiles" = "Профили на этом устройстве";
+"air_signin_profiles_note" = "Удержите профиль, чтобы удалить его.";
+"air_signin_forgot" = "Забыли пароль?";
+"air_signin_forgot_title" = "Пароль не восстановить";
+"air_signin_forgot_message" = "Серверов нет, и пароль знаете только вы. Можно создать новый профиль с новым ID: этот останется на устройстве, и его получится открыть, если пароль вспомнится. Или удалить этот профиль с устройства.";
+"air_signin_create" = "Создать новый профиль";
+"air_signin_delete" = "Удалить этот профиль";
+"air_signin_delete_short" = "Удалить";
+"air_signin_wrong_password" = "Пароль не подошёл. Проверьте раскладку и регистр.";
+"air_signin_damaged" = "Файл профиля повреждён. Если есть экспортированная копия, перенесите профиль из неё.";
+"air_signin_no_access" = "Нет доступа к файлу профиля. Разблокируйте iPhone и попробуйте ещё раз.";
+"air_signin_failed_title" = "Профиль не открылся";
+"air_import_title" = "Перенос профиля";
+"air_import_password_body_format" = "Файл «%@» защищён паролем. Введите пароль, с которым профиль сохранили.";
+"air_import_reading" = "Читаем файл";
+"air_import_wrong_password" = "Пароль не подходит к этому файлу. Нужен пароль профиля на том устройстве, откуда файл.";
+"air_import_preview_title" = "Это ваш профиль?";
+"air_import_preview_body" = "Проверьте имя и ID: профиль появится на этом устройстве.";
+"air_import_name" = "Имя";
+"air_import_no_name" = "Без имени";
+"air_import_confirm" = "Перенести профиль";
+"air_import_moving" = "Переносим профиль";
+"air_import_other_file" = "Выбрать другой файл";
+"air_import_not_profile" = "Это не файл профиля Khandaq. Выберите файл .tox, экспортированный из профиля.";
+"air_import_failed_title" = "Профиль не перенёсся";
+"air_share_import_action" = "Перенести профиль из файла";
+"air_share_import_verb" = "Перенести";
+"air_share_in_title" = "Кому отправить";
+"air_share_ext_preparing" = "Готовим к отправке";
+"air_share_ext_open_app" = "Готово. Откройте Khandaq и выберите, кому отправить.";
+"air_share_ext_failed" = "Не получилось передать это в Khandaq.";
+"air_settings_import_message_device" = "Приложение выйдет из этого профиля и откроет профиль из файла. Этот профиль останется на устройстве и откроется снова без пароля.";
+"air_password_set_title" = "Задать пароль";
+"air_password_set_body" = "Сейчас профиль открывается ключом из связки ключей этого iPhone. С паролем его можно перенести на другое устройство. Восстановить пароль нельзя: серверов нет.";
+"air_password_set_action" = "Задать пароль";
+"air_password_change_action" = "Сменить пароль";
+"air_password_old_first" = "Сначала введите старый пароль.";
+"air_password_saving" = "Сохраняем пароль";
+"air_password_wrong_old" = "Старый пароль не подошёл.";
+"air_password_set_failed" = "Пароль не задался: ключ этого iPhone не открыл профиль. Попробуйте ещё раз.";
+"air_password_changed" = "Пароль сменён";
+"air_password_set_done" = "Пароль задан";
+"air_password_old_placeholder" = "Старый пароль";
+"air_password_new_placeholder" = "Новый пароль";
+"air_export_needs_password_title" = "Сначала задайте пароль";
+"air_export_needs_password_message" = "Профиль без пароля открывается только ключом этого iPhone, и на другом устройстве его файл не откроется. Задайте пароль: файл откроется им.";
+"air_you_logout_message_device" = "Профиль останется на этом устройстве и откроется снова без пароля, только на этом iPhone.";
+"air_pin_set_note" = "PIN не восстановить. После десяти неверных попыток ввод закрывается на время, и каждый раз дольше.";
+"air_pin_entered_format" = "Введено %1$ld из %2$ld";
+
+/* Redesign stage 5: group settings, joining by key, private messages in a group */
+"air_group_private_note_format" = "Личная переписка в группе «%1$@»: её видите только вы и %2$@.";
+"air_group_private_hint_away_format" = "%@ не в сети: напишите, когда появится";
+"air_group_settings_self_name" = "Ваше имя в группе";
+"air_group_settings_self_name_note" = "Его видят участники этой группы. Имя профиля остаётся прежним.";
+"air_group_settings_topic" = "Тема";
+"air_group_settings_topic_none" = "Нет темы";
+"air_group_settings_topic_note" = "Тему видят все участники: в списке и в шапке группы она стоит вместо названия.";
+"air_group_settings_topic_locked" = "Тему меняют только основатель и модераторы.";
+"air_group_settings_topic_not_observers" = "Тему меняют все, кроме наблюдателей.";
+"air_group_settings_topic_lock" = "Тему меняют только основатель и модераторы";
+"air_group_settings_join" = "Кто может войти";
+"air_group_settings_password_set" = "Задан";
+"air_group_settings_password_none" = "Нет";
+"air_group_settings_password_note" = "Пароль понадобится новым участникам. Кто уже в группе, останется в ней.";
+"air_group_settings_limit" = "Предел участников";
+"air_group_settings_limit_full" = "Группа заполнена: новые участники не войдут, пока предел не вырастет.";
+"air_group_settings_write" = "Кто может писать";
+"air_group_voice_all_note" = "Все, кроме наблюдателей.";
+"air_group_settings_founder_only" = "Это меняет основатель группы.";
+"air_group_settings_saved" = "Сохранено";
+"air_group_password_remove" = "Убрать пароль";
+"air_group_password_removed" = "Пароль убран";
+"air_group_name_empty" = "Имя не может быть пустым.";
+"air_group_limit_range" = "Предел: число от 1 до 65 535.";
+"air_join_title" = "Вступить в группу";
+"air_join_key_placeholder" = "Ключ из 64 знаков";
+"air_join_key_hint" = "Ключ группы есть в её досье: попросите участника нажать там «Копировать» или показать QR-код.";
+"air_join_key_partial_format" = "Набрано %d из 64 знаков";
+"air_join_key_not_key" = "Это не ключ группы: в ключе 64 знака, цифры и буквы от A до F.";
+"air_join_key_person" = "Это ID человека, а не ключ группы. Человека добавляют через «Новый контакт».";
+"air_join_key_member" = "Вы уже в этой группе.";
+"air_join_open_group" = "Открыть группу";
+"air_join_password_placeholder" = "Если основатель его задал";
+"air_join_password_note" = "Если пароля нет, оставьте поле пустым.";
+"air_join_how" = "Группа найдётся, когда в сети будет кто-то из её участников. Если среди них есть ваш контакт, Khandaq попросит его прислать вам приглашение.";
+"air_join_why_key" = "Сначала ключ группы";
+"air_cmd_join_group" = "Вступить в группу с этим ключом";
+"air_cmd_group_note" = "64 знака: столько в ключе группы";
+
+/* Stage 5: Password and PIN */
+"air_security_pin_section" = "PIN-код";
+"air_security_pin" = "Спрашивать PIN-код";
+"air_security_pin_note" = "Khandaq спросит PIN-код, когда вы вернётесь в приложение. Восстановить PIN-код нельзя.";
+"air_security_lock" = "Блокировать";
+"air_security_lock_now" = "Сразу";
+"air_security_lock_30s" = "Через 30 секунд";
+"air_security_lock_1m" = "Через минуту";
+"air_security_lock_2m" = "Через 2 минуты";
+"air_security_lock_5m" = "Через 5 минут";
+"air_security_lock_note" = "Время идёт с момента, когда вы ушли из Khandaq.";
+"air_security_face_id" = "Открывать по Face ID";
+"air_security_touch_id" = "Открывать по Touch ID";
+"air_security_biometrics_note" = "Вместо PIN-кода. PIN-код тоже откроет Khandaq.";
+"air_security_password_section" = "Пароль профиля";
+"air_security_password_note" = "Им зашифрован профиль на этом iPhone. Восстановить пароль нельзя: серверов нет.";
+"air_security_device_key_note" = "Профиль открывается ключом из связки ключей этого iPhone. С паролем его можно перенести на другое устройство.";
+
+/* Stage 5: a profile whose key is not on this iPhone */
+"air_signin_key_missing" = "Этот профиль открывался без пароля, ключом того iPhone, на котором его создали. На этом iPhone такого ключа нет, поэтому здесь профиль не откроется.";
+"air_signin_key_missing_note" = "Если тот iPhone под рукой, задайте на нём пароль в разделе «Пароль и PIN-код», сделайте экспорт профиля и перенесите файл сюда.";
+"air_signin_key_missing_short" = "Ключа нет на этом iPhone";
+"air_signin_key_missing_move" = "Перенести профиль";

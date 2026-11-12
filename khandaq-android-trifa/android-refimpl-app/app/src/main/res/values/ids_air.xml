@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Air screen as a main-screen id next to the old bottom-navigation tabs (MainActivity.currentMainTab). -->
+<resources>
+    <item name="main_screen_air" type="id" />
+    <!-- The conversation: the mic tint a chat asks of ChatInputBarHelper, and the mark an entry shows. -->
+    <item name="air_mic_tint" type="id" />
+    <item name="air_entry_status" type="id" />
+    <!-- The message an entry is rising in for, and the reply bar that takes the design-system colours. -->
+    <item name="air_entry_arrival" type="id" />
+    <item name="air_reply_style" type="id" />
+    <!-- The views of an entry, looked up once per row holder. -->
+    <item name="air_entry_views" type="id" />
+    <!-- The accessibility actions (edit, cancel) a tray row carries, kept to replace them on a rebind. -->
+    <item name="air_tray_actions" type="id" />
+    <!-- The fields of New contact, so their text survives a recreate and their headings can label them. -->
+    <item name="air_nc_id_field" type="id" />
+    <item name="air_nc_message_field" type="id" />
+    <!-- New group: its fields, so their text survives a recreate, and the mark a choice row carries. -->
+    <item name="air_ng_name_field" type="id" />
+    <item name="air_ng_search_field" type="id" />
+    <item name="air_ng_mark" type="id" />
+    <!-- E21: the line AirUi.sayUnder puts under a field or button of an older screen, found again by it. -->
+    <item name="air_note_under" type="id" />
+</resources>

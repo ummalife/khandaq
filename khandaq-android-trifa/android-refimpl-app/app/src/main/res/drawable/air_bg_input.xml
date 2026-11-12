@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A framed field (kq-input, kq-id-input): surface with a strong hairline that turns to ink with focus;
+     a field that is off (an observer's private message) is sunken, as a button that may not go. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_enabled="false">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/kq_sunken" />
+            <stroke android:width="@dimen/kq_stroke_hairline" android:color="@color/kq_line" />
+            <corners android:radius="@dimen/kq_radius_field" />
+        </shape>
+    </item>
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/kq_surface" />
+            <stroke android:width="@dimen/kq_stroke_hairline" android:color="@color/kq_ink" />
+            <corners android:radius="@dimen/kq_radius_field" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/kq_surface" />
+            <stroke android:width="@dimen/kq_stroke_hairline" android:color="@color/kq_line_strong" />
+            <corners android:radius="@dimen/kq_radius_field" />
+        </shape>
+    </item>
+</selector>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Group settings (redesign, stage 5): GroupInfoActivity drawn as GroupInfoController on iOS, the same words -->
+    <string name="air_gs_self_name">اسمك في المجموعة</string>
+    <string name="air_gs_self_name_note">يراه أعضاء هذه المجموعة، ويبقى اسم ملفك الشخصي كما هو.</string>
+    <string name="air_gs_name_empty">لا يمكن أن يكون الاسم فارغًا.</string>
+    <string name="air_gs_topic">الموضوع</string>
+    <string name="air_gs_topic_none">بلا موضوع</string>
+    <string name="air_gs_topic_note">يرى كل الأعضاء الموضوع: يظهر بدل الاسم في القائمة وفي أعلى المجموعة.</string>
+    <string name="air_gs_topic_locked">لا يغيّر الموضوع إلا المؤسس والمشرفون.</string>
+    <string name="air_gs_topic_not_observers">يغيّر الموضوع جميع الأعضاء ما عدا المراقبين.</string>
+    <string name="air_gs_topic_empty">لا يمكن أن يكون الموضوع فارغًا.</string>
+    <string name="air_gs_topic_lock">لا يغيّر الموضوع إلا المؤسس والمشرفون</string>
+    <string name="air_gs_join">من يمكنه الانضمام</string>
+    <string name="air_gs_password">كلمة مرور المجموعة</string>
+    <string name="air_gs_password_note">سيحتاج الأعضاء الجدد إلى كلمة المرور، ومن في المجموعة الآن يبقى فيها.</string>
+    <string name="air_gs_password_remove">إزالة كلمة المرور</string>
+    <string name="air_gs_password_removed">أُزيلت كلمة المرور</string>
+    <string name="air_gs_limit">حد الأعضاء</string>
+    <string name="air_gs_limit_full">المجموعة ممتلئة: لن ينضم أعضاء جدد حتى يُرفع الحد.</string>
+    <string name="air_gs_limit_range">الحد رقم من 1 إلى 65535.</string>
+    <string name="air_gs_write">من يمكنه الكتابة</string>
+    <string name="air_gs_voice_all">كل الأعضاء</string>
+    <string name="air_gs_voice_all_note">الجميع ما عدا المراقبين.</string>
+    <string name="air_gs_voice_moderator">المشرفون والمؤسس</string>
+    <string name="air_gs_voice_founder">المؤسس فقط</string>
+    <string name="air_gs_founder_only">يغيّر هذا مؤسس المجموعة.</string>
+    <string name="air_gs_save">حفظ</string>
+    <string name="air_gs_saved">تم الحفظ</string>
+    <string name="air_gs_not_here">هذا الجهاز ليس في المجموعة الآن، لذا لا يمكن تغيير إعداداتها هنا.</string>
+</resources>

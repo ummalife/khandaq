@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The composer of the conversation: the surface with a hairline above it. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <color android:color="@color/kq_line" />
+    </item>
+    <item android:top="@dimen/kq_stroke_hairline">
+        <color android:color="@color/kq_surface" />
+    </item>
+</layer-list>

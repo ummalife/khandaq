@@ -22,11 +22,8 @@ package com.zoffcc.applications.trifa;
 import org.khandaq.messenger.R;
 
 import android.content.Context;
-import android.content.DialogInterface;
-import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
-import android.net.Uri;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
@@ -44,10 +41,8 @@ import com.mikepenz.fontawesome_typeface_library.FontAwesome;
 import com.mikepenz.iconics.IconicsDrawable;
 import com.zoffcc.applications.sorm.Message;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.RecyclerView;
 
-import static com.zoffcc.applications.trifa.HelperFriend.add_friend_real;
 import static com.zoffcc.applications.trifa.HelperGeneric.dp2px;
 import static com.zoffcc.applications.trifa.HelperGeneric.format_chat_message_time;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__global_font_size;
@@ -99,10 +94,22 @@ public class MessageListHolder_text_incoming_not_read extends RecyclerView.ViewH
         message_text_date_string = (TextView) itemView.findViewById(R.id.message_text_date_string);
         message_text_date = (ViewGroup) itemView.findViewById(R.id.message_text_date);
 
+        // KHANDAQ (redesign, stage 2): the conversation's text rows are entries of the transcript.
+        if (AirTranscript.isEntry(itemView))
+        {
+            AirTranscript.prepare(itemView, textView);
+        }
+
         swipe_state = 0;
         swipe_state_done = 0;
 
         swipeLayout = (SwipeLayout) itemView.findViewById(R.id.msg_swipe_container);
+        // KHANDAQ (redesign, stage 2): an entry of the transcript has no swipe container; swipe to reply
+        // runs through the list's ItemTouchHelper for every row (#T3 below).
+        if (swipeLayout == null)
+        {
+            return;
+        }
         swipeLayout.setShowMode(SwipeLayout.ShowMode.PullOut);
         // KHANDAQ (#T3): swipe-to-reply for incoming 1:1 text now goes through the RecyclerView-level
         // ItemTouchHelper (reliable from the first open) like every other row type — same fix already
@@ -204,7 +211,7 @@ public class MessageListHolder_text_incoming_not_read extends RecyclerView.ViewH
 
         if (is_selected)
         {
-            layout_message_container.setBackgroundResource(R.drawable.bg_message_selection);
+            layout_message_container.setBackgroundResource(AirTranscript.selectionPlate(layout_message_container));
         }
         else
         {
@@ -272,28 +279,36 @@ public class MessageListHolder_text_incoming_not_read extends RecyclerView.ViewH
             {
                 if (autoLinkMode == AutoLinkMode.MODE_URL)
                 {
-                    showDialog_url(context, "open URL?", matchedText.replaceFirst("^\\s", ""));
+                    AirLinkQuestion.openLink(context, matchedText.replaceFirst("^\\s", ""));
                 }
                 else if (autoLinkMode == AutoLinkMode.MODE_EMAIL)
                 {
-                    showDialog_email(context, "send Email?", matchedText.replaceFirst("^\\s", ""));
+                    AirLinkQuestion.writeEmail(context, matchedText.replaceFirst("^\\s", ""));
                 }
                 else if (autoLinkMode == AutoLinkMode.MODE_MENTION)
                 {
-                    showDialog_url(context, "open URL?", "https://twitter.com/" +
+                    AirLinkQuestion.openLink(context, "https://twitter.com/" +
                                                          matchedText.replaceFirst("^\\s", "").replaceFirst("^@", ""));
                 }
                 else if (autoLinkMode == AutoLinkMode.MODE_HASHTAG)
                 {
-                    showDialog_url(context, "open URL?", "https://twitter.com/hashtag/" +
+                    AirLinkQuestion.openLink(context, "https://twitter.com/hashtag/" +
                                                          matchedText.replaceFirst("^\\s", "").replaceFirst("^#", ""));
                 }
                 else if (autoLinkMode == AutoLinkMode.MODE_CUSTOM) // tox: urls
                 {
-                    showDialog_tox(context, context.getString(R.string.add_id_dialog_title), matchedText.replaceFirst("^\\s", ""));
+                    AirLinkQuestion.requestContact(context, matchedText.replaceFirst("^\\s", ""));
                 }
             }
         });
+
+        // KHANDAQ (redesign, stage 2): an entry of the transcript takes its look from AirTranscript: no
+        // bubble, the time column, the author over a run and our mark; nothing below applies to it.
+        if (AirTranscript.isEntry(itemView))
+        {
+            AirTranscript.bindText(itemView, my_position, m, parsedMessage, locationBound);
+            return;
+        }
 
         HelperGeneric.fill_friend_avatar_icon(m, context, img_avatar);
 
@@ -396,114 +411,6 @@ public class MessageListHolder_text_incoming_not_read extends RecyclerView.ViewH
     {
         // Log.i(TAG, "onLongClick");
         return true;
-    }
-
-    private void showDialog_url(final Context c, final String title, final String url1)
-    {
-        String url2 = url1;
-
-        // check to see if protocol is specified in URL, otherwise add "http://"
-        if (!url2.contains("://"))
-        {
-            url2 = "https://" + url1;
-        }
-        final String url = url2;
-
-        final AlertDialog.Builder builder = new AlertDialog.Builder(this.context);
-        builder.setMessage(url).setTitle(title).
-                setCancelable(false).
-                setPositiveButton("OK", new DialogInterface.OnClickListener()
-                {
-                    public void onClick(DialogInterface dialog, int id)
-                    {
-                        try
-                        {
-                            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                            c.startActivity(intent);
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                        dialog.dismiss();
-                    }
-                }).setNegativeButton("Cancel", new DialogInterface.OnClickListener()
-        {
-            public void onClick(DialogInterface dialog, int id)
-            {
-            }
-        });
-
-        final AlertDialog alert = builder.create();
-        alert.show();
-    }
-
-    private void showDialog_email(final Context c, final String title, final String email_addr)
-    {
-        final AlertDialog.Builder builder = new AlertDialog.Builder(this.context);
-        builder.setMessage(email_addr).setTitle(title).
-                setCancelable(false).
-                setPositiveButton("OK", new DialogInterface.OnClickListener()
-                {
-                    public void onClick(DialogInterface dialog, int id)
-                    {
-                        try
-                        {
-                            Intent emailIntent = new Intent(Intent.ACTION_SENDTO,
-                                                            Uri.fromParts("mailto", email_addr, null));
-                            emailIntent.setType("message/rfc822");
-                            // emailIntent.putExtra(Intent.EXTRA_SUBJECT, "Subject");
-                            // emailIntent.putExtra(Intent.EXTRA_TEXT, "Body");
-                            c.startActivity(Intent.createChooser(emailIntent, "Send email..."));
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                        dialog.dismiss();
-                    }
-                }).setNegativeButton("Cancel", new DialogInterface.OnClickListener()
-        {
-            public void onClick(DialogInterface dialog, int id)
-            {
-            }
-        });
-
-        final AlertDialog alert = builder.create();
-        alert.show();
-    }
-
-    private void showDialog_tox(final Context c, final String title, final String toxid)
-    {
-        final AlertDialog.Builder builder = new AlertDialog.Builder(this.context);
-        builder.setMessage(toxid.toUpperCase()).setTitle(title).
-                setCancelable(false).
-                setPositiveButton("OK", new DialogInterface.OnClickListener()
-                {
-                    public void onClick(DialogInterface dialog, int id)
-                    {
-                        try
-                        {
-                            String friend_tox_id = toxid.toUpperCase().replace(" ", "").replaceFirst("tox:",
-                                                                                                     "").replaceFirst(
-                                    "TOX:", "").replaceFirst("Tox:", "");
-                            add_friend_real(friend_tox_id);
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                        dialog.dismiss();
-                    }
-                }).setNegativeButton("Cancel", new DialogInterface.OnClickListener()
-        {
-            public void onClick(DialogInterface dialog, int id)
-            {
-            }
-        });
-
-        final AlertDialog alert = builder.create();
-        alert.show();
     }
 
 

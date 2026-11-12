@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A settings plate: rows sit flush on the surface, the card radius around them. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/kq_surface" />
+    <corners android:radius="@dimen/kq_radius_card" />
+</shape>

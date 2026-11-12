@@ -69,14 +69,17 @@ import com.etiennelawlor.discreteslider.library.ui.DiscreteSlider;
 import com.google.speech.levelmeter.BarLevelDrawable;
 import com.mikepenz.google_material_typeface_library.GoogleMaterial;
 import com.mikepenz.iconics.IconicsDrawable;
-import com.zoffcc.applications.sorm.FriendList;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import static android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.get_aec_active;
@@ -92,9 +95,7 @@ import static com.zoffcc.applications.trifa.CameraWrapper.camera_preview_call_ba
 import static com.zoffcc.applications.trifa.CameraWrapper.getRotation;
 import static com.zoffcc.applications.trifa.CustomVideoImageView.video_output_orentation_update;
 import static com.zoffcc.applications.trifa.HeadsetStateReceiver.isBluetoothConnected;
-import static com.zoffcc.applications.trifa.HelperFriend.main_get_friend;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
-import static com.zoffcc.applications.trifa.HelperGeneric.format_timeduration_from_seconds;
 import static com.zoffcc.applications.trifa.HelperGeneric.applyActiveCallVideoBitrate;
 import static com.zoffcc.applications.trifa.HelperGeneric.applyCallStreamVolume;
 import static com.zoffcc.applications.trifa.HelperGeneric.reset_audio_mode;
@@ -237,6 +238,19 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     static boolean camera_toggle_button_pressed = false;
     static boolean pendingCameraOpen = false;
     private Runnable pendingCallPermissionAction = null;
+    // KHANDAQ (redesign, stage 3b): the head of the screen (the name, the state in right_left_text_1, the
+    // link), the word under Decline or End, and the answer that waits for access.
+    private TextView call_name = null;
+    private AirLinkMarkView call_link_mark = null;
+    private TextView call_link_text = null;
+    private TextView call_decline_label = null;
+    private boolean call_state_is_timer = false;
+    /** With video was pressed; the camera still decides (performIncomingCallAcceptance). */
+    private boolean answer_with_video = false;
+    /** The dialog that says why access is missing, over this screen; dismissed with it. */
+    private AlertDialog call_explanation = null;
+    /** True while a call that could not go on without the microphone is explained: the dialog closes the screen. */
+    private volatile boolean explaining_call_end = false;
     static byte[] arr_h264_enc = null;
 
     private static MediaCodec.BufferInfo mBufferInfo_h264_decoder;
@@ -359,7 +373,8 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             R.id.video_box_left_top_01, R.id.video_box_right_top_01, R.id.video_box_aec,
             R.id.video_speaker_aec, R.id.video_box_right_volumeslider_01,
             R.id.video_box_right_video_add_delay_slider_01,
-            R.id.audio_bar_in_v, R.id.audio_bar_out_v, R.id.debug001, R.id.caller_avatar_view
+            R.id.audio_bar_in_v, R.id.audio_bar_out_v, R.id.debug001, R.id.caller_avatar_view,
+            R.id.air_call_head
     };
 
     @Override
@@ -372,6 +387,12 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     private void enterPipIfPossible()
     {
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O)
+        {
+            return;
+        }
+        // KHANDAQ (redesign, stage 3b): no picture in picture for a call that is over (Open Settings in the
+        // access dialog leaves the screen as well).
+        if (explaining_call_end || isFinishing() || (Callstate.state == 0))
         {
             return;
         }
@@ -471,6 +492,15 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
 
         super.onCreate(savedInstanceState);
 
+        // KHANDAQ (redesign, stage 3b): rebuilt by the system (a theme change) after the call ended, for
+        // instance under the microphone explanation: there is no call to show, so the screen goes.
+        if ((savedInstanceState != null) && (Callstate.state == 0))
+        {
+            HelperGeneric.logI(TAG, "onCreate:recreated after the call ended");
+            finish();
+            return;
+        }
+
         calling_activity_start_ms = System.currentTimeMillis();
 
         HelperGeneric.logI(TAG, "onCreate:02");
@@ -478,6 +508,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         dh = new DetectHeadset(this);
 
         setContentView(R.layout.activity_calling);
+        style_call_window();
 
         // KHANDAQ (ringtone fix): the moment our own call screen is up, cancel the incoming-call
         // notification so its ringtone channel can't overlap with the Activity ringtone ("several at once").
@@ -503,13 +534,19 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         misc_button = (ImageButton) findViewById(R.id.misc_button);
         misc_button_pad = (TextView) findViewById(R.id.misc_button_pad);
         calling_friend_online_status = (View) findViewById(R.id.calling_friend_online_status);
+        call_name = findViewById(R.id.air_call_name);
+        call_link_mark = findViewById(R.id.air_call_link_mark);
+        call_link_text = findViewById(R.id.air_call_link_text);
+        call_decline_label = findViewById(R.id.air_call_decline_label);
 
+        int link_status = -1;
         try
         {
             final long call_friend_num = tox_friend_by_public_key__wrapper(Callstate.friend_pubkey);
             if (call_friend_num >= 0)
             {
                 int conn_status = tox_friend_get_connection_status(call_friend_num);
+                link_status = conn_status;
                 if (conn_status == ToxVars.TOX_CONNECTION.TOX_CONNECTION_UDP.value)
                 {
                     calling_friend_online_status.setBackgroundColor(Color.parseColor("#04b431"));
@@ -533,6 +570,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             Log.w(TAG, "onCreate:conn_status:EE:" + e.getMessage());
             calling_friend_online_status.setBackgroundColor(Color.parseColor("#ff0000"));
         }
+        show_call_link(link_status);
 
         audio_bar_in_v = (BarLevelDrawable) findViewById(R.id.audio_bar_in_v);
         audio_bar_out_v = (BarLevelDrawable) findViewById(R.id.audio_bar_out_v);
@@ -800,21 +838,8 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             }
         });
 
-
-        try
-        {
-            final FriendList friend = main_get_friend(tox_friend_by_public_key__wrapper(Callstate.friend_pubkey));
-            String displayName = friend.name;
-            if (friend.alias_name != null && friend.alias_name.length() > 0)
-            {
-                displayName = friend.alias_name;
-            }
-            ChatBubbleUiHelper.fill_profile_peer_icon(caller_avatar_view, Callstate.friend_pubkey, displayName);
-        }
-        catch (Exception e1)
-        {
-            e1.printStackTrace();
-        }
+        // KHANDAQ (redesign, stage 3b): no full-screen initials any more; the head carries the person, as
+        // on iOS (caller_avatar_view stays hidden).
 
         right_top_text_1 = (TextView) findViewById(R.id.right_top_text_1);
         right_top_text_1b = (TextView) findViewById(R.id.right_top_text_1b);
@@ -1262,8 +1287,9 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             misc_button.setVisibility(View.VISIBLE);
             misc_button_pad.setVisibility(View.VISIBLE);
 
+            // White on the lock ground of the call screens, as the other controls.
             Drawable d8 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_touch_app).backgroundColor(
-                    Color.TRANSPARENT).color(android.graphics.Color.WHITE).sizeDp(50);
+                    Color.TRANSPARENT).color(AirUi.color(this, R.color.kq_fixed_white)).sizeDp(50);
             misc_button.setImageDrawable(d8);
 
             misc_button.setOnTouchListener(new View.OnTouchListener()
@@ -1291,7 +1317,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                         {
                             Drawable d2a = new IconicsDrawable(v.getContext()).icon(
                                     GoogleMaterial.Icon.gmd_touch_app).backgroundColor(Color.TRANSPARENT).color(
-                                    android.graphics.Color.WHITE).sizeDp(50);
+                                    AirUi.color(v.getContext(), R.color.kq_fixed_white)).sizeDp(50);
                             misc_button.setImageDrawable(d2a);
 
                             // send misc. message to friend, and do NOT save to DB
@@ -1320,104 +1346,45 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             misc_button_pad.setVisibility(View.GONE);
         }
 
-        final Drawable d1 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_mic).backgroundColor(
-                Color.TRANSPARENT).color(android.graphics.Color.WHITE).sizeDp(50);
-        mute_button.setImageDrawable(d1);
-        mute_button.setOnTouchListener(new View.OnTouchListener()
-        {
-            @Override
-            public boolean onTouch(View v, MotionEvent event)
+        // KHANDAQ (redesign, stage 3b): the microphone is a switch read as on or off, and a click, so
+        // TalkBack's double tap works it too (the old touch listener acted on raw touches only).
+        show_mic_switch();
+        mute_button.setOnClickListener(v -> {
+            try
             {
-                if (event.getAction() != MotionEvent.ACTION_UP)
+                if (trifa_is_MicrophoneMute)
                 {
-                    try
-                    {
-                        // if (audio_manager_s.isMicrophoneMute())
-                        if (trifa_is_MicrophoneMute)
-                        {
-                            Drawable d1a = new IconicsDrawable(v.getContext()).icon(
-                                    GoogleMaterial.Icon.gmd_mic_off).backgroundColor(Color.TRANSPARENT).color(
-                                    getResources().getColor(R.color.md_green_600)).sizeDp(50);
-                            mute_button.setImageDrawable(d1a);
-                        }
-                        else
-                        {
-                            Drawable d1a = new IconicsDrawable(v.getContext()).icon(
-                                    GoogleMaterial.Icon.gmd_mic).backgroundColor(Color.TRANSPARENT).color(
-                                    getResources().getColor(R.color.md_green_600)).sizeDp(50);
-                            mute_button.setImageDrawable(d1a);
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        e.printStackTrace();
-                    }
+                    audio_manager_s.setMicrophoneMute(false);
+                    trifa_is_MicrophoneMute = false;
                 }
-                else if (event.getAction() == MotionEvent.ACTION_UP)
+                else
                 {
-                    try
-                    {
-                        // if (audio_manager_s.isMicrophoneMute())
-                        if (trifa_is_MicrophoneMute)
-                        {
-                            audio_manager_s.setMicrophoneMute(false);
-                            trifa_is_MicrophoneMute = false;
-                            Drawable d2a = new IconicsDrawable(v.getContext()).icon(
-                                    GoogleMaterial.Icon.gmd_mic).backgroundColor(Color.TRANSPARENT).color(
-                                    android.graphics.Color.WHITE).sizeDp(50);
-                            mute_button.setImageDrawable(d2a);
-                        }
-                        else
-                        {
-                            audio_manager_s.setMicrophoneMute(true);
-                            trifa_is_MicrophoneMute = true;
-                            Drawable d2a = new IconicsDrawable(v.getContext()).icon(
-                                    GoogleMaterial.Icon.gmd_mic_off).backgroundColor(Color.TRANSPARENT).color(
-                                    android.graphics.Color.WHITE).sizeDp(50);
-                            mute_button.setImageDrawable(d2a);
-                            audio_bar_in_v.setLevel(0);
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        e.printStackTrace();
-                        HelperGeneric.logI(TAG, "setMicrophoneMute:001:EE:" + e.getMessage());
-                    }
+                    audio_manager_s.setMicrophoneMute(true);
+                    trifa_is_MicrophoneMute = true;
+                    audio_bar_in_v.setLevel(0);
                 }
-                return true;
             }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+                HelperGeneric.logI(TAG, "setMicrophoneMute:001:EE:" + e.getMessage());
+            }
+            show_mic_switch();
         });
 
         // on startup always use front camera
         active_camera_type = FRONT_CAMERA_USED;
 
-        final Drawable d3 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_highlight_off).backgroundColor(
-                Color.TRANSPARENT).color(Color.parseColor("#A0FF0000")).sizeDp(50);
-        decline_button.setImageDrawable(d3);
-        // #AARRGGBB
-
-        final Drawable d4 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_check_circle).backgroundColor(
-                Color.TRANSPARENT).color(Color.parseColor("#EF088A29")).sizeDp(50);
-        accept_button.setImageDrawable(d4);
-
+        caller_avatar_view.setVisibility(View.GONE);
+        apply_call_controls();
         if (Callstate.accepted_call == 1)
         {
             // HINT: also when starting a call ourselves!!
-            caller_avatar_view.setVisibility(View.VISIBLE);
-            accept_button.setVisibility(View.GONE);
-            camera_toggle_button.setVisibility(View.VISIBLE);
-            mute_button.setVisibility(View.VISIBLE);
-
             stop_ringtone();
             set_calling_audio_mode();
         }
         else
         {
-            caller_avatar_view.setVisibility(View.VISIBLE);
-            accept_button.setVisibility(View.VISIBLE);
-            camera_toggle_button.setVisibility(View.GONE);
-            mute_button.setVisibility(View.GONE);
-
             start_ringtone();
         }
 
@@ -1427,91 +1394,31 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         // KHANDAQ (modern call screen): strip the legacy TRIfA debug/expert overlays for a clean look.
         hide_legacy_call_debug_ui();
 
-        if (active_camera_type == FRONT_CAMERA_USED)
-        {
-            final Drawable d5 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_camera_front).backgroundColor(
-                    Color.TRANSPARENT).color(android.graphics.Color.WHITE).sizeDp(50);
-            camera_toggle_button.setImageDrawable(d5);
-            HelperGeneric.logI(TAG, "active_camera_type(5)=" + active_camera_type);
-        }
-        else
-        {
-            final Drawable d6 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_camera_rear).backgroundColor(
-                    Color.TRANSPARENT).color(android.graphics.Color.WHITE).sizeDp(50);
-            camera_toggle_button.setImageDrawable(d6);
-            HelperGeneric.logI(TAG, "active_camera_type(6)=" + active_camera_type);
-        }
-
-        camera_toggle_button.setOnTouchListener(new View.OnTouchListener()
-        {
-            @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-            @Override
-            public boolean onTouch(View v, MotionEvent event)
+        // KHANDAQ (redesign, stage 3b): Switch camera keeps one glyph and its word (the camera in use shows
+        // in the preview), and it is a click, so TalkBack's double tap works it too.
+        camera_toggle_button.setOnClickListener(v -> {
+            HelperGeneric.logI(TAG, "active_camera_type(8)=" + active_camera_type);
+            camera_toggle_button_pressed = true;
+            HelperGeneric.logI(TAG, "camera_toggle_button_pressed[press start]=" + camera_toggle_button_pressed);
+            final Thread toggle_thread = new Thread()
             {
-                if (event.getAction() != MotionEvent.ACTION_UP)
+                @Override
+                public void run()
                 {
-                    HelperGeneric.logI(TAG, "active_camera_type(7)=" + active_camera_type);
-
-                    if (active_camera_type == FRONT_CAMERA_USED)
+                    try
                     {
-                        Drawable d2a = new IconicsDrawable(v.getContext()).icon(
-                                GoogleMaterial.Icon.gmd_camera_front).backgroundColor(Color.TRANSPARENT).color(
-                                getResources().getColor(R.color.md_green_600)).sizeDp(7);
-                        camera_toggle_button.setImageDrawable(d2a);
+                        Thread.sleep(30);
                     }
-                    else
+                    catch (Exception e)
                     {
-                        Drawable d2a = new IconicsDrawable(v.getContext()).icon(
-                                GoogleMaterial.Icon.gmd_camera_rear).backgroundColor(Color.TRANSPARENT).color(
-                                getResources().getColor(R.color.md_green_600)).sizeDp(7);
-                        camera_toggle_button.setImageDrawable(d2a);
+                        // e.printStackTrace();
                     }
+                    toggle_camera();
+                    camera_toggle_button_pressed = false;
+                    HelperGeneric.logI(TAG, "camera_toggle_button_pressed[press end]=" + camera_toggle_button_pressed);
                 }
-                else
-                {
-                    HelperGeneric.logI(TAG, "active_camera_type(8)=" + active_camera_type);
-
-                    if (active_camera_type == FRONT_CAMERA_USED)
-                    {
-                        Drawable d2a = new IconicsDrawable(v.getContext()).icon(
-                                GoogleMaterial.Icon.gmd_camera_rear).backgroundColor(Color.TRANSPARENT).color(
-                                android.graphics.Color.WHITE).sizeDp(7);
-                        camera_toggle_button.setImageDrawable(d2a);
-                    }
-                    else
-                    {
-                        Drawable d2a = new IconicsDrawable(v.getContext()).icon(
-                                GoogleMaterial.Icon.gmd_camera_front).backgroundColor(Color.TRANSPARENT).color(
-                                android.graphics.Color.WHITE).sizeDp(7);
-                        camera_toggle_button.setImageDrawable(d2a);
-                    }
-
-                    camera_toggle_button_pressed = true;
-                    HelperGeneric.logI(TAG, "camera_toggle_button_pressed[press start]=" + camera_toggle_button_pressed);
-                    final Thread toggle_thread = new Thread()
-                    {
-                        @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-                        @Override
-                        public void run()
-                        {
-                            try
-                            {
-                                Thread.sleep(30);
-                            }
-                            catch (Exception e)
-                            {
-                                // e.printStackTrace();
-                            }
-                            toggle_camera();
-                            camera_toggle_button_pressed = false;
-                            HelperGeneric.logI(TAG, "camera_toggle_button_pressed[press end]=" + camera_toggle_button_pressed);
-                        }
-                    };
-                    toggle_thread.start();
-                }
-
-                return true;
-            }
+            };
+            toggle_thread.start();
         });
 
         HelperGeneric.logI(TAG, "start:0001");
@@ -1532,67 +1439,391 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         top_text_line_str4 = "";
         update_top_text_line();
 
-        accept_button.setOnTouchListener(new View.OnTouchListener()
-        {
-            @Override
-            public boolean onTouch(View v, MotionEvent event)
-            {
-                HelperGeneric.logI(TAG, "accept_button:onTouch:001");
-                try
-                {
-                    if (event.getAction() != MotionEvent.ACTION_UP)
-                    {
-                        HelperGeneric.logI(TAG, "accept_button:onTouch:002");
-                    }
-                    else
-                    {
-                        HelperGeneric.logI(TAG,
-                              "accept_button:onTouch:003 " + Callstate.accepted_call + " " + Callstate.friend_pubkey);
-                        if (Callstate.accepted_call != 1)
-                        {
-                            ensureCallPermissions(CallingActivity.this::performIncomingCallAcceptance);
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                    HelperGeneric.logI(TAG, "accept_button:onTouch:006:EE01:" + e.getMessage());
-                }
-                return true;
-            }
+        // KHANDAQ (redesign, stage 3b): the head, as on iOS (CallBaseController): the person in the display
+        // size, then the state of the call and the link (show_call_link above).
+        call_name.setText(call_person_name());
+        ViewCompat.setAccessibilityHeading(call_name, true);
+        show_call_state();
+
+        // Answer, With video, Decline and End are clicks, so TalkBack's double tap works them too; the old
+        // touch listeners acted on raw touches only (Decline on the first touch).
+        accept_button.setOnClickListener(v -> {
+            HelperGeneric.logI(TAG, "accept_button:click " + Callstate.accepted_call + " " + Callstate.friend_pubkey);
+            answer_call(false);
         });
-
-        decline_button.setOnTouchListener(new View.OnTouchListener()
-        {
-            @Override
-            public boolean onTouch(View v, MotionEvent event)
+        findViewById(R.id.air_call_answer_video_button).setOnClickListener(v -> {
+            HelperGeneric.logI(TAG, "answer_video_button:click " + Callstate.accepted_call);
+            answer_call(true);
+        });
+        decline_button.setOnClickListener(v -> {
+            HelperGeneric.logI(TAG, "decline_button_pressed:on_call_ended_actions");
+            try
             {
-                HelperGeneric.logI(TAG, "decline_button_pressed:000");
-
-                try
-                {
-                    if (event.getAction() == MotionEvent.ACTION_DOWN)
-                    {
-                        HelperGeneric.logI(TAG, "decline_button_pressed:DOWN");
-                        HelperGeneric.logI(TAG, "decline_button_pressed:on_call_ended_actions");
-                        if (Callstate.incoming_one_on_one_call && Callstate.accepted_call != 1)
-                        {
-                            HelperCall.logCallEvent(Callstate.friend_pubkey, R.string.call_log_missed);
-                        }
-                        CallAudioService.stop_me(true);
-                    }
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-
-                return true;
+                CallAudioService.stop_me(true);
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
             }
         });
 
         HelperGeneric.logI(TAG, "onCreate:99");
+    }
+
+    /**
+     * KHANDAQ (redesign, stage 3b; stage 5): the window and the bars on the flat lock ground (lock-top), dark
+     * in both themes as on iOS (AirCallBackdropView), so the bars keep light icons by day and by night.
+     */
+    @SuppressWarnings("deprecation")
+    private void style_call_window()
+    {
+        final int ground = AirUi.color(this, R.color.kq_lock_top);
+        getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(ground));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+        {
+            // In immersive mode a phone with a cutout letterboxes the window below it, and that strip
+            // stayed black over the theme ground. The window now reaches the short edge, and its content
+            // keeps below the cutout, so the strip shows the ground and nothing is drawn under the cutout.
+            final WindowManager.LayoutParams attrs = getWindow().getAttributes();
+            attrs.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            getWindow().setAttributes(attrs);
+            final View content = findViewById(android.R.id.content);
+            if (content != null)
+            {
+                ViewCompat.setOnApplyWindowInsetsListener(content, (v, insets) -> {
+                    final androidx.core.graphics.Insets cut = insets.getInsets(
+                            androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+                    v.setPadding(cut.left, cut.top, cut.right, cut.bottom);
+                    return insets;
+                });
+            }
+        }
+        getWindow().setStatusBarColor(ground);
+        getWindow().setNavigationBarColor(ground);
+        final WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(),
+                                                                                   getWindow().getDecorView());
+        bars.setAppearanceLightStatusBars(false);
+        bars.setAppearanceLightNavigationBars(false);
+    }
+
+    /** The person of the call: the name the app shows for them, else the start of their key. */
+    private String call_person_name()
+    {
+        final String key = Callstate.friend_pubkey;
+        final boolean knownKey = (key != null) && !key.trim().isEmpty() && !"-1".equals(key);
+        String name = knownKey ? HelperFriend.resolve_name_for_pubkey(key, "") : "";
+        name = (name == null) ? "" : name.trim();
+        if (name.isEmpty() && (Callstate.friend_alias_name != null) && !"-1".equals(Callstate.friend_alias_name))
+        {
+            name = Callstate.friend_alias_name.trim();
+        }
+        if (name.isEmpty() && knownKey)
+        {
+            name = key.trim().substring(0, Math.min(8, key.trim().length()));
+        }
+        return name;
+    }
+
+    /**
+     * KHANDAQ (redesign, stage 3b): the controls of the moment, each in its column with its word under it
+     * (design/DESIGN.md, "Files, voice and calls on the phone"). While a call rings: Decline, With video
+     * (an incoming video call only: Android cannot add video to a call that came without it) and Answer.
+     * Once answered, and while ours calls: Microphone, Speaker, Switch camera (a video call only) and End.
+     * Decline and End are one button, at the start while it rings and at the end on a call, as on iOS.
+     */
+    private void apply_call_controls()
+    {
+        final boolean ringing = (Callstate.accepted_call != 1);
+        show_control(R.id.air_call_answer_column, accept_button, ringing);
+        show_control(R.id.air_call_video_column, findViewById(R.id.air_call_answer_video_button),
+                     ringing && !Callstate.audio_call);
+        show_control(R.id.air_call_mic_column, mute_button, !ringing);
+        show_control(R.id.air_call_speaker_column, audio_speaker_button, !ringing);
+        show_control(R.id.air_call_camera_column, camera_toggle_button, !ringing && !Callstate.audio_call);
+        // The expert button keeps its own visibility (PREF__X_misc_button_enabled); never while it rings.
+        final View misc = findViewById(R.id.air_call_misc_column);
+        if (misc != null)
+        {
+            misc.setVisibility(
+                    (!ringing && PREF__X_misc_button_enabled) ? View.VISIBLE : View.GONE);
+        }
+
+        final ViewGroup row = findViewById(R.id.bottom);
+        final View declineColumn = findViewById(R.id.air_call_decline_column);
+        if ((row != null) && (declineColumn != null))
+        {
+            final int place = ringing ? 0 : row.getChildCount() - 1;
+            if (row.indexOfChild(declineColumn) != place)
+            {
+                row.removeView(declineColumn);
+                row.addView(declineColumn, ringing ? 0 : row.getChildCount());
+            }
+        }
+        final int word = ringing ? R.string.air_call_decline : R.string.air_call_end;
+        if (decline_button != null)
+        {
+            decline_button.setContentDescription(getString(word));
+        }
+        if (call_decline_label != null)
+        {
+            call_decline_label.setText(word);
+        }
+    }
+
+    private void show_control(final int columnId, final View button, final boolean shown)
+    {
+        final View column = findViewById(columnId);
+        if (column != null)
+        {
+            column.setVisibility(shown ? View.VISIBLE : View.GONE);
+        }
+        if (shown && (button != null))
+        {
+            button.setVisibility(View.VISIBLE);
+        }
+    }
+
+    /** The microphone switch: its glyph, its fill while it is off (muted), and "on" or "off" to TalkBack. */
+    private void show_mic_switch()
+    {
+        if (mute_button == null)
+        {
+            return;
+        }
+        final boolean off = trifa_is_MicrophoneMute;
+        mute_button.setImageResource(off ? R.drawable.air_call_ic_mic_off : R.drawable.kq_ic_mic);
+        mute_button.setActivated(off);
+        ViewCompat.setStateDescription(mute_button, getString(off ? R.string.air_call_mic_off : R.string.air_call_mic_on));
+    }
+
+    /**
+     * The microphone switch from outside the screen (the mute action of the ongoing call notification,
+     * CallAudioService.do_mute): posted to the screen when it is up.
+     */
+    static void show_mic_switch_from_outside()
+    {
+        final CallingActivity activity = ca;
+        if (activity != null)
+        {
+            activity.runOnUiThread(activity::show_mic_switch);
+        }
+    }
+
+    /**
+     * KHANDAQ (redesign, stage 3b): the state of the call under the name, as on iOS (CallBaseController.setInfo):
+     * "Incoming call" while it rings, "Calling" while ours waits for an answer, then the timer in tabular
+     * figures in the heading size ("4:12", as the call entry in the transcript says it).
+     */
+    void show_call_state()
+    {
+        final TextView state = right_left_text_1;
+        if (state == null)
+        {
+            return;
+        }
+        final boolean timer = (Callstate.accepted_call == 1) && (Callstate.call_start_timestamp != -1);
+        final String text;
+        if (timer)
+        {
+            final long seconds = (System.currentTimeMillis() - Callstate.call_start_timestamp) / 1000L;
+            text = AirUi.localDigits(this, HelperCall.callDuration(seconds));
+        }
+        else
+        {
+            text = getString((Callstate.accepted_call == 1) ? R.string.air_call_calling : R.string.air_call_incoming);
+        }
+        show_call_state_face(timer);
+        if (!text.contentEquals(state.getText()))
+        {
+            state.setText(text);
+        }
+    }
+
+    /**
+     * The timer in the heading size with tabular figures, so its width does not jump; a word in the body size.
+     * White either way on the lock ground, as on iOS.
+     */
+    private void show_call_state_face(final boolean timer)
+    {
+        if ((right_left_text_1 == null) || (timer == call_state_is_timer))
+        {
+            return;
+        }
+        call_state_is_timer = timer;
+        right_left_text_1.setTextAppearance(timer ? R.style.TextAppearance_KQ_Heading : R.style.TextAppearance_KQ_Body);
+        right_left_text_1.setTextColor(AirUi.color(this, R.color.kq_fixed_white));
+        right_left_text_1.setFontFeatureSettings(timer ? "tnum" : null);
+    }
+
+    /** "Call ended" under the name, and said to TalkBack, as the screen goes (iOS: prepareForRemoval). */
+    private void show_call_ended()
+    {
+        try
+        {
+            if (right_left_text_1 == null)
+            {
+                return;
+            }
+            show_call_state_face(false);
+            final String ended = getString(R.string.air_call_ended);
+            right_left_text_1.setText(ended);
+            right_left_text_1.announceForAccessibility(ended);
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "show_call_ended:EE:" + e.getMessage());
+        }
+    }
+
+    /**
+     * KHANDAQ (redesign, stage 3b): the link to the person under the state, with its mark, as on iOS
+     * (AirCallText.line): direct over UDP, through a relay over TCP, none otherwise.
+     */
+    private void show_call_link(final int conn_status)
+    {
+        final AirConversationModel.LinkState link;
+        final int words;
+        if (conn_status == ToxVars.TOX_CONNECTION.TOX_CONNECTION_UDP.value)
+        {
+            link = AirConversationModel.LinkState.DIRECT;
+            words = R.string.air_call_line_direct;
+        }
+        else if (conn_status == ToxVars.TOX_CONNECTION.TOX_CONNECTION_TCP.value)
+        {
+            link = AirConversationModel.LinkState.RELAY;
+            words = R.string.air_call_line_relay;
+        }
+        else
+        {
+            link = AirConversationModel.LinkState.NONE;
+            words = R.string.air_call_line_none;
+        }
+        if (call_link_mark != null)
+        {
+            call_link_mark.setState(link);
+        }
+        if (call_link_text != null)
+        {
+            call_link_text.setText(words);
+        }
+    }
+
+    /**
+     * KHANDAQ (redesign, stage 3b): Answer and With video, as on iOS (CallCoordinator.answerCall). The
+     * microphone comes first: granted, the call is answered; never asked, the system asks and the answer
+     * waits for it; refused, the call is declined and the reason said once (onRequestPermissionsResult).
+     * With video also asks for the camera; without it the call is answered with sound alone and the reason
+     * said over the call (performIncomingCallAcceptance).
+     */
+    private void answer_call(final boolean withVideo)
+    {
+        if ((Callstate.accepted_call == 1) || explaining_call_end)
+        {
+            return;
+        }
+        answer_with_video = withVideo && !Callstate.audio_call;
+        final boolean audioOnly = !answer_with_video;
+        if (HelperCall.hasRequiredCallPermissions(this, audioOnly))
+        {
+            performIncomingCallAcceptance();
+            return;
+        }
+        pendingCallPermissionAction = this::performIncomingCallAcceptance;
+        HelperCall.requestCallPermissions(this, audioOnly);
+    }
+
+    /**
+     * KHANDAQ (redesign, stage 3b): a call never goes on without audio (design/DESIGN.md, "Access is asked
+     * before a call, never assumed"). It is declined, or ended if it was already up, and the reason is said
+     * once over this screen with the app's settings one tap away; the screen closes with the dialog, as iOS
+     * declines and then explains (CallCoordinator.answerCall).
+     */
+    private void end_call_without_microphone()
+    {
+        pendingCallPermissionAction = null;
+        final boolean explain = !explaining_call_end;
+        // Set before the call ends, so close_calling_activity leaves the screen to the dialog.
+        explaining_call_end = true;
+        try
+        {
+            CallAudioService.stop_me(true);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+        show_call_ended();
+        set_call_controls_enabled(false);
+        if (!explain)
+        {
+            return;
+        }
+        dismiss_call_explanation();
+        try
+        {
+            final AlertDialog dialog = HelperCall.explainMissingPermission(this, true, null);
+            call_explanation = dialog;
+            dialog.setOnDismissListener(shown -> {
+                call_explanation = null;
+                explaining_call_end = false;
+                if (!isFinishing())
+                {
+                    finish();
+                }
+            });
+        }
+        catch (Exception e)
+        {
+            // The window is gone (the screen is going): nothing to explain over, so it simply closes.
+            Log.w(TAG, "end_call_without_microphone:EE:" + e.getMessage());
+            call_explanation = null;
+            explaining_call_end = false;
+            if (!isFinishing())
+            {
+                finish();
+            }
+        }
+    }
+
+    /** The controls stay where they are under the explanation, but nothing on them answers any more. */
+    private void set_call_controls_enabled(final boolean enabled)
+    {
+        final ViewGroup row = findViewById(R.id.bottom);
+        if (row == null)
+        {
+            return;
+        }
+        for (int i = 0; i < row.getChildCount(); i++)
+        {
+            final View column = row.getChildAt(i);
+            column.setEnabled(enabled);
+            if (column instanceof ViewGroup)
+            {
+                final ViewGroup group = (ViewGroup) column;
+                for (int j = 0; j < group.getChildCount(); j++)
+                {
+                    group.getChildAt(j).setEnabled(enabled);
+                }
+            }
+        }
+    }
+
+    private void dismiss_call_explanation()
+    {
+        final AlertDialog dialog = call_explanation;
+        call_explanation = null;
+        if (dialog != null)
+        {
+            dialog.setOnDismissListener(null);
+            try
+            {
+                dialog.dismiss();
+            }
+            catch (Exception e)
+            {
+                Log.w(TAG, "dismiss_call_explanation:EE:" + e.getMessage());
+            }
+        }
     }
 
     private void ensureCallPermissions(final Runnable onGranted)
@@ -1616,7 +1847,25 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         HelperGeneric.logI(TAG, "answer button pressed");
         HelperGeneric.logI(TAG, "accept_button:onTouch:004 " + Callstate.audio_call);
 
-        if (Callstate.audio_call)
+        if ((Callstate.accepted_call == 1) || (Callstate.state == 0))
+        {
+            return;
+        }
+        // KHANDAQ (redesign, stage 3b): never connect a call without audio. The ways here ask for the
+        // microphone first; this holds for any way that comes without it.
+        if (!HelperCall.hasMicrophonePermission(this))
+        {
+            end_call_without_microphone();
+            return;
+        }
+        // A video call goes with video when With video was pressed and the camera may be used. Otherwise it
+        // is answered with sound alone and becomes an audio call here, as ours does when it goes without
+        // video (MessageListActivity): no camera, their video is not shown, the sound goes to the earpiece.
+        final boolean videoCall = !Callstate.audio_call;
+        final boolean withVideo = videoCall && answer_with_video && HelperCall.hasCameraPermission(this);
+        final boolean cameraRefused = videoCall && answer_with_video && !withVideo;
+
+        if (!withVideo)
         {
             int res1 = toxav_answer(tox_friend_by_public_key__wrapper(Callstate.friend_pubkey),
                                     GLOBAL_AUDIO_BITRATE, 0);
@@ -1629,6 +1878,12 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             }
             Callstate.tox_call_state = ToxVars.TOXAV_FRIEND_CALL_STATE.TOXAV_FRIEND_CALL_STATE_SENDING_A.value;
             HelperGeneric.logI(TAG, "accept_button:onTouch:004:003");
+            if (videoCall)
+            {
+                Callstate.audio_call = true;
+                Callstate.audio_speaker = false;
+                set_audio_speaker_button_icon(false);
+            }
         }
         else
         {
@@ -1650,9 +1905,6 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         HelperGeneric.logI(TAG, "accept_button:onTouch:005");
 
         caller_avatar_view.setVisibility(View.GONE);
-        accept_button.setVisibility(View.GONE);
-        camera_toggle_button.setVisibility(View.VISIBLE);
-        mute_button.setVisibility(View.VISIBLE);
 
         Callstate.call_start_timestamp = System.currentTimeMillis();
         String a = "" +
@@ -1660,6 +1912,8 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                    "s";
         top_text_line_str2 = a;
         update_top_text_line();
+        apply_call_controls();
+        show_call_state();
 
         HelperGeneric.logI(TAG, "on_call_started_actions:01");
         on_call_started_actions();
@@ -1675,6 +1929,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         if (!Callstate.audio_call)
         {
             scheduleCameraOpen();
+        }
+
+        if (cameraRefused)
+        {
+            // As on iOS: answered with sound, and the reason said over the call with the settings at hand.
+            dismiss_call_explanation();
+            call_explanation = HelperCall.explainMissingPermission(this, false, null);
         }
     }
 
@@ -1700,7 +1961,8 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         }
     }
 
-    // KHANDAQ (#F2a): white volume-up/off glyph on the bottom-row loudspeaker ImageButton (blue circle bg).
+    // KHANDAQ (#F2a, redesign stage 3b): the loudspeaker switch of the bottom row, filled while the speaker is
+    // on, and read as on or off to TalkBack.
     private void set_audio_speaker_button_icon(boolean speakerOn)
     {
         try
@@ -1709,10 +1971,9 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             {
                 return;
             }
-            Drawable ic = new IconicsDrawable(this).icon(
-                    speakerOn ? GoogleMaterial.Icon.gmd_volume_up : GoogleMaterial.Icon.gmd_volume_off).color(
-                    android.graphics.Color.WHITE).sizeDp(24);
-            audio_speaker_button.setImageDrawable(ic);
+            audio_speaker_button.setActivated(speakerOn);
+            ViewCompat.setStateDescription(audio_speaker_button, getString(
+                    speakerOn ? R.string.air_call_speaker_on : R.string.air_call_speaker_off));
         }
         catch (Throwable ignored)
         {
@@ -1777,7 +2038,9 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     {
                         if (Callstate.accepted_call != 1)
                         {
-                            ensureCallPermissions(CallingActivity.this::performIncomingCallAcceptance);
+                            // KHANDAQ (redesign, stage 3b): the notification's Answer takes the call as it
+                            // came, a video call with video, through the same access checks as the screen.
+                            answer_call(true);
                         }
                     }
                     catch (Exception e)
@@ -1798,6 +2061,15 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     {
         super.onNewIntent(intent);
         setIntent(intent);
+        // KHANDAQ (redesign, stage 3b): a new call that comes while this screen still says why the last one
+        // could not go on gets a screen of its own, built for it as a new one would be.
+        if (explaining_call_end && (Callstate.state != 0))
+        {
+            explaining_call_end = false;
+            dismiss_call_explanation();
+            recreate();
+            return;
+        }
         maybeAutoAcceptFromNotification(intent);
     }
 
@@ -1811,17 +2083,24 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             return;
         }
 
-        if (!HelperCall.hasMicrophonePermission(this))
+        final Runnable action = pendingCallPermissionAction;
+        pendingCallPermissionAction = null;
+
+        // KHANDAQ (redesign, stage 3b): the call may have ended while the system asked (the other side hung
+        // up); there is nothing left to answer or to explain.
+        if (isFinishing() || (Callstate.state == 0))
         {
-            HelperCall.showMissingPermissionToast(this, Callstate.audio_call);
-            CallAudioService.stop_me(true);
-            pendingCallPermissionAction = null;
-            finish();
             return;
         }
 
-        final Runnable action = pendingCallPermissionAction;
-        pendingCallPermissionAction = null;
+        // Refused (or refused before, so the system did not ask again): a call without audio does not go
+        // on. It is declined, or ended, and the reason said once with the way to the settings; this used to
+        // be a toast.
+        if (!HelperCall.hasMicrophonePermission(this))
+        {
+            end_call_without_microphone();
+            return;
+        }
 
         if (action != null)
         {
@@ -1912,6 +2191,10 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         // For "lean back" mode, remove SYSTEM_UI_FLAG_IMMERSIVE.
         // Or for "sticky immersive," replace it with SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         View decorView = getWindow().getDecorView();
+        // KHANDAQ (redesign, stage 3b): the bars that slide in over the theme ground keep dark icons in the
+        // light theme; these flags would otherwise clear what style_call_window set.
+        final int lightBars = HelperGeneric.is_nightmode_active(this) ? 0
+                              : (View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         decorView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                                         // Set the content to appear under the system bars so that the
                                         // content doesn't resize when the system bars hide and show.
@@ -1919,7 +2202,8 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                                         View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
                                         View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                                         // Hide the nav bar and status bar
-                                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN);
+                                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN
+                                        | lightBars);
     }
 
     // Shows the system bars by removing all the flags
@@ -1994,9 +2278,17 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         HelperGeneric.logI(TAG, "reset_values:001");
         Callstate.reset_values();
         // close calling activity --------
-        if (ca != null && !ca.isFinishing())
+        // KHANDAQ (redesign, stage 3b): "Call ended" under the name as the screen goes, as on iOS
+        // (CallBaseController.prepareForRemoval). While a call that could not go on without the microphone
+        // is explained, the screen stays under the dialog and closes with it (end_call_without_microphone).
+        final CallingActivity activity = ca;
+        if (activity != null && !activity.isFinishing())
         {
-            ca.finish();
+            activity.runOnUiThread(activity::show_call_ended);
+            if (!activity.explaining_call_end)
+            {
+                activity.finish();
+            }
         }
         // close calling activity --------
     }
@@ -2014,6 +2306,12 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             @Override
             public void run()
             {
+                // KHANDAQ (redesign, stage 3b): the link line under the state follows the connection.
+                final CallingActivity activity = ca;
+                if (activity != null)
+                {
+                    activity.show_call_link(conn_status);
+                }
                 try
                 {
                     if (conn_status == ToxVars.TOX_CONNECTION.TOX_CONNECTION_UDP.value)
@@ -2137,6 +2435,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         HelperGeneric.logI(TAG, "onResume:01");
 
         super.onResume();
+
+        // KHANDAQ (redesign, stage 3b): the call is over and the dialog says why; coming back to it must
+        // not start the audio, the sensors, the timer or the call's network mode again.
+        if (explaining_call_end)
+        {
+            return;
+        }
 
         tox_set_onion_active(0);
         Callstate.incoming_one_on_one_call = false;
@@ -2306,8 +2611,18 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     {
         if (!HelperCall.hasCameraPermission(this))
         {
+            // E21: the system asks first; refused, the reason is said once over the call with the way to
+            // the settings, as for an answer without the camera. It used to be a toast at once.
+            pendingCallPermissionAction = () -> {
+                if (HelperCall.hasCameraPermission(this))
+                {
+                    toggle_camera();
+                    return;
+                }
+                dismiss_call_explanation();
+                call_explanation = HelperCall.explainMissingPermission(this, false, null);
+            };
             HelperCall.requestCallPermissions(this, false);
-            HelperCall.showMissingPermissionToast(this, false);
             return;
         }
 
@@ -2368,6 +2683,8 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     @Override
     protected void onDestroy()
     {
+        // KHANDAQ (redesign, stage 3b): the access dialog goes with the screen, without closing it twice.
+        dismiss_call_explanation();
         super.onDestroy();
         // KHANDAQ (leak): this Activity holds its whole view tree in static fields (needed for the
         // cross-thread call-audio/video callbacks). They were never cleared, leaking the destroyed
@@ -3126,23 +3443,9 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
 
     void update_call_time()
     {
-        if (Callstate.accepted_call == 1)
-        {
-            if (Callstate.call_start_timestamp != -1)
-            {
-
-                right_left_text_1.setText(format_timeduration_from_seconds(
-                        (System.currentTimeMillis() - Callstate.call_start_timestamp) / 1000));
-            }
-            else
-            {
-                right_left_text_1.setText("...");
-            }
-        }
-        else
-        {
-            right_left_text_1.setText("...");
-        }
+        // KHANDAQ (redesign, stage 3b): the state in words until the call is up, then the timer
+        // (show_call_state); it used to be "..." and a zero-padded clock.
+        show_call_state();
     }
 
     static void update_audio_device_icon()
@@ -3361,8 +3664,10 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     // KHANDAQ (#247): the self-preview only means something once the camera is actually
                     // open. On an audio call it was an empty bordered rectangle parked in the corner.
                     // (my_video_enabled defaults to 1 and stays 1 in audio calls, so it can't be used.)
+                    // An audio call marks the camera "opened" without opening it (scheduleCameraOpen), so
+                    // that flag alone still showed the empty frame there.
                     CallingActivity.video_box_self_preview_01.setVisibility(
-                            Callstate.camera_opened ? View.VISIBLE : View.GONE);
+                            Callstate.camera_opened && !Callstate.audio_call ? View.VISIBLE : View.GONE);
                     CallingActivity.video_box_left_top_01.setVisibility(View.VISIBLE);
                     // KHANDAQ (modern call screen): keep the debug bitrate/fps stats box hidden.
                     // CallingActivity.video_box_right_top_01.setVisibility(View.VISIBLE);

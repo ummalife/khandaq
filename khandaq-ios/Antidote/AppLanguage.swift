@@ -91,6 +91,8 @@ import UIKit
         let path = Bundle.main.path(forResource: code, ofType: "lproj")
             ?? Bundle.main.path(forResource: "en", ofType: "lproj")
         Bundle.setLanguageBundle(path.flatMap(Bundle.init(path:)))
+        // The share extension speaks it too (stage 5).
+        ShareInboxStorage.appLanguage = code
 
         // The search bar's Cancel is UIKit's own string, which follows the language the app was
         // launched in. The appearance proxy reaches the bar button item of every search bar built from
@@ -102,6 +104,26 @@ import UIKit
         UINavigationBar.appearance().semanticContentAttribute = direction
         UITableView.appearance().semanticContentAttribute = direction
         UICollectionView.appearance().semanticContentAttribute = direction
+        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+            scene.windows.forEach { applyDirection(to: $0) }
+        }
+    }
+
+    /// KHANDAQ (redesign stage 5): the views follow the in-app language through
+    /// `semanticContentAttribute`, but UIKit draws its own arrows (the back chevron of the navigation
+    /// bar, the "backward" symbols) by the trait direction, which comes from the language the process
+    /// was started in. Arabic picked in the app on an English iPhone (until the next launch, which
+    /// starts in Arabic) put the back button on the right with its chevron pointing left, and English
+    /// on an Arabic iPhone the reverse. Each window is told the direction of the in-app language, so
+    /// the two agree. iOS 17 and later; an earlier system keeps the process direction until the next
+    /// launch.
+    static func applyDirection(to window: UIWindow?) {
+        guard let window = window else {
+            return
+        }
+        if #available(iOS 17.0, *) {
+            window.traitOverrides.layoutDirection = isRightToLeft ? .rightToLeft : .leftToRight
+        }
     }
 }
 

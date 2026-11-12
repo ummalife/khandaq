@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The knob of the design-system switch: white in both states and both themes, as kq-switch draws it
+     (switch-on is the track under a white knob). A surface-coloured knob vanishes on the dark theme's
+     surfaces when the switch is off. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/kq_fixed_white" />
+</selector>

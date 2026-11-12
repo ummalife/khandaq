@@ -43,6 +43,10 @@ class ChatInputView: UIView {
         set {
             textView.text = newValue
             updateViews()
+            if isAirStyle {
+                updateTextviewHeight(textView)
+            }
+            onTextChanged?(newValue)
         }
     }
 
@@ -68,7 +72,8 @@ class ChatInputView: UIView {
     // private messages are text-only). Default false → identical layout for normal chats.
     var attachmentButtonHidden: Bool = false {
         didSet {
-            guard attachmentButtonHidden != oldValue, textViewLeadingConstraint != nil else {
+            // The Air composer lays its text out again itself (layoutAirText), without that constraint.
+            guard attachmentButtonHidden != oldValue, isAirStyle || textViewLeadingConstraint != nil else {
                 return
             }
             applyAttachmentButtonHidden()
@@ -111,6 +116,42 @@ class ChatInputView: UIView {
     fileprivate var myHeight: Constraint!
     fileprivate var didconstraint = 0
     fileprivate var isEmojiActive = false
+
+    // KHANDAQ (redesign stage 2): the composer of design/system/index.html for the conversation with one
+    // person: one framed field with the paperclip, the text that grows to five lines and the send button
+    // of the same height, then the line about what happens to the message. Opt-in through useAirStyle();
+    // the group screens keep the old bar.
+    private(set) var isAirStyle = false
+    /// The line under the field; nil until useAirStyle().
+    private(set) var hintView: AirComposeHintView?
+    /// Called after every change of the text, typed or set.
+    var onTextChanged: ((String) -> Void)?
+    /// True while the text is longer than a message can be: the send button stays disabled.
+    var sendBlocked = false {
+        didSet {
+            if sendBlocked != oldValue {
+                updateViews()
+            }
+        }
+    }
+    /// False while nothing may be written here (an observer in the private messages of a group): the
+    /// field takes neither text nor focus and goes quiet, and nothing can be sent or attached. The line
+    /// under it says why. The composer of the redesign only.
+    var fieldEnabled = true {
+        didSet {
+            if fieldEnabled != oldValue {
+                applyFieldEnabled()
+            }
+        }
+    }
+    fileprivate var airBox: UIView?
+    fileprivate var airAttachButton: AirIconButton?
+    /// The hold on the microphone that records a voice message.
+    fileprivate weak var voiceHold: UILongPressGestureRecognizer?
+    fileprivate let voiceHoldWithLargeContent = AirHoldWithLargeContent()
+    fileprivate var airPlaceholder: UILabel?
+    fileprivate var airTextHeight: Constraint?
+    fileprivate var airMeasuredWidth: CGFloat = 0
     fileprivate lazy var emojiKeyboard: EmojiKeyboardView = {
         let keyboard = EmojiKeyboardView(theme: theme)
         keyboard.onPick = { [weak self] emoji in
@@ -150,6 +191,26 @@ class ChatInputView: UIView {
     // recordingTimer firing forever on the run loop. Invalidate it on dealloc (block already [weak self]).
     deinit {
         recordingTimer?.invalidate()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // The field's height depends on its width, known only after layout.
+        if isAirStyle, abs(textView.bounds.width - airMeasuredWidth) > 0.5 {
+            airMeasuredWidth = textView.bounds.width
+            updateTextviewHeight(textView)
+        }
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if isAirStyle {
+            applyAirFocus(textView.isFirstResponder)
+            if previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory {
+                updateAirGlyphs()
+                updateTextviewHeight(textView)
+            }
+        }
     }
 
     override func becomeFirstResponder() -> Bool {
@@ -321,6 +382,15 @@ extension ChatInputView: UITextViewDelegate {
         updateViews()
         updateTextviewHeight(textView)
         delegate?.chatInputViewTextDidChange(self)
+        onTextChanged?(textView.text)
+    }
+
+    func textViewDidBeginEditing(_ textView: UITextView) {
+        applyAirFocus(true)
+    }
+
+    func textViewDidEndEditing(_ textView: UITextView) {
+        applyAirFocus(false)
     }
 
     override func didMoveToWindow() {
@@ -409,6 +479,7 @@ private extension ChatInputView {
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(ChatInputView.voiceLongPress(_:)))
         longPress.minimumPressDuration = 0.25
         voiceButton.addGestureRecognizer(longPress)
+        voiceHold = longPress
         addSubview(voiceButton)
 
         textView = UITextView()
@@ -569,6 +640,10 @@ private extension ChatInputView {
 
     func updateTextviewHeight(_ t : UITextView)
     {
+        if isAirStyle {
+            updateAirTextHeight(t)
+            return
+        }
         if (self.didconstraint == 1)
         {
             self.myHeight.uninstall()
@@ -596,6 +671,11 @@ private extension ChatInputView {
     }
 
     func applyAttachmentButtonHidden() {
+        if isAirStyle {
+            airAttachButton?.isHidden = attachmentButtonHidden
+            layoutAirText()
+            return
+        }
         emojiButton.isHidden = attachmentButtonHidden
         textViewLeadingConstraint?.deactivate()
         textView.snp.makeConstraints {
@@ -619,20 +699,36 @@ private extension ChatInputView {
 
         // Always visible outside the recording state (showRecordingBar hides them, this restores them).
         textView.isHidden = false
-        emojiButton.isHidden = attachmentButtonHidden
+        if isAirStyle {
+            emojiButton.isHidden = true
+            airAttachButton?.isHidden = attachmentButtonHidden || !fieldEnabled
+            airPlaceholder?.isHidden = !textView.text.isEmpty
+        }
+        else {
+            emojiButton.isHidden = attachmentButtonHidden
+        }
 
         let hasText = !textView.text.isEmpty
-        cameraButton.isHidden = !cameraButtonEnabled
+        // The composer of the redesign has its own paperclip in the field; the old one stays hidden.
+        cameraButton.isHidden = isAirStyle || !cameraButtonEnabled
         cameraButton.isEnabled = cameraButtonEnabled
         // Typing turns the mic into the send button (Telegram/Android behaviour); empty text shows
         // the mic (when voice is available for this chat).
         sendButton.isHidden = !hasText
-        sendButton.isEnabled = hasText
-        voiceButton.isHidden = hasText || !voiceButtonEnabled
-        voiceButton.isEnabled = voiceButtonEnabled && !hasText
+        sendButton.isEnabled = hasText && !sendBlocked && fieldEnabled
+        if isAirStyle {
+            sendButton.alpha = sendButton.isEnabled ? 1 : 0.4
+            if hasText {
+                sendButton.accessibilityHint = sendBlocked ? String(localized: "air_compose_send_blocked") : nil
+            }
+        }
+        voiceButton.isHidden = hasText || !voiceButtonEnabled || !fieldEnabled
+        voiceButton.isEnabled = voiceButtonEnabled && !hasText && fieldEnabled
     }
 
     func showRecordingBar(showControls: Bool = false) {
+        airAttachButton?.isHidden = true
+        airPlaceholder?.isHidden = true
         emojiButton.isHidden = true
         cameraButton.isHidden = true
         voiceButton.isHidden = true
@@ -691,6 +787,267 @@ private extension ChatInputView {
         let elapsed = max(0.0, Date().timeIntervalSince(startedAt))
         let total = Int(elapsed)
         recordingTimerLabel.text = String(format: "%d:%02d", total / 60, total % 60)
+    }
+}
+
+// MARK: KHANDAQ (redesign stage 2) composer
+
+extension ChatInputView {
+    /// Switches the bar to the composer of the redesign. Call once, right after init.
+    func useAirStyle() {
+        guard !isAirStyle else {
+            return
+        }
+        isAirStyle = true
+
+        backgroundColor = KQColor.surface
+        topBorder.backgroundColor = KQColor.line
+        topBorder.isHidden = false
+
+        let box = UIView()
+        box.backgroundColor = KQColor.surface
+        box.layer.cornerRadius = KQRadius.field
+        box.layer.borderWidth = KQStroke.hairline
+        box.isUserInteractionEnabled = false
+        insertSubview(box, at: 0)
+        airBox = box
+
+        let attach = AirIconButton(icon: "paperclip", label: String(localized: "air_compose_attach"))
+        attach.accessibilityIdentifier = "air.chat.attach"
+        attach.addTarget(self, action: #selector(ChatInputView.airAttachPressed), for: .touchUpInside)
+        addSubview(attach)
+        airAttachButton = attach
+
+        emojiButton.isHidden = true
+        cameraButton.isHidden = true
+
+        textView.font = KQFont.font(.body)
+        textView.adjustsFontForContentSizeCategory = true
+        textView.textColor = KQColor.ink
+        textView.tintColor = KQColor.ink
+        textView.backgroundColor = .clear
+        textView.layer.cornerRadius = 0
+        textView.layer.borderWidth = 0
+        textView.textContainerInset = UIEdgeInsets(top: KQSpace.x10, left: KQSpace.x4, bottom: KQSpace.x10, right: KQSpace.x4)
+        textView.textContainer.lineFragmentPadding = 0
+        textView.accessibilityLabel = String(localized: "air_compose_placeholder")
+        textView.accessibilityIdentifier = "air.chat.field"
+
+        let placeholder = UILabel()
+        placeholder.font = KQFont.font(.body)
+        placeholder.adjustsFontForContentSizeCategory = true
+        placeholder.textColor = KQColor.ink3
+        placeholder.text = String(localized: "air_compose_placeholder")
+        placeholder.isAccessibilityElement = false
+        placeholder.isUserInteractionEnabled = false
+        addSubview(placeholder)
+        airPlaceholder = placeholder
+
+        sendButton.setTitle(nil, for: .normal)
+        sendButton.setImage(AirIcon.image("arrow-up"), for: .normal)
+        sendButton.tintColor = KQColor.onInk
+        sendButton.backgroundColor = KQColor.ink
+        sendButton.layer.cornerRadius = KQRadius.control
+        sendButton.clipsToBounds = true
+        sendButton.accessibilityLabel = String(localized: "air_compose_send")
+        sendButton.accessibilityIdentifier = "air.chat.send"
+        sendButton.addTarget(self, action: #selector(ChatInputView.airPressDown(_:)), for: [.touchDown, .touchDragEnter])
+        sendButton.addTarget(self, action: #selector(ChatInputView.airPressUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit])
+
+        voiceButton.setTitle(nil, for: .normal)
+        voiceButton.setImage(AirIcon.image("mic"), for: .normal)
+        voiceButton.tintColor = KQColor.ink2
+        voiceButton.layer.cornerRadius = KQRadius.control
+        voiceButton.accessibilityLabel = String(localized: "air_compose_voice")
+        voiceButton.accessibilityHint = String(localized: "group_voice_hold_to_record")
+        voiceButton.accessibilityIdentifier = "air.chat.voice"
+        voiceButton.addTarget(self, action: #selector(ChatInputView.airPressDown(_:)), for: [.touchDown, .touchDragEnter])
+        voiceButton.addTarget(self, action: #selector(ChatInputView.airPressUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit])
+
+        // At the accessibility text sizes the arrow and the microphone show large on a long press, as the
+        // paperclip does. The microphone records while it is held: the viewer opens with the hold, not in
+        // its place, and lifting the finger ends the recording only.
+        AirLargeContent.show(on: sendButton, title: sendButton.accessibilityLabel, image: AirIcon.image("arrow-up"))
+        AirLargeContent.show(on: voiceButton, title: voiceButton.accessibilityLabel, image: AirIcon.image("mic"),
+                             delegate: voiceHoldWithLargeContent)
+        voiceHoldWithLargeContent.interaction = voiceButton.interactions.compactMap { $0 as? UILargeContentViewerInteraction }.first
+        voiceHold?.delegate = voiceHoldWithLargeContent
+        attach.growsWithText = true
+
+        recordingBar.backgroundColor = KQColor.surface
+        recordingDot.backgroundColor = KQColor.danger
+        recordingDot.layer.cornerRadius = KQSize.dot / 2
+        recordingTimerLabel.font = KQFont.tabular(KQFont.font(.body))
+        recordingTimerLabel.textColor = KQColor.ink
+        slideHintLabel.font = KQFont.font(.label, weight: 400)
+        slideHintLabel.textColor = KQColor.ink3
+        recordingCancelButton.setTitleColor(KQColor.ink2, for: .normal)
+        recordingCancelButton.titleLabel?.font = KQFont.font(.label)
+        recordingSendButton.backgroundColor = KQColor.ink
+        recordingSendButton.layer.cornerRadius = KQRadius.control
+        recordingSendButton.tintColor = KQColor.onInk
+        recordingSendButton.setTitle(nil, for: .normal)
+        recordingSendButton.setImage(AirIcon.image("arrow-up"), for: .normal)
+
+        let hint = AirComposeHintView()
+        addSubview(hint)
+        hintView = hint
+
+        // The old bar sizes itself through one height constraint on the whole view; the composer sizes
+        // itself from the height of the field.
+        if didconstraint == 1 {
+            myHeight.deactivate()
+            didconstraint = 0
+        }
+
+        box.snp.makeConstraints {
+            $0.top.equalTo(self).offset(KQSpace.x8)
+            $0.leading.equalTo(safeAreaLayoutGuide).offset(KQSpace.x12)
+            $0.trailing.equalTo(safeAreaLayoutGuide).offset(-KQSpace.x12)
+        }
+        attach.snp.makeConstraints {
+            $0.leading.equalTo(box).offset(KQSpace.x4)
+            $0.bottom.equalTo(box).offset(-KQSpace.x4)
+        }
+        voiceButton.snp.remakeConstraints {
+            $0.trailing.equalTo(box).offset(-KQSpace.x4)
+            $0.bottom.equalTo(box).offset(-KQSpace.x4)
+            $0.width.height.equalTo(KQSize.targetIos)
+        }
+        sendButton.snp.remakeConstraints {
+            $0.center.equalTo(voiceButton)
+            $0.width.height.equalTo(KQSize.targetIos)
+        }
+        hint.snp.makeConstraints {
+            $0.top.equalTo(box.snp.bottom).offset(KQSpace.x6)
+            $0.leading.equalTo(box).offset(KQSpace.x4)
+            $0.trailing.equalTo(box).offset(-KQSpace.x4)
+            $0.bottom.equalTo(self).offset(-KQSpace.x8)
+        }
+        recordingBar.snp.remakeConstraints {
+            $0.edges.equalTo(box).inset(KQStroke.hairline)
+        }
+        recordingDot.snp.remakeConstraints {
+            $0.leading.equalTo(recordingBar).offset(KQSpace.x16)
+            $0.centerY.equalTo(recordingBar)
+            $0.width.height.equalTo(KQSize.dot)
+        }
+        recordingSendButton.snp.remakeConstraints {
+            $0.trailing.equalTo(recordingBar).offset(-KQSpace.x4 + KQStroke.hairline)
+            $0.centerY.equalTo(recordingBar)
+            $0.width.height.equalTo(KQSize.targetIos)
+        }
+        layoutAirText()
+
+        applyAirFocus(false)
+        updateAirGlyphs()
+        updateViews()
+        updateTextviewHeight(textView)
+    }
+
+    /// At the accessibility text sizes the glyphs of the field grow to 28 points in their 44 point targets,
+    /// beside text many times their size; at the other sizes they keep the size of the design, so nothing
+    /// moves. The paperclip follows its own traits (AirIconButton.growsWithText).
+    fileprivate func updateAirGlyphs() {
+        let grown = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        let glyph = { (name: String) -> UIImage? in
+            return grown ? AirIcon.image(name, side: AirLargeContent.grownGlyph) : AirIcon.image(name)
+        }
+        voiceButton.setImage(glyph("mic"), for: .normal)
+        sendButton.setImage(glyph("arrow-up"), for: .normal)
+    }
+
+    /// The text runs from the paperclip (or the frame, when there is nothing to attach) to the button.
+    fileprivate func layoutAirText() {
+        guard let box = airBox else {
+            return
+        }
+        let height = airTextHeight?.layoutConstraints.first?.constant ?? KQSize.targetIos
+        textView.snp.remakeConstraints {
+            if attachmentButtonHidden || airAttachButton == nil {
+                $0.leading.equalTo(box).offset(KQSpace.x8)
+            }
+            else if let attach = airAttachButton {
+                $0.leading.equalTo(attach.snp.trailing).offset(KQSpace.x6 - KQSpace.x4)
+            }
+            $0.trailing.equalTo(voiceButton.snp.leading).offset(-KQSpace.x6)
+            $0.top.equalTo(box).offset(KQSpace.x4)
+            $0.bottom.equalTo(box).offset(-KQSpace.x4)
+            airTextHeight = $0.height.equalTo(height).constraint
+        }
+        textViewLeadingConstraint = nil
+        airPlaceholder?.snp.remakeConstraints {
+            $0.leading.equalTo(textView).offset(KQSpace.x4)
+            $0.trailing.lessThanOrEqualTo(textView)
+            $0.top.equalTo(textView).offset(KQSpace.x10)
+        }
+    }
+
+    /// From one line (44 points with its padding) up to five, then the text scrolls inside the field.
+    fileprivate func updateAirTextHeight(_ t: UITextView) {
+        let line = ceil(KQFont.lineHeight(.body))
+        let padding = t.textContainerInset.top + t.textContainerInset.bottom
+        let maxHeight = max(KQSize.composeMax, 5 * line + padding)
+        guard t.bounds.width > 0 else {
+            airTextHeight?.update(offset: max(KQSize.targetIos, line + padding))
+            return
+        }
+        let fitting = ceil(t.sizeThatFits(CGSize(width: t.bounds.width, height: .greatestFiniteMagnitude)).height)
+        let height = min(max(KQSize.targetIos, fitting), maxHeight)
+        if airTextHeight?.layoutConstraints.first?.constant != height {
+            airTextHeight?.update(offset: height)
+        }
+        t.isScrollEnabled = true
+        t.showsVerticalScrollIndicator = fitting > maxHeight
+        airPlaceholder?.isHidden = !t.text.isEmpty || isVoiceRecording
+    }
+
+    /// The frame darkens to ink while the field has the focus, as .kq-compose:focus-within.
+    fileprivate func applyAirFocus(_ focused: Bool) {
+        guard let box = airBox else {
+            return
+        }
+        box.layer.borderColor = airCGColor(focused ? KQColor.ink : KQColor.lineStrong)
+    }
+
+    /// `fieldEnabled` applied: off, the field gives up the focus and takes no touch, it and its frame
+    /// fade as a disabled control does, and VoiceOver says it is dimmed.
+    fileprivate func applyFieldEnabled() {
+        if !fieldEnabled {
+            _ = resignFirstResponder()
+        }
+        textView.isEditable = fieldEnabled
+        textView.isSelectable = fieldEnabled
+        if fieldEnabled {
+            textView.accessibilityTraits &= ~UIAccessibilityTraitNotEnabled
+        }
+        else {
+            textView.accessibilityTraits |= UIAccessibilityTraitNotEnabled
+        }
+        let alpha: CGFloat = fieldEnabled ? 1 : 0.4
+        airBox?.alpha = alpha
+        airPlaceholder?.alpha = alpha
+        textView.alpha = alpha
+        updateViews()
+    }
+
+    @objc fileprivate func airAttachPressed() {
+        guard let attach = airAttachButton else {
+            return
+        }
+        delegate?.chatInputViewCameraButtonPressed(self, cameraView: attach)
+    }
+
+    @objc fileprivate func airPressDown(_ sender: UIView) {
+        UIView.animate(withDuration: KQMotion.duration(KQMotion.tap), delay: 0, options: [.beginFromCurrentState, .allowUserInteraction], animations: {
+            sender.transform = UIAccessibilityIsReduceMotionEnabled() ? .identity : CGAffineTransform(scaleX: 0.97, y: 0.97)
+        }, completion: nil)
+    }
+
+    @objc fileprivate func airPressUp(_ sender: UIView) {
+        UIView.animate(withDuration: KQMotion.duration(KQMotion.tap), delay: 0, options: [.beginFromCurrentState, .allowUserInteraction], animations: {
+            sender.transform = .identity
+        }, completion: nil)
     }
 }
 
@@ -821,5 +1178,26 @@ private final class EmojiCell: UICollectionViewCell {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+}
+
+/// The microphone records while it is held, and the Large Content Viewer opens on a long press of the same
+/// button: the two run together, so at the accessibility text sizes the microphone shows large while it
+/// records, and the hold is never taken away by the viewer. Lifting the finger ends the recording, so the
+/// viewer does not act on the button as well: its tap only asks to hold the button.
+final class AirHoldWithLargeContent: NSObject, UIGestureRecognizerDelegate, UILargeContentViewerInteractionDelegate {
+    weak var interaction: UILargeContentViewerInteraction?
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        if let viewer = interaction?.gestureRecognizerForExclusionRelationship, otherGestureRecognizer === viewer {
+            return true
+        }
+        return otherGestureRecognizer.view === gestureRecognizer.view
+    }
+
+    func largeContentViewerInteraction(_ interaction: UILargeContentViewerInteraction,
+                                       didEndOn item: UILargeContentViewerItem?, at point: CGPoint) {
+        // The hold that ran with the viewer has sent or cancelled the recording when the finger lifted.
     }
 }

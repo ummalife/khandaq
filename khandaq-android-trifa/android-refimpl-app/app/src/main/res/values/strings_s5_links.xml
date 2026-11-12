@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Redesign stage 5: what a tap on a link, a mail address or a Tox ID in a message asks first (AirLinkQuestion) -->
+    <string name="air_text_link_question">Open this link?</string>
+    <string name="air_text_link_open">Open</string>
+    <string name="air_text_email_question">Write to this address?</string>
+    <string name="air_text_email_write">Write</string>
+    <!-- Title of the system list of mail apps -->
+    <string name="air_text_email_chooser">Write with</string>
+    <!-- The ID stands under it; the verb is air_nc_send, and the request carries the usual greeting -->
+    <string name="air_text_id_question">Send a contact request to this ID?</string>
+</resources>

@@ -47,6 +47,11 @@ public final class DbSecretKeyStorage
     private static final String PREFS_LAST_WORKING_ENC = "DB_last_working_key_enc";
     private static final String PREFS_LAST_WORKING_IV = "DB_last_working_key_iv";
     private static final String PREFS_INSTALLED_VERSION_CODE = "khandaq_installed_version_code";
+    /**
+     * KHANDAQ (redesign stage 4, E20): the profile's name for the sign-in page, which shows it before
+     * the encrypted database is open. Written while the profile is open, removed with the profile.
+     */
+    static final String PREFS_PROFILE_NAME = "khandaq_profile_name";
     private static final String KEYSTORE_LAST_WORKING_ALIAS = "khandaq_db_last_working_key";
 
     // KHANDAQ (security NEW-3): the recovery backup is no longer stored in plaintext. It is encrypted
@@ -478,6 +483,34 @@ public final class DbSecretKeyStorage
         catch (Exception ignored)
         {
         }
+        // 1b) KHANDAQ (redesign stage 4): the rest of the profile. The encrypted file store
+        // (app_vfs/files.db) and the Tox save (files/savedata.tox) stayed behind, sealed with the old
+        // key, so the new profile that "Forgot the password?" and Delete profile lead to could not
+        // start: the store failed to mount and the app stopped on Wrong Credentials (reproduced on
+        // emulator-5580, 12.11.2026). The save goes with its parked and rekey copies, and the
+        // plaintext copies of files opened from the store go with the cache.
+        try
+        {
+            deleteRecursive(context.getDir("vfs", Context.MODE_PRIVATE));
+        }
+        catch (Exception ignored)
+        {
+        }
+        deleteToxSaves(context.getFilesDir());
+        deleteChildren(context.getCacheDir());
+        try
+        {
+            final File external = context.getExternalFilesDir(null);
+            if (external != null)
+            {
+                deleteRecursive(new File(external, "tmpdir"));
+                deleteRecursive(new File(external, "vfs_export"));
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        clearPendingRekey(context);
         // 2) clear all stored key material + the onboarding gate from default prefs
         try
         {
@@ -492,6 +525,23 @@ public final class DbSecretKeyStorage
                     .remove(PREFS_DEVICE_BACKUP_ENC)
                     .remove(PREFS_DEVICE_BACKUP_IV)
                     .remove(PREFS_SESSION_LOGGED_IN)
+                    // KHANDAQ (redesign stage 4): the password salt and the identity anchor belonged to
+                    // the deleted profile. A kept salt made a new profile without a password count as
+                    // one with a password (prefersManualPasswordUnlock); a kept anchor made the new
+                    // identity look like a lost one (MainActivity.accept_loaded_identity).
+                    .remove("DB_secret_salt")
+                    .remove("kq_own_tox_pubkey")
+                    .remove("kq_identity_block_count")
+                    .remove(MainActivity.PREF_IDENTITY_REANCHOR_ONCE)
+                    .remove(CreateProfileActivity.PREF_ONBOARDING_DISPLAY_NAME)
+                    .remove(PREFS_PROFILE_NAME)
+                    // The app lock guarded the deleted profile. Kept, it locked the new profile behind a
+                    // PIN that whoever made it may not know, and the PIN screen has no way out.
+                    .remove(AppLockHelper.PREF_ENABLED)
+                    .remove(AppLockHelper.PREF_PIN_HASH)
+                    .remove(AppLockHelper.PREF_PIN_SALT)
+                    // The note that the deleted profile's files did not open (stage 5).
+                    .remove(CheckPasswordActivity.PREF_PROFILE_NOT_OPENED)
                     .putBoolean("PW_SET_SCREEN_DONE", false)
                     .commit();
         }
@@ -522,6 +572,36 @@ public final class DbSecretKeyStorage
         }
         catch (Exception ignored)
         {
+        }
+    }
+
+    /** The Tox save of the profile with the copies MainActivity parks and DbRekeyHelper stages. */
+    private static void deleteToxSaves(final File filesDir)
+    {
+        final File[] files = filesDir == null ? null : filesDir.listFiles();
+        if (files == null)
+        {
+            return;
+        }
+        for (final File f : files)
+        {
+            if (f.getName().startsWith("savedata.tox"))
+            {
+                deleteRecursive(f);
+            }
+        }
+    }
+
+    private static void deleteChildren(final File dir)
+    {
+        final File[] kids = dir == null ? null : dir.listFiles();
+        if (kids == null)
+        {
+            return;
+        }
+        for (final File k : kids)
+        {
+            deleteRecursive(k);
         }
     }
 
@@ -634,6 +714,40 @@ public final class DbSecretKeyStorage
         }
         PreferenceManager.getDefaultSharedPreferences(context).edit()
                 .putBoolean(PREFS_SESSION_LOGGED_IN, loggedIn).commit();
+    }
+
+    /**
+     * KHANDAQ (redesign stage 4, E20): keeps the profile's name for the sign-in page, which shows it
+     * (and hands it to password managers as the username) before the database is open. The name is
+     * what contacts see, not a secret; it goes with the profile in wipeUserProfile.
+     */
+    static void rememberProfileName(final Context context, final String name)
+    {
+        if (context == null)
+        {
+            return;
+        }
+        final String clean = name == null ? "" : name.trim();
+        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        if (clean.isEmpty())
+        {
+            prefs.edit().remove(PREFS_PROFILE_NAME).apply();
+        }
+        else if (!clean.equals(prefs.getString(PREFS_PROFILE_NAME, null)))
+        {
+            prefs.edit().putString(PREFS_PROFILE_NAME, clean).apply();
+        }
+    }
+
+    /** The name kept by rememberProfileName, or an empty string when there is none yet. */
+    static String loadProfileName(final Context context)
+    {
+        if (context == null)
+        {
+            return "";
+        }
+        final String name = PreferenceManager.getDefaultSharedPreferences(context).getString(PREFS_PROFILE_NAME, "");
+        return name == null ? "" : name;
     }
 
     // ---- KHANDAQ (rekey): file-level GCM staging for the tox savedata snapshot ----------------

@@ -5,29 +5,29 @@
 import Foundation
 
 /**
- KHANDAQ (owner request 17.08): which tab a horizontal swipe on the chat list should land on.
+ KHANDAQ (owner request 17.08): which filter a horizontal swipe on the Air list should land on.
 
  Pulled out of the gesture handler so it can be tested without a running app: the parts worth being
- sure about are the order, the two ends, and Arabic. In an RTL layout the tabs are mirrored on screen,
- so a swipe to the left has to walk the list the other way — get that backwards and the gesture fights
+ sure about are the order, the two ends, and Arabic. In an RTL layout the pills are mirrored on screen,
+ so a swipe to the left has to walk the list the other way: get that backwards and the gesture fights
  what the user sees.
  */
 enum ChatListSwipeNavigation {
-    /// Visual order of the tabs, left to right, in a left-to-right layout.
-    static let order: [ChatListFilterTab] = [.direct, .groups, .favorites]
+    /// Everything first, then the pills left to right, in a left-to-right layout.
+    static let order: [AirFilter] = AirFilter.swipeOrder
 
     /**
-     - returns: the tab to switch to, or nil at either end — deliberately no wrap-around, so the
-                first and last tab feel like edges instead of teleporting across the bar.
+     - returns: the filter to switch to, or nil at either end: deliberately no wrap-around, so the
+                first and the last filter feel like edges instead of teleporting across the strip.
      */
-    static func nextTab(from current: ChatListFilterTab,
-                        swipingLeft: Bool,
-                        isRightToLeft: Bool) -> ChatListFilterTab? {
+    static func nextFilter(from current: AirFilter,
+                           swipingLeft: Bool,
+                           isRightToLeft: Bool) -> AirFilter? {
         guard let index = order.firstIndex(of: current) else {
             return nil
         }
 
-        // Swiping left moves FORWARD through the visual order — unless the layout is mirrored.
+        // Swiping left moves FORWARD through the visual order, unless the layout is mirrored.
         let forward = swipingLeft != isRightToLeft
         let next = forward ? index + 1 : index - 1
 

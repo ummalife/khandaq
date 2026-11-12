@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What the list says when it has nothing to show, with the one action that helps. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:paddingStart="@dimen/kq_space_20"
+    android:paddingTop="@dimen/kq_space_32"
+    android:paddingEnd="@dimen/kq_space_20"
+    android:paddingBottom="@dimen/kq_space_32">
+
+    <TextView
+        android:id="@+id/air_empty_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:accessibilityHeading="true"
+        android:gravity="center"
+        android:textAppearance="@style/TextAppearance.KQ.Heading"
+        android:textColor="@color/kq_ink" />
+
+    <TextView
+        android:id="@+id/air_empty_body"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/kq_space_8"
+        android:gravity="center"
+        android:maxWidth="@dimen/kq_size_dialog"
+        android:textAppearance="@style/TextAppearance.KQ.Caption"
+        android:textColor="@color/kq_ink_2" />
+
+    <TextView
+        android:id="@+id/air_empty_action"
+        style="@style/Widget.KQ.Air.Button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp" />
+</LinearLayout>

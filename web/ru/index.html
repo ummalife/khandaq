@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Мессенджер Khandaq: переписка через сеть Tox без номера телефона</title>
+  <meta name="description" content="Мессенджер с открытым кодом для Android, iPhone, Windows, macOS и Linux. Сквозное шифрование через сеть Tox. Без номера телефона, аккаунта и сервера сообщений.">
+  <link rel="canonical" href="https://khandaq.org/ru/">
+  <link rel="alternate" hreflang="en" href="https://khandaq.org/">
+  <link rel="alternate" hreflang="ru" href="https://khandaq.org/ru/">
+  <link rel="alternate" hreflang="x-default" href="https://khandaq.org/">
+  <meta name="robots" content="index, follow">
+
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://khandaq.org/ru/">
+  <meta property="og:title" content="Мессенджер Khandaq: без номера телефона и без сервера сообщений">
+  <meta property="og:description" content="Сообщения идут со сквозным шифрованием с вашего устройства прямо на устройство собеседника, через открытую сеть Tox. Android, iPhone, Windows, macOS, Linux.">
+  <meta property="og:image" content="https://khandaq.org/assets/pwa-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="Значок приложения Khandaq">
+  <meta property="og:site_name" content="Khandaq Messenger">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Мессенджер Khandaq">
+  <meta name="twitter:description" content="Мессенджер с открытым кодом в сети Tox: без номера телефона и без сервера сообщений.">
+  <meta name="twitter:image" content="https://khandaq.org/assets/pwa-512.png">
+
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/assets/favicon-48.png" sizes="48x48" type="image/png">
+  <link rel="icon" href="/assets/favicon-16.png" sizes="16x16" type="image/png">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <link rel="preload" href="/assets/fonts/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/assets/fonts/ibm-plex-sans-600.woff2" as="font" type="font/woff2" crossorigin>
+  <script>try{var t=localStorage.getItem('kq-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
+  <link rel="stylesheet" href="/assets/tokens.css?v=9109f5fc5c">
+  <link rel="stylesheet" href="/style.css?v=ed6305eeb7">
+  <script src="/assets/site.js?v=d12f990d52" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Перейти к&nbsp;содержимому</a>
+
+  <svg class="visually-hidden" aria-hidden="true" focusable="false">
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-double" viewBox="0 0 24 24"><path d="M2.5 12.5L7 17l9.5-9.5"/><path d="M12.6 16.2l.8.8 8.6-9"/></symbol>
+  </svg>
+
+  <header class="site-head">
+    <div class="wrap">
+      <a class="brand" href="/ru/">
+        <img src="/assets/app-icon-64.png" srcset="/assets/app-icon-64.png 2x, /assets/app-icon-96.png 3x" width="32" height="32" alt="">
+        <span>Khandaq</span>
+      </a>
+      <nav class="nav" aria-label="Основное">
+        <a class="nav-wide" href="#how">Как это устроено</a>
+        <a class="nav-mid" href="#download">Скачать</a>
+        <a class="nav-mid" href="/ru/changelog.html">Изменения</a>
+        <a class="nav-wide" href="#source">Исходный код</a>
+        <a class="nav-lang" href="/" hreflang="en" lang="en">English</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="wrap">
+        <div class="hero-text">
+          <h1 class="hero-title" id="hero-title">Мессенджер без номера телефона и&nbsp;серверов</h1>
+          <p class="hero-lead">Между вами нет сервера Khandaq: сообщения идут с&nbsp;вашего устройства прямо на&nbsp;устройство собеседника через открытую сеть Tox, со&nbsp;сквозным шифрованием. Если человек не&nbsp;в&nbsp;сети, сообщение ждёт на&nbsp;вашем устройстве и&nbsp;уходит само, когда он появится в&nbsp;сети.</p>
+          <div class="hero-actions">
+            <a class="btn btn-ink" href="#download" data-hero-cta>Скачать Khandaq</a>
+            <a class="btn-quiet" href="#how">Как это устроено</a>
+          </div>
+          <p class="hero-facts" data-hero-facts>Бесплатно и&nbsp;с&nbsp;открытым кодом, для Android, iPhone, Windows, macOS и&nbsp;Linux.</p>
+        </div>
+
+        <figure class="air" data-air>
+          <div class="air-window" aria-hidden="true">
+            <div class="air-list">
+              <div class="air-swap is-cover" data-swap="reached">
+                <div class="is-before">
+                  <p class="kq-sec-head" data-k="live">В&nbsp;сети сейчас <b>2</b></p>
+                  <div class="kq-row" data-k="yusuf"><span class="kq-tile tone-1">ЮК</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Юсуф Каримов</span><span class="kq-reach is-live">в сети</span></span><span class="kq-row-last">И горелку, если твоя на ремонте</span></span></div>
+                  <div class="kq-row" data-k="omar"><span class="kq-tile tone-2">ОХ</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Омар Хасанов</span><span class="kq-reach is-live">в сети, узел</span></span><span class="kq-row-last">голосовое, 0:42</span></span></div>
+                  <p class="kq-sec-head" data-k="away">Не&nbsp;в&nbsp;сети <b>2</b></p>
+                  <div class="kq-row is-current" data-k="amina"><span class="kq-tile tone-3">АС</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Амина Сафина</span><span class="kq-reach">25 мин назад</span></span><span class="kq-row-last is-wait">2 в пути</span></span></div>
+                  <div class="kq-row" data-k="khadija"><span class="kq-tile tone-4">ХЮ</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Хадиджа Юнусова</span><span class="kq-reach">3 дн назад</span></span><span class="kq-row-last">сообщений пока нет</span></span></div>
+                </div>
+                <div class="is-after">
+                  <p class="kq-sec-head" data-k="live">В&nbsp;сети сейчас <b>3</b></p>
+                  <div class="kq-row" data-k="yusuf"><span class="kq-tile tone-1">ЮК</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Юсуф Каримов</span><span class="kq-reach is-live">в сети</span></span><span class="kq-row-last">И горелку, если твоя на ремонте</span></span></div>
+                  <div class="kq-row" data-k="omar"><span class="kq-tile tone-2">ОХ</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Омар Хасанов</span><span class="kq-reach is-live">в сети, узел</span></span><span class="kq-row-last">голосовое, 0:42</span></span></div>
+                  <div class="kq-row is-current" data-k="amina"><span class="kq-tile tone-3">АС</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Амина Сафина</span><span class="kq-reach is-live">в сети</span></span><span class="kq-row-last">И&nbsp;напомни, сколько брать воды</span></span></div>
+                  <p class="kq-sec-head" data-k="away">Не&nbsp;в&nbsp;сети <b>1</b></p>
+                  <div class="kq-row" data-k="khadija"><span class="kq-tile tone-4">ХЮ</span><span class="kq-row-main"><span class="kq-row-top"><span class="kq-row-name">Хадиджа Юнусова</span><span class="kq-reach">3 дн назад</span></span><span class="kq-row-last">сообщений пока нет</span></span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="air-chat">
+              <div class="air-chat-head">
+                <span class="kq-tile tone-3">АС</span>
+                <span class="air-chat-who">
+                  <b>Амина Сафина</b>
+                  <span class="air-swap" data-swap="reached">
+                    <span class="kq-hint is-before"><svg class="kq-lm" viewBox="0 0 30 10"><circle cx="4" cy="5" r="3"/><path class="gap" d="M10 5h10"/><circle class="far" cx="26" cy="5" r="3"/></svg>не&nbsp;в&nbsp;сети 25&nbsp;минут</span>
+                    <span class="kq-hint is-after"><svg class="kq-lm is-live" viewBox="0 0 30 10"><circle cx="4" cy="5" r="3"/><path d="M7 5h16"/><circle cx="26" cy="5" r="3"/></svg>в&nbsp;сети, напрямую</span>
+                  </span>
+                </span>
+              </div>
+
+              <div class="air-chat-body">
+                <div class="air-swap is-cover" data-swap="delivered">
+                  <div class="is-before">
+                    <div class="kq-log">
+                      <p class="kq-day" data-k="day1">Вчера</p>
+                      <div class="kq-entry" data-k="m1"><span class="kq-entry-time">21:03</span><span><span class="kq-entry-who tone-3">Амина</span><span class="kq-entry-text">Список вещей пришлю вечером</span></span><span></span></div>
+                      <div class="kq-entry" data-k="m2"><span class="kq-entry-time">21:05</span><span><span class="kq-entry-who">Вы</span><span class="kq-entry-text">Хорошо, спасибо!</span></span><span class="kq-st is-done"><svg class="ic st-clock"><use href="#i-clock"/></svg><svg class="ic st-check"><use href="#i-check"/></svg><svg class="ic st-double"><use href="#i-double"/></svg></span></div>
+                    </div>
+                    <div class="kq-queue">
+                      <span class="kq-queue-ground"></span>
+                      <div class="kq-queue-head"><b>В&nbsp;пути: 2&nbsp;сообщения</b><span>Ждут Амину. Телефон получит сигнал пробуждения без вашего текста и&nbsp;заберёт их сам.</span></div>
+                      <div class="kq-entry" data-k="m3"><span class="kq-entry-time">12:30</span><span class="kq-entry-text">Амина, список ещё в&nbsp;силе? Хочу заехать в&nbsp;магазин после работы</span><span class="kq-st is-wait"><svg class="ic st-clock"><use href="#i-clock"/></svg><svg class="ic st-check"><use href="#i-check"/></svg><svg class="ic st-double"><use href="#i-double"/></svg></span></div>
+                      <div class="kq-entry" data-k="m4"><span class="kq-entry-time">12:31</span><span class="kq-entry-text">И&nbsp;напомни, сколько брать воды</span><span class="kq-st is-wait"><svg class="ic st-clock"><use href="#i-clock"/></svg><svg class="ic st-check"><use href="#i-check"/></svg><svg class="ic st-double"><use href="#i-double"/></svg></span></div>
+                    </div>
+                  </div>
+                  <div class="is-after">
+                    <div class="kq-log">
+                      <p class="kq-day" data-k="day1">Вчера</p>
+                      <div class="kq-entry" data-k="m1"><span class="kq-entry-time">21:03</span><span><span class="kq-entry-who tone-3">Амина</span><span class="kq-entry-text">Список вещей пришлю вечером</span></span><span></span></div>
+                      <div class="kq-entry" data-k="m2"><span class="kq-entry-time">21:05</span><span><span class="kq-entry-who">Вы</span><span class="kq-entry-text">Хорошо, спасибо!</span></span><span class="kq-st is-done"><svg class="ic st-clock"><use href="#i-clock"/></svg><svg class="ic st-check"><use href="#i-check"/></svg><svg class="ic st-double"><use href="#i-double"/></svg></span></div>
+                      <p class="kq-day">Сегодня</p>
+                      <div class="kq-entry" data-k="m3"><span class="kq-entry-time">12:30</span><span class="kq-entry-text">Амина, список ещё в&nbsp;силе? Хочу заехать в&nbsp;магазин после работы</span><span class="kq-st is-done"><svg class="ic st-clock"><use href="#i-clock"/></svg><svg class="ic st-check"><use href="#i-check"/></svg><svg class="ic st-double"><use href="#i-double"/></svg></span></div>
+                      <div class="kq-entry" data-k="m4"><span class="kq-entry-time">12:31</span><span class="kq-entry-text">И&nbsp;напомни, сколько брать воды</span><span class="kq-st is-done"><svg class="ic st-clock"><use href="#i-clock"/></svg><svg class="ic st-check"><use href="#i-check"/></svg><svg class="ic st-double"><use href="#i-double"/></svg></span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="air-composer">
+                <div class="air-compose"><span>Сообщение</span><span class="air-send">Отправить</span></div>
+                <div class="air-swap" data-swap="reached">
+                  <span class="kq-hint is-before"><span class="kq-dot is-wait"></span>Подождёт в&nbsp;пути: Амина не&nbsp;в&nbsp;сети. Уйдёт само, как только связь появится</span>
+                  <span class="kq-hint is-after"><span class="kq-dot is-live"></span>Уйдёт сразу: Амина в&nbsp;сети</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>Пример переписки, нарисованный деталями самого приложения; люди в&nbsp;нём выдуманы. Пока Амина не&nbsp;в&nbsp;сети, два сообщения ждут в&nbsp;лотке «В&nbsp;пути» на&nbsp;вашем устройстве. Когда она появляется в&nbsp;сети, они уходят сами, одно за&nbsp;другим, и&nbsp;получают отметку «доставлено».</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="band band-surface" id="how" aria-labelledby="how-title">
+      <div class="wrap">
+        <div class="band-head">
+          <h2 class="title" id="how-title">Как это работает без сервера</h2>
+          <p class="lead">Там, где у&nbsp;других мессенджеров номер телефона и&nbsp;сервер, у&nbsp;Khandaq ID и&nbsp;путь между двумя устройствами.</p>
+        </div>
+
+        <div class="chapters">
+          <article class="chapter" aria-labelledby="ch-id">
+            <div class="chapter-text">
+              <h3 id="ch-id">ID вместо номера телефона</h3>
+              <p>Никто не&nbsp;спрашивает ваш номер, почту или имя. При первом запуске приложение создаёт на&nbsp;устройстве пару ключей; открытая половина и&nbsp;есть первая часть вашего ID, а&nbsp;секретная никогда не&nbsp;покидает устройство. ID вы&nbsp;даёте тем, от&nbsp;кого хотите получать сообщения, текстом или QR-кодом.</p>
+              <figure class="id">
+                <dl class="id-parts">
+                  <div class="id-part">
+                    <dt><span>F610</span> <span>617C</span> <span>CC60</span> <span>B3AA</span> <span>6703</span> <span>9463</span> <span>B622</span> <span>30D6</span> <span>717F</span> <span>C3A1</span> <span>3586</span> <span>2473</span> <span>5A49</span> <span>5F21</span> <span>C365</span> <span>CD47</span></dt>
+                    <dd><b>Ключ</b>, 64&nbsp;знака. По&nbsp;нему сверяют, что это действительно вы.</dd>
+                  </div>
+                  <div class="id-part">
+                    <dt><span>B209</span> <span>C87B</span></dt>
+                    <dd><b>Антиспам</b>, 8&nbsp;знаков. Смените их, и&nbsp;старый ID перестанет принимать новые запросы.</dd>
+                  </div>
+                  <div class="id-part">
+                    <dt><span>4F21</span></dt>
+                    <dd><b>Проверка</b>, 4&nbsp;знака. По&nbsp;ней видна опечатка.</dd>
+                  </div>
+                </dl>
+                <div class="id-ruler" aria-hidden="true" data-ruler><i></i><i></i><i></i></div>
+                <figcaption class="id-note">Пример ID. Его последние четыре знака действительно проверка, посчитанная по&nbsp;первым 72.</figcaption>
+              </figure>
+              <ol class="steps">
+                <li>Установите Khandaq и&nbsp;создайте профиль. Пароль не&nbsp;обязателен: без него профиль просто открывается на&nbsp;этом устройстве. Если зададите пароль, запишите его: восстановить его не&nbsp;сможет никто, и&nbsp;мы тоже.</li>
+                <li>Отправьте свой ID тому, кому доверяете, или дайте отсканировать QR-код.</li>
+                <li>Человек вставляет ID в&nbsp;строку сверху и&nbsp;отправляет запрос. Когда вы его примете, вы станете контактами.</li>
+              </ol>
+            </div>
+            <div class="shots" role="region" aria-labelledby="ch-id" tabindex="0">
+              <figure class="shot">
+                <picture>
+                  <source type="image/webp" srcset="/assets/shots/search-id-ru-360.webp 360w, /assets/shots/search-id-ru-540.webp 540w, /assets/shots/search-id-ru-720.webp 720w" sizes="(max-width: 760px) 240px, 300px">
+                  <img src="/assets/shots/search-id-ru-720.jpg" width="720" height="1040" loading="lazy" decoding="async" alt="Поиск на iPhone: по zzqx совпадений нет, подсказка, что ID целиком занимает 76 знаков, и кнопка, которая снова показывает все чаты.">
+                </picture>
+                <figcaption>Одна строка сверху ищет по&nbsp;чатам и&nbsp;принимает ID. Если совпадений нет, она напоминает, что в&nbsp;ID целиком 76&nbsp;знаков.</figcaption>
+              </figure>
+              <figure class="shot">
+                <picture>
+                  <source type="image/webp" srcset="/assets/shots/favorites-ru-360.webp 360w, /assets/shots/favorites-ru-540.webp 540w, /assets/shots/favorites-ru-720.webp 720w" sizes="(max-width: 760px) 240px, 300px">
+                  <img src="/assets/shots/favorites-ru-720.jpg" width="720" height="1040" loading="lazy" decoding="async" alt="Список чатов на iPhone с включённым фильтром «Избранные»: Амина и «Походный клуб» сейчас в сети, ниже «Избранное» для себя.">
+                </picture>
+                <figcaption>Фильтры над списком: «Запросы», «В&nbsp;пути», «Избранные». Ниже, в&nbsp;разделе «Для себя», чат «Избранное».</figcaption>
+              </figure>
+            </div>
+          </article>
+
+          <article class="chapter is-flipped" aria-labelledby="ch-path">
+            <div class="chapter-text">
+              <h3 id="ch-path">Путь вместо сервера</h3>
+              <p>Ни&nbsp;один сервер Khandaq не&nbsp;получает и&nbsp;не&nbsp;хранит ваши сообщения. Устройства находят друг друга через открытую сеть Tox, которую держат добровольцы, а&nbsp;потом общаются напрямую. Приложение показывает, какой из&nbsp;трёх путей есть у&nbsp;сообщения прямо сейчас.</p>
+              <ul class="paths">
+                <li class="path is-live">
+                  <svg class="kq-lm is-live" viewBox="0 0 30 10" aria-hidden="true"><circle cx="4" cy="5" r="3"/><path d="M7 5h16"/><circle cx="26" cy="5" r="3"/></svg>
+                  <b>Напрямую</b>
+                  <p>Ваше устройство и&nbsp;устройство собеседника, между ними никого.</p>
+                </li>
+                <li class="path is-live">
+                  <svg class="kq-lm is-relay" viewBox="0 0 30 10" aria-hidden="true"><circle cx="4" cy="5" r="3"/><path d="M7 5h5M18 5h5"/><rect x="12.5" y="2.5" width="5" height="5" rx="1"/><circle cx="26" cy="5" r="3"/></svg>
+                  <b>Через ретранслятор</b>
+                  <p>Когда прямую связь установить не&nbsp;удаётся, узел добровольца передаёт зашифрованный трафик дальше. Он видит, что два устройства общаются, но&nbsp;не&nbsp;видит, о&nbsp;чём.</p>
+                </li>
+                <li class="path is-off">
+                  <svg class="kq-lm" viewBox="0 0 30 10" aria-hidden="true"><circle cx="4" cy="5" r="3"/><path class="gap" d="M10 5h10"/><circle class="far" cx="26" cy="5" r="3"/></svg>
+                  <b>Не&nbsp;в&nbsp;сети</b>
+                  <p>Пути пока нет. Сообщения ждут в&nbsp;пути на&nbsp;вашем устройстве и&nbsp;уходят сами, когда человек появится в&nbsp;сети.</p>
+                </li>
+              </ul>
+              <p>Чтобы достучаться до&nbsp;уснувшего телефона, Khandaq держит одну небольшую службу: службу пробуждения на&nbsp;push.khandaq.org. Она посылает сигнал без текста сообщения; телефон просыпается и&nbsp;сам забирает сообщение у&nbsp;отправителя. Что именно она видит, перечислено в&nbsp;<a href="/ru/privacy.html#push">политике конфиденциальности</a>.</p>
+            </div>
+            <div class="shots" role="region" aria-labelledby="ch-path" tabindex="0">
+              <figure class="shot">
+                <picture>
+                  <source type="image/webp" srcset="/assets/shots/transit-light-ru-360.webp 360w, /assets/shots/transit-light-ru-540.webp 540w, /assets/shots/transit-light-ru-720.webp 720w" sizes="(max-width: 760px) 240px, 300px">
+                  <img src="/assets/shots/transit-light-ru-720.jpg" width="720" height="1040" loading="lazy" decoding="async" alt="Верх списка чатов на iPhone: ваша связь «в сети, через ретранслятор», а фильтр «В пути» показывает четыре сообщения, которые ждут Юсуфа, пока он не в сети.">
+                </picture>
+                <figcaption>Ваша собственная связь, сверху: в&nbsp;сети, через ретранслятор. Юсуф не&nbsp;в&nbsp;сети, и&nbsp;четыре сообщения ждут в&nbsp;пути.</figcaption>
+              </figure>
+              <figure class="shot">
+                <picture>
+                  <source type="image/webp" srcset="/assets/shots/transit-dark-ru-360.webp 360w, /assets/shots/transit-dark-ru-540.webp 540w, /assets/shots/transit-dark-ru-720.webp 720w" sizes="(max-width: 760px) 240px, 300px">
+                  <img src="/assets/shots/transit-dark-ru-720.jpg" width="720" height="1040" loading="lazy" decoding="async" alt="Тот же список в тёмной теме: фильтр «В пути», всё доставлено.">
+                </picture>
+                <figcaption>«В&nbsp;пути» в&nbsp;тёмной теме: всё доставлено.</figcaption>
+              </figure>
+            </div>
+          </article>
+
+          <article class="chapter" aria-labelledby="ch-device">
+            <div class="chapter-text">
+              <h3 id="ch-device">Профиль на&nbsp;этом устройстве</h3>
+              <p>Профиль, контакты, история и&nbsp;полученные файлы хранятся в&nbsp;базе данных на&nbsp;вашем устройстве, и&nbsp;её можно закрыть паролем. Копии нигде больше нет.</p>
+              <p>У&nbsp;этого две стороны. Забытый пароль не&nbsp;может сбросить никто. А&nbsp;чтобы перейти на&nbsp;новый телефон, профиль экспортируют в&nbsp;файл и&nbsp;импортируют там: переедут ID и&nbsp;контакты, история чатов останется. Профиль работает на&nbsp;одном устройстве за&nbsp;раз.</p>
+            </div>
+            <div class="shots" role="region" aria-labelledby="ch-device" tabindex="0">
+              <figure class="shot">
+                <picture>
+                  <source type="image/webp" srcset="/assets/shots/settings-light-ru-360.webp 360w, /assets/shots/settings-light-ru-540.webp 540w, /assets/shots/settings-light-ru-720.webp 720w" sizes="(max-width: 760px) 240px, 300px">
+                  <img src="/assets/shots/settings-light-ru-720.jpg" width="720" height="1040" loading="lazy" decoding="async" alt="Перенос профиля в настройках iPhone: экспорт и импорт профиля и пояснение, что в файле ваш ID и контакты, а история чатов остаётся на устройстве.">
+                </picture>
+                <figcaption>Перенос профиля в&nbsp;настройках: экспорт и&nbsp;импорт.</figcaption>
+              </figure>
+              <figure class="shot">
+                <picture>
+                  <source type="image/webp" srcset="/assets/shots/settings-dark-ru-360.webp 360w, /assets/shots/settings-dark-ru-540.webp 540w, /assets/shots/settings-dark-ru-720.webp 720w" sizes="(max-width: 760px) 240px, 300px">
+                  <img src="/assets/shots/settings-dark-ru-720.jpg" width="720" height="1040" loading="lazy" decoding="async" alt="Оформление в настройках iPhone, в тёмной теме: тема как в системе, светлая или тёмная, затем язык и системные сообщения групп.">
+                </picture>
+                <figcaption>Тёмная тема следует системе или вашему выбору.</figcaption>
+              </figure>
+            </div>
+          </article>
+        </div>
+        <p class="shots-note">Все шесть экранов сняты в&nbsp;приложении для iPhone; люди на&nbsp;них выдуманы.</p>
+      </div>
+    </section>
+
+    <section class="band" id="download" aria-labelledby="download-title">
+      <div class="wrap dl">
+        <div class="band-head">
+          <h2 class="title" id="download-title">Скачать Khandaq</h2>
+          <p class="lead">Бесплатно на&nbsp;любой платформе. На&nbsp;телефон приложение ставится из&nbsp;Google Play или TestFlight, на&nbsp;компьютер скачивается с&nbsp;GitHub, с&nbsp;подписью, которую можно проверить.</p>
+          <p class="small">Все файлы для компьютера есть и&nbsp;на&nbsp;<a href="/downloads/">зеркале khandaq.org</a>.</p>
+        </div>
+        <div>
+          <ul class="dl-list" data-dl-list>
+            <li class="dl-row" id="dl-android" data-platform="android" data-cta="Установить из&nbsp;Google Play" data-note="Android 8 или новее, из&nbsp;Google Play. Другие платформы ниже.">
+              <div class="dl-info">
+                <p class="dl-yours" hidden>Ваше устройство</p>
+                <h3>Android</h3>
+                <p>Из&nbsp;Google Play, который и&nbsp;обновляет приложение. Android 8+. Пакет <code>com.khandaq.messenger</code>.</p>
+                <span class="meta">v0.2.46, GPL-3.0</span>
+              </div>
+              <div class="dl-actions">
+                <a class="btn btn-ink" href="https://play.google.com/store/apps/details?id=com.khandaq.messenger" data-primary>Открыть Google Play</a>
+              </div>
+            </li>
+            <li class="dl-row" id="dl-ios" data-platform="ios" data-cta="Установить через TestFlight" data-note="Открытая бета в&nbsp;TestFlight: сначала поставьте TestFlight, потом откройте приглашение.">
+              <div class="dl-info">
+                <p class="dl-yours" hidden>Ваше устройство</p>
+                <h3>iPhone и&nbsp;iPad</h3>
+                <p>Открытая бета через Apple TestFlight. Поставьте TestFlight из&nbsp;App Store, затем откройте приглашение на&nbsp;телефоне. iOS&nbsp;15 или новее.</p>
+                <span class="meta">1.4.33, сборка TestFlight 142993, MPL-2.0</span>
+              </div>
+              <div class="dl-actions">
+                <a class="btn btn-ink" href="https://testflight.apple.com/join/4ppS8ZN5" data-primary>Открыть TestFlight</a>
+              </div>
+            </li>
+            <li class="dl-row" id="dl-windows" data-platform="windows" data-cta="Скачать для Windows" data-note="Windows 10 и&nbsp;11, x64. Подписи Authenticode у&nbsp;файла пока нет: проверьте его подпись, как показано ниже.">
+              <div class="dl-info">
+                <p class="dl-yours" hidden>Ваше устройство</p>
+                <h3>Windows</h3>
+                <p>Переносимая сборка для Windows 10 и&nbsp;11, x64. Распакуйте архив и&nbsp;запустите <code>Khandaq.exe</code>, установка не&nbsp;нужна.</p>
+                <span class="meta">Релиз v0.2.12 на&nbsp;GitHub, GPL-3.0</span>
+              </div>
+              <div class="dl-actions">
+                <a class="btn btn-ink" href="/downloads/khandaq-windows-x86_64.zip" data-asset="khandaq-windows-x86_64.zip" data-primary>Скачать .zip</a>
+                <a class="btn-quiet" href="/downloads/khandaq-windows-x86_64.zip">Зеркало на&nbsp;khandaq.org</a>
+              </div>
+            </li>
+            <li class="dl-row" id="dl-macos" data-platform="macos" data-cta="Скачать для macOS" data-note="Apple Silicon и&nbsp;Intel в&nbsp;одном приложении. Нотаризации пока нет: в&nbsp;первый раз откройте его через контекстное меню.">
+              <div class="dl-info">
+                <p class="dl-yours" hidden>Ваше устройство</p>
+                <h3>macOS</h3>
+                <p><code>khandaq.app</code> в&nbsp;zip-архиве, Apple Silicon и&nbsp;Intel в&nbsp;одной сборке.</p>
+                <span class="meta">Релиз v0.2.12 на&nbsp;GitHub, GPL-3.0</span>
+              </div>
+              <div class="dl-actions">
+                <a class="btn btn-ink" href="/downloads/khandaq-macos.zip" data-asset="khandaq-macos.zip" data-primary>Скачать .zip</a>
+                <a class="btn-quiet" href="/downloads/khandaq-macos.zip">Зеркало на&nbsp;khandaq.org</a>
+              </div>
+            </li>
+            <li class="dl-row" id="dl-linux" data-platform="linux" data-cta="Скачать для Linux" data-cta-href="#dl-linux" data-note="Пакет .deb для Debian и&nbsp;Ubuntu, переносимый архив для остальных дистрибутивов.">
+              <div class="dl-info">
+                <p class="dl-yours" hidden>Ваше устройство</p>
+                <h3>Linux</h3>
+                <p>Debian и&nbsp;Ubuntu: пакет <code>.deb</code>. Другие дистрибутивы: переносимый архив со&nbsp;своими библиотеками. amd64.</p>
+                <span class="meta">Релиз v0.2.12 на&nbsp;GitHub, GPL-3.0</span>
+              </div>
+              <div class="dl-actions">
+                <a class="btn btn-ink" href="/downloads/khandaq-messenger_amd64.deb" data-asset="khandaq-messenger_amd64.deb" data-primary>Скачать .deb</a>
+                <a class="btn btn-plain" href="/downloads/khandaq-linux-x86_64-portable.tar.gz" data-asset="khandaq-linux-x86_64-portable.tar.gz">Переносимый .tar.gz</a>
+                <a class="btn-quiet" href="/downloads/">Зеркало на&nbsp;khandaq.org</a>
+              </div>
+            </li>
+          </ul>
+
+          <div class="verify" id="verify">
+            <h3>Проверьте файл, прежде чем запускать</h3>
+            <p>Каждый файл для компьютера подписан ключом, который опубликован в&nbsp;репозитории с&nbsp;исходным кодом, то&nbsp;есть не&nbsp;на&nbsp;этом сайте. Одна контрольная сумма тут не&nbsp;поможет: кто смог бы подменить файл, подменил бы и&nbsp;сумму рядом с&nbsp;ним. А&nbsp;подпись ключом, которого нет на&nbsp;этом сервере, поможет.</p>
+            <ol>
+              <li>Возьмите список подписантов из&nbsp;репозитория, а&nbsp;не&nbsp;с&nbsp;этой страницы:
+                <pre tabindex="0"><code>curl -O https://raw.githubusercontent.com/ummalife/khandaq/master/web/downloads/allowed_signers</code></pre></li>
+              <li>Скачайте файл и&nbsp;его <code>.sig</code>, затем проверьте:
+                <pre tabindex="0"><code>ssh-keygen -Y verify -f allowed_signers -I releases@khandaq.org -n khandaq-release -s khandaq-messenger_amd64.deb.sig &lt; khandaq-messenger_amd64.deb</code></pre></li>
+              <li>Ответ <code>Good "khandaq-release" signature</code> значит, что файл тот самый, который собрали мы. Любой другой ответ значит: не&nbsp;запускайте его и, пожалуйста, напишите нам.</li>
+            </ol>
+            <p class="small"><code>ssh-keygen</code> уже есть в&nbsp;macOS и&nbsp;Linux и&nbsp;входит в&nbsp;Git для Windows. <code>SHA256SUMS.txt</code> по-прежнему публикуется, <a href="https://github.com/ummalife/khandaq/releases/latest" data-asset="SHA256SUMS.txt">на&nbsp;GitHub</a> и&nbsp;<a href="/downloads/SHA256SUMS.txt">на&nbsp;этом сайте</a>, но&nbsp;это проверка целостности, а&nbsp;не&nbsp;основа доверия: <code>shasum -a 256 -c SHA256SUMS.txt</code>.</p>
+          </div>
+
+          <div class="notes">
+            <h3>Как установить</h3>
+            <details class="qa">
+              <summary>Android: Google Play</summary>
+              <div class="qa-body">
+                <ol>
+                  <li>Откройте <a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger">Khandaq в&nbsp;Google Play</a>.</li>
+                  <li>Нажмите «Установить». Обновления приходят через Google Play.</li>
+                  <li>Стоит старая сборка, поставленная вручную, или отладочная? Экспортируйте профиль, удалите старое приложение, установите его из&nbsp;Google Play и&nbsp;импортируйте профиль. Ключ подписи другой, поэтому новое приложение не&nbsp;может обновить старое поверх.</li>
+                </ol>
+              </div>
+            </details>
+            <details class="qa">
+              <summary>Windows: предупреждение о&nbsp;неизвестном издателе</summary>
+              <div class="qa-body">
+                <ol>
+                  <li>Проверьте подпись, как показано выше, затем распакуйте архив и&nbsp;запустите <code>Khandaq.exe</code>.</li>
+                  <li>Windows предупредит, что издатель неизвестен: у&nbsp;сборки для компьютера <strong>пока нет подписи Authenticode</strong>, и&nbsp;мы не&nbsp;будем делать вид, что это нормально. Подлинность файла подтверждает проверка подписи. Предупреждение Windows говорит правду: сама Windows проверить это за&nbsp;вас не&nbsp;может.</li>
+                  <li>Мы не&nbsp;просим добавлять исключения в&nbsp;антивирус. Если антивирус ругается на&nbsp;файл, подпись которого сошлась, напишите нам: такое ложное срабатывание стоит разобрать, а&nbsp;не&nbsp;отключать.</li>
+                </ol>
+              </div>
+            </details>
+            <details class="qa">
+              <summary>macOS: приложение без нотаризации</summary>
+              <div class="qa-body">
+                <ol>
+                  <li>Проверьте подпись, как показано выше, затем распакуйте архив и&nbsp;перенесите <code>khandaq.app</code> в&nbsp;«Программы».</li>
+                  <li>Сборка <strong>пока не&nbsp;нотаризована Apple</strong>, поэтому Gatekeeper не&nbsp;откроет её двойным щелчком в&nbsp;первый раз. Щёлкните приложение правой кнопкой, выберите <strong>Открыть</strong> и&nbsp;подтвердите: это документированный способ запустить приложение, за&nbsp;которое Gatekeeper не&nbsp;может поручиться, и&nbsp;остальная защита Gatekeeper при этом продолжает работать.</li>
+                  <li>Раньше на&nbsp;этой странице советовали <code>xattr -cr</code>. Больше не&nbsp;советуем: команда снимает отметку карантина со&nbsp;всего пакета и&nbsp;выключает ровно ту&nbsp;проверку, которая понадобится в&nbsp;день, когда скачанный файл окажется не&nbsp;настоящим.</li>
+                </ol>
+              </div>
+            </details>
+            <details class="qa">
+              <summary>Debian и&nbsp;Ubuntu: пакет .deb</summary>
+              <div class="qa-body">
+                <ol>
+                  <li>Скачайте <code>khandaq-messenger_amd64.deb</code> и&nbsp;проверьте его подпись.</li>
+                  <li><code>sudo apt install ./khandaq-messenger_amd64.deb</code></li>
+                  <li>Запустите <strong>Khandaq</strong> из&nbsp;меню приложений или командой <code>khandaq</code>.</li>
+                </ol>
+              </div>
+            </details>
+            <details class="qa">
+              <summary>Другие Linux: переносимый архив</summary>
+              <div class="qa-body">
+                <ol>
+                  <li><code>tar -xzf khandaq-linux-x86_64-portable.tar.gz</code></li>
+                  <li>Держите <code>khandaq</code>, <code>khandaq.bin</code> и&nbsp;<code>lib/</code> вместе; почему, объясняет <code>INSTALL.txt</code> в&nbsp;архиве.</li>
+                  <li>Удобнее всего установить в&nbsp;<code>~/.local/share/khandaq/</code> и&nbsp;сделать на&nbsp;него ссылку <code>~/.local/bin/khandaq</code>.</li>
+                </ol>
+              </div>
+            </details>
+            <details class="qa">
+              <summary>iPhone и&nbsp;iPad: TestFlight</summary>
+              <div class="qa-body">
+                <ol>
+                  <li>Поставьте <strong>TestFlight</strong> из&nbsp;App Store.</li>
+                  <li>Откройте <a href="https://testflight.apple.com/join/4ppS8ZN5">открытую ссылку TestFlight</a> на&nbsp;iPhone или iPad.</li>
+                  <li>Примите приглашение и&nbsp;установите Khandaq. Обновления приходят через TestFlight.</li>
+                </ol>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="band band-surface" id="changes" aria-labelledby="changes-title">
+      <div class="wrap">
+        <div class="band-head">
+          <h2 class="title" id="changes-title">Последние выпуски</h2>
+          <p class="lead">Каждый выпуск описан с&nbsp;датой: что было сломано, что изменилось и&nbsp;на&nbsp;каких платформах. Записи ведутся на&nbsp;английском.</p>
+        </div>
+        <ol class="recent-list" data-recent hidden></ol>
+        <p class="recent-more"><a class="btn btn-plain" href="/ru/changelog.html">Открыть журнал изменений</a></p>
+      </div>
+    </section>
+
+    <section class="band" id="source" aria-labelledby="source-title">
+      <div class="wrap source">
+        <div class="source-text">
+          <h2 class="title" id="source-title">Открытый код</h2>
+          <p>Приложения для Android, iPhone и&nbsp;компьютера, служба пробуждения и&nbsp;этот сайт лежат на&nbsp;GitHub. Khandaq говорит на&nbsp;открытом протоколе Tox и&nbsp;остаётся совместимым с&nbsp;открытой сетью Tox. Он добавляет групповые чаты, правку и&nbsp;удаление сообщений у&nbsp;обеих сторон, реакции, голосовые сообщения, подписанную историю групп и&nbsp;службу пробуждения, через которую не&nbsp;проходит текст сообщений.</p>
+          <ul class="link-list">
+            <li><a href="https://github.com/ummalife/khandaq">Исходный код на&nbsp;GitHub</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/releases/latest">Последний релиз</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/blob/master/SECURITY.md">Политика безопасности</a></li>
+          </ul>
+        </div>
+        <div class="source-text">
+          <h3 class="sub">Открытая инфраструктура</h3>
+          <ul class="link-list">
+            <li>Начальные узлы: открытая сеть Tox DHT (nodes.tox.chat), своих начальных узлов у&nbsp;нас нет</li>
+            <li><a href="https://push.khandaq.org">push.khandaq.org</a>: служба только для пробуждения, без текста сообщений</li>
+            <li lang="en">Open-source foundations: qTox (desktop), TRIfA (Android), Antidote (iOS)</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="band band-surface" id="questions" aria-labelledby="questions-title">
+      <div class="wrap">
+        <div class="band-head">
+          <h2 class="title" id="questions-title">Вопросы</h2>
+        </div>
+        <div class="faq-cols">
+          <div>
+            <details class="qa">
+              <summary>Нужны ли номер телефона или почта, чтобы начать?</summary>
+              <div class="qa-body"><p>Нет. Аккаунта и&nbsp;регистрации нет. Вы создаёте профиль на&nbsp;своём устройстве и&nbsp;получаете ID; поделитесь им с&nbsp;теми, кому доверяете, чтобы связаться. Ни&nbsp;номер телефона, ни&nbsp;почта, ни&nbsp;другие личные данные не&nbsp;запрашиваются и&nbsp;не&nbsp;собираются.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Вы храните мои сообщения?</summary>
+              <div class="qa-body"><p>Нет. Содержимое сообщений остаётся на&nbsp;ваших устройствах. Единственная служба, которую держит Khandaq, это служба пробуждения; она описана в&nbsp;<a href="https://github.com/ummalife/khandaq/blob/master/docs/PUSH_RELAY.md">репозитории</a> и&nbsp;в&nbsp;<a href="/ru/privacy.html">политике конфиденциальности</a>. Устройства находят друг друга через открытую сеть Tox DHT, которую мы не&nbsp;обслуживаем.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Шифрование правда сквозное?</summary>
+              <div class="qa-body"><p>Да. Каждое сообщение, файл и&nbsp;звонок шифруются из&nbsp;конца в&nbsp;конец протоколом <a href="https://tox.chat">Tox</a> (криптография NaCl), прямо между устройствами. Никто посередине, включая нас, не&nbsp;может прочитать ваши сообщения или увидеть ваши контакты.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Я отправил сообщение, но&nbsp;оно не&nbsp;доставлено. Почему?</summary>
+              <div class="qa-body"><p>Центрального сервера, который держал&nbsp;бы сообщения, нет. Сообщение доставляется, когда устройство контакта доступно. Если человек не&nbsp;в&nbsp;сети, сообщение ждёт в&nbsp;пути и&nbsp;уходит само, как только кто-то из&nbsp;вас снова подключится, поэтому доставка может занять время, если собеседник давно не&nbsp;открывал приложение. Если приложение открыто или ему разрешены работа в&nbsp;фоне и&nbsp;уведомления, доставка почти мгновенная.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Почему не&nbsp;приходят уведомления, когда приложение закрыто?</summary>
+              <div class="qa-body"><p>Khandaq работает от&nbsp;устройства к&nbsp;устройству, и&nbsp;у&nbsp;закрытого приложения нет живого соединения. Небольшая служба пробуждения подталкивает устройство подключиться и&nbsp;забрать сообщение; текст сообщения через неё не&nbsp;идёт, только сигнал. Проверьте, что уведомления для Khandaq разрешены в&nbsp;настройках системы и&nbsp;что приложение не&nbsp;остановлено принудительно и&nbsp;не&nbsp;ограничено в&nbsp;расходе батареи. На&nbsp;Android сборки из&nbsp;Google Play получают эти сигналы автоматически.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Работают&nbsp;ли звонки между Android и&nbsp;iPhone?</summary>
+              <div class="qa-body"><p>Да. Голосовые и&nbsp;видеозвонки один на&nbsp;один работают между Android и&nbsp;iOS: обе стороны видят камеру собеседника в&nbsp;правильной ориентации и&nbsp;на&nbsp;весь экран. Звонки идут от&nbsp;устройства к&nbsp;устройству и&nbsp;зашифрованы из&nbsp;конца в&nbsp;конец, как и&nbsp;сообщения.</p></div>
+            </details>
+          </div>
+          <div>
+            <details class="qa">
+              <summary>Я забыл пароль профиля. Его можно сбросить?</summary>
+              <div class="qa-body"><p>Нет, и&nbsp;никто не&nbsp;может. Ключи шифрования профиля выводятся из&nbsp;этого пароля, и&nbsp;ни&nbsp;один сервер его не&nbsp;хранит, поэтому сбрасывать нечего. Если пароль утерян, понадобятся новый профиль и&nbsp;новый ID. Запишите пароль в&nbsp;надёжном месте, когда создаёте профиль.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Как перенести профиль на&nbsp;новый телефон?</summary>
+              <div class="qa-body"><p>Экспортируйте профиль на&nbsp;старом устройстве и&nbsp;импортируйте на&nbsp;новом: ID и&nbsp;контакты останутся прежними. Профиль рассчитан на&nbsp;одно активное устройство за&nbsp;раз: протокол Tox не&nbsp;поддерживает один и&nbsp;тот&nbsp;же профиль на&nbsp;двух устройствах одновременно.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Где скачать Khandaq?</summary>
+              <div class="qa-body"><p><strong>Android:</strong> официальная страница в&nbsp;<a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger">Google Play</a>, она&nbsp;же обновляет приложение. <strong>iPhone и&nbsp;iPad:</strong> <a href="https://testflight.apple.com/join/4ppS8ZN5">TestFlight</a>, пока версия для iOS в&nbsp;бете. <strong>Windows, macOS, Linux:</strong> раздел <a href="#download">«Скачать»</a> выше.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Как сообщить об&nbsp;ошибке?</summary>
+              <div class="qa-body"><p>Напишите на&nbsp;<a href="mailto:support@khandaq.org">support@khandaq.org</a> или откройте задачу в&nbsp;<a href="https://github.com/ummalife/khandaq/issues">GitHub Issues</a>. Об&nbsp;уязвимости сообщайте через <a href="https://github.com/ummalife/khandaq/security/advisories/new">закрытую форму</a>.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Khandaq и&nbsp;Matrix или Element: это одно и&nbsp;то&nbsp;же?</summary>
+              <div class="qa-body"><p>Нет. Khandaq работает на&nbsp;протоколе <strong>Tox</strong>: от&nbsp;устройства к&nbsp;устройству, без домашнего сервера. Сейчас на&nbsp;этом сайте страница загрузки Khandaq Messenger.</p></div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="thumb-bar" data-thumb-bar>
+      <a class="btn btn-ink" href="#download" data-thumb-cta>Скачать Khandaq</a>
+    </div>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap">
+      <div class="foot-cols">
+        <div>
+          <h2>Khandaq Messenger</h2>
+          <p>Переписка со&nbsp;сквозным шифрованием в&nbsp;сети Tox. Бесплатно и&nbsp;с&nbsp;открытым кодом.</p>
+        </div>
+        <div>
+          <h2>Скачать</h2>
+          <ul>
+            <li><a href="#download">Все платформы</a></li>
+            <li><a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger">Android в&nbsp;Google Play</a></li>
+            <li><a href="https://testflight.apple.com/join/4ppS8ZN5">iPhone в&nbsp;TestFlight</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Проект</h2>
+          <ul>
+            <li><a href="https://github.com/ummalife/khandaq">Исходный код</a></li>
+            <li><a href="/ru/changelog.html">Журнал изменений</a></li>
+            <li><a href="/ru/privacy.html">Политика конфиденциальности</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/blob/master/SECURITY.md">Безопасность</a></li>
+            <li><a href="https://tox.chat">Протокол Tox</a></li>
+          </ul>
+        </div>
+        <!-- KHANDAQ (02.09): the support address stays visible on every home page, as on the English
+             one: it is the support URL given to the stores (Guideline 1.5). -->
+        <div>
+          <h2>Поддержка</h2>
+          <ul>
+            <li><a href="mailto:support@khandaq.org">support@khandaq.org</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/issues">Сообщить о&nbsp;проблеме</a></li>
+            <li><a href="https://github.com/ummalife/khandaq/security/advisories/new">Сообщить об&nbsp;уязвимости</a></li>
+            <li><a href="/ru/privacy.html">Вопросы о&nbsp;приватности</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="foot-base">
+        <p class="copyright">© Khandaq, <a href="https://khandaq.org/">khandaq.org</a>. Открытый код, совместим с&nbsp;Tox. <span class="credit">Владелец и&nbsp;разработчик: <a href="https://1sa.me/" target="_blank" rel="noopener">Isa Dagestani</a></span></p>
+        <fieldset class="seg" data-theme-control hidden>
+          <legend>Тема</legend>
+          <span class="seg-options">
+            <label><input type="radio" name="theme" value="system">Как в&nbsp;системе</label>
+            <label><input type="radio" name="theme" value="light">Светлая</label>
+            <label><input type="radio" name="theme" value="dark">Тёмная</label>
+          </span>
+        </fieldset>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      var release = 'v0.2.12';
+      var gh = 'https://github.com/ummalife/khandaq/releases/download/' + release + '/';
+      // The files a release publishes. A link names its file in data-asset, and only a name on this list
+      // becomes a GitHub address, so nothing read from the page goes into an href as it is.
+      var files = ['khandaq-windows-x86_64.zip', 'khandaq-macos.zip', 'khandaq-messenger_amd64.deb',
+        'khandaq-linux-x86_64-portable.tar.gz', 'SHA256SUMS.txt'];
+      var links = document.querySelectorAll('[data-asset]');
+      for (var i = 0; i < links.length; i++) {
+        var wanted = links[i].getAttribute('data-asset');
+        for (var j = 0; j < files.length; j++) {
+          if (files[j] === wanted) {
+            links[i].href = gh + files[j];
+          }
+        }
+      }
+    })();
+  </script>
+</body>
+</html>

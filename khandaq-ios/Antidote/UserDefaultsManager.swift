@@ -30,7 +30,7 @@ struct ChatFavoritesStore {
     static func favoriteKey(for chat: OCTChat) -> String {
         // KHANDAQ (audit #16): key on the STABLE uniqueIdentifier. The old scheme keyed groups on
         // groupChatIdHex, which is empty right after create/join and only fills to 64 chars once the
-        // NGC id syncs — so a group favorited early was stored under "chat:<uid>" but later looked up
+        // NGC id syncs, so a group favorited early was stored under "chat:<uid>" but later looked up
         // under "group:<hex>", silently dropping the star and orphaning the entry.
         return (chat.isGroup ? "group:" : "chat:") + chat.uniqueIdentifier
     }
@@ -92,9 +92,9 @@ class UserDefaultsManager {
         get {
             // KHANDAQ (call-screen report, 17 Aug): Android shipped its call-screen debug telemetry to
             // a real user because nothing gated it. iOS gates the equivalent on this flag, but only the
-            // TOGGLE is compiled out of release (SettingsMainController) — the stored value survives in
+            // TOGGLE is compiled out of release (SettingsMainController); the stored value survives in
             // UserDefaults, so a device that had it on in a debug build (a tester's phone, a restored
-            // backup) keeps showing "rx:… sendV:… feed:…" over a call on release with no way to turn it
+            // backup) keeps showing "rx:... sendV:... feed:..." over a call on release with no way to turn it
             // off. Force it off wherever it cannot be turned back off.
             #if DEBUG
             return boolForKey(Keys.DebugMode, defaultValue: false)
@@ -152,6 +152,21 @@ class UserDefaultsManager {
         }
     }
 
+    /// The person's theme choice. Until they make one, the app follows the system. The old dark
+    /// switch is carried over once: a profile that had it on stays dark, everything else follows the
+    /// system (an "off" switch cannot be told apart from a switch nobody ever touched).
+    var themePreference: ThemePreference {
+        get {
+            if let raw = stringForKey(Keys.ThemePreference), let value = ThemePreference(rawValue: raw) {
+                return value
+            }
+            return boolForKey(Keys.DarkModeEnabled, defaultValue: false) ? .dark : .system
+        }
+        set {
+            setObject(newValue.rawValue as AnyObject, forKey: Keys.ThemePreference)
+        }
+    }
+
     var chatListFilterTab: ChatListFilterTab {
         get {
             let raw = intForKey(Keys.ChatListFilterTab, defaultValue: ChatListFilterTab.direct.rawValue)
@@ -194,6 +209,16 @@ class UserDefaultsManager {
         }
     }
 
+    /// Set by Log out on "You", cleared by the next login with the password (see SessionAutoLogin).
+    var loggedOutByUser: Bool {
+        get {
+            return boolForKey(Keys.LoggedOutByUser, defaultValue: false)
+        }
+        set {
+            setBool(newValue, forKey: Keys.LoggedOutByUser)
+        }
+    }
+
     func resetUDPEnabled() {
         removeObjectForKey(Keys.UDPEnabled)
     }
@@ -211,8 +236,10 @@ private extension UserDefaultsManager {
         static let AutodownloadImages = "user-info/autodownload-images"
         static let GroupShowSystemMessages = "user-info/group-show-system-messages"
         static let DarkModeEnabled = "user-info/dark-mode-enabled"
+        static let ThemePreference = "user-info/theme-preference"
         static let ChatListFilterTab = "user-info/chat-list-filter-tab"
         static let FavoriteChatKeys = "user-info/favorite-chat-keys"
+        static let LoggedOutByUser = "user-info/logged-out-by-user"
     }
 
     func setObject(_ object: AnyObject?, forKey key: String) {

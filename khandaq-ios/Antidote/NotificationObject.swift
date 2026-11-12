@@ -8,6 +8,8 @@ import UIKit
 enum NotificationAction {
     case openChat(chatUniqueIdentifier: String)
     case openRequest(requestUniqueIdentifier: String)
+    /// An invitation to a group from a contact: Requests, where it waits as a card (E12, E22).
+    case openGroupInvite(inviteIdentifier: String)
     case answerIncomingCall(userInfo: String)
 }
 
@@ -18,6 +20,7 @@ extension NotificationAction {
 
         static let OpenChatValue = "OpenChatValue"
         static let OpenRequestValue = "OpenRequestValue"
+        static let OpenGroupInviteValue = "OpenGroupInviteValue"
         static let AnswerIncomingCallValue = "AnswerIncomingCallValue"
     }
 
@@ -37,6 +40,11 @@ extension NotificationAction {
                     return nil
                 }
                 self = .openRequest(requestUniqueIdentifier: argument)
+            case Constants.OpenGroupInviteValue:
+                guard let argument = dictionary[Constants.ArgumentKey] else {
+                    return nil
+                }
+                self = .openGroupInvite(inviteIdentifier: argument)
             case Constants.AnswerIncomingCallValue:
                 guard let argument = dictionary[Constants.ArgumentKey] else {
                     return nil
@@ -44,6 +52,20 @@ extension NotificationAction {
                 self = .answerIncomingCall(userInfo: argument)
             default:
                 return nil
+        }
+    }
+
+    /// What a tap on the in-app band does, for VoiceOver.
+    var bandHint: String {
+        switch self {
+            case .openChat:
+                return String(localized: "air_banner_hint")
+            case .openRequest:
+                return String(localized: "air_banner_hint_request")
+            case .openGroupInvite:
+                return String(localized: "air_banner_hint_invite")
+            case .answerIncomingCall:
+                return ""
         }
     }
 
@@ -57,6 +79,11 @@ extension NotificationAction {
             case .openRequest(let identifier):
                 return [
                     Constants.ValueKey: Constants.OpenRequestValue,
+                    Constants.ArgumentKey: identifier,
+                ]
+            case .openGroupInvite(let identifier):
+                return [
+                    Constants.ValueKey: Constants.OpenGroupInviteValue,
                     Constants.ArgumentKey: identifier,
                 ]
             case .answerIncomingCall(let userInfo):
@@ -81,6 +108,11 @@ struct NotificationObject {
     /// Sound to play when notification is fired. Valid only for local notifications.
     let soundName: String
 
-    /// Optional icon for in-app banner (friend avatar).
+    /// The sender's own photo for the in-app band, when they chose one.
     let icon: UIImage?
+
+    /// The tile of the in-app band (E22): the sender's or the group's initials (an invitation shows the
+    /// contact who sent it), or the dashed tile of a request; nil for a notification that never comes
+    /// as a band.
+    let tile: AirTileView.Style?
 }

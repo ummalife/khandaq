@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Redesign stage 5: what a tap on a link, a mail address or a Tox ID in a message asks first (AirLinkQuestion) -->
+    <string name="air_text_link_question">打开这个链接？</string>
+    <string name="air_text_link_open">打开</string>
+    <string name="air_text_email_question">给这个地址写邮件？</string>
+    <string name="air_text_email_write">写邮件</string>
+    <string name="air_text_email_chooser">选择写邮件的应用</string>
+    <string name="air_text_id_question">向这个 ID 发送联系人请求？</string>
+</resources>

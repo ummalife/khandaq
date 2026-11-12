@@ -22,11 +22,9 @@ package com.zoffcc.applications.trifa;
 import org.khandaq.messenger.R;
 
 import android.annotation.SuppressLint;
-import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
@@ -145,6 +143,7 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
     @SuppressLint("ClickableViewAccessibility")
     public void bindMessageList(Message m)
     {
+        AirFileEntry.setCopyActions(itemView, null);
         // Log.i(TAG, "bindMessageList");
 
         if (m == null)
@@ -178,7 +177,7 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
 
         if (is_selected)
         {
-            layout_message_container.setBackgroundResource(R.drawable.bg_message_selection);
+            layout_message_container.setBackgroundResource(AirTranscript.selectionPlate(layout_message_container));
         }
         else
         {
@@ -235,7 +234,7 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
         date_time.setText(long_date_time_format(m.rcvd_timestamp));
         // Media/file bubbles had only the near-invisible external date; show the in-bubble time like text messages.
         ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
-                HelperGeneric.format_chat_message_time(m, false), false);
+                AirTranscript.timeText(itemView.getContext(), m, false), false);
 
         final Message message = m;
 
@@ -323,7 +322,8 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
                 final String kqPreviewSig = "img:" + message.id + ":" + message.filename_fullpath;
                 if (! kqPreviewSig.equals(ft_preview_image.getTag(R.id.ft_preview_image)))
                 {
-                    ft_preview_image.setImageResource(R.drawable.round_loading_animation);
+                    // KHANDAQ (redesign, stage 3b): the still plate under the photo until its picture comes.
+                    ft_preview_image.setImageDrawable(null);
                     ft_preview_image.setTag(R.id.ft_preview_image, kqPreviewSig);
                 }
 
@@ -454,69 +454,7 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
                     {
                         try
                         {
-                            new AlertDialog.Builder(v.getContext()).setIcon(R.mipmap.ic_launcher).
-                                    setTitle("Export File to unencrypted Storage?").
-                                    setCancelable(true).
-                                    setNeutralButton("Export", new DialogInterface.OnClickListener()
-                                    {
-                                        @Override
-                                        public void onClick(DialogInterface dialog, int which)
-                                        {
-                                            final int view_position_in_adapter = getAbsoluteAdapterPosition();
-                                            final RecyclerView.Adapter<? extends RecyclerView.ViewHolder> adapter = getBindingAdapter();
-
-                                            getBindingAdapter().notifyItemChanged(1);
-
-                                            try
-                                            {
-                                                final String export_filename =
-                                                        SD_CARD_FILES_EXPORT_DIR + "/" + message2.tox_friendpubkey +
-                                                        "/";
-                                                final FileDB file_ = (FileDB) orma.selectFromFileDB().idEq(
-                                                        message2.filedb_id).get(0);
-                                                ProgressDialog progressDialog2 = null;
-
-                                                try
-                                                {
-                                                    progressDialog2 = ProgressDialog.show(v.getContext(), "",
-                                                                                          "exporting File ...");
-                                                    progressDialog2.setCanceledOnTouchOutside(false);
-                                                    progressDialog2.setOnCancelListener(
-                                                            new DialogInterface.OnCancelListener()
-                                                            {
-                                                                @Override
-                                                                public void onCancel(DialogInterface dialog)
-                                                                {
-                                                                }
-                                                            });
-                                                }
-                                                catch (Exception e3)
-                                                {
-                                                    e3.printStackTrace();
-                                                    Log.i(TAG, "save_selected_messages:EE1:" + e3.getMessage());
-                                                }
-
-                                                new MainActivity.save_selected_message_custom_asynchtask(v.getContext(),
-                                                                                                         progressDialog2,
-                                                                                                         file_,
-                                                                                                         export_filename,
-                                                                                                         message2.text,
-                                                                                                         adapter,
-                                                                                                         view_position_in_adapter,
-                                                                                                         v).execute();
-                                            }
-                                            catch (Exception e)
-                                            {
-                                            }
-                                        }
-                                    }).
-                                    setNegativeButton("Cancel", new DialogInterface.OnClickListener()
-                                    {
-                                        public void onClick(DialogInterface dialog, int id)
-                                        {
-                                        }
-                                    }).
-                                    show();
+                            ask_export(v, message2);
                         }
                         catch (Exception e)
                         {
@@ -545,6 +483,27 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
                 }
             });
 
+                AirFileEntry.setCopyActions(itemView, new AirFileEntry.CopyActions()
+                {
+                    @Override
+                    public void save(final View anchor)
+                    {
+                        ask_export(anchor, message2);
+                    }
+
+                    @Override
+                    public boolean canShare()
+                    {
+                        return export_filename_with_path != null;
+                    }
+
+                    @Override
+                    public void share(final View anchor)
+                    {
+                        try_to_share_file(message2, export_filename_with_path, anchor.getContext());
+                    }
+                });
+
                 ft_preview_container.setVisibility(View.VISIBLE);
                 ft_preview_image.setVisibility(View.VISIBLE);
             }
@@ -557,6 +516,48 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
         {
             finishDirectVoiceChrome();
         }
+    }
+
+    /**
+     * KHANDAQ (redesign, stage 3b): saving a copy outside the app asks from below first, with the verb on the
+     * button (the copy is not encrypted); then the old export runs as it did.
+     */
+    void ask_export(final View v, final Message message2)
+    {
+        AirFileEntry.askExport(v, () -> {
+            final int view_position_in_adapter = getAbsoluteAdapterPosition();
+            final RecyclerView.Adapter<? extends RecyclerView.ViewHolder> adapter = getBindingAdapter();
+            if (adapter != null)
+            {
+                adapter.notifyItemChanged(1);
+            }
+
+            try
+            {
+                final String export_filename = SD_CARD_FILES_EXPORT_DIR + "/" + message2.tox_friendpubkey + "/";
+                final FileDB file_ = (FileDB) orma.selectFromFileDB().idEq(message2.filedb_id).get(0);
+                ProgressDialog progressDialog2 = null;
+
+                try
+                {
+                    progressDialog2 = ProgressDialog.show(v.getContext(), "",
+                                                          v.getContext().getString(R.string.air_file_saving));
+                    progressDialog2.setCanceledOnTouchOutside(false);
+                }
+                catch (Exception e3)
+                {
+                    e3.printStackTrace();
+                    Log.i(TAG, "save_selected_messages:EE1:" + e3.getMessage());
+                }
+
+                new MainActivity.save_selected_message_custom_asynchtask(v.getContext(), progressDialog2, file_,
+                                                                         export_filename, message2.text, adapter,
+                                                                         view_position_in_adapter, v).execute();
+            }
+            catch (Exception e)
+            {
+            }
+        });
     }
 
     public void try_to_share_file(Message message2, String export_filename_with_path, final Context c)

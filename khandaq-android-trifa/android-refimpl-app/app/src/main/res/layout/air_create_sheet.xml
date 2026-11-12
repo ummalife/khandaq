@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The sheet behind "+": a new contact by ID, a new group. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/air_bg_sheet"
+    android:orientation="vertical"
+    android:paddingStart="@dimen/kq_space_16"
+    android:paddingTop="@dimen/kq_space_8"
+    android:paddingEnd="@dimen/kq_space_16"
+    android:paddingBottom="@dimen/kq_space_24">
+
+    <View
+        android:layout_width="@dimen/kq_size_grip_width"
+        android:layout_height="@dimen/kq_size_grip_height"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="@dimen/kq_space_12"
+        android:background="@drawable/air_bg_grip"
+        android:importantForAccessibility="no" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:accessibilityHeading="true"
+        android:text="@string/air_create"
+        android:textAlignment="viewStart"
+        android:textAppearance="@style/TextAppearance.KQ.Heading"
+        android:textColor="@color/kq_ink" />
+
+    <LinearLayout
+        android:id="@+id/air_create_contact"
+        style="@style/Widget.KQ.Air.ButtonRow"
+        android:layout_marginTop="@dimen/kq_space_12">
+
+        <ImageView
+            android:layout_width="@dimen/kq_size_icon"
+            android:layout_height="@dimen/kq_size_icon"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kq_ic_user_plus"
+            android:tint="@color/kq_ink" />
+
+        <TextView
+            style="@style/Widget.KQ.Air.ButtonRowText"
+            android:text="@string/air_new_contact" />
+    </LinearLayout>
+
+    <!-- One "New group" (E15): who can join is chosen on its screen. -->
+    <LinearLayout
+        android:id="@+id/air_create_group"
+        style="@style/Widget.KQ.Air.ButtonRow"
+        android:layout_marginTop="@dimen/kq_space_12">
+
+        <ImageView
+            android:layout_width="@dimen/kq_size_icon"
+            android:layout_height="@dimen/kq_size_icon"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kq_ic_users"
+            android:tint="@color/kq_ink" />
+
+        <TextView
+            style="@style/Widget.KQ.Air.ButtonRowText"
+            android:text="@string/air_new_group_title" />
+    </LinearLayout>
+</LinearLayout>
+</LinearLayout>

@@ -25,7 +25,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
-import android.graphics.drawable.Drawable;
 import android.media.MediaCodec;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
@@ -34,8 +33,6 @@ import android.net.Uri;
 import android.text.TextUtils;
 import android.util.Log;
 
-import com.mikepenz.fontawesome_typeface_library.FontAwesome;
-import com.mikepenz.iconics.IconicsDrawable;
 import com.zoffcc.applications.sorm.FriendList;
 import com.zoffcc.applications.sorm.GroupDB;
 import com.zoffcc.applications.sorm.GroupMessage;
@@ -72,7 +69,6 @@ import static com.zoffcc.applications.trifa.HelperFiletransfer.save_group_incomi
 import static com.zoffcc.applications.trifa.HelperGeneric.bytebuffer_to_hexstring;
 import static com.zoffcc.applications.trifa.HelperGeneric.bytes_to_hex;
 import static com.zoffcc.applications.trifa.HelperGeneric.display_toast;
-import static com.zoffcc.applications.trifa.HelperGeneric.dp2px;
 import static com.zoffcc.applications.trifa.HelperGeneric.is_valid_tox_public_key;
 import static com.zoffcc.applications.trifa.HelperGeneric.fourbytes_of_long_to_hex;
 import static com.zoffcc.applications.trifa.HelperGeneric.io_file_copy;
@@ -940,6 +936,12 @@ public class HelperGroup
 
     static long ensure_group_in_tox(@NonNull String group_identifier)
     {
+        // A group another live source answers for (AirLiveOverride, debug builds only) lives in the
+        // database only and is never joined.
+        if (AirLiveOverride.group(group_identifier) != null)
+        {
+            return -1;
+        }
         long group_num = tox_group_by_groupid__wrapper(group_identifier);
         if (group_num >= 0)
         {
@@ -1086,24 +1088,35 @@ public class HelperGroup
 
     static boolean invite_friend_to_group(@NonNull String group_identifier, @NonNull String friend_public_key)
     {
+        return invite_friend_to_group(group_identifier, friend_public_key, null);
+    }
+
+    /**
+     * KHANDAQ (redesign, E21): {@code say_failure} takes the words of a failed invitation, for the screen
+     * that asked to say them at its Invite button; without it they come as a toast, as before. A sent or
+     * queued invitation is still confirmed with a toast.
+     */
+    static boolean invite_friend_to_group(@NonNull String group_identifier, @NonNull String friend_public_key,
+                                          @Nullable final java.util.function.Consumer<String> say_failure)
+    {
         final String precheck = group_send_precheck_failure_reason(group_identifier);
         if (precheck != null)
         {
-            display_toast(precheck, false, 300);
+            say_failure_or_toast(precheck, say_failure);
             return false;
         }
 
         final long friend_num = tox_friend_by_public_key__wrapper(friend_public_key);
         if ((friend_num < 0) || (friend_num >= UINT32_MAX_JAVA))
         {
-            display_toast(context_s.getString(R.string.group_invite_friend_not_found), false, 300);
+            say_failure_or_toast(context_s.getString(R.string.group_invite_friend_not_found), say_failure);
             return false;
         }
 
         final long group_num = ensure_group_in_tox(group_identifier);
         if (group_num < 0)
         {
-            display_toast(context_s.getString(R.string.group_send_group_not_found), false, 300);
+            say_failure_or_toast(context_s.getString(R.string.group_send_group_not_found), say_failure);
             return false;
         }
 
@@ -1124,6 +1137,18 @@ public class HelperGroup
         queue_manual_group_invite(group_identifier, friend_public_key);
         display_toast(context_s.getString(R.string.group_invite_friend_queued), false, 300);
         return false;
+    }
+
+    private static void say_failure_or_toast(final String text, @Nullable final java.util.function.Consumer<String> say_failure)
+    {
+        if (say_failure != null)
+        {
+            say_failure.accept(text);
+        }
+        else
+        {
+            display_toast(text, false, 300);
+        }
     }
 
     static String group_send_failure_reason(final long message_id)
@@ -1794,6 +1819,11 @@ public class HelperGroup
         if (group_identifier == null)
         {
             return new long[]{0L, 0L};
+        }
+        final AirLiveOverride.Source standIn = AirLiveOverride.group(group_identifier);
+        if (standIn != null)
+        {
+            return standIn.groupCounts(group_identifier);
         }
 
         final String key = group_identifier.toLowerCase(Locale.ROOT);
@@ -2667,6 +2697,12 @@ public class HelperGroup
     static List<GroupMemberDisplay> collect_group_members_for_display(final String group_identifier)
     {
         final List<GroupMemberDisplay> members = new ArrayList<>();
+        final AirLiveOverride.Source standIn = AirLiveOverride.group(group_identifier);
+        if (standIn != null)
+        {
+            members.addAll(standIn.groupMembers(group_identifier));
+            return members;
+        }
         try
         {
             long group_num = tox_group_by_groupid__wrapper(group_identifier);
@@ -3203,17 +3239,45 @@ public class HelperGroup
                                     final int success_string_id, final int failure_string_id,
                                     final String system_message, @Nullable final String founder_password)
     {
+        return create_new_group_id(privacy_state, raw_group_name, success_string_id, failure_string_id,
+                                   system_message, founder_password) != null;
+    }
+
+    /**
+     * Creates the group and returns its ID, or null when it was not created (a toast said why).
+     * KHANDAQ (redesign, E15): "New group" invites and opens it right after; with {@code success_string_id}
+     * 0 no toast says it was created, the opened group shows it.
+     */
+    @Nullable
+    static String create_new_group_id(final int privacy_state, final String raw_group_name,
+                                      final int success_string_id, final int failure_string_id,
+                                      final String system_message, @Nullable final String founder_password)
+    {
+        return create_new_group_id(privacy_state, raw_group_name, success_string_id, failure_string_id,
+                                   system_message, founder_password, null);
+    }
+
+    /**
+     * KHANDAQ (redesign, E21): as above; {@code say_failure} takes the words when the group was not
+     * created, for the screen that asked to say them at its button. Without it they come as a toast.
+     */
+    @Nullable
+    static String create_new_group_id(final int privacy_state, final String raw_group_name,
+                                      final int success_string_id, final int failure_string_id,
+                                      final String system_message, @Nullable final String founder_password,
+                                      @Nullable final java.util.function.Consumer<String> say_failure)
+    {
         if (!HelperFriend.is_tox_profile_ready())
         {
-            display_toast(context_s.getString(R.string.add_group_failed_not_ready), false, 300);
-            return false;
+            say_failure_or_toast(context_s.getString(R.string.add_group_failed_not_ready), say_failure);
+            return null;
         }
 
         final String group_name = sanitize_group_title(raw_group_name);
         if (group_name.isEmpty())
         {
-            display_toast(context_s.getString(R.string.add_group_failed_empty_name), false, 300);
-            return false;
+            say_failure_or_toast(context_s.getString(R.string.add_group_failed_empty_name), say_failure);
+            return null;
         }
 
         final String peer_name = sanitize_group_peer_name(get_group_peer_join_name());
@@ -3224,8 +3288,8 @@ public class HelperGroup
 
         if ((new_group_num < 0) || (new_group_num >= UINT32_MAX_JAVA))
         {
-            display_toast(group_create_failure_message(new_group_num), false, 300);
-            return false;
+            say_failure_or_toast(group_create_failure_message(new_group_num), say_failure);
+            return null;
         }
 
         update_savedata_file_wrapper();
@@ -3234,8 +3298,8 @@ public class HelperGroup
         if (tox_group_get_chat_id(new_group_num, groupid_buf) != 0)
         {
             HelperGeneric.logI(TAG, "create_new_group:get_chat_id failed groupnum=" + new_group_num);
-            display_toast(context_s.getString(failure_string_id), false, 300);
-            return false;
+            say_failure_or_toast(context_s.getString(failure_string_id), say_failure);
+            return null;
         }
 
         final byte[] groupid_buffer = new byte[GROUP_ID_LENGTH];
@@ -3259,7 +3323,10 @@ public class HelperGroup
         }
 
         add_group_wrapper(0, new_group_num, group_identifier, resolved_privacy_state);
-        display_toast(context_s.getString(success_string_id), false, 300);
+        if (success_string_id != 0)
+        {
+            display_toast(context_s.getString(success_string_id), false, 300);
+        }
         add_system_message_to_group_chat(group_identifier, system_message);
         set_group_active(group_identifier);
         if (resolved_privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
@@ -3302,7 +3369,47 @@ public class HelperGroup
             HelperGeneric.logI(TAG, "create_new_group:friendlist:EE:" + e.getMessage());
         }
 
-        return true;
+        return group_identifier;
+    }
+
+    /**
+     * KHANDAQ (redesign, E15): the invitations "New group" sends to the contacts chosen on it, without a
+     * toast for each. One that does not go at once (the contact flapped offline that instant) waits in the
+     * manual invitation queue, as from the dossier. Returns how many went at once.
+     */
+    static int invite_friends_to_new_group(@NonNull final String group_identifier,
+                                           @NonNull final List<String> friend_public_keys)
+    {
+        final long group_num = tox_group_by_groupid__wrapper(group_identifier);
+        if (group_num < 0)
+        {
+            return 0;
+        }
+        int sent = 0;
+        for (final String key : friend_public_keys)
+        {
+            final long friend_num = tox_friend_by_public_key__wrapper(key);
+            if ((friend_num < 0) || (friend_num >= UINT32_MAX_JAVA))
+            {
+                continue;
+            }
+            final int res = tox_group_invite_friend(group_num, friend_num);
+            HelperGeneric.logI(TAG, "invite_friends_to_new_group:group=" + group_identifier_short(group_identifier, false)
+                                    + " friend_num=" + friend_num + " res=" + res);
+            if (res == 1)
+            {
+                sent++;
+            }
+            else
+            {
+                queue_manual_group_invite(group_identifier, key);
+            }
+        }
+        if (sent > 0)
+        {
+            update_savedata_file_wrapper();
+        }
+        return sent;
     }
 
     static String get_effective_group_title(final long group_num, final String group_identifier)
@@ -3798,6 +3905,37 @@ public class HelperGroup
         }
         catch (Exception ignored)
         {
+        }
+    }
+
+    /**
+     * KHANDAQ (redesign, stage 5): a group joined from an invitation card goes by the invitation's name until
+     * toxcore has its own (its name and topic come with the connection), as iOS passes the invitation's name
+     * when it accepts. Before, the group stood under the first characters of its ID for as long as it took
+     * to connect. A name the group already has is never replaced.
+     */
+    static void name_group_from_invitation(final String group_identifier, final String invitation_name)
+    {
+        try
+        {
+            final String id = group_identifier.toLowerCase();
+            final List<GroupDB> rows = orma.selectFromGroupDB().group_identifierEq(id).toList();
+            if (rows.isEmpty())
+            {
+                return;
+            }
+            final String name = AirInviteStore.placeholderName(rows.get(0).name, invitation_name);
+            if (name.isEmpty())
+            {
+                return;
+            }
+            orma.updateGroupDB().group_identifierEq(id).name(name).execute();
+            update_group_in_friendlist(id);
+            update_group_in_groupmessagelist(id);
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "name_group_from_invitation:EE:" + e.getClass().getSimpleName());
         }
     }
 
@@ -4753,13 +4891,16 @@ public class HelperGroup
 
         if (group_id.compareTo("-1") == 0)
         {
-            display_toast(context_s.getString(R.string.group_incoming_message_error), true, 0);
+            AirComposerNotice.sayInGroup(group_id, context_s.getString(R.string.air_group_message_unreadable), true);
             return;
         }
 
-        if (group_temp.group_identifier.toLowerCase().compareTo(group_id.toLowerCase()) != 0)
+        // KHANDAQ (stage 5): no row for the group (left, deleted, or not written yet) is the same case as a
+        // row for another group; it threw a NullPointerException on the Tox thread before.
+        if (group_temp == null || group_temp.group_identifier == null
+            || group_temp.group_identifier.toLowerCase().compareTo(group_id.toLowerCase()) != 0)
         {
-            display_toast(context_s.getString(R.string.group_incoming_message_error), true, 0);
+            AirComposerNotice.sayInGroup(group_id, context_s.getString(R.string.air_group_message_unreadable), true);
             return;
         }
 
@@ -4937,7 +5078,8 @@ public class HelperGroup
             {
                 notificationText = context_s.getString(R.string.group_mention_notification_prefix) + notificationText;
             }
-            change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, notificationText);
+            change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, notificationText,
+                                    m.sent_timestamp, peer_pubkey);
         }
     }
 
@@ -5253,7 +5395,8 @@ public class HelperGroup
 
         if (do_notification)
         {
-            change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, m.text);
+            change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, m.text,
+                                    m.sent_timestamp, m.tox_group_peer_pubkey);
         }
     }
 
@@ -5287,7 +5430,7 @@ public class HelperGroup
         if ((data_length > TOX_MAX_NGC_FILE_AND_HEADER_SIZE) || (data_length < (header + 1)))
         {
             HelperGeneric.logI(TAG, "send_group_image: data length has wrong size: " + data_length);
-            display_toast(context_s.getString(R.string.group_file_send_failed), true, 100);
+            AirComposerNotice.say(context_s.getString(R.string.group_file_send_failed), true);
             return;
         }
 
@@ -5386,7 +5529,7 @@ public class HelperGroup
         {
             HelperGeneric.logI(TAG, "send_group_image: file read mismatch len=" + length_sum + " expected=" + g.filesize);
             mark_ngc_file_transfer_failed(g.group_identifier, g.msg_id_hash);
-            display_toast(context_s.getString(R.string.group_file_send_failed), true, 100);
+            AirComposerNotice.say(context_s.getString(R.string.group_file_send_failed), true);
             return;
         }
 
@@ -5395,7 +5538,7 @@ public class HelperGroup
         {
             HelperGeneric.logI(TAG, "send_group_image: group not found");
             mark_ngc_file_transfer_failed(g.group_identifier, g.msg_id_hash);
-            display_toast(context_s.getString(R.string.group_file_send_failed), true, 100);
+            AirComposerNotice.say(context_s.getString(R.string.group_file_send_failed), true);
             return;
         }
 
@@ -5425,7 +5568,7 @@ public class HelperGroup
             HelperGeneric.logI(TAG, "send_group_image: packet failed res=" + sendRes
                     + " (" + HelperGroup.describe_ngc_custom_packet_error(sendRes) + ")");
             mark_ngc_file_transfer_failed(g.group_identifier, g.msg_id_hash);
-            display_toast(context_s.getString(R.string.group_file_send_failed), true, 100);
+            AirComposerNotice.say(context_s.getString(R.string.group_file_send_failed), true);
             return;
         }
 
@@ -7023,7 +7166,8 @@ public class HelperGroup
                 catch (Exception ignored)
                 {
                 }
-                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, m.text);
+                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, m.text,
+                                        m.sent_timestamp, m.tox_group_peer_pubkey);
             }
 
             HelperFriend.refresh_chat_list_group_row_wrapper(group_id);
@@ -7388,7 +7532,7 @@ public class HelperGroup
 
             if (ff1.length() > TOX_MAX_NGC_FILESIZE)
             {
-                display_toast(context_s.getString(R.string.group_image_shrink_failed), true, 50);
+                AirComposerNotice.say(context_s.getString(R.string.group_image_shrink_failed), true);
             }
         }
         catch (Exception e)
@@ -8394,6 +8538,40 @@ public class HelperGroup
         if (group_identifier != null)
         {
             pending_friend_assisted_joins.remove(group_identifier.toLowerCase(Locale.ENGLISH));
+        }
+    }
+
+    /**
+     * KHANDAQ (redesign, E12): true while we wait for friends to invite us into this group, a join by ID
+     * we started. Such an invitation is taken at once; any other waits as a card until it is answered.
+     */
+    static boolean is_pending_friend_assisted_join(@Nullable final String group_identifier)
+    {
+        if (group_identifier == null)
+        {
+            return false;
+        }
+        final Long asked_ms = pending_friend_assisted_joins.get(group_identifier.toLowerCase(Locale.ENGLISH));
+        return asked_ms != null && System.currentTimeMillis() - asked_ms <= GROUP_INVITE_REQUEST_TTL_MS;
+    }
+
+    /**
+     * KHANDAQ (redesign, E12): true when we are in this group already, connected or not: toxcore holds it.
+     * A group we left is gone from toxcore, so a new invitation to it is a new choice.
+     */
+    static boolean is_member(@Nullable final String group_identifier)
+    {
+        if (group_identifier == null)
+        {
+            return false;
+        }
+        try
+        {
+            return tox_group_by_groupid__wrapper(group_identifier.toLowerCase(Locale.ENGLISH)) >= 0;
+        }
+        catch (Exception e)
+        {
+            return false;
         }
     }
 
@@ -9560,15 +9738,23 @@ public class HelperGroup
 
     static boolean join_public_group_by_id(final String group_id, @Nullable final String password, final boolean show_toast)
     {
+        return join_public_group_by_id(group_id, password, show_toast, null);
+    }
+
+    /**
+     * E21: with {@code failures}, a failed join hands its words to the screen that asked, to say at its
+     * Join button, instead of a toast; {@code show_toast} then decides only the confirmation of a join.
+     * The sink is called on this (worker) thread.
+     */
+    static boolean join_public_group_by_id(final String group_id, @Nullable final String password, final boolean show_toast,
+                                           @Nullable final java.util.function.Consumer<String> failures)
+    {
         try
         {
             final String normalized_group_id = normalize_public_group_chat_id(group_id);
             if (normalized_group_id == null)
             {
-                if (show_toast)
-                {
-                    display_toast(join_public_group_failure_message(-2L), false, 300);
-                }
+                say_join_failure(join_public_group_failure_message(-2L), show_toast, failures);
                 return false;
             }
 
@@ -9576,10 +9762,7 @@ public class HelperGroup
 
             if (!wait_for_tox_ready(12000L))
             {
-                if (show_toast)
-                {
-                    display_toast(join_public_group_failure_message(-1L), false, 300);
-                }
+                say_join_failure(join_public_group_failure_message(-1L), show_toast, failures);
                 return false;
             }
 
@@ -9650,10 +9833,7 @@ public class HelperGroup
                 return finish_public_group_join(new_group_num, normalized_group_id, show_toast);
             }
 
-            if (show_toast)
-            {
-                display_toast(join_public_group_failure_message(last_join_result), false, 300);
-            }
+            say_join_failure(join_public_group_failure_message(last_join_result), show_toast, failures);
         }
         catch (Exception e)
         {
@@ -9661,6 +9841,19 @@ public class HelperGroup
             HelperGeneric.logI(TAG, "join_group:EE01:" + e.getMessage());
         }
         return false;
+    }
+
+    private static void say_join_failure(final String words, final boolean show_toast,
+                                         @Nullable final java.util.function.Consumer<String> failures)
+    {
+        if (failures != null)
+        {
+            failures.accept(words);
+        }
+        else if (show_toast)
+        {
+            display_toast(words, false, 300);
+        }
     }
 
     static void do_join_public_group(Intent data)
@@ -9710,14 +9903,14 @@ public class HelperGroup
 
             if (group_id.compareTo("-1") == 0)
             {
-                display_toast(context_s.getString(R.string.group_incoming_file_error), true, 0);
+                AirComposerNotice.sayInGroup(group_id, context_s.getString(R.string.air_group_file_unreadable), true);
                 return;
             }
 
             if ((group_temp != null)
                 && (group_temp.group_identifier.toLowerCase().compareTo(group_id.toLowerCase()) != 0))
             {
-                display_toast(context_s.getString(R.string.group_incoming_file_error), true, 0);
+                AirComposerNotice.sayInGroup(group_id, context_s.getString(R.string.air_group_file_unreadable), true);
                 return;
             }
 
@@ -9873,7 +10066,8 @@ public class HelperGroup
 
             if (do_notification)
             {
-                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, m.text);
+                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, m.text,
+                                        m.sent_timestamp, m.tox_group_peer_pubkey);
             }
         }
         catch (Exception e)
@@ -11246,13 +11440,15 @@ public class HelperGroup
 
             if (group_id.compareTo("-1") == 0)
             {
-                display_toast(context_s.getString(R.string.group_incoming_file_error), true, 0);
+                AirComposerNotice.sayInGroup(group_id, context_s.getString(R.string.air_group_file_unreadable), true);
                 return;
             }
 
-            if (group_temp.group_identifier.toLowerCase().compareTo(group_id.toLowerCase()) != 0)
+            // KHANDAQ (stage 5): no row for the group is the same case as a row for another group.
+            if (group_temp == null || group_temp.group_identifier == null
+                || group_temp.group_identifier.toLowerCase().compareTo(group_id.toLowerCase()) != 0)
             {
-                display_toast(context_s.getString(R.string.group_incoming_file_error), true, 0);
+                AirComposerNotice.sayInGroup(group_id, context_s.getString(R.string.air_group_file_unreadable), true);
                 return;
             }
 
@@ -11368,7 +11564,8 @@ public class HelperGroup
 
             if (do_notification)
             {
-                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, m.text);
+                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, m.text,
+                                        m.sent_timestamp, m.tox_group_peer_pubkey);
             }
         }
         catch (Exception e)
@@ -11448,90 +11645,49 @@ public class HelperGroup
 
     static void ngc_set_video_call_icon(final int state)
     {
-        try
+        // KHANDAQ (redesign, stage 3): the design system's video glyph in the header, tinted by state: live
+        // while our video goes to the group, transit while a member's comes in, the icon button's otherwise.
+        final Runnable myRunnable = () ->
         {
-            if (state == NGC_VIDEO_ICON_STATE_ACTIVE)
+            try
             {
-                final Runnable myRunnable = new Runnable()
+                final android.widget.ImageButton icon = ml_video_icon;
+                if (icon == null)
                 {
-                    @Override
-                    public void run()
-                    {
-                        try
-                        {
-                            final Drawable d3 = new IconicsDrawable(context_s).
-                                    icon(FontAwesome.Icon.faw_video).color(context_s.getResources().
-                                    getColor(R.color.md_light_green_A700)).sizeDp(80);
-                            ml_video_icon.setImageDrawable(d3);
-                            ml_video_icon.setPadding((int) dp2px(0), (int) dp2px(0), (int) dp2px(0), (int) dp2px(0));
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                    }
-                };
-                if (main_handler_s != null)
-                {
-                    main_handler_s.post(myRunnable);
+                    return;
                 }
+                final Context context = icon.getContext();
+                final android.content.res.ColorStateList tint;
+                final int label;
+                if (state == NGC_VIDEO_ICON_STATE_ACTIVE)
+                {
+                    tint = android.content.res.ColorStateList.valueOf(
+                            androidx.core.content.ContextCompat.getColor(context, R.color.kq_live));
+                    label = R.string.group_live_video_toggle_active;
+                }
+                else if (state == NGC_VIDEO_ICON_STATE_INCOMING)
+                {
+                    tint = android.content.res.ColorStateList.valueOf(
+                            androidx.core.content.ContextCompat.getColor(context, R.color.kq_transit));
+                    label = R.string.group_live_video_toggle_incoming;
+                }
+                else
+                {
+                    tint = androidx.core.content.ContextCompat.getColorStateList(context,
+                                                                                 R.color.air_icon_button_tint);
+                    label = R.string.group_live_video_toggle;
+                }
+                androidx.core.widget.ImageViewCompat.setImageTintList(icon, tint);
+                icon.setContentDescription(context.getString(label));
             }
-            else if (state == NGC_VIDEO_ICON_STATE_INCOMING)
+            catch (Exception e)
             {
-                final Runnable myRunnable = new Runnable()
-                {
-                    @Override
-                    public void run()
-                    {
-                        try
-                        {
-                            final Drawable d3 = new IconicsDrawable(context_s).
-                                    icon(FontAwesome.Icon.faw_video).color(context_s.getResources().
-                                    getColor(R.color.md_amber_800)).sizeDp(80);
-                            ml_video_icon.setPadding((int) dp2px(7), (int) dp2px(7), (int) dp2px(7), (int) dp2px(7));
-                            ml_video_icon.setImageDrawable(d3);
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                    }
-                };
-                if (main_handler_s != null)
-                {
-                    main_handler_s.post(myRunnable);
-                }
+                e.printStackTrace();
             }
-            else // state == NGC_VIDEO_ICON_STATE_INACTIVE
-            {
-                final Runnable myRunnable = new Runnable()
-                {
-                    @Override
-                    public void run()
-                    {
-                        try
-                        {
-                            final Drawable d3 = new IconicsDrawable(context_s).
-                                    icon(FontAwesome.Icon.faw_video).color(context_s.getResources().
-                                    getColor(R.color.icon_colors)).sizeDp(80);
-                            ml_video_icon.setPadding((int) dp2px(7), (int) dp2px(7), (int) dp2px(7), (int) dp2px(7));
-                            ml_video_icon.setImageDrawable(d3);
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                    }
-                };
-                if (main_handler_s != null)
-                {
-                    main_handler_s.post(myRunnable);
-                }
-            }
-        }
-        catch (Exception e)
+        };
+        if (main_handler_s != null)
         {
-            e.printStackTrace();
+            main_handler_s.post(myRunnable);
         }
     }
 

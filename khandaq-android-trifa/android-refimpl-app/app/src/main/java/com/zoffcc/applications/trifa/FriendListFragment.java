@@ -308,6 +308,8 @@ public class FriendListFragment extends Fragment
 
     public void notifyChatListUpdated()
     {
+        // KHANDAQ (redesign): the hidden lists still hear every change first; Air refreshes from them.
+        AirRepository.requestRefresh();
         final Activity activity = getActivity();
         if (activity instanceof MainActivity)
         {
@@ -354,6 +356,8 @@ public class FriendListFragment extends Fragment
 
     public void refresh_group_chat_list_row(final String groupIdentifier)
     {
+        // KHANDAQ (redesign): the hidden lists still hear every change first; Air refreshes from them.
+        AirRepository.requestRefresh();
         if (groupIdentifier == null || main_handler_s == null)
         {
             return;
@@ -693,6 +697,8 @@ public class FriendListFragment extends Fragment
 
     synchronized void modify_friend(final CombinedFriendsAndConferences c, int is_friend)
     {
+        // KHANDAQ (redesign): the hidden lists still hear every change first; Air refreshes from them.
+        AirRepository.requestRefresh();
         // Log.i(TAG, "modify_friend");
 
         if (is_friend == COMBINED_IS_FRIEND)
@@ -885,6 +891,8 @@ public class FriendListFragment extends Fragment
 
     public void remove_group_from_list(@Nullable final String group_identifier)
     {
+        // KHANDAQ (redesign): the hidden lists still hear every change first; Air refreshes from them.
+        AirRepository.requestRefresh();
         if (group_identifier == null || adapter == null)
         {
             return;
@@ -1575,6 +1583,8 @@ public class FriendListFragment extends Fragment
 
     void add_all_friends_clear_real(final int delay)
     {
+        // KHANDAQ (redesign): the hidden lists still hear every change first; Air refreshes from them.
+        AirRepository.requestRefresh();
         if (listMode == LIST_MODE_CONTACTS)
         {
             reloadContactsListFromDb(delay);
@@ -1676,6 +1686,8 @@ public class FriendListFragment extends Fragment
 
     synchronized void add_all_friends_clear(final int delay)
     {
+        // KHANDAQ (redesign): the hidden lists still hear every change first; Air refreshes from them.
+        AirRepository.requestRefresh();
         if (listMode == LIST_MODE_CHATS && !shouldRunFullChatListReload())
         {
             scheduleDeferredFullChatListReload(delay);

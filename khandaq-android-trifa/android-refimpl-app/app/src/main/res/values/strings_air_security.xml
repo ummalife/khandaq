@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Password and PIN, the PIN screens and Change password (redesign stage 4, E20); iOS keys where the meaning is the same, Android wording where Android works differently -->
+    <string name="air_security_pin_section">PIN</string>
+    <string name="air_security_pin">Ask for a PIN</string>
+    <string name="air_security_pin_note">Khandaq asks for the PIN when you come back to it. A PIN cannot be recovered.</string>
+    <string name="air_security_lock_note">Counted from the moment you leave Khandaq.</string>
+    <string name="air_security_password_note">The profile on this phone is encrypted with it. A password cannot be recovered: there are no servers.</string>
+    <string name="air_security_device_key_note">The profile opens with a key kept on this phone. With a password, it is encrypted with the password and, after you log out, opens only with it.</string>
+    <string name="air_password_set_body">Now the profile opens with a key kept on this phone. With a password, it is encrypted with the password and, after you log out, opens only with it. A password cannot be recovered: there are no servers.</string>
+    <string name="air_password_set_action">Set password</string>
+    <string name="air_password_old_placeholder">Old password</string>
+    <string name="air_password_old_first">Enter the old password first.</string>
+    <string name="air_password_wrong_old">The old password is wrong.</string>
+    <string name="air_password_checking">Checking the password</string>
+    <string name="air_password_preparing">Preparing the password</string>
+    <string name="air_password_change_failed">The password was not changed. Try again.</string>
+    <string name="air_password_set_failed">The password was not set: the key kept on this phone did not open the profile. Try again.</string>
+    <string name="air_password_not_set">The password was not set. Try again.</string>
+    <string name="air_password_change_question">Change the password?</string>
+    <string name="air_password_set_question">Set the password?</string>
+    <string name="air_password_restart_consequence">Khandaq closes; when you open it again, it encrypts the profile with the new password and then asks for it.</string>
+    <string name="air_password_reopen">Open Khandaq again to finish.</string>
+    <string name="air_pin_enter_title">Enter the PIN</string>
+    <string name="air_pin_repeat_title">Repeat the PIN</string>
+    <string name="air_pin_wrong">Wrong PIN.</string>
+    <string name="air_pin_mismatch">The PINs do not match. Set it again.</string>
+    <string name="air_pin_set_note">A PIN cannot be recovered. If you forget it, Khandaq opens again only after its data is cleared in the phone\'s settings, and that deletes the profile from this phone.</string>
+    <string name="air_pin_entered_format">%1$d of %2$d entered</string>
+    <string name="air_pin_delete_digit">Delete the last digit</string>
+    <!-- The page of a password change at the next start: busy, then rolled back (E20, E21). -->
+    <string name="air_rekey_running">Encrypting the profile with the new password</string>
+    <string name="air_rekey_running_note">Keep Khandaq open. A large profile takes longer.</string>
+    <string name="air_rekey_failed_title">The password was not changed</string>
+    <string name="air_rekey_failed_note">Encrypting the profile with the new password did not finish, so nothing was changed: the profile opens as before.</string>
+    <string name="air_rekey_continue">Continue</string>
+</resources>

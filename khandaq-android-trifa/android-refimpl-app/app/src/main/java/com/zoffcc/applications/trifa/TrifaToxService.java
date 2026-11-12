@@ -861,8 +861,10 @@ public class TrifaToxService extends Service
                     update_group_in_db_name(group_identifier, group_topic);
                     update_group_in_db_topic(group_identifier, group_topic);
                 }
-                else
+                else if (group_name.length() > 0)
                 {
+                    // KHANDAQ (redesign, stage 5): an empty name from toxcore never replaces the one the
+                    // group has, such as the invitation's (MainActivity.join_invite).
                     update_group_in_db_name(group_identifier, group_name);
                 }
 
@@ -960,6 +962,13 @@ public class TrifaToxService extends Service
                         else if (current_savedata.exists())
                         {
                             HelperGeneric.logI(TAG, "tox_thread_start_fg:KEEPING savedata (identity anchor present)");
+                            if (MainActivity.savedata_not_opened)
+                            {
+                                // KHANDAQ (stage 5): no key on this phone opens the save, so every start
+                                // ended on this toast. The next start stops on the sign-in page, which
+                                // says why and offers Delete and create new; the save stays as it is.
+                                CheckPasswordActivity.noteProfileNotOpened(context_s);
+                            }
                         }
                     }
                     catch (Exception e)
@@ -967,13 +976,20 @@ public class TrifaToxService extends Service
                         e.printStackTrace();
                     }
 
+                    // E21: this exit is fatal and comes before any screen can stand, so it stays a toast.
+                    // Its words now say what happened to the file: set aside (no identity loaded here
+                    // before), or kept as it is (the old words claimed a rename in both cases).
+                    final boolean savedata_parked =
+                            !new File(MainActivity.app_files_directory, "savedata.tox").exists();
                     if (main_handler_s != null)
                     {
                         main_handler_s.post(() ->
                         {
                             try
                             {
-                                Toast.makeText(context_s, R.string.tox_profile_load_failed,
+                                Toast.makeText(context_s, savedata_parked
+                                                          ? R.string.air_profile_load_failed_parked
+                                                          : R.string.air_profile_load_failed_kept,
                                                Toast.LENGTH_LONG).show();
                             }
                             catch (Exception ignored)
@@ -1244,6 +1260,8 @@ public class TrifaToxService extends Service
                     onb_prefs.edit().remove(CreateProfileActivity.PREF_ONBOARDING_DISPLAY_NAME).apply();
                     HelperGeneric.logI(TAG, "AAA:005");
                 }
+                // KHANDAQ (redesign stage 4, E20): the sign-in page shows this name before the profile is open.
+                DbSecretKeyStorage.rememberProfileName(context_s, global_my_name);
 
                 if (tox_self_get_status_message_size() > 0)
                 {
@@ -1841,6 +1859,10 @@ public class TrifaToxService extends Service
             last_delivery_watchdog_ms = System.currentTimeMillis();
             MessageDeliveryWatchdog.tick();
         }
+
+        // KHANDAQ (redesign, stage 2): the hours each contact is online, for the chat's day strip. Throttled
+        // inside to one pass every five minutes.
+        AirContactMarks.tick();
     }
 
     private void start_queued_filetransfers()
@@ -2713,7 +2735,9 @@ public class TrifaToxService extends Service
 
                 if (is_friend_online_real(tox_friend_by_public_key__wrapper(m_unsent.tox_friendpubkey)) == 0)
                 {
-                    if (m_unsent.sent_push < 1)
+                    // KHANDAQ (redesign, stage 2): messages now queue while our own node is offline too.
+                    // The one push per message waits until we are online, or it is spent on a dead link.
+                    if ((m_unsent.sent_push < 1) && HelperFriend.is_self_tox_connected_to_dht())
                     {
                         friend_call_push_url(m_unsent.tox_friendpubkey, m_unsent.sent_timestamp);
                         orma.updateMessage().idEq(m_unsent.id).sent_push(1).execute();
@@ -2721,54 +2745,76 @@ public class TrifaToxService extends Service
                     continue;
                 }
 
-                MainActivity.send_message_result result = tox_friend_send_message_wrapper(
-                        m_unsent.tox_friendpubkey, 0, m_unsent.text, (m_unsent.sent_timestamp / 1000));
-
-                if (result == null)
+                // KHANDAQ (redesign, stage 2): the chat's tray can edit or cancel a queued text until it
+                // leaves. Under the tray's lock, read the row again and send what it holds now (nothing if
+                // it was cancelled or already left), and write the result before the lock is released.
+                synchronized (AirChatPanel.UNSENT_LOCK)
                 {
-                    continue;
-                }
+                    final List<com.zoffcc.applications.sorm.Message> fresh = orma.selectFromMessage().
+                            idEq(m_unsent.id).
+                            message_idEq(-1).
+                            readEq(false).
+                            toList();
+                    if ((fresh == null) || fresh.isEmpty())
+                    {
+                        continue;
+                    }
+                    m_unsent = fresh.get(0);
 
-                long res = result.msg_num;
-                if (HelperFriend.is_dm_message_send_success(res))
-                {
-                    m_unsent.resend_count = 1;
-                    m_unsent.message_id = res;
-                }
-                else
-                {
-                    m_unsent.resend_count = 0;
-                    m_unsent.message_id = -1;
-                }
+                    MainActivity.send_message_result result = tox_friend_send_message_wrapper(
+                            m_unsent.tox_friendpubkey, 0, m_unsent.text, (m_unsent.sent_timestamp / 1000));
 
-                if (result.msg_v2)
-                {
-                    m_unsent.msg_version = 1;
-                }
+                    if (result == null)
+                    {
+                        continue;
+                    }
 
-                if ((result.msg_hash_hex != null) && (!result.msg_hash_hex.isEmpty()))
-                {
-                    m_unsent.msg_id_hash = result.msg_hash_hex;
-                }
+                    long res = result.msg_num;
+                    if (HelperFriend.is_dm_message_send_success(res))
+                    {
+                        m_unsent.resend_count = 1;
+                        m_unsent.message_id = res;
+                    }
+                    else
+                    {
+                        m_unsent.resend_count = 0;
+                        m_unsent.message_id = -1;
+                    }
 
-                if ((result.msg_hash_v3_hex != null) && (!result.msg_hash_v3_hex.isEmpty()))
-                {
-                    m_unsent.msg_idv3_hash = result.msg_hash_v3_hex;
-                }
+                    if (result.msg_v2)
+                    {
+                        m_unsent.msg_version = 1;
+                    }
 
-                if ((result.raw_message_buf_hex != null) && (!result.raw_message_buf_hex.isEmpty()))
-                {
-                    m_unsent.raw_msgv2_bytes = result.raw_message_buf_hex;
-                }
+                    if ((result.msg_hash_hex != null) && (!result.msg_hash_hex.isEmpty()))
+                    {
+                        m_unsent.msg_id_hash = result.msg_hash_hex;
+                    }
 
-                update_message_in_db_messageid(m_unsent);
-                // KHANDAQ (#193): PERSIST the msgv3 hash the resend just minted. It was only kept
-                // in memory, so a later delete-for-both / edit / reaction re-read the row from the
-                // DB, found an empty anchor and silently skipped sending the wire packet — the
-                // peer never saw the delete. (The recipient stored THIS hash, so it must match.)
-                update_message_in_db_msg_idv3_hash(m_unsent);
-                update_message_in_db_resend_count(m_unsent);
-                update_message_in_db_no_read_recvedts(m_unsent);
+                    if ((result.msg_hash_v3_hex != null) && (!result.msg_hash_v3_hex.isEmpty()))
+                    {
+                        m_unsent.msg_idv3_hash = result.msg_hash_v3_hex;
+                    }
+
+                    if ((result.raw_message_buf_hex != null) && (!result.raw_message_buf_hex.isEmpty()))
+                    {
+                        m_unsent.raw_msgv2_bytes = result.raw_message_buf_hex;
+                    }
+
+                    update_message_in_db_messageid(m_unsent);
+                    // KHANDAQ (#193): PERSIST the msgv3 hash the resend just minted. It was only kept
+                    // in memory, so a later delete-for-both / edit / reaction re-read the row from the
+                    // DB, found an empty anchor and silently skipped sending the wire packet: the
+                    // peer never saw the delete. (The recipient stored THIS hash, so it must match.)
+                    update_message_in_db_msg_idv3_hash(m_unsent);
+                    update_message_in_db_resend_count(m_unsent);
+                    HelperMessage.update_message_in_db_no_read_recvedts_now(m_unsent);
+                    if (HelperFriend.is_dm_message_send_success(res))
+                    {
+                        // KHANDAQ (redesign, stage 2): the open chat turns its clock into the "sent" check.
+                        HelperMessage.update_single_message(m_unsent, true);
+                    }
+                }
 
                 sent_this_round++;
                 if (sent_this_round >= max_per_round)

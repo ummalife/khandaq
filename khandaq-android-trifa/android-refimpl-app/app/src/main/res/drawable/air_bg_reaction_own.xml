@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A reaction that is our own: the selected plate with a stronger line. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/kq_selected" />
+    <stroke android:width="@dimen/kq_stroke_hairline" android:color="@color/kq_line_strong" />
+    <corners android:radius="@dimen/kq_radius_round" />
+</shape>

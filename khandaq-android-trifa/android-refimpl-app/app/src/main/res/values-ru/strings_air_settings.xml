@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Advanced settings (stage 3b): the sections by task, the dialog buttons and the start-on-boot note -->
+    <string name="air_pref_section_chats">Чаты</string>
+    <string name="air_pref_section_files">Файлы</string>
+    <string name="air_pref_section_call_sound">Звук в звонках</string>
+    <string name="air_pref_section_call_video">Видео в звонках</string>
+    <string name="air_pref_section_system">Система</string>
+    <string name="air_pref_ok">OK</string>
+    <string name="air_pref_boot_title">Запуск после перезагрузки</string>
+    <string name="air_pref_boot_message">Android 10 и новее не дают приложению открыться самому после перезагрузки телефона, поэтому на этом телефоне переключатель ничего не меняет. После перезагрузки откройте Khandaq, чтобы быть в сети.</string>
+    <!-- The command line (E3, stage 3b): Paste ID and joining a group by its key or link -->
+    <string name="air_cmd_paste_id">Вставить ID</string>
+    <string name="air_cmd_paste_none">В буфере обмена нет ID или ключа группы</string>
+    <string name="air_cmd_join_group">Вступить в группу по этому ключу</string>
+    <string name="air_cmd_group_open">Открыть группу</string>
+    <string name="air_cmd_group_member">Вы в этой группе</string>
+    <string name="air_cmd_group_note_nobody">Пока нет контактов в сети, чтобы впустить вас: вход подождёт. Только открытые группы.</string>
+    <string name="air_cmd_group_joining">Вступаем в группу</string>
+    <string name="air_cmd_group_failed">Не удалось вступить в группу. Попробуйте ещё раз.</string>
+    <plurals name="air_cmd_group_note_online">
+        <item quantity="one">Попросим %1$d контакт в сети впустить вас. Только открытые группы.</item>
+        <item quantity="few">Попросим %1$d контакта в сети впустить вас. Только открытые группы.</item>
+        <item quantity="many">Попросим %1$d контактов в сети впустить вас. Только открытые группы.</item>
+        <item quantity="other">Попросим %1$d контакта в сети впустить вас. Только открытые группы.</item>
+    </plurals>
+    <!-- Advanced settings rows (stage 3b): titles and summaries in plain words, for the keys of pref_general.xml -->
+    <string name="air_pref_font_size_title">Размер текста в чатах</string>
+    <string name="air_pref_font_size_summary">Размер текста сообщений в чатах. Остальные экраны Khandaq берут размер текста из настроек телефона.</string>
+    <string name="air_pref_incognito_title">Клавиатура инкогнито</string>
+    <string name="air_pref_incognito_summary">Просит клавиатуру не запоминать то, что вы пишете в сообщениях. Выполнит ли она просьбу, зависит от клавиатуры.</string>
+    <string name="air_pref_screenshots_title">Запрет снимков экрана</string>
+    <string name="air_pref_screenshots_summary">Список чатов, чаты и звонки не попадают на снимки и записи экрана, а в недавних приложениях выглядят пустыми.</string>
+    <string name="air_pref_page_size_title">Сообщений на странице</string>
+    <string name="air_pref_page_size_summary">Чат показывает столько сообщений за раз, более ранние открываются касанием. 0 показывает все сразу, в длинном чате это может быть медленно.</string>
+    <string name="air_pref_group_notes_title">Кто входит и выходит</string>
+    <string name="air_pref_group_notes_summary">В групповом чате появляется строка, когда кто-то входит, выходит или меняет имя.</string>
+    <string name="air_pref_irc_name_1_title">Первое скрытое имя IRC</string>
+    <string name="air_pref_irc_name_2_title">Второе скрытое имя IRC</string>
+    <string name="air_pref_irc_name_3_title">Третье скрытое имя IRC</string>
+    <string name="air_pref_irc_name_1_summary">В группе с мостом IRC сообщения, которые он передаёт от этого имени, скрыты. Если моста нет, оставьте пустым.</string>
+    <string name="air_pref_irc_name_more_summary">Ещё одно имя, которое нужно скрыть, или оставьте пустым.</string>
+    <string name="air_pref_accept_pictures_title">Автоприём изображений</string>
+    <string name="air_pref_accept_pictures_summary">Изображения до 12 МБ загружаются без вопроса.</string>
+    <string name="air_pref_accept_videos_title">Автоприём видео</string>
+    <string name="air_pref_accept_videos_summary">Видео до 200 МБ загружаются без вопроса.</string>
+    <string name="air_pref_accept_files_title">Автоприём всех файлов</string>
+    <string name="air_pref_accept_files_summary">Любой файл до 200 МБ загружается без вопроса, а это место на телефоне и трафик.</string>
+    <string name="air_pref_share_in_title">Отправка из других приложений</string>
+    <string name="air_pref_share_in_summary">Можно отправлять фото и файлы в чат через меню «Поделиться» другого приложения.</string>
+    <string name="air_pref_open_out_title">Открытие в других приложениях</string>
+    <string name="air_pref_open_out_summary">Полученный файл открывается прямо в другом приложении, без сохранения на телефон. Вредоносное приложение тогда сможет прочитать и другие файлы, которые Khandaq хранит в зашифрованном виде.</string>
+    <string name="air_pref_screen_off_title">Гасить экран у уха</string>
+    <string name="air_pref_screen_off_summary">Во время голосового звонка экран гаснет, когда телефон у уха. Если потом он не включается, выключите это: экран будет только становиться пустым.</string>
+    <string name="air_pref_auto_level_title">Автоуровень микрофона</string>
+    <string name="air_pref_auto_level_summary">В звонках тихий голос автоматически становится громче. Если звук искажается, выключите это.</string>
+    <string name="air_pref_mic_boost_title">Усиление микрофона</string>
+    <string name="air_pref_mic_boost_summary">Делает ваш голос громче в звонках, если микрофон тихий. 1 означает без усиления.</string>
+    <string name="air_pref_boost_lowers_title">Усиление делает тише</string>
+    <string name="air_pref_boost_lowers_summary">Для слишком громкого микрофона: усиление выше тогда делает голос тише, а не громче.</string>
+    <string name="air_pref_noise_title">Подавление шума</string>
+    <string name="air_pref_noise_summary">Убирает из вашего голоса в звонках фоновый шум, например улицы или вентилятора. Немного больше расходует батарею.</string>
+    <string name="air_pref_call_quality_title">Качество звука в звонках</string>
+    <string name="air_pref_call_quality_summary">Чем выше качество, тем чище звук и больше трафик. Действует со следующего звонка.</string>
+    <string name="air_pref_swap_colours_title">Поменять цвета камеры</string>
+    <string name="air_pref_swap_colours_summary">Если ваше видео выходит в неправильных цветах, например с синей кожей, переключите это.</string>
+    <string name="air_pref_picture_format_title">Формат картинки камеры</string>
+    <string name="air_pref_picture_format_summary">Если ваше видео выходит искажённым или в полосах, попробуйте другой формат.</string>
+    <string name="air_pref_video_chip_title">Видеочип телефона</string>
+    <string name="air_pref_video_chip_summary">В видеозвонках картинку сжимает видеочип телефона, а не Khandaq. Это бережёт батарею, но на некоторых телефонах картинка рассыпается.</string>
+    <string name="air_pref_resolution_title">Разрешение камеры</string>
+    <string name="air_pref_resolution_summary">Насколько чёткая ваша картинка в видеозвонках. Для более чёткой нужно более быстрое соединение.</string>
+    <string name="air_pref_gradual_refresh_title">Постепенное обновление</string>
+    <string name="air_pref_gradual_refresh_summary">С видеочипом телефона картинка обновляется по частям, а не целиком, и при слабой связи видео идёт ровнее.</string>
+    <string name="air_pref_fewer_frames_title">Меньше кадров</string>
+    <string name="air_pref_fewer_frames_summary">Отправляет вдвое меньше кадров в секунду, около 12 вместо 25: менее плавно, зато меньше трафика.</string>
+    <string name="air_pref_camera_fps_title">15 кадров в секунду</string>
+    <string name="air_pref_camera_fps_summary">Просит камеру снимать 15 кадров в секунду. На некоторых телефонах Khandaq тогда может закрыться при включении камеры.</string>
+    <string name="air_pref_direct_only_title">Только прямые соединения</string>
+    <string name="air_pref_direct_only_summary">Khandaq соединяется только напрямую, без ретрансляторов, и с контактами в сетях, закрывающих прямой путь, связаться не получится. Действует со следующего запуска Khandaq.</string>
+    <string name="air_pref_tor_title">Подключение через Tor</string>
+    <string name="air_pref_tor_summary">Трафик идёт через сеть Tor, и контакты не видят ваш адрес в интернете. Нужно приложение Orbot, соединение медленнее, действует со следующего запуска Khandaq.</string>
+    <string name="air_pref_start_after_restart_title">Запуск после перезагрузки</string>
+    <string name="air_pref_start_after_restart_summary">Открывает Khandaq после перезагрузки телефона на Android 9 и более ранних. Android 10 и новее этого не разрешают: после перезагрузки откройте Khandaq один раз.</string>
+    <!-- The shown choices of the Advanced lists; their stored values stay the arrays of strings.xml -->
+    <string-array name="air_pref_font_size_entries">
+        <item>Самый мелкий</item>
+        <item>Мелкий</item>
+        <item>Обычный</item>
+        <item>Крупный</item>
+        <item>Крупнее</item>
+        <item>Очень крупный</item>
+        <item>Самый крупный</item>
+    </string-array>
+    <string-array name="air_pref_call_quality_entries">
+        <item>Низкое</item>
+        <item>Обычное</item>
+        <item>Высокое</item>
+    </string-array>
+    <string-array name="air_pref_picture_format_entries">
+        <item>Обычный</item>
+        <item>Другой</item>
+    </string-array>
+    <string-array name="air_pref_resolution_entries">
+        <item>Обычное</item>
+        <item>HD</item>
+        <item>Full HD</item>
+    </string-array>
+</resources>

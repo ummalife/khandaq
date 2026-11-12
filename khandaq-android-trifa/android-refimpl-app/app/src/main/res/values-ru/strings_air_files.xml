@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Redesign stage 3b: files, photos and voice notes as entries of the transcript (E8); iOS wording where iOS has it -->
+    <string name="air_file_accept">Принять</string>
+    <string name="air_file_decline">Отклонить</string>
+    <string name="air_file_cancel">Отменить</string>
+    <string name="air_file_retry_incoming">Скачать снова</string>
+    <string name="air_file_retry_outgoing">Отправить снова</string>
+    <string name="air_file_left_format">Осталось %s</string>
+    <string name="air_file_paused">На паузе</string>
+    <string name="air_file_failed_incoming">Загрузка прервалась</string>
+    <string name="air_file_failed_outgoing">Не отправлено</string>
+    <string name="air_file_waits_accept_format">Ждёт, когда %s примет файл</string>
+    <string name="air_file_waits_online_format">Уйдёт, когда %s будет в сети</string>
+    <string name="air_voice_listen">Слушать</string>
+    <string name="air_voice_pause">Пауза</string>
+    <string name="air_voice_spoken">Голосовое сообщение</string>
+    <string name="air_file_saved_format">Сохранено в %s</string>
+    <string name="air_file_saved_app_folder_format">Сохранено в папке приложения: %s</string>
+    <string name="air_file_save_failed">Файл не сохранился. Попробуйте ещё раз</string>
+    <string name="air_file_export_title">Сохранить копию на телефон?</string>
+    <string name="air_file_export_message">Копия хранится вне Khandaq и не зашифрована.</string>
+    <string name="air_file_export_action">Сохранить</string>
+    <string name="air_file_saving">Сохраняем файл</string>
+    <string name="air_file_save">Сохранить на телефон</string>
+    <string name="air_file_share">Поделиться</string>
+    <!-- Redesign stage 3b: the question before a file of theirs is declined, and a group file that waits for the group -->
+    <string name="air_file_decline_title">Отклонить файл?</string>
+    <string name="air_file_decline_message">Файл не загрузится на этот телефон. Отправитель увидит, что он не дошёл.</string>
+    <string name="air_file_waits_group">Уйдёт, когда группа будет в сети</string>
+</resources>

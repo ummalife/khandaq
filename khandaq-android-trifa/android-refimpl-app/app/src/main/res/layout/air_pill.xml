@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    A filter pill with its count. The frame is the 48dp touch target and carries the states; the
+    pill inside is drawn 32dp high and copies them. With the phone's largest text the pill and its
+    count grow with their words instead of cutting them; up to font 1.3 nothing needs more than 32dp.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="@dimen/kq_size_target_android"
+    android:layout_marginEnd="@dimen/kq_space_6"
+    android:clickable="true"
+    android:focusable="true">
+
+    <LinearLayout
+        android:id="@+id/air_pill_body"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:background="@drawable/air_bg_pill"
+        android:duplicateParentState="true"
+        android:gravity="center_vertical"
+        android:importantForAccessibility="noHideDescendants"
+        android:minHeight="@dimen/kq_size_chip"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/kq_space_12"
+        android:paddingTop="@dimen/kq_space_2"
+        android:paddingEnd="@dimen/kq_space_12"
+        android:paddingBottom="@dimen/kq_space_2">
+
+        <TextView
+            android:id="@+id/air_pill_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:maxLines="1"
+            android:textAppearance="@style/TextAppearance.KQ.Label"
+            android:textColor="@color/air_pill_text" />
+
+        <com.zoffcc.applications.trifa.AirRollingLabel
+            android:id="@+id/air_pill_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/kq_space_6"
+            android:background="@drawable/air_bg_badge"
+            android:minWidth="@dimen/kq_size_badge"
+            android:minHeight="@dimen/kq_size_badge"
+            android:paddingStart="@dimen/kq_space_6"
+            android:paddingEnd="@dimen/kq_space_6"
+            android:visibility="gone" />
+    </LinearLayout>
+</FrameLayout>

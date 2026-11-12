@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (redesign, stage 5): Delete on the PIN keypad of the lock: a white word in the place of a key,
+     nothing at rest, translucent white (media-control) while pressed, a white focus ring under a keyboard. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:exitFadeDuration="@integer/kq_dur_tap">
+    <item android:state_pressed="true">
+        <shape android:shape="oval">
+            <solid android:color="@color/kq_media_control" />
+        </shape>
+    </item>
+    <item android:state_focused="true">
+        <shape android:shape="oval">
+            <solid android:color="@android:color/transparent" />
+            <stroke android:width="@dimen/kq_stroke_focus" android:color="@color/kq_fixed_white" />
+        </shape>
+    </item>
+    <item>
+        <color android:color="@android:color/transparent" />
+    </item>
+</selector>

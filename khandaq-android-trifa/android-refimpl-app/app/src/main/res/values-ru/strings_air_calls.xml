@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- KHANDAQ (redesign, stage 3b): the call screens, with the iOS keys and wording (CallBaseController, CallButton, AirCallText). -->
+    <string name="air_call_incoming">Входящий звонок</string>
+    <string name="air_call_calling">Вызываем</string>
+    <string name="air_call_ended">Звонок окончен</string>
+    <string name="air_call_decline">Отклонить</string>
+    <string name="air_call_answer">Ответить</string>
+    <string name="air_call_answer_video">С видео</string>
+    <string name="air_call_end">Завершить</string>
+    <string name="air_call_mic">Микрофон</string>
+    <string name="air_call_mic_on">включён</string>
+    <string name="air_call_mic_off">выключен</string>
+    <string name="air_call_speaker">Динамик</string>
+    <string name="air_call_speaker_on">включён</string>
+    <string name="air_call_speaker_off">выключен</string>
+    <string name="air_call_switch_camera">Сменить камеру</string>
+    <string name="air_call_line_direct">Прямая связь</string>
+    <string name="air_call_line_relay">Через ретранслятор</string>
+    <string name="air_call_line_none">Связи сейчас нет</string>
+</resources>

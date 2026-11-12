@@ -468,6 +468,27 @@ final class ChatListUiHelper
         return cached_group_last_msg(group_identifier).timestampMs;
     }
 
+    /** The newest message of a group, from the same short-lived cache the old list reads; null when none. */
+    static GroupMessage group_last_message(final String group_identifier)
+    {
+        return cached_group_last_msg(group_identifier).latest;
+    }
+
+    /**
+     * Air's preview of a 1:1 or saved message: the visible body only. Air shows whose message it is
+     * with the delivery mark, so there is no "You:" prefix.
+     */
+    static String air_message_body(final Context context, final String text, final String filename)
+    {
+        return format_message_body(context, text, filename);
+    }
+
+    /** Air's preview of a group message: "Sender: body" for others, the body alone for our own. */
+    static String air_group_preview(final Context context, final GroupMessage message)
+    {
+        return format_group_message_preview(context, message, false);
+    }
+
     /** Strip reply/mention wire metadata and return user-visible preview text. */
     static String sanitize_preview_body(final String rawText)
     {
@@ -494,6 +515,12 @@ final class ChatListUiHelper
 
     private static String format_group_message_preview(final Context context, final GroupMessage message)
     {
+        return format_group_message_preview(context, message, true);
+    }
+
+    private static String format_group_message_preview(final Context context, final GroupMessage message,
+                                                       final boolean prefixOwn)
+    {
         if (message == null)
         {
             return "";
@@ -505,7 +532,7 @@ final class ChatListUiHelper
 
         if (outgoing)
         {
-            return context.getString(R.string.chat_list_preview_you, body);
+            return prefixOwn ? context.getString(R.string.chat_list_preview_you, body) : body;
         }
 
         String sender = message.tox_group_peername;

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (redesign, E22): over the in-app band, with its sheet radius: the focus ring under a keyboard,
+     nothing otherwise. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <stroke android:width="@dimen/kq_stroke_focus" android:color="@color/kq_focus" />
+            <corners android:radius="@dimen/kq_radius_sheet" />
+        </shape>
+    </item>
+    <item>
+        <color android:color="@android:color/transparent" />
+    </item>
+</selector>

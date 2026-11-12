@@ -25,7 +25,9 @@ enum ThemeChrome {
         let textColor = theme.colorForType(.NormalText)
 
         UIButton.appearance().tintColor = linkTextColor
-        UISwitch.appearance().onTintColor = linkTextColor
+        // The link colour is ink, which turns near-white in the dark theme and swallows the white
+        // knob; the switch token keeps the knob readable in both themes.
+        UISwitch.appearance().onTintColor = KQColor.switchOn
         UINavigationBar.appearance().tintColor = linkTextColor
         UINavigationBar.appearance().barTintColor = backgroundColor
         UINavigationBar.appearance().titleTextAttributes = [.foregroundColor: textColor]
@@ -56,9 +58,10 @@ enum ThemeChrome {
     static func applyWindowStyle(_ window: UIWindow?, theme: Theme) {
         if #available(iOS 13.0, *) {
             // Drive system-drawn UI (UIAlertController alerts & action sheets, text fields, the keyboard,
-            // pickers, switches) to match the app's custom theme. With .unspecified these followed the
-            // SYSTEM appearance and rendered light ("white patches") while the app was in dark mode.
-            window?.overrideUserInterfaceStyle = ThemeAppearance.isDarkMode ? .dark : .light
+            // pickers, switches) to match the app's custom theme. An explicit light or dark choice is
+            // forced on the window; while the app follows the system the window follows it too, so
+            // the YAML theme, the design tokens and system controls always agree.
+            window?.overrideUserInterfaceStyle = ThemeAppearance.windowInterfaceStyle
         }
         window?.backgroundColor = theme.colorForType(.NormalBackground)
     }
@@ -136,7 +139,7 @@ enum ThemeChrome {
             return
         }
 
-        // KHANDAQ: never recurse into system controls that own their internal appearance — the
+        // KHANDAQ: never recurse into system controls that own their internal appearance: the
         // generic re-theme below paints their PRIVATE subviews with .NormalBackground. After a live
         // theme rebuild this blanked the UISearchBar's rounded field pill (+ placeholder) and drew a
         // dark square box behind each UISwitch knob. A fresh launch escapes it only because apply()
@@ -182,7 +185,7 @@ enum ThemeChrome {
     }
 
     /// A view class UIKit keeps to itself: named with a leading underscore (`_UIFloatingBarContainerView`,
-    /// mangled Swift `_TtGC5UIKit…`) or `UIKit.…`, and not defined by the app.
+    /// mangled Swift `_TtGC5UIKit...`) or `UIKit....`, and not defined by the app.
     static func isUIKitPrivateView(_ view: UIView) -> Bool {
         let viewClass: AnyClass = type(of: view)
         if Bundle(for: viewClass) == Bundle.main {
@@ -194,13 +197,13 @@ enum ThemeChrome {
     }
 
     // KHANDAQ design (Figma): navigation-bar action buttons sit in a soft grey capsule (iOS 26
-    // Liquid Glass look) — a circle for icon buttons (e.g. "+") and a pill for text buttons (e.g.
+    // Liquid Glass look): a circle for icon buttons (e.g. "+") and a pill for text buttons (e.g.
     // "Править"). Applied selectively per screen, NOT globally, so back buttons stay plain as in
     // the design.
     static func makeCircleNavButton(theme: Theme, image: UIImage?, target: Any?, action: Selector, tint: UIColor? = nil) -> UIBarButtonItem {
-        // KHANDAQ (#iOS nav polish): frameless nav button — NO grey circle (the tester found the circle/
+        // KHANDAQ (#iOS nav polish): frameless nav button, NO grey circle (the tester found the circle/
         // pill chrome cluttered the header). Just the tinted glyph, native/Telegram-clean, consistent
-        // across every screen that uses this helper (Contacts, back button, add-friend, …).
+        // across every screen that uses this helper (Contacts, back button, add-friend and so on).
         let size: CGFloat = 32.0
         let button = UIButton(type: .system)
         button.backgroundColor = .clear
@@ -215,6 +218,13 @@ enum ThemeChrome {
         button.translatesAutoresizingMaskIntoConstraints = false
         button.widthAnchor.constraint(equalToConstant: size).isActive = true
         button.heightAnchor.constraint(equalToConstant: size).isActive = true
+        // KHANDAQ (redesign stage 5): the glyph keeps its size while the text grows; at the accessibility
+        // text sizes the bar shows it large on a long press (the Large Content Viewer) from these, as it does
+        // for its own items. The screen that names the button sets its title (the back button takes the
+        // title of the screen it returns to).
+        button.showsLargeContentViewer = true
+        button.largeContentImage = image
+        button.scalesLargeContentImage = true
         return UIBarButtonItem(customView: button)
     }
 
@@ -228,13 +238,13 @@ enum ThemeChrome {
         return makeCircleNavButton(theme: theme, image: image, target: target, action: action)
     }
 
-    /// Resizable grey capsule used as a bar-button background image — lets a SYSTEM bar button (e.g.
+    /// Resizable grey capsule used as a bar-button background image; lets a SYSTEM bar button (e.g.
     /// the auto-localized Edit/Done editButtonItem) keep its behaviour while gaining the design's pill.
     static func navCapsuleBackgroundImage(theme: Theme) -> UIImage {
         let height: CGFloat = 30.0
         let cap = height / 2.0
         let size = CGSize(width: cap * 2.0 + 1.0, height: height)
-        // KHANDAQ (#iOS nav polish): no grey pill behind Edit/Done — a CLEAR background so the button is
+        // KHANDAQ (#iOS nav polish): no grey pill behind Edit/Done, a CLEAR background so the button is
         // plain tinted text (native/Telegram-clean), consistent with the frameless nav glyphs.
         let fill: UIColor = .clear
         let renderer = UIGraphicsImageRenderer(size: size)

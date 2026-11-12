@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (redesign, stage 3b; stage 5): the glyph of a call switch on the lock ground, white at rest and
+     lock-top on the white circle while the switch is on, as CallButton on iOS. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/kq_lock_top" android:state_activated="true" />
+    <item android:color="@color/kq_fixed_white" />
+</selector>

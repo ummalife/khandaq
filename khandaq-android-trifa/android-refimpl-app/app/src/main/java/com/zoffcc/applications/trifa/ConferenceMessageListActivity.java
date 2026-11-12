@@ -600,7 +600,8 @@ public class ConferenceMessageListActivity extends AppCompatActivity
 
     private void setUpEmojiPopup()
     {
-        emojiPopup = EmojiPopup.Builder.fromRootView(rootView).setOnEmojiBackspaceClickListener(
+        // KHANDAQ (redesign, stage 5): the panel on the design's grounds, as in the conversations.
+        emojiPopup = AirUi.emojiPanelColors(this, EmojiPopup.Builder.fromRootView(rootView).setOnEmojiBackspaceClickListener(
                 new OnEmojiBackspaceClickListener()
                 {
                     @Override
@@ -651,7 +652,7 @@ public class ConferenceMessageListActivity extends AppCompatActivity
             {
                 // Log.d(TAG, "Closed soft keyboard");
             }
-        }).build(ml_new_conf_message);
+        })).build(ml_new_conf_message);
     }
 
     String get_current_conf_id()

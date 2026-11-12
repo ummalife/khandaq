@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- First launch, sign-in and moving a profile in (redesign stage 4, E19 and E20); iOS keys where the meaning is the same, Android wording where Android works differently -->
+    <string name="air_first_step_format">Шаг %1$d из %2$d</string>
+    <string name="air_first_name_title">Как вас называть</string>
+    <string name="air_first_name_body">Имя увидят только те, кого вы добавите.</string>
+    <string name="air_first_name_placeholder">Имя</string>
+    <string name="air_first_name_first">Сначала впишите имя.</string>
+    <string name="air_first_next">Дальше</string>
+    <string name="air_first_move_profile">Перенести профиль с другого устройства</string>
+    <string name="air_first_password_title">Пароль профиля</string>
+    <string name="air_first_password_body">Восстановить пароль нельзя: серверов нет. Профиль хранится только на этом устройстве.</string>
+    <string name="air_first_password_set">Задать пароль</string>
+    <string name="air_first_password_set_detail">Профиль зашифрован паролем. После выхода он откроется только с паролем.</string>
+    <string name="air_first_password_skip">Продолжить без пароля</string>
+    <string name="air_first_password_skip_detail">Профиль всё равно зашифрован: ключ хранится на этом телефоне. Он откроется без пароля у того, кто может разблокировать телефон, и только здесь.</string>
+    <string name="air_first_password_placeholder">Пароль</string>
+    <string name="air_first_repeat_placeholder">Пароль ещё раз</string>
+    <string name="air_first_password_rule">Не короче 8 знаков, с буквой и цифрой.</string>
+    <string name="air_first_password_empty">Сначала придумайте пароль.</string>
+    <string name="air_first_password_short">Пароль короче 8 знаков.</string>
+    <string name="air_first_password_weak">В пароле нужны буква и цифра.</string>
+    <string name="air_first_password_repeat_first">Повторите пароль во втором поле.</string>
+    <string name="air_first_password_mismatch">Пароли не совпадают.</string>
+    <string name="air_first_create">Создать профиль</string>
+    <string name="air_first_creating">Создаём профиль</string>
+    <string name="air_first_create_failed">Профиль не создался. Попробуйте ещё раз.</string>
+    <string name="air_first_id_title">Ваш ID готов</string>
+    <string name="air_first_id_body">Отправьте ID тем, с кем хотите переписываться, или покажите им QR-код.</string>
+    <string name="air_first_share">Поделиться</string>
+    <string name="air_first_add_person">Добавить первого человека</string>
+    <string name="air_field_show_password">Показать пароль</string>
+    <string name="air_field_hide_password">Скрыть пароль</string>
+    <string name="air_signin_go">Войти</string>
+    <string name="air_signin_opening">Открываем профиль</string>
+    <string name="air_signin_enter_password">Сначала введите пароль.</string>
+    <string name="air_signin_no_password">Этот профиль открывается без пароля, только на этом телефоне.</string>
+    <string name="air_signin_profile_fallback">Профиль на этом устройстве</string>
+    <string name="air_signin_forgot">Забыли пароль?</string>
+    <string name="air_signin_forgot_title">Пароль не восстановить</string>
+    <string name="air_signin_forgot_message">Серверов нет, пароль знаете только вы. Новый профиль получит новый ID и займёт место этого: этот профиль, его контакты и история удалятся с телефона.</string>
+    <string name="air_signin_start_over">Удалить и создать новый</string>
+    <string name="air_signin_wrong_password">Пароль не подошёл. Проверьте раскладку и регистр.</string>
+    <string name="air_signin_damaged">Файл профиля повреждён. Если есть экспортированная копия, перенесите профиль из неё.</string>
+    <string name="air_signin_no_access">Нет доступа к файлу профиля. Перезапустите телефон и попробуйте ещё раз.</string>
+    <string name="air_import_title">Перенос профиля</string>
+    <string name="air_import_reading">Читаем файл</string>
+    <string name="air_import_preview_title">Это ваш профиль?</string>
+    <string name="air_import_preview_body">Проверьте имя и ID. В файле есть ID и контакты, а истории переписки в нём нет.</string>
+    <string name="air_import_name">Имя</string>
+    <string name="air_import_no_name">Без имени</string>
+    <string name="air_import_confirm">Перенести профиль</string>
+    <string name="air_import_moving">Переносим профиль</string>
+    <string name="air_import_other_file">Выбрать другой файл</string>
+    <string name="air_import_not_profile">Это не файл профиля Khandaq. Выберите файл .tox, экспортированный из профиля.</string>
+    <string name="air_import_encrypted">Этот файл защищён паролем. Khandaq для Android переносит только файл профиля, сохранённый без пароля.</string>
+    <string name="air_import_failed_title">Профиль не перенёсся</string>
+    <!-- Stage 4: how a moved-in profile opens on Android -->
+    <string name="air_import_device_key">На этом телефоне профиль откроется без пароля, по ключу, который хранится здесь. Пароль можно задать позже: «Профиль», «Пароль и PIN-код».</string>
+</resources>

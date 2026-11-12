@@ -21,7 +21,7 @@
 	<key>group_member_online_count_format</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
-		<string>%1$#@members@ · %2$d online</string>
+		<string>%1$#@members@, %2$d online</string>
 		<key>members</key>
 		<dict>
 			<key>NSStringFormatSpecTypeKey</key>
@@ -64,6 +64,198 @@
 			<string>%ld system message</string>
 			<key>other</key>
 			<string>%ld system messages</string>
+		</dict>
+	</dict>
+	<key>air_compose_bytes_left</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@bytes@</string>
+		<key>bytes</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d byte left</string>
+			<key>other</key>
+			<string>%d bytes left</string>
+		</dict>
+	</dict>
+	<key>air_compose_bytes_over</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@bytes@ over the limit</string>
+		<key>bytes</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d byte</string>
+			<key>other</key>
+			<string>%d bytes</string>
+		</dict>
+	</dict>
+	<key>air_presence_away_days</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>offline for %#@days@</string>
+		<key>days</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d day</string>
+			<key>other</key>
+			<string>%d days</string>
+		</dict>
+	</dict>
+	<key>air_presence_away_hours</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>offline for %#@hours@</string>
+		<key>hours</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d hour</string>
+			<key>other</key>
+			<string>%d hours</string>
+		</dict>
+	</dict>
+	<key>air_presence_away_minutes</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>offline for %#@minutes@</string>
+		<key>minutes</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d minute</string>
+			<key>other</key>
+			<string>%d minutes</string>
+		</dict>
+	</dict>
+	<key>air_tray_head_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>In transit: %#@messages@</string>
+		<key>messages</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d message</string>
+			<key>other</key>
+			<string>%d messages</string>
+		</dict>
+	</dict>
+	<key>air_nc_verdict_left</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@chars@</string>
+		<key>chars</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d character left.</string>
+			<key>other</key>
+			<string>%d characters left.</string>
+		</dict>
+	</dict>
+	<key>air_cmd_id_left</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@chars@</string>
+		<key>chars</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d character missing</string>
+			<key>other</key>
+			<string>%d characters missing</string>
+		</dict>
+	</dict>
+	<key>air_group_members_count</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@members@</string>
+		<key>members</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d member</string>
+			<key>other</key>
+			<string>%d members</string>
+		</dict>
+	</dict>
+	<key>air_group_hint_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@reach@</string>
+		<key>reach</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%1$d of %2$d gets it now, the rest when they come online</string>
+			<key>other</key>
+			<string>%1$d of %2$d get it now, the rest when they come online</string>
+		</dict>
+	</dict>
+	<key>air_group_hint_all_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@all@</string>
+		<key>all</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>All %d get it now: everyone is online</string>
+			<key>other</key>
+			<string>All %d get it now: everyone is online</string>
+		</dict>
+	</dict>
+	<key>air_invite_sent</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@sent@</string>
+		<key>sent</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>Invitation sent</string>
+			<key>other</key>
+			<string>%d invitations sent</string>
 		</dict>
 	</dict>
 </dict>

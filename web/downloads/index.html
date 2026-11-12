@@ -3,40 +3,52 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Downloads — Khandaq Messenger</title>
+  <title>Downloads: Khandaq Messenger</title>
   <meta name="robots" content="noindex">
-  <link rel="stylesheet" href="../style.css">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/assets/favicon-48.png" sizes="48x48" type="image/png">
+  <link rel="icon" href="/assets/favicon-16.png" sizes="16x16" type="image/png">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <link rel="preload" href="/assets/fonts/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/assets/fonts/ibm-plex-sans-600.woff2" as="font" type="font/woff2" crossorigin>
+  <script>try{var t=localStorage.getItem('kq-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
+  <link rel="stylesheet" href="/assets/tokens.css?v=9109f5fc5c">
+  <link rel="stylesheet" href="/style.css?v=ed6305eeb7">
 </head>
 <body>
-  <header class="site-header">
-    <div class="container header-inner">
+  <header class="site-head">
+    <div class="wrap">
       <a class="brand" href="/">
-        <img src="../assets/logo.svg" alt="" width="36" height="36">
+        <img src="/assets/app-icon-64.png" srcset="/assets/app-icon-64.png 2x, /assets/app-icon-96.png 3x" width="32" height="32" alt="">
         <span>Khandaq</span>
       </a>
-      <nav class="nav" aria-label="Primary">
-        <a href="/#download">Back to download page</a>
+      <nav class="nav" aria-label="Main">
+        <a href="/#download">Back to the download page</a>
       </nav>
     </div>
   </header>
-  <main class="section container">
-    <h1 class="section-title">Direct download mirror</h1>
-    <p class="section-lead">Hosted on khandaq.org. Verify every file with <a href="SHA256SUMS.txt">SHA256SUMS.txt</a> before installing.</p>
-    <div class="panel">
-      <ul>
-        <li><a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger" target="_blank" rel="noopener">Android — Google Play</a> (official)</li>
-        <li><a href="khandaq-windows-x86_64.zip">khandaq-windows-x86_64.zip</a> — Windows</li>
-        <li><a href="khandaq-macos.zip">khandaq-macos.zip</a> — macOS</li>
-        <li><a href="khandaq-linux-x86_64-portable.tar.gz">khandaq-linux-x86_64-portable.tar.gz</a> — Linux (portable)</li>
-        <li><a href="khandaq-messenger_amd64.deb">khandaq-messenger_amd64.deb</a> — Linux (.deb)</li>
-        <li><a href="SHA256SUMS.txt">SHA256SUMS.txt</a> — checksums</li>
-      </ul>
-    </div>
-    <p class="section-lead" style="font-size:0.9rem;">Primary release hosting: <a href="https://github.com/ummalife/khandaq/releases/latest">GitHub Releases</a>.</p>
+
+  <main id="main" class="wrap doc">
+    <h1>Direct download mirror</h1>
+    <p class="lead">Hosted on khandaq.org. Before you run a file, check its signature as shown under <a href="/#verify">Check a download</a>; the signer list comes from the source repository, not from this server.</p>
+    <ul>
+      <li><a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger" target="_blank" rel="noopener">Android on Google Play</a> (official)</li>
+      <li><a href="/downloads/khandaq-windows-x86_64.zip">khandaq-windows-x86_64.zip</a>: Windows (<a href="/downloads/khandaq-windows-x86_64.zip.sig">signature</a>)</li>
+      <li><a href="/downloads/khandaq-macos.zip">khandaq-macos.zip</a>: macOS (<a href="/downloads/khandaq-macos.zip.sig">signature</a>)</li>
+      <li><a href="/downloads/khandaq-linux-x86_64-portable.tar.gz">khandaq-linux-x86_64-portable.tar.gz</a>: Linux, portable (<a href="/downloads/khandaq-linux-x86_64-portable.tar.gz.sig">signature</a>)</li>
+      <li><a href="/downloads/khandaq-messenger_amd64.deb">khandaq-messenger_amd64.deb</a>: Linux, .deb (<a href="/downloads/khandaq-messenger_amd64.deb.sig">signature</a>)</li>
+      <li><a href="/downloads/SHA256SUMS.txt">SHA256SUMS.txt</a>: checksums, an integrity check rather than a trust anchor</li>
+    </ul>
+    <p>Primary release hosting: <a href="https://github.com/ummalife/khandaq/releases/latest">GitHub Releases</a>.</p>
   </main>
-  <!-- KHANDAQ (18.08): this mirror page had no footer; add only the copyright strip so the credit is present on every page. The inline reset drops ".copyright"'s own rule/spacing, which exists to separate it from a ".footer-grid" this page does not have. -->
-  <footer class="site-footer container">
-    <p class="copyright" style="margin-top:0;padding-top:0;border-top:0;">© Khandaq · <a href="https://khandaq.org/">khandaq.org</a> · <span class="credit">Owner and developer — <a href="https://1sa.me/" target="_blank" rel="noopener">Isa Dagestani</a></span></p>
+  <!-- KHANDAQ (18.08): this mirror page had no footer; it carries only the copyright strip so the credit is present on every page. -->
+  <footer class="site-foot">
+    <div class="wrap">
+      <div class="foot-base">
+        <p class="copyright">© Khandaq, <a href="https://khandaq.org/">khandaq.org</a>. Open source, Tox-compatible. <span class="credit">Owner and developer: <a href="https://1sa.me/" target="_blank" rel="noopener">Isa Dagestani</a></span></p>
+      </div>
+    </div>
   </footer>
 </body>
 </html>

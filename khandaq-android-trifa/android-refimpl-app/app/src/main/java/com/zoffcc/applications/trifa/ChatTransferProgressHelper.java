@@ -2,7 +2,6 @@ package com.zoffcc.applications.trifa;
 
 import android.content.Context;
 import android.graphics.drawable.Drawable;
-import android.text.format.Formatter;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -419,6 +418,8 @@ final class ChatTransferProgressHelper
         }
 
         finishFileBubbleStyle(itemRoot, outgoing, snap, isImage || isVideo);
+        // KHANDAQ (redesign, stage 3b): a file entry of the transcript says this state in words.
+        AirFileEntry.applyDirectState(context, itemRoot, message, outgoing);
     }
 
     static void applyGroup(final Context context, final View itemRoot, final GroupMessage message, final boolean outgoing)
@@ -486,6 +487,8 @@ final class ChatTransferProgressHelper
         }
 
         finishFileBubbleStyle(itemRoot, outgoing, snap, isMediaPreview);
+        // KHANDAQ (redesign, stage 3b): a file entry of the transcript says this state in words.
+        AirFileEntry.applyGroupState(context, itemRoot, message, outgoing, snap);
     }
 
     private static void apply(final Context context, final View itemRoot, final Snapshot snap, final Callbacks callbacks)
@@ -845,8 +848,8 @@ final class ChatTransferProgressHelper
             return snap.percent + "%";
         }
 
-        final String doneStr = Formatter.formatFileSize(context, snap.bytesDone);
-        final String totalStr = Formatter.formatFileSize(context, snap.bytesTotal);
+        final String doneStr = AirByteSize.text(context, snap.bytesDone);
+        final String totalStr = AirByteSize.text(context, snap.bytesTotal);
         if (snap.speedBps > 0f)
         {
             return context.getString(R.string.file_transfer_progress_with_speed,
@@ -855,7 +858,8 @@ final class ChatTransferProgressHelper
         return context.getString(R.string.file_transfer_progress_format, doneStr, totalStr, snap.percent);
     }
 
-    private static Callbacks directCallbacks(final Context context, final View itemRoot, final Message message,
+    /** Also the file entry's Cancel and its "Send again" or "Download again" (AirFileEntry). */
+    static Callbacks directCallbacks(final Context context, final View itemRoot, final Message message,
                                              final boolean outgoing)
     {
         return new Callbacks()
@@ -888,7 +892,8 @@ final class ChatTransferProgressHelper
         };
     }
 
-    private static Callbacks groupCallbacks(final Context context, final GroupMessage message, final boolean outgoing)
+    /** Also the group file entry's Cancel, Accept and "Send again" or "Download again" (AirFileEntry). */
+    static Callbacks groupCallbacks(final Context context, final GroupMessage message, final boolean outgoing)
     {
         return new Callbacks()
         {

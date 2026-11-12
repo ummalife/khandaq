@@ -6,173 +6,70 @@ import Foundation
 import MobileCoreServices
 @testable import Antidote
 
+/// Our own file or photo as an entry of the transcript (redesign stage 3, E8): what it waits for, the bar
+/// while it moves, and the status mark at the far end.
 class ChatOutgoingFileCellSnapshotTest: CellSnapshotTest {
-    override func setUp() {
-        super.setUp()
+    func testWaitingState() {
+        verify(.waitingConfirmation)
     }
 
-    func testWaitingState() {
-        let model = ChatOutgoingFileCellModel()
-        model.state = .waitingConfirmation
-        model.fileName = "file.txt"
-        model.fileSize = "3.14 KB"
-        model.fileUTI = kUTTypePlainText as String
-
-        let cell = ChatOutgoingFileCell()
-        cell.setupWithTheme(theme, model: model)
-
-        updateCellLayout(cell)
-        verifyView(cell)
+    func testWaitingForSomeoneAway() {
+        let model = fileEntry(ChatOutgoingFileCellModel(), state: .waitingConfirmation)
+        model.personName = "Yusuf"
+        model.personOnline = false
+        verifyFileCell(ChatOutgoingFileCell(), model: model)
     }
 
     func testLoading() {
-        let model = ChatOutgoingFileCellModel()
-        model.state = .loading
-        model.fileName = "file.txt"
-        model.fileSize = "3.14 KB"
-        model.fileUTI = kUTTypePlainText as String
-
-        let progressObject = MockedChatProgressProtocol()
-
-        let cell = ChatOutgoingFileCell()
-        cell.setupWithTheme(theme, model: model)
-        cell.progressObject = progressObject
-
-        progressObject.updateProgress?(0.43)
-
-        updateCellLayout(cell)
-        verifyView(cell)
+        verify(.loading, progress: 0.43)
     }
 
     func testPaused() {
-        let model = ChatOutgoingFileCellModel()
-        model.state = .paused
-        model.fileName = "file.txt"
-        model.fileSize = "3.14 KB"
-        model.fileUTI = kUTTypePlainText as String
-
-        let progressObject = MockedChatProgressProtocol()
-
-        let cell = ChatOutgoingFileCell()
-        cell.setupWithTheme(theme, model: model)
-        cell.progressObject = progressObject
-
-        progressObject.updateProgress?(0.43)
-
-        updateCellLayout(cell)
-        verifyView(cell)
+        verify(.paused, progress: 0.43)
     }
 
     func testCancelled() {
-        let model = ChatOutgoingFileCellModel()
-        model.state = .cancelled
-        model.fileName = "file.txt"
-        model.fileSize = "3.14 KB"
-        model.fileUTI = kUTTypePlainText as String
-
-        let cell = ChatOutgoingFileCell()
-        cell.setupWithTheme(theme, model: model)
-
-        updateCellLayout(cell)
-        verifyView(cell)
+        verify(.cancelled)
     }
 
     func testDone() {
-        let model = ChatOutgoingFileCellModel()
-        model.state = .done
-        model.fileName = "file.txt"
-        model.fileSize = "3.14 KB"
-        model.fileUTI = kUTTypePlainText as String
-
-        let cell = ChatOutgoingFileCell()
-        cell.setupWithTheme(theme, model: model)
-
-        updateCellLayout(cell)
-        verifyView(cell)
+        let model = fileEntry(ChatOutgoingFileCellModel(), state: .done)
+        model.delivered = true
+        verifyFileCell(ChatOutgoingFileCell(), model: model)
     }
 
     func testWaitingStateWithImage() {
-        let model = ChatOutgoingFileCellModel()
-        model.state = .waitingConfirmation
-        model.fileName = "icon.png"
-        model.fileSize = "3.14 KB"
-        model.fileUTI = kUTTypePNG as String
-
-        let cell = ChatOutgoingFileCell()
-        cell.setupWithTheme(theme, model: model)
-        cell.setButtonImage(image)
-
-        updateCellLayout(cell)
-        verifyView(cell)
+        verifyImage(.waitingConfirmation)
     }
 
     func testLoadingWithImage() {
-        let model = ChatOutgoingFileCellModel()
-        model.state = .loading
-        model.fileName = "icon.png"
-        model.fileSize = "3.14 KB"
-        model.fileUTI = kUTTypePNG as String
-
-        let progressObject = MockedChatProgressProtocol()
-
-        let cell = ChatOutgoingFileCell()
-        cell.setupWithTheme(theme, model: model)
-        cell.progressObject = progressObject
-        cell.setButtonImage(image)
-
-        progressObject.updateProgress?(0.43)
-
-        updateCellLayout(cell)
-        verifyView(cell)
+        verifyImage(.loading, progress: 0.43)
     }
 
     func testPausedWithImage() {
-        let model = ChatOutgoingFileCellModel()
-        model.state = .paused
-        model.fileName = "icon.png"
-        model.fileSize = "3.14 KB"
-        model.fileUTI = kUTTypePNG as String
-
-        let progressObject = MockedChatProgressProtocol()
-
-        let cell = ChatOutgoingFileCell()
-        cell.setupWithTheme(theme, model: model)
-        cell.progressObject = progressObject
-        cell.setButtonImage(image)
-
-        progressObject.updateProgress?(0.43)
-
-        updateCellLayout(cell)
-        verifyView(cell)
+        verifyImage(.paused, progress: 0.43)
     }
 
     func testCancelledWithImage() {
-        let model = ChatOutgoingFileCellModel()
-        model.state = .cancelled
-        model.fileName = "icon.png"
-        model.fileSize = "3.14 KB"
-        model.fileUTI = kUTTypePNG as String
-
-        let cell = ChatOutgoingFileCell()
-        cell.setupWithTheme(theme, model: model)
-        cell.setButtonImage(image)
-
-        updateCellLayout(cell)
-        verifyView(cell)
+        verifyImage(.cancelled)
     }
 
     func testDoneWithImage() {
-        let model = ChatOutgoingFileCellModel()
-        model.state = .done
-        model.fileName = "icon.png"
-        model.fileSize = "3.14 KB"
-        model.fileUTI = kUTTypePNG as String
+        verifyImage(.done)
+    }
+}
 
-        let cell = ChatOutgoingFileCell()
-        cell.setupWithTheme(theme, model: model)
-        cell.setButtonImage(image)
+private extension ChatOutgoingFileCellSnapshotTest {
+    func verify(_ state: ChatGenericFileCellModel.State, progress: Float? = nil) {
+        let model = fileEntry(ChatOutgoingFileCellModel(), state: state)
+        model.personName = "Yusuf"
+        verifyFileCell(ChatOutgoingFileCell(), model: model, progress: progress)
+    }
 
-        updateCellLayout(cell)
-        verifyView(cell)
+    func verifyImage(_ state: ChatGenericFileCellModel.State, progress: Float? = nil) {
+        let model = fileEntry(ChatOutgoingFileCellModel(), state: state, name: "icon.png", bytes: 3_140, uti: kUTTypePNG as String)
+        model.personName = "Yusuf"
+        model.previewSize = image.size
+        verifyFileCell(ChatOutgoingFileCell(), model: model, progress: progress, preview: image)
     }
 }

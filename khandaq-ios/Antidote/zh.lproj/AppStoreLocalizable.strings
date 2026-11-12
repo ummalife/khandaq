@@ -52,3 +52,63 @@
 "app_store_screenshot_chat_message_4" = "Sure, thanks!";
 /* Demo chat message for the App Store screenshot */
 "app_store_screenshot_chat_message_5" = "yep";
+
+/* Stage 2 of the redesign: the demo world of the UI tests' mock profile (OCTManagerMock). Made-up people. */
+"demo_s2_amina" = "阿米娜 萨菲娜";
+"demo_s2_amina_status" = "周末在山里";
+"demo_s2_yusuf" = "尤素福 卡里莫夫";
+"demo_s2_bilal" = "比拉勒 哈达德";
+"demo_s2_long" = "马克西米利安 亚历山大 冯 霍亨索伦 西格马林根";
+"demo_s2_leila" = "莱拉 纳赛尔";
+"demo_s2_group_founder" = "徒步俱乐部";
+"demo_s2_group_observer" = "清真寺公告";
+"demo_s2_group_peer_imam" = "哈立德伊玛目";
+"demo_s2_bulk_format" = "联系人 %d";
+"demo_s2_bulk_message" = "回头见";
+"demo_s2_amina_1" = "你好！周六去爬山吗？";
+"demo_s2_amina_2" = "去，只要天气不变";
+"demo_s2_amina_3" = "天气预报不错，全天晴";
+"demo_s2_amina_4" = "那我们6点出发，我带帐篷";
+"demo_s2_amina_5" = "好的，我带炉子和水";
+"demo_s2_amina_6" = "晚上我把装备清单发给你";
+"demo_s2_amina_7" = "一言为定";
+"demo_s2_amina_8" = "5:45在车站见";
+"demo_s2_yusuf_1" = "我明天去拿车库钥匙";
+"demo_s2_yusuf_2" = "好，我七点后在家";
+"demo_s2_yusuf_3" = "尤素福，清单还算数吗？我下班后想去趟商店";
+"demo_s2_yusuf_4" = "再提醒我一下要带多少水";
+"demo_s2_yusuf_5" = "我19:30到你那儿";
+"demo_s2_bilal_1" = "路线图发你了";
+"demo_s2_bilal_2" = "谢谢，我看看";
+"demo_s2_bilal_failed" = "回程火车几点？";
+"demo_s2_long_1" = "谢谢你的书！";
+"demo_s2_saved_1" = "妈妈家门禁密码：2741";
+"demo_s2_saved_2" = "要买：面包、椰枣、茶";
+"demo_s2_group_1" = "周六谁去？今晚前报名";
+"demo_s2_group_2" = "周五讲道13:00开始";
+
+/* Stage 3 of the redesign: more of the demo world (requests, invitations, groups). Made-up people. */
+"demo_s3_request_1" = "你好！我是帖木儿，我们周六在讲座上认识的。";
+"demo_s3_invite_book" = "读书会";
+"demo_s3_invite_family" = "家人";
+"demo_s3_timur" = "帖木儿 艾哈迈多夫";
+"demo_s3_self" = "萨米尔 瓦利耶夫";
+"demo_s3_peer_khadija" = "赫蒂彻 努里耶娃";
+"demo_s3_peer_omar" = "欧麦尔 赛义多夫";
+"demo_s3_peer_zaynab" = "宰娜卜 阿利耶娃";
+"demo_s3_peer_ibrahim" = "易卜拉欣 加萨诺夫";
+"demo_s3_peer_maryam" = "麦尔彦 哈利洛娃";
+"demo_s3_peer_hamza" = "哈姆扎 拉希多夫";
+"demo_s3_listener_format" = "听众 %d";
+"demo_s3_group_bilal" = "周六的路线：14 公里，开头有一段陡坡";
+"demo_s3_group_omar" = "我多带了两个炉头，谁需要可以用";
+"demo_s3_group_khadija_format" = "@%@，我可以带妹妹一起去吗？她 16 岁";
+"demo_s3_group_self" = "当然，人越多越好。5:45 在车站集合";
+"demo_s3_group_hamza" = "从下周起，周五课程改为 19:00 开始";
+"demo_s3_bilal_caption" = "在这里集合，北出口";
+"demo_s3_self_status" = "晚上回复";
+"demo_s3_band_message" = "周六的照片已经发到群里了，你看看";
+"demo_s3_band_invite_group" = "河边的周六";
+
+/* Redesign stage 5: the private messages with the moderator */
+"demo_s5_private_hamza" = "愿你平安！课后你问我能不能在群里发言。我去问问伊玛目，他是创建者。";

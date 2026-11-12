@@ -171,7 +171,7 @@ public class GroupMessageListHolder_file_outgoing_state_cancel extends RecyclerV
         if (!previewAlreadyBuilt)
         {
             GlideApp.with(context).clear(ft_preview_image);
-            ft_preview_image.setImageResource(R.drawable.round_loading_animation);
+            ft_preview_image.setImageDrawable(null); // KHANDAQ (redesign, stage 3b): the still plate, no spinner
             ft_preview_image.setTag(R.id.ft_preview_image, previewSig);
         }
 

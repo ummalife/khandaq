@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- KHANDAQ (redesign, stage 3b): the call screens, with the iOS keys and wording (CallBaseController, CallButton, AirCallText). -->
+    <string name="air_call_incoming">来电</string>
+    <string name="air_call_calling">正在呼叫</string>
+    <string name="air_call_ended">通话已结束</string>
+    <string name="air_call_decline">拒绝</string>
+    <string name="air_call_answer">接听</string>
+    <string name="air_call_answer_video">视频接听</string>
+    <string name="air_call_end">挂断</string>
+    <string name="air_call_mic">麦克风</string>
+    <string name="air_call_mic_on">已开启</string>
+    <string name="air_call_mic_off">已关闭</string>
+    <string name="air_call_speaker">扬声器</string>
+    <string name="air_call_speaker_on">已开启</string>
+    <string name="air_call_speaker_off">已关闭</string>
+    <string name="air_call_switch_camera">切换摄像头</string>
+    <string name="air_call_line_direct">直连</string>
+    <string name="air_call_line_relay">经中继连接</string>
+    <string name="air_call_line_none">当前没有连接</string>
+</resources>

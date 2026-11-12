@@ -147,7 +147,6 @@
     <string name="MainActivity_maint">Konserwacja</string>
     <string name="MainActivity_exit">Wyjście</string>
     <string name="MainActivity_new_noti_token_dialog_text">Otrzymano nowy token powiadomień. Używać tego tokena\?</string>
-    <string name="invite_join_conference_success">Zostałeś zaproszony do Grupy Konferencyjnej</string>
     <string name="layout___set_app_language">ustaw język Aplikacji</string>
     <string name="layout___online">Online</string>
     <string name="FriendListHolder_toggle_notification_silent_title">włącz/wyłącz Powiadomienia</string>
@@ -304,7 +303,6 @@
     <string name="join_public_group_activity_warning">Ostrzeżenie:
 \ndołączanie do Grupy Publicznej poprzez ID Grupy nie działa jeszcze w pełni poprawnie!!</string>
     <string name="invite_friend_success">Zaproszenie od Kontaktu potwierdzone</string>
-    <string name="invite_join_group_success">Zostałeś zaproszony do Grupy</string>
     <string name="layout___add_friend">Dodaj Znajomych</string>
     <string name="pref_title_allow_enable_ngc_features">NGC - Nowe Czaty Grupowe</string>
     <string name="pref_description_speakerphone_tweak">Włącz opcję, jeżeli podczas rozmowy Aplikacja nie przełącza się automatycznie na Głośnik.</string>

@@ -601,8 +601,12 @@ final class ChatBubbleUiHelper
     }
 
     static void bind_bubble_time(final TextView bubbleTime, final TextView externalTime,
-                                 final String timeText, final boolean outgoing)
+                                 final String text, final boolean outgoing)
     {
+        // KHANDAQ (redesign, stage 3): the time is formatted once per process (MainActivity.df_time_only),
+        // and an in-app language change keeps the process, so its digits are put in the app's language here.
+        final TextView anchor = (bubbleTime != null) ? bubbleTime : externalTime;
+        final String timeText = (anchor != null && text != null) ? AirUi.localDigits(anchor.getContext(), text) : text;
         if (bubbleTime != null)
         {
             bubbleTime.setVisibility(View.VISIBLE);
@@ -1056,7 +1060,7 @@ final class ChatBubbleUiHelper
     // pubkey for a short window so a scroll burst does the DB+VFS work once per peer instead of once per
     // bind. Kept fully synchronous (no background thread) so there is no view-recycling race; Glide's own
     // memory cache makes the repeated load cheap. Self-heals within the TTL when an avatar changes.
-    private static final class AvatarMeta
+    static final class AvatarMeta
     {
         final boolean loadable;
         final String path;
@@ -1117,6 +1121,60 @@ final class ChatBubbleUiHelper
         avatar_meta_cache.put(peerPubkey, v);
         avatar_meta_cache_ts.put(peerPubkey, System.currentTimeMillis());
         return v;
+    }
+
+    /**
+     * Air: the photo of a friend row that was already read from the database. Stats the encrypted file,
+     * so call it off the main thread; the result goes to {@link #load_peer_photo} on the main thread.
+     */
+    static AvatarMeta peer_avatar_meta(final FriendList friend)
+    {
+        if (!VFS_ENCRYPT || friend == null || TrifaToxService.vfs == null)
+        {
+            return AVATAR_META_NONE;
+        }
+        try
+        {
+            if (!shouldLoadVfsAvatar(friend))
+            {
+                return AVATAR_META_NONE;
+            }
+            final info.guardianproject.iocipher.File avatarFile =
+                    new info.guardianproject.iocipher.File(friend.avatar_pathname + "/" + friend.avatar_filename);
+            if (avatarFile.length() <= 0)
+            {
+                return AVATAR_META_NONE;
+            }
+            return new AvatarMeta(true, friend.avatar_pathname, friend.avatar_filename, friend.avatar_update_timestamp);
+        }
+        catch (Exception ignored)
+        {
+            return AVATAR_META_NONE;
+        }
+    }
+
+    /** Air: loads a photo resolved by {@link #peer_avatar_meta} into a square tile, cropped to fill it. */
+    static void load_peer_photo(final Context context, final AvatarMeta meta, final ImageView target)
+    {
+        GlideApp.with(context).clear(target);
+        if (meta == null || !meta.loadable)
+        {
+            target.setImageDrawable(null);
+            return;
+        }
+        try
+        {
+            final info.guardianproject.iocipher.File avatarFile =
+                    new info.guardianproject.iocipher.File(meta.path + "/" + meta.filename);
+            GlideApp.with(context).load(avatarFile).diskCacheStrategy(DiskCacheStrategy.RESOURCE).signature(
+                    new com.bumptech.glide.signature.StringSignatureZ(
+                            "_avatar_" + meta.path + "/" + meta.filename + "_" + meta.updateTs))
+                    .centerCrop().into(target);
+        }
+        catch (Exception ignored)
+        {
+            target.setImageDrawable(null);
+        }
     }
 
     private static void fill_peer_avatar(final Context context, final String peerPubkey, final String peerName,

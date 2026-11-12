@@ -66,17 +66,49 @@ final class ChatReplyQuoteView: UIControl {
         backgroundColor = theme.colorForType(.ChatIncomingBubble).withAlphaComponent(0.35)
         accentBar.backgroundColor = theme.colorForType(.LinkText)
         nameLabel.textColor = theme.colorForType(.LinkText)
+        if isTranscript {
+            applyTranscriptColors()
+        }
 
         let name = meta.senderName.isEmpty
             ? String(localized: "chat_reply_unknown_sender")
             : meta.senderName
         nameLabel.text = name
-        previewLabel.textColor = theme.colorForType(.ChatListCellMessage)
+        previewLabel.textColor = isTranscript ? KQColor.ink2 : theme.colorForType(.ChatListCellMessage)
         previewLabel.text = MessageReplyHelper.previewForDisplay(meta.previewText, maxLen: 160)
         isHidden = false
     }
 
     @objc private func tapped() {
         onTap?()
+    }
+
+    /// KHANDAQ (redesign stage 2): the quote inside a transcript entry: a sunken plate with the name and
+    /// the quoted words in grey, without the coloured bar on its edge.
+    private(set) var isTranscript = false
+
+    func useTranscriptStyle() {
+        guard !isTranscript else {
+            return
+        }
+        isTranscript = true
+        layer.cornerRadius = KQRadius.small
+        accentBar.isHidden = true
+        nameLabel.font = KQFont.font(.caption, weight: 600)
+        nameLabel.adjustsFontForContentSizeCategory = true
+        previewLabel.font = KQFont.font(.caption)
+        previewLabel.adjustsFontForContentSizeCategory = true
+        nameLabel.snp.remakeConstraints {
+            $0.leading.equalToSuperview().offset(KQSpace.x8)
+            $0.trailing.equalToSuperview().offset(-KQSpace.x8)
+            $0.top.equalToSuperview().offset(KQSpace.x4)
+        }
+        applyTranscriptColors()
+    }
+
+    private func applyTranscriptColors() {
+        backgroundColor = KQColor.sunken
+        nameLabel.textColor = KQColor.ink2
+        previewLabel.textColor = KQColor.ink2
     }
 }

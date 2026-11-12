@@ -54,7 +54,9 @@ public class VoicePlayerView extends LinearLayout
     private String shareTitle = "Share Voice";
 
     private LinearLayout main_layout, padded_layout, container_layout;
-    private ImageView imgPlay, imgPause, imgShare;
+    // KHANDAQ (redesign, stage 3b): Listen and Pause are words now, as on iOS.
+    private TextView imgPlay, imgPause;
+    private ImageView imgShare;
     private SeekBar seekBar;
     private ProgressBar progressBar;
     private TextView txtProcess;
@@ -201,8 +203,11 @@ public class VoicePlayerView extends LinearLayout
         shareShape.setColor(shareBackgroundColor);
         shareShape.setCornerRadius(shareCornerRadius);
 
-        imgPlay.setBackground(playPauseShape);
-        imgPause.setBackground(playPauseShape);
+        // The redesign's layouts pass no colour here: Listen and Pause keep the design's button ground.
+        if (playPaueseBackgroundColor != Color.TRANSPARENT) {
+            imgPlay.setBackground(playPauseShape);
+            imgPause.setBackground(playPauseShape);
+        }
         imgShare.setBackground(shareShape);
         main_layout.setBackground(viewShape);
         seekBar.getProgressDrawable().setColorFilter(seekBarProgressColor, PorterDuff.Mode.SRC_IN);
@@ -294,9 +299,8 @@ public class VoicePlayerView extends LinearLayout
             }
         }
         if (dur > 0) {
-            txtProcess.setText(pos > 0
-                    ? convertSecondsToHMmSs(pos / 1000) + " / " + convertSecondsToHMmSs(dur / 1000)
-                    : convertSecondsToHMmSs(dur / 1000));
+            // KHANDAQ (redesign, stage 3b): the length at rest, the time played while it plays (iOS).
+            txtProcess.setText(playing && pos > 0 ? convertSecondsToHMmSs(pos / 1000) : convertSecondsToHMmSs(dur / 1000));
         }
     }
 
@@ -718,19 +722,19 @@ public class VoicePlayerView extends LinearLayout
             this.container_layout = container_layout;
         }
 
-        public ImageView getImgPlay() {
+        public TextView getImgPlay() {
             return imgPlay;
         }
 
-        public void setImgPlay(ImageView imgPlay) {
+        public void setImgPlay(TextView imgPlay) {
             this.imgPlay = imgPlay;
         }
 
-        public ImageView getImgPause() {
+        public TextView getImgPause() {
             return imgPause;
         }
 
-        public void setImgPause(ImageView imgPause) {
+        public void setImgPause(TextView imgPause) {
             this.imgPause = imgPause;
         }
 

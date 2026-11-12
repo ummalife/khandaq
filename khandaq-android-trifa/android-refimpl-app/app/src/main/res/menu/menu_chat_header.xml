@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- KHANDAQ chat header overflow (Figma: only phone is a visible icon; everything else lives in ⋮). -->
+<!-- KHANDAQ chat header overflow (redesign, stage 3): search, video and call are header icons; the
+     overflow keeps the log filters, the video call below 400dp where the header has no room, and Search
+     when the name would show fewer than about ten characters (MessageListActivity.fitHeaderToName). -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
         android:id="@+id/action_chat_search"
         android:title="@string/chat_action_search"
+        android:visible="false"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_chat_video"

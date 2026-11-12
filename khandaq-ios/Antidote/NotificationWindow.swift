@@ -5,43 +5,44 @@
 import UIKit
 import SnapKit
 
-private struct Constants {
-    static let AnimationDuration = 0.3
-    static let ConnectingBlinkPeriod = 1.0
-}
+/// The window of the in-app band (redesign stage 3, E22), above the app's windows and under the PIN
+/// lock. Since the app adopted scenes a window made from a frame belongs to no scene, so nothing in
+/// this one ever showed (neither the connection pill nor the banners); it joins the app's scene and
+/// takes the app's theme. It is up only while a band shows, so that it never decides the look of the
+/// status bar over the screen under it, and touches outside the band go to the app.
+final class NotificationWindow: UIWindow {
+    /// How long a band stays when nobody touches it.
+    static let bandSeconds: TimeInterval = 4.5
 
-class NotificationWindow: UIWindow {
-    fileprivate let theme: Theme
-
-    fileprivate var connectingView: UIView!
-    fileprivate var connectingViewLabel: UILabel!
-    fileprivate var connectingViewTopConstraint: Constraint!
-
-    // KHANDAQ: custom in-app banner (replaces LNNotificationsUI, which ignored the Dynamic Island).
-    fileprivate var bannerView: NotificationBannerView?
-    fileprivate var bannerDismissTimer: Timer?
-
-    fileprivate var connectionAutoHideTimer: Timer?
-
+    /// The states the session reports for the connection pill, which E4 retired: our node is told by
+    /// the line under the name on the Air screen and by the hint under the message field.
     enum ConnectionPillState {
-        case connecting   // blue, "Connecting…"
-        case connected    // green, "Online", then auto-hides
-        case offline      // red, "No connection"
-        case degraded     // yellow, "Weak connection", auto-hides (shown periodically while weak)
-        case stable       // green, "Connection stable", auto-hides once on recovery
+        case connecting
+        case connected
+        case offline
+        case degraded
+        case stable
     }
 
-    init(theme: Theme) {
-        self.theme = theme
+    private var bannerView: NotificationBannerView?
+    private var bannerDismissTimer: Timer?
 
+    init() {
         super.init(frame: UIScreen.main.bounds)
 
         windowLevel = UIWindowLevelStatusBar + 500
         backgroundColor = .clear
-        isHidden = false
+        windowScene = AppDelegate.shared.window?.windowScene
+            ?? UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        // The band resolves the design tokens in the app's theme, not only the system's.
+        overrideUserInterfaceStyle = ThemeAppearance.windowInterfaceStyle
+        AppLanguage.applyDirection(to: self)
+        isHidden = true
 
-        createRootViewController()
-        createConnectingView()
+        let root = UIViewController()
+        root.view = ViewPassingGestures()
+        root.view.backgroundColor = .clear
+        rootViewController = root
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -60,12 +61,15 @@ class NotificationWindow: UIWindow {
         return false
     }
 
-    // MARK: - In-app banner
+    // MARK: - In-app band
 
-    func showBanner(title: String, body: String, icon: UIImage?, onTap: @escaping () -> Void) {
+    /// Shows a band in place of the one up now. `tile` nil shows the words alone; `hint` says what a tap
+    /// opens.
+    func showBanner(title: String, body: String, tile: AirTileView.Style?, photo: UIImage?, hint: String, onTap: @escaping () -> Void) {
         dismissBanner(animated: false)
+        isHidden = false
 
-        let banner = NotificationBannerView(theme: theme, title: title, body: body, icon: icon)
+        let banner = NotificationBannerView(title: title, body: body, tile: tile, photo: photo, hint: hint)
         banner.onTap = { [weak self] in
             self?.dismissBanner(animated: true)
             onTap()
@@ -76,22 +80,22 @@ class NotificationWindow: UIWindow {
         addSubview(banner)
 
         banner.snp.makeConstraints {
-            $0.top.equalTo(self.safeAreaLayoutGuide.snp.top).offset(8.0)
-            $0.leading.equalTo(self).offset(10.0)
-            $0.trailing.equalTo(self).offset(-10.0)
+            $0.top.equalTo(self.safeAreaLayoutGuide.snp.top).offset(KQSpace.x8)
+            $0.leading.equalTo(self.safeAreaLayoutGuide).offset(KQSpace.x12)
+            $0.trailing.equalTo(self.safeAreaLayoutGuide).offset(-KQSpace.x12)
         }
 
         bannerView = banner
 
-        // Slide in from above the safe area.
+        // It comes down from above the safe area.
         layoutIfNeeded()
-        banner.transform = CGAffineTransform(translationX: 0, y: -(banner.frame.maxY + 20))
-        UIView.animate(withDuration: Constants.AnimationDuration, delay: 0, options: .curveEaseOut, animations: {
+        banner.transform = CGAffineTransform(translationX: 0, y: -(banner.frame.maxY + KQSpace.x20))
+        UIView.animate(withDuration: KQMotion.duration(KQMotion.layout), delay: 0, options: .curveEaseOut, animations: {
             banner.transform = .identity
         }, completion: nil)
 
         bannerDismissTimer?.invalidate()
-        bannerDismissTimer = Timer.scheduledTimer(withTimeInterval: 4.5, repeats: false) { [weak self] _ in
+        bannerDismissTimer = Timer.scheduledTimer(withTimeInterval: NotificationWindow.bandSeconds, repeats: false) { [weak self] _ in
             self?.dismissBanner(animated: true)
         }
     }
@@ -105,8 +109,12 @@ class NotificationWindow: UIWindow {
         }
         bannerView = nil
 
-        let removal = {
+        let removal = { [weak self] in
             banner.removeFromSuperview()
+            // Hidden again unless the next band already took its place.
+            if let self = self, self.bannerView == nil {
+                self.isHidden = true
+            }
         }
 
         guard animated else {
@@ -114,227 +122,101 @@ class NotificationWindow: UIWindow {
             return
         }
 
-        UIView.animate(withDuration: Constants.AnimationDuration, delay: 0, options: .curveEaseIn, animations: {
-            banner.transform = CGAffineTransform(translationX: 0, y: -(banner.frame.maxY + 20))
+        UIView.animate(withDuration: KQMotion.duration(KQMotion.state), delay: 0, options: .curveEaseIn, animations: {
+            banner.transform = CGAffineTransform(translationX: 0, y: -(banner.frame.maxY + KQSpace.x20))
             banner.alpha = 0.0
         }, completion: { _ in
             removal()
         })
     }
-
-    func setConnectionState(_ state: ConnectionPillState, animated: Bool) {
-        connectionAutoHideTimer?.invalidate()
-        connectionAutoHideTimer = nil
-
-        connectingViewLabel.layer.removeAllAnimations()
-        connectingViewLabel.alpha = 1.0
-        // KHANDAQ (#94): re-assert the label color on every state change. A theme switch recreates
-        // the NotificationWindow; without this the green pill could show invisible (blank green) text.
-        connectingViewLabel.textColor = theme.colorForType(.ConnectingText)
-
-        switch state {
-            case .connecting:
-                connectingView.backgroundColor = theme.colorForType(.ConnectingBackground)
-                connectingViewLabel.text = String(localized: "connecting_label")
-                showConnectingView(true, animated: animated)
-                startConnectingViewAnimation()   // gentle blink only while actually connecting
-
-            case .offline:
-                connectingView.backgroundColor = UIColor(red: 0.83, green: 0.18, blue: 0.18, alpha: 1.0)
-                connectingViewLabel.text = String(localized: "conn_state_offline")
-                showConnectingView(true, animated: animated)
-
-            case .connected:
-                connectingView.backgroundColor = theme.colorForType(.ConnectingBackground)
-                connectingViewLabel.text = String(localized: "conn_state_connected")
-                showConnectingView(true, animated: animated)
-                // Flash "Online" briefly, then slide away.
-                connectionAutoHideTimer = Timer.scheduledTimer(withTimeInterval: 1.6, repeats: false) { [weak self] _ in
-                    self?.showConnectingView(false, animated: true)
-                }
-
-            case .degraded:
-                connectingView.backgroundColor = UIColor(red: 0.91, green: 0.65, blue: 0.10, alpha: 1.0)
-                connectingViewLabel.text = String(localized: "conn_state_weak")
-                showConnectingView(true, animated: animated)
-                // A periodic nag so the user notices their link is unstable.
-                connectionAutoHideTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
-                    self?.showConnectingView(false, animated: true)
-                }
-
-            case .stable:
-                connectingView.backgroundColor = theme.colorForType(.ConnectingBackground)
-                connectingViewLabel.text = String(localized: "conn_state_stable")
-                showConnectingView(true, animated: animated)
-                connectionAutoHideTimer = Timer.scheduledTimer(withTimeInterval: 1.8, repeats: false) { [weak self] _ in
-                    self?.showConnectingView(false, animated: true)
-                }
-        }
-    }
-
-    func showConnectingView(_ show: Bool, animated: Bool) {
-        let showPreparation = { [unowned self] in
-            self.connectingView.isHidden = false
-        }
-
-        let showBlock = { [unowned self] in
-            // Slide the chip down to sit just below the Dynamic Island / notch (top, Telegram-style).
-            self.connectingViewTopConstraint.update(offset: 6.0)
-            self.layoutIfNeeded()
-        }
-
-        let showCompletion = {}
-
-        let hidePreparation = {}
-
-        let hideBlock = { [unowned self] in
-            // Tuck the chip up above the safe-area top so it slides out of view.
-            self.connectingViewTopConstraint.update(offset: -(self.connectingView.frame.size.height + 12.0))
-            self.layoutIfNeeded()
-            self.connectingViewLabel.layer.removeAllAnimations()
-        }
-
-        let hideCompletion = { [unowned self] in
-            self.connectingView.isHidden = true
-        }
-
-        show ? showPreparation() : hidePreparation()
-
-        if animated {
-            UIView.animate(withDuration: Constants.AnimationDuration, animations: {
-                show ? showBlock() : hideBlock()
-            }, completion: { finished in
-                show ? showCompletion() : hideCompletion()
-            })
-        }
-        else {
-            show ? showBlock() : hideBlock()
-            show ? showCompletion() : hideCompletion()
-        }
-    }
 }
 
-private extension NotificationWindow {
-    func createRootViewController() {
-        rootViewController = UIViewController()
-        rootViewController!.view = ViewPassingGestures()
-        rootViewController!.view.backgroundColor = .clear
-    }
-
-    func createConnectingView() {
-        // KHANDAQ: a compact centered pill BELOW the Dynamic Island / notch instead of a full-width
-        // bar painted over the whole status-bar area (which on iPhone 17 / iOS 26 covered the island
-        // in solid blue and collided with the clock). Android-style subtle "Connecting…" chip.
-        connectingView = UIView()
-        connectingView.backgroundColor = theme.colorForType(.ConnectingBackground)
-        connectingView.layer.cornerRadius = 13.0
-        connectingView.layer.masksToBounds = true
-        connectingView.isHidden = true   // shown only via setConnectionState
-        addSubview(connectingView)
-
-        connectingViewLabel = UILabel()
-        connectingViewLabel.textColor = theme.colorForType(.ConnectingText)
-        connectingViewLabel.backgroundColor = .clear
-        let quality = ConnectionQualityMonitor.shared.level.localizedName
-        connectingViewLabel.text = String(localized: "connecting_label") + " · " + quality
-        connectingViewLabel.textAlignment = .center
-        connectingViewLabel.font = UIFont.khandaqFontWithSize(12.0, weight: .light)
-        connectingView.addSubview(connectingViewLabel)
-
-        connectingView.snp.makeConstraints {
-            // KHANDAQ (#113): a TOP chip just under the Dynamic Island / notch (Telegram-style), centered.
-            // Starts tucked above the safe area; slides down into view when shown. Sits over the nav-title
-            // area like Telegram's "Connecting…" indicator.
-            connectingViewTopConstraint = $0.top.equalTo(self.safeAreaLayoutGuide.snp.top).offset(-38.0).constraint
-            $0.centerX.equalTo(self)
-            $0.height.equalTo(26.0)
-            $0.leading.greaterThanOrEqualTo(self).offset(12.0)
-            $0.trailing.lessThanOrEqualTo(self).offset(-12.0)
-        }
-
-        connectingViewLabel.snp.makeConstraints {
-            $0.top.bottom.equalTo(connectingView)
-            $0.leading.equalTo(connectingView).offset(14.0)
-            $0.trailing.equalTo(connectingView).offset(-14.0)
-        }
-    }
-
-    func startConnectingViewAnimation() {
-        connectingViewLabel.alpha = 0.0
-        UIView.animate(withDuration: Constants.ConnectingBlinkPeriod, delay: 0.0, options: [.repeat, .autoreverse], animations: {
-            self.connectingViewLabel.alpha = 1.0
-        }, completion: nil)
-    }
-
-    func stopConnectingViewAnimation() {
-        stopConnectingViewAnimation()
-    }
-}
-
-/// KHANDAQ: a safe-area-aware in-app notification banner (rounded card under the Dynamic Island /
-/// notch). Replaces LNNotificationsUI, which painted at y=0 and collided with the island.
+/// The band an incoming message, request or invitation comes as while the app is open (E22): under the
+/// safe area, the tile the Air screen shows for the chat, the sender and then the text, on the raised
+/// surface. A tap opens what it tells of; a swipe up (or the VoiceOver escape) puts it away, and it
+/// leaves by itself.
 final class NotificationBannerView: UIView {
     var onTap: (() -> Void)?
     var onDismiss: (() -> Void)?
 
-    init(theme: Theme, title: String, body: String, icon: UIImage?) {
+    init(title: String, body: String, tile: AirTileView.Style?, photo: UIImage?, hint: String) {
         super.init(frame: .zero)
+        isAccessibilityElement = true
+        accessibilityTraits = UIAccessibilityTraitButton
+        accessibilityIdentifier = "air.banner"
+        accessibilityLabel = [title, body].filter { !$0.isEmpty }.joined(separator: ", ")
+        accessibilityHint = hint
 
         let backdrop = UIView()
-        backdrop.backgroundColor = UIColor(red: 0.13, green: 0.13, blue: 0.15, alpha: 0.98)
-        backdrop.layer.cornerRadius = 18.0
+        backdrop.backgroundColor = KQColor.raised
+        backdrop.layer.cornerRadius = KQRadius.sheet
         backdrop.layer.masksToBounds = true
         backdrop.isUserInteractionEnabled = false
         addSubview(backdrop)
 
-        layer.cornerRadius = 18.0
+        // Lifted off the screen under it by a shadow rather than a frame.
+        layer.cornerRadius = KQRadius.sheet
         layer.shadowColor = UIColor.black.cgColor
-        layer.shadowOpacity = 0.25
-        layer.shadowRadius = 12.0
-        layer.shadowOffset = CGSize(width: 0, height: 4)
+        layer.shadowOpacity = 0.18
+        layer.shadowRadius = KQSpace.x12
+        layer.shadowOffset = CGSize(width: 0, height: KQSpace.x4)
 
-        let iconView = UIImageView(image: icon)
-        iconView.contentMode = .scaleAspectFill
-        iconView.layer.cornerRadius = 18.0
-        iconView.layer.masksToBounds = true
-        iconView.backgroundColor = UIColor(white: 1.0, alpha: 0.1)
-        addSubview(iconView)
+        let tileView = AirTileView(side: KQSize.tilePhone)
+        if let tile = tile {
+            tileView.configure(style: tile, photo: photo)
+        }
+        tileView.isHidden = tile == nil
+        addSubview(tileView)
 
         let titleLabel = UILabel()
         titleLabel.text = title
-        titleLabel.font = UIFont.systemFont(ofSize: 15, weight: .semibold)
-        titleLabel.textColor = .white
+        titleLabel.font = KQFont.font(.label, weight: 600)
+        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.textColor = KQColor.ink
         titleLabel.numberOfLines = 1
         addSubview(titleLabel)
 
         let bodyLabel = UILabel()
         bodyLabel.text = body
-        bodyLabel.font = UIFont.systemFont(ofSize: 14)
-        bodyLabel.textColor = UIColor(white: 1.0, alpha: 0.85)
+        bodyLabel.font = KQFont.font(.label, weight: 400)
+        bodyLabel.adjustsFontForContentSizeCategory = true
+        bodyLabel.textColor = KQColor.ink2
         bodyLabel.numberOfLines = 2
+        bodyLabel.isHidden = body.isEmpty
         addSubview(bodyLabel)
 
-        backdrop.snp.makeConstraints { $0.edges.equalToSuperview() }
+        backdrop.snp.makeConstraints {
+            $0.edges.equalToSuperview()
+        }
 
-        iconView.snp.makeConstraints {
-            $0.leading.equalToSuperview().offset(12)
+        tileView.snp.makeConstraints {
+            $0.leading.equalToSuperview().offset(KQSpace.x12)
             $0.centerY.equalToSuperview()
-            $0.width.height.equalTo(36)
-            $0.top.greaterThanOrEqualToSuperview().offset(10)
-            $0.bottom.lessThanOrEqualToSuperview().offset(-10)
+            $0.size.equalTo(KQSize.tilePhone)
+            $0.top.greaterThanOrEqualToSuperview().offset(KQSpace.x12)
+            $0.bottom.lessThanOrEqualToSuperview().offset(-KQSpace.x12)
         }
 
         titleLabel.snp.makeConstraints {
-            $0.leading.equalTo(iconView.snp.trailing).offset(10)
-            $0.trailing.equalToSuperview().offset(-14)
-            $0.top.equalToSuperview().offset(11)
+            if tile == nil {
+                $0.leading.equalToSuperview().offset(KQSpace.x16)
+            }
+            else {
+                $0.leading.equalTo(tileView.snp.trailing).offset(KQSpace.x12)
+            }
+            $0.trailing.equalToSuperview().offset(-KQSpace.x16)
+            $0.top.equalToSuperview().offset(KQSpace.x12)
         }
 
         bodyLabel.snp.makeConstraints {
             $0.leading.equalTo(titleLabel)
             $0.trailing.equalTo(titleLabel)
-            $0.top.equalTo(titleLabel.snp.bottom).offset(2)
-            $0.bottom.equalToSuperview().offset(-11)
+            $0.top.equalTo(titleLabel.snp.bottom).offset(KQSpace.x2)
+        }
+        // The band ends under the last line it shows.
+        let last: UIView = body.isEmpty ? titleLabel : bodyLabel
+        last.snp.makeConstraints {
+            $0.bottom.equalToSuperview().offset(-KQSpace.x12)
         }
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
@@ -348,6 +230,16 @@ final class NotificationBannerView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override func accessibilityActivate() -> Bool {
+        onTap?()
+        return true
+    }
+
+    override func accessibilityPerformEscape() -> Bool {
+        onDismiss?()
+        return true
+    }
+
     @objc private func tapped() {
         onTap?()
     }
@@ -356,14 +248,16 @@ final class NotificationBannerView: UIView {
         let translationY = gesture.translation(in: self).y
         switch gesture.state {
             case .changed:
-                // Allow dragging up only.
+                // Up only.
                 transform = CGAffineTransform(translationX: 0, y: min(0, translationY))
             case .ended, .cancelled:
-                if translationY < -20 {
+                if translationY < -KQSpace.x20 {
                     onDismiss?()
                 }
                 else {
-                    UIView.animate(withDuration: 0.2) { self.transform = .identity }
+                    UIView.animate(withDuration: KQMotion.duration(KQMotion.state)) {
+                        self.transform = .identity
+                    }
                 }
             default:
                 break

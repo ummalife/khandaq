@@ -27,6 +27,7 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
@@ -519,100 +520,97 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
         }
     }
 
-    public void show_delete_friend_confirm_dialog(final View view, final FriendList f2)
+    static void show_delete_friend_confirm_dialog(final View view, final FriendList f2)
     {
-        AlertDialog.Builder builder = new AlertDialog.Builder(view.getContext());
-        builder.setTitle("Delete Friend?");
-        builder.setMessage("Do you want to delete this Friend including all Messages and Files?");
-
-        builder.setNegativeButton("Cancel", null);
-        builder.setPositiveButton("Yes", new DialogInterface.OnClickListener()
+        // KHANDAQ (redesign, E21): the question of the dossier's Remove, from below and in the app's
+        // language, with the verb on the button; it was "Delete Friend?" in English with Yes.
+        final Context context = view.getContext();
+        String name = HelperFriend.display_name_from_friendlist(f2, f2.tox_public_key_string);
+        if (TextUtils.isEmpty(name))
         {
-            @Override
-            public void onClick(DialogInterface dialog, int which)
-            {
-                Runnable myRunnable = new Runnable()
-                {
-                    @Override
-                    public void run()
-                    {
-                        try
-                        {
-                            long friend_num_temp = tox_friend_by_public_key__wrapper(f2.tox_public_key_string);
-
-                            Log.i(TAG, "onMenuItemClick:1:fn=" + friend_num_temp);
-
-                            // delete friends files -------
-                            Log.i(TAG, "onMenuItemClick:1.c:fnum=" + friend_num_temp);
-                            delete_friend_all_files(f2.tox_public_key_string);
-                            // delete friend  files -------
-
-                            // delete friends FTs -------
-                            Log.i(TAG, "onMenuItemClick:1.d:fnum=" + friend_num_temp);
-                            delete_friend_all_filetransfers(f2.tox_public_key_string);
-                            // delete friend  FTs -------
-
-                            // delete friends messages -------
-                            Log.i(TAG, "onMenuItemClick:1.b:fnum=" + friend_num_temp);
-                            delete_friend_all_messages(f2.tox_public_key_string);
-                            // delete friend  messages -------
-
-                            // delete friend -------
-                            // Log.i(TAG, "onMenuItemClick:1.a:pubkey=" + f2.tox_public_key_string);
-                            delete_friend(f2.tox_public_key_string);
-                            // delete friend -------
-
-                            // delete friend - tox ----
-                            Log.i(TAG, "onMenuItemClick:4");
-                            if (friend_num_temp > -1)
-                            {
-                                int res = tox_friend_delete(friend_num_temp);
-                                cache_pubkey_fnum.clear();
-                                cache_fnum_pubkey.clear();
-                                update_savedata_file_wrapper(); // save toxcore datafile (friend removed)
-                                Log.i(TAG, "onMenuItemClick:5:res=" + res);
-                            }
-                            // delete friend - tox ----
-
-                            // load all friends into data list ---
-                            Log.i(TAG, "onMenuItemClick:6");
-                            try
-                            {
-                                if (friend_list_fragment != null)
-                                {
-                                    // reload friendlist
-                                    // TODO: only remove 1 item, don't clear all!! this can crash
-                                    friend_list_fragment.add_all_friends_clear(0);
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-
-                            Log.i(TAG, "onMenuItemClick:7");
-                            // load all friends into data list ---
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                            Log.i(TAG, "onMenuItemClick:8:EE:" + e.getMessage());
-                        }
-                    }
-                };
-                // TODO: use own handler
-                if (view.getHandler() != null)
-                {
-                    view.getHandler().post(myRunnable);
-                }
-            }
-        });
-
-        AlertDialog dialog = builder.create();
-        dialog.show();
+            name = HelperFriend.peer_pubkey_short_id(f2.tox_public_key_string);
+        }
+        AirQuestion.ask(context, context.getString(R.string.air_dossier_remove_title_format, name),
+                        context.getString(R.string.air_dossier_remove_message),
+                        context.getString(R.string.air_dossier_remove), true,
+                        () -> delete_friend_now(f2.tox_public_key_string));
     }
 
-    public void show_confirm_addrelay_dialog(final View view, final FriendList f2)
+    /**
+     * Removes a friend with every message and file, from the database and from toxcore. Runs on the
+     * caller's thread, which has always been the main thread. KHANDAQ (redesign, stage 2): shared by the
+     * list's confirmation and the chat dossier's, and it also forgets the contact's presence marks.
+     */
+    static void delete_friend_now(final String pubkey)
+    {
+        try
+        {
+            long friend_num_temp = tox_friend_by_public_key__wrapper(pubkey);
+
+            Log.i(TAG, "onMenuItemClick:1:fn=" + friend_num_temp);
+
+            // delete friends files -------
+            Log.i(TAG, "onMenuItemClick:1.c:fnum=" + friend_num_temp);
+            delete_friend_all_files(pubkey);
+            // delete friend  files -------
+
+            // delete friends FTs -------
+            Log.i(TAG, "onMenuItemClick:1.d:fnum=" + friend_num_temp);
+            delete_friend_all_filetransfers(pubkey);
+            // delete friend  FTs -------
+
+            // delete friends messages -------
+            Log.i(TAG, "onMenuItemClick:1.b:fnum=" + friend_num_temp);
+            delete_friend_all_messages(pubkey);
+            // delete friend  messages -------
+
+            // delete friend -------
+            // Log.i(TAG, "onMenuItemClick:1.a:pubkey=" + pubkey);
+            delete_friend(pubkey);
+            // delete friend -------
+
+            // delete friend - tox ----
+            Log.i(TAG, "onMenuItemClick:4");
+            if (friend_num_temp > -1)
+            {
+                int res = tox_friend_delete(friend_num_temp);
+                cache_pubkey_fnum.clear();
+                cache_fnum_pubkey.clear();
+                update_savedata_file_wrapper(); // save toxcore datafile (friend removed)
+                Log.i(TAG, "onMenuItemClick:5:res=" + res);
+            }
+            // delete friend - tox ----
+
+            // load all friends into data list ---
+            Log.i(TAG, "onMenuItemClick:6");
+            try
+            {
+                if (friend_list_fragment != null)
+                {
+                    // reload the whole friend list (removing just this row would be lighter)
+                    friend_list_fragment.add_all_friends_clear(0);
+                }
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+
+            Log.i(TAG, "onMenuItemClick:7");
+            // load all friends into data list ---
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            Log.i(TAG, "onMenuItemClick:8:EE:" + e.getMessage());
+        }
+        AirContactMarks.forget(pubkey);
+        // KHANDAQ (redesign, E12): their invitations go too, toxcore joins only through them.
+        AirInviteStore.removeFrom(pubkey);
+        AirRepository.requestRefresh();
+    }
+
+    static void show_confirm_addrelay_dialog(final View view, final FriendList f2)
     {
         AlertDialog.Builder builder = new AlertDialog.Builder(view.getContext());
         builder.setTitle("add as Relay?");
@@ -681,8 +679,16 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
     public boolean onLongClick(final View v)
     {
         Log.i(TAG, "onLongClick");
+        return show_row_menu(v, this.friendlist);
+    }
 
-        final FriendList f2 = this.friendlist;
+    /** KHANDAQ (redesign): the row's action menu, anchored to {@code v}; the old list and Air share it. */
+    static boolean show_row_menu(final View v, final FriendList f2)
+    {
+        if (f2 == null)
+        {
+            return false;
+        }
 
         PopupMenu menu = new PopupMenu(v.getContext(), v);
         menu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener()
@@ -694,16 +700,15 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
                 switch (id)
                 {
                     case R.id.item_info:
-                        // show friend info page -----------------
-                        long friend_num_temp_safety = tox_friend_by_public_key__wrapper(f2.tox_public_key_string);
-
-                        Log.i(TAG, "onMenuItemClick:info:1:fn_safety=" + friend_num_temp_safety);
-
-                        Intent intent = new Intent(v.getContext(), FriendInfoActivity.class);
-                        intent.putExtra("friendnum", friend_num_temp_safety);
+                        // KHANDAQ (redesign, E10): what there is to know about a contact is the dossier of
+                        // its conversation, not a screen of its own: Information opens the chat with the
+                        // dossier unfolded.
+                        Intent intent = new Intent(v.getContext(), MessageListActivity.class);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                        intent.putExtra("friendnum", tox_friend_by_public_key__wrapper(f2.tox_public_key_string));
                         intent.putExtra("friend_pubkey", f2.tox_public_key_string);
+                        intent.putExtra(MessageListActivity.EXTRA_OPEN_DOSSIER, true);
                         v.getContext().startActivity(intent);
-                        // show friend info page -----------------
                         break;
 
                     case R.id.item_create_conference:
@@ -863,14 +868,10 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
 
         menu.inflate(R.menu.menu_friendlist_item);
         MenuItem add_toxproxy_item = menu.getMenu().findItem(R.id.item_add_toxproxy);
-        if (have_own_relay())
-        {
-            add_toxproxy_item.setVisible(false);
-        }
-        else
-        {
-            add_toxproxy_item.setVisible(true);
-        }
+        // KHANDAQ (redesign, E10): relay settings are developer tracing, as in the profile's advanced
+        // section; a consumer menu offered "add as Tox proxy" next to Information.
+        final boolean developer_details = org.khandaq.messenger.BuildConfig.DEBUG && MainActivity.INSANE_TRACE_LOGGING;
+        add_toxproxy_item.setVisible(developer_details && !have_own_relay());
         final MenuItem favoriteItem = menu.getMenu().findItem(R.id.item_toggle_favorite);
         if (favoriteItem != null)
         {
@@ -897,9 +898,21 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
 
     static void notifyFavoriteChanged(final View view)
     {
-        if (view.getContext() instanceof MainActivity)
+        android.content.Context context = view.getContext();
+        // A themed view may sit on a ContextThemeWrapper around the activity.
+        while (!(context instanceof MainActivity) && context instanceof android.content.ContextWrapper)
         {
-            ((MainActivity) view.getContext()).onChatFavoriteChanged();
+            final android.content.Context base = ((android.content.ContextWrapper) context).getBaseContext();
+            if (base == null || base == context)
+            {
+                break;
+            }
+            context = base;
         }
+        if (context instanceof MainActivity)
+        {
+            ((MainActivity) context).onChatFavoriteChanged();
+        }
+        AirRepository.requestRefresh();
     }
 }

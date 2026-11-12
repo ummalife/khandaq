@@ -626,8 +626,14 @@ public class HelperMessageDelete
         {
             for (int i = 0; i < len; i += 2)
             {
-                out[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4)
-                                     + Character.digit(s.charAt(i + 1), 16));
+                final int high = Character.digit(s.charAt(i), 16);
+                final int low = Character.digit(s.charAt(i + 1), 16);
+                if (high < 0 || low < 0)
+                {
+                    // Not an anchor at all: no packet rather than one that names another message.
+                    return null;
+                }
+                out[i / 2] = (byte) ((high << 4) + low);
             }
         }
         catch (Exception e)

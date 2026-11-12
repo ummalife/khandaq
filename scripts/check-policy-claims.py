@@ -32,6 +32,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PRIVACY = ROOT / "web" / "privacy.html"
+PRIVACY_RU = ROOT / "web" / "ru" / "privacy.html"
 SECURITY = ROOT / "SECURITY.md"
 APP_MANIFEST = ROOT / "khandaq-android-trifa/android-refimpl-app/app/src/main/AndroidManifest.xml"
 INJECTED = ROOT / "docs" / "android-merge-injected-permissions.txt"
@@ -70,6 +71,36 @@ DENIED: dict[str, str] = {
     "ignore battery optimisations": P + "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
 }
 
+# KHANDAQ (redesign E23, 2026-11-11): the Russian translation of the policy, web/ru/privacy.html.
+# It is read by the same users and reviewers, so it is held to the same three checks, with its own
+# wording. On top of that, both pages must name and deny exactly the same permissions: a translation
+# that silently drops or adds one is a policy that says two different things.
+NAMED_RU: dict[str, tuple[str, ...]] = {
+    "интернет": (P + "INTERNET",),
+    "состояние сети": (P + "ACCESS_NETWORK_STATE",),
+    "отключение спящего режима": (P + "WAKE_LOCK",),
+    "активная служба особого типа": (P + "FOREGROUND_SERVICE_SPECIAL_USE",),
+    "активная служба": (P + "FOREGROUND_SERVICE",),
+    "запуск при включении": (P + "RECEIVE_BOOT_COMPLETED",),
+    "повышенный приоритет потоков": ("org.thoughtcrime.securesms.RAISED_THREAD_PRIORITY",),
+    "изменение настроек звука": (P + "MODIFY_AUDIO_SETTINGS",),
+    "отключение блокировки экрана": (P + "DISABLE_KEYGUARD",),
+    "полноэкранное уведомление": (P + "USE_FULL_SCREEN_INTENT",),
+    "точный будильник": (P + "SCHEDULE_EXACT_ALARM",),
+    "разрешение на получение сообщений Google": (C2DM,),
+    "устройства поблизости": (P + "BLUETOOTH_CONNECT",),
+    "поверх других приложений": (P + "SYSTEM_ALERT_WINDOW",),
+}
+
+DENIED_RU: dict[str, str] = {
+    "доступ ко всем файлам": P + "MANAGE_EXTERNAL_STORAGE",
+    "игнорирование оптимизации батареи": P + "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+}
+
+# The Russian page translates the denial sentence with this anchor.
+DENIAL_EN = r"does <strong>not</strong> declare[^<]*(?:<[^>]+>[^<]*)*"
+DENIAL_RU = r"<strong>не</strong> объявляет[^<]*(?:<[^>]+>[^<]*)*"
+
 # False from SIGNING_FROM_VERSION_CODE onward. Each entry says why, because a bare regex list becomes
 # unmaintainable the moment somebody rewords the page legitimately.
 STALE_AFTER_SIGNING: list[tuple[str, str]] = [
@@ -79,6 +110,16 @@ STALE_AFTER_SIGNING: list[tuple[str, str]] = [
      "клиенты с 0.2.42 подписывают пробуждения"),
     (r"apps currently on the App Store and Google Play are built without",
      "утверждение устарело с релиза 0.2.42"),
+]
+
+# The same three claims in the wording of web/ru/privacy.html.
+STALE_AFTER_SIGNING_RU: list[tuple[str, str]] = [
+    (r"собран\w* без ключа подписи",
+     "store builds carry the signing key since Android 0.2.42 and iOS 142986"),
+    (r"ни один (?:выпущенный|поставляемый) клиент не подписывает",
+     "clients sign their wakes since 0.2.42"),
+    (r"(?:приложения|сборки) в App Store и Google Play собраны без",
+     "the claim is stale since release 0.2.42"),
 ]
 
 failures: list[str] = []
@@ -132,47 +173,79 @@ def shipped_permissions() -> set[str]:
     return declared | injected
 
 
-def main() -> int:
-    print("==> Сверка утверждений политики с приложением и релизом")
-    if not PRIVACY.is_file():
-        print("::error::нет web/privacy.html", file=sys.stderr)
-        return 1
-
-    shipped = shipped_permissions()
-    privacy = PRIVACY.read_text(encoding="utf-8")
-    security = SECURITY.read_text(encoding="utf-8") if SECURITY.is_file() else ""
-
+def check_page(name: str, page: str, shipped: set[str], named: dict[str, tuple[str, ...]],
+               denied: dict[str, str], denial_pattern: str) -> tuple[set[str], set[str]]:
+    """Checks 1 and 2 for one language version. Returns (named, denied) permission constants."""
+    # A no-break space is typography (Russian text binds short words with it), not wording.
+    page = page.replace("&nbsp;", " ").replace("\u00a0", " ")
     # 1. Что страница называет — должно быть объявлено.
     named_ok = 0
-    for phrase, perms in NAMED.items():
-        if re.search(r"<em>" + re.escape(phrase) + r"</em>", privacy, re.I):
+    named_perms: set[str] = set()
+    for phrase, perms in named.items():
+        if re.search(r"<em>" + re.escape(phrase) + r"</em>", page, re.I):
+            named_perms.update(perms)
             if not any(p in shipped for p in perms):
                 failures.append(
-                    f"privacy.html называет разрешение «{phrase}», но приложение его не запрашивает "
+                    f"{name} называет разрешение «{phrase}», но приложение его не запрашивает "
                     f"({' / '.join(perms)}). Либо разрешение убрали и страницу не поправили, либо "
                     f"страница описывает не тот билд.")
             else:
                 named_ok += 1
-    print(f"    названо на странице и подтверждено манифестом: {named_ok}")
+    print(f"    {name}: названо на странице и подтверждено манифестом: {named_ok}")
 
     # 2. Что страница отрицает — должно отсутствовать.
-    denial = re.search(r"does <strong>not</strong> declare[^<]*(?:<[^>]+>[^<]*)*", privacy)
+    denial = re.search(denial_pattern, page)
     denial_text = denial.group(0) if denial else ""
     denied_ok = 0
-    for phrase, perm in DENIED.items():
+    denied_perms: set[str] = set()
+    for phrase, perm in denied.items():
         if phrase.lower() in denial_text.lower():
+            denied_perms.add(perm)
             if perm in shipped:
                 failures.append(
-                    f"privacy.html утверждает, что приложение НЕ запрашивает «{phrase}», но {perm} "
+                    f"{name} утверждает, что приложение НЕ запрашивает «{phrase}», но {perm} "
                     f"есть в поставляемом манифесте. Это прямая неправда в политике "
                     f"конфиденциальности.")
             else:
                 denied_ok += 1
         elif perm in shipped:
             failures.append(
-                f"{perm} появилось в поставляемом манифесте, а privacy.html об этом молчит "
+                f"{perm} появилось в поставляемом манифесте, а {name} об этом молчит "
                 f"(«{phrase}»). Разрешение, чувствительное для магазина, должно быть описано.")
-    print(f"    отрицаний проверено: {denied_ok}")
+    print(f"    {name}: отрицаний проверено: {denied_ok}")
+    return named_perms, denied_perms
+
+
+def main() -> int:
+    print("==> Сверка утверждений политики с приложением и релизом")
+    if not PRIVACY.is_file():
+        print("::error::нет web/privacy.html", file=sys.stderr)
+        return 1
+    # Required, not optional: a translation that disappears must fail here, not skip.
+    if not PRIVACY_RU.is_file():
+        print("::error::web/ru/privacy.html is missing", file=sys.stderr)
+        return 1
+
+    shipped = shipped_permissions()
+    privacy = PRIVACY.read_text(encoding="utf-8")
+    privacy_ru = PRIVACY_RU.read_text(encoding="utf-8")
+    security = SECURITY.read_text(encoding="utf-8") if SECURITY.is_file() else ""
+
+    named_en, denied_en = check_page("privacy.html", privacy, shipped, NAMED, DENIED, DENIAL_EN)
+    named_ru, denied_ru = check_page("ru/privacy.html", privacy_ru, shipped, NAMED_RU, DENIED_RU, DENIAL_RU)
+
+    # Both language versions must make the same claims.
+    for what, en, ru in (("names", named_en, named_ru), ("denies", denied_en, denied_ru)):
+        if en != ru:
+            failures.append(
+                f"the English and Russian policies differ: privacy.html {what} "
+                f"{', '.join(sorted(en - ru)) or 'nothing more'}, ru/privacy.html {what} "
+                f"{', '.join(sorted(ru - en)) or 'nothing more'} beyond the other version. A "
+                f"translation must say what the original says.")
+    if not named_en or not denied_en:
+        failures.append("privacy.html names or denies no permission at all: the page changed shape, "
+                        "and this check would pass vacuously")
+    print(f"    both versions agree: {len(named_en & named_ru)} named, {len(denied_en & denied_ru)} denied")
 
     # 3. Утверждения, ставшие ложью после выката подписи.
     try:
@@ -185,8 +258,12 @@ def main() -> int:
                 if re.search(pattern, text, re.I):
                     failures.append(f"{name}: утверждение «{pattern}» устарело — {why} "
                                     f"(релиз versionCode {vc})")
+        for pattern, why in STALE_AFTER_SIGNING_RU:
+            if re.search(pattern, privacy_ru.replace("&nbsp;", " ").replace("\u00a0", " "), re.I):
+                failures.append(f"web/ru/privacy.html: the claim \"{pattern}\" is stale: {why} "
+                                f"(release versionCode {vc})")
         print(f"    релиз {vc} >= {SIGNING_FROM_VERSION_CODE}: проверено "
-              f"{len(STALE_AFTER_SIGNING)} утверждени(й) о подписи")
+              f"{len(STALE_AFTER_SIGNING) + len(STALE_AFTER_SIGNING_RU)} утверждени(й) о подписи")
     else:
         print(f"    релиз {vc} < {SIGNING_FROM_VERSION_CODE}: проверки про подпись не применяются")
 

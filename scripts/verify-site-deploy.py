@@ -254,6 +254,17 @@ def main() -> int:
             ok(f"домашняя страница называет iOS {ios_ver}/{ios_build}")
         else:
             fail(f"на домашней странице нет сборки iOS {ios_build} из манифеста")
+        # KHANDAQ (redesign E23, 2026-11-11): the Russian home page /ru/ carries the same numbers.
+        status, _, body = get(f"{base}/ru/", allow_redirect=True)
+        html = body.decode("utf-8", "replace") if body else ""
+        if f"v{android}" in html or android in html:
+            ok(f"the Russian home page /ru/ names Android {android}")
+        else:
+            fail(f"the Russian home page /ru/ does not name Android {android} from the manifest")
+        if ios_build in html or ios_ver in html:
+            ok(f"the Russian home page /ru/ names iOS {ios_ver}/{ios_build}")
+        else:
+            fail(f"the Russian home page /ru/ does not name iOS build {ios_build} from the manifest")
 
     # 3. header baseline across the five response classes nginx handles differently
     print("-- заголовки безопасности")
@@ -265,7 +276,9 @@ def main() -> int:
     check_headers(f"{base}/definitely-not-a-real-path-{probe}", "404")
 
     print("-- CSP против реально отданного HTML")
-    for page in ("/", "/changelog", "/privacy.html"):
+    # KHANDAQ (redesign E23, 2026-11-11): the Russian pages are served from web/ru/ by the same
+    # `location /`; a deploy that forgets to copy them answers 404 here and fails.
+    for page in ("/", "/changelog", "/privacy.html", "/ru/", "/ru/changelog.html", "/ru/privacy.html"):
         check_csp_covers_inline(base, page)
     # The 404 page is served `internal;`, so it cannot be fetched by its own path — asking for it
     # directly is itself a 404. The body of a real miss is the only way to see what it sends.
@@ -385,6 +398,8 @@ def main() -> int:
     for host in TLS_HOSTS:
         try:
             ctx = ssl.create_default_context()
+            # Every host here serves TLS 1.2 or later; refuse anything older instead of reading its certificate.
+            ctx.minimum_version = ssl.TLSVersion.TLSv1_2
             with socket.create_connection((host, 443), timeout=15) as sock:
                 with ctx.wrap_socket(sock, server_hostname=host) as tls:
                     cert = tls.getpeercert()

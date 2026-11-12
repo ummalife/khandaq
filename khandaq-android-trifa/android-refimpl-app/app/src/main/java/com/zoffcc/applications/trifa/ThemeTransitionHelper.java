@@ -7,6 +7,8 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.preference.PreferenceManager;
@@ -44,6 +46,37 @@ final class ThemeTransitionHelper
         // (MainActivity does NOT handle uiMode in configChanges). The previous explicit
         // activity.recreate() ran a SECOND recreate → the slow/janky double-rebuild. Let night-mode
         // do the single recreate; scheduleCrossfadeAfterCreate() still plays the crossfade after it.
+        MainApplication.applyDarkModeFromPref(darkModePrefValue);
+    }
+
+    /**
+     * KHANDAQ (redesign, E18): the theme segment in settings. A choice that leaves the window as it is
+     * (light chosen while the system is light, say) is only stored: no recreate follows it, so a snapshot
+     * taken for it would cross-fade over some later, unrelated recreate.
+     */
+    static void applyThemeChoice(@NonNull final Activity activity, @NonNull final String darkModePrefValue)
+    {
+        final boolean nightNow = HelperGeneric.is_nightmode_active(activity);
+        final boolean nightNext;
+        if ("1".equals(darkModePrefValue))
+        {
+            nightNext = true;
+        }
+        else if ("2".equals(darkModePrefValue))
+        {
+            nightNext = false;
+        }
+        else
+        {
+            nightNext = (Resources.getSystem().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+                        == Configuration.UI_MODE_NIGHT_YES;
+        }
+        if (nightNext != nightNow)
+        {
+            recreateWithThemeCrossfade(activity, darkModePrefValue);
+            return;
+        }
+        PreferenceManager.getDefaultSharedPreferences(activity).edit().putString("dark_mode_pref", darkModePrefValue).apply();
         MainApplication.applyDarkModeFromPref(darkModePrefValue);
     }
 
@@ -116,7 +149,10 @@ final class ThemeTransitionHelper
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
         final ValueAnimator animator = ValueAnimator.ofFloat(1f, 0f);
-        animator.setDuration(CROSSFADE_MS);
+        // Reduced motion: the window still changes with a fade, only a short one.
+        animator.setDuration(AirUi.reducedMotion()
+                             ? Math.min(CROSSFADE_MS, activity.getResources().getInteger(R.integer.kq_dur_reduced_max))
+                             : CROSSFADE_MS);
         animator.setInterpolator(new DecelerateInterpolator(1.5f));
         animator.addUpdateListener(animation ->
         {

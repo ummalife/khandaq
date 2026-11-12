@@ -32,8 +32,9 @@ img_src = m.group(1) if m else ""
 data_allowed = "data:" in img_src
 
 sources = [(CSS.name, css)]
-for html in sorted(WEB.glob("*.html")):
-    sources.append((html.name, html.read_text(encoding="utf-8", errors="replace")))
+# KHANDAQ (redesign E23, 2026-11-11): web/ru/ holds the Russian pages, served under the same policy.
+for html in sorted(WEB.glob("*.html")) + sorted((WEB / "ru").glob("*.html")):
+    sources.append((html.relative_to(WEB).as_posix(), html.read_text(encoding="utf-8", errors="replace")))
 
 for name, text in sources:
     if not data_allowed and "data:image" in text:

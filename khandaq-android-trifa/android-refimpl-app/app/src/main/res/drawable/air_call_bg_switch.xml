@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (redesign, stage 3b; stage 5): the 64dp circle of a call switch (Microphone, Speaker) and of
+     Switch camera on the lock ground of the call screens, as CallButton on iOS: translucent white with no
+     outline at rest (media-control), white while the switch is on (activated, which TalkBack does not
+     read as "selected"; the switch says on or off itself), and the focus ring under a keyboard. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:exitFadeDuration="@integer/kq_dur_tap">
+    <item android:state_activated="true" android:state_focused="true">
+        <shape android:shape="oval">
+            <solid android:color="@color/kq_fixed_white" />
+            <stroke android:width="@dimen/kq_stroke_focus" android:color="@color/kq_focus" />
+        </shape>
+    </item>
+    <item android:state_activated="true">
+        <shape android:shape="oval">
+            <solid android:color="@color/kq_fixed_white" />
+        </shape>
+    </item>
+    <item android:state_focused="true">
+        <shape android:shape="oval">
+            <solid android:color="@color/kq_media_control" />
+            <stroke android:width="@dimen/kq_stroke_focus" android:color="@color/kq_fixed_white" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="@color/kq_media_control" />
+        </shape>
+    </item>
+</selector>

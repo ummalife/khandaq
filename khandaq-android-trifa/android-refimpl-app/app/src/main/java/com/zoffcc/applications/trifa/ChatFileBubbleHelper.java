@@ -1,7 +1,6 @@
 package com.zoffcc.applications.trifa;
 
 import android.content.Context;
-import android.text.format.Formatter;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -99,7 +98,7 @@ final class ChatFileBubbleHelper
             {
                 if (fileSizeBytes > 0)
                 {
-                    size.setText(Formatter.formatFileSize(context, fileSizeBytes));
+                    size.setText(AirByteSize.text(context, fileSizeBytes));
                     size.setVisibility(View.VISIBLE);
                 }
                 else
@@ -336,13 +335,13 @@ final class ChatFileBubbleHelper
             else if (phase == ChatTransferProgressHelper.Phase.PENDING)
             {
                 sizeView.setText(totalBytes > 0
-                        ? Formatter.formatFileSize(context, totalBytes)
+                        ? AirByteSize.text(context, totalBytes)
                         : "");
                 sizeView.setVisibility(totalBytes > 0 ? View.VISIBLE : View.GONE);
             }
             else if (totalBytes > 0)
             {
-                sizeView.setText(Formatter.formatFileSize(context, totalBytes));
+                sizeView.setText(AirByteSize.text(context, totalBytes));
                 sizeView.setVisibility(View.VISIBLE);
             }
             else
@@ -424,7 +423,7 @@ final class ChatFileBubbleHelper
         }
     }
 
-    private static long resolveMessageFileSize(final Message message)
+    static long resolveMessageFileSize(final Message message)
     {
         if (message.filetransfer_id > 0)
         {

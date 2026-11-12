@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    KHANDAQ (redesign, Air): a screen reached from settings or a dossier. The header with the way back
+    and the title, then one scrolling column the screen fills in code (AirScreenActivity).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/air_screen_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/kq_bg"
+    android:orientation="vertical">
+
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/air_screen_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/kq_bg"
+        android:minHeight="?attr/actionBarSize"
+        app:popupTheme="@style/KhandaqPopupOverlay"
+        app:theme="@style/ThemeOverlay.AppCompat.DayNight.ActionBar" />
+
+    <!-- The line that closes the header, as under the Air header and the conversation's, and as the
+         opaque navigation bar on iOS draws it: a form the keyboard lifts slides under an edge.
+         The first-launch and sign-in pages leave it out (AirScreenActivity.headerRule). -->
+    <View
+        android:id="@+id/air_screen_rule"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/kq_stroke_hairline"
+        android:background="@color/kq_line" />
+
+    <ScrollView
+        android:id="@+id/air_screen_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:id="@+id/air_screen_column"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="@dimen/kq_space_16"
+            android:paddingTop="@dimen/kq_space_16"
+            android:paddingEnd="@dimen/kq_space_16"
+            android:paddingBottom="@dimen/kq_space_32" />
+    </ScrollView>
+
+    <!-- A bar under the column for the one action of the screen; it rides above the keyboard. -->
+    <LinearLayout
+        android:id="@+id/air_screen_bottom"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/air_bg_screen_bar"
+        android:orientation="vertical"
+        android:paddingStart="@dimen/kq_space_16"
+        android:paddingTop="@dimen/kq_space_12"
+        android:paddingEnd="@dimen/kq_space_16"
+        android:paddingBottom="@dimen/kq_space_12"
+        android:visibility="gone" />
+</LinearLayout>

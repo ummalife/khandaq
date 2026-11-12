@@ -68,7 +68,8 @@ public class ShareActivity extends AppCompatActivity
         HelperToolbar.enableUpNavigation(this, toolbar);
 
         t1 = (TextView) findViewById(R.id.text1);
-        t1.setText("Share Content ...\nNot yet implemented via share.");
+        // KHANDAQ (stage 5): what this screen says while the list of chats opens over it, in the app's language.
+        t1.setText(R.string.share_choose_target);
 
         HelperGeneric.logI(TAG, "onCreate");
 
@@ -79,6 +80,8 @@ public class ShareActivity extends AppCompatActivity
 
         if (!PREF__allow_file_sharing_to_trifa_via_intent)
         {
+            // The switch is off in Advanced settings: say so instead of a list that never comes.
+            t1.setText(R.string.share_turned_off);
             return;
         }
 
@@ -519,7 +522,8 @@ public class ShareActivity extends AppCompatActivity
                 {
                     final String name = HelperFiletransfer.resolve_attachment_display_name(app, u, null);
                     if ((name != null)
-                        && (FavoritesChatHelper.sendLocalOutgoingFile(app, u.toString(), name, -1L, false) > 0))
+                        && (FavoritesChatHelper.sendLocalOutgoingFile(app, u.toString(), name, -1L, false,
+                                                                      false) > 0))
                     {
                         saved++;
                     }
@@ -535,9 +539,10 @@ public class ShareActivity extends AppCompatActivity
                 if (saved_final < safeUris.size())
                 {
                     // a provider that hides the size, a copy that failed: say so instead of opening
-                    // Favorites as if everything had arrived
-                    android.widget.Toast.makeText(app, app.getString(R.string.share_favorites_failed,
-                            safeUris.size() - saved_final, safeUris.size()), android.widget.Toast.LENGTH_LONG).show();
+                    // Favorites as if everything had arrived. E21: at the composer of the saved chat that
+                    // opens next (one summary; the per-file refusal is off for this path).
+                    AirComposerNotice.sayOnReturn(app.getString(R.string.share_favorites_failed,
+                            safeUris.size() - saved_final, safeUris.size()), true);
                 }
                 if (isFinishing() || isDestroyed())
                 {

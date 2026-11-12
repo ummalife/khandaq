@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A reaction under an entry: a raised chip with a line. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/kq_raised" />
+    <stroke android:width="@dimen/kq_stroke_hairline" android:color="@color/kq_line" />
+    <corners android:radius="@dimen/kq_radius_round" />
+</shape>

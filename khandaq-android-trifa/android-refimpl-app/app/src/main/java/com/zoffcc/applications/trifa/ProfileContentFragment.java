@@ -40,6 +40,7 @@ import android.os.Handler;
 import android.provider.DocumentsContract;
 import android.text.Editable;
 import android.text.Html;
+import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -63,6 +64,7 @@ import com.mikepenz.google_material_typeface_library.GoogleMaterial;
 import com.mikepenz.iconics.IconicsDrawable;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.StringRes;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.text.PrecomputedTextCompat;
 import androidx.core.widget.TextViewCompat;
@@ -143,6 +145,12 @@ public class ProfileContentFragment extends Fragment
     static final int MEDIAPICK_ID_002 = 8003;
     static final int PROFILE_FIELD_EDIT_ID = 8005;
     private boolean editingProfileName = false;
+    // KHANDAQ (redesign, E17): the You screen over the legacy views; null while the view does not exist.
+    @Nullable
+    private AirYouScreen you = null;
+    // What the note under Log out was written for, and whether "Password and PIN" was opened since.
+    private boolean youPasswordSet = false;
+    private boolean youSecurityOpened = false;
 
     static Handler profile_handler_s = null;
     private boolean stop_me_netconn = false;
@@ -508,28 +516,7 @@ public class ProfileContentFragment extends Fragment
         };
         mystatus_message_edittext.setOnEditorActionListener(saveOnDoneListener);
 
-        profile_icon_edit.setOnClickListener(v -> {
-            // select new avatar image
-            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            intent.addCategory(Intent.CATEGORY_OPENABLE);
-            intent.setType("image/*");
-            intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT)
-            {
-                // KHANDAQ: EXTRA_MIME_TYPES REQUIRES a String[] — passing a plain String made
-                // getStringArrayExtra() return null, so the system picker ignored the filter and
-                // showed ALL files (incl. videos). Picking a video then broke the crop/apply flow
-                // (bounce to PIN → back to profile, avatar unchanged). Restrict to images only.
-                intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*"});
-            }
-            // KHANDAQ (#avatar-pin): the system photo picker is an external app, so it backgrounds us and
-            // the app-lock would prompt for the PIN on return from an intentional in-app action. Suppress
-            // the lock for exactly this one foreground return (same flag the chat photo/file pickers use;
-            // the gate consumes+clears it whether the user picks or cancels). Only here — NOT before the
-            // in-app uCrop/field-edit launches, which never background the app.
-            AppLockHelper.suppressNextLock();
-            startActivityForResult(intent, MEDIAPICK_ID_002);
-        });
+        profile_icon_edit.setOnClickListener(v -> launchAvatarPicker());
 
         profile_icon_remove.setOnClickListener(v -> {
             try
@@ -545,35 +532,7 @@ public class ProfileContentFragment extends Fragment
                         {
                             public void onClick(DialogInterface dialog, int id)
                             {
-                                try
-                                {
-                                    del_own_avatar();
-                                }
-                                catch (Exception ignored)
-                                {
-                                }
-
-                                try
-                                {
-                                    del_g_opts("VFS_OWN_AVATAR_FNAME");
-                                    del_g_opts("VFS_OWN_AVATAR_FILE_EXTENSION");
-                                }
-                                catch (Exception ignored)
-                                {
-                                }
-
-                                try
-                                {
-                                    final Drawable d1 = new IconicsDrawable(v.getContext()).icon(
-                                            GoogleMaterial.Icon.gmd_face).color(
-                                            getResources().getColor(R.color.colorPrimaryDark)).sizeDp(200);
-                                    profile_icon.setImageDrawable(d1);
-                                    update_avatar_remove_button_visibility();
-                                    MainActivity.update_main_profile_bar();
-                                }
-                                catch (Exception ignored)
-                                {
-                                }
+                                removeOwnAvatar();
                             }
                         }).create();
                 ad.setTitle(getString(R.string.ProfileActivity_delete_avatar_dialog_title));
@@ -588,6 +547,311 @@ public class ProfileContentFragment extends Fragment
         });
         profile_handler_s = profile_handler;
         configureConsumerProfileUi(view);
+        buildYouScreen(view);
+    }
+
+    // select new avatar image
+    private void launchAvatarPicker()
+    {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("image/*");
+        intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT)
+        {
+            // KHANDAQ: EXTRA_MIME_TYPES REQUIRES a String[] — passing a plain String made
+            // getStringArrayExtra() return null, so the system picker ignored the filter and
+            // showed ALL files (incl. videos). Picking a video then broke the crop/apply flow
+            // (bounce to PIN → back to profile, avatar unchanged). Restrict to images only.
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*"});
+        }
+        // KHANDAQ (#avatar-pin): the system photo picker is an external app, so it backgrounds us and
+        // the app-lock would prompt for the PIN on return from an intentional in-app action. Suppress
+        // the lock for exactly this one foreground return (same flag the chat photo/file pickers use;
+        // the gate consumes+clears it whether the user picks or cancels). Only here — NOT before the
+        // in-app uCrop/field-edit launches, which never background the app.
+        AppLockHelper.suppressNextLock();
+        startActivityForResult(intent, MEDIAPICK_ID_002);
+    }
+
+    private void removeOwnAvatar()
+    {
+        try
+        {
+            del_own_avatar();
+        }
+        catch (Exception ignored)
+        {
+        }
+
+        try
+        {
+            del_g_opts("VFS_OWN_AVATAR_FNAME");
+            del_g_opts("VFS_OWN_AVATAR_FILE_EXTENSION");
+        }
+        catch (Exception ignored)
+        {
+        }
+
+        try
+        {
+            final Drawable d1 = new IconicsDrawable(requireContext()).icon(GoogleMaterial.Icon.gmd_face).color(
+                    getResources().getColor(R.color.colorPrimaryDark)).sizeDp(200);
+            profile_icon.setImageDrawable(d1);
+            update_avatar_remove_button_visibility();
+            MainActivity.update_main_profile_bar();
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
+
+    // ---- KHANDAQ (redesign, E17): the You screen (AirYouScreen) and what its controls ask for ----
+
+    private void buildYouScreen(final View root)
+    {
+        final android.widget.LinearLayout column = root.findViewById(R.id.profile_you_column);
+        if (column == null)
+        {
+            return;
+        }
+        column.removeAllViews();
+        youPasswordSet = DbSecretKeyStorage.prefersManualPasswordUnlock(requireContext());
+        you = new AirYouScreen(column, youActions, youPasswordSet);
+        you.bindProfile(global_my_name, global_my_status_message);
+        refreshYouPhoto();
+    }
+
+    /** Our photo is read off the main thread (the encrypted file system), then shown on the tile. */
+    private void refreshYouPhoto()
+    {
+        final AirYouScreen screen = you;
+        if (screen == null)
+        {
+            return;
+        }
+        final Thread reader = new Thread(() -> {
+            final ProfileTabAvatarHelper.OwnPhoto own = ProfileTabAvatarHelper.ownPhoto();
+            new Handler(android.os.Looper.getMainLooper()).post(() -> {
+                if (you == screen && isAdded())
+                {
+                    screen.bindPhoto(own, global_my_name);
+                }
+            });
+        }, "you-photo");
+        reader.start();
+    }
+
+    private final AirYouScreen.Actions youActions = new AirYouScreen.Actions()
+    {
+        @Override
+        public void shareId()
+        {
+            final String id = myIdNow();
+            if (id == null)
+            {
+                return;
+            }
+            final Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType("text/plain");
+            send.putExtra(Intent.EXTRA_TEXT, id);
+            try
+            {
+                startActivity(Intent.createChooser(send, getString(R.string.air_you_share)));
+            }
+            catch (android.content.ActivityNotFoundException e)
+            {
+                Log.i(TAG, "share:EE:" + e.getMessage());
+            }
+        }
+
+        @Override
+        public void copyId()
+        {
+            final String id = myIdNow();
+            if (id == null || clipboard == null)
+            {
+                return;
+            }
+            try
+            {
+                clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.profile_label_myid), id));
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "copy:EE:" + e.getMessage());
+                return;
+            }
+            final View root = getView();
+            if (root == null)
+            {
+                return;
+            }
+            // From Android 13 the system shows its own "copied" confirmation.
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU)
+            {
+                AirToast.show(root, getString(R.string.air_you_copied));
+            }
+            else
+            {
+                root.announceForAccessibility(getString(R.string.air_you_copied));
+            }
+        }
+
+        @Override
+        public void changePhoto(final boolean hasPhoto)
+        {
+            if (!hasPhoto)
+            {
+                launchAvatarPicker();
+                return;
+            }
+            final CharSequence[] choices = {getString(R.string.air_you_photo_choose),
+                                            getString(R.string.air_you_photo_remove)};
+            final AlertDialog dialog = new AlertDialog.Builder(requireContext()).setItems(choices, (d, which) -> {
+                if (which == 0)
+                {
+                    launchAvatarPicker();
+                }
+                else
+                {
+                    removeOwnAvatar();
+                }
+            }).setNegativeButton(R.string.cancel, null).create();
+            AirUi.showDialog(requireContext(), dialog, false);
+        }
+
+        @Override
+        public void commitName(final String text)
+        {
+            final String name = text.trim();
+            final String current = global_my_name == null ? "" : global_my_name;
+            // A name cannot be emptied: the field takes the name back, as on iOS.
+            if (name.isEmpty() || name.equals(current) || !canSaveProfile())
+            {
+                showSavedProfile();
+                return;
+            }
+            mynick_edittext.setText(name);
+            mystatus_message_edittext.setText(global_my_status_message);
+            saveProfileChanges(false);
+            showSavedProfile();
+            announce(R.string.air_you_saved);
+        }
+
+        @Override
+        public void commitStatus(final String text)
+        {
+            final String status = text.trim();
+            final String current = global_my_status_message == null ? "" : global_my_status_message;
+            if (status.equals(current) || !canSaveProfile())
+            {
+                showSavedProfile();
+                return;
+            }
+            mynick_edittext.setText(global_my_name);
+            mystatus_message_edittext.setText(status);
+            saveProfileChanges(false);
+            showSavedProfile();
+            announce(R.string.air_you_saved);
+        }
+
+        @Override
+        public void changeAntispam()
+        {
+            // E21: asked from below, the verb on the button in the danger colour.
+            AirQuestion.ask(requireContext(), getString(R.string.air_you_antispam_title),
+                            getString(R.string.air_you_antispam_message), getString(R.string.air_you_antispam_action),
+                            true, () -> {
+                        if (!is_tox_started || TrifaToxService.manually_logged_out)
+                        {
+                            return;
+                        }
+                        try
+                        {
+                            set_new_random_nospam_value();
+                        }
+                        catch (Exception e)
+                        {
+                            Log.i(TAG, "antispam:EE:" + e.getMessage());
+                            return;
+                        }
+                        update_toxid_display();
+                        final View root = getView();
+                        if (root != null)
+                        {
+                            AirToast.show(root, getString(R.string.air_you_antispam_done));
+                        }
+                    });
+        }
+
+        @Override
+        public void openSecurity()
+        {
+            youSecurityOpened = true;
+            startActivity(new Intent(requireContext(), ProfileDetailsActivity.class));
+        }
+
+        @Override
+        public void logOut()
+        {
+            final boolean passwordSet = DbSecretKeyStorage.prefersManualPasswordUnlock(requireContext());
+            // E21: asked from below with what logging out means for this profile.
+            AirQuestion.ask(requireContext(), getString(R.string.air_you_logout_title),
+                            getString(AirYouScreen.logoutMeaning(passwordSet)), getString(R.string.air_you_logout), false,
+                            () -> performLogout());
+        }
+
+        @Override
+        public void deleteProfile()
+        {
+            final String name = TextUtils.isEmpty(global_my_name) ? getString(R.string.air_you) : global_my_name;
+            // E21: asked from below, the verb on the button in the danger colour.
+            AirQuestion.ask(requireContext(), getString(R.string.air_you_delete_title),
+                            getString(R.string.air_you_delete_message_format, name),
+                            getString(R.string.air_you_delete_action), true, () -> {
+                        final Activity activity = getActivity();
+                        if (activity != null)
+                        {
+                            ProfileDetailsActivity.wipeProfile(activity);
+                        }
+                    });
+        }
+    };
+
+    /** Tox takes a new name or status only while it runs, and not once a logout has begun. */
+    private static boolean canSaveProfile()
+    {
+        return is_tox_started && !TrifaToxService.manually_logged_out;
+    }
+
+    /** The fields show what Tox has: the saved text, or the old one when nothing was saved. */
+    private void showSavedProfile()
+    {
+        if (you != null)
+        {
+            you.bindProfile(global_my_name, global_my_status_message);
+        }
+    }
+
+    private void announce(final int words)
+    {
+        final View root = getView();
+        if (root != null)
+        {
+            root.announceForAccessibility(getString(words));
+        }
+    }
+
+    /** Our Tox ID, or null while Tox is not up (before the start, or during a logout). */
+    @Nullable
+    private static String myIdNow()
+    {
+        if (!is_tox_started || TrifaToxService.manually_logged_out)
+        {
+            return null;
+        }
+        return MainActivity.get_my_toxid();
     }
 
     @Override
@@ -604,6 +868,7 @@ public class ProfileContentFragment extends Fragment
         catch (Throwable ignored)
         {
         }
+        you = null;
         super.onDestroyView();
     }
 
@@ -623,6 +888,17 @@ public class ProfileContentFragment extends Fragment
     public void onResume()
     {
         super.onResume();
+        if (youSecurityOpened)
+        {
+            youSecurityOpened = false;
+            // A first password set in "Password and PIN" changes what logging out means.
+            final View root = getView();
+            if (you != null && root != null
+                && DbSecretKeyStorage.prefersManualPasswordUnlock(requireContext()) != youPasswordSet)
+            {
+                buildYouScreen(root);
+            }
+        }
         reloadProfileFromTox();
 
         mytox_network_connections.setText("");
@@ -697,7 +973,7 @@ public class ProfileContentFragment extends Fragment
             if ((data == null) || (data.getData() == null))
             {
                 Log.i(TAG, "profile_avatar:FAIL:step=1");
-Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (1)", Toast.LENGTH_SHORT).show();
+sayPhotoFailure(R.string.profile_avatar_error_generic);
                 return;
             }
             // KHANDAQ: belt-and-suspenders — reject a non-image pick (e.g. a video from a picker that
@@ -709,7 +985,7 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
                 if ((picked_mime != null) && !picked_mime.startsWith("image/"))
                 {
                     Log.i(TAG, "profile_avatar:FAIL:step=1b:not an image mime=" + picked_mime);
-                    Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (image only)", Toast.LENGTH_LONG).show();
+                    sayPhotoFailure(R.string.profile_avatar_error_unsupported);
                     return;
                 }
             }
@@ -725,11 +1001,25 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
             if (cropped == null)
             {
                 Log.i(TAG, "profile_avatar:FAIL:step=2");
-Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (2)", Toast.LENGTH_SHORT).show();
+sayPhotoFailure(R.string.profile_avatar_error_generic);
                 return;
             }
             apply_avatar_from_uri(cropped);
         }
+    }
+
+    /**
+     * KHANDAQ (redesign, E21): a photo that could not be set is said under the photo on the You screen,
+     * not in a toast; the step that failed stays in the log. The legacy profile view keeps a toast.
+     */
+    private void sayPhotoFailure(@StringRes final int text)
+    {
+        if (you != null)
+        {
+            you.sayPhotoFailure(getString(text));
+            return;
+        }
+        Toast.makeText(requireContext(), getString(text), Toast.LENGTH_SHORT).show();
     }
 
     // KHANDAQ (#8): launch the uCrop square (1:1) editor for the picked image; result comes back
@@ -758,7 +1048,7 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
         {
             e.printStackTrace();
             Log.i(TAG, "profile_avatar:FAIL:step=3");
-Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (3)", Toast.LENGTH_SHORT).show();
+sayPhotoFailure(R.string.profile_avatar_error_generic);
         }
     }
 
@@ -795,7 +1085,7 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
 
                 if (file_size > 10 * 1024 * 1024)
                 {
-                    Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_too_large), Toast.LENGTH_SHORT).show();
+                    sayPhotoFailure(R.string.profile_avatar_error_too_large);
                     return;
                 }
 
@@ -804,7 +1094,7 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
                 if ((file_size > 0) && (file_size < 100))
                 {
                     Log.i(TAG, "profile_avatar:FAIL:step=4");
-Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (4)", Toast.LENGTH_SHORT).show();
+sayPhotoFailure(R.string.profile_avatar_error_generic);
                     return;
                 }
 
@@ -814,20 +1104,20 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
                 if (ofw == null)
                 {
                     Log.i(TAG, "profile_avatar:FAIL:step=5");
-Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (5)", Toast.LENGTH_SHORT).show();
+sayPhotoFailure(R.string.profile_avatar_error_generic);
                     return;
                 }
 
                 if (ofw.file_size_wrapped < 100)
                 {
                     Log.i(TAG, "profile_avatar:FAIL:step=6");
-Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (6)", Toast.LENGTH_SHORT).show();
+sayPhotoFailure(R.string.profile_avatar_error_generic);
                     return;
                 }
 
                 if (ofw.file_size_wrapped > 10 * 1024 * 1024)
                 {
-                    Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_too_large), Toast.LENGTH_SHORT).show();
+                    sayPhotoFailure(R.string.profile_avatar_error_too_large);
                     return;
                 }
 
@@ -835,7 +1125,7 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
                 Bitmap b = decode_downsampled_bitmap(local_image_path, 1600);
                 if (b == null)
                 {
-                    Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_unsupported), Toast.LENGTH_SHORT).show();
+                    sayPhotoFailure(R.string.profile_avatar_error_unsupported);
                     try
                     {
                         new java.io.File(local_image_path).delete();
@@ -871,7 +1161,7 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
                 {
                     e.printStackTrace();
                     Log.i(TAG, "profile_avatar:FAIL:step=7");
-Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (7)", Toast.LENGTH_SHORT).show();
+sayPhotoFailure(R.string.profile_avatar_error_generic);
                     return;
                 }
 
@@ -893,7 +1183,7 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
                 if ((!vfs_avatar.exists()) || (vfs_avatar.length() < 100))
                 {
                     Log.i(TAG, "profile_avatar:FAIL:step=8");
-Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (8)", Toast.LENGTH_SHORT).show();
+sayPhotoFailure(R.string.profile_avatar_error_generic);
                     return;
                 }
 
@@ -908,6 +1198,10 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
                 send_avatar_to_all_friends();
                 update_avatar_remove_button_visibility();
                 MainActivity.update_main_profile_bar();
+                if (you != null)
+                {
+                    you.endPhotoNote();
+                }
                 Toast.makeText(requireContext(), getString(R.string.profile_avatar_saved_toast), Toast.LENGTH_SHORT).show();
             }
             // KHANDAQ (#159): Throwable, not Exception — a full-resolution avatar can OOM inside the
@@ -917,7 +1211,7 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
             {
                 e.printStackTrace();
                 Log.i(TAG, "profile_avatar:FAIL:step=9");
-Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (9)", Toast.LENGTH_SHORT).show();
+sayPhotoFailure(R.string.profile_avatar_error_generic);
             }
         }
     }
@@ -1030,6 +1324,8 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
         {
             return;
         }
+        // Every change of our photo passes here: the You tile follows it.
+        refreshYouPhoto();
 
         try
         {
@@ -1078,6 +1374,11 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
             // 4 	nospam
             // 2 	checksum
             final String my_tox_id_temp = MainActivity.get_my_toxid();
+            if (you != null)
+            {
+                // The You screen shows no QR and no parts until the ID exists, and draws its own code.
+                you.bindId(my_tox_id_temp);
+            }
 
             if (my_tox_id_temp == null)
             {
@@ -1216,14 +1517,10 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
 
                 if (act != null)
                 {
-                    // KHANDAQ (logout target): with a real password → password screen (must re-enter to
-                    // get back in). WITHOUT a password there is nothing to lock and CheckPasswordActivity
-                    // would just auto-unlock straight back into the account ("can't log out"), so send the
-                    // user to the onboarding start screen instead (create / import). The existing profile
-                    // stays on disk — a normal app restart still auto-loads it, so this isn't a lock-out.
-                    final Class<?> target = DbSecretKeyStorage.prefersManualPasswordUnlock(act)
-                            ? CheckPasswordActivity.class
-                            : OnboardingActivity.class;
+                    // KHANDAQ (logout target, redesign stage 4): the sign-in page in both cases. With a
+                    // password it asks for it; without one it shows the profile's name and Log in, and
+                    // waits for that tap (the session flag is off), so logging out sticks.
+                    final Class<?> target = CheckPasswordActivity.class;
                     act.runOnUiThread(() ->
                     {
                         try
@@ -1273,6 +1570,7 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
 
     private void refreshProfileValueRows()
     {
+        showSavedProfile();
         final View root = getView();
         if (root == null)
         {
@@ -1329,6 +1627,7 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
             global_my_status_message = truncateUtf8(mystatus_message_edittext.getText().toString(),
                     TOX_MAX_STATUS_MESSAGE_LENGTH);
             tox_self_set_name(global_my_name);
+            DbSecretKeyStorage.rememberProfileName(requireContext(), global_my_name);
             tox_self_set_status_message(global_my_status_message);
             HelperGroup.sync_self_display_name_to_all_groups(global_my_name);
             update_savedata_file_wrapper();
@@ -1371,6 +1670,11 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
     public void onPause()
     {
         super.onPause();
+        // A name or status being typed is kept when the screen goes, as when its field is left.
+        if (you != null)
+        {
+            you.finishEditing();
+        }
         if (profileDirty)
         {
             saveProfileChanges(false);

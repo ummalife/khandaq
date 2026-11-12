@@ -6,33 +6,62 @@ import UIKit
 
 class AppCoordinator {
     fileprivate let window: UIWindow
-    var activeCoordinator: TopCoordinatorProtocol?
+    var activeCoordinator: TopCoordinatorProtocol? {
+        didSet {
+            deliverPendingInboxURL()
+        }
+    }
+    /// A file or link handed over while no coordinator is up yet: at launch the profile opens in the
+    /// background, so a file opened in Khandaq from another app waits for it instead of being dropped.
+    fileprivate var pendingInboxURL: URL?
     fileprivate var theme: Theme
     fileprivate var pendingToxRestartOptions: CoordinatorOptions?
     fileprivate var toxRestartWorkItem: DispatchWorkItem?
     fileprivate var isReloadingAppearance = false
+    /// The palette the interface was last built with, so a change of choice that keeps the same
+    /// palette (dark to "as the system" on a dark phone) only restyles the window.
+    fileprivate var appliedDarkMode: Bool
+    fileprivate let systemAppearanceWatcher = ThemeSystemAppearanceWatcher(frame: .zero)
 
     init(window: UIWindow) {
         self.window = window
 
         theme = ThemeAppearance.resolvedTheme()
+        appliedDarkMode = ThemeAppearance.isDarkMode
         ThemeChrome.applyWindowStyle(window, theme: theme)
         ThemeChrome.applyGlobalAppearance(theme)
 
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(handleAppearanceChange),
+            selector: #selector(handleThemePreferenceChange),
             name: ThemeAppearance.didChangeNotification,
             object: nil
         )
 
+        // Following the system: the phone can switch appearance at any moment (the scheduled dark
+        // mode at sunset, Control Centre). While the app is in the background iOS flips the traits
+        // back and forth to take snapshots, so the check waits until the app is in front again.
+        window.addSubview(systemAppearanceWatcher)
+        systemAppearanceWatcher.onChange = { [weak self] in
+            guard UIApplication.shared.applicationState != .background else {
+                return
+            }
+            self?.reloadAppearanceIfPaletteChanged()
+        }
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleWillEnterForeground),
+            name: NSNotification.Name.UIApplicationWillEnterForeground,
+            object: nil
+        )
+
         // KHANDAQ (iPhone 11 Pro report, 17 Aug): switching the in-app language only changed PART of
-        // the UI — the chat name went Arabic while the tab labels, the bottom bar, the search
+        // the UI: the chat name went Arabic while the tab labels, the bottom bar, the search
         // placeholder and "Править" stayed Russian. The bundle swap works; the problem is that every
         // one of those strings is read ONCE when its view is built (tab bar items in
         // ActiveSessionCoordinator.createDeviceSpecificObjects, the filter tabs in
         // ChatListFilterBar.setupTabs, the placeholder in setupGlobalSearch), so nothing re-reads it.
-        // SettingsMainController already posted this notification — it just had no subscriber
+        // SettingsMainController already posted this notification; it just had no subscriber
         // anywhere in the project. Rebuilding the session is exactly what the theme switch does, and
         // a rebuilt session reads every string again from the swapped bundle.
         NotificationCenter.default.addObserver(
@@ -51,6 +80,27 @@ class AppCoordinator {
         reloadAppearance()
     }
 
+    @objc func handleThemePreferenceChange() {
+        reloadAppearanceIfPaletteChanged()
+    }
+
+    @objc func handleWillEnterForeground() {
+        guard ThemeAppearance.preference == .system else {
+            return
+        }
+        reloadAppearanceIfPaletteChanged()
+    }
+
+    /// Rebuilds the interface only when the palette really changes. Otherwise the window style is
+    /// all that differs, and rebuilding the session for it would flash the whole screen for nothing.
+    func reloadAppearanceIfPaletteChanged() {
+        guard ThemeAppearance.isDarkMode != appliedDarkMode else {
+            ThemeChrome.applyWindowStyle(window, theme: theme)
+            return
+        }
+        reloadAppearance()
+    }
+
     func reloadAppearance() {
         guard !isReloadingAppearance else {
             return
@@ -60,6 +110,7 @@ class AppCoordinator {
 
         let newTheme = ThemeAppearance.resolvedTheme()
         theme = newTheme
+        appliedDarkMode = ThemeAppearance.isDarkMode
         window.backgroundColor = newTheme.colorForType(.NormalBackground)
 
         guard let running = activeCoordinator as? RunningCoordinator else {
@@ -73,11 +124,16 @@ class AppCoordinator {
                               duration: ThemeChrome.transitionDuration,
                               options: [.transitionCrossDissolve, .allowAnimatedContent],
                               animations: {
-                // KHANDAQ: flip the window interface style BEFORE re-theming — the search field
+                // KHANDAQ: flip the window interface style BEFORE re-theming: the search field
                 // (.minimal) and tab-bar material are system-drawn from overrideUserInterfaceStyle.
                 ThemeChrome.applyGlobalAppearance(newTheme)
                 ThemeChrome.applyWindowStyle(transitionWindow, theme: newTheme)
-                ThemeChrome.apply(to: transitionWindow.rootViewController, theme: newTheme)
+                // The sign-in and first-launch pages (stage 4) draw with design tokens, which follow
+                // the window style by themselves; painting them would put a background behind every
+                // label on a plate.
+                if !(self.activeCoordinator is LoginCoordinator) {
+                    ThemeChrome.apply(to: transitionWindow.rootViewController, theme: newTheme)
+                }
                 transitionWindow.layoutIfNeeded()
             }, completion: { [weak self] _ in
                 self?.isReloadingAppearance = false
@@ -90,11 +146,11 @@ class AppCoordinator {
                           duration: ThemeChrome.transitionDuration,
                           options: [.transitionCrossDissolve, .allowAnimatedContent],
                           animations: {
-            // KHANDAQ: reloadTheme rebuilds the whole session from scratch — exactly like a fresh
+            // KHANDAQ: reloadTheme rebuilds the whole session from scratch, exactly like a fresh
             // launch / app restart, which the user confirms renders the theme correctly everywhere.
             // We must NOT then run ThemeChrome.apply over that freshly-built hierarchy: its generic
             // recursion clobbers system controls' private subviews (blank search pill, dark square box
-            // behind UISwitch knobs, mis-tinted cell chevrons) — every theme-toggle glitch traced back
+            // behind UISwitch knobs, mis-tinted cell chevrons): every theme-toggle glitch traced back
             // to this. Set the window style + global appearance proxies first, rebuild, and stop.
             ThemeChrome.applyGlobalAppearance(newTheme)
             ThemeChrome.applyWindowStyle(transitionWindow, theme: newTheme)
@@ -122,7 +178,26 @@ extension AppCoordinator: TopCoordinatorProtocol {
     }
 
     func handleInboxURL(_ url: URL) {
-        activeCoordinator?.handleInboxURL(url)
+        guard let coordinator = activeCoordinator else {
+            pendingInboxURL = url
+            return
+        }
+        coordinator.handleInboxURL(url)
+    }
+
+    /// Hands a waiting file to the coordinator that has just come up, once its screens are in the
+    /// window.
+    fileprivate func deliverPendingInboxURL() {
+        guard pendingInboxURL != nil, activeCoordinator != nil else {
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let url = self.pendingInboxURL, let coordinator = self.activeCoordinator else {
+                return
+            }
+            self.pendingInboxURL = nil
+            coordinator.handleInboxURL(url)
+        }
     }
 
     func processPendingShareIfNeeded() {
@@ -135,17 +210,21 @@ extension AppCoordinator: TopCoordinatorProtocol {
 extension AppCoordinator: RunningCoordinatorDelegate {
     func runningCoordinatorDidLogout(_ coordinator: RunningCoordinator, importToxProfileFromURL: URL?) {
         // KHANDAQ (#11 Fix B): keep the keychain on a plain logout so recreateActiveCoordinator
-        // auto-logs back into the existing profile instead of onboarding. Only wipe for import-on-logout.
-        if importToxProfileFromURL != nil {
+        // auto-logs back into the existing profile instead of onboarding (after Log out on "You" it
+        // opens the login form, see SessionAutoLogin). Only wipe for import-on-logout.
+        if let url = importToxProfileFromURL {
             KeychainManager().deleteActiveAccountData()
+            // The file goes to the sign-in pages straight away. Recreating would sign back in to the
+            // profile being left whenever it opens without the stored password: a profile made
+            // without a password keeps its key in the keychain (stage 4), and an old unencrypted one
+            // needs nothing, so the import was dropped for both.
+            let coordinator = createLoginCoordinator(nil)
+            activeCoordinator = coordinator
+            coordinator.handleInboxURL(url)
+            return
         }
 
         recreateActiveCoordinator()
-
-        if let url = importToxProfileFromURL,
-           let coordinator = activeCoordinator as? LoginCoordinator {
-            coordinator.handleInboxURL(url)
-        }
     }
 
     func runningCoordinatorDeleteProfile(_ coordinator: RunningCoordinator) {
@@ -174,16 +253,42 @@ extension AppCoordinator: RunningCoordinatorDelegate {
 }
 
 extension AppCoordinator: LoginCoordinatorDelegate {
-    func loginCoordinatorDidLogin(_ coordinator: LoginCoordinator, manager: OCTManager, password: String) {
+    func loginCoordinatorDidLogin(_ coordinator: LoginCoordinator, manager: OCTManager, password: String, options: CoordinatorOptions?) {
         let keychainManager = KeychainManager()
         keychainManager.toxPasswordForActiveAccount = password
         // KHANDAQ (audit #11): the profile password is strictly stronger than the 4-digit pin, so a
-        // successful password login is proof the owner is here — drop any running pin lockout, else the
+        // successful password login is proof the owner is here, so drop any running pin lockout, else the
         // owner can be refused for up to an hour with no way out.
         keychainManager.failedPinAttemptsNumber = nil
         keychainManager.pinLockedUntil = nil
+        // The password was typed: from now on the profile opens by itself again.
+        SessionAutoLogin.isLoggedOutByUser = false
 
-        recreateActiveCoordinator(manager: manager, skipAuthorizationChallenge: true)
+        let leaving = window.snapshotView(afterScreenUpdates: false)
+        recreateActiveCoordinator(options: options, manager: manager, skipAuthorizationChallenge: true)
+        if let leaving = leaving {
+            revealSession(from: leaving)
+        }
+    }
+
+    /// A successful sign-in opens into Air (E20): the page parts towards the person and fades, and
+    /// the session is under it. With reduced motion it only fades. The session's own view is not
+    /// moved: the window lays it out.
+    func revealSession(from leaving: UIView) {
+        leaving.frame = window.bounds
+        window.addSubview(leaving)
+        let opens = !UIAccessibilityIsReduceMotionEnabled()
+        let animator = UIViewPropertyAnimator(duration: KQMotion.duration(KQMotion.reveal), timingParameters: KQMotion.easeOut)
+        animator.addAnimations {
+            leaving.alpha = 0
+            if opens {
+                leaving.transform = CGAffineTransform(scaleX: 1.04, y: 1.04)
+            }
+        }
+        animator.addCompletion { _ in
+            leaving.removeFromSuperview()
+        }
+        animator.startAnimation()
     }
 }
 
@@ -260,7 +365,7 @@ private extension AppCoordinator {
                                    manager: OCTManager? = nil,
                                    skipAuthorizationChallenge: Bool = false,
                                    onToxOptionsRestartComplete: ((Bool) -> Void)? = nil) {
-        // Fresh login passes manager directly — must not depend on keychain (unsigned sim builds fail with errSecMissingEntitlement).
+        // Fresh login passes manager directly and must not depend on keychain (unsigned sim builds fail with errSecMissingEntitlement).
         if let manager = manager {
             activeCoordinator = createRunningCoordinatorWithManager(manager,
                                                                     options: options,

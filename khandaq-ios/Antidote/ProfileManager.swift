@@ -37,7 +37,13 @@ class ProfileManager {
     func deleteProfileWithName(_ name: String) throws {
         let path = pathFromName(name)
 
+        // A profile made without a password takes its keychain key with it (redesign stage 4), once
+        // its folder is really gone: a key removed before a failed delete would lock the profile out.
+        let deviceKeyIdentifier = ProfileDeviceKey.identifier(profilePath: path)
         try FileManager.default.removeItem(atPath: path)
+        if let identifier = deviceKeyIdentifier {
+            KeychainManager().setDeviceKey(nil, forIdentifier: identifier)
+        }
 
         reloadProfileNames()
     }

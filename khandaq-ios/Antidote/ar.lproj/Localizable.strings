@@ -16,7 +16,7 @@
 /* Login screen text */
 "create_account" = "حساب جديد";
 /* Login screen text */
-"import_profile" = "نقل الحساب";
+"import_profile" = "استيراد الملف الشخصي";
 /* Password field */
 "password" = "كلمة المرور";
 /* Login button */
@@ -38,7 +38,7 @@
 /* Login screen text */
 "set_password_title" = "ضع كلمة مرور";
 /* Login screen text */
-"set_password_hint" = "الحاجة في كلمة المرور هي لحماية البيانات الخاصة. أحتفظ بها - بفقدانها لا يمكن استعادة الحساب.";
+"set_password_hint" = "كلمة المرور تحمي بياناتك. استخدم 8 رموز على الأقل من الحروف والأرقام. احتفظ بها: إذا فقدتها فلا يمكن استعادتها.";
 /* Login button */
 "create_account_next_button" = "التالي";
 /* Login button */
@@ -69,7 +69,7 @@
 /* PIN screen screen */
 "pin_touch_id_enabled" = "تفعيل الهوية باللمس";
 /* PIN screen screen */
-"pin_description" = "منع الوصول غير المصرح به إلى أنتيدوت مع PIN.";
+"pin_description" = "منع الوصول غير المصرح به إلى Khandaq مع PIN.";
 /* PIN screen screen */
 "pin_touch_id_description" = "استخدام بصمة الإصبع كبديل لإدخال رمز PIN.";
 /* PIN screen screen */
@@ -102,7 +102,7 @@
 /* No contacts placeholder text */
 "contact_no_contacts_add_contact" = "اضافة حساب\nاو\n";
 /* No contacts placeholder text */
-"contact_no_contacts_share_tox_id" = "مشاركة حساب التوكس الخاص بك";
+"contact_no_contacts_share_tox_id" = "مشاركة معرّفك";
 /* Contact request section title */
 "contact_requests_section" = "قائمة الإضافات";
 /* Contact last seen status */
@@ -128,7 +128,7 @@
 /* Add contat button */
 "add_contact_send" = "إرسال";
 /* Add contat placeholder text */
-"add_contact_tox_id_placeholder" = "أدخل عنوان حساب التوكس";
+"add_contact_tox_id_placeholder" = "أدخل المعرّف";
 /* Add contat placeholder text */
 "add_contact_or_label" = "أو";
 /* Add contat button */
@@ -138,7 +138,7 @@
 /* Add contat default text sended to contact */
 "add_contact_default_message_text" = "مرحباً! هل من الممكن أن تقبل إضافتي في قائمتك؟";
 /* Add contat error */
-"add_contact_wrong_qr" = "رمز الاستجابة السريع او الباركود خطأ. يجب توفر عنوان حساب التوكس";
+"add_contact_wrong_qr" = "لا يحتوي رمز QR هذا على معرّف";
 
 /* User name text */
 "name" = "الإسم";
@@ -149,7 +149,7 @@
 /* User status text */
 "status_title" = "الحالة";
 /* User Tox ID text */
-"my_tox_id" = "عنوان حساب التوكس";
+"my_tox_id" = "معرّفك";
 /* User public key text */
 "public_key" = "مفتاح المعلن المشفر";
 /* Share Tox ID text */
@@ -202,21 +202,21 @@
 "notification_incoming_file" = "وصول ملف";
 
 /* Settings menu / screen name */
-"settings_about" = "نبذة عن";
+"settings_about" = "حول التطبيق";
 /* Settings menu / screen name */
-"settings_faq" = "التعليمات";
+"settings_faq" = "الأسئلة الشائعة";
 /* Settings menu / screen name */
 "settings_advanced_settings" = "خصائص الاعدادات";
 /* About screen menu */
-"settings_khandaq_version" = "إصدار الانتيدوت";
+"settings_khandaq_version" = "إصدار Khandaq";
 /* About screen menu */
-"settings_khandaq_build" = "بناء الانتيدوت";
+"settings_khandaq_build" = "بناء Khandaq";
 /* About screen menu */
-"settings_toxcore_version" = "إصدار نواة التوكس او التوكس كور";
+"settings_toxcore_version" = "إصدار Toxcore";
 /* About screen menu */
 "settings_acknowledgements" = "شكر وتنويه";
 /* Settings screen menu */
-"settings_autodownload_images" = "ملفات التنزيل التلقائي";
+"settings_autodownload_images" = "تنزيل المرفقات";
 /* Settings screen menu */
 "settings_autodownload_images_description" = "تنزيل الملفات الواردة تلقائيا.";
 /* Settings screen menu */
@@ -224,18 +224,17 @@
 /* Settings screen menu */
 "settings_notifications_description" = "حينما يتم عمل البرنامج في النظام، سيتم عرض الإشعارات حتى 10 دقائق.";
 /* Settings screen menu */
-"settings_udp_enabled" = "تفعيل UDP";
+"settings_udp_enabled" = "استخدام UDP";
 /* Settings screen menu */
-"settings_restore_default" = "إسترجاع الإعدادات التلقائية";
+"settings_restore_default" = "استعادة الإعدادات الافتراضية";
 /* Settings screen autodownload images option */
-"settings_never" = "لا";
+"settings_never" = "أبدًا";
 /* Settings screen autodownload images option */
 "settings_wifi" = "إتصال لاسلكي او واي-فاي";
 /* Settings screen autodownload images option */
-"settings_using_wifi" = "إستخدام إتصال لاسلكي او واي-فاي";
+"settings_using_wifi" = "عبر Wi-Fi";
 /* Settings screen autodownload images option */
-"settings_always" = "دائماً";
-
+"settings_always" = "دائمًا";
 /* Profile settings menu */
 "change_password" = "تغيير كلمة المرور";
 /* Profile settings menu */
@@ -260,13 +259,12 @@
 /* Source of photo to take */
 "photo_from_photo_library" = "قائمة الصور";
 /* Error while converting avatar image */
-"change_avatar_error_convert_image" = "لا يمكن تحويل الصورة";
-
+"change_avatar_error_convert_image" = "تعذّر تجهيز الصورة. اختر صورة أخرى.";
 /* Alert text when sending file to contacts */
 "file_send_to_contact" = "إرسال إلى جهة اتصال";
 
 /* Profile menu item */
-"export_profile" = "حفظ الحساب الشخصي";
+"export_profile" = "تصدير الملف الشخصي";
 /* Profile menu item */
 "delete_profile" = "حذف الحساب الشخصي";
 /* Delete profile confirmation */
@@ -373,9 +371,9 @@
 /* Error */
 "error_contact_request_already_sent" = "طلب الإضافة قد تم ارسالها مسبقاً";
 /* Error */
-"error_contact_request_bad_checksum" = "المجموع الاختباري باطل، يرجى التحقق من هوية Tox المدخلة";
+"error_contact_request_bad_checksum" = "في المعرّف خطأ أو لم يُنسخ كاملًا. انسخه مرة أخرى.";
 /* Error */
-"error_contact_request_new_nospam" = "قيمة تعطيل الإزعاج nospam باطلة، يرجى التحقق من هوية Tox المدخلة.";
+"error_contact_request_new_nospam" = "لدى جهة الاتصال هذه مضاد إزعاج جديد: تحقق من المعرّف مرة أخرى";
 
 /* Call error */
 "call_error_already_in_call" = "حالياً في مكالمة";
@@ -423,11 +421,10 @@
 "group_live_video_quality_low" = "SD";
 "group_live_video_quality_high" = "HD";
 "group_voice_hold_to_record" = "اضغط مع الاستمرار على زر الميكروفون لتسجيل رسالة صوتية";
-"group_live_video_toggle_active" = "فيدio مباشر نشط";
-"group_live_video_toggle_incoming" = "فيدio مباشر وارد";
-"group_live_video_streams_empty" = "streams:0";
-"group_live_video_streams_format" = "streams:%llu
-%@";
+"group_live_video_toggle_active" = "فيديو مباشر نشط";
+"group_live_video_toggle_incoming" = "فيديو مباشر وارد";
+"group_live_video_streams_empty" = "لا يوجد فيديو بعد";
+"group_live_video_streams_format" = "الفيديو: %llu\n%@";
 "group_video_join_title" = "الانضمام إلى فيديو المجموعة؟";
 "group_video_join_message" = "إرسال الفيديو والصوت إلى الجميع في هذه المجموعة؟";
 "group_video_join_confirm" = "نعم، بدء الفيديو";
@@ -459,7 +456,7 @@
 "onboarding_decentralized_subtitle" = "لا تخزن رسائلك على أي خوادم. استمتع بلامركزية كاملة";
 "onboarding_next" = "التالي";
 "onboarding_create_account" = "إنشاء حساب";
-"contacts_copy_myid" = "نسخ MyID";
+"contacts_copy_myid" = "نسخ المعرّف";
 "chat_encryption_badge" = "بروتوكول Tox";
 "chat_encryption_info" = "جميع بيانات المحادثة محمية بتشفير Tox من طرف إلى طرف ولا يمكن لأحد الاطلاع عليها سواك أنت والمستلم";
 "create_account_screen_title" = "إنشاء ملف شخصي";
@@ -489,8 +486,8 @@
 "global_search_section_chats" = "جهات الاتصال والمجموعات:";
 "global_search_section_messages" = "الرسائل:";
 "global_search_no_results" = "لا توجد نتائج";
-"add_contact_own_id_error" = "لا يمكنك إضافة Tox ID الخاص بك. استخدم ملفا شخصيا مختلفا على الجهاز الثاني، أو قم بتصدير الملف نفسه واستيراده (يمكن لجهاز واحد فقط أن يكون متصلا في الوقت نفسه).";
-"add_contact_myid_label" = "MyID الخاص بالمستخدم";
+"add_contact_own_id_error" = "لا يمكنك إضافة معرّفك. استخدم ملفا شخصيا مختلفا على الجهاز الثاني، أو قم بتصدير الملف نفسه واستيراده (يمكن لجهاز واحد فقط أن يكون متصلا في الوقت نفسه).";
+"add_contact_myid_label" = "معرّف الطرف الآخر";
 "add_contact_use_qr_gallery" = "رمز QR من المعرض";
 "add_contact_paste" = "لصق من الحافظة";
 "add_contact_paste_short" = "لصق";
@@ -498,9 +495,9 @@
 "add_contact_invalid_id_format" = "صيغة المعرف غير صحيحة";
 "add_contact_already_friend" = "جهة الاتصال هذه موجودة في قائمتك بالفعل.";
 "add_contact_request_already_pending" = "هناك طلب صداقة معلق بالفعل إلى جهة الاتصال هذه.";
-"add_contact_public_key_only_hint" = "تم إدخال المفتاح العام فقط. سيستخدم الطلب nospam=0 وقد لا يصل إلى جهة الاتصال إلا إذا كانت تستخدم المعرف نفسه تماما. يفضل استخدام MyID الكامل المكون من 76 حرفا من ملفها الشخصي.";
+"add_contact_public_key_only_hint" = "تم إدخال المفتاح العام فقط. قد لا يصل الطلب: اطلب من الشخص معرّفه الكامل المكوّن من 76 رمزًا من ملفه الشخصي.";
 "qr_screen_title" = "رمز QR الخاص بي";
-"qr_my_id_heading" = "MyID الخاص بحسابك";
+"qr_my_id_heading" = "معرّفك";
 "qr_my_id_subtitle" = "يمكن لأصدقائك مراسلتك بمسح رمز QR الخاص بك";
 "chat_draft_prefix" = "مسودة: %@";
 "status_last_seen_just_now" = "آخر اتصال قبل لحظات";
@@ -509,13 +506,13 @@
 "status_last_seen_long_ago" = "آخر اتصال منذ زمن بعيد";
 "settings_website" = "الموقع الإلكتروني";
 "settings_longer_bg_mode" = "وضع الخلفية الممتد";
-"settings_longer_bg_mode_description" = "سيبقي هذا التطبيق يعمل في الخلفية لفترة أطول لإكمال إرسال الرسائل، لكنه سيكشف أيضا المزيد من البيانات الوصفية عنك. سيربط عنوان IP الخاص بك برمز PUSH. إنها موازنة بين الراحة وخصوصية البيانات الوصفية.\n\nيمكنك استخدام VPN لمنع ذلك.";
-"settings_profile_backup_description" = "قم بتصدير ملف Tox الشخصي (.tox) أو استيراده. يشمل ذلك Tox ID وجهات الاتصال فقط؛ لا يتم نقل سجل المحادثات.";
+"settings_longer_bg_mode_description" = "تحصل الرسائل على وقت أطول للإرسال بعد مغادرة التطبيق، لكن خادم الإشعارات يعرف الشبكة التي يتصل بها هذا الهاتف.";
+"settings_profile_backup_description" = "قم بتصدير ملف Tox الشخصي (.tox) أو استيراده. يشمل ذلك المعرّف وجهات الاتصال فقط؛ لا يتم نقل سجل المحادثات.";
 "settings_import_profile_invalid_file" = "الملف المحدد ليس ملف Tox شخصيا صالحا (.tox).";
 "settings_dark_theme" = "المظهر الداكن";
 "settings_group_system_messages" = "رسائل النظام في المجموعات";
 "settings_group_system_messages_description" = "إظهار رسائل الانضمام والمغادرة وغيرها من رسائل النظام في محادثات المجموعات.";
-"settings_call_audio_vpio" = "محرك صوت جديد للمكالمات (إصلاح الصدى ومستوى الصوت)";
+"settings_call_audio_vpio" = "إلغاء الصدى وضبط مستوى الصوت";
 "settings_udp_restart_title" = "يلزم إعادة التشغيل";
 "settings_udp_restart_enable_message" = "UDP تجريبي على iOS وقد يسبب أعطالا. سيعيد التطبيق تشغيل نفسه لتطبيق هذا الإعداد. ابق في Khandaq حتى تكتمل إعادة التشغيل.";
 "settings_udp_restart_disable_message" = "سيعيد التطبيق تشغيل نفسه لتطبيق إعدادات الشبكة. ابق في Khandaq حتى تكتمل إعادة التشغيل.";
@@ -529,8 +526,8 @@
 "attach_location" = "الموقع";
 "file_send_to_group" = "إرسال إلى مجموعة";
 "group_select_no_groups" = "لا توجد مجموعات بعد";
-"share_extension_preparing" = "جاري التحضير للمشاركة…";
-"share_extension_open_app" = "جاري فتح Khandaq…";
+"share_extension_preparing" = "جاري التحضير للمشاركة...";
+"share_extension_open_app" = "جاري فتح Khandaq...";
 "share_extension_failed" = "تعذرت المشاركة إلى Khandaq";
 "chat_file_download_failed" = "فشل التنزيل";
 "delete_selected_chats_title" = "حذف المحادثات المحددة (%d)؟";
@@ -541,9 +538,9 @@
 "chat_edit_action" = "تعديل";
 "message_edit_save" = "حفظ";
 "message_edited_marker" = "معدلة";
-"group_msg_sender_unverified" = "مُعاد من السجل — لم يتم التحقق من المرسل";
+"group_msg_sender_unverified" = "مُعاد من السجل، لم يتم التحقق من المرسل";
 "alert_ok" = "موافق";
-"video_send_preparing" = "جاري تحضير الفيديو…";
+"video_send_preparing" = "جاري تحضير الفيديو...";
 "video_send_preparation_failed" = "تعذر تحضير الفيديو للإرسال.";
 "video_send_too_large" = "حجم الفيديو كبير جدا (الحد الأقصى 500 ميغابايت).";
 "video_send_busy" = "لا يزال هناك فيديو آخر قيد التحضير. يرجى الانتظار.";
@@ -551,7 +548,7 @@
 "video_send_cancel" = "إلغاء";
 "file_transfer_stalled" = "توقف نقل الملف. يمكنك الإلغاء والمحاولة مرة أخرى.";
 "media_send_button" = "إرسال";
-"media_send_caption_hint" = "أضف تعليقا…";
+"media_send_caption_hint" = "أضف تعليقا...";
 "media_send_counter_format" = "%1$d / %2$d";
 "call_error_codec" = "تعذر تهيئة برامج ترميز الصوت أو الفيديو";
 "call_error_connection" = "تعذرت المزامنة مع المتصل. حاول مرة أخرى.";
@@ -574,8 +571,8 @@
 "group_join_action" = "انضمام";
 "group_join_invalid_id" = "يجب أن يتكون معرف المحادثة من 64 حرفا ست عشريا.";
 "group_create_failed" = "تعذر إنشاء المجموعة.";
-"group_create_in_progress" = "جاري إنشاء المجموعة…";
-"launch_loading" = "جاري التحميل…";
+"group_create_in_progress" = "جاري إنشاء المجموعة...";
+"launch_loading" = "جاري التحميل...";
 "group_join_failed" = "تعذر الانضمام إلى المجموعة.";
 "group_join_fail_peer_limit" = "المجموعة ممتلئة. تم بلوغ الحد الأقصى للأعضاء.";
 "group_join_fail_invalid_password" = "كلمة مرور المجموعة غير صحيحة.";
@@ -585,12 +582,12 @@
 "group_chat_default_title" = "مجموعة";
 "group_chat_list_subtitle" = "محادثة جماعية";
 "group_chat_list_private" = "خاصة";
-"group_chat_list_disconnected" = "جاري الاتصال…";
+"group_chat_list_disconnected" = "جاري الاتصال...";
 "group_chat_list_private_unread_format" = "%d رسالة خاصة غير مقروءة";
-"group_disconnected_banner" = "جاري الاتصال بالمجموعة… سيتم إرسال الرسائل عند الاتصال.";
-"group_connecting_banner_format" = "جاري الاتصال بالمجموعة… (المحاولة %d)";
+"group_disconnected_banner" = "نتصل بالمجموعة. تُرسل الرسائل عند الاتصال.";
+"group_connecting_banner_format" = "نتصل بالمجموعة، المحاولة %d";
 "group_member_count_format" = "%d عضو";
-"group_member_online_count_format" = "%d عضو · %d متصل";
+"group_member_online_count_format" = "%d عضو، %d متصل";
 "group_send_observer_role" = "أنت مراقب في هذه المجموعة ولا يمكنك إرسال الرسائل. اطلب من أحد المشرفين تغيير دورك إلى عضو.";
 "group_my_peer_name_header" = "اسمك في المجموعة";
 "group_my_peer_name_placeholder" = "أدخل الاسم المعروض";
@@ -603,10 +600,10 @@
 "group_info_title" = "معلومات المجموعة";
 "group_chat_id_header" = "معرف المحادثة";
 "group_chat_id_footer" = "شارك هذا المعرف ليتمكن الآخرون من الانضمام إلى المجموعة.";
-"group_chat_id_loading" = "جاري التحميل…";
+"group_chat_id_loading" = "جاري التحميل...";
 "group_members_header" = "الأعضاء";
 "group_members_header_format" = "الأعضاء (%d)";
-"group_members_header_online_format" = "الأعضاء: %1$d · %2$d متصل";
+"group_members_header_online_format" = "الأعضاء: %1$d، المتصلون: %2$d";
 "group_members_empty" = "لا يوجد أعضاء بعد";
 "group_member_list_title" = "الأعضاء";
 "group_member_status_offline" = "غير متصل";
@@ -624,8 +621,8 @@
 "chat_pinned_banner_title" = "رسالة مثبّتة";
 "chat_copy_action" = "نسخ";
 "chat_select_action" = "تحديد";
-"chat_forwarded_from_format" = "↪ معاد توجيهها من %@";
-"chat_forwarded_noname" = "↪ معاد توجيهها";
+"chat_forwarded_from_format" = "معاد توجيهها من %@";
+"chat_forwarded_noname" = "معاد توجيهها";
 "saved_messages_title" = "الرسائل المحفوظة";
 "chat_reply_cancel" = "إلغاء الرد";
 "chat_reply_header" = "ردا على %@";
@@ -635,7 +632,7 @@
 "group_messages_copy_action" = "نسخ";
 "network_connections_title" = "اتصالات الشبكة";
 "network_connections_summary" = "DHT، المرحلات، سجل إعادة الاتصال";
-"network_connections_loading" = "جاري تحميل حالة الشبكة…";
+"network_connections_loading" = "جاري تحميل حالة الشبكة...";
 "network_connections_beta_notice" = "سجل أحداث الاتصال ومقاييس الجودة أثناء التشغيل. تفريغ UDP/TCP الكامل غير متاح على iOS بعد.";
 "group_peer_fallback_format" = "عضو %d";
 "group_error_disconnected" = "لم يتم الاتصال بالمجموعة بعد. انتظر قليلا ثم أعد المحاولة.";
@@ -764,7 +761,7 @@
 "nav_edit_start" = "تحرير";
 "nav_edit_done" = "تم";
 
-/* KHANDAQ (user request 17.08): the attachments screen — files / audio / voice notes */
+/* KHANDAQ (user request 17.08): the attachments screen, files / audio / voice notes */
 "attachments_title" = "المرفقات";
 "attachments_documents" = "الملفات";
 "attachments_audio" = "الصوتيات";
@@ -772,9 +769,688 @@
 "attachments_empty" = "لا شيء هنا بعد";
 "attachments_not_downloaded" = "لم يتم تنزيل هذا الملف بعد.";
 
-/* KHANDAQ (18.08): About screen — owner/developer credit, links to https://1sa.me/ */
-"settings_credit_owner" = "المالك والمطور — عيسى الداغستاني";
+/* KHANDAQ (18.08): About screen, owner/developer credit, links to https://1sa.me/ */
+"settings_credit_owner" = "المالك والمطور: عيسى الداغستاني";
 
 /* KHANDAQ (re-review 2026-08-22, KQ-03): shown INSTEAD of the sender name when relayed
    history names an author whose signing key is stale. The row is kept; the identity is not. */
-"group_msg_relayed_unattributed" = "سجل مُعاد إرساله — لم يتم التحقق من الكاتب";
+"group_msg_relayed_unattributed" = "سجل مُعاد إرساله، لم يتم التحقق من الكاتب";
+
+/* KHANDAQ redesign (B): the theme is a choice of three; a sheet names the current choice. */
+"settings_theme" = "السمة";
+"settings_theme_system" = "حسب النظام";
+"settings_theme_light" = "فاتح";
+"settings_theme_dark" = "داكن";
+"settings_choice_current" = "الحالي: %@";
+
+/* KHANDAQ redesign (B): the Air screen, one list for people, groups and requests. */
+"air_command_placeholder" = "ابحث عن محادثة أو الصق معرّفًا";
+"air_create" = "إنشاء";
+"air_new_contact" = "جهة اتصال جديدة";
+"air_you" = "أنت";
+"air_you_hint" = "يفتح ملفك الشخصي";
+"air_net_direct" = "متصل، مباشرةً";
+"air_net_relay" = "متصل، عبر خادم وسيط";
+"air_net_connecting" = "جارٍ الاتصال";
+"air_net_offline" = "لا شبكة: الرسائل بالانتظار";
+"air_filter_all" = "الكل";
+"air_filter_requests" = "الطلبات";
+"air_filter_transit" = "في الطريق";
+"air_section_live" = "متصلون الآن";
+"air_section_away" = "غير متصلين";
+"air_section_saved" = "لنفسك";
+"air_section_messages" = "الرسائل";
+"air_request_tag" = "طلب وارد";
+"air_request_key_format" = "المفتاح %@. سيظهر الاسم بعد أن تقبل الطلب";
+"air_reach_live" = "متصل";
+"air_reach_relay" = "متصل، عبر وسيط";
+"air_reach_pending" = "بانتظار الرد";
+"air_reach_connecting" = "جارٍ الاتصال";
+"air_reach_group_online" = "متصلون الآن: %d";
+"air_reach_group_none" = "لا أحد متصل";
+"air_reach_just_now" = "الآن";
+"air_reach_minutes" = "منذ %d د";
+"air_reach_hours" = "منذ %d س";
+"air_reach_days" = "منذ %d ي";
+"air_reach_long_ago" = "منذ مدة";
+"air_delivery_transit" = "في الطريق";
+"air_delivery_sent" = "أُرسلت";
+"air_delivery_delivered" = "وصلت";
+"air_transit_format" = "في الطريق: %d";
+"air_unread_a11y" = "غير مقروءة: %d";
+"air_hint_request_sent" = "أُرسل الطلب";
+"air_hint_saved" = "على هذا الجهاز فقط";
+"air_hint_no_messages" = "لا رسائل بعد";
+"air_menu_select" = "تحديد";
+"air_menu_remove_contact" = "حذف جهة الاتصال";
+"air_selected_format" = "المحدد: %d";
+"air_empty_nothing_title" = "لا أحد هنا بعد";
+"air_empty_nothing_body" = "الصق معرّف الشخص في السطر أعلاه أو افتح «جهة اتصال جديدة».";
+"air_empty_no_match_title" = "لم يُعثر على شيء";
+"air_empty_no_match_body" = "لا تطابق في الأسماء ولا في نص الرسائل. إن كان هذا معرّفًا، فتأكد أنه كامل: 76 حرفًا.";
+"air_empty_no_requests_title" = "لا طلبات";
+"air_empty_no_requests_body" = "ستظهر هنا الطلبات الواردة وطلباتك التي ما زالت بانتظار الرد.";
+"air_empty_no_transit_title" = "وصل كل شيء";
+"air_empty_no_transit_body" = "تتجمع هنا الرسائل التي تنتظر أن يتصل صاحبها.";
+"air_empty_no_favorites_title" = "المفضلة فارغة";
+"air_empty_no_favorites_body" = "ضع علامة على محادثة من قائمتها وستظهر هنا.";
+"air_empty_show_all" = "عرض كل المحادثات";
+
+/* KHANDAQ redesign (B), stage 2: the conversation, the tray, the composer and the dossier. */
+"air_chat_call" = "اتصال";
+"air_chat_dossier_hint" = "يفتح الملف: الاتصال وآخر 24 ساعة والمفتاح";
+"air_chat_jump_latest" = "إلى أحدث الرسائل";
+"air_chat_search" = "البحث في المحادثة";
+"air_chat_video" = "مكالمة فيديو";
+"air_compose_attach" = "إرفاق ملف";
+"air_compose_bytes_left" = "المتبقي: %d بايت";
+"air_compose_bytes_over" = "أكثر من الحد بـ %d بايت";
+"air_compose_hint_live_format" = "ستُرسل فورًا: %@ متصل";
+"air_compose_hint_saved" = "ستبقى الملاحظة على هذا الجهاز فقط";
+"air_compose_hint_wait_format" = "ستنتظر في الطريق: %@ غير متصل. ستُرسل تلقائيًا";
+"air_compose_placeholder" = "رسالة";
+"air_compose_send" = "إرسال";
+"air_compose_send_blocked" = "الرسالة أطول من الحد المسموح. اختصرها لإرسالها";
+"air_compose_voice" = "رسالة صوتية";
+"air_day_a11y_format" = "متصل %@";
+"air_day_a11y_none" = "لا توجد علامات";
+"air_day_best_format" = "عادةً من %d:00 إلى %d:00";
+"air_day_empty" = "لا علامات بعد";
+"air_day_hint_ranges_format" = "آخر 24 ساعة: %@";
+"air_day_note" = "يسجّل هذا الهاتف الساعات التي يرى فيها الشخص متصلًا. تبقى العلامات هنا فقط لمدة سبعة أيام.";
+"air_day_now_online" = "متصل الآن";
+"air_day_range_format" = "من %d:00 إلى %d:00";
+"air_day_title" = "آخر 24 ساعة";
+"air_delivery_failed" = "لم تُرسل";
+"air_delivery_sending" = "جارٍ الإرسال";
+"air_dossier_best_format" = "أفضل وقت للكتابة من %d:00 إلى %d:00، حين يكون الشخص متصلًا في الغالب.";
+"air_dossier_block" = "حظر";
+"air_dossier_close_hint" = "يغلق الملف";
+"air_dossier_copy_key" = "نسخ المفتاح";
+"air_dossier_day_title" = "آخر 24 ساعة";
+"air_dossier_files_title" = "الملفات";
+"air_dossier_key_copied" = "تم نسخ المفتاح";
+"air_dossier_key_title" = "المفتاح";
+"air_dossier_link_direct" = "مباشرةً، بلا خادم وسيط.";
+"air_dossier_link_none" = "لا اتصال الآن. ستنتظر الرسائل في الطريق وتُرسل تلقائيًا.";
+"air_dossier_link_relay" = "عبر خادم وسيط. ينقل الرسائل مشفّرة ولا يرى محتواها.";
+"air_dossier_link_title" = "الاتصال";
+"air_dossier_mute" = "كتم الصوت";
+"air_dossier_not_verified" = "لم يتم التحقق من المفتاح.";
+"air_dossier_notifications_title" = "الإشعارات";
+"air_dossier_push_off" = "لن تصل إشعارات: لم يفعّلها تطبيق الطرف الآخر. ستصل الرسائل حين يفتح Khandaq.";
+"air_dossier_push_on_format" = "تصل الإشعارات. حين يكون %@ غير متصل، يتلقى الهاتف إشارة بلا نص ويجلب الرسائل بنفسه.";
+"air_dossier_qr" = "رمز QR";
+"air_dossier_remove" = "حذف";
+"air_dossier_remove_message" = "ستُحذف المحادثة من هذا الجهاز. للتراسل من جديد ستحتاجان إلى طلب جديد.";
+"air_dossier_remove_title_format" = "حذف %@ من جهات الاتصال؟";
+"air_dossier_rename" = "إعادة تسمية";
+"air_dossier_unverify" = "إلغاء التحقق";
+"air_dossier_verified_format" = "تم التحقق من المفتاح في %@.";
+"air_dossier_verify" = "تحقّق";
+"air_dossier_verify_title" = "التحقق من المفتاح";
+"air_failed_item_hint" = "يفتح إجراءات الرسالة";
+"air_failed_retry" = "لم تُرسل. أعد المحاولة";
+"air_failed_retry_hint" = "يرسل الرسالة مرة أخرى";
+"air_link_direct" = "اتصال مباشر";
+"air_link_none" = "لا اتصال";
+"air_link_relay" = "اتصال عبر خادم وسيط";
+"air_path_relay" = "خادم وسيط";
+"air_pin_jump_hint" = "يعرض الرسالة المثبّتة في المحادثة";
+"air_pin_remove" = "إلغاء التثبيت";
+"air_presence_away_days" = "غير متصل منذ %d يوم";
+"air_presence_away_hours" = "غير متصل منذ %d ساعة";
+"air_presence_away_just_now" = "غير متصل منذ أقل من دقيقة";
+"air_presence_away_long" = "غير متصل منذ أكثر من أسبوع";
+"air_presence_away_minutes" = "غير متصل منذ %d دقيقة";
+"air_presence_direct" = "متصل، اتصال مباشر";
+"air_presence_direct_since_format" = "متصل منذ %@، اتصال مباشر";
+"air_presence_pending" = "بانتظار الرد على الطلب";
+"air_presence_relay" = "متصل، عبر خادم وسيط";
+"air_presence_relay_since_format" = "متصل منذ %@، عبر خادم وسيط";
+"air_presence_typing" = "يكتب";
+"air_qr_key_heading_format" = "المفتاح: %@";
+"air_qr_key_subtitle" = "قارنه بالمعرّف في الملف الشخصي للطرف الآخر: يجب أن تتطابق أول 64 خانة.";
+"air_retry" = "إعادة المحاولة";
+"air_tray_cancel" = "إلغاء الإرسال";
+"air_tray_collapse_hint" = "يطوي الدرج";
+"air_tray_departed" = "أُرسلت الرسائل التي كانت في الطريق";
+"air_tray_edit_unavailable" = "لا يمكن تعديل هذه الرسالة";
+"air_tray_expand_hint" = "يعرض الرسائل التي في الطريق";
+"air_tray_head_format" = "في الطريق: %d رسالة";
+"air_tray_item_hint" = "يمكنك تعديلها أو إلغاؤها قبل أن تُرسل";
+"air_tray_wait_format" = "ستُرسل تلقائيًا حين يتصل %@.";
+"air_tray_wait_push_format" = "ستُرسل تلقائيًا حين يتصل %@. سيتلقى الهاتف إشارة بلا نص ويجلبها بنفسه.";
+"air_verify_match" = "متطابق";
+"air_verify_message" = "اطلب من الطرف الآخر قراءة معرّفه من ملفه الشخصي. إذا طابقت أول 64 خانة منه المفتاح أدناه، فأنت تتحدث مع الشخص الصحيح.";
+"air_verify_title" = "التحقق من المفتاح";
+"air_day_today" = "اليوم";
+"air_day_yesterday" = "أمس";
+
+/* KHANDAQ redesign (B), stage 3: block, privacy, refused messages. */
+"air_dossier_block_title_format" = "حظر %@؟";
+"air_dossier_block_message" = "ستُحذف جهة الاتصال والمحادثة من هذا الجهاز، ولن تظهر الطلبات الجديدة من هذا المفتاح.";
+"air_dossier_block_hint" = "يسأل أولًا، ثم يحذف جهة الاتصال ويخفي الطلبات من هذا المفتاح";
+"air_privacy_title" = "الخصوصية";
+"air_blocked_title" = "المحظورون";
+"air_blocked_none" = "لا أحد";
+"air_blocked_count_format" = "%d";
+"air_blocked_section_note" = "لا تظهر الطلبات من المفاتيح المحظورة. تُحفظ القائمة على هذا الجهاز فقط.";
+"air_blocked_empty" = "ستظهر هنا المفاتيح التي تحظرها من ملف جهة الاتصال.";
+"air_blocked_note" = "لا تظهر الطلبات من هذه المفاتيح. إلغاء الحظر لا يعيد جهة الاتصال: يلزم لذلك طلب جديد.";
+"air_blocked_unblock" = "إلغاء الحظر";
+"air_blocked_unblocked" = "أُلغي حظر المفتاح";
+
+/* KHANDAQ redesign (B), stage 3: new contact and the command line. */
+"air_nc_id_label" = "معرّف الطرف الآخر";
+"air_nc_id_placeholder" = "الصق المعرّف: 76 رمزًا من الأرقام والحروف من A إلى F";
+"air_nc_ruler_key" = "المفتاح";
+"air_nc_ruler_antispam" = "مضاد الإزعاج";
+"air_nc_ruler_check" = "التحقق";
+"air_nc_ruler_part_format" = "%1$@: %2$d من %3$d";
+"air_nc_verdict_empty" = "يمكن ترك المسافات وفواصل الأسطر والبادئة tox: فالحقل ينظّفها بنفسه.";
+"air_nc_verdict_left" = "بقي %d رمز.";
+"air_nc_verdict_bad" = "لم يتطابق التحقق: في المعرّف خطأ أو لم يُنسخ كاملًا. انسخه مرة أخرى.";
+"air_nc_verdict_own" = "هذا معرّفك أنت: تُرسله إلى الآخرين ولا تضيفه.";
+"air_nc_verdict_contact_format" = "%@ موجود في جهات الاتصال.";
+"air_nc_verdict_they_asked" = "أرسل إليك هذا الشخص طلبًا بالفعل، وهو ينتظر في «الطلبات».";
+"air_nc_verdict_blocked" = "هذا المفتاح محظور على هذا الجهاز. إرسال الطلب يرفع الحظر.";
+"air_nc_verdict_ok" = "المعرّف سليم. سيُرسل الطلب حالما يتصل الطرف الآخر.";
+"air_nc_why_whole" = "الصق المعرّف كاملًا أولًا: 76 رمزًا.";
+"air_nc_why_own" = "لا يمكنك إضافة معرّفك.";
+"air_nc_why_fix" = "صحّح المعرّف أولًا.";
+"air_nc_why_contact" = "هذا الشخص موجود في جهات الاتصال.";
+"air_nc_why_they_asked" = "اقبل طلبه في «الطلبات».";
+"air_nc_open_chat" = "فتح المحادثة";
+"air_nc_open_requests" = "فتح «الطلبات»";
+"air_nc_paste" = "لصق";
+"air_nc_scan" = "مسح رمز QR";
+"air_nc_scan_photo" = "رمز QR من صورة";
+"air_nc_wrong_qr" = "لا يوجد معرّف في رمز QR هذا.";
+"air_nc_message_label" = "رسالة مع الطلب";
+"air_nc_message_note" = "سيقرؤها قبل قبول الطلب. إن تركت الحقل فارغًا تُرسل التحية الظاهرة فيه.";
+"air_nc_message_too_long" = "الرسالة طويلة جدًا للطلب: اختصرها.";
+"air_nc_send" = "إرسال الطلب";
+"air_nc_own_title" = "معرّفك";
+"air_nc_own_note" = "أرسله إلى من يريد إضافتك.";
+"air_nc_copy" = "نسخ";
+"air_nc_copied" = "تم نسخ المعرّف";
+"air_nc_sent_title" = "الطلب في الطريق";
+"air_nc_sent_text" = "سيُرسل الطلب حالما يتصل الطرف الآخر. سيُعرف اسمه بعد أن يقبل الطلب. حتى ذلك الحين يظهر في القائمة بعبارة «بانتظار الرد».";
+"air_nc_accepted_title" = "تم قبول الطلب";
+"air_nc_accepted_text_format" = "%@ في جهات الاتصال، يمكنك الكتابة الآن.";
+"air_nc_them" = "الطرف الآخر";
+"air_nc_done" = "تم";
+"air_nc_path_label_format" = "أنت و%@، لا اتصال بعد";
+"air_nc_path_live_format" = "أنت و%@، متصلان";
+"air_cmd_new_contact" = "جهة اتصال جديدة بهذا المعرّف";
+"air_cmd_id_ok" = "المعرّف سليم";
+"air_cmd_id_left" = "ينقص %d رمز";
+"air_cmd_id_own" = "هذا معرّفك";
+"air_cmd_id_bad" = "لم يتطابق التحقق";
+"air_cmd_id_contact" = "موجود في جهات الاتصال";
+"air_nc_clear" = "مسح";
+
+/* KHANDAQ redesign (B), stage 3: requests and group invitations. */
+"air_invite_tag" = "دعوة إلى مجموعة";
+"air_invite_from_format" = "يدعوك %@.";
+"air_invite_wait_format" = "يمكنك الانضمام عندما يكون %@ متصلًا.";
+"air_invite_join" = "انضمام";
+"air_request_declined" = "تم رفض الطلب";
+"air_invite_declined" = "تم رفض الدعوة";
+"air_undo" = "تراجع";
+
+/* Redesign stage 3, E13 to E15: groups */
+"air_group_role_founder" = "المؤسس";
+"air_group_role_moderator" = "مشرف";
+"air_group_role_user" = "عضو";
+"air_group_role_observer" = "مراقب";
+"air_group_you_founder" = "أنت مؤسس المجموعة: تعيّن المشرفين، وتجعل أي شخص عضوًا أو مراقبًا، وتزيل الأعضاء، وتغيّر إعدادات المجموعة.";
+"air_group_you_moderator" = "أنت مشرف: تجعل الأعضاء مراقبين والمراقبين أعضاء، ويمكنك إزالتهم من المجموعة.";
+"air_group_you_user" = "أنت عضو: تكتب في المجموعة، ويديرها المؤسس والمشرفون.";
+"air_group_you_observer" = "أنت مراقب: تقرأ المجموعة لكن لا يمكنك الكتابة. يمكن لمشرف أن يمنحك حق الكتابة.";
+"air_group_members_count" = "%d عضو";
+"air_group_header_format" = "%1$@، %2$d متصلون الآن";
+"air_group_header_none_format" = "%@، لا أحد متصل الآن";
+"air_group_header_offline_format" = "%@، لا اتصال بالمجموعة";
+"air_group_hint_offline" = "لا اتصال بالمجموعة: تنتظر الرسائل على هذا الجهاز وتُرسل عند الاتصال";
+"air_group_hint_alone" = "أنت وحدك في المجموعة حتى الآن: ادعُ آخرين من ملف المجموعة";
+"air_group_hint_none" = "لا أحد متصل الآن: يستلمها الأعضاء عند اتصالهم";
+"air_group_hint_all_format" = "يستلمها الآن الجميع (%d): كلهم متصلون";
+"air_group_hint_format" = "يستلمها الآن %1$d من %2$d، والباقون عند اتصالهم";
+"air_group_get_now" = "يستلمونها الآن";
+"air_group_get_now_spoken_format" = "يستلمونها الآن: %@";
+"air_group_dossier_hint" = "يفتح ملف المجموعة";
+"air_group_read_only_observer" = "قراءة فقط. أنت مراقب: يمكن لمشرف أن يمنحك حق الكتابة.";
+"air_group_read_only_moderators" = "قراءة فقط. يكتب هنا المشرفون والمؤسس فقط.";
+"air_group_read_only_founder" = "قراءة فقط. يكتب هنا المؤسس فقط.";
+"air_group_ask_moderator" = "راسل مشرفًا";
+"air_group_ask_founder" = "راسل المؤسس";
+"air_group_ask_nobody" = "لا يُعرف مشرف لهذه المجموعة بعد";
+"air_group_observer_no_private" = "لا يستطيع المراقب الكتابة هنا ولو على انفراد: اطلب ذلك من مشرف خارج المجموعة.";
+"air_group_member_status_format" = "%1$@، %2$@";
+"air_group_member_offline" = "غير متصل";
+"air_group_member_you_format" = "%@ (أنت)";
+"air_group_member_hint" = "يفتح الإجراءات الخاصة بهذا العضو";
+"air_group_dossier_title" = "المجموعة";
+"air_group_your_role" = "دورك";
+"air_group_who_gets_now" = "من يستلم الرسالة الآن";
+"air_group_who_gets_now_note_format" = "متصلون الآن: %1$d من %2$d. يستلم الباقون الرسائل عند اتصالهم.";
+"air_group_members" = "الأعضاء";
+"air_group_search_members" = "ابحث عن عضو";
+"air_group_nobody_found" = "لا أحد بهذا الاسم";
+"air_group_key" = "مفتاح المجموعة";
+"air_group_copy_key" = "نسخ";
+"air_group_invite" = "دعوة";
+"air_group_key_copied" = "نُسخ مفتاح المجموعة";
+"air_group_qr_heading_format" = "مجموعة %@";
+"air_group_qr_subtitle" = "امسح الرمز للعثور على المجموعة بمفتاحها";
+"air_group_muted_note" = "لن تصل إشعارات برسائل هذه المجموعة الجديدة، ويبقى عدد غير المقروء ظاهرًا في القائمة.";
+"air_group_unmuted_note" = "تصل رسائل هذه المجموعة الجديدة مع إشعار.";
+"air_group_history" = "السجل";
+"air_group_history_note" = "الرسائل المكتوبة أثناء غيابك ينقلها أعضاء آخرون. إذا لم يُتحقق من توقيع الكاتب، تُعلَّم الرسالة بأن المرسل غير مؤكد.";
+"air_group_remove_system_format" = "حذف رسائل النظام: %d";
+"air_group_remove_system_message" = "تُحذف من هذا الجهاز ملاحظات الانضمام والمغادرة وتغييرات المجموعة.";
+"air_group_remove_system_action" = "حذف";
+"air_group_clear_history" = "مسح السجل";
+"air_group_clear_history_title" = "مسح سجل هذه المجموعة؟";
+"air_group_clear_history_message" = "تُحذف الرسائل من هذا الجهاز فقط، وتبقى لدى الأعضاء.";
+"air_group_settings" = "إعدادات المجموعة";
+"air_group_settings_detail" = "اسمك في المجموعة، الموضوع، من ينضم ومن يكتب";
+"air_group_leave" = "مغادرة المجموعة";
+"air_group_leave_note" = "تتوقف رسائلها عن الوصول، ويُحذف السجل من هذا الجهاز.";
+"air_group_leave_title_format" = "مغادرة %@؟";
+"air_group_leave_message" = "سيرى الأعضاء أنك غادرت. للعودة تحتاج إلى دعوة أو إلى مفتاح المجموعة.";
+"air_group_write_privately" = "راسله على انفراد";
+"air_group_add_contact" = "إضافة إلى جهات الاتصال";
+"air_group_contact_added_format" = "أُضيف %@ إلى جهات الاتصال";
+"air_group_copy_member_key" = "نسخ المفتاح";
+"air_group_member_key_copied" = "نُسخ المفتاح";
+"air_group_member_mute" = "كتم في هذه المجموعة";
+"air_group_member_unmute" = "إلغاء الكتم في هذه المجموعة";
+"air_group_member_muted_format" = "كُتم %@ في هذه المجموعة";
+"air_group_member_unmuted_format" = "أُلغي كتم %@";
+"air_group_make_moderator" = "تعيين مشرفًا";
+"air_group_make_user" = "جعله عضوًا";
+"air_group_make_observer" = "جعله مراقبًا";
+"air_group_kick" = "إزالة من المجموعة";
+"air_group_make_moderator_title_format" = "تعيين %@ مشرفًا؟";
+"air_group_make_moderator_message" = "يجعل المشرف الأعضاء مراقبين والعكس، ويمكنه إزالتهم.";
+"air_group_make_user_title_format" = "جعل %@ عضوًا؟";
+"air_group_make_user_message" = "يكتب العضو في المجموعة ولا يدير شيئًا.";
+"air_group_make_observer_title_format" = "جعل %@ مراقبًا؟";
+"air_group_make_observer_message" = "يقرأ المراقب المجموعة لكنه لا يستطيع الكتابة.";
+"air_group_kick_title_format" = "إزالة %@ من المجموعة؟";
+"air_group_kick_message" = "تتوقف رسائل المجموعة عن الوصول. تتطلب العودة دعوة جديدة أو، في مجموعة مفتوحة، مفتاحها.";
+"air_group_now_moderator_format" = "%@ مشرف الآن";
+"air_group_now_user_format" = "%@ عضو الآن";
+"air_group_now_observer_format" = "%@ مراقب الآن";
+"air_group_kicked_format" = "لم يعد %@ في المجموعة";
+"air_group_invite_title" = "دعوة إلى المجموعة";
+"air_invite_online_note" = "تُرسل الدعوة عبر اتصالك بجهة الاتصال، لذا لا يمكن دعوة إلا المتصلين الآن.";
+"air_invite_choose_first" = "اختر من تريد دعوته";
+"air_invite_send_format" = "دعوة %d";
+"air_invite_sent" = "أُرسلت الدعوات: %d";
+"air_invite_already_member" = "في المجموعة بالفعل";
+"air_invite_when_online" = "يمكن دعوته عند اتصاله";
+"air_invite_no_contacts" = "لا توجد جهات اتصال بعد: أضف شخصًا أولًا.";
+"air_invite_nobody_found" = "لا توجد جهة اتصال بهذا الاسم";
+"air_invite_search" = "ابحث عن جهة اتصال";
+"air_new_group_title" = "مجموعة جديدة";
+"air_new_group_name" = "الاسم";
+"air_new_group_name_placeholder" = "مثلًا: نادي الكتاب";
+"air_new_group_name_note" = "سيراه كل من تدعوهم. يمكن لاحقًا تغيير الموضوع، أما الاسم فلا.";
+"air_new_group_privacy" = "من يمكنه الانضمام";
+"air_group_privacy_invite_only" = "بالدعوة فقط";
+"air_group_privacy_invite_only_note" = "لا ينضم إلا من يدعوه أحد الأعضاء.";
+"air_group_privacy_open" = "مفتوحة لكل من لديه مفتاح المجموعة";
+"air_group_privacy_open_note" = "يمكن لأي شخص لديه مفتاح المجموعة الانضمام دون دعوة.";
+"air_new_group_invite_note" = "تُرسل الدعوات فورًا، لذا لا يمكن هنا دعوة إلا المتصلين. ادعُ الآخرين لاحقًا من ملف المجموعة.";
+"air_new_group_create" = "إنشاء المجموعة";
+"air_new_group_create_invite_format" = "إنشاء ودعوة %d";
+"air_new_group_name_first" = "سمِّ المجموعة لإنشائها";
+"air_new_group_name_too_long" = "الاسم طويل جدًا لمجموعة: اختصره";
+"air_group_author_role_format" = "%1$@، %2$@";
+"air_group_author_unconfirmed" = "المرسل غير مؤكد";
+"air_group_mentions_you" = "يذكرك";
+"air_group_live_on" = "قيد التشغيل";
+"air_group_hint_one_other" = "العضو الآخر متصل ويستلمها الآن";
+"air_group_open_chat" = "فتح المحادثة";
+"air_group_author_unknown" = "عضو في المجموعة";
+
+/* Redesign stage 3: files, photos and voice notes in the transcript (E8) */
+"air_file_accept" = "قبول";
+"air_file_decline" = "رفض";
+"air_file_pause" = "إيقاف مؤقت";
+"air_file_resume" = "متابعة";
+"air_file_cancel" = "إلغاء";
+"air_file_retry_incoming" = "التنزيل مجددًا";
+"air_file_retry_outgoing" = "الإرسال مجددًا";
+"air_file_left_format" = "المتبقي %@";
+"air_file_paused" = "متوقف مؤقتًا";
+"air_file_failed_incoming" = "توقف التنزيل";
+"air_file_failed_outgoing" = "لم يُرسل";
+"air_file_waits_accept_format" = "بانتظار أن يقبله %@";
+"air_file_waits_online_format" = "سيُرسل عندما يتصل %@";
+"air_size_bytes_format" = "%@ بايت";
+"air_size_kb_format" = "%@ ك.ب";
+"air_size_mb_format" = "%@ م.ب";
+"air_size_gb_format" = "%@ غ.ب";
+"air_group_file_limit_format" = "يمكن إرسال ملفات حتى %@ إلى المجموعة";
+"air_voice_listen" = "استماع";
+"air_voice_pause" = "إيقاف مؤقت";
+"air_voice_spoken" = "رسالة صوتية";
+"air_tray_file_format" = "%1$@، %2$@";
+
+/* Redesign stage 3: calls, their screens and their entries in the transcript (E9) */
+"air_call_entry_format" = "مكالمة، %@";
+"air_call_missed" = "مكالمة فائتة";
+"air_call_no_answer" = "لم يتم الرد";
+"air_call_offline_title_format" = "%@ غير متصل: لن تصل المكالمة";
+"air_call_offline_push" = "يمكنك الانتظار هنا: يصل إلى هاتفه تنبيه بلا نص، وتبدأ المكالمة حين يتصل.";
+"air_call_offline_wait" = "يمكنك الانتظار هنا: تبدأ المكالمة حين يتصل.";
+"air_call_wait_action" = "انتظر ثم اتصل";
+"air_call_waiting_format" = "بانتظار أن يتصل %@";
+"air_call_waiting_push" = "أُرسل إلى هاتفه تنبيه بلا نص. تبدأ المكالمة تلقائيًا حين يتصل.";
+"air_call_waiting_no_push" = "تبدأ المكالمة تلقائيًا حين يتصل.";
+"air_call_cancel" = "إلغاء";
+"air_call_mic_title" = "لا يوجد إذن للميكروفون";
+"air_call_mic_message" = "من دون الميكروفون لن يسمعك الطرف الآخر. اسمح به في الإعدادات: Khandaq، الميكروفون.";
+"air_call_camera_title" = "لا يوجد إذن للكاميرا";
+"air_call_camera_message" = "من دون الكاميرا لن يراك الطرف الآخر، ويمكن أن تستمر المكالمة بالصوت. اسمح بها في الإعدادات: Khandaq، الكاميرا.";
+"air_call_open_settings" = "فتح الإعدادات";
+"air_call_audio_only" = "اتصال بلا فيديو";
+"air_call_calling" = "جارٍ الاتصال";
+"air_call_incoming" = "مكالمة واردة";
+"air_call_ended" = "انتهت المكالمة";
+"air_call_line_direct" = "اتصال مباشر";
+"air_call_line_relay" = "عبر مُرحِّل";
+"air_call_line_none" = "لا اتصال الآن";
+"air_call_decline" = "رفض";
+"air_call_answer" = "رد";
+"air_call_answer_video" = "بالفيديو";
+"air_call_end" = "إنهاء";
+"air_call_mic" = "الميكروفون";
+"air_call_mic_on" = "مفعّل";
+"air_call_mic_off" = "متوقف";
+"air_call_speaker" = "مكبر الصوت";
+"air_call_speaker_on" = "مفعّل";
+"air_call_speaker_off" = "متوقف";
+"air_call_camera" = "الكاميرا";
+"air_call_camera_on" = "مفعّلة";
+"air_call_camera_off" = "متوقفة";
+"air_call_switch_camera" = "تبديل الكاميرا";
+
+/* Redesign stage 3, E17: You */
+"air_you_share" = "مشاركة المعرّف";
+"air_you_copy" = "نسخ المعرّف";
+"air_you_copied" = "تم نسخ المعرّف";
+"air_you_qr" = "رمز QR لمعرّفك";
+"air_you_qr_hint" = "يُمسح من «جهة اتصال جديدة» على هاتف آخر";
+"air_you_photo" = "صورة الملف الشخصي";
+"air_you_photo_hint" = "يغيّر الصورة";
+"air_you_name" = "الاسم";
+"air_you_name_placeholder" = "اسمك";
+"air_you_status" = "الحالة";
+"air_you_status_placeholder" = "سطر تراه جهات اتصالك";
+"air_you_saved" = "تم الحفظ";
+"air_you_details" = "التفاصيل";
+"air_you_part_key" = "المفتاح";
+"air_you_part_antispam" = "مضاد الإزعاج";
+"air_you_part_check" = "التحقق";
+"air_you_antispam" = "تغيير مضاد الإزعاج";
+"air_you_antispam_title" = "تغيير مضاد الإزعاج؟";
+"air_you_antispam_message" = "سيتوقف معرّفك القديم عن استقبال طلبات جديدة. تبقى جهات اتصالك، ويتغيّر المعرّف ورمز QR.";
+"air_you_antispam_action" = "تغيير";
+"air_you_antispam_done" = "تم تغيير مضاد الإزعاج: شارك المعرّف الجديد";
+"air_you_security" = "كلمة المرور ورمز PIN";
+"air_you_logout" = "تسجيل الخروج";
+"air_you_logout_title" = "تسجيل الخروج من الملف الشخصي؟";
+"air_you_logout_message" = "يبقى الملف الشخصي على هذا الجهاز، ويمكنك الدخول مجددًا بكلمة مروره.";
+"air_you_delete" = "حذف الملف الشخصي من هذا الجهاز";
+"air_you_delete_title" = "حذف الملف الشخصي من هذا الجهاز؟";
+"air_you_delete_message_format" = "%@: سيُمحى الملف الشخصي وجهات اتصاله وسجلّه من هذا الهاتف. لا يمكن استعادتها دون نسخة مُصدَّرة.";
+"air_you_delete_action" = "حذف";
+
+/* Settings by task (redesign stage 3, E18) */
+"air_settings_appearance" = "المظهر";
+"air_settings_notifications" = "الإشعارات";
+"air_settings_transfer" = "نقل الملف الشخصي";
+"air_settings_network" = "الشبكة";
+"air_settings_debug" = "تصحيح الأخطاء";
+"air_settings_group_events_detail" = "من انضم أو غادر أو غيّر اسمه";
+"air_settings_preview" = "إظهار نص الرسائل";
+"air_settings_preview_note" = "يظهر نص الرسائل وأسماء الملفات على شاشة القفل. عند الإيقاف يقول الإشعار «رسالة جديدة» فقط.";
+"air_settings_transfer_note" = "يحمل ملف الملف الشخصي معرّفك وجهات اتصالك. يبقى سجل المحادثات على هذا الجهاز.";
+"air_settings_import_message" = "سيخرج التطبيق من هذا الملف الشخصي ويفتح الملف الشخصي المحفوظ في الملف المختار. يبقى هذا الملف الشخصي على الجهاز، ويمكنك الدخول إليه مجددًا بكلمة مروره.";
+"air_settings_import_action" = "اختيار ملف";
+"air_settings_attachments_note" = "الملفات التي لا تُنزَّل تلقائيًا تنتظر «قبول» في المحادثة.";
+"air_settings_calls" = "المكالمات";
+
+/* Network state and in-app band (redesign stage 3, E4 and E22) */
+"air_network_title_direct" = "متصل، مباشرةً";
+"air_network_title_relay" = "متصل، عبر خادم وسيط";
+"air_network_title_connecting" = "جارٍ الاتصال";
+"air_network_title_offline" = "لا شبكة";
+"air_network_meaning_direct" = "تُرسل الرسائل فورًا، مباشرةً إلى هاتف الطرف الآخر.";
+"air_network_meaning_relay" = "تُرسل الرسائل فورًا عبر خادم وسيط: هذه الشبكة تغلق الطريق المباشر، ولا يؤثر ذلك على التسليم.";
+"air_network_meaning_connecting" = "الإنترنت متوفر والتطبيق يبحث عن الشبكة. تنتظر الرسائل الجديدة في الطريق وستُرسل تلقائيًا.";
+"air_network_meaning_offline" = "لا يوجد إنترنت على الهاتف. تنتظر الرسائل الجديدة في الطريق وستُرسل عند عودته.";
+"air_network_internet" = "الإنترنت";
+"air_network_internet_yes" = "متوفر";
+"air_network_internet_no" = "غير متوفر";
+"air_network_link" = "الاتصال";
+"air_network_link_direct" = "مباشر";
+"air_network_link_relay" = "عبر خادم وسيط";
+"air_network_link_none" = "ليس بعد";
+"air_network_reconnect" = "إعادة الاتصال";
+"air_network_reconnect_toast" = "جارٍ إعادة الاتصال";
+"air_network_log" = "سجل للدعم الفني";
+"air_network_log_note" = "تفاصيل تقنية عن الاتصال، إذا طلبها الدعم الفني.";
+"air_net_hint" = "يفتح حالة الشبكة";
+"air_compose_hint_self_connecting" = "ستنتظر في الطريق: التطبيق يتصل بالشبكة. ستُرسل تلقائيًا";
+"air_compose_hint_self_offline" = "ستنتظر في الطريق: لا شبكة على هذا الهاتف. ستُرسل تلقائيًا";
+"air_banner_hint" = "يفتح المحادثة";
+"air_banner_hint_request" = "يفتح الطلب";
+"notification_group_invite" = "يدعوك إلى مجموعة";
+"notification_group_invite_format" = "يدعوك إلى المجموعة %@";
+"air_banner_hint_invite" = "يفتح الدعوة";
+
+/* Errors and confirmations (redesign stage 3, E21) */
+"error_failed_open_page" = "تعذّر فتح الصفحة";
+"error_failed_open_profile" = "تعذّر فتح الملف الشخصي";
+"error_failed_name" = "تعذّر تغيير الاسم";
+"error_failed_status" = "تعذّر تغيير الحالة";
+"error_failed_add_contact" = "تعذّرت إضافة جهة الاتصال";
+"error_failed_remove_contact" = "تعذّرت إزالة جهة الاتصال";
+"error_failed_call" = "تعذّر بدء المكالمة";
+"error_failed_export" = "تعذّر تصدير الملف الشخصي";
+"error_failed_delete_profile" = "تعذّر حذف الملف الشخصي";
+"error_failed_password" = "كلمة المرور غير مناسبة";
+"error_failed_answer" = "تعذّر الرد على المكالمة";
+"error_failed_speaker" = "تعذّر تشغيل مكبّر الصوت";
+"error_failed_camera" = "تعذّر تشغيل الكاميرا";
+"error_failed_switch_camera" = "تعذّر تبديل الكاميرا";
+"error_failed_photo" = "تعذّر تغيير الصورة";
+"error_failed_send_message" = "لم تُرسَل الرسالة";
+"error_failed_join_group" = "تعذّر الانضمام إلى المجموعة";
+"error_failed_invite" = "تعذّرت الدعوة إلى المجموعة";
+"error_failed_kick" = "تعذّرت إزالة العضو";
+"error_failed_leave_group" = "تعذّرت مغادرة المجموعة";
+"error_failed_role" = "تعذّر تغيير الدور";
+"error_failed_topic" = "تعذّر تغيير الموضوع";
+"error_failed_group_name" = "تعذّر تغيير اسمك في المجموعة";
+"error_failed_group_settings" = "تعذّر تغيير إعدادات المجموعة";
+"error_failed_send_file" = "لم يُرسَل الملف";
+"error_failed_accept_file" = "تعذّر قبول الملف";
+"error_failed_cancel_file" = "تعذّر إلغاء النقل";
+"error_failed_pause_file" = "تعذّر إيقاف النقل مؤقتًا";
+"error_failed_pick_media" = "تعذّر أخذ الملف";
+"error_failed_generic" = "لم ينجح ذلك";
+"error_pin_logout_title" = "تم تسجيل خروجك";
+"error_try_again_message" = "حاول مرة أخرى.";
+"error_details" = "التفاصيل";
+"error_details_format" = "الرمز للدعم: %@";
+"error_details_copy" = "نسخ";
+"error_try_again_support_message" = "حاول مرة أخرى. وإذا لم ينجح، فاكتب إلى الدعم وأرفق التفاصيل.";
+"air_delete_chat_title" = "حذف المحادثة؟";
+"air_delete_chat_message" = "ستُحذف المحادثة من هذا الجهاز، وتبقى جهة الاتصال.";
+"air_delete_chats_message" = "ستُحذف المحادثات من هذا الجهاز، وستغادر المجموعات المحددة.";
+
+/* A message in markup this build cannot read (redesign stage 3, item 10) */
+"air_message_unknown_format" = "هذه الرسالة بصيغة لا يستطيع التطبيق عرضها بعد";
+
+/* The play control of a video in the media gallery, for VoiceOver (redesign stage 3, item 9) */
+"air_media_play_video" = "تشغيل الفيديو";
+
+/* First launch, sign-in, password, PIN and moving a profile in (redesign stage 4, E19 and E20) */
+"air_first_step_format" = "الخطوة %1$ld من %2$ld";
+"air_first_name_title" = "بماذا نناديك";
+"air_first_name_body" = "لن يرى هذا الاسم إلا من تضيفهم.";
+"air_first_name_placeholder" = "الاسم";
+"air_first_name_first" = "اكتب اسمًا أولًا.";
+"air_first_next" = "التالي";
+"air_first_move_profile" = "نقل ملف شخصي من جهاز آخر";
+"air_first_default_folder" = "الملف الشخصي";
+"air_first_password_title" = "كلمة مرور الملف الشخصي";
+"air_first_password_body" = "لا يمكن استعادة كلمة المرور: لا توجد خوادم. يُحفظ الملف الشخصي على هذا الجهاز فقط.";
+"air_first_password_set" = "تعيين كلمة مرور";
+"air_first_password_set_detail" = "لا يُفتح الملف الشخصي إلا بكلمة المرور، وبها يمكن نقله إلى جهاز آخر.";
+"air_first_password_skip" = "المتابعة دون كلمة مرور";
+"air_first_password_skip_detail" = "يبقى الملف الشخصي مشفّرًا: مفتاحه محفوظ في سلسلة المفاتيح على جهاز iPhone هذا. يُفتح دون كلمة مرور، لكن هنا فقط. لنقله، عيّن كلمة مرور أولًا.";
+"air_first_password_placeholder" = "كلمة المرور";
+"air_first_repeat_placeholder" = "كلمة المرور مرة أخرى";
+"air_first_password_rule" = "8 أحرف على الأقل، مع حرف ورقم.";
+"air_first_password_empty" = "اختر كلمة مرور أولًا.";
+"air_first_password_short" = "كلمة المرور أقصر من 8 أحرف.";
+"air_first_password_weak" = "تحتاج كلمة المرور إلى حرف ورقم.";
+"air_first_password_repeat_first" = "اكتب كلمة المرور مرة أخرى في الحقل الثاني.";
+"air_first_password_mismatch" = "كلمتا المرور غير متطابقتين.";
+"air_first_create" = "إنشاء الملف الشخصي";
+"air_first_creating" = "جارٍ إنشاء الملف الشخصي";
+"air_first_create_failed" = "لم يُنشأ الملف الشخصي. حاول مرة أخرى.";
+"air_first_keychain_failed" = "لم تقبل سلسلة المفاتيح على جهاز iPhone هذا المفتاح. عيّن كلمة مرور، وبها يُنشأ الملف الشخصي.";
+"air_first_id_title" = "معرّفك جاهز";
+"air_first_id_body" = "أرسل معرّفك إلى من تريد مراسلتهم، أو أرِهم رمز QR.";
+"air_first_share" = "مشاركة";
+"air_first_add_person" = "إضافة أول شخص";
+"air_field_show_password" = "إظهار كلمة المرور";
+"air_field_hide_password" = "إخفاء كلمة المرور";
+"air_signin_go" = "تسجيل الدخول";
+"air_signin_opening" = "جارٍ فتح الملف الشخصي";
+"air_signin_enter_password" = "أدخل كلمة المرور أولًا.";
+"air_signin_no_password" = "يُفتح هذا الملف الشخصي دون كلمة مرور، على جهاز iPhone هذا فقط.";
+"air_signin_no_password_short" = "دون كلمة مرور";
+"air_signin_profiles" = "الملفات الشخصية على هذا الجهاز";
+"air_signin_profiles_note" = "المس الملف الشخصي مطوّلًا لحذفه.";
+"air_signin_forgot" = "نسيت كلمة المرور؟";
+"air_signin_forgot_title" = "لا يمكن استعادة كلمة المرور";
+"air_signin_forgot_message" = "لا توجد خوادم، ولا يعرف كلمة المرور سواك. يمكنك إنشاء ملف شخصي جديد بمعرّف جديد: يبقى هذا الملف الشخصي على الجهاز ويُفتح إن تذكرت كلمة المرور. أو احذف هذا الملف الشخصي من الجهاز.";
+"air_signin_create" = "إنشاء ملف شخصي جديد";
+"air_signin_delete" = "حذف هذا الملف الشخصي";
+"air_signin_delete_short" = "حذف";
+"air_signin_wrong_password" = "كلمة المرور غير صحيحة. تحقّق من لغة لوحة المفاتيح والأحرف الكبيرة.";
+"air_signin_damaged" = "ملف الملف الشخصي تالف. إن كانت لديك نسخة مُصدَّرة، فانقل الملف الشخصي منها.";
+"air_signin_no_access" = "لا يمكن الوصول إلى ملف الملف الشخصي. افتح قفل جهاز iPhone وحاول مرة أخرى.";
+"air_signin_failed_title" = "لم يُفتح الملف الشخصي";
+"air_import_title" = "نقل ملف شخصي";
+"air_import_password_body_format" = "الملف «%@» محمي بكلمة مرور. أدخل كلمة المرور التي حُفظ بها الملف الشخصي.";
+"air_import_reading" = "جارٍ قراءة الملف";
+"air_import_wrong_password" = "كلمة المرور هذه لا تفتح الملف. المطلوب كلمة مرور الملف الشخصي على الجهاز الذي جاء منه الملف.";
+"air_import_preview_title" = "هل هذا ملفك الشخصي؟";
+"air_import_preview_body" = "تحقّق من الاسم والمعرّف: سيُضاف الملف الشخصي إلى هذا الجهاز.";
+"air_import_name" = "الاسم";
+"air_import_no_name" = "دون اسم";
+"air_import_confirm" = "نقل الملف الشخصي إلى هنا";
+"air_import_moving" = "جارٍ نقل الملف الشخصي";
+"air_import_other_file" = "اختيار ملف آخر";
+"air_import_not_profile" = "هذا ليس ملفًا شخصيًا من Khandaq. اختر ملف ‎.tox مُصدَّرًا من ملف شخصي.";
+"air_import_failed_title" = "لم يُنقل الملف الشخصي";
+"air_share_import_action" = "نقل الملف الشخصي من هذا الملف";
+"air_share_import_verb" = "نقل";
+"air_share_in_title" = "إرسال إلى";
+"air_share_ext_preparing" = "جارٍ التحضير للإرسال";
+"air_share_ext_open_app" = "جاهز. افتح Khandaq واختر من سيستلمه.";
+"air_share_ext_failed" = "تعذّر تمرير هذا إلى Khandaq.";
+"air_settings_import_message_device" = "سيخرج التطبيق من هذا الملف الشخصي ويفتح الملف الشخصي المحفوظ في الملف المختار. يبقى هذا الملف الشخصي على الجهاز ويُفتح مجددًا دون كلمة مرور.";
+"air_password_set_title" = "تعيين كلمة مرور";
+"air_password_set_body" = "يُفتح الملف الشخصي الآن بمفتاح من سلسلة المفاتيح على جهاز iPhone هذا. مع كلمة مرور يمكن نقله إلى جهاز آخر. لا يمكن استعادة كلمة المرور: لا توجد خوادم.";
+"air_password_set_action" = "تعيين كلمة المرور";
+"air_password_change_action" = "تغيير كلمة المرور";
+"air_password_old_first" = "أدخل كلمة المرور القديمة أولًا.";
+"air_password_saving" = "جارٍ حفظ كلمة المرور";
+"air_password_wrong_old" = "كلمة المرور القديمة غير صحيحة.";
+"air_password_set_failed" = "لم تُعيَّن كلمة المرور: لم يفتح مفتاح جهاز iPhone هذا الملف الشخصي. حاول مرة أخرى.";
+"air_password_changed" = "تم تغيير كلمة المرور";
+"air_password_set_done" = "تم تعيين كلمة المرور";
+"air_password_old_placeholder" = "كلمة المرور القديمة";
+"air_password_new_placeholder" = "كلمة المرور الجديدة";
+"air_export_needs_password_title" = "عيّن كلمة مرور أولًا";
+"air_export_needs_password_message" = "الملف الشخصي دون كلمة مرور لا يُفتح إلا بمفتاح جهاز iPhone هذا، فلن يُفتح ملفه على جهاز آخر. عيّن كلمة مرور، وبها يُفتح الملف.";
+"air_you_logout_message_device" = "يبقى الملف الشخصي على هذا الجهاز ويُفتح مجددًا دون كلمة مرور، على جهاز iPhone هذا فقط.";
+"air_pin_set_note" = "لا يمكن استعادة رمز PIN. بعد عشر محاولات خاطئة يُغلق الإدخال لبعض الوقت، وتطول المدة في كل مرة.";
+"air_pin_entered_format" = "أُدخل %1$ld من %2$ld";
+
+/* Redesign stage 5: group settings, joining by key, private messages in a group */
+"air_group_private_note_format" = "رسائل خاصة في المجموعة «%1$@»: لا يراها إلا أنت و%2$@.";
+"air_group_private_hint_away_format" = "%@ غير متصل: اكتب حين يتصل";
+"air_group_settings_self_name" = "اسمك في المجموعة";
+"air_group_settings_self_name_note" = "يراه أعضاء هذه المجموعة، ويبقى اسم ملفك الشخصي كما هو.";
+"air_group_settings_topic" = "الموضوع";
+"air_group_settings_topic_none" = "بلا موضوع";
+"air_group_settings_topic_note" = "يرى كل الأعضاء الموضوع: يظهر بدل الاسم في القائمة وفي أعلى المجموعة.";
+"air_group_settings_topic_locked" = "لا يغيّر الموضوع إلا المؤسس والمشرفون.";
+"air_group_settings_topic_not_observers" = "يغيّر الموضوع جميع الأعضاء ما عدا المراقبين.";
+"air_group_settings_topic_lock" = "لا يغيّر الموضوع إلا المؤسس والمشرفون";
+"air_group_settings_join" = "من يمكنه الانضمام";
+"air_group_settings_password_set" = "مُعيّنة";
+"air_group_settings_password_none" = "لا توجد";
+"air_group_settings_password_note" = "سيحتاج الأعضاء الجدد إلى كلمة المرور، ومن في المجموعة الآن يبقى فيها.";
+"air_group_settings_limit" = "حد الأعضاء";
+"air_group_settings_limit_full" = "المجموعة ممتلئة: لن ينضم أعضاء جدد حتى يُرفع الحد.";
+"air_group_settings_write" = "من يمكنه الكتابة";
+"air_group_voice_all_note" = "الجميع ما عدا المراقبين.";
+"air_group_settings_founder_only" = "يغيّر هذا مؤسس المجموعة.";
+"air_group_settings_saved" = "تم الحفظ";
+"air_group_password_remove" = "إزالة كلمة المرور";
+"air_group_password_removed" = "أُزيلت كلمة المرور";
+"air_group_name_empty" = "لا يمكن أن يكون الاسم فارغًا.";
+"air_group_limit_range" = "الحد رقم من 1 إلى 65535.";
+"air_join_title" = "الانضمام إلى مجموعة";
+"air_join_key_placeholder" = "مفتاح من 64 حرفًا";
+"air_join_key_hint" = "مفتاح المجموعة موجود في ملفها: اطلب من أحد الأعضاء أن ينقر «نسخ» هناك أو أن يعرض رمز QR.";
+"air_join_key_partial_format" = "%d من 64 حرفًا";
+"air_join_key_not_key" = "هذا ليس مفتاح مجموعة: المفتاح 64 حرفًا من الأرقام والحروف من A إلى F.";
+"air_join_key_person" = "هذا معرّف شخص وليس مفتاح مجموعة. يُضاف الشخص من «جهة اتصال جديدة».";
+"air_join_key_member" = "أنت في هذه المجموعة بالفعل.";
+"air_join_open_group" = "فتح المجموعة";
+"air_join_password_placeholder" = "إن عيّنها المؤسس";
+"air_join_password_note" = "اتركه فارغًا إن لم تكن للمجموعة كلمة مرور.";
+"air_join_how" = "يُعثر على المجموعة حين يكون أحد أعضائها متصلًا. وإن كان بينهم أحد جهات اتصالك، يطلب منه Khandaq أن يرسل إليك دعوة.";
+"air_join_why_key" = "مفتاح المجموعة أولًا";
+"air_cmd_join_group" = "الانضمام إلى المجموعة بهذا المفتاح";
+"air_cmd_group_note" = "64 حرفًا، بعدد أحرف مفتاح المجموعة";
+
+/* Stage 5: Password and PIN */
+"air_security_pin_section" = "رمز PIN";
+"air_security_pin" = "طلب رمز PIN";
+"air_security_pin_note" = "يطلب Khandaq رمز PIN عند عودتك إليه. لا يمكن استعادة الرمز.";
+"air_security_lock" = "القفل";
+"air_security_lock_now" = "فورًا";
+"air_security_lock_30s" = "بعد 30 ثانية";
+"air_security_lock_1m" = "بعد دقيقة";
+"air_security_lock_2m" = "بعد دقيقتين";
+"air_security_lock_5m" = "بعد 5 دقائق";
+"air_security_lock_note" = "يبدأ العدّ من لحظة مغادرتك Khandaq.";
+"air_security_face_id" = "الفتح عبر Face ID";
+"air_security_touch_id" = "الفتح عبر Touch ID";
+"air_security_biometrics_note" = "بدلًا من رمز PIN. يفتح الرمز Khandaq أيضًا.";
+"air_security_password_section" = "كلمة مرور الملف الشخصي";
+"air_security_password_note" = "بها يُشفَّر الملف الشخصي على هذا الـ iPhone. لا يمكن استعادة كلمة المرور: لا توجد خوادم.";
+"air_security_device_key_note" = "يُفتح الملف الشخصي بمفتاح من سلسلة مفاتيح هذا الـ iPhone. مع كلمة مرور يمكن نقله إلى جهاز آخر.";
+
+/* Stage 5: a profile whose key is not on this iPhone */
+"air_signin_key_missing" = "كان هذا الملف الشخصي يُفتح دون كلمة مرور، بمفتاح جهاز iPhone الذي أُنشئ عليه. هذا المفتاح غير موجود على هذا الـ iPhone، لذلك لن يُفتح الملف الشخصي هنا.";
+"air_signin_key_missing_note" = "إن كان ذلك الـ iPhone في متناولك، فعيّن عليه كلمة مرور في «كلمة المرور ورمز PIN»، ثم صدّر الملف الشخصي وانقل الملف إلى هنا.";
+"air_signin_key_missing_short" = "لا مفتاح له على هذا الـ iPhone";
+"air_signin_key_missing_move" = "نقل ملف شخصي";

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    One option of the segmented control: raised with a line when chosen, the focus ring under a
+    keyboard. Each option is a 48dp touch target; the shape is drawn 32dp high, 2dp inside the well.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:exitFadeDuration="@integer/kq_dur_tap">
+    <item android:state_focused="true" android:state_selected="true">
+        <inset android:insetTop="@dimen/kq_space_8" android:insetBottom="@dimen/kq_space_8">
+            <shape android:shape="rectangle">
+                <solid android:color="@color/kq_raised" />
+                <stroke android:width="@dimen/kq_stroke_focus" android:color="@color/kq_focus" />
+                <corners android:radius="@dimen/air_segment_option_radius" />
+            </shape>
+        </inset>
+    </item>
+    <item android:state_selected="true">
+        <inset android:insetTop="@dimen/kq_space_8" android:insetBottom="@dimen/kq_space_8">
+            <shape android:shape="rectangle">
+                <solid android:color="@color/kq_raised" />
+                <stroke android:width="@dimen/kq_stroke_hairline" android:color="@color/kq_line_strong" />
+                <corners android:radius="@dimen/air_segment_option_radius" />
+            </shape>
+        </inset>
+    </item>
+    <item android:state_focused="true">
+        <inset android:insetTop="@dimen/kq_space_8" android:insetBottom="@dimen/kq_space_8">
+            <shape android:shape="rectangle">
+                <solid android:color="@android:color/transparent" />
+                <stroke android:width="@dimen/kq_stroke_focus" android:color="@color/kq_focus" />
+                <corners android:radius="@dimen/air_segment_option_radius" />
+            </shape>
+        </inset>
+    </item>
+    <item android:state_pressed="true">
+        <inset android:insetTop="@dimen/kq_space_8" android:insetBottom="@dimen/kq_space_8">
+            <shape android:shape="rectangle">
+                <solid android:color="@color/kq_selected" />
+                <corners android:radius="@dimen/air_segment_option_radius" />
+            </shape>
+        </inset>
+    </item>
+    <item>
+        <color android:color="@android:color/transparent" />
+    </item>
+</selector>

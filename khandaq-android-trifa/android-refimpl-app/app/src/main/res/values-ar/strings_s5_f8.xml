@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Redesign stage 5: Settings > About drawn as the other sections of Settings (Aboutpage), as SettingsAboutController on iOS -->
+    <string name="air_about_version">الإصدار</string>
+    <string name="air_about_build">البناء</string>
+    <string name="air_about_toxcore_version">إصدار Toxcore</string>
+</resources>

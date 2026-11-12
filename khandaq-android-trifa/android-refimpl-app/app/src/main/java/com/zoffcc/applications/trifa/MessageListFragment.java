@@ -48,7 +48,6 @@ import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_get_public_k
 import static com.zoffcc.applications.trifa.HelperGeneric.do_fade_anim_on_fab;
 import static com.zoffcc.applications.trifa.HelperGeneric.get_sqlite_search_string;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__messageview_paging;
-import static com.zoffcc.applications.trifa.MainActivity.context_s;
 import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_showing_messageview;
@@ -198,8 +197,7 @@ public class MessageListFragment extends Fragment
             unread_messages_notice_button = view.findViewById(R.id.unread_messages_notice_button);
             unread_messages_notice_button.setAnimation(null);
             unread_messages_notice_button.setVisibility(View.INVISIBLE);
-            unread_messages_notice_button.setSupportBackgroundTintList(
-                    (ContextCompat.getColorStateList(context_s, R.color.message_list_scroll_to_bottom_fab_bg_normal)));
+            tint_jump_button(false);
         }
         catch (Exception e)
         {
@@ -330,13 +328,17 @@ public class MessageListFragment extends Fragment
         scrollDateHeader = (TextView) view.findViewById(R.id.scroll_date_header);
         scrollDateHeader.setText("");
         scrollDateHeader.setVisibility(View.INVISIBLE);
-        ChatDateSeparatorHelper.applyTheme(scrollDateHeader);
+        AirTranscript.styleFloatingDay(scrollDateHeader);
         conversationDateHeader = new ConversationDateHeader(view.getContext(), scrollDateHeader);
 
         final LinearLayoutManager linearLayoutManager = new LinearLayoutManager(getActivity());
         linearLayoutManager.setStackFromEnd(true); // pin to bottom element
         listingsView.setLayoutManager(linearLayoutManager);
-        listingsView.setItemAnimator(new DefaultItemAnimator());
+        // KHANDAQ (redesign, stage 2): a changed row is redrawn in place, not cross-faded with a copy of
+        // itself, so a receipt only cross-fades the mark of the entry (AirTranscript) and nothing blinks.
+        final DefaultItemAnimator item_animator = new DefaultItemAnimator();
+        item_animator.setSupportsChangeAnimations(false);
+        listingsView.setItemAnimator(item_animator);
         listingsView.setHasFixedSize(false);
 
         listingsView.setFastScrollListener(new FastScroller.FastScrollListener()
@@ -445,9 +447,7 @@ public class MessageListFragment extends Fragment
                         try
                         {
                             do_fade_anim_on_fab(unread_messages_notice_button, false, this.getClass().getName());
-                            unread_messages_notice_button.setSupportBackgroundTintList(
-                                    (ContextCompat.getColorStateList(context_s,
-                                                                     R.color.message_list_scroll_to_bottom_fab_bg_normal)));
+                            tint_jump_button(false);
                         }
                         catch (Exception ignored)
                         {
@@ -705,10 +705,8 @@ public class MessageListFragment extends Fragment
 
                         try
                         {
-                            // set color of FAB to "red"-ish color, to indicate that there are also new messages/FTs
-                            unread_messages_notice_button.setSupportBackgroundTintList(
-                                    (ContextCompat.getColorStateList(context_s,
-                                                                     R.color.message_list_scroll_to_bottom_fab_bg_new_message)));
+                            // the button turns ink: there are also new messages/FTs below
+                            tint_jump_button(true);
                         }
                         catch (Exception ignored)
                         {
@@ -728,6 +726,21 @@ public class MessageListFragment extends Fragment
 
     }
 
+    /**
+     * KHANDAQ (redesign, stage 2): the person came online or went away, or their name changed. Every
+     * entry redraws its author and mark in place ({@link MessagelistAdapter#PAYLOAD_AIR}), with no
+     * reload and no rebind of its text or media. Main thread only.
+     */
+    void refresh_air_entries()
+    {
+        final MessagelistAdapter current = adapter;
+        if ((current == null) || (current.getItemCount() == 0))
+        {
+            return;
+        }
+        current.notifyItemRangeChanged(0, current.getItemCount(), MessagelistAdapter.PAYLOAD_AIR);
+    }
+
     // KHANDAQ (#22): opening a chat read+sorted ALL its messages on the UI thread (onResume), which
     // froze older phones on a busy chat. Do the heavy DB read off the UI thread and only touch the
     // adapter on the main thread. A generation counter drops a stale load if the user re-enters or
@@ -737,6 +750,15 @@ public class MessageListFragment extends Fragment
             java.util.concurrent.Executors.newSingleThreadExecutor();
 
     void update_all_messages_async(final boolean from_resume_fragment)
+    {
+        update_all_messages_async(from_resume_fragment, false);
+    }
+
+    /**
+     * KHANDAQ (redesign, stage 2): {@code scroll_to_end_if_at_bottom} keeps the end of the log in view when
+     * it was there, for rows that join the log by a reload (a message that left the tray).
+     */
+    void update_all_messages_async(final boolean from_resume_fragment, final boolean scroll_to_end_if_at_bottom)
     {
         final int loadGen = ++message_load_generation;
         message_load_executor.execute(new Runnable()
@@ -774,6 +796,11 @@ public class MessageListFragment extends Fragment
                             final int number_of_items_old = data_values.size();
                             // no early clear — shared list, see add_list_clear unchanged-skip
                             adapter.add_list_clear(ml);
+                            if (scroll_to_end_if_at_bottom && is_at_bottom && (listingsView != null)
+                                && (adapter.getItemCount() > 0))
+                            {
+                                listingsView.scrollToPosition(adapter.getItemCount() - 1);
+                            }
 
                             if (from_resume_fragment && (number_of_items_old > 0) &&
                                 (data_values.size() > number_of_items_old))
@@ -795,9 +822,7 @@ public class MessageListFragment extends Fragment
                                 }
                                 try
                                 {
-                                    unread_messages_notice_button.setSupportBackgroundTintList(
-                                            ContextCompat.getColorStateList(context_s,
-                                                    R.color.message_list_scroll_to_bottom_fab_bg_new_message));
+                                    tint_jump_button(true);
                                 }
                                 catch (Exception ignored)
                                 {
@@ -866,7 +891,9 @@ public class MessageListFragment extends Fragment
                         toList();
             }
         }
-        return ml;
+        // KHANDAQ (redesign, stage 2): while the person is away, our texts that wait for them stand in the
+        // tray, not in the log.
+        return AirTranscript.withoutTrayRows(ml);
     }
 
     private int get_messages_count_full()
@@ -942,7 +969,17 @@ public class MessageListFragment extends Fragment
             {
                 try
                 {
-                    adapter.update_item(m);
+                    // KHANDAQ (redesign, stage 2): a text that waits for the person while they are away moves
+                    // to the tray; one that left the tray joins the log, rising into it.
+                    if (AirTranscript.isTrayRow(m))
+                    {
+                        adapter.remove_item(m);
+                    }
+                    else if (!adapter.update_item(m) && (m.direction == 1) && is_of_open_chat(m))
+                    {
+                        AirTranscript.markArrival(getContext(), m.id);
+                        update_all_messages_async(false, true);
+                    }
                 }
                 catch (Exception e)
                 {
@@ -968,6 +1005,18 @@ public class MessageListFragment extends Fragment
                 try
                 {
                     Log.i(TAG, "add_message:002");
+                    // KHANDAQ (redesign, stage 2): a text that waits for the person goes to the tray (AirChatPanel
+                    // hears of it through AirRepository); everything else joins the log, rising into it. The
+                    // insert asked for a refresh before the row was written, so ask again now that it is there.
+                    if (AirTranscript.isTrayRow(m))
+                    {
+                        AirRepository.requestRefresh();
+                        return;
+                    }
+                    if (is_real_new_message && is_of_open_chat(m))
+                    {
+                        AirTranscript.markArrival(getContext(), m.id);
+                    }
                     adapter.add_item(m);
 
                     if (stay_at_top)
@@ -986,10 +1035,8 @@ public class MessageListFragment extends Fragment
                         {
                             if (is_real_new_message)
                             {
-                                // set color of FAB to "red"-ish color, to indicate that there are also new messages/FTs
-                                unread_messages_notice_button.setSupportBackgroundTintList(
-                                        (ContextCompat.getColorStateList(context_s,
-                                                                         R.color.message_list_scroll_to_bottom_fab_bg_new_message)));
+                                // the button turns ink: there are also new messages/FTs below
+                                tint_jump_button(true);
                             }
                         }
                         catch (Exception ignored)
@@ -1009,6 +1056,31 @@ public class MessageListFragment extends Fragment
         {
             main_handler_s.post(myRunnable);
         }
+    }
+
+    /** KHANDAQ (redesign, stage 2): the row belongs to the conversation this list shows. */
+    private boolean is_of_open_chat(final Message m)
+    {
+        final String fpk = query_friend_pubkey();
+        return (m != null) && (fpk != null) && fpk.equalsIgnoreCase(m.tox_friendpubkey);
+    }
+
+    /**
+     * KHANDAQ (redesign, stage 2): the jump-to-latest button. Raised and quiet while nothing new is below,
+     * ink once new messages came in under the view.
+     */
+    private void tint_jump_button(final boolean new_messages)
+    {
+        final FloatingActionButton button = unread_messages_notice_button;
+        if (button == null)
+        {
+            return;
+        }
+        final Context c = button.getContext();
+        button.setSupportBackgroundTintList(
+                ContextCompat.getColorStateList(c, new_messages ? R.color.kq_ink : R.color.kq_raised));
+        button.setSupportImageTintList(
+                ContextCompat.getColorStateList(c, new_messages ? R.color.kq_on_ink : R.color.kq_ink_2));
     }
 
     public void scrollToReplyTarget(final MessageReplyHelper.ReplyMeta replyMeta)

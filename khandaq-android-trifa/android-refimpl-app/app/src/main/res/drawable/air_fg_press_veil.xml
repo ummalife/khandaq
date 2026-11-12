@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Over a tile that is a button, such as the photo on the You screen: the scrim while pressed (iOS dims
+     the tile), the focus ring under a keyboard, nothing at rest. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:exitFadeDuration="@integer/kq_dur_tap">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/kq_scrim" />
+            <corners android:radius="@dimen/kq_radius_control" />
+        </shape>
+    </item>
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <stroke android:width="@dimen/kq_stroke_focus" android:color="@color/kq_focus" />
+            <corners android:radius="@dimen/kq_radius_control" />
+        </shape>
+    </item>
+    <item>
+        <color android:color="@android:color/transparent" />
+    </item>
+</selector>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- KHANDAQ (redesign, E22): the in-app band. Its lift: the elevation token "lift" drops its shadow 8
+         below it. -->
+    <dimen name="air_band_elevation">@dimen/kq_space_8</dimen>
+    <!-- How far the band stays from the safe area at the top, and from the sides. -->
+    <dimen name="air_band_top_gap">@dimen/kq_space_8</dimen>
+    <dimen name="air_band_side_gap">@dimen/kq_space_12</dimen>
+    <!-- A swipe up longer than this puts the band away; a shorter one lets it settle back. -->
+    <dimen name="air_band_dismiss_distance">@dimen/kq_space_20</dimen>
+    <!-- On a wide screen the band keeps the width of a dialog instead of crossing the whole screen. -->
+    <dimen name="air_band_max_width">@dimen/kq_size_dialog</dimen>
+</resources>

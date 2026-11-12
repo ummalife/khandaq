@@ -132,10 +132,12 @@ extension RunningCoordinator {
 
 private extension RunningCoordinator {
     func logoutUser(importToxProfileFromURL url: URL? = nil) {
-        // KHANDAQ (#11 Fix B): a plain logout must NOT wipe the keychain password — wiping it broke
+        // KHANDAQ (#11 Fix B): a plain logout must NOT wipe the keychain password: wiping it broke
         // auto-login for the encrypted profile and dropped the user into the create/import onboarding
         // even though the profile still exists. Keeping it lets AppCoordinator auto-login back into the
-        // same profile. Import-on-logout still wipes so it can go through the login flow.
+        // same profile after a PIN lockout; Log out on "You" sets SessionAutoLogin.isLoggedOutByUser
+        // first, so that one opens the login form instead (E17). Import-on-logout still wipes so it can
+        // go through the login flow.
         if url != nil {
             KeychainManager().deleteActiveAccountData()
         }

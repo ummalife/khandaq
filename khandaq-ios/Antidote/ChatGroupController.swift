@@ -85,6 +85,24 @@ class ChatGroupController: PortraitChatController {
     fileprivate var incomingVideoActivityObserver: NSObjectProtocol?
     let replyController = ChatReplyController()
 
+    // KHANDAQ (redesign stage 3, E13): the header with the group's name, the band under it with who gets
+    // a message now, the pinned strip, and the bar that takes the field's place when you may only read.
+    var groupTitleView: ChatPrivateTitleView!
+    var groupBand: AirGroupBandView!
+    var pinnedStrip: AirPinnedStripView!
+    var groupTopStack: UIStackView!
+    var readOnlyBar: AirGroupReadOnlyBar!
+    fileprivate var tableToReadOnlyConstraint: Constraint!
+    var groupSearchItem: UIBarButtonItem?
+    var groupVideoItem: UIBarButtonItem?
+    var groupAudioItem: UIBarButtonItem?
+    /// What the header, the band and the field were last drawn from.
+    var groupMembers: [AirGroupMember] = []
+    var groupComposeRight: AirGroupComposeRight = .write
+    var groupAirObservers: [NSObjectProtocol] = []
+    /// The mark each of our messages showed when last drawn, so a change cross-fades.
+    var groupStatusMemory: [String: AirEntryStatus] = [:]
+
     private let membersDrawerWidth: CGFloat = 300
 
     init(theme: Theme,
@@ -136,15 +154,13 @@ class ChatGroupController: PortraitChatController {
         if let observer = signedHistoryVerdictObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        groupAirObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
     override func loadView() {
-        loadViewWithBackgroundColor(theme.colorForType(.ChatBackground))
-
-        // KHANDAQ design (Figma): doodle wallpaper behind the (transparent) message cells.
-        let chatBackgroundView = ThemeChrome.makeChatDoodleBackgroundView()
-        view.addSubview(chatBackgroundView)
-        chatBackgroundView.snp.makeConstraints { $0.edges.equalTo(view) }
+        // KHANDAQ (redesign stage 3, E13): as the conversation with one person, the transcript sits on the
+        // plain surface: no wallpaper, no bubbles.
+        loadViewWithBackgroundColor(KQColor.surface)
 
         tableView = UITableView()
         tableView.estimatedRowHeight = 44.0
@@ -166,6 +182,7 @@ class ChatGroupController: PortraitChatController {
         tableView.scrollIndicatorInsets.top = 6.0
         tableView.register(ChatIncomingTextCell.self, forCellReuseIdentifier: ChatIncomingTextCell.staticReuseIdentifier)
         tableView.register(ChatOutgoingTextCell.self, forCellReuseIdentifier: ChatOutgoingTextCell.staticReuseIdentifier)
+        tableView.register(AirEntryTextCell.self, forCellReuseIdentifier: AirEntryTextCell.staticReuseIdentifier)
         tableView.register(ChatIncomingFileCell.self, forCellReuseIdentifier: ChatIncomingFileCell.staticReuseIdentifier)
         tableView.register(ChatOutgoingFileCell.self, forCellReuseIdentifier: ChatOutgoingFileCell.staticReuseIdentifier)
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "groupSystemCell")
@@ -180,17 +197,20 @@ class ChatGroupController: PortraitChatController {
         tableView.addGestureRecognizer(longPressGR)
 
         chatInputView = ChatInputView(theme: theme)
+        // KHANDAQ (redesign stage 3, E13): the composer of the design system, with the line under the
+        // field saying who gets the message now and the length counter.
+        chatInputView.useAirStyle()
         view.addSubview(chatInputView)
         view.addSubview(ngcVideoOverlay)
 
         // KHANDAQ (#93-task): floating "jump to latest" button (mirrors the 1:1 chat).
         scrollDownButton = UIButton(type: .system)
-        scrollDownButton.setTitle("↓", for: .normal)
-        scrollDownButton.titleLabel?.font = UIFont.systemFont(ofSize: 20.0, weight: .semibold)
-        scrollDownButton.setTitleColor(theme.colorForType(.ConnectingText), for: .normal)
-        scrollDownButton.backgroundColor = theme.colorForType(.ConnectingBackground)
+        scrollDownButton.setImage(AirIcon.image("chevron-down"), for: .normal)
+        scrollDownButton.tintColor = KQColor.ink2
+        scrollDownButton.backgroundColor = KQColor.raised
         scrollDownButton.layer.cornerRadius = 20.0
         scrollDownButton.layer.masksToBounds = true
+        scrollDownButton.accessibilityLabel = String(localized: "air_chat_jump_latest")
         scrollDownButton.alpha = 0.0
         scrollDownButton.addTarget(self, action: #selector(ChatGroupController.scrollDownButtonPressed), for: .touchUpInside)
         view.addSubview(scrollDownButton)
@@ -201,11 +221,30 @@ class ChatGroupController: PortraitChatController {
         // yet — that crash fired when opening a (just-created) group chat. ChatPrivateController already
         // installs before constraining; this matches that order.
         replyController.install(in: view, above: chatInputView, theme: theme)
+        createAirGroupViews()
+
+        // Under the header the band and the pinned strip take only the height of their content; the log
+        // gets the rest. Weaker than any content hugging, so it only settles what nothing else decides.
+        let shrinkToContent = UILayoutPriority.defaultLow.rawValue - 1
+        groupTopStack.snp.makeConstraints {
+            $0.top.equalTo(view.safeAreaLayoutGuide.snp.top)
+            $0.leading.trailing.equalTo(view)
+            $0.height.equalTo(0).priority(shrinkToContent)
+        }
+        readOnlyBar.snp.makeConstraints {
+            $0.leading.trailing.equalTo(view)
+            $0.bottom.equalTo(view.safeAreaLayoutGuide.snp.bottom)
+            // At the largest text sizes the bar's text scrolls inside it past its share of the conversation.
+            $0.height.lessThanOrEqualTo(view).multipliedBy(AirGroupReadOnlyBar.screenShare)
+        }
 
         tableView.snp.makeConstraints {
-            $0.top.leading.trailing.equalTo(view)
+            $0.top.equalTo(groupTopStack.snp.bottom)
+            $0.leading.trailing.equalTo(view)
             tableViewToChatInputConstraint = $0.bottom.equalTo(replyController.previewView.snp.top).constraint
+            tableToReadOnlyConstraint = $0.bottom.equalTo(readOnlyBar.snp.top).constraint
         }
+        tableToReadOnlyConstraint.deactivate()
 
         chatInputView.snp.makeConstraints {
             $0.leading.trailing.equalTo(view)
@@ -219,7 +258,7 @@ class ChatGroupController: PortraitChatController {
         // KHANDAQ (#115): fill the home-indicator gap beneath the input bar with the bar's own
         // background (the bar is pushed up by the safe area, exposing the chat doodle otherwise).
         let inputBottomFiller = UIView()
-        inputBottomFiller.backgroundColor = theme.colorForType(.ChatInputBackground)
+        inputBottomFiller.backgroundColor = KQColor.surface
         inputBottomFiller.isUserInteractionEnabled = false
         view.insertSubview(inputBottomFiller, belowSubview: chatInputView)
         inputBottomFiller.snp.makeConstraints {
@@ -274,9 +313,13 @@ class ChatGroupController: PortraitChatController {
             self.ngcVideoOverlay.setHighQuality(nextQuality)
         }
 
+        // KHANDAQ (redesign stage 3, E13): the members, the files and the settings are in the group dossier,
+        // opened from the header; search waits behind its button.
         updateGroupInfoBarButton()
-        updateMembersBarButton()
         installMessageToolsUI()
+        chatInputView.onTextChanged = { [weak self] _ in
+            self?.updateGroupComposeLimit()
+        }
 
         messagesToken = messages.addNotificationBlock { [weak self] _ in
             self?.handleMessagesChange()
@@ -294,6 +337,7 @@ class ChatGroupController: PortraitChatController {
 
             self.prepareGroupLiveMediaMonitoringIfNeeded()
             self.updateConnectionBanner()
+            self.refreshGroupAir(animated: true)
         }
 
         voicePlayerObserver = NotificationCenter.default.addObserver(
@@ -322,6 +366,8 @@ class ChatGroupController: PortraitChatController {
             // fight the scroll position every time a sync burst lands.
             self.tableView.reloadRows(at: self.tableView.indexPathsForVisibleRows ?? [], with: .none)
         }
+
+        startAirGroup()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -336,33 +382,15 @@ class ChatGroupController: PortraitChatController {
         submanagerGroups.refreshPeers(for: chat)
         updateLastReadDate()
         updateConnectionBanner()
-        updateGroupTitleView()
+        refreshGroupAir(animated: false)
+        // The screens pushed from here show only the chevron, and so does this one over the list: a long
+        // title would make UIKit fall back to the system "Back", which does not follow the in-app language.
+        navigationItem.backButtonDisplayMode = .minimal
+        let stack = navigationController?.viewControllers ?? []
+        if stack.count >= 2 {
+            stack[stack.count - 2].navigationItem.backButtonDisplayMode = .minimal
+        }
         delegate?.chatGroupControllerWillAppear(self)
-    }
-
-    /// KHANDAQ (Figma): group nav bar shows the name with a "N участников" subtitle underneath.
-    private func updateGroupTitleView() {
-        let name = (chat.groupTopic?.isEmpty == false ? chat.groupTopic : chat.groupName)
-            ?? String(localized: "group_chat_default_title")
-        let count = max(Int(submanagerGroups.peerCount(for: chat)), 1)
-
-        let titleLabel = UILabel()
-        titleLabel.text = name
-        titleLabel.font = UIFont.systemFont(ofSize: 16.0, weight: .semibold)
-        titleLabel.textColor = theme.colorForType(.NormalText)
-        titleLabel.textAlignment = .center
-
-        let subtitleLabel = UILabel()
-        subtitleLabel.text = String(localized: "group_member_count_format", count)
-        subtitleLabel.font = UIFont.systemFont(ofSize: 12.0)
-        subtitleLabel.textColor = theme.colorForType(.FriendCellStatus)
-        subtitleLabel.textAlignment = .center
-
-        let stack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
-        stack.axis = .vertical
-        stack.alignment = .center
-        stack.spacing = 0
-        navigationItem.titleView = stack
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -371,97 +399,57 @@ class ChatGroupController: PortraitChatController {
         refreshPinnedBanner()   // KHANDAQ (#G5): restore the pinned-message banner if any.
     }
 
-    // KHANDAQ (#G5): pinned-message banner for group chats (mirrors ChatPrivateController).
-    private var pinnedBannerView: UIView? {
-        get { objc_getAssociatedObject(self, &ChatGroupController.pinBannerKey) as? UIView }
-        set { objc_setAssociatedObject(self, &ChatGroupController.pinBannerKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
-    }
-    private var pinnedBannerLabel: UILabel? {
-        get { objc_getAssociatedObject(self, &ChatGroupController.pinLabelKey) as? UILabel }
-        set { objc_setAssociatedObject(self, &ChatGroupController.pinLabelKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
-    }
-    private static var pinBannerKey: UInt8 = 0
-    private static var pinLabelKey: UInt8 = 0
-    private static let pinnedBannerHeight: CGFloat = 46.0
-
+    // KHANDAQ (#G5): the pinned message of the group (mirrors ChatPrivateController).
+    // KHANDAQ (redesign stage 3, E13): a quiet strip under the band, in the stack above the log, so the
+    // log no longer keeps room free under a floating card.
     func refreshPinnedBanner() {
         let pinnedId = ChatPinStore.pinnedMessageId(forChat: chat.uniqueIdentifier)
         var preview: String?
         if let pinnedId = pinnedId {
             for i in 0..<messages.count where messages[i].uniqueIdentifier == pinnedId {
-                let m = messages[i]
-                if let text = m.messageText?.text, !text.isEmpty {
-                    preview = MessageReplyHelper.plainBody(for: m) ?? text
-                } else if let file = m.messageFile {
-                    preview = "📎 " + (file.fileName ?? "")
-                } else {
-                    preview = "📌"
-                }
+                preview = ChatGroupController.pinnedPreview(for: messages[i])
                 break
             }
         }
         guard let text = preview else {
             if pinnedId != nil { ChatPinStore.clearPin(forChat: chat.uniqueIdentifier) }
-            pinnedBannerView?.isHidden = true
-            tableView?.contentInset.top = 0
-            tableView?.verticalScrollIndicatorInsets.top = 0
+            setPinnedStripVisible(false)
             return
         }
-        ensurePinnedBannerBuilt()
-        pinnedBannerLabel?.text = text
-        pinnedBannerView?.isHidden = false
-        if let banner = pinnedBannerView { view.bringSubview(toFront: banner) }
-        tableView?.contentInset.top = ChatGroupController.pinnedBannerHeight
-        tableView?.verticalScrollIndicatorInsets.top = ChatGroupController.pinnedBannerHeight
+        pinnedStrip.configure(text: text)
+        setPinnedStripVisible(true)
     }
 
-    private func ensurePinnedBannerBuilt() {
-        guard pinnedBannerView == nil else { return }
-        let banner = UIView()
-        banner.backgroundColor = theme.colorForType(.NormalBackground)
-        banner.isUserInteractionEnabled = true
-        banner.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(pinnedBannerTapped)))
-
-        let accent = UIView()
-        accent.backgroundColor = theme.colorForType(.LinkText)
-
-        let title = UILabel()
-        title.text = String(localized: "chat_pinned_banner_title")
-        title.font = UIFont.systemFont(ofSize: 11.0, weight: .semibold)
-        title.textColor = theme.colorForType(.LinkText)
-
-        let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 14.0)
-        label.textColor = theme.colorForType(.NormalText)
-        label.lineBreakMode = .byTruncatingTail
-
-        let close = UIButton(type: .system)
-        if #available(iOS 13.0, *) { close.setImage(UIImage(systemName: "xmark"), for: .normal) } else { close.setTitle("✕", for: .normal) }
-        close.tintColor = theme.colorForType(.NormalText)
-        close.addTarget(self, action: #selector(pinnedBannerClosePressed), for: .touchUpInside)
-
-        let separator = UIView()
-        separator.backgroundColor = theme.colorForType(.SeparatorsAndBorders)
-
-        banner.addSubview(accent); banner.addSubview(title); banner.addSubview(label); banner.addSubview(close); banner.addSubview(separator)
-        view.addSubview(banner)
-
-        banner.snp.makeConstraints {
-            $0.top.equalTo(view.safeAreaLayoutGuide.snp.top)
-            $0.leading.trailing.equalTo(view)
-            $0.height.equalTo(ChatGroupController.pinnedBannerHeight)
+    private func setPinnedStripVisible(_ visible: Bool) {
+        guard pinnedStrip.isHidden == visible else {
+            return
         }
-        accent.snp.makeConstraints { $0.leading.equalTo(banner).offset(12.0); $0.top.equalTo(banner).offset(8.0); $0.bottom.equalTo(banner).offset(-8.0); $0.width.equalTo(3.0) }
-        close.snp.makeConstraints { $0.trailing.equalTo(banner).offset(-14.0); $0.centerY.equalTo(banner); $0.width.height.equalTo(24.0) }
-        title.snp.makeConstraints { $0.leading.equalTo(accent.snp.trailing).offset(10.0); $0.top.equalTo(banner).offset(6.0); $0.trailing.lessThanOrEqualTo(close.snp.leading).offset(-10.0) }
-        label.snp.makeConstraints { $0.leading.equalTo(accent.snp.trailing).offset(10.0); $0.top.equalTo(title.snp.bottom).offset(1.0); $0.trailing.lessThanOrEqualTo(close.snp.leading).offset(-10.0) }
-        separator.snp.makeConstraints { $0.leading.trailing.bottom.equalTo(banner); $0.height.equalTo(0.5) }
-
-        pinnedBannerView = banner
-        pinnedBannerLabel = label
+        let changes = {
+            self.pinnedStrip.isHidden = !visible
+            self.view.layoutIfNeeded()
+        }
+        if view.window != nil {
+            UIView.animate(withDuration: KQMotion.duration(KQMotion.layout), delay: 0, options: [.curveEaseOut, .beginFromCurrentState], animations: changes, completion: nil)
+        }
+        else {
+            changes()
+        }
     }
 
-    @objc private func pinnedBannerTapped() {
+    private static func pinnedPreview(for message: OCTMessageAbstract) -> String {
+        if let text = message.messageText?.text, !text.isEmpty {
+            return MessageReplyHelper.plainBody(for: message) ?? GroupMentionHelper.parse(text).bodyText
+        }
+        if let file = message.messageFile {
+            if VoiceMessageHelper.isVoiceMessage(fileName: file.fileName, filePath: nil) {
+                return String(localized: "voice_message_label")
+            }
+            return file.fileName ?? String(localized: "chat_pinned_banner_title")
+        }
+        return String(localized: "chat_pinned_banner_title")
+    }
+
+    @objc func pinnedBannerTapped() {
         guard let id = ChatPinStore.pinnedMessageId(forChat: chat.uniqueIdentifier), let tableView = tableView else { return }
         var storageIndex: Int?
         for i in 0..<messages.count where messages[i].uniqueIdentifier == id { storageIndex = i; break }
@@ -478,7 +466,7 @@ class ChatGroupController: PortraitChatController {
         }
     }
 
-    @objc private func pinnedBannerClosePressed() {
+    @objc func pinnedBannerClosePressed() {
         ChatPinStore.clearPin(forChat: chat.uniqueIdentifier)
         refreshPinnedBanner()
     }
@@ -524,7 +512,7 @@ class ChatGroupController: PortraitChatController {
                         return
                     }
                     UIView.animate(withDuration: 0.25, animations: {
-                        cell.backgroundColor = UIColor.systemYellow.withAlphaComponent(0.25)
+                        cell.backgroundColor = KQColor.selected
                     }, completion: { _ in
                         UIView.animate(withDuration: 0.4) { cell.backgroundColor = .clear }
                     })
@@ -534,6 +522,10 @@ class ChatGroupController: PortraitChatController {
         }
     }
 
+    /// KHANDAQ (redesign stage 3, E13): the icon buttons of the design system, as in the conversation with
+    /// one person: live audio, live video and the search behind its button (rightBarButtonItems[0] is the
+    /// slot at the trailing edge). The members, the files and the settings are in the dossier, opened from
+    /// the header. The buttons are made once; the 2 second video poll only recolours them.
     func updateGroupInfoBarButton() {
         // While messages are being selected the right side holds their Cancel button; the 2-second
         // video poll calls this too and used to swap it back for the header icons at once.
@@ -541,105 +533,47 @@ class ChatGroupController: PortraitChatController {
             return
         }
 
-        let infoItem: UIBarButtonItem
-        if #available(iOS 13.0, *) {
-            infoItem = UIBarButtonItem(
-                    image: UIImage(named: "chat-header-info")?.withRenderingMode(.alwaysTemplate)
-                            ?? UIImage(systemName: "info"),
-                    style: .plain,
-                    target: self,
-                    action: #selector(ChatGroupController.infoButtonPressed))
+        if groupAudioItem == nil {
+            groupAudioItem = groupBarButton(icon: "mic", label: String(localized: "group_live_audio_toggle"),
+                                            identifier: "air.group.liveAudio", action: #selector(ChatGroupController.toggleLiveAudio))
+            groupVideoItem = groupBarButton(icon: "video", label: String(localized: "group_live_video_toggle"),
+                                            identifier: "air.group.liveVideo", action: #selector(ChatGroupController.toggleLiveVideo))
+            groupSearchItem = groupBarButton(icon: "search", label: String(localized: "air_chat_search"),
+                                             identifier: "air.group.search", action: #selector(ChatGroupController.groupSearchButtonPressed))
         }
-        else {
-            infoItem = UIBarButtonItem(
-                    title: String(localized: "group_info_button"),
-                    style: .plain,
-                    target: self,
-                    action: #selector(ChatGroupController.infoButtonPressed))
+        if let audio = groupAudioItem?.customView as? AirIconButton {
+            let active = submanagerGroups.isGroupLiveAudioActive()
+            audio.restingTint = active ? KQColor.live : KQColor.ink2
+            audio.accessibilityValue = active ? String(localized: "air_group_live_on") : nil
         }
-        infoItem.accessibilityLabel = String(localized: "group_info_title")
+        if let video = groupVideoItem?.customView as? AirIconButton {
+            let state = submanagerGroups.groupLiveVideoIconState(for: chat)
+            switch state {
+                case .active:
+                    video.restingTint = KQColor.live
+                case .incoming:
+                    video.restingTint = KQColor.transit
+                default:
+                    video.restingTint = KQColor.ink2
+            }
+            video.accessibilityLabel = liveVideoToolbarAccessibilityLabel(for: state)
+        }
 
-        let liveAudioItem: UIBarButtonItem
-        if #available(iOS 13.0, *) {
-            liveAudioItem = UIBarButtonItem(
-                    // KHANDAQ (18.08): shared icon set — a bare Material mic, matching the 1:1 header's
-                    // bare paperclip/videocam/phone. The circled SF variants made the group header look
-                    // like a different app. Live state is shown by tint, not by a filled circle.
-                    image: UIImage(named: "chat-header-mic")?.withRenderingMode(.alwaysTemplate)
-                            ?? UIImage(systemName: submanagerGroups.isGroupLiveAudioActive() ? "mic.circle.fill" : "mic.circle"),
-                    style: .plain,
-                    target: self,
-                    action: #selector(ChatGroupController.toggleLiveAudio))
+        let items = [groupAudioItem, groupVideoItem, groupSearchItem].compactMap { $0 }
+        let current = navigationItem.rightBarButtonItems ?? []
+        if current.count != items.count || zip(current, items).contains(where: { $0 !== $1 }) {
+            navigationItem.rightBarButtonItems = items
+            installGroupTitleItem()
         }
-        else {
-            liveAudioItem = UIBarButtonItem(
-                    title: String(localized: "group_live_audio_toggle"),
-                    style: .plain,
-                    target: self,
-                    action: #selector(ChatGroupController.toggleLiveAudio))
-        }
-        liveAudioItem.accessibilityLabel = String(localized: "group_live_audio_toggle")
-
-        let liveVideoItem: UIBarButtonItem
-        let videoIconState = submanagerGroups.groupLiveVideoIconState(for: chat)
-        if #available(iOS 13.0, *) {
-            liveVideoItem = UIBarButtonItem(
-                    image: liveVideoToolbarImage(for: videoIconState),
-                    style: .plain,
-                    target: self,
-                    action: #selector(ChatGroupController.toggleLiveVideo))
-        }
-        else {
-            liveVideoItem = UIBarButtonItem(
-                    title: String(localized: "group_live_video_toggle"),
-                    style: .plain,
-                    target: self,
-                    action: #selector(ChatGroupController.toggleLiveVideo))
-        }
-        liveVideoItem.accessibilityLabel = liveVideoToolbarAccessibilityLabel(for: videoIconState)
-
-        // KHANDAQ (user request 17.08): the group's files / audio / voice notes, same as a 1:1 chat.
-        let attachmentsItem: UIBarButtonItem
-        if #available(iOS 13.0, *) {
-            attachmentsItem = UIBarButtonItem(
-                    image: UIImage(named: "chat-header-attach")?.withRenderingMode(.alwaysTemplate)
-                            ?? UIImage(systemName: "paperclip"),
-                    style: .plain,
-                    target: self,
-                    action: #selector(ChatGroupController.attachmentsButtonPressed))
-        }
-        else {
-            attachmentsItem = UIBarButtonItem(
-                    title: String(localized: "attachments_title"),
-                    style: .plain,
-                    target: self,
-                    action: #selector(ChatGroupController.attachmentsButtonPressed))
-        }
-        attachmentsItem.accessibilityLabel = String(localized: "attachments_title")
-
-        navigationItem.rightBarButtonItems = [infoItem, attachmentsItem, liveVideoItem, liveAudioItem]
     }
 
-    @available(iOS 13.0, *)
-    private func liveVideoToolbarImage(for state: OCTGroupLiveVideoIconState) -> UIImage? {
-        // KHANDAQ (18.08): shared icon set — the bare Material videocam, like the 1:1 header. State is
-        // carried by tint alone; the circled SF variants were the last thing making this header look
-        // like a different app.
-        let symbolName = (state == .active) ? "video.circle.fill" : "video.circle"
-        guard let image = UIImage(named: "chat-header-video")?.withRenderingMode(.alwaysTemplate)
-                ?? UIImage(systemName: symbolName) else {
-            return nil
-        }
-
-        switch state {
-        case .active:
-            // KHANDAQ design: brand accent for the active live-video state (was Apple systemGreen).
-            return image.withTintColor(UIColor(red: 0.01, green: 0.61, blue: 0.49, alpha: 1.0), renderingMode: .alwaysOriginal)
-        case .incoming:
-            return image.withTintColor(.systemOrange, renderingMode: .alwaysOriginal)
-        default:
-            return image
-        }
+    private func groupBarButton(icon: String, label: String, identifier: String, action: Selector) -> UIBarButtonItem {
+        let button = AirIconButton(icon: icon, label: label)
+        button.accessibilityIdentifier = identifier
+        button.addTarget(self, action: action, for: .touchUpInside)
+        let item = UIBarButtonItem(customView: button)
+        item.accessibilityLabel = label
+        return item
     }
 
     private func liveVideoToolbarAccessibilityLabel(for state: OCTGroupLiveVideoIconState) -> String {
@@ -717,15 +651,11 @@ class ChatGroupController: PortraitChatController {
             return
         }
 
-        if let peerName = submanagerGroups.primaryRecentIncomingGroupLiveVideoPeerName(for: chat),
-           !peerName.isEmpty {
-            let format = String(localized: "group_live_video_streams_format")
-            ngcVideoOverlay.setStreamInfo(String(format: format, streamCount, peerName))
-        } else {
-            let unknownPeer = String(localized: "group_live_video_stream_unknown_peer")
-            let format = String(localized: "group_live_video_streams_format")
-            ngcVideoOverlay.setStreamInfo(String(format: format, streamCount, unknownPeer))
-        }
+        // String(localized:) formats by itself: the count and the name go to it once (formatting its
+        // result again had already lost both).
+        let peerName = submanagerGroups.primaryRecentIncomingGroupLiveVideoPeerName(for: chat) ?? ""
+        let shownName = peerName.isEmpty ? String(localized: "group_live_video_stream_unknown_peer") : peerName
+        ngcVideoOverlay.setStreamInfo(String(localized: "group_live_video_streams_format", UInt64(streamCount), shownName as NSString))
     }
 
     @objc func toggleLiveVideo() {
@@ -838,32 +768,6 @@ class ChatGroupController: PortraitChatController {
         return true
     }
 
-    func updateMembersBarButton() {
-        let membersItem: UIBarButtonItem
-        if #available(iOS 13.0, *) {
-            membersItem = UIBarButtonItem(
-                    image: UIImage(named: "chat-header-members")?.withRenderingMode(.alwaysTemplate)
-                            ?? UIImage(systemName: "person.2"),
-                    style: .plain,
-                    target: self,
-                    action: #selector(ChatGroupController.membersButtonPressed))
-        }
-        else {
-            membersItem = UIBarButtonItem(
-                    title: String(localized: "group_member_list_title"),
-                    style: .plain,
-                    target: self,
-                    action: #selector(ChatGroupController.membersButtonPressed))
-        }
-        membersItem.accessibilityLabel = String(localized: "group_member_list_title")
-        navigationItem.leftItemsSupplementBackButton = true
-        navigationItem.leftBarButtonItem = membersItem
-    }
-
-    @objc func membersButtonPressed() {
-        toggleMembersDrawer()
-    }
-
     @objc func attachmentsButtonPressed() {
         let attachments = ChatAttachmentsController(theme: theme, chat: chat,
                                                     submanagerObjects: submanagerObjects)
@@ -914,10 +818,32 @@ class ChatGroupController: PortraitChatController {
         super.viewDidLayoutSubviews()
         let maxHeight = view.bounds.height * 0.4
         chatInputView.maxHeight = maxHeight
+        updateGroupTitleWidth()
 
         if isMembersDrawerOpen {
             membersDrawerLeadingConstraint?.update(offset: 0)
         }
+    }
+
+    /// KHANDAQ (redesign stage 3, E13): when you may only read, the bar that says so takes the place of the
+    /// field, the reply preview and the keyboard; the log reaches down to it.
+    func setGroupReadOnly(_ readOnly: Bool) {
+        guard readOnlyBar.isHidden == readOnly else {
+            return
+        }
+        if readOnly {
+            _ = chatInputView.resignFirstResponder()
+            replyController.clear()
+            tableViewToChatInputConstraint.deactivate()
+            tableToReadOnlyConstraint.activate()
+        }
+        else {
+            tableToReadOnlyConstraint.deactivate()
+            tableViewToChatInputConstraint.activate()
+        }
+        chatInputView.isHidden = readOnly
+        readOnlyBar.isHidden = !readOnly
+        view.setNeedsLayout()
     }
 
     func toggleMembersDrawer() {
@@ -1036,14 +962,15 @@ extension ChatGroupController: UITableViewDataSource {
         }
 
         if message.groupSystemMessage {
+            // KHANDAQ (redesign stage 3, E13): a quiet line of the log, centred, in the third ink.
             let cell = tableView.dequeueReusableCell(withIdentifier: "groupSystemCell", for: indexPath)
-            // Transparent so the doodle chat background shows through (matches the message cells).
             cell.backgroundColor = .clear
             cell.contentView.backgroundColor = .clear
             cell.selectionStyle = .none
             cell.textLabel?.numberOfLines = 0
-            cell.textLabel?.font = UIFont.italicSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .footnote).pointSize)
-            cell.textLabel?.textColor = theme.colorForType(.FriendCellStatus)
+            cell.textLabel?.font = KQFont.font(.caption)
+            cell.textLabel?.adjustsFontForContentSizeCategory = true
+            cell.textLabel?.textColor = KQColor.ink3
             cell.textLabel?.textAlignment = .center
             cell.textLabel?.text = message.messageText?.text ?? ""
             return cell
@@ -1055,63 +982,22 @@ extension ChatGroupController: UITableViewDataSource {
             return cell
         }
 
-        if message.isOutgoing() {
-            let cell = tableView.dequeueReusableCell(withIdentifier: ChatOutgoingTextCell.staticReuseIdentifier, for: indexPath) as! ChatOutgoingTextCell
-            let model = ChatOutgoingTextCellModel()
-            let parsed = GroupMentionHelper.parse(message.messageText?.text)
-            // KHANDAQ (#iOS forward): clean stacked/legacy "↪ Переслано от (null)" at display (no-op otherwise).
-            model.message = MessageReplyHelper.normalizeForwardedHeader(parsed.bodyText)
-            // KHANDAQ: render shared location as a map bubble in groups too (parity with 1:1 +
-            // Android — both use the "khandaq-location:lat,lon" wire format).
-            if let location = LocationMessage.parse(parsed.bodyText) {
-                model.locationLatitude = location.latitude
-                model.locationLongitude = location.longitude
-            }
-            model.mentionHandles = parsed.mentions.map { $0.handle }
-            model.replyMeta = parsed.reply
-            attachReplyQuoteHandler(to: model, messages: messages)
-            model.searchHighlight = highlight
-            model.dateString = dateText
-            model.delivered = (message.messageText?.isDelivered ?? false) || (message.messageText?.groupSyncConfirmations ?? 0) > 0
-            model.dateSeparator = daySeparatorString(forDisplayIndex: indexPath.row)
-            model.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
-            // KHANDAQ (#208): own group text with a shared message_id is editable (not replies/location).
-            let editIdOK = (message.messageText?.messageId ?? 0) != 0
-            model.canEdit = editIdOK && model.replyMeta == nil && !model.hasLocation
-            // KHANDAQ (#H2): «изменено» rendered as a small dim suffix by the cell, not appended text.
-            model.edited = message.edited
-            cell.delegate = self
-            cell.replySwipeDelegate = self
-            cell.setupWithTheme(theme, model: model)
-            return cell
-        }
-
-        let cell = tableView.dequeueReusableCell(withIdentifier: ChatIncomingTextCell.staticReuseIdentifier, for: indexPath) as! ChatIncomingTextCell
-        let model = ChatBaseTextCellModel()
+        // KHANDAQ (redesign stage 3, E13): a transcript entry (AirEntryTextCell) as in the conversation
+        // with one person: the time column, the author over the first entry of a run in the tone of that
+        // member, the mark of our own messages, and the row tinted where someone named you.
+        let cell = tableView.dequeueReusableCell(withIdentifier: AirEntryTextCell.staticReuseIdentifier, for: indexPath) as! AirEntryTextCell
+        let model = AirEntryTextCellModel()
         let parsed = GroupMentionHelper.parse(message.messageText?.text)
         let body = parsed.bodyText
         model.mentionHandles = parsed.mentions.map { $0.handle }
         if let location = LocationMessage.parse(body) {
-            // Map bubble (the cell shows the map + coords; the per-peer header isn't shown inline for
-            // location, same as 1:1). Cross-platform: matches the Android "khandaq-location:" format.
+            // Cross-platform: matches the Android "khandaq-location:" format.
             model.locationLatitude = location.latitude
             model.locationLongitude = location.longitude
-        }
-        else if let header = peerHeader(for: message) {
-            // KHANDAQ (re-review 2026-08-22, KQ-03): a relayed row naming an author whose signing key
-            // has gone stale is kept but not attributed. Any other member could have produced it, and
-            // a "sender not verified" marker beside a familiar name is easy to overlook — so the name
-            // is replaced rather than annotated. The bubble keeps its unverified marker as well.
-            let attributable = submanagerGroups.isGroupMessageAttributable(message, in: chat)
-            let shownHeader = attributable ? header : String(localized: "group_msg_relayed_unattributed")
-            model.message = "\(shownHeader)\n\(MessageReplyHelper.normalizeForwardedHeader(body))"
-            // KHANDAQ (Figma): per-peer colored sender header, keyed by the frozen display name.
-            model.senderHeaderLength = shownHeader.count
-            model.senderColor = attributable
-                ? GroupPeerColors.color(forName: peerName(for: message) ?? header)
-                : nil
+            model.message = String(format: "%.5f, %.5f", location.latitude, location.longitude)
         }
         else {
+            // KHANDAQ (#iOS forward): clean stacked/legacy forward headers at display (no-op otherwise).
             model.message = MessageReplyHelper.normalizeForwardedHeader(body)
         }
         model.replyMeta = parsed.reply
@@ -1119,18 +1005,46 @@ extension ChatGroupController: UITableViewDataSource {
         model.searchHighlight = highlight
         model.dateString = dateText
         model.dateSeparator = daySeparatorString(forDisplayIndex: indexPath.row)
+        model.transcriptMarks = true
         model.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
-        // KHANDAQ (#208/#H2): peer can edit their own group message → cell shows a small dim «изменено».
+        // KHANDAQ (#208/#H2): «edited» is a small dim suffix drawn by the cell, not appended text.
         model.edited = message.edited
-        // KHANDAQ (audit#2 finding 1): a history-synced row names an author the transport never
-        // authenticated — only the peer that RELAYED it. Say so on the bubble unless a signature over
-        // this exact message says otherwise. Live rows are unaffected: they arrive authenticated.
-        model.senderUnverified = message.groupHistorySync
-            && !message.groupSystemMessage
-            && !submanagerGroups.isGroupMessageAuthorVerified(message, in: chat)
+        model.timeText = dateText
+
+        if message.isOutgoing() {
+            model.isOutgoing = true
+            // KHANDAQ (#208): own group text with a shared message_id is editable (not replies/location).
+            let editIdOK = (message.messageText?.messageId ?? 0) != 0
+            model.canEdit = editIdOK && model.replyMeta == nil && !model.hasLocation
+            model.status = AirGroupTranscript.status(pending: message.groupPendingSend,
+                                                     delivered: message.messageText?.isDelivered ?? false,
+                                                     confirmations: message.messageText?.groupSyncConfirmations ?? 0)
+            if let id = message.uniqueIdentifier {
+                model.previousStatus = groupStatusMemory[id]
+                groupStatusMemory[id] = model.status
+            }
+        }
+        else {
+            // KHANDAQ (audit#2 finding 1): a history-synced row names an author the transport never
+            // authenticated, only the peer that RELAYED it. Say so unless a signature over this exact
+            // message says otherwise. Live rows are unaffected: they arrive authenticated.
+            model.senderUnverified = message.groupHistorySync
+                && !message.groupSystemMessage
+                && !submanagerGroups.isGroupMessageAuthorVerified(message, in: chat)
+        }
+        configureGroupEntry(model, message: message, row: indexPath.row)
+
         cell.delegate = self
         cell.replySwipeDelegate = self
         cell.setupWithTheme(theme, model: model)
+        // After the setup: it clears the content colour of every reused row.
+        if !message.isOutgoing(), groupMessageMentionsMe(parsed.mentions) {
+            cell.contentView.backgroundColor = KQColor.selected
+            cell.accessibilityHint = String(localized: "air_group_mentions_you")
+        }
+        else {
+            cell.accessibilityHint = nil
+        }
         return cell
     }
 }
@@ -1229,39 +1143,25 @@ extension ChatGroupController: UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         let entry = messageEntry(atDisplayIndex: indexPath.row)
-        let message = entry.message
-
         if messageSearchQuery.isEmpty, isMergedCaptionRow(storageIndex: entry.storageIndex) {
             return 0.0
         }
 
+        // KHANDAQ (redesign stage 3, E8): a photo or video entry sizes itself like every other row; its
+        // preview box has its size from the file before the image loads (prepareGroupFileCell).
+        return UITableViewAutomaticDimension
+    }
+
+    /// The size of the preview of a photo or a video that can be shown inline: ours, or theirs once it
+    /// is here, and not larger than an inline preview may be.
+    func inlinePreviewSize(for message: OCTMessageAbstract) -> CGSize? {
         guard let messageFile = message.messageFile,
               message.isOutgoing() || messageFile.fileType == .ready,
               let file = messageFile.filePath(),
               messageFile.fileSize < Constants.MaxImageSizeToShowInline else {
-            return UITableViewAutomaticDimension
+            return nil
         }
-
-        guard let size = inlineMediaSize(forFileAt: file, messageFile: messageFile) else {
-            return UITableViewAutomaticDimension
-        }
-        let box = LoadingImageView.previewBox(for: size)
-        var height = box.height + 16.0
-        if messageSearchQuery.isEmpty,
-           let captionMsg = captionMessage(forFileAtStorageIndex: entry.storageIndex),
-           let caption = MessageReplyHelper.plainBody(for: captionMsg), !caption.isEmpty {
-            // KHANDAQ (#52): height must match the stripped (markup-free) caption text.
-            height += ChatGenericFileCell.captionHeight(for: caption, width: box.width)
-        }
-        // KHANDAQ (18 Aug): reserve the reaction chips line too (parity with 1:1) — without it the
-        // chips are clipped by the explicit row height and a reaction on media looks like a no-op.
-        height += ChatGenericFileCell.reactionsHeight(
-                for: ChatReactionsFormat.display(from: message.reactionsJSON))
-        // KHANDAQ (#99): media rows have an explicit height; add the separator band on a day boundary.
-        if daySeparatorString(forDisplayIndex: indexPath.row) != nil {
-            height += ChatMovableDateCell.daySeparatorReservedHeight
-        }
-        return height
+        return inlineMediaSize(forFileAt: file, messageFile: messageFile)
     }
 
     /// Pixel size of an inline photo/video, or nil if the file isn't displayable media. Falls back to a
@@ -1467,19 +1367,14 @@ private extension ChatGroupController {
         // KHANDAQ (#209): swipe-to-reply on group media/voice bubbles (delegate was text-only).
         cell.replySwipeDelegate = self
 
-        if incoming, let peerName = peerName(for: message), !model.isVoiceMessage {
-            // KHANDAQ (re-review 2026-08-22, KQ-03): the same rule the text bubble applies, and the
-            // case that matters more. A file record can never carry a signature — the 0x03 packet has
-            // no signed form — so a stale-key author's file row is the cheapest thing in the protocol
-            // to put somebody else's name on.
-            let shownName = submanagerGroups.isGroupMessageAttributable(message, in: chat)
-                ? peerName
-                : String(localized: "group_msg_relayed_unattributed")
-            model.fileName = "\(shownName)\n\(messageFile.fileName ?? "")"
-        }
-
+        // KHANDAQ (redesign stage 3, E8): the author goes over the entry as over a text, by the same
+        // rule (KQ-03): a file record never carries a signature, so a stale-key author's file is named
+        // as unconfirmed, never as somebody.
         model.dateString = dateText
+        model.timeText = dateText
         model.dateSeparator = daySeparatorString(forDisplayIndex: indexPath.row)
+        model.transcriptMarks = true
+        configureGroupEntry(model, message: message, row: indexPath.row)
 
         cell.setupWithTheme(theme, model: model)
 
@@ -1507,9 +1402,14 @@ private extension ChatGroupController {
 
         model.fileName = messageFile.fileName
         model.fileSizeBytes = messageFile.fileSize
-        model.fileSize = ByteCountFormatter.string(fromByteCount: messageFile.fileSize, countStyle: .file)
+        // KHANDAQ (redesign stage 3, E8): in the language chosen in the app, which ByteCountFormatter ignores.
+        model.fileSize = AirByteSize.text(messageFile.fileSize)
         model.fileUTI = inferredFileUTI(for: messageFile)
         model.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
+        // KHANDAQ (redesign stage 3, E8): the preview box takes its size before the image loads, so the
+        // row sizes itself once; the bar starts where the transfer is.
+        model.previewSize = inlinePreviewSize(for: message)
+        model.transferProgress = messageFile.groupTransferProgress
 
         // Telegram-style merged caption (the text message sent right after this file).
         if messageSearchQuery.isEmpty {
@@ -1667,24 +1567,10 @@ private extension ChatGroupController {
             fileCell.refreshVoicePlaybackState(theme: theme)
         }
     }
+}
 
-    func peerHeader(for message: OCTMessageAbstract) -> String? {
-        guard message.groupSenderPeerId > 0 else {
-            // KHANDAQ (audit F-6): a history-synced row whose author isn't in our roster right now has
-            // peer id 0, so there is no role to look up — show the name frozen on the row rather than
-            // an anonymous bubble.
-            if message.groupHistorySync, let frozen = peerName(for: message), !frozen.isEmpty {
-                return frozen
-            }
-
-            return nil
-        }
-
-        let name = peerName(for: message) ?? String(localized: "group_peer_fallback_format", message.groupSenderPeerId)
-        let role = submanagerGroups.peerRole(withId: UInt32(message.groupSenderPeerId), in: chat)
-        return "\(name) · \(role.localizedName)"
-    }
-
+// Internal: the transcript entries in ChatGroupController+Air.swift name authors with it too.
+extension ChatGroupController {
     func peerName(for message: OCTMessageAbstract) -> String? {
         // KHANDAQ (#42): prefer the name FROZEN on the message at receipt (resolved then by the STABLE
         // sender pubkey). The live peerId lookup below is unreliable after an app restart (the group
@@ -1716,7 +1602,9 @@ private extension ChatGroupController {
 
         return String(localized: "group_peer_fallback_format", message.groupSenderPeerId)
     }
+}
 
+private extension ChatGroupController {
     func updateLastReadDate() {
         submanagerObjects.change(chat, lastReadDateInterval: Date().timeIntervalSince1970)
         // KHANDAQ (#54): opening the group also clears the separate in-group private-message unread
@@ -1762,22 +1650,21 @@ private extension ChatGroupController {
             bannerText = String(localized: "group_disconnected_banner")
         }
 
-        // KHANDAQ (#iOS group-connecting note): a subtle centered rounded chip (same surface as the 1:1
-        // offline note / ChatFauxOfflineHeaderView) instead of raw red text that clipped its 2nd line.
-        // Dark translucent pill + light 12pt text, measured at a capped width so the long
-        // "…отправятся после соединения." wraps instead of being cut off.
+        // KHANDAQ (#iOS group-connecting note): a subtle centered rounded chip, measured at a capped width
+        // so a long note wraps instead of being cut off.
+        // KHANDAQ (redesign stage 3, E13): in the tokens of the design system, sunken with the second ink.
         let maxLabelWidth: CGFloat = 290
-        let hInset: CGFloat = 12, vInset: CGFloat = 6, sideMargin: CGFloat = 16, topGap: CGFloat = 10
+        let hInset: CGFloat = KQSpace.x12, vInset: CGFloat = KQSpace.x6, sideMargin: CGFloat = KQSpace.x16, topGap: CGFloat = KQSpace.x10
 
         let container = UIView()
         let chip = UIView()
-        chip.backgroundColor = UIColor(white: 0.0, alpha: 0.28)
-        chip.layer.cornerRadius = 13
+        chip.backgroundColor = KQColor.sunken
+        chip.layer.cornerRadius = KQRadius.card
         chip.layer.masksToBounds = true
 
         let label = UILabel()
-        label.font = UIFont.khandaqFontWithSize(12.0, weight: .light)
-        label.textColor = UIColor(white: 1.0, alpha: 0.9)
+        label.font = KQFont.font(.caption)
+        label.textColor = KQColor.ink2
         label.textAlignment = .center
         label.numberOfLines = 0
         label.preferredMaxLayoutWidth = maxLabelWidth
@@ -2004,12 +1891,6 @@ private extension ChatGroupController {
         // stable order that matches displayed times. (Group LIVE cross-device order still depends on
         // per-device arrival — no sender wire ts on the NGC live path — but 1:1 + sync are now stable.)
         return submanagerObjects.messages(predicate: predicate).sortedResultsUsingProperty("sortTimestamp", ascending: false)
-    }
-}
-
-private extension OCTToxGroupRole {
-    var localizedName: String {
-        return groupLocalizedName
     }
 }
 

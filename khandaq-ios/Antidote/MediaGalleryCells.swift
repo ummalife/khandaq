@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 //
-// KHANDAQ (Figma): cells for the custom media gallery — a zoomable photo /
+// KHANDAQ (Figma): cells for the custom media gallery: a zoomable photo /
 // tap-to-play AVPlayer video page, and a thumbnail cell for the strip.
 
 import AVFoundation
@@ -51,15 +51,17 @@ final class MediaPageCell: UICollectionViewCell, UIScrollViewDelegate {
         doubleTap.numberOfTapsRequired = 2
         scrollView.addGestureRecognizer(doubleTap)
 
-        // KHANDAQ (#207): single tap → toggle chrome; must wait out the double-tap-to-zoom.
+        // KHANDAQ (#207): a single tap toggles the chrome; it must wait out the double-tap-to-zoom.
         let singleTap = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap(_:)))
         singleTap.numberOfTapsRequired = 1
         singleTap.require(toFail: doubleTap)
         scrollView.addGestureRecognizer(singleTap)
 
-        playButton.setTitle("▶", for: .normal)
-        playButton.titleLabel?.font = .systemFont(ofSize: 40, weight: .bold)
-        playButton.setTitleColor(.white, for: .normal)
+        // An icon, not a typed triangle (redesign stage 3), with a name for VoiceOver.
+        playButton.setImage(UIImage(systemName: "play.fill",
+                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 30, weight: .bold)), for: .normal)
+        playButton.tintColor = .white
+        playButton.accessibilityLabel = String(localized: "air_media_play_video")
         playButton.backgroundColor = UIColor.black.withAlphaComponent(0.4)
         playButton.layer.cornerRadius = 36
         playButton.isHidden = true
@@ -123,7 +125,7 @@ final class MediaPageCell: UICollectionViewCell, UIScrollViewDelegate {
                 let img = UIImage(contentsOfFile: photoURL.path)
                 DispatchQueue.main.async {
                     // KHANDAQ (audit #14): the cell may have been reused for another item while this
-                    // decode was in flight — only paint if it's still bound to the same photo.
+                    // decode was in flight: only paint if it's still bound to the same photo.
                     guard let self = self, !self.isVideoCell, self.currentPhotoURL == photoURL else { return }
                     self.imageView.image = img
                     self.unavailableLabel.isHidden = (img != nil)
@@ -200,9 +202,10 @@ final class ThumbCell: UICollectionViewCell {
         contentView.addSubview(imageView)
         imageView.snp.makeConstraints { $0.edges.equalToSuperview() }
 
-        videoBadge.text = "▶"
-        videoBadge.font = .systemFont(ofSize: 12)
-        videoBadge.textColor = .white
+        let play = NSTextAttachment()
+        play.image = UIImage(systemName: "play.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 12, weight: .bold))?
+            .withTintColor(.white, renderingMode: .alwaysOriginal)
+        videoBadge.attributedText = NSAttributedString(attachment: play)
         videoBadge.textAlignment = .center
         videoBadge.isHidden = true
         contentView.addSubview(videoBadge)

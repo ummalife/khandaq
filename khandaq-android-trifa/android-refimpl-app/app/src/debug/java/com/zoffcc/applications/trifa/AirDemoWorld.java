@@ -148,8 +148,9 @@ final class AirDemoWorld
         final int thread = clamp(intent.getIntExtra(EXTRA_THREAD, 5000), 0, 50000);
         final int groupThread = clamp(intent.getIntExtra(EXTRA_GROUP_THREAD, 2000), 0, 50000);
         final Context app = context.getApplicationContext();
-        Log.i(TAG, "request: world=" + world + " lang=" + lang + " observer=" + observer + " contacts=" + contacts
-                   + " thread=" + thread + " group_thread=" + groupThread);
+        Log.i(TAG, "request: world=" + world.replaceAll("\\R", "_") + " lang=" + lang.replaceAll("\\R", "_")
+                   + " observer=" + observer + " contacts=" + contacts + " thread=" + thread
+                   + " group_thread=" + groupThread);
         WORKER.execute(() -> run(app, world, lang, observer, contacts, thread, groupThread));
     }
 

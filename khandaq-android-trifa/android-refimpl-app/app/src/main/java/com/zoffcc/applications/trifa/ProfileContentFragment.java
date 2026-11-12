@@ -984,7 +984,7 @@ sayPhotoFailure(R.string.profile_avatar_error_generic);
                 final String picked_mime = requireContext().getContentResolver().getType(data.getData());
                 if ((picked_mime != null) && !picked_mime.startsWith("image/"))
                 {
-                    Log.i(TAG, "profile_avatar:FAIL:step=1b:not an image mime=" + picked_mime);
+                    Log.i(TAG, "profile_avatar:FAIL:step=1b:not an image mime=" + picked_mime.replaceAll("\\R", "_"));
                     sayPhotoFailure(R.string.profile_avatar_error_unsupported);
                     return;
                 }

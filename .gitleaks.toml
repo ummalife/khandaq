@@ -81,4 +81,31 @@ regexes = [
   # pinned by exactly the same reasoning as the base-image digest a few lines above it — and it trips
   # `generic-api-key` because the variable name contains "KEY" and the value is 64 hex characters.
   '''d965d646defe94b3dfba6d5b4406900ac6c81065428bf9d9303ad7a72ee8d1b8''',
+
+  # KHANDAQ (redesign, release 0.2.46): Tox PUBLIC keys of people who do not exist. A Tox public key
+  # is the first half of an address people hand out to be found; these are made-up values. They trip
+  # `generic-api-key` because the variable names contain "KEY" and the values are 64 hex characters.
+  # The demo world that draws the store screenshots holds the same people on both platforms:
+  # Android's AirDemoWorld, a debug-only source set, and iOS's OCTManagerMock. The unit and UI tests
+  # use the same people plus a few keys of their own. Listed one value at a time, case-insensitive
+  # because one test spells a key in lower case.
+  # Demo people, shared by AirDemoWorld.java, OCTManagerMock.swift and the tests:
+  '''(?i)7F3A91C05D2E8B4416A9C3E07D5F2B8164E0A3C9D7B25F1E8A4C6D0B3F9E2A71''',
+  '''(?i)2C8E5F1A9B3D7046E2A8C5F19D3B7E604A2F8C1D5E9B3A7046C2E8F1A5D9B3E7''',
+  '''(?i)9D1B7E3F5A2C8046B9E1D7F3A5C2084E6B1D9F7A3C5E2048D6B9F1E7A3C5D208''',
+  '''(?i)4E6A2C8F0B5D7193E4A6C8F2B0D5E7193A4C6E8F2D0B5A7193E6C4A8F2B0D5E7''',
+  '''(?i)B5D3F1A7C9E2064B8D5F3A1C7E9B2064D8F5A3C1E7B9D2046F8A5C3E1B7D9F20''',
+  '''(?i)0142EB6ABBDC1C2A417431B4E940E0F48C7C31073CF8606F628A331619493721''',
+  '''(?i)5E1F7A33C0D94B28A6E1F09C3D7B52E4A8C61F0D93B27E5A4C08F16D2B93E7A5''',
+  '''(?i)FA2A8767135B6308EB2300C9AFDBC89DB7E47E9D8A6F11B37CE6F499DD9BB7C6''',
+  # Keys only the tests use (AirBlockListTest, AirContactMarksTest, AirCommandPasteTest, AirGroupModelTests,
+  # SwipeAndLanguageUITests, AirLocalStoreTests):
+  '''(?i)7F3A91C05D2E7F3A91C05D2E7F3A91C05D2E7F3A91C05D2E7F3A91C05D2E7F3A''',
+  '''(?i)88ACED36E3BEC19E5F0A6B7C2D9E1F3A4B5C6D7E8F90A1B2C3D4E5F6A7B8C9D0''',
+  '''(?i)5D0A7C3E9B1F4A6C8E2D0B5F7A9C1E3D5B7F9A1C3E5D7B9F1A3C5E7D9B1F3A5C''',
+  '''(?i)0B1C2D3E4F5061728394A5B6C7D8E9F00112233445566778899AABBCCDDEEFF0''',
+  # The demo CONTACT's public key (ToxSaveSummaryTest): a real, always-online bot whose whole Tox ID is
+  # handed out on purpose, in the App Review notes, so that reviewers can add it. Like any Tox public key
+  # it is an address, not a credential: knowing it lets you send a friend request and nothing more.
+  '''(?i)872F45C1BAF8AC12C854003E6420C7459339056FF6E40E5BAD8B123AC397E117''',
 ]

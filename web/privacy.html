@@ -58,7 +58,7 @@
   <main id="main">
     <article class="wrap doc">
   <h1>Privacy Policy</h1>
-  <p class="doc-date">Last updated: 9 August 2026</p>
+  <p class="doc-date">Last updated: 12 November 2026</p>
 
   <p>Khandaq is a free, open-source, peer-to-peer messenger built on the <a href="https://tox.chat/" target="_blank" rel="noopener">Tox</a> protocol. It is engineered so that <strong>we cannot read your messages even if we wanted to</strong>. This policy explains, in plain language, what that means.</p>
 
@@ -80,9 +80,9 @@
 
   <h2>Data stored on your device</h2>
   <ul>
-    <li>Your profile, contacts, message history, and received files are stored <strong>locally on your device only</strong>, in a database that can be encrypted with a password you choose. Deleting the app removes all of it.</li>
+    <li>Your profile, contacts, message history, and received files are stored <strong>locally on your device only</strong>. Deleting the app removes all of it.</li>
     <li>Media you explicitly <strong>save to your gallery</strong> is the exception. It is written into the phone’s shared photo and file storage (<em>Pictures/Khandaq</em>, <em>Movies/Khandaq</em> and <em>Download/Khandaq</em> on Android, the Photos app on iOS), which is outside the app and therefore survives uninstalling Khandaq. Delete those items from your gallery or file manager if you want them gone.</li>
-    <li>You can set a passphrase/PIN so that the local database is encrypted at rest. Khandaq never transmits this passphrase anywhere.</li>
+    <li><strong>Encrypted at rest.</strong> On Android and iOS your profile and message history are always stored encrypted, and on Android so are received files. If you set a password, the key is derived from it; if you continue without one, the app makes a random key and keeps it in the phone’s protected key store (the Android Keystore; on iOS, the keychain, on this device only). The desktop app encrypts your profile and history only if you set a password. Khandaq never transmits your password or that key anywhere.</li>
   </ul>
 
   <h2>How the network works</h2>

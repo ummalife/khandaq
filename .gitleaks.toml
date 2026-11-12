@@ -88,7 +88,9 @@ regexes = [
   # The demo world that draws the store screenshots holds the same people on both platforms:
   # Android's AirDemoWorld, a debug-only source set, and iOS's OCTManagerMock. The unit and UI tests
   # use the same people plus a few keys of their own. Listed one value at a time, case-insensitive
-  # because one test spells a key in lower case.
+  # because one test spells a key in lower case. Added by Claude (AI assistant), each value checked
+  # against the sources; the repository owner, told on 2026-11-12 that the list awaited confirmation,
+  # asked for it to be closed as written.
   # Demo people, shared by AirDemoWorld.java, OCTManagerMock.swift and the tests:
   '''(?i)7F3A91C05D2E8B4416A9C3E07D5F2B8164E0A3C9D7B25F1E8A4C6D0B3F9E2A71''',
   '''(?i)2C8E5F1A9B3D7046E2A8C5F19D3B7E604A2F8C1D5E9B3A7046C2E8F1A5D9B3E7''',

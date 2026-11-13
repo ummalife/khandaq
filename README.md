@@ -28,18 +28,18 @@ Message content is **end-to-end encrypted** by Tox. Khandaq infrastructure provi
 
 ## Download pre-built clients
 
-All binaries are hosted on **[GitHub Releases](https://github.com/ummalife/khandaq/releases/tag/v0.2.49)** (not in git):
+All binaries are hosted on **[GitHub Releases](https://github.com/ummalife/khandaq/releases/tag/v0.2.50)** (not in git):
 
 | Platform | Download |
 |----------|----------|
 | Android | [Google Play](https://play.google.com/store/apps/details?id=com.khandaq.messenger) (not distributed as an APK here) |
-| Windows | [khandaq-windows-x86_64.zip](https://github.com/ummalife/khandaq/releases/download/v0.2.49/khandaq-windows-x86_64.zip) |
-| macOS 11 or later (Apple Silicon, tested on macOS 26) | [khandaq-macos.zip](https://github.com/ummalife/khandaq/releases/download/v0.2.49/khandaq-macos.zip) |
-| Linux x86_64 (portable, glibc 2.38 or newer) | [khandaq-linux-x86_64-portable.tar.gz](https://github.com/ummalife/khandaq/releases/download/v0.2.49/khandaq-linux-x86_64-portable.tar.gz) |
-| Debian 13 / Ubuntu 24.04 or newer (.deb) | [khandaq-messenger_amd64.deb](https://github.com/ummalife/khandaq/releases/download/v0.2.49/khandaq-messenger_amd64.deb) |
+| Windows | [khandaq-windows-x86_64.zip](https://github.com/ummalife/khandaq/releases/download/v0.2.50/khandaq-windows-x86_64.zip) |
+| macOS 11 or later (Apple Silicon, tested on macOS 26) | [khandaq-macos.zip](https://github.com/ummalife/khandaq/releases/download/v0.2.50/khandaq-macos.zip) |
+| Linux x86_64 (portable, glibc 2.38 or newer) | [khandaq-linux-x86_64-portable.tar.gz](https://github.com/ummalife/khandaq/releases/download/v0.2.50/khandaq-linux-x86_64-portable.tar.gz) |
+| Debian 13 / Ubuntu 24.04 or newer (.deb) | [khandaq-messenger_amd64.deb](https://github.com/ummalife/khandaq/releases/download/v0.2.50/khandaq-messenger_amd64.deb) |
 | iOS | [TestFlight](https://testflight.apple.com/join/4ppS8ZN5) (build 142994; not distributed as IPA here) |
 
-Verify downloads with [SHA256SUMS.txt](https://github.com/ummalife/khandaq/releases/download/v0.2.49/SHA256SUMS.txt).
+Verify downloads with [SHA256SUMS.txt](https://github.com/ummalife/khandaq/releases/download/v0.2.50/SHA256SUMS.txt).
 
 ---
 

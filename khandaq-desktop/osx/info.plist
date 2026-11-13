@@ -33,8 +33,15 @@
 	<string>khandaq</string>
 	<key>CFBundleIconFile</key>
 	<string>khandaq.icns</string>
+	<!-- KHANDAQ (desktop v0.2.51): an identifier of its own. org.khandaq.messenger is the iPhone
+	     app's, and on a Mac that has the iPhone app too, macOS refused this app's notifications
+	     ("Legacy client org.khandaq.messenger connecting to modern client"). Profiles and settings
+	     (~/Library/Application Support/Khandaq), the keychain service and the autostart agent are
+	     named on their own and do not change. What macOS keys on this identifier starts over once:
+	     the notification, microphone, camera and screen recording permissions, and the keychain
+	     asks once before this app reads a password an earlier version kept there. -->
 	<key>CFBundleIdentifier</key>
-	<string>org.khandaq.messenger</string>
+	<string>org.khandaq.desktop</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>en_US</string>
@@ -65,7 +72,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.50</string>
+	<string>0.2.51</string>
 	<key>CFBundleSignature</key>
 	<string>toxq</string>
 	<key>CFBundleURLTypes</key>
@@ -84,7 +91,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>0.2.50</string>
+	<string>0.2.51</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>11.0</string>
 	<key>NSPrincipalClass</key>

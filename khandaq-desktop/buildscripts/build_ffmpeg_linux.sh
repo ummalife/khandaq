@@ -24,8 +24,8 @@ set -euo pipefail
 readonly SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 
 # The release and digest scripts/build-macos-deps.sh pins for the macOS build.
-readonly FFMPEG_VERSION=8.1.1
-readonly FFMPEG_HASH=b6863adde98898f42602017462871b5f6333e65aec803fdd7a6308639c52edf3
+readonly FFMPEG_VERSION=8.1.3
+readonly FFMPEG_HASH=7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3
 
 # Goes into the version and configuration strings of every library, where
 # scripts/verify-linux-build.sh looks for it: a bundle without it carries some other FFmpeg.
@@ -37,7 +37,7 @@ download_verify_extract_tarball \
     "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" \
     "${FFMPEG_HASH}"
 
-# As on macOS: three advisories against 8.1.1 with no fixed 8.1.x release sit in MOV boxes a voice
+# As on macOS: three advisories against 8.1.3 with no fixed 8.1 release sit in MOV boxes a voice
 # message never carries: CVE-2026-52297 (iacb, IAMF), CVE-2026-96611 (ispe, HEIF image items) and
 # CVE-2026-107678 (pssh, DRM init data). IAMF is configured out below; the other two boxes leave the
 # demuxer's parse table, so it skips them as it skips any unknown box. A future FFmpeg that changes

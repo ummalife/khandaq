@@ -67,7 +67,14 @@
     "2026-11-14, confirmation. The repository owner confirmed the decisions delegated on 2026-11-13:",
     "the 33 entries re-checked that day and the 35 ffmpeg 8.1.1 entries of desktop v0.2.50. Their",
     "owner fields now name the repository owner and keep who did the analysis; no text, date or",
-    "expiry changed."
+    "expiry changed.",
+    "",
+    "2026-11-14, desktop v0.2.51 (Claude). FFmpeg 8.1.3 replaces 8.1.1 in the Windows, macOS and Linux",
+    "builds, with the same configure lines and the same MOV changes (the pssh and ispe lines are in the",
+    "mov.c of 8.1.3 exactly once, as the builds require). NVD lists 16 advisories against 8.1.3, all of",
+    "them among the 35 of 8.1.1; the 19 that 8.1.2 and 8.1.3 fix are removed. The 16 were checked",
+    "against the 8.1.3 source and moved to 8.1.3 with their texts; CVE-2026-107677 now names every",
+    "caller of av_strireplace() (the whisper filter and the ffmpeg tools call it too; neither is built)."
   ],
   "waivers": [
     {
@@ -110,387 +117,178 @@
     {
       "id": "CVE-2025-25468",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "purl": "pkg:generic/ffmpeg@8.1.3",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Memory leak, not corruption, that NVD files under libavutil/mem.c; the leaking path is the muxing interleave queue (libavformat/mux.c, ff_interleave_add_packet) as the ffmpeg command-line tool drives it. The app never muxes, no muxer is built, and the ffmpeg programs are not built (--disable-programs). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "owner": "Isa (repository owner), confirmed 2026-11-14 for FFmpeg 8.1.1; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration, re-checked on 2026-11-14 against the FFmpeg 8.1.3 source",
+      "exploitability": "Memory leak, not corruption, that NVD files under libavutil/mem.c; the leaking path is the muxing interleave queue (libavformat/mux.c, ff_interleave_add_packet) as the ffmpeg command-line tool drives it. The app never muxes, no muxer is built, and the ffmpeg programs are not built (--disable-programs). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.3 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "8.1.1"
+      "version": "8.1.3"
     },
     {
       "id": "CVE-2025-25469",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "purl": "pkg:generic/ffmpeg@8.1.3",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Memory leak, not corruption, of IAMF parameter definitions: av_iamf_param_definition_alloc() in libavutil/iamf.c, whose only callers are the IAMF reader and parser (libavformat/iamf_reader.c, iamf_parse.c). Those files are compiled only with CONFIG_IAMFDEC, which --disable-iamf turns off; libavutil/iamf.c ships in avutil-60.dll with nothing in the build calling that allocator. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "owner": "Isa (repository owner), confirmed 2026-11-14 for FFmpeg 8.1.1; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration, re-checked on 2026-11-14 against the FFmpeg 8.1.3 source",
+      "exploitability": "Memory leak, not corruption, of IAMF parameter definitions: av_iamf_param_definition_alloc() in libavutil/iamf.c, whose only callers are the IAMF reader and parser (libavformat/iamf_reader.c, iamf_parse.c). Those files are compiled only with CONFIG_IAMFDEC, which --disable-iamf turns off; libavutil/iamf.c ships in avutil-60.dll with nothing in the build calling that allocator. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.3 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-64830",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Heap overflow in the VobSub subtitle demuxer (libavformat/mpeg.c) and the subtitle queue it fills; not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-64831",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Stack overflow in the Vulkan HEVC hardware decoder (libavcodec/vulkan_hevc.c); neither the HEVC decoder nor any hardware decoder is built, and Vulkan is not detected (--disable-autodetect). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-64832",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Double free in the NVIDIA NVDEC hardware decoder (libavcodec/nvdec.c); no hardware decoder is built, and the NVIDIA headers are not detected (--disable-autodetect). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-64833",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Over-read in the S/PDIF muxer (libavformat/spdifenc.c); muxers are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-64834",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Infinite loop in the RTP/ASF depacketizer (libavformat/rtpdec_asf.c); RTP, RTSP and network are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-64835",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Out-of-bounds access in the ADX/AAX audio decoder (libavcodec/adxdec.c); not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-65703",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Heap write in the TDSC video decoder (libavcodec/tdsc.c), fed by AVI; neither is built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-65704",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Heap write in the TY demuxer (libavformat/ty.c) and the Shorten decoder (libavcodec/shorten.c), reached through an ffconcat list opened with -safe 0; none of these is built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-65705",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Heap write in the floodfill video filter (libavfilter/vf_floodfill.c); libavfilter is not built (--disable-avfilter). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-65706",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Heap write in the swaprect video filter (libavfilter/vf_swaprect.c); libavfilter is not built (--disable-avfilter). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-66036",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Heap write in the hqdn3d video filter (libavfilter/vf_hqdn3d.c); libavfilter is not built (--disable-avfilter). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-66037",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Unbounded allocation in the IAMF demuxer (libavformat/iamf_parse.c, mix_presentation_obu); IAMF is configured out (--disable-iamf), and the IAMF code inside the MOV demuxer is compiled only with CONFIG_IAMFDEC, which the build checks is 0. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-66038",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Uninitialised read in the LCL/ZLIB video decoder (libavcodec/lcldec.c); not built, and zlib is disabled. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-66039",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Signed overflow in the MACE6 audio decoder (libavcodec/mace.c), fed by the CAF demuxer (libavformat/cafdec.c); neither is built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-66040",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Heap write in the PNG and APNG encoders (libavcodec/pngenc.c); encoders are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-66041",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Heap write in the quirc video filter (libavfilter/vf_quirc.c), fed by PGS/SUP subtitles; libavfilter is not built and libquirc is not linked. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
+      "version": "8.1.3"
     },
     {
       "id": "CVE-2026-70628",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "purl": "pkg:generic/ffmpeg@8.1.3",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Signed overflow in the DVB subtitle parser (libavcodec/dvbsub_parser.c), fed by a WTV file; neither the dvbsub parser nor the WTV demuxer is built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "owner": "Isa (repository owner), confirmed 2026-11-14 for FFmpeg 8.1.1; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration, re-checked on 2026-11-14 against the FFmpeg 8.1.3 source",
+      "exploitability": "Signed overflow in the DVB subtitle parser (libavcodec/dvbsub_parser.c), fed by a WTV file; neither the dvbsub parser nor the WTV demuxer is built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.3 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "8.1.1"
+      "version": "8.1.3"
     },
     {
       "id": "CVE-2026-70629",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "purl": "pkg:generic/ffmpeg@8.1.3",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Uninitialised read in the RSCC decoder (libavcodec/rscc.c), which is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "owner": "Isa (repository owner), confirmed 2026-11-14 for FFmpeg 8.1.1; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration, re-checked on 2026-11-14 against the FFmpeg 8.1.3 source",
+      "exploitability": "Uninitialised read in the RSCC decoder (libavcodec/rscc.c), which is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.3 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "8.1.1"
+      "version": "8.1.3"
     },
     {
       "id": "CVE-2026-70630",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "purl": "pkg:generic/ffmpeg@8.1.3",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Uninitialised read in the Screenpresso decoder (libavcodec/screenpresso.c), which is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "owner": "Isa (repository owner), confirmed 2026-11-14 for FFmpeg 8.1.1; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration, re-checked on 2026-11-14 against the FFmpeg 8.1.3 source",
+      "exploitability": "Uninitialised read in the Screenpresso decoder (libavcodec/screenpresso.c), which is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.3 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "8.1.1"
+      "version": "8.1.3"
     },
     {
       "id": "CVE-2026-70631",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "purl": "pkg:generic/ffmpeg@8.1.3",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Uninitialised read in the TIFF decoder's Deflate strip path (libavcodec/tiff.c); the TIFF decoder is not built, and zlib is disabled. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "owner": "Isa (repository owner), confirmed 2026-11-14 for FFmpeg 8.1.1; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration, re-checked on 2026-11-14 against the FFmpeg 8.1.3 source",
+      "exploitability": "Uninitialised read in the TIFF decoder's Deflate strip path (libavcodec/tiff.c); the TIFF decoder is not built, and zlib is disabled. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.3 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "8.1.1"
+      "version": "8.1.3"
     },
     {
       "id": "CVE-2026-70632",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "purl": "pkg:generic/ffmpeg@8.1.3",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Heap write in the CineForm HD decoder (libavcodec/cfhd.c), which is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "owner": "Isa (repository owner), confirmed 2026-11-14 for FFmpeg 8.1.1; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration, re-checked on 2026-11-14 against the FFmpeg 8.1.3 source",
+      "exploitability": "Heap write in the CineForm HD decoder (libavcodec/cfhd.c), which is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.3 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "8.1.1"
+      "version": "8.1.3"
     },
     {
       "id": "CVE-2026-52295",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "purl": "pkg:generic/ffmpeg@8.1.3",
       "severity": "LOW",
       "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Over-read in the IAMF muxer (libavformat/iamf_writer.c); muxers and IAMF are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "owner": "Isa (repository owner), confirmed 2026-11-14 for FFmpeg 8.1.1; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration, re-checked on 2026-11-14 against the FFmpeg 8.1.3 source",
+      "exploitability": "Over-read in the IAMF muxer (libavformat/iamf_writer.c); muxers and IAMF are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.3 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "8.1.1"
+      "version": "8.1.3"
     },
     {
       "id": "CVE-2026-52296",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "purl": "pkg:generic/ffmpeg@8.1.3",
       "severity": "LOW",
       "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Over-read in the WMA encoder (libavcodec/wmaenc.c); encoders are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "owner": "Isa (repository owner), confirmed 2026-11-14 for FFmpeg 8.1.1; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration, re-checked on 2026-11-14 against the FFmpeg 8.1.3 source",
+      "exploitability": "Over-read in the WMA encoder (libavcodec/wmaenc.c); encoders are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.3 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "8.1.1"
+      "version": "8.1.3"
     },
     {
       "id": "CVE-2026-52297",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "purl": "pkg:generic/ffmpeg@8.1.3",
       "severity": "LOW",
       "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Over-read in the MOV demuxer's iacb box (mov_read_iacb, IAMF in MP4). The MOV demuxer IS built, for voice messages, but mov_read_iacb() and its entry in the box table are compiled only with CONFIG_IAMFDEC; build_ffmpeg.sh configures --disable-iamf and stops unless CONFIG_IAMFDEC is 0, so an iacb box is skipped as unknown. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "owner": "Isa (repository owner), confirmed 2026-11-14 for FFmpeg 8.1.1; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration, re-checked on 2026-11-14 against the FFmpeg 8.1.3 source",
+      "exploitability": "Over-read in the MOV demuxer's iacb box (mov_read_iacb, IAMF in MP4). The MOV demuxer IS built, for voice messages, but mov_read_iacb() and its entry in the box table are compiled only with CONFIG_IAMFDEC; build_ffmpeg.sh configures --disable-iamf and stops unless CONFIG_IAMFDEC is 0, so an iacb box is skipped as unknown. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.3 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "8.1.1"
+      "version": "8.1.3"
     },
     {
       "id": "CVE-2026-96611",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "purl": "pkg:generic/ffmpeg@8.1.3",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Signed overflow in the MOV demuxer's ispe box (mov_read_ispe, HEIF image items). The MOV demuxer IS built, for voice messages, but build_ffmpeg.sh deletes the ispe entry from its box table and stops unless the entry was there exactly once, so mov_read_ispe() is never called and an ispe box is skipped as unknown. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "owner": "Isa (repository owner), confirmed 2026-11-14 for FFmpeg 8.1.1; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration, re-checked on 2026-11-14 against the FFmpeg 8.1.3 source",
+      "exploitability": "Signed overflow in the MOV demuxer's ispe box (mov_read_ispe, HEIF image items). The MOV demuxer IS built, for voice messages, but build_ffmpeg.sh deletes the ispe entry from its box table and stops unless the entry was there exactly once, so mov_read_ispe() is never called and an ispe box is skipped as unknown. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.3 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-107660",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Hostname check skipped in the mbedTLS TLS protocol (libavformat/tls_mbedtls.c); protocols and network are not built and mbedTLS is not linked. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
+      "version": "8.1.3"
     },
     {
       "id": "CVE-2026-107675",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "purl": "pkg:generic/ffmpeg@8.1.3",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "No host-key check in the libssh sftp protocol; protocols are not built and libssh is not linked. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "owner": "Isa (repository owner), confirmed 2026-11-14 for FFmpeg 8.1.1; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration, re-checked on 2026-11-14 against the FFmpeg 8.1.3 source",
+      "exploitability": "No host-key check in the libssh sftp protocol; protocols are not built and libssh is not linked. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.3 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "8.1.1"
+      "version": "8.1.3"
     },
     {
       "id": "CVE-2026-107676",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "purl": "pkg:generic/ffmpeg@8.1.3",
       "severity": "LOW",
       "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Uninitialised bytes from av_dynamic_hdr_plus_to_t35() (libavutil), a writer whose only callers in FFmpeg 8.1.1 are the Matroska muxer and the libaom encoder; neither is built, and the app never calls it. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "owner": "Isa (repository owner), confirmed 2026-11-14 for FFmpeg 8.1.1; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration, re-checked on 2026-11-14 against the FFmpeg 8.1.3 source",
+      "exploitability": "Uninitialised bytes from av_dynamic_hdr_plus_to_t35() (libavutil), a writer whose only callers in FFmpeg 8.1.3 are the Matroska muxer and the libaom encoder; neither is built, and the app never calls it. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.3 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "8.1.1"
+      "version": "8.1.3"
     },
     {
       "id": "CVE-2026-107677",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "purl": "pkg:generic/ffmpeg@8.1.3",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Infinite loop in av_strireplace() (libavutil/avstring.c) when the DASH demuxer passes an empty SegmentTemplate media string. av_strireplace() ships in avutil-60.dll, but its only callers in FFmpeg 8.1.1 are the DASH demuxer and muxer (dashdec.c, dashenc.c), neither of which is built, and the app never calls it. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "owner": "Isa (repository owner), confirmed 2026-11-14 for FFmpeg 8.1.1; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration, re-checked on 2026-11-14 against the FFmpeg 8.1.3 source",
+      "exploitability": "Infinite loop in av_strireplace() (libavutil/avstring.c) when the DASH demuxer passes an empty SegmentTemplate media string. av_strireplace() ships in avutil-60.dll, but its callers in FFmpeg 8.1.3 are the DASH demuxer and muxer (dashdec.c, dashenc.c), the whisper audio filter (libavfilter) and the text formatter of the ffmpeg tools (fftools); none of them is built, and the app never calls it. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.3 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "8.1.1"
+      "version": "8.1.3"
     },
     {
       "id": "CVE-2026-107678",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "purl": "pkg:generic/ffmpeg@8.1.3",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Stack exhaustion in av_encryption_init_info_free() (libavutil) on the lists the MOV demuxer's mov_read_pssh() builds. The MOV demuxer IS built, for voice messages, but build_ffmpeg.sh deletes the pssh entry from its box table and stops unless the entry was there exactly once, so mov_read_pssh() is never called; the only other producer, the MOV muxer (movenc.c), is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "owner": "Isa (repository owner), confirmed 2026-11-14 for FFmpeg 8.1.1; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration, re-checked on 2026-11-14 against the FFmpeg 8.1.3 source",
+      "exploitability": "Stack exhaustion in av_encryption_init_info_free() (libavutil) on the lists the MOV demuxer's mov_read_pssh() builds. The MOV demuxer IS built, for voice messages, but build_ffmpeg.sh deletes the pssh entry from its box table and stops unless the entry was there exactly once, so mov_read_pssh() is never called; the only other producer, the MOV muxer (movenc.c), is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.3 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-107695",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Infinite loop in the HLS demuxer (libavformat/hls.c), which is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
+      "version": "8.1.3"
     },
     {
       "id": "CVE-2026-107696",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "purl": "pkg:generic/ffmpeg@8.1.3",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Unbounded RTSP redirects (ff_rtsp_connect, libavformat/rtsp.c); the RTSP demuxer is not built and network is disabled. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "owner": "Isa (repository owner), confirmed 2026-11-14 for FFmpeg 8.1.1; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration, re-checked on 2026-11-14 against the FFmpeg 8.1.3 source",
+      "exploitability": "Unbounded RTSP redirects (ff_rtsp_connect, libavformat/rtsp.c); the RTSP demuxer is not built and network is disabled. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.3 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "8.1.1"
-    },
-    {
-      "id": "CVE-2026-107697",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@8.1.1",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
-      "exploitability": "Protocol and extension restrictions bypassed in the HLS demuxer (libavformat/hls.c); the HLS demuxer is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "8.1.1"
+      "version": "8.1.3"
     },
     {
       "id": "CVE-2023-6601",

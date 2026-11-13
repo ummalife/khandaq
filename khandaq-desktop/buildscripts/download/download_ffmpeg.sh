@@ -18,11 +18,12 @@
 set -euo pipefail
 
 # KHANDAQ (security): bumped 4.4.1 -> 4.4.5 -> 4.4.8 (the head of the 4.4.x branch, with
-# its accumulated decoder CVE fixes; audit #2 finding 7) -> 8.1.1 in desktop v0.2.50, the
-# release and digest scripts/build-macos-deps.sh and build_ffmpeg_linux.sh pin, so the three
-# desktop builds read voice messages with the same FFmpeg. build_ffmpeg.sh says what is built.
-FFMPEG_VERSION=8.1.1
-FFMPEG_HASH=b6863adde98898f42602017462871b5f6333e65aec803fdd7a6308639c52edf3
+# its accumulated decoder CVE fixes; audit #2 finding 7) -> 8.1.1 in desktop v0.2.50 -> 8.1.3
+# in desktop v0.2.51, the release and digest scripts/build-macos-deps.sh and
+# build_ffmpeg_linux.sh pin, so the three desktop builds read voice messages with the same
+# FFmpeg. build_ffmpeg.sh says what is built.
+FFMPEG_VERSION=8.1.3
+FFMPEG_HASH=7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3
 
 source "$(dirname "$(realpath "$0")")/common.sh"
 

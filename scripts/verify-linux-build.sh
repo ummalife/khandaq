@@ -46,7 +46,7 @@ echo "==> Verifying $BIN"
 [[ -f "$ROOT/dist/linux/plugins/platforms/libqxcb.so" ]] && ok "Qt xcb plugin bundled" || bad "Qt plugins missing"
 
 # KHANDAQ (desktop v0.2.49): the bundle carries the FFmpeg khandaq-desktop/buildscripts/
-# build_ffmpeg_linux.sh builds (8.1.1 without the MOV boxes of the open advisories; its
+# build_ffmpeg_linux.sh builds (8.1.3 since v0.2.51, without the MOV boxes of the open advisories; its
 # --extra-version is in every library's configuration string), never Ubuntu's 6.1.1. libavfilter and
 # libswresample are configured out of it, so finding one means some other FFmpeg came along.
 FFMPEG_MARK="khandaq-mov-hardening"

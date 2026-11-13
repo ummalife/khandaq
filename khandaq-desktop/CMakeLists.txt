@@ -33,6 +33,7 @@ option(TSAN "Compile with ThreadSanitizer" OFF)
 option(DESKTOP_NOTIFICATIONS "Use snorenotify for desktop notifications" OFF)
 option(STRICT_OPTIONS "Error on compile warning, used by CI" OFF)
 option(KHANDAQ_SCREENSHOT_HOOK "Test builds only: KHANDAQ_SHOT_SCRIPT plays window states and saves PNGs" OFF)
+option(KHANDAQ_HOMEBREW_PATHS "macOS: look for openal-soft, opus and libvpx in Homebrew" ON)
 
 # process generated files if cmake >= 3.10
 if(POLICY CMP0071)
@@ -57,7 +58,10 @@ set(ENV{PKG_CONFIG_PATH}
   ${CMAKE_SOURCE_DIR}/libs/lib/pkgconfig:/opt/ffmpeg/lib/pkgconfig:$ENV{PKG_CONFIG_PATH})
 
 # necessary to find openal-soft / opus / libvpx on macOS (Homebrew)
-if(APPLE)
+# KHANDAQ: scripts/build-macos.sh turns this off. It builds the three for the bundle's minimum
+# macOS in a prefix of its own, and with these paths first pkg-config handed the app Homebrew's
+# headers and Homebrew's lib directories, which also became rpaths of the executable.
+if(APPLE AND KHANDAQ_HOMEBREW_PATHS)
   set(_khandaq_brew_pkgconfig_paths
     /usr/local/opt/openal-soft/lib/pkgconfig
     /opt/homebrew/opt/openal-soft/lib/pkgconfig

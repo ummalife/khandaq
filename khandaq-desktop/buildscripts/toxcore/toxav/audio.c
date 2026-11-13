@@ -362,7 +362,7 @@ uint8_t ac_iterate(ACSession *ac, uint64_t *a_r_timestamp, uint64_t *a_l_timesta
              * (AV_INPUT_BUFFER_PADDING_SIZE) keeps the reads below inside the buffer on this side,
              * but msg->len - 4 still reaches opus_decode as a negative length. */
             if (msg->len <= 4) {
-                LOGGER_API_WARNING(ac->av->tox, "Audio packet too short to hold a frame: %u",
+                LOGGER_API_WARNING(ac->tox, "Audio packet too short to hold a frame: %u",
                                    (unsigned)msg->len);
                 free(msg);
                 msg = nullptr;

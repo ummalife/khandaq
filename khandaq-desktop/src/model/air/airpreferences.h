@@ -43,6 +43,13 @@ constexpr qint64 bytesPerMegabyte = 1000 * 1000;
 constexpr qint64 smallAttachmentDefault = 10 * bytesPerMegabyte;
 /** The largest limit the field takes, in megabytes. */
 constexpr int smallAttachmentMaxMegabytes = 4000;
+/**
+ * Whether a new installation saves the files contacts send by itself: no, every file waits for
+ * Accept in the chat (the owner's choice of 2026-11-13). Saving by itself put
+ * whatever a contact sent into the downloads folder before anyone had looked at it. Settings reads
+ * this only when it holds no choice yet, so a profile that already chose keeps its choice.
+ */
+constexpr bool autoSaveDefault = false;
 
 /** The settings behind a choice: whether files are saved by themselves, and up to what size. */
 struct AttachmentRule

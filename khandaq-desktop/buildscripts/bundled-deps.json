@@ -380,7 +380,7 @@
     },
     "linux": {
       "pinned": false,
-      "how": "apt-пакеты образа Ubuntu",
+      "how": "Ubuntu 24.04 packages of the build image (buildscripts/docker/Dockerfile.khandaq_ubuntu2404), unpinned, except what the image builds itself: toxcore from the copy committed under buildscripts/toxcore (since v0.2.48), toxext and toxext_messages from the archives download_toxext*.sh pin, and, since v0.2.49, FFmpeg 8.1.1 from the archive buildscripts/build_ffmpeg_linux.sh pins by version and sha256 (the release and digest of the macOS build). None of these versions are in this file, so the SBOM and scripts/check-native-advisories.py do not see them.",
       "gap": "Та же работа, что и для macOS: состав снимать с готового тарбола (dpkg-query/ldd)."
     }
   }

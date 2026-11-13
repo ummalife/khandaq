@@ -45,6 +45,30 @@ echo "==> Verifying $BIN"
 [[ -d "$LIB_DIR" ]] && ok "lib/ bundled ($(find "$LIB_DIR" -maxdepth 1 \( -type f -o -type l \) | wc -l | tr -d ' ') entries)" || bad "lib/ missing"
 [[ -f "$ROOT/dist/linux/plugins/platforms/libqxcb.so" ]] && ok "Qt xcb plugin bundled" || bad "Qt plugins missing"
 
+# KHANDAQ (desktop v0.2.49): the bundle carries the FFmpeg khandaq-desktop/buildscripts/
+# build_ffmpeg_linux.sh builds (8.1.1 without the MOV boxes of the open advisories; its
+# --extra-version is in every library's configuration string), never Ubuntu's 6.1.1. libavfilter and
+# libswresample are configured out of it, so finding one means some other FFmpeg came along.
+FFMPEG_MARK="khandaq-mov-hardening"
+for name in libavcodec libavdevice libavformat libavutil libswscale; do
+  found=""
+  for lib in "$LIB_DIR/$name".so.*; do
+    [[ -f "$lib" && ! -L "$lib" ]] || continue
+    found="$lib"
+    if LC_ALL=C grep -aqF -- "--extra-version=$FFMPEG_MARK" "$lib"; then
+      ok "$(basename "$lib") is the FFmpeg built from source"
+    else
+      bad "$(basename "$lib") is not the FFmpeg of build_ffmpeg_linux.sh (no $FFMPEG_MARK)"
+    fi
+  done
+  [[ -n "$found" ]] || bad "$name missing from lib/"
+done
+for name in libavfilter libswresample libpostproc; do
+  if compgen -G "$LIB_DIR/$name.so*" >/dev/null; then
+    bad "$name bundled: build_ffmpeg_linux.sh configures it out"
+  fi
+done
+
 FILE_INFO="$(file -b "$(strings_target)" 2>/dev/null || echo unknown)"
 echo "  info: $FILE_INFO"
 

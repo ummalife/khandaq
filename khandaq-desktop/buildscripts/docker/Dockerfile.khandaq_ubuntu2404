@@ -4,6 +4,10 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
 
+# KHANDAQ (desktop v0.2.49): FFmpeg is built from source below (build_ffmpeg_linux.sh), so Ubuntu's
+# FFmpeg 6.1.1 development packages are gone, and with them the codec libraries (dav1d, x265, AOM,
+# LAME, VA-API and the rest) that were here only because its pkg-config files require them. Nothing
+# else in the build uses them; nasm and the xcb packages are what the FFmpeg build needs.
 RUN apt-get update && apt-get -y --no-install-recommends install \
     build-essential \
     autoconf \
@@ -13,10 +17,7 @@ RUN apt-get update && apt-get -y --no-install-recommends install \
     extra-cmake-modules \
     git \
     pkg-config \
-    libavcodec-dev \
-    libavdevice-dev \
-    libavfilter-dev \
-    libavutil-dev \
+    nasm \
     libexif-dev \
     libgdk-pixbuf2.0-dev \
     libglib2.0-dev \
@@ -28,35 +29,13 @@ RUN apt-get update && apt-get -y --no-install-recommends install \
     libqt5svg5-dev \
     libsodium-dev \
     libsqlcipher-dev \
-    libswresample-dev \
-    libswscale-dev \
     libvpx-dev \
     libx264-dev \
-    libdav1d-dev \
-    libmp3lame-dev \
-    libvorbis-dev \
-    libogg-dev \
-    libx265-dev \
-    libaom-dev \
-    libsnappy-dev \
-    libzvbi-dev \
-    libshine-dev \
-    libspeex-dev \
-    libtheora-dev \
-    libxvidcore-dev \
-    libva-dev \
-    libsoxr-dev \
-    libgsm1-dev \
-    libopenjp2-7-dev \
-    libcodec2-dev \
-    libsvtav1enc-dev \
-    librav1e-dev \
-    libjxl-dev \
-    libtwolame-dev \
-    libdrm-dev \
-    libvdpau-dev \
-    libvpl-dev \
-    ocl-icd-opencl-dev \
+    libxcb1-dev \
+    libxcb-shape0-dev \
+    libxcb-shm0-dev \
+    libxcb-xfixes0-dev \
+    zlib1g-dev \
     librsvg2-dev \
     libxss-dev \
     qtbase5-dev \
@@ -69,6 +48,9 @@ RUN apt-get update && apt-get -y --no-install-recommends install \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY download/common.sh /build/download/common.sh
+# KHANDAQ (desktop v0.2.49): before toxcore, which links libavcodec and libavutil.
+COPY build_ffmpeg_linux.sh /build/build_ffmpeg_linux.sh
+RUN mkdir -p /src/ffmpeg && cd /src/ffmpeg && /build/build_ffmpeg_linux.sh && rm -rf /src/ffmpeg
 COPY build_utils.sh /build/build_utils.sh
 COPY download/download_toxcore.sh /build/download/download_toxcore.sh
 COPY download/download_toxext.sh /build/download/download_toxext.sh

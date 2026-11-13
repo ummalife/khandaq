@@ -344,7 +344,7 @@
 
   var TEXT = {
     en: {
-      page: '/changelog.html',
+      page: '/changelog',
       months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September',
         'October', 'November', 'December'],
       level: { critical: 'Critical', important: 'Important', medium: 'Medium', low: 'Low' },

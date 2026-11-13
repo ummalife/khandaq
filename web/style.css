@@ -2025,8 +2025,10 @@ pre code {
   border-bottom: var(--kq-stroke-hairline) solid var(--kq-line);
 }
 
+/* Below the screen together with its shadow (elevation-sheet: 10 px up, 30 px of blur), so no grey
+   edge is left over the download list. */
 .consent.is-tucked {
-  transform: translateY(110%);
+  transform: translateY(calc(100% + var(--kq-space-40)));
 }
 
 .consent-row {

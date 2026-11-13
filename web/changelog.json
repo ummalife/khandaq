@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-13T13:25:25Z",
+  "generated_at": "2026-11-13T16:42:53Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,33 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.49",
+      "date": "2026-11-13",
+      "title": "Files from contacts wait for you to accept them",
+      "summary": "A new installation no longer saves the files a contact sends you by itself: each one waits in the chat until you accept it. The Linux app reads voice messages with an FFmpeg built for it, which skips the parts of MP4 files with known bugs, instead of Ubuntu's FFmpeg 6.1.1.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "Files from a contact wait for Accept on a new installation",
+          "description": "Until now a new installation saved every file a contact sent you into the downloads folder by itself, before you had looked at it. Now it starts with Settings > Network > Download attachments set to Never: each file waits in the chat until you press Accept. Always and Small files are still there to choose, and an installation that already has a choice keeps it. A folder you set for a contact still takes their files, and files sent in a group are saved as before.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Voice messages on Linux are read with a hardened FFmpeg",
+          "description": "The Linux app used Ubuntu's FFmpeg 6.1.1 with every format Ubuntu builds in, and Ubuntu has not yet fixed CVE-2026-107678 in it: a crafted MP4 file can make FFmpeg exhaust its stack, and a voice message is an MP4 file the app reads when you press play. The Linux app now carries FFmpeg 8.1.1 with only the parts it uses for the camera, voice messages and video calls, with no network access and no filters. As in the Mac app, its MP4 reader skips the kinds of boxes that have known bugs and no fixed FFmpeg 8.1 release yet (CVE-2026-52297, CVE-2026-96611, CVE-2026-107678). The libraries that came only with Ubuntu's FFmpeg are gone too, so the portable archive shrinks from 123 MB to about 50 MB.",
+          "platforms": [
+            "linux"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.48",
       "date": "2026-11-13",

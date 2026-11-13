@@ -99,4 +99,9 @@ docker run --rm --platform "$PLATFORM" \
     echo "Docker build OK"
   '
 
+# KHANDAQ (desktop release v0.2.47): INSTALL.txt goes into the portable archive (deploy-site.sh packs
+# it) and into the .deb as its README (build-linux-deb.sh), and the site tells people to read it,
+# but no script made it: v0.2.12 carried a copy written by hand. It lives in the repository now.
+cp -f "$ROOT/packaging/linux/INSTALL.txt" "$ROOT/dist/linux/INSTALL.txt"
+
 echo "Artifact: $ROOT/dist/linux/khandaq"

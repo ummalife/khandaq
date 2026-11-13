@@ -91,7 +91,7 @@ def build_truth():
 # Hand-maintained, and deliberately so — nothing in the build files knows these.
 HAND_MAINTAINED = {
     "desktop": {
-        "releaseTag": "v0.2.49",
+        "releaseTag": "v0.2.50",
         "_comment": "The GitHub release the desktop .zip/.deb URLs are built from. NOT the Android "
                     "versionName: there is no v0.2.38 tag, and aligning them breaks every download link.",
     },

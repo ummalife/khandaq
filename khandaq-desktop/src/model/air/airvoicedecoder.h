@@ -27,7 +27,7 @@
 /**
  * The sound of a voice note (an M4A file of the phones) as one channel of 16-bit samples, read with
  * the FFmpeg the client already links for video. Builds whose FFmpeg has no MP4 demuxer or no AAC
- * decoder (the minimal Windows one) cannot read it; canDecode() says so before anything is tried.
+ * decoder (Windows before v0.2.50) cannot read it; canDecode() says so before anything is tried.
  */
 namespace AirVoiceDecoder {
 

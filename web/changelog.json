@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-13T16:42:53Z",
+  "generated_at": "2026-11-13T19:32:05Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,31 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.50",
+      "date": "2026-11-13",
+      "title": "Voice messages play in the Windows app",
+      "summary": "The Windows app plays voice messages from the phones in the chat, as the Mac and Linux apps do, instead of opening them in the system's player. It now carries FFmpeg 8.1.1 built for it, like the Mac and Linux apps, in place of FFmpeg 4.4.8.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "Voice messages from the phones play in the Windows app",
+          "description": null,
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "The Windows app carries FFmpeg 8.1.1 built for it, like the Mac and Linux apps",
+          "description": null,
+          "platforms": [
+            "windows"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.49",
       "date": "2026-11-13",

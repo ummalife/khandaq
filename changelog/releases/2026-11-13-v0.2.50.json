@@ -1,0 +1,23 @@
+{
+  "version": "0.2.50",
+  "date": "2026-11-13",
+  "title": "Voice messages play in the Windows app",
+  "summary": "The Windows app plays voice messages from the phones in the chat, as the Mac and Linux apps do, instead of opening them in the system's player. It now carries FFmpeg 8.1.1 built for it, like the Mac and Linux apps, in place of FFmpeg 4.4.8.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "Voice messages from the phones play in the Windows app",
+      "platforms": [
+        "windows"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "The Windows app carries FFmpeg 8.1.1 built for it, like the Mac and Linux apps",
+      "platforms": [
+        "windows"
+      ]
+    }
+  ]
+}

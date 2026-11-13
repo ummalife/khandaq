@@ -35,9 +35,53 @@
   <link rel="preload" href="/assets/fonts/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/assets/fonts/ibm-plex-sans-600.woff2" as="font" type="font/woff2" crossorigin>
   <script>try{var t=localStorage.getItem('kq-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
-  <link rel="stylesheet" href="/assets/tokens.css?v=9109f5fc5c">
-  <link rel="stylesheet" href="/style.css?v=ed6305eeb7">
-  <script src="/assets/site.js?v=d12f990d52" defer></script>
+  <link rel="stylesheet" href="/assets/tokens.css?v=1d1e812128">
+  <link rel="stylesheet" href="/style.css?v=1dd1913461">
+  <script src="/assets/site.js?v=b8f847e9c2" defer></script>
+  <!-- KHANDAQ (SEO, 2026-11-13): structured data for search engines. Every value is stated on this
+       page: the description is the meta description, the platforms, licences, price and links are
+       the download section's, the names are the footer's. Change it together with them. A JSON
+       data block is never executed, so it carries no CSP hash (scripts/generate-security-headers.py). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://khandaq.org/#organization",
+        "name": "Khandaq",
+        "url": "https://khandaq.org/",
+        "logo": "https://khandaq.org/assets/pwa-512.png",
+        "email": "support@khandaq.org"
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://khandaq.org/#website",
+        "name": "Khandaq Messenger",
+        "alternateName": "Khandaq",
+        "url": "https://khandaq.org/",
+        "publisher": { "@id": "https://khandaq.org/#organization" }
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://khandaq.org/#app",
+        "name": "Khandaq Messenger",
+        "alternateName": "Khandaq",
+        "description": "Open-source messenger for Android, iPhone, Windows, macOS and Linux. End-to-end encrypted over the Tox network. No phone number, no account, no message server.",
+        "url": "https://khandaq.org/",
+        "image": "https://khandaq.org/assets/pwa-512.png",
+        "applicationCategory": "CommunicationApplication",
+        "operatingSystem": "Android 8+, iOS 15+, Windows 10, Windows 11, macOS, Linux",
+        "offers": { "@type": "Offer", "price": "0" },
+        "license": ["https://www.gnu.org/licenses/gpl-3.0.html", "https://www.mozilla.org/en-US/MPL/2.0/"],
+        "installUrl": ["https://play.google.com/store/apps/details?id=com.khandaq.messenger", "https://testflight.apple.com/join/4ppS8ZN5"],
+        "downloadUrl": ["https://github.com/ummalife/khandaq/releases/latest", "https://khandaq.org/downloads/"],
+        "author": { "@type": "Person", "name": "Isa Dagestani", "url": "https://1sa.me/" },
+        "publisher": { "@id": "https://khandaq.org/#organization" }
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>

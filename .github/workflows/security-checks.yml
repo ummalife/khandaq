@@ -159,6 +159,16 @@ jobs:
       # A stale stamp would pair new pages with the old file still sitting in the visitor's cache.
       - name: Long-cached site files must be linked with their current version
         run: python3 scripts/version-site-assets.py --check
+      # KHANDAQ (SEO, 2026-11-13): those files are published minified (pr-cy, after Lighthouse,
+      # reported them unminified), and the stamps above are the hashes of the minified bytes. The
+      # minifier must pass its fixtures, and the script it publishes must still parse.
+      - name: Published CSS and JS must be minified, and the script must still parse
+        run: |
+          set -euo pipefail
+          python3 scripts/site_minify.py --self-test
+          out="$(mktemp -d)"
+          python3 scripts/version-site-assets.py --out "$out"
+          node --check "$out/assets/site.js"
       - name: nginx must accept the generated config
         run: |
           set -euo pipefail

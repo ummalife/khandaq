@@ -317,7 +317,15 @@ ssh "$REMOTE" "rm -f '$REMOTE_SITE_DIR/downloads/khandaq-android.apk' '$REMOTE_S
 # verify-site-deploy.py refuses a published manifest whose gitSha is null or does not match.
 STAMPED="$(mktemp -t khandaq-manifest)"
 trap 'rm -f "$STAMPED"' EXIT
+# KHANDAQ (SEO, 2026-11-13): the same idea for the stylesheets and the script. pr-cy, after
+# Lighthouse, reported them as unminified. web/ keeps the readable sources; what gets published is
+# their minified form (scripts/site_minify.py), written here by the same script that stamps the
+# pages, so the ?v= every page carries is the hash of exactly these bytes. It refuses to write
+# them if any stamp is stale, and verify-site-deploy.py compares the served files with the stamps.
+PUBLISHED="$(mktemp -d "${TMPDIR:-/tmp}/khandaq-site-assets.XXXXXX")"
+trap 'rm -rf "$STAMPED" "$PUBLISHED"' EXIT
 python3 "$ROOT/scripts/generate-release-manifest.py" --stamp "$STAMPED"
+python3 "$ROOT/scripts/version-site-assets.py" --out "$PUBLISHED"
 
 # KHANDAQ (re-audit 2026-08-22, W-02): upload to a staging directory, then replace.
 #
@@ -332,9 +340,17 @@ python3 "$ROOT/scripts/generate-release-manifest.py" --stamp "$STAMPED"
 # file is never served.
 INCOMING="$REMOTE_SITE_DIR.incoming"
 ssh "$REMOTE" "rm -rf '$INCOMING' && mkdir -p '$INCOMING/downloads' '$INCOMING/.well-known'"
-scp -p "$WEB/index.html" "$WEB/changelog.html" "$WEB/changelog.json" "$WEB/404.html" "$WEB/privacy.html" "$WEB/style.css" "$WEB/robots.txt" "$WEB/sitemap.xml" "$REMOTE:$INCOMING/"
+scp -p "$WEB/index.html" "$WEB/changelog.html" "$WEB/changelog.json" "$WEB/404.html" "$WEB/privacy.html" "$WEB/robots.txt" "$WEB/sitemap.xml" "$REMOTE:$INCOMING/"
+# KHANDAQ (SEO, 2026-11-13): the files that prove ownership of the site to Google Search Console and
+# Yandex Webmaster. Both services fetch them from the site root again from time to time and drop the
+# verification once they are gone, so they stay for good, byte for byte as the services issued them.
+# verify-site-deploy.py checks that each answers 200, text/html, with no redirect and these bytes.
+scp -p "$WEB/googleed8b77188642d163.html" "$WEB/yandex_3641f7482369653c.html" "$REMOTE:$INCOMING/"
 scp -p "$STAMPED" "$REMOTE:$INCOMING/release-manifest.json"
 scp -pr "$WEB/assets" "$REMOTE:$INCOMING/"
+# style.css, assets/site.js and assets/tokens.css as published: minified, over the readable copies
+# of assets/ that the line above has just sent. Order matters.
+scp -pr "$PUBLISHED"/* "$REMOTE:$INCOMING/"
 # KHANDAQ (redesign 2026-11): the Russian site is its own folder (/ru/), so it needs its own copy;
 # verify-site-deploy.py checks the /ru/ pages and fails the deploy if this line goes missing.
 scp -pr "$WEB/ru" "$REMOTE:$INCOMING/"

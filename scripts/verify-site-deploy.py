@@ -13,7 +13,10 @@ So this runs against the public HTTPS endpoint, never against localhost, and fai
   * the version strings on the homepage and changelog agree with that manifest;
   * the security-header baseline is present on a normal page, a directory, a pretty URL,
     a redirect and a 404 — the five response classes nginx treats differently;
+  * every long-cached file a page links with a ?v= stamp arrives as the bytes that stamp names;
   * /.well-known/security.txt is 200, text/plain, and not expired;
+  * the search engines' ownership files at the site root are 200, text/html, with no redirect and
+    the committed bytes;
   * TLS 1.0/1.1 are refused and 1.2/1.3 negotiate.
 
     scripts/verify-site-deploy.py                      # expect this checkout's HEAD
@@ -25,6 +28,7 @@ from __future__ import annotations
 import argparse
 import base64
 import datetime as dt
+import gzip
 import hashlib
 import json
 import re
@@ -68,6 +72,24 @@ CERT_FAIL_DAYS = 14
 CSP_MUST_CONTAIN = ("default-src 'none'", "object-src 'none'", "base-uri 'none'",
                     # KQ-09: the value matters, not merely the directive's presence.
                     "frame-ancestors 'none'")
+
+# KHANDAQ (SEO, 2026-11-13): a <script> of a data type (the JSON-LD for search engines) is never
+# executed and the CSP does not apply to it, so it carries no hash. The same list and the same
+# reading of the type attribute as scripts/generate-security-headers.py, which writes the policy.
+DATA_SCRIPT_TYPES = ("application/ld+json",)
+SCRIPT_TYPE = re.compile(r"(?:^|\s)type\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s\"'>]+))", re.I)
+# The pages served at these paths, between them, link every long-cached file of the site.
+PAGES = ("/", "/changelog", "/privacy.html", "/ru/", "/ru/changelog.html", "/ru/privacy.html")
+VERSIONED_LINK = re.compile(r"""\s(?:src|href)=(["'])(/[^"'?#\s]+)\?v=([0-9a-f]+)\1""")
+# The names Google Search Console and Yandex Webmaster give their ownership files in web/.
+OWNERSHIP_FILE = re.compile(r"(?:google[0-9a-f]+|yandex_[0-9a-f]+)\.html")
+
+
+def is_data_script(attrs: str) -> bool:
+    m = SCRIPT_TYPE.search(attrs)
+    if not m:
+        return False
+    return next(group for group in m.groups() if group is not None).strip().lower() in DATA_SCRIPT_TYPES
 
 failures: list[str] = []
 checks = 0
@@ -162,6 +184,8 @@ def check_csp_covers_inline(base: str, path: str, expect: int = 200) -> None:
             attrs, inner = m.group(1), m.group(2)
             if re.search(r"\bsrc\s*=", attrs, re.I) or not inner.strip():
                 continue
+            if tag == "script" and is_data_script(attrs):
+                continue
             digest = base64.b64encode(hashlib.sha256(inner.encode("utf-8")).digest()).decode()
             if f"'sha256-{digest}'" not in csp:
                 line = html[: m.start()].count("\n") + 1
@@ -172,6 +196,86 @@ def check_csp_covers_inline(base: str, path: str, expect: int = 200) -> None:
         fail(f"{path}: браузер заблокирует — " + "; ".join(blocked))
     else:
         ok(f"{path}: все инлайновые блоки покрыты хешами CSP")
+
+
+def check_versioned_assets(base: str) -> None:
+    """Does every long-cached file a page links arrive as the bytes its ?v= stamp names?
+
+    KHANDAQ (SEO, 2026-11-13). The stamp is the hash of the published bytes, and those are the
+    minified build of the file, not the file in the repository (scripts/version-site-assets.py). A
+    deploy that sent the readable source, or left an old copy in place, serves pages that name one
+    file while the server sends another, and a visitor's cache pairs the two for up to a week. The
+    check does not depend on the deployed commit, so the scheduled run holds it too.
+    """
+    linked: dict[tuple[str, str], str] = {}
+    for page in PAGES:
+        status, _, body = get(f"{base}{page}", allow_redirect=True)
+        if status != 200:
+            continue  # the CSP check of the same page reports it
+        for m in VERSIONED_LINK.finditer(body.decode("utf-8", "replace")):
+            linked.setdefault((m.group(2), m.group(3)), page)
+    if not linked:
+        fail("no page links a file with a ?v= stamp: the check would pass vacuously")
+        return
+    for (path, stamp), page in sorted(linked.items()):
+        status, headers, body = get(f"{base}{path}?v={stamp}")
+        if status is None:
+            continue
+        if status != 200:
+            fail(f"{page} links {path}?v={stamp}, which answers {status}")
+            continue
+        if "gzip" in headers.get("content-encoding", ""):
+            body = gzip.decompress(body)
+        served = hashlib.sha256(body).hexdigest()[: len(stamp)]
+        if served != stamp:
+            fail(f"{page} links {path}?v={stamp}, but the server sends bytes stamped {served}: "
+                 f"a cached copy of either would be paired with the wrong one")
+        else:
+            ok(f"{path}?v={stamp}: the server sends the bytes the pages name ({len(body)} B)")
+
+
+def check_ownership_files(base: str, published: str | None) -> None:
+    """Does the site root serve each search engine's ownership file exactly as committed?
+
+    KHANDAQ (SEO, 2026-11-13). Google Search Console and Yandex Webmaster confirm who owns the site
+    by fetching a file of theirs from its root, and fetch it again later: a file that is gone,
+    redirected or changed costs the verification. Each must answer 200 as text/html, without a
+    redirect, with the bytes of the published commit. A file that commit does not have is not asked
+    for, so a rollback past the commit that added it is reported rather than failed.
+    """
+    names = sorted(p.name for p in (ROOT / "web").iterdir() if OWNERSHIP_FILE.fullmatch(p.name))
+    if not names:
+        fail("web/ holds no search-engine ownership file: the check would pass vacuously")
+        return
+    for name in names:
+        want = (ROOT / "web" / name).read_bytes()
+        if published:
+            shown = subprocess.run(["git", "-C", str(ROOT), "show", f"{published}:web/{name}"],
+                                   capture_output=True)
+            if shown.returncode == 0:
+                want = shown.stdout
+            elif subprocess.run(["git", "-C", str(ROOT), "cat-file", "-e", f"{published}^{{commit}}"],
+                                capture_output=True).returncode == 0:
+                checks_bump()
+                print(f"  note: /{name} is not in the published commit {published[:12]}, not checked")
+                continue
+        status, headers, body = get(f"{base}/{name}")
+        if status is None:
+            continue
+        if status != 200:
+            where = f" (a redirect to {headers.get('location')})" if 300 <= status < 400 else ""
+            fail(f"/{name} answers {status}{where}: the search engine needs 200 at this exact path")
+            continue
+        ctype = headers.get("content-type", "")
+        if ctype.split(";", 1)[0].strip().lower() != "text/html":
+            fail(f"/{name} is served as {ctype!r}, not text/html")
+            continue
+        if "gzip" in headers.get("content-encoding", ""):
+            body = gzip.decompress(body)
+        if body != want:
+            fail(f"/{name} sends {len(body)} B that differ from the {len(want)} B of web/{name}")
+        else:
+            ok(f"/{name}: 200, {ctype}, no redirect, the {len(body)} committed bytes")
 
 
 def main() -> int:
@@ -278,11 +382,14 @@ def main() -> int:
     print("-- CSP против реально отданного HTML")
     # KHANDAQ (redesign E23, 2026-11-11): the Russian pages are served from web/ru/ by the same
     # `location /`; a deploy that forgets to copy them answers 404 here and fails.
-    for page in ("/", "/changelog", "/privacy.html", "/ru/", "/ru/changelog.html", "/ru/privacy.html"):
+    for page in PAGES:
         check_csp_covers_inline(base, page)
     # The 404 page is served `internal;`, so it cannot be fetched by its own path — asking for it
     # directly is itself a 404. The body of a real miss is the only way to see what it sends.
     check_csp_covers_inline(base, f"/definitely-not-a-real-path-{probe}", expect=404)
+
+    print("-- long-cached files against the stamps the pages carry")
+    check_versioned_assets(base)
 
     # 4. security.txt
     print("-- security.txt")
@@ -313,6 +420,9 @@ def main() -> int:
                 fail(f"Expires не разбирается: {m.group(1)!r}")
         if not re.search(r"^Contact:\s*\S+", text, re.M):
             fail("в security.txt нет поля Contact")
+
+    print("-- search-engine ownership files")
+    check_ownership_files(base, (manifest.get("site") or {}).get("gitSha") if manifest else None)
 
     # 5. every published artifact must have a published signature beside it
     print("-- подписи артефактов")

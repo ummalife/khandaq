@@ -1,0 +1,43 @@
+{
+  "version": "0.2.48",
+  "date": "2026-11-13",
+  "title": "The Mac app opens on macOS 11 and later again",
+  "summary": "Khandaq v0.2.47 for Mac asked for macOS 11 but did not open on macOS 11 to 15: its libraries had been built for macOS 26. This release builds them for macOS 11 and checks every file in the app before packing it. The Windows and Linux builds get the call checks written in August, which had never reached them, and pictures you receive are read with a fixed libexif on Windows and Mac.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "The Mac app opens on macOS 11 and later",
+      "description": "v0.2.47 took its libraries from a package manager that builds them for the newest macOS, so on macOS 11 to 15 the app did not open. Every library in the app now targets macOS 11, and the build refuses to pack the app if any file in it needs a newer macOS or loads a library from outside the app. Profiles and message history from v0.2.47 open as before. The app is still for Macs with Apple Silicon and is still not notarized.",
+      "platforms": [
+        "macos"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Calls on Windows and Linux get the packet checks",
+      "description": "In August the app got checks on the packets that carry a call: a packet whose header claims more data than it holds is dropped before anything is copied, and so is an audio packet too short to carry any sound. Without them, a contact in a call could send packets that make the app write past the end of a buffer. The Windows and Linux builds compiled an unchanged copy of the network library and never got these checks. They are built from the patched copy now, like the Mac app.",
+      "platforms": [
+        "windows",
+        "linux"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Received pictures are read with libexif 0.6.26",
+      "description": "To show a received photo the right way up, the app reads the camera information inside it with libexif. Up to 0.6.25, libexif could be made to crash, or to leak memory contents, by a picture carrying crafted Fuji or Olympus maker notes (CVE-2026-40386). 0.6.26 fixes that and two related bugs (CVE-2026-32775, CVE-2026-40385).",
+      "platforms": [
+        "windows",
+        "macos"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Less of FFmpeg and a newer PCRE2 in the Mac app",
+      "description": "The Mac app used to carry all of FFmpeg. It now carries only the parts it uses for the camera, voice messages and video calls, with no network access and no filters. Its MP4 reader no longer reads three kinds of boxes a voice message never contains, which have known bugs and no fixed FFmpeg 8.1 release yet (CVE-2026-52297, CVE-2026-96611, CVE-2026-107678). PCRE2 moves to 10.49.",
+      "platforms": [
+        "macos"
+      ]
+    }
+  ]
+}

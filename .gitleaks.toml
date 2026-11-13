@@ -70,6 +70,14 @@ paths = [
   # the --no-git scan reaches it, because git mode does not diff the binary.
   '''.*[/\\]objcTox[/\\]Tests[/\\]unencrypted-database\.realm''',
 
+  # --- Device logs kept as test evidence ----------------------------------------------------------
+  # A logcat dump from the June 2026 smoke test, reachable only from tag v0.2.0-beta.1 (commit
+  # d61a7409; the file is gone from master). Its three findings, lines 6506, 6849 and 6887, are
+  # `GATT_Register: Allocated name:GattClient uuid:...` lines: the identifier Android's Bluetooth
+  # stack gives each GATT client registration. They were the last three of the weekly full-history
+  # sweep (2026-11-13), listed by rule, file and line in the gitleaks workflow log. Not credentials.
+  '''docs[/\\]smoke-test-screenshots[/\\]c3-logcat\.txt''',
+
   # --- Public signing identities ----------------------------------------------------------------
   '''\.github[/\\]allowed_signers''',
   '''\.github[/\\]CONTRIBUTING\.md''',

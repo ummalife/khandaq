@@ -615,9 +615,23 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
 
     /// Puts a step of the share question over whatever is on screen. A screen still coming or going
     /// refuses it; the share then stays in the inbox, and the next time the app is active asks again.
-    private func presentShareQuestion(_ makeController: (UIView) -> UIViewController) {
+    ///
+    /// KHANDAQ (QA 2026-11-14): a step asked for by an answer to the step before waits until that one has
+    /// left the screen. UIKit holds back a presentation asked for while another is still going away, and the
+    /// check below took that for a refusal: on the owner's phone (iOS 27.2, build 142995) "Choose a chat" put
+    /// the list up, but the chat picked in it got nothing and the list came back.
+    private func presentShareQuestion(_ makeController: @escaping (UIView) -> UIViewController) {
         var presenter = rootViewController()
-        while let presented = presenter.presentedViewController, !presented.isBeingDismissed {
+        while let presented = presenter.presentedViewController {
+            if presented.isBeingDismissed {
+                if let transition = presented.transitionCoordinator,
+                   transition.animate(alongsideTransition: nil, completion: { [weak self] _ in
+                       self?.presentShareQuestion(makeController)
+                   }) {
+                    return
+                }
+                break
+            }
             presenter = presented
         }
         let controller = makeController(presenter.view)
@@ -641,7 +655,7 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
             guard let self = self, let saved = self.toxManager.objects.getOrCreateSavedMessagesChat() else {
                 return
             }
-            self.deliverPendingShare(to: saved)
+            self.deliverShare(payload, to: saved)
         })
         let chats = toxManager.objects.chats().sortedResultsUsingProperty("lastActivityDateInterval", ascending: false)
         var offered = 0
@@ -652,11 +666,11 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
             }
             offered += 1
             sheet.addAction(UIAlertAction(title: MessageForwarder.displayName(for: chat), style: .default) { [weak self] _ in
-                self?.deliverPendingShare(to: chat)
+                self?.deliverShare(payload, to: chat)
             })
         }
         sheet.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel) { [weak self] _ in
-            self?.confirmDroppingPendingShare()
+            self?.confirmDroppingShare(payload)
         })
         return sheet
     }
@@ -665,17 +679,13 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
     /// used to drop the share from the inbox at once. On the owner's phone a link shared from Chrome
     /// reached nobody, and nothing said so. Dropping it now takes a second answer, in an alert that a
     /// stray tap cannot close; "Choose a chat" brings the list back.
-    private func confirmDroppingPendingShare() {
-        guard let payload = pendingSharePayload else {
-            finishPendingShare()
-            return
-        }
+    private func confirmDroppingShare(_ payload: ShareInboxPayload) {
         presentShareQuestion { _ in
             let alert = UIAlertController(title: String(localized: "air_share_drop_title"),
                                           message: ShareInboxStorage.summary(of: payload),
                                           preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: String(localized: "air_share_drop_verb"), style: .destructive) { [weak self] _ in
-                self?.finishPendingShare()
+                self?.finishShare(payload)
             })
             let chooseChat = UIAlertAction(title: String(localized: "air_share_choose_chat"), style: .cancel) { [weak self] _ in
                 guard let self = self else {
@@ -689,20 +699,17 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
         }
     }
 
-    private func deliverPendingShare(to chat: OCTChat) {
-        if let payload = pendingSharePayload {
-            sendSharePayload(payload, to: chat)
-        }
-        finishPendingShare()
+    private func deliverShare(_ payload: ShareInboxPayload, to chat: OCTChat) {
+        sendSharePayload(payload, to: chat)
+        finishShare(payload)
         showChat(chat)
     }
 
     /// The question is answered: what it was about leaves the inbox, and a share that came in while it
-    /// waited gets its own question.
-    private func finishPendingShare() {
-        if let payload = pendingSharePayload {
-            ShareInboxStorage.clearPendingShare(payload)
-        }
+    /// waited gets its own question. Each step carries the share it asks about, so an answer still acts
+    /// on it when the step was put up after the question's state was let go.
+    private func finishShare(_ payload: ShareInboxPayload) {
+        ShareInboxStorage.clearPendingShare(payload)
         pendingSharePayload = nil
         isPresentingSharePicker = false
         DispatchQueue.main.async { [weak self] in

@@ -45,6 +45,10 @@ MUST_BE_ABSENT = {
     "фильтр":    "_filter",
     "hwaccel":   "_hwaccel",
     "энкодер":   "_encoder",
+    # 2026-11-13: several waived advisories sit in parsers (CVE-2026-70628, the DVB subtitle
+    # parser) and the waivers say no parser or bitstream filter is linked, so hold that too.
+    "parser":    "_parser",
+    "bitstream filter": "_bsf",
 }
 ABSENT_FUNCS = ("avformat_open_input", "av_read_frame", "avio_open",
                 "sws_scale", "swr_convert", "avfilter_graph_alloc")

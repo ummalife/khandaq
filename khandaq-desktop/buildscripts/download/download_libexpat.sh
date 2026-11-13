@@ -17,8 +17,8 @@
 
 set -euo pipefail
 
-EXPAT_VERSION="2.8.3"
-EXPAT_HASH="f6256df90c906773d344da084402b7d3e4f22ed41b1a59c989098a83d3ea0c85"
+EXPAT_VERSION="2.10.0"
+EXPAT_HASH="c624ba2998fc65df1163a49641ff3f9ab73138b11641d92c86bee0fb01b1bc7f"
 
 source "$(dirname "$(realpath "$0")")/common.sh"
 

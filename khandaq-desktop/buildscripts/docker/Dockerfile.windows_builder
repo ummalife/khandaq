@@ -208,6 +208,11 @@ COPY download/download_toxcore.sh /build/download/download_toxcore.sh
 COPY download/download_toxext.sh /build/download/download_toxext.sh
 COPY download/download_toxext_messages.sh /build/download/download_toxext_messages.sh
 COPY build_toxcore.sh /build/build_toxcore.sh
+# KHANDAQ (v0.2.48): build the toxcore committed under buildscripts/toxcore, the copy that has the
+# toxav length checks (scripts/check-audio-length-gate.py) and that the macOS build uses. With
+# /src/tox empty, download_toxcore.sh cloned upstream 2e7a0675, which has none of them; with the
+# copy in place it skips the clone.
+COPY toxcore /src/tox/toxcore
 RUN mkdir -p /src/tox && \
   cd /src/tox && \
   /build/build_toxcore.sh && \

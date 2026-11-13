@@ -158,6 +158,10 @@ jobs:
           # silently fell back to a prebuilt AAR; the result threw UnsatisfiedLinkError 33 times a
           # second on users' phones and left the anti-downgrade gate unable to ever fire.
           python3 scripts/check-jni-symbols.py
+          # The FFmpeg waivers in security-waivers.json rest on what these exact slices link (one
+          # H.264 decoder, nothing else). security-checks.yml runs this on a plain checkout, where
+          # the gitignored .so is absent and the check has nothing to look at; here it is present.
+          python3 scripts/check-ffmpeg-surface.py
 
       - name: Provide google-services.json (real from secret, else placeholder for the build)
         env:

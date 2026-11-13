@@ -516,6 +516,13 @@ dependencies {
     testImplementation 'androidx.test.ext:junit:1.1.5'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.12.2'
+    // KHANDAQ (GHSA-574f-3g2m-x479, GHSA-9pwp-9qqc-pr26): robolectric 4.12.2 brings bcprov-jdk18on
+    // 1.77. Both advisories are fixed in 1.85; raise only bcprov, robolectric stays where it is.
+    constraints {
+        testImplementation('org.bouncycastle:bcprov-jdk18on:1.85') {
+            because 'GHSA-574f-3g2m-x479 and GHSA-9pwp-9qqc-pr26 are fixed in 1.85'
+        }
+    }
     testImplementation 'androidx.test.espresso:espresso-core:3.5.1'
     testImplementation 'androidx.test.espresso:espresso-intents:3.5.1'
     testImplementation 'androidx.test.ext:truth:1.5.0'

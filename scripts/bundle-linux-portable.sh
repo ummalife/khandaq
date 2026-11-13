@@ -36,8 +36,17 @@ if [[ ! -f "$BIN" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$DIST/khandaq.bin" ]]; then
-  mv "$BIN" "$DIST/khandaq.bin"
+# KHANDAQ (desktop v0.2.51): every build installs its binary as $DIST/khandaq, and this script turns
+# $DIST/khandaq into the launcher written below. The binary used to be moved aside only when there was
+# no khandaq.bin yet, so a build into a dist/ left by an earlier one kept the earlier khandaq.bin and
+# wrote the launcher over the new binary: the first v0.2.51 Linux build carried the v0.2.50 binary next
+# to the new libraries, and verify-linux-build.sh passed it. An ELF file here is a new build and always
+# replaces khandaq.bin; the launcher here means this bundle was made already and keeps its khandaq.bin.
+if [[ "$(LC_ALL=C head -c 4 "$BIN")" == $'\177ELF' ]]; then
+  mv -f "$BIN" "$DIST/khandaq.bin"
+elif [[ ! -f "$DIST/khandaq.bin" ]]; then
+  echo "Missing binary: $BIN is not an ELF file and there is no $DIST/khandaq.bin" >&2
+  exit 1
 fi
 BIN="$DIST/khandaq.bin"
 

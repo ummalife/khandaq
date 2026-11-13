@@ -340,7 +340,7 @@ python3 "$ROOT/scripts/version-site-assets.py" --out "$PUBLISHED"
 # file is never served.
 INCOMING="$REMOTE_SITE_DIR.incoming"
 ssh "$REMOTE" "rm -rf '$INCOMING' && mkdir -p '$INCOMING/downloads' '$INCOMING/.well-known'"
-scp -p "$WEB/index.html" "$WEB/changelog.html" "$WEB/changelog.json" "$WEB/404.html" "$WEB/privacy.html" "$WEB/robots.txt" "$WEB/sitemap.xml" "$REMOTE:$INCOMING/"
+scp -p "$WEB/index.html" "$WEB/changelog.html" "$WEB/changelog.json" "$WEB/404.html" "$WEB/privacy.html" "$WEB/robots.txt" "$WEB/llms.txt" "$WEB/sitemap.xml" "$REMOTE:$INCOMING/"
 # KHANDAQ (SEO, 2026-11-13): the files that prove ownership of the site to Google Search Console and
 # Yandex Webmaster. Both services fetch them from the site root again from time to time and drop the
 # verification once they are gone, so they stay for good, byte for byte as the services issued them.

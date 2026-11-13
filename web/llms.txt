@@ -1,0 +1,29 @@
+# Khandaq Messenger
+
+> Open-source messenger for Android, iPhone, Windows, macOS and Linux. End-to-end encrypted over the Tox network. No phone number, no account, no message server.
+
+There is no Khandaq server between two people: messages go end-to-end encrypted from one device straight to the other, over the open Tox network. If the other person is offline, the message waits on the sender's device and leaves by itself when they come online.
+
+- Nobody asks for a number, email or name. On first launch the app makes a key pair on the device; people add each other by the resulting ID, as text or as a QR code.
+- Every message, file and call is end-to-end encrypted by the Tox protocol (NaCl cryptography), directly between devices. Message content stays on the devices.
+- The only service Khandaq runs is push.khandaq.org, a wake-only push relay that carries no message body. Devices find each other through the public Tox DHT; Khandaq runs no bootstrap nodes of its own.
+- The apps are free and open source. They build on qTox (desktop), TRIfA (Android) and Antidote (iOS).
+
+## Pages
+
+- [Khandaq Messenger](https://khandaq.org/): how it works without a server, downloads for every platform, installation notes, questions and answers
+- [Khandaq Messenger, in Russian](https://khandaq.org/ru/): the same page in Russian
+- [Changelog](https://khandaq.org/changelog): what changed in each release, by platform
+- [Privacy policy](https://khandaq.org/privacy.html): what the apps keep on the device, how the network and push notifications work, and the visit statistics of this website
+
+## Downloads
+
+- [Google Play](https://play.google.com/store/apps/details?id=com.khandaq.messenger): Android
+- [TestFlight](https://testflight.apple.com/join/4ppS8ZN5): iPhone and iPad
+- [GitHub releases](https://github.com/ummalife/khandaq/releases/latest): Windows, macOS and Linux, each file with a signature to check before running it
+
+## Source and support
+
+- [Source code](https://github.com/ummalife/khandaq): the Android, iPhone and desktop apps, the push relay and this website
+- [Issues](https://github.com/ummalife/khandaq/issues): bug reports
+- [Security policy](https://github.com/ummalife/khandaq/blob/master/SECURITY.md): how to report a vulnerability

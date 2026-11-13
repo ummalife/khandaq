@@ -1380,6 +1380,9 @@
 "air_share_import_action" = "Move the profile from this file";
 "air_share_import_verb" = "Move";
 "air_share_in_title" = "Send to";
+"air_share_drop_title" = "Don't send it?";
+"air_share_drop_verb" = "Don't send";
+"air_share_choose_chat" = "Choose a chat";
 "air_share_ext_preparing" = "Preparing to send";
 "air_share_ext_open_app" = "Ready. Open Khandaq and choose who gets it.";
 "air_share_ext_failed" = "This could not be passed to Khandaq.";

@@ -1382,6 +1382,9 @@
 "air_share_import_action" = "Перенести профиль из файла";
 "air_share_import_verb" = "Перенести";
 "air_share_in_title" = "Кому отправить";
+"air_share_drop_title" = "Не отправлять?";
+"air_share_drop_verb" = "Не отправлять";
+"air_share_choose_chat" = "Выбрать чат";
 "air_share_ext_preparing" = "Готовим к отправке";
 "air_share_ext_open_app" = "Готово. Откройте Khandaq и выберите, кому отправить.";
 "air_share_ext_failed" = "Не получилось передать это в Khandaq.";

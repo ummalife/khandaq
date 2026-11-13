@@ -1369,6 +1369,9 @@
 "air_share_import_action" = "从这个文件转移档案";
 "air_share_import_verb" = "转移";
 "air_share_in_title" = "发送给";
+"air_share_drop_title" = "不发送了吗？";
+"air_share_drop_verb" = "不发送";
+"air_share_choose_chat" = "选择聊天";
 "air_share_ext_preparing" = "正在准备发送";
 "air_share_ext_open_app" = "已准备好。打开 Khandaq，选择发送给谁。";
 "air_share_ext_failed" = "无法把它交给 Khandaq。";

@@ -610,15 +610,19 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
 
         pendingSharePayload = payload
         isPresentingSharePicker = true
+        presentShareQuestion { source in self.shareTargetsSheet(for: payload, source: source) }
+    }
 
+    /// Puts a step of the share question over whatever is on screen. A screen still coming or going
+    /// refuses it; the share then stays in the inbox, and the next time the app is active asks again.
+    private func presentShareQuestion(_ makeController: (UIView) -> UIViewController) {
         var presenter = rootViewController()
         while let presented = presenter.presentedViewController, !presented.isBeingDismissed {
             presenter = presented
         }
-        let sheet = shareTargetsSheet(for: payload, source: presenter.view)
-        presenter.present(sheet, animated: true, completion: nil)
-        // A screen still coming or going refuses the sheet: the next time the app is active asks again.
-        if sheet.presentingViewController == nil {
+        let controller = makeController(presenter.view)
+        presenter.present(controller, animated: true, completion: nil)
+        if controller.presentingViewController == nil {
             pendingSharePayload = nil
             isPresentingSharePicker = false
         }
@@ -652,9 +656,37 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
             })
         }
         sheet.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel) { [weak self] _ in
-            self?.finishPendingShare()
+            self?.confirmDroppingPendingShare()
         })
         return sheet
+    }
+
+    /// KHANDAQ (QA 2026-11-13): on an iPhone the list's Cancel also answers a tap beside the list, and it
+    /// used to drop the share from the inbox at once. On the owner's phone a link shared from Chrome
+    /// reached nobody, and nothing said so. Dropping it now takes a second answer, in an alert that a
+    /// stray tap cannot close; "Choose a chat" brings the list back.
+    private func confirmDroppingPendingShare() {
+        guard let payload = pendingSharePayload else {
+            finishPendingShare()
+            return
+        }
+        presentShareQuestion { _ in
+            let alert = UIAlertController(title: String(localized: "air_share_drop_title"),
+                                          message: ShareInboxStorage.summary(of: payload),
+                                          preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: String(localized: "air_share_drop_verb"), style: .destructive) { [weak self] _ in
+                self?.finishPendingShare()
+            })
+            let chooseChat = UIAlertAction(title: String(localized: "air_share_choose_chat"), style: .cancel) { [weak self] _ in
+                guard let self = self else {
+                    return
+                }
+                self.presentShareQuestion { source in self.shareTargetsSheet(for: payload, source: source) }
+            }
+            alert.addAction(chooseChat)
+            alert.preferredAction = chooseChat
+            return alert
+        }
     }
 
     private func deliverPendingShare(to chat: OCTChat) {

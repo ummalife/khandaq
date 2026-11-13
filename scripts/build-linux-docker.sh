@@ -49,11 +49,23 @@ for value in "$GIT_VERSION" "$GIT_DESCRIBE" "$GIT_DESCRIBE_EXACT"; do
 done
 echo "==> Settings > About will say ${GIT_DESCRIBE:-Nightly}, commit ${GIT_VERSION:-build without git}"
 
+# KHANDAQ (desktop v0.2.49): the CMake build directory lives in the cache volume and outlives the
+# image. CMake keeps what pkg-config found in CMakeCache.txt, so a directory configured in an earlier
+# image goes on pointing at that image's libraries (v0.2.49 replaced Ubuntu's FFmpeg in
+# /usr/lib/x86_64-linux-gnu with one built into /usr/local). The container starts the directory over
+# when the image it was configured in is not this one.
+IMAGE_ID="$(docker image inspect --format '{{.Id}}' "$IMAGE")"
+if [[ ! "$IMAGE_ID" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  echo "unexpected image id of $IMAGE: $IMAGE_ID" >&2
+  exit 1
+fi
+
 echo "==> Compiling Khandaq inside container ($PLATFORM)..."
 docker run --rm --platform "$PLATFORM" \
   -e KHANDAQ_GIT_VERSION="$GIT_VERSION" \
   -e KHANDAQ_GIT_DESCRIBE="$GIT_DESCRIBE" \
   -e KHANDAQ_GIT_DESCRIBE_EXACT="$GIT_DESCRIBE_EXACT" \
+  -e KHANDAQ_IMAGE_ID="$IMAGE_ID" \
   -v "$SRC:/khandaq:ro" \
   -v "$ROOT/scripts:/scripts:ro" \
   -v "$ROOT/dist/linux:/dist" \
@@ -74,7 +86,12 @@ docker run --rm --platform "$PLATFORM" \
     if [[ -x scripts/generate-khandaq-icons.sh ]]; then
       ./scripts/generate-khandaq-icons.sh || true
     fi
+    if [[ "$(cat /build/out/.khandaq-image 2>/dev/null || true)" != "$KHANDAQ_IMAGE_ID" ]]; then
+      echo "==> Build directory was configured in another image; starting it over"
+      rm -rf /build/out
+    fi
     mkdir -p /build/out && cd /build/out
+    printf "%s\n" "$KHANDAQ_IMAGE_ID" > .khandaq-image
     # /build/out is kept between runs and a value given with -D stays in its CMakeCache.txt, so an
     # empty one removes the entry (-U) instead of building with the version of an earlier run.
     version_args=()

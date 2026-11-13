@@ -1536,9 +1536,9 @@
       "description": "EXIF parsing for image previews",
       "group": "generic",
       "name": "libexif",
-      "purl": "pkg:generic/libexif@0.6.24",
+      "purl": "pkg:generic/libexif@0.6.26",
       "type": "library",
-      "version": "0.6.24"
+      "version": "0.6.26"
     },
     {
       "description": "XML target descriptions for the bundled gdb; debug packaging only",

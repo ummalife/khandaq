@@ -90,7 +90,7 @@
     },
     {
       "name": "libexif",
-      "version": "0.6.24",
+      "version": "0.6.26",
       "purpose": "EXIF parsing for image previews",
       "pin_file": "khandaq-desktop/buildscripts/download/download_libexif.sh",
       "pin_var": "LIBEXIF_VERSION",

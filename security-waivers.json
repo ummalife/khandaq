@@ -38,7 +38,11 @@
     "fixes all seven of its advisories, and those entries were removed. CVE-2025-9231/9232 do not",
     "affect 1.1.1 at all (OpenSSL advisory of 2025-09-30); NVD's range is wider than the advisory. NVD",
     "attached CVE-2024-5535 (SSL_select_next_proto over-read) to 1.1.1w on 2026-11-10; it is",
-    "waived on the same ground as the other OpenSSL entries: release builds make no TLS connection."
+    "waived on the same ground as the other OpenSSL entries: release builds make no TLS connection.",
+    "libexif moved to 0.6.26 (2026-04-14), which fixes CVE-2026-32775, -40385 and -40386: all",
+    "three sit in MakerNote decoding, which the desktop runs on every received image it",
+    "previews (src/widget/imagepreviewwidget.cpp), so they were reachable with one accepted",
+    "file. Their waivers are removed rather than kept until the Qt 6 migration."
   ],
   "waivers": [
     {
@@ -803,39 +807,6 @@
       "exploitability": "gmp 6.2.1, транзитивная зависимость сборки. Обновляется в том же цикле.",
       "expires": "2027-02-08",
       "version": "6.2.1"
-    },
-    {
-      "id": "CVE-2026-32775",
-      "package": "libexif",
-      "purl": "pkg:generic/libexif@0.6.24",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "libexif 0.6.24 читает EXIF присланных изображений на десктопе. Обновляется вместе с остальным bundled-стеком в цикле миграции Qt 6.",
-      "expires": "2027-02-08",
-      "version": "0.6.24"
-    },
-    {
-      "id": "CVE-2026-40385",
-      "package": "libexif",
-      "purl": "pkg:generic/libexif@0.6.24",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "libexif 0.6.24 читает EXIF присланных изображений на десктопе. Обновляется вместе с остальным bundled-стеком в цикле миграции Qt 6.",
-      "expires": "2027-02-08",
-      "version": "0.6.24"
-    },
-    {
-      "id": "CVE-2026-40386",
-      "package": "libexif",
-      "purl": "pkg:generic/libexif@0.6.24",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "libexif 0.6.24 читает EXIF присланных изображений на десктопе. Обновляется вместе с остальным bundled-стеком в цикле миграции Qt 6.",
-      "expires": "2027-02-08",
-      "version": "0.6.24"
     },
     {
       "id": "CVE-2009-1390",

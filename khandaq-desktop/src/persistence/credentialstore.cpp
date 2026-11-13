@@ -7,6 +7,9 @@
 #include "credentialstore.h"
 
 #include <QByteArray>
+#ifdef KHANDAQ_SCREENSHOT_HOOK
+#include <QSettings>
+#endif
 
 #include <string>
 #include <tuple>
@@ -28,10 +31,32 @@ QString targetName(const QString& profile)
     return QStringLiteral("Khandaq:%1").arg(profile);
 }
 #endif
+
+#ifdef KHANDAQ_SCREENSHOT_HOOK
+/**
+ * A walk of a test build names a file of its own in KHANDAQ_SHOT_CREDENTIALS, and the passwords go
+ * there instead of the system store: the system may ask about its keychain on the screen of the
+ * computer the walk runs on.
+ */
+QString walkStore()
+{
+    return qEnvironmentVariable("KHANDAQ_SHOT_CREDENTIALS");
+}
+
+QString walkKey(const QString& profile)
+{
+    return QString::fromLatin1(profile.toUtf8().toHex());
+}
+#endif
 } // namespace
 
 bool CredentialStore::isSupported()
 {
+#ifdef KHANDAQ_SCREENSHOT_HOOK
+    if (!walkStore().isEmpty()) {
+        return true;
+    }
+#endif
 #if defined(Q_OS_MAC) || defined(Q_OS_WIN)
     return true;
 #else
@@ -41,6 +66,14 @@ bool CredentialStore::isSupported()
 
 bool CredentialStore::save(const QString& profile, const QString& password)
 {
+#ifdef KHANDAQ_SCREENSHOT_HOOK
+    if (!walkStore().isEmpty()) {
+        QSettings store(walkStore(), QSettings::IniFormat);
+        store.setValue(walkKey(profile), password);
+        store.sync();
+        return store.status() == QSettings::NoError;
+    }
+#endif
 #if defined(Q_OS_MAC)
     remove(profile);
 
@@ -112,6 +145,16 @@ bool CredentialStore::save(const QString& profile, const QString& password)
 
 bool CredentialStore::load(const QString& profile, QString& password)
 {
+#ifdef KHANDAQ_SCREENSHOT_HOOK
+    if (!walkStore().isEmpty()) {
+        const QSettings store(walkStore(), QSettings::IniFormat);
+        if (!store.contains(walkKey(profile))) {
+            return false;
+        }
+        password = store.value(walkKey(profile)).toString();
+        return true;
+    }
+#endif
 #if defined(Q_OS_MAC)
     const QByteArray service = QByteArray::fromRawData(SERVICE_NAME, sizeof(SERVICE_NAME) - 1);
     const QByteArray account = profile.toUtf8();
@@ -161,6 +204,17 @@ bool CredentialStore::load(const QString& profile, QString& password)
 
 bool CredentialStore::remove(const QString& profile)
 {
+#ifdef KHANDAQ_SCREENSHOT_HOOK
+    if (!walkStore().isEmpty()) {
+        QSettings store(walkStore(), QSettings::IniFormat);
+        if (!store.contains(walkKey(profile))) {
+            return false;
+        }
+        store.remove(walkKey(profile));
+        store.sync();
+        return store.status() == QSettings::NoError;
+    }
+#endif
 #if defined(Q_OS_MAC)
     const QByteArray service = QByteArray::fromRawData(SERVICE_NAME, sizeof(SERVICE_NAME) - 1);
     const QByteArray account = profile.toUtf8();

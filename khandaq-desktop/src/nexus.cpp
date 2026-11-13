@@ -157,6 +157,17 @@ void Nexus::start()
     showMainGUI();
 }
 
+void Nexus::setLoginFailure(const QString& profileName, const Air::OpenFailure& failure)
+{
+    loginFailureProfile = profileName;
+    loginFailure = failure;
+}
+
+void Nexus::setPendingImport(const QString& path)
+{
+    pendingImport = path;
+}
+
 /**
  * @brief Hides the main GUI, delete the profile, and shows the login screen
  */
@@ -171,13 +182,43 @@ int Nexus::showLogin(const QString& profileName)
     LoginScreen loginScreen{settings, *style, profileName};
     connectLoginScreen(loginScreen);
 
+    // A profile just deleted from You: the files that stayed are named over the start window.
+    loginScreen.tellLeftovers(deletionLeftovers);
+    deletionLeftovers.clear();
+    // The profile that did not open by itself at start says why under its field.
+    loginScreen.showFailure(loginFailureProfile, loginFailure);
+    loginFailureProfile.clear();
+    loginFailure = Air::OpenFailure();
+    if (!pendingImport.isEmpty()) {
+        loginScreen.moveIn(pendingImport);
+        pendingImport.clear();
+    }
+
     QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
 
     // TODO(kriby): Move core out of profile
     // This is awkward because the core is in the profile
     // The connection order ensures profile will be ready for bootstrap for now
     connect(this, &Nexus::currentProfileChanged, this, &Nexus::bootstrapWithProfile);
+    // KHANDAQ (redesign E19, E20): the main window is made as soon as the profile is open and waits
+    // behind the start window, which then grows into its frame and gives way to it.
+    QObject::connect(&loginScreen, &LoginScreen::readyToOpen, this,
+                     [this, &loginScreen](bool addFirstPerson) {
+                         if (!widget) {
+                             loginScreen.done(QDialog::Accepted);
+                             return;
+                         }
+                         const QRect frame = widget->frameForStart(loginScreen.geometry());
+                         loginScreen.growInto(frame, [this, &loginScreen, frame, addFirstPerson] {
+                             if (widget) {
+                                 widget->showFromStart(frame, addFirstPerson);
+                             }
+                             loginScreen.done(QDialog::Accepted);
+                         });
+                     });
+    holdWindow = true;
     int returnval = loginScreen.exec();
+    holdWindow = false;
     if (returnval == QDialog::Rejected) {
         // Kriby: This will terminate the main application loop, necessary until we refactor
         // away the split startup/return to login behavior.
@@ -185,6 +226,35 @@ int Nexus::showLogin(const QString& profileName)
     }
     disconnect(this, &Nexus::currentProfileChanged, this, &Nexus::bootstrapWithProfile);
     return returnval;
+}
+
+/**
+ * @brief Deletes the profile in use from this computer, then shows the login screen.
+ */
+void Nexus::removeProfile()
+{
+    if (!profile) {
+        return;
+    }
+    const QString name = profile->getName();
+    deletionLeftovers = profile->remove();
+    // KHANDAQ (redesign E17): a password kept for logging in automatically goes with the profile.
+    if (CredentialStore::isSupported()) {
+        CredentialStore::remove(name);
+    }
+    showLogin();
+}
+
+/**
+ * @brief A login at the login screen ends what Log out started (ProfileInfo::logout): the next
+ * starts log in by themselves again when logging in automatically is on.
+ */
+void Nexus::clearLoggedOut()
+{
+    if (settings.getLoggedOut()) {
+        settings.setLoggedOut(false);
+        settings.saveGlobal();
+    }
 }
 
 void Nexus::bootstrapWithProfile(Profile* p)
@@ -207,6 +277,7 @@ void Nexus::connectLoginScreen(const LoginScreen& loginScreen)
 
     // Nexus -> LoginScreen
     QObject::connect(this, &Nexus::profileLoaded, &loginScreen, &LoginScreen::onProfileLoaded);
+    QObject::connect(this, &Nexus::profileCreated, &loginScreen, &LoginScreen::onProfileCreated);
     QObject::connect(this, &Nexus::profileLoadFailed, &loginScreen, &LoginScreen::onProfileLoadFailed);
     // LoginScreen -> Nexus
     QObject::connect(&loginScreen, &LoginScreen::createNewProfile, this, &Nexus::onCreateNewProfile);
@@ -227,6 +298,9 @@ void Nexus::showMainGUI()
     // Create GUI
     widget = new Widget(*profile, *audioControl, cameraSource, settings, *style,
         ipc, *this);
+    if (holdWindow) {
+        widget->holdForStart();
+    }
 
     // Start GUI
     widget->init();
@@ -242,14 +316,15 @@ void Nexus::showMainGUI()
 
     connect(profile, &Profile::coreChanged, widget, &Widget::onCoreChanged);
 
-    connect(profile, &Profile::failedToStart, widget, &Widget::onFailedToStartCore,
-            Qt::BlockingQueuedConnection);
-
-    connect(profile, &Profile::badProxy, widget, &Widget::onBadProxyCore, Qt::BlockingQueuedConnection);
-
     profile->startCore();
 
     widget->setEnabled(true);
+
+    // Other instances hand their tox: links and files over from now on (Widget::handleToxUri).
+    // KHANDAQ: after Log out the main window is made again, and takes them again.
+    if (ipc.isAttached()) {
+        registerIpcHandlers();
+    }
 }
 
 /**
@@ -266,10 +341,12 @@ Profile* Nexus::getProfile()
  * @param name New username
  * @param pass New password
  */
-void Nexus::onCreateNewProfile(const QString& name, const QString& pass, bool autoLogin)
+void Nexus::onCreateNewProfile(const QString& fileName, const QString& selfName,
+                               const QString& pass, bool autoLogin)
 {
-    Profile* p = Profile::createProfile(name, pass, settings, parser, cameraSource,
-                                        messageBoxManager);
+    Air::OpenFailure failure;
+    Profile* p = Profile::createProfile(fileName, pass, settings, parser, cameraSource,
+                                        messageBoxManager, &failure, selfName);
     // KHANDAQ (deep review 2026-08-23, RR3-09): storing the password and skipping the login screen
     // happen only when the person creating the profile asked for them.
     //
@@ -279,22 +356,26 @@ void Nexus::onCreateNewProfile(const QString& name, const QString& pass, bool au
     // what an attacker with the unlocked machine has to get past, and it is not a decision to make
     // on somebody's behalf. The create-profile page now carries the checkbox that asks.
     if (p && autoLogin && !pass.isEmpty() && CredentialStore::isSupported()) {
-        if (CredentialStore::save(name, pass)) {
+        if (CredentialStore::save(fileName, pass)) {
             settings.setAutoLogin(true);
             settings.saveGlobal();
         }
     }
-    setProfile(p);
+    if (p) {
+        clearLoggedOut();
+    }
+    setProfile(p, failure, true);
     parser = nullptr; // only apply cmdline proxy settings once
 }
 
 /**
  * Loads an existing profile and replaces the current one.
  */
-void Nexus::onLoadProfile(const QString& name, const QString& pass)
+void Nexus::onLoadProfile(const QString& name, const QString& pass, bool withoutProxy)
 {
-    Profile* p = Profile::loadProfile(name, pass, settings, parser, cameraSource,
-                                      messageBoxManager);
+    Air::OpenFailure failure;
+    Profile* p = Profile::loadProfile(name, pass, settings, parser, cameraSource, messageBoxManager,
+                                      &failure, withoutProxy);
     if (p) {
         if (settings.getAutoLogin()) {
             if (!pass.isEmpty() && CredentialStore::isSupported()) {
@@ -303,25 +384,33 @@ void Nexus::onLoadProfile(const QString& name, const QString& pass)
         } else if (CredentialStore::isSupported()) {
             CredentialStore::remove(name);
         }
+        clearLoggedOut();
     }
-    setProfile(p);
+    setProfile(p, failure, false);
     parser = nullptr; // only apply cmdline proxy settings once
 }
+
 /**
  * Changes the loaded profile and notifies listeners.
  * @param p
  */
-void Nexus::setProfile(Profile* p)
+void Nexus::setProfile(Profile* p, const Air::OpenFailure& failure, bool created)
 {
     if (!p) {
-        emit profileLoadFailed();
-        // Warnings are issued during respective createNew/load calls
+        // Why it failed is said under the field of the start window.
+        emit profileLoadFailed(failure);
         return;
+    }
+    // The ID is read before the core runs on its own thread.
+    const QString id = created ? p->getCore().getSelfId().toString() : QString();
+    // The main window is made first, held behind the start window, so the start window can grow
+    // into its frame once it is told the profile is open.
+    emit currentProfileChanged(p);
+    if (created) {
+        emit profileCreated(id);
     } else {
         emit profileLoaded();
     }
-
-    emit currentProfileChanged(p);
 }
 
 void Nexus::setParser(QCommandLineParser* parser_)
@@ -338,6 +427,12 @@ bool Nexus::handleToxSave(const QString& path)
 {
     assert(widget);
     return widget->handleToxSave(path);
+}
+
+bool Nexus::handleToxUri(const QString& uri)
+{
+    assert(widget);
+    return widget->handleToxUri(uri);
 }
 
 #ifdef Q_OS_MAC

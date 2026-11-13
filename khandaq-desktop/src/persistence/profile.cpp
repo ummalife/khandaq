@@ -21,6 +21,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
+#include <QLockFile>
 #include <QObject>
 #include <QSaveFile>
 #include <QThread>
@@ -34,6 +35,8 @@
 #include "src/core/core.h"
 #include "src/core/coreav.h"
 #include "src/core/corefile.h"
+#include "src/model/air/airstart.h"
+#include "src/model/air/airyou.h"
 #include "src/net/avatarbroadcaster.h"
 #include "src/net/bootstrapnodeupdater.h"
 #include "src/nexus.h"
@@ -195,6 +198,36 @@ bool logLoadToxDataError(const LoadToxDataError& error, const QString& path)
     return true;
 }
 
+/**
+ * Why a save did not load, as the start window says it (E20). A password that does not open an
+ * encrypted save and a save damaged after the encryption fail the same way; only a save too short
+ * to hold anything is known to be damaged.
+ */
+Air::OpenFailure loadFailure(LoadToxDataError error, const QString& path)
+{
+    using Kind = Air::OpenFailure::Kind;
+    const QString code = QStringLiteral("LoadToxDataError %1").arg(static_cast<int>(error));
+    switch (error) {
+    case LoadToxDataError::FILE_NOT_FOUND:
+    case LoadToxDataError::COULD_NOT_READ_FILE:
+        return Air::OpenFailure(Kind::NoAccess, code);
+    case LoadToxDataError::FILE_IS_EMPTY:
+    case LoadToxDataError::COULD_NOT_DERIVE_KEY:
+        return Air::OpenFailure(Kind::Damaged, code);
+    case LoadToxDataError::ENCRYPTED_NO_PASSWORD:
+        return Air::OpenFailure(Kind::WrongPassword, code);
+    case LoadToxDataError::DECRYPTION_FAILED:
+        return Air::OpenFailure(QFileInfo(path).size() <= TOX_PASS_ENCRYPTION_EXTRA_LENGTH
+                                    ? Kind::Damaged
+                                    : Kind::WrongPassword,
+                                code);
+    case LoadToxDataError::OK:
+    case LoadToxDataError::DECRYPT_UNENCRYPTED_FILE:
+        break;
+    }
+    return Air::OpenFailure(Kind::Other, code);
+}
+
 bool logCreateToxDataError(const CreateToxDataError& error, const QString& userName)
 {
     switch (error) {
@@ -233,44 +266,55 @@ bool logCreateToxDataError(const CreateToxDataError& error, const QString& userN
 
 QStringList Profile::profiles;
 
-void Profile::initCore(const QByteArray& toxsave, Settings& s, bool isNewProfile, CameraSource& cameraSource)
+bool Profile::initCore(const QByteArray& toxsave, Settings& s, bool isNewProfile,
+                       CameraSource& cameraSource, Air::OpenFailure& failure)
 {
+    // KHANDAQ (redesign E20): a core that does not start is said under the field of the start
+    // window. qTox emitted signals here that nothing was connected to yet, and the profile went on
+    // without a core into the main window, which then failed on it.
+    using Kind = Air::OpenFailure::Kind;
     if (toxsave.isEmpty() && !isNewProfile) {
         qCritical() << "Existing toxsave is empty";
-        emit failedToStart();
+        failure = Air::OpenFailure(Kind::Damaged, QStringLiteral("save empty"));
+        return false;
     }
 
     if (!toxsave.isEmpty() && isNewProfile) {
         qCritical() << "New profile has toxsave data";
-        emit failedToStart();
+        failure = Air::OpenFailure(Kind::Other, QStringLiteral("new save"));
+        return false;
     }
 
     bootstrapNodes = std::unique_ptr<BootstrapNodeUpdater>(
         new BootstrapNodeUpdater(s.getProxy(), paths));
 
-    Core::ToxCoreErrors err;
+    Core::ToxCoreErrors err = Core::ToxCoreErrors::FAILED_TO_START;
     core = Core::makeToxCore(toxsave, s, *bootstrapNodes, &err);
     if (!core) {
+        const QString code = QStringLiteral("ToxCoreErrors %1").arg(static_cast<int>(err));
         switch (err) {
         case Core::ToxCoreErrors::BAD_PROXY:
-            emit badProxy();
+            failure = Air::OpenFailure(Kind::BadProxy, code);
+            break;
+        case Core::ToxCoreErrors::INVALID_SAVE:
+            failure = Air::OpenFailure(Kind::Damaged, code);
             break;
         case Core::ToxCoreErrors::ERROR_ALLOC:
         case Core::ToxCoreErrors::FAILED_TO_START:
-        case Core::ToxCoreErrors::INVALID_SAVE:
-        default:
-            emit failedToStart();
+            failure = Air::OpenFailure(Kind::Other, code);
+            break;
         }
 
         qDebug() << "Failed to start Toxcore";
-        return;
+        return false;
     }
 
     coreAv = CoreAV::makeCoreAV(core->getTox(), core->getCoreLoopLock(), s, s, cameraSource);
     if (!coreAv) {
         qDebug() << "Failed to start ToxAV";
-        emit failedToStart();
-        return;
+        core.reset();
+        failure = Air::OpenFailure(Kind::Other, QStringLiteral("toxav"));
+        return false;
     }
 
     // Tell Core that we run with AV before doing anything else
@@ -278,8 +322,15 @@ void Profile::initCore(const QByteArray& toxsave, Settings& s, bool isNewProfile
     coreAv->start();
 
     if (isNewProfile) {
-        core->setStatusMessage(tr("Toxing on Khandaq"));
-        core->setUsername(name);
+        // KHANDAQ (redesign E17): a new profile starts without a status line, as on the phones;
+        // qTox wrote a joke into every new one. The name is the one typed on first launch (E19),
+        // which the name of the profile file only follows.
+        core->setUsername(initialUsername.isEmpty() ? name : initialUsername);
+        onSaveToxSave();
+    } else if (Air::isLegacyDefaultStatus(core->getStatusMessage())) {
+        // The joke an older build wrote, never chosen by the person: cleared once, at load.
+        qDebug() << "Clearing the default status message of an older build";
+        core->setStatusMessage(QString());
         onSaveToxSave();
     }
 
@@ -292,6 +343,7 @@ void Profile::initCore(const QByteArray& toxsave, Settings& s, bool isNewProfile
             Qt::ConnectionType::QueuedConnection);
     // broadcast our own avatar
     avatarBroadcaster = std::unique_ptr<AvatarBroadcaster>(new AvatarBroadcaster(*core));
+    return true;
 }
 
 Profile::Profile(const QString& name_, std::unique_ptr<ToxEncrypt> passkey_, Paths& paths_,
@@ -314,17 +366,25 @@ Profile::Profile(const QString& name_, std::unique_ptr<ToxEncrypt> passkey_, Pat
  */
 Profile* Profile::loadProfile(const QString& name, const QString& password, Settings& settings,
                               const QCommandLineParser* parser, CameraSource& cameraSource,
-                              IMessageBoxManager& messageBoxManager)
+                              IMessageBoxManager& messageBoxManager, Air::OpenFailure* failure,
+                              bool withoutProxy)
 {
+    using Kind = Air::OpenFailure::Kind;
+    const auto fail = [failure](const Air::OpenFailure& why) -> Profile* {
+        if (failure) {
+            *failure = why;
+        }
+        return nullptr;
+    };
     if (ProfileLocker::hasLock()) {
         qCritical() << "Tried to load profile " << name << ", but another profile is already locked!";
-        return nullptr;
+        return fail(Air::OpenFailure(Kind::Other, QStringLiteral("locked here")));
     }
 
     Paths& paths = settings.getPaths();
     if (!ProfileLocker::lock(name, paths)) {
         qWarning() << "Failed to lock profile " << name;
-        return nullptr;
+        return fail(Air::OpenFailure(Kind::InUse, QStringLiteral("lock")));
     }
 
     LoadToxDataError error;
@@ -333,7 +393,7 @@ Profile* Profile::loadProfile(const QString& name, const QString& password, Sett
     std::unique_ptr<ToxEncrypt> tmpKey = loadToxData(password, path, toxsave, error);
     if (logLoadToxDataError(error, path)) {
         ProfileLocker::unlock();
-        return nullptr;
+        return fail(loadFailure(error, path));
     }
 
     Profile* p = new Profile(name, std::move(tmpKey), paths, settings);
@@ -341,8 +401,18 @@ Profile* Profile::loadProfile(const QString& name, const QString& password, Sett
     // Core settings are saved per profile, need to load them before starting Core
     constexpr bool isNewProfile = false;
     settings.updateProfileData(p, parser, isNewProfile);
+    if (withoutProxy) {
+        // The proxy of these network settings kept toxcore from starting: it goes, as the person
+        // was told before asking for it.
+        settings.setProxyType(Settings::ProxyType::ptNone);
+    }
 
-    p->initCore(toxsave, settings, isNewProfile, cameraSource);
+    Air::OpenFailure coreFailure;
+    if (!p->initCore(toxsave, settings, isNewProfile, cameraSource, coreFailure)) {
+        // Nothing of the profile is saved without a core: its files stay as they were.
+        delete p;
+        return fail(coreFailure);
+    }
     p->loadDatabase(password, messageBoxManager);
 
     return p;
@@ -358,7 +428,8 @@ Profile* Profile::loadProfile(const QString& name, const QString& password, Sett
  */
 Profile* Profile::createProfile(const QString& name, const QString& password, Settings& settings,
                                 const QCommandLineParser* parser, CameraSource& cameraSource,
-                                IMessageBoxManager& messageBoxManager)
+                                IMessageBoxManager& messageBoxManager, Air::OpenFailure* failure,
+                                const QString& selfName)
 {
     CreateToxDataError error;
     Paths& paths = settings.getPaths();
@@ -366,16 +437,31 @@ Profile* Profile::createProfile(const QString& name, const QString& password, Se
     std::unique_ptr<ToxEncrypt> tmpKey = createToxData(name, password, path, error, paths);
 
     if (logCreateToxDataError(error, name)) {
+        if (failure) {
+            *failure =
+                Air::OpenFailure(Air::OpenFailure::Kind::Other,
+                                 QStringLiteral("CreateToxDataError %1").arg(static_cast<int>(error)));
+        }
         return nullptr;
     }
 
     settings.createPersonal(name);
     Profile* p = new Profile(name, std::move(tmpKey), paths, settings);
+    p->initialUsername = selfName;
 
     constexpr bool isNewProfile = true;
     settings.updateProfileData(p, parser, isNewProfile);
 
-    p->initCore(QByteArray(), settings, isNewProfile, cameraSource);
+    Air::OpenFailure coreFailure;
+    if (!p->initCore(QByteArray(), settings, isNewProfile, cameraSource, coreFailure)) {
+        // A profile that never started leaves nothing behind: its settings file goes too.
+        delete p;
+        removeFiles(name, paths);
+        if (failure) {
+            *failure = coreFailure;
+        }
+        return nullptr;
+    }
     p->loadDatabase(password, messageBoxManager);
     return p;
 }
@@ -383,12 +469,21 @@ Profile* Profile::createProfile(const QString& name, const QString& password, Se
 Profile::~Profile()
 {
     if (isRemoved) {
+        settings.unloadPersonal(*this);
+        return;
+    }
+
+    if (!core) {
+        // Toxcore never started (initCore): there is nothing to save, and the files stay as they were.
+        settings.unloadPersonal(*this);
+        ProfileLocker::unlock();
         return;
     }
 
     onSaveToxSave();
     settings.savePersonal();
     settings.sync();
+    settings.unloadPersonal(*this);
     ProfileLocker::assertLock(paths);
     assert(ProfileLocker::getCurLockName() == name);
     ProfileLocker::unlock();
@@ -715,7 +810,10 @@ void Profile::onRequestSent(const ToxPk& friendPk, const QString& message)
         return;
     }
 
-    const QString inviteStr = Core::tr("/me offers friendship, \"%1\"").arg(message);
+    // An action line, read as "<your name> sent a request: ...": qTox offered "friendship" here,
+    // a word the redesign's dictionary gives up for contact and request.
+    //: Written into the history when you send a request; /me stands for your name
+    const QString inviteStr = Core::tr("/me sent a request: \"%1\"").arg(message);
     const ToxPk selfPk = core->getSelfPublicKey();
     const QDateTime datetime = QDateTime::currentDateTime();
     const QString selfName = core->getUsername();
@@ -807,6 +905,31 @@ void Profile::removeAvatar(const ToxPk& owner)
     } else {
         setFriendAvatar(owner, {});
     }
+}
+
+QStringList Profile::removeFiles(const QString& name, Paths& paths)
+{
+    const QString path = paths.getSettingsDirPath() + name;
+    const QStringList files{path + Core::TOX_EXT, path + QStringLiteral(".ini"),
+                            getDbPath(name, paths)};
+    // The files go only while this lock is held, so no instance can open the profile meanwhile. As
+    // in ProfileLocker::lock(), the lock of another instance is stale only once its process is gone.
+    QLockFile lock(ProfileLocker::lockPathFromName(name, paths));
+    lock.setStaleLockTime(0);
+    const bool openHere = ProfileLocker::hasLock() && ProfileLocker::getCurLockName() == name;
+    if (openHere || !lock.tryLock()) {
+        qWarning() << "Not removing profile" << name << "while it is open";
+        return files;
+    }
+    QStringList left;
+    for (const QString& file : files) {
+        if (QFile::exists(file) && !QFile::remove(file)) {
+            qWarning() << "Could not remove file" << file;
+            left.append(file);
+        }
+    }
+    profiles.removeAll(name);
+    return left;
 }
 
 bool Profile::exists(QString name, Paths& paths)

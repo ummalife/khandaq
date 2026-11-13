@@ -25,9 +25,10 @@
 #include "src/persistence/credentialstore.h"
 #include "src/persistence/profile.h"
 #include "src/ipc.h"
+#include "src/widget/air/airstyle.h"
+#include "src/widget/air/airwidgets.h"
 #include "src/widget/translator.h"
 #include "src/nexus.h"
-#include "src/net/toxuri.h"
 #include "src/widget/widget.h"
 #include "src/video/camerasource.h"
 
@@ -38,8 +39,8 @@
 #include <QApplication>
 #include <QFontDatabase>
 #include <QCommandLineParser>
+#include <QDialog>
 #include <QDir>
-#include <QMessageBox>
 #include <QObject>
 
 namespace
@@ -147,20 +148,6 @@ void logMessageHandler(QtMsgType type, const QMessageLogContext& ctxt, const QSt
 #endif
 }
 
-bool toxURIEventHandler(const QByteArray& eventData, void* userData)
-{
-    ToxURIDialog* uriDialog = static_cast<ToxURIDialog*>(userData);
-    if (!eventData.startsWith("tox:")) {
-        return false;
-    }
-
-    if (!uriDialog) {
-        return false;
-    }
-
-    uriDialog->handleToxURI(QString::fromUtf8(eventData));
-    return true;
-}
 } // namespace
 
 AppManager::AppManager(int& argc, char** argv)
@@ -204,6 +191,11 @@ int AppManager::run()
     if (QFontDatabase::addApplicationFont("://font/DejaVuSans.ttf") == -1) {
         qWarning() << "Couldn't load font";
     }
+    // The redesign's type, IBM Plex, becomes the application font. This also creates the AirStyle
+    // instance here, before any translation callback runs, which must not register handlers.
+    AirStyle::installFonts();
+    // A control that takes the focus inside a scrolled page comes into view, in every window.
+    AirFocus::followIntoView();
 
     QString locale = settings->getTranslation();
     // We need to init the resources in the translations_library explicitely.
@@ -322,6 +314,13 @@ int AppManager::run()
         profileName = settings->getCurrentProfile();
     }
 
+    // KHANDAQ (redesign E17): after Log out every start opens the login screen until a login there,
+    // whatever the stored password or -p would allow; the profile stays chosen on it.
+    if (settings->getLoggedOut()) {
+        qDebug() << "Logged out at the end of the last session: opening the login screen";
+        autoLogin = false;
+    }
+
     if (parser.positionalArguments().empty()) {
         eventType = "activate";
     } else {
@@ -376,18 +375,23 @@ int AppManager::run()
                            && CredentialStore::load(profileName, loginPassword));
 
         if (canAutoLogin) {
+            Air::OpenFailure failure;
             profile = Profile::loadProfile(profileName, loginPassword, *settings, &parser,
-                                           *cameraSource, *messageBoxManager);
-        }
-
-        if (canAutoLogin && !profile) {
-            QMessageBox::information(nullptr, tr("Error"),
-                                     tr("Failed to load profile automatically."));
+                                           *cameraSource, *messageBoxManager, &failure);
+            if (!profile) {
+                // Said under the password field of the start window that comes next (E21).
+                nexus->setLoginFailure(profileName, failure);
+            }
         }
     }
     if (profile) {
         nexus->bootstrapWithProfile(profile);
     } else {
+        // A profile file opened with the app is moved in from the start window (E20).
+        if (eventType == ToxSave::eventHandlerKey) {
+            nexus->setPendingImport(firstParam);
+            eventType.clear();
+        }
         nexus->setParser(&parser);
         int returnval = nexus->showLogin(profileName);
         if (returnval == QDialog::Rejected) {
@@ -396,17 +400,9 @@ int AppManager::run()
         profile = nexus->getProfile();
     }
 
-    uriDialog = std::unique_ptr<ToxURIDialog>(new ToxURIDialog(nullptr, profile->getCore(), *messageBoxManager));
-
-    if (ipc->isAttached()) {
-        // Start to accept Inter-process communication
-        ipc->registerEventHandler("uri", &toxURIEventHandler, uriDialog.get());
-        nexus->registerIpcHandlers();
-    }
-
     // Event was not handled by already running instance therefore we handle it ourselves
     if (eventType == "uri") {
-        uriDialog->handleToxURI(firstParam);
+        nexus->handleToxUri(firstParam);
     } else if (eventType == ToxSave::eventHandlerKey) {
         nexus->handleToxSave(firstParam);
     }

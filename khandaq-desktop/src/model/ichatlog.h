@@ -33,6 +33,7 @@
 #include "util/strongtype.h"
 
 #include <cassert>
+#include <tuple>
 
 using ChatLogIdx =
     NamedType<size_t, struct ChatLogIdxTag, Orderable, UnderlyingAddable, UnitlessDifferencable, Incrementable>;
@@ -142,6 +143,28 @@ public:
      * @param[in] message systemMessage to insert
      */
     virtual void addSystemMessage(const SystemMessage& message) = 0;
+
+    /**
+     * @brief Whether the log shows the item where it stands: a message the user cancelled is not
+     * shown, nor one the delivery gave up on, which waits for "Retry" below the log instead
+     * @param[in] idx index of an item of this log
+     */
+    virtual bool isShown(ChatLogIdx idx) const
+    {
+        std::ignore = idx;
+        return true;
+    }
+
+    /**
+     * @brief Whether the item is a message the user cancelled: it keeps its index until the next
+     * start, but is gone for everyone
+     * @param[in] idx index of an item of this log
+     */
+    virtual bool isCancelled(ChatLogIdx idx) const
+    {
+        std::ignore = idx;
+        return false;
+    }
 
 signals:
     void itemUpdated(ChatLogIdx idx);

@@ -71,6 +71,12 @@ qreal ChatLineContentProxy::getAscent() const
     return 7.0;
 }
 
+QString ChatLineContentProxy::getSpokenText() const
+{
+    const QWidget* const widget = getWidget();
+    return widget ? widget->accessibleName() : QString();
+}
+
 QWidget* ChatLineContentProxy::getWidget() const
 {
     return proxy->widget();
@@ -79,7 +85,20 @@ QWidget* ChatLineContentProxy::getWidget() const
 void ChatLineContentProxy::setWidth(float width)
 {
     prepareGeometryChange();
-    proxy->widget()->setFixedWidth(qMax(static_cast<int>(width * widthPercent), widthMin));
+    QWidget* const widget = proxy->widget();
+    const int fixedWidth = qMax(static_cast<int>(width * widthPercent), widthMin);
+    // A widget whose height follows its width (a file entry with a note that wraps) gets both
+    // here, before the line takes its height, so the scene learns the change in time.
+    if (widget->hasHeightForWidth()) {
+        widget->setFixedSize(fixedWidth, widget->heightForWidth(fixedWidth));
+        // The widget's size is the one measure: the proxy would otherwise hold its geometry inside
+        // the limits it last read from the widget's layout, and a file entry whose buttons left
+        // once it was done would keep the line as tall as before.
+        proxy->setMinimumSize(widget->size());
+        proxy->setMaximumSize(widget->size());
+    } else {
+        widget->setFixedWidth(fixedWidth);
+    }
 }
 
 ChatLineContentProxy::ChatLineContentProxyType ChatLineContentProxy::getWidgetType() const

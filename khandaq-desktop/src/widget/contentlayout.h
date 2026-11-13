@@ -33,6 +33,11 @@ public:
     ~ContentLayout();
 
     void clear();
+    /**
+     * A conversation runs to the edges of the column and closes its head with its own line.
+     * clear() brings the margins and the line back for the next form.
+     */
+    void setFlush(bool flush);
 
     QFrame mainHLine;
     QHBoxLayout mainHLineLayout;
@@ -46,4 +51,6 @@ public slots:
 
 private:
     void init();
+
+    QMargins contentMargins;
 };

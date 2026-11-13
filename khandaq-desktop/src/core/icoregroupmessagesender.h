@@ -21,6 +21,8 @@
 
 #include <QString>
 
+#include <cstdint>
+
 class ICoreGroupMessageSender
 {
 public:
@@ -31,6 +33,10 @@ public:
     ICoreGroupMessageSender(ICoreGroupMessageSender&&) = default;
     ICoreGroupMessageSender& operator=(ICoreGroupMessageSender&&) = default;
 
-    virtual void sendGroupAction(int groupId, const QString& message) = 0;
-    virtual void sendGroupMessage(int groupId, const QString& message) = 0;
+    /**
+     * Sends a message or an action to a group. Returns the id toxcore gave it, which the edits,
+     * deletions and reactions of the members point at, or 0 when it did not go.
+     */
+    virtual uint32_t sendGroupAction(int groupId, const QString& message) = 0;
+    virtual uint32_t sendGroupMessage(int groupId, const QString& message) = 0;
 };

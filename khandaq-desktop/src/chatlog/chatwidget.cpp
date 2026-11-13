@@ -21,8 +21,14 @@
 #include "chatlinecontent.h"
 #include "chatlinecontentproxy.h"
 #include "chatmessage.h"
+#include "content/airlabel.h"
 #include "content/filetransferwidget.h"
 #include "content/text.h"
+#include "src/widget/air/airaccessible.h"
+#include "src/widget/air/airstrings.h"
+#include "src/widget/air/airstyle.h"
+#include "src/widget/air/airtokens.h"
+#include "src/widget/air/airwidgets.h"
 #include "src/widget/translator.h"
 #include "src/widget/style.h"
 #include "src/persistence/settings.h"
@@ -33,7 +39,9 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QDebug>
+#include <QLocale>
 #include <QMouseEvent>
+#include <QPainter>
 #include <QScrollBar>
 #include <QShortcut>
 #include <QTimer>
@@ -61,16 +69,17 @@ T clamp(T x, T min, T max)
     return x;
 }
 
+/** "Today", "Yesterday" or the date: the day mark above the first entry of a day. */
 ChatMessage::Ptr createDateMessage(QDateTime timestamp, DocumentCache& documentCache,
     Settings& settings, Style& style)
 {
-    const auto date = timestamp.date();
-    auto dateText = date.toString(settings.getDateFormat());
-    return ChatMessage::createChatInfoMessage(dateText, ChatMessage::INFO, QDateTime(),
-        documentCache, settings, style);
+    const QString code = settings.getTranslation();
+    const QLocale locale = code.isEmpty() ? QLocale::system() : QLocale(code);
+    const QString dateText = AirStrings::dayMarkText(timestamp.date(), QDate::currentDate(), locale);
+    return ChatMessage::createDayMark(dateText, documentCache, settings, style);
 }
 
-ChatMessage::Ptr createMessage(const QString& displayName, bool isSelf, bool colorizeNames,
+ChatMessage::Ptr createMessage(const ChatMessage::AirLook& look, const QString& displayName,
                                const ChatLogMessage& chatLogMessage, DocumentCache& documentCache,
                                SmileyPack& smileyPack, Settings& settings, Style& style)
 {
@@ -88,15 +97,16 @@ ChatMessage::Ptr createMessage(const QString& displayName, bool isSelf, bool col
     }
 
     const auto timestamp = chatLogMessage.message.timestamp;
-    return ChatMessage::createChatMessage(displayName, chatLogMessage.message.content,messageType,
-                                          isSelf, chatLogMessage.state, timestamp, documentCache,
-                                          smileyPack, settings, style, colorizeNames);
+    return ChatMessage::createChatMessage(look, displayName, chatLogMessage.message.content,
+                                          messageType, timestamp, chatLogMessage.marks,
+                                          documentCache, smileyPack, settings, style);
 }
 
-void renderMessageRaw(const QString& displayName, bool isSelf, bool colorizeNames,
-                   const ChatLogMessage& chatLogMessage, ChatLine::Ptr& chatLine,
-                   DocumentCache& documentCache, SmileyPack& smileyPack,
-                   Settings& settings, Style& style)
+/** Returns whether a line drawn before may have changed its height: an edit, a reaction. */
+bool renderMessageRaw(const ChatMessage::AirLook& look, const QString& displayName,
+                      const ChatLogMessage& chatLogMessage, ChatLine::Ptr& chatLine,
+                      DocumentCache& documentCache, SmileyPack& smileyPack, Settings& settings,
+                      Style& style)
 {
     // HACK: This is kind of gross, but there's not an easy way to fit this into
     // the existing architecture. This shouldn't ever fail since we should only
@@ -106,15 +116,13 @@ void renderMessageRaw(const QString& displayName, bool isSelf, bool colorizeName
     auto chatMessage = static_cast<ChatMessage*>(chatLine.get());
 
     if (chatMessage) {
-        if (chatLogMessage.state == MessageState::complete) {
-            chatMessage->markAsDelivered(chatLogMessage.message.timestamp);
-        } else if (chatLogMessage.state == MessageState::broken) {
-            chatMessage->markAsBroken();
-        }
-    } else {
-        chatLine = createMessage(displayName, isSelf, colorizeNames, chatLogMessage,
-            documentCache, smileyPack, settings, style);
+        chatMessage->setStatus(look.status);
+        return chatMessage->updateMessage(chatLogMessage.message.content, chatLogMessage.marks,
+                                          smileyPack);
     }
+    chatLine =
+        createMessage(look, displayName, chatLogMessage, documentCache, smileyPack, settings, style);
+    return false;
 }
 
 /**
@@ -210,8 +218,8 @@ ChatLogIdx clampedAdd(ChatLogIdx idx, int val, IChatLog& chatLog)
 
 
 ChatWidget::ChatWidget(IChatLog& chatLog_, const Core& core_, DocumentCache& documentCache_,
-    SmileyPack& smileyPack_, Settings& settings_, Style& style_,
-    IMessageBoxManager& messageBoxManager_, QWidget* parent)
+                       SmileyPack& smileyPack_, Settings& settings_, Style& style_,
+                       IMessageBoxManager& messageBoxManager_, QWidget* parent, Kind kind)
     : QGraphicsView(parent)
     , selectionRectColor{style_.getColor(Style::ColorPalette::SelectText)}
     , chatLog(chatLog_)
@@ -223,6 +231,11 @@ ChatWidget::ChatWidget(IChatLog& chatLog_, const Core& core_, DocumentCache& doc
     , style{style_}
     , messageBoxManager{messageBoxManager_}
 {
+    personChat = kind == Kind::Person;
+    notesChat = kind == Kind::Notes;
+    // Every entry an element of its own for a screen reader, with what the phones say for it.
+    AirAccessible::install();
+
     // Create the scene
     busyScene = new QGraphicsScene(this);
     scene = new QGraphicsScene(this);
@@ -281,6 +294,12 @@ ChatWidget::ChatWidget(IChatLog& chatLog_, const Core& core_, DocumentCache& doc
     workerTimer->setInterval(5);
     connect(workerTimer, &QTimer::timeout, this, &ChatWidget::onWorkerTimeout);
 
+    // A file entry that grows or shrinks moves the lines after it, once per turn of the loop.
+    resizedLater = new QTimer(this);
+    resizedLater->setSingleShot(true);
+    resizedLater->setInterval(0);
+    connect(resizedLater, &QTimer::timeout, this, &ChatWidget::layoutResizedLines);
+
     // This timer is used to detect multiple clicks
     multiClickTimer = new QTimer(this);
     multiClickTimer->setSingleShot(true);
@@ -294,6 +313,10 @@ ChatWidget::ChatWidget(IChatLog& chatLog_, const Core& core_, DocumentCache& doc
     });
 
     connect(&style, &Style::themeReload, this, &ChatWidget::reloadTheme);
+    connect(&AirStyle::instance(), &AirStyle::changed, this, [this]() {
+        setBackgroundBrush(QBrush(style.getColor(Style::ColorPalette::GroundBase), Qt::SolidPattern));
+        viewport()->update();
+    });
 
     reloadTheme();
     retranslateUi();
@@ -360,9 +383,11 @@ void ChatWidget::layout(int start, int end, qreal width)
     qreal h = 0.0;
 
     // Line at start-1 is considered to have the correct position. All following lines are
-    // positioned in respect to this line.
-    if (start - 1 >= 0)
-        h = (*chatLineStorage)[start - 1]->sceneBoundingRect().bottom() + lineSpacing;
+    // positioned in respect to this line. A collapsed line takes no room, not even the gap after it.
+    if (start - 1 >= 0 && start - 1 < static_cast<int>(chatLineStorage->size())) {
+        const ChatLine* previous = (*chatLineStorage)[start - 1].get();
+        h = previous->sceneBoundingRect().bottom() + (previous->isCollapsed() ? 0.0 : lineSpacing);
+    }
 
     start = clamp<int>(start, 0, chatLineStorage->size());
     end = clamp<int>(end + 1, 0, chatLineStorage->size());
@@ -371,7 +396,9 @@ void ChatWidget::layout(int start, int end, qreal width)
         ChatLine* l = (*chatLineStorage)[i].get();
 
         l->layout(width, QPointF(0.0, h));
-        h += l->sceneBoundingRect().height() + lineSpacing;
+        if (!l->isCollapsed()) {
+            h += l->sceneBoundingRect().height() + lineSpacing;
+        }
     }
 }
 
@@ -570,6 +597,12 @@ void ChatWidget::insertChatlines(std::map<ChatLogIdx, ChatLine::Ptr> chatLines)
 
     scene->setItemIndexMethod(oldIndexMeth);
 
+    // New lines may also open a day whose mark was folded, or close a run of one author.
+    const size_t firstMoved = applyEntryFlags();
+    if (firstMoved < startLineSize) {
+        startLineSize = firstMoved;
+    }
+
     // If all insertions are at the bottom we can get away with only rendering
     // the updated lines, otherwise we need to go through the resize workflow to
     // re-layout everything asynchronously.
@@ -679,13 +712,13 @@ QString ChatWidget::getSelectedText() const
         // build a nicely formatted message
         QString out;
 
-        forEachLineIn(selFirstRow, selLastRow, *chatLineStorage, [&] (ChatLine::Ptr& line) {
-            if (line->content[1]->getText().isEmpty())
+        forEachLineIn(selFirstRow, selLastRow, *chatLineStorage, [&](ChatLine::Ptr& line) {
+            if (line->isCollapsed() || line->content[1]->getText().isEmpty())
                 return;
 
-            QString timestamp = line->content[2]->getText().isEmpty()
-                                    ? tr("pending")
-                                    : line->content[2]->getText();
+            //: Copied text of several messages: in place of the time of one that has not gone yet
+            QString timestamp = line->content[2]->getText().isEmpty() ? tr("in transit")
+                                                                      : line->content[2]->getText();
             QString author = line->content[0]->getText();
             QString msg = line->content[1]->getText();
 
@@ -697,6 +730,24 @@ QString ChatWidget::getSelectedText() const
     }
 
     return QString();
+}
+
+std::vector<ChatLine::Ptr> ChatWidget::spokenLines() const
+{
+    std::vector<ChatLine::Ptr> spoken;
+    spoken.reserve(chatLineStorage->size());
+    for (size_t i = 0; i < chatLineStorage->size(); ++i) {
+        const ChatLine::Ptr& line = (*chatLineStorage)[i];
+        if (line && !line->isCollapsed()) {
+            spoken.push_back(line);
+        }
+    }
+    return spoken;
+}
+
+QRect ChatWidget::viewportRectOf(const ChatLine& line) const
+{
+    return mapFromScene(line.sceneBoundingRect()).boundingRect();
 }
 
 bool ChatWidget::isEmpty() const
@@ -717,6 +768,29 @@ bool ChatWidget::hasTextToBeCopied() const
 ChatLineContent* ChatWidget::getContentFromGlobalPos(QPoint pos) const
 {
     return getContentFromPos(mapToScene(mapFromGlobal(pos)));
+}
+
+bool ChatWidget::entryAtGlobalPos(QPoint pos, ChatLogIdx& idx) const
+{
+    if (!chatLineStorage->hasIndexedMessage()) {
+        return false;
+    }
+    const QPointF scenePos = mapToScene(mapFromGlobal(pos));
+    const ChatLine::Ptr line = findLineByPosY(scenePos.y());
+    if (!line || line->isCollapsed()) {
+        return false;
+    }
+    const QRectF bounds = line->sceneBoundingRect();
+    if (scenePos.y() < bounds.top() || scenePos.y() > bounds.bottom()) {
+        return false;
+    }
+    for (auto i = chatLineStorage->firstIdx(); i <= chatLineStorage->lastIdx(); ++i) {
+        if (chatLineStorage->contains(i) && (*chatLineStorage)[i] == line) {
+            idx = i;
+            return true;
+        }
+    }
+    return false;
 }
 
 void ChatWidget::clear()
@@ -751,9 +825,11 @@ void ChatWidget::copySelectedText(bool toSelectionBuffer) const
 
 void ChatWidget::setTypingNotificationVisible(bool visible)
 {
+    typingShown = visible;
     if (typingNotification.get()) {
         typingNotification->setVisible(visible);
         updateTypingNotification();
+        updateSceneRect();
     }
 }
 
@@ -951,6 +1027,11 @@ void ChatWidget::checkVisibility()
 void ChatWidget::scrollContentsBy(int dx, int dy)
 {
     QGraphicsView::scrollContentsBy(dx, dy);
+    // The view moves what it shows by copying it; the focus ring stays where it is, so the view
+    // is painted afresh while the ring shows.
+    if (AirPaint::keyboardFocus(this)) {
+        viewport()->update();
+    }
     checkVisibility();
 }
 
@@ -1048,7 +1129,7 @@ QRectF ChatWidget::calculateSceneRect() const
 {
     qreal bottom = (chatLineStorage->empty() ? 0.0 : chatLineStorage->back()->sceneBoundingRect().bottom());
 
-    if (typingNotification.get() != nullptr)
+    if (typingNotification.get() != nullptr && typingShown)
         bottom += typingNotification->sceneBoundingRect().height() + lineSpacing;
 
     return QRectF(-margins.left(), -margins.top(), useableWidth(),
@@ -1130,6 +1211,7 @@ void ChatWidget::renderMessages(ChatLogIdx begin, ChatLogIdx end)
 {
     auto linesToRender = std::map<ChatLogIdx, ChatLine::Ptr>();
 
+    bool updated = false;
     for (auto i = begin; i < end; ++i) {
         bool alreadyRendered = chatLineStorage->contains(i);
         bool prevIdxRendered = i != begin || chatLineStorage->contains(i - 1);
@@ -1139,10 +1221,16 @@ void ChatWidget::renderMessages(ChatLogIdx begin, ChatLogIdx end)
 
         if (!alreadyRendered) {
             linesToRender.insert({i, chatMessage});
+        } else {
+            updated = true;
         }
     }
 
     insertChatlines(linesToRender);
+    // A line that changed in place may have left the log (cancelled, failed, waiting in the tray).
+    if (updated && linesToRender.empty()) {
+        refreshEntries();
+    }
 }
 
 void ChatWidget::setRenderedWindowStart(ChatLogIdx begin)
@@ -1337,9 +1425,23 @@ void ChatWidget::hideEvent(QHideEvent* event)
     }
 }
 
+void ChatWidget::drawForeground(QPainter* painter, const QRectF& rect)
+{
+    QGraphicsView::drawForeground(painter, rect);
+    if (!AirPaint::keyboardFocus(this)) {
+        return;
+    }
+    // In the coordinates of the viewport: the ring stands at its edge, whatever is scrolled.
+    painter->save();
+    painter->resetTransform();
+    AirPaint::focusRing(*painter, QRectF(viewport()->rect()), AirTokens::Radius::control);
+    painter->restore();
+}
+
 void ChatWidget::focusInEvent(QFocusEvent* ev)
 {
     QGraphicsView::focusInEvent(ev);
+    viewport()->update();
 
     if (selectionMode != SelectionMode::None) {
         selGraphItem->setBrush(QBrush(selectionRectColor));
@@ -1359,6 +1461,7 @@ void ChatWidget::focusInEvent(QFocusEvent* ev)
 void ChatWidget::focusOutEvent(QFocusEvent* ev)
 {
     QGraphicsView::focusOutEvent(ev);
+    viewport()->update();
 
     if (selectionMode != SelectionMode::None) {
         selGraphItem->setBrush(QBrush(selectionRectColor.lighter(120)));
@@ -1385,6 +1488,62 @@ void ChatWidget::retranslateUi()
 {
     copyAction->setText(tr("Copy"));
     selectAllAction->setText(tr("Select all"));
+    // What a screen reader says when Tab brings the focus to the messages.
+    setAccessibleName(AirStrings::text(AirStrings::Text::TranscriptName));
+
+    // A language written the other way turns the transcript around: the texts take the new start
+    // edge and the lines are laid out again.
+    const Qt::LayoutDirection direction = QGuiApplication::layoutDirection();
+    const bool turned = direction != lineDirection;
+    if (turned) {
+        lineDirection = direction;
+        for (ChatLine::Ptr l : *chatLineStorage) {
+            l->reloadTheme();
+        }
+    }
+
+    // The words the transcript writes itself come in the new language at once: the day marks
+    // ("Today", "Yesterday", a date) and "You" over your own messages.
+    const QString code = settings.getTranslation();
+    const QLocale locale = code.isEmpty() ? QLocale::system() : QLocale(code);
+    const QDate today = QDate::currentDate();
+    bool renamed = false;
+    for (const auto& day : chatLineStorage->dateLines()) {
+        if (auto* const label = qobject_cast<AirLabel*>(day.first->getContent(0))) {
+            label->setText(AirStrings::dayMarkText(day.second.date(), today, locale));
+            renamed = true;
+        }
+    }
+    if (chatLineStorage->hasIndexedMessage()) {
+        const QString you = AirStrings::text(AirStrings::Text::You);
+        const ToxPk self = core.getSelfPublicKey();
+        for (auto i = chatLineStorage->firstIdx(); i <= chatLineStorage->lastIdx(); ++i) {
+            if (!chatLineStorage->contains(i)) {
+                continue;
+            }
+            const ChatLogItem& item = chatLog.at(i);
+            if (item.getContentType() == ChatLogItem::ContentType::systemMessage) {
+                // The words of a call entry.
+                Air::CallEntry call;
+                auto* const line = qobject_cast<AirCallLine*>((*chatLineStorage)[i]->getContent(1));
+                if (line && Air::callEntryOf(item.getContentAsSystemMessage(), &call)) {
+                    line->setText(AirStrings::callEntryText(call));
+                    renamed = true;
+                }
+                continue;
+            }
+            if (item.getSender() != self) {
+                continue;
+            }
+            if (auto* const label = qobject_cast<AirLabel*>((*chatLineStorage)[i]->getContent(0))) {
+                label->setText(you);
+                renamed = true;
+            }
+        }
+    }
+    if (turned || renamed) {
+        forceRelayout();
+    }
 }
 
 bool ChatWidget::isActiveFileTransfer(ChatLine::Ptr l)
@@ -1417,56 +1576,295 @@ void ChatWidget::setTypingNotification()
 
 void ChatWidget::renderItem(const ChatLogItem& item, bool hideName, bool colorizeNames_, ChatLine::Ptr& chatMessage)
 {
-    const auto& sender = item.getSender();
-
-    bool isSelf = sender == core.getSelfPublicKey();
+    // Every author has a tone of their own in the redesign, so the colorized names option has
+    // nothing left to switch.
+    std::ignore = colorizeNames_;
+    const ChatMessage::AirLook look = lookOf(item);
 
     switch (item.getContentType()) {
     case ChatLogItem::ContentType::message: {
         const auto& chatLogMessage = item.getContentAsMessage();
 
-        renderMessageRaw(item.getDisplayName(), isSelf, colorizeNames_, chatLogMessage,
-            chatMessage, documentCache, smileyPack, settings, style);
+        if (renderMessageRaw(look, item.getDisplayName(), chatLogMessage, chatMessage,
+                             documentCache, smileyPack, settings, style)) {
+            resizedLines.push_back(chatMessage);
+            resizedLater->start();
+        }
 
         break;
     }
     case ChatLogItem::ContentType::fileTransfer: {
         const auto& file = item.getContentAsFile();
-        renderFile(item.getDisplayName(), file.file, isSelf, item.getTimestamp(), chatMessage);
+        renderFile(look, file.file, item.getTimestamp(), file.marks, chatMessage);
         break;
     }
     case ChatLogItem::ContentType::systemMessage: {
         const auto& systemMessage = item.getContentAsSystemMessage();
 
+        // A call is an entry of its own: one row per call, with its length or how it went.
+        Air::CallEntry call;
+        if (Air::callEntryOf(systemMessage, &call)) {
+            const bool answered = call.outcome == Air::CallOutcome::Answered
+                                  || call.outcome == Air::CallOutcome::CutOff;
+            chatMessage = ChatMessage::createCallEntry(AirStrings::callEntryText(call), answered,
+                                                       systemMessage.timestamp, documentCache,
+                                                       settings, style);
+            hideName = true;
+            break;
+        }
         auto chatMessageType = getChatMessageType(systemMessage);
         chatMessage = ChatMessage::createChatInfoMessage(systemMessage.toString(),
             chatMessageType, systemMessage.timestamp, documentCache, settings,
             style);
-        // Ignore caller's decision to hide the name. We show the icon in the
-        // slot of the sender's name so we always want it visible
-        hideName = false;
+        // A line nobody wrote has no author to show.
+        hideName = true;
         break;
     }
     }
 
-    if (hideName) {
-        chatMessage->getContent(0)->hide();
+    // Notes are all yours: no author over any of them.
+    chatMessage->setAuthorShown(!hideName && !notesChat);
+}
+
+ChatMessage::AirLook ChatWidget::lookOf(const ChatLogItem& item) const
+{
+    ChatMessage::AirLook look;
+    const bool isSelf = item.getSender() == core.getSelfPublicKey();
+    if (isSelf) {
+        look.who = AirStrings::text(AirStrings::Text::You);
+        look.tone = -1;
+        // Notes are all yours: a screen reader says no author over them either.
+        look.spokenWho = notesChat ? QString() : look.who;
+    } else {
+        look.who = Air::shortName(item.getDisplayName());
+        look.tone = Air::toneIndex(item.getSender().toString());
+        look.spokenWho = item.getDisplayName();
+    }
+    const ChatLogItem::ContentType type = item.getContentType();
+    look.hasMark = personChat && isSelf
+                   && (type == ChatLogItem::ContentType::message
+                       || type == ChatLogItem::ContentType::fileTransfer);
+    look.status = look.hasMark ? statusOf(item) : Air::EntryStatus::None;
+    return look;
+}
+
+Air::EntryStatus ChatWidget::statusOf(const ChatLogItem& item) const
+{
+    if (item.getContentType() == ChatLogItem::ContentType::fileTransfer) {
+        // Two checks once the person has all of it, a clock while it waits or moves.
+        return Air::fileStatus(item.getContentAsFile().file.status, personOnline);
+    }
+    if (item.getContentType() != ChatLogItem::ContentType::message) {
+        return Air::EntryStatus::None;
+    }
+    const MessageState state = item.getContentAsMessage().state;
+    // toxcore takes a message as soon as the person is online, so a pending one has left this
+    // computer then: there is no "sending" state on the desktop.
+    return Air::directTextStatus(false, state == MessageState::complete,
+                                 state == MessageState::broken, true, personOnline);
+}
+
+bool ChatWidget::isCollapsedAt(ChatLogIdx idx) const
+{
+    if (!chatLog.isShown(idx)) {
+        return true;
+    }
+    if (!personChat || personOnline) {
+        return false;
+    }
+    // While the person is offline, our messages waiting for them are in the tray instead.
+    const ChatLogItem& item = chatLog.at(idx);
+    return item.getContentType() == ChatLogItem::ContentType::message
+           && item.getSender() == core.getSelfPublicKey()
+           && item.getContentAsMessage().state == MessageState::pending;
+}
+
+size_t ChatWidget::applyEntryFlags()
+{
+    const size_t count = chatLineStorage->size();
+    if (!chatLineStorage->hasIndexedMessage()) {
+        return count;
+    }
+
+    std::map<const ChatLine*, ChatLogIdx> idxOf;
+    for (auto i = chatLineStorage->firstIdx(); i <= chatLineStorage->lastIdx(); ++i) {
+        if (chatLineStorage->contains(i)) {
+            idxOf.insert({(*chatLineStorage)[i].get(), i});
+        }
+    }
+
+    size_t firstMoved = count;
+    const auto moved = [&firstMoved](size_t position) {
+        firstMoved = std::min(firstMoved, position);
+    };
+
+    // The day mark folds away with the last entry of its day that the log shows.
+    size_t dayPosition = count;
+    bool dayHasEntries = false;
+    const auto closeDay = [&]() {
+        if (dayPosition < count && (*chatLineStorage)[dayPosition]->setCollapsed(!dayHasEntries)) {
+            moved(dayPosition);
+        }
+    };
+
+    bool hasPrevious = false;
+    Air::RunKey previous;
+    for (size_t position = 0; position < count; ++position) {
+        ChatLine* line = (*chatLineStorage)[position].get();
+        if (line->getLayout() == ChatLine::Layout::AirDay) {
+            closeDay();
+            dayPosition = position;
+            dayHasEntries = false;
+            hasPrevious = false;
+            continue;
+        }
+        const auto found = idxOf.find(line);
+        if (found == idxOf.end()) {
+            continue;
+        }
+
+        const ChatLogIdx idx = found->second;
+        const bool collapsed = isCollapsedAt(idx);
+        if (line->setCollapsed(collapsed)) {
+            moved(position);
+        }
+        if (collapsed) {
+            continue;
+        }
+        dayHasEntries = true;
+
+        const ChatLogItem& item = chatLog.at(idx);
+        const bool isSelf = item.getSender() == core.getSelfPublicKey();
+        const ChatLogItem::ContentType type = item.getContentType();
+        const Air::RunKey key(isSelf ? QString() : item.getSender().toString(), item.getTimestamp(),
+                              type == ChatLogItem::ContentType::message);
+        if (type != ChatLogItem::ContentType::systemMessage) {
+            const bool shown = !notesChat && Air::startsRun(key, hasPrevious ? &previous : nullptr);
+            if (line->setAuthorShown(shown)) {
+                moved(position);
+            }
+        }
+        if (personChat && isSelf
+            && (type == ChatLogItem::ContentType::message
+                || type == ChatLogItem::ContentType::fileTransfer)) {
+            static_cast<ChatMessage*>(line)->setStatus(statusOf(item));
+        }
+        previous = key;
+        hasPrevious = true;
+    }
+    closeDay();
+    return firstMoved;
+}
+
+void ChatWidget::refreshEntries()
+{
+    const size_t firstMoved = applyEntryFlags();
+    if (firstMoved >= chatLineStorage->size()) {
+        return;
+    }
+    const bool stickToBtm = stickToBottom();
+    layout(static_cast<int>(firstMoved), static_cast<int>(chatLineStorage->size()), useableWidth());
+    updateSceneRect();
+    if (stickToBtm) {
+        scrollToBottom();
+    }
+    checkVisibility();
+    updateTypingNotification();
+    updateMultiSelectionRect();
+}
+
+void ChatWidget::setPersonOnline(bool online)
+{
+    if (personOnline == online) {
+        return;
+    }
+    personOnline = online;
+    refreshEntries();
+    refreshFileEntries();
+}
+
+void ChatWidget::setPersonName(const QString& name)
+{
+    if (personName == name) {
+        return;
+    }
+    personName = name;
+    refreshFileEntries();
+}
+
+namespace {
+/** The file entry of a line, or null for a line of another kind. */
+FileTransferWidget* fileEntryOf(const ChatLine& line)
+{
+    auto* const proxy = qobject_cast<ChatLineContentProxy*>(line.getContent(1));
+    return proxy ? qobject_cast<FileTransferWidget*>(proxy->getWidget()) : nullptr;
+}
+} // namespace
+
+void ChatWidget::refreshFileEntries()
+{
+    for (const ChatLine::Ptr& line : *chatLineStorage) {
+        if (FileTransferWidget* const entry = fileEntryOf(*line)) {
+            entry->setConversation(!personChat, personName, personOnline);
+        }
     }
 }
 
-void ChatWidget::renderFile(QString displayName, ToxFile file, bool isSelf, QDateTime timestamp,
-                ChatLine::Ptr& chatMessage)
+void ChatWidget::layoutResizedLines()
+{
+    size_t first = chatLineStorage->size();
+    for (const std::weak_ptr<ChatLine>& weak : resizedLines) {
+        const ChatLine::Ptr line = weak.lock();
+        if (!line) {
+            continue;
+        }
+        const auto found = chatLineStorage->find(line);
+        if (found != chatLineStorage->end()) {
+            first = std::min(first, static_cast<size_t>(found - chatLineStorage->begin()));
+        }
+    }
+    resizedLines.clear();
+    if (first >= chatLineStorage->size()) {
+        return;
+    }
+    const bool stickToBtm = stickToBottom();
+    layout(static_cast<int>(first), static_cast<int>(chatLineStorage->size()), useableWidth());
+    updateSceneRect();
+    if (stickToBtm) {
+        scrollToBottom();
+    }
+    checkVisibility();
+    updateTypingNotification();
+    updateMultiSelectionRect();
+}
+
+void ChatWidget::renderFile(const ChatMessage::AirLook& look, ToxFile file, QDateTime timestamp,
+                            const Air::EntryMarks& marks, ChatLine::Ptr& chatMessage)
 {
     if (!chatMessage) {
         CoreFile* coreFile = core.getCoreFile();
         assert(coreFile);
-        chatMessage = ChatMessage::createFileTransferMessage(displayName, *coreFile,
-            file, isSelf, timestamp, documentCache, settings, style, messageBoxManager);
+        chatMessage = ChatMessage::createFileTransferMessage(look, *coreFile, file, timestamp,
+                                                             marks, documentCache, smileyPack,
+                                                             settings, style, messageBoxManager);
+        FileTransferWidget* const entry = fileEntryOf(*chatMessage);
+        assert(entry);
+        entry->setConversation(!personChat, personName, personOnline);
+        const std::weak_ptr<ChatLine> weak = chatMessage;
+        connect(entry, &FileTransferWidget::heightChanged, this, [this, weak] {
+            resizedLines.push_back(weak);
+            resizedLater->start();
+        });
     } else {
-        auto proxy = static_cast<ChatLineContentProxy*>(chatMessage->getContent(1));
-        assert(proxy->getWidgetType() == ChatLineContentProxy::FileTransferWidgetType);
-        auto ftWidget = static_cast<FileTransferWidget*>(proxy->getWidget());
-        ftWidget->onFileTransferUpdate(file);
+        FileTransferWidget* const entry = fileEntryOf(*chatMessage);
+        assert(entry);
+        entry->onFileTransferUpdate(file);
+        auto* const line = static_cast<ChatMessage*>(chatMessage.get());
+        line->setStatus(look.status);
+        if (line->updateMarks(marks)) {
+            resizedLines.push_back(chatMessage);
+            resizedLater->start();
+        }
     }
 }
 
@@ -1489,17 +1887,14 @@ bool ChatWidget::needsToHideName(ChatLogIdx idx, bool prevIdxRendered) const
     const auto& prevItem = chatLog.at(idx - 1);
     const auto& currentItem = chatLog.at(idx);
 
-    // Always show the * in the name field for action messages
-    if (currentItem.getContentType() == ChatLogItem::ContentType::message
-        && currentItem.getContentAsMessage().message.isAction) {
-        return false;
-    }
-
-    qint64 messagesTimeDiff = prevItem.getTimestamp().secsTo(currentItem.getTimestamp());
-    return currentItem.getSender() == prevItem.getSender()
-           && messagesTimeDiff < repNameAfter;
-
-    return false;
+    // The run rule of the redesign: the same author on the same day, at most five minutes apart.
+    const auto keyOf = [this](const ChatLogItem& item) -> Air::RunKey {
+        const bool isSelf = item.getSender() == core.getSelfPublicKey();
+        return Air::RunKey(isSelf ? QString() : item.getSender().toString(), item.getTimestamp(),
+                           item.getContentType() == ChatLogItem::ContentType::message);
+    };
+    const Air::RunKey previous = keyOf(prevItem);
+    return !Air::startsRun(keyOf(currentItem), &previous);
 }
 
 bool ChatWidget::shouldRenderMessage(ChatLogIdx idx) const

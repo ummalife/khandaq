@@ -19,7 +19,8 @@
 
 #include "notificationgenerator.h"
 #include "src/chatlog/content/filetransferwidget.h"
-#include "util/display.h"
+#include "src/widget/air/airstrings.h"
+#include "src/widget/translator.h"
 
 #include <QCollator>
 
@@ -42,12 +43,10 @@ namespace
         return friendNotifications.size() + groupNotifications.size();
     }
 
-    QString generateMultiChatTitle(size_t numChats, size_t numMessages)
+    QString generateMultiChatTitle(size_t numMessages)
     {
-        //: e.g. 3 messages from 2 chats
-        return QObject::tr("%1 message(s) from %2 chats")
-            .arg(numMessages)
-            .arg(numChats);
+        // "3 new messages": the chats they came from follow, by name.
+        return AirStrings::text(AirStrings::Text::NotifyNewMessages, static_cast<int>(numMessages));
     }
 
     template <typename T>
@@ -57,9 +56,8 @@ namespace
     {
         if (numNotifications[contact] > 1)
         {
-            //: e.g. 2 messages from Bob
-            return QObject::tr("%1 message(s) from %2")
-                .arg(numNotifications[contact])
+            return AirStrings::text(AirStrings::Text::NotifyMessagesFrom,
+                                    static_cast<int>(numNotifications[contact]))
                 .arg(contact->getDisplayedName());
         }
         else
@@ -76,7 +74,7 @@ namespace
         auto numChats = getNumChats(friendNotifications, groupNotifications);
         if (numChats > 1)
         {
-            return generateMultiChatTitle(numChats, getNumMessages(friendNotifications, groupNotifications));
+            return generateMultiChatTitle(getNumMessages(friendNotifications, groupNotifications));
         }
         else
         {
@@ -92,7 +90,7 @@ namespace
         auto numChats = getNumChats(friendNotifications, groupNotifications);
         if (numChats > 1)
         {
-            return generateMultiChatTitle(numChats, getNumMessages(friendNotifications, groupNotifications));
+            return generateMultiChatTitle(getNumMessages(friendNotifications, groupNotifications));
         }
         else
         {
@@ -172,7 +170,7 @@ NotificationData NotificationGenerator::friendMessageNotification(const Friend* 
     NotificationData ret;
 
     if (notificationSettings.getNotifyHide()) {
-        ret.title = tr("New message");
+        ret.title = AirStrings::text(AirStrings::Text::NotifyNewMessage);
         return ret;
     }
 
@@ -190,7 +188,7 @@ NotificationData NotificationGenerator::groupMessageNotification(const Group* g,
     NotificationData ret;
 
     if (notificationSettings.getNotifyHide()){
-        ret.title = tr("New group message");
+        ret.title = AirStrings::text(AirStrings::Text::NotifyNewGroupMessage);
         return ret;
     }
 
@@ -208,23 +206,28 @@ NotificationData NotificationGenerator::fileTransferNotification(const Friend* f
     NotificationData ret;
 
     if (notificationSettings.getNotifyHide()) {
-        ret.title = tr("Incoming file transfer");
+        ret.title = AirStrings::text(AirStrings::Text::NotifyIncomingFile);
         return ret;
     }
 
     auto numChats = getNumChats(friendNotifications, groupNotifications);
     auto numMessages = getNumMessages(friendNotifications, groupNotifications);
+    const QString fileWords = AirStrings::text(AirStrings::Text::FileMessage);
 
     if (numChats > 1 || numMessages > 1)
     {
         ret.title = generateTitle(friendNotifications, groupNotifications, f);
-        ret.message = generateContent(friendNotifications, groupNotifications, tr("Incoming file transfer"), f->getPublicKey());
+        ret.message = generateContent(friendNotifications, groupNotifications,
+                                      fileWords.arg(filename), f->getPublicKey());
     }
     else
     {
-        //: e.g. Bob - file transfer
-        ret.title = tr("%1 - file transfer").arg(f->getDisplayedName());
-        ret.message = filename + " (" + getHumanReadableSize(fileSize) + ")";
+        // The person, then the file as the list says it, with its size: "File: plan.pdf (5.2 MB)".
+        ret.title = f->getDisplayedName();
+        ret.message = fileWords.arg(
+            filename + QStringLiteral(" (")
+            + AirStrings::byteSizeText(static_cast<qint64>(fileSize), Translator::locale())
+            + QLatin1Char(')'));
     }
 
     ret.pixmap = getSenderAvatar(profile, f->getPublicKey());
@@ -232,17 +235,21 @@ NotificationData NotificationGenerator::fileTransferNotification(const Friend* f
     return ret;
 }
 
-NotificationData NotificationGenerator::groupInvitationNotification(const Friend* from)
+NotificationData NotificationGenerator::groupInvitationNotification(const Friend* from,
+                                                                    const QString& groupName)
 {
     NotificationData ret;
 
+    // An invitation is a notification of its own kind (E22): who invites, then to what.
     if (notificationSettings.getNotifyHide()) {
-        ret.title = tr("Group invite received");
+        ret.title = AirStrings::text(AirStrings::Text::InviteTag);
         return ret;
     }
 
-    ret.title = tr("%1 invites you to join a group.").arg(from->getDisplayedName());
-    ret.message = "";
+    ret.title = from->getDisplayedName();
+    ret.message = groupName.isEmpty()
+                      ? AirStrings::text(AirStrings::Text::NotifyInvite)
+                      : AirStrings::text(AirStrings::Text::NotifyInviteTo).arg(groupName);
     ret.pixmap = getSenderAvatar(profile, from->getPublicKey());
 
     return ret;
@@ -250,14 +257,16 @@ NotificationData NotificationGenerator::groupInvitationNotification(const Friend
 
 NotificationData NotificationGenerator::friendRequestNotification(const ToxPk& sender, const QString& message)
 {
+    // A request is a notification of its own kind (E22), as its card says it: the person's words,
+    // never their key, which says nothing to anyone.
+    Q_UNUSED(sender)
     NotificationData ret;
+    ret.title = AirStrings::text(AirStrings::Text::RequestTag);
 
     if (notificationSettings.getNotifyHide()) {
-        ret.title = tr("Friend request received");
         return ret;
     }
 
-    ret.title = tr("Friend request received from %1").arg(sender.toString());
     ret.message = message;
 
     return ret;

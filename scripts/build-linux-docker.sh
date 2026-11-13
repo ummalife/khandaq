@@ -16,8 +16,25 @@ else
   echo "==> Skipping image build (SKIP_IMAGE_BUILD=1)"
 fi
 
+# KHANDAQ (desktop release v0.2.47): the container gets a copy of khandaq-desktop/ without the .git of
+# the monorepo, so CMake's own `git describe` found nothing and Settings > About said "Nightly", with
+# "build without git" for the commit. What git says here goes in instead.
+GIT_VERSION="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
+GIT_DESCRIBE="$(git -C "$ROOT" describe --tags 2>/dev/null || true)"
+GIT_DESCRIBE_EXACT="$(git -C "$ROOT" describe --exact-match --tags HEAD 2>/dev/null || true)"
+for value in "$GIT_VERSION" "$GIT_DESCRIBE" "$GIT_DESCRIBE_EXACT"; do
+  if [[ -n "$value" && ! "$value" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "unexpected output of git: $value" >&2
+    exit 1
+  fi
+done
+echo "==> Settings > About will say ${GIT_DESCRIBE:-Nightly}, commit ${GIT_VERSION:-build without git}"
+
 echo "==> Compiling Khandaq inside container ($PLATFORM)..."
 docker run --rm --platform "$PLATFORM" \
+  -e KHANDAQ_GIT_VERSION="$GIT_VERSION" \
+  -e KHANDAQ_GIT_DESCRIBE="$GIT_DESCRIBE" \
+  -e KHANDAQ_GIT_DESCRIBE_EXACT="$GIT_DESCRIBE_EXACT" \
   -v "$SRC:/khandaq:ro" \
   -v "$ROOT/scripts:/scripts:ro" \
   -v "$ROOT/dist/linux:/dist" \
@@ -39,11 +56,19 @@ docker run --rm --platform "$PLATFORM" \
       ./scripts/generate-khandaq-icons.sh || true
     fi
     mkdir -p /build/out && cd /build/out
+    # /build/out is kept between runs and a value given with -D stays in its CMakeCache.txt, so an
+    # empty one removes the entry (-U) instead of building with the version of an earlier run.
+    version_args=()
+    for name in GIT_DESCRIBE GIT_DESCRIBE_EXACT GIT_VERSION; do
+      value_name="KHANDAQ_${name}"
+      if [[ -n "${!value_name:-}" ]]; then version_args+=("-D${name}=${!value_name}"); else version_args+=("-U${name}"); fi
+    done
     cmake /build/src \
       -DCMAKE_BUILD_TYPE=Release \
       -DUPDATE_CHECK=OFF \
       -DSPELL_CHECK=OFF \
-      -DDESKTOP_NOTIFICATIONS=OFF
+      -DDESKTOP_NOTIFICATIONS=OFF \
+      "${version_args[@]}"
     make -j"$(nproc)" khandaq
     install -m 755 khandaq /dist/khandaq
     cp -f /build/src/khandaq.desktop /dist/

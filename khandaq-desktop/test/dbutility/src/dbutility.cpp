@@ -159,6 +159,26 @@ const std::vector<DbUtility::SqliteMasterEntry> DbUtility::schema11{
      "FOREIGN KEY (id, message_type) REFERENCES history(id, message_type))"},
     {"chat_id_idx", "CREATE INDEX chat_id_idx on history (chat_id)"}};
 
+namespace {
+std::vector<DbUtility::SqliteMasterEntry>
+withOutboxAndNotes(std::vector<DbUtility::SqliteMasterEntry> schema)
+{
+    schema.push_back(
+        {"outbox",
+         "CREATE TABLE outbox (id INTEGER PRIMARY KEY, chat_uuid BLOB NOT NULL, timestamp "
+         "INTEGER NOT NULL, message BLOB NOT NULL, required_extensions INTEGER NOT NULL "
+         "DEFAULT 0, history_id INTEGER UNIQUE, state INTEGER NOT NULL DEFAULT 0, FOREIGN "
+         "KEY (history_id) REFERENCES history(id) ON DELETE SET NULL)"});
+    schema.push_back({"outbox_chat_idx", "CREATE INDEX outbox_chat_idx on outbox (chat_uuid)"});
+    schema.push_back({"notes", "CREATE TABLE notes (id INTEGER PRIMARY KEY, timestamp INTEGER NOT "
+                               "NULL, message BLOB NOT NULL)"});
+    return schema;
+}
+} // namespace
+
+const std::vector<DbUtility::SqliteMasterEntry> DbUtility::schema12 =
+    withOutboxAndNotes(DbUtility::schema11);
+
 void DbUtility::createSchemaAtVersion(std::shared_ptr<RawDatabase> db, const std::vector<DbUtility::SqliteMasterEntry>& schema)
 {
     QVector<RawDatabase::Query> queries;

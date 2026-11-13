@@ -55,6 +55,12 @@ public:
     void deselectText();
 
     void setWidth(float width) final;
+    /** Room around the text inside its box; the transcript sets 0 so the text starts where the
+     * author's name does. */
+    void setDocumentMargin(qreal margin);
+    /** Sets the lines at the start edge of the interface, whatever the direction of their own
+     * words; the transcript has them so, next to its time column. */
+    void setStartAligned(bool startAligned);
 
     void selectionMouseMove(QPointF scenePos) final;
     void selectionStarted(QPointF scenePos) final;
@@ -111,6 +117,10 @@ private:
     int selectionEnd = -1;
     int selectionAnchor = -1;
     qreal ascent = 0.0;
+    /** QTextDocument's own default. */
+    qreal documentMargin = 4.0;
+    /** Off: each paragraph stands by its own direction, as QTextOption has it. */
+    bool startAligned = false;
     QFont defFont;
     TextType textType;
     QColor color;

@@ -21,8 +21,12 @@
 
 #include <QElapsedTimer>
 #include <QLabel>
+#include <QLocale>
+#include <QPointer>
 #include <QSet>
 #include <QTimer>
+
+#include <functional>
 
 #include "genericchatform.h"
 #include "src/core/core.h"
@@ -33,8 +37,15 @@
 #include "src/widget/tool/screenshotgrabber.h"
 #include "src/video/netcamview.h"
 
-class CallConfirmWidget;
+class AirCallBand;
+class AirDossier;
+class AirFailedList;
+class AirLocal;
+class AirSource;
+class AirTray;
+class ChatHistory;
 class FileTransferInstance;
+struct AirDossierInfo;
 class Friend;
 class History;
 class OfflineMsgEngine;
@@ -65,6 +76,12 @@ public:
 
     void setFriendTyping(bool isTyping_);
 
+    /**
+     * Where the conversation learns how far the person is (the list's view of the network) and
+     * what this device remembers about them (online hours, mute, verification).
+     */
+    void setAir(AirSource* source, AirLocal* local);
+
     void show(ContentLayout* contentLayout_) final;
 
     static const QString ACTION_PREFIX;
@@ -78,6 +95,9 @@ signals:
     void rejectCall(uint32_t friendId);
     void acceptCall(uint32_t friendId);
     void updateFriendActivity(Friend& frnd);
+    /** "Remove" in the dossier, confirmed there: the main window removes the contact. */
+    void removeFriendRequested(const ToxPk& friendPk);
+    void blockFriendRequested(const ToxPk& friendPk);
 
 public slots:
     void onAvInvite(uint32_t friendId, bool video);
@@ -99,7 +119,6 @@ private slots:
     void onTextEditChanged();
     void onCallTriggered();
     void onVideoCallTriggered();
-    void onAnswerCallTriggered(bool video);
     void onRejectCallTriggered();
     void onMicMuteToggle();
     void onVolMuteToggle();
@@ -114,7 +133,6 @@ private slots:
     void cancelImagePreview();
     void sendImageFromPreview();
     void doScreenshot();
-    void onCopyStatusMessage();
 
     void callUpdateFriendActivity();
 
@@ -122,12 +140,45 @@ private:
     void updateMuteMicButton();
     void updateMuteVolButton();
     void retranslateUi();
-    void showOutgoingCall(bool video);
     void startCounter();
-    void stopCounter(bool error = false);
+    void stopCounter();
     void updateCallButtons();
+
+    // A call (E9): access is asked first, someone offline can be waited for, every failure is said.
+    /** A call or a video call from the head: asks for access, then calls or offers to wait. */
+    void requestCall(bool video);
+    /** Calls now; a refusal of toxav is said in a dialog. */
+    void placeCall(bool video);
+    /** "Yusuf is offline: the call will not get through", with Wait and call. */
+    void askToWait(bool video);
+    void cancelWaiting();
+    /** Answer on the band: the microphone first, the camera for With video, then the answer. */
+    void answerIncoming(bool video);
+    /** Their call still rings: they may hang up while the system asks for access. */
+    bool stillRinging() const;
+    void finishAnswer(bool video);
+    /** Asks for the microphone, and the camera for video; proceed gets what may be used. */
+    void checkCallAccess(bool video, std::function<void(bool video)> proceed);
+    void explainMicrophone();
+    void explainCamera(std::function<void(bool video)> proceed);
+    /** One entry of the transcript per call, at its end. */
+    void recordCall(bool answered, bool error);
     void showNetcam();
     void hideNetcam();
+
+    void refreshHead();
+    void refreshQueue();
+    /** Tab goes down the column as it shows: messages, unsent rows, the tray, then the field. */
+    void orderTabs();
+    void refreshCounter();
+    void refreshPhoto();
+    void toggleDossier();
+    AirDossierInfo dossierInfo() const;
+    QLocale interfaceLocale() const;
+    void editQueued(qint64 id);
+    void cancelQueued(qint64 id);
+    void retryQueued(qint64 id);
+    bool editLastQueued();
 
 protected:
     std::unique_ptr<NetCamView> createNetcam();
@@ -139,17 +190,32 @@ protected:
 private:
     Core& core;
     Friend* f;
-    CroppingLabel* statusMessageLabel;
-    QMenu statusMessageMenu;
-    QLabel* callDuration;
+    AirCallBand* callBand;
+    /** Wait and call was chosen: the call starts once the person is online. */
+    bool waitingToCall = false;
+    bool waitingVideo = false;
+    /** The call that rings or is on came from them. */
+    bool callIncoming = false;
     QTimer* callDurationTimer;
     QTimer typingTimer;
     QElapsedTimer timeElapsed;
-    QAction* copyStatusAction;
     QPixmap imagePreviewSource;
     ImagePreviewButton* imagePreview;
     bool isTyping;
+    bool friendTyping = false;
     bool lastCallIsVideo;
+    /** The queue of this conversation; null only where the log is not a ChatHistory. */
+    ChatHistory* queueLog = nullptr;
+    QPointer<AirSource> airSource;
+    QPointer<AirLocal> airLocal;
+    AirFailedList* failedList;
+    AirTray* tray;
+    AirDossier* dossier;
+    /** "offline for 25 minutes" ages while nothing happens; the head reads it again now and then. */
+    QTimer headTicker;
+    /** Many changes come in bursts; the head is read once after them. */
+    QTimer headLater;
+    QPixmap photo;
     std::unique_ptr<NetCamView> netcam;
     CameraSource& cameraSource;
     Settings& settings;

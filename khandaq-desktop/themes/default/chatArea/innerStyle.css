@@ -19,14 +19,16 @@ p {
     color: #279419;
 }
 
+/* A message that mentions you has the selected ground (DESIGN.md, groups): amber stays for
+   what is in transit, and light ink on it does not read in the dark theme. */
 .alert {
     margin-left: 0px;
     margin-right: 0px;
-    background-color: @orange;
+    background-color: @selectText;
 }
 
 .alert_name {
-    background-color: @orange;
+    background-color: @selectText;
     font: @bigBold;
 }
 

@@ -20,6 +20,7 @@
 #include "contentlayout.h"
 #include "style.h"
 #include "src/persistence/settings.h"
+#include "src/widget/air/airstyle.h"
 #include <QFrame>
 #include <QStyleFactory>
 
@@ -38,28 +39,35 @@ ContentLayout::ContentLayout(Settings& settings_, Style& style_, QWidget* parent
 {
     init();
 
-    QPalette palette = parent->palette();
-    palette.setBrush(QPalette::WindowText, QColor(0, 0, 0));
-    palette.setBrush(QPalette::Button, QColor(255, 255, 255));
-    palette.setBrush(QPalette::Light, QColor(255, 255, 255));
-    palette.setBrush(QPalette::Midlight, QColor(255, 255, 255));
-    palette.setBrush(QPalette::Dark, QColor(127, 127, 127));
-    palette.setBrush(QPalette::Mid, QColor(170, 170, 170));
-    palette.setBrush(QPalette::Text, QColor(0, 0, 0));
-    palette.setBrush(QPalette::BrightText, QColor(255, 255, 255));
-    palette.setBrush(QPalette::ButtonText, QColor(0, 0, 0));
-    palette.setBrush(QPalette::Base, QColor(255, 255, 255));
-    palette.setBrush(QPalette::Window, QColor(255, 255, 255));
-    palette.setBrush(QPalette::Shadow, QColor(0, 0, 0));
-    palette.setBrush(QPalette::AlternateBase, QColor(255, 255, 255));
-    palette.setBrush(QPalette::ToolTipBase, QColor(255, 255, 220));
-    palette.setBrush(QPalette::ToolTipText, QColor(0, 0, 0));
+    // The conversation column stands on the surface of the current theme, in both themes.
+    const auto applyPalette = [parent] {
+        using AirTokens::Color;
+        const AirStyle& air = AirStyle::instance();
+        QPalette palette = parent->palette();
+        palette.setBrush(QPalette::WindowText, air.color(Color::Ink));
+        palette.setBrush(QPalette::Button, air.color(Color::Raised));
+        palette.setBrush(QPalette::Light, air.color(Color::Raised));
+        palette.setBrush(QPalette::Midlight, air.color(Color::Line));
+        palette.setBrush(QPalette::Dark, air.color(Color::LineStrong));
+        palette.setBrush(QPalette::Mid, air.color(Color::LineStrong));
+        palette.setBrush(QPalette::Text, air.color(Color::Ink));
+        palette.setBrush(QPalette::BrightText, air.color(Color::OnInk));
+        palette.setBrush(QPalette::ButtonText, air.color(Color::Ink));
+        palette.setBrush(QPalette::Base, air.color(Color::Raised));
+        palette.setBrush(QPalette::Window, air.color(Color::Surface));
+        palette.setBrush(QPalette::Shadow, air.color(Color::Shadow));
+        palette.setBrush(QPalette::AlternateBase, air.color(Color::Sunken));
+        palette.setBrush(QPalette::ToolTipBase, air.color(Color::Ink));
+        palette.setBrush(QPalette::ToolTipText, air.color(Color::OnInk));
 
-    palette.setBrush(QPalette::Disabled, QPalette::WindowText, QColor(127, 127, 127));
-    palette.setBrush(QPalette::Disabled, QPalette::Text, QColor(127, 127, 127));
-    palette.setBrush(QPalette::Disabled, QPalette::ButtonText, QColor(127, 127, 127));
+        palette.setBrush(QPalette::Disabled, QPalette::WindowText, air.color(Color::Ink3));
+        palette.setBrush(QPalette::Disabled, QPalette::Text, air.color(Color::Ink3));
+        palette.setBrush(QPalette::Disabled, QPalette::ButtonText, air.color(Color::Ink3));
 
-    parent->setPalette(palette);
+        parent->setPalette(palette);
+    };
+    applyPalette();
+    connect(&AirStyle::instance(), &AirStyle::changed, this, applyPalette);
 }
 
 ContentLayout::~ContentLayout()
@@ -92,6 +100,14 @@ void ContentLayout::clear()
         item->widget()->setParent(nullptr);
         delete item;
     }
+
+    setFlush(false);
+}
+
+void ContentLayout::setFlush(bool flush)
+{
+    mainContent->layout()->setContentsMargins(flush ? QMargins() : contentMargins);
+    mainHLine.setVisible(!flush);
 }
 
 void ContentLayout::init()
@@ -108,13 +124,18 @@ void ContentLayout::init()
 
     mainHLine.setFrameShape(QFrame::HLine);
     mainHLine.setFrameShadow(QFrame::Plain);
-    QPalette palette = mainHLine.palette();
-    palette.setBrush(QPalette::WindowText, QBrush(QColor(193, 193, 193)));
-    mainHLine.setPalette(palette);
+    const auto applyLineColor = [this] {
+        QPalette palette = mainHLine.palette();
+        palette.setBrush(QPalette::WindowText, AirStyle::instance().color(AirTokens::Color::Line));
+        mainHLine.setPalette(palette);
+    };
+    applyLineColor();
+    connect(&AirStyle::instance(), &AirStyle::changed, this, applyLineColor);
 
     mainContent = new QWidget();
     mainContent->setLayout(new QVBoxLayout);
     mainContent->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
+    contentMargins = mainContent->layout()->contentsMargins();
 
     if (QStyleFactory::keys().contains(settings.getStyle())
         && settings.getStyle() != "None") {

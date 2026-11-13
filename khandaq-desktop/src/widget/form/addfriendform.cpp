@@ -22,13 +22,15 @@
 #include "src/core/toxstring.h"
 #include "src/nexus.h"
 #include "src/persistence/settings.h"
+#include "src/widget/air/airstrings.h"
+#include "src/widget/air/airstyle.h"
+#include "src/widget/air/airtokens.h"
+#include "src/widget/air/airwidgets.h"
 #include "src/widget/contentlayout.h"
 #include "src/widget/tool/croppinglabel.h"
 #include "src/widget/style.h"
 #include "src/widget/translator.h"
 #include "src/widget/tool/imessageboxmanager.h"
-#include <QApplication>
-#include <QClipboard>
 #include <QErrorMessage>
 #include <QFileDialog>
 #include <QFont>
@@ -37,6 +39,7 @@
 #include <QScrollArea>
 #include <QSet>
 #include <QSizePolicy>
+#include <QTabBar>
 #include <QTabWidget>
 #include <QWindow>
 #include <tox/tox.h>
@@ -69,11 +72,6 @@ namespace
         return ToxId::isToxId(id);
     }
 }
-
-/**
- * @var QString AddFriendForm::lastUsername
- * @brief Cached username so we can retranslate the invite message
- */
 
 AddFriendForm::AddFriendForm(ToxId ownId_, Settings& settings_, Style& style_,
     IMessageBoxManager& messageBoxManager_, Core& core_)
@@ -124,6 +122,16 @@ AddFriendForm::AddFriendForm(ToxId ownId_, Settings& settings_, Style& style_,
     configureFormField(importSendButton);
     importContacts->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
     tabWidget->addTab(importContacts, QString());
+    // One ID is added in the New contact panel over the list, which checks it as it is typed; the
+    // form keeps the import of a file of IDs.
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    tabWidget->setTabVisible(AddFriend, false);
+#else
+    tabWidget->setTabEnabled(AddFriend, false);
+#endif
+    tabWidget->setCurrentIndex(ImportContacts);
+    // One page left: no tabs to choose from.
+    tabWidget->tabBar()->hide();
 
     head->setLayout(&headLayout);
     headLayout.addWidget(&headLabel);
@@ -136,16 +144,15 @@ AddFriendForm::AddFriendForm(ToxId ownId_, Settings& settings_, Style& style_,
     connect(&sendButton, &QPushButton::clicked, this, &AddFriendForm::onSendTriggered);
     connect(&importSendButton, &QPushButton::clicked, this, &AddFriendForm::onImportSendClicked);
     connect(&importFileButton, &QPushButton::clicked, this, &AddFriendForm::onImportOpenClicked);
-    connect(&core, &Core::usernameSet, this, &AddFriendForm::onUsernameSet);
 
-    // accessibility stuff
-    toxIdLabel.setAccessibleDescription(
-        tr("Tox ID, 76 hexadecimal characters"));
-    toxId.setAccessibleDescription(tr("Type in Tox ID of your friend"));
-    messageLabel.setAccessibleDescription(tr("Friend request message"));
-    message.setAccessibleDescription(tr(
-        "Type message to send with the friend request or leave empty to send a default message"));
+    // The fields get their accessible names with the other words, in retranslateUi.
     message.setTabChangesFocus(true);
+    importMessage.setTabChangesFocus(true);
+    // The count under the message turns red past the limit; red follows the theme.
+    connect(&AirStyle::instance(), &AirStyle::changed, this, [this] {
+        onMessageChanged();
+        onImportMessageChanged();
+    });
 
     retranslateUi();
     Translator::registerHandler(std::bind(&AddFriendForm::retranslateUi, this), this);
@@ -180,8 +187,7 @@ void AddFriendForm::show(ContentLayout* contentLayout)
     contentLayout->mainHead->layout()->addWidget(head);
     tabWidget->show();
     head->show();
-    setIdFromClipboard();
-    toxId.setFocus();
+    importFileButton.setFocus();
 
     // Fix #3421
     // Needed to update tab after opening window
@@ -203,8 +209,9 @@ QString AddFriendForm::getImportMessage() const
 
 void AddFriendForm::setMode(Mode mode)
 {
-    if (mode == FriendRequest) {
-        mode = AddFriend;
+    if (mode != ImportContacts) {
+        // A single ID goes through the New contact panel; this form only imports.
+        mode = ImportContacts;
     }
     tabWidget->setCurrentIndex(mode);
 }
@@ -216,27 +223,21 @@ bool AddFriendForm::addFriendRequest(const QString& friendAddress, const QString
     return false;
 }
 
-void AddFriendForm::onUsernameSet(const QString& username)
-{
-    lastUsername = username;
-    retranslateUi();
-}
-
 void AddFriendForm::addFriend(const QString& idText, const QString& requestMessage)
 {
     ToxId friendId(idText);
+    using AirStrings::Text;
 
     if (!friendId.isValid()) {
-        messageBoxManager.showWarning(tr("Couldn't add friend"),
-                         tr("%1 Tox ID is invalid", "Tox address error").arg(idText));
+        messageBoxManager.showWarning(tr("Couldn't send the request"),
+                                      AirStrings::text(Text::NcVerdictBad));
         return;
     }
 
     deleteFriendRequest(friendId);
     if (friendId == ownId) {
-        messageBoxManager.showWarning(tr("Couldn't add friend"),
-                         //: When trying to add your own Tox ID as friend
-                         tr("You can't add yourself as a friend!"));
+        messageBoxManager.showWarning(tr("Couldn't send the request"),
+                                      AirStrings::text(Text::NcVerdictOwn));
     } else {
         emit friendRequested(friendId, requestMessage);
     }
@@ -289,14 +290,13 @@ void AddFriendForm::showImportSkippedSummary(const ImportSkipStats& stats, int s
 
     QStringList lines;
     if (sentCount > 0) {
-        lines.append(tr("%n friend request(s) sent.", "", sentCount));
+        lines.append(tr("%n request(s) sent.", "", sentCount));
     }
     if (stats.alreadyFriends > 0) {
-        lines.append(tr("%n contact(s) skipped — already in your friends list.", "",
-            stats.alreadyFriends));
+        lines.append(tr("%n ID(s) skipped: already in your contacts.", "", stats.alreadyFriends));
     }
     if (stats.duplicatesInFile > 0) {
-        lines.append(tr("%n duplicate contact(s) skipped.", "", stats.duplicatesInFile));
+        lines.append(tr("%n ID(s) skipped: repeated in the file.", "", stats.duplicatesInFile));
     }
 
     messageBoxManager.showWarning(tr("Import contacts"), lines.join(QLatin1Char('\n')));
@@ -308,12 +308,13 @@ void AddFriendForm::onImportSendClicked()
 
     QString resolvedImportMessage = requestMessage.trimmed();
     if (resolvedImportMessage.isEmpty()) {
-        resolvedImportMessage = QStringLiteral("Khandaq");
+        // Spaces alone carry the greeting, as an empty field does.
+        resolvedImportMessage = AirStrings::text(AirStrings::Text::NcGreeting);
     }
 
     if (ToxString(resolvedImportMessage).size() > tox_max_friend_request_length()) {
-        messageBoxManager.showWarning(tr("Couldn't send friend request"),
-            tr("Your message is too long!", "Error while sending friend request"));
+        messageBoxManager.showWarning(tr("Couldn't send the requests"),
+                                      AirStrings::text(AirStrings::Text::NcMessageTooLong));
         return;
     }
 
@@ -336,16 +337,16 @@ void AddFriendForm::onImportSendClicked()
 
 void AddFriendForm::onImportOpenClicked()
 {
-    const QString path = QFileDialog::getOpenFileName(Q_NULLPTR, tr("Open contact list"));
+    const QString path = QFileDialog::getOpenFileName(Q_NULLPTR, tr("Choose a file with IDs"));
     if (path.isEmpty()) {
         return;
     }
 
     QFile contactFile(path);
     if (!contactFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        messageBoxManager.showWarning(tr("Couldn't open file"),
-                         //: Error message when trying to open a contact list file to import
-                         tr("Couldn't open the contact file"));
+        messageBoxManager
+            .showWarning(tr("Couldn't import contacts"),
+                         tr("The file couldn't be opened. Check that it can be read."));
         return;
     }
 
@@ -366,8 +367,9 @@ void AddFriendForm::onImportOpenClicked()
     }
 
     if (contactsToImport.isEmpty()) {
-        messageBoxManager.showWarning(tr("Invalid file"),
-                         tr("We couldn't find any contacts to import in this file!"));
+        messageBoxManager.showWarning(
+            tr("Couldn't import contacts"),
+            tr("There are no IDs in this file. Each line holds one ID of 76 characters."));
         return;
     }
 
@@ -390,17 +392,10 @@ void AddFriendForm::onIdChanged(const QString& id)
     const bool isValidId = checkIsValidId(strippedId);
     const bool isValidOrEmpty = strippedId.isEmpty() || isValidId;
 
-    //: Tox ID of the person you're sending a friend request to
-    const QString toxIdText(tr("Tox ID"));
-    //: Tox ID format description
-    const QString toxIdComment(tr("76 hexadecimal characters"));
-
-    const QString labelText =
-        isValidId ? QStringLiteral("%1 (%2)") : QStringLiteral("%1 <font color='red'>(%2)</font>");
-    toxIdLabel.setText(labelText.arg(toxIdText, toxIdComment));
+    toxIdLabel.setText(AirStrings::text(AirStrings::Text::NcIdLabel));
     toxId.setStyleSheet(isValidOrEmpty ? QStringLiteral("")
                                   : style.getStylesheet("addFriendForm/toxId.css", settings));
-    toxId.setToolTip(isValidOrEmpty ? QStringLiteral("") : tr("Invalid Tox ID format"));
+    toxId.setToolTip(isValidOrEmpty ? QString() : AirStrings::text(AirStrings::Text::NcVerdictBad));
 
     updateSendButtonState();
 }
@@ -432,26 +427,16 @@ void AddFriendForm::updateSendButtonState()
 
 void AddFriendForm::updateMessageLengthLabel(QLabel& label, const QString& text)
 {
-    const auto maxBytes = tox_max_friend_request_length();
-    const auto bytes = ToxString(text).size();
-    label.setText(tr("%1 / %2", "Friend request message length").arg(bytes).arg(maxBytes));
+    // In the words New contact uses: what is left of the request, or that the message is too long.
+    const auto maxBytes = static_cast<int>(tox_max_friend_request_length());
+    const auto bytes = static_cast<int>(ToxString(text).size());
     const bool tooLong = bytes > maxBytes;
-    label.setStyleSheet(tooLong ? QStringLiteral("color: red;") : QStringLiteral(""));
-    label.setToolTip(
-        tooLong ? tr("Your message is too long!", "Error while sending friend request")
-                : tr("Maximum friend request message length"));
+    label.setText(tooLong ? AirStrings::text(AirStrings::Text::NcMessageTooLong)
+                          : AirStrings::text(AirStrings::Text::BytesLeft, maxBytes - bytes));
+    AirPaint::textColor(&label, AirStyle::instance().color(tooLong ? AirTokens::Color::Danger
+                                                                   : AirTokens::Color::Ink3));
 }
 
-void AddFriendForm::setIdFromClipboard()
-{
-    const QClipboard* clipboard = QApplication::clipboard();
-    const QString trimmedId = clipboard->text().trimmed();
-    const QString strippedId = getToxId(trimmedId);
-    const bool isSelf = ToxId::isToxId(strippedId) && ToxId(strippedId) != ownId;
-    if (!strippedId.isEmpty() && ToxId::isToxId(strippedId) && isSelf) {
-        toxId.setText(trimmedId);
-    }
-}
 
 void AddFriendForm::deleteFriendRequest(const ToxId& toxId_)
 {
@@ -500,30 +485,39 @@ void AddFriendForm::onCurrentChanged(int index)
 
 void AddFriendForm::retranslateUi()
 {
-    headLabel.setText(tr("Add Friends"));
-    //: The message you send in friend requests
-    static const QString messageLabelText = tr("Message");
+    using AirStrings::Text;
+    headLabel.setText(AirStrings::text(Text::NcImport));
+    // Not kept in a static: the words follow a change of language.
+    const QString messageLabelText = AirStrings::text(Text::NcMessageLabel);
     messageLabel.setText(messageLabelText);
     importMessageLabel.setText(messageLabelText);
-    //: Button to choose a file with a list of contacts to import
-    importFileButton.setText(tr("Open"));
-    importSendButton.setText(tr("Send friend requests"));
-    sendButton.setText(tr("Send friend request"));
-    //: Default message in friend requests if the field is left blank. Write something appropriate!
-    message.setPlaceholderText(tr("%1 here! Tox me maybe?").arg(lastUsername));
-    importMessage.setPlaceholderText(tr("%1 here! Tox me maybe?").arg(lastUsername));
+    //: Button that opens the system dialog to choose a text file of IDs, one per line
+    importFileButton.setText(tr("Choose a file"));
+    importSendButton.setText(tr("Send requests"));
+    sendButton.setText(AirStrings::text(Text::NcSend));
+    // KHANDAQ (redesign E17): a request left blank carries the greeting of New contact, as on the
+    // phones, instead of qTox's joke.
+    const QString greeting = AirStrings::text(Text::NcGreeting);
+    message.setPlaceholderText(greeting);
+    importMessage.setPlaceholderText(greeting);
+    toxId.setAccessibleName(AirStrings::text(Text::NcIdLabel));
+    toxId.setAccessibleDescription(AirStrings::text(Text::NcIdPlaceholder));
+    for (QTextEdit* const field : {&message, &importMessage}) {
+        field->setAccessibleName(messageLabelText);
+        field->setAccessibleDescription(AirStrings::text(Text::NcMessageNote));
+    }
 
     importFileLabel.setText(
         contactsToImport.isEmpty()
-            ? tr("Import a list of contacts, one Tox ID per line")
-            //: Shows the number of contacts we're about to import from a file (at least one)
-            : tr("Ready to import %n contact(s), click send to confirm", "", contactsToImport.size()));
+            ? tr("Choose a text file with one ID on each line.")
+            //: How many IDs of the chosen file get a request (at least one)
+            : tr("Requests are ready for %n ID(s) from the file.", "", contactsToImport.size()));
 
     onIdChanged(toxId.text());
     onMessageChanged();
     onImportMessageChanged();
 
-    tabWidget->setTabText(AddFriend, tr("Add a friend"));
+    tabWidget->setTabText(AddFriend, AirStrings::text(Text::NewContact));
     tabWidget->setTabText(ImportContacts, tr("Import contacts"));
 
     for (QPushButton* acceptButton : acceptButtons) {

@@ -47,6 +47,7 @@ namespace DbUtility
     extern const std::vector<SqliteMasterEntry> schema9;
     extern const std::vector<SqliteMasterEntry> schema10;
     extern const std::vector<SqliteMasterEntry> schema11;
+    extern const std::vector<SqliteMasterEntry> schema12;
 
     void createSchemaAtVersion(std::shared_ptr<RawDatabase> db, const std::vector<DbUtility::SqliteMasterEntry>& schema);
     void verifyDb(std::shared_ptr<RawDatabase> db, const std::vector<DbUtility::SqliteMasterEntry>& expectedSql);

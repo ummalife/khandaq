@@ -28,11 +28,6 @@
 #include <memory>
 
 namespace {
-constexpr int RECEIPT_TIMEOUT_MS = 20000;
-constexpr int MAX_RECEIPT_RETRIES = 5;
-constexpr int RECEIPT_RETRY_BASE_MS = 2000;
-constexpr int RECEIPT_RETRY_MAX_MS = 30000;
-
 /** Outgoing friend messages use the Tox core path for reliable cross-client delivery. */
 ExtensionSet coreOnlyExtensions(ExtensionSet extensions)
 {
@@ -43,11 +38,13 @@ ExtensionSet coreOnlyExtensions(ExtensionSet extensions)
 
 FriendMessageDispatcher::FriendMessageDispatcher(Friend& f_, MessageProcessor processor_,
                                                  ICoreFriendMessageSender& messageSender_,
-                                                 ICoreExtPacketAllocator& coreExtPacketAllocator_)
+                                                 ICoreExtPacketAllocator& coreExtPacketAllocator_,
+                                                 FriendMessageRetryPolicy retryPolicy_)
     : f(f_)
     , coreExtPacketAllocator(coreExtPacketAllocator_)
     , messageSender(messageSender_)
     , processor(std::move(processor_))
+    , retryPolicy(retryPolicy_)
 {
     connect(&f, &Friend::onlineOfflineChanged, this, &FriendMessageDispatcher::onFriendOnlineOfflineChanged);
 }
@@ -66,7 +63,7 @@ FriendMessageDispatcher::sendMessage(bool isAction, const QString& content)
         lastId = messageId;
 
         auto onOfflineMsgComplete = getCompletionFn(messageId);
-        sendProcessedMessage(message, onOfflineMsgComplete);
+        sendProcessedMessage(message, onOfflineMsgComplete, tagOf(messageId));
 
         emit messageSent(messageId, message);
     }
@@ -87,11 +84,33 @@ FriendMessageDispatcher::sendExtendedMessage(const QString& content, ExtensionSe
         lastId = messageId;
 
         auto onOfflineMsgComplete = getCompletionFn(messageId);
-        sendProcessedMessage(message, onOfflineMsgComplete);
+        sendProcessedMessage(message, onOfflineMsgComplete, tagOf(messageId));
 
         emit messageSent(messageId, message);
     }
     return std::make_pair(firstId, lastId);
+}
+
+/**
+ * @see IMessageDispatcher::cancelMessage
+ * @note A message already handed to toxcore may still reach the friend; it is only no longer sent
+ * again, and its receipt is ignored.
+ */
+bool FriendMessageDispatcher::cancelMessage(DispatchedMessageId id)
+{
+    const auto tag = tagOf(id);
+    cancelledTags.insert(tag);
+    offlineMsgEngine.removeMessage(tag);
+    return true;
+}
+
+/**
+ * @brief The tag of a message in the offline message engine: never 0, which the engine keeps for
+ * untagged messages.
+ */
+uint64_t FriendMessageDispatcher::tagOf(DispatchedMessageId messageId)
+{
+    return static_cast<uint64_t>(messageId.get()) + 1;
 }
 
 /**
@@ -138,34 +157,36 @@ void FriendMessageDispatcher::onFriendOnlineOfflineChanged(const ToxPk& friendPk
     if (isOnline) {
         auto messagesToResend = offlineMsgEngine.removeAllMessages();
         for (auto const& message : messagesToResend) {
-            sendProcessedMessage(message.message, message.callback);
+            sendProcessedMessage(message.message, message.callback, message.tag);
         }
     }
 }
 
+
 /**
- * @brief Clears all currently outgoing messages
+ * @param attempt How many times this message was already sent again after a missing receipt while
+ * the friend stayed online; a reconnect starts the count from zero.
  */
-void FriendMessageDispatcher::clearOutgoingMessages()
+void FriendMessageDispatcher::sendProcessedMessage(Message const& message,
+                                                   OfflineMsgEngine::CompletionFn onOfflineMsgComplete,
+                                                   uint64_t tag, int attempt)
 {
-    offlineMsgEngine.removeAllMessages();
-}
+    if (cancelledTags.contains(tag)) {
+        return;
+    }
 
-
-void FriendMessageDispatcher::sendProcessedMessage(Message const& message, OfflineMsgEngine::CompletionFn onOfflineMsgComplete)
-{
     if (!Status::isOnline(f.getStatus())) {
-        offlineMsgEngine.addUnsentMessage(message, onOfflineMsgComplete);
+        offlineMsgEngine.addUnsentMessage(message, onOfflineMsgComplete, tag);
         return;
     }
 
     Q_UNUSED(coreExtPacketAllocator);
-    sendCoreProcessedMessage(message, onOfflineMsgComplete);
+    sendCoreProcessedMessage(message, onOfflineMsgComplete, tag, attempt);
 }
 
 
-
-void FriendMessageDispatcher::sendExtendedProcessedMessage(Message const& message, OfflineMsgEngine::CompletionFn onOfflineMsgComplete)
+void FriendMessageDispatcher::sendExtendedProcessedMessage(
+    Message const& message, OfflineMsgEngine::CompletionFn onOfflineMsgComplete, uint64_t tag)
 {
     assert(!message.isAction); // Actions not supported with extensions
 
@@ -179,7 +200,7 @@ void FriendMessageDispatcher::sendExtendedProcessedMessage(Message const& messag
 
     const uint64_t rawReceipt = packet->addExtendedMessage(message.content);
     if (rawReceipt == UINT64_MAX) {
-        offlineMsgEngine.addUnsentMessage(message, onOfflineMsgComplete);
+        offlineMsgEngine.addUnsentMessage(message, onOfflineMsgComplete, tag);
         return;
     }
 
@@ -187,33 +208,46 @@ void FriendMessageDispatcher::sendExtendedProcessedMessage(Message const& messag
     const auto messageSent = packet->send();
 
     if (messageSent) {
-        offlineMsgEngine.addSentExtendedMessage(
-            receipt, message, wrapWithReceiptTimeout(message, onOfflineMsgComplete, "extended",
-                                                     receipt.get(), 0, true));
+        offlineMsgEngine.addSentExtendedMessage(receipt, message,
+                                                wrapWithReceiptTimeout(message, onOfflineMsgComplete,
+                                                                       "extended", receipt.get(),
+                                                                       tag, 0, true),
+                                                tag);
     } else {
-        offlineMsgEngine.addUnsentMessage(message, onOfflineMsgComplete);
+        offlineMsgEngine.addUnsentMessage(message, onOfflineMsgComplete, tag);
     }
 }
 
+/**
+ * @brief Sends a message again after its receipt did not come, or reports it as not sent once the
+ * retries are used up. A message reported as not sent leaves the queue: sending it again is up to
+ * the user.
+ * @param attempt Number of the retry to schedule, starting from 1.
+ */
 void FriendMessageDispatcher::scheduleMessageRetry(Message const& message,
                                                    OfflineMsgEngine::CompletionFn onOfflineMsgComplete,
-                                                   int attempt)
+                                                   uint64_t tag, int attempt)
 {
-    if (attempt >= MAX_RECEIPT_RETRIES) {
-        qWarning() << "FriendMessageDispatcher: giving up after" << MAX_RECEIPT_RETRIES
-                   << "retries for friend" << f.getPublicKey().toString();
-        offlineMsgEngine.addUnsentMessage(message, onOfflineMsgComplete);
+    if (attempt > retryPolicy.maxRetries) {
+        qWarning() << "FriendMessageDispatcher: no receipt after" << retryPolicy.maxRetries
+                   << "retries, reporting the message as not sent; friend"
+                   << f.getPublicKey().toString();
         onOfflineMsgComplete(false);
         return;
     }
 
-    const int delayMs = qMin(RECEIPT_RETRY_BASE_MS * (1 << attempt), RECEIPT_RETRY_MAX_MS);
-    QTimer::singleShot(delayMs, this, [this, message, onOfflineMsgComplete, attempt]() {
-        sendProcessedMessage(message, onOfflineMsgComplete);
-    });
+    const int shift = qBound(0, attempt - 1, 16);
+    const qint64 delayMs = qMin(static_cast<qint64>(retryPolicy.retryBaseMs) << shift,
+                                static_cast<qint64>(retryPolicy.retryMaxMs));
+    QTimer::singleShot(static_cast<int>(delayMs), this,
+                       [this, message, onOfflineMsgComplete, tag, attempt]() {
+                           sendProcessedMessage(message, onOfflineMsgComplete, tag, attempt);
+                       });
 }
 
-void FriendMessageDispatcher::sendCoreProcessedMessage(Message const& message, OfflineMsgEngine::CompletionFn onOfflineMsgComplete)
+void FriendMessageDispatcher::sendCoreProcessedMessage(Message const& message,
+                                                       OfflineMsgEngine::CompletionFn onOfflineMsgComplete,
+                                                       uint64_t tag, int attempt)
 {
     auto receipt = ReceiptNum();
 
@@ -225,72 +259,86 @@ void FriendMessageDispatcher::sendCoreProcessedMessage(Message const& message, O
     const auto messageSent = sendFn(messageSender, friendId, message.content, receipt);
 
     if (messageSent) {
-        offlineMsgEngine.addSentCoreMessage(
-            receipt, message, wrapWithReceiptTimeout(message, onOfflineMsgComplete, "core",
-                                                     receipt.get(), 0, false));
+        offlineMsgEngine.addSentCoreMessage(receipt, message,
+                                            wrapWithReceiptTimeout(message, onOfflineMsgComplete,
+                                                                   "core", receipt.get(), tag,
+                                                                   attempt, false),
+                                            tag);
     } else {
-        offlineMsgEngine.addUnsentMessage(message, onOfflineMsgComplete);
+        offlineMsgEngine.addUnsentMessage(message, onOfflineMsgComplete, tag);
     }
 }
 
+/**
+ * @brief Wraps the completion of a sent message so that it runs once, and starts the wait for the
+ * receipt of this send.
+ */
 OfflineMsgEngine::CompletionFn FriendMessageDispatcher::wrapWithReceiptTimeout(
     Message const& message, OfflineMsgEngine::CompletionFn inner, const char* sendKind,
-    uint64_t receiptId, int attempt, bool isExtended)
+    uint64_t receiptId, uint64_t tag, int attempt, bool isExtended)
 {
     const QString friendPk = f.getPublicKey().toString();
     auto finished = std::make_shared<std::atomic<bool>>(false);
 
-    const auto completeOnce = [inner, finished, friendPk, sendKind, receiptId](bool success) {
+    QTimer::singleShot(retryPolicy.receiptTimeoutMs, this,
+                       [this, message, inner, finished, friendPk, sendKind, receiptId, tag, attempt,
+                        isExtended]() {
+                           if (finished->load() || cancelledTags.contains(tag)) {
+                               return;
+                           }
+
+                           if (!Status::isOnline(f.getStatus())) {
+                               // The engine keeps waiting for this receipt; the reconnect sends
+                               // the message again under a new receipt, with a wait of its own.
+                               return;
+                           }
+
+                           const bool wasWaiting =
+                               isExtended
+                                   ? offlineMsgEngine.abandonExtendedMessage(
+                                         ExtendedReceiptNum(receiptId))
+                                   : offlineMsgEngine.abandonCoreMessage(ReceiptNum(receiptId));
+                           if (!wasWaiting) {
+                               // A reconnect already sent the message again, and that send is
+                               // waited for on its own; retrying here would send it twice.
+                               return;
+                           }
+
+                           qInfo() << "FriendMessageDispatcher: receipt timeout" << sendKind
+                                   << "receipt" << receiptId << "friend" << friendPk << "attempt"
+                                   << attempt;
+
+                           scheduleMessageRetry(message, inner, tag, attempt + 1);
+                       });
+
+    return [inner, finished, friendPk, sendKind, receiptId](bool success) {
         if (finished->exchange(true)) {
             return;
         }
 
         if (success) {
-            qDebug() << "FriendMessageDispatcher: delivery confirmed" << sendKind
-                     << "receipt" << receiptId << "friend" << friendPk;
+            qDebug() << "FriendMessageDispatcher: delivery confirmed" << sendKind << "receipt"
+                     << receiptId << "friend" << friendPk;
         }
 
         inner(success);
-    };
-
-    QTimer::singleShot(RECEIPT_TIMEOUT_MS, this,
-                       [this, message, inner, completeOnce, finished, friendPk, sendKind, receiptId,
-                        attempt, isExtended]() {
-                           if (finished->load()) {
-                               return;
-                           }
-
-                           qInfo() << "FriendMessageDispatcher: receipt timeout, retrying" << sendKind
-                                   << "receipt" << receiptId << "friend" << friendPk << "attempt"
-                                   << attempt;
-
-                           if (isExtended) {
-                               offlineMsgEngine.abandonExtendedMessage(ExtendedReceiptNum(receiptId));
-                           } else {
-                               offlineMsgEngine.abandonCoreMessage(ReceiptNum(receiptId));
-                           }
-
-                           scheduleMessageRetry(message, inner, attempt + 1);
-                       });
-
-    return [completeOnce, finished](bool success) {
-        if (!success) {
-            finished->store(true);
-        }
-
-        completeOnce(success);
     };
 }
 
 OfflineMsgEngine::CompletionFn FriendMessageDispatcher::getCompletionFn(DispatchedMessageId messageId)
 {
-    return [this, messageId] (bool success) {
+    return [this, messageId](bool success) {
+        if (cancelledTags.contains(tagOf(messageId))) {
+            return;
+        }
+
         if (success) {
             emit messageComplete(messageId);
         } else {
-            // For now we know the only reason we can fail after giving to the
-            // offline message engine is due to a reduced extension set
-            emit messageBroken(messageId, BrokenMessageReason::unsupportedExtensions);
+            // Outgoing messages take the core path only, so the one way to fail after the offline
+            // message engine took the message is a receipt that never came. The reason is not
+            // read back from the history, so the existing generic value is stored.
+            emit messageBroken(messageId, BrokenMessageReason::unknown);
         }
     };
 }

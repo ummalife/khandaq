@@ -40,17 +40,34 @@ class QCommandLineParser;
 class ToxPk;
 class CameraSource;
 class IMessageBoxManager;
+namespace Air {
+struct OpenFailure;
+}
 
 class Profile : public QObject
 {
     Q_OBJECT
 
 public:
+    /**
+     * Opens the profile kept in name.tox. On failure it returns nullptr and, when failure is given,
+     * says why as the start window tells it (E20). withoutProxy turns the proxy of the profile's
+     * network settings off before toxcore starts, for a profile whose proxy did not work.
+     */
     static Profile* loadProfile(const QString& name, const QString& password, Settings& settings,
                                 const QCommandLineParser* parser, CameraSource& cameraSource,
-                                    IMessageBoxManager& messageBoxManager);
+                                IMessageBoxManager& messageBoxManager,
+                                Air::OpenFailure* failure = nullptr, bool withoutProxy = false);
+    /**
+     * Makes a profile kept in name.tox, encrypted with password when there is one. selfName is the
+     * name its contacts see; without it they see name. On failure it returns nullptr, leaves no
+     * file of the profile behind and, when failure is given, says why.
+     */
     static Profile* createProfile(const QString& name, const QString& password, Settings& settings,
-                                  const QCommandLineParser* parser, CameraSource& cameraSource, IMessageBoxManager& messageBoxManager);
+                                  const QCommandLineParser* parser, CameraSource& cameraSource,
+                                  IMessageBoxManager& messageBoxManager,
+                                  Air::OpenFailure* failure = nullptr,
+                                  const QString& selfName = QString());
     ~Profile();
 
     Core& getCore() const;
@@ -81,6 +98,11 @@ public:
     static bool exists(QString name, Paths& paths);
     static bool isEncrypted(QString name, Paths& paths);
     static QString getDbPath(const QString& profileName, Paths& paths);
+    /**
+     * Deletes the files of a profile that is not open: name.tox, name.ini and name.db. Returns the
+     * files that stayed; a profile open in this or another Khandaq keeps all of them.
+     */
+    static QStringList removeFiles(const QString& name, Paths& paths);
 
 signals:
     void selfAvatarChanged(const QPixmap& pixmap);
@@ -90,9 +112,6 @@ signals:
     void friendAvatarSet(const ToxPk& friendPk, const QPixmap& pixmap);
     // emit on set to default, used by those that modify on active
     void friendAvatarRemoved(const ToxPk& friendPk);
-    // TODO(sudden6): this doesn't seem to be the right place for Core errors
-    void failedToStart();
-    void badProxy();
     void coreChanged(Core& core);
 
 public slots:
@@ -112,13 +131,17 @@ private:
     static QStringList getFilesByExt(QString extension, Settings& settings);
     QString avatarPath(const ToxPk& owner, bool forceUnencrypted = false);
     bool saveToxSave(QByteArray data);
-    void initCore(const QByteArray& toxsave, Settings &s, bool isNewProfile, CameraSource& cameraSource);
+    /** Starts toxcore and toxav for the profile; false, with why in failure, when they did not. */
+    bool initCore(const QByteArray& toxsave, Settings& s, bool isNewProfile,
+                  CameraSource& cameraSource, Air::OpenFailure& failure);
 
 private:
     std::unique_ptr<AvatarBroadcaster> avatarBroadcaster;
     std::unique_ptr<Core> core;
     std::unique_ptr<CoreAV> coreAv;
     QString name;
+    /** The name a new profile gives its contacts, when it is not the name of its file. */
+    QString initialUsername;
     std::unique_ptr<ToxEncrypt> passkey;
     std::shared_ptr<RawDatabase> database;
     std::shared_ptr<History> history;

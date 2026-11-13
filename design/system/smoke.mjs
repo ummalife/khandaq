@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Smoke run of the design system page in headless Chrome, with the driver of the directions smoke.
+// Smoke run of the design system page in headless Chrome, with the DevTools driver in cdp.mjs.
 //
 // The page is opened at wide, laptop, tablet and phone sizes in both themes and once more with reduced
 // motion. The run fails on any script error, console error, failed resource or sideways page scroll,
@@ -13,7 +13,7 @@ import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { Cdp, Page, VIEWS, launchChrome, sleep } from "../redesign/directions/smoke.mjs";
+import { Cdp, Page, VIEWS, launchChrome, sleep } from "./cdp.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";

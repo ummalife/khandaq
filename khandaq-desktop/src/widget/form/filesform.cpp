@@ -25,7 +25,7 @@
 #include "src/widget/widget.h"
 #include "src/widget/tool/imessageboxmanager.h"
 #include "src/friendlist.h"
-#include "util/display.h"
+#include "src/widget/air/airstrings.h"
 
 #include <QDesktopServices>
 #include <QFileInfo>
@@ -290,9 +290,11 @@ namespace FileTransferList
             case Column::progress:
                 return files[row].progress.getProgress() * 100.0;
             case Column::size:
-                return getHumanReadableSize(files[row].progress.getFileSize());
+                return AirStrings::byteSizeText(static_cast<qint64>(files[row].progress.getFileSize()),
+                                                Translator::locale());
             case Column::speed:
-                return getHumanReadableSize(files[row].progress.getSpeed()) + "/s";
+                return AirStrings::speedText(static_cast<qint64>(files[row].progress.getSpeed()),
+                                             Translator::locale());
             case Column::status:
                 return fileStatusString(files[row]);
             case Column::control:

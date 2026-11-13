@@ -22,10 +22,12 @@
 #include <QDateTime>
 #include <QHash>
 #include <QPointer>
+#include <QSet>
 #include <QVector>
 
 #include <cassert>
 #include <cstdint>
+#include <memory>
 #include <tox/toxencryptsave.h>
 
 #include "src/core/extension.h"
@@ -34,6 +36,7 @@
 #include "src/model/brokenmessagereason.h"
 #include "src/model/systemmessage.h"
 #include "src/persistence/db/rawdatabase.h"
+#include "src/persistence/outbox.h"
 #include "src/widget/searchtypes.h"
 
 class Profile;
@@ -224,6 +227,11 @@ public:
     void addNewMessage(const ChatId& chatId, const QString& message, const ToxPk& sender,
                        const QDateTime& time, bool isDelivered, ExtensionSet extensions,
                        QString dispName, const std::function<void(RowId)>& insertIdCallback = {});
+    void addNewOutgoingMessage(const ChatId& chatId, const QString& message, const ToxPk& sender,
+                               const QDateTime& time, ExtensionSet extensions,
+                               const QString& dispName, qint64 outboxId);
+    Outbox* getOutbox();
+    SavedNotes* getSavedNotes();
 
     void addNewFileMessage(const ChatId& chatId, const QByteArray& fileId,
                            const QString& fileName, const QString& filePath, int64_t size,
@@ -243,6 +251,20 @@ public:
 
     void markAsDelivered(RowId messageId);
     void markAsBroken(RowId messageId, BrokenMessageReason reason);
+
+    /**
+     * Gives a message new words, for an edit by its author (stage 3, item 10). The message is the
+     * last one in the conversation with that author, time and present words; there is no column
+     * for the ids the network gives messages. Empty words erase the message, for one its author
+     * deleted: the conversation leaves an empty message out.
+     */
+    void setMessageText(const ChatId& chatId, const ToxPk& author, const QDateTime& time,
+                        const QString& current, const QString& text);
+    /**
+     * Erases the name and the place of a file its sender deleted (stage 3, item 10): the
+     * conversation leaves a file without either out. A transfer that ends later keeps them erased.
+     */
+    void eraseFileEntry(const ChatId& chatId, const QByteArray& fileId);
 
 signals:
     void fileInserted(RowId dbId, QByteArray fileId);
@@ -272,5 +294,9 @@ private:
 
     // This needs to be a shared pointer to avoid callback lifetime issues
     QHash<QByteArray, FileInfo> fileInfos;
+    /** Files their senders deleted while this run knew them: an end of the transfer writes no path. */
+    QSet<QByteArray> erasedFiles;
     Settings& settings;
+    std::unique_ptr<Outbox> outbox;
+    std::unique_ptr<SavedNotes> savedNotes;
 };

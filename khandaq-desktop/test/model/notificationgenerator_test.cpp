@@ -24,6 +24,7 @@
 #include "mock/mockcoreidhandler.h"
 #include "mock/mockgroupquery.h"
 
+#include <QLocale>
 #include <QObject>
 #include <QtTest/QtTest>
 
@@ -63,6 +64,7 @@ class TestNotificationGenerator : public QObject
     Q_OBJECT
 
 private slots:
+    void initTestCase();
     void init();
     void testSingleFriendMessage();
     void testMultipleFriendMessages();
@@ -92,6 +94,13 @@ private:
     std::unique_ptr<MockCoreIdHandler> coreIdHandler;
     std::unique_ptr<FriendList> friendList;
 };
+
+void TestNotificationGenerator::initTestCase()
+{
+    // File sizes are written in the interface language; before a language is loaded that is the
+    // default locale, fixed here so the numbers do not depend on the machine.
+    QLocale::setDefault(QLocale(QLocale::English, QLocale::UnitedStates));
+}
 
 void TestNotificationGenerator::init()
 {
@@ -179,7 +188,7 @@ void TestNotificationGenerator::testMultipleFriendSourceMessages()
     notificationGenerator->friendMessageNotification(&f, "test1");
     auto notificationData = notificationGenerator->friendMessageNotification(&f2, "test2");
 
-    QVERIFY(notificationData.title == "2 message(s) from 2 chats");
+    QCOMPARE(notificationData.title, QStringLiteral("2 new message(s)"));
     QVERIFY(notificationData.message == "friend1, friend2");
 }
 
@@ -194,7 +203,7 @@ void TestNotificationGenerator::testMultipleGroupSourceMessages()
     notificationGenerator->groupMessageNotification(&g, sender, "test1");
     auto notificationData = notificationGenerator->groupMessageNotification(&g2, sender, "test1");
 
-    QVERIFY(notificationData.title == "2 message(s) from 2 chats");
+    QCOMPARE(notificationData.title, QStringLiteral("2 new message(s)"));
     QVERIFY(notificationData.message == "groupName, groupName2");
 }
 
@@ -211,11 +220,11 @@ void TestNotificationGenerator::testMixedSourceMessages()
     notificationGenerator->friendMessageNotification(&f, "test1");
     auto notificationData = notificationGenerator->groupMessageNotification(&g, sender, "test2");
 
-    QVERIFY(notificationData.title == "2 message(s) from 2 chats");
+    QCOMPARE(notificationData.title, QStringLiteral("2 new message(s)"));
     QVERIFY(notificationData.message == "friend, group");
 
     notificationData = notificationGenerator->fileTransferNotification(&f, "file", 0);
-    QVERIFY(notificationData.title == "3 message(s) from 2 chats");
+    QCOMPARE(notificationData.title, QStringLiteral("3 new message(s)"));
     QVERIFY(notificationData.message == "friend, group");
 }
 
@@ -226,8 +235,9 @@ void TestNotificationGenerator::testFileTransfer()
 
     auto notificationData = notificationGenerator->fileTransferNotification(&f, "file", 5 * 1024 * 1024 /* 5MB */);
 
-    QVERIFY(notificationData.title == "friend - file transfer");
-    QVERIFY(notificationData.message == "file (5.00MiB)");
+    QCOMPARE(notificationData.title, QStringLiteral("friend"));
+    // 5 MiB is 5 242 880 bytes: 5.2 MB, counted in thousands as on the phones.
+    QCOMPARE(notificationData.message, QStringLiteral("File: file (5.2 MB)"));
 }
 
 void TestNotificationGenerator::testFileTransferAfterMessage()
@@ -239,7 +249,7 @@ void TestNotificationGenerator::testFileTransferAfterMessage()
     auto notificationData = notificationGenerator->fileTransferNotification(&f, "file", 5 * 1024 * 1024 /* 5MB */);
 
     QVERIFY(notificationData.title == "2 message(s) from friend");
-    QVERIFY(notificationData.message == "Incoming file transfer");
+    QCOMPARE(notificationData.message, QStringLiteral("File: file"));
 }
 
 void TestNotificationGenerator::testGroupInvitation()
@@ -249,8 +259,12 @@ void TestNotificationGenerator::testGroupInvitation()
 
     auto notificationData = notificationGenerator->groupInvitationNotification(&f);
 
-    QVERIFY(notificationData.title == "friend invites you to join a group.");
-    QVERIFY(notificationData.message == "");
+    QCOMPARE(notificationData.title, QStringLiteral("friend"));
+    QCOMPARE(notificationData.message, QStringLiteral("Invites you to a group"));
+
+    notificationData = notificationGenerator->groupInvitationNotification(&f, "Book club");
+    QCOMPARE(notificationData.title, QStringLiteral("friend"));
+    QCOMPARE(notificationData.message, QStringLiteral("Invites you to the group Book club"));
 }
 
 void TestNotificationGenerator::testGroupInviteUncounted()
@@ -272,8 +286,9 @@ void TestNotificationGenerator::testFriendRequest()
 
     auto notificationData = notificationGenerator->friendRequestNotification(sender, "request");
 
-    QVERIFY(notificationData.title == "Friend request received from 0000000000000000000000000000000000000000000000000000000000000000");
-    QVERIFY(notificationData.message == "request");
+    QCOMPARE(notificationData.title, QStringLiteral("Incoming request"));
+    QCOMPARE(notificationData.message, QStringLiteral("request"));
+    QVERIFY(!notificationData.title.contains(sender.toString()));
 }
 
 void TestNotificationGenerator::testFriendRequestUncounted()
@@ -312,7 +327,7 @@ void TestNotificationGenerator::testSimpleFileTransfer()
 
     auto notificationData = notificationGenerator->fileTransferNotification(&f, "file", 0);
 
-    QVERIFY(notificationData.title == "Incoming file transfer");
+    QCOMPARE(notificationData.title, QStringLiteral("Incoming file"));
     QVERIFY(notificationData.message == "");
 }
 
@@ -337,7 +352,7 @@ void TestNotificationGenerator::testSimpleFriendRequest()
 
     auto notificationData = notificationGenerator->friendRequestNotification(sender, "request");
 
-    QVERIFY(notificationData.title == "Friend request received");
+    QCOMPARE(notificationData.title, QStringLiteral("Incoming request"));
     QVERIFY(notificationData.message == "");
 }
 
@@ -347,9 +362,10 @@ void TestNotificationGenerator::testSimpleGroupInvite()
     f.setName("friend");
 
     notificationSettings->setNotifyHide(true);
-    auto notificationData = notificationGenerator->groupInvitationNotification(&f);
+    auto notificationData = notificationGenerator->groupInvitationNotification(&f, "Book club");
 
-    QVERIFY(notificationData.title == "Group invite received");
+    // With message text off the group's name stays out too: only that an invitation came.
+    QCOMPARE(notificationData.title, QStringLiteral("Group invitation"));
     QVERIFY(notificationData.message == "");
 }
 

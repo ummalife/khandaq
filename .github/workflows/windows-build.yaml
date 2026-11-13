@@ -43,10 +43,27 @@ jobs:
           --build-arg ARCH=x86_64 --build-arg WINEARCH=win64
           -t qtox_windows_builder:latest buildscripts
 
+      # KHANDAQ (desktop release v0.2.47): the container gets khandaq-desktop/ without the .git of the
+      # monorepo, so the build could not see its own version and Settings > About said "Nightly" and
+      # "build without git". The version is read here, where the checkout is, and passed in. On a
+      # release tag the checkout fetches that tag, so About names it; on a branch it says Nightly
+      # with the real commit.
       - name: Cross-compile Khandaq desktop for Windows
-        run: >
-          docker run --rm -v "$PWD:/qtox" -w /qtox qtox_windows_builder:latest
-          ./windows/cross-compile/build.sh --arch x86_64 --build-type Release --src-dir /qtox
+        run: |
+          set -euo pipefail
+          KHANDAQ_GIT_VERSION="$(git rev-parse HEAD)"
+          KHANDAQ_GIT_DESCRIBE="$(git describe --tags 2>/dev/null || true)"
+          KHANDAQ_GIT_DESCRIBE_EXACT="$(git describe --exact-match --tags HEAD 2>/dev/null || true)"
+          [[ "$KHANDAQ_GIT_VERSION" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::unexpected commit id: $KHANDAQ_GIT_VERSION"; exit 1; }
+          for value in "$KHANDAQ_GIT_DESCRIBE" "$KHANDAQ_GIT_DESCRIBE_EXACT"; do
+            [[ -z "$value" || "$value" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::unexpected git describe: $value"; exit 1; }
+          done
+          echo "Settings > About will say ${KHANDAQ_GIT_DESCRIBE:-Nightly}, commit $KHANDAQ_GIT_VERSION"
+          export KHANDAQ_GIT_VERSION KHANDAQ_GIT_DESCRIBE KHANDAQ_GIT_DESCRIBE_EXACT
+          docker run --rm -v "$PWD:/qtox" -w /qtox \
+            -e KHANDAQ_GIT_VERSION -e KHANDAQ_GIT_DESCRIBE -e KHANDAQ_GIT_DESCRIBE_EXACT \
+            qtox_windows_builder:latest \
+            ./windows/cross-compile/build.sh --arch x86_64 --build-type Release --src-dir /qtox
 
       # KHANDAQ: this used to look for package-prefix/setup-qtox.exe, the upstream qTox name. Our
       # installer script defines INSTALLER_NAME "Khandaq-installer.exe" (windows/qtox64.nsi:11), so

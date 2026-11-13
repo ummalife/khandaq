@@ -74,8 +74,8 @@
  * @var std::atomic_bool* RawDatabase::Transaction::success = nullptr;
  * @brief If not a nullptr, the result of the transaction will be set
  *
- * @var std::atomic_bool* RawDatabase::Transaction::done = nullptr;
- * @brief If not a nullptr, will be set to true when the transaction has been executed
+ * @var QSemaphore* RawDatabase::Transaction::done = nullptr;
+ * @brief If not a nullptr, will be released when the transaction has been executed
  */
 
 /**
@@ -424,7 +424,7 @@ bool RawDatabase::execNow(const QVector<RawDatabase::Query>& statements)
         return false;
     }
 
-    std::atomic_bool done{false};
+    QSemaphore done;
     std::atomic_bool success{false};
 
     Transaction trans;
@@ -438,9 +438,11 @@ bool RawDatabase::execNow(const QVector<RawDatabase::Query>& statements)
 
     // We can't use blocking queued here, otherwise we might process future transactions
     // before returning, but we only want to wait until this transaction is done.
+    // KHANDAQ (redesign stage 5): the wait ends the moment the transaction is done. It polled
+    // every 10 ms, so every query waited for took at least that long, and a profile with
+    // hundreds of chats waited seconds at start for queries that take microseconds.
     QMetaObject::invokeMethod(this, "process");
-    while (!done.load(std::memory_order_acquire))
-        QThread::msleep(10);
+    done.acquire();
 
     return success.load(std::memory_order_acquire);
 }
@@ -865,7 +867,7 @@ void RawDatabase::process()
 
         // Signal transaction results
         if (trans.done != nullptr)
-            trans.done->store(true, std::memory_order_release);
+            trans.done->release();
     }
 }
 

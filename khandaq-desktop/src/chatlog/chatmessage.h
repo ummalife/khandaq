@@ -21,6 +21,8 @@
 
 #include "chatline.h"
 #include "src/core/toxfile.h"
+#include "src/model/air/airconversation.h"
+#include "src/model/air/airmessagemarks.h"
 #include "src/persistence/history.h"
 
 #include <QDateTime>
@@ -28,6 +30,7 @@
 class CoreFile;
 class QGraphicsScene;
 class DocumentCache;
+class Text;
 class SmileyPack;
 class Settings;
 class Style;
@@ -57,21 +60,63 @@ public:
     ChatMessage(const ChatMessage&) = default;
     ChatMessage(ChatMessage&&) = default;
 
-    static ChatMessage::Ptr createChatMessage(const QString& sender, const QString& rawMessage,
-                                              MessageType type, bool isMe, MessageState state,
-                                              const QDateTime& date, DocumentCache& documentCache,
-                                              SmileyPack& smileyPack, Settings& settings, Style& style, bool colorizeName = false);
+    /** Who wrote an entry of the transcript, and the state of our own messages. */
+    struct AirLook
+    {
+        /** "You" for our own messages, the first word of the author's name otherwise. */
+        QString who;
+        /** The author's tone; -1 signs the entry in ink-2, as our own messages are signed. */
+        int tone = -1;
+        /** Our own messages to a person carry a state mark; others have none. */
+        bool hasMark = false;
+        Air::EntryStatus status = Air::EntryStatus::None;
+        /** Who wrote it, as a screen reader says it: "You" or the whole name; empty in notes. */
+        QString spokenWho;
+    };
+
+    /**
+     * A message: the words it shows (Air::readMessageText, or the sentence for a form this version
+     * cannot read), the quote of a reply above them, and its marks (an edit by its author, the
+     * reactions on it) under them.
+     */
+    static ChatMessage::Ptr createChatMessage(const AirLook& look, const QString& sender,
+                                              const QString& rawMessage, MessageType type,
+                                              const QDateTime& date, const Air::EntryMarks& marks,
+                                              DocumentCache& documentCache, SmileyPack& smileyPack,
+                                              Settings& settings, Style& style);
     static ChatMessage::Ptr createChatInfoMessage(const QString& rawMessage, SystemMessageType type,
                                                   const QDateTime& date, DocumentCache& documentCache, Settings& settings,
                                                   Style& style);
-    static ChatMessage::Ptr createFileTransferMessage(const QString& sender, CoreFile& coreFile,
-                                                      ToxFile file, bool isMe, const QDateTime& date,
-                                                      DocumentCache& documentCache, Settings& settings, Style& style, IMessageBoxManager& messageBoxManager);
+    static ChatMessage::Ptr createFileTransferMessage(
+        const AirLook& look, CoreFile& coreFile, ToxFile file, const QDateTime& date,
+        const Air::EntryMarks& marks, DocumentCache& documentCache, SmileyPack& smileyPack,
+        Settings& settings, Style& style, IMessageBoxManager& messageBoxManager);
+    /** A call: the phone glyph and its words ("Call, 4:12", "Missed call"), without an author. */
+    static ChatMessage::Ptr createCallEntry(const QString& words, bool answered,
+                                            const QDateTime& date, DocumentCache& documentCache,
+                                            Settings& settings, Style& style);
+    /** "Today", "Yesterday" or the date, above the first entry of a day. */
+    static ChatMessage::Ptr createDayMark(const QString& text, DocumentCache& documentCache,
+                                          Settings& settings, Style& style);
+    /** The text font of the transcript: the design's body text, unless the user chose a font. */
+    static QFont bodyFont(Settings& settings);
     static ChatMessage::Ptr createTypingNotification(DocumentCache& documentCache, Settings& settings, Style& style);
     static ChatMessage::Ptr createBusyNotification(DocumentCache& documentCache, Settings& settings, Style& style);
 
-    void markAsDelivered(const QDateTime& time);
-    void markAsBroken();
+    /** Changes the state mark of one of our messages. */
+    void setStatus(Air::EntryStatus status);
+    /**
+     * Shows what changed on a message since it was drawn (stage 3, item 10): the new words of an
+     * edit and the marks. Returns whether the entry may have changed its height.
+     */
+    bool updateMessage(const QString& rawMessage, const Air::EntryMarks& marks, SmileyPack& smileyPack);
+    /** Shows the marks of an entry anew; returns whether it may have changed its height. */
+    bool updateMarks(const Air::EntryMarks& marks);
+    /**
+     * An entry as iOS says it: who wrote it and when, its words, that it mentions you, the state
+     * of a message of ours; a day mark says its day.
+     */
+    QString spokenText() const override;
     QString toString() const;
     bool isAction() const;
     void setAsAction();
@@ -83,7 +128,18 @@ protected:
     static QString wrapDiv(const QString& str, const QString& div);
 
 private:
+    /** The text of a message entry, content 1: words is what it shows, sender signs an action. */
+    static Text* createBody(const QString& words, const QString& sender, MessageType type,
+                            DocumentCache& documentCache, SmileyPack& smileyPack,
+                            Settings& settings, Style& style);
+
     bool action = false;
+    QString spokenWho;
+    bool mentionsYou = false;
+    /** What a message entry was drawn from, to draw its words again after an edit. */
+    QString rawText;
+    QString senderName;
+    MessageType messageType = NORMAL;
     DocumentCache& documentCache;
     Settings& settings;
     Style& style;

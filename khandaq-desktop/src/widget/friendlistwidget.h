@@ -94,6 +94,7 @@ private:
     CircleWidget* createCircleWidget(int id = -1);
     CategoryWidget* getTimeCategoryWidget(const Friend* frd) const;
     void sortByMode();
+    void sortIfPending();
     void cleanMainLayout();
     QWidget* getNextWidgetForName(IFriendListItem* currentPos, bool forward) const;
     QVector<std::shared_ptr<IFriendListItem> > getItemsFromCircle(CircleWidget* circle) const;
@@ -103,6 +104,7 @@ private:
     QVBoxLayout* activityLayout = nullptr;
     QTimer* dayTimer;
     FriendListManager* manager;
+    bool sortPending = false;
 
     const Core& core;
     Settings& settings;

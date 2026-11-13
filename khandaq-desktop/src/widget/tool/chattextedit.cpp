@@ -19,6 +19,7 @@
 
 #include "chattextedit.h"
 
+#include "src/widget/air/airtokens.h"
 #include "src/widget/translator.h"
 
 #include <QApplication>
@@ -105,9 +106,11 @@ QStringList localFilePathsFromMimeData(const QMimeData* mimeData)
     return existingLocalFilePaths(candidates);
 }
 
-constexpr int MESSAGE_EDIT_MIN_HEIGHT = 96;
-constexpr int MESSAGE_EDIT_MAX_HEIGHT = 280;
-constexpr int MESSAGE_EDIT_VERTICAL_PADDING = 12;
+// kq-compose textarea: as high as "Send" for one line, growing up to the compose maximum, with
+// 8 px above the text and the rest below it (the padding is set by the form's style sheet).
+constexpr int MESSAGE_EDIT_MIN_HEIGHT = AirTokens::Size::control;
+constexpr int MESSAGE_EDIT_MAX_HEIGHT = AirTokens::Size::composeMax;
+constexpr int MESSAGE_EDIT_VERTICAL_PADDING = AirTokens::Space::s8 + AirTokens::Space::s8 - 1;
 
 } // namespace
 
@@ -122,6 +125,8 @@ ChatTextEdit::ChatTextEdit(QWidget* parent)
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setMinimumHeight(MESSAGE_EDIT_MIN_HEIGHT);
     setMaximumHeight(MESSAGE_EDIT_MAX_HEIGHT);
+    // The padding of the field is all the room around the text.
+    document()->setDocumentMargin(0);
 
     connect(this, &QTextEdit::textChanged, this, &ChatTextEdit::updateHeightForContent);
 
@@ -156,6 +161,11 @@ void ChatTextEdit::keyPressEvent(QKeyEvent* event)
         return;
     }
     if (key == Qt::Key_Up && toPlainText().isEmpty()) {
+        if (editLast && editLast()) {
+            setFocus();
+            moveCursor(QTextCursor::MoveOperation::End, QTextCursor::MoveMode::MoveAnchor);
+            return;
+        }
         setPlainText(lastMessage);
         setFocus();
         moveCursor(QTextCursor::MoveOperation::End, QTextCursor::MoveMode::MoveAnchor);
@@ -183,6 +193,11 @@ void ChatTextEdit::insertFromMimeData(const QMimeData* source)
 void ChatTextEdit::setLastMessage(QString lm)
 {
     lastMessage = lm;
+}
+
+void ChatTextEdit::setEditLastHandler(std::function<bool()> handler)
+{
+    editLast = std::move(handler);
 }
 
 void ChatTextEdit::retranslateUi()

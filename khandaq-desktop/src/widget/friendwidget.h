@@ -43,6 +43,11 @@ public:
         Profile& profile);
 
     void contextMenuEvent(QContextMenuEvent* event) final;
+    /**
+     * The friend's menu at globalPos. leadingActions, owned by the caller, stand first: the Air
+     * list puts its favourite toggle there.
+     */
+    void showContextMenu(const QPoint& globalPos, const QList<QAction*>& leadingActions = {});
     void setAsActiveChatroom() final;
     void setAsInactiveChatroom() final;
     void updateStatusLight() final;
@@ -65,6 +70,8 @@ signals:
     void friendWidgetClicked(FriendWidget* widget);
     void removeFriend(const ToxPk& friendPk);
     void copyFriendIdToClipboard(const ToxPk& friendPk);
+    /** "To new group": New group opens with this contact chosen for the invitations. */
+    void newGroupRequested(const ToxPk& friendPk);
     void contextMenuCalled(QContextMenuEvent* event);
     void friendHistoryRemoved();
     void updateFriendActivity(Friend& frnd);
@@ -73,6 +80,8 @@ public slots:
     void onAvatarSet(const ToxPk& friendPk, const QPixmap& pic);
     void onAvatarRemoved(const ToxPk& friendPk);
     void onContextMenuCalled(QContextMenuEvent* event);
+    /** Edits the alias in place, or in a dialog while the old list row is hidden. */
+    void editAlias();
     void setActive(bool active_);
 
 protected:

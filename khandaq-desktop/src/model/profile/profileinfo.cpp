@@ -19,7 +19,9 @@
 
 #include "profileinfo.h"
 #include "src/core/core.h"
+#include "src/model/air/airyou.h"
 #include "src/nexus.h"
+#include "src/persistence/credentialstore.h"
 #include "src/persistence/profile.h"
 #include "src/persistence/settings.h"
 #include "src/model/toxclientstandards.h"
@@ -28,7 +30,9 @@
 #include <QBuffer>
 #include <QClipboard>
 #include <QFile>
+#include <QFileInfo>
 #include <QImageReader>
+#include <QRandomGenerator>
 
 namespace {
 /**
@@ -117,7 +121,13 @@ ProfileInfo::ProfileInfo(Core* core_, Profile* profile_, Settings& settings_, Ne
  */
 bool ProfileInfo::setPassword(const QString& password)
 {
+    const ToxEncrypt* const before = profile->getPasskey();
     QString errorMsg = profile->setPassword(password);
+    // The profile file takes the new password even when the history cannot (Profile::setPassword
+    // re-encrypts the save first), and the stored copy has to open the profile file.
+    if (profile->getPasskey() != before) {
+        storePassword(password);
+    }
     return errorMsg.isEmpty();
 }
 
@@ -128,7 +138,30 @@ bool ProfileInfo::setPassword(const QString& password)
 bool ProfileInfo::deletePassword()
 {
     QString errorMsg = profile->setPassword("");
+    // The profile file is saved without encryption whatever the history does: no password to keep.
+    storePassword(QString());
     return errorMsg.isEmpty();
+}
+
+/**
+ * @brief Keeps the copy of the password in the system credential store in step with the profile.
+ *
+ * KHANDAQ (deep review 2026-08-23, RR3-09): a copy is kept only while logging in automatically is
+ * on, so a changed password replaces it then; otherwise, and once the password is removed, none is.
+ * A changed password used to leave the old one there, and a removed one stayed where the user could
+ * not see it.
+ */
+void ProfileInfo::storePassword(const QString& password)
+{
+    if (!CredentialStore::isSupported()) {
+        return;
+    }
+    const QString name = profile->getName();
+    if (!password.isEmpty() && settings.getAutoLogin()) {
+        CredentialStore::save(name, password);
+    } else {
+        CredentialStore::remove(name);
+    }
 }
 
 /**
@@ -152,6 +185,35 @@ void ProfileInfo::copyId() const
     if (clip->supportsSelection()) {
         clip->setText(txt, QClipboard::Selection);
     }
+}
+
+/**
+ * @brief Your ID as it is now, with the antispam in use.
+ */
+ToxId ProfileInfo::getSelfId() const
+{
+    return core->getSelfId();
+}
+
+/**
+ * @brief Gives the ID a new antispam: contacts stay, the old ID stops taking new requests.
+ */
+void ProfileInfo::changeNospam()
+{
+    bool ok = false;
+    const quint32 current = core->getSelfId().getNoSpamString().toUInt(&ok, 16);
+    core->setNospam(
+        Air::newAntispam(ok ? current : 0, [] { return QRandomGenerator::system()->generate(); }));
+}
+
+QString ProfileInfo::getUsername() const
+{
+    return core->getUsername();
+}
+
+QString ProfileInfo::getStatusMessage() const
+{
+    return core->getStatusMessage();
 }
 
 /**
@@ -182,13 +244,21 @@ QString ProfileInfo::getProfileName() const
 }
 
 /**
+ * @brief The folder the profile file is kept in.
+ */
+QString ProfileInfo::getProfileFolder() const
+{
+    return settings.getPaths().getSettingsDirPath();
+}
+
+/**
  * @brief Rename profile file.
  * @param name New profile name.
  * @return Result code of rename operation.
  */
 IProfileInfo::RenameResult ProfileInfo::renameProfile(const QString& name)
 {
-    QString cur = profile->getName();
+    const QString cur = profile->getName();
     if (name.isEmpty()) {
         return RenameResult::EmptyName;
     }
@@ -199,8 +269,18 @@ IProfileInfo::RenameResult ProfileInfo::renameProfile(const QString& name)
         return RenameResult::ProfileAlreadyExists;
     }
 
-    if (!profile->rename(name)) {
+    // The files get the name that was checked: the typed one could carry a character the file
+    // system takes for a folder.
+    if (!profile->rename(newName)) {
         return RenameResult::Error;
+    }
+
+    // KHANDAQ (redesign E17): a password kept for logging in automatically is filed under the name
+    // of the profile, so it moves with it rather than staying behind under the old one.
+    QString password;
+    if (CredentialStore::isSupported() && CredentialStore::load(cur, password)) {
+        CredentialStore::save(newName, password);
+        CredentialStore::remove(cur);
     }
 
     return RenameResult::OK;
@@ -218,11 +298,18 @@ IProfileInfo::SaveResult ProfileInfo::exportProfile(const QString& path) const
         return SaveResult::EmptyPath;
     }
 
+    const QString source = settings.getPaths().getSettingsDirPath() + current;
+    // The profile file itself chosen as the copy: the writability test below would delete it.
+    const QString sourcePath = QFileInfo(source).canonicalFilePath();
+    if (!sourcePath.isEmpty() && QFileInfo(path).canonicalFilePath() == sourcePath) {
+        return SaveResult::OK;
+    }
+
     if (!tryRemoveFile(path)) {
         return SaveResult::NoWritePermission;
     }
 
-    if (!QFile::copy(settings.getPaths().getSettingsDirPath() + current, path)) {
+    if (!QFile::copy(source, path)) {
         return SaveResult::Error;
     }
 
@@ -231,24 +318,38 @@ IProfileInfo::SaveResult ProfileInfo::exportProfile(const QString& path) const
 
 /**
  * @brief Remove profile.
- * @return List of files, which couldn't be removed automaticaly.
+ *
+ * Queued: Nexus deletes the window that asked, which must not happen inside its own handler. It
+ * deletes the files, then shows the login screen and names there any file that stayed.
  */
-QStringList ProfileInfo::removeProfile()
+void ProfileInfo::removeProfile()
 {
-    QStringList manualDeleteFiles = profile->remove();
-    QMetaObject::invokeMethod(&nexus, "showLogin");
-    return manualDeleteFiles;
+    Nexus* const app = &nexus;
+    QMetaObject::invokeMethod(app, [app] { app->removeProfile(); }, Qt::QueuedConnection);
 }
 
 /**
  * @brief Log out from current profile.
+ *
+ * KHANDAQ (redesign E17): Log out says what it means. Until a login at the login screen, every
+ * start opens it instead of logging straight back in; the credential store keeps the password
+ * meanwhile, and the login clears the flag (Nexus). Queued for the same reason as removeProfile().
  */
 void ProfileInfo::logout()
 {
-    // TODO(kriby): Refactor all of these invokeMethod calls with connect() properly when possible
+    settings.setLoggedOut(true);
     settings.saveGlobal();
-    QMetaObject::invokeMethod(&nexus, "showLogin",
+    QMetaObject::invokeMethod(&nexus, "showLogin", Qt::QueuedConnection,
                               Q_ARG(QString, settings.getCurrentProfile()));
+}
+
+/**
+ * @brief Logs out to move the profile file at path in from the start window (redesign E20).
+ */
+void ProfileInfo::logoutToImport(const QString& path)
+{
+    nexus.setPendingImport(path);
+    logout();
 }
 
 /**

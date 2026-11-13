@@ -188,6 +188,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Generated client files, contrast rules and forbidden glyphs
         run: bash design/check.sh
+      - name: Desktop token header matches tokens.json
+        run: python3 khandaq-desktop/tools/gen-design-tokens.py --check
 
   android-unit-tests:
     # KHANDAQ (re-audit 2026-08-22, S-01). The 172 JVM tests existed and ran only on a TAG, inside

@@ -42,6 +42,17 @@ while (( $# > 0 )); do
     esac
 done
 
+# KHANDAQ (desktop release v0.2.47): the build container sees khandaq-desktop/ alone, without the
+# .git of the monorepo, so CMake's own `git describe` finds nothing and Settings > About says
+# "Nightly", with "build without git" for the commit. The workflow passes what git says on the host;
+# a run without these keeps CMake's fallback. A value given with -D stays in CMakeCache.txt, so an
+# empty one removes the entry (-U) instead of leaving an earlier run's version in a reused build.
+VERSION_ARGS=()
+for name in GIT_DESCRIBE GIT_DESCRIBE_EXACT GIT_VERSION; do
+    value_name="KHANDAQ_${name}"
+    if [[ -n "${!value_name:-}" ]]; then VERSION_ARGS+=("-D${name}=${!value_name}"); else VERSION_ARGS+=("-U${name}"); fi
+done
+
 # Common directory paths
 
 QTOX_PREFIX_DIR="$(realpath install-prefix)"
@@ -89,6 +100,7 @@ then
         -DUPDATE_CHECK=OFF \
         -DSTRICT_OPTIONS=ON \
         -DTEST_CROSSCOMPILING_EMULATOR=wine \
+        ${VERSION_ARGS[@]+"${VERSION_ARGS[@]}"} \
         "$QTOX_SRC_DIR"
 elif [[ "$BUILD_TYPE" == "Debug" ]]
 then
@@ -100,6 +112,7 @@ then
         -DUPDATE_CHECK=OFF \
         -DSTRICT_OPTIONS=ON \
         -DTEST_CROSSCOMPILING_EMULATOR=wine \
+        ${VERSION_ARGS[@]+"${VERSION_ARGS[@]}"} \
         "$QTOX_SRC_DIR"
 fi
 

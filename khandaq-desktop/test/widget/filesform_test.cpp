@@ -21,6 +21,7 @@
 #include "src/friendlist.h"
 #include "src/model/friend.h"
 
+#include <QLocale>
 #include <QTest>
 #include <limits>
 
@@ -28,6 +29,7 @@ class TestFileTransferList : public QObject
 {
     Q_OBJECT
 private slots:
+    void initTestCase();
     void init();
     void testFileTransferListConversion();
     void testEditorActionConversion();
@@ -50,6 +52,13 @@ private:
 };
 
 using namespace FileTransferList;
+
+void TestFileTransferList::initTestCase()
+{
+    // Sizes are written in the interface language; before a language is loaded that is the
+    // default locale, fixed here so the numbers do not depend on the machine.
+    QLocale::setDefault(QLocale(QLocale::English, QLocale::UnitedStates));
+}
 
 void TestFileTransferList::init()
 {
@@ -106,14 +115,13 @@ void TestFileTransferList::testSize()
     const auto idx = model->index(0, static_cast<int>(Column::size));
     auto size = idx.data();
 
-    // Size should be a human readable string
-    QCOMPARE(size.toString(), QString("1000B"));
+    // Sizes count in thousands, as on the phones.
+    QCOMPARE(size.toString(), QString("1 KB"));
 
-    // 1GB + a little to avoid floating point inaccuracy
     file = ToxFile(0, 0, "", "", 1024 * 1024 * 1024 + 2, ToxFile::FileDirection::SENDING);
     model->onFileUpdated(file);
     size = idx.data();
-    QCOMPARE(size.toString(), QString("1.00GiB"));
+    QCOMPARE(size.toString(), QString("1.07 GB"));
 }
 
 void TestFileTransferList::testSpeed()
@@ -126,8 +134,8 @@ void TestFileTransferList::testSpeed()
     const auto idx = model->index(0, static_cast<int>(Column::speed));
     const auto speed = idx.data();
 
-    // Speed should be a human readable string
-    QCOMPARE(speed.toString(), QString("100KiB/s"));
+    // 100 KiB a second is 102 400 bytes: 102 KB, counted in thousands as the sizes are.
+    QCOMPARE(speed.toString(), QString("102 KB/s"));
 }
 
 void TestFileTransferList::testStatus()

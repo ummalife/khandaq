@@ -64,7 +64,6 @@ public slots:
     int getCircleId() const;
     QString getCircleName() const;
 
-    void inviteToNewGroup();
     void inviteFriend(const Group* group);
 
     bool autoAcceptEnabled() const;

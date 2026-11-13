@@ -43,6 +43,7 @@ public:
 
 private slots:
     void testSelfMention();
+    void testReplyIsNoMention();
     void testOutgoingMessage();
     void testIncomingMessage();
 };
@@ -106,6 +107,18 @@ void TestMessageProcessor::testSelfMention()
     processedMessage = messageProcessor.processIncomingCoreMessage(false, "NewUserName: hi");
     QVERIFY(messageHasSelfMention(processedMessage));
 
+    // Names outside ASCII are words too: the word boundary has to know Cyrillic and Arabic letters
+    for (const QString& name : {QStringLiteral("Амина Рахимова"), QStringLiteral("أمينة")}) {
+        sharedParams.onUserNameSet(name);
+        processedMessage =
+            messageProcessor.processIncomingCoreMessage(false, name % QStringLiteral(", привет"));
+        QVERIFY2(messageHasSelfMention(processedMessage), qPrintable(name));
+        // A longer word that starts with the name is not a mention
+        processedMessage =
+            messageProcessor.processIncomingCoreMessage(false, name % QStringLiteral("ой"));
+        QVERIFY2(!messageHasSelfMention(processedMessage), qPrintable(name));
+    }
+
     // Regression tests for: https://github.com/qTox/qTox/issues/2119
     {
         // Empty usernames should not match
@@ -117,6 +130,51 @@ void TestMessageProcessor::testSelfMention()
         processedMessage = messageProcessor.processIncomingCoreMessage(false, "a");
         QVERIFY(!messageHasSelfMention(processedMessage));
     }
+}
+
+/**
+ * @brief A reply to my message carries my name in its header and my words in its quote; only the
+ * words its author wrote can mention me.
+ */
+void TestMessageProcessor::testReplyIsNoMention()
+{
+    MessageProcessor::SharedParams sharedParams(tox_max_message_length(), 10 * 1024 * 1024);
+    const QString name = QStringLiteral("Амина Рахимова");
+    sharedParams.onUserNameSet(name);
+    sharedParams.setPublicKey(
+        QStringLiteral("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF"));
+    auto messageProcessor = MessageProcessor(sharedParams);
+    messageProcessor.enableMentions();
+
+    const QString header = QStringLiteral("[KQ|1731400000000|5908ABCD|1731400000000|") % name
+                           % QStringLiteral("]\n") % name % QStringLiteral(": Я возьму проектор\n");
+    // The phones' reply: header, quote, footer, then the words.
+    const QString reply = header % QStringLiteral("[KQ/end]\nОтлично, а я принесу удлинитель");
+    QVERIFY(!messageHasSelfMention(messageProcessor.processIncomingCoreMessage(false, reply)));
+    // Without the footer the first line is the quote.
+    const QString shortReply =
+        QStringLiteral("[KQ|1|5908ABCD|2|") % name % QStringLiteral("]\nЯ возьму проектор\nОтлично");
+    QVERIFY(!messageHasSelfMention(messageProcessor.processIncomingCoreMessage(false, shortReply)));
+    // The older quote.
+    const QString legacy =
+        QStringLiteral("----\n") % name % QStringLiteral(": Я возьму проектор\n----\nОтлично");
+    QVERIFY(!messageHasSelfMention(messageProcessor.processIncomingCoreMessage(false, legacy)));
+    // Markup this build cannot read says nothing to me.
+    const QString poll = QStringLiteral("[KQ|poll|7|") % name % QStringLiteral("?|Да|Нет]");
+    QVERIFY(!messageHasSelfMention(messageProcessor.processIncomingCoreMessage(false, poll)));
+
+    // A reply whose own words name me mentions me, at the place of those words.
+    const QString named = header % QStringLiteral("[KQ/end]\n") % name % QStringLiteral(", а ты?");
+    const Message processed = messageProcessor.processIncomingCoreMessage(false, named);
+    QVERIFY(messageHasSelfMention(processed));
+    QCOMPARE(processed.metadata.front().start, static_cast<size_t>(named.lastIndexOf(name)));
+    QCOMPARE(processed.metadata.front().end,
+             static_cast<size_t>(named.lastIndexOf(name) + name.size()));
+
+    // A mention block with the "@" it puts before the name.
+    const QString mention = QStringLiteral("[KQ|m|ABCDEF12:") % name % QStringLiteral("][KQ/m]@")
+                            % name % QStringLiteral(", ключ от зала у тебя?");
+    QVERIFY(messageHasSelfMention(messageProcessor.processIncomingCoreMessage(false, mention)));
 }
 
 /**

@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <QLocale>
 #include <QMutex>
 #include <QPair>
 #include <QVector>
@@ -31,6 +32,11 @@ class Translator
 {
 public:
     static void translate(const QString& localeName);
+    /**
+     * The locale of the language the interface speaks now: the one translate() loaded, or the
+     * default locale before the first call.
+     */
+    static QLocale locale();
     static void registerHandler(const std::function<void()>& f, void* owner);
     static void unregister(void* owner);
 
@@ -38,6 +44,12 @@ private:
     using Callback = QPair<void*, std::function<void()>>;
     static QVector<Callback> callbacks;
     static QMutex lock;
+    /**
+     * The language translate() loaded last. It has a lock of its own: the handlers that translate()
+     * calls while it holds lock may ask for it.
+     */
+    static QString language;
+    static QMutex languageLock;
     static QTranslator* core_translator;
     static QTranslator* app_translator;
 };

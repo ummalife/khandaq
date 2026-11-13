@@ -20,6 +20,9 @@
 #include "setpassworddialog.h"
 #include "ui_setpassworddialog.h"
 
+#include "src/model/air/airstart.h"
+#include "src/widget/air/airstrings.h"
+
 #include <QApplication>
 #include <QPushButton>
 
@@ -56,21 +59,33 @@ SetPasswordDialog::~SetPasswordDialog()
 
 void SetPasswordDialog::onPasswordEdit()
 {
-    QString pswd = ui->passwordlineEdit->text();
+    const QString pswd = ui->passwordlineEdit->text();
 
-    if (pswd.isEmpty()) {
-        ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
-        ui->body->setText(body);
-    } else if (pswd.length() < 6) {
-        ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
-        ui->body->setText(body + tr("The password is too short."));
-    } else if (pswd != ui->repasswordlineEdit->text()) {
-        ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
-        ui->body->setText(body + tr("The password doesn't match."));
-    } else {
-        ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(true);
-        ui->body->setText(body);
+    // KHANDAQ (redesign E19): the rule of a new password is the one first launch keeps, at least 8
+    // characters with a letter and a digit, said in the same words.
+    using Text = AirStrings::Text;
+    const Air::NewPasswordProblem problem =
+        Air::newPasswordProblem(pswd, ui->repasswordlineEdit->text());
+    QString reason;
+    switch (problem) {
+    case Air::NewPasswordProblem::None:
+    case Air::NewPasswordProblem::Empty:
+        break;
+    case Air::NewPasswordProblem::Short:
+        reason = AirStrings::text(Text::StartPasswordShort);
+        break;
+    case Air::NewPasswordProblem::Weak:
+        reason = AirStrings::text(Text::StartPasswordWeak);
+        break;
+    case Air::NewPasswordProblem::RepeatFirst:
+        reason = AirStrings::text(Text::StartPasswordRepeatFirst);
+        break;
+    case Air::NewPasswordProblem::Mismatch:
+        reason = AirStrings::text(Text::StartPasswordMismatch);
+        break;
     }
+    ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(problem == Air::NewPasswordProblem::None);
+    ui->body->setText(body + reason);
 
     ui->passStrengthMeter->setValue(getPasswordStrength(pswd));
 }

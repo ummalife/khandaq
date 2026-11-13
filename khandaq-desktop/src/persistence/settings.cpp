@@ -66,6 +66,26 @@ QThread* Settings::settingsThread{nullptr};
 static constexpr int GLOBAL_SETTINGS_VERSION = 1;
 static constexpr int PERSONAL_SETTINGS_VERSION = 1;
 
+namespace {
+Settings::ThemeMode themeModeFromValue(int value)
+{
+    switch (value) {
+    case static_cast<int>(Settings::ThemeMode::Light):
+        return Settings::ThemeMode::Light;
+    case static_cast<int>(Settings::ThemeMode::Dark):
+        return Settings::ThemeMode::Dark;
+    default:
+        return Settings::ThemeMode::System;
+    }
+}
+
+/** The old theme list (Style) put its five dark variants at indexes 5 to 9. */
+bool isDarkLegacyThemeColor(int themeColor)
+{
+    return themeColor >= 5 && themeColor <= 9;
+}
+} // namespace
+
 Settings::Settings(IMessageBoxManager& messageBoxManager_)
     : loaded(false)
     , useCustomDhtList{false}
@@ -134,6 +154,7 @@ void Settings::loadGlobal()
     s.beginGroup("Login");
     {
         autoLogin = s.value("autoLogin", false).toBool();
+        loggedOut = s.value("loggedOut", false).toBool();
     }
     s.endGroup();
 
@@ -211,6 +232,13 @@ void Settings::loadGlobal()
         showGroupJoinLeaveMessages = s.value("showGroupJoinLeaveMessages", false).toBool();
         spellCheckingEnabled = s.value("spellCheckingEnabled", true).toBool();
         themeColor = s.value("themeColor", 0).toInt();
+        if (s.contains("themeMode")) {
+            themeMode = themeModeFromValue(s.value("themeMode").toInt());
+        } else {
+            // Before the theme mode existed, one list held the light and the dark themes. A dark
+            // one chosen by hand stays dark; everything else now follows the system.
+            themeMode = isDarkLegacyThemeColor(themeColor) ? ThemeMode::Dark : ThemeMode::System;
+        }
         style = s.value("style", "").toString();
         if (style == "") // Default to Fusion if available, otherwise no style
         {
@@ -559,6 +587,10 @@ void Settings::loadPersonal(const Profile& profile, bool newProfile)
     ps.beginGroup("GUI");
     {
         compactLayout = ps.value("compactLayout", true).toBool();
+        // split() and removeAll() rather than Qt::SkipEmptyParts, which Qt 5.12 lacks.
+        favoriteChats = ps.value("favoriteChats", QString()).toString().split('\n');
+        favoriteChats.removeAll(QString());
+        airLocalStore = ps.value("airLocalStore", QString()).toString().toUtf8();
         sortingMode = static_cast<FriendListSortingMode>(
             ps.value("friendSortingMethod", static_cast<int>(FriendListSortingMode::Name)).toInt());
     }
@@ -588,6 +620,21 @@ void Settings::loadPersonal(const Profile& profile, bool newProfile)
         ps.endArray();
     }
     ps.endGroup();
+}
+
+/**
+ * @brief Forgets the profile whose personal settings were loaded, as it goes away.
+ *
+ * KHANDAQ (redesign E17): after Log out or deleting the profile the login screen has no profile, and
+ * quitting from it saved the personal settings of the deleted one through a dangling pointer, which
+ * crashed on exit. With none loaded, savePersonal() saves nothing until the next login loads one.
+ */
+void Settings::unloadPersonal(const Profile& profile)
+{
+    QMutexLocker locker{&bigLock};
+    if (loadedProfile == &profile) {
+        loadedProfile = nullptr;
+    }
 }
 
 void Settings::resetToDefault()
@@ -626,6 +673,7 @@ void Settings::saveGlobal()
     s.beginGroup("Login");
     {
         s.setValue("autoLogin", autoLogin);
+        s.setValue("loggedOut", loggedOut);
     }
     s.endGroup();
 
@@ -688,6 +736,7 @@ void Settings::saveGlobal()
         s.setValue("lightTrayIcon", lightTrayIcon);
         s.setValue("useEmoticons", useEmoticons);
         s.setValue("themeColor", themeColor);
+        s.setValue("themeMode", static_cast<int>(themeMode));
         s.setValue("style", style);
         s.setValue("nameColors", nameColors);
         s.setValue("statusChangeNotificationEnabled", statusChangeNotificationEnabled);
@@ -811,6 +860,8 @@ void Settings::savePersonal(QString profileName, const ToxEncrypt* passkey)
     ps.beginGroup("GUI");
     {
         ps.setValue("compactLayout", compactLayout);
+        ps.setValue("favoriteChats", favoriteChats.join('\n'));
+        ps.setValue("airLocalStore", QString::fromUtf8(airLocalStore));
         ps.setValue("friendSortingMethod", static_cast<int>(sortingMode));
     }
     ps.endGroup();
@@ -2168,6 +2219,58 @@ void Settings::setThemeColor(int value)
     }
 }
 
+Settings::ThemeMode Settings::getThemeMode() const
+{
+    QMutexLocker locker{&bigLock};
+    return themeMode;
+}
+
+void Settings::setThemeMode(ThemeMode mode)
+{
+    if (setVal(themeMode, mode)) {
+        emit themeModeChanged(static_cast<int>(mode));
+    }
+}
+
+QStringList Settings::getFavoriteChats() const
+{
+    QMutexLocker locker{&bigLock};
+    return favoriteChats;
+}
+
+bool Settings::isFavoriteChat(const QString& chatId) const
+{
+    QMutexLocker locker{&bigLock};
+    return favoriteChats.contains(chatId);
+}
+
+void Settings::setFavoriteChat(const QString& chatId, bool favorite)
+{
+    QStringList next = getFavoriteChats();
+    if (favorite == next.contains(chatId)) {
+        return;
+    }
+    if (favorite) {
+        next.append(chatId);
+    } else {
+        next.removeAll(chatId);
+    }
+    if (setVal(favoriteChats, next)) {
+        emit favoriteChatsChanged(next);
+    }
+}
+
+QByteArray Settings::getAirLocalStore() const
+{
+    QMutexLocker locker{&bigLock};
+    return airLocalStore;
+}
+
+void Settings::setAirLocalStore(const QByteArray& data)
+{
+    setVal(airLocalStore, data);
+}
+
 bool Settings::getAutoLogin() const
 {
     QMutexLocker locker{&bigLock};
@@ -2179,6 +2282,21 @@ void Settings::setAutoLogin(bool state)
     if (setVal(autoLogin, state)) {
         emit autoLoginChanged(state);
     }
+}
+
+/**
+ * @brief Whether the last session ended with Log out: the next starts then open the login screen
+ * instead of logging in automatically, until a login there (khandaq-ios behaves the same).
+ */
+bool Settings::getLoggedOut() const
+{
+    QMutexLocker locker{&bigLock};
+    return loggedOut;
+}
+
+void Settings::setLoggedOut(bool state)
+{
+    setVal(loggedOut, state);
 }
 
 void Settings::setEnableGroupChatsColor(bool state)

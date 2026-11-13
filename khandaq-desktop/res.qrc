@@ -126,7 +126,6 @@
         <file>themes/dark/addFriendForm/toxId.css</file>
         <file>themes/dark/rejectCall/rejectCall.svg</file>
         <file>themes/dark/notificationEdge/notificationEdge.css</file>
-        <file>themes/dark/loginScreen/loginScreen.css</file>
         <file>themes/dark/contentDialog/contentDialog.css</file>
         <file>themes/dark/tooliconsZone/tooliconsZone.css</file>
         <file>themes/default/palette.ini</file>
@@ -198,7 +197,6 @@
         <file>themes/default/rejectCall/rejectCall.svg</file>
         <file>img/login_logo.svg</file>
         <file>themes/default/notificationEdge/notificationEdge.css</file>
-        <file>themes/default/loginScreen/loginScreen.css</file>
         <file>img/others/logout-icon.svg</file>
         <file>img/caps_lock.svg</file>
         <file>themes/default/contentDialog/contentDialog.css</file>

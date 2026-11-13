@@ -19,6 +19,7 @@
 
 #include "style.h"
 #include "src/persistence/settings.h"
+#include "src/platform/systemappearance.h"
 
 #include <QDebug>
 #include <QDir>
@@ -33,6 +34,8 @@
 #include <QStyle>
 #include <QSvgRenderer>
 #include <QWidget>
+
+#include <tuple>
 
 /**
  * @enum Style::Font
@@ -324,17 +327,21 @@ void Style::repolish(QWidget* w)
     }
 }
 
+/**
+ * @brief Reloads the palette of the current theme.
+ * @param color Index into the old theme colour list. The redesign takes every colour from the
+ * design tokens, so accent variants are no longer applied: the index only survives in the settings,
+ * where it decided the theme mode once (see Settings::loadGlobal).
+ */
 void Style::setThemeColor(Settings& settings, int color)
 {
+    std::ignore = color;
     stylesheetsCache.clear(); // clear stylesheet cache which includes color info
     palette.clear();
     dictColor.clear();
     initPalette(settings);
     initDictColor();
-    if (color < 0 || color >= themeNameColors.size())
-        setThemeColor(QColor());
-    else
-        setThemeColor(themeNameColors[color].color);
+    setThemeColor(QColor());
 }
 
 /**
@@ -422,12 +429,23 @@ void Style::initDictColor()
             {"@selectText", Style::getColor(ColorPalette::SelectText).name()}};
 }
 
+/**
+ * @brief Whether the dark theme is in use: chosen, or followed from a dark system appearance.
+ */
+bool Style::isDarkTheme(Settings& settings)
+{
+    switch (settings.getThemeMode()) {
+    case Settings::ThemeMode::Dark:
+        return true;
+    case Settings::ThemeMode::Light:
+        return false;
+    case Settings::ThemeMode::System:
+        break;
+    }
+    return SystemAppearance::prefersDark();
+}
+
 QString Style::getThemePath(Settings& settings)
 {
-    const int num = settings.getThemeColor();
-    if (themeNameColors[num].type == MainTheme::Dark) {
-        return BuiltinThemeDarkPath;
-    }
-
-    return BuiltinThemeDefaultPath;
+    return isDarkTheme(settings) ? BuiltinThemeDarkPath : BuiltinThemeDefaultPath;
 }

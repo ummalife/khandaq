@@ -165,12 +165,12 @@ window.KQ_TOKENS = {
     "lock-top": {
       "light": "#0f1218",
       "dark": "#0c0f13",
-      "use": "lock screen, top"
+      "use": "flat ground of the call screens and the PIN lock, dark in both themes"
     },
     "lock-bottom": {
       "light": "#1c222a",
       "dark": "#171c22",
-      "use": "lock screen, bottom"
+      "use": "ground of your own camera tile on a call, a step lighter than lock-top"
     },
     "ink-hover": {
       "light": "#35383d",

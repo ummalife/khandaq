@@ -20,8 +20,13 @@
 #include "chatline.h"
 #include "chatlinecontent.h"
 
+#include "src/widget/air/airstyle.h"
+#include "src/widget/air/airtokens.h"
+
 #include <QDebug>
 #include <QGraphicsScene>
+#include <QGuiApplication>
+#include <QStringList>
 
 ChatLine::ChatLine()
 {
@@ -118,6 +123,18 @@ int ChatLine::getColumnCount()
     return content.size();
 }
 
+QString ChatLine::spokenText() const
+{
+    QStringList words;
+    for (const ChatLineContent* const column : content) {
+        const QString text = column->getSpokenText().simplified();
+        if (!text.isEmpty()) {
+            words.append(text);
+        }
+    }
+    return words.join(QStringLiteral(", "));
+}
+
 void ChatLine::updateBBox()
 {
     bbox.setHeight(0);
@@ -143,6 +160,22 @@ void ChatLine::addColumn(ChatLineContent* item, ColumnFormat fmt)
     item->setIndex(0, content.size() -1 );
 }
 
+void ChatLine::setEntryParts(int quote, int notes)
+{
+    quoteColumn = quote;
+    notesColumn = notes;
+}
+
+ChatLineContent* ChatLine::quotePart() const
+{
+    return quoteColumn >= 0 ? getContent(quoteColumn) : nullptr;
+}
+
+ChatLineContent* ChatLine::notesPart() const
+{
+    return notesColumn >= 0 ? getContent(notesColumn) : nullptr;
+}
+
 void ChatLine::replaceContent(int col, ChatLineContent* lineContent)
 {
     if (col >= 0 && col < content.size() && lineContent) {
@@ -161,12 +194,146 @@ void ChatLine::replaceContent(int col, ChatLineContent* lineContent)
     }
 }
 
+void ChatLine::setLayout(Layout layout_)
+{
+    lineLayout = layout_;
+}
+
+ChatLine::Layout ChatLine::getLayout() const
+{
+    return lineLayout;
+}
+
+bool ChatLine::setAuthorShown(bool shown)
+{
+    if (authorShown == shown) {
+        return false;
+    }
+    authorShown = shown;
+    return true;
+}
+
+bool ChatLine::isAuthorShown() const
+{
+    return authorShown;
+}
+
+bool ChatLine::setCollapsed(bool collapsed_)
+{
+    if (collapsed == collapsed_) {
+        return false;
+    }
+    collapsed = collapsed_;
+    return true;
+}
+
+bool ChatLine::isCollapsed() const
+{
+    return collapsed;
+}
+
+/**
+ * @brief Places an entry or a day mark of the transcript. The line runs from its start edge, the
+ * left one in left-to-right languages: 16 px of padding, the time column, a gap of 10, the text at
+ * most 760 px wide, a gap of 10 and the 18 px state mark. Wider lines keep the rest as margin. In
+ * the text column the author stands above the quote of a reply, 4 px over the text, and the notes
+ * of the entry under the text.
+ */
+void ChatLine::layoutAir(QPointF scenePos)
+{
+    using namespace AirTokens;
+    const AirStyle& air = AirStyle::instance();
+    const bool rightToLeft = QGuiApplication::layoutDirection() == Qt::RightToLeft;
+
+    bbox.setTopLeft(scenePos);
+    bbox.setWidth(width);
+
+    if (collapsed) {
+        for (ChatLineContent* c : content) {
+            c->setVisible(false);
+            c->setPos(scenePos);
+        }
+        bbox.setHeight(0);
+        return;
+    }
+
+    // start: distance from the start edge; top: from the top of the line.
+    const auto place = [&](ChatLineContent* c, qreal start, qreal top, qreal itemWidth) {
+        c->setVisible(true);
+        c->setWidth(static_cast<float>(itemWidth));
+        // A file card may come out narrower than its column; it stands at the start edge.
+        const qreal x = rightToLeft ? scenePos.x() + width - start - c->boundingRect().width()
+                                    : scenePos.x() + start;
+        c->setPos(x, scenePos.y() + top);
+    };
+
+    const qreal edge = Space::s16;
+    const qreal textStart = edge + Size::timeColumn + Space::s10;
+    const qreal markRoom = Space::s10 + Size::mark;
+    const qreal textWidth = qBound<qreal>(0.0, width - textStart - edge - markRoom, Size::textMeasure);
+
+    if (lineLayout == Layout::AirDay) {
+        place(content[0], textStart, Space::s12, textWidth);
+        for (int i = 1; i < content.size(); ++i) {
+            content[i]->setVisible(false);
+        }
+        bbox.setHeight(Space::s12 + air.lineHeight(TextRole::Caption) + Space::s4);
+        return;
+    }
+
+    const qreal top = Space::s4;
+    qreal y = top;
+    if (authorShown) {
+        place(content[0], textStart, y, textWidth);
+        y += content[0]->boundingRect().height();
+    } else {
+        content[0]->setVisible(false);
+    }
+
+    // A part that takes no room is left out, with its gap.
+    const auto placePart = [&](ChatLineContent* part, qreal gap) {
+        place(part, textStart, y, textWidth);
+        const qreal height = part->boundingRect().height();
+        if (height > 0) {
+            y += height + gap;
+        } else {
+            part->setVisible(false);
+        }
+    };
+
+    ChatLineContent* const quote = quotePart();
+    if (quote) {
+        placePart(quote, Space::s4);
+    }
+
+    place(content[1], textStart, y, textWidth);
+    y += content[1]->boundingRect().height();
+
+    ChatLineContent* const notes = notesPart();
+    if (notes) {
+        placePart(notes, 0);
+    }
+
+    place(content[2], edge, top + Space::s2, Size::timeColumn);
+
+    if (content.size() > 3 && quoteColumn != 3 && notesColumn != 3) {
+        place(content[3], textStart + textWidth + Space::s10, top, Size::mark);
+    }
+
+    bbox.setHeight(y + Space::s4);
+}
+
 void ChatLine::layout(qreal w, QPointF scenePos)
 {
     if (!content.size())
         return;
 
     width = w;
+    if (lineLayout != Layout::Columns) {
+        layoutAir(scenePos);
+        return;
+    }
+
     bbox.setTopLeft(scenePos);
 
     qreal fixedWidth = (content.size() - 1) * columnSpacing;

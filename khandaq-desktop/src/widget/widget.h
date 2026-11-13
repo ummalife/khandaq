@@ -36,11 +36,14 @@
 #include "src/core/toxfile.h"
 #include "src/core/toxid.h"
 #include "src/core/toxpk.h"
+#include "src/model/air/airgroup.h"
 #include "src/model/friendmessagedispatcher.h"
 #include "src/model/groupmessagedispatcher.h"
-#if DESKTOP_NOTIFICATIONS
 #include "src/model/notificationgenerator.h"
+#if DESKTOP_NOTIFICATIONS
 #include "src/platform/desktop_notifications/desktopnotify.h"
+#else
+#include "src/platform/traynotify.h"
 #endif
 
 #define PIXELS_TO_ACT 7
@@ -50,6 +53,17 @@ class MainWindow;
 }
 
 class AddFriendForm;
+class AirBand;
+class AirCommandIdRow;
+class AirController;
+class AirListView;
+class AirLocal;
+class AirNewContact;
+class AirNewGroup;
+class AirNoChat;
+class AirSettingsPage;
+class AirSource;
+class AirYouPage;
 class AlSink;
 class Camera;
 class ChatForm;
@@ -64,20 +78,22 @@ class FriendListWidget;
 class FriendWidget;
 class GenericChatroomWidget;
 class Group;
+class NotesChat;
+class NotesDispatcher;
+class NotesForm;
+class SessionChatLog;
 class GroupChatForm;
 class GroupChatroom;
 class GroupInvite;
 class GroupInviteForm;
 class GroupWidget;
 class MaskablePixmapWidget;
-class ProfileForm;
 class ProfileInfo;
 class QActionGroup;
 class QMenu;
 class QPushButton;
 class QSplitter;
 class QTimer;
-class SettingsWidget;
 class SystemTrayIcon;
 class VideoSurface;
 class UpdateCheck;
@@ -115,7 +131,9 @@ private:
         TransferDialog,
         SettingDialog,
         ProfileDialog,
-        GroupDialog
+        GroupDialog,
+        /** Saved Messages in a window of their own. */
+        NotesDialog
     };
 
     enum class FilterCriteria
@@ -150,8 +168,6 @@ public:
     ContentDialog* createContentDialog() const;
     ContentLayout* createContentDialog(DialogType type) const;
 
-    void clearAllReceipts();
-
     static inline QIcon prepareIcon(QString path, int w = 0, int h = 0);
 
     bool groupsVisible() const;
@@ -159,7 +175,28 @@ public:
     void resetIcon();
     void registerIpcHandlers();
     static bool toxActivateEventHandler(const QByteArray& data, void* userData);
+    static bool toxUriEventHandler(const QByteArray& data, void* userData);
     bool handleToxSave(const QString& path);
+    /**
+     * A tox: link opened from outside, from a browser or from another app: New contact opens with
+     * its ID in the field, checked there as a pasted ID is (E11). False for anything else.
+     */
+    bool handleToxUri(const QString& uri);
+    /**
+     * A profile file opened with the app: it is moved in from the start window, after the question
+     * whether to log out of this profile for it. A file that is no profile is said at once.
+     */
+    bool askImportProfile(const QString& path);
+
+    /**
+     * The start window is up (E19, E20): the window is made but waits behind it, and shows when
+     * showFromStart() says so, not by itself.
+     */
+    void holdForStart();
+    /** Where the window will stand, for the start window, which stands at startWindow, to grow into. */
+    QRect frameForStart(const QRect& startWindow) const;
+    /** Shows the window in frame, where the start window grew to; addFirstPerson opens New contact. */
+    void showFromStart(const QRect& frame, bool addFirstPerson);
 
 public slots:
     void reloadTheme();
@@ -171,8 +208,6 @@ public slots:
     void onConnected();
     void onDisconnected();
     void onStatusSet(Status::Status status);
-    void onFailedToStartCore();
-    void onBadProxyCore();
     void onSelfAvatarLoaded(const QPixmap& pic);
     void setUsername(const QString& username);
     void setStatusMessage(const QString& statusMessage);
@@ -198,11 +233,17 @@ public slots:
     void onGroupJoinFailed(const QString& reason);
     void onGroupJoinSucceeded();
     void onGroupJoinByIdPrompt();
-    void onGroupMessageReceived(int groupnumber, int peernumber, const QString& message, bool isAction);
+    void onGroupMessageReceived(int groupnumber, int peernumber, const QString& message,
+                                bool isAction, uint32_t messageId);
     void onGroupFileReceived(int groupnumber, const ToxPk& sender, const QString& fileName,
-                             const QByteArray& fileData, const QDateTime& timestamp, bool wasSynced);
+                             const QByteArray& fileData, const QDateTime& timestamp, bool wasSynced,
+                             const QByteArray& fileId);
     void onGroupFileSent(int groupnumber, const QString& fileName, const QString& localPath,
-                         qint64 fileSize);
+                         qint64 fileSize, const QByteArray& fileId);
+    /** An edit, a deletion or a reaction a friend sent (stage 3, item 10). */
+    void onFriendMessageEffect(uint32_t friendnumber, const QByteArray& packet);
+    /** An edit, a deletion or a reaction a member sent to a group (stage 3, item 10). */
+    void onGroupMessageEffect(int groupnumber, const ToxPk& sender, const QByteArray& packet);
     void onGroupPeerlistChanged(uint32_t groupnumber);
     void onGroupPeerNameChanged(uint32_t groupnumber, const ToxPk& peerPk, const QString& newName);
     void onGroupTitleChanged(uint32_t groupnumber, const QString& author, const QString& title);
@@ -279,11 +320,37 @@ private:
     void moveEvent(QMoveEvent* event) final;
 
     bool newMessageAlert(QWidget* currentWindow, bool isActive, bool sound = true, bool notify = true);
+    /**
+     * The band in front for news while the app is in front (E22), in place of the system
+     * notification: a message or a file of a contact, a message of a group, a request, an invitation.
+     */
+    void showFriendBand(QWidget* front, const Friend& f, const QString& text, const QString& filename);
+    void showGroupBand(QWidget* front, const Group& g, const ToxPk& author, const QString& message);
+    void showRequestBand(QWidget* front, const QString& message);
+    void showInviteBand(QWidget* front, const Friend& inviter, const QString& groupName);
+    /** Whether a system notification shows for news now; the window is not alerted when it does. */
+    bool systemNotificationShows() const;
+    /** Settings, made the first time they are opened and kept for the session. */
+    AirSettingsPage& settingsScreen();
     void setActiveToolMenuButton(ActiveToolMenuButton newActiveButton);
     void hideMainForms(GenericChatroomWidget* chatroomWidget);
+    /** Log out from the tray or the menu bar: You opens and asks, as its own button does. */
+    void askLogout();
     Group* createGroup(uint32_t groupnumber, const GroupId& groupId);
     void removeFriend(Friend* f, bool fake = false);
+    void forgetFriend(const Friend& f, bool removeHistory);
+    void dropFriend(Friend* f, bool fake);
+    void blockFriend(const ToxPk& friendPk);
+    /** Remove, confirmed in the dossier: the contact and the conversation, without a second
+     * question. */
+    void removeConfirmedFriend(const ToxPk& friendPk);
     void removeGroup(Group* g, bool fake = false);
+    /** Takes the group out of the list and, unless fake, out of toxcore, without asking. */
+    void discardGroup(Group* g, bool fake);
+    /** Leave the group, confirmed in its dossier: the group and its history leave this device. */
+    void leaveGroup(const GroupId& groupId);
+    void onGroupPrivateMessageReceived(int groupnumber, const ToxPk& peerPk, const QString& message,
+                                       bool isAction);
     QDir groupDownloadDir(const Group* g) const;
     void dispatchGroupFileToChatLog(const GroupId& groupId, const ToxPk& sender, ToxFile file);
     void saveWindowGeometry();
@@ -302,7 +369,48 @@ private:
     void playNotificationSound(IAudioSink::Sound sound, bool loop = false);
     void cleanupNotificationSound();
     void acceptFileTransfer(const ToxFile &file, const QString &path);
-    void formatWindowTitle(const QString& content);
+
+    // The Air screen (design/redesign stage 1): band, list and their glue.
+    void setupAir();
+    void restyleAir();
+    int airMinimumWidth() const;
+    /** Sets the least size of the window: room for the Air band and what the window holds. */
+    void refreshLeastSize();
+    QString airEntryIdOf(const GenericChatroomWidget* widget) const;
+    GenericChatroomWidget* chatroomWidgetOf(const QString& entryId) const;
+    void openAirEntry(const QString& entryId);
+    /** Saved Messages: the notes to yourself. */
+    void openNotes();
+    /** New contact over the list column; address, whole or not, goes into its ID field. */
+    void openNewContact(const QString& address);
+    /** New group over the list column (E15); a contact's key chooses them for the invitations. */
+    void openNewGroup(const QString& inviteKey = QString());
+    /** The same panel on joining by key; text goes into the key field. */
+    void openJoinGroup(const QString& text = QString());
+    void createAirGroup(const QString& name, Air::GroupPrivacy privacy,
+                        const QVector<Air::InviteCandidate>& invited);
+    void joinAirGroup(const QString& groupKey);
+    /** The contacts New group offers to invite. */
+    QVector<Air::InviteCandidate> inviteCandidates() const;
+    /** The legacy form, kept for importing a file of IDs. */
+    void openImportContacts();
+    /** The conversation column with nothing open: where to look and what to paste. */
+    void showNoChat();
+    void showCommandIdStart(const QString& hex);
+    void onRequestSent(const ToxPk& friendPk, const QString& message);
+    /** The person New contact waits on came online: they accepted the request. */
+    void followNewContact();
+    /** Accept on a request card, or Join on an invitation card (E12). */
+    void acceptAirRequest(const QString& requestId);
+    /** Decline on a card: it leaves at once, and a toast can bring it back for five seconds. */
+    void declineAirRequest(const QString& requestId);
+    void joinAirInvite(const QString& inviteId);
+    void showAirEntryMenu(const QString& entryId, const QPoint& globalPos);
+    void showAirBackgroundMenu(const QPoint& globalPos);
+    void showStatusMenu(const QPoint& globalPos);
+#ifdef KHANDAQ_SCREENSHOT_HOOK
+    void runShotScript(const QString& path);
+#endif
 
 private:
     Profile& profile;
@@ -336,9 +444,11 @@ private:
     GroupInviteForm* groupInviteForm;
 
     ProfileInfo* profileInfo;
-    ProfileForm* profileForm;
+    /** You (E17): your ID, name, status, password and profile file. */
+    AirYouPage* youPage = nullptr;
 
-    QPointer<SettingsWidget> settingsWidget;
+    /** Settings (E18), in the content column like You. */
+    QPointer<AirSettingsPage> settingsPage;
     std::unique_ptr<UpdateCheck> updateCheck; // ownership should be moved outside Widget once non-singleton
     FilesForm* filesForm;
     static Widget* instance;
@@ -391,9 +501,15 @@ private:
 
 
     std::unique_ptr<MessageProcessor::SharedParams> sharedMessageProcessorParams;
-#if DESKTOP_NOTIFICATIONS
+    /** The same for groups, whose messages may be longer (TOX_GROUP_MAX_MESSAGE_LENGTH). */
+    std::unique_ptr<MessageProcessor::SharedParams> groupMessageProcessorParams;
     std::unique_ptr<NotificationGenerator> notificationGenerator;
+    // System notifications (E22): snorenotify where the build has it (the Windows release), else
+    // the tray icon, which macOS and Linux show through their own notification service.
+#if DESKTOP_NOTIFICATIONS
     DesktopNotify notifier;
+#else
+    TrayNotify notifier;
 #endif
 
 #ifdef Q_OS_MAC
@@ -418,4 +534,30 @@ private:
     IPC& ipc;
     std::unique_ptr<ToxSave> toxSave;
     Nexus& nexus;
+    /** The start window is in front: nothing shows this window until it gives way (holdForStart). */
+    bool heldByStart = false;
+    /** The start window gave way to this window: the tray does not hide it again at start. */
+    bool openedFromStart = false;
+#ifdef KHANDAQ_SCREENSHOT_HOOK
+    /** The screenshot script waits for the window to show from the start window. */
+    QString heldShotScript;
+#endif
+
+    AirBand* airBand = nullptr;
+    AirListView* airList = nullptr;
+    AirSource* airSource = nullptr;
+    AirController* airController = nullptr;
+    AirLocal* airLocal = nullptr;
+    AirNewContact* newContact = nullptr;
+    AirNewGroup* newGroup = nullptr;
+    /** "New contact with this ID" over the list while the command line holds the start of one. */
+    AirCommandIdRow* commandIdRow = nullptr;
+    /** Out of the content column while a conversation is open, so the window deletes it. */
+    QPointer<AirNoChat> noChatView;
+
+    // Saved Messages: the chat with nobody, its log and the form; the form goes first.
+    std::unique_ptr<NotesChat> notesChat;
+    std::unique_ptr<NotesDispatcher> notesDispatcher;
+    std::unique_ptr<SessionChatLog> notesLog;
+    NotesForm* notesForm = nullptr;
 };

@@ -45,7 +45,13 @@ public:
     Group* getGroup() const final;
     const Chat* getChat() const final;
     void setName(const QString& name);
+    /** Edits the title in place, or in a dialog while the old list row is hidden. */
     void editName();
+    /**
+     * The group's menu at globalPos. leadingActions, owned by the caller, stand first: the Air list
+     * puts its favourite toggle there.
+     */
+    void showContextMenu(const QPoint& globalPos, const QList<QAction*>& leadingActions = {});
 
     bool isFriend() const final;
     bool isGroup() const final;

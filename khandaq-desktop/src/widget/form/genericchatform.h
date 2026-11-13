@@ -33,6 +33,7 @@
  *        - Even a different font is not enough – TODO #1307 ~~zetok
  */
 
+class AirComposer;
 class ChatFormHeader;
 class ChatWidget;
 class ChatQuotePreview;
@@ -127,6 +128,15 @@ private:
     QDateTime getTime(const ChatLine::Ptr& chatLine) const;
 
 protected:
+    /**
+     * Called before the menu of the transcript shows at globalPos, so a form can add what fits
+     * the entry there.
+     */
+    virtual void prepareChatMenu(QPoint globalPos);
+    /** What Send would hand over now: the quote and the field, without the action prefix. */
+    QString outgoingText() const;
+    /** Whether Send may hand the text over now; a form that limits it says why under the field. */
+    virtual bool canSendNow() const;
     ChatMessage::Ptr createMessage(const ToxPk& author, const QString& message,
                                    const QDateTime& datetime, bool isAction, bool isSent, bool colorizeName = false);
     void adjustFileMenuPosition();
@@ -155,6 +165,12 @@ protected:
     QMenu menu;
 
     QVBoxLayout* contentLayout;
+    /** The field with the paperclip and "Send", and the line about the next message. */
+    AirComposer* composer;
+    /** A group's file limit, said by the paperclip and the attach menu before a file is chosen. */
+    void setAttachLimit(const QString& words);
+    QString attachLimit;
+    // The buttons of the old footer stay as the actions the composer triggers.
     QPushButton* emoteButton;
     QPushButton* fileButton;
     QPushButton* screenshotButton;

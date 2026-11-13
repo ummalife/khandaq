@@ -141,6 +141,14 @@ public:
         WITHOUT_CHARS = 2
     };
 
+    /** The colour theme: follow the system, or always light, or always dark. */
+    enum class ThemeMode
+    {
+        System = 0,
+        Light = 1,
+        Dark = 2
+    };
+
     enum class FriendListSortingMode
     {
         Name,
@@ -161,6 +169,7 @@ public:
 
     void loadGlobal();
     void loadPersonal(const Profile& profile, bool newProfile);
+    void unloadPersonal(const Profile& profile);
 
     void resetToDefault();
 
@@ -216,6 +225,8 @@ signals:
     void dialogSettingsGeometryChanged(const QByteArray& rect);
     void styleChanged(const QString& style);
     void themeColorChanged(int color);
+    void themeModeChanged(int mode);
+    void favoriteChatsChanged(const QStringList& chatIds);
     void compactLayoutChanged(bool enabled);
     void sortingModeChanged(FriendListSortingMode mode);
     void showIdenticonsChanged(bool enabled);
@@ -416,6 +427,22 @@ public:
     int getThemeColor() const;
     void setThemeColor(int value);
 
+    ThemeMode getThemeMode() const;
+    void setThemeMode(ThemeMode mode);
+
+    /** Chats starred for the Favorites filter, by Air entry id ("f:" + key, "c:" + group id). */
+    QStringList getFavoriteChats() const;
+    bool isFavoriteChat(const QString& chatId) const;
+    void setFavoriteChat(const QString& chatId, bool favorite);
+
+    /**
+     * What the conversation screens remember about contacts on this device (Air::LocalStore): the
+     * hours they were seen online, "mute" and "key verified". Kept with the profile, so it is
+     * encrypted together with it.
+     */
+    QByteArray getAirLocalStore() const;
+    void setAirLocalStore(const QByteArray& data);
+
     StyleType getStylePreference() const;
     void setStylePreference(StyleType newValue);
 
@@ -532,6 +559,8 @@ public:
     void setShowIdenticons(bool value);
 
     bool getAutoLogin() const;
+    bool getLoggedOut() const;
+    void setLoggedOut(bool state);
     void setEnableGroupChatsColor(bool state);
     bool getEnableGroupChatsColor() const;
 
@@ -590,6 +619,7 @@ private:
     bool dontShowDhtDialog;
 
     bool autoLogin;
+    bool loggedOut = false;
     bool compactLayout;
     FriendListSortingMode sortingMode;
     bool groupchatPosition;
@@ -709,6 +739,9 @@ private:
     QVector<circleProp> circleLst;
 
     int themeColor;
+    ThemeMode themeMode = ThemeMode::System;
+    QStringList favoriteChats;
+    QByteArray airLocalStore;
 
     static CompatibleRecursiveMutex bigLock;
     static const QString globalSettingsFile;

@@ -59,6 +59,29 @@ public:
 
     ~CoreAV();
 
+    /** Why a call did not start or could not be answered, for the words a person reads. */
+    struct CallError
+    {
+        enum class Kind
+        {
+            None,
+            /** A call with this person is on already, on one side or the other. */
+            AlreadyInCall,
+            /** toxav does not reach the person, whatever the list showed a moment ago. */
+            Offline,
+            /** The person stopped calling before the answer. */
+            NotCalling,
+            /** Anything else toxav refused; code is its error number, the code for support. */
+            Toxav,
+        };
+        Kind kind = Kind::None;
+        int code = 0;
+    };
+
+    /** startCall and answerCall that say why they failed, when error is not null. */
+    bool startCall(uint32_t friendNum, bool video, CallError* error);
+    bool answerCall(uint32_t friendNum, bool video, CallError* error);
+
     bool isCallStarted(const Friend* f) const;
     bool isCallStarted(const Group* g) const;
     bool isCallActive(const Friend* f) const;

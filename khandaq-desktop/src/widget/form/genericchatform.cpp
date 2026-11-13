@@ -28,8 +28,12 @@
 #include "src/grouplist.h"
 #include "src/model/friend.h"
 #include "src/model/group.h"
+#include "src/model/notes.h"
 #include "src/persistence/settings.h"
 #include "src/persistence/smileypack.h"
+#include "src/widget/air/aircomposer.h"
+#include "src/widget/air/airoverlay.h"
+#include "src/widget/air/airstrings.h"
 #include "src/widget/chatformheader.h"
 #include "src/widget/contentdialog.h"
 #include "src/widget/contentdialogmanager.h"
@@ -49,7 +53,7 @@
 #include <QClipboard>
 #include <QFileDialog>
 #include <QKeyEvent>
-#include <QMessageBox>
+#include <QPointer>
 #include <QRegularExpression>
 #include <QStringBuilder>
 #include <QtGlobal>
@@ -66,9 +70,6 @@
 
 namespace {
 const QSize FILE_FLYOUT_SIZE{24, 24};
-const short FOOT_BUTTONS_SPACING = 2;
-const short MAIN_FOOT_LAYOUT_SPACING = 5;
-const QString FONT_STYLE[]{"normal", "italic", "oblique"};
 
 QString formatQuoteForSend(const QString& quote)
 {
@@ -82,19 +83,22 @@ QString formatQuoteForSend(const QString& quote)
 }
 
 /**
- * @brief Creates CSS style string for needed class with specified font
- * @param font Font that needs to be represented for a class
- * @param name Class name
- * @return Style string
+ * The field lies inside the composer's frame: no frame or fill of its own, 8 px above the text
+ * and 4 px at its sides (kq-compose textarea; one pixel less below, so one line is as high as
+ * "Send").
  */
-QString fontToCss(const QFont& font, const QString& name)
+const QString MESSAGE_EDIT_STYLE = QStringLiteral(
+    "QTextEdit { background: transparent; border: none; padding: 8px 4px 7px 4px; }");
+
+ChatWidget::Kind chatWidgetKind(const Chat* chat)
 {
-    QString result{"%1{"
-                   "font-family: \"%2\"; "
-                   "font-size: %3px; "
-                   "font-style: \"%4\"; "
-                   "font-weight: normal;}"};
-    return result.arg(name).arg(font.family()).arg(font.pixelSize()).arg(FONT_STYLE[font.style()]);
+    if (qobject_cast<const Friend*>(chat)) {
+        return ChatWidget::Kind::Person;
+    }
+    if (qobject_cast<const NotesChat*>(chat)) {
+        return ChatWidget::Kind::Notes;
+    }
+    return ChatWidget::Kind::Group;
 }
 } // namespace
 
@@ -168,8 +172,8 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
     headWidget = new ChatFormHeader(settings, style);
     searchForm = new SearchForm(settings, style);
     dateInfo = new QLabel(this);
-    chatWidget = new ChatWidget(chatLog_, core, documentCache, smileyPack,
-        settings, style, messageBoxManager, this);
+    chatWidget = new ChatWidget(chatLog_, core, documentCache, smileyPack, settings, style,
+                                messageBoxManager, this, chatWidgetKind(chat));
     searchForm->hide();
     dateInfo->setAlignment(Qt::AlignHCenter);
     dateInfo->setVisible(false);
@@ -203,7 +207,9 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
     fileLayout->setMargin(0);
 
     msgEdit->setFrameStyle(QFrame::NoFrame);
-    msgEdit->setPlaceholderText(tr("Сообщение"));
+
+    // The conversation stands on the surface of the column it is shown in.
+    setAutoFillBackground(true);
 
     bodySplitter = new QSplitter(Qt::Vertical, this);
     QWidget* contentWidget = new QWidget(this);
@@ -215,28 +221,43 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
 
     setLayout(mainLayout);
 
-    // KHANDAQ (Figma): single horizontal input bar — emote (left) + msgEdit + file/paperclip + send
-    // (right), instead of the old stacked emote/file column. Pure re-parenting via addWidget; every
-    // button's connect() above (onEmoteButtonClicked / onAttachClicked / onSendTriggered) is unchanged.
-    QHBoxLayout* mainFootLayout = new QHBoxLayout();
-    mainFootLayout->addWidget(emoteButton);
-    mainFootLayout->addWidget(msgEdit);
-    mainFootLayout->addWidget(fileButton);
-    mainFootLayout->addSpacing(MAIN_FOOT_LAYOUT_SPACING);
-    mainFootLayout->addWidget(sendButton);
-    mainFootLayout->setSpacing(4);
+    // kq-composer: the paperclip, the field and "Send" in one frame. The emoji button is gone; the
+    // old buttons stay hidden and do what the composer asks of them, so their connections hold.
+    composer = new AirComposer(msgEdit, contentWidget);
+    composer->addAbove(quotePreview);
+    for (QPushButton* button : {emoteButton, fileButton, sendButton}) {
+        button->setParent(contentWidget);
+        button->hide();
+    }
+    connect(composer, &AirComposer::sendRequested, sendButton, &QPushButton::click);
+    connect(composer, &AirComposer::attachRequested, this, [this](const QPoint& globalPos) {
+        QMenu attachMenu(this);
+        if (!attachLimit.isEmpty()) {
+            attachMenu.addAction(attachLimit)->setEnabled(false);
+            attachMenu.addSeparator();
+        }
+        //: The paper clip's menu: opens the system dialog, where one file or several are chosen
+        QAction* const fileAction = attachMenu.addAction(tr("Send files"));
+        QAction* const screenshotAction = attachMenu.addAction(tr("Send a screenshot"));
+        fileAction->setEnabled(fileButton->isEnabled());
+        screenshotAction->setEnabled(screenshotButton->isEnabled());
+        QAction* const chosen = attachMenu.exec(globalPos);
+        if (chosen == fileAction) {
+            fileButton->click();
+        } else if (chosen == screenshotAction) {
+            screenshotButton->click();
+        }
+    });
+    connect(headWidget, &ChatFormHeader::searchRequested, this, &GenericChatForm::searchFormShow);
 
-    auto* footerLayout = new QVBoxLayout();
-    footerLayout->setSpacing(4);
-    footerLayout->setContentsMargins(0, 0, 0, 0);
-    footerLayout->addWidget(quotePreview);
-    footerLayout->addLayout(mainFootLayout);
-
+    // The log, the tray and the composer keep their own margins; the column has none.
     contentLayout = new QVBoxLayout(contentWidget);
+    contentLayout->setContentsMargins(0, 0, 0, 0);
+    contentLayout->setSpacing(0);
     contentLayout->addWidget(searchForm);
     contentLayout->addWidget(dateInfo);
     contentLayout->addWidget(chatWidget);
-    contentLayout->addLayout(footerLayout);
+    contentLayout->addWidget(composer);
 
     quoteAction = menu.addAction(QIcon(), QString(), this, SLOT(quoteSelectedText()),
                                  QKeySequence(Qt::ALT + Qt::Key_Q));
@@ -380,10 +401,11 @@ QDateTime GenericChatForm::getLatestTime() const
 
 void GenericChatForm::reloadTheme()
 {
-    setStyleSheet(style.getStylesheet("genericChatForm/genericChatForm.css", settings));
-    quotePreview->setStyleSheet(style.getStylesheet("quotePreview/quotePreview.css", settings));
-    msgEdit->setStyleSheet(style.getStylesheet("msgEdit/msgEdit.css", settings)
-                           + fontToCss(settings.getChatMessageFont(), "QTextEdit"));
+    // No sheet for the whole form: it painted every child, the tray and the composer included,
+    // with the old theme's ground. The form fills itself with the column's surface instead, and
+    // the quote above the composer paints itself from the tokens.
+    msgEdit->setStyleSheet(MESSAGE_EDIT_STYLE);
+    msgEdit->setFont(ChatMessage::bodyFont(settings));
 
     emoteButton->setStyleSheet(style.getStylesheet(STYLE_PATH, settings));
     fileButton->setStyleSheet(style.getStylesheet(STYLE_PATH, settings));
@@ -400,6 +422,7 @@ void GenericChatForm::show(ContentLayout* contentLayout_)
 {
     contentLayout_->mainHead->layout()->addWidget(headWidget);
     headWidget->show();
+    contentLayout_->setFlush(true);
 
 #if QT_VERSION < QT_VERSION_CHECK(5, 12, 4) && QT_VERSION > QT_VERSION_CHECK(5, 11, 0)
     // HACK: switching order happens to avoid a Qt bug causing segfault, present between these versions.
@@ -413,11 +436,16 @@ void GenericChatForm::show(ContentLayout* contentLayout_)
 #endif
 }
 
+void GenericChatForm::setAttachLimit(const QString& words)
+{
+    attachLimit = words;
+    composer->setAttachNote(words);
+}
+
 void GenericChatForm::showEvent(QShowEvent* event)
 {
     std::ignore = event;
     msgEdit->setFocus();
-    headWidget->showCallConfirm();
 }
 
 bool GenericChatForm::event(QEvent* e)
@@ -456,8 +484,14 @@ void GenericChatForm::onChatContextMenuRequested(QPoint pos)
         }
     }
     copyLinkAction->setVisible(clickedOnLink);
+    prepareChatMenu(pos);
 
     menu.exec(pos);
+}
+
+void GenericChatForm::prepareChatMenu(QPoint globalPos)
+{
+    std::ignore = globalPos;
 }
 
 void GenericChatForm::onPasteFiles(const QStringList& paths)
@@ -465,8 +499,29 @@ void GenericChatForm::onPasteFiles(const QStringList& paths)
     std::ignore = paths;
 }
 
+QString GenericChatForm::outgoingText() const
+{
+    QString msg = msgEdit->toPlainText();
+    if (msg.startsWith(ChatForm::ACTION_PREFIX, Qt::CaseInsensitive)) {
+        msg.remove(0, ChatForm::ACTION_PREFIX.length());
+    }
+    if (quotePreview->hasQuote()) {
+        msg = formatQuoteForSend(quotePreview->quoteText()) + msg;
+    }
+    return msg;
+}
+
+bool GenericChatForm::canSendNow() const
+{
+    return true;
+}
+
 void GenericChatForm::onSendTriggered()
 {
+    if (!canSendNow()) {
+        return;
+    }
+
     auto msg = msgEdit->toPlainText();
 
     bool isAction = msg.startsWith(ChatForm::ACTION_PREFIX, Qt::CaseInsensitive);
@@ -533,9 +588,9 @@ void GenericChatForm::onChatMessageFontChanged(const QFont& font)
     // chat log
     chatWidget->fontChanged(font);
     chatWidget->forceRelayout();
-    // message editor
-    msgEdit->setStyleSheet(style.getStylesheet("msgEdit/msgEdit.css", settings)
-                           + fontToCss(font, "QTextEdit"));
+    // message editor: the same type as the log
+    std::ignore = font;
+    msgEdit->setFont(ChatMessage::bodyFont(settings));
 }
 
 void GenericChatForm::setColorizedNames(bool enable)
@@ -577,13 +632,18 @@ void GenericChatForm::clearChatArea()
 void GenericChatForm::clearChatArea(bool confirm, bool inform)
 {
     if (confirm) {
-        QMessageBox::StandardButton mboxResult =
-                QMessageBox::question(this, tr("Confirmation"),
-                                      tr("Are you sure that you want to clear all displayed messages?"),
-                                      QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-        if (mboxResult == QMessageBox::No) {
-            return;
-        }
+        // Asked over the window, the consequence in one sentence and the verb on the button (E21).
+        using AirStrings::Text;
+        QPointer<GenericChatForm> form(this);
+        AirDialog::confirm(this, AirStrings::text(Text::ClearScreenTitle),
+                           AirStrings::text(Text::ClearScreenMessage),
+                           AirStrings::text(Text::ClearScreenAction), AirDialog::Verb::Ink,
+                           [form, inform] {
+                               if (form) {
+                                   form->clearChatArea(false, inform);
+                               }
+                           });
+        return;
     }
 
     chatWidget->clear();
@@ -708,6 +768,10 @@ void GenericChatForm::onExportChat()
 
     QString buffer;
     for (auto i = chatLog.getFirstIdx(); i < chatLog.getNextIdx(); ++i) {
+        // A message cancelled here or deleted by its author is gone for the saved log too.
+        if (chatLog.isCancelled(i)) {
+            continue;
+        }
         const auto& item = chatLog.at(i);
         if (item.getContentType() != ChatLogItem::ContentType::message) {
             continue;
@@ -717,9 +781,11 @@ void GenericChatForm::onExportChat()
         QString datestamp = item.getTimestamp().date().toString("yyyy-MM-dd");
         QString author = item.getDisplayName();
 
-        buffer = buffer
-                 % QString{datestamp % '\t' % timestamp % '\t' % author % '\t'
-                           % item.getContentAsMessage().message.content % '\n'};
+        // The words the transcript shows, without the markup of a reply.
+        buffer =
+            buffer
+            % QString{datestamp % '\t' % timestamp % '\t' % author % '\t'
+                      % AirStrings::messageWords(item.getContentAsMessage().message.content) % '\n'};
     }
     file.write(buffer.toUtf8());
     file.close();
@@ -750,9 +816,13 @@ void GenericChatForm::updateShowDateInfo(const ChatLine::Ptr& prevLine, const Ch
 
 void GenericChatForm::retranslateUi()
 {
+    msgEdit->setPlaceholderText(AirStrings::text(AirStrings::Text::ComposePlaceholder));
+    // A screen reader names the field as the placeholder does, which goes once text is typed.
+    msgEdit->setAccessibleName(AirStrings::text(AirStrings::Text::ComposePlaceholder));
     sendButton->setToolTip(tr("Send message"));
     emoteButton->setToolTip(tr("Smileys"));
-    fileButton->setToolTip(tr("Send file(s)"));
+    //: The paper clip's menu: opens the system dialog, where one file or several are chosen
+    fileButton->setToolTip(tr("Send files"));
     screenshotButton->setToolTip(tr("Send a screenshot"));
     clearAction->setText(tr("Clear displayed messages"));
     quoteAction->setText(tr("Quote selected text"));

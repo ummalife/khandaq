@@ -732,6 +732,20 @@ final class AirFailedSends {
     private func notify(_ chatId: String) {
         NotificationCenter.default.post(name: .airFailedSendsDidChange, object: self, userInfo: ["chatId": chatId])
     }
+
+    /// KHANDAQ (QA-Live 2026-11-13): a shared text that toxcore refuses waits in its chat with "Retry",
+    /// as a text from the composer does (ChatPrivateController.onSendFailed). The share showed an error
+    /// alert instead, and that alert comes while the "Send to" sheet is still going away: when it finds
+    /// no screen to stand on, the shared text is gone without a word. True when the text was kept; false
+    /// when the chat has no person left to send to again, and the caller shows the error as before.
+    @discardableResult
+    func keepRefusedShare(_ text: String, toChat chatId: String, hasPerson: Bool) -> Bool {
+        guard hasPerson, !text.isEmpty else {
+            return false
+        }
+        add(text: text, toChat: chatId)
+        return true
+    }
 }
 
 /// Invitations to groups waiting in Requests (E12).

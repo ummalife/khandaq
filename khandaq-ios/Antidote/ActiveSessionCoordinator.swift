@@ -1504,8 +1504,11 @@ private extension ActiveSessionCoordinator {
     }
 
     /// A text to a person, as its composer sends one, in the parts that each fit a message: with the
-    /// wake-up signal ten seconds after the last part.
+    /// wake-up signal ten seconds after the last part, and a part toxcore refuses kept in the chat with
+    /// "Retry", as the composer keeps one.
     private func sendSharedText(_ parts: [String], toPerson chat: OCTChat) {
+        // Read while the chat is surely valid: the refusal may come after the contact is gone.
+        let chatId: String = chat.uniqueIdentifier
         for (index, part) in parts.enumerated() {
             let isLast = index == parts.count - 1
             toxManager.chats.sendMessage(to: chat, text: part, type: .normal, successBlock: { [weak self] _ in
@@ -1521,7 +1524,10 @@ private extension ActiveSessionCoordinator {
                 }
             }, failureBlock: { error in
                 DispatchQueue.main.async {
-                    handleErrorWithType(.sendMessageToFriend, error: error as NSError?)
+                    let hasPerson = !chat.isInvalidated && chat.friends.firstObject() is OCTFriend
+                    if !AirFailedSends.shared.keepRefusedShare(part, toChat: chatId, hasPerson: hasPerson) {
+                        handleErrorWithType(.sendMessageToFriend, error: error as NSError?)
+                    }
                 }
             })
         }

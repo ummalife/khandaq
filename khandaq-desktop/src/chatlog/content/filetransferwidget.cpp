@@ -613,7 +613,9 @@ void FileTransferWidget::onPreviewLoaded()
 
 void FileTransferWidget::tellHeight()
 {
-    if (heightForWidth(width()) != height()) {
+    // The constructor gets here through restyle(), so the call is spelled out: the class is final,
+    // and this is the function dynamic binding would pick at any other time as well.
+    if (FileTransferWidget::heightForWidth(width()) != height()) {
         updateGeometry();
         emit heightChanged();
     }

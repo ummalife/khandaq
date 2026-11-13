@@ -54,7 +54,7 @@ class Preview;
  * The entry tells its height for a width (heightForWidth) and says when it changed, so the line of
  * the transcript around it lays out again.
  */
-class FileTransferWidget : public QWidget
+class FileTransferWidget final : public QWidget
 {
     Q_OBJECT
 

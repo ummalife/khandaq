@@ -193,7 +193,8 @@ public:
 
     ~FitLayout() override
     {
-        while (QLayoutItem* const item = takeAt(0)) {
+        // Spelled out: in a destructor the call goes to this class's takeAt in any case.
+        while (QLayoutItem* const item = FitLayout::takeAt(0)) {
             delete item;
         }
     }

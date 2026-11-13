@@ -5529,14 +5529,14 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "dabb98c24d72c9b9f585633d1df9c5cd58d9ad373d0cd681367e6a603a495d58"
+          "content": "20af26bf6060bb8005cc2389916812c1e0e998dc48d2ced7131b89461b54cff7"
         }
       ],
       "name": "org.bouncycastle:bcprov-jdk18on",
-      "purl": "pkg:maven/org.bouncycastle/bcprov-jdk18on@1.77",
+      "purl": "pkg:maven/org.bouncycastle/bcprov-jdk18on@1.85",
       "scope": "excluded",
       "type": "library",
-      "version": "1.77"
+      "version": "1.85"
     },
     {
       "group": "maven",

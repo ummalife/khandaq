@@ -42,7 +42,11 @@
     "libexif moved to 0.6.26 (2026-04-14), which fixes CVE-2026-32775, -40385 and -40386: all",
     "three sit in MakerNote decoding, which the desktop runs on every received image it",
     "previews (src/widget/imagepreviewwidget.cpp), so they were reachable with one accepted",
-    "file. Their waivers are removed rather than kept until the Qt 6 migration."
+    "file. Their waivers are removed rather than kept until the Qt 6 migration.",
+    "bcprov-jdk18on, which Robolectric brings to the JVM unit tests, is constrained to 1.85,",
+    "the release that fixes GHSA-574f-3g2m-x479 and GHSA-9pwp-9qqc-pr26; both entries are",
+    "removed. witness.gradle took exactly that one line from witness-checksums-update.yml",
+    "(run 43401422094), and the jar fetched separately from Maven Central has the same sha256."
   ],
   "waivers": [
     {
@@ -1867,19 +1871,6 @@
   ],
   "build_only_reviewed": [
     {
-      "id": "GHSA-574f-3g2m-x479",
-      "package": "org.bouncycastle:bcprov-jdk18on",
-      "version": "1.77",
-      "aliases": [
-        "CVE-2025-14813"
-      ],
-      "severity": "CRITICAL",
-      "first_seen": "2026-08-23",
-      "reviewer": "Isa (repository owner)",
-      "rationale": "Затронут G3413CTRBlockCipher — режим CTR шифра ГОСТ 28147-2015: счётчик инкрементирует только последний байт, после 255 блоков поток ключа повторяется. В Khandaq ГОСТ-шифры не используются нигде: транспорт — NaCl из toxcore, база — SQLCipher (AES). Сам bcprov в releaseRuntimeClasspath отсутствует, то есть в APK не попадает — это артефакт сборочной цепочки. Остаточный риск ограничен сборочной средой и не касается устройств пользователей.",
-      "expires": "2027-02-08"
-    },
-    {
       "id": "GHSA-c4c3-7fpv-j4q5",
       "package": "io.netty:netty-handler",
       "version": "4.1.93.Final",
@@ -1890,19 +1881,6 @@
       "first_seen": "2026-10-02",
       "reviewer": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
       "rationale": "Server-side flaw: SslClientHelloHandler falls back to the default SslContext on a fragmented ClientHello, which bypasses mTLS only where per-SNI SslContext selection is the sole gate and the default context is more permissive; fixed in 4.1.137.Final. Netty 4.1.93.Final comes from grpc-netty 1.57.0, pulled in by the Android Gradle Plugin 8.6.0 and its Unified Test Platform artifacts (com.android.tools.utp 31.6.0), which run only for connected (instrumented) tests; CI runs none. The UTP plugins use it as gRPC clients, and AGP's own result-listener server (UtpTestResultListenerServer) uses a single SslContext with clientAuth=REQUIRE and no SNI routing, so there is no fallback to bypass. It is not in releaseRuntimeClasspath (sbom/android-release-runtime.txt has no netty or grpc artifact), so it never ships in the APK. There is no plain version bump: the Netty version follows AGP's grpc. Residual risk is limited to the build environment.",
-      "expires": "2027-02-08"
-    },
-    {
-      "id": "GHSA-9pwp-9qqc-pr26",
-      "package": "org.bouncycastle:bcprov-jdk18on",
-      "version": "1.77",
-      "aliases": [
-        "CVE-2026-8763"
-      ],
-      "severity": "CRITICAL",
-      "first_seen": "2026-10-02",
-      "reviewer": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "rationale": "Name Constraints bypass through a trailing dot in rfc822Name/URI during certificate path validation. The bcprov 1.77 in witness.gradle and the SBOM is not signing tooling: it comes from Robolectric 4.12.2, the JVM unit-test runner (testImplementation), which validates no third-party certificate chain carrying name constraints. AGP 8.6.0 keeps its own copy on the root buildscript classpath, which this scan does not see. Neither is in releaseRuntimeClasspath (sbom/android-release-runtime.txt), so it never ships in the APK; on devices TLS is the platform's and the Tox transport is NaCl. The fix is in 1.85, reachable by a test-scope constraint in app/build.gradle once the Gradle witness is regenerated with the 1.85 jar; that would also retire GHSA-574f-3g2m-x479. Residual risk is limited to the build environment.",
       "expires": "2027-02-08"
     }
   ]

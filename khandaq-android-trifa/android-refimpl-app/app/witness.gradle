@@ -274,7 +274,7 @@ dependencyVerification {
         'net.java.dev.jna:jna-platform:5.6.0:jna-platform-5.6.0.jar:9ecea8bf2b1b39963939d18b70464eef60c508fed8820f9dcaba0c35518eabf7',
         'net.java.dev.jna:jna:5.6.0:jna-5.6.0.jar:5557e235a8aa2f9766d5dc609d67948f2a8832c2d796cea9ef1d6cbe0b3b7eaf',
         'net.sf.kxml:kxml2:2.3.0:kxml2-2.3.0.jar:f264dd9f79a1fde10ce5ecc53221eff24be4c9331c830b7d52f2f08a7b633de2',
-        'org.bouncycastle:bcprov-jdk18on:1.77:bcprov-jdk18on-1.77.jar:dabb98c24d72c9b9f585633d1df9c5cd58d9ad373d0cd681367e6a603a495d58',
+        'org.bouncycastle:bcprov-jdk18on:1.85:bcprov-jdk18on-1.85.jar:20af26bf6060bb8005cc2389916812c1e0e998dc48d2ced7131b89461b54cff7',
         'org.checkerframework:checker-compat-qual:2.5.5:checker-compat-qual-2.5.5.jar:11d134b245e9cacc474514d2d66b5b8618f8039a1465cdc55bbc0b34e0008b7a',
         'org.checkerframework:checker-qual:3.13.0:checker-qual-3.13.0.jar:3ea0dcd73b4d6cb2fb34bd7ed4dad6db327a01ebad7db05eb7894076b3d64491',
         'org.checkerframework:checker-qual:3.33.0:checker-qual-3.33.0.jar:e316255bbfcd9fe50d165314b85abb2b33cb2a66a93c491db648e498a82c2de1',

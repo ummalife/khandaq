@@ -62,7 +62,12 @@
     "(CVE-2025-25468). Three are in the MOV demuxer, which the build now has: its iacb box exists",
     "only with IAMF, which is configured out, and build_ffmpeg.sh deletes the pssh and ispe boxes from",
     "the demuxer's table, as the macOS and Linux builds do. 8.1.3 (2026-09-21) is the newest 8.1",
-    "release."
+    "release.",
+    "",
+    "2026-11-14, confirmation. The repository owner confirmed the decisions delegated on 2026-11-13:",
+    "the 33 entries re-checked that day and the 35 ffmpeg 8.1.1 entries of desktop v0.2.50. Their",
+    "owner fields now name the repository owner and keep who did the analysis; no text, date or",
+    "expiry changed."
   ],
   "waivers": [
     {
@@ -108,7 +113,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Memory leak, not corruption, that NVD files under libavutil/mem.c; the leaking path is the muxing interleave queue (libavformat/mux.c, ff_interleave_add_packet) as the ffmpeg command-line tool drives it. The app never muxes, no muxer is built, and the ffmpeg programs are not built (--disable-programs). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -119,7 +124,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Memory leak, not corruption, of IAMF parameter definitions: av_iamf_param_definition_alloc() in libavutil/iamf.c, whose only callers are the IAMF reader and parser (libavformat/iamf_reader.c, iamf_parse.c). Those files are compiled only with CONFIG_IAMFDEC, which --disable-iamf turns off; libavutil/iamf.c ships in avutil-60.dll with nothing in the build calling that allocator. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -130,7 +135,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Heap overflow in the VobSub subtitle demuxer (libavformat/mpeg.c) and the subtitle queue it fills; not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -141,7 +146,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Stack overflow in the Vulkan HEVC hardware decoder (libavcodec/vulkan_hevc.c); neither the HEVC decoder nor any hardware decoder is built, and Vulkan is not detected (--disable-autodetect). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -152,7 +157,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Double free in the NVIDIA NVDEC hardware decoder (libavcodec/nvdec.c); no hardware decoder is built, and the NVIDIA headers are not detected (--disable-autodetect). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -163,7 +168,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Over-read in the S/PDIF muxer (libavformat/spdifenc.c); muxers are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -174,7 +179,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Infinite loop in the RTP/ASF depacketizer (libavformat/rtpdec_asf.c); RTP, RTSP and network are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -185,7 +190,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Out-of-bounds access in the ADX/AAX audio decoder (libavcodec/adxdec.c); not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -196,7 +201,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Heap write in the TDSC video decoder (libavcodec/tdsc.c), fed by AVI; neither is built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -207,7 +212,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Heap write in the TY demuxer (libavformat/ty.c) and the Shorten decoder (libavcodec/shorten.c), reached through an ffconcat list opened with -safe 0; none of these is built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -218,7 +223,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Heap write in the floodfill video filter (libavfilter/vf_floodfill.c); libavfilter is not built (--disable-avfilter). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -229,7 +234,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Heap write in the swaprect video filter (libavfilter/vf_swaprect.c); libavfilter is not built (--disable-avfilter). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -240,7 +245,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Heap write in the hqdn3d video filter (libavfilter/vf_hqdn3d.c); libavfilter is not built (--disable-avfilter). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -251,7 +256,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Unbounded allocation in the IAMF demuxer (libavformat/iamf_parse.c, mix_presentation_obu); IAMF is configured out (--disable-iamf), and the IAMF code inside the MOV demuxer is compiled only with CONFIG_IAMFDEC, which the build checks is 0. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -262,7 +267,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Uninitialised read in the LCL/ZLIB video decoder (libavcodec/lcldec.c); not built, and zlib is disabled. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -273,7 +278,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Signed overflow in the MACE6 audio decoder (libavcodec/mace.c), fed by the CAF demuxer (libavformat/cafdec.c); neither is built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -284,7 +289,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Heap write in the PNG and APNG encoders (libavcodec/pngenc.c); encoders are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -295,7 +300,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Heap write in the quirc video filter (libavfilter/vf_quirc.c), fed by PGS/SUP subtitles; libavfilter is not built and libquirc is not linked. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -306,7 +311,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Signed overflow in the DVB subtitle parser (libavcodec/dvbsub_parser.c), fed by a WTV file; neither the dvbsub parser nor the WTV demuxer is built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -317,7 +322,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Uninitialised read in the RSCC decoder (libavcodec/rscc.c), which is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -328,7 +333,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Uninitialised read in the Screenpresso decoder (libavcodec/screenpresso.c), which is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -339,7 +344,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Uninitialised read in the TIFF decoder's Deflate strip path (libavcodec/tiff.c); the TIFF decoder is not built, and zlib is disabled. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -350,7 +355,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Heap write in the CineForm HD decoder (libavcodec/cfhd.c), which is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -361,7 +366,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "LOW",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Over-read in the IAMF muxer (libavformat/iamf_writer.c); muxers and IAMF are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -372,7 +377,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "LOW",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Over-read in the WMA encoder (libavcodec/wmaenc.c); encoders are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -383,7 +388,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "LOW",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Over-read in the MOV demuxer's iacb box (mov_read_iacb, IAMF in MP4). The MOV demuxer IS built, for voice messages, but mov_read_iacb() and its entry in the box table are compiled only with CONFIG_IAMFDEC; build_ffmpeg.sh configures --disable-iamf and stops unless CONFIG_IAMFDEC is 0, so an iacb box is skipped as unknown. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -394,7 +399,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Signed overflow in the MOV demuxer's ispe box (mov_read_ispe, HEIF image items). The MOV demuxer IS built, for voice messages, but build_ffmpeg.sh deletes the ispe entry from its box table and stops unless the entry was there exactly once, so mov_read_ispe() is never called and an ispe box is skipped as unknown. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -405,7 +410,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Hostname check skipped in the mbedTLS TLS protocol (libavformat/tls_mbedtls.c); protocols and network are not built and mbedTLS is not linked. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -416,7 +421,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "No host-key check in the libssh sftp protocol; protocols are not built and libssh is not linked. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -427,7 +432,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "LOW",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Uninitialised bytes from av_dynamic_hdr_plus_to_t35() (libavutil), a writer whose only callers in FFmpeg 8.1.1 are the Matroska muxer and the libaom encoder; neither is built, and the app never calls it. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -438,7 +443,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Infinite loop in av_strireplace() (libavutil/avstring.c) when the DASH demuxer passes an empty SegmentTemplate media string. av_strireplace() ships in avutil-60.dll, but its only callers in FFmpeg 8.1.1 are the DASH demuxer and muxer (dashdec.c, dashenc.c), neither of which is built, and the app never calls it. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -449,7 +454,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Stack exhaustion in av_encryption_init_info_free() (libavutil) on the lists the MOV demuxer's mov_read_pssh() builds. The MOV demuxer IS built, for voice messages, but build_ffmpeg.sh deletes the pssh entry from its box table and stops unless the entry was there exactly once, so mov_read_pssh() is never called; the only other producer, the MOV muxer (movenc.c), is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -460,7 +465,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Infinite loop in the HLS demuxer (libavformat/hls.c), which is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -471,7 +476,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Unbounded RTSP redirects (ff_rtsp_connect, libavformat/rtsp.c); the RTSP demuxer is not built and network is disabled. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -482,7 +487,7 @@
       "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; assessed by Claude (AI assistant) on 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration",
       "exploitability": "Protocol and extension restrictions bypassed in the HLS demuxer (libavformat/hls.c); the HLS demuxer is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
       "version": "8.1.1"
@@ -1340,7 +1345,7 @@
       "purl": "pkg:generic/openssl@1.1.1w",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Server-side only: unbounded session-cache growth in a TLS 1.3 server that sets SSL_OP_NO_TICKET. OpenSSL 1.1.1w ships only in the Windows build, where Qt Network loads libssl at runtime and SQLCipher links libcrypto (AES, HMAC, PBKDF2); ffmpeg is built with --disable-network. Release builds open no TLS connection: src/net/updatecheck.cpp is compiled only with UPDATE_CHECK=ON, which windows/cross-compile/build.sh sets OFF, and BootstrapNodeUpdater only reads the bundled nodes.json since its HTTPS fetch was removed (audit A44). src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in OpenSSL 3.x or later or in paid 1.1.1 support (1.1.1y), so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
       "expires": "2027-02-08",
       "version": "1.1.1w"
@@ -1351,7 +1356,7 @@
       "purl": "pkg:generic/openssl@1.1.1w",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Low-level GF(2^m) EC APIs fed untrusted explicit field polynomials. Qt 5.12.12 resolves no such function (qsslsocket_openssl_symbols.cpp at v5.12.12), and per OpenSSL's analysis the X9.62 encoding through which explicit binary curves reach a TLS client in a certificate cannot carry the problematic values. OpenSSL 1.1.1w ships only in the Windows build, where Qt Network loads libssl at runtime and SQLCipher links libcrypto (AES, HMAC, PBKDF2); ffmpeg is built with --disable-network. Release builds open no TLS connection: src/net/updatecheck.cpp is compiled only with UPDATE_CHECK=ON, which windows/cross-compile/build.sh sets OFF, and BootstrapNodeUpdater only reads the bundled nodes.json since its HTTPS fetch was removed (audit A44). src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in OpenSSL 3.x or later or in paid 1.1.1 support (1.1.1zb), so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
       "expires": "2027-02-08",
       "version": "1.1.1w"
@@ -1362,7 +1367,7 @@
       "purl": "pkg:generic/openssl@1.1.1w",
       "severity": "CRITICAL",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Use-after-free that needs the application to call SSL_free_buffers. Qt 5.12.12 neither resolves nor calls it (checked in qsslsocket_openssl_symbols.cpp at v5.12.12), and nothing else links libssl. OpenSSL 1.1.1w ships only in the Windows build, where Qt Network loads libssl at runtime and SQLCipher links libcrypto (AES, HMAC, PBKDF2); ffmpeg is built with --disable-network. Release builds open no TLS connection: src/net/updatecheck.cpp is compiled only with UPDATE_CHECK=ON, which windows/cross-compile/build.sh sets OFF, and BootstrapNodeUpdater only reads the bundled nodes.json since its HTTPS fetch was removed (audit A44). src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in OpenSSL 3.x or later or in paid 1.1.1 support (1.1.1y), so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
       "expires": "2027-02-08",
       "version": "1.1.1w"
@@ -1373,7 +1378,7 @@
       "purl": "pkg:generic/openssl@1.1.1w",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Timing leak in ECDSA signing (mainly P-521). Nothing here signs with ECDSA through OpenSSL: no TLS client certificate is configured, SQLCipher does not sign, and Tox identities are Ed25519 in libsodium. OpenSSL 1.1.1w ships only in the Windows build, where Qt Network loads libssl at runtime and SQLCipher links libcrypto (AES, HMAC, PBKDF2); ffmpeg is built with --disable-network. Release builds open no TLS connection: src/net/updatecheck.cpp is compiled only with UPDATE_CHECK=ON, which windows/cross-compile/build.sh sets OFF, and BootstrapNodeUpdater only reads the bundled nodes.json since its HTTPS fetch was removed (audit A44). src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in OpenSSL 3.x or later or in paid 1.1.1 support (1.1.1zb), so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
       "expires": "2027-02-08",
       "version": "1.1.1w"
@@ -1384,7 +1389,7 @@
       "purl": "pkg:generic/openssl@1.1.1w",
       "severity": "CRITICAL",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Out-of-bounds read/write when decrypting password-based (PWRI) CMS messages. No CMS anywhere: Qt 5.12.12 resolves no CMS_* function and SQLCipher does not use CMS. OpenSSL 1.1.1w ships only in the Windows build, where Qt Network loads libssl at runtime and SQLCipher links libcrypto (AES, HMAC, PBKDF2); ffmpeg is built with --disable-network. Release builds open no TLS connection: src/net/updatecheck.cpp is compiled only with UPDATE_CHECK=ON, which windows/cross-compile/build.sh sets OFF, and BootstrapNodeUpdater only reads the bundled nodes.json since its HTTPS fetch was removed (audit A44). src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in OpenSSL 3.x or later or in paid 1.1.1 support (1.1.1zd), so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
       "expires": "2027-02-08",
       "version": "1.1.1w"
@@ -1395,7 +1400,7 @@
       "purl": "pkg:generic/openssl@1.1.1w",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "SM2 signing timing leak on 64-bit ARM. The pinned 1.1.1w is the x86_64 Windows build, and nothing uses SM2. OpenSSL 1.1.1w ships only in the Windows build, where Qt Network loads libssl at runtime and SQLCipher links libcrypto (AES, HMAC, PBKDF2); ffmpeg is built with --disable-network. Release builds open no TLS connection: src/net/updatecheck.cpp is compiled only with UPDATE_CHECK=ON, which windows/cross-compile/build.sh sets OFF, and BootstrapNodeUpdater only reads the bundled nodes.json since its HTTPS fetch was removed (audit A44). src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. OpenSSL's advisory of 2025-09-30 lists 1.1.1 as not affected; the entry exists only because NVD's CPE range covers 1.1.1 before 1.1.1zd, so there is nothing to fix in this version, and the entry goes with the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
       "expires": "2027-02-08",
       "version": "1.1.1w"
@@ -1406,7 +1411,7 @@
       "purl": "pkg:generic/openssl@1.1.1w",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Over-read in OpenSSL's own HTTP client (OCSP/CMP) with no_proxy and an IPv6 host; the vulnerable code was introduced in 3.0.16, 3.1.8, 3.2.4, 3.3.3, 3.4.0 and 3.5.0. Qt Network has its own HTTP stack, and Qt 5.12.12 resolves no OCSP or HTTP-client function. OpenSSL 1.1.1w ships only in the Windows build, where Qt Network loads libssl at runtime and SQLCipher links libcrypto (AES, HMAC, PBKDF2); ffmpeg is built with --disable-network. Release builds open no TLS connection: src/net/updatecheck.cpp is compiled only with UPDATE_CHECK=ON, which windows/cross-compile/build.sh sets OFF, and BootstrapNodeUpdater only reads the bundled nodes.json since its HTTPS fetch was removed (audit A44). src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. OpenSSL's advisory of 2025-09-30 lists 1.1.1 as not affected; the entry exists only because NVD's CPE range covers 1.1.1 before 1.1.1zd, so there is nothing to fix in this version, and the entry goes with the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
       "expires": "2027-02-08",
       "version": "1.1.1w"
@@ -1417,7 +1422,7 @@
       "purl": "pkg:generic/openssl@1.1.1w",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "DTLS only: memory amplification from future-epoch records during a DTLS handshake. The desktop never creates a DTLS endpoint; Tox runs over UDP with libsodium, not DTLS. OpenSSL 1.1.1w ships only in the Windows build, where Qt Network loads libssl at runtime and SQLCipher links libcrypto (AES, HMAC, PBKDF2); ffmpeg is built with --disable-network. Release builds open no TLS connection: src/net/updatecheck.cpp is compiled only with UPDATE_CHECK=ON, which windows/cross-compile/build.sh sets OFF, and BootstrapNodeUpdater only reads the bundled nodes.json since its HTTPS fetch was removed (audit A44). src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in OpenSSL 3.x or later or in paid 1.1.1 support (1.1.1zi), so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
       "expires": "2027-02-08",
       "version": "1.1.1w"
@@ -1428,7 +1433,7 @@
       "purl": "pkg:generic/openssl@1.1.1w",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Memory pressure only: a certificate with many nameRelativeToCRLIssuer CRL distribution points makes X.509 extension caching allocate several hundred MiB on the receiving side of a TLS handshake (a client, or a server that requests client certificates); no memory corruption. Not reachable in Khandaq release builds. OpenSSL 1.1.1w ships only in the Windows build, where Qt Network loads libssl at runtime and SQLCipher links libcrypto (AES, HMAC, PBKDF2); ffmpeg is built with --disable-network. Release builds open no TLS connection: src/net/updatecheck.cpp is compiled only with UPDATE_CHECK=ON, which windows/cross-compile/build.sh sets OFF, and BootstrapNodeUpdater only reads the bundled nodes.json since its HTTPS fetch was removed (audit A44). src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. It would become reachable, with the same limited impact, only if an HTTPS request through Qt Network were added, for example in a build with UPDATE_CHECK=ON. The fix exists only in OpenSSL 3.x or later or in paid 1.1.1 support (1.1.1zj), so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
       "expires": "2027-02-08",
       "version": "1.1.1w"
@@ -1439,7 +1444,7 @@
       "purl": "pkg:generic/openssl@1.1.1w",
       "severity": "LOW",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Nonce timing leak in ECDSA/SM2 signing on curves without a dedicated constant-time implementation (Brainpool and other generic prime curves; P-256, P-384 and P-521 are not affected). Nothing here signs with ECDSA or SM2 through OpenSSL. OpenSSL 1.1.1w ships only in the Windows build, where Qt Network loads libssl at runtime and SQLCipher links libcrypto (AES, HMAC, PBKDF2); ffmpeg is built with --disable-network. Release builds open no TLS connection: src/net/updatecheck.cpp is compiled only with UPDATE_CHECK=ON, which windows/cross-compile/build.sh sets OFF, and BootstrapNodeUpdater only reads the bundled nodes.json since its HTTPS fetch was removed (audit A44). src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in OpenSSL 3.x or later or in paid 1.1.1 support (1.1.1zj), so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
       "expires": "2027-02-08",
       "version": "1.1.1w"
@@ -1450,7 +1455,7 @@
       "purl": "pkg:generic/openssl@1.1.1w",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "DTLS 1.2 only: one unauthenticated short datagram tears down an AEAD association. There is no DTLS in the desktop. OpenSSL 1.1.1w ships only in the Windows build, where Qt Network loads libssl at runtime and SQLCipher links libcrypto (AES, HMAC, PBKDF2); ffmpeg is built with --disable-network. Release builds open no TLS connection: src/net/updatecheck.cpp is compiled only with UPDATE_CHECK=ON, which windows/cross-compile/build.sh sets OFF, and BootstrapNodeUpdater only reads the bundled nodes.json since its HTTPS fetch was removed (audit A44). src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in OpenSSL 3.x or later or in paid 1.1.1 support (1.1.1zj), so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
       "expires": "2027-02-08",
       "version": "1.1.1w"
@@ -1461,7 +1466,7 @@
       "purl": "pkg:generic/openssl@1.1.1w",
       "severity": "LOW",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "SM2 signing timing leak. SM2 is not used anywhere. OpenSSL 1.1.1w ships only in the Windows build, where Qt Network loads libssl at runtime and SQLCipher links libcrypto (AES, HMAC, PBKDF2); ffmpeg is built with --disable-network. Release builds open no TLS connection: src/net/updatecheck.cpp is compiled only with UPDATE_CHECK=ON, which windows/cross-compile/build.sh sets OFF, and BootstrapNodeUpdater only reads the bundled nodes.json since its HTTPS fetch was removed (audit A44). src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in OpenSSL 3.x or later or in paid 1.1.1 support (1.1.1zj), so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
       "expires": "2027-02-08",
       "version": "1.1.1w"
@@ -1472,7 +1477,7 @@
       "purl": "pkg:generic/openssl@1.1.1w",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "DTLS only: over-read when retransmitting a partially written handshake message. There is no DTLS in the desktop. OpenSSL 1.1.1w ships only in the Windows build, where Qt Network loads libssl at runtime and SQLCipher links libcrypto (AES, HMAC, PBKDF2); ffmpeg is built with --disable-network. Release builds open no TLS connection: src/net/updatecheck.cpp is compiled only with UPDATE_CHECK=ON, which windows/cross-compile/build.sh sets OFF, and BootstrapNodeUpdater only reads the bundled nodes.json since its HTTPS fetch was removed (audit A44). src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in OpenSSL 3.x or later or in paid 1.1.1 support (1.1.1zj), so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
       "expires": "2027-02-08",
       "version": "1.1.1w"
@@ -1483,7 +1488,7 @@
       "purl": "pkg:generic/openssl@1.1.1w",
       "severity": "CRITICAL",
       "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Over-read in SSL_select_next_proto() when the caller passes an empty list of client protocols (ALPN/NPN negotiation): only an application that calls it with a zero-length client list is affected, which OpenSSL describes as a configuration or programming error rather than something a peer controls. NVD attached 1.1.1w to it on 2026-11-10. OpenSSL 1.1.1w ships only in the Windows build, where Qt Network loads libssl at runtime and SQLCipher links libcrypto (AES, HMAC, PBKDF2); ffmpeg is built with --disable-network. Release builds open no TLS connection: src/net/updatecheck.cpp is compiled only with UPDATE_CHECK=ON, which windows/cross-compile/build.sh sets OFF, and BootstrapNodeUpdater only reads the bundled nodes.json since its HTTPS fetch was removed (audit A44). src/ has no direct OpenSSL call, no TLS server, no QDtls, no client key and sets no ALPN or NPN protocol list. The fix exists only in OpenSSL 3.x or in paid 1.1.1 support (1.1.1za), so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
       "expires": "2027-02-08",
       "version": "1.1.1w"
@@ -1494,7 +1499,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "HIGH",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Signed overflow in the DVB subtitle parser (dvbsub_parser.c), fed by a WTV file; neither is configured, and nm finds no parser structure at all in the pinned slices. Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1505,7 +1510,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "MEDIUM",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Uninitialised read in the RSCC decoder (rscc.c). Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1516,7 +1521,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "MEDIUM",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Uninitialised read in the Screenpresso decoder (screenpresso.c). Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1527,7 +1532,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "MEDIUM",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Uninitialised read in the TIFF decoder (tiff.c, zlib strips). Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1538,7 +1543,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "HIGH",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Heap write in the CineForm HD decoder (cfhd). Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1549,7 +1554,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "LOW",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Over-read in the IAMF muxer (libavformat/iamf_writer.c); IAMF arrived in FFmpeg 7.0, so n6.0 has no such code, and there is no libavformat in the library at all. Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1560,7 +1565,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "HIGH",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Negative memcpy in the RTP H.264/HEVC muxer (rtpenc_h264_hevc.c); there is no libavformat at all. Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1571,7 +1576,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "LOW",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Over-read in the WMA encoder (wmaenc.c). Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1582,7 +1587,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "LOW",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Over-read in the MOV demuxer (mov_read_iacb, added in FFmpeg 7.0 and absent from n6.0); there is no libavformat at all. Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1593,7 +1598,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "MEDIUM",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Signed overflow in the MOV/HEIF demuxer (mov_read_ispe, added in FFmpeg 7.0 and absent from n6.0); there is no libavformat at all. Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1604,7 +1609,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "MEDIUM",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Hostname check skipped in the mbedTLS TLS protocol (tls_mbedtls.c); no protocols, no network, no mbedTLS. Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1615,7 +1620,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "MEDIUM",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "No host-key check in the libssh sftp protocol; no protocols, no libssh. Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1626,7 +1631,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "LOW",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Uninitialised bytes from av_dynamic_hdr_plus_to_t35(), a writer used when remuxing/transcoding HDR10+ metadata. FFmpeg 6.0 does not have this function (it arrived in 6.1; absent from n6.0 libavutil/hdr_dynamic_metadata.h and .c), and nm finds no av_dynamic_hdr_plus_* symbol in the shipped library. Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1637,7 +1642,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "MEDIUM",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Infinite loop in av_strireplace() (libavutil/avstring.c) when the DASH demuxer's get_current_fragment() passes an empty SegmentTemplate media string; the upstream fix (ed27bfcb) is in libavutil. av_strireplace() is in both pinned release slices because avstring.o comes with libavutil.a, but nothing calls it: objdump finds no call site in either slice, and its only callers in FFmpeg 6.0, dashdec.c and dashenc.c, are in libavformat, which is not linked. The DASH demuxer is not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1648,7 +1653,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "MEDIUM",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Stack exhaustion freeing AVEncryptionInitInfo lists built by the MOV demuxer (mov_read_pssh); there is no MOV demuxer, and nm finds no av_encryption_init_info_* symbol in the shipped library. Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1659,7 +1664,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "MEDIUM",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Infinite loop in the HLS demuxer. Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1670,7 +1675,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "MEDIUM",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "Unbounded RTSP redirects (ff_rtsp_connect); no RTSP, no network. Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1681,7 +1686,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "MEDIUM",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "HLS demuxer protocol whitelist bypass. Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
@@ -1692,7 +1697,7 @@
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
       "severity": "MEDIUM",
       "platform": "android",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
+      "owner": "Isa (repository owner), confirmed 2026-11-14; re-checked by Claude (AI assistant) on 2026-11-13 against the shipped binaries and NVD",
       "exploitability": "SSRF through RTSP redirects (ff_rtsp_connect); no RTSP, no network. Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"

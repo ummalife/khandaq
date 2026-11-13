@@ -13,6 +13,13 @@ carries its own <style>. Each one is hashed and named explicitly, which means an
 them changes the hash — and `--check` then fails in CI rather than the script being silently
 blocked in the browser after deploy.
 
+KHANDAQ (SEO, 2026-11-13). A <script> whose type is a data format is not hashed. The browser never
+runs such a data block, and the CSP never sees it: HTML stops preparing the element as soon as the
+type is not a script type, before the policy check. The JSON-LD that describes the app to search
+engines is one, and a hash for it would only add a source to script-src that nothing executes. It
+still has to be the data it claims to be, so a block that does not parse as JSON fails here.
+scripts/verify-site-deploy.py makes the same exemption when it checks the served pages.
+
     scripts/generate-security-headers.py           # write infra/nginx/khandaq-security-headers.conf
     scripts/generate-security-headers.py --check   # fail if the committed file is stale
 """
@@ -21,6 +28,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import json
 import re
 import sys
 from pathlib import Path
@@ -28,6 +36,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 OUT = ROOT / "infra" / "nginx" / "khandaq-security-headers.conf"
+
+# Script types that only carry data. Kept to the one the site uses: any other type is still hashed,
+# which costs nothing if it turns out to be data too.
+DATA_SCRIPT_TYPES = ("application/ld+json",)
+SCRIPT_TYPE = re.compile(r"(?:^|\s)type\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s\"'>]+))", re.I)
+
+
+def data_script_type(attrs: str) -> str | None:
+    """The type of a <script> that only carries data, or None for one the browser would run."""
+    m = SCRIPT_TYPE.search(attrs)
+    if not m:
+        return None
+    value = next(group for group in m.groups() if group is not None).strip().lower()
+    return value if value in DATA_SCRIPT_TYPES else None
 
 # KHANDAQ (re-review 2026-08-22, KQ-09): includeSubDomains, after actually inventorying them.
 #
@@ -57,14 +79,16 @@ def sha256_csp(text: str) -> str:
     return "'sha256-" + base64.b64encode(hashlib.sha256(text.encode("utf-8")).digest()).decode() + "'"
 
 
-def inline_hashes() -> tuple[list[str], list[str], list[str]]:
+def inline_hashes() -> tuple[list[str], list[str], list[str], list[str]]:
     """Hash every inline <script> and <style> across the published pages.
 
-    Returns (script hashes, style hashes, provenance lines for the file header).
+    Returns (script hashes, style hashes, provenance lines for the file header, data blocks that
+    were left unhashed).
     """
     scripts: list[str] = []
     styles: list[str] = []
     notes: list[str] = []
+    data_blocks: list[str] = []
     # KHANDAQ (redesign E23, 2026-11-11): the Russian pages under web/ru/ are served with the same
     # header and carry the same kinds of inline block, so they are hashed exactly like the top level.
     for page in sorted(WEB.glob("*.html")) + sorted((WEB / "ru").glob("*.html")):
@@ -78,10 +102,21 @@ def inline_hashes() -> tuple[list[str], list[str], list[str]]:
                     continue
                 if not body.strip():
                     continue
+                line = html[: m.start()].count("\n") + 1
+                kind = data_script_type(attrs) if tag == "script" else None
+                if kind:
+                    try:
+                        json.loads(body)
+                    except ValueError as exc:
+                        raise SystemExit(
+                            f"ERROR: {name}:{line}: <script type=\"{kind}\"> is not valid JSON ({exc}). "
+                            f"It is left out of the CSP because it is data, so it must parse as data."
+                        )
+                    data_blocks.append(f"#   {name}:{line}  <script type=\"{kind}\">")
+                    continue
                 h = sha256_csp(body)
                 if h not in bucket:
                     bucket.append(h)
-                line = html[: m.start()].count("\n") + 1
                 notes.append(f"#   {name}:{line}  <{tag}>  {h}")
         # An inline style="" attribute cannot be hashed — it would force 'unsafe-inline' back into
         # style-src (style-src-attr is not carried by every supported browser). They were moved into
@@ -91,11 +126,11 @@ def inline_hashes() -> tuple[list[str], list[str], list[str]]:
                 f"ОШИБКА: {name} содержит инлайновый атрибут style= — он не хешируется и "
                 f"потребовал бы 'unsafe-inline' в style-src. Перенесите объявление в CSS."
             )
-    return scripts, styles, notes
+    return scripts, styles, notes, data_blocks
 
 
 def render() -> str:
-    scripts, styles, notes = inline_hashes()
+    scripts, styles, notes, data_blocks = inline_hashes()
     csp = "; ".join([
         "default-src 'none'",
         "script-src 'self' " + " ".join(scripts),
@@ -124,6 +159,7 @@ def render() -> str:
         "#",
         "# Hashed inline blocks:",
         *notes,
+        *(["#", "# Inline data blocks, never executed and so not hashed:", *data_blocks] if data_blocks else []),
         "",
         f'add_header Content-Security-Policy "{csp}" always;',
         f'add_header Strict-Transport-Security "{HSTS}" always;',

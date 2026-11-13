@@ -45,6 +45,8 @@ VERSIONED = {
     "/assets/site.js": WEB / "assets" / "site.js",
     "/assets/tokens.css": WEB / "assets" / "tokens.css",
     "/style.css": WEB / "style.css",
+    # KHANDAQ (visit statistics, 2026-11-13): the consent notice and the loader of the counters.
+    "/assets/visit-stats.js": WEB / "assets" / "visit-stats.js",
 }
 
 # src="..." and href="..." in either quote style. The leading whitespace keeps data-src and

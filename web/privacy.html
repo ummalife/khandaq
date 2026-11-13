@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Privacy Policy: Khandaq</title>
-  <meta name="description" content="Khandaq privacy policy. Khandaq is a peer-to-peer, end-to-end encrypted messenger built on Tox. No accounts, no phone numbers, no ads, no behavioural analytics.">
+  <meta name="description" content="Khandaq privacy policy. Khandaq is a peer-to-peer, end-to-end encrypted messenger built on Tox. No accounts, no phone numbers, no ads and no behavioural analytics in the app.">
   <link rel="canonical" href="https://khandaq.org/privacy.html">
   <link rel="alternate" hreflang="en" href="https://khandaq.org/privacy.html">
   <link rel="alternate" hreflang="ru" href="https://khandaq.org/ru/privacy.html">
@@ -14,7 +14,7 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://khandaq.org/privacy.html">
   <meta property="og:title" content="Privacy Policy: Khandaq">
-  <meta property="og:description" content="Khandaq privacy policy. Khandaq is a peer-to-peer, end-to-end encrypted messenger built on Tox. No accounts, no phone numbers, no ads, no behavioural analytics.">
+  <meta property="og:description" content="Khandaq privacy policy. Khandaq is a peer-to-peer, end-to-end encrypted messenger built on Tox. No accounts, no phone numbers, no ads and no behavioural analytics in the app.">
   <meta property="og:image" content="https://khandaq.org/assets/pwa-512.png">
   <meta property="og:image:width" content="512">
   <meta property="og:image:height" content="512">
@@ -33,8 +33,9 @@
   <link rel="preload" href="/assets/fonts/ibm-plex-sans-600.woff2" as="font" type="font/woff2" crossorigin>
   <script>try{var t=localStorage.getItem('kq-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
   <link rel="stylesheet" href="/assets/tokens.css?v=1d1e812128">
-  <link rel="stylesheet" href="/style.css?v=1dd1913461">
+  <link rel="stylesheet" href="/style.css?v=b9d4630bea">
   <script src="/assets/site.js?v=b8f847e9c2" defer></script>
+  <script src="/assets/visit-stats.js?v=f782712c84" defer></script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
@@ -58,12 +59,12 @@
   <main id="main">
     <article class="wrap doc">
   <h1>Privacy Policy</h1>
-  <p class="doc-date">Last updated: 12 November 2026</p>
+  <p class="doc-date">Last updated: 13 November 2026</p>
 
   <p>Khandaq is a free, open-source, peer-to-peer messenger built on the <a href="https://tox.chat/" target="_blank" rel="noopener">Tox</a> protocol. It is engineered so that <strong>we cannot read your messages even if we wanted to</strong>. This policy explains, in plain language, what that means.</p>
 
   <div class="doc-note">
-    <strong>The short version.</strong> No account. No phone number. No email. No advertising. No behavioural analytics. Your messages, calls, and files are end-to-end encrypted and travel directly between you and the people you talk to. Khandaq operates no central server that stores your conversations. The one exception to “no servers” is notifications: waking a phone requires Google’s push service and a small Khandaq wake relay, which see delivery data but never message content (see <a href="#push">Push notifications</a>).
+    <strong>The short version.</strong> No account. No phone number. No email. No advertising. No behavioural analytics. Your messages, calls, and files are end-to-end encrypted and travel directly between you and the people you talk to. Khandaq operates no central server that stores your conversations. The one exception to “no servers” is notifications: waking a phone requires Google’s push service and a small Khandaq wake relay, which see delivery data but never message content (see <a href="#push">Push notifications</a>). All of this is about the app. The website, khandaq.org, counts its visits with Yandex Metrica and Google Analytics, and only if you allow it (see <a href="#website">This website</a>).
   </div>
 
   <!-- DEPLOY ORDER: the "Firebase diagnostics is switched off" claim below is true only from the NEXT
@@ -74,7 +75,7 @@
   <ul>
     <li><strong>No registration data.</strong> Khandaq does not ask for a name, phone number, email, or any personal identifier to create a profile. Your identity is a locally generated Tox key pair; the secret half never leaves your device, and you decide who you hand the public half to.</li>
     <li><strong>No message content.</strong> Messages, voice/video calls, and file transfers are end-to-end encrypted using the Tox protocol (NaCl/libsodium). They are readable only by you and your conversation partner. We have no servers that receive or store them.</li>
-    <li><strong>No advertising or behavioural analytics.</strong> Khandaq contains no advertising SDKs, no usage or behavioural analytics, no crash-reporting upload, and no third-party trackers. There is Google code in the app, and it is there for two things. The first is <strong>Firebase Cloud Messaging</strong>, which delivers notifications and is described under <a href="#push">Push notifications</a>. The second, on Android only, is <strong>Google’s ML Kit barcode scanner</strong>, used to read a Tox ID QR code from the camera or from a picture you choose. That scanner is the fully on-device build: its recognition model is packaged inside the app rather than fetched from Google Play services, and no image, camera frame or scan result leaves your phone. Both of these pull in Google’s Play services base library as a dependency. One further library, Firebase’s own diagnostics component on iOS, would otherwise report SDK configuration and usage back to Google; we switch it off in the app’s configuration, so it sends nothing.</li>
+    <li><strong>No advertising or behavioural analytics in the app.</strong> The Khandaq app contains no advertising SDKs, no usage or behavioural analytics, no crash-reporting upload, and no third-party trackers. There is Google code in the app, and it is there for two things. The first is <strong>Firebase Cloud Messaging</strong>, which delivers notifications and is described under <a href="#push">Push notifications</a>. The second, on Android only, is <strong>Google’s ML Kit barcode scanner</strong>, used to read a Tox ID QR code from the camera or from a picture you choose. That scanner is the fully on-device build: its recognition model is packaged inside the app rather than fetched from Google Play services, and no image, camera frame or scan result leaves your phone. Both of these pull in Google’s Play services base library as a dependency. One further library, Firebase’s own diagnostics component on iOS, would otherwise report SDK configuration and usage back to Google; we switch it off in the app’s configuration, so it sends nothing.</li>
     <li><strong>No address-book upload.</strong> Khandaq does not read or upload your device contacts. You add contacts manually by exchanging Tox IDs.</li>
   </ul>
 
@@ -121,7 +122,7 @@
   <p>Khandaq is not directed to children under 17. Because it provides unrestricted, unmoderated communication, it is rated accordingly on the App Store.</p>
 
   <h2>Third parties</h2>
-  <p>Khandaq does not sell or rent personal data to anyone, and it runs no advertising or analytics business. There is no profile to sell: we hold no account, no contact list, and no message content. A small number of services are unavoidably involved in making the app work, and each of them is listed here.</p>
+  <p>Khandaq does not sell or rent personal data to anyone, and it runs no advertising or analytics business: the app contains no analytics code, and the visit statistics of the website (see <a href="#website">This website</a>) are not sold either. There is no profile to sell: we hold no account, no contact list, and no message content. A small number of services are unavoidably involved in making the app work, and each of them is listed here, followed by the two the website uses if you allow it.</p>
   <ul>
     <li><strong>Google (Firebase Cloud Messaging)</strong>: delivers notifications on Android and iOS. Handles a per-device registration token, your IP address, and the sender’s Tox public key carried inside the wake push; no message content. Governed by Google’s own privacy policy. Google’s ML Kit barcode scanner is also in the Android app, but it runs on-device and sends nothing.</li>
     <li><strong>Apple (APNs)</strong>: the final delivery hop for notifications on iOS, reached through FCM. Same limits: no message content.</li>
@@ -130,8 +131,24 @@
     <li><strong>OpenStreetMap and Apple Maps</strong>: only when a location message is displayed, to fetch the map preview. They see the requested coordinates and your IP address.</li>
     <li><strong>Tox bootstrap and relay nodes</strong>: run by volunteers, not by us. They help devices find each other and cannot read end-to-end encrypted traffic.</li>
     <li><strong>The App Store and Google Play</strong>: distribute the app and report their own aggregate install statistics to us. We do not add any identifier of our own to those.</li>
+    <li><strong>Yandex (Metrica) and Google (Analytics)</strong>: on the website khandaq.org only, and only if you allow it; see <a href="#website">This website</a>. The apps use neither.</li>
   </ul>
   <p>Khandaq is open source, and the Tox protocol libraries it builds on are open source and community-audited, so these claims can be checked against the code rather than taken on trust.</p>
+
+  <h2 id="website">This website: visit statistics</h2>
+  <p>Everything above is about the Khandaq app. This section is about the website, khandaq.org, and none of it applies to the app: the apps do not use Yandex Metrica or Google Analytics, and nothing from your profile, contacts or messages reaches either of them.</p>
+  <p>To see which pages people read and how they find the site, the website can count its visits with <strong>Yandex Metrica</strong> and <strong>Google Analytics</strong>, but only if you allow it. Until you choose <em>Accept</em> in the notice at the bottom of the page, the site loads nothing from Yandex or Google, and <em>Decline</em> keeps it that way. With scripts turned off, nothing is loaded and nothing is asked. Your choice is kept in your browser, in this site’s local storage.</p>
+  <p>If you accept, the pages of khandaq.org you open send both services:</p>
+  <ul>
+    <li>the address of the page, and the site or search that brought you to it;</li>
+    <li>your type of device, operating system, browser, screen size and language;</li>
+    <li>your IP address, from which each service works out an approximate location;</li>
+    <li>random identifiers stored in cookies, which let each service recognise the same browser on a later visit; they carry no name, email or phone number;</li>
+    <li>how you use the page: how far you scroll, which links to other sites or files you follow, and how long you stay.</li>
+  </ul>
+  <p>Metrica’s Webvisor, which records sessions and forms, is off, and so is its click map. Google signals and ad personalisation are off too, Google is told not to use the data for advertising, and the site blocks Metrica’s requests to Yandex’s advertising network. After you accept, Metrica also checks whether an ad blocker is on and syncs Yandex’s own cookies, and Yandex and Google may set cookies on their own domains; this site cannot delete those, but you can, in your browser’s settings. Yandex and Google process this data under their own policies: the <a href="https://yandex.com/legal/confidential/" target="_blank" rel="noopener">Yandex privacy policy</a>, the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google privacy policy</a> and <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener">how Google uses information from sites that use its services</a>.</p>
+  <p>You can change your mind at any time with the button below. If you decline after accepting, the site stops both counters, deletes the cookies and the stored data they left on khandaq.org, and reloads the page without them; statistics already sent stay in the reports. Clearing this site’s data in your browser also clears your choice, and the notice asks again.</p>
+  <p><button class="btn btn-plain" type="button" data-visit-stats-open hidden>Change your choice</button></p>
 
   <h2>Changes to this policy</h2>
   <p>If this policy changes, the updated version will be posted on this page with a new “Last updated” date.</p>

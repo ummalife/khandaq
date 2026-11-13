@@ -169,6 +169,13 @@ jobs:
           out="$(mktemp -d)"
           python3 scripts/version-site-assets.py --out "$out"
           node --check "$out/assets/site.js"
+          node --check "$out/assets/visit-stats.js"
+      # KHANDAQ (visit statistics, 2026-11-13): Yandex Metrica and Google Analytics run only after the
+      # visitor accepts. Nothing but web/assets/visit-stats.js may load them, every content page must
+      # carry it, the privacy policies must let a visitor withdraw, and ad cookie matching stays shut.
+      # The loader itself runs under Node against a stand-in page: it must ask before it loads anything.
+      - name: Visit statistics must stay behind the visitor's consent
+        run: python3 scripts/check-visit-stats.py
       - name: nginx must accept the generated config
         run: |
           set -euo pipefail

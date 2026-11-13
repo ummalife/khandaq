@@ -154,3 +154,6 @@ khandaq-desktop/osx/DS_Store-DMG
 
 # KHANDAQ (audit A21): keep Firebase config out of git (rotate the leaked key in GCP)
 **/google-services.json
+
+# Third-party libraries for the macOS bundle, built by scripts/build-macos-deps.sh.
+khandaq-desktop/macos-deps/

@@ -68,7 +68,7 @@ docker run --rm \
     set -euo pipefail
     rm -rf /build/src
     mkdir -p /build/src
-    tar -C /khandaq --exclude=build --exclude=local-deps --exclude=.git -cf - . | tar -C /build/src -xf -
+    tar -C /khandaq --exclude=build --exclude=local-deps --exclude=macos-deps --exclude=.git -cf - . | tar -C /build/src -xf -
     cd /build/src
     if [[ -x scripts/generate-khandaq-icons.sh ]]; then
       ./scripts/generate-khandaq-icons.sh || true

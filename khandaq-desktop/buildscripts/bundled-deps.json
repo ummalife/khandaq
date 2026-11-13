@@ -375,8 +375,8 @@
     },
     "macos": {
       "pinned": false,
-      "how": "Homebrew-формулы в CI-образе; версии не закреплены и в этом файле не отражены",
-      "gap": "Закрепить через Brewfile.lock.json и генерировать состав из готового .app (otool -L). До тех пор поле platforms описывает, ГДЕ компонент используется, а не что закреплено."
+      "how": "Since v0.2.48 scripts/build-macos-deps.sh builds every third-party library except Qt from source archives pinned there by version and sha256, for the bundle's LSMinimumSystemVersion; scripts/build-macos.sh checks the bundle against that macOS. Qt 5 is Homebrew's qt@5, unpinned. None of these versions are in this file, so the SBOM and scripts/check-native-advisories.py do not see them.",
+      "gap": "Carry the build-macos-deps.sh pins into this inventory (or generate them from it) so the SBOM and the advisory scan cover them, and pin Qt. Until then the platforms field says WHERE a component is used, not what is pinned."
     },
     "linux": {
       "pinned": false,

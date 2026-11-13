@@ -332,11 +332,11 @@
                 <a class="btn-quiet" href="/downloads/khandaq-macos.zip">Mirror on khandaq.org</a>
               </div>
             </li>
-            <li class="dl-row" id="dl-linux" data-platform="linux" data-cta="Download for Linux" data-cta-href="#dl-linux" data-note="A .deb package for Debian and Ubuntu, a portable archive for the other distributions.">
+            <li class="dl-row" id="dl-linux" data-platform="linux" data-cta="Download for Linux" data-cta-href="#dl-linux" data-note="A .deb package for Debian 13 and Ubuntu 24.04 or newer, a portable archive for the other distributions.">
               <div class="dl-info">
                 <p class="dl-yours" hidden>Your device</p>
                 <h3>Linux</h3>
-                <p>Debian and Ubuntu: a <code>.deb</code> package. Other distributions: a portable archive with its own libraries. amd64.</p>
+                <p>Debian 13 and Ubuntu 24.04 or newer: a <code>.deb</code> package. Other distributions with glibc 2.38 or newer: a portable archive with its own libraries. amd64.</p>
                 <span class="meta">v0.2.47 release on GitHub, GPL-3.0</span>
               </div>
               <div class="dl-actions">
@@ -407,7 +407,7 @@
               <div class="qa-body">
                 <ol>
                   <li><code>tar -xzf khandaq-linux-x86_64-portable.tar.gz</code></li>
-                  <li>Keep <code>khandaq</code>, <code>khandaq.bin</code> and <code>lib/</code> together; <code>INSTALL.txt</code> in the archive explains why.</li>
+                  <li>Keep <code>khandaq</code>, <code>khandaq.bin</code>, <code>lib/</code> and <code>plugins/</code> together; <code>INSTALL.txt</code> in the archive explains why.</li>
                   <li>Recommended: install under <code>~/.local/share/khandaq/</code> and link <code>~/.local/bin/khandaq</code> to it.</li>
                 </ol>
               </div>

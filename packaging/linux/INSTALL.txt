@@ -1,0 +1,77 @@
+Khandaq for Linux: the portable archive (amd64)
+
+What it needs
+  - glibc 2.38 or newer, as in Ubuntu 24.04 and Debian 13. To see yours:
+    ldd --version | head -1
+  - X11 or Wayland, with a desktop.
+  - For calls and the camera: PulseAudio or PipeWire, and v4l2. Most desktops
+    have them.
+Everything else comes in the archive: Qt 5, FFmpeg, toxcore and the libraries
+they use, so nothing has to be installed from your distribution.
+
+Keep khandaq, khandaq.bin, lib/ and plugins/ together. khandaq is a short
+script that starts khandaq.bin with the libraries in lib/ beside it. Started on
+its own, khandaq.bin looks for its libraries in the system, and fails or loads
+other versions.
+
+Run it where you unpacked it:
+
+  tar -xzf khandaq-linux-x86_64-portable.tar.gz
+  ./khandaq
+
+Or install it for your user, with an entry in the app menu:
+
+  mkdir -p ~/.local/share/khandaq ~/.local/bin ~/.local/share/applications
+  cp -a khandaq khandaq.bin lib plugins ~/.local/share/khandaq/
+  ln -sf ~/.local/share/khandaq/khandaq ~/.local/bin/khandaq
+  cp khandaq.desktop ~/.local/share/applications/
+  update-desktop-database ~/.local/share/applications 2>/dev/null || true
+
+The menu entry runs khandaq from ~/.local/bin, so that folder has to be on your
+PATH.
+
+Check: khandaq --version prints Khandaq and the commit it was built from.
+
+On Debian 13, Ubuntu 24.04 and newer the .deb package is simpler:
+sudo apt install ./khandaq-messenger_amd64.deb puts the same files in
+/opt/khandaq, with the menu entry and the icons.
+
+
+Khandaq для Linux: переносимый архив (amd64)
+
+Что нужно
+  - glibc 2.38 или новее, как в Ubuntu 24.04 и Debian 13. Узнать свою:
+    ldd --version | head -1
+  - X11 или Wayland и рабочий стол.
+  - Для звонков и камеры: PulseAudio или PipeWire и v4l2. На большинстве
+    рабочих столов они уже есть.
+Всё остальное лежит в архиве: Qt 5, FFmpeg, toxcore и библиотеки, которые им
+нужны, так что из репозитория дистрибутива ставить ничего не надо.
+
+Держите khandaq, khandaq.bin, lib/ и plugins/ вместе. khandaq это короткий
+скрипт, он запускает khandaq.bin с библиотеками из lib/ рядом с ним. Запущенный
+сам по себе, khandaq.bin ищет библиотеки в системе и не запускается или берёт
+другие версии.
+
+Запуск прямо там, куда распаковали:
+
+  tar -xzf khandaq-linux-x86_64-portable.tar.gz
+  ./khandaq
+
+Или установка для своего пользователя, с пунктом в меню приложений:
+
+  mkdir -p ~/.local/share/khandaq ~/.local/bin ~/.local/share/applications
+  cp -a khandaq khandaq.bin lib plugins ~/.local/share/khandaq/
+  ln -sf ~/.local/share/khandaq/khandaq ~/.local/bin/khandaq
+  cp khandaq.desktop ~/.local/share/applications/
+  update-desktop-database ~/.local/share/applications 2>/dev/null || true
+
+Пункт меню запускает khandaq из ~/.local/bin, поэтому эта папка должна быть
+в PATH.
+
+Проверка: khandaq --version выводит Khandaq и коммит, из которого собрана
+программа.
+
+В Debian 13, Ubuntu 24.04 и новее проще пакет .deb:
+sudo apt install ./khandaq-messenger_amd64.deb кладёт те же файлы в
+/opt/khandaq, с пунктом меню и значками.

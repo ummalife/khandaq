@@ -64,6 +64,19 @@ def data_script_type(attrs: str) -> str | None:
 # closing a finding.
 HSTS = "max-age=31536000; includeSubDomains"
 
+# KHANDAQ (visit statistics, 2026-11-13): Yandex Metrica and Google Analytics, which
+# web/assets/visit-stats.js loads only after the visitor accepts (privacy policy, "This website").
+# Before that, and after a decline, no page loads anything from these hosts; the policy only permits
+# what the counters need once they run: their tags, their hits and their pixels, nothing more.
+# Deliberately absent: frame-src (so it stays 'none' through default-src) and yandex.ru. Those are
+# what Metrica's cookie matching with Yandex's advertising uses, an <img> from yandex.ru/an/mapuid/
+# and a frame from mc.yandex.com, and both are meant to be refused.
+STATS_SCRIPT_SRC = ("https://mc.yandex.ru", "https://www.googletagmanager.com")
+STATS_IMG_SRC = ("https://mc.yandex.ru", "https://mc.yandex.com", "https://*.google-analytics.com",
+                 "https://*.googletagmanager.com")
+STATS_CONNECT_SRC = ("https://mc.yandex.ru", "https://mc.yandex.com", "https://*.google-analytics.com",
+                     "https://*.analytics.google.com", "https://*.googletagmanager.com")
+
 PERMISSIONS_POLICY = ", ".join(
     f"{feature}=()"
     for feature in (
@@ -133,12 +146,13 @@ def render() -> str:
     scripts, styles, notes, data_blocks = inline_hashes()
     csp = "; ".join([
         "default-src 'none'",
-        "script-src 'self' " + " ".join(scripts),
+        "script-src 'self' " + " ".join([*STATS_SCRIPT_SRC, *scripts]),
         "style-src 'self' " + " ".join(styles),
-        "img-src 'self'",
+        "img-src 'self' " + " ".join(STATS_IMG_SRC),
         "font-src 'self'",
-        # changelog.html fetches /changelog.json; nothing else talks to the network.
-        "connect-src 'self'",
+        # changelog.html fetches /changelog.json; the only other traffic is the visit statistics,
+        # and only once the visitor has accepted them.
+        "connect-src 'self' " + " ".join(STATS_CONNECT_SRC),
         "base-uri 'none'",
         "form-action 'none'",
         # KQ-09: 'none', not 'self'. Nothing on this site embeds any other part of it, so same-origin
@@ -156,6 +170,10 @@ def render() -> str:
         "# sets one header of its own drops every header inherited from the server level, so a",
         "# baseline declared once at the top would silently disappear on exactly the locations that",
         "# customise caching — which is most of them.",
+        "#",
+        "# The Yandex and Google hosts in script-src, img-src and connect-src serve the visit statistics,",
+        "# which web/assets/visit-stats.js loads only after the visitor accepts them. No frame-src and no",
+        "# yandex.ru: Metrica's cookie matching with Yandex's advertising is refused on purpose.",
         "#",
         "# Hashed inline blocks:",
         *notes,

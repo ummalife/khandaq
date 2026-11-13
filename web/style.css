@@ -2003,6 +2003,63 @@ pre code {
   min-height: var(--kq-size-target-ios);
 }
 
+/* ---- visit statistics: the consent notice ---------------------------------------------------------- */
+
+/* Built by /assets/visit-stats.js, which shows it until the visitor accepts or declines (privacy
+   policy, "This website"). Fixed over the bottom of the page: above the download bar under the thumb
+   (z-index 20), below the skip link (40). While that bar is out the script lifts the notice above it
+   (is-lifted), so the download button is never covered, and the two move together when the bar steps
+   aside for the download list. */
+.consent {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 30;
+  padding-block: var(--kq-space-16) calc(var(--kq-space-16) + env(safe-area-inset-bottom, 0px));
+  background: var(--kq-surface);
+  box-shadow: var(--kq-elevation-sheet);
+  transition: transform var(--kq-dur-layout) var(--kq-ease-out);
+}
+
+.consent.is-lifted {
+  padding-bottom: var(--kq-space-16);
+  border-bottom: var(--kq-stroke-hairline) solid var(--kq-line);
+}
+
+.consent-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--kq-space-12) var(--kq-space-32);
+}
+
+.consent-text {
+  max-width: var(--site-measure);
+  font: var(--site-small);
+}
+
+.consent-actions {
+  display: flex;
+  gap: var(--kq-space-12);
+}
+
+@media (max-width: 760px) {
+  .consent {
+    padding-block: var(--kq-space-12) calc(var(--kq-space-12) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .consent.is-lifted {
+    padding-bottom: var(--kq-space-12);
+  }
+
+  .consent-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .consent-actions .btn {
+    flex: 1 1 0;
+  }
+}
+
 /* ---- motion preferences ---------------------------------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
@@ -2032,5 +2089,10 @@ pre code {
   .thumb-bar.is-tucked {
     opacity: 0;
     transform: none;
+  }
+
+  /* The notice moves to its new place at once when the bar fades out. */
+  .consent {
+    transition: none;
   }
 }

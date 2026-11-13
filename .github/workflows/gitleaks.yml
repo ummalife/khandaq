@@ -58,4 +58,19 @@ jobs:
               fi ;;
           esac
           echo "gitleaks range: ${RANGE}"
-          ./gitleaks detect --source . --log-opts="${RANGE}" --redact --no-banner
+          if [ "${RANGE}" != "--all" ]; then
+            exec ./gitleaks detect --source . --log-opts="${RANGE}" --redact --no-banner
+          fi
+          # KHANDAQ (2026-11-13): the weekly full-history sweep said only "leaks found: 3", which
+          # nobody could act on without running gitleaks locally. It now lists each finding as rule,
+          # file, line, commit and fingerprint. The secret itself stays redacted and the author
+          # e-mail is not printed: the log of a public repository is public. The fingerprint is the
+          # value an allowlist entry in .gitleaks.toml would use.
+          status=0
+          ./gitleaks detect --source . --log-opts="${RANGE}" --redact --no-banner \
+            --report-format json --report-path gitleaks-report.json || status=$?
+          if [ -s gitleaks-report.json ]; then
+            jq -r '.[] | [.RuleID, .File, (.StartLine | tostring), .Commit[0:12], .Date, .Fingerprint] | @tsv' \
+              gitleaks-report.json
+          fi
+          exit "${status}"

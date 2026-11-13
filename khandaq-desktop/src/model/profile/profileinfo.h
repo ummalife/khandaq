@@ -42,15 +42,21 @@ public:
     bool isEncrypted() const override;
 
     void copyId() const override;
+    ToxId getSelfId() const override;
+    void changeNospam() override;
 
+    QString getUsername() const override;
+    QString getStatusMessage() const override;
     void setUsername(const QString& name) override;
     void setStatusMessage(const QString& status) override;
 
     QString getProfileName() const override;
+    QString getProfileFolder() const override;
     RenameResult renameProfile(const QString& name) override;
     SaveResult exportProfile(const QString& path) const override;
-    QStringList removeProfile() override;
+    void removeProfile() override;
     void logout() override;
+    void logoutToImport(const QString& path) override;
 
     void copyQr(const QImage& image) const override;
     SaveResult saveQr(const QImage& image, const QString& path) const override;
@@ -63,6 +69,7 @@ public:
     SIGNAL_IMPL(ProfileInfo, statusMessageChanged, const QString& message)
 
 private:
+    void storePassword(const QString& password);
     IProfileInfo::SetAvatarResult createAvatarFromFile(QFile& file, QByteArray& avatar);
     IProfileInfo::SetAvatarResult byteArrayToPng(QByteArray inData, QByteArray& outPng);
     IProfileInfo::SetAvatarResult scalePngToAvatar(QByteArray& avatar);

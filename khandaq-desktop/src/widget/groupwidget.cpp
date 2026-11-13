@@ -24,9 +24,12 @@
 #include <QContextMenuEvent>
 #include <QDrag>
 #include <QDragEnterEvent>
+#include <QInputDialog>
+#include <QLineEdit>
 #include <QMenu>
 #include <QMimeData>
 #include <QPalette>
+#include <QRegularExpression>
 
 #include "maskablepixmapwidget.h"
 #include "form/groupchatform.h"
@@ -36,6 +39,7 @@
 #include "src/model/group.h"
 #include "src/model/status.h"
 #include "src/grouplist.h"
+#include "src/widget/air/airstrings.h"
 #include "src/widget/friendwidget.h"
 #include "src/widget/style.h"
 #include "src/widget/translator.h"
@@ -77,6 +81,11 @@ void GroupWidget::updateTitle(const QString& author, const QString& newName)
 
 void GroupWidget::contextMenuEvent(QContextMenuEvent* event)
 {
+    showContextMenu(event->globalPos());
+}
+
+void GroupWidget::showContextMenu(const QPoint& globalPos, const QList<QAction*>& leadingActions)
+{
     if (!active) {
         setBackgroundRole(QPalette::Highlight);
     }
@@ -84,6 +93,11 @@ void GroupWidget::contextMenuEvent(QContextMenuEvent* event)
     installEventFilter(this); // Disable leave event.
 
     QMenu menu(this);
+
+    if (!leadingActions.isEmpty()) {
+        menu.addActions(leadingActions);
+        menu.addSeparator();
+    }
 
     QAction* openChatWindow = nullptr;
     if (chatroom->possibleToOpenInNewWindow() ) {
@@ -101,7 +115,7 @@ void GroupWidget::contextMenuEvent(QContextMenuEvent* event)
     QAction* setTitle = menu.addAction(tr("Set title..."));
     QAction* quitGroup = menu.addAction(tr("Quit group", "Menu to quit a groupchat"));
 
-    QAction* selectedItem = menu.exec(event->globalPos());
+    QAction* selectedItem = menu.exec(globalPos);
 
     removeEventFilter(this);
 
@@ -191,7 +205,21 @@ QString GroupWidget::getStatusString() const
 
 void GroupWidget::editName()
 {
-    nameLabel->editBegin();
+    if (isVisible()) {
+        nameLabel->editBegin();
+        return;
+    }
+
+    Group* group = chatroom->getGroup();
+    QString title = tr("Set title...");
+    title.remove(QRegularExpression(QStringLiteral("[.\\x{2026}]+$")));
+    bool accepted = false;
+    const QString name =
+        QInputDialog::getText(window(), title, AirStrings::text(AirStrings::Text::GroupNamePrompt),
+                              QLineEdit::Normal, group->getName(), &accepted);
+    if (accepted && !name.trimmed().isEmpty()) {
+        group->setName(name.trimmed());
+    }
 }
 
 bool GroupWidget::isFriend() const

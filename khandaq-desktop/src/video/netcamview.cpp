@@ -58,7 +58,8 @@ NetCamView::NetCamView(ToxPk friendPk_, CameraSource& cameraSource_,
     , style{style_}
 {
     verLayout = new QVBoxLayout(this);
-    setWindowTitle(tr("Tox video"));
+    //: Title of the window of a video call
+    setWindowTitle(tr("Video call"));
 
     buttonLayout = new QHBoxLayout();
 

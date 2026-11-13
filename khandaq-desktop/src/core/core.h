@@ -35,6 +35,7 @@
 #include "src/model/status.h"
 #include <tox/tox.h>
 
+#include <QElapsedTimer>
 #include <QMutex>
 #include <QObject>
 #include <QThread>
@@ -97,10 +98,29 @@ public:
     QVector<uint32_t> getGroupPeerList(int groupId) const override;
     QString getGroupPeerName(int groupId, int peerId) const override;
     ToxPk getGroupPeerPk(int groupId, int peerId) const override;
+    /** Our own key in a group, which the members know us by; empty when the group is unknown. */
+    ToxPk getGroupSelfPublicKey(int groupId) const;
     bool isGroupPeerPresent(int groupId, const ToxPk& peerPk) const;
     QStringList getGroupPeerNames(int groupId) const override;
     QString getGroupName(int groupId) const;
     bool getGroupAvEnabled(int groupId) const override;
+    // What the group screens ask toxcore before they act (E13 to E15).
+    /** Our own peer number in the group; UINT32_MAX when toxcore does not know it. */
+    uint32_t getGroupSelfPeerId(int groupId) const;
+    Tox_Group_Role getGroupSelfRole(int groupId) const;
+    Tox_Group_Role getGroupPeerRole(int groupId, int peerId) const;
+    /** Whether toxcore has a connection to the peer now. */
+    bool isGroupPeerOnline(int groupId, int peerId) const;
+    /**
+     * tox_group_is_connected of this fork: 1 once the group is synced, 0 while it connects (a
+     * founder's group back from the save stays there while members come to it), -1 when it is
+     * not connected or unknown.
+     */
+    int getGroupConnection(int groupId) const;
+    Tox_Group_Voice_State getGroupVoiceState(int groupId) const;
+    Tox_Group_Privacy_State getGroupPrivacyState(int groupId) const;
+    /** The longest group message toxcore takes, in bytes: it refuses a longer one. */
+    static uint32_t getMaxGroupMessageSize();
     ToxPk getFriendPublicKey(uint32_t friendNumber) const;
     QString getFriendUsername(uint32_t friendNumber) const;
 
@@ -127,8 +147,16 @@ public slots:
 
     void acceptFriendRequest(const ToxPk& friendPk);
     void requestFriendship(const ToxId& friendId, const QString& message);
-    void groupInviteFriend(uint32_t friendId, int groupId);
-    int createGroup(Tox_Group_Privacy_State privacyState = TOX_GROUP_PRIVACY_STATE_PUBLIC);
+    /** False when toxcore refused the invitation (the contact went offline, the group is gone). */
+    bool groupInviteFriend(uint32_t friendId, int groupId);
+    /** A new group with this name and privacy, founded by us; -1 when toxcore refused it. */
+    int createGroup(const QString& name, Tox_Group_Privacy_State privacyState);
+    /** The founder or a moderator gives a member a role; false when toxcore refused it. */
+    bool setGroupPeerRole(int groupId, int peerId, Tox_Group_Role role);
+    /** The founder or a moderator removes a member from the group; false when toxcore refused it. */
+    bool kickGroupPeer(int groupId, int peerId);
+    /** A message only that peer of the group gets; false when toxcore refused it. */
+    bool sendGroupPrivateMessage(int groupId, int peerId, const QString& message);
 
     void removeFriend(uint32_t friendId);
     void removeGroup(int groupId);
@@ -138,8 +166,8 @@ public slots:
     void setStatusMessage(const QString& message);
 
     bool sendMessage(uint32_t friendId, const QString& message, ReceiptNum& receipt) override;
-    void sendGroupMessage(int groupId, const QString& message) override;
-    void sendGroupAction(int groupId, const QString& message) override;
+    uint32_t sendGroupMessage(int groupId, const QString& message) override;
+    uint32_t sendGroupAction(int groupId, const QString& message) override;
     bool sendGroupFile(int groupId, const QString& fileName, const QString& localPath,
                        const QByteArray& fileData);
     bool sendGroupFileFromPath(int groupId, const QString& fileName, const QString& localPath);
@@ -149,9 +177,21 @@ public slots:
 
     void setNospam(uint32_t nospam);
 
+    /**
+     * Asks the network again at once, as Connect again in Settings does. It runs on the thread of
+     * the node: call it through a queued connection from elsewhere.
+     */
+    void reconnect();
+
 signals:
     void connected();
     void disconnected();
+    /** Our own link changed: a TOX_CONNECTION value (none, a TCP relay, or direct UDP). */
+    void selfLinkChanged(int toxConnection);
+    /** How many relays the node holds a connection to; looked at every few seconds. */
+    void relaysChanged(int relays);
+    /** A friend's link changed: a TOX_CONNECTION value, so a row can tell direct from relayed. */
+    void friendLinkChanged(uint32_t friendId, int toxConnection);
 
     void friendRequestReceived(const ToxPk& friendPk, const QString& message);
     void friendAvatarChanged(const ToxPk& friendPk, const QByteArray& pic);
@@ -191,7 +231,13 @@ signals:
 
     void emptyGroupCreated(int groupnumber, const GroupId groupId, const QString& title = QString());
     void groupInviteReceived(const GroupInvite& inviteInfo);
-    void groupMessageReceived(int groupnumber, int peernumber, const QString& message, bool isAction);
+    /** messageId: what the edits, deletions and reactions of the group point at (stage 3, item 10). */
+    void groupMessageReceived(int groupnumber, int peernumber, const QString& message,
+                              bool isAction, uint32_t messageId);
+    /** An edit, a deletion or a reaction a friend sent: lossless packet 186, 187 or 188, as it came. */
+    void friendMessageEffect(uint32_t friendId, const QByteArray& packet);
+    /** An edit, a deletion or a reaction a member sent to the group: 0x41, 0x42 or 0x43, as it came. */
+    void groupMessageEffect(int groupnumber, const ToxPk& sender, const QByteArray& packet);
     void groupNamelistChanged(int groupnumber, int peernumber, uint8_t change);
     void groupPeerlistChanged(int groupnumber);
     void groupPeerNameChanged(int groupnumber, const ToxPk& peerPk, const QString& newName);
@@ -199,16 +245,23 @@ signals:
     void groupPeerAudioPlaying(int groupnumber, ToxPk peerPk);
     void groupSentFailed(int groupId);
     void groupJoined(int groupnumber, GroupId groupId);
+    /** A role in the group changed, someone was removed, or the voice or privacy state changed. */
+    void groupModerationChanged(int groupnumber);
+    /** A peer of the group wrote to us alone. */
+    void groupPrivateMessageReceived(int groupnumber, const ToxPk& peerPk, const QString& message,
+                                     bool isAction);
     // KHANDAQ (external audit 2026-08-21, K-01): `wasSynced` says whether this row arrived through
     // HISTORY SYNC rather than live. It matters because the two carry completely different
     // guarantees: a live packet is authenticated by toxcore, while a synced one names an author that
     // the relaying peer simply wrote into the packet. Desktop has no signed-history consumer (0x02
     // dies at the version gate), so every synced row is unverified by construction — and until now
     // one was indistinguishable from a live one at the point where a notification is raised.
+    // fileId: the 32-byte id of the file in its packets, which a deletion or a reaction points at.
     void groupFileReceived(int groupnumber, ToxPk sender, const QString& fileName,
-                           const QByteArray& fileData, const QDateTime& timestamp, bool wasSynced);
+                           const QByteArray& fileData, const QDateTime& timestamp, bool wasSynced,
+                           const QByteArray& fileId);
     void groupFileSent(int groupnumber, const QString& fileName, const QString& localPath,
-                       qint64 fileSize);
+                       qint64 fileSize, const QByteArray& fileId);
     void actionSentResult(uint32_t friendId, const QString& action, int success);
 
     void receiptRecieved(int friedId, ReceiptNum receipt);
@@ -244,6 +297,15 @@ private:
     static void onGroupTopicChange(Tox* tox, uint32_t groupId, uint32_t peerId, const uint8_t* topic,
                                    size_t length, void* vCore);
     static void onGroupSelfJoin(Tox* tox, uint32_t groupId, void* vCore);
+    static void onGroupModeration(Tox* tox, uint32_t groupId, uint32_t sourcePeerId,
+                                  uint32_t targetPeerId, Tox_Group_Mod_Event modType, void* vCore);
+    static void onGroupVoiceState(Tox* tox, uint32_t groupId, Tox_Group_Voice_State voiceState,
+                                  void* vCore);
+    static void onGroupPrivacyState(Tox* tox, uint32_t groupId,
+                                    Tox_Group_Privacy_State privacyState, void* vCore);
+    static void onGroupPrivateMessage(Tox* tox, uint32_t groupId, uint32_t peerId,
+                                      Tox_Message_Type type, const uint8_t* message, size_t length,
+                                      void* vCore);
     static void onGroupJoinFail(Tox* tox, uint32_t groupId, Tox_Group_Join_Fail failType, void* vCore);
     static void onGroupCustomPacket(Tox* tox, uint32_t groupId, uint32_t peerId, const uint8_t* data,
                                     size_t length, void* vCore);
@@ -256,9 +318,11 @@ private:
                                    const uint8_t* data, size_t length, void* core);
     static void onReadReceiptCallback(Tox* tox, uint32_t friendId, uint32_t receipt, void* core);
 
-    void sendGroupMessageWithType(int groupId, const QString& message, Tox_Message_Type type);
+    uint32_t sendGroupMessageWithType(int groupId, const QString& message, Tox_Message_Type type);
     bool sendMessageWithType(uint32_t friendId, const QString& message, Tox_Message_Type type, ReceiptNum& receipt);
     bool checkConnection();
+    /** Counts the relays the node holds a connection to, at most every few seconds. */
+    void countRelays();
 
     void makeTox(QByteArray savedata, ICoreSettings* s);
     void loadFriends();
@@ -291,14 +355,13 @@ private:
             tox_kill(tox_);
         }
     };
-    /* Using the now commented out statements in checkConnection(), I watched how
-    * many ticks disconnects-after-initial-connect lasted. Out of roughly 15 trials,
-    * 5 disconnected; 4 were DCd for less than 20 ticks, while the 5th was ~50 ticks.
-    * So I set the tolerance here at 25, and initial DCs should be very rare now.
-    * This should be able to go to 50 or 100 without affecting legitimate disconnects'
-    * downtime, but lets be conservative for now. Edit: now ~~40~~ 30.
-    */
-    #define CORE_DISCONNECT_TOLERANCE 8
+    /**
+     * While our node stays offline, the bootstrap nodes are asked again this often (DESIGN.md,
+     * "Network state on the phone": every 15 seconds, as Android's OFFLINE_PERIODIC). The start, a
+     * change of network and Connect again ask at once; a node that drops off waits this long first,
+     * while toxcore tries the nodes it knows.
+     */
+    static constexpr qint64 offlineBootstrapIntervalMs = 15000;
 
     using ToxPtr = std::unique_ptr<Tox, ToxDeleter>;
     ToxPtr tox;
@@ -314,7 +377,12 @@ private:
     const IBootstrapListGenerator& bootstrapListGenerator;
     const ICoreSettings& settings;
     bool isConnected = false;
-    int tolerance = CORE_DISCONNECT_TOLERANCE;
+    int lastSelfConnection = -1;
+    /** When the relays were last counted, and how many there were (-1 before the first count). */
+    QElapsedTimer relaysCounted;
+    int lastRelays = -1;
+    /** Since the bootstrap nodes were last asked, or since the node went offline; invalid before. */
+    QElapsedTimer bootstrapClock;
     class QNetworkConfigurationManager* networkManager = nullptr;
     qint64 lastNetworkRebootstrapMs = 0;
     int groupMaintenanceTick = 0;

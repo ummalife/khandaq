@@ -20,6 +20,8 @@
 #include "sessionchatlog.h"
 #include "src/friendlist.h"
 #include "src/grouplist.h"
+#include "src/model/air/airlocalstore.h"
+#include "src/model/air/airmodel.h"
 
 #include <QDebug>
 #include <QtGlobal>
@@ -180,13 +182,13 @@ SearchResult SessionChatLog::searchForward(SearchPos startPos, const QString& ph
         const auto& key = it->first;
         const auto& item = it->second;
 
-        if (item.getContentType() != ChatLogItem::ContentType::message) {
+        if (item.getContentType() != ChatLogItem::ContentType::message || hiddenItems.count(key) != 0) {
             continue;
         }
 
-        const auto& content = item.getContentAsMessage();
-
-        auto match = regexp.globalMatch(content.message.content, 0);
+        // The words the entry shows: a reply without its quote, a mention without its markup.
+        const QString shown = Air::entryWords(item.getContentAsMessage().message.content);
+        auto match = regexp.globalMatch(shown, 0);
 
         auto numMatches = 0;
         QRegularExpressionMatch lastMatch;
@@ -242,12 +244,12 @@ SearchResult SessionChatLog::searchBackward(SearchPos startPos, const QString& p
         const auto& key = it->first;
         const auto& item = it->second;
 
-        if (item.getContentType() != ChatLogItem::ContentType::message) {
+        if (item.getContentType() != ChatLogItem::ContentType::message || hiddenItems.count(key) != 0) {
             continue;
         }
 
-        const auto& content = item.getContentAsMessage();
-        auto match = regexp.globalMatch(content.message.content, 0);
+        const QString shown = Air::entryWords(item.getContentAsMessage().message.content);
+        auto match = regexp.globalMatch(shown, 0);
 
         auto totalMatches = 0;
         auto numMatchesBeforePos = 0;
@@ -323,6 +325,121 @@ std::vector<IChatLog::DateChatLogIdxPair> SessionChatLog::getDateIdxs(const QDat
     }
 
     return ret;
+}
+
+/**
+ * @brief Takes an item out of the log for good: it keeps its index, so the indexes after it do
+ * not move, but it is neither shown nor found any more
+ * @param[in] idx index of an item of this log
+ */
+void SessionChatLog::hideItem(ChatLogIdx idx)
+{
+    if (items.find(idx) == items.end() || !hiddenItems.insert(idx).second) {
+        return;
+    }
+    emit itemUpdated(idx);
+}
+
+void SessionChatLog::markHidden(ChatLogIdx idx)
+{
+    hiddenItems.insert(idx);
+}
+
+SessionChatLog::EffectResult SessionChatLog::applyEffect(const ToxPk& sender,
+                                                         const Air::MessageEffect& effect,
+                                                         const ToxPk& selfKey)
+{
+    using Anchor = Air::MessageEffect::Anchor;
+    using Change = EffectResult::Change;
+    using Kind = Air::MessageEffect::Kind;
+
+    EffectResult result;
+    const ToxPk ownKey = coreIdHandler.getSelfPublicKey();
+    // One of ours coming back: this device made it, or nobody did. Only a text has words to edit,
+    // and a packet that names no message points at none of those that have no id here.
+    if (sender == ownKey || sender == selfKey || effect.anchorId.isEmpty()
+        || (effect.kind == Kind::Edit && effect.anchor != Anchor::Text)) {
+        return result;
+    }
+
+    for (auto it = items.rbegin(); it != items.rend(); ++it) {
+        if (hiddenItems.count(it->first) != 0) {
+            continue;
+        }
+        ChatLogItem& item = it->second;
+        const ToxPk author = item.getSender();
+        if (effect.kind != Kind::Reaction) {
+            // Only its author changes or deletes what they wrote.
+            if (author != sender) {
+                continue;
+            }
+        } else if (!effect.author.isEmpty()
+                   && effect.author != (author == ownKey ? selfKey : author).getByteArray()) {
+            // A reaction in a group names whose message it is.
+            continue;
+        }
+        if (effect.anchor == Anchor::Text) {
+            if (item.getContentType() != ChatLogItem::ContentType::message
+                || item.getContentAsMessage().message.wireId != effect.anchorId) {
+                continue;
+            }
+        } else if (item.getContentType() != ChatLogItem::ContentType::fileTransfer
+                   || item.getContentAsFile().file.resumeFileId != effect.anchorId) {
+            continue;
+        }
+
+        result.idx = it->first;
+        result.author = author;
+        result.timestamp = item.getTimestamp();
+        Air::EntryMarks* marks = nullptr;
+        if (effect.anchor == Anchor::Text) {
+            ChatLogMessage& message = item.getContentAsMessage();
+            result.before = message.message;
+            marks = &message.marks;
+        } else {
+            ChatLogFile& file = item.getContentAsFile();
+            result.file = file.file;
+            marks = &file.marks;
+        }
+
+        switch (effect.kind) {
+        case Kind::Edit: {
+            Message& message = item.getContentAsMessage().message;
+            if (!marks->acceptsEdit(effect.time, effect.text, message.content)) {
+                return result;
+            }
+            message.content = effect.text;
+            marks->edited = true;
+            marks->editedAt = effect.time;
+            result.change = Change::Edited;
+            break;
+        }
+        case Kind::Delete:
+            hiddenItems.insert(it->first);
+            result.change = Change::Deleted;
+            break;
+        case Kind::Reaction:
+            if (!marks->react(Air::LocalStore::hashedKey(sender.toString()), effect.emoji, effect.add)) {
+                return result;
+            }
+            result.change = Change::Reacted;
+            break;
+        }
+        result.marks = *marks;
+        emit itemUpdated(it->first);
+        return result;
+    }
+    return result;
+}
+
+bool SessionChatLog::isShown(ChatLogIdx idx) const
+{
+    return hiddenItems.count(idx) == 0;
+}
+
+bool SessionChatLog::isCancelled(ChatLogIdx idx) const
+{
+    return hiddenItems.count(idx) != 0;
 }
 
 void SessionChatLog::addSystemMessage(const SystemMessage& message)
@@ -485,7 +602,7 @@ void SessionChatLog::onFileUpdated(const ToxPk& sender, const ToxFile& file)
         currentTransfer.idx = nextIdx++;
         currentFileTransfers.push_back(currentTransfer);
 
-        const auto chatLogFile = ChatLogFile{QDateTime::currentDateTime(), file};
+        const auto chatLogFile = ChatLogFile{QDateTime::currentDateTime(), file, {}};
         items.emplace(currentTransfer.idx, ChatLogItem(sender, resolveSenderNameFromSender(sender), chatLogFile));
         messageIdx = currentTransfer.idx;
     } else if (fileIt != currentFileTransfers.end()) {

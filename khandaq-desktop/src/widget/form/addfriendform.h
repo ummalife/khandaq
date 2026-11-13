@@ -66,9 +66,6 @@ signals:
     void friendRequestAccepted(const ToxPk& friendAddress);
     void friendRequestsSeen();
 
-public slots:
-    void onUsernameSet(const QString& userName);
-
 private slots:
     void onSendTriggered();
     void onIdChanged(const QString& id);
@@ -88,7 +85,6 @@ private:
     void retranslateAcceptButton(QPushButton* acceptButton);
     void retranslateRejectButton(QPushButton* rejectButton);
     void deleteFriendRequest(const ToxId& toxId_);
-    void setIdFromClipboard();
     QString getMessage() const;
     QString getImportMessage() const;
     void updateSendButtonState();
@@ -123,7 +119,6 @@ private:
     QWidget* head;
     QWidget* main;
     QWidget* importContacts;
-    QString lastUsername;
     QTabWidget* tabWidget;
     QVBoxLayout* requestsLayout;
     QList<QPushButton*> acceptButtons;

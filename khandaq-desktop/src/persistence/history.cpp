@@ -202,6 +202,9 @@ History::History(std::shared_ptr<RawDatabase> db_, Settings& settings_, IMessage
         return;
     }
 
+    outbox.reset(new Outbox(db));
+    savedNotes.reset(new SavedNotes(db));
+
     connect(this, &History::fileInserted, this, &History::onFileInserted);
 }
 
@@ -357,8 +360,8 @@ void History::onFileInserted(RowId dbId, QByteArray fileId)
 {
     auto& fileInfo = fileInfos[fileId];
     if (fileInfo.finished) {
-        db->execLater(
-            generateFileFinished(dbId, fileInfo.success, fileInfo.filePath, fileInfo.fileHash));
+        const QString filePath = erasedFiles.contains(fileId) ? QString() : fileInfo.filePath;
+        db->execLater(generateFileFinished(dbId, fileInfo.success, filePath, fileInfo.fileHash));
         fileInfos.remove(fileId);
     } else {
         fileInfo.finished = false;
@@ -517,16 +520,55 @@ void History::setFileFinished(const QByteArray& fileId, bool success, const QStr
     }
 
     auto& fileInfo = fileInfos[fileId];
+    // A file its sender deleted keeps its place erased (eraseFileEntry).
+    const QString shownPath = erasedFiles.contains(fileId) ? QString() : filePath;
     if (fileInfo.fileId.get() == -1) {
         fileInfo.finished = true;
         fileInfo.success = success;
-        fileInfo.filePath = filePath;
+        fileInfo.filePath = shownPath;
         fileInfo.fileHash = fileHash;
     } else {
-        db->execLater(generateFileFinished(fileInfo.fileId, success, filePath, fileHash));
+        db->execLater(generateFileFinished(fileInfo.fileId, success, shownPath, fileHash));
     }
 
     fileInfos.remove(fileId);
+}
+
+/**
+ * @brief Saves one of our messages that has not reached the person yet: its history row, marked as
+ * pending, and its row in the outgoing queue, in one transaction.
+ * @param outboxId The id reserved for it with Outbox::reserveId().
+ */
+void History::addNewOutgoingMessage(const ChatId& chatId, const QString& message,
+                                    const ToxPk& sender, const QDateTime& time,
+                                    ExtensionSet extensions, const QString& dispName, qint64 outboxId)
+{
+    if (historyAccessBlocked()) {
+        return;
+    }
+
+    auto queries =
+        generateNewTextMessageQueries(chatId, message, sender, time, false, extensions, dispName, {});
+    queries += Outbox::linkedInsertQuery(outboxId, chatId, message, time, extensions);
+    db->execLater(queries);
+}
+
+/**
+ * @brief The outgoing queue, kept whether the history is on or off.
+ * @return Null when the database could not be opened.
+ */
+Outbox* History::getOutbox()
+{
+    return isValid() ? outbox.get() : nullptr;
+}
+
+/**
+ * @brief The saved messages, kept whether the history is on or off.
+ * @return Null when the database could not be opened.
+ */
+SavedNotes* History::getSavedNotes()
+{
+    return isValid() ? savedNotes.get() : nullptr;
 }
 
 size_t History::getNumMessagesForChat(const ChatId& chatId)
@@ -598,7 +640,8 @@ QList<History::HistMessage> History::getMessagesForChat(const ChatId& chatId, si
         switch (messageType[0].toLatin1()) {
         case 'T': {
             it = std::next(row.begin(), messageOffset);
-            assert(!it->isNull());
+            // An empty text reads as null: a message its author deleted (setMessageText), which
+            // the conversation leaves out.
             const auto messageContent = (*it++).toString();
             it = std::next(row.begin(), senderOffset);
             const auto senderKey = ToxPk{(*it++).toByteArray()};
@@ -922,6 +965,49 @@ bool History::historyAccessBlocked()
     }
 
     return false;
+}
+
+void History::setMessageText(const ChatId& chatId, const ToxPk& author, const QDateTime& time,
+                             const QString& current, const QString& text)
+{
+    if (historyAccessBlocked()) {
+        return;
+    }
+
+    QVector<QByteArray> boundParams;
+    boundParams += text.toUtf8();
+    QString queryString = QStringLiteral("UPDATE text_messages SET message = ? WHERE id = ("
+                                         "SELECT history.id FROM history "
+                                         "JOIN text_messages ON text_messages.id = history.id "
+                                         "JOIN aliases ON text_messages.sender_alias = aliases.id "
+                                         "WHERE history.chat_id = ");
+    addChatIdSubQuery(queryString, boundParams, chatId);
+    queryString += QStringLiteral(" AND aliases.owner = ");
+    addAuthorIdSubQuery(queryString, boundParams, author);
+    queryString += QStringLiteral(" AND history.timestamp = %1 AND text_messages.message = ? "
+                                  "ORDER BY history.id DESC LIMIT 1);")
+                       .arg(time.toMSecsSinceEpoch());
+    boundParams += current.toUtf8();
+    db->execLater(RawDatabase::Query(queryString, boundParams));
+}
+
+void History::eraseFileEntry(const ChatId& chatId, const QByteArray& fileId)
+{
+    if (historyAccessBlocked()) {
+        return;
+    }
+
+    erasedFiles.insert(fileId);
+    QVector<QByteArray> boundParams;
+    boundParams += QByteArray();
+    boundParams += QByteArray();
+    boundParams += fileId;
+    QString queryString = QStringLiteral("UPDATE file_transfers SET file_name = ?, file_path = ? "
+                                         "WHERE file_restart_id = ? AND id IN "
+                                         "(SELECT id FROM history WHERE chat_id = ");
+    addChatIdSubQuery(queryString, boundParams, chatId);
+    queryString += QStringLiteral(");");
+    db->execLater(RawDatabase::Query(queryString, boundParams));
 }
 
 void History::markAsBroken(RowId messageId, BrokenMessageReason reason)

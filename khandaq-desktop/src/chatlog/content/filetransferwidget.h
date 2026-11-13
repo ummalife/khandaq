@@ -1,5 +1,6 @@
 /*
     Copyright © 2014-2019 by The qTox Project Contributors
+    Copyright © 2026 by The Khandaq Project
 
     This file is part of qTox, a Qt-based graphical interface for Tox.
 
@@ -19,80 +20,116 @@
 
 #pragma once
 
-#include <QTime>
+#include <QElapsedTimer>
+#include <QFutureWatcher>
+#include <QImage>
+#include <QVector>
 #include <QWidget>
 
-#include "src/chatlog/chatlinecontent.h"
 #include "src/core/toxfile.h"
+#include "src/model/air/airconversation.h"
+#include "src/model/air/airmedia.h"
 
+class AirButton;
+class AirProgressBar;
+class AirVoiceNote;
 class CoreFile;
-
-namespace Ui {
-class FileTransferWidget;
-}
-
-class QVariantAnimation;
-class QPushButton;
+class IMessageBoxManager;
+class QHBoxLayout;
+class QLabel;
 class Settings;
 class Style;
-class IMessageBoxManager;
 
-class FileTransferWidget : public QWidget
+namespace FileEntryParts {
+class Name;
+class Preview;
+} // namespace FileEntryParts
+
+/**
+ * A file, a photo or a voice note as an entry of the transcript (E8): a photo shows inline in a box
+ * that has its size before the picture loads; a voice note is a player; any other file is its glyph,
+ * name and size. Under them, while the file is not here, the bar with what is left, one line of state
+ * in words and the actions as quiet buttons. The words and the actions follow Air::fileEntryState.
+ *
+ * The entry tells its height for a width (heightForWidth) and says when it changed, so the line of
+ * the transcript around it lays out again.
+ */
+class FileTransferWidget final : public QWidget
 {
     Q_OBJECT
 
 public:
-    FileTransferWidget(QWidget* parent, CoreFile& _coreFile, ToxFile file,
-        Settings& settings, Style& style, IMessageBoxManager& messageBoxManager);
-    virtual ~FileTransferWidget();
+    FileTransferWidget(QWidget* parent, CoreFile& _coreFile, ToxFile file, Settings& settings,
+                       Style& style, IMessageBoxManager& messageBoxManager);
+    ~FileTransferWidget() override;
     bool isActive() const;
     void onFileTransferUpdate(ToxFile file);
 
-protected:
-    void updateWidgetColor(ToxFile const& file);
-    void updateWidgetText(ToxFile const& file);
-    void updateFileProgress(ToxFile const& file);
-    void updateSignals(ToxFile const& file);
-    void updatePreview(ToxFile const& file);
-    void setupButtons(ToxFile const& file);
-    void handleButton(QPushButton* btn);
-    void showPreview(const QString& filename);
-    void acceptTransfer(const QString& filepath);
-    void setBackgroundColor(const QColor& c, bool whiteFont);
-    void setButtonColor(const QColor& c);
+    /**
+     * Where the entry stands: a group file travels whole and has nothing to answer; personName is
+     * the short name of the other person of a conversation, for "Waits for Yusuf to accept it".
+     */
+    void setConversation(bool group, const QString& personName, bool personOnline);
 
-    bool drawButtonAreaNeeded() const;
+    /** The mark of a file of ours, for the line around the entry. */
+    Air::EntryStatus status() const;
 
-    void paintEvent(QPaintEvent* event) final;
+    bool hasHeightForWidth() const override;
+    int heightForWidth(int width) const override;
+    QSize sizeHint() const override;
 
-public slots:
-    void reloadTheme();
-
-private slots:
-    void onLeftButtonClicked();
-    void onRightButtonClicked();
-    void onPreviewButtonClicked();
+signals:
+    /** The entry grew or shrank: a bar, a note or a preview came or went. */
+    void heightChanged();
 
 private:
-    static bool tryRemoveFile(const QString &filepath);
+    void restyle();
+    void retranslate();
+    /** Shows the state of the transfer in fileInfo; the parts that change size say so. */
+    void refresh();
+    void setActions(const QVector<Air::FileAction>& actions);
+    void act(Air::FileAction action);
+    void accept();
+    void sendAgain();
+    void open();
+    void showInFolder();
+    void loadPreview();
+    void onPreviewLoaded();
+    Air::FileFacts facts() const;
+    QString sizeText() const;
+    void tellHeight();
 
-    void updateWidget(ToxFile const& file);
-    void updateBackgroundColor(const ToxFile::FileStatus status);
-
-private:
     CoreFile& coreFile;
-    Ui::FileTransferWidget* ui;
     ToxFile fileInfo;
-    QVariantAnimation* backgroundColorAnimation = nullptr;
-    QVariantAnimation* buttonColorAnimation = nullptr;
-    QColor backgroundColor;
-    QColor buttonColor;
-    QColor buttonBackgroundColor;
-
-    bool active;
-    QTime lastTransmissionUpdate;
-    ToxFile::FileStatus lastStatus = ToxFile::INITIALIZING;
     Settings& settings;
     Style& style;
     IMessageBoxManager& messageBoxManager;
+
+    bool active = true;
+    bool group = false;
+    QString personName;
+    bool personOnline = true;
+    /** Send again was pressed once: the new transfer is an entry of its own. */
+    bool resent = false;
+    QElapsedTimer lastProgress;
+    int lastHeight = -1;
+
+    FileEntryParts::Preview* preview = nullptr;
+    AirVoiceNote* voice = nullptr;
+    QWidget* head = nullptr;
+    QLabel* icon = nullptr;
+    FileEntryParts::Name* name = nullptr;
+    QLabel* size = nullptr;
+    AirProgressBar* bar = nullptr;
+    QLabel* note = nullptr;
+    QWidget* actionsRow = nullptr;
+    QHBoxLayout* actionsLayout = nullptr;
+    QVector<Air::FileAction> shownActions;
+    QVector<AirButton*> actionButtons;
+
+    /** The photo shown, once its picture is read off the main thread. */
+    QString previewPath;
+    QFutureWatcher<QImage> previewLoad;
+    qint64 voiceLengthMs = -1;
+    QString voicePath;
 };

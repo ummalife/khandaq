@@ -30,6 +30,20 @@
 
 namespace {
 constexpr uint64_t testMaxExtendedMessageSize = 10 * 1024 * 1024;
+
+/**
+ * @brief Short waits for the tests of the receipt retries: a receipt is due after receiptTimeoutMs,
+ * and a message is sent at most twice more before it is reported as not sent.
+ */
+FriendMessageRetryPolicy fastRetryPolicy(int receiptTimeoutMs)
+{
+    FriendMessageRetryPolicy policy;
+    policy.receiptTimeoutMs = receiptTimeoutMs;
+    policy.maxRetries = 2;
+    policy.retryBaseMs = 5;
+    policy.retryMaxMs = 10;
+    return policy;
+}
 }
 
 class MockCoreExtPacket : public ICoreExtPacket
@@ -68,8 +82,8 @@ class MockCoreExtPacketAllocator : public ICoreExtPacketAllocator
 public:
     std::unique_ptr<ICoreExtPacket> getPacket(uint32_t friendId) override;
 
-    uint64_t numSentMessages;
-    uint64_t currentReceiptId;
+    uint64_t numSentMessages = 0;
+    uint64_t currentReceiptId = 0;
 };
 
 std::unique_ptr<ICoreExtPacket> MockCoreExtPacketAllocator::getPacket(uint32_t friendId)
@@ -133,6 +147,11 @@ private slots:
     void testOfflineExtensionMessages();
     void testSentMessageExtensionSetReduced();
     void testActionMessagesSplitWithExtensions();
+    void testReceiptTimeoutGivesUp();
+    void testReceiptAfterRetryCompletes();
+    void testReconnectKeepsOneRetryChain();
+    void testReceiptTimeoutWhileOffline();
+    void testCancelledMessagesAreNotSentAgain();
 
     void onMessageSent(DispatchedMessageId id, Message message)
     {
@@ -158,9 +177,12 @@ private slots:
     {
         std::ignore = reason;
         brokenMessages.insert(id);
+        ++numBrokenSignals;
     }
 
 private:
+    void recreateDispatcher(FriendMessageRetryPolicy retryPolicy);
+
     // All unique_ptrs to make construction/init() easier to manage
     std::unique_ptr<Friend> f;
     std::unique_ptr<MockFriendMessageSender> messageSender;
@@ -170,6 +192,7 @@ private:
     std::unique_ptr<FriendMessageDispatcher> friendMessageDispatcher;
     std::map<DispatchedMessageId, Message> outgoingMessages;
     std::set<DispatchedMessageId> brokenMessages;
+    size_t numBrokenSignals = 0;
     std::deque<Message> receivedMessages;
 };
 
@@ -189,8 +212,19 @@ void TestFriendMessageDispatcher::init()
         std::unique_ptr<MessageProcessor::SharedParams>(new MessageProcessor::SharedParams(tox_max_message_length(), testMaxExtendedMessageSize));
 
     messageProcessor = std::unique_ptr<MessageProcessor>(new MessageProcessor(*sharedProcessorParams));
+    recreateDispatcher(FriendMessageRetryPolicy());
+
+    outgoingMessages = std::map<DispatchedMessageId, Message>();
+    receivedMessages = std::deque<Message>();
+    brokenMessages = std::set<DispatchedMessageId>();
+    numBrokenSignals = 0;
+}
+
+void TestFriendMessageDispatcher::recreateDispatcher(FriendMessageRetryPolicy retryPolicy)
+{
     friendMessageDispatcher = std::unique_ptr<FriendMessageDispatcher>(
-        new FriendMessageDispatcher(*f, *messageProcessor, *messageSender, *coreExtPacketAllocator));
+        new FriendMessageDispatcher(*f, *messageProcessor, *messageSender, *coreExtPacketAllocator,
+                                    retryPolicy));
 
     connect(friendMessageDispatcher.get(), &FriendMessageDispatcher::messageSent, this,
             &TestFriendMessageDispatcher::onMessageSent);
@@ -200,10 +234,6 @@ void TestFriendMessageDispatcher::init()
             &TestFriendMessageDispatcher::onMessageReceived);
     connect(friendMessageDispatcher.get(), &FriendMessageDispatcher::messageBroken, this,
             &TestFriendMessageDispatcher::onMessageBroken);
-
-    outgoingMessages = std::map<DispatchedMessageId, Message>();
-    receivedMessages = std::deque<Message>();
-    brokenMessages = std::set<DispatchedMessageId>();
 }
 
 /**
@@ -324,6 +354,10 @@ void TestFriendMessageDispatcher::testNegotiationFailure()
     QVERIFY(messageSender->numSentMessages == 1);
 }
 
+/**
+ * @brief Since v0.2.6 outgoing messages take the Tox core path, also when the friend negotiated
+ * extended messages
+ */
 void TestFriendMessageDispatcher::testNegotiationSuccess()
 {
     f->setStatus(Status::Status::Offline);
@@ -333,14 +367,17 @@ void TestFriendMessageDispatcher::testNegotiationSuccess()
     f->onNegotiationComplete();
 
     friendMessageDispatcher->sendMessage(false, "test");
-
-    QVERIFY(coreExtPacketAllocator->numSentMessages == 1);
+    QVERIFY(messageSender->numSentMessages == 1);
 
     friendMessageDispatcher->sendMessage(false, "test");
-    QVERIFY(coreExtPacketAllocator->numSentMessages == 2);
-    QVERIFY(messageSender->numSentMessages == 0);
+    QVERIFY(messageSender->numSentMessages == 2);
+    QVERIFY(coreExtPacketAllocator->numSentMessages == 0);
 }
 
+/**
+ * @brief A message queued with required extensions goes over the core path once the friend is
+ * online, whether or not the friend supports the extensions; nothing is dropped
+ */
 void TestFriendMessageDispatcher::testOfflineExtensionMessages()
 {
     f->setStatus(Status::Status::Offline);
@@ -348,15 +385,17 @@ void TestFriendMessageDispatcher::testOfflineExtensionMessages()
     auto requiredExtensions = ExtensionSet();
     requiredExtensions[ExtensionType::messages] = true;
 
+    const auto firstReceipt = messageSender->receiptNum;
     friendMessageDispatcher->sendExtendedMessage("Test", requiredExtensions);
+    QVERIFY(messageSender->numSentMessages == 0);
 
     f->setStatus(Status::Status::Online);
     f->setExtendedMessageSupport(true);
     f->onNegotiationComplete();
 
-    // Ensure that when our friend came online with the desired extensions we
-    // were able to send them our message over the extended message path
-    QVERIFY(coreExtPacketAllocator->numSentMessages == 1);
+    QVERIFY(messageSender->numSentMessages == 1);
+    friendMessageDispatcher->onReceiptReceived(firstReceipt);
+    QVERIFY(outgoingMessages.empty());
 
     f->setStatus(Status::Status::Offline);
 
@@ -366,13 +405,15 @@ void TestFriendMessageDispatcher::testOfflineExtensionMessages()
     f->setExtendedMessageSupport(false);
     f->onNegotiationComplete();
 
-    // Here we want to make sure that when they do _not_ support extensions
-    // we discard the message instead of attempting to send it over either
-    // channel
-    QVERIFY(coreExtPacketAllocator->numSentMessages == 1);
-    QVERIFY(messageSender->numSentMessages == 0);
+    QVERIFY(messageSender->numSentMessages == 2);
+    QVERIFY(coreExtPacketAllocator->numSentMessages == 0);
+    QVERIFY(brokenMessages.empty());
 }
 
+/**
+ * @brief A sent message still waiting for its receipt is sent again after a reconnect, whatever
+ * extensions the friend supports then, and is not reported as broken
+ */
 void TestFriendMessageDispatcher::testSentMessageExtensionSetReduced()
 {
     f->setStatus(Status::Status::Online);
@@ -380,15 +421,16 @@ void TestFriendMessageDispatcher::testSentMessageExtensionSetReduced()
     f->onNegotiationComplete();
 
     friendMessageDispatcher->sendMessage(false, "Test");
+    QVERIFY(messageSender->numSentMessages == 1);
 
     f->setStatus(Status::Status::Offline);
     f->setStatus(Status::Status::Online);
     f->setExtendedMessageSupport(false);
     f->onNegotiationComplete();
 
-    // Ensure that when we reduce our extension set we correctly emit the
-    // "messageBroken" signal
-    QVERIFY(brokenMessages.size() == 1);
+    QVERIFY(messageSender->numSentMessages == 2);
+    QVERIFY(outgoingMessages.size() == 1);
+    QVERIFY(brokenMessages.empty());
 }
 
 void TestFriendMessageDispatcher::testActionMessagesSplitWithExtensions()
@@ -408,6 +450,126 @@ void TestFriendMessageDispatcher::testActionMessagesSplitWithExtensions()
     QVERIFY(coreExtPacketAllocator->numSentMessages == 0);
     QVERIFY(messageSender->numSentMessages == 0);
     QVERIFY(messageSender->numSentActions > 1);
+}
+
+/**
+ * @brief A message without a receipt is sent again only as many times as the policy allows, then it
+ * is reported as not sent, once, and leaves the queue: a reconnect does not send it again
+ */
+void TestFriendMessageDispatcher::testReceiptTimeoutGivesUp()
+{
+    recreateDispatcher(fastRetryPolicy(30));
+
+    const auto sentIds = friendMessageDispatcher->sendMessage(false, "test");
+    QCOMPARE(messageSender->numSentMessages, size_t(1));
+
+    QTRY_COMPARE_WITH_TIMEOUT(messageSender->numSentMessages, size_t(3), 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(brokenMessages.count(sentIds.first), size_t(1), 5000);
+
+    QTest::qWait(200);
+    QCOMPARE(messageSender->numSentMessages, size_t(3));
+    QCOMPARE(numBrokenSignals, size_t(1));
+
+    f->setStatus(Status::Status::Offline);
+    f->setStatus(Status::Status::Online);
+    f->onNegotiationComplete();
+
+    QCOMPARE(messageSender->numSentMessages, size_t(3));
+    QCOMPARE(numBrokenSignals, size_t(1));
+}
+
+/**
+ * @brief The receipt of a resent message completes it, and nothing is sent after that
+ */
+void TestFriendMessageDispatcher::testReceiptAfterRetryCompletes()
+{
+    recreateDispatcher(fastRetryPolicy(250));
+
+    const auto firstReceipt = messageSender->receiptNum;
+    friendMessageDispatcher->sendMessage(false, "test");
+
+    QTRY_COMPARE_WITH_TIMEOUT(messageSender->numSentMessages, size_t(2), 5000);
+    friendMessageDispatcher->onReceiptReceived(ReceiptNum{firstReceipt.get() + 1});
+    QVERIFY(outgoingMessages.empty());
+
+    QTest::qWait(600);
+    QCOMPARE(messageSender->numSentMessages, size_t(2));
+    QVERIFY(brokenMessages.empty());
+}
+
+/**
+ * @brief The wait of a send that a reconnect replaced does not start a second chain of resends:
+ * the message goes out once per retry and is reported as not sent once
+ */
+void TestFriendMessageDispatcher::testReconnectKeepsOneRetryChain()
+{
+    recreateDispatcher(fastRetryPolicy(30));
+
+    const auto sentIds = friendMessageDispatcher->sendMessage(false, "test");
+    f->setStatus(Status::Status::Offline);
+    f->setStatus(Status::Status::Online);
+    f->onNegotiationComplete();
+    QCOMPARE(messageSender->numSentMessages, size_t(2));
+
+    // The send, the resend after the reconnect and two retries
+    QTRY_COMPARE_WITH_TIMEOUT(brokenMessages.count(sentIds.first), size_t(1), 5000);
+    QTest::qWait(200);
+    QCOMPARE(messageSender->numSentMessages, size_t(4));
+    QCOMPARE(numBrokenSignals, size_t(1));
+}
+
+/**
+ * @brief A receipt that is due while the friend is offline neither resends nor fails the message;
+ * the reconnect sends it
+ */
+void TestFriendMessageDispatcher::testReceiptTimeoutWhileOffline()
+{
+    recreateDispatcher(fastRetryPolicy(30));
+
+    friendMessageDispatcher->sendMessage(false, "test");
+    f->setStatus(Status::Status::Offline);
+
+    QTest::qWait(200);
+    QCOMPARE(messageSender->numSentMessages, size_t(1));
+    QVERIFY(brokenMessages.empty());
+
+    f->setStatus(Status::Status::Online);
+    f->onNegotiationComplete();
+    QCOMPARE(messageSender->numSentMessages, size_t(2));
+    QCOMPARE(outgoingMessages.size(), size_t(1));
+}
+
+/**
+ * @brief Tests that a message taken back while the friend is offline is not sent when they come
+ * online, whether it never left or was sent and still waited for its receipt, and that neither
+ * completion nor failure is reported for it
+ */
+void TestFriendMessageDispatcher::testCancelledMessagesAreNotSentAgain()
+{
+    const auto sentBefore = friendMessageDispatcher->sendMessage(false, "sent before").first;
+    QCOMPARE(messageSender->numSentMessages, size_t(1));
+
+    f->setStatus(Status::Status::Offline);
+    const auto waiting = friendMessageDispatcher->sendMessage(false, "waiting").first;
+    const auto kept = friendMessageDispatcher->sendMessage(false, "kept").first;
+
+    QVERIFY(friendMessageDispatcher->cancelMessage(sentBefore));
+    QVERIFY(friendMessageDispatcher->cancelMessage(waiting));
+
+    f->setStatus(Status::Status::Online);
+    f->onNegotiationComplete();
+
+    // Only "kept" goes out again.
+    QCOMPARE(messageSender->numSentMessages, size_t(2));
+
+    for (auto i = ReceiptNum(0); i < messageSender->receiptNum; ++i.get()) {
+        friendMessageDispatcher->onReceiptReceived(i);
+    }
+
+    QVERIFY(outgoingMessages.find(kept) == outgoingMessages.end());
+    QVERIFY(outgoingMessages.find(sentBefore) != outgoingMessages.end());
+    QVERIFY(outgoingMessages.find(waiting) != outgoingMessages.end());
+    QCOMPARE(numBrokenSignals, size_t(0));
 }
 
 QTEST_GUILESS_MAIN(TestFriendMessageDispatcher)

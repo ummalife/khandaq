@@ -21,6 +21,7 @@
 
 #include "ichatlog.h"
 #include "sessionchatlog.h"
+#include "src/model/air/airmessagemarks.h"
 #include "src/model/brokenmessagereason.h"
 #include "src/persistence/history.h"
 
@@ -34,9 +35,26 @@ class ChatHistory : public IChatLog
 {
     Q_OBJECT
 public:
+    /** One of our messages that has not reached the person yet. */
+    struct QueuedMessage
+    {
+        qint64 outboxId = -1;
+        /** The text, without the action prefix. */
+        QString text;
+        bool isAction = false;
+        QDateTime timestamp;
+        /** The delivery gave up on it: it waits for "Retry" instead of the person. */
+        bool failed = false;
+    };
+
+    /**
+     * @param entryStore_ Keeps the edits and reactions shown on entries and the ids a group gave
+     * its messages between launches (stage 3, item 10); without it they last until the app quits.
+     */
     ChatHistory(Chat& chat_, History* history_, const ICoreIdHandler& coreIdHandler_,
                 const Settings& settings_, IMessageDispatcher& messageDispatcher,
-                FriendList& friendList, GroupList& groupList);
+                FriendList& friendList, GroupList& groupList,
+                Air::EntryMarksStore* entryStore_ = nullptr);
     const ChatLogItem& at(ChatLogIdx idx) const override;
     SearchResult searchForward(SearchPos startIdx, const QString& phrase,
                                const ParameterSearch& parameter) const override;
@@ -46,6 +64,24 @@ public:
     ChatLogIdx getNextIdx() const override;
     std::vector<DateChatLogIdxPair> getDateIdxs(const QDate& startDate, size_t maxDates) const override;
     void addSystemMessage(const SystemMessage& message) override;
+    bool isShown(ChatLogIdx idx) const override;
+    bool isCancelled(ChatLogIdx idx) const override;
+
+    /** The messages to one person that have not reached them, oldest first; none for a group. */
+    QVector<QueuedMessage> queuedMessages() const;
+    /** Takes a waiting or failed message back: it is not sent again and leaves the conversation. */
+    void cancelQueuedMessage(qint64 outboxId);
+
+    /**
+     * Applies an edit, a deletion or a reaction of sender (SessionChatLog::applyEffect) and keeps
+     * it: the new words or the erased message in the history, the marks in the entry store.
+     */
+    SessionChatLog::EffectResult applyEffect(const ToxPk& sender, const Air::MessageEffect& effect,
+                                             const ToxPk& selfKey);
+
+signals:
+    /** A message joined the queue, left it, or failed. */
+    void queueChanged();
 
 public slots:
     void onFileUpdated(const ToxPk& sender, const ToxFile& file);
@@ -68,6 +104,28 @@ private:
     void breakMessage(DispatchedMessageId id, BrokenMessageReason reason);
     bool canUseHistory() const;
     ChatLogIdx getInitialChatLogIdx() const;
+    /** The key of this conversation, under which its entries keep their marks. */
+    QString chatKey() const;
+    /** Keeps the id a group gave a message of ours or of a member, when the history keeps it. */
+    void keepWireId(const ToxPk& author, const Message& message);
+
+    struct QueueEntry
+    {
+        QueuedMessage message;
+        /** False for a failed message: the dispatcher no longer holds it. */
+        bool dispatched = false;
+        DispatchedMessageId dispatchId{0};
+        /** The same message in the history, or -1. */
+        RowId historyId{-1};
+        /** Whether the message has an index in this log yet, and which. */
+        bool hasIdx = false;
+        size_t idx = 0;
+    };
+
+    void dispatchQueue(IMessageDispatcher& messageDispatcher);
+    void queueSentMessage(DispatchedMessageId id, const Message& message);
+    int queueIndexOf(DispatchedMessageId id) const;
+    void noteLoadedQueueRow(RowId historyId, ChatLogIdx idx) const;
 
     Chat& chat;
     History* history;
@@ -85,4 +143,16 @@ private:
     // If a message is inserted into history before it gets a completion
     // callback it will end up in this map
     QMap<DispatchedMessageId, RowId> dispatchedMessageRowIdMap;
+
+    IMessageDispatcher& dispatcher;
+    // The outgoing queue of a friend chat; null for a group, or without a database. A chat with a
+    // queue keeps its history rows in step through it, instead of the maps above.
+    Outbox* outbox = nullptr;
+    // Indexes of queued messages are only known once the history row is loaded, hence mutable.
+    mutable QVector<QueueEntry> queue;
+    // Queued messages whose history rows are not loaded yet, by row: the dispatch id to show them with
+    QMap<RowId, DispatchedMessageId> queuedHistoryRows;
+    QSet<int64_t> cancelledHistoryRows;
+    mutable QSet<size_t> cancelledIdx;
+    Air::EntryMarksStore* entryStore = nullptr;
 };

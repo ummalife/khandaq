@@ -40,16 +40,21 @@ class OfflineMsgEngine : public QObject
 public:
     using CompletionFn = std::function<void(bool)>;
     OfflineMsgEngine() = default;
-    void addUnsentMessage(Message const& message, CompletionFn completionCallback);
-    void addSentCoreMessage(ReceiptNum receipt, Message const& message, CompletionFn completionCallback);
-    void addSentExtendedMessage(ExtendedReceiptNum receipt, Message const& message, CompletionFn completionCallback);
-    void abandonCoreMessage(ReceiptNum receipt);
-    void abandonExtendedMessage(ExtendedReceiptNum receipt);
+    /** A tag of 0 marks no message in particular; removeMessage() finds the others by their tag. */
+    void addUnsentMessage(Message const& message, CompletionFn completionCallback, uint64_t tag = 0);
+    void addSentCoreMessage(ReceiptNum receipt, Message const& message,
+                            CompletionFn completionCallback, uint64_t tag = 0);
+    void addSentExtendedMessage(ExtendedReceiptNum receipt, Message const& message,
+                                CompletionFn completionCallback, uint64_t tag = 0);
+    bool abandonCoreMessage(ReceiptNum receipt);
+    bool abandonExtendedMessage(ExtendedReceiptNum receipt);
+    bool removeMessage(uint64_t tag);
 
     struct RemovedMessage
     {
         Message message;
         CompletionFn callback;
+        uint64_t tag;
     };
     std::vector<RemovedMessage> removeAllMessages();
 
@@ -63,6 +68,7 @@ private:
         Message message;
         std::chrono::time_point<std::chrono::steady_clock> authorshipTime;
         CompletionFn completionFn;
+        uint64_t tag;
     };
 
     CompatibleRecursiveMutex mutex;
@@ -95,6 +101,20 @@ private:
             }
 
             receivedReceipts.push_back(receipt);
+        }
+
+        bool removeTagged(uint64_t tag)
+        {
+            bool removed = false;
+            for (auto it = unAckedMessages.begin(); it != unAckedMessages.end();) {
+                if (it->second.tag == tag) {
+                    it = unAckedMessages.erase(it);
+                    removed = true;
+                } else {
+                    ++it;
+                }
+            }
+            return removed;
         }
 
         std::vector<OfflineMessage> clear()

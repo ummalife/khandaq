@@ -24,21 +24,21 @@
 #include "content/image.h"
 #include "content/notificationicon.h"
 #include "content/spinner.h"
+#include "content/airlabel.h"
 #include "content/text.h"
-#include "content/timestamp.h"
-#include "content/broken.h"
+#include "src/model/air/airmodel.h"
+#include "src/widget/air/airstrings.h"
+#include "src/widget/air/airstyle.h"
 #include "src/widget/style.h"
-#include "src/widget/tool/identicon.h"
 
 #include <QDebug>
-#include <QCryptographicHash>
+#include <QLocale>
 
 #include "src/persistence/settings.h"
 #include "src/persistence/smileypack.h"
 #include "src/persistence/history.h"
 
 #define NAME_COL_WIDTH 90.0
-#define TIME_COL_WIDTH 90.0
 
 
 ChatMessage::ChatMessage(DocumentCache& documentCache_, Settings& settings_,
@@ -51,16 +51,48 @@ ChatMessage::ChatMessage(DocumentCache& documentCache_, Settings& settings_,
 
 ChatMessage::~ChatMessage() = default;
 
-ChatMessage::Ptr ChatMessage::createChatMessage(const QString& sender, const QString& rawMessage,
-                                                MessageType type, bool isMe, MessageState state,
-                                                const QDateTime& date, DocumentCache& documentCache,
-                                                SmileyPack& smileyPack, Settings& settings,
-                                                Style& style, bool colorizeName)
+namespace {
+/** The time of an entry: hours and minutes, no seconds, in the Latin digits of the type. */
+QString entryTime(const QDateTime& date)
 {
-    ChatMessage::Ptr msg = ChatMessage::Ptr(new ChatMessage(documentCache, settings, style));
+    return date.isValid() ? QLocale::c().toString(date.toLocalTime().time(), QStringLiteral("H:mm"))
+                          : QString();
+}
 
-    QString text = rawMessage.toHtmlEscaped();
-    QString senderText = sender;
+/** The author label and the time of an entry: contents 0 and 2. */
+AirLabel* authorLabel(const ChatMessage::AirLook& look)
+{
+    return new AirLabel(look.who, AirTokens::TextRole::Label,
+                        look.tone < 0 ? AirLabel::Ink::Ink2 : AirLabel::Ink::Tone, QFont::DemiBold,
+                        true, look.tone);
+}
+
+AirLabel* timeLabel(const QDateTime& date)
+{
+    return new AirLabel(entryTime(date), AirTokens::TextRole::Caption, AirLabel::Ink::Ink3, -1, true);
+}
+
+/** Where the reactions under an entry take their pictures: where the messages take theirs. */
+const SmileyPack* reactionPictures(const SmileyPack& smileyPack, const Settings& settings)
+{
+    return settings.getUseEmoticons() ? &smileyPack : nullptr;
+}
+} // namespace
+
+QFont ChatMessage::bodyFont(Settings& settings)
+{
+    const QFont chosen = settings.getChatMessageFont();
+    if (chosen == Style::getFont(Style::Font::Big)) {
+        return AirStyle::instance().font(AirTokens::TextRole::Body);
+    }
+    return chosen;
+}
+
+Text* ChatMessage::createBody(const QString& words, const QString& sender, MessageType type,
+                              DocumentCache& documentCache, SmileyPack& smileyPack,
+                              Settings& settings, Style& style)
+{
+    QString text = words.toHtmlEscaped();
 
     // Avoid UI freeze on pathological markdown from untrusted contacts (#11).
     const int kMaxMarkdownChars = 16000;
@@ -83,16 +115,13 @@ ChatMessage::Ptr ChatMessage::createChatMessage(const QString& sender, const QSt
         text = TextFormatter::applyMarkdown(text, styleType == Settings::StyleType::WITH_CHARS);
     }
 
-
     switch (type) {
     case NORMAL:
         text = wrapDiv(text, "msg");
         break;
     case ACTION:
         textType = Text::ACTION;
-        senderText = "*";
         text = wrapDiv(QString("%1 %2").arg(sender.toHtmlEscaped(), text), "action");
-        msg->setAsAction();
         break;
     case ALERT:
         text = wrapDiv(text, "alert");
@@ -100,107 +129,134 @@ ChatMessage::Ptr ChatMessage::createChatMessage(const QString& sender, const QSt
     }
 
     // Note: Eliding cannot be enabled for RichText items. (QTBUG-17207)
-    QFont baseFont = settings.getChatMessageFont();
-    QFont authorFont = baseFont;
-    if (isMe)
-        authorFont.setBold(true);
+    // A copy takes the words the entry shows, never the markup of a reply.
+    auto* const body =
+        new Text(documentCache, settings, style, text, bodyFont(settings), false,
+                 type == ACTION ? QString("%1 %2").arg(sender, words) : words, textType);
+    body->setDocumentMargin(0);
+    body->setStartAligned(true);
+    return body;
+}
 
-    QColor color = style.getColor(Style::ColorPalette::MainText);
-    if (colorizeName) {
-        QByteArray hash = QCryptographicHash::hash((sender.toUtf8()), QCryptographicHash::Sha256);
-        auto lightness = color.lightnessF();
-        // Adapt as good as possible to Light/Dark themes
-        lightness = lightness*0.5 + 0.3;
-
-        // Magic values
-        color.setHslF(Identicon::bytesToColor(hash.left(Identicon::IDENTICON_COLOR_BYTES)), 1.0, lightness);
-
-        if (!isMe && textType == Text::NORMAL) {
-                textType = Text::CUSTOM;
-        }
+ChatMessage::Ptr ChatMessage::createChatMessage(const AirLook& look, const QString& sender,
+                                                const QString& rawMessage, MessageType type,
+                                                const QDateTime& date, const Air::EntryMarks& marks,
+                                                DocumentCache& documentCache, SmileyPack& smileyPack,
+                                                Settings& settings, Style& style)
+{
+    ChatMessage::Ptr msg = ChatMessage::Ptr(new ChatMessage(documentCache, settings, style));
+    msg->spokenWho = look.spokenWho;
+    msg->mentionsYou = type == ALERT;
+    msg->rawText = rawMessage;
+    msg->senderName = sender;
+    msg->messageType = type;
+    if (type == ACTION) {
+        msg->setAsAction();
     }
 
-    msg->addColumn(new Text(documentCache, settings, style, color, senderText, authorFont, true, sender, textType),
-                   ColumnFormat(NAME_COL_WIDTH, ColumnFormat::FixedSize, ColumnFormat::Right));
-    msg->addColumn(new Text(documentCache, settings, style, text, baseFont, false, ((type == ACTION) && isMe)
-                                                       ? QString("%1 %2").arg(sender, rawMessage)
-                                                       : rawMessage),
-                   ColumnFormat(1.0, ColumnFormat::VariableSize));
-
-    switch (state) {
-        case MessageState::complete:
-            msg->addColumn(new Timestamp(date, settings.getTimestampFormat(),
-                        baseFont, documentCache, settings, style),
-                        ColumnFormat(TIME_COL_WIDTH, ColumnFormat::FixedSize, ColumnFormat::Right));
-            break;
-        case MessageState::pending:
-            msg->addColumn(new Spinner(style.getImagePath("chatArea/spinner.svg", settings), QSize(16, 16), 360.0 / 1.6),
-                        ColumnFormat(TIME_COL_WIDTH, ColumnFormat::FixedSize, ColumnFormat::Right));
-            break;
-        case MessageState::broken:
-            msg->addColumn(new Broken(style.getImagePath("chatArea/error.svg", settings), QSize(16, 16)),
-                        ColumnFormat(TIME_COL_WIDTH, ColumnFormat::FixedSize, ColumnFormat::Right));
-            break;
+    const Air::MessageText read = Air::readMessageText(rawMessage);
+    msg->setLayout(Layout::AirEntry);
+    msg->addColumn(authorLabel(look), ColumnFormat());
+    msg->addColumn(createBody(AirStrings::messageWords(rawMessage), sender, type, documentCache,
+                              smileyPack, settings, style),
+                   ColumnFormat());
+    msg->addColumn(timeLabel(date), ColumnFormat());
+    if (look.hasMark) {
+        msg->addColumn(new AirMark(look.status), ColumnFormat());
     }
+    // Every message keeps a place for a quote and notes: an edit or a reaction may come later.
+    const int quote = msg->getColumnCount();
+    msg->addColumn(new AirQuote(read.replyName, read.reply ? read.replyPreview : QString()),
+                   ColumnFormat());
+    msg->addColumn(new AirEntryNotes(marks, reactionPictures(smileyPack, settings)), ColumnFormat());
+    msg->setEntryParts(quote, quote + 1);
     return msg;
 }
 
+/**
+ * @brief A line of the log that nobody wrote: a call that ended, a new name. Its words stand where
+ * the text of the entries stands, in ink-2, without an author.
+ */
 ChatMessage::Ptr ChatMessage::createChatInfoMessage(const QString& rawMessage,
                                                     SystemMessageType type, const QDateTime& date,
                                                     DocumentCache& documentCache, Settings& settings,
                                                     Style& style)
 {
+    std::ignore = type;
     ChatMessage::Ptr msg = ChatMessage::Ptr(new ChatMessage(documentCache, settings, style));
-    QString text = rawMessage.toHtmlEscaped();
+    const QString text = rawMessage.toHtmlEscaped();
 
-    QString img;
-    switch (type) {
-    case INFO:
-        img = style.getImagePath("chatArea/info.svg", settings);
-        break;
-    case ERROR:
-        img = style.getImagePath("chatArea/error.svg", settings);
-        break;
-    case TYPING:
-        img = style.getImagePath("chatArea/typing.svg", settings);
-        break;
-    }
-
-    QFont baseFont = settings.getChatMessageFont();
-
-    msg->addColumn(new Image(QSize(18, 18), img),
-                   ColumnFormat(NAME_COL_WIDTH, ColumnFormat::FixedSize, ColumnFormat::Right));
-    msg->addColumn(new Text(documentCache, settings, style, "<b>" + text + "</b>", baseFont, false, text),
-                   ColumnFormat(1.0, ColumnFormat::VariableSize, ColumnFormat::Left));
-    msg->addColumn(new Timestamp(date, settings.getTimestampFormat(),
-                    baseFont, documentCache, settings, style),
-                   ColumnFormat(TIME_COL_WIDTH, ColumnFormat::FixedSize, ColumnFormat::Right));
-
+    msg->setLayout(Layout::AirEntry);
+    msg->addColumn(new AirLabel(QString(), AirTokens::TextRole::Label, AirLabel::Ink::Ink2, -1, false),
+                   ColumnFormat());
+    auto* const words =
+        new Text(documentCache, settings, style, text,
+                 AirStyle::instance().font(AirTokens::TextRole::Caption), false, rawMessage);
+    words->setDocumentMargin(0);
+    words->setStartAligned(true);
+    msg->addColumn(words, ColumnFormat());
+    msg->addColumn(timeLabel(date), ColumnFormat());
+    msg->setAuthorShown(false);
     return msg;
 }
 
 ChatMessage::Ptr ChatMessage::createFileTransferMessage(
-    const QString& sender, CoreFile& coreFile, ToxFile file, bool isMe,
-    const QDateTime& date, DocumentCache& documentCache, Settings& settings,
-    Style& style, IMessageBoxManager& messageBoxManager)
+    const AirLook& look, CoreFile& coreFile, ToxFile file, const QDateTime& date,
+    const Air::EntryMarks& marks, DocumentCache& documentCache, SmileyPack& smileyPack,
+    Settings& settings, Style& style, IMessageBoxManager& messageBoxManager)
 {
     ChatMessage::Ptr msg = ChatMessage::Ptr(new ChatMessage(documentCache, settings, style));
+    msg->spokenWho = look.spokenWho;
 
-    QFont baseFont = settings.getChatMessageFont();
-    QFont authorFont = baseFont;
-    if (isMe) {
-        authorFont.setBold(true);
-    }
-
-    msg->addColumn(new Text(documentCache, settings, style, sender, authorFont, true),
-                   ColumnFormat(NAME_COL_WIDTH, ColumnFormat::FixedSize, ColumnFormat::Right));
+    msg->setLayout(Layout::AirEntry);
+    msg->addColumn(authorLabel(look), ColumnFormat());
     msg->addColumn(new ChatLineContentProxy(new FileTransferWidget(
                    nullptr, coreFile, file, settings, style, messageBoxManager), 320, 0.6f),
                    ColumnFormat(1.0, ColumnFormat::VariableSize));
-    msg->addColumn(new Timestamp(date, settings.getTimestampFormat(), baseFont,
-                    documentCache, settings, style),
-                   ColumnFormat(TIME_COL_WIDTH, ColumnFormat::FixedSize, ColumnFormat::Right));
+    msg->addColumn(timeLabel(date), ColumnFormat());
+    // A file of ours to a person takes the mark a message takes, at the far end of the text.
+    if (look.hasMark) {
+        msg->addColumn(new AirMark(look.status), ColumnFormat());
+    }
+    // A file is not edited, but people react to it.
+    Air::EntryMarks reactions = marks;
+    reactions.edited = false;
+    const int notes = msg->getColumnCount();
+    msg->addColumn(new AirEntryNotes(reactions, reactionPictures(smileyPack, settings)),
+                   ColumnFormat());
+    msg->setEntryParts(-1, notes);
 
+    return msg;
+}
+
+ChatMessage::Ptr ChatMessage::createCallEntry(const QString& words, bool answered,
+                                              const QDateTime& date, DocumentCache& documentCache,
+                                              Settings& settings, Style& style)
+{
+    ChatMessage::Ptr msg = ChatMessage::Ptr(new ChatMessage(documentCache, settings, style));
+    msg->setLayout(Layout::AirEntry);
+    msg->addColumn(new AirLabel(QString(), AirTokens::TextRole::Label, AirLabel::Ink::Ink2, -1, false),
+                   ColumnFormat());
+    msg->addColumn(new AirCallLine(words, answered), ColumnFormat());
+    msg->addColumn(timeLabel(date), ColumnFormat());
+    msg->setAuthorShown(false);
+    return msg;
+}
+
+ChatMessage::Ptr ChatMessage::createDayMark(const QString& text, DocumentCache& documentCache,
+                                            Settings& settings, Style& style)
+{
+    ChatMessage::Ptr msg = ChatMessage::Ptr(new ChatMessage(documentCache, settings, style));
+    msg->setLayout(Layout::AirDay);
+    // Three contents, as every line of the log has: a copied selection skips a line whose
+    // content 1 says nothing.
+    msg->addColumn(new AirLabel(text, AirTokens::TextRole::Caption, AirLabel::Ink::Ink3,
+                                QFont::Medium, false),
+                   ColumnFormat());
+    msg->addColumn(new AirLabel(QString(), AirTokens::TextRole::Caption, AirLabel::Ink::Ink3, -1, false),
+                   ColumnFormat());
+    msg->addColumn(new AirLabel(QString(), AirTokens::TextRole::Caption, AirLabel::Ink::Ink3, -1, false),
+                   ColumnFormat());
     return msg;
 }
 
@@ -248,17 +304,60 @@ ChatMessage::Ptr ChatMessage::createBusyNotification(DocumentCache& documentCach
     return msg;
 }
 
-void ChatMessage::markAsDelivered(const QDateTime& time)
+void ChatMessage::setStatus(Air::EntryStatus status)
 {
-    QFont baseFont = settings.getChatMessageFont();
-
-    const QString stamp = time.toString(settings.getTimestampFormat()) + QString::fromUtf8("  ✓✓");
-    replaceContent(2, new Text(documentCache, settings, style, stamp, baseFont, false, stamp));
+    auto* mark = qobject_cast<AirMark*>(getContent(3));
+    if (mark) {
+        mark->setStatus(status);
+    }
 }
 
-void ChatMessage::markAsBroken()
+bool ChatMessage::updateMessage(const QString& rawMessage, const Air::EntryMarks& marks,
+                                SmileyPack& smileyPack)
 {
-    replaceContent(2, new Broken(style.getImagePath("chatArea/error.svg", settings), QSize(16, 16)));
+    bool resized = updateMarks(marks);
+    if (rawMessage == rawText || getLayout() != Layout::AirEntry) {
+        return resized;
+    }
+    // Its author changed the words: the text is drawn again, and so is the quote it opens with.
+    rawText = rawMessage;
+    replaceContent(1, createBody(AirStrings::messageWords(rawMessage), senderName, messageType,
+                                 documentCache, smileyPack, settings, style));
+    if (auto* const quote = qobject_cast<AirQuote*>(quotePart())) {
+        const Air::MessageText read = Air::readMessageText(rawMessage);
+        quote->setQuote(read.replyName, read.reply ? read.replyPreview : QString());
+    }
+    return true;
+}
+
+bool ChatMessage::updateMarks(const Air::EntryMarks& marks)
+{
+    auto* const notes = qobject_cast<AirEntryNotes*>(notesPart());
+    return notes && notes->setNotes(marks);
+}
+
+QString ChatMessage::spokenText() const
+{
+    const auto spoken = [this](int column) {
+        const ChatLineContent* const part = getContent(column);
+        return part ? part->getSpokenText() : QString();
+    };
+    const auto spokenPart = [](const ChatLineContent* part) {
+        return part ? part->getSpokenText() : QString();
+    };
+    switch (getLayout()) {
+    case Layout::AirDay:
+        return spoken(0);
+    case Layout::AirEntry: {
+        const auto* const mark = qobject_cast<const AirMark*>(getContent(3));
+        return AirStrings::spokenEntry(spokenWho, spoken(2), spoken(1),
+                                       mark ? mark->getStatus() : Air::EntryStatus::None,
+                                       mentionsYou, spokenPart(quotePart()), spokenPart(notesPart()));
+    }
+    case Layout::Columns:
+        break;
+    }
+    return ChatLine::spokenText();
 }
 
 QString ChatMessage::toString() const

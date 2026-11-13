@@ -453,6 +453,7 @@ void FriendListWidget::cycleChats(GenericChatroomWidget* activeChatroomWidget, b
     if (!activeChatroomWidget) {
         return;
     }
+    sortIfPending();
 
     int index = -1;
     FriendWidget* friendWidget = qobject_cast<FriendWidget*>(activeChatroomWidget);
@@ -569,7 +570,23 @@ void FriendListWidget::dayTimeout()
 
 void FriendListWidget::itemsChanged()
 {
-    sortByMode();
+    // KHANDAQ (redesign stage 5): the changes of one pass of the event loop share one sort.
+    // Opening a profile names its contacts one by one, and a sort after each name laid the whole
+    // list out again: with 300 contacts that was most of the start. What reads the layout sorts
+    // first when a sort is still to come.
+    if (sortPending) {
+        return;
+    }
+    sortPending = true;
+    QTimer::singleShot(0, this, &FriendListWidget::sortIfPending);
+}
+
+void FriendListWidget::sortIfPending()
+{
+    if (sortPending) {
+        sortPending = false;
+        sortByMode();
+    }
 }
 
 void FriendListWidget::moveWidget(FriendWidget* widget, Status::Status s, bool add)
@@ -591,6 +608,7 @@ void FriendListWidget::moveWidget(FriendWidget* widget, Status::Status s, bool a
 
         circleWidget->addFriendWidget(widget, s);
     } else {
+        sortIfPending();
         const Friend* contact = widget->getFriend();
         auto* categoryWidget = getTimeCategoryWidget(contact);
         categoryWidget->addFriendWidget(widget, contact->getStatus());
@@ -604,6 +622,7 @@ void FriendListWidget::updateActivityTime(const QDateTime& time)
     if (mode != SortingMode::Activity)
         return;
 
+    sortIfPending();
     int timeIndex = static_cast<int>(getTimeBucket(time));
     QWidget* widget = activityLayout->itemAt(timeIndex)->widget();
     CategoryWidget* categoryWidget = static_cast<CategoryWidget*>(widget);

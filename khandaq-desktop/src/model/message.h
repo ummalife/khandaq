@@ -22,6 +22,7 @@
 #include "src/core/coreext.h"
 #include "src/core/extension.h"
 
+#include <QByteArray>
 #include <QDateTime>
 #include <QRegularExpression>
 #include <QString>
@@ -56,6 +57,11 @@ struct Message
     QDateTime timestamp;
     ExtensionSet extensionSet;
     std::vector<MessageMetadata> metadata;
+    /**
+     * The id toxcore gave a group message, 4 bytes big-endian, which the edits, deletions and
+     * reactions of the group point at (stage 3, item 10); empty for any other message. Not stored.
+     */
+    QByteArray wireId;
 };
 
 

@@ -27,6 +27,7 @@
 #include <QString>
 
 #include <cstdint>
+#include <tuple>
 
 using DispatchedMessageId = NamedType<size_t, struct SentMessageIdTag, Orderable, Incrementable>;
 Q_DECLARE_METATYPE(DispatchedMessageId)
@@ -56,6 +57,18 @@ public:
      */
     virtual std::pair<DispatchedMessageId, DispatchedMessageId>
     sendExtendedMessage(const QString& content, ExtensionSet extensions) = 0;
+
+    /**
+     * @brief Takes back a message that has not been delivered yet: it is not sent again, and
+     * neither messageComplete nor messageBroken is emitted for it.
+     * @param[in] id Id of a message this dispatcher sent
+     * @return False if this dispatcher keeps no queue to take messages back from
+     */
+    virtual bool cancelMessage(DispatchedMessageId id)
+    {
+        std::ignore = id;
+        return false;
+    }
 
 signals:
     /**

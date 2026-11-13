@@ -20,7 +20,10 @@
 #include "chathistory.h"
 #include "src/persistence/settings.h"
 #include "src/core/chatid.h"
+#include "src/model/friend.h"
 #include "src/widget/form/chatform.h"
+
+#include <algorithm>
 
 namespace {
 /**
@@ -69,16 +72,26 @@ bool handleActionPrefix(QString& content)
 
     return isAction;
 }
+
+/** A text as the history keeps it: an action with its prefix. */
+QString storedText(const Message& message)
+{
+    return message.isAction ? ChatForm::ACTION_PREFIX + message.content : message.content;
+}
 } // namespace
 
 ChatHistory::ChatHistory(Chat& chat_, History* history_, const ICoreIdHandler& coreIdHandler_,
                          const Settings& settings_, IMessageDispatcher& messageDispatcher,
-                         FriendList& friendList, GroupList& groupList)
+                         FriendList& friendList, GroupList& groupList,
+                         Air::EntryMarksStore* entryStore_)
     : chat(chat_)
     , history(history_)
     , settings(settings_)
     , coreIdHandler(coreIdHandler_)
     , sessionChatLog(getInitialChatLogIdx(), coreIdHandler_, friendList, groupList)
+    , dispatcher(messageDispatcher)
+    , outbox(qobject_cast<Friend*>(&chat_) && history_ ? history_->getOutbox() : nullptr)
+    , entryStore(entryStore_)
 {
     connect(&messageDispatcher, &IMessageDispatcher::messageComplete, this,
             &ChatHistory::onMessageComplete);
@@ -87,9 +100,11 @@ ChatHistory::ChatHistory(Chat& chat_, History* history_, const ICoreIdHandler& c
     connect(&messageDispatcher, &IMessageDispatcher::messageBroken, this,
             &ChatHistory::onMessageBroken);
 
-    if (canUseHistory()) {
-        // Defer messageSent callback until we finish firing off all our unsent messages.
-        // If it was connected all our unsent messages would be re-added ot history again
+    // Defer messageSent callback until we finish firing off all our unsent messages.
+    // If it was connected all our unsent messages would be re-added ot history again
+    if (outbox) {
+        dispatchQueue(messageDispatcher);
+    } else if (canUseHistory()) {
         dispatchUnsentMessages(messageDispatcher);
     }
 
@@ -275,6 +290,7 @@ void ChatHistory::onMessageReceived(const ToxPk& sender, const Message& message)
         }
 
         history->addNewMessage(chatId, content, sender, message.timestamp, true, message.extensionSet, displayName);
+        keepWireId(sender, message);
     }
 
     sessionChatLog.onMessageReceived(sender, message);
@@ -282,6 +298,11 @@ void ChatHistory::onMessageReceived(const ToxPk& sender, const Message& message)
 
 void ChatHistory::onMessageSent(DispatchedMessageId id, const Message& message)
 {
+    if (outbox) {
+        queueSentMessage(id, message);
+        return;
+    }
+
     if (canUseHistory()) {
         auto selfPk = coreIdHandler.getSelfPublicKey();
         auto& chatId = chat.getPersistentId();
@@ -297,6 +318,7 @@ void ChatHistory::onMessageSent(DispatchedMessageId id, const Message& message)
 
         history->addNewMessage(chatId, content, selfPk, message.timestamp, false, message.extensionSet, username,
                                onInsertion);
+        keepWireId(selfPk, message);
     }
 
     sessionChatLog.onMessageSent(id, message);
@@ -304,7 +326,14 @@ void ChatHistory::onMessageSent(DispatchedMessageId id, const Message& message)
 
 void ChatHistory::onMessageComplete(DispatchedMessageId id)
 {
-    if (canUseHistory()) {
+    if (outbox) {
+        const int at = queueIndexOf(id);
+        if (at >= 0) {
+            outbox->remove(queue[at].message.outboxId);
+            queue.remove(at);
+            emit queueChanged();
+        }
+    } else if (canUseHistory()) {
         completeMessage(id);
     }
 
@@ -313,11 +342,259 @@ void ChatHistory::onMessageComplete(DispatchedMessageId id)
 
 void ChatHistory::onMessageBroken(DispatchedMessageId id, BrokenMessageReason reason)
 {
-    if (canUseHistory()) {
+    bool queued = false;
+    if (outbox) {
+        // Marked before the log reports the change, so the conversation moves the message from
+        // the log to the failed row in one step.
+        const int at = queueIndexOf(id);
+        if (at >= 0) {
+            outbox->markFailed(queue[at].message.outboxId);
+            queue[at].message.failed = true;
+            queue[at].dispatched = false;
+            queued = true;
+        }
+    } else if (canUseHistory()) {
         breakMessage(id, reason);
     }
 
     sessionChatLog.onMessageBroken(id, reason);
+
+    if (queued) {
+        emit queueChanged();
+    }
+}
+
+bool ChatHistory::isShown(ChatLogIdx idx) const
+{
+    // Cancelled here, or deleted by its author.
+    if (cancelledIdx.contains(idx.get()) || !sessionChatLog.isShown(idx)) {
+        return false;
+    }
+
+    for (const auto& entry : queue) {
+        if (entry.hasIdx && entry.idx == idx.get()) {
+            return !entry.message.failed;
+        }
+    }
+    return true;
+}
+
+bool ChatHistory::isCancelled(ChatLogIdx idx) const
+{
+    return cancelledIdx.contains(idx.get()) || sessionChatLog.isCancelled(idx);
+}
+
+SessionChatLog::EffectResult ChatHistory::applyEffect(const ToxPk& sender,
+                                                      const Air::MessageEffect& effect,
+                                                      const ToxPk& selfKey)
+{
+    using Change = SessionChatLog::EffectResult::Change;
+    const SessionChatLog::EffectResult result = sessionChatLog.applyEffect(sender, effect, selfKey);
+    if (result.change == Change::None || !canUseHistory()) {
+        return result;
+    }
+
+    const ChatId& chatId = chat.getPersistentId();
+    const bool isFile = effect.anchor == Air::MessageEffect::Anchor::File;
+    const QString key = isFile ? Air::fileEntryKey(chatKey(), result.file.resumeFileId)
+                               : Air::textEntryKey(chatKey(), result.author.toString(),
+                                                   result.timestamp.toMSecsSinceEpoch());
+    switch (result.change) {
+    case Change::Edited: {
+        Message after = result.before;
+        after.content = effect.text;
+        history->setMessageText(chatId, result.author, result.timestamp, storedText(result.before),
+                                storedText(after));
+        break;
+    }
+    case Change::Deleted:
+        if (isFile) {
+            history->eraseFileEntry(chatId, result.file.resumeFileId);
+        } else {
+            history->setMessageText(chatId, result.author, result.timestamp,
+                                    storedText(result.before), QString());
+        }
+        break;
+    case Change::Reacted:
+    case Change::None:
+        break;
+    }
+    if (entryStore) {
+        entryStore->setEntryMarks(key, result.change == Change::Deleted ? Air::EntryMarks()
+                                                                        : result.marks);
+        if (result.change == Change::Deleted && !isFile) {
+            entryStore->setWireId(key, QByteArray());
+        }
+    }
+    return result;
+}
+
+QString ChatHistory::chatKey() const
+{
+    return chat.getPersistentId().toString();
+}
+
+void ChatHistory::keepWireId(const ToxPk& author, const Message& message)
+{
+    if (!entryStore || message.wireId.isEmpty()) {
+        return;
+    }
+    entryStore->setWireId(Air::textEntryKey(chatKey(), author.toString(),
+                                            message.timestamp.toMSecsSinceEpoch()),
+                          message.wireId);
+}
+
+QVector<ChatHistory::QueuedMessage> ChatHistory::queuedMessages() const
+{
+    QVector<QueuedMessage> result;
+    result.reserve(queue.size());
+    for (const auto& entry : queue) {
+        result << entry.message;
+    }
+    return result;
+}
+
+/**
+ * @brief Takes a waiting or failed message back. The dispatcher forgets it, the queue drops it, and
+ * its history row, if any, goes at the next start: removing it now would move the indexes of the
+ * rows after it.
+ * @param[in] outboxId Id of a message of queuedMessages()
+ */
+void ChatHistory::cancelQueuedMessage(qint64 outboxId)
+{
+    if (!outbox) {
+        return;
+    }
+
+    const auto it = std::find_if(queue.begin(), queue.end(), [outboxId](const QueueEntry& entry) {
+        return entry.message.outboxId == outboxId;
+    });
+    if (it == queue.end()) {
+        return;
+    }
+
+    const QueueEntry entry = *it;
+    queue.erase(it);
+
+    if (entry.dispatched) {
+        dispatcher.cancelMessage(entry.dispatchId);
+    }
+    outbox->cancel(outboxId);
+
+    if (entry.historyId.get() >= 0) {
+        cancelledHistoryRows.insert(entry.historyId.get());
+    }
+    if (entry.hasIdx) {
+        cancelledIdx.insert(entry.idx);
+        emit itemUpdated(ChatLogIdx(entry.idx));
+    }
+    emit queueChanged();
+}
+
+/**
+ * @brief Puts a message that just left the dispatcher in the queue: with the history on, its
+ * history row and its queue row are written together.
+ */
+void ChatHistory::queueSentMessage(DispatchedMessageId id, const Message& message)
+{
+    auto content = message.content;
+    if (message.isAction) {
+        content = ChatForm::ACTION_PREFIX + content;
+    }
+
+    QueueEntry entry;
+    if (canUseHistory()) {
+        entry.message.outboxId = outbox->reserveId();
+        history->addNewOutgoingMessage(chat.getPersistentId(), content,
+                                       coreIdHandler.getSelfPublicKey(), message.timestamp,
+                                       message.extensionSet, coreIdHandler.getUsername(),
+                                       entry.message.outboxId);
+    } else {
+        entry.message.outboxId =
+            outbox->add(chat.getPersistentId(), content, message.timestamp, message.extensionSet);
+    }
+    entry.message.text = message.content;
+    entry.message.isAction = message.isAction;
+    entry.message.timestamp = message.timestamp;
+    entry.dispatched = true;
+    entry.dispatchId = id;
+    entry.hasIdx = true;
+    entry.idx = sessionChatLog.getNextIdx().get();
+
+    sessionChatLog.onMessageSent(id, message);
+    queue.append(entry);
+    emit queueChanged();
+}
+
+int ChatHistory::queueIndexOf(DispatchedMessageId id) const
+{
+    for (int i = 0; i < queue.size(); ++i) {
+        if (queue[i].dispatched && queue[i].dispatchId == id) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/**
+ * @brief Gives the queued or cancelled message of a history row its index, once the row is loaded.
+ */
+void ChatHistory::noteLoadedQueueRow(RowId historyId, ChatLogIdx idx) const
+{
+    if (cancelledHistoryRows.contains(historyId.get())) {
+        cancelledIdx.insert(idx.get());
+    }
+
+    for (auto& entry : queue) {
+        if (entry.historyId == historyId) {
+            entry.hasIdx = true;
+            entry.idx = idx.get();
+        }
+    }
+}
+
+/**
+ * @brief Sends the queue of this friend again, oldest first, as it was left last time. With the
+ * history on, a message that has a history row is shown when that row is loaded; any other is
+ * added to the end of the log.
+ * @param[in] messageDispatcher
+ */
+void ChatHistory::dispatchQueue(IMessageDispatcher& messageDispatcher)
+{
+    const bool withHistory = canUseHistory();
+    for (const auto& stored : outbox->entriesForChat(chat.getPersistentId())) {
+        QueueEntry entry;
+        entry.message.outboxId = stored.id;
+        entry.message.text = stored.message;
+        entry.message.isAction = handleActionPrefix(entry.message.text);
+        entry.message.timestamp = stored.timestamp;
+        entry.message.failed = stored.failed;
+        entry.historyId = stored.historyId;
+
+        if (!stored.failed) {
+            // As in dispatchUnsentMessages: one stored message is one dispatched message, and in
+            // the odd case it splits further, the last part stands for it.
+            entry.dispatchId =
+                stored.extensionSet.none()
+                    ? messageDispatcher.sendMessage(entry.message.isAction, entry.message.text).second
+                    : messageDispatcher.sendExtendedMessage(entry.message.text, stored.extensionSet).second;
+            entry.dispatched = true;
+
+            if (withHistory && stored.historyId.get() >= 0) {
+                queuedHistoryRows.insert(stored.historyId, entry.dispatchId);
+            } else {
+                entry.hasIdx = true;
+                entry.idx = sessionChatLog.getNextIdx().get();
+                sessionChatLog.onMessageSent(entry.dispatchId, Message{entry.message.isAction,
+                                                                       entry.message.text,
+                                                                       stored.timestamp,
+                                                                       stored.extensionSet,
+                                                                       {},
+                                                                       {}});
+            }
+        }
+        queue.append(entry);
+    }
 }
 
 /**
@@ -367,8 +644,15 @@ void ChatHistory::loadHistoryIntoSessionChatLog(ChatLogIdx start) const
         case HistMessageContentType::file: {
             const auto date = message.timestamp;
             const auto file = message.content.asFile();
-            const auto chatLogFile = ChatLogFile{date, file};
+            const Air::EntryMarks marks =
+                entryStore ? entryStore->entryMarks(Air::fileEntryKey(chatKey(), file.resumeFileId))
+                           : Air::EntryMarks();
+            const auto chatLogFile = ChatLogFile{date, file, marks};
             sessionChatLog.insertFileAtIdx(currentIdx, message.sender, message.dispName, chatLogFile);
+            // Its sender deleted it: the history keeps neither its name nor its place.
+            if (file.fileName.isEmpty() && file.filePath.isEmpty()) {
+                sessionChatLog.markHidden(currentIdx);
+            }
             break;
         }
         case HistMessageContentType::message: {
@@ -382,16 +666,48 @@ void ChatHistory::loadHistoryIntoSessionChatLog(ChatLogIdx start) const
             // we hit IMessageDispatcher's signals which history listens for.
             // Items added to history have already been sent so we know they already
             // reflect what was sent/received.
-            auto processedMessage = Message{isAction, messageContent, message.timestamp, {}, {}};
+            // The marks of the entry and the id a group gave it live in the entry store (item 10).
+            const QString entryKey = Air::textEntryKey(chatKey(), message.sender.toString(),
+                                                       message.timestamp.toMSecsSinceEpoch());
+            const QByteArray wireId = entryStore ? entryStore->wireId(entryKey) : QByteArray();
+            const Air::EntryMarks marks =
+                entryStore ? entryStore->entryMarks(entryKey) : Air::EntryMarks();
+            auto processedMessage =
+                Message{isAction, messageContent, message.timestamp, {}, {}, wireId};
+
+            auto chatLogMessage = ChatLogMessage{message.state, processedMessage, marks};
+            // Its author deleted it: the history keeps no words.
+            if (messageContent.isEmpty()) {
+                sessionChatLog.markHidden(currentIdx);
+            }
+
+            if (outbox) {
+                noteLoadedQueueRow(message.id, currentIdx);
+                if (message.state == MessageState::pending) {
+                    const auto queued = queuedHistoryRows.find(message.id);
+                    if (queued != queuedHistoryRows.end()) {
+                        sessionChatLog.insertIncompleteMessageAtIdx(currentIdx, message.sender,
+                                                                    message.dispName,
+                                                                    chatLogMessage, queued.value());
+                    } else {
+                        // Nothing will ever complete a pending row the queue does not hold.
+                        sessionChatLog.insertBrokenMessageAtIdx(currentIdx, message.sender,
+                                                                message.dispName, chatLogMessage);
+                    }
+                    break;
+                }
+            }
 
             auto dispatchedMessageIt =
                 std::find_if(dispatchedMessageRowIdMap.begin(), dispatchedMessageRowIdMap.end(),
                              [&](RowId dispatchedId) { return dispatchedId == message.id; });
 
-            assert((message.state != MessageState::pending && dispatchedMessageIt == dispatchedMessageRowIdMap.end()) ||
-                   (message.state == MessageState::pending && dispatchedMessageIt != dispatchedMessageRowIdMap.end()));
+            assert(outbox
+                   || (message.state != MessageState::pending
+                       && dispatchedMessageIt == dispatchedMessageRowIdMap.end())
+                   || (message.state == MessageState::pending
+                       && dispatchedMessageIt != dispatchedMessageRowIdMap.end()));
 
-            auto chatLogMessage = ChatLogMessage{message.state, processedMessage};
             switch (message.state) {
                 case MessageState::complete:
                     sessionChatLog.insertCompleteMessageAtIdx(currentIdx, message.sender, message.dispName,

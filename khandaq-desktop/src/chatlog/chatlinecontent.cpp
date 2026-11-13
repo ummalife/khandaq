@@ -98,3 +98,8 @@ QString ChatLineContent::getText() const
 {
     return QString();
 }
+
+QString ChatLineContent::getSpokenText() const
+{
+    return getText();
+}

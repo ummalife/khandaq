@@ -89,14 +89,16 @@ chmod 755 "$PKGROOT/DEBIAN/postinst"
 
 echo "==> Build .deb inside Docker ($IMAGE)"
 mkdir -p "$OUT"
+# KHANDAQ (desktop release v0.2.47): dpkg-dev is fetched only when the image lacks it. The builder
+# image of build-linux-docker.sh already has it (build-essential), so with
+# KHANDAQ_DEB_IMAGE=khandaq-builder:ubuntu24.04-amd64 this step needs no network at all.
 docker run --rm --platform linux/amd64 \
   -v "$STAGING:/work:ro" \
   -v "$OUT:/out" \
   "$IMAGE" \
   bash -ec "
     set -euo pipefail
-    apt-get update -qq
-    apt-get install -y -qq dpkg-dev >/dev/null
+    command -v dpkg-deb >/dev/null || { apt-get update -qq; apt-get install -y -qq dpkg-dev >/dev/null; }
     dpkg-deb --build /work/$PKG /out/${PKG}.deb
     dpkg-deb -I /out/${PKG}.deb
     ls -lh /out/${PKG}.deb

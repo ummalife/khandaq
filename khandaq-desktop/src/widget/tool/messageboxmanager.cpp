@@ -19,6 +19,9 @@
 
 #include "messageboxmanager.h"
 
+#include "src/widget/air/airoverlay.h"
+#include "src/widget/air/airstrings.h"
+
 #include <QApplication>
 #include <QThread>
 #include <QMessageBox>
@@ -26,6 +29,38 @@
 #include <QFileInfo>
 #include <QDesktopServices>
 #include <QUrl>
+
+namespace {
+/**
+ * The window of the manager while it is on screen: what it says is a dialog anchored to that
+ * window, which closes on Esc (E21). Null for the manager of the start, which has no window yet,
+ * and while the window is hidden.
+ */
+QWidget* anchoredWindow(const QWidget* manager)
+{
+    QWidget* const parent = manager->parentWidget();
+    QWidget* const window = parent ? parent->window() : nullptr;
+    return window && window->isVisible() ? window : nullptr;
+}
+
+/**
+ * The parent of a plain message box: the manager in its window, else the window in front (the
+ * login form at the start), so a box never stands alone on the screen.
+ */
+QWidget* boxParent(QWidget* manager)
+{
+    return manager->parentWidget() ? manager : QApplication::activeWindow();
+}
+
+/** Opens the file as the program it is: it gets the right to run first, as the person asked. */
+void openProgram(const QFileInfo& file)
+{
+    QFile(file.filePath())
+        .setPermissions(file.permissions() | QFile::ExeOwner | QFile::ExeUser | QFile::ExeGroup
+                        | QFile::ExeOther);
+    QDesktopServices::openUrl(QUrl::fromLocalFile(file.filePath()));
+}
+} // namespace
 
 MessageBoxManager::MessageBoxManager(QWidget* parent)
     : QWidget(parent)
@@ -158,6 +193,14 @@ void MessageBoxManager::confirmExecutableOpen(const QFileInfo& file)
         suffix.chop(1);
     }
     if (dangerousExtensions.contains(suffix, Qt::CaseInsensitive)) {
+        // Asked over the window, the danger in one sentence and Cancel first (E21).
+        if (QWidget* const window = anchoredWindow(this)) {
+            AirDialog::confirm(window, AirStrings::text(AirStrings::Text::ProgramTitle),
+                               AirStrings::text(AirStrings::Text::ProgramMessage).arg(file.fileName()),
+                               AirStrings::text(AirStrings::Text::LinkOpen),
+                               AirDialog::Verb::Danger, [file] { openProgram(file); });
+            return;
+        }
         bool answer = askQuestion(tr("Executable file", "popup title"),
                                        tr("You have asked Khandaq to open an executable file. "
                                           "Executable files can potentially damage your computer. "
@@ -169,9 +212,8 @@ void MessageBoxManager::confirmExecutableOpen(const QFileInfo& file)
         }
 
         // The user wants to run this file, so make it executable and run it
-        QFile(file.filePath())
-            .setPermissions(file.permissions() | QFile::ExeOwner | QFile::ExeUser | QFile::ExeGroup
-                            | QFile::ExeOther);
+        openProgram(file);
+        return;
     }
 
     QDesktopServices::openUrl(QUrl::fromLocalFile(file.filePath()));
@@ -180,21 +222,33 @@ void MessageBoxManager::confirmExecutableOpen(const QFileInfo& file)
 // Private implementations
 void MessageBoxManager::_showInfo(const QString& title, const QString& msg)
 {
-    QMessageBox messageBox(QMessageBox::Information, title, msg, QMessageBox::Ok, this);
+    if (QWidget* const window = anchoredWindow(this)) {
+        AirDialog::notice(window, title, msg);
+        return;
+    }
+    QMessageBox messageBox(QMessageBox::Information, title, msg, QMessageBox::Ok, boxParent(this));
     messageBox.setButtonText(QMessageBox::Ok, QApplication::tr("Ok"));
     messageBox.exec();
 }
 
 void MessageBoxManager::_showWarning(const QString& title, const QString& msg)
 {
-    QMessageBox messageBox(QMessageBox::Warning, title, msg, QMessageBox::Ok, this);
+    if (QWidget* const window = anchoredWindow(this)) {
+        AirDialog::notice(window, title, msg);
+        return;
+    }
+    QMessageBox messageBox(QMessageBox::Warning, title, msg, QMessageBox::Ok, boxParent(this));
     messageBox.setButtonText(QMessageBox::Ok, QApplication::tr("Ok"));
     messageBox.exec();
 }
 
 void MessageBoxManager::_showError(const QString& title, const QString& msg)
 {
-    QMessageBox messageBox(QMessageBox::Critical, title, msg, QMessageBox::Ok, this);
+    if (QWidget* const window = anchoredWindow(this)) {
+        AirDialog::notice(window, title, msg);
+        return;
+    }
+    QMessageBox messageBox(QMessageBox::Critical, title, msg, QMessageBox::Ok, boxParent(this));
     messageBox.setButtonText(QMessageBox::Ok, QApplication::tr("Ok"));
     messageBox.exec();
 }
@@ -213,7 +267,7 @@ bool MessageBoxManager::_askQuestion(const QString& title, const QString& msg, c
                        const QString& button2, bool defaultAns, bool warning)
 {
     QMessageBox::Icon icon = warning ? QMessageBox::Warning : QMessageBox::Question;
-    QMessageBox box(icon, title, msg, QMessageBox::NoButton, this);
+    QMessageBox box(icon, title, msg, QMessageBox::NoButton, boxParent(this));
     QPushButton* pushButton1 = box.addButton(button1, QMessageBox::AcceptRole);
     QPushButton* pushButton2 = box.addButton(button2, QMessageBox::RejectRole);
     box.setDefaultButton(defaultAns ? pushButton1 : pushButton2);

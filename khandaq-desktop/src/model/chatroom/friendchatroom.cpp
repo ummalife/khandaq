@@ -86,13 +86,6 @@ QString FriendChatroom::getCircleName() const
     return settings.getCircleName(circleId);
 }
 
-void FriendChatroom::inviteToNewGroup()
-{
-    const auto friendId = frnd->getId();
-    const auto groupId = core.createGroup();
-    core.groupInviteFriend(friendId, groupId);
-}
-
 QString FriendChatroom::getAutoAcceptDir() const
 {
     const auto pk = frnd->getPublicKey();

@@ -33,6 +33,7 @@
 #include "src/model/status.h"
 #include "src/persistence/settings.h"
 #include "src/widget/about/aboutfriendform.h"
+#include "src/widget/air/airstrings.h"
 #include "src/widget/form/chatform.h"
 #include "src/widget/style.h"
 #include "src/widget/tool/croppinglabel.h"
@@ -44,8 +45,10 @@
 #include <QDrag>
 #include <QFileDialog>
 #include <QInputDialog>
+#include <QLineEdit>
 #include <QMenu>
 #include <QMimeData>
+#include <QRegularExpression>
 
 #include <cassert>
 
@@ -101,6 +104,11 @@ void FriendWidget::contextMenuEvent(QContextMenuEvent* event)
  */
 void FriendWidget::onContextMenuCalled(QContextMenuEvent* event)
 {
+    showContextMenu(event->globalPos());
+}
+
+void FriendWidget::showContextMenu(const QPoint& globalPos, const QList<QAction*>& leadingActions)
+{
     if (!active) {
         setBackgroundRole(QPalette::Highlight);
     }
@@ -108,6 +116,11 @@ void FriendWidget::onContextMenuCalled(QContextMenuEvent* event)
     installEventFilter(this); // Disable leave event.
 
     QMenu menu;
+
+    if (!leadingActions.isEmpty()) {
+        menu.addActions(leadingActions);
+        menu.addSeparator();
+    }
 
     if (chatroom->possibleToOpenInNewWindow()) {
         const auto openChatWindow = menu.addAction(tr("Open chat in new window"));
@@ -124,7 +137,8 @@ void FriendWidget::onContextMenuCalled(QContextMenuEvent* event)
         menu.addMenu(tr("Invite to group", "Menu to invite a friend to a groupchat"));
     inviteMenu->setEnabled(chatroom->canBeInvited());
     const auto newGroupAction = inviteMenu->addAction(tr("To new group"));
-    connect(newGroupAction, &QAction::triggered, chatroom.get(), &FriendChatroom::inviteToNewGroup);
+    connect(newGroupAction, &QAction::triggered, this,
+            [this] { emit newGroupRequested(chatroom->getFriend()->getPublicKey()); });
     inviteMenu->addSeparator();
 
     for (const auto& group : chatroom->getGroups()) {
@@ -155,7 +169,7 @@ void FriendWidget::onContextMenuCalled(QContextMenuEvent* event)
     }
 
     const auto setAlias = menu.addAction(tr("Set alias..."));
-    connect(setAlias, &QAction::triggered, nameLabel, &CroppingLabel::editBegin);
+    connect(setAlias, &QAction::triggered, this, &FriendWidget::editAlias);
 
     menu.addSeparator();
     auto autoAccept =
@@ -177,13 +191,31 @@ void FriendWidget::onContextMenuCalled(QContextMenuEvent* event)
     const auto aboutWindow = menu.addAction(tr("Show details"));
     connect(aboutWindow, &QAction::triggered, this, &FriendWidget::showDetails);
 
-    const auto pos = event->globalPos();
-    menu.exec(pos);
+    menu.exec(globalPos);
 
     removeEventFilter(this);
 
     if (!active) {
         setBackgroundRole(QPalette::Window);
+    }
+}
+
+void FriendWidget::editAlias()
+{
+    if (isVisible()) {
+        nameLabel->editBegin();
+        return;
+    }
+
+    Friend* frnd = chatroom->getFriend();
+    QString title = tr("Set alias...");
+    title.remove(QRegularExpression(QStringLiteral("[.\\x{2026}]+$")));
+    bool accepted = false;
+    const QString alias =
+        QInputDialog::getText(window(), title, AirStrings::text(AirStrings::Text::AliasPrompt),
+                              QLineEdit::Normal, frnd->getDisplayedName(), &accepted);
+    if (accepted) {
+        frnd->setAlias(alias.trimmed());
     }
 }
 
@@ -340,14 +372,9 @@ QString FriendWidget::getStatusString() const
     const int status = static_cast<int>(frnd->getStatus());
     const bool event = frnd->getEventFlag();
 
-    static const QVector<QString> names = {
-        tr("Online"),
-        tr("Away"),
-        tr("Busy"),
-        tr("Offline"),
-        tr("Blocked"),
-        tr("Negotiating")
-    };
+    // Not kept in a static: the window title says it, and it follows a change of language.
+    const QVector<QString> names = {tr("Online"),  tr("Away"),    tr("Busy"),
+                                    tr("Offline"), tr("Blocked"), tr("Negotiating")};
 
     return event ? tr("New message") : names.value(status);
 }

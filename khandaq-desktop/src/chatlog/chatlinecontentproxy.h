@@ -43,6 +43,8 @@ public:
     void setWidth(float width) override;
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override;
     qreal getAscent() const override;
+    /** The name the widget gives a screen reader: a file says its name, size and state. */
+    QString getSpokenText() const override;
 
     QWidget* getWidget() const;
     ChatLineContentProxyType getWidgetType() const;

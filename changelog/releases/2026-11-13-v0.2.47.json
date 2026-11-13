@@ -1,0 +1,153 @@
+{
+  "version": "0.2.47",
+  "date": "2026-11-13",
+  "title": "The new look on the computer, with requests that wait for your answer",
+  "summary": "Khandaq for Windows, macOS and Linux gets the look the phones got in v0.2.46: one list with the people online now first, and a conversation that says before you send whether a message goes now or waits in transit. Rebuilding every screen turned up older problems as well, fixed here: the computer accepted every contact request by itself and threw its message away, turning off Keep history lost messages still waiting to be sent, and a profile with a few hundred contacts took half a minute to open. Replies, edits and reactions from phones now show on the computer, which does not send them yet.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "One list, with the people online now first",
+      "description": "Chats, contacts and groups are one list instead of tabs: people online now first, then everyone else, and your notes for yourself last. The line under your name says how this computer is connected: directly, through a relay, or not at all. An ID pasted into the search line opens New contact. The interface is set in IBM Plex Sans, in a light and a dark theme that follows the system unless you choose one, in place of the ten old colour schemes.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Contact requests wait for your answer",
+      "description": "The computer used to accept every contact request by itself, without asking, and threw away the message that came with it. A request now waits as a card at the top of the list until you answer, with the person's message, the start of their key, Accept and Decline, and it is still there after a restart. Decline sends nothing and can be undone for 5 seconds. A group invitation comes as the same kind of card, with Join.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "A message to someone offline waits in transit and goes once",
+      "description": "A message for someone who is offline waits in a tray above the field and leaves on its own when they are back; before you send, the line under the field says which will happen. Waiting messages are kept in your profile, through this update too, even with Keep history turned off, which used to lose them when you quit. A message is no longer sent again and again when its receipt goes missing, or twice after a reconnect.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "The contact card shows how you are connected",
+      "description": "Clicking the name at the top of a conversation unfolds the person's card: whether you reach each other directly or through a relay, when they were online over the last day, Mute, key verification, their key with a QR code, the files you exchanged, and Block and Remove behind one question. These marks stay on this computer; requests from a blocked key are dropped, and Settings can unblock it. Remove now also deletes the conversation from this computer, as on the phones.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Moving a profile in no longer replaces one with the same name",
+      "description": "Importing a profile copied the file under its own name and, after one question, replaced a profile with that name, leaving that profile's settings and history next to the new file; nothing showed whose profile it was, and it did not open afterwards. Move a profile from another device now reads the file first, asks for its password if it has one, shows the name and the ID, adds the profile under a name of its own and opens it.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "A profile with hundreds of contacts opens in seconds",
+      "description": "Opening a profile sorted the contact list again for every contact it loaded. In a test with 311 contacts and about 10,000 messages, the window now appears after about 3 seconds instead of 30, and Khandaq uses about 55 MB less memory.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Logging out no longer ends in a crash",
+      "description": "After Log out, closing the sign-in window made Khandaq crash as it quit. It now quits normally. Log out also says what it means before it happens, and from then on every start opens sign-in until you log in again, even with a saved password.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Sign-in says why a profile did not open",
+      "description": "Any failure at sign-in showed the same Wrong password box. Sign-in now tells apart a wrong password, a damaged profile file, a file it may not read, a profile already open in Khandaq on this computer and a proxy that did not work, and says under the field what to do. Forgot the password? says it cannot be recovered and what happens to the old file. A new profile takes three pages: a name, a password or none with what each means, and your ID.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Files, voice messages and calls are part of the conversation",
+      "description": "A file is an entry in the conversation with its state in words and its size in KB or MB, and a picture shows inside the conversation. A voice message from a phone shows its length, with Listen. A call runs in a bar at the top of the conversation and leaves an entry such as Call, 0:09, Missed call or No answer. Calling someone offline says the call will not get through and offers to wait and call; groups say they have no calls.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Groups say who gets a message now",
+      "description": "A group's header counts members and who is online now, and a strip under it shows who gets a message right away. An observer sees Read only in place of the message field. The group card names roles in words, and the founder and moderators change roles and remove members after one question. New group is one panel with a name and a choice between By invitation only and open; before, every new group was open and called New group.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Replies, edits and reactions from phones show on the computer",
+      "description": "A reply from a phone shows with the message it answers. In groups, edits, deletions and reactions from phones show too; in one-to-one chats they show for files, not yet for text. The computer does not send replies, edits or reactions yet: a quote from the computer reaches phones as plain text. A message in a form this version cannot show says so instead of showing its code.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "News from other chats comes inside the window",
+      "description": "While Khandaq is in front, a message from another chat, a contact request or a group invitation slides in as a band under the top bar, and a click opens it; before, the system showed a notification even with the window open. A request no longer shows the sender's whole 64-character key as its title. Errors and questions appear over the Khandaq window and name what failed, instead of boxes in the middle of the screen.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Settings in plain sections",
+      "description": "Settings are sections with each value at the right of its row: the theme as System, Light or Dark, notifications, privacy with blocked keys, profile transfer, network and About. Download attachments now works: Always, Small files up to a size you set, or Never; the old Accept files automatically box did nothing. Restoring defaults resets only the network settings; before, it deleted the profile's settings file with the names and notes you gave contacts. The update check box that did nothing is gone.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "The connection, in words",
+      "description": "Clicking the line under your name opens Network in Settings: how this computer is connected and what that means for messages, whether it has internet, and how many relays and contacts it reaches directly, with no IP addresses. While it looks for the network it offers Connect again and asks every 15 seconds, instead of about every second. The log for support starts with the state of the network, also without addresses.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Every screen works from the keyboard",
+      "description": "Tab goes through every screen in reading order and back to the start, and the control in focus always shows a ring; a panel open over the list or the conversation keeps Tab to itself until it closes. Screen readers get a name for every icon button, chat, request card and message. Every screen was checked at 1440 by 900, 1920 by 1080 and the smallest window, in both themes, and text that was cut off now wraps. With Reduce motion on, nothing slides.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Russian, Arabic and Chinese throughout",
+      "description": "Every new string is in English, Russian, Arabic and Chinese, and the older ones in these languages were cleaned up: plural forms, labels left untranslated, and words the app no longer uses, such as friend, or account for the profile. Arabic runs right to left, and Russian or English text inside it keeps its own direction. German, French and the other older translations do not have the new strings yet, so the new screens show English in them.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "Your ID as a QR code in You",
+      "description": "Your photo, name and status are edited in place in You, beside a QR code of your ID with Copy ID, Copy QR code and Save QR code. New profiles start without a status, and the joke status that older versions set by themselves is cleared once; a status you wrote stays.",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "Smaller fixes found while rebuilding the screens",
+      "description": "Text between triple backticks now shows as code. A mention by a name written in Cyrillic or Arabic now highlights. Sizes count 1,000 bytes to the KB, as on the phones. The language menu names each language in its own words, and a request from a tox: link offers the greeting of New contact instead of the old joke text.",
+      "platforms": [
+        "desktop"
+      ]
+    }
+  ]
+}

@@ -167,6 +167,16 @@ fi
 WIN_EXE="$ROOT/dist/windows/x86_64/khandaq-windows-installer.exe"
 [[ -f "$WIN_EXE" ]] || WIN_EXE="$ROOT/dist/windows/x86_64/Khandaq-installer.exe"
 [[ -f "$WIN_EXE" ]] && { cp -f "$WIN_EXE" "$DL/khandaq-windows-installer.exe"; drop_stale_sig khandaq-windows-installer.exe; }
+# KHANDAQ (desktop release v0.2.47): the portable zip is the Windows download the site leads with, and
+# nothing staged it: every deploy carried over the zip it found on the server, so a new Windows build
+# would have gone out as a new installer beside the old zip. CI names it khandaq-<arch>-Release.zip
+# (khandaq-desktop/windows/cross-compile/build.sh); the release asset is khandaq-windows-x86_64.zip.
+WIN_ZIP="$ROOT/dist/windows/x86_64/khandaq-windows-x86_64.zip"
+[[ -f "$WIN_ZIP" ]] || WIN_ZIP="$ROOT/dist/windows/x86_64/khandaq-x86_64-Release.zip"
+if [[ -f "$WIN_ZIP" ]]; then
+  cp -f "$WIN_ZIP" "$DL/khandaq-windows-x86_64.zip"
+  drop_stale_sig khandaq-windows-x86_64.zip
+fi
 
 # KHANDAQ (audit 2026-08-20): MERGE the checksum list, never blindly overwrite it.
 #

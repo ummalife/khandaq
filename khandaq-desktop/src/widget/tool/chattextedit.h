@@ -21,6 +21,8 @@
 
 #include <QTextEdit>
 
+#include <functional>
+
 class ChatTextEdit final : public QTextEdit
 {
     Q_OBJECT
@@ -29,6 +31,11 @@ public:
     ~ChatTextEdit();
     void setLastMessage(QString lm);
     void sendKeyEvent(QKeyEvent* event);
+    /**
+     * Up in an empty field asks handler first: it may put a message that has not left yet back
+     * into the field to edit, and returns whether it did. Otherwise the last text comes back.
+     */
+    void setEditLastHandler(std::function<bool()> handler);
 
 signals:
     void enterPressed();
@@ -50,4 +57,5 @@ private:
 
 private:
     QString lastMessage;
+    std::function<bool()> editLast;
 };

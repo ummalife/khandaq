@@ -39,26 +39,30 @@
 class MockGroupMessageSender : public ICoreGroupMessageSender
 {
 public:
-    void sendGroupAction(int groupId, const QString& action) override;
+    uint32_t sendGroupAction(int groupId, const QString& action) override;
 
-    void sendGroupMessage(int groupId, const QString& message) override;
+    uint32_t sendGroupMessage(int groupId, const QString& message) override;
 
     size_t numSentActions = 0;
     size_t numSentMessages = 0;
+    /** The id toxcore gives the next message, as tox_group_send_message hands it back. */
+    uint32_t nextWireId = 0x0A0B0C0D;
 };
 
-void MockGroupMessageSender::sendGroupAction(int groupId, const QString& action)
+uint32_t MockGroupMessageSender::sendGroupAction(int groupId, const QString& action)
 {
     std::ignore = groupId;
     std::ignore = action;
     numSentActions++;
+    return nextWireId++;
 }
 
-void MockGroupMessageSender::sendGroupMessage(int groupId, const QString& message)
+uint32_t MockGroupMessageSender::sendGroupMessage(int groupId, const QString& message)
 {
     std::ignore = groupId;
     std::ignore = message;
     numSentMessages++;
+    return nextWireId++;
 }
 
 class MockGroupSettings : public QObject, public IGroupSettings
@@ -102,6 +106,7 @@ private slots:
     void testEmptyGroup();
     void testSelfReceive();
     void testBlacklist();
+    void messagesCarryTheIdsToxcoreGaveThem();
 
     void onMessageSent(DispatchedMessageId id, Message message)
     {
@@ -255,6 +260,33 @@ void TestGroupMessageDispatcher::testBlacklist()
     groupSettings->setBlackList({otherPk.toString()});
     groupMessageDispatcher->onMessageReceived(otherPk, false, "Test");
     QVERIFY(receivedMessages.size() == 1);
+}
+
+/**
+ * @brief The edits, deletions and reactions of a group point at the id toxcore gave a message
+ * (stage 3, item 10): a sent message keeps the id tox_group_send_message handed back, a received
+ * one the id of the callback, both as the packets carry them, four bytes big-endian.
+ */
+void TestGroupMessageDispatcher::messagesCarryTheIdsToxcoreGaveThem()
+{
+    groupMessageDispatcher->sendMessage(false, "Ours");
+    QCOMPARE(sentMessages.size(), size_t{1});
+    QCOMPARE(sentMessages.front().wireId, QByteArray::fromHex("0a0b0c0d"));
+
+    uint8_t id[ToxPk::size] = {1};
+    groupMessageDispatcher->onMessageReceived(ToxPk(id), false, "Theirs", 0xDEADBEEF);
+    QCOMPARE(receivedMessages.size(), size_t{1});
+    QCOMPARE(receivedMessages.front().wireId, QByteArray::fromHex("deadbeef"));
+
+    // Without an id, nothing points at the message.
+    groupMessageDispatcher->onMessageReceived(ToxPk(id), false, "No id");
+    QVERIFY(receivedMessages.back().wireId.isEmpty());
+
+    // Alone in the group nothing is sent, so nothing has an id either.
+    groupQuery->setAsEmptyGroup();
+    g->regeneratePeerList();
+    groupMessageDispatcher->sendMessage(false, "Alone");
+    QVERIFY(sentMessages.back().wireId.isEmpty());
 }
 
 // Cannot be guiless due to a settings instance in GroupMessageDispatcher

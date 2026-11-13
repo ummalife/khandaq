@@ -21,22 +21,19 @@
 
 class QString;
 class QByteArray;
-class Settings;
 class IPC;
-class QString;
-class QWidget;
+class Widget;
 
 class ToxSave
 {
 public:
     const static QString eventHandlerKey;
-    ToxSave(Settings& settings, IPC& ipc, QWidget* parent);
+    ToxSave(IPC& ipc, Widget& widget);
     ~ToxSave();
     bool handleToxSave(const QString& path);
     static bool toxSaveEventHandler(const QByteArray& eventData, void* userData);
 
 private:
-    Settings& settings;
     IPC& ipc;
-    QWidget* parent;
+    Widget& widget;
 };

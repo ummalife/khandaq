@@ -50,6 +50,11 @@ public:
     virtual void fontChanged(const QFont& font);
 
     virtual QString getText() const;
+    /**
+     * What a screen reader says for the content: its text, also where a copied selection leaves
+     * the text out (a day mark), and the words of a widget that stands in the log (a file).
+     */
+    virtual QString getSpokenText() const;
 
     virtual qreal getAscent() const;
 

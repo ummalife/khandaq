@@ -50,7 +50,8 @@ public:
     NotificationData friendMessageNotification(const Friend* f, const QString& message);
     NotificationData groupMessageNotification(const Group* g, const ToxPk& sender, const QString& message);
     NotificationData fileTransferNotification(const Friend* f, const QString& filename, size_t fileSize);
-    NotificationData groupInvitationNotification(const Friend* from);
+    NotificationData groupInvitationNotification(const Friend* from,
+                                                 const QString& groupName = QString());
     NotificationData friendRequestNotification(const ToxPk& sender, const QString& message);
 
 public slots:

@@ -52,15 +52,26 @@ public:
     virtual bool isEncrypted() const = 0;
 
     virtual void copyId() const = 0;
+    virtual ToxId getSelfId() const = 0;
+    /** A new antispam: the ID changes and the old one stops taking new requests. */
+    virtual void changeNospam() = 0;
 
+    virtual QString getUsername() const = 0;
+    virtual QString getStatusMessage() const = 0;
     virtual void setUsername(const QString& name) = 0;
     virtual void setStatusMessage(const QString& status) = 0;
 
     virtual QString getProfileName() const = 0;
+    /** The folder the profile file is kept in. */
+    virtual QString getProfileFolder() const = 0;
     virtual RenameResult renameProfile(const QString& name) = 0;
     virtual SaveResult exportProfile(const QString& path) const = 0;
-    virtual QStringList removeProfile() = 0;
+    /** Deletes the profile from this computer and goes to the login screen, after this call. */
+    virtual void removeProfile() = 0;
+    /** Goes to the login screen after this call; the next starts open it until a login. */
     virtual void logout() = 0;
+    /** Logs out as logout() does, and the start window then moves in the profile file at path. */
+    virtual void logoutToImport(const QString& path) = 0;
 
     virtual void copyQr(const QImage& image) const = 0;
     virtual SaveResult saveQr(const QImage& image, const QString& path) const = 0;

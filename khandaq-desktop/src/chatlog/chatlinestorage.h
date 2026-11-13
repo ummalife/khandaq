@@ -83,6 +83,12 @@ public:
 
     bool contains(QDateTime timestamp) const;
 
+    /** The day marks with the time of the first line of their day. */
+    const DateLineMap_t& dateLines() const
+    {
+        return dateMap;
+    }
+
     iterator find(ChatLogIdx idx);
     iterator find(ChatLine::Ptr line);
 

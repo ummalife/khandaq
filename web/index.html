@@ -313,19 +313,19 @@
                 <p class="dl-yours" hidden>Your device</p>
                 <h3>Windows</h3>
                 <p>A portable build for Windows 10 and 11, x64. Unzip it and run <code>Khandaq.exe</code>; no installer needed.</p>
-                <span class="meta">v0.2.12 release on GitHub, GPL-3.0</span>
+                <span class="meta">v0.2.47 release on GitHub, GPL-3.0</span>
               </div>
               <div class="dl-actions">
                 <a class="btn btn-ink" href="/downloads/khandaq-windows-x86_64.zip" data-asset="khandaq-windows-x86_64.zip" data-primary>Download .zip</a>
                 <a class="btn-quiet" href="/downloads/khandaq-windows-x86_64.zip">Mirror on khandaq.org</a>
               </div>
             </li>
-            <li class="dl-row" id="dl-macos" data-platform="macos" data-cta="Download for macOS" data-note="Apple Silicon and Intel in one app. Not notarized yet: the first time, open it from the context menu.">
+            <li class="dl-row" id="dl-macos" data-platform="macos" data-cta="Download for macOS" data-note="For Macs with Apple Silicon. Not notarized yet: the first launch takes one more step.">
               <div class="dl-info">
                 <p class="dl-yours" hidden>Your device</p>
                 <h3>macOS</h3>
-                <p><code>khandaq.app</code> in a zip archive, Apple Silicon and Intel in one bundle.</p>
-                <span class="meta">v0.2.12 release on GitHub, GPL-3.0</span>
+                <p><code>khandaq.app</code> in a zip archive, for Macs with Apple Silicon. Tested on macOS 26.</p>
+                <span class="meta">v0.2.47 release on GitHub, GPL-3.0</span>
               </div>
               <div class="dl-actions">
                 <a class="btn btn-ink" href="/downloads/khandaq-macos.zip" data-asset="khandaq-macos.zip" data-primary>Download .zip</a>
@@ -337,7 +337,7 @@
                 <p class="dl-yours" hidden>Your device</p>
                 <h3>Linux</h3>
                 <p>Debian and Ubuntu: a <code>.deb</code> package. Other distributions: a portable archive with its own libraries. amd64.</p>
-                <span class="meta">v0.2.12 release on GitHub, GPL-3.0</span>
+                <span class="meta">v0.2.47 release on GitHub, GPL-3.0</span>
               </div>
               <div class="dl-actions">
                 <a class="btn btn-ink" href="/downloads/khandaq-messenger_amd64.deb" data-asset="khandaq-messenger_amd64.deb" data-primary>Download .deb</a>
@@ -387,7 +387,7 @@
               <div class="qa-body">
                 <ol>
                   <li>Check the signature as shown above, then unzip and move <code>khandaq.app</code> to Applications.</li>
-                  <li>The build is <strong>not yet notarized by Apple</strong>, so Gatekeeper will not open it on a first double-click. Right-click the app, choose <strong>Open</strong> and confirm: that is the documented way to run an app Gatekeeper cannot vouch for, and it keeps the rest of Gatekeeper working.</li>
+                  <li>The build is <strong>not yet notarized by Apple</strong>, so Gatekeeper will not open it on a first double-click. On macOS 15 and later, try to open it once, then go to <strong>System Settings &gt; Privacy &amp; Security</strong>, click <strong>Open Anyway</strong> and confirm. On macOS 14 and earlier, right-click the app, choose <strong>Open</strong> and confirm. These are Apple’s documented ways to run an app Gatekeeper cannot vouch for, and they keep the rest of Gatekeeper working.</li>
                   <li>Earlier versions of this page suggested <code>xattr -cr</code>. It is no longer recommended: it strips the quarantine flag from everything in the bundle and turns off exactly the check you would want on the day a download is not genuine.</li>
                 </ol>
               </div>
@@ -577,7 +577,7 @@
 
   <script>
     (function () {
-      var release = 'v0.2.12';
+      var release = 'v0.2.47';
       var gh = 'https://github.com/ummalife/khandaq/releases/download/' + release + '/';
       // The files a release publishes. A link names its file in data-asset, and only a name on this list
       // becomes a GitHub address, so nothing read from the page goes into an href as it is.

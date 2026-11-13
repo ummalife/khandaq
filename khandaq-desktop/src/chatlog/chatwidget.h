@@ -23,6 +23,8 @@
 #include <QGraphicsView>
 #include <QMargins>
 
+#include <vector>
+
 #include "chatline.h"
 #include "chatmessage.h"
 #include "src/model/ichatlog.h"
@@ -44,9 +46,24 @@ class ChatWidget : public QGraphicsView
 {
     Q_OBJECT
 public:
+    /** What the log is a conversation with. */
+    enum class Kind
+    {
+        /** A group: authors in their tones, no state marks. */
+        Group,
+        /**
+         * One person: our messages carry state marks, and while the person is offline the
+         * messages waiting for them leave the log for the tray under it.
+         */
+        Person,
+        /** Notes to yourself: no authors and no marks. */
+        Notes,
+    };
+
     ChatWidget(IChatLog& chatLog_, const Core& core_, DocumentCache& documentCache,
-        SmileyPack& smileyPack, Settings& settings, Style& style,
-        IMessageBoxManager& messageBoxManager, QWidget* parent = nullptr);
+               SmileyPack& smileyPack, Settings& settings, Style& style,
+               IMessageBoxManager& messageBoxManager, QWidget* parent = nullptr,
+               Kind kind = Kind::Group);
     virtual ~ChatWidget();
 
     void insertChatlines(std::map<ChatLogIdx, ChatLine::Ptr> chatLines);
@@ -64,11 +81,23 @@ public:
     bool isEmpty() const;
     bool hasTextToBeCopied() const;
     ChatLineContent* getContentFromGlobalPos(QPoint pos) const;
+    /** Finds the log entry shown at pos (global); false when none of the log stands there. */
+    bool entryAtGlobalPos(QPoint pos, ChatLogIdx& idx) const;
     const uint repNameAfter = 5 * 60;
 
     void setColorizedNames(bool enable) { colorizeNames = enable; };
     void jumpToDate(QDate date);
     void jumpToIdx(ChatLogIdx idx);
+
+    /** Whether the person of a conversation with one person is online now. */
+    void setPersonOnline(bool online);
+    /** The short name of that person, as the file entries say it ("Waits for Yusuf to accept it"). */
+    void setPersonName(const QString& name);
+
+    /** The lines a screen reader goes through (AirAccessible): those the log shows, in order. */
+    std::vector<ChatLine::Ptr> spokenLines() const;
+    /** Where a line stands, in the coordinates of the viewport. */
+    QRect viewportRectOf(const ChatLine& line) const;
 
 signals:
     void selectionChanged();
@@ -106,6 +135,10 @@ protected:
     ChatLineContent* getContentFromPos(QPointF scenePos) const;
 
     void layout(int start, int end, qreal width);
+    /** Lays out again from the first of resizedLines on. */
+    void layoutResizedLines();
+    /** Gives every file entry the conversation it stands in. */
+    void refreshFileEntries();
     bool isOverSelection(QPointF scenePos) const;
     bool stickToBottom() const;
 
@@ -127,6 +160,8 @@ protected:
     void focusInEvent(QFocusEvent* ev) final;
     void focusOutEvent(QFocusEvent* ev) final;
     void wheelEvent(QWheelEvent *event) final;
+    /** The focus ring round the messages while Tab has brought the focus here. */
+    void drawForeground(QPainter* painter, const QRectF& rect) final;
 
     void updateMultiSelectionRect();
     void updateTypingNotification();
@@ -149,8 +184,20 @@ private:
     void setTypingNotification();
 
     void renderItem(const ChatLogItem &item, bool hideName, bool colorizeNames_, ChatLine::Ptr &chatMessage);
-    void renderFile(QString displayName, ToxFile file, bool isSelf, QDateTime timestamp, ChatLine::Ptr &chatMessage);
+    void renderFile(const ChatMessage::AirLook& look, ToxFile file, QDateTime timestamp,
+                    const Air::EntryMarks& marks, ChatLine::Ptr& chatMessage);
     bool needsToHideName(ChatLogIdx idx, bool prevIdxRendered) const;
+    ChatMessage::AirLook lookOf(const ChatLogItem& item) const;
+    Air::EntryStatus statusOf(const ChatLogItem& item) const;
+    bool isCollapsedAt(ChatLogIdx idx) const;
+    /**
+     * Brings every rendered line in line with the log: which lines the log leaves out, where the
+     * runs of one author start, the state marks. Returns the position of the first line whose
+     * height changed, or the number of lines when none did.
+     */
+    size_t applyEntryFlags();
+    /** applyEntryFlags(), then lays out again what moved. */
+    void refreshEntries();
     bool shouldRenderMessage(ChatLogIdx idx) const;
     void disableSearchText();
 private:
@@ -175,6 +222,8 @@ private:
     QList<ChatLine::Ptr> visibleLines;
     ChatLine::Ptr typingNotification;
     ChatLine::Ptr busyNotification;
+    /** The interface direction the lines are laid out for. */
+    Qt::LayoutDirection lineDirection = Qt::LeftToRight;
 
     // selection
 
@@ -205,9 +254,18 @@ private:
     bool workerStb = false;
     ChatLine::Ptr workerAnchorLine;
 
-    // layout
-    QMargins margins = QMargins(10, 10, 10, 10);
-    qreal lineSpacing = 5.0;
+    // layout: kq-log, 12 px above and below the entries and 2 px between them. The entries keep
+    // their own 16 px side padding.
+    QMargins margins = QMargins(0, 12, 0, 12);
+    qreal lineSpacing = 2.0;
+    bool personChat = false;
+    bool notesChat = false;
+    bool personOnline = true;
+    QString personName;
+    bool typingShown = false;
+    /** Lines whose file entry changed its height: laid out again on the next turn of the loop. */
+    std::vector<std::weak_ptr<ChatLine>> resizedLines;
+    QTimer* resizedLater = nullptr;
 
     IChatLog& chatLog;
     bool colorizeNames = false;

@@ -32,6 +32,8 @@ QTranslator* Translator::core_translator{nullptr};
 QTranslator* Translator::app_translator{nullptr};
 QVector<Translator::Callback> Translator::callbacks;
 QMutex Translator::lock;
+QString Translator::language;
+QMutex Translator::languageLock;
 
 /**
  * @brief Loads the translations according to the settings or locale.
@@ -52,6 +54,10 @@ void Translator::translate(const QString& localeName)
 
     // Load translations
     QString locale = localeName.isEmpty() ? QLocale::system().name().section('_', 0, 0) : localeName;
+    {
+        QMutexLocker languageLocker{&languageLock};
+        language = locale;
+    }
 
     if (core_translator->load(locale, ":translations/")) {
         qDebug() << "Loaded translation" << locale;
@@ -83,6 +89,12 @@ void Translator::translate(const QString& localeName)
 
     for (auto pair : callbacks)
         pair.second();
+}
+
+QLocale Translator::locale()
+{
+    QMutexLocker languageLocker{&languageLock};
+    return language.isEmpty() ? QLocale() : QLocale(language);
 }
 
 /**

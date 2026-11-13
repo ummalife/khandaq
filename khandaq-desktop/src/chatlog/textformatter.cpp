@@ -50,10 +50,12 @@ const QString DOUBLE_SIGN_PATTERN = QStringLiteral("(?<=^|\\s)"
                                                           "[%1]{2}"
                                                           "(?=$|\\s)");
 
+// The block is bounded to 8000 characters. A character class keeps the pattern small; a repeated
+// group such as (?:.|\n){1,8000} is too large for PCRE2 to compile, and then never matches.
 const QString MULTILINE_CODE = QStringLiteral("(?<=^|\\s)"
                                                      "```"
                                                      "(?!`)"
-                                                     "((?:.|\\n){1,8000}?)"
+                                                     "([\\s\\S]{1,8000}?)"
                                                      "(?<!`)"
                                                      "```"
                                                      "(?=$|\\s)");

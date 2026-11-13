@@ -473,9 +473,9 @@
     {
       "group": "gem",
       "name": "addressable",
-      "purl": "pkg:gem/addressable@2.9.0",
+      "purl": "pkg:gem/addressable@2.9.1",
       "type": "library",
-      "version": "2.9.0"
+      "version": "2.9.1"
     },
     {
       "group": "gem",

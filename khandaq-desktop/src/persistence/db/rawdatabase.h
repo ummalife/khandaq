@@ -30,6 +30,7 @@
 #include <QVariant>
 #include <QVector>
 #include <QRegularExpression>
+#include <QSemaphore>
 
 #include <atomic>
 #include <cassert>
@@ -171,7 +172,7 @@ private:
     {
         QVector<Query> queries;
         std::atomic_bool* success = nullptr;
-        std::atomic_bool* done = nullptr;
+        QSemaphore* done = nullptr;
     };
 
 private:

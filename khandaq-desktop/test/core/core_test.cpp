@@ -58,6 +58,7 @@ private slots:
     void change_name();
     void change_status_message();
     void change_status();
+    void change_nospam();
 
 private:
     /* Test Variables */
@@ -129,31 +130,39 @@ void TestCore::bootstrap()
 
 void TestCore::make_friends()
 {
-    // Make a friend request from alice to bob
+    // Make a friend request from alice to bob. The core accepts nothing by itself: the request and
+    // its message reach the interface, which shows them until they are answered.
     const QLatin1String friendMsg{"Test Invite Message"};
 
     QSignalSpy spyBobFriendMsg(bob.get(), &Core::friendRequestReceived);
+    QSignalSpy spyBobFriendAdded(bob.get(), &Core::friendAdded);
     QSignalSpy spyAliceFriendMsg(alice.get(), &Core::requestSent);
+    QSignalSpy spyAliceFriendOnline(alice.get(), &Core::friendStatusChanged);
+    QSignalSpy spyBobFriendOnline(bob.get(), &Core::friendStatusChanged);
     alice->requestFriendship(bob->getSelfId(), friendMsg);
 
-    // Wait for friend message to be received
-    QTRY_VERIFY_WITH_TIMEOUT(spyBobFriendMsg.count() == 1 && spyAliceFriendMsg.count() == 1, connected_message_wait);
+    // Wait for the request to arrive. A request goes through the onion, which may still be
+    // building its paths right after bootstrap, so it can take longer than a message.
+    QTRY_VERIFY_WITH_TIMEOUT(spyBobFriendMsg.count() == 1 && spyAliceFriendMsg.count() == 1,
+                             bootstrap_timeout);
 
     // Check for expected signal content
     QVERIFY(qvariant_cast<ToxPk>(spyBobFriendMsg[0][0]) == alice->getSelfPublicKey());
     QVERIFY(spyBobFriendMsg[0][1].toString() == friendMsg);
+    QVERIFY(spyBobFriendAdded.isEmpty());
 
     QVERIFY(qvariant_cast<ToxPk>(spyAliceFriendMsg[0][0]) == bob->getSelfPublicKey());
     QVERIFY(spyAliceFriendMsg[0][1].toString() == friendMsg);
 
     // Let Bob accept the friend request from Alice
     bob->acceptFriendRequest(alice->getSelfPublicKey());
+    QCOMPARE(spyBobFriendAdded.count(), 1);
+    QVERIFY(qvariant_cast<ToxPk>(spyBobFriendAdded[0][1]) == alice->getSelfPublicKey());
 
-    // Wait until both see each other
-    QSignalSpy spyAliceFriendOnline(alice.get(), &Core::friendStatusChanged);
-    QSignalSpy spyBobFriendOnline(bob.get(), &Core::friendStatusChanged);
-
-    QTRY_VERIFY_WITH_TIMEOUT(spyAliceFriendOnline.count() >= 1 && spyBobFriendOnline.count() >= 1, connected_message_wait);
+    // Wait until both see each other. They find each other through the onion as the request did,
+    // which takes as long on a busy machine.
+    QTRY_VERIFY_WITH_TIMEOUT(spyAliceFriendOnline.count() >= 1 && spyBobFriendOnline.count() >= 1,
+                             bootstrap_timeout);
 
     // Check for expected signal content
     QVERIFY(spyAliceFriendOnline[0][0].toInt() == static_cast<int>(Status::Status::Online));
@@ -252,6 +261,25 @@ void TestCore::change_status()
     // unchanged status, so QTRY_VERIFY_WITH_TIMEOUT would return immediately.
     QTest::qSleep(connected_message_wait);
     QVERIFY(bobStatusChangeReceived.count() == 1);
+}
+
+void TestCore::change_nospam()
+{
+    // A new antispam (Change antispam in You): a new ID, the same key, and saved at once.
+    const ToxId before = alice->getSelfId();
+    // The spy can keep the ID the signal carries once the type is known, as Nexus makes it.
+    qRegisterMetaType<ToxId>("ToxId");
+    QSignalSpy aliceSaveRequest(alice.get(), &Core::saveRequest);
+    QSignalSpy aliceIdSet(alice.get(), &Core::idSet);
+
+    alice->setNospam(0x12345678);
+
+    QCOMPARE(aliceSaveRequest.count(), 1);
+    QCOMPARE(aliceIdSet.count(), 1);
+    QCOMPARE(alice->getSelfId().getNoSpamString(), QStringLiteral("12345678"));
+    QVERIFY(alice->getSelfId().getPublicKey() == before.getPublicKey());
+    // ToxId compares the keys alone: the whole ID tells the two apart.
+    QVERIFY(alice->getSelfId().toString() != before.toString());
 }
 
 QTEST_GUILESS_MAIN(TestCore)

@@ -19,6 +19,8 @@
 
 #include "text.h"
 #include "../documentcache.h"
+#include "src/widget/air/airoverlay.h"
+#include "src/widget/air/airstrings.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QApplication>
@@ -26,9 +28,9 @@
 #include <QDesktopServices>
 #include <QFontMetrics>
 #include <QGraphicsSceneMouseEvent>
-#include <QMessageBox>
 #include <QPainter>
 #include <QPalette>
+#include <QStyle>
 #include <QTextBlock>
 #include <QTextFragment>
 #include <QUrl>
@@ -111,6 +113,19 @@ void Text::setWidth(float w)
     dirty = true;
 
     regenerate();
+}
+
+void Text::setDocumentMargin(qreal margin)
+{
+    documentMargin = margin;
+    // As with setText(), the document takes it in when the line is laid out.
+    dirty = true;
+}
+
+void Text::setStartAligned(bool startAligned_)
+{
+    startAligned = startAligned_;
+    dirty = true;
 }
 
 void Text::selectionMouseMove(QPointF scenePos)
@@ -306,15 +321,17 @@ void Text::mouseReleaseEvent(QGraphicsSceneMouseEvent* event)
     const QUrl url(anchor);
     const QString scheme = url.scheme().toLower();
     if (scheme == QStringLiteral("file") || scheme == QStringLiteral("smb")) {
-        const QMessageBox::StandardButton answer = QMessageBox::warning(
-            nullptr, tr("Open a local or network file?", "popup title"),
-            tr("This link opens a file on your computer or network:\n\n%1\n\n"
-               "Opening it can run a program on your computer. Links in messages come from other "
-               "people. Open it anyway?", "popup text")
-                .arg(url.toString()),
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-        if (answer != QMessageBox::Yes)
+        // Asked over the window the transcript is in (E21), Cancel first, as a dangerous verb is.
+        QWidget* const view = event->widget();
+        if (!view) {
             return;
+        }
+        // This class is Text too: the strings go by their full name.
+        AirDialog::confirm(view, AirStrings::text(AirStrings::Text::LinkLocalTitle),
+                           AirStrings::text(AirStrings::Text::LinkLocalMessage).arg(url.toString()),
+                           AirStrings::text(AirStrings::Text::LinkOpen), AirDialog::Verb::Danger,
+                           [url] { QDesktopServices::openUrl(url); });
+        return;
     }
 
     // open anchor in browser
@@ -362,6 +379,8 @@ void Text::regenerate()
     }
 
     if (dirty) {
+        // The documents are shared through the cache: each text sets its own margin.
+        doc->setDocumentMargin(documentMargin);
         doc->setDefaultFont(defFont);
 
         if (elide) {
@@ -377,6 +396,11 @@ void Text::regenerate()
         // wrap mode
         QTextOption opt;
         opt.setWrapMode(elide ? QTextOption::NoWrap : QTextOption::WrapAtWordBoundaryOrAnywhere);
+        if (startAligned) {
+            // Absolute, so a paragraph in the other script does not turn it around; the direction
+            // is read here, so a change of language comes in with the next regeneration.
+            opt.setAlignment(QStyle::visualAlignment(QGuiApplication::layoutDirection(), Qt::AlignLeft));
+        }
         doc->setDefaultTextOption(opt);
 
         // width

@@ -20,6 +20,7 @@
 #include "message.h"
 #include "friend.h"
 #include "src/core/core.h"
+#include "src/model/air/airmodel.h"
 
 #include <cassert>
 
@@ -59,10 +60,13 @@ void MessageProcessor::SharedParams::onUserNameSet(const QString& username)
 {
     QString sanename = username;
     sanename.remove(QRegularExpression("[\\t\\n\\v\\f\\r\\x0000]"));
-    nameMention = QRegularExpression("\\b" + QRegularExpression::escape(username) + "\\b",
-                                     QRegularExpression::CaseInsensitiveOption);
-    sanitizedNameMention = QRegularExpression("\\b" + QRegularExpression::escape(sanename) + "\\b",
-                                              QRegularExpression::CaseInsensitiveOption);
+    // Without Unicode properties \b only knows ASCII letters, so a Cyrillic or Arabic name never
+    // matched and its owner was never told about a mention.
+    const auto options =
+        QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption;
+    nameMention = QRegularExpression("\\b" + QRegularExpression::escape(username) + "\\b", options);
+    sanitizedNameMention =
+        QRegularExpression("\\b" + QRegularExpression::escape(sanename) + "\\b", options);
 }
 
 /**
@@ -127,16 +131,19 @@ Message MessageProcessor::processIncomingCoreMessage(bool isAction, QString cons
         auto nameMention = sharedParams.getNameMention();
         auto sanitizedNameMention = sharedParams.getSanitizedNameMention();
         auto pubKeyMention = sharedParams.getPublicKeyMention();
+        // Only the words the author wrote count: a reply's header and quote name whom it answers.
+        const int ownStart = Air::ownWordsStart(ret.content);
+        const QString ownWords = ret.content.mid(ownStart);
 
         for (auto const& mention : {nameMention, sanitizedNameMention, pubKeyMention}) {
-            auto matchIt = mention.globalMatch(ret.content);
+            auto matchIt = mention.globalMatch(ownWords);
             if (!matchIt.hasNext()) {
                 continue;
             }
 
             auto match = matchIt.next();
 
-            auto pos = static_cast<size_t>(match.capturedStart());
+            auto pos = static_cast<size_t>(ownStart + match.capturedStart());
             auto length = static_cast<size_t>(match.capturedLength());
 
             // skip matches on empty usernames

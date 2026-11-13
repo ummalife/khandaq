@@ -21,9 +21,12 @@
 
 #include "ichatlog.h"
 #include "imessagedispatcher.h"
+#include "src/model/air/airmessagemarks.h"
 
 #include <QList>
 #include <QObject>
+
+#include <set>
 
 struct SessionChatLogMetadata;
 class FriendList;
@@ -48,6 +51,46 @@ public:
     ChatLogIdx getNextIdx() const override;
     std::vector<DateChatLogIdxPair> getDateIdxs(const QDate& startDate, size_t maxDates) const override;
     void addSystemMessage(const SystemMessage& message) override;
+    bool isShown(ChatLogIdx idx) const override;
+    bool isCancelled(ChatLogIdx idx) const override;
+
+    void hideItem(ChatLogIdx idx);
+    /** Leaves out an item as it is loaded, one the history keeps erased; nothing is signalled. */
+    void markHidden(ChatLogIdx idx);
+
+    /** What an edit, a deletion or a reaction did to the log (stage 3, item 10). */
+    struct EffectResult
+    {
+        enum class Change
+        {
+            None,
+            Edited,
+            Deleted,
+            Reacted,
+        };
+        Change change = Change::None;
+        ChatLogIdx idx{0};
+        /** Who wrote the item, and when. */
+        ToxPk author;
+        QDateTime timestamp;
+        /** A text as it was before an edit or a deletion. */
+        Message before{};
+        /** A file as it was when it was deleted or got a reaction. */
+        ToxFile file;
+        /** The marks of the item after the change. */
+        Air::EntryMarks marks;
+    };
+
+    /**
+     * Applies an edit, a deletion or a reaction of sender to the item it points at, by the rules
+     * Android keeps: only the author edits or deletes, and only what they wrote here; anyone in the
+     * conversation reacts, once per person, to anything; an older edit than the one shown, or one
+     * of ours coming back, changes nothing. Of two items that answer, the newer takes it.
+     * @param selfKey Our key as the others here know it: the profile's key between two people, our
+     * key in the group in a group, which a reaction on one of our messages names.
+     */
+    EffectResult applyEffect(const ToxPk& sender, const Air::MessageEffect& effect,
+                             const ToxPk& selfKey);
 
     void insertCompleteMessageAtIdx(ChatLogIdx idx, const ToxPk& sender, QString senderName,
                                     const ChatLogMessage& message);
@@ -79,6 +122,8 @@ private:
     ChatLogIdx nextIdx = ChatLogIdx(0);
 
     std::map<ChatLogIdx, ChatLogItem> items;
+    /** Items taken out by hideItem: gone, like a cancelled message. */
+    std::set<ChatLogIdx> hiddenItems;
 
     struct CurrentFileTransfer
     {

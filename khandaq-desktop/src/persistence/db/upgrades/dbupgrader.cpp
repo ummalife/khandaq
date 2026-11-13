@@ -29,7 +29,38 @@
 #include <QTranslator>
 
 namespace {
-constexpr int SCHEMA_VERSION = 11;
+constexpr int SCHEMA_VERSION = 12;
+
+/**
+ * @brief The tables of schema 12.
+ *
+ * outbox holds every one of our messages that has not reached the person yet, apart from the
+ * history: the queue survives with the history switched off, and a message the delivery gave up
+ * on keeps its text for "Retry". history_id links the row to the same message in the history when
+ * the history was on; it turns NULL when that history is erased. state: 0 waits, 1 failed,
+ * 2 cancelled (its history row is removed at the next start, when no chat log holds its index).
+ *
+ * notes holds the saved messages ("Favorites"): they stay on this device and go nowhere.
+ */
+QVector<RawDatabase::Query> outboxAndNotesSchema()
+{
+    QVector<RawDatabase::Query> queries;
+    queries += RawDatabase::Query(
+        QStringLiteral("CREATE TABLE outbox (id INTEGER PRIMARY KEY, "
+                       "chat_uuid BLOB NOT NULL, "
+                       "timestamp INTEGER NOT NULL, "
+                       "message BLOB NOT NULL, "
+                       "required_extensions INTEGER NOT NULL DEFAULT 0, "
+                       "history_id INTEGER UNIQUE, "
+                       "state INTEGER NOT NULL DEFAULT 0, "
+                       "FOREIGN KEY (history_id) REFERENCES history(id) ON DELETE SET NULL);"));
+    queries +=
+        RawDatabase::Query(QStringLiteral("CREATE INDEX outbox_chat_idx on outbox (chat_uuid);"));
+    queries += RawDatabase::Query(QStringLiteral("CREATE TABLE notes (id INTEGER PRIMARY KEY, "
+                                                 "timestamp INTEGER NOT NULL, "
+                                                 "message BLOB NOT NULL);"));
+    return queries;
+}
 
 std::vector<DbUpgrader::BadEntry> getInvalidPeers(RawDatabase& db)
 {
@@ -249,10 +280,12 @@ bool DbUpgrader::dbSchemaUpgrade(std::shared_ptr<RawDatabase>& db, IMessageBoxMa
     }
 
     using DbSchemaUpgradeFn = bool (*)(RawDatabase&);
-    std::vector<DbSchemaUpgradeFn> upgradeFns = {dbSchema0to1, dbSchema1to2, dbSchema2to3,
-                                                 dbSchema3to4, dbSchema4to5, dbSchema5to6,
-                                                 dbSchema6to7, dbSchema7to8, dbSchema8to9,
-                                                 dbSchema9to10, DbTo11::dbSchema10to11};
+    std::vector<DbSchemaUpgradeFn> upgradeFns = {dbSchema0to1,           dbSchema1to2,
+                                                 dbSchema2to3,           dbSchema3to4,
+                                                 dbSchema4to5,           dbSchema5to6,
+                                                 dbSchema6to7,           dbSchema7to8,
+                                                 dbSchema8to9,           dbSchema9to10,
+                                                 DbTo11::dbSchema10to11, dbSchema11to12};
 
     assert(databaseSchemaVersion < static_cast<int>(upgradeFns.size()));
     assert(upgradeFns.size() == SCHEMA_VERSION);
@@ -337,6 +370,7 @@ bool DbUpgrader::createCurrentSchema(RawDatabase& db)
     // sqlite doesn't support including the index as part of the CREATE TABLE statement, so add a second query
     queries += RawDatabase::Query(
         "CREATE INDEX chat_id_idx on history (chat_id);");
+    queries += outboxAndNotesSchema();
     queries += RawDatabase::Query(QStringLiteral("PRAGMA user_version = %1;").arg(SCHEMA_VERSION));
     return db.execNow(queries);
 }
@@ -615,6 +649,28 @@ bool DbUpgrader::dbSchema9to10(RawDatabase& db)
     upgradeQueries += RawDatabase::Query(QStringLiteral("UPDATE file_transfers SET file_restart_id = ? WHERE LENGTH(file_restart_id) != 32;"),
         {dummyResumeId});
     upgradeQueries += RawDatabase::Query(QStringLiteral("PRAGMA user_version = 10;"));
+    return db.execNow(upgradeQueries);
+}
+
+/**
+ * @brief Adds the outgoing queue and the saved messages, and moves the messages that wait in the
+ * history (faux_offline_pending) into the queue, oldest first, still linked to their history rows.
+ * The history tables stay as they are.
+ */
+bool DbUpgrader::dbSchema11to12(RawDatabase& db)
+{
+    QVector<RawDatabase::Query> upgradeQueries = outboxAndNotesSchema();
+    upgradeQueries += RawDatabase::Query(
+        QStringLiteral("INSERT INTO outbox (chat_uuid, timestamp, message, required_extensions, "
+                       "history_id, state) "
+                       "SELECT chats.uuid, history.timestamp, text_messages.message, "
+                       "faux_offline_pending.required_extensions, history.id, 0 "
+                       "FROM faux_offline_pending "
+                       "JOIN history ON history.id = faux_offline_pending.id "
+                       "JOIN text_messages ON text_messages.id = history.id "
+                       "JOIN chats ON chats.id = history.chat_id "
+                       "ORDER BY history.id;"));
+    upgradeQueries += RawDatabase::Query(QStringLiteral("PRAGMA user_version = 12;"));
     return db.execNow(upgradeQueries);
 }
 

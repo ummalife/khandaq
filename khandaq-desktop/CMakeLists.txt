@@ -32,6 +32,7 @@ option(ASAN "Compile with AddressSanitizer" OFF)
 option(TSAN "Compile with ThreadSanitizer" OFF)
 option(DESKTOP_NOTIFICATIONS "Use snorenotify for desktop notifications" OFF)
 option(STRICT_OPTIONS "Error on compile warning, used by CI" OFF)
+option(KHANDAQ_SCREENSHOT_HOOK "Test builds only: KHANDAQ_SHOT_SCRIPT plays window states and saves PNGs" OFF)
 
 # process generated files if cmake >= 3.10
 if(POLICY CMP0071)
@@ -161,24 +162,17 @@ include(Dependencies)
 ################################################################################
 
 qt5_wrap_ui(${PROJECT_NAME}_FORMS
-  src/chatlog/content/filetransferwidget.ui
-  src/loginscreen.ui
   src/mainwindow.ui
   src/widget/about/aboutfriendform.ui
   src/widget/form/loadhistorydialog.ui
-  src/widget/form/profileform.ui
   src/widget/form/removechatdialog.ui
   src/widget/form/searchsettingsform.ui
   src/widget/form/setpassworddialog.ui
-  src/widget/form/settings/aboutsettings.ui
-  src/widget/form/settings/advancedsettings.ui
-  src/widget/form/settings/avform.ui
-  src/widget/form/settings/generalsettings.ui
-  src/widget/form/settings/privacysettings.ui
-  src/widget/form/settings/userinterfacesettings.ui)
+  src/widget/form/settings/avform.ui)
 
 set(${PROJECT_NAME}_RESOURCES
     res.qrc
+    res/air.qrc
 )
 
 if(NOT SMILEYS)
@@ -219,6 +213,8 @@ set(${PROJECT_NAME}_SOURCES
   src/chatlog/chatwidget.h
   src/chatlog/chatmessage.cpp
   src/chatlog/chatmessage.h
+  src/chatlog/content/airlabel.cpp
+  src/chatlog/content/airlabel.h
   src/chatlog/content/filetransferwidget.cpp
   src/chatlog/content/filetransferwidget.h
   src/chatlog/content/image.cpp
@@ -296,6 +292,28 @@ set(${PROJECT_NAME}_SOURCES
   src/model/about/aboutfriend.h
   src/model/about/iaboutfriend.cpp
   src/model/about/iaboutfriend.h
+  src/model/air/airconversation.cpp
+  src/model/air/airconversation.h
+  src/model/air/airgroup.cpp
+  src/model/air/airgroup.h
+  src/model/air/airlocalstore.cpp
+  src/model/air/airlocalstore.h
+  src/model/air/airmessagemarks.cpp
+  src/model/air/airmessagemarks.h
+  src/model/air/airmedia.cpp
+  src/model/air/airmedia.h
+  src/model/air/airmodel.cpp
+  src/model/air/airmodel.h
+  src/model/air/airnetwork.cpp
+  src/model/air/airnetwork.h
+  src/model/air/airpreferences.cpp
+  src/model/air/airpreferences.h
+  src/model/air/airstart.cpp
+  src/model/air/airstart.h
+  src/model/air/airvoicedecoder.cpp
+  src/model/air/airvoicedecoder.h
+  src/model/air/airyou.cpp
+  src/model/air/airyou.h
   src/model/chathistory.cpp
   src/model/chathistory.h
   src/model/chatlogitem.cpp
@@ -334,6 +352,8 @@ set(${PROJECT_NAME}_SOURCES
   src/model/imessagedispatcher.h
   src/model/message.cpp
   src/model/message.h
+  src/model/notes.cpp
+  src/model/notes.h
   src/model/notificationgenerator.cpp
   src/model/notificationgenerator.h
   src/model/profile/iprofileinfo.cpp
@@ -349,8 +369,6 @@ set(${PROJECT_NAME}_SOURCES
   src/net/bootstrapnodeupdater.h
   src/net/avatarbroadcaster.cpp
   src/net/avatarbroadcaster.h
-  src/net/toxuri.cpp
-  src/net/toxuri.h
   src/persistence/db/rawdatabase.cpp
   src/persistence/db/rawdatabase.h
   src/persistence/db/upgrades/dbupgrader.cpp
@@ -369,10 +387,14 @@ set(${PROJECT_NAME}_SOURCES
   src/persistence/ismileysettings.h
   src/persistence/offlinemsgengine.cpp
   src/persistence/offlinemsgengine.h
+  src/persistence/outbox.cpp
+  src/persistence/outbox.h
   src/persistence/paths.cpp
   src/persistence/paths.h
   src/persistence/profile.cpp
   src/persistence/profile.h
+  src/persistence/profilefile.cpp
+  src/persistence/profilefile.h
   src/persistence/profilelocker.cpp
   src/persistence/profilelocker.h
   src/persistence/credentialstore.cpp
@@ -411,6 +433,56 @@ set(${PROJECT_NAME}_SOURCES
   src/video/videosurface.h
   src/widget/about/aboutfriendform.cpp
   src/widget/about/aboutfriendform.h
+  src/widget/air/airband.cpp
+  src/widget/air/airband.h
+  src/widget/air/airchatparts.cpp
+  src/widget/air/airchatparts.h
+  src/widget/air/aircomposer.cpp
+  src/widget/air/aircomposer.h
+  src/widget/air/aircontroller.cpp
+  src/widget/air/aircontroller.h
+  src/widget/air/airdossier.cpp
+  src/widget/air/airdossier.h
+  src/widget/air/airgroupdossier.cpp
+  src/widget/air/airgroupdossier.h
+  src/widget/air/airgroupviews.cpp
+  src/widget/air/airgroupviews.h
+  src/widget/air/airaccessible.cpp
+  src/widget/air/airaccessible.h
+  src/widget/air/airlistview.cpp
+  src/widget/air/airlistview.h
+  src/widget/air/airlocal.cpp
+  src/widget/air/airlocal.h
+  src/widget/air/airmediaparts.cpp
+  src/widget/air/airmediaparts.h
+  src/widget/air/airnewcontact.cpp
+  src/widget/air/airnewcontact.h
+  src/widget/air/airnewgroup.cpp
+  src/widget/air/airnewgroup.h
+  src/widget/air/airoverlay.cpp
+  src/widget/air/airoverlay.h
+  src/widget/air/airpanels.cpp
+  src/widget/air/airpanels.h
+  src/widget/air/airsettings.cpp
+  src/widget/air/airsettings.h
+  src/widget/air/airsettingspage.cpp
+  src/widget/air/airsettingspage.h
+  src/widget/air/airsource.cpp
+  src/widget/air/airsource.h
+  src/widget/air/airstartparts.cpp
+  src/widget/air/airstartparts.h
+  src/widget/air/airstrings.cpp
+  src/widget/air/airstrings.h
+  src/widget/air/airstyle.cpp
+  src/widget/air/airstyle.h
+  src/widget/air/airtokens.h
+  src/widget/air/airtray.cpp
+  src/widget/air/airtray.h
+  src/widget/air/airwidgets.cpp
+  src/widget/air/airwidgets.h
+  src/widget/air/airyou.cpp
+  src/widget/air/airyou.h
+  src/platform/systemappearance.h
   src/widget/categorywidget.cpp
   src/widget/categorywidget.h
   src/widget/chatformheader.cpp
@@ -450,30 +522,18 @@ set(${PROJECT_NAME}_SOURCES
   src/widget/form/groupinvitewidget.h
   src/widget/form/loadhistorydialog.cpp
   src/widget/form/loadhistorydialog.h
-  src/widget/form/profileform.cpp
-  src/widget/form/profileform.h
+  src/widget/form/notesform.cpp
+  src/widget/form/notesform.h
   src/widget/form/searchsettingsform.cpp
   src/widget/form/searchsettingsform.h
   src/widget/form/setpassworddialog.cpp
   src/widget/form/setpassworddialog.h
-  src/widget/form/settings/aboutform.cpp
-  src/widget/form/settings/aboutform.h
-  src/widget/form/settings/advancedform.cpp
-  src/widget/form/settings/advancedform.h
   src/widget/form/settings/avform.cpp
   src/widget/form/settings/avform.h
-  src/widget/form/settings/generalform.cpp
-  src/widget/form/settings/generalform.h
   src/widget/form/settings/genericsettings.cpp
   src/widget/form/settings/genericsettings.h
-  src/widget/form/settings/privacyform.cpp
-  src/widget/form/settings/privacyform.h
-  src/widget/form/settings/userinterfaceform.h
-  src/widget/form/settings/userinterfaceform.cpp
   src/widget/form/settings/verticalonlyscroller.cpp
   src/widget/form/settings/verticalonlyscroller.h
-  src/widget/form/settingswidget.cpp
-  src/widget/form/settingswidget.h
   src/widget/form/tabcompleter.cpp
   src/widget/form/tabcompleter.h
   src/widget/friendlistlayout.cpp
@@ -516,8 +576,6 @@ set(${PROJECT_NAME}_SOURCES
   src/widget/tool/messageboxmanager.h
   src/widget/tool/imageviewerwidget.cpp
   src/widget/tool/imageviewerwidget.h
-  src/widget/tool/callconfirmwidget.cpp
-  src/widget/tool/callconfirmwidget.h
   src/widget/tool/chatquotepreview.cpp
   src/widget/tool/chatquotepreview.h
   src/widget/tool/chattextedit.cpp
@@ -530,8 +588,6 @@ set(${PROJECT_NAME}_SOURCES
   src/widget/tool/identicon.h
   src/widget/tool/movablewidget.cpp
   src/widget/tool/movablewidget.h
-  src/widget/tool/profileimporter.cpp
-  src/widget/tool/profileimporter.h
   src/widget/tool/recursivesignalblocker.cpp
   src/widget/tool/recursivesignalblocker.h
   src/widget/tool/removechatdialog.cpp
@@ -602,6 +658,34 @@ if (PLATFORM_EXTENSIONS)
 endif()
 
 add_definitions(-DQT_MESSAGELOGCONTEXT=1)
+
+# Light or dark, and less motion: asked of the system the client runs on.
+if(APPLE)
+  set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
+    src/platform/systemappearance_osx.mm)
+else()
+  set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
+    src/platform/systemappearance.cpp)
+endif()
+
+# The microphone and the camera before a call: macOS asks the person, elsewhere access is given.
+set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
+  src/platform/mediaaccess.cpp
+  src/platform/mediaaccess.h
+  src/platform/traynotify.cpp
+  src/platform/traynotify.h)
+if(APPLE)
+  set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
+    src/platform/mediaaccess_osx.mm)
+endif()
+
+if(KHANDAQ_SCREENSHOT_HOOK)
+  add_definitions(-DKHANDAQ_SCREENSHOT_HOOK=1)
+  set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
+    src/widget/air/airwalk.cpp
+    src/widget/air/airwalk.h)
+  message(STATUS "screenshot hook ENABLED (test builds only)")
+endif()
 
 if(AVFOUNDATION_FOUND)
   set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
@@ -680,7 +764,9 @@ target_link_libraries(${PROJECT_NAME}_static translations_library)
 
 if(APPLE)
   find_library(KHANDAQ_SECURITY_FRAMEWORK Security REQUIRED)
-  target_link_libraries(${PROJECT_NAME}_static ${KHANDAQ_SECURITY_FRAMEWORK})
+  find_library(KHANDAQ_APPKIT_FRAMEWORK AppKit REQUIRED)
+  target_link_libraries(${PROJECT_NAME}_static ${KHANDAQ_SECURITY_FRAMEWORK}
+    ${KHANDAQ_APPKIT_FRAMEWORK})
 endif()
 if(WIN32)
   target_link_libraries(${PROJECT_NAME}_static advapi32)

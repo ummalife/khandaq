@@ -20,6 +20,7 @@
 #pragma once
 
 #include <QPointF>
+#include <QString>
 #include <QRectF>
 #include <QVector>
 #include <memory>
@@ -67,6 +68,21 @@ class ChatLine
 public:
     using Ptr = std::shared_ptr<ChatLine>;
 
+    /** How the contents of the line are placed. */
+    enum class Layout
+    {
+        /** The classic row of columns, sized by their ColumnFormat. */
+        Columns,
+        /**
+         * An entry of the transcript (design/system kq-entry): the time at the start, the author
+         * above the text, the state mark after the text. Contents: 0 the author, 1 the text, 2 the
+         * time, and 3 the state mark when there is one; then the parts setEntryParts names.
+         */
+        AirEntry,
+        /** A day mark, set where the text of the entries starts: content 0. */
+        AirDay,
+    };
+
     ChatLine();
     virtual ~ChatLine();
 
@@ -74,6 +90,17 @@ public:
 
     void replaceContent(int col, ChatLineContent* lineContent);
     void layout(qreal width, QPointF scenePos);
+    void setLayout(Layout layout);
+    Layout getLayout() const;
+    /** An entry shows its author only where a run of one author starts. Returns whether it changed. */
+    bool setAuthorShown(bool shown);
+    bool isAuthorShown() const;
+    /**
+     * A collapsed line takes no height and shows nothing: an item the log does not show. Returns
+     * whether it changed.
+     */
+    bool setCollapsed(bool collapsed);
+    bool isCollapsed() const;
     void moveBy(qreal deltaY);
     void removeFromScene();
     void addToScene(QGraphicsScene* scene);
@@ -87,6 +114,8 @@ public:
 
     ChatLineContent* getContent(int col) const;
     ChatLineContent* getContent(QPointF scenePos) const;
+    /** What a screen reader says for the line: here the words of its contents, in order. */
+    virtual QString spokenText() const;
 
     bool isOverSelection(QPointF scenePos);
 
@@ -100,7 +129,16 @@ protected:
     QPointF mapToContent(ChatLineContent* c, QPointF pos);
 
     void addColumn(ChatLineContent* item, ColumnFormat fmt);
+    /**
+     * Where an entry keeps what it shows besides its text (stage 3, item 10): the quote of the
+     * message it answers, above the text, and its notes (the reactions, "edited") under it. -1 for
+     * a part it does not have; a part that takes no room is left out.
+     */
+    void setEntryParts(int quote, int notes);
+    ChatLineContent* quotePart() const;
+    ChatLineContent* notesPart() const;
     void updateBBox();
+    void layoutAir(QPointF scenePos);
     void visibilityChanged(bool visible);
 
 private:
@@ -111,4 +149,9 @@ private:
     qreal columnSpacing = 15.0;
     QRectF bbox;
     bool isVisible = false;
+    Layout lineLayout = Layout::Columns;
+    bool authorShown = true;
+    bool collapsed = false;
+    int quoteColumn = -1;
+    int notesColumn = -1;
 };

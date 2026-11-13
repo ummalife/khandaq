@@ -1166,6 +1166,201 @@ Deferred and left out on Android, stage 5:
 | Only a member's private message in a read-only group, sent through "Write to a moderator", picks the moderator from a list dialog when there are several (`AirGroupPanel`) | the rest of the member's actions are sheets; this choice is reached only in a read-only group with more than one moderator | after the release |
 | The group "QA roles" stays on the test profile Bilal | made by the stage 3 checks; it is never in store or site frames | none |
 
+### Desktop stage 3: decided on review
+
+Decided by the coordinator on 12.11.2026, after the review of the desktop's stage 3.
+
+- **Replies, edits, deletions and reactions are shown, not sent.** The desktop reads what the phones
+  send (packets 186, 187 and 188, and 0x41, 0x42 and 0x43 in groups) with the fallback of "Unknown
+  markup" below, but offers none of them itself in this release: editing a message needs its msgV3
+  hash, and the desktop's toxcore does not advertise msgV3, so sending would change the protocol on
+  its side.
+- **The line under the name** says "online, via a relay" (ru «в сети, через ретранслятор»), as the
+  phones do. The node count stands only in Settings > Network, as the Nodes row: the relays this
+  computer is connected to and the contacts it reaches directly.
+- **Reconnect:** while the node is offline, the nodes are asked again every 15 seconds, as above; qTox
+  asked about every 1.2 seconds and resolved the names of four public nodes on the core thread each
+  time. The start, a network change the system reports and Connect again ask at once. Measured on
+  127.0.0.1 with the only node stopped for the first 35 seconds of a run: 3 requests while it was
+  away instead of 29, and the link came 7.6 seconds after the node was back (7.5 with the old pace),
+  because toxcore finds a node that comes back by itself. Nothing asks for a faster pace.
+
+### Desktop stage 4: first launch and sign-in
+
+Built in the desktop client on 12.11.2026 to the rules of "First launch, sign-in and PIN on the
+phone", with the iOS words where they are the same, in English, Russian, Arabic and Chinese. What a
+profile has on the desktop was written down first and kept; nothing new guards it.
+
+- **What a profile has on the desktop:** a password encrypts the Tox save (.tox), the profile's
+  settings file (.ini) and the history (SQLCipher, .db) with keys derived from it; without a
+  password none of them is encrypted, and the words say so before the choice. The password is kept
+  in the system credential store (the keychain on macOS, the Credential Manager on Windows; Linux
+  builds have none, so there the switch shows only for a profile without a password) only while Log
+  in automatically is on. After Log out every start opens sign-in until a login there, `-p`
+  included. There is no PIN on the desktop.
+- **One window**, 560 by 640 in the middle of the screen and at least 400 high on a short screen,
+  where the page scrolls under a fixed bar with the main button and the reason it waits; it does not
+  maximise. The back arrow and Esc go back a page. After the last step or a sign-in the words fade
+  out in the tap time and the window grows into the main window's frame in the reveal time; with
+  reduced motion the main window is there at once.
+- **First launch** is the three pages with the three bars at the top. A page slides in the layout
+  time from the end edge going forward (mirrored in right-to-left languages); with reduced motion it
+  fades in over the old one. The rule (8 characters, a letter and a digit) stands under the
+  password fields and is now the rule of the password dialog on You too, which took 6 characters.
+  Log in automatically stands under the fields with its consequence, and only while Set a password
+  is chosen. On Your ID is ready the groups of the ID come in one after another (the stagger, each
+  in the state time; at once with reduced motion); Share is a menu (Copy ID, Copy QR code, Save QR
+  code); Add the first person opens New contact in the main window, and Esc opens Air without it.
+- **Sign-in** is the profile's name, its password field and the room kept under it for an error.
+  Several profiles are a list (Profiles on this device; a profile without a password reads No
+  password), and a right click on a row offers Delete, asked once. Why the profile did not open
+  stands under the field in red: a wrong password (the field shakes once, not with reduced motion,
+  and what was typed is selected), a damaged file, no access to the file, the profile open in
+  another Khandaq on this computer, a proxy in the profile's network settings that did not work
+  (with Log in without the proxy, asked first, which turns the proxy off for that profile), and any
+  other failure with its code under Details. The qTox form said "Wrong password." in a box for every
+  one of them, and passed on a profile whose core had not started.
+- **Forgot the password?** says that the password cannot be recovered and offers Create a new
+  profile (this one stays on the device in its file, named in the words, and opens if the password
+  comes back) or Delete this profile, asked once more. Deleting removes the profile's .tox, .ini and
+  .db and its stored password, and only while holding the profile's lock: a profile open in another
+  Khandaq is not deleted.
+- **Moving a profile in** starts from first launch and sign-in; from an open profile, Settings >
+  Profile transfer > Import and a `.tox` opened with the app ask first, because they log out. The
+  file is read by toxcore with no network before anything is written: a file with a password asks
+  for it, then the name and the ID are shown, and Move the profile here copies it and opens it. A
+  file that is no profile, a damaged one and one that cannot be read say so in place. A profile of
+  the same name is not replaced: the new one takes a name of its own ("Amina 2"), where qTox replaced
+  the .tox and left the old .ini and .db. A moved-in profile with a password does not log in by
+  itself until asked.
+- **Upgrade path:** two test profiles made with the stage 3 build, one with a password set there and
+  one without, each with its contacts and groups, its history and three messages to an offline
+  contact (two in transit, one Not sent), opened in the stage 4 build with all of it: the plain one by
+  itself as before, the other through sign-in. The history kept schema 12 and the same row counts,
+  the plain save stayed the same byte for byte, the encrypted files stayed encrypted, and the stage 3
+  build opened again what the stage 4 build left. Logging in by itself with a stored password, and
+  `-p` with it turned off, work as before.
+
+Deferred and left out on the desktop:
+
+| What | Why not now | Where |
+| --- | --- | --- |
+| The start window's 560, 640 and 400 come from the plan, not from tokens | tokens.json has a size group, but build.py writes it into the iOS and Android sources too, so a window size there would change files of clients that have shipped; the sizes are named constants in loginscreen.cpp (Desktop stage 5) | coordinator |
+| Large text is walked as the display scale (3) | the desktop follows the system's scale and has no text size of its own | none |
+| The keychain and the Credential Manager themselves | the walks' sandbox closes the keychain, so no system question comes up on the computer they run on; the code that keeps the password is the one of stage 3 | a release check on a real machine |
+| Linux and Windows walks | walked on macOS only; Windows (Qt 5.12, MinGW) is built in CI at release | CI |
+| The window stands still while a profile opens (about 1.3 seconds with a password in a walk on a busy machine); the main button says Opening the profile first | qTox opens a profile on the main thread, key derivation and the core start included; moving that off it changes Nexus and Profile beyond this stage | a later stage |
+| Replies, edits, deletions and reactions sent from the desktop | msgV3 on the desktop changes the protocol | owner |
+
+### Desktop stage 5: every screen, the keyboard and the release checks
+
+Done in the desktop client on 13.11.2026, for the desktop's own release (v0.2.47).
+
+- **The pass.** Every screen of stages 1 to 4 was walked by a script of the test build (AirWalk,
+  built only with KHANDAQ_SCREENSHOT_HOOK) at 1440 by 900, 1920 by 1080 and the window's least size,
+  in both themes, in English, Russian, Arabic, Chinese and German: 690 screens, on fresh copies of
+  the made-up test profiles in a sandbox with the network only to 127.0.0.1. For each screen it
+  writes into the log every control Tab reaches, in order, with what a screen reader says, its
+  tooltip and how many pixels its focus ring changes, and every label or button cut short, widget
+  squeezed under its least size, widget outside its parent and overlap. German has a translation
+  file but none of the Air strings, so its Air screens are in English; the longest complete
+  translation is Russian (1.09 of the English characters, Arabic 1.05).
+- **Window sizes, each a named constant with its reason beside it.** The start window is 560 by
+  640 and at least 400 high on a short screen (`loginscreen.cpp`). The main window is at least 775
+  wide with the list and a conversation side by side, or as wide as the Air band needs for the pills
+  it shows, whichever is more (with Requests and In transit: 867 in English, 849 in Russian, 841 in
+  Arabic, 820 in Chinese), and at least 480 high; the list alone, or a window that holds Settings or You, at least 420 high; a
+  conversation in a window of its own at least 720 by 420 (`widget.cpp`). The command line is up to
+  560 wide (`airwidgets.cpp`). tokens.json has a size group, but build.py writes it into the iOS and
+  Android sources as well, so a window size there would change files of clients that have shipped;
+  the sizes stay in the desktop's code.
+- **A narrow pane keeps its words.** A row of Settings puts its control under the words when the
+  pane is too narrow for both; a menu field narrows to its chevron and a few letters; the full
+  commit under About is cut at its end but copied whole and shown in the tooltip. The old form of
+  the call devices keeps the width its grid of labels and lists needs, and the pane scrolls
+  sideways. In a conversation the tray's messages take the room that the transcript, the rows not
+  sent and the field leave them, and scroll, so none of them is squeezed; the line under the field
+  keeps the height of its words (Arabic stands taller than the caption's line); the hours of the
+  last day beside the strip in the header go on to a second line.
+- **The keyboard.** Tab follows each screen as it reads and comes back to where it started. While
+  New contact, New group or a dossier is open over the list or the conversation, what it covers is
+  out of the Tab chain, and the focus goes back to where it was when the panel folds away. Scroll
+  areas do not take Tab themselves; the transcript does, with a ring at its edge, and is "Messages"
+  to a screen reader; the field is named as its placeholder. Rows a list makes afresh (members,
+  people to invite, files of a dossier, blocked keys, hidden members, the tray's messages) take
+  their place where the list stands in the order, not at the end of the window. A control that
+  takes the focus inside a scrolled pane comes into view with its ring: Qt's own call scrolled a
+  right-to-left pane the wrong way, so the desktop counts the bar from the right there. The list
+  brings the row its cursor stands on back into view when Tab comes to it. The start of the stage
+  had 28 controls whose focus did not show and 19 without a spoken name; the end has none of either.
+- **Volume.** A copy of the test profile with 311 made-up contacts,
+  10 337 messages and one chat of 5 000 (desktop-s5-volume.py; the source is not written) was opened
+  with no network at display scale 2, three times by each of three builds in turn: this stage's, the
+  stage's starting build and HEAD. The main window shows after 2.7 s, against 39.4 s for the starting
+  build and 30.3 s for HEAD. At a start the old list of qTox, kept hidden under the Air list, sorted
+  and laid out all its rows again after each contact's name came in (13 375 of the 16 808 samples of
+  the main thread); it now sorts once for the changes of one pass of the event loop, and what reads
+  its layout sorts first. Each query of the history waits on a semaphore instead of looking every
+  10 ms, and the queue of a chat is read in one wait instead of four. Most of what is left of the
+  start is the conversation form made for each contact. The chat of 5 000 messages opens in 56 ms to
+  a settled transcript (HEAD 46 ms, with 318 items in its scene against 575; these are medians, the
+  runs of both builds range from 43 to 61 ms); a step of scrolling the
+  list takes 1.5 to 2 ms on this busy Mac (HEAD 1 to 1.4 ms); the memory footprint is 590 MB against
+  646 MB for HEAD.
+- **Motion.** The main window was walked twice in the test build, saving the window every 40 ms:
+  once with full motion (KHANDAQ_SHOT_FULL_MOTION, a test build only) and once as this Mac asks,
+  with Reduce motion on (the setting stays as it is). With full motion the dossier unfolds over the
+  conversation in about 0.4 s and New contact drops from the band in about 0.45 s (reveal, 440 ms),
+  a section of Settings slides in about 0.25 s (layout, 280 ms) and the theme cross-fades in about
+  0.2 s (state, 200 ms). With reduced
+  motion nothing moves: a panel is there in under 0.1 s, a section changes in under 0.15 s and the
+  theme fades in at most 120 ms. A window standing still paints nothing but the blinking cursor of
+  a focused field. The list refreshes its times every 30 seconds; a refresh that moves no row used
+  to slide every row to where it already stood, 19 frames in 0.3 s, and now paints the list once.
+  The start window moves as in stage 4.
+- **Opening a .tox while a profile is open** does what iOS does: it asks once, then logs out, shows
+  the file's name and ID, and moves it in. The verb is now the phones' Move (ru «Перенести»). Two
+  differences stay, as the logic is not changed in this stage: the desktop reads the file before it
+  asks, so a file that is no profile is said at once without logging out, and its title is "Import
+  a profile?" where iOS says "Import profile".
+- **Release checks.** On the final sources, Debug and Release built from scratch pass
+  the 50 unit tests, and the Release binary holds none of the test build's strings. GCC 15 with the
+  warning set of cmake/warnings (each an error on Windows, where STRICT_OPTIONS is on), with and
+  without -O2 and with and without snore, over the changed units and over every unit, finds nothing
+  this branch added, after two fixes: a QPointer read twice in the tray, and a member added in stage 4
+  that shadowed a local of qTox in Profile. The Qt 5.12 audit finds only the three uses already
+  guarded; clang-format leaves the changed lines as they are; lupdate leaves the four .ts files as
+  they are, with nothing unfinished; design/check.sh, gen-design-tokens.py --check and the two desktop
+  steps of security-checks.yml pass: the Qt forms, and cppcheck with nothing HEAD has not, after a
+  guard, two initializers and inline suppressions, each with its reason, on members of local
+  aggregate tables. The version is written by hand in several places. Settings > About and the report
+  link show git describe of the build, so the tag v0.2.47 has to stand on the release commit before
+  CMake runs; osx/info.plist says 1.17.6, windows/qtox.nsi and qtox64.nsi 0.1.0.0 with DisplayVersion
+  1.17.5, res/org.khandaq.messenger.appdata.xml 0.1.0-alpha, VERSION 0.2.40 for the .deb,
+  web/release-manifest.json v0.2.12, and changelog/releases ends at v0.2.45. qTox's
+  tools/update-versions.sh writes only DisplayVersion in the .nsi files, info.plist and qTox's own
+  appdata, and needs GNU sed. The Windows build of CI and the Linux build in Docker see no .git (the container gets
+  khandaq-desktop alone, and CI checks out one commit without tags), so their About would say Nightly
+  unless GIT_DESCRIBE and GIT_VERSION are passed to CMake; this is read from the build scripts, not
+  from a build.
+- **Release v0.2.47** (coordinator, 13.11.2026) set all of these to 0.2.47 by hand, with the
+  release's date in the appdata, and gave both builds their version from git where the checkout is:
+  windows-build.yaml reads git describe and the commit on the runner and passes them into the
+  container, windows/cross-compile/build.sh and scripts/build-linux-docker.sh hand them to CMake, and
+  an empty value removes the cached entry rather than keeping an older build's version.
+
+Deferred and left out on the desktop, stage 5:
+
+| What | Why not now | Where |
+| --- | --- | --- |
+| German, French and the other old translations have none of the Air strings | they came with qTox; the redesign was translated into the four languages of the phones | after the release |
+| Conversations in windows of their own were not walked | the setting is off by default and the walks keep the defaults; the window's least size is set as above | after the release |
+| The window stands still while a profile opens, as in stage 4 | qTox opens a profile on the main thread | a later stage |
+| The version is written in several places by hand | done by hand for v0.2.47; one script for every place is still to come | after the release |
+| About in the Windows and Linux release builds said Nightly | fixed in v0.2.47: the version comes from git on the host | done |
+| A conversation form is still made for each contact at a start | making them only when a chat opens changes qTox's main window beyond this stage | a later stage |
+| Only macOS was walked | the Windows build (Qt 5.12, MinGW) and the Linux build come from CI at release; here GCC with the CI warning set and the Qt 5.12 audit stand in for them | release |
+
 ### Block, on every client
 
 Decided 11.11.2026 for all clients; iOS has it, Android and the desktop follow this contract. Tox has
@@ -1285,8 +1480,8 @@ Lowest contrast is the worst pair from the contrast rules in each theme; `build.
 | `danger-fill` | `#bf3329` | `#b8352b` | filled red button with a white icon (decline a call) | ground for text |
 | `media-control` | `#ffffff33` | `#ffffff33` | translucent control over media and calls | not used for text |
 | `media-shade` | `#0f1218eb` | `#05070aeb` | in-app banner, dark shade over media | ground for text |
-| `lock-top` | `#0f1218` | `#0c0f13` | lock screen, top | ground for text |
-| `lock-bottom` | `#1c222a` | `#171c22` | lock screen, bottom | ground for text |
+| `lock-top` | `#0f1218` | `#0c0f13` | flat ground of the call screens and the PIN lock, dark in both themes | ground for text |
+| `lock-bottom` | `#1c222a` | `#171c22` | ground of your own camera tile on a call, a step lighter than lock-top | ground for text |
 | `ink-hover` | `#35383d` | `#c5c8cd` | primary button under the pointer | ground for text |
 | `ink-pressed` | `#525459` | `#abafb4` | primary button while pressed | ground for text |
 | `ink-badge` | `#44464b` | `#b8bbc0` | counter ground inside a pressed ink pill | ground for text |

@@ -21,6 +21,7 @@
 
 #include "src/core/toxfile.h"
 #include "src/core/toxpk.h"
+#include "src/model/air/airmessagemarks.h"
 #include "src/model/message.h"
 #include "src/model/systemmessage.h"
 #include "src/persistence/history.h"
@@ -31,12 +32,16 @@ struct ChatLogMessage
 {
     MessageState state;
     Message message;
+    /** What happened to it after it came: an edit by its author, the reactions on it. */
+    Air::EntryMarks marks;
 };
 
 struct ChatLogFile
 {
     QDateTime timestamp;
     ToxFile file;
+    /** The reactions on it. */
+    Air::EntryMarks marks;
 };
 
 class ChatLogItem

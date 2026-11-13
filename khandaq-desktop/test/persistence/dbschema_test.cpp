@@ -138,6 +138,7 @@ private slots:
     // test8to9 omitted, data corruption correction upgrade with no schema change
     void test9to10();
     // test10to11 handled in dbTo11_test
+    void test11to12();
     // test suite
 
 private:
@@ -163,7 +164,7 @@ void TestDbSchema::testCreation()
     QVector<RawDatabase::Query> queries;
     auto db = std::shared_ptr<RawDatabase>{new RawDatabase{testDatabaseFile->fileName(), {}, {}}};
     QVERIFY(DbUpgrader::createCurrentSchema(*db));
-    DbUtility::verifyDb(db, DbUtility::schema11);
+    DbUtility::verifyDb(db, DbUtility::schema12);
 }
 
 void TestDbSchema::testIsNewDb()
@@ -420,6 +421,71 @@ void TestDbSchema::test9to10()
     QVERIFY(numHealed == 2);
     QVERIFY(numUnchanged == 3);
     verifyDb(db, DbUtility::schema10);
+}
+
+/**
+ * @brief Messages that wait in the history move to the outgoing queue, oldest first, linked to
+ * their history rows; delivered and broken messages stay out of it.
+ */
+void TestDbSchema::test11to12()
+{
+    auto db = std::shared_ptr<RawDatabase>{new RawDatabase{testDatabaseFile->fileName(), {}, {}}};
+    createSchemaAtVersion(db, DbUtility::schema11);
+
+    const QByteArray chat(32, 'c');
+    const QByteArray author(32, 'a');
+    QVector<RawDatabase::Query> setup;
+    setup += RawDatabase::Query("INSERT INTO chats (id, uuid) VALUES (1, ?);", {chat});
+    setup += RawDatabase::Query("INSERT INTO authors (id, public_key) VALUES (1, ?);", {author});
+    setup += RawDatabase::Query("INSERT INTO aliases (id, owner, display_name) VALUES (1, 1, ?);",
+                                {QByteArray("Amina")});
+    const char* texts[] = {"delivered", "first waits", "broken", "second waits"};
+    for (int i = 0; i < 4; ++i) {
+        setup +=
+            RawDatabase::Query(QStringLiteral("INSERT INTO history (id, message_type, timestamp, "
+                                              "chat_id) VALUES (%1, 'T', %2, 1);")
+                                   .arg(i + 1)
+                                   .arg(1000 * (i + 1)));
+        setup += RawDatabase::Query(QStringLiteral("INSERT INTO text_messages (id, message_type, "
+                                                   "sender_alias, message) VALUES (%1, 'T', 1, ?);")
+                                        .arg(i + 1),
+                                    {QByteArray(texts[i])});
+    }
+    setup += RawDatabase::Query(
+        "INSERT INTO faux_offline_pending (id, required_extensions) VALUES (2, 0);");
+    setup += RawDatabase::Query("INSERT INTO broken_messages (id, reason) VALUES (3, 0);");
+    setup += RawDatabase::Query(
+        "INSERT INTO faux_offline_pending (id, required_extensions) VALUES (4, 0);");
+    QVERIFY(db->execNow(setup));
+
+    QVERIFY(DbUpgrader::dbSchema11to12(*db));
+    verifyDb(db, DbUtility::schema12);
+
+    QVector<QVector<QVariant>> rows;
+    QVERIFY(db->execNow(RawDatabase::Query(
+        "SELECT chat_uuid, timestamp, message, history_id, state FROM outbox ORDER BY id;",
+        [&](const QVector<QVariant>& row) { rows << row; })));
+    QCOMPARE(rows.size(), 2);
+    QCOMPARE(rows[0][0].toByteArray(), chat);
+    QCOMPARE(rows[0][1].toLongLong(), 2000);
+    QCOMPARE(rows[0][2].toByteArray(), QByteArray("first waits"));
+    QCOMPARE(rows[0][3].toLongLong(), 2);
+    QCOMPARE(rows[0][4].toInt(), 0);
+    QCOMPARE(rows[1][2].toByteArray(), QByteArray("second waits"));
+    QCOMPARE(rows[1][3].toLongLong(), 4);
+
+    // The history keeps its pending marks: only the queue is new.
+    int pending = 0;
+    QVERIFY(db->execNow(
+        RawDatabase::Query("SELECT COUNT(*) FROM faux_offline_pending;",
+                           [&](const QVector<QVariant>& row) { pending = row[0].toInt(); })));
+    QCOMPARE(pending, 2);
+
+    int version = 0;
+    QVERIFY(db->execNow(RawDatabase::Query("PRAGMA user_version;", [&](const QVector<QVariant>& row) {
+        version = row[0].toInt();
+    })));
+    QCOMPARE(version, 12);
 }
 
 QTEST_GUILESS_MAIN(TestDbSchema)

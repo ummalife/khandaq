@@ -37,9 +37,10 @@ public:
     static bool hasLock();
     static QString getCurLockName();
     static void assertLock(Paths& paths);
+    /** The lock file of a profile, for a lock held a moment (Profile::removeFiles). */
+    static QString lockPathFromName(const QString& name, const Paths& paths);
 
 private:
-    static QString lockPathFromName(const QString& name, const Paths& paths);
     static void deathByBrokenLock();
 
 private:

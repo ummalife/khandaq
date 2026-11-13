@@ -18,20 +18,15 @@
 */
 
 #include "toxsave.h"
-#include "src/persistence/settings.h"
 #include "src/widget/widget.h"
-#include "src/nexus.h"
 #include "src/ipc.h"
-#include "src/widget/tool/profileimporter.h"
-#include <QCoreApplication>
 #include <QString>
 
 const QString ToxSave::eventHandlerKey = QStringLiteral("save");
 
-ToxSave::ToxSave(Settings& settings_, IPC& ipc_, QWidget* parent_)
-    : settings{settings_}
-    , ipc{ipc_}
-    , parent{parent_}
+ToxSave::ToxSave(IPC& ipc_, Widget& widget_)
+    : ipc{ipc_}
+    , widget{widget_}
 {}
 
 ToxSave::~ToxSave()
@@ -52,13 +47,12 @@ bool ToxSave::toxSaveEventHandler(const QByteArray& eventData, void* userData)
 }
 
 /**
- * @brief Import new profile.
- * @note Will wait until the core is ready first.
+ * @brief A profile file opened with the app: it is moved in from the start window, once the person
+ * agrees to log out of the profile open now (KHANDAQ redesign E20).
  * @param path Path to .tox file.
- * @return True if import success, false, otherwise.
+ * @return True if the file holds a profile and the question was asked, false otherwise.
  */
 bool ToxSave::handleToxSave(const QString& path)
 {
-    ProfileImporter importer(settings, parent);
-    return importer.importProfile(path);
+    return widget.askImportProfile(path);
 }

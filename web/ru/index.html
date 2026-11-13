@@ -313,19 +313,19 @@
                 <p class="dl-yours" hidden>Ваше устройство</p>
                 <h3>Windows</h3>
                 <p>Переносимая сборка для Windows 10 и&nbsp;11, x64. Распакуйте архив и&nbsp;запустите <code>Khandaq.exe</code>, установка не&nbsp;нужна.</p>
-                <span class="meta">Релиз v0.2.12 на&nbsp;GitHub, GPL-3.0</span>
+                <span class="meta">Релиз v0.2.47 на&nbsp;GitHub, GPL-3.0</span>
               </div>
               <div class="dl-actions">
                 <a class="btn btn-ink" href="/downloads/khandaq-windows-x86_64.zip" data-asset="khandaq-windows-x86_64.zip" data-primary>Скачать .zip</a>
                 <a class="btn-quiet" href="/downloads/khandaq-windows-x86_64.zip">Зеркало на&nbsp;khandaq.org</a>
               </div>
             </li>
-            <li class="dl-row" id="dl-macos" data-platform="macos" data-cta="Скачать для macOS" data-note="Apple Silicon и&nbsp;Intel в&nbsp;одном приложении. Нотаризации пока нет: в&nbsp;первый раз откройте его через контекстное меню.">
+            <li class="dl-row" id="dl-macos" data-platform="macos" data-cta="Скачать для macOS" data-note="Для Mac с&nbsp;Apple Silicon. Нотаризации пока нет: при первом запуске нужен ещё один шаг.">
               <div class="dl-info">
                 <p class="dl-yours" hidden>Ваше устройство</p>
                 <h3>macOS</h3>
-                <p><code>khandaq.app</code> в&nbsp;zip-архиве, Apple Silicon и&nbsp;Intel в&nbsp;одной сборке.</p>
-                <span class="meta">Релиз v0.2.12 на&nbsp;GitHub, GPL-3.0</span>
+                <p><code>khandaq.app</code> в&nbsp;zip-архиве, для Mac с&nbsp;Apple Silicon. Проверено на&nbsp;macOS 26.</p>
+                <span class="meta">Релиз v0.2.47 на&nbsp;GitHub, GPL-3.0</span>
               </div>
               <div class="dl-actions">
                 <a class="btn btn-ink" href="/downloads/khandaq-macos.zip" data-asset="khandaq-macos.zip" data-primary>Скачать .zip</a>
@@ -337,7 +337,7 @@
                 <p class="dl-yours" hidden>Ваше устройство</p>
                 <h3>Linux</h3>
                 <p>Debian и&nbsp;Ubuntu: пакет <code>.deb</code>. Другие дистрибутивы: переносимый архив со&nbsp;своими библиотеками. amd64.</p>
-                <span class="meta">Релиз v0.2.12 на&nbsp;GitHub, GPL-3.0</span>
+                <span class="meta">Релиз v0.2.47 на&nbsp;GitHub, GPL-3.0</span>
               </div>
               <div class="dl-actions">
                 <a class="btn btn-ink" href="/downloads/khandaq-messenger_amd64.deb" data-asset="khandaq-messenger_amd64.deb" data-primary>Скачать .deb</a>
@@ -387,7 +387,7 @@
               <div class="qa-body">
                 <ol>
                   <li>Проверьте подпись, как показано выше, затем распакуйте архив и&nbsp;перенесите <code>khandaq.app</code> в&nbsp;«Программы».</li>
-                  <li>Сборка <strong>пока не&nbsp;нотаризована Apple</strong>, поэтому Gatekeeper не&nbsp;откроет её двойным щелчком в&nbsp;первый раз. Щёлкните приложение правой кнопкой, выберите <strong>Открыть</strong> и&nbsp;подтвердите: это документированный способ запустить приложение, за&nbsp;которое Gatekeeper не&nbsp;может поручиться, и&nbsp;остальная защита Gatekeeper при этом продолжает работать.</li>
+                  <li>Сборка <strong>пока не&nbsp;нотаризована Apple</strong>, поэтому Gatekeeper не&nbsp;откроет её двойным щелчком в&nbsp;первый раз. В&nbsp;macOS 15 и&nbsp;новее попробуйте открыть её один раз, затем зайдите в&nbsp;<strong>Системные настройки &gt; Конфиденциальность и&nbsp;безопасность</strong>, нажмите <strong>Все равно открыть</strong> и&nbsp;подтвердите. В&nbsp;macOS 14 и&nbsp;раньше щёлкните приложение правой кнопкой, выберите <strong>Открыть</strong> и&nbsp;подтвердите. Это документированные Apple способы запустить приложение, за&nbsp;которое Gatekeeper не&nbsp;может поручиться, и&nbsp;остальная защита Gatekeeper при этом продолжает работать.</li>
                   <li>Раньше на&nbsp;этой странице советовали <code>xattr -cr</code>. Больше не&nbsp;советуем: команда снимает отметку карантина со&nbsp;всего пакета и&nbsp;выключает ровно ту&nbsp;проверку, которая понадобится в&nbsp;день, когда скачанный файл окажется не&nbsp;настоящим.</li>
                 </ol>
               </div>
@@ -576,7 +576,7 @@
 
   <script>
     (function () {
-      var release = 'v0.2.12';
+      var release = 'v0.2.47';
       var gh = 'https://github.com/ummalife/khandaq/releases/download/' + release + '/';
       // The files a release publishes. A link names its file in data-asset, and only a name on this list
       // becomes a GitHub address, so nothing read from the page goes into an href as it is.

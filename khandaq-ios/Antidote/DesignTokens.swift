@@ -72,9 +72,9 @@ enum KQColor {
     static let mediaControl = dynamic(light: 0xFFFFFF33, dark: 0xFFFFFF33)
     /// in-app banner, dark shade over media
     static let mediaShade = dynamic(light: 0x0F1218EB, dark: 0x05070AEB)
-    /// lock screen, top
+    /// flat ground of the call screens and the PIN lock, dark in both themes
     static let lockTop = dynamic(light: 0x0F1218FF, dark: 0x0C0F13FF)
-    /// lock screen, bottom
+    /// ground of your own camera tile on a call, a step lighter than lock-top
     static let lockBottom = dynamic(light: 0x1C222AFF, dark: 0x171C22FF)
     /// primary button under the pointer
     static let inkHover = dynamic(light: 0x35383DFF, dark: 0xC5C8CDFF)

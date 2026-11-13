@@ -18,6 +18,7 @@
 */
 
 #include "groupmessagedispatcher.h"
+#include "src/model/air/airmessagemarks.h"
 #include "src/persistence/igroupsettings.h"
 
 #include <QtCore>
@@ -41,14 +42,16 @@ GroupMessageDispatcher::sendMessage(bool isAction, QString const& content)
     const auto firstMessageId = nextMessageId;
     auto lastMessageId = firstMessageId;
 
-    for (auto const& message : processor.processOutgoingMessage(isAction, content, ExtensionSet())) {
+    for (auto message : processor.processOutgoingMessage(isAction, content, ExtensionSet())) {
         auto messageId = nextMessageId++;
         lastMessageId = messageId;
         if (group.getPeersCount() != 1) {
-            if (message.isAction) {
-                messageSender.sendGroupAction(group.getId(), message.content);
-            } else {
-                messageSender.sendGroupMessage(group.getId(), message.content);
+            const uint32_t wireId =
+                message.isAction ? messageSender.sendGroupAction(group.getId(), message.content)
+                                 : messageSender.sendGroupMessage(group.getId(), message.content);
+            // What the members' reactions to it will point at.
+            if (wireId != 0) {
+                message.wireId = Air::groupWireId(wireId);
             }
         }
 
@@ -82,8 +85,11 @@ GroupMessageDispatcher::sendExtendedMessage(const QString& content, ExtensionSet
  * @param[in] sender
  * @param[in] isAction True if is action
  * @param[in] content Message content
+ * @param[in] wireId The id toxcore gave the message, which the edits, deletions and reactions of
+ * its author and of the others point at; 0 for none
  */
-void GroupMessageDispatcher::onMessageReceived(const ToxPk& sender, bool isAction, QString const& content)
+void GroupMessageDispatcher::onMessageReceived(const ToxPk& sender, bool isAction,
+                                               QString const& content, uint32_t wireId)
 {
     bool isSelf = sender == idHandler.getSelfPublicKey();
 
@@ -96,5 +102,9 @@ void GroupMessageDispatcher::onMessageReceived(const ToxPk& sender, bool isActio
         return;
     }
 
-    emit messageReceived(sender, processor.processIncomingCoreMessage(isAction, content));
+    Message message = processor.processIncomingCoreMessage(isAction, content);
+    if (wireId != 0) {
+        message.wireId = Air::groupWireId(wireId);
+    }
+    emit messageReceived(sender, message);
 }

@@ -256,12 +256,25 @@ bool CoreAV::isCallVideoEnabled(const Friend* f) const
 
 bool CoreAV::answerCall(uint32_t friendNum, bool video)
 {
+    return answerCall(friendNum, video, nullptr);
+}
+
+bool CoreAV::answerCall(uint32_t friendNum, bool video, CallError* error)
+{
     QWriteLocker locker{&callsLock};
     QMutexLocker coreLocker{&coreLock};
 
     qDebug() << QString("Answering call %1").arg(friendNum);
     auto it = calls.find(friendNum);
-    assert(it != calls.end());
+    if (it == calls.end()) {
+        // The person hung up between the ring and the answer: the toxav thread ended the call.
+        qWarning() << QString("Can't answer call %1, it is over").arg(friendNum);
+        if (error) {
+            error->kind = CallError::Kind::NotCalling;
+            error->code = 0;
+        }
+        return false;
+    }
     Toxav_Err_Answer err;
 
     const uint32_t videoBitrate = video ? VIDEO_DEFAULT_BITRATE : 0;
@@ -271,6 +284,11 @@ bool CoreAV::answerCall(uint32_t friendNum, bool video)
         return true;
     } else {
         qWarning() << "Failed to answer call with error" << err;
+        if (error) {
+            error->kind = err == TOXAV_ERR_ANSWER_FRIEND_NOT_CALLING ? CallError::Kind::NotCalling
+                                                                     : CallError::Kind::Toxav;
+            error->code = static_cast<int>(err);
+        }
         Toxav_Err_Call_Control controlErr;
         toxav_call_control(toxav.get(), friendNum, TOXAV_CALL_CONTROL_CANCEL, &controlErr);
         PARSE_ERR(controlErr);
@@ -281,6 +299,11 @@ bool CoreAV::answerCall(uint32_t friendNum, bool video)
 
 bool CoreAV::startCall(uint32_t friendNum, bool video)
 {
+    return startCall(friendNum, video, nullptr);
+}
+
+bool CoreAV::startCall(uint32_t friendNum, bool video, CallError* error)
+{
     QWriteLocker locker{&callsLock};
     QMutexLocker coreLocker{&coreLock};
 
@@ -288,6 +311,10 @@ bool CoreAV::startCall(uint32_t friendNum, bool video)
     auto it = calls.find(friendNum);
     if (it != calls.end()) {
         qWarning() << QString("Can't start call with %1, we're already in this call!").arg(friendNum);
+        if (error) {
+            error->kind = CallError::Kind::AlreadyInCall;
+            error->code = 0;
+        }
         return false;
     }
 
@@ -296,6 +323,12 @@ bool CoreAV::startCall(uint32_t friendNum, bool video)
     toxav_call(toxav.get(), friendNum, audioSettings.getAudioBitrate(), videoBitrate,
                     &err);
     if (!PARSE_ERR(err)) {
+        if (error) {
+            error->kind = err == TOXAV_ERR_CALL_FRIEND_ALREADY_IN_CALL ? CallError::Kind::AlreadyInCall
+                          : err == TOXAV_ERR_CALL_FRIEND_NOT_CONNECTED ? CallError::Kind::Offline
+                                                                       : CallError::Kind::Toxav;
+            error->code = static_cast<int>(err);
+        }
         return false;
     }
 

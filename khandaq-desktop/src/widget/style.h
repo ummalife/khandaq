@@ -90,6 +90,7 @@ public:
     void initPalette(Settings& settings);
     void initDictColor();
     static QString getThemePath(Settings& settings);
+    static bool isDarkTheme(Settings& settings);
 
 signals:
     void themeReload();

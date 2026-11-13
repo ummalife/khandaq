@@ -1,14 +1,14 @@
 {
   "version": "0.2.48",
   "date": "2026-11-13",
-  "title": "The Mac app opens on macOS 11 and later again",
+  "title": "The Mac app is built for macOS 11 and later again",
   "summary": "Khandaq v0.2.47 for Mac asked for macOS 11 but did not open on macOS 11 to 15: its libraries had been built for macOS 26. This release builds them for macOS 11 and checks every file in the app before packing it. The Windows and Linux builds get the call checks written in August, which had never reached them, and pictures you receive are read with a fixed libexif on Windows and Mac.",
   "commits": [],
   "changes": [
     {
       "severity": "important",
-      "title": "The Mac app opens on macOS 11 and later",
-      "description": "v0.2.47 took its libraries from a package manager that builds them for the newest macOS, so on macOS 11 to 15 the app did not open. Every library in the app now targets macOS 11, and the build refuses to pack the app if any file in it needs a newer macOS or loads a library from outside the app. Profiles and message history from v0.2.47 open as before. The app is still for Macs with Apple Silicon and is still not notarized.",
+      "title": "The Mac app is built for macOS 11 and later",
+      "description": "v0.2.47 took its libraries from a package manager that builds them for the newest macOS, so on macOS 11 to 15 the app did not open. Every library in the app now targets macOS 11, and the build refuses to pack the app if any file in it needs a newer macOS or loads a library from outside the app. It has been run on macOS 26; on macOS 11 to 15 it is checked file by file, not yet by running it. Profiles and message history from v0.2.47 open as before. The app is still for Macs with Apple Silicon and is still not notarized.",
       "platforms": [
         "macos"
       ]

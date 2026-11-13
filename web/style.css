@@ -2008,8 +2008,8 @@ pre code {
 /* Built by /assets/visit-stats.js, which shows it until the visitor accepts or declines (privacy
    policy, "This website"). Fixed over the bottom of the page: above the download bar under the thumb
    (z-index 20), below the skip link (40). While that bar is out the script lifts the notice above it
-   (is-lifted), so the download button is never covered, and the two move together when the bar steps
-   aside for the download list. */
+   (is-lifted), so the download button is never covered, and the notice steps aside with the bar while
+   the download list is in view (is-tucked), so the list's buttons are not covered either. */
 .consent {
   position: fixed;
   inset: auto 0 0;
@@ -2025,6 +2025,10 @@ pre code {
   border-bottom: var(--kq-stroke-hairline) solid var(--kq-line);
 }
 
+.consent.is-tucked {
+  transform: translateY(110%);
+}
+
 .consent-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -2035,6 +2039,12 @@ pre code {
 .consent-text {
   max-width: var(--site-measure);
   font: var(--site-small);
+}
+
+/* The whole sentence on a wide window; a phone gets the brief question, two lines at most, so the
+   notice leaves most of the screen to the page. Both link to the policy. */
+.consent-brief {
+  display: none;
 }
 
 .consent-actions {
@@ -2053,6 +2063,14 @@ pre code {
 
   .consent-row {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .consent-full {
+    display: none;
+  }
+
+  .consent-brief {
+    display: block;
   }
 
   .consent-actions .btn {

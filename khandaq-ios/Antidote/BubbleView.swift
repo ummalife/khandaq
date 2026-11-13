@@ -156,20 +156,36 @@ class BubbleView: UIView {
 
     func setLocationMapImage(_ image: UIImage?) {
         if let image = image {
-            ensureMapImageView()
-            mapImageView?.image = image
-            mapImageView?.isHidden = false
-            textView.dataDetectorTypes = []
-            installLocationTapRecognizer()
+            showMapTile(image, fills: true)
         }
         else {
             mapImageView?.isHidden = true
             mapImageView?.image = nil
             textView.dataDetectorTypes = .all
             removeLocationTapRecognizer()
+            updateTextConstraints(hasMap: false)
         }
+    }
 
-        updateTextConstraints(hasMap: image != nil)
+    /// KHANDAQ (location row): holds the place of a map whose snapshot is still being made. The table
+    /// measures a row when the cell is set up and the snapshot comes later, so without the tile the row
+    /// was measured for the coordinates alone and the map, when it came, was drawn over the rows below.
+    /// The tile has the size the snapshot will have and the glyph of "Location" in the attachment menu,
+    /// so a snapshot that never comes (no network) still leaves a place to tap and open in Maps.
+    func showLocationMapPlaceholder() {
+        let glyph = UIImage(systemName: "location",
+                            withConfiguration: UIImage.SymbolConfiguration(pointSize: 20.0, weight: .regular))
+        showMapTile(glyph, fills: false)
+    }
+
+    private func showMapTile(_ image: UIImage?, fills: Bool) {
+        ensureMapImageView()
+        mapImageView?.contentMode = fills ? .scaleAspectFill : .center
+        mapImageView?.image = image
+        mapImageView?.isHidden = false
+        textView.dataDetectorTypes = []
+        installLocationTapRecognizer()
+        updateTextConstraints(hasMap: true)
     }
 
     func bindReplyQuote(_ meta: MessageReplyHelper.ReplyMeta?, theme: Theme) {
@@ -216,6 +232,10 @@ class BubbleView: UIView {
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         imageView.isUserInteractionEnabled = true
+        // Seen only while the snapshot is being made (showLocationMapPlaceholder): the snapshot fills
+        // the whole tile.
+        imageView.backgroundColor = KQColor.sunken
+        imageView.tintColor = KQColor.ink3
         if isTranscript {
             imageView.layer.cornerRadius = KQRadius.card
         }

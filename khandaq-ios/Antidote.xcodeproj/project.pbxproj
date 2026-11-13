@@ -310,6 +310,7 @@
 		B3C343706707940000000003 /* AirNewContactModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C343706707940000000002 /* AirNewContactModelTests.swift */; };
 		B3C343693019790000000003 /* AirLocalStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C343693019790000000002 /* AirLocalStoreTests.swift */; };
 		B2BAIR061111000000000002 /* AirEntryTextCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BAIR051111000000000002 /* AirEntryTextCellSnapshotTest.swift */; };
+		KQLOCROW0000000000000001 /* ChatLocationRowLayoutTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQLOCROW0000000000000002 /* ChatLocationRowLayoutTest.swift */; };
 		B2BAIR041111000000000001 /* AirConversationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BAIR031111000000000001 /* AirConversationModel.swift */; };
 		B3C344287040630000000003 /* AirNetworkScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344287040630000000002 /* AirNetworkScreen.swift */; };
 		B3C344196753430000000003 /* AirCalls.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344196753430000000002 /* AirCalls.swift */; };
@@ -858,6 +859,7 @@
 		B3C343706707940000000002 /* AirNewContactModelTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirNewContactModelTests.swift; sourceTree = "<group>"; };
 		B3C343693019790000000002 /* AirLocalStoreTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirLocalStoreTests.swift; sourceTree = "<group>"; };
 		B2BAIR051111000000000002 /* AirEntryTextCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirEntryTextCellSnapshotTest.swift; sourceTree = "<group>"; };
+		KQLOCROW0000000000000002 /* ChatLocationRowLayoutTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatLocationRowLayoutTest.swift; sourceTree = "<group>"; };
 		B2BAIR031111000000000001 /* AirConversationModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirConversationModel.swift; sourceTree = "<group>"; };
 		B3C344287040630000000002 /* AirNetworkScreen.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirNetworkScreen.swift; sourceTree = "<group>"; };
 		B3C344196753430000000002 /* AirCalls.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirCalls.swift; sourceTree = "<group>"; };
@@ -1041,6 +1043,7 @@
 				B3C343706707940000000002 /* AirNewContactModelTests.swift */,
 				B3C343693019790000000002 /* AirLocalStoreTests.swift */,
 				B2BAIR051111000000000002 /* AirEntryTextCellSnapshotTest.swift */,
+				KQLOCROW0000000000000002 /* ChatLocationRowLayoutTest.swift */,
 				KHLOCTEST000000000000002 /* LocalizationTest.swift */,
 				KHLOCTEST000000000000004 /* MessageForwarderTest.swift */,
 				KHLOCTEST000000000000006 /* KhandaqBrandingTest.swift */,
@@ -2379,6 +2382,7 @@
 				B3C343706707940000000003 /* AirNewContactModelTests.swift in Sources */,
 				B3C343693019790000000003 /* AirLocalStoreTests.swift in Sources */,
 				B2BAIR061111000000000002 /* AirEntryTextCellSnapshotTest.swift in Sources */,
+				KQLOCROW0000000000000001 /* ChatLocationRowLayoutTest.swift in Sources */,
 				KHLOCTEST000000000000001 /* LocalizationTest.swift in Sources */,
 				KHLOCTEST000000000000003 /* MessageForwarderTest.swift in Sources */,
 				KHLOCTEST000000000000005 /* KhandaqBrandingTest.swift in Sources */,

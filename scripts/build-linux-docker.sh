@@ -9,6 +9,25 @@ IMAGE="${KHANDAQ_LINUX_IMAGE:-khandaq-builder:ubuntu24.04-amd64}"
 DOCKERFILE="$SRC/buildscripts/docker/Dockerfile.khandaq_ubuntu2404"
 CACHE_VOL="${KHANDAQ_LINUX_CACHE:-khandaq-linux-build-cache-amd64}"
 
+# KHANDAQ (desktop release v0.2.47): the release-blocking waiver gate (audit round 3, F-23) runs here,
+# on the host, before anything is built. bundle-linux-portable.sh carries the same gate, but in the
+# container below it sees only khandaq-desktop/ and scripts/, so its check could not find
+# khandaq-desktop/buildscripts/bundled-deps.json and the build stopped at its last step after a
+# complete compile. The container is told the gate already ran (KHANDAQ_SKIP_DEP_GATE=1 on that one
+# command).
+# Skippable only deliberately, for a local experiment that is not a release:
+#   KHANDAQ_SKIP_DEP_GATE=1 ./scripts/build-linux-docker.sh
+if [ "${KHANDAQ_SKIP_DEP_GATE:-0}" != "1" ]; then
+    if command -v python3 >/dev/null 2>&1; then
+        echo "==> bundled dependency gate (waivers must be live)"
+        python3 "$ROOT/scripts/check-bundled-deps-eol.py" --release
+    else
+        echo "ERROR: python3 not found; cannot run the bundled dependency gate." >&2
+        echo "       Install python3, or set KHANDAQ_SKIP_DEP_GATE=1 if this is not a release." >&2
+        exit 1
+    fi
+fi
+
 if [[ "${SKIP_IMAGE_BUILD:-0}" != "1" ]]; then
   echo "==> Building Docker image: $IMAGE ($PLATFORM)"
   docker build --platform "$PLATFORM" -f "$DOCKERFILE" -t "$IMAGE" "$SRC/buildscripts"
@@ -73,7 +92,8 @@ docker run --rm --platform "$PLATFORM" \
     install -m 755 khandaq /dist/khandaq
     cp -f /build/src/khandaq.desktop /dist/
     cp -f /build/src/res/org.khandaq.messenger.appdata.xml /dist/
-    bash /scripts/bundle-linux-portable.sh /dist
+    # The waiver gate ran on the host at the top of build-linux-docker.sh.
+    KHANDAQ_SKIP_DEP_GATE=1 bash /scripts/bundle-linux-portable.sh /dist
     sha256sum /dist/khandaq.bin | tee /dist/khandaq.sha256
     file /dist/khandaq.bin
     echo "Docker build OK"

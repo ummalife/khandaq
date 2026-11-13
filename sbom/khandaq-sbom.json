@@ -1501,12 +1501,12 @@
       "version": "effcebc1d81c5e174a48b870cb420f490fb5fb4d"
     },
     {
-      "description": "video decode for calls",
+      "description": "video decode for calls, voice messages (MOV demuxer, AAC decoder)",
       "group": "generic",
       "name": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
       "type": "library",
-      "version": "4.4.8"
+      "version": "8.1.1"
     },
     {
       "description": "debugger, debug packaging only",

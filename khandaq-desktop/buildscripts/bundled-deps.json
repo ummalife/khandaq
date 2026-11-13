@@ -36,15 +36,15 @@
     },
     {
       "name": "ffmpeg",
-      "version": "4.4.8",
-      "purpose": "video decode for calls",
+      "version": "8.1.1",
+      "purpose": "video decode for calls, voice messages (MOV demuxer, AAC decoder)",
       "pin_file": "khandaq-desktop/buildscripts/download/download_ffmpeg.sh",
       "pin_var": "FFMPEG_VERSION",
       "platforms": [
         "windows",
         "macos"
       ],
-      "note": "4.4 is an upstream LONG-TERM branch that still receives point releases (4.4.8), so it is not EOL — but it is the oldest maintained line and worth revisiting with the Qt 6 work.",
+      "note": "Since desktop v0.2.50 the Windows build carries 8.1.1, the release scripts/build-macos-deps.sh and build_ffmpeg_linux.sh pin, built with only what the app uses (build_ffmpeg.sh). The 8.1 line still receives point releases (8.1.3 on 2026-09-21; 9.0 is the newest line), so it is not EOL; moving the three desktop builds to 8.1.3 together is the next bump.",
       "pin_governs": [
         "windows"
       ]

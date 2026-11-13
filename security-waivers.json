@@ -49,7 +49,20 @@
     "bcprov-jdk18on, which Robolectric brings to the JVM unit tests, is constrained to 1.85,",
     "the release that fixes GHSA-574f-3g2m-x479 and GHSA-9pwp-9qqc-pr26; both entries are",
     "removed. witness.gradle took exactly that one line from witness-checksums-update.yml",
-    "(run 43401422094), and the jar fetched separately from Maven Central has the same sha256."
+    "(run 43401422094), and the jar fetched separately from Maven Central has the same sha256.",
+    "",
+    "2026-11-13, desktop v0.2.50 (Claude; the repository owner delegated the decision that day). The",
+    "Windows build moved from FFmpeg 4.4.8 to 8.1.1, the release the macOS and Linux builds pin, with",
+    "the MOV demuxer and the AAC decoder, so the app reads phone voice messages itself instead of",
+    "offering an external player. The 52 entries for ffmpeg 4.4.8 are removed with the version. NVD",
+    "lists 35 advisories against 8.1.1; each was checked against the 8.1.1 source and the configure",
+    "line of build_ffmpeg.sh and added below. 28 are in components the build does not compile. Four",
+    "are in code that ships but that only uncompiled components call: the IAMF allocator and two",
+    "libavutil helpers (CVE-2025-25469, CVE-2026-107676, CVE-2026-107677) and the muxing queue",
+    "(CVE-2025-25468). Three are in the MOV demuxer, which the build now has: its iacb box exists",
+    "only with IAMF, which is configured out, and build_ffmpeg.sh deletes the pssh and ispe boxes from",
+    "the demuxer's table, as the macOS and Linux builds do. 8.1.3 (2026-09-21) is the newest 8.1",
+    "release."
   ],
   "waivers": [
     {
@@ -90,37 +103,389 @@
   },
   "native_waivers": [
     {
-      "id": "CVE-2022-3109",
+      "id": "CVE-2025-25468",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2022-3341",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "MEDIUM",
       "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Memory leak, not corruption, that NVD files under libavutil/mem.c; the leaking path is the muxing interleave queue (libavformat/mux.c, ff_interleave_add_packet) as the ffmpeg command-line tool drives it. The app never muxes, no muxer is built, and the ffmpeg programs are not built (--disable-programs). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "4.4.8"
+      "version": "8.1.1"
     },
     {
-      "id": "CVE-2022-48434",
+      "id": "CVE-2025-25469",
       "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
       "severity": "HIGH",
       "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Memory leak, not corruption, of IAMF parameter definitions: av_iamf_param_definition_alloc() in libavutil/iamf.c, whose only callers are the IAMF reader and parser (libavformat/iamf_reader.c, iamf_parse.c). Those files are compiled only with CONFIG_IAMFDEC, which --disable-iamf turns off; libavutil/iamf.c ships in avutil-60.dll with nothing in the build calling that allocator. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
       "expires": "2027-02-08",
-      "version": "4.4.8"
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-64830",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Heap overflow in the VobSub subtitle demuxer (libavformat/mpeg.c) and the subtitle queue it fills; not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-64831",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Stack overflow in the Vulkan HEVC hardware decoder (libavcodec/vulkan_hevc.c); neither the HEVC decoder nor any hardware decoder is built, and Vulkan is not detected (--disable-autodetect). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-64832",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Double free in the NVIDIA NVDEC hardware decoder (libavcodec/nvdec.c); no hardware decoder is built, and the NVIDIA headers are not detected (--disable-autodetect). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-64833",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Over-read in the S/PDIF muxer (libavformat/spdifenc.c); muxers are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-64834",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Infinite loop in the RTP/ASF depacketizer (libavformat/rtpdec_asf.c); RTP, RTSP and network are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-64835",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Out-of-bounds access in the ADX/AAX audio decoder (libavcodec/adxdec.c); not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-65703",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Heap write in the TDSC video decoder (libavcodec/tdsc.c), fed by AVI; neither is built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-65704",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Heap write in the TY demuxer (libavformat/ty.c) and the Shorten decoder (libavcodec/shorten.c), reached through an ffconcat list opened with -safe 0; none of these is built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-65705",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Heap write in the floodfill video filter (libavfilter/vf_floodfill.c); libavfilter is not built (--disable-avfilter). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-65706",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Heap write in the swaprect video filter (libavfilter/vf_swaprect.c); libavfilter is not built (--disable-avfilter). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-66036",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Heap write in the hqdn3d video filter (libavfilter/vf_hqdn3d.c); libavfilter is not built (--disable-avfilter). Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-66037",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Unbounded allocation in the IAMF demuxer (libavformat/iamf_parse.c, mix_presentation_obu); IAMF is configured out (--disable-iamf), and the IAMF code inside the MOV demuxer is compiled only with CONFIG_IAMFDEC, which the build checks is 0. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-66038",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Uninitialised read in the LCL/ZLIB video decoder (libavcodec/lcldec.c); not built, and zlib is disabled. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-66039",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Signed overflow in the MACE6 audio decoder (libavcodec/mace.c), fed by the CAF demuxer (libavformat/cafdec.c); neither is built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-66040",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Heap write in the PNG and APNG encoders (libavcodec/pngenc.c); encoders are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-66041",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Heap write in the quirc video filter (libavfilter/vf_quirc.c), fed by PGS/SUP subtitles; libavfilter is not built and libquirc is not linked. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-70628",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Signed overflow in the DVB subtitle parser (libavcodec/dvbsub_parser.c), fed by a WTV file; neither the dvbsub parser nor the WTV demuxer is built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-70629",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Uninitialised read in the RSCC decoder (libavcodec/rscc.c), which is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-70630",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Uninitialised read in the Screenpresso decoder (libavcodec/screenpresso.c), which is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-70631",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Uninitialised read in the TIFF decoder's Deflate strip path (libavcodec/tiff.c); the TIFF decoder is not built, and zlib is disabled. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-70632",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Heap write in the CineForm HD decoder (libavcodec/cfhd.c), which is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-52295",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "LOW",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Over-read in the IAMF muxer (libavformat/iamf_writer.c); muxers and IAMF are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-52296",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "LOW",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Over-read in the WMA encoder (libavcodec/wmaenc.c); encoders are not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-52297",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "LOW",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Over-read in the MOV demuxer's iacb box (mov_read_iacb, IAMF in MP4). The MOV demuxer IS built, for voice messages, but mov_read_iacb() and its entry in the box table are compiled only with CONFIG_IAMFDEC; build_ffmpeg.sh configures --disable-iamf and stops unless CONFIG_IAMFDEC is 0, so an iacb box is skipped as unknown. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-96611",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Signed overflow in the MOV demuxer's ispe box (mov_read_ispe, HEIF image items). The MOV demuxer IS built, for voice messages, but build_ffmpeg.sh deletes the ispe entry from its box table and stops unless the entry was there exactly once, so mov_read_ispe() is never called and an ispe box is skipped as unknown. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-107660",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Hostname check skipped in the mbedTLS TLS protocol (libavformat/tls_mbedtls.c); protocols and network are not built and mbedTLS is not linked. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-107675",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "No host-key check in the libssh sftp protocol; protocols are not built and libssh is not linked. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-107676",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "LOW",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Uninitialised bytes from av_dynamic_hdr_plus_to_t35() (libavutil), a writer whose only callers in FFmpeg 8.1.1 are the Matroska muxer and the libaom encoder; neither is built, and the app never calls it. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-107677",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Infinite loop in av_strireplace() (libavutil/avstring.c) when the DASH demuxer passes an empty SegmentTemplate media string. av_strireplace() ships in avutil-60.dll, but its only callers in FFmpeg 8.1.1 are the DASH demuxer and muxer (dashdec.c, dashenc.c), neither of which is built, and the app never calls it. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-107678",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Stack exhaustion in av_encryption_init_info_free() (libavutil) on the lists the MOV demuxer's mov_read_pssh() builds. The MOV demuxer IS built, for voice messages, but build_ffmpeg.sh deletes the pssh entry from its box table and stops unless the entry was there exactly once, so mov_read_pssh() is never called; the only other producer, the MOV muxer (movenc.c), is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-107695",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Infinite loop in the HLS demuxer (libavformat/hls.c), which is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-107696",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Unbounded RTSP redirects (ff_rtsp_connect, libavformat/rtsp.c); the RTSP demuxer is not built and network is disabled. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
+    },
+    {
+      "id": "CVE-2026-107697",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@8.1.1",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant), assessed 2026-11-13 against the FFmpeg 8.1.1 source and the Windows build configuration; the repository owner delegated the decision on 2026-11-13",
+      "exploitability": "Protocol and extension restrictions bypassed in the HLS demuxer (libavformat/hls.c); the HLS demuxer is not built. Not in the Windows build: build_ffmpeg.sh configures FFmpeg 8.1.1 with --disable-everything and enables only the dshow, gdigrab and vfwcap input devices, the h264, mjpeg and mov demuxers, the aac, h264 and mjpeg parsers and the aac, h264, mjpeg and rawvideo decoders (gdigrab adds bmp): no encoders, muxers, protocols, network, filters (libavfilter is not built), hardware decoders, IAMF or zlib, and the build stops if configure turns IAMF, network, zlib or libavfilter on. This pin is the Windows build's; the macOS and Linux builds configure the same release with the same MOV changes but are not in this inventory (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "8.1.1"
     },
     {
       "id": "CVE-2023-6601",
@@ -134,17 +499,6 @@
       "version": "6.0"
     },
     {
-      "id": "CVE-2023-6601",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
       "id": "CVE-2023-6602",
       "package": "ffmpeg",
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
@@ -154,17 +508,6 @@
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/tty.c (TTY/ANSI-art демуксер), эксплуатируется через HLS-плейлист — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
       "expires": "2027-01-11",
       "version": "6.0"
-    },
-    {
-      "id": "CVE-2023-6602",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
     },
     {
       "id": "CVE-2023-6603",
@@ -178,17 +521,6 @@
       "version": "6.0"
     },
     {
-      "id": "CVE-2023-6603",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
       "id": "CVE-2023-6604",
       "package": "ffmpeg",
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
@@ -198,17 +530,6 @@
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/xbin.c (XBIN-демуксер), эксплуатируется через HLS — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят. Отдельно проверено: совпадение по strings — это статическая таблица имён codec ID (libavcodec/codec_desc.c), исполняемого кода за ней нет.",
       "expires": "2027-01-11",
       "version": "6.0"
-    },
-    {
-      "id": "CVE-2023-6604",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
     },
     {
       "id": "CVE-2023-6605",
@@ -222,17 +543,6 @@
       "version": "6.0"
     },
     {
-      "id": "CVE-2023-6605",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
       "id": "CVE-2024-31578",
       "package": "ffmpeg",
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
@@ -242,17 +552,6 @@
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavutil/hwcontext.c (av_hwframe_ctx_init), провоцируется отказом vulkan_frames_init в libavutil/hwcontext_vulkan.c — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
       "expires": "2027-01-11",
       "version": "6.0"
-    },
-    {
-      "id": "CVE-2024-31578",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
     },
     {
       "id": "CVE-2024-31585",
@@ -288,17 +587,6 @@
       "version": "6.0"
     },
     {
-      "id": "CVE-2024-7272",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
       "id": "CVE-2025-10256",
       "package": "ffmpeg",
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
@@ -308,17 +596,6 @@
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavfilter/af_firequalizer.c (аудиофильтр firequalizer, config_input) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
       "expires": "2027-01-11",
       "version": "6.0"
-    },
-    {
-      "id": "CVE-2025-10256",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
     },
     {
       "id": "CVE-2025-1373",
@@ -332,17 +609,6 @@
       "version": "6.0"
     },
     {
-      "id": "CVE-2025-1373",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "LOW",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
       "id": "CVE-2025-1594",
       "package": "ffmpeg",
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
@@ -352,17 +618,6 @@
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/aacenc_tns.c (AAC-энкодер, функция ff_aac_search_for_tns) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
       "expires": "2027-01-11",
       "version": "6.0"
-    },
-    {
-      "id": "CVE-2025-1594",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
     },
     {
       "id": "CVE-2025-25468",
@@ -376,17 +631,6 @@
       "version": "6.0"
     },
     {
-      "id": "CVE-2025-25468",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
       "id": "CVE-2025-25469",
       "package": "ffmpeg",
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
@@ -396,17 +640,6 @@
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/iamf_parse.c (param_parse / mix_presentation_obu) и libavformat/iamfdec.c; аллокация в libavutil/iamf.c:av_iamf_param_definition_alloc — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
       "expires": "2027-01-11",
       "version": "6.0"
-    },
-    {
-      "id": "CVE-2025-25469",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
     },
     {
       "id": "CVE-2026-30997",
@@ -420,17 +653,6 @@
       "version": "6.0"
     },
     {
-      "id": "CVE-2026-30997",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
       "id": "CVE-2026-30998",
       "package": "ffmpeg",
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
@@ -440,17 +662,6 @@
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — tools/zmqsend.c — отдельная утилита из каталога tools/, не часть библиотек — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
       "expires": "2027-01-11",
       "version": "6.0"
-    },
-    {
-      "id": "CVE-2026-30998",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
     },
     {
       "id": "CVE-2026-30999",
@@ -464,17 +675,6 @@
       "version": "6.0"
     },
     {
-      "id": "CVE-2026-30999",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
       "id": "CVE-2026-40962",
       "package": "ffmpeg",
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
@@ -484,17 +684,6 @@
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/mov.c (обработка CENC subsample, MP4/ISOBMFF-демуксер) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
       "expires": "2027-01-11",
       "version": "6.0"
-    },
-    {
-      "id": "CVE-2026-40962",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
     },
     {
       "id": "CVE-2026-64830",
@@ -508,17 +697,6 @@
       "version": "6.0"
     },
     {
-      "id": "CVE-2026-64830",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
       "id": "CVE-2026-64832",
       "package": "ffmpeg",
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
@@ -528,17 +706,6 @@
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/nvdec.c (аппаратный декодер NVIDIA NVDEC, ff_nvdec_start_frame_sep_ref / nvdec_fdd_priv_free) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
       "expires": "2027-01-11",
       "version": "6.0"
-    },
-    {
-      "id": "CVE-2026-64832",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
     },
     {
       "id": "CVE-2026-64833",
@@ -552,17 +719,6 @@
       "version": "6.0"
     },
     {
-      "id": "CVE-2026-64833",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
       "id": "CVE-2026-64834",
       "package": "ffmpeg",
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
@@ -572,17 +728,6 @@
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/rtpdec_asf.c (RTP/ASF демуксер, функция rtp_asf_fix_header) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
       "expires": "2027-01-11",
       "version": "6.0"
-    },
-    {
-      "id": "CVE-2026-64834",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
     },
     {
       "id": "CVE-2026-64835",
@@ -596,17 +741,6 @@
       "version": "6.0"
     },
     {
-      "id": "CVE-2026-64835",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
       "id": "CVE-2026-65703",
       "package": "ffmpeg",
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
@@ -616,17 +750,6 @@
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/tdsc.c (видеодекодер TDSC, функции tdsc_parse_tdsf/tdsc_blit/tdsc_yuv2rgb) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
       "expires": "2027-01-11",
       "version": "6.0"
-    },
-    {
-      "id": "CVE-2026-65703",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
     },
     {
       "id": "CVE-2026-65704",
@@ -640,17 +763,6 @@
       "version": "6.0"
     },
     {
-      "id": "CVE-2026-65704",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
       "id": "CVE-2026-65705",
       "package": "ffmpeg",
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
@@ -660,17 +772,6 @@
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavfilter/vf_floodfill.c (filter_frame/config_input) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
       "expires": "2027-01-11",
       "version": "6.0"
-    },
-    {
-      "id": "CVE-2026-65705",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
     },
     {
       "id": "CVE-2026-65706",
@@ -684,17 +785,6 @@
       "version": "6.0"
     },
     {
-      "id": "CVE-2026-65706",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
       "id": "CVE-2026-66036",
       "package": "ffmpeg",
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
@@ -704,17 +794,6 @@
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavfilter/vf_hqdn3d.c (config_input/denoise_spatial) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
       "expires": "2027-01-11",
       "version": "6.0"
-    },
-    {
-      "id": "CVE-2026-66036",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
     },
     {
       "id": "CVE-2026-66037",
@@ -728,17 +807,6 @@
       "version": "6.0"
     },
     {
-      "id": "CVE-2026-66037",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
       "id": "CVE-2026-66038",
       "package": "ffmpeg",
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
@@ -748,17 +816,6 @@
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/lcldec.c — LCL/ZLIB (MSZH/ZLIB) видеодекодер, zlib_decomp() — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
       "expires": "2027-01-11",
       "version": "6.0"
-    },
-    {
-      "id": "CVE-2026-66038",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
     },
     {
       "id": "CVE-2026-66039",
@@ -772,17 +829,6 @@
       "version": "6.0"
     },
     {
-      "id": "CVE-2026-66039",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
       "id": "CVE-2026-66040",
       "package": "ffmpeg",
       "purl": "pkg:generic/ffmpeg@6.0?platform=android",
@@ -792,17 +838,6 @@
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/pngenc.c — нативные PNG/APNG ЭНКОДЕРЫ, add_exif_profile_size()/png_write_chunk() — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
       "expires": "2027-01-11",
       "version": "6.0"
-    },
-    {
-      "id": "CVE-2026-66040",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
     },
     {
       "id": "CVE-2021-43618",
@@ -1661,215 +1696,6 @@
       "exploitability": "SSRF through RTSP redirects (ff_rtsp_connect); no RTSP, no network. Not in the shipped binary: the Android libjni-c-toxcore.so links only libavcodec.a and libavutil.a of FFmpeg n6.0, configured by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264. nm on both release slices pinned in nativelibs/SHA256SUMS.txt (re-run 2026-11-13) finds ff_h264_decoder as the only ff_* codec, parser, bitstream filter, demuxer, muxer, protocol or hwaccel structure, and no avformat or avio symbol. scripts/check-ffmpeg-surface.py holds this on the release slices themselves: release-provenance.yml runs it after fetching them and checking their digests, and a second decoder or any demuxer, muxer, protocol, filter, hwaccel, encoder, parser or bitstream filter fails the release. The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
       "expires": "2027-01-11",
       "version": "6.0"
-    },
-    {
-      "id": "CVE-2026-70628",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "Signed overflow in the DVB subtitle parser (dvbsub_parser.c), fed by a WTV file; neither the dvbsub parser nor the WTV demuxer is built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-70629",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "Uninitialised read in the RSCC decoder (rscc.c), which is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-70630",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "Uninitialised read in the Screenpresso decoder (screenpresso.c), which is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-70631",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "Uninitialised read in the TIFF decoder's zlib strip path (tiff.c); the TIFF decoder is not built, and zlib is disabled. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-70632",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "Heap write in the CineForm HD decoder (cfhd), which is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-52295",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "LOW",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "Over-read in the IAMF muxer (iamf_writer.c); muxers are disabled. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-30754",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "HIGH",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "Negative memcpy in the RTP H.264/HEVC muxer (rtpenc_h264_hevc.c); muxers and network are disabled. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-52296",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "LOW",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "Over-read in the WMA encoder (wmaenc.c); encoders are disabled. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-52297",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "LOW",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "Over-read in the MOV demuxer (mov_read_iacb), which is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-96611",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "Signed overflow in the MOV/HEIF demuxer (mov_read_ispe), which is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-107660",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "Hostname check skipped in the mbedTLS TLS protocol (tls_mbedtls.c); protocols and network are disabled and mbedTLS is not linked. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-107675",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "No host-key check in the libssh sftp protocol; protocols are disabled and libssh is not linked. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-107676",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "LOW",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "Uninitialised bytes from av_dynamic_hdr_plus_to_t35(), a writer used when remuxing/transcoding HDR10+ metadata. FFmpeg 4.4.8 does not have this function (absent from n4.4.8 libavutil/hdr_dynamic_metadata.h), and muxers are disabled. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-107677",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "Infinite loop in av_strireplace() (libavutil/avstring.c) when the DASH demuxer's get_current_fragment() passes an empty SegmentTemplate media string; the upstream fix (ed27bfcb) is in libavutil. av_strireplace() ships in avutil-56.dll, but its only callers in FFmpeg 4.4.8 are the DASH demuxer and muxer (dashdec.c, dashenc.c), neither of which is built, and the client never calls it. The DASH code is not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-107678",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "Stack exhaustion freeing AVEncryptionInitInfo lists; libavutil ships, but the only producer of such lists is the MOV demuxer's mov_read_pssh(), which is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-107695",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "Infinite loop in the HLS demuxer, which is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-107696",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "Unbounded RTSP redirects (ff_rtsp_connect); the RTSP demuxer is not built and network is disabled. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-107697",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "HLS demuxer protocol whitelist bypass; the HLS demuxer is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
-    },
-    {
-      "id": "CVE-2026-107698",
-      "package": "ffmpeg",
-      "purl": "pkg:generic/ffmpeg@4.4.8",
-      "severity": "MEDIUM",
-      "platform": "desktop",
-      "owner": "Claude (AI assistant), re-checked 2026-11-13 against the shipped binaries and NVD; the repository owner delegated the decision on 2026-11-13",
-      "exploitability": "SSRF through RTSP redirects (ff_rtsp_connect); the RTSP demuxer is not built and network is disabled. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. This pin is the Windows build's; macOS and Linux get FFmpeg elsewhere and are not covered by it (platform_sources in bundled-deps.json).",
-      "expires": "2027-02-08",
-      "version": "4.4.8"
     }
   ],
   "build_only_reviewed": [

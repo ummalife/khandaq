@@ -40,6 +40,9 @@ RUN printf '%s\n' \
       'deb http://archive.debian.org/debian-security bullseye-security main' \
       > /etc/apt/sources.list
 
+# KHANDAQ (desktop v0.2.50): nasm for FFmpeg 8.1.1, whose configure no longer accepts yasm
+# (build_ffmpeg.sh). yasm stays for libvpx, which picks it when both are installed; x264 is built
+# with --disable-asm.
 RUN dpkg --add-architecture i386 && \
     apt-get update && apt-get install -y --no-install-recommends \
                    autoconf \
@@ -51,6 +54,7 @@ RUN dpkg --add-architecture i386 && \
                    git \
                    libarchive-tools \
                    libtool \
+                   nasm \
                    nsis \
                    pkg-config \
                    python3-pefile \

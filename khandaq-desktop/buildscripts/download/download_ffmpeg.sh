@@ -17,15 +17,12 @@
 
 set -euo pipefail
 
-# KHANDAQ (security): bumped 4.4.1 -> 4.4.5 -> 4.4.8, the current head of the 4.4.x
-# branch, picking up its accumulated decoder CVE fixes (audit #2 finding 7: six issues
-# were fixed in 4.4.6 alone). Same 4.4 ABI, no risk to the cross-compile.
-# Hash is from the real tarball; its detached .asc verifies against FFmpeg's release
-# signing key FCF986EA15E6E293A5644F10B4322F04D67658D8.
-# TODO: move the Windows build to a modern FFmpeg (Linux uses n8.x) — needs a Windows
-# CI build to verify avcodec API changes, so out of scope for this drop-in bump.
-FFMPEG_VERSION=4.4.8
-FFMPEG_HASH=c73848c4ae283d9eaee7be3b276affbc3543380483555500d0dd2c9b7e1c39c3
+# KHANDAQ (security): bumped 4.4.1 -> 4.4.5 -> 4.4.8 (the head of the 4.4.x branch, with
+# its accumulated decoder CVE fixes; audit #2 finding 7) -> 8.1.1 in desktop v0.2.50, the
+# release and digest scripts/build-macos-deps.sh and build_ffmpeg_linux.sh pin, so the three
+# desktop builds read voice messages with the same FFmpeg. build_ffmpeg.sh says what is built.
+FFMPEG_VERSION=8.1.1
+FFMPEG_HASH=b6863adde98898f42602017462871b5f6333e65aec803fdd7a6308639c52edf3
 
 source "$(dirname "$(realpath "$0")")/common.sh"
 

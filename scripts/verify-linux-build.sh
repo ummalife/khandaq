@@ -45,6 +45,24 @@ echo "==> Verifying $BIN"
 [[ -d "$LIB_DIR" ]] && ok "lib/ bundled ($(find "$LIB_DIR" -maxdepth 1 \( -type f -o -type l \) | wc -l | tr -d ' ') entries)" || bad "lib/ missing"
 [[ -f "$ROOT/dist/linux/plugins/platforms/libqxcb.so" ]] && ok "Qt xcb plugin bundled" || bad "Qt plugins missing"
 
+# KHANDAQ (desktop v0.2.51): the bundle must carry the binary of this build. bundle-linux-portable.sh
+# used to keep a khandaq.bin it found in dist/linux and write the launcher over the new binary, so a
+# build into a dist/ left by an earlier one shipped the earlier binary next to the new libraries, and
+# every other check here passed. The binary names the commit it was built from (GIT_VERSION, shown in
+# Settings > About), and that must be the commit of this tree.
+BUILT_BIN="$(strings_target)"
+if [[ -f "$REAL_BIN" && -f "$BIN" && "$(LC_ALL=C head -c 4 "$BIN")" == $'\177ELF' ]]; then
+  bad "the launcher is a binary next to khandaq.bin: the bundle step did not run on this build"
+fi
+HEAD_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
+if [[ -z "$HEAD_COMMIT" ]]; then
+  echo "  SKIP: built commit (no git in $ROOT)"
+elif [[ -f "$BUILT_BIN" ]] && LC_ALL=C grep -aqF -- "$HEAD_COMMIT" "$BUILT_BIN"; then
+  ok "$(basename "$BUILT_BIN") is the build of $HEAD_COMMIT"
+else
+  bad "$(basename "$BUILT_BIN") does not name $HEAD_COMMIT: a binary of an earlier build?"
+fi
+
 # KHANDAQ (desktop v0.2.49): the bundle carries the FFmpeg khandaq-desktop/buildscripts/
 # build_ffmpeg_linux.sh builds (8.1.3 since v0.2.51, without the MOV boxes of the open advisories; its
 # --extra-version is in every library's configuration string), never Ubuntu's 6.1.1. libavfilter and

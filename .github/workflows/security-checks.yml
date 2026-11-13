@@ -66,6 +66,10 @@ jobs:
       # while every pin it names is a Windows cross-build script, and the SBOM repeated the claim.
       - name: The bundled inventory must not claim unpinned platforms
         run: python3 scripts/check-bundled-deps-platforms.py
+      # KHANDAQ (desktop v0.2.51): a Linux build into a dist/ left by an earlier one kept the earlier
+      # binary and bundled it with the new libraries. The real bundle script runs on throwaway trees.
+      - name: The Linux bundle must carry the binary of the build that made it
+        run: python3 scripts/check-linux-bundle.py
 
   release-metadata:
     # KHANDAQ (re-audit 2026-08-21, R-07): the package name, the version and the iOS build number were

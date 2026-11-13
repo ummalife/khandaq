@@ -929,6 +929,21 @@ class ShareInboxTests: XCTestCase {
         XCTAssertEqual(ShareInboxCollector.deduplicated([text, text]).count, 1)
     }
 
+    /// QA-Live 2026-11-13: a shared text toxcore refuses waits in its chat with "Retry", as one from the
+    /// composer does, instead of an alert that the closing "Send to" sheet can swallow. Without a person
+    /// to send to again nothing is kept, and the caller shows the error.
+    func testARefusedSharedTextWaitsInItsChatWithRetry() {
+        let sends = AirFailedSends()
+        XCTAssertTrue(sends.keepRefusedShare("https://khandaq.org/", toChat: "chat-a", hasPerson: true))
+        XCTAssertEqual(sends.items(forChat: "chat-a").map { $0.text }, ["https://khandaq.org/"])
+
+        XCTAssertFalse(sends.keepRefusedShare("https://khandaq.org/", toChat: "chat-b", hasPerson: false),
+                       "a chat whose person was removed kept a text nobody can be sent it again")
+        XCTAssertTrue(sends.items(forChat: "chat-b").isEmpty)
+        XCTAssertFalse(sends.keepRefusedShare("", toChat: "chat-a", hasPerson: true))
+        XCTAssertEqual(sends.items(forChat: "chat-a").count, 1)
+    }
+
     func testALongTextIsShortenedAtAWordAboveTheChats() {
         let words = Array(repeating: "word", count: 100).joined(separator: " ")
         let payload = ShareInboxPayload(version: 1, createdAt: 1, items: [

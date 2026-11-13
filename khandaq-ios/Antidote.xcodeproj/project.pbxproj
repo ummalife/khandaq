@@ -310,6 +310,7 @@
 		B3C343706707940000000003 /* AirNewContactModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C343706707940000000002 /* AirNewContactModelTests.swift */; };
 		B3C343693019790000000003 /* AirLocalStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C343693019790000000002 /* AirLocalStoreTests.swift */; };
 		B2BAIR061111000000000002 /* AirEntryTextCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BAIR051111000000000002 /* AirEntryTextCellSnapshotTest.swift */; };
+		KQLOCROW0000000000000001 /* ChatLocationRowLayoutTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQLOCROW0000000000000002 /* ChatLocationRowLayoutTest.swift */; };
 		B2BAIR041111000000000001 /* AirConversationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BAIR031111000000000001 /* AirConversationModel.swift */; };
 		B3C344287040630000000003 /* AirNetworkScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344287040630000000002 /* AirNetworkScreen.swift */; };
 		B3C344196753430000000003 /* AirCalls.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344196753430000000002 /* AirCalls.swift */; };
@@ -858,6 +859,7 @@
 		B3C343706707940000000002 /* AirNewContactModelTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirNewContactModelTests.swift; sourceTree = "<group>"; };
 		B3C343693019790000000002 /* AirLocalStoreTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirLocalStoreTests.swift; sourceTree = "<group>"; };
 		B2BAIR051111000000000002 /* AirEntryTextCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirEntryTextCellSnapshotTest.swift; sourceTree = "<group>"; };
+		KQLOCROW0000000000000002 /* ChatLocationRowLayoutTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatLocationRowLayoutTest.swift; sourceTree = "<group>"; };
 		B2BAIR031111000000000001 /* AirConversationModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirConversationModel.swift; sourceTree = "<group>"; };
 		B3C344287040630000000002 /* AirNetworkScreen.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirNetworkScreen.swift; sourceTree = "<group>"; };
 		B3C344196753430000000002 /* AirCalls.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirCalls.swift; sourceTree = "<group>"; };
@@ -1041,6 +1043,7 @@
 				B3C343706707940000000002 /* AirNewContactModelTests.swift */,
 				B3C343693019790000000002 /* AirLocalStoreTests.swift */,
 				B2BAIR051111000000000002 /* AirEntryTextCellSnapshotTest.swift */,
+				KQLOCROW0000000000000002 /* ChatLocationRowLayoutTest.swift */,
 				KHLOCTEST000000000000002 /* LocalizationTest.swift */,
 				KHLOCTEST000000000000004 /* MessageForwarderTest.swift */,
 				KHLOCTEST000000000000006 /* KhandaqBrandingTest.swift */,
@@ -2379,6 +2382,7 @@
 				B3C343706707940000000003 /* AirNewContactModelTests.swift in Sources */,
 				B3C343693019790000000003 /* AirLocalStoreTests.swift in Sources */,
 				B2BAIR061111000000000002 /* AirEntryTextCellSnapshotTest.swift in Sources */,
+				KQLOCROW0000000000000001 /* ChatLocationRowLayoutTest.swift in Sources */,
 				KHLOCTEST000000000000001 /* LocalizationTest.swift in Sources */,
 				KHLOCTEST000000000000003 /* MessageForwarderTest.swift in Sources */,
 				KHLOCTEST000000000000005 /* KhandaqBrandingTest.swift in Sources */,
@@ -2689,7 +2693,7 @@
 				CODE_SIGN_ENTITLEMENTS = Antidote/Antidote.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 142993;
+				CURRENT_PROJECT_VERSION = 142994;
 				DEVELOPMENT_TEAM = DQRPWB97AB;
 				ENABLE_BITCODE = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
@@ -2724,7 +2728,7 @@
 				CLANG_STATIC_ANALYZER_MODE = deep;
 				CODE_SIGN_ENTITLEMENTS = Antidote/Antidote.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 142993;
+				CURRENT_PROJECT_VERSION = 142994;
 				DEVELOPMENT_TEAM = DQRPWB97AB;
 				ENABLE_BITCODE = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
@@ -2818,7 +2822,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
-				CURRENT_PROJECT_VERSION = 142993;
+				CURRENT_PROJECT_VERSION = 142994;
 				MARKETING_VERSION = 1.4.33;
 				PRODUCT_BUNDLE_IDENTIFIER = org.khandaq.messenger.pushextension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -2845,7 +2849,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				CURRENT_PROJECT_VERSION = 142993;
+				CURRENT_PROJECT_VERSION = 142994;
 				MARKETING_VERSION = 1.4.33;
 				PRODUCT_BUNDLE_IDENTIFIER = org.khandaq.messenger.pushextension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -2875,7 +2879,7 @@
 				MARKETING_VERSION = 1.4.33;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
-				CURRENT_PROJECT_VERSION = 142993;
+				CURRENT_PROJECT_VERSION = 142994;
 				PRODUCT_BUNDLE_IDENTIFIER = org.khandaq.messenger.shareextension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -2903,7 +2907,7 @@
 				MARKETING_VERSION = 1.4.33;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				CURRENT_PROJECT_VERSION = 142993;
+				CURRENT_PROJECT_VERSION = 142994;
 				PRODUCT_BUNDLE_IDENTIFIER = org.khandaq.messenger.shareextension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

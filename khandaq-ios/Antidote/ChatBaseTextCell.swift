@@ -14,7 +14,9 @@ class ChatBaseTextCell: ChatMovableDateCell {
 
     var bubbleNormalBackground: UIColor?
     var bubbleView: BubbleView!
-    
+    /// KHANDAQ (location row): the place this cell shows the map of, nil on any other row.
+    private var shownLocationKey: NSString?
+
     override func setupWithTheme(_ theme: Theme, model: BaseCellModel) {
         super.setupWithTheme(theme, model: model)
 
@@ -30,6 +32,7 @@ class ChatBaseTextCell: ChatMovableDateCell {
         bubbleView.onLocationTap = nil
         bubbleView.onReplyQuoteTap = nil
         bubbleView.setLocationMapImage(nil)
+        shownLocationKey = nil
         bubbleView.bindReplyQuote(textModel.replyMeta, theme: theme)
         bubbleView.onReplyQuoteTap = textModel.onReplyQuoteTap
         // KHANDAQ (#192): reaction chips + tap-to-toggle (opens the quick bar via the delegate)
@@ -116,13 +119,33 @@ class ChatBaseTextCell: ChatMovableDateCell {
         bubbleView.attributedText = current
     }
 
+    /// The key a place's map snapshot is cached and matched under.
+    static func mapSnapshotKey(latitude: Double, longitude: Double) -> NSString {
+        return NSString(string: String(format: "%.5f,%.5f", latitude, longitude))
+    }
+
+    /// KHANDAQ (location row): the snapshot comes late, and by then the table may have given this cell
+    /// another row, so it goes on only while the cell still shows the place it was made for. Without
+    /// the check one row's map was drawn on the next row of the log (TestFlight 1.4.33 (142993)).
+    func applyLocationMapSnapshot(_ image: UIImage, forKey key: NSString) {
+        guard shownLocationKey == key else {
+            return
+        }
+        bubbleView.setLocationMapImage(image)
+    }
+
     fileprivate func loadLocationMapSnapshot(latitude: Double, longitude: Double) {
-        let cacheKey = NSString(string: String(format: "%.5f,%.5f", latitude, longitude))
+        let cacheKey = ChatBaseTextCell.mapSnapshotKey(latitude: latitude, longitude: longitude)
+        shownLocationKey = cacheKey
 
         if let cachedImage = ChatBaseTextCell.mapSnapshotCache.object(forKey: cacheKey) {
             bubbleView.setLocationMapImage(cachedImage)
             return
         }
+
+        // The row is measured now, before the snapshot exists: the tile takes the map's place from the
+        // start and the snapshot only fills it in.
+        bubbleView.showLocationMapPlaceholder()
 
         let options = MKMapSnapshotter.Options()
         options.region = MKCoordinateRegionMakeWithDistance(
@@ -133,14 +156,14 @@ class ChatBaseTextCell: ChatMovableDateCell {
         options.scale = UIScreen.main.scale
 
         MKMapSnapshotter(options: options).start { [weak self] snapshot, _ in
-            guard let self = self, let image = snapshot?.image else {
+            guard let image = snapshot?.image else {
                 return
             }
 
             ChatBaseTextCell.mapSnapshotCache.setObject(image, forKey: cacheKey)
 
             DispatchQueue.main.async {
-                self.bubbleView.setLocationMapImage(image)
+                self?.applyLocationMapSnapshot(image, forKey: cacheKey)
             }
         }
     }

@@ -21,6 +21,7 @@
 #include "settings.h"
 #include "src/core/core.h"
 #include "src/core/corefile.h"
+#include "src/model/air/airpreferences.h"
 #include "src/nexus.h"
 #include "src/persistence/profile.h"
 #include "src/persistence/profilelocker.h"
@@ -175,7 +176,7 @@ void Settings::loadGlobal()
         notifySound = s.value("notifySound", true).toBool();
         notifyHide = s.value("notifyHide", false).toBool();
         busySound = s.value("busySound", false).toBool();
-        autoSaveEnabled = s.value("autoSaveEnabled", true).toBool();
+        autoSaveEnabled = s.value("autoSaveEnabled", Air::autoSaveDefault).toBool();
         globalAutoAcceptDir = s.value("globalAutoAcceptDir",
                                       QStandardPaths::writableLocation(QStandardPaths::DownloadLocation))
                                   .toString();

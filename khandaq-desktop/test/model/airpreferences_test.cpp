@@ -101,6 +101,7 @@ private slots:
     void filesFromAContactGoToTheirFolder();
     void filesGoToTheChosenFolderElseDownloads();
     void neverLeavesFilesWaiting();
+    void aNewInstallationLetsFilesWait();
     void theLimitCountsTheFileItself();
     void theDownloadsFolderGoesByItsName();
     void anotherFolderShowsItsPath();
@@ -174,6 +175,19 @@ void TestAirPreferences::neverLeavesFilesWaiting()
     // The old General tab had this switch, and nothing read it: every file was saved anyway.
     QCOMPARE(Air::autoAcceptFolder(QString(), false, globalFolder, downloads, 0, 1), QString());
     QCOMPARE(Air::autoAcceptFolder(QString(), false, QString(), downloads, 0, 1), QString());
+}
+
+void TestAirPreferences::aNewInstallationLetsFilesWait()
+{
+    // Settings::loadGlobal falls back to this when nothing is stored yet: a new installation saves
+    // nothing a contact sends until Accept, and its settings page shows Never.
+    QVERIFY(!Air::autoSaveDefault);
+    QCOMPARE(Air::attachmentMode(Air::autoSaveDefault, 0), Air::AttachmentMode::Never);
+    QCOMPARE(Air::autoAcceptFolder(QString(), Air::autoSaveDefault, globalFolder, downloads, 0, 1),
+             QString());
+    // A folder chosen for a contact still takes their files: that was chosen, not defaulted.
+    QCOMPARE(Air::autoAcceptFolder(contactFolder, Air::autoSaveDefault, globalFolder, downloads, 0, 1),
+             contactFolder);
 }
 
 void TestAirPreferences::theLimitCountsTheFileItself()

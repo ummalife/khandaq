@@ -375,10 +375,10 @@ build_ffmpeg() {
     # and the libx264 encoder toxav uses for video calls, MJPEG/raw camera frames and swscale.
     # No network, no filters, no hardware codecs. Homebrew's build had all of FFmpeg plus x265,
     # SVT-AV1, dav1d, vmaf, LAME and OpenSSL, none of which the app calls.
-    local v=8.1.1 d
-    prepare ffmpeg "https://ffmpeg.org/releases/ffmpeg-$v.tar.xz" b6863adde98898f42602017462871b5f6333e65aec803fdd7a6308639c52edf3
+    local v=8.1.3 d
+    prepare ffmpeg "https://ffmpeg.org/releases/ffmpeg-$v.tar.xz" 7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3
     d="$SRC_DIR"
-    # The MOV demuxer is here for voice messages (AAC in MP4). Three advisories against 8.1.1 with no
+    # The MOV demuxer is here for voice messages (AAC in MP4). Three advisories against 8.1.3 with no
     # fixed 8.1.x release sit in boxes a voice message never carries: CVE-2026-52297 (iacb, IAMF),
     # CVE-2026-96611 (ispe, HEIF image items) and CVE-2026-107678 (pssh, DRM init data). IAMF is
     # configured out below; the other two boxes leave the demuxer's parse table, so it skips them as
@@ -494,7 +494,7 @@ build_toxext_messages() {
 ALL=(
     "pcre2 10.49" "zstd 1.5.7" "gettext 1.0" "glib 2.88.2" "libpng 1.6.59" "md4c 0.5.3"
     "xz 5.8.4" "jpeg 3.2.1" "tiff 4.7.2" "webp 1.6.0" "freetype 2.15.0"
-    "sodium 1.0.22" "opus 1.6.1" "vpx 1.16.0" "x264 r3222" "ffmpeg 8.1.1+mov-hardening"
+    "sodium 1.0.22" "opus 1.6.1" "vpx 1.16.0" "x264 r3222" "ffmpeg 8.1.3+mov-hardening"
     "openal 1.25.2" "sqlcipher 4.16.0" "qrencode 4.1.1" "libexif 0.6.26"
     "toxcore 2e7a0675" "toxext 0.0.3" "toxext_messages 0.0.3"
 )

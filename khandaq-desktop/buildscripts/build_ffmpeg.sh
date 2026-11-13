@@ -4,7 +4,8 @@
 #     Copyright (c) 2017-2021 Maxim Biro <nurupo.contributions@gmail.com>
 #     Copyright (c) 2021 by The qTox Project Contributors
 
-# KHANDAQ (desktop v0.2.50): FFmpeg 8.1.1 for the Windows build, configured like the macOS build
+# KHANDAQ (desktop v0.2.50; 8.1.3 since v0.2.51): FFmpeg 8.1 for the Windows build, configured like
+# the macOS build
 # (build_ffmpeg in scripts/build-macos-deps.sh) and the Linux build (build_ffmpeg_linux.sh). Until
 # v0.2.50 Windows carried FFmpeg 4.4.8 without the MOV demuxer and the AAC decoder, so the app could
 # not read a voice message from the phones (src/model/air/airvoicedecoder.cpp, canDecode()) and
@@ -55,7 +56,7 @@ fi
 
 "${SCRIPT_DIR}/download/download_ffmpeg.sh"
 
-# As on macOS and Linux: three advisories against 8.1.1 with no fixed 8.1.x release sit in MOV boxes
+# As on macOS and Linux: three advisories against 8.1.3 with no fixed 8.1 release sit in MOV boxes
 # a voice message never carries: CVE-2026-52297 (iacb, IAMF), CVE-2026-96611 (ispe, HEIF image
 # items) and CVE-2026-107678 (pssh, DRM init data). IAMF is configured out below; the other two
 # boxes leave the demuxer's parse table, so it skips them as it skips any unknown box. A future

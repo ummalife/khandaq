@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-13T19:32:05Z",
+  "generated_at": "2026-11-13T22:43:03Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,33 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.51",
+      "date": "2026-11-14",
+      "title": "Mac notifications next to the iPhone app, and FFmpeg 8.1.3",
+      "summary": "On a Mac that also has Khandaq for iPhone installed, macOS refused the Mac app's message notifications, because both apps carried the same identifier. The Mac app now has its own. The Windows, Mac and Linux apps carry FFmpeg 8.1.3, the newest release of the 8.1 line.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "New-message notifications show on a Mac that also has Khandaq for iPhone",
+          "description": "Macs with Apple silicon can install the iPhone app, and it shares the identifier org.khandaq.messenger with the Mac app. On such a Mac, macOS took the Mac app for the iPhone app and refused its notifications without a word. The Mac app is now org.khandaq.desktop. Your profiles, settings and history stay where they are, but macOS meets the app as a new one once: it asks again before showing notifications, before the first call uses the microphone or the camera, and before you share your screen. If you let the app open your profile without asking for its password, macOS also asks once whether Khandaq may use the password it keeps in the keychain: enter your Mac password and choose Always Allow. If Khandaq for iPhone is in your Applications folder, it holds the name Khandaq there, so keep the Mac app in another folder, for example the Applications folder in your home folder, and do not let Finder replace one with the other.",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "FFmpeg 8.1.3 in the Windows, Mac and Linux apps",
+          "description": "The three desktop apps read voice messages, the camera and video calls with FFmpeg 8.1.3, the newest release of the 8.1 line, built as before with only the parts the app uses. NVD lists 16 advisories against 8.1.3, down from 35 against 8.1.1. The MP4 reader still skips the kinds of boxes with known bugs and no fixed FFmpeg 8.1 release yet (CVE-2026-52297, CVE-2026-96611, CVE-2026-107678).",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.50",
       "date": "2026-11-13",

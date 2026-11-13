@@ -148,6 +148,12 @@ class ChatPrivateController: PortraitChatController {
     fileprivate var displayGeneration = 0
     /// Storage index of every row of the log; a nil map means each loaded message has its own row.
     fileprivate var displayMapCache: (key: DisplayMapKey, map: [Int]?)?
+    /// KHANDAQ (QA 2026-11-13): `messages.count` when the table last read its rows, a row or a height.
+    /// The Results are live, so the table can draw a message before Realm delivers the change that adds
+    /// it; inserting that row again then draws the message twice. On a phone with TestFlight 1.4.33
+    /// (142994) a link shared to a long chat stood twice: a stale copy with one tick above the delivered
+    /// one, until the next reload.
+    fileprivate var tableReadMessageCount: Int?
     /// What each of our messages showed the last time it was drawn, so a change of state cross-fades.
     fileprivate var statusMemory: [String: AirEntryStatus] = [:]
     /// Messages that rise into the log when their row appears, with the delay of each.
@@ -873,6 +879,7 @@ extension ChatPrivateController: LocationSharingChat {}
 
 extension ChatPrivateController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        tableReadMessageCount = messages.count
         let entry = messageEntry(atDisplayIndex: indexPath.row)
         let message = entry.message
 
@@ -1037,6 +1044,7 @@ extension ChatPrivateController: UITableViewDataSource {
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        tableReadMessageCount = messages.count
         return displayableRowCount()
     }
 }
@@ -1064,6 +1072,7 @@ extension ChatPrivateController: UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        tableReadMessageCount = messages.count
         let entry = messageEntry(atDisplayIndex: indexPath.row)
 
         // Merged caption rows are not shown on their own.
@@ -2101,7 +2110,11 @@ private extension ChatPrivateController {
             }
             switch change {
                 case .initial:
-                    break
+                    // KHANDAQ (QA 2026-11-13): the changes Realm delivers from here on start at this
+                    // version; a table that loaded another one is brought to it (see tableReadMessageCount).
+                    if let readCount = self.tableReadMessageCount, readCount != self.messages.count {
+                        tableView.reloadData()
+                    }
                 case .update(_, let deletions, let insertions, let modifications):
                     // KHANDAQ (redesign stage 2): the rows of the log change with the messages; the
                     // tray takes what waits for the person, a new message rises into the log.
@@ -2174,8 +2187,16 @@ private extension ChatPrivateController {
                         let indicesInBounds = animatedDeletions.allSatisfy { $0 >= 0 && $0 < oldRows }
                             && animatedInsertions.allSatisfy { $0 >= 0 && $0 <= projectedRows }
                         let countReconciles = (oldRows + animatedInsertions.count - animatedDeletions.count) == projectedRows
+                        // KHANDAQ (QA 2026-11-13): the table already read the messages after this change
+                        // (see tableReadMessageCount), so its rows may show the new messages. On a chat
+                        // longer than the loaded window the row count still reconciles, and the batch
+                        // would push a row that already shows the new message one place up and draw it
+                        // again below. Read after numberOfRows(inSection:), which itself loads the rows
+                        // again when a reload is pending.
+                        let tableReadThisChange = self.tableReadMessageCount
+                            != self.messages.count - insertions.count + deletions.count
 
-                        if indicesInBounds && countReconciles {
+                        if indicesInBounds && countReconciles && !tableReadThisChange {
                             // KHANDAQ (#86/#90/crash): apply EXACTLY the reconciled (window-clamped) index
                             // paths — not the clamping helpers, which would re-clamp against the just-
                             // advanced window and insert an extra row at the pagination boundary.

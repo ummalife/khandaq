@@ -1369,6 +1369,9 @@
 "air_share_import_action" = "نقل الملف الشخصي من هذا الملف";
 "air_share_import_verb" = "نقل";
 "air_share_in_title" = "إرسال إلى";
+"air_share_drop_title" = "ألا تريد إرساله؟";
+"air_share_drop_verb" = "لا ترسل";
+"air_share_choose_chat" = "اختر محادثة";
 "air_share_ext_preparing" = "جارٍ التحضير للإرسال";
 "air_share_ext_open_app" = "جاهز. افتح Khandaq واختر من سيستلمه.";
 "air_share_ext_failed" = "تعذّر تمرير هذا إلى Khandaq.";

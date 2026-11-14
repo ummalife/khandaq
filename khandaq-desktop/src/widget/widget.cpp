@@ -2638,7 +2638,11 @@ void Widget::onGroupPeerlistChanged(uint32_t groupnumber)
 {
     const GroupId& groupId = groupList->id2Key(groupnumber);
     Group* g = groupList->findGroup(groupId);
-    assert(g);
+    if (!g) {
+        // A late signal for a group that is gone from the list: nothing to update.
+        qWarning() << "onGroupPeerlistChanged: no group for number" << groupnumber;
+        return;
+    }
     g->regeneratePeerList();
 }
 
@@ -2807,7 +2811,11 @@ void Widget::onGroupPeerNameChanged(uint32_t groupnumber, const ToxPk& peerPk, c
 {
     const GroupId& groupId = groupList->id2Key(groupnumber);
     Group* g = groupList->findGroup(groupId);
-    assert(g);
+    if (!g) {
+        // A late signal for a group that is gone from the list: nothing to update.
+        qWarning() << "onGroupPeerNameChanged: no group for number" << groupnumber;
+        return;
+    }
 
     const QString setName = friendList->decideNickname(peerPk, newName);
     g->updateUsername(peerPk, newName);
@@ -2817,7 +2825,11 @@ void Widget::onGroupTitleChanged(uint32_t groupnumber, const QString& author, co
 {
     const GroupId& groupId = groupList->id2Key(groupnumber);
     Group* g = groupList->findGroup(groupId);
-    assert(g);
+    if (!g) {
+        // A late signal for a group that is gone from the list: nothing to update.
+        qWarning() << "onGroupTitleChanged: no group for number" << groupnumber;
+        return;
+    }
 
     GroupWidget* widget = groupWidgets[groupId];
     if (widget->isActive()) {

@@ -118,6 +118,9 @@ QByteArray groupChatId(const Tox* tox, uint32_t groupNumber)
     return chatId;
 }
 
+// Defined with the friend-assisted join below.
+void forgetFriendAssistedJoin(const QByteArray& chatId);
+
 } // namespace
 
 Core::Core(QThread* coreThread_, IBootstrapListGenerator& bootstrapListGenerator_, const ICoreSettings& settings_)
@@ -945,8 +948,18 @@ void Core::onGroupCustomPacket(Tox* tox, uint32_t groupId, uint32_t peerId, cons
                                          QDateTime::currentMSecsSinceEpoch());
             emit core->groupPeerlistChanged(group);
             // A notice that no exit follows lapses: the member shows again if toxcore still has it.
-            QTimer::singleShot(Air::GroupLeaveNotices::windowMs + 1000, core,
-                               [core, group] { emit core->groupPeerlistChanged(group); });
+            // Only while the group is still ours: we may have left it in the meantime, and toxcore
+            // may have given its number to another group since.
+            const QByteArray chatId = groupChatId(tox, groupId);
+            QTimer::singleShot(Air::GroupLeaveNotices::windowMs + 1000, core, [core, group, chatId] {
+                QMutexLocker ml{&core->coreLoopLock};
+                const uint32_t groupNumber = static_cast<uint32_t>(group);
+                if (chatId.isEmpty() || core->ignoresGroup(groupNumber)
+                    || groupChatId(core->tox.get(), groupNumber) != chatId) {
+                    return;
+                }
+                emit core->groupPeerlistChanged(group);
+            });
         }
         return;
     }
@@ -1291,6 +1304,9 @@ void Core::leaveGroupAfterNotice(int groupId)
 {
     const uint32_t groupNumber = static_cast<uint32_t>(groupId);
     groupLeaveNotices.forgetGroup(groupId);
+    // A join by ID asked our friends for an invite: a late one must not join the group again, as
+    // on iOS (OCTSubmanagerGroupsImpl).
+    forgetFriendAssistedJoin(groupChatId(tox.get(), groupNumber));
     if (sendGroupLeaveNotice(groupId)) {
         // Our own peer counts as one.
         Tox_Err_Group_Peer_Query peerError;
@@ -2216,6 +2232,12 @@ constexpr int64_t GROUP_INVITE_REQUEST_RESEND_MS = 30 * 1000;
 constexpr int64_t GROUP_INVITE_REPLY_MIN_INTERVAL_MS = 60 * 1000;
 // chat ids (raw 32 bytes) we asked friends to invite us to → request time
 std::unordered_map<std::string, int64_t> pendingFriendAssistedJoins;
+
+void forgetFriendAssistedJoin(const QByteArray& chatId)
+{
+    pendingFriendAssistedJoins.erase(std::string(chatId.constData(), static_cast<size_t>(chatId.size())));
+}
+
 // receiver side: (friendId, groupNum) → last time we sent them an invite
 std::unordered_map<uint64_t, int64_t> lastGroupInviteReplyMs;
 // sender side: (friendId, chat id hash) → last time we sent the request

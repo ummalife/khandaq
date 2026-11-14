@@ -33,6 +33,9 @@ import static org.junit.Assert.assertTrue;
  * system Photo Picker names a photo after its gallery id ("1000000022.png"), so for its picks the gallery
  * is asked for the real name.
  *
+ * That name comes from another app, so it is made safe for a path first, and nothing is written or deleted
+ * outside the outgoing folder, also by way of a link (code scanning, java/path-injection).
+ *
  * The outgoing folder is passed in: MainActivity, which holds it, cannot be loaded in a JVM test.
  */
 public class OutgoingFileCopyTest
@@ -156,15 +159,98 @@ public class OutgoingFileCopyTest
     }
 
     @Test
+    public void a_hostile_name_gets_a_safe_one_in_the_copy_s_own_folder() throws IOException
+    {
+        // Up one level would put the copy beside the folders, two levels next to the outgoing folder.
+        assertEquals(new File(new File(outgoing, "9ded"), "___x"), claim("9ded", "../../x"));
+        assertEquals(new File(new File(outgoing, "9ded"), "a_b.png"), claim("9ded", "a/b.png"));
+        // Nothing usable left: the generated name. The same name again takes the next folder.
+        assertEquals(new File(new File(outgoing, "9ded"), "9ded_"), claim("9ded", ".."));
+        assertEquals(new File(new File(outgoing, "9ded_1"), "9ded_"), claim("9ded", ""));
+        assertFalse(new File(outgoing, "x").exists());
+        assertFalse(new File(folder.getRoot(), "x").exists());
+    }
+
+    @Test
+    public void a_path_that_leads_out_of_the_outgoing_folder_is_not_deleted() throws IOException
+    {
+        final File original = folder.newFile("keep.png");
+
+        // The text of the path starts with the outgoing folder, the path itself does not.
+        assertFalse(delete_outgoing_copy(outgoingDir + "9ded/../../keep.png", outgoingDir));
+        assertTrue(original.exists());
+        // Nor is the outgoing folder itself a copy.
+        assertFalse(delete_outgoing_copy(outgoingDir, outgoingDir));
+        assertTrue(outgoing.isDirectory());
+    }
+
+    @Test
+    public void a_folder_that_links_out_of_the_outgoing_folder_is_neither_written_nor_deleted_in() throws IOException
+    {
+        final File elsewhere = folder.newFolder("elsewhere");
+        final File kept = new File(elsewhere, "keep.png");
+        write(kept, "keep");
+        Files.createSymbolicLink(new File(outgoing, "9ded").toPath(), elsewhere.toPath());
+
+        // The path reads as the outgoing folder's own; with the link resolved it is not, so the next folder is used.
+        assertEquals(new File(new File(outgoing, "9ded_1"), "photo.png"), claim("9ded", "photo.png"));
+        assertFalse(new File(elsewhere, "photo.png").exists());
+        assertFalse(delete_outgoing_copy(outgoingDir + "9ded/keep.png", outgoingDir));
+        assertTrue(kept.exists());
+    }
+
+    @Test
     public void the_name_is_made_safe_for_a_path_and_a_blank_one_keeps_the_old_form()
     {
         assertEquals("qa-stripes-android.png", outgoing_copy_file_name("qa-stripes-android.png", "9ded"));
         assertEquals("a_b_c.png", outgoing_copy_file_name("a/b:c.png", "9ded"));
+        assertEquals("a_b.png", outgoing_copy_file_name("a\\b.png", "9ded"));
+        assertEquals("___x", outgoing_copy_file_name("../../x", "9ded"));
+        assertEquals("x_y_.png", outgoing_copy_file_name("x\u0000y\n.png", "9ded"));
+        assertEquals("hidden.png", outgoing_copy_file_name(".hidden.png", "9ded"));
+        assertEquals("a_b.png", outgoing_copy_file_name("a..b.png", "9ded"));
         assertEquals("9ded_", outgoing_copy_file_name("", "9ded"));
         assertEquals("9ded_", outgoing_copy_file_name(null, "9ded"));
-        assertEquals("9ded_.", outgoing_copy_file_name(".", "9ded"));
+        assertEquals("9ded_", outgoing_copy_file_name(".", "9ded"));
+        assertEquals("9ded_", outgoing_copy_file_name("..", "9ded"));
+        assertEquals("9ded_", outgoing_copy_file_name("....", "9ded"));
         assertEquals("9ded", outgoing_copy_dir_name("9ded", 0));
         assertEquals("9ded_2", outgoing_copy_dir_name("9ded", 2));
+    }
+
+    private static String repeat(final String piece, final int times)
+    {
+        final StringBuilder out = new StringBuilder();
+        for (int i = 0; i < times; i++)
+        {
+            out.append(piece);
+        }
+        return out.toString();
+    }
+
+    private static int utf8(final String text)
+    {
+        return text.getBytes(StandardCharsets.UTF_8).length;
+    }
+
+    @Test
+    public void a_long_name_is_cut_to_what_a_file_name_and_toxcore_take_and_keeps_its_extension()
+    {
+        final String cyrillic = outgoing_copy_file_name(repeat("я", 300) + ".png", "9ded");
+        assertEquals(repeat("я", 125) + ".png", cyrillic);
+        assertTrue(utf8(cyrillic) <= HelperFiletransfer.OUTGOING_COPY_NAME_MAX_BYTES);
+
+        // Never half of an emoji's surrogate pair.
+        final String emoji = outgoing_copy_file_name(repeat("😀", 100) + ".jpg", "9ded");
+        assertEquals(repeat("😀", 62) + ".jpg", emoji);
+
+        // No extension, or one too long to be one: the name is cut as it is.
+        assertEquals(repeat("a", 255), outgoing_copy_file_name(repeat("a", 300), "9ded"));
+        assertEquals(255, utf8(outgoing_copy_file_name("a." + repeat("b", 300), "9ded")));
+
+        // A cut that ends on a dot does not make ".." with the extension.
+        assertEquals(repeat("a", 250) + ".png",
+                     outgoing_copy_file_name(repeat("a", 250) + "." + repeat("b", 10) + ".png", "9ded"));
     }
 
     @Test

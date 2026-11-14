@@ -59,6 +59,8 @@ import java.io.InputStream;
 import java.net.URLConnection;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
@@ -1732,18 +1734,10 @@ public class HelperFiletransfer
         // the desktop showed "9ded_photo.png". Rows written before keep their flat paths, which every reader
         // takes whole (filename_fullpath, or path_name and file_name), and delete_outgoing_copy leaves the
         // outgoing folder itself in place.
-        final String filename_sd_card = outgoing_copy_file_name(filename, new_fake_filename_prefix);
-        if (filename_sd_card == null)
-        {
-            Log.i(TAG, "copy_outgoing_file_to_sdcard_dir:003");
-            return null;
-        }
-
         File file = null;
         try
         {
-            file = claim_outgoing_copy(SD_CARD_FILES_OUTGOING_WRAPPER_DIR, new_fake_filename_prefix,
-                                       filename_sd_card);
+            file = claim_outgoing_copy(SD_CARD_FILES_OUTGOING_WRAPPER_DIR, new_fake_filename_prefix, filename);
             if (file == null)
             {
                 Log.i(TAG, "copy_outgoing_file_to_sdcard_dir:005");
@@ -1751,7 +1745,9 @@ public class HelperFiletransfer
             }
 
             ret.filepath_wrapped = file.getParentFile().getAbsolutePath();
-            ret.filename_wrapped = filename_sd_card;
+            // The name as made safe for the copy (outgoing_copy_file_name): the copy lies under it and goes out
+            // with it.
+            ret.filename_wrapped = file.getName();
 
             // now write that contents of the virtual file to the actual file on SD card ----------------
             // Log.i(TAG, "copy_outgoing_file_to_sdcard_dir:filepath=" + filepath);
@@ -1824,15 +1820,27 @@ public class HelperFiletransfer
     /**
      * KHANDAQ (QA live, F4): the file of a new copy, created empty in a folder of its own under the outgoing
      * folder: [prefix]/[name], or [prefix]_1/[name] and on when that path is taken (the same file sent twice,
-     * two at once), so that no two copies share a path. Null when 5000 are taken.
+     * two at once), so that no two copies share a path. The name is made safe first (outgoing_copy_file_name),
+     * and a copy is made only where its path stays in the outgoing folder (outgoing_copy_target). Null when
+     * 5000 are taken.
      */
     static File claim_outgoing_copy(final String outgoingDir, final String prefix, final String name)
             throws java.io.IOException
     {
+        if ((outgoingDir == null) || outgoingDir.isEmpty())
+        {
+            return null;
+        }
+        final String safe_name = outgoing_copy_file_name(name, prefix);
         for (int attempt = 0; attempt <= 5000; attempt++)
         {
-            final File dir = new File(outgoingDir, outgoing_copy_dir_name(prefix, attempt));
-            final File file = new File(dir, name);
+            final File file = outgoing_copy_target(outgoingDir, outgoing_copy_dir_name(prefix, attempt), safe_name);
+            if (file == null)
+            {
+                // With the name made safe, only a folder that links elsewhere gets here; the next one is tried.
+                continue;
+            }
+            final File dir = file.getParentFile();
             try
             {
                 if (create_outgoing_copy_file(dir, file))
@@ -1847,6 +1855,48 @@ public class HelperFiletransfer
             }
         }
         return null;
+    }
+
+    /**
+     * KHANDAQ (QA live, F4): [outgoing]/[folder]/[name] as a file, or null when that path leads anywhere else,
+     * by "..", a separator or a link. Checked on the normalized path, which is the one stored and shown, and
+     * again with links resolved (is_inside_outgoing_dir), which is where the bytes would go.
+     */
+    private static File outgoing_copy_target(final String outgoingDir, final String folder, final String name)
+    {
+        final Path base = Paths.get(outgoingDir).normalize();
+        final Path target = base.resolve(folder).resolve(name).normalize();
+        if (!target.startsWith(base))
+        {
+            return null;
+        }
+        if (target.getNameCount() != base.getNameCount() + 2)
+        {
+            return null;
+        }
+        final File file = target.toFile();
+        if (!is_inside_outgoing_dir(file, outgoingDir))
+        {
+            return null;
+        }
+        return file;
+    }
+
+    /**
+     * KHANDAQ (QA live, F4): whether the file lies in the outgoing folder, both with all links resolved. A path
+     * that cannot be resolved does not.
+     */
+    private static boolean is_inside_outgoing_dir(final File file, final String outgoingDir)
+    {
+        try
+        {
+            final String real_dir = new File(outgoingDir).getCanonicalPath();
+            return file.getCanonicalPath().startsWith(real_dir + File.separator);
+        }
+        catch (java.io.IOException e)
+        {
+            return false;
+        }
     }
 
     /**
@@ -1878,22 +1928,60 @@ public class HelperFiletransfer
     }
 
     /**
+     * KHANDAQ (QA live, F4): the longest name a copy may have, in UTF-8 bytes: the longest file name Android's
+     * file systems take, and the longest name toxcore sends with a file.
+     */
+    static final int OUTGOING_COPY_NAME_MAX_BYTES = TOX_MAX_FILENAME_LENGTH;
+    /** An extension longer than this, dot included, is not kept apart when a name is cut. */
+    private static final int OUTGOING_COPY_EXTENSION_MAX_CHARS = 16;
+
+    /**
      * KHANDAQ (QA live, F4): the name a copy keeps on disk and goes out with: the picked name, made safe for
-     * a path. A name with nothing usable in it keeps the prefixed form it had before.
+     * a path. The name comes from another app (a provider's display name, the photo picker, a share), so it
+     * may hold anything. Path separators and control characters become "_". Leading dots go, so "." and ".."
+     * are nothing, and any other ".." becomes "_". A name over OUTGOING_COPY_NAME_MAX_BYTES is cut, keeping
+     * its extension. A name with nothing left is the prefix and "_", the form every copy had before.
      */
     static String outgoing_copy_file_name(final String filename, final String prefix)
     {
-        final String clean = remove_bad_chars_from_outgoing_sdcard_filename(filename == null ? "" : filename);
-        if (clean == null)
+        final String picked = (filename == null) ? "" : filename;
+        final StringBuilder safe = new StringBuilder(picked.length());
+        for (int i = 0; i < picked.length(); i++)
         {
-            return null;
+            final char c = picked.charAt(i);
+            if ((safe.length() == 0) && (c == '.'))
+            {
+                continue;
+            }
+            safe.append(((c == '/') || (c == '\\') || (c == ':') || Character.isISOControl(c)) ? '_' : c);
         }
-        final String bare = clean.trim();
-        if (bare.isEmpty() || bare.equals("."))
+        final String name = cut_outgoing_copy_name(safe.toString().replace("..", "_"));
+        if (name.trim().isEmpty())
         {
-            return remove_bad_chars_from_outgoing_sdcard_filename(prefix + "_" + clean);
+            return prefix + "_";
         }
-        return clean;
+        return name;
+    }
+
+    /** The name cut to OUTGOING_COPY_NAME_MAX_BYTES after a whole character, its extension kept when short. */
+    private static String cut_outgoing_copy_name(final String name)
+    {
+        if (AirUtf8Limit.utf8Length(name, 0, name.length()) <= OUTGOING_COPY_NAME_MAX_BYTES)
+        {
+            return name;
+        }
+        final int dot = name.lastIndexOf('.');
+        final String extension = ((dot > 0) && ((name.length() - dot) <= OUTGOING_COPY_EXTENSION_MAX_CHARS))
+                                 ? name.substring(dot) : "";
+        final String stem = name.substring(0, name.length() - extension.length());
+        final int room = OUTGOING_COPY_NAME_MAX_BYTES - AirUtf8Limit.utf8Length(extension, 0, extension.length());
+        int end = AirUtf8Limit.fittingChars(stem, room);
+        // A dot left at the end of the cut would stand next to the extension's own, a ".." again.
+        while ((end > 0) && !extension.isEmpty() && (stem.charAt(end - 1) == '.'))
+        {
+            end--;
+        }
+        return stem.substring(0, end) + extension;
     }
 
     /** KHANDAQ (QA live, F4): the folder of a copy under the outgoing folder; the next one when it is taken. */
@@ -1915,18 +2003,43 @@ public class HelperFiletransfer
     /** As above, with the outgoing folder given (MainActivity sets it with a slash at the end). */
     static boolean delete_outgoing_copy(final String fullpath, final String outgoingDir)
     {
-        if ((fullpath == null) || (outgoingDir == null) || outgoingDir.isEmpty() || !fullpath.startsWith(outgoingDir))
+        if ((fullpath == null) || (outgoingDir == null) || outgoingDir.isEmpty())
         {
             return false;
         }
-        final File file = new File(fullpath);
-        final boolean deleted = file.delete();
-        final File dir = file.getParentFile();
-        if (dir != null)
+        try
         {
-            remove_outgoing_copy_dir(dir, outgoingDir);
+            final Path base = Paths.get(outgoingDir).normalize();
+            final Path target = Paths.get(fullpath).normalize();
+            // Normalized first: a path that only starts with the outgoing folder's name ("outgoing/../x") is
+            // not in it. The folder itself is never one copy.
+            if (!target.startsWith(base))
+            {
+                return false;
+            }
+            if (target.getNameCount() <= base.getNameCount())
+            {
+                return false;
+            }
+            final File file = target.toFile();
+            // Nor is a place a link leads to.
+            if (!is_inside_outgoing_dir(file, outgoingDir))
+            {
+                return false;
+            }
+            final boolean deleted = file.delete();
+            final File dir = file.getParentFile();
+            if (dir != null)
+            {
+                remove_outgoing_copy_dir(dir, outgoingDir);
+            }
+            return deleted;
         }
-        return deleted;
+        catch (Exception e)
+        {
+            Log.i(TAG, "delete_outgoing_copy:EE:" + e.getMessage());
+            return false;
+        }
     }
 
     /** KHANDAQ (QA live, F4): removes the folder of a copy once nothing is left in it; never the outgoing folder. */

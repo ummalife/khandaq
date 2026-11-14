@@ -607,6 +607,19 @@ void Core::onFriendMessage(Tox* tox, uint32_t friendId, Tox_Message_Type type, c
                            size_t cMessageSize, void* core)
 {
     std::ignore = tox;
+    // KHANDAQ (msgV3 receipt shown as "_"): every desktop build links the toxcore committed under
+    // buildscripts/toxcore (the zoff99/c-toxcore msgV3 fork the phones use; macOS through
+    // scripts/build-macos-deps.sh, Windows and Linux through their Docker builders and
+    // scripts/build-linux.sh), and it hands this callback a third type as well:
+    // TOX_MESSAGE_TYPE_HIGH_LEVEL_ACK, the receipt for a msgV3 message, whose text is a bare "_".
+    // Everything but an action was taken for a normal message, so a receipt from the iPhone showed
+    // up as a message "_" from it after every message the desktop sent. The desktop sends no msgV3
+    // and reads no such receipt: only a normal message and an action are messages, any other type is
+    // dropped. The third type is not named here, so this still builds against an upstream tox.h,
+    // which has neither the type nor its packet.
+    if (type != TOX_MESSAGE_TYPE_NORMAL && type != TOX_MESSAGE_TYPE_ACTION) {
+        return;
+    }
     bool isAction = (type == TOX_MESSAGE_TYPE_ACTION);
     QString msg = ToxString(cMessage, cMessageSize).getQString();
     emit static_cast<Core*>(core)->friendMessageReceived(friendId, msg, isAction);

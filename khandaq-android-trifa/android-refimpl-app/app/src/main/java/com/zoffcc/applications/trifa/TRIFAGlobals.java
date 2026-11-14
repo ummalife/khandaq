@@ -405,6 +405,35 @@ public class TRIFAGlobals
             this.value = value;
         }
 
+        /** toxcore GC_Conn_State (group_common.h), the raw value the group connection status callback carries. */
+        static final int GC_CONN_STATE_NONE = 0;
+        static final int GC_CONN_STATE_DISCONNECTED = 1;
+        static final int GC_CONN_STATE_CONNECTING = 2;
+        static final int GC_CONN_STATE_CONNECTED = 3;
+
+        /**
+         * KHANDAQ (0.2.56): the one conversion from what the group connection status callback carries to this enum.
+         *
+         * tox_group_is_connected() already returns this enum's values (-1, 0, 1). The callback does not: toxcore
+         * calls it from do_gc() with chat->connection_state, the raw GC_Conn_State (1 disconnected, 2 connecting,
+         * 3 connected), and the JNI layer passes it on unchanged. Compared with this enum directly, a group that
+         * disconnected (1) looked connected and one that really connected (3) looked disconnected.
+         *
+         * Anything that is not connecting or connected is ERROR, as tox_group_is_connected() reports it.
+         */
+        public static int from_gc_conn_state(final int gc_conn_state)
+        {
+            if (gc_conn_state == GC_CONN_STATE_CONNECTED)
+            {
+                return TOX_GROUP_CONNECTION_STATUS_CONNECTED.value;
+            }
+            if (gc_conn_state == GC_CONN_STATE_CONNECTING)
+            {
+                return TOX_GROUP_CONNECTION_STATUS_CONNECTING.value;
+            }
+            return TOX_GROUP_CONNECTION_STATUS_ERROR.value;
+        }
+
         public static String value_str(int value)
         {
             if (value == TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_ERROR.value)

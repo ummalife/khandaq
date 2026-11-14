@@ -9600,19 +9600,21 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-    static void android_tox_callback_group_connection_status_cb_method(long group_number, int a_TOX_GROUP_CONNECTION_STATUS)
+    static void android_tox_callback_group_connection_status_cb_method(long group_number, int a_gc_conn_state)
     {
         if (HelperGroup.is_group_leave_pending(group_number))
         {
             return;
         }
-        HelperGeneric.logI(TAG, "group_connection_status_cb:group_number=" + group_number + " status=" + a_TOX_GROUP_CONNECTION_STATUS
-                + " id=" + tox_group_by_groupnum__wrapper(group_number));
+        // KHANDAQ (0.2.56): toxcore hands this callback its raw GC_Conn_State, not the value
+        // tox_group_is_connected() returns; see TOX_GROUP_CONNECTION_STATUS.from_gc_conn_state.
+        final int conn = TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.from_gc_conn_state(a_gc_conn_state);
+        HelperGeneric.logI(TAG, "group_connection_status_cb:group_number=" + group_number + " gc_state=" + a_gc_conn_state
+                + " conn=" + conn + " id=" + tox_group_by_groupnum__wrapper(group_number));
 
         final String conn_group_identifier = tox_group_by_groupnum__wrapper(group_number);
 
-        if (a_TOX_GROUP_CONNECTION_STATUS ==
-            TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
+        if (conn == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
         {
             HelperGroup.sync_group_peers_from_tox_to_db(group_number);
             update_group_in_groupmessagelist(conn_group_identifier, true);

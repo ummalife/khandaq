@@ -38,4 +38,85 @@ bool isGroupLeaveNotice(const uint8_t* data, size_t length)
            && std::memcmp(data, leaveNotice, sizeof(leaveNotice)) == 0;
 }
 
+bool GroupLeaveNotices::waits(const Notice& notice, qint64 nowMs)
+{
+    return !notice.exited && nowMs >= notice.atMs && nowMs - notice.atMs <= windowMs;
+}
+
+void GroupLeaveNotices::note(int group, const QByteArray& publicKey, uint32_t peerId, qint64 nowMs)
+{
+    if (publicKey.isEmpty()) {
+        return;
+    }
+    QHash<QByteArray, Notice>& notices = groups[group];
+    // Notices that no exit followed have lapsed.
+    for (auto it = notices.begin(); it != notices.end();) {
+        if (!it->exited && !waits(*it, nowMs)) {
+            it = notices.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    Notice notice;
+    notice.peerId = peerId;
+    notice.atMs = nowMs;
+    notices.insert(publicKey, notice);
+}
+
+void GroupLeaveNotices::joined(int group, const QByteArray& publicKey)
+{
+    const auto found = groups.find(group);
+    if (found == groups.end()) {
+        return;
+    }
+    found->remove(publicKey);
+    if (found->isEmpty()) {
+        groups.erase(found);
+    }
+}
+
+bool GroupLeaveNotices::exited(int group, uint32_t peerId, qint64 nowMs)
+{
+    const auto found = groups.find(group);
+    if (found == groups.end()) {
+        return false;
+    }
+    for (auto it = found->begin(); it != found->end(); ++it) {
+        if (it->exited || it->peerId != peerId) {
+            continue;
+        }
+        if (waits(*it, nowMs)) {
+            it->exited = true;
+            return true;
+        }
+        // The notice had lapsed: this is an exit like any other.
+        found->erase(it);
+        if (found->isEmpty()) {
+            groups.erase(found);
+        }
+        return false;
+    }
+    return false;
+}
+
+bool GroupLeaveNotices::hides(int group, const QByteArray& publicKey, qint64 nowMs) const
+{
+    const auto found = groups.constFind(group);
+    if (found == groups.constEnd()) {
+        return false;
+    }
+    const auto notice = found->constFind(publicKey);
+    return notice != found->constEnd() && (notice->exited || waits(*notice, nowMs));
+}
+
+bool GroupLeaveNotices::hidesAny(int group) const
+{
+    return groups.contains(group);
+}
+
+void GroupLeaveNotices::forgetGroup(int group)
+{
+    groups.remove(group);
+}
+
 } // namespace Air

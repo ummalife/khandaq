@@ -139,6 +139,8 @@ final class AirLocalStore {
         var hours: [Int] = []
         var muted: Bool = false
         var verifiedAt: Double?
+        /// When the request of a contact made by accepting it came, in seconds since 1970 (askedAt).
+        var askedAt: Double?
     }
 
     private struct FailedRecord: Codable {
@@ -349,6 +351,27 @@ final class AirLocalStore {
         notify()
     }
 
+    // MARK: Accepted requests
+
+    /// When the request of a contact made by accepting it came: they were online then, and no request
+    /// of ours waits for them. Nil for a contact made by our own request. Kept until the contact is
+    /// removed.
+    func askedAt(publicKey: String) -> Date? {
+        return contacts[AirLocalStore.hashedKey(publicKey)]?.askedAt.map { Date(timeIntervalSince1970: $0) }
+    }
+
+    /// KHANDAQ (QA 2026-11-14, F2): the contact was made by accepting their request, which came at
+    /// `date`. Until they first connect toxcore has no last-online time for them, which the list read
+    /// as our own request waiting for a reply; that they asked is known only here.
+    func noteAccepted(publicKey: String, askedAt date: Date) {
+        let key = AirLocalStore.hashedKey(publicKey)
+        var contact = contacts[key] ?? Contact()
+        contact.askedAt = date.timeIntervalSince1970
+        contacts[key] = contact
+        save()
+        notify()
+    }
+
     /// Forgets the marks of a contact, when the contact itself is removed. A block stays: it is about
     /// the key, not the contact.
     func forget(publicKey: String) {
@@ -526,7 +549,7 @@ final class AirLocalStore {
         for (key, contact) in contacts {
             var kept = contact
             kept.hours = contact.hours.filter { $0 >= oldest }
-            if kept.hours.isEmpty && !kept.muted && kept.verifiedAt == nil {
+            if kept.hours.isEmpty && !kept.muted && kept.verifiedAt == nil && kept.askedAt == nil {
                 contacts.removeValue(forKey: key)
             }
             else {
@@ -574,6 +597,20 @@ final class AirLocalStore {
 
     private func notify() {
         NotificationCenter.default.post(name: .airLocalStoreDidChange, object: self)
+    }
+}
+
+// MARK: - Accepting a request
+
+extension OCTSubmanagerFriends {
+    /// Accepts a friend request, and the new contact keeps the time it came (AirLocalStore.askedAt), so
+    /// it is never shown as our own request waiting for a reply. Every Accept goes through here.
+    func approveKeepingItsTime(_ request: OCTFriendRequest, store: AirLocalStore = .shared) throws {
+        // Accepting deletes the request: what is needed of it is read first.
+        let publicKey = request.publicKey
+        let date = request.date()
+        try approve(request)
+        store.noteAccepted(publicKey: publicKey, askedAt: date)
     }
 }
 

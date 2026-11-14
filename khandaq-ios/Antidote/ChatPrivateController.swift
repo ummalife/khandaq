@@ -3129,7 +3129,8 @@ extension ChatPrivateController {
         return AirReach.friend(connection: friend.connectionStatus,
                                lastSeenOnlineInterval: friend.lastSeenOnlineInterval,
                                now: Date().timeIntervalSince1970,
-                               selfLinkSettling: SelfConnectionTracker.friendLinksMayStillBeConnecting)
+                               selfLinkSettling: SelfConnectionTracker.friendLinksMayStillBeConnecting,
+                               askedAt: AirLocalStore.shared.askedAt(publicKey: friend.publicKey))
     }
 
     /// A message sent now would arrive now.

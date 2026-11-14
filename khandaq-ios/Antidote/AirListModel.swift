@@ -89,7 +89,7 @@ enum AirReach: Equatable {
     case relay
     /// Not online; seconds since they were last seen.
     case away(secondsAgo: TimeInterval)
-    /// Added, but never online since: our request has not been answered yet.
+    /// Added by our request and never online since: it has not been answered yet.
     case pending
     /// Not linked yet, but active within the last day while our own node has only just come online:
     /// their link is most likely still being set up (KHANDAQ #178), so the row says so instead of a
@@ -113,21 +113,29 @@ enum AirReach: Equatable {
     }
 
     /// `selfLinkSettling`: our own node came online less than a minute ago
-    /// (SelfConnectionTracker.friendLinksMayStillBeConnecting).
+    /// (SelfConnectionTracker.friendLinksMayStillBeConnecting). `askedAt`: for a contact made by
+    /// accepting their request, when it came (AirLocalStore.askedAt); nil for a contact made by our own
+    /// request.
     static func friend(connection: OCTToxConnectionStatus,
                        lastSeenOnlineInterval: TimeInterval,
                        now: TimeInterval,
-                       selfLinkSettling: Bool = false) -> AirReach {
+                       selfLinkSettling: Bool = false,
+                       askedAt: Date? = nil) -> AirReach {
         switch connection {
             case .UDP:
                 return .direct
             case .TCP:
                 return .relay
             case .none:
-                guard lastSeenOnlineInterval > 0 else {
+                // KHANDAQ (QA 2026-11-14, F2): toxcore has no last-online time for anyone who has not
+                // connected since being added, also when they asked us and we accepted, and that read as
+                // our own request waiting for a reply. They were online when their request came, which
+                // stands for the time they were last seen until toxcore has one.
+                let lastSeen = lastSeenOnlineInterval > 0 ? lastSeenOnlineInterval : (askedAt?.timeIntervalSince1970 ?? 0)
+                guard lastSeen > 0 else {
                     return .pending
                 }
-                let secondsAgo = max(0, now - lastSeenOnlineInterval)
+                let secondsAgo = max(0, now - lastSeen)
                 if selfLinkSettling && secondsAgo < 86400 {
                     return .connecting
                 }

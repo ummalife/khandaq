@@ -194,6 +194,38 @@ class AirLocalStoreTests: XCTestCase {
         XCTAssertTrue(AirBlockGuard.blockedPositions(publicKeys: waiting, store: store).isEmpty)
     }
 
+    /// KHANDAQ (QA 2026-11-14, F2): accepting a request keeps the time it came with the new contact,
+    /// across launches and the weekly pruning and without naming the contact, until the contact is
+    /// removed. A contact made by our own request has no such time, and a refused Accept leaves none.
+    func testAnAcceptedRequestKeepsItsTimeAcrossLaunchesUntilTheContactGoes() throws {
+        let directory = makeDirectory()
+        let sealing = FixedKeySealing()
+        let store = AirLocalStore(sealing: sealing)
+        store.attach(directory: directory)
+        // More than a week ago: a launch prunes every hour mark that old.
+        let came = Date(timeIntervalSince1970: 1_762_850_000)
+
+        try OCTSubmanagerFriendsMock().approveKeepingItsTime(friendRequest(aminaKey.lowercased(), came: came), store: store)
+        XCTAssertEqual(store.askedAt(publicKey: aminaKey), came)
+        XCTAssertNil(store.askedAt(publicKey: yusufKey), "a contact made by our own request has no such time")
+
+        XCTAssertThrowsError(try RefusingFriends().approveKeepingItsTime(friendRequest(yusufKey, came: came), store: store))
+        XCTAssertNil(store.askedAt(publicKey: yusufKey), "a refused Accept makes no contact")
+        store.flush()
+        XCTAssertFalse(fileText(directory).uppercased().contains(aminaKey), "the file never names a contact, in any case")
+
+        let again = AirLocalStore(sealing: sealing)
+        again.attach(directory: directory)
+        XCTAssertEqual(again.askedAt(publicKey: aminaKey), came)
+
+        again.forget(publicKey: aminaKey)
+        XCTAssertNil(again.askedAt(publicKey: aminaKey))
+        again.flush()
+        let third = AirLocalStore(sealing: sealing)
+        third.attach(directory: directory)
+        XCTAssertNil(third.askedAt(publicKey: aminaKey))
+    }
+
     func testGroupInvitationsWaitSealedUntilAnswered() {
         let directory = makeDirectory()
         let sealing = FixedKeySealing()
@@ -259,6 +291,21 @@ class AirLocalStoreTests: XCTestCase {
     private func fileText(_ directory: URL) -> String {
         let data = (try? Data(contentsOf: directory.appendingPathComponent(AirLocalStore.fileName))) ?? Data()
         return String(decoding: data, as: UTF8.self)
+    }
+
+    /// A request as objcTox keeps it, outside any Realm.
+    private func friendRequest(_ publicKey: String, came: Date) -> OCTFriendRequest {
+        let request = OCTFriendRequest()
+        request.publicKey = publicKey
+        request.dateInterval = came.timeIntervalSince1970
+        return request
+    }
+}
+
+/// A friends submanager whose Accept toxcore refuses.
+private final class RefusingFriends: OCTSubmanagerFriendsMock {
+    override func approve(_ friendRequest: OCTFriendRequest!) throws {
+        throw NSError(domain: "AirLocalStoreTests", code: 1)
     }
 }
 

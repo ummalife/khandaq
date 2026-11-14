@@ -350,6 +350,47 @@ class AirListModelTests: XCTestCase {
         XCTAssertEqual(AirReach.friend(connection: .UDP, lastSeenOnlineInterval: now - 90, now: now, selfLinkSettling: true), .direct)
     }
 
+    /// KHANDAQ (QA 2026-11-14, F2): toxcore has no last-online time for a contact made by accepting
+    /// their request until they first connect. They were online when the request came, and that time
+    /// stands for it: the row is not "waiting for reply", the tile is not dashed and the contact is not
+    /// among the requests. Our own request, unanswered, still is.
+    func testAContactWhoseRequestWeAcceptedIsNotWaitingForAReply() {
+        let now: TimeInterval = 1_000_000
+        let day: TimeInterval = 86400
+        let asked = { (secondsAgo: TimeInterval) in Date(timeIntervalSince1970: now - secondsAgo) }
+
+        XCTAssertEqual(AirReach.friend(connection: .none, lastSeenOnlineInterval: 0, now: now, askedAt: asked(30)), .away(secondsAgo: 30))
+        XCTAssertEqual(AirReach.friend(connection: .none, lastSeenOnlineInterval: 0, now: now, askedAt: asked(3 * day)),
+                       .away(secondsAgo: 3 * day))
+        // Right after our own node comes online they are linking, as anyone seen within the day.
+        XCTAssertEqual(AirReach.friend(connection: .none, lastSeenOnlineInterval: 0, now: now, selfLinkSettling: true, askedAt: asked(90)),
+                       .connecting)
+        XCTAssertEqual(AirReach.friend(connection: .none, lastSeenOnlineInterval: 0, now: now, selfLinkSettling: true, askedAt: asked(day)),
+                       .away(secondsAgo: day))
+        // Once toxcore has a time of its own, that time counts.
+        XCTAssertEqual(AirReach.friend(connection: .none, lastSeenOnlineInterval: now - 60, now: now, askedAt: asked(7200)),
+                       .away(secondsAgo: 60))
+        XCTAssertEqual(AirReach.friend(connection: .UDP, lastSeenOnlineInterval: 0, now: now, askedAt: asked(30)), .direct)
+        XCTAssertEqual(AirReach.friend(connection: .TCP, lastSeenOnlineInterval: 0, now: now, askedAt: asked(30)), .relay)
+        XCTAssertEqual(AirReach.friend(connection: .none, lastSeenOnlineInterval: 0, now: now, askedAt: nil), .pending)
+        XCTAssertEqual(AirReach.friend(connection: .none, lastSeenOnlineInterval: 0, now: now, selfLinkSettling: true), .pending)
+
+        let accepted = entry("accepted", kind: .contact,
+                             reach: AirReach.friend(connection: .none, lastSeenOnlineInterval: 0, now: now, askedAt: asked(30)))
+        let ours = entry("ours", kind: .contact, reach: AirReach.friend(connection: .none, lastSeenOnlineInterval: 0, now: now))
+        XCTAssertFalse(AirListBuilder.matches(accepted, filter: .requests))
+        XCTAssertTrue(AirListBuilder.matches(ours, filter: .requests))
+        XCTAssertEqual(AirListBuilder.build(entries: [accepted, saved()], requests: [], filter: .requests, query: "").emptyState,
+                       .noRequests)
+        XCTAssertEqual(ids(AirListBuilder.build(entries: [accepted, ours, saved()], requests: [], filter: .requests, query: ""), .away),
+                       ["ours"])
+
+        // The words of the QA run, where the row read "waiting for reply" in Russian right after Accept.
+        use("ru")
+        XCTAssertEqual(AirRowCell.reachText(accepted.reach), "только что")
+        XCTAssertEqual(AirRowCell.reachText(ours.reach), "ждёт ответа")
+    }
+
     func testOnlyAWorkingLinkCountsAsLive() {
         XCTAssertTrue(AirReach.direct.isLive)
         XCTAssertTrue(AirReach.relay.isLive)

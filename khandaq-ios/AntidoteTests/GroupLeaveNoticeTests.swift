@@ -80,4 +80,96 @@ final class GroupLeaveNoticeTests: XCTestCase {
         groups.forgetGroupLeaveNotice(forChatKey: "chat-4", peerId: 7)
         XCTAssertFalse(groups.takeGroupLeaveNotice(forChatKey: "chat-4", peerId: 7, at: 501, publicKeyHex: nil))
     }
+
+    // MARK: Gone at once (QA live 14.11: on a TCP relay the QUIT was lost, and the member stayed for 54 s)
+
+    /// Public keys of two members, 64 hex digits each (named so that gitleaks does not take them for secrets).
+    private let leaver = String(repeating: "B3A1C9D2E4F50617", count: 4)
+    private let newcomer = String(repeating: "0A1B2C3D4E5F6071", count: 4)
+
+    func testTheNoticeTakesTheMemberOutAtOnce() {
+        XCTAssertFalse(groups.hasGroupLeaveNotices(forChatKey: "chat-5"))
+        XCTAssertTrue(groups.noteGroupLeaveNotice(forChatKey: "chat-5", peerId: 3, publicKeyHex: leaver, at: 1_000))
+
+        XCTAssertTrue(groups.hasGroupLeaveNotices(forChatKey: "chat-5"))
+        // toxcore still lists the member until its exit; here it is out already, whatever the case of its key.
+        XCTAssertTrue(groups.isGroupPeerLeaving(forChatKey: "chat-5", peerId: 3, publicKeyHex: leaver, at: 1_001))
+        XCTAssertTrue(groups.isGroupPeerLeaving(forChatKey: "chat-5", peerId: 3,
+                                                publicKeyHex: leaver.lowercased(), at: 1_054))
+        // A key toxcore could not give is taken for the member on the id.
+        XCTAssertTrue(groups.isGroupPeerLeaving(forChatKey: "chat-5", peerId: 3, publicKeyHex: nil, at: 1_001))
+        // The other members stay, and so does the member in its other groups.
+        XCTAssertFalse(groups.isGroupPeerLeaving(forChatKey: "chat-5", peerId: 4, publicKeyHex: newcomer, at: 1_001))
+        XCTAssertFalse(groups.isGroupPeerLeaving(forChatKey: "chat-6", peerId: 3, publicKeyHex: leaver, at: 1_001))
+        XCTAssertFalse(groups.hasGroupLeaveNotices(forChatKey: "chat-6"))
+    }
+
+    /// toxcore gives a freed id to the next peer: that one has another key and is a member.
+    func testAnotherMemberOnTheIdIsNotLeaving() {
+        groups.noteGroupLeaveNotice(forChatKey: "chat-7", peerId: 3, publicKeyHex: leaver, at: 1_000)
+        XCTAssertFalse(groups.isGroupPeerLeaving(forChatKey: "chat-7", peerId: 3, publicKeyHex: newcomer, at: 1_001))
+        // Its own notice on the id is news again.
+        XCTAssertTrue(groups.noteGroupLeaveNotice(forChatKey: "chat-7", peerId: 3, publicKeyHex: newcomer, at: 1_002))
+        XCTAssertTrue(groups.isGroupPeerLeaving(forChatKey: "chat-7", peerId: 3, publicKeyHex: newcomer, at: 1_003))
+    }
+
+    /// The group is told "left" once: a repeated notice is not news, and keeps the first time, so it cannot
+    /// keep a member hidden past the window.
+    func testARepeatedNoticeIsNotNewsAndKeepsItsTime() {
+        XCTAssertTrue(groups.noteGroupLeaveNotice(forChatKey: "chat-8", peerId: 2, publicKeyHex: leaver, at: 100))
+        XCTAssertFalse(groups.noteGroupLeaveNotice(forChatKey: "chat-8", peerId: 2, publicKeyHex: leaver, at: 200))
+        XCTAssertTrue(groups.isGroupPeerLeaving(forChatKey: "chat-8", peerId: 2, publicKeyHex: leaver, at: 100 + 300))
+        XCTAssertFalse(groups.isGroupPeerLeaving(forChatKey: "chat-8", peerId: 2, publicKeyHex: leaver, at: 100 + 301))
+    }
+
+    /// No exit in five minutes: the member said it was leaving and stayed, and is shown again.
+    func testANoticeWithNoExitLapses() {
+        XCTAssertTrue(groups.noteGroupLeaveNotice(forChatKey: "chat-9", peerId: 5, publicKeyHex: leaver, at: 100))
+        XCTAssertFalse(groups.isGroupPeerLeaving(forChatKey: "chat-9", peerId: 5, publicKeyHex: leaver, at: 401))
+        // The time went back: the notice is not taken as pending.
+        XCTAssertFalse(groups.isGroupPeerLeaving(forChatKey: "chat-9", peerId: 5, publicKeyHex: leaver, at: 99))
+        // A notice after the lapse is news, and the lapsed one is let go.
+        XCTAssertTrue(groups.noteGroupLeaveNotice(forChatKey: "chat-9", peerId: 5, publicKeyHex: leaver, at: 500))
+        XCTAssertTrue(groups.isGroupPeerLeaving(forChatKey: "chat-9", peerId: 5, publicKeyHex: leaver, at: 501))
+    }
+
+    /// A member that said it was leaving and joins again is a member again, on whatever id it has now.
+    func testAJoinOfTheKeyIsAMemberAgain() {
+        groups.noteGroupLeaveNotice(forChatKey: "chat-10", peerId: 3, publicKeyHex: leaver, at: 1_000)
+        groups.noteGroupLeaveNotice(forChatKey: "chat-10", peerId: 4, publicKeyHex: newcomer, at: 1_000)
+        groups.noteGroupLeaveNotice(forChatKey: "chat-11", peerId: 3, publicKeyHex: leaver, at: 1_000)
+
+        groups.forgetGroupLeaveNotices(forChatKey: "chat-10", publicKeyHex: leaver.lowercased())
+
+        XCTAssertFalse(groups.isGroupPeerLeaving(forChatKey: "chat-10", peerId: 3, publicKeyHex: leaver, at: 1_001))
+        XCTAssertFalse(groups.takeGroupLeaveNotice(forChatKey: "chat-10", peerId: 3, at: 1_002, publicKeyHex: nil))
+        // The other member's notice and the member's notice in another group stay.
+        XCTAssertTrue(groups.isGroupPeerLeaving(forChatKey: "chat-10", peerId: 4, publicKeyHex: newcomer, at: 1_001))
+        XCTAssertTrue(groups.isGroupPeerLeaving(forChatKey: "chat-11", peerId: 3, publicKeyHex: leaver, at: 1_001))
+        // A join whose key toxcore could not give drops nothing.
+        groups.forgetGroupLeaveNotices(forChatKey: "chat-10", publicKeyHex: nil)
+        XCTAssertTrue(groups.isGroupPeerLeaving(forChatKey: "chat-10", peerId: 4, publicKeyHex: newcomer, at: 1_001))
+    }
+
+    /// The exit within the window, the QUIT or the timeout of a lost one, uses the notice up: the member is gone
+    /// from toxcore's list by then, and nothing is left on record.
+    func testTheExitUsesTheNoticeUp() {
+        groups.noteGroupLeaveNotice(forChatKey: "chat-12", peerId: 6, publicKeyHex: leaver, at: 1_000)
+        XCTAssertTrue(groups.takeGroupLeaveNotice(forChatKey: "chat-12", peerId: 6, at: 1_054, publicKeyHex: nil))
+        XCTAssertFalse(groups.isGroupPeerLeaving(forChatKey: "chat-12", peerId: 6, publicKeyHex: leaver, at: 1_055))
+        XCTAssertFalse(groups.hasGroupLeaveNotices(forChatKey: "chat-12"))
+    }
+
+    /// "Left" is told at the notice. The exit after it adds nothing; without a notice only a kick is told.
+    func testTheExitAfterANoticeTellsNothingMore() {
+        for exit: OCTToxGroupExitType in [.quit, .timeout, .disconnected, .kick] {
+            XCTAssertNil(OCTSubmanagerGroupsImpl.groupExitSystemMessageFormatKey(exit, saidItWasLeaving: true),
+                         "exit \(exit.rawValue)")
+        }
+        XCTAssertEqual(OCTSubmanagerGroupsImpl.groupExitSystemMessageFormatKey(.kick, saidItWasLeaving: false),
+                       "group_system_peer_kicked")
+        // A bare QUIT is an app that closed, a timeout a lost connection: no message, as before.
+        XCTAssertNil(OCTSubmanagerGroupsImpl.groupExitSystemMessageFormatKey(.quit, saidItWasLeaving: false))
+        XCTAssertNil(OCTSubmanagerGroupsImpl.groupExitSystemMessageFormatKey(.timeout, saidItWasLeaving: false))
+    }
 }

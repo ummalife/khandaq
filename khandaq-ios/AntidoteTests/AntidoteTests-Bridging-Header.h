@@ -60,9 +60,14 @@ void friendLosslessPacketCallback(void *cTox, uint32_t friendNumber, const uint8
 + (NSData *)groupLeaveNoticePacket;
 + (BOOL)isGroupLeaveNoticePacket:(NSData *)data;
 + (BOOL)groupExitEndsMembership:(OCTToxGroupExitType)exitType saidItWasLeaving:(BOOL)saidItWasLeaving;
-- (void)noteGroupLeaveNoticeForChatKey:(NSString *)chatKey peerId:(uint32_t)peerId publicKeyHex:(NSString *)publicKeyHex at:(NSTimeInterval)now;
++ (NSString *)groupExitSystemMessageFormatKey:(OCTToxGroupExitType)exitType saidItWasLeaving:(BOOL)saidItWasLeaving;
+- (BOOL)noteGroupLeaveNoticeForChatKey:(NSString *)chatKey peerId:(uint32_t)peerId publicKeyHex:(NSString *)publicKeyHex at:(NSTimeInterval)now;
 - (BOOL)takeGroupLeaveNoticeForChatKey:(NSString *)chatKey peerId:(uint32_t)peerId at:(NSTimeInterval)now publicKeyHex:(NSString **)publicKeyHex;
 - (void)forgetGroupLeaveNoticeForChatKey:(NSString *)chatKey peerId:(uint32_t)peerId;
+// QA live F11: a member that said it is leaving is out of the members at once, until its exit or the window.
+- (BOOL)isGroupPeerLeavingForChatKey:(NSString *)chatKey peerId:(uint32_t)peerId publicKeyHex:(NSString *)publicKeyHex at:(NSTimeInterval)now;
+- (BOOL)hasGroupLeaveNoticesForChatKey:(NSString *)chatKey;
+- (void)forgetGroupLeaveNoticesForChatKey:(NSString *)chatKey publicKeyHex:(NSString *)publicKeyHex;
 @end
 
 // KHANDAQ (msgV3 receipt shown as "_"): the 1:1 message receive path and the msgV3 receipt sender,

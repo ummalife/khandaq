@@ -388,6 +388,59 @@ public class AirGroupModelTest
         assertEquals(Integer.valueOf(-8), AirGroupModel.composeRemaining(1380));
     }
 
+    // ---- who can join (0.2.56) ----
+
+    private static final int PUBLIC = AirGroupModel.PRIVACY_PUBLIC;
+    private static final int PRIVATE = AirGroupModel.PRIVACY_PRIVATE;
+    private static final int UNKNOWN = AirGroupModel.PRIVACY_UNKNOWN;
+
+    @Test
+    public void the_privacy_states_are_toxcores()
+    {
+        assertEquals(ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value, PUBLIC);
+        assertEquals(ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PRIVATE.value, PRIVATE);
+        assertFalse(AirGroupModel.isKnownPrivacy(UNKNOWN));
+        // The JNI getter gives a negative error code (-1, -99) when toxcore cannot answer.
+        assertFalse(AirGroupModel.isKnownPrivacy(-99));
+        assertFalse(AirGroupModel.isKnownPrivacy(2));
+    }
+
+    @Test
+    public void a_connected_group_is_what_toxcore_says()
+    {
+        assertEquals(PRIVATE, AirGroupModel.privacyToShow(PRIVATE, true, PUBLIC));
+        assertEquals(PUBLIC, AirGroupModel.privacyToShow(PUBLIC, true, PRIVATE));
+        assertEquals(PUBLIC, AirGroupModel.privacyToShow(PUBLIC, true, UNKNOWN));
+    }
+
+    @Test
+    public void a_group_not_connected_yet_is_what_was_stored()
+    {
+        // A private group joined again by its key reads as public in toxcore until a member syncs it.
+        assertEquals(PRIVATE, AirGroupModel.privacyToShow(PUBLIC, false, PRIVATE));
+        assertEquals(PUBLIC, AirGroupModel.privacyToShow(PRIVATE, false, PUBLIC));
+        assertEquals(PRIVATE, AirGroupModel.privacyToShow(-99, false, PRIVATE));
+        assertEquals(PRIVATE, AirGroupModel.privacyToShow(-1, true, PRIVATE));
+    }
+
+    @Test
+    public void with_nothing_stored_toxcore_answers_and_else_nobody_does()
+    {
+        assertEquals(PRIVATE, AirGroupModel.privacyToShow(PRIVATE, false, UNKNOWN));
+        assertEquals(PUBLIC, AirGroupModel.privacyToShow(PUBLIC, false, -5));
+        assertEquals(UNKNOWN, AirGroupModel.privacyToShow(-99, false, UNKNOWN));
+        assertEquals(UNKNOWN, AirGroupModel.privacyToShow(-1, true, 7));
+    }
+
+    @Test
+    public void only_an_open_group_shows_its_key()
+    {
+        assertTrue(AirGroupModel.showsKey(PUBLIC));
+        assertFalse(AirGroupModel.showsKey(PRIVATE));
+        // Not known: the key of a group that may be private stays hidden.
+        assertFalse(AirGroupModel.showsKey(UNKNOWN));
+    }
+
     private static AirGroupModel.Member member(final String key, final String name, final int role,
                                                final boolean online, final long lastSeenMs)
     {

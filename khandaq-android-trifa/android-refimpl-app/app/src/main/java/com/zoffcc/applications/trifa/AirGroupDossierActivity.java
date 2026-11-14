@@ -48,9 +48,10 @@ import org.khandaq.messenger.R;
  * opened from the group's title, not the folding panel of a person, since the members need the height
  * (design/DESIGN.md, "Groups on the phone"). In order: the name and the counts; your role; who gets a
  * message now, the members by role and online first, each with role and presence, with a search from 20
- * members; the group key in groups of four with Copy, Invite, the QR code and who can join;
- * notifications; the history (files, service messages, clearing it from this device); the group
- * settings; Leave the group with its consequence. The screen follows the group while it is open.
+ * members; the group key in groups of four with Copy, Invite, the QR code and who can join (a group open by
+ * invitation only shows who can join and Invite, never its key); notifications; the history (files, service
+ * messages, clearing it from this device); the group settings; Leave the group with its consequence. The
+ * screen follows the group while it is open.
  *
  * <p>Files and Leave are answered by the conversation under the dossier, through the result
  * ({@link #EXTRA_ACTION}).
@@ -105,6 +106,15 @@ public final class AirGroupDossierActivity extends AirScreenActivity
     @Nullable
     private TextView memberActionNote;
     private TextView privacyNote;
+    /** 0.2.56: the key, Copy and the QR code, shown for an open group only (AirGroupModel.showsKey). */
+    @Nullable
+    private TextView keyHeading;
+    @Nullable
+    private View keyText;
+    @Nullable
+    private View copyButton;
+    @Nullable
+    private View qrLine;
     private View invite;
     @Nullable
     private TextView inviteNote;
@@ -121,7 +131,7 @@ public final class AirGroupDossierActivity extends AirScreenActivity
         final boolean inTox;
         /** Your role, -1 while toxcore does not say. */
         final int selfRole;
-        /** toxcore's privacy state, -1 while it does not say. */
+        /** Who can join (AirGroupModel.privacyToShow), PRIVACY_UNKNOWN while neither toxcore nor the profile says. */
         final int privacy;
         final boolean muted;
         /** This device left the group: there is nothing to leave or invite to any more. */
@@ -178,6 +188,21 @@ public final class AirGroupDossierActivity extends AirScreenActivity
      */
     static void membersChanged(final String groupIdentifier)
     {
+        readAgainIfShown(groupIdentifier);
+    }
+
+    /**
+     * KHANDAQ (0.2.56): who can join the group changed (MainActivity's privacy state callback, on toxcore's
+     * thread, after the database has it). The page of that group shows or hides the key at once instead of
+     * on its next read.
+     */
+    static void privacyChanged(final String groupIdentifier)
+    {
+        readAgainIfShown(groupIdentifier);
+    }
+
+    private static void readAgainIfShown(final String groupIdentifier)
+    {
         final AirGroupDossierActivity page = onScreen.get();
         if (page == null || groupIdentifier == null || !groupIdentifier.equalsIgnoreCase(page.groupId))
         {
@@ -198,6 +223,12 @@ public final class AirGroupDossierActivity extends AirScreenActivity
         onScreen = new WeakReference<>(this);
         main.removeCallbacks(poll);
         main.postDelayed(poll, POLL_MS);
+        if (shown != null)
+        {
+            // KHANDAQ (0.2.56): back from the group settings, where the founder may have opened the group to
+            // anyone with its key: its key shows now, not at the next poll.
+            refresh();
+        }
         // E21: the invite picker closes when there is nobody to invite; its words come back here.
         AirComposerNotice.deliverOnReturn(this::sayAtMembers);
     }
@@ -280,13 +311,13 @@ public final class AirGroupDossierActivity extends AirScreenActivity
         final AirGroupPanel.Snapshot group = AirGroupPanel.read(groupId);
         final long groupNum = HelperGroup.tox_group_by_groupid__wrapper(groupId);
         int selfRole = -1;
-        int privacy = -1;
+        int toxPrivacy = AirGroupModel.PRIVACY_UNKNOWN;
         if (groupNum >= 0)
         {
             try
             {
                 selfRole = MainActivity.tox_group_self_get_role(groupNum);
-                privacy = MainActivity.tox_group_get_privacy_state(groupNum);
+                toxPrivacy = MainActivity.tox_group_get_privacy_state(groupNum);
             }
             catch (Throwable e)
             {
@@ -296,6 +327,7 @@ public final class AirGroupDossierActivity extends AirScreenActivity
         final String stored = groupId.toLowerCase(Locale.ROOT);
         boolean muted = false;
         boolean left = false;
+        int storedPrivacy = AirGroupModel.PRIVACY_UNKNOWN;
         try
         {
             final List<GroupDB> rows = TrifaToxService.orma.selectFromGroupDB().group_identifierEq(stored).toList();
@@ -303,6 +335,7 @@ public final class AirGroupDossierActivity extends AirScreenActivity
             {
                 muted = rows.get(0).notification_silent;
                 left = rows.get(0).group_we_left;
+                storedPrivacy = rows.get(0).privacy_state;
             }
         }
         catch (Throwable e)
@@ -320,6 +353,8 @@ public final class AirGroupDossierActivity extends AirScreenActivity
         {
             Log.i(TAG, "read:system:EE:" + e.getMessage());
         }
+        // KHANDAQ (0.2.56): toxcore's privacy state of a group it has not synced is not the group's; the stored one is.
+        final int privacy = AirGroupModel.privacyToShow(toxPrivacy, group.reach.connected, storedPrivacy);
         return new State(group, groupNum >= 0, selfRole, privacy, muted, left, systemCount);
     }
 
@@ -356,6 +391,20 @@ public final class AirGroupDossierActivity extends AirScreenActivity
             if (who != 0)
             {
                 setText(privacyNote, getString(who));
+            }
+        }
+        // KHANDAQ (0.2.56): the key, Copy and the QR code only for an open group. A group open by invitation
+        // only is never announced, so its key lets nobody in: the section says how members join and keeps Invite.
+        final boolean keyShown = AirGroupModel.showsKey(s.privacy);
+        if (keyHeading != null)
+        {
+            setText(keyHeading, getString(keyShown ? R.string.air_group_key : R.string.air_new_group_privacy));
+        }
+        for (final View part : new View[]{keyText, copyButton, qrLine})
+        {
+            if (part != null)
+            {
+                part.setVisibility(keyShown ? View.VISIBLE : View.GONE);
             }
         }
         if (invite != null)
@@ -405,25 +454,32 @@ public final class AirGroupDossierActivity extends AirScreenActivity
         AirScreenKit.addSection(column, null, null, membersHeading, membersNote, search, membersHolder,
                                 memberActionNote);
 
-        // The key, and who can join with it.
+        // The key, and who can join with it; show() hides the key of a group open by invitation only.
         final String key = s.group.groupId.toUpperCase(Locale.ROOT);
         if (key.length() == GROUP_KEY_HEX_LENGTH)
         {
-            final TextView keyText = AirScreenKit.keyText(this, key);
-            keyText.setContentDescription(getString(R.string.air_group_key) + ": "
-                                          + AirConversationModel.keyLines(key, 0));
+            final TextView keyLines = AirScreenKit.keyText(this, key);
+            keyLines.setContentDescription(getString(R.string.air_group_key) + ": "
+                                           + AirConversationModel.keyLines(key, 0));
+            keyText = keyLines;
             privacyNote = AirScreenKit.note(this, "");
             final View copy = AirScreenKit.iconButton(this, getString(R.string.air_group_copy_key), R.drawable.kq_ic_copy);
             copy.setOnClickListener(v -> copyKey(key));
+            copyButton = copy;
             invite = AirScreenKit.iconButton(this, getString(R.string.air_group_invite), R.drawable.kq_ic_user_plus);
             invite.setOnClickListener(v -> invite());
             final View qr = AirScreenKit.iconButton(this, getString(R.string.air_dossier_qr), R.drawable.kq_ic_scan);
             qr.setOnClickListener(v -> showQr(key));
+            qrLine = AirScreenKit.leading(qr);
             // E21: what stopped an invitation stands under the Invite button.
             inviteNote = AirScreenKit.note(this, "");
             inviteNote.setVisibility(View.GONE);
-            AirScreenKit.addSection(column, getString(R.string.air_group_key), null, keyText, privacyNote,
-                                    AirScreenKit.buttonRow(this, copy, invite), inviteNote, AirScreenKit.leading(qr));
+            final LinearLayout keySection = AirScreenKit.addSection(column, getString(R.string.air_group_key), null,
+                                                                    keyLines, privacyNote,
+                                                                    AirScreenKit.buttonRow(this, copy, invite),
+                                                                    inviteNote, qrLine);
+            // addSection puts the heading first when it is given one.
+            keyHeading = (TextView) keySection.getChildAt(0);
         }
 
         // Notifications.
@@ -707,10 +763,17 @@ public final class AirGroupDossierActivity extends AirScreenActivity
         return true;
     }
 
+    /** 0.2.56: a tap that lands as the group turns invitation only copies and shows nothing. */
+    private boolean keyShown()
+    {
+        final State s = shown;
+        return s != null && AirGroupModel.showsKey(s.privacy);
+    }
+
     private void copyKey(final String key)
     {
         final ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-        if (clipboard == null)
+        if (clipboard == null || !keyShown())
         {
             return;
         }
@@ -729,6 +792,10 @@ public final class AirGroupDossierActivity extends AirScreenActivity
     private void showQr(final String key)
     {
         final State s = shown;
+        if (!keyShown())
+        {
+            return;
+        }
         final String title = s == null ? "" : s.group.title;
         // The group's link, as on iOS (GroupJoinHelper), so a camera that reads it knows a group from a person.
         AirKeyQr.show(this, "khandaq:group:" + key, key, getString(R.string.air_group_qr_heading_format, title),

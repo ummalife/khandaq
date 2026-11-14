@@ -9195,6 +9195,9 @@ public class MainActivity extends AppCompatActivity
               "group_privacy_state_cb:group_number=" + group_number + " privacy_state=" + a_TOX_GROUP_PRIVACY_STATE);
         final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
         update_group_in_db_privacy_state(group_identifier, a_TOX_GROUP_PRIVACY_STATE);
+        // KHANDAQ (0.2.56): the dossier shows or hides the key, and the settings say who can join, at once.
+        AirGroupDossierActivity.privacyChanged(group_identifier);
+        GroupInfoActivity.privacyChanged(group_identifier);
         update_group_in_friendlist(group_identifier);
         update_group_in_groupmessagelist(group_identifier);
         add_system_message_to_group_chat(group_identifier, "privacy state changed to: " +

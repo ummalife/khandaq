@@ -47,7 +47,11 @@ import org.khandaq.messenger.R;
  */
 public final class AirNewGroupActivity extends AirScreenActivity
 {
-    /** Whether "By invitation only" is chosen when the screen opens (true unless the caller says open). */
+    /**
+     * Whether "By invitation only" is chosen when the screen opens. KHANDAQ (0.2.56): false unless the caller asks
+     * for it. toxcore never announces a private group, so its key lets nobody in: testers created one, handed out
+     * its key and could not join it from any device. A new group is open; invitation only is the founder's choice.
+     */
     static final String EXTRA_INVITE_ONLY = "org.khandaq.messenger.NEW_GROUP_INVITE_ONLY";
 
     /** The search over the contacts shows from this many contacts on, as on iOS. */
@@ -64,7 +68,7 @@ public final class AirNewGroupActivity extends AirScreenActivity
     private TextView create;
     private TextView why;
 
-    private boolean inviteOnly = true;
+    private boolean inviteOnly = false;
     /** The chosen contacts by key: a friend number is only a slot of this session. */
     private final Set<String> chosen = new LinkedHashSet<>();
     private List<AirGroupModel.InviteCandidate> candidates = new ArrayList<>();
@@ -87,7 +91,7 @@ public final class AirNewGroupActivity extends AirScreenActivity
     protected void onCreate(@Nullable final Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
-        inviteOnly = getIntent().getBooleanExtra(EXTRA_INVITE_ONLY, true);
+        inviteOnly = getIntent().getBooleanExtra(EXTRA_INVITE_ONLY, false);
         if (savedInstanceState != null)
         {
             inviteOnly = savedInstanceState.getBoolean(STATE_INVITE_ONLY, inviteOnly);

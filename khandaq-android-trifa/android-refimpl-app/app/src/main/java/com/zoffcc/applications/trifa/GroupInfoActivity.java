@@ -46,6 +46,7 @@ import androidx.core.view.ViewCompat;
 
 import com.zoffcc.applications.sorm.GroupDB;
 
+import java.lang.ref.WeakReference;
 import java.text.NumberFormat;
 import java.util.List;
 import java.util.Locale;
@@ -92,6 +93,11 @@ public class GroupInfoActivity extends AirScreenActivity
                                              R.id.air_gs_voice_founder_row};
     private static final Object WORKER_LOCK = new Object();
     private static Handler worker = null;
+    /**
+     * The page resumed last, until it is destroyed: a change of who can join reads its group at once. No
+     * onPause here: leaving the screen changes nothing (AirGroupSettingsModelTest).
+     */
+    private static volatile WeakReference<GroupInfoActivity> lastShown = new WeakReference<>(null);
 
     /** A value with a page of its own, and the row of the list that opens it. */
     private enum Field
@@ -127,7 +133,7 @@ public class GroupInfoActivity extends AirScreenActivity
         String topic = "";
         /** TOPIC_LOCK_ENABLED or TOPIC_LOCK_DISABLED, -1 while toxcore does not say. */
         int topicLock = -1;
-        /** The privacy state toxcore gives, else the stored one; -1 when neither says. */
+        /** Who can join (AirGroupModel.privacyToShow): toxcore's or the stored state; -1 when neither says. */
         int privacy = -1;
         /** Who can write as toxcore gives it, -1 while it does not say. */
         int voice = -1;
@@ -310,12 +316,34 @@ public class GroupInfoActivity extends AirScreenActivity
     protected void onResume()
     {
         super.onResume();
+        lastShown = new WeakReference<>(this);
         // As the old screen did on every return: a group that dropped out of toxcore is brought back,
         // unless this device left it. A page of one value stays as it is.
         if (open == null && !groupId.isEmpty())
         {
             refresh(true);
         }
+    }
+
+    /**
+     * KHANDAQ (0.2.56): who can join the group changed (MainActivity's privacy state callback, on toxcore's
+     * thread, after the database has it). The page of that group reads it again: it showed the old choice until
+     * the next return to it. Only a read, so a page under another screen may take it too; with a page of one
+     * value open, it only updates what the list shows once that closes (show).
+     */
+    static void privacyChanged(final String groupIdentifier)
+    {
+        final GroupInfoActivity page = lastShown.get();
+        if (page == null || groupIdentifier == null || !groupIdentifier.equalsIgnoreCase(page.groupId))
+        {
+            return;
+        }
+        page.main.post(() -> {
+            if (!page.destroyed && !page.isFinishing())
+            {
+                page.refresh(false);
+            }
+        });
     }
 
     @Override
@@ -340,6 +368,10 @@ public class GroupInfoActivity extends AirScreenActivity
     protected void onDestroy()
     {
         destroyed = true;
+        if (lastShown.get() == this)
+        {
+            lastShown = new WeakReference<>(null);
+        }
         main.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
@@ -381,6 +413,8 @@ public class GroupInfoActivity extends AirScreenActivity
         s.live = num >= 0;
         s.extended = Boolean.TRUE.equals(ask("extended", HelperGroup::is_tox_group_extended_state_jni_supported));
         String topic = null;
+        int toxPrivacy = AirGroupModel.PRIVACY_UNKNOWN;
+        boolean connected = false;
         if (s.live)
         {
             final Integer role = ask("role", () -> MainActivity.tox_group_self_get_role(num));
@@ -394,7 +428,10 @@ public class GroupInfoActivity extends AirScreenActivity
                 s.topicLock = lock != null && isLock(lock) ? lock : -1;
             }
             final Integer privacy = ask("privacy", () -> MainActivity.tox_group_get_privacy_state(num));
-            s.privacy = privacy != null && isPrivacy(privacy) ? privacy : -1;
+            toxPrivacy = privacy != null ? privacy : AirGroupModel.PRIVACY_UNKNOWN;
+            final Integer connection = ask("connected", () -> MainActivity.tox_group_is_connected(num));
+            connected = connection != null
+                        && connection == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value;
             final Integer voice = ask("voice", () -> MainActivity.tox_group_get_voice_state(num));
             s.voice = voice != null && AirGroupSettingsModel.voiceChoice(voice) >= 0 ? voice : -1;
             final Integer limit = ask("limit", () -> HelperGroup.get_display_peer_limit(num));
@@ -409,10 +446,9 @@ public class GroupInfoActivity extends AirScreenActivity
             topic = row.topic;
         }
         s.topic = isKnown(topic) ? topic : "";
-        if (s.privacy < 0 && row != null && isPrivacy(row.privacy_state))
-        {
-            s.privacy = row.privacy_state;
-        }
+        // KHANDAQ (0.2.56): as the dossier says it; toxcore's state of a group it has not synced is not the group's.
+        s.privacy = AirGroupModel.privacyToShow(toxPrivacy, connected,
+                                                row != null ? row.privacy_state : AirGroupModel.PRIVACY_UNKNOWN);
         return s;
     }
 
@@ -444,11 +480,6 @@ public class GroupInfoActivity extends AirScreenActivity
     private static boolean isKnown(@Nullable final String text)
     {
         return text != null && !"-1".equals(text);
-    }
-
-    private static boolean isPrivacy(final int state)
-    {
-        return state == PRIVACY_PUBLIC || state == PRIVACY_PRIVATE;
     }
 
     private static boolean isLock(final int lock)

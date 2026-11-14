@@ -351,7 +351,7 @@
     <string name="air_new_group_name_note">Everyone you invite sees it. Later the topic can change, the name cannot.</string>
     <string name="air_new_group_privacy">Who can join</string>
     <string name="air_group_privacy_invite_only">By invitation only</string>
-    <string name="air_group_privacy_invite_only_note">Only people invited by a member can join.</string>
+    <string name="air_group_privacy_invite_only_note">Only people invited by a member can join. The group key lets nobody in.</string>
     <string name="air_group_privacy_open">Open to anyone with the group key</string>
     <string name="air_group_privacy_open_note">Anyone who has the group key can join, no invitation needed.</string>
     <string name="air_group_invite">Invite</string>

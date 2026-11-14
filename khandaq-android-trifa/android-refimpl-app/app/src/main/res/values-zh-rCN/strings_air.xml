@@ -338,7 +338,7 @@
     <string name="air_new_group_name_note">所有受邀者都会看到。之后可以修改主题，但不能修改名称。</string>
     <string name="air_new_group_privacy">谁可以加入</string>
     <string name="air_group_privacy_invite_only">仅限邀请</string>
-    <string name="air_group_privacy_invite_only_note">只有成员邀请的人才能加入。</string>
+    <string name="air_group_privacy_invite_only_note">只有成员邀请的人才能加入。仅凭群组密钥无法加入。</string>
     <string name="air_group_privacy_open">持有群组密钥即可加入</string>
     <string name="air_group_privacy_open_note">任何持有群组密钥的人都可以加入，无需邀请。</string>
     <string name="air_group_invite">邀请</string>

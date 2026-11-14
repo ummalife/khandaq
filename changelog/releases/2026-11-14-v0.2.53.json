@@ -1,8 +1,8 @@
 {
-  "version": "0.2.52",
+  "version": "0.2.53",
   "date": "2026-11-14",
   "title": "Leaving a group shows at once, and emoji are whole on the computer",
-  "summary": "A member who leaves a group now tells the others, and Khandaq for the computer and for iPhone take them off the list at once instead of about a minute later. Closing the app is no longer taken for leaving. On the computer, emoji with a skin tone, flags and joined emoji are drawn whole and as big as the others, and Listen plays a voice message without asking where to save it. iPhone build 142997 carries the iPhone side of these fixes.",
+  "summary": "A member who leaves a group now tells the others, and Khandaq for the computer and for iPhone take them off the list at once instead of about a minute later. Closing the app is no longer taken for leaving. On the computer, emoji with a skin tone and joined emoji are drawn whole and as big as the others, and Listen plays a voice message without asking where to save it. iPhone build 142997 carries the iPhone side of these fixes.",
   "commits": [],
   "changes": [
     {
@@ -18,8 +18,8 @@
     },
     {
       "severity": "important",
-      "title": "Emoji with a skin tone, flags and joined emoji are whole on the computer",
-      "description": "The computer drew 👍🏽 as a thumb and a coloured square, 🏴‍☠️ as a flag and a skull, and 👨‍⚕️ as a man and a staff, in messages, in the message field and in the row of a message on its way. Each is now one emoji, set in the system's colour emoji font and as big as the emoji around it, and so are flags and keycaps such as 🇹🇷 and 1️⃣. A few joined emoji that the phones' emoji picker does not offer stay drawn apart, as on Android.",
+      "title": "Emoji with a skin tone and joined emoji are whole on the computer",
+      "description": "The computer drew 👍🏽 as a thumb and a coloured square, 🏴‍☠️ as a flag and a skull, and 👨‍⚕️ as a man and a staff, in messages, in the message field and in the row of a message on its way. Each is now one emoji, set in the system's colour emoji font and as big as the emoji around it. On the Mac and Linux so are flags and keycaps such as 🇹🇷 and 1️⃣. Windows has no colour flags, so there flags and keycaps stay in the font of the text around them, as before. A few joined emoji that the phones' emoji picker does not offer stay drawn apart, as on Android.",
       "platforms": [
         "windows",
         "macos",

@@ -294,6 +294,7 @@
 		B2BAIR060611000000000001 /* AirListModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BAIR050611000000000001 /* AirListModelTests.swift */; };
 		B2BAIR061111000000000001 /* AirConversationModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BAIR051111000000000001 /* AirConversationModelTests.swift */; };
 		B3C344352129930000000003 /* MediaScreensSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344352129930000000002 /* MediaScreensSnapshotTest.swift */; };
+		KQA11YMENU00000000000001 /* MenuAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQA11YMENU00000000000002 /* MenuAccessibilityTests.swift */; };
 		B3C344342820740000000003 /* AirPacketTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344342820740000000002 /* AirPacketTests.swift */; };
 		B3C344320584870000000003 /* AirErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344320584870000000002 /* AirErrorTests.swift */; };
 		B3C344293419070000000003 /* AirNetworkSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344293419070000000002 /* AirNetworkSnapshotTest.swift */; };
@@ -844,6 +845,7 @@
 		B2BAIR050611000000000001 /* AirListModelTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirListModelTests.swift; sourceTree = "<group>"; };
 		B2BAIR051111000000000001 /* AirConversationModelTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirConversationModelTests.swift; sourceTree = "<group>"; };
 		B3C344352129930000000002 /* MediaScreensSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MediaScreensSnapshotTest.swift; sourceTree = "<group>"; };
+		KQA11YMENU00000000000002 /* MenuAccessibilityTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MenuAccessibilityTests.swift; sourceTree = "<group>"; };
 		B3C344342820740000000002 /* AirPacketTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirPacketTests.swift; sourceTree = "<group>"; };
 		B3C344320584870000000002 /* AirErrorTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirErrorTests.swift; sourceTree = "<group>"; };
 		B3C344293419070000000002 /* AirNetworkSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirNetworkSnapshotTest.swift; sourceTree = "<group>"; };
@@ -1028,6 +1030,7 @@
 				B2BAIR050611000000000001 /* AirListModelTests.swift */,
 				B2BAIR051111000000000001 /* AirConversationModelTests.swift */,
 				B3C344352129930000000002 /* MediaScreensSnapshotTest.swift */,
+				KQA11YMENU00000000000002 /* MenuAccessibilityTests.swift */,
 				B3C344342820740000000002 /* AirPacketTests.swift */,
 				B3C344320584870000000002 /* AirErrorTests.swift */,
 				B3C344293419070000000002 /* AirNetworkSnapshotTest.swift */,
@@ -2368,6 +2371,7 @@
 				B2BAIR060611000000000001 /* AirListModelTests.swift in Sources */,
 				B2BAIR061111000000000001 /* AirConversationModelTests.swift in Sources */,
 				B3C344352129930000000003 /* MediaScreensSnapshotTest.swift in Sources */,
+				KQA11YMENU00000000000001 /* MenuAccessibilityTests.swift in Sources */,
 				B3C344342820740000000003 /* AirPacketTests.swift in Sources */,
 				B3C344320584870000000003 /* AirErrorTests.swift in Sources */,
 				B3C344293419070000000003 /* AirNetworkSnapshotTest.swift in Sources */,

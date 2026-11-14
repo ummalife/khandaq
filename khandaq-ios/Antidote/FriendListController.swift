@@ -315,9 +315,14 @@ private extension FriendListController {
         button.addTarget(self, action: action, for: .touchUpInside)
         // KHANDAQ (#132/#133): a bit taller so a two-line title fits on narrow devices.
         button.snp.makeConstraints { $0.height.equalTo(88.0) }
+        // KHANDAQ (accessibility): the card is a button without a title (its words are a label inside),
+        // so it had no accessibility label of its own. The card is one element named by its words; the
+        // icon and the label inside are not read on their own.
+        button.accessibilityLabel = title
 
         let icon = UIImageView()
         icon.isUserInteractionEnabled = false
+        icon.isAccessibilityElement = false
         icon.contentMode = .scaleAspectFit
         icon.tintColor = theme.colorForType(.NormalText)
         if #available(iOS 13.0, *) {
@@ -328,6 +333,7 @@ private extension FriendListController {
 
         let label = UILabel()
         label.isUserInteractionEnabled = false
+        label.isAccessibilityElement = false
         label.text = title
         label.font = UIFont.systemFont(ofSize: 15.0)
         label.textColor = theme.colorForType(.NormalText)

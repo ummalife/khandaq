@@ -692,6 +692,10 @@ final class ChatReactionPopup: NSObject, UITextFieldDelegate {
             row.tag = i
             row.contentHorizontalAlignment = .fill
             row.addTarget(self, action: #selector(menuRowTapped(_:)), for: .touchUpInside)
+            // KHANDAQ (accessibility): as in the menu of the paperclip, the row is a button without a
+            // title (its words are a label inside), so it had no accessibility label of its own. The row
+            // is one element named by its action; the label and the icon inside are not read on their own.
+            row.accessibilityLabel = action.title
 
             let tint = action.destructive ? UIColor(red: 1.0, green: 0.23, blue: 0.19, alpha: 1.0)
                                           : (dark ? UIColor.white : UIColor.black)
@@ -699,8 +703,10 @@ final class ChatReactionPopup: NSObject, UITextFieldDelegate {
             label.text = action.title
             label.font = UIFont.systemFont(ofSize: 16)
             label.textColor = tint
+            label.isAccessibilityElement = false
 
             let icon = UIImageView()
+            icon.isAccessibilityElement = false
             icon.contentMode = .scaleAspectFit
             // KHANDAQ (18.08): one icon set across platforms — the context menu draws the same Material
             // glyphs Android uses, falling back to the SF Symbol if an asset is ever missing.

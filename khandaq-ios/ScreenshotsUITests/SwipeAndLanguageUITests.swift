@@ -2133,8 +2133,9 @@ final class SwipeAndLanguageUITests: XCTestCase {
     /// conversation.
     private func closeWhatTheHoldOpened(_ lang: String) {
         let cancel = app.buttons.matching(NSPredicate(format: "label IN {'Cancel', 'Отмена', 'إلغاء', 'إلغاء الامر', '取消'}")).firstMatch
-        // The items of a menu are buttons without a label of their own: the words are a text inside.
-        let menuItem = app.staticTexts[appString("attach_gallery", lang)]
+        // Each item of the menu of the paperclip is one button, named by its words, with an identifier
+        // that is the same in every language.
+        let menuItem = app.buttons["air.attach.gallery"]
         if cancel.exists, cancel.isHittable {
             cancel.tap()
             usleep(600_000)

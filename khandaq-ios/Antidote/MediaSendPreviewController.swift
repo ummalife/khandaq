@@ -154,6 +154,9 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
         captionField.keyboardAppearance = .dark
         captionField.returnKeyType = .done
         captionField.inputAccessoryView = makeCaptionKeyboardToolbar()
+        // KHANDAQ (accessibility): the caption field had no accessibility label. It is named by the hint
+        // every shipped language already has; the field still shows no placeholder.
+        captionField.accessibilityLabel = String(localized: "media_send_caption_hint")
 
         bottomBar.backgroundColor = UIColor(white: 0.08, alpha: 0.95)
 

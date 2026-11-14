@@ -256,15 +256,34 @@ bool isKeycapBase(uint codePoint)
 }
 
 /**
+ * @brief Whether the system's emoji font draws flags and keycaps
+ * @note KHANDAQ (QA live 2026-11-14, Windows): Segoe UI Emoji has no flags, so 🇹🇷 stays the
+ * letters T and R in it, and Qt 5 drew 1️⃣ in it as the 1 and the keycap's frame side by side, the
+ * frame over the next character. The text font draws the 1 inside its frame. On Windows both stay
+ * in the text font, as before the emoji font took them on the Mac and Linux.
+ */
+constexpr bool emojiFontDrawsFlagsAndKeycaps()
+{
+#if defined(Q_OS_WIN)
+    return false;
+#else
+    return true;
+#endif
+}
+
+/**
  * @brief Finds the flags (two regional indicator letters, paired from the start of a run) and the
- * keycaps (a digit, # or *, U+FE0F if any and U+20E3) of a text
- * @return The start and the end of each
+ * keycaps (a digit, # or *, U+FE0F if any and U+20E3) of a text that the emoji font is to draw
+ * @return The start and the end of each; none where the emoji font does not draw them
  * @note KHANDAQ (QA live 2026-11-14): left to the system font, 🇹🇷 was as big as the text next to
  * the pack's 🇷🇺, and 1️⃣ was the text font's 1 in a frame.
  */
 QVector<QPair<int, int>> flagsAndKeycaps(const QString& text)
 {
     QVector<QPair<int, int>> characters;
+    if (!emojiFontDrawsFlagsAndKeycaps()) {
+        return characters;
+    }
     int position = 0;
     while (position < text.size()) {
         int length = 0;

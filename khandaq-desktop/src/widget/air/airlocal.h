@@ -81,6 +81,13 @@ public:
      */
     bool addRequest(const ToxPk& publicKey, const QString& message);
     void removeRequest(const ToxPk& publicKey);
+    /**
+     * They became a contact while their request waited: it is answered, and the contact keeps the
+     * time it came. Written at once, like the requests.
+     */
+    void acceptRequest(const ToxPk& publicKey);
+    /** When the request of a contact made by accepting it came; invalid for anyone else. */
+    QDateTime askedAt(const ToxPk& publicKey) const;
 
     /** The group invitations waiting for Join or Decline, oldest first. */
     QVector<Air::LocalStore::WaitingInvite> invites() const;

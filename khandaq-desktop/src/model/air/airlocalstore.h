@@ -154,6 +154,18 @@ public:
     QVector<WaitingRequest> requests() const;
     bool hasRequest(const QString& publicKey) const;
     /**
+     * KHANDAQ (QA 2026-11-14, F2): the key became a contact while its request waited, so the
+     * request is answered: it stops waiting, and the contact keeps the time it came (askedAt).
+     * False when no request from the key waits.
+     */
+    bool acceptRequest(const QString& publicKey);
+    /**
+     * When the request of a contact made by accepting it came: they were online then, and no
+     * request of ours waits for them. Invalid for a contact made by our own request. Kept until the
+     * contact is removed. Desktop only so far; the iOS store has no such mark.
+     */
+    QDateTime askedAt(const QString& publicKey) const;
+    /**
      * Keeps a request until it is answered. False, and nothing kept, for a text that is not a
      * public key, a blocked key, or the same words from a key that waits already; other words from
      * that key take the place of the old ones, with the new time.
@@ -209,6 +221,8 @@ private:
         bool muted = false;
         /** Milliseconds since 1970, or -1 when not verified. */
         qint64 verifiedAt = -1;
+        /** When their request came, in milliseconds since 1970, or -1 (askedAt). */
+        qint64 askedAt = -1;
 
         bool isEmpty() const;
     };

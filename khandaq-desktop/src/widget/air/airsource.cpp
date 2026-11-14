@@ -147,8 +147,14 @@ void AirSource::watchNotes(const IChatLog& notesLog)
 Air::Reach AirSource::reachOf(const Friend& frnd) const
 {
     return Air::Reach::friendReach(friendLinks.value(frnd.getId(), Air::toxConnectionNone),
-                                   lastSeen.value(frnd.getId(), 0),
-                                   QDateTime::currentSecsSinceEpoch(), selfLinkSettling());
+                                   lastSeen.value(frnd.getId(), 0), QDateTime::currentSecsSinceEpoch(),
+                                   selfLinkSettling(), askedSeconds(frnd.getPublicKey()));
+}
+
+qint64 AirSource::askedSeconds(const ToxPk& publicKey) const
+{
+    const QDateTime asked = local ? local->askedAt(publicKey) : QDateTime();
+    return asked.isValid() ? asked.toSecsSinceEpoch() : 0;
 }
 
 void AirSource::watchFriend(Friend& frnd, std::shared_ptr<IChatLog> chatLog)
@@ -252,7 +258,8 @@ Air::Entry AirSource::friendEntry(Friend& frnd, const IChatLog* log, qint64 nowS
     }
     entry.tone = Air::toneIndex(key);
     entry.reach = Air::Reach::friendReach(friendLinks.value(frnd.getId(), Air::toxConnectionNone),
-                                          lastSeen.value(frnd.getId(), 0), nowSeconds, settling);
+                                          lastSeen.value(frnd.getId(), 0), nowSeconds, settling,
+                                          askedSeconds(publicKey));
     entry.isFavorite = favorites.contains(entry.id);
     entry.photoKey = avatars.contains(key) ? key : QString();
 

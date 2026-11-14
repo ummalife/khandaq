@@ -66,6 +66,7 @@ private slots:
     void requestsFromABlockedKeyAreDroppedAndOthersStay();
     void removingAContactKeepsItsKeyBlocked();
     void waitingRequestsKeepTheirWordsAndTimeAcrossLaunches();
+    void anAcceptedRequestKeepsItsTimeWithTheContactAcrossLaunches();
     void invitationsWaitUntilAnsweredAndGoWithTheirContact();
     void entryMarksKeepTheNewestAndGoWithTheirConversation();
     void groupIdsKeepTheNewestAndGoWithTheirConversation();
@@ -643,6 +644,47 @@ void TestAirConversation::waitingRequestsKeepTheirWordsAndTimeAcrossLaunches()
     QVERIFY(again.block(aminaKey));
     QVERIFY(again.requests().isEmpty());
     QVERIFY(!again.addRequest(aminaKey, QStringLiteral("Salam"), now));
+}
+
+/**
+ * KHANDAQ (QA 2026-11-14, F2): accepting a request answers it, and the contact keeps the time it
+ * came, across launches and the weekly pruning, until the contact is removed. A contact made by
+ * our own request has no such time.
+ */
+void TestAirConversation::anAcceptedRequestKeepsItsTimeWithTheContactAcrossLaunches()
+{
+    const QDateTime now = date(2026, 11, 11, 12, 0);
+    Air::LocalStore store;
+    store.load(QByteArray(), now);
+    QVERIFY(store.addRequest(aminaKey, QStringLiteral("Salam, it is Amina"), now));
+    QVERIFY(store.addRequest(yusufKey, QString(), now.addSecs(30)));
+
+    QVERIFY(store.acceptRequest(aminaKey.toLower()));
+    QVERIFY(!store.hasRequest(aminaKey));
+    QCOMPARE(store.requests().size(), 1);
+    QCOMPARE(store.askedAt(aminaKey).toMSecsSinceEpoch(), now.toMSecsSinceEpoch());
+    QCOMPARE(store.askedAt(aminaKey.toLower()), store.askedAt(aminaKey));
+    // Nothing waits from the key any more: the time stays as it was.
+    QVERIFY(!store.acceptRequest(aminaKey));
+    QCOMPARE(store.askedAt(aminaKey).toMSecsSinceEpoch(), now.toMSecsSinceEpoch());
+    const QString ownKey = QString(64, QLatin1Char('C'));
+    QVERIFY(!store.acceptRequest(ownKey));
+    QVERIFY(!store.askedAt(ownKey).isValid());
+    QVERIFY(!store.askedAt(yusufKey).isValid());
+
+    const QByteArray saved = store.save();
+    QVERIFY2(!saved.contains(aminaKey.toUtf8()), "the stored form never names a contact");
+    Air::LocalStore again;
+    again.load(saved, now.addDays(30));
+    QCOMPARE(again.askedAt(aminaKey).toMSecsSinceEpoch(), now.toMSecsSinceEpoch());
+    QCOMPARE(again.requests(), store.requests());
+    QVERIFY(!again.pruneHours(now.addDays(30)));
+    QCOMPARE(again.askedAt(aminaKey).toMSecsSinceEpoch(), now.toMSecsSinceEpoch());
+
+    QVERIFY(again.forget(aminaKey));
+    QVERIFY(!again.askedAt(aminaKey).isValid());
+    again.load(again.save(), now);
+    QVERIFY(!again.askedAt(aminaKey).isValid());
 }
 
 /**

@@ -332,6 +332,7 @@ private slots:
     void ownWordsBeginAfterTheQuote();
     void friendReach();
     void friendSeenTodayIsStillLinkingRightAfterWeComeOnline();
+    void aContactWhoseRequestWeAcceptedIsNotWaitingForAReply();
     void onlyAWorkingLinkCountsAsLive();
     void networkStateFromTheToxLinkAndTheDevice();
     void awayWordsChangeUnitAtTheSameSecondsAsOnIos();
@@ -1092,6 +1093,40 @@ void TestAirModel::friendSeenTodayIsStillLinkingRightAfterWeComeOnline()
     QCOMPARE(Reach::friendReach(toxConnectionNone, now - 86400, now, true), Reach::away(86400));
     QCOMPARE(Reach::friendReach(toxConnectionNone, 0, now, true), Reach::pending());
     QCOMPARE(Reach::friendReach(toxConnectionUdp, now - 90, now, true), Reach::direct());
+}
+
+/**
+ * KHANDAQ (QA 2026-11-14, F2): toxcore has no last-online time for a contact made by accepting
+ * their request until they first connect. They were online when the request came, and that time
+ * stands for it: the row is not "waiting for reply", the tile is not dashed and the contact is not
+ * among the requests. Our own request, unanswered, still is.
+ */
+void TestAirModel::aContactWhoseRequestWeAcceptedIsNotWaitingForAReply()
+{
+    const qint64 now = 1000000;
+    const qint64 day = 86400;
+
+    QCOMPARE(Reach::friendReach(toxConnectionNone, 0, now, false, now - 30), Reach::away(30));
+    QCOMPARE(Reach::friendReach(toxConnectionNone, 0, now, false, now - 3 * day), Reach::away(3 * day));
+    // Right after our own node comes online they are linking, as anyone seen within the day.
+    QCOMPARE(Reach::friendReach(toxConnectionNone, 0, now, true, now - 90), Reach::connecting());
+    QCOMPARE(Reach::friendReach(toxConnectionNone, 0, now, true, now - day), Reach::away(day));
+    // Once toxcore has a time of its own, that time counts.
+    QCOMPARE(Reach::friendReach(toxConnectionNone, now - 60, now, false, now - 2 * 3600),
+             Reach::away(60));
+    QCOMPARE(Reach::friendReach(toxConnectionUdp, 0, now, false, now - 30), Reach::direct());
+    QCOMPARE(Reach::friendReach(toxConnectionTcp, 0, now, false, now - 30), Reach::relay());
+    QCOMPARE(Reach::friendReach(toxConnectionNone, 0, now, false, 0), Reach::pending());
+    QCOMPARE(Reach::friendReach(toxConnectionNone, 0, now, true, 0), Reach::pending());
+
+    const Entry accepted =
+        entry("accepted", Reach::friendReach(toxConnectionNone, 0, now, false, now - 30));
+    const Entry ours = entry("ours", Reach::friendReach(toxConnectionNone, 0, now, false, 0));
+    QVERIFY(!matches(accepted, Filter::Requests));
+    QVERIFY(matches(ours, Filter::Requests));
+    QCOMPARE(buildAll({accepted, saved()}, {}, Filter::Requests).emptyState, EmptyState::NoRequests);
+    QCOMPARE(ids(buildAll({accepted, ours, saved()}, {}, Filter::Requests), SectionKind::Away),
+             (QStringList{"ours"}));
 }
 
 void TestAirModel::onlyAWorkingLinkCountsAsLive()

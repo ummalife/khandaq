@@ -191,8 +191,9 @@ bool actionRole(MemberAction action, GroupRole* role);
 
 /**
  * NGC carries at most 1372 bytes in one group message (TOX_GROUP_MAX_MESSAGE_LENGTH) and toxcore
- * refuses a longer one instead of cutting it: the field counts down its last tenth (composeRoom)
- * and Send waits over the limit.
+ * refuses a longer one instead of cutting it. The field of the group counts down its last tenth
+ * (composeRoom) and a longer text goes in parts, cut at this limit (GroupMessageDispatcher); a
+ * private message to a member is one message, so its Send waits over the limit.
  */
 constexpr int groupMessageLimitBytes = 1372;
 

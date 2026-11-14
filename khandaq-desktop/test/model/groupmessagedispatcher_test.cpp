@@ -17,6 +17,7 @@
     along with qTox.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "src/core/core.h"
 #include "src/core/icoregroupmessagesender.h"
 #include "src/model/group.h"
 #include "src/model/groupmessagedispatcher.h"
@@ -55,6 +56,8 @@ public:
 
     size_t numSentActions = 0;
     size_t numSentMessages = 0;
+    /** The texts handed to toxcore, in the order they went. */
+    std::vector<QString> sentTexts;
     std::vector<Receipt> receipts;
     /** The id toxcore gives the next message, as tox_group_send_message hands it back. */
     uint32_t nextWireId = 0x0A0B0C0D;
@@ -77,8 +80,8 @@ uint32_t MockGroupMessageSender::sendGroupAction(int groupId, const QString& act
 uint32_t MockGroupMessageSender::sendGroupMessage(int groupId, const QString& message)
 {
     std::ignore = groupId;
-    std::ignore = message;
     numSentMessages++;
+    sentTexts.push_back(message);
     return nextWireId++;
 }
 
@@ -125,6 +128,7 @@ private slots:
     void testBlacklist();
     void messagesCarryTheIdsToxcoreGaveThem();
     void aShownMessageIsConfirmedToItsAuthor();
+    void aLongTextGoesInPartsWithinTheGroupLimit();
 
     void onMessageSent(DispatchedMessageId id, Message message)
     {
@@ -335,6 +339,56 @@ void TestGroupMessageDispatcher::aShownMessageIsConfirmedToItsAuthor()
     groupMessageDispatcher->onMessageReceived(author, false, "Blocked", 0x0BADF00D);
     QCOMPARE(messageSender->receipts.size(), size_t{2});
     QCOMPARE(receivedMessages.size(), size_t{3});
+}
+
+/**
+ * @brief KHANDAQ (0.2.56): the field of a group no longer stops a text longer than one group
+ * message; the dispatcher sends it in parts. Each part fits toxcore's group limit in UTF-8 bytes,
+ * none cuts a character in two, and together they are the text, in order. A text without spaces
+ * or line breaks is cut at the limit itself, so two- and four-byte characters meet the cut.
+ */
+void TestGroupMessageDispatcher::aLongTextGoesInPartsWithinTheGroupLimit()
+{
+    // The parameters Widget gives every group (groupMessageProcessorParams).
+    MessageProcessor::SharedParams groupParams(Core::getMaxGroupMessageSize(), 10 * 1024 * 1024);
+    MessageProcessor groupProcessor(groupParams);
+    GroupMessageDispatcher dispatcher(*g, groupProcessor, *coreIdHandler, *messageSender,
+                                      *groupSettings);
+    const int limit = static_cast<int>(Core::getMaxGroupMessageSize());
+    QCOMPARE(limit, TOX_GROUP_MAX_MESSAGE_LENGTH);
+
+    QString words;
+    for (int i = 0; i < 400; ++i) {
+        words += QStringLiteral("Слово %1 word \U0001F600\n").arg(i);
+    }
+    // One ASCII byte in front shifts every later character off the even byte boundaries.
+    QString solid = QStringLiteral("a");
+    for (int i = 0; i < 1500; ++i) {
+        solid += (i % 3 == 0) ? QStringLiteral("\U0001F468\u200D\u2695\uFE0F")
+                              : QStringLiteral("жё");
+    }
+
+    for (const QString& text : {words, solid}) {
+        messageSender->sentTexts.clear();
+        const auto ids = dispatcher.sendMessage(false, text);
+
+        const std::vector<QString>& parts = messageSender->sentTexts;
+        QVERIFY(parts.size() > 1);
+        QCOMPARE(static_cast<size_t>(ids.second.get() - ids.first.get() + 1), parts.size());
+        QString joined;
+        for (const QString& part : parts) {
+            const QByteArray bytes = part.toUtf8();
+            QVERIFY(!bytes.isEmpty());
+            QVERIFY(bytes.size() <= limit);
+            // A cut inside a character would not come back from UTF-8 as the same text.
+            QCOMPARE(QString::fromUtf8(bytes), part);
+            QVERIFY(!part.contains(QChar::ReplacementCharacter));
+            QVERIFY(!part.at(part.size() - 1).isHighSurrogate());
+            QVERIFY(!part.at(0).isLowSurrogate());
+            joined += part;
+        }
+        QCOMPARE(joined, text);
+    }
 }
 
 // Cannot be guiless due to a settings instance in GroupMessageDispatcher

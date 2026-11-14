@@ -911,7 +911,10 @@ QString groupAskText(Air::ComposeRight right);
  * group, private messages included; otherwise nobody may be known to ask yet.
  */
 QString groupAskUnavailableText(Air::ComposeRight right, bool nobodyToAsk);
-/** The length counter of a group field: the bytes left, or over the limit. */
+/**
+ * The length counter of a private message to a member, which is one message: the bytes left, or
+ * over the limit. The field of the group itself counts with composeCounterText.
+ */
 QString groupCounterText(int left);
 /** The second line of a member row: the role, then online or offline. */
 QString groupMemberStatusText(const Air::GroupMember& member);

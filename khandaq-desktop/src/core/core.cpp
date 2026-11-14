@@ -737,6 +737,11 @@ void Core::onGroupPeerJoin(Tox* tox, uint32_t groupId, uint32_t peerId, void* vC
     std::ignore = tox;
     const auto core = static_cast<Core*>(vCore);
     qDebug() << QString("Group %1 peer %2 joined").arg(groupId).arg(peerId);
+    // QA live F11: a key that said it was leaving and joins again is a member again.
+    const ToxPk joined = core->getGroupPeerPk(static_cast<int>(groupId), static_cast<int>(peerId));
+    if (!joined.isEmpty()) {
+        core->groupLeaveNotices.joined(static_cast<int>(groupId), joined.getByteArray());
+    }
     emit core->groupPeerlistChanged(groupId);
     // first peers bring the synced shared state — refresh the real group name
     // (Group::setTitle ignores identical titles, so re-emitting is cheap)
@@ -757,7 +762,12 @@ void Core::onGroupPeerExit(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Grou
     std::ignore = partMessage;
     std::ignore = partMessageLength;
     const auto core = static_cast<Core*>(vCore);
-    qDebug() << QString("Group %1 peer %2 left").arg(groupId).arg(peerId);
+    // QA live F11: the exit a leave notice waited for. The member was gone since the notice, and
+    // stays gone while toxcore still lists it, unconfirmed, after the exit.
+    const bool announced = core->groupLeaveNotices.exited(static_cast<int>(groupId), peerId,
+                                                          QDateTime::currentMSecsSinceEpoch());
+    qDebug() << QString("Group %1 peer %2 left").arg(groupId).arg(peerId)
+             << (announced ? "as it said" : "");
     emit core->groupPeerlistChanged(groupId);
 }
 
@@ -832,10 +842,21 @@ void Core::onGroupCustomPacket(Tox* tox, uint32_t groupId, uint32_t peerId, cons
 {
     std::ignore = tox;
     auto core = static_cast<Core*>(vCore);
-    // QA live F11: a member says it is leaving. The member list here is toxcore's own, which drops
-    // the member at its exit either way, so there is nothing to keep; Android and iOS act on it.
+    // QA live F11: a member says it is leaving, and it is gone from the member list at once. Over
+    // a TCP relay the QUIT that follows is often lost: toxcore drops the member only when it times
+    // out, about a minute later, and lists it until then (Air::GroupLeaveNotices).
     if (Air::isGroupLeaveNotice(data, length)) {
+        const int group = static_cast<int>(groupId);
+        const ToxPk leaving = core->getGroupPeerPk(group, static_cast<int>(peerId));
         qDebug() << "Group" << groupId << "peer" << peerId << "says it is leaving";
+        if (!leaving.isEmpty()) {
+            core->groupLeaveNotices.note(group, leaving.getByteArray(), peerId,
+                                         QDateTime::currentMSecsSinceEpoch());
+            emit core->groupPeerlistChanged(group);
+            // A notice that no exit follows lapses: the member shows again if toxcore still has it.
+            QTimer::singleShot(Air::GroupLeaveNotices::windowMs + 1000, core,
+                               [core, group] { emit core->groupPeerlistChanged(group); });
+        }
         return;
     }
     // Edits, deletions and reactions go to the whole group (stage 3, item 10). As on Android, one
@@ -871,6 +892,12 @@ void Core::onGroupPeerNameChange(Tox* tox, uint32_t groupId, uint32_t peerId, co
     qDebug() << QString("Group %1, peer %2, name changed to %3").arg(groupId).arg(peerId).arg(newName);
     auto* core = static_cast<Core*>(vCore);
     auto peerPk = core->getGroupPeerPk(groupId, peerId);
+    // QA live F11: a member that said it is leaving is not listed; its name would list it again.
+    if (!peerPk.isEmpty()
+        && core->groupLeaveNotices.hides(static_cast<int>(groupId), peerPk.getByteArray(),
+                                         QDateTime::currentMSecsSinceEpoch())) {
+        return;
+    }
     emit core->groupPeerNameChanged(groupId, peerPk, newName);
 }
 
@@ -1120,6 +1147,7 @@ void Core::removeGroup(int groupId)
     QMutexLocker ml{&coreLoopLock};
 
     sendGroupLeaveNotice(groupId);
+    groupLeaveNotices.forgetGroup(groupId);
     Tox_Err_Group_Leave error;
     tox_group_leave(tox.get(), groupId, nullptr, 0, &error);
     if (PARSE_ERR(error)) {
@@ -1132,6 +1160,7 @@ void Core::quitGroupChat(int groupId) const
     QMutexLocker ml{&coreLoopLock};
 
     sendGroupLeaveNotice(groupId);
+    groupLeaveNotices.forgetGroup(groupId);
     Tox_Err_Group_Leave error;
     tox_group_leave(tox.get(), groupId, nullptr, 0, &error);
     PARSE_ERR(error);
@@ -1456,7 +1485,21 @@ QVector<uint32_t> Core::getGroupPeerList(int groupId) const
     if (!PARSE_ERR(error)) {
         return {};
     }
-    return peers;
+    if (!groupLeaveNotices.hidesAny(groupId)) {
+        return peers;
+    }
+    // QA live F11: a member that said it is leaving is not listed (Air::GroupLeaveNotices).
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    QVector<uint32_t> listed;
+    listed.reserve(peers.size());
+    for (const uint32_t peerId : peers) {
+        const ToxPk peerPk = getGroupPeerPk(groupId, static_cast<int>(peerId));
+        if (!peerPk.isEmpty() && groupLeaveNotices.hides(groupId, peerPk.getByteArray(), now)) {
+            continue;
+        }
+        listed.append(peerId);
+    }
+    return listed;
 }
 
 /**
@@ -1471,6 +1514,10 @@ uint32_t Core::getGroupNumberPeers(int groupId) const
     uint32_t count = tox_group_peer_count(tox.get(), groupId, &error);
     if (!PARSE_ERR(error)) {
         return std::numeric_limits<uint32_t>::max();
+    }
+    if (groupLeaveNotices.hidesAny(groupId)) {
+        // QA live F11: without the members that said they are leaving, as getGroupPeerList.
+        return static_cast<uint32_t>(getGroupPeerList(groupId).size());
     }
 
     return count;

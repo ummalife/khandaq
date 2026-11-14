@@ -32,6 +32,7 @@
 
 #include "util/strongtype.h"
 #include "util/compatiblerecursivemutex.h"
+#include "src/model/air/airgroupleave.h"
 #include "src/model/status.h"
 #include <tox/tox.h>
 
@@ -374,6 +375,9 @@ private:
     QTimer* toxTimer = nullptr;
     // recursive, since we might call our own functions
     mutable CompatibleRecursiveMutex coreLoopLock;
+    // QA live F11: members that said they are leaving a group. Under coreLoopLock: the toxcore
+    // callbacks run in process(), which holds it. Mutable: quitGroupChat() is const.
+    mutable Air::GroupLeaveNotices groupLeaveNotices;
 
     std::unique_ptr<QThread> coreThread;
     const IBootstrapListGenerator& bootstrapListGenerator;

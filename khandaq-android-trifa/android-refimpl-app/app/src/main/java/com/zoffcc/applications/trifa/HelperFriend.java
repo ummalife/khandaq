@@ -915,16 +915,13 @@ public class HelperFriend
                     e.printStackTrace();
                 }
 
-                if (MainActivity.PREF__U_keep_nospam == false)
-                {
-                    // ---- set new random nospam value after each added friend ----
-                    // ---- set new random nospam value after each added friend ----
-                    // ---- set new random nospam value after each added friend ----
-                    HelperGeneric.set_new_random_nospam_value();
-                    // ---- set new random nospam value after each added friend ----
-                    // ---- set new random nospam value after each added friend ----
-                    // ---- set new random nospam value after each added friend ----
-                }
+                // KHANDAQ (QA live, F16): the antispam is not changed here. TRIfA gave the profile a new
+                // random antispam after every friend added, unless U_keep_nospam was on, and that switch is
+                // hidden in release builds. So accepting a request, or a friend's push relay coming in as a
+                // friend, gave the user a new ID without a word, and toxcore drops a request sent to the ID
+                // they had shared, with nothing on either side. The antispam changes when the user asks
+                // (You, Change antispam), which warns that the old ID stops taking requests (DESIGN.md), as
+                // on the desktop and iOS.
             }
         };
         t.start();

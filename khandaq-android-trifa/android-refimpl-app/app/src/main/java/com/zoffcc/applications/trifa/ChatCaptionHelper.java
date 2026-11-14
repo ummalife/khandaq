@@ -96,17 +96,30 @@ public class ChatCaptionHelper
         return (file_msg.direction == 0) && within_window(file_msg.rcvd_timestamp, text_msg.rcvd_timestamp);
     }
 
+    // KHANDAQ (QA live, F3): whether a 1:1 file row shows its photo or video inline in this transfer state,
+    // as the row holders and AirFileEntry draw it: ours from the moment it is sent until it is cancelled
+    // (iOS isFileDisplayedInline: outgoing, or ready), theirs once it is here. Ours used to merge only
+    // once delivered, so right after sending the caption stood as an entry of its own under the photo,
+    // and was folded into it (styled differently) by a later rebind.
+    static boolean shows_media_inline(final int direction, final int state, final long filedb_id,
+                                      final long filetransfer_id)
+    {
+        if (direction == 1)
+        {
+            // a cancelled send (over, no file row) draws a file row, not its photo
+            return (state != TOX_FILE_CONTROL_CANCEL.value) || (filedb_id != -1);
+        }
+        // theirs: by the rule MessagelistAdapter picks the row holder with
+        return HelperFiletransfer.incoming_file_is_here(state, filedb_id, filetransfer_id);
+    }
+
     private static boolean file_shows_inline_media(final Context c, final Message m)
     {
         if ((m == null) || (m.TRIFA_MESSAGE_TYPE != TRIFA_MSG_FILE.value))
         {
             return false;
         }
-        if (m.state != TOX_FILE_CONTROL_CANCEL.value)
-        {
-            return false;
-        }
-        if (m.filedb_id == -1)
+        if (!shows_media_inline(m.direction, m.state, m.filedb_id, m.filetransfer_id))
         {
             return false;
         }

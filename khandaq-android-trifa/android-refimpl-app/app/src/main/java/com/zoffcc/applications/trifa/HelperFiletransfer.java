@@ -3414,6 +3414,23 @@ public class HelperFiletransfer
         }
     }
 
+    /**
+     * KHANDAQ (QA live, F3): a file of theirs that is here. Its row in the file table comes only with the whole
+     * file (MainActivity, file_recv_chunk) and goes with a failed one (fail_incoming_filetransfer), and its
+     * transfer is over by then. A retry that ran late used to set such a file back to RESUME
+     * (retry_incoming_filetransfer), and that state stays in the database: the file is still here.
+     */
+    static boolean incoming_file_is_here(final int state, final long filedb_id, final long filetransfer_id)
+    {
+        return (filedb_id != -1) && ((state == TOX_FILE_CONTROL_CANCEL.value) || (filetransfer_id <= 0));
+    }
+
+    /** KHANDAQ (QA live, F3): a retry of a file of theirs has a transfer to resume and no whole file yet. */
+    static boolean incoming_retry_applies(final long filedb_id, final long filetransfer_id)
+    {
+        return (filetransfer_id > 0) && (filedb_id == -1);
+    }
+
     static void retry_incoming_filetransfer(final Message message)
     {
         if (message == null)
@@ -3422,19 +3439,27 @@ public class HelperFiletransfer
         }
         try
         {
-            if (accept_paused_incoming_filetransfer(message))
+            // KHANDAQ (QA live, F3): the retry works on the message as it is now, not as it was when the retry
+            // was asked for. A row drawn while the file comes posts one (schedule_auto_retry_dm_incoming_file),
+            // and a small file can be whole before it runs: with the transfer of the old copy, the finished file
+            // was set back to RESUME for good, and its row lost "Save to phone", also after the chat was opened
+            // again (QA: a TXT that came right after a PNG and a PDF).
+            final Message current = (Message) orma.selectFromMessage().idEq(message.id).get(0);
+            if (!incoming_retry_applies(current.filedb_id, current.filetransfer_id))
             {
-                update_single_message_from_messge_id(message.id, true);
+                Log.i(TAG, "retry_incoming_filetransfer:nothing_to_retry:" + current.id);
                 return;
             }
-            if (message.filetransfer_id > 0)
+            if (accept_paused_incoming_filetransfer(current))
             {
-                tox_file_control(tox_friend_by_public_key__wrapper(message.tox_friendpubkey),
-                                 get_filetransfer_filenum_from_id(message.filetransfer_id), TOX_FILE_CONTROL_RESUME.value);
-                set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_RESUME.value);
-                set_message_state_from_id(message.id, TOX_FILE_CONTROL_RESUME.value);
-                update_single_message_from_messge_id(message.id, true);
+                update_single_message_from_messge_id(current.id, true);
+                return;
             }
+            tox_file_control(tox_friend_by_public_key__wrapper(current.tox_friendpubkey),
+                             get_filetransfer_filenum_from_id(current.filetransfer_id), TOX_FILE_CONTROL_RESUME.value);
+            set_filetransfer_state_from_id(current.filetransfer_id, TOX_FILE_CONTROL_RESUME.value);
+            set_message_state_from_id(current.id, TOX_FILE_CONTROL_RESUME.value);
+            update_single_message_from_messge_id(current.id, true);
         }
         catch (Exception ignored)
         {

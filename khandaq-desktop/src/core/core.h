@@ -171,6 +171,11 @@ public slots:
     bool setGroupPeerRole(int groupId, int peerId, Tox_Group_Role role);
     /** The founder or a moderator removes a member from the group; false when toxcore refused it. */
     bool kickGroupPeer(int groupId, int peerId);
+    /**
+     * The founder sets who can join; false when toxcore refused it. toxcore calls no privacy
+     * callback for this change of our own: the caller shows it.
+     */
+    bool setGroupPrivacyState(int groupId, Tox_Group_Privacy_State privacyState);
     /** A message only that peer of the group gets; false when toxcore refused it. */
     bool sendGroupPrivateMessage(int groupId, int peerId, const QString& message);
 

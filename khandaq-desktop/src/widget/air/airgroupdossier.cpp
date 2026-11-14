@@ -146,12 +146,16 @@ AirGroupDossier::AirGroupDossier(QWidget* parent)
     body->addWidget(membersHolder);
     left->addStretch();
 
-    // The group key: in groups of four, who can join with it, Copy, Invite and the QR code.
+    // The group key: in groups of four, who can join with it, Copy, Invite and the QR code. A
+    // group by invitation only has one line in its place, and Invite.
     body = section(right, &keyTitle);
     keyText = makeLabel(TextRole::Mono, Color::Ink, pageWidget);
     keyText->setTextInteractionFlags(Qt::TextSelectableByMouse);
     keyText->setObjectName(QStringLiteral("groupKey"));
     body->addWidget(keyText);
+    keyHidden = makeLabel(TextRole::Body, Color::Ink2, pageWidget);
+    keyHidden->setObjectName(QStringLiteral("groupKeyHidden"));
+    body->addWidget(keyHidden);
     auto* const keyActions = new QHBoxLayout();
     keyActions->setContentsMargins(0, Space::s4, 0, 0);
     keyActions->setSpacing(Space::s8);
@@ -194,6 +198,14 @@ AirGroupDossier::AirGroupDossier(QWidget* parent)
     privacyText = makeLabel(TextRole::Body, Color::Ink, pageWidget);
     privacyText->setObjectName(QStringLiteral("groupPrivacy"));
     body->addWidget(privacyText);
+    // The founder's switch stands in place of the words: on while the group is open.
+    auto* const privacyRow = new QHBoxLayout();
+    privacySwitchLabel = makeLabel(TextRole::Body, Color::Ink, pageWidget);
+    privacySwitch = new AirSwitch(pageWidget);
+    privacySwitch->setObjectName(QStringLiteral("groupPrivacySwitch"));
+    privacyRow->addWidget(privacySwitchLabel, 1);
+    privacyRow->addWidget(privacySwitch);
+    body->addLayout(privacyRow);
     privacyNote = makeLabel(TextRole::Caption, Color::Ink2, pageWidget);
     body->addWidget(privacyNote);
 
@@ -230,10 +242,16 @@ AirGroupDossier::AirGroupDossier(QWidget* parent)
         refreshMembers();
     });
     connect(copyButton, &AirButton::clicked, this, [this] {
+        if (info.privacy != Air::GroupPrivacy::Open) {
+            return;
+        }
         QApplication::clipboard()->setText(info.groupKey);
         AirToast::post(this, AirStrings::text(Text::GroupKeyCopied));
     });
     connect(qrButton, &AirButton::clicked, this, [this] {
+        if (info.privacy != Air::GroupPrivacy::Open) {
+            return;
+        }
         showAirQr(this, AirStrings::text(Text::GroupQrHeading).arg(info.name),
                   QStringLiteral("khandaq:group:") + info.groupKey,
                   AirStrings::text(Text::GroupQrSubtitle));
@@ -260,14 +278,30 @@ AirGroupDossier::AirGroupDossier(QWidget* parent)
         inviteBox->hide();
         place();
     });
+    connect(privacySwitch, &AirSwitch::clicked, this, [this](bool open) {
+        // The switch shows what toxcore holds: it goes back until the group has taken the change.
+        privacySwitch->setChecked(info.privacy == Air::GroupPrivacy::Open);
+        if (!open) {
+            emit privacyChangeRequested(Air::GroupPrivacy::InviteOnly);
+            return;
+        }
+        // Anyone the key reaches gets in then, a member removed before too: asked once.
+        AirDialog::confirm(this, AirStrings::text(Text::GroupOpenTitle),
+                           AirStrings::text(Text::GroupOpenMessage),
+                           AirStrings::text(Text::GroupOpenVerb), AirDialog::Verb::Ink,
+                           [this] { emit privacyChangeRequested(Air::GroupPrivacy::Open); });
+    });
     connect(muteSwitch, &AirSwitch::toggled, this, [this](bool muted) {
         info.muted = muted;
         mutedNote->setText(AirStrings::text(muted ? Text::GroupMutedNote : Text::GroupUnmutedNote));
         emit muteChanged(muted);
     });
     connect(leaveButton, &AirButton::clicked, this, [this] {
+        // The key lets nobody back into a group by invitation only.
+        const bool open = info.privacy == Air::GroupPrivacy::Open;
         AirDialog::confirm(this, AirStrings::text(Text::GroupLeaveTitle).arg(info.name),
-                           AirStrings::text(Text::GroupLeaveMessage),
+                           AirStrings::text(open ? Text::GroupLeaveMessage
+                                                 : Text::GroupLeavePrivateMessage),
                            AirStrings::text(Text::GroupLeaveVerb), AirDialog::Verb::Danger, [this] {
                                close();
                                emit leaveRequested();
@@ -310,10 +344,25 @@ void AirGroupDossier::setInfo(const AirGroupInfo& info_)
     nameLabel->setText(info.name);
     countsLabel->setText(AirStrings::groupHeaderText(info.reach));
     roleText->setText(AirStrings::groupRoleExplanation(info.selfRole));
-    keyText->setText(Air::keyLines(info.groupKey));
+    // A group by invitation only is joined by invitation, not with its key: the key is neither
+    // shown nor copied nor shared as a QR code; Invite stays.
+    const bool open = info.privacy == Air::GroupPrivacy::Open;
+    keyText->setText(open ? Air::keyLines(info.groupKey) : QString());
     keyText->setAccessibleName(AirStrings::text(Text::GroupKey));
-    keyText->setAccessibleDescription(Air::keyGroups(info.groupKey).join(QLatin1Char(' ')));
+    keyText->setAccessibleDescription(
+        open ? Air::keyGroups(info.groupKey).join(QLatin1Char(' ')) : QString());
+    keyText->setVisible(open);
+    copyButton->setVisible(open);
+    qrButton->setVisible(open);
+    keyHidden->setVisible(!open);
+    // The founder alone may change who can join (toxcore refuses anyone else): a switch for the
+    // founder, the words for everyone else.
+    const bool founder = info.selfRole == Air::GroupRole::Founder;
     privacyText->setText(AirStrings::groupPrivacyText(info.privacy));
+    privacyText->setVisible(!founder);
+    privacySwitchLabel->setVisible(founder);
+    privacySwitch->setVisible(founder);
+    privacySwitch->setChecked(open);
     privacyNote->setText(AirStrings::groupPrivacyNote(info.privacy));
     const QSignalBlocker blocker(muteSwitch);
     muteSwitch->setChecked(info.muted);
@@ -335,7 +384,10 @@ void AirGroupDossier::retranslate()
     copyButton->setText(AirStrings::text(Text::GroupCopyKey));
     inviteButton->setText(AirStrings::text(Text::GroupInvite));
     qrButton->setText(AirStrings::text(Text::DossierQr));
+    keyHidden->setText(AirStrings::text(Text::GroupKeyHidden));
     privacyTitle->setText(AirStrings::text(Text::NewGroupPrivacy));
+    privacySwitchLabel->setText(AirStrings::text(Text::PrivacyOpen));
+    privacySwitch->setAccessibleName(privacySwitchLabel->text());
     inviteNote->setText(AirStrings::text(Text::InviteOnlineNote));
     cancelInvites->setText(AirStrings::text(Text::Cancel));
     notifyTitle->setText(AirStrings::text(Text::DossierNotificationsTitle));
@@ -368,8 +420,10 @@ void AirGroupDossier::restyle()
         {membersNote, TextRole::Caption, Color::Ink2},
         {keyTitle, TextRole::Label, Color::Ink3},
         {keyText, TextRole::Mono, Color::Ink},
+        {keyHidden, TextRole::Body, Color::Ink2},
         {privacyTitle, TextRole::Label, Color::Ink3},
         {privacyText, TextRole::Body, Color::Ink},
+        {privacySwitchLabel, TextRole::Body, Color::Ink},
         {privacyNote, TextRole::Caption, Color::Ink2},
         {inviteNote, TextRole::Caption, Color::Ink2},
         {inviteWhy, TextRole::Caption, Color::Ink3},

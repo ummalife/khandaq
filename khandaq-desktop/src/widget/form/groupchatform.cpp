@@ -207,6 +207,7 @@ GroupChatForm::GroupChatForm(Core& core_, Group* chatGroup, IChatLog& chatLog_,
                                          .arg(member.name));
             });
     connect(dossier, &AirGroupDossier::inviteRequested, this, &GroupChatForm::inviteContacts);
+    connect(dossier, &AirGroupDossier::privacyChangeRequested, this, &GroupChatForm::setPrivacy);
     connect(privateThread, &AirPrivateThread::sendRequested, this, &GroupChatForm::sendPrivate);
     connect(composer, &AirComposer::readOnlyActionRequested, this, &GroupChatForm::askToWrite);
 
@@ -550,6 +551,20 @@ void GroupChatForm::undoRole(const Air::GroupMember& member, Air::GroupRole role
     refreshMembers();
     if (!done) {
         AirDialog::notice(this, AirStrings::text(AirText::ErrorRoleTitle),
+                          AirStrings::text(AirText::GroupChangeFailed));
+    }
+}
+
+void GroupChatForm::setPrivacy(Air::GroupPrivacy privacy)
+{
+    const Tox_Group_Privacy_State state = privacy == Air::GroupPrivacy::Open
+                                              ? TOX_GROUP_PRIVACY_STATE_PUBLIC
+                                              : TOX_GROUP_PRIVACY_STATE_PRIVATE;
+    const bool done = core.setGroupPrivacyState(static_cast<int>(group->getId()), state);
+    // toxcore calls back the other members, not us: the dossier asks it again here.
+    refreshMembers();
+    if (!done) {
+        AirDialog::notice(this, AirStrings::text(AirText::ErrorPrivacyTitle),
                           AirStrings::text(AirText::GroupChangeFailed));
     }
 }

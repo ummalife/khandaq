@@ -1652,6 +1652,11 @@
         <translation>Отсканируйте, чтобы найти группу по ключу</translation>
     </message>
     <message>
+        <source>Members join by invitation, so the key is not shown.</source>
+        <comment>group dossier of a group by invitation only, in place of the group key</comment>
+        <translation>Участники входят по приглашению, поэтому ключ не показывается.</translation>
+    </message>
+    <message>
         <source>No notifications for new messages of this group; the unread count stays in the list.</source>
         <comment>group dossier, under Mute</comment>
         <translation>Уведомлений о новых сообщениях группы не будет, непрочитанные останутся видны в списке.</translation>
@@ -1680,6 +1685,11 @@
         <source>The members see that you left. To come back you need an invitation or the group key.</source>
         <comment>question before leaving a group</comment>
         <translation>Участники увидят, что вы вышли. Чтобы вернуться, понадобится приглашение или ключ группы.</translation>
+    </message>
+    <message>
+        <source>The members see that you left. To come back you need a new invitation.</source>
+        <comment>question before leaving a group by invitation only</comment>
+        <translation>Участники увидят, что вы вышли. Чтобы вернуться, понадобится новое приглашение.</translation>
     </message>
     <message>
         <source>Leave</source>
@@ -1837,9 +1847,9 @@
         <translation>Только по приглашению</translation>
     </message>
     <message>
-        <source>Only people invited by a member can join.</source>
+        <source>Only people invited by a member can join. The group key alone does not let anyone in.</source>
         <comment>who can join a group: consequence</comment>
-        <translation>Войти можно только по приглашению кого-то из участников.</translation>
+        <translation>Войти можно только по приглашению кого-то из участников. Одного ключа группы для этого мало.</translation>
     </message>
     <message>
         <source>Open to anyone with the group key</source>
@@ -1892,9 +1902,9 @@
         <translation>Вход в группу</translation>
     </message>
     <message>
-        <source>Joining works when the group is open to anyone with its key, or when a contact of yours who is in it is online.</source>
+        <source>A group open to anyone with its key can be joined here. A group by invitation only needs an invitation from one of its members.</source>
         <comment>join by key: under the field</comment>
-        <translation>Войти получится, если группа открыта по ключу или если в сети ваш контакт из этой группы.</translation>
+        <translation>Здесь можно войти в группу, открытую по ключу. В остальные группы входят по приглашению кого-то из участников.</translation>
     </message>
     <message>
         <source>A group key has 64 characters: 0 to 9 and A to F.</source>
@@ -3475,6 +3485,21 @@
         <translation>Группа не приняла изменение. Попробуйте ещё раз, когда появится связь.</translation>
     </message>
     <message>
+        <source>Open the group to anyone with its key?</source>
+        <comment>question before the founder opens a group by invitation only</comment>
+        <translation>Открыть группу для всех, у кого есть ключ?</translation>
+    </message>
+    <message>
+        <source>Anyone who has the group key can then join without an invitation, and every member can see and share the key.</source>
+        <comment>question before opening a group to anyone with its key</comment>
+        <translation>Тогда войти без приглашения сможет любой, у кого есть ключ группы, а все участники смогут увидеть ключ и поделиться им.</translation>
+    </message>
+    <message>
+        <source>Open the group</source>
+        <comment>the verb of the question of opening a group to anyone with its key</comment>
+        <translation>Открыть по ключу</translation>
+    </message>
+    <message>
         <source>%1 wrote to you privately</source>
         <comment>band of a private message in a group: %1 is the member</comment>
         <translation>%1: личное сообщение</translation>
@@ -3556,6 +3581,11 @@
         <source>Couldn&apos;t remove the member</source>
         <comment>title of the error when the group refused to remove a member</comment>
         <translation>Не удалось удалить участника</translation>
+    </message>
+    <message>
+        <source>Couldn&apos;t change who can join</source>
+        <comment>title of the error when the group refused a change of who can join</comment>
+        <translation>Не удалось изменить, кто может войти</translation>
     </message>
     <message>
         <source>Couldn&apos;t invite to the group</source>

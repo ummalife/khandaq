@@ -121,6 +121,8 @@ private:
     int peerIdOf(const QString& peerKey) const;
     void applyMemberAction(const Air::GroupMember& member, Air::MemberAction action);
     void undoRole(const Air::GroupMember& member, Air::GroupRole role);
+    /** The founder's switch: toxcore sets who can join, or the reason shows. */
+    void setPrivacy(Air::GroupPrivacy privacy);
     void inviteContacts(const QVector<Air::InviteCandidate>& chosen);
     void askToWrite();
     void showPrivate(const QString& name, const QString& peerKey);

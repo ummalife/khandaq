@@ -33,7 +33,7 @@ class QLabel;
 /**
  * New group (E15, desktop): one panel that drops from under the Air band over the list column, as
  * New contact does. The name (one line, up to 48 bytes, which cannot change later), who can join
- * (By invitation only, chosen at first, or Open to anyone with the group key), each with what it
+ * (By invitation only, or Open to anyone with the group key, chosen at first), each with what it
  * means, the contacts online to invite, and Create group with the reason it waits. Joining a group
  * by its key is the other page of the same panel, behind a quiet link: creating and joining are
  * found in one place.

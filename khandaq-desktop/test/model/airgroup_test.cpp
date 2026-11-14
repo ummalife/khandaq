@@ -513,9 +513,16 @@ void TestAirGroup::privacyIsSaidWithItsConsequence()
              QStringLiteral("By invitation only"));
     QCOMPARE(AirStrings::groupPrivacyNote(Air::GroupPrivacy::Open),
              QStringLiteral("Anyone who has the group key can join, no invitation needed."));
+    // A group by invitation only cannot be joined with its key, and says so.
+    QCOMPARE(AirStrings::groupPrivacyNote(Air::GroupPrivacy::InviteOnly),
+             QStringLiteral("Only people invited by a member can join. "
+                            "The group key alone does not let anyone in."));
     use(QStringLiteral("ru"));
     QCOMPARE(AirStrings::groupPrivacyText(Air::GroupPrivacy::InviteOnly),
              QStringLiteral("Только по приглашению"));
+    QCOMPARE(AirStrings::groupPrivacyNote(Air::GroupPrivacy::InviteOnly),
+             QStringLiteral("Войти можно только по приглашению кого-то из участников. "
+                            "Одного ключа группы для этого мало."));
 }
 
 void TestAirGroup::nameIsOneLineAndFitsInFortyEightBytes()

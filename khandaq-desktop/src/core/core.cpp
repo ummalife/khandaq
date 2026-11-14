@@ -2045,6 +2045,22 @@ bool Core::kickGroupPeer(int groupId, int peerId)
     return true;
 }
 
+bool Core::setGroupPrivacyState(int groupId, Tox_Group_Privacy_State privacyState)
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    Tox_Err_Group_Founder_Set_Privacy_State error;
+    tox_group_founder_set_privacy_state(tox.get(), static_cast<uint32_t>(groupId), privacyState,
+                                        &error);
+    if (error != TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE_OK) {
+        qWarning() << "Group" << groupId << "could not set the privacy state" << privacyState << ":"
+                   << error;
+        return false;
+    }
+    emit saveRequest();
+    return true;
+}
+
 bool Core::sendGroupPrivateMessage(int groupId, int peerId, const QString& message)
 {
     QMutexLocker ml{&coreLoopLock};

@@ -49,9 +49,11 @@ public:
     void editName();
     /**
      * The group's menu at globalPos. leadingActions, owned by the caller, stand first: the Air list
-     * puts its favourite toggle there.
+     * puts its favourite toggle there. Without offersGroupId the menu does not copy the group's
+     * id: a group by invitation only does not share its key.
      */
-    void showContextMenu(const QPoint& globalPos, const QList<QAction*>& leadingActions = {});
+    void showContextMenu(const QPoint& globalPos, const QList<QAction*>& leadingActions = {},
+                         bool offersGroupId = true);
 
     bool isFriend() const final;
     bool isGroup() const final;

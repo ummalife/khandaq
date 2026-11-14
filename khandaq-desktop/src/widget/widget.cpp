@@ -4140,7 +4140,11 @@ void Widget::showAirEntryMenu(const QString& entryId, const QPoint& globalPos)
     if (auto* friendWidget = qobject_cast<FriendWidget*>(widget)) {
         friendWidget->showContextMenu(globalPos, {&favoriteAction});
     } else if (auto* groupWidget = qobject_cast<GroupWidget*>(widget)) {
-        groupWidget->showContextMenu(globalPos, {&favoriteAction});
+        // A group by invitation only shares no key, as its dossier shows none.
+        const int groupNumber = static_cast<int>(groupWidget->getGroup()->getId());
+        const bool sharesKey =
+            core->getGroupPrivacyState(groupNumber) != TOX_GROUP_PRIVACY_STATE_PRIVATE;
+        groupWidget->showContextMenu(globalPos, {&favoriteAction}, sharesKey);
     }
 }
 

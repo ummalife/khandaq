@@ -109,4 +109,36 @@ public class KhandaqEmojiFilterTest
         assertTrue(KhandaqEmojiFilter.isBlocked(null));
         assertFalse(KhandaqEmojiFilter.isBlocked(emoji("🙂")));
     }
+
+    /**
+     * KHANDAQ (owner, 2026-11-14; QA live F14): a joined sequence in a message that the picker does not
+     * offer is drawn apart. A message can carry any spelling and any skin tone of it.
+     */
+    @Test
+    public void aBlockedSequenceInAMessageHitsInEverySpellingAndSkinTone()
+    {
+        for (final String sequence : new String[]{
+                "🏳️‍🌈", "🏳‍🌈", "🏳️‍⚧️", "🏳‍⚧",
+                "👨‍❤️‍👨", "👩‍❤‍👩", "👨‍❤️‍💋‍👨", "👩‍❤‍💋‍👩",
+                "👨‍👨‍👦", "👩‍👩‍👧‍👧", "👨‍🤝‍👨", "👩‍🤝‍👩",
+                "👨🏻‍❤️‍👨🏼",       // couple with heart, men, light and medium-light skin tones
+                "👩🏾‍🤝‍👩🏻",       // women holding hands, medium-dark and light skin tones
+                "👨🏿‍❤️‍💋‍👨🏽"}) // kiss, men, dark and medium skin tones
+        {
+            assertTrue("must stay apart: " + sequence, KhandaqEmojiFilter.isBlockedSequence(sequence));
+        }
+    }
+
+    @Test
+    public void everyOtherSequenceInAMessageIsNotBlocked()
+    {
+        for (final String sequence : new String[]{
+                "👨‍👩‍👦", "👩‍❤️‍👨", "👩‍❤️‍💋‍👨", "👩🏻‍🤝‍👨🏾", // a man and a woman
+                "❤️‍🔥", "🏴‍☠️", "🏃🏽‍♀️", "👨‍⚕️", "🧑‍🤝‍🧑"})
+        {
+            assertFalse("must be drawn whole: " + sequence, KhandaqEmojiFilter.isBlockedSequence(sequence));
+        }
+        assertFalse(KhandaqEmojiFilter.isBlockedSequence(null));
+        assertFalse(KhandaqEmojiFilter.isBlockedSequence(""));
+    }
 }

@@ -46,6 +46,7 @@ public:
     QList<QStringList> getEmoticons() const;
     std::shared_ptr<QIcon> getAsIcon(const QString& emoticon) const;
     static QString getAsRichText(const QString& key);
+    static QString getInEmojiFont(const QString& sequence);
 
 private slots:
     void onSmileyPackChanged();

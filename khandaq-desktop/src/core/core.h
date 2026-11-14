@@ -168,6 +168,7 @@ public slots:
     bool sendMessage(uint32_t friendId, const QString& message, ReceiptNum& receipt) override;
     uint32_t sendGroupMessage(int groupId, const QString& message) override;
     uint32_t sendGroupAction(int groupId, const QString& message) override;
+    void sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t messageId) override;
     bool sendGroupFile(int groupId, const QString& fileName, const QString& localPath,
                        const QByteArray& fileData);
     bool sendGroupFileFromPath(int groupId, const QString& fileName, const QString& localPath);

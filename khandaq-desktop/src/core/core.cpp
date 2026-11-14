@@ -1882,6 +1882,9 @@ uint32_t chatIdHash32(const uint8_t* chatId)
 // BROADCAST of a file this device is sending itself, and 0x02 is not even parsed on the receive side.
 const uint8_t NGC_MAGIC[6] = {0x66, 0x77, 0x88, 0x11, 0x34, 0x35};
 constexpr uint8_t NGC_VERSION = 0x01;
+// pkt 0x04 (delivery receipt, private): msg_id(4, big-endian) of the group message that arrived
+constexpr uint8_t NGC_PKT_DELIVERY_RECEIPT = 0x04;
+constexpr size_t NGC_DELIVERY_RECEIPT_SIZE = 6 + 1 + 1 + 4;
 constexpr size_t NGC_SYNC_FILE_HEADER_SIZE = 6 + 1 + 1 + 32 + 32 + 4 + 25 + 255; // 356
 
 // KHANDAQ (audit #29): an assembly with no BEGIN/CHUNK activity for this long is stale — it is swept at
@@ -2144,6 +2147,46 @@ bool Core::groupInviteFriend(uint32_t friendId, int groupId)
     Tox_Err_Group_Invite_Friend error;
     tox_group_invite_friend(tox.get(), groupId, friendId, &error);
     return PARSE_ERR(error);
+}
+
+/**
+ * @brief Tell the author of a group message that it arrived here.
+ *
+ * The receipt is a lossless private custom packet: magic(6) 01 04 msg_id(4, big-endian), the
+ * layout the Android and iOS clients send and read. Without it an Android author keeps its message
+ * at "sent" and re-runs history sync to the whole group every few seconds, waiting for a
+ * confirmation that never comes from a desktop member. The author is looked up by public key at
+ * send time: toxcore reuses peer ids, and the signal that brought the message here may be handled
+ * after the author left.
+ */
+void Core::sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t messageId)
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    if (author.isEmpty() || messageId == 0) {
+        return;
+    }
+
+    const auto group = static_cast<uint32_t>(groupId);
+    Tox_Err_Group_Peer_Query queryError;
+    const uint32_t peerId =
+        tox_group_peer_by_public_key(tox.get(), group, author.getData(), &queryError);
+    if (queryError != TOX_ERR_GROUP_PEER_QUERY_OK) {
+        return;
+    }
+
+    uint8_t receipt[NGC_DELIVERY_RECEIPT_SIZE];
+    ngcPutMagic(receipt);
+    receipt[7] = NGC_PKT_DELIVERY_RECEIPT;
+    ngcPutU32Be(receipt + 8, messageId);
+
+    Tox_Err_Group_Send_Custom_Private_Packet error;
+    tox_group_send_custom_private_packet(tox.get(), group, peerId, true, receipt, sizeof(receipt),
+                                         &error);
+    if (error != TOX_ERR_GROUP_SEND_CUSTOM_PRIVATE_PACKET_OK) {
+        qDebug() << "sendGroupDeliveryReceipt: not sent to peer" << peerId << "of group" << groupId
+                 << "error" << static_cast<int>(error);
+    }
 }
 
 /**

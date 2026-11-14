@@ -306,6 +306,10 @@ public class SettingsActivity extends AppCompatPreferenceActivity
                 "speakerphone_tweak",
                 // MainActivity puts SAMPLE_RATE_FIXED into PREF__min_audio_samplingrate_out right after reading it.
                 "min_audio_samplingrate_out",
+                // MainActivity reads it into PREF__U_keep_nospam, and nothing acts on it: the warning icon it
+                // drove (top_imageview2) went with the old header, and since QA live F16 the antispam changes
+                // only when the user asks (HelperFriend.add_friend_to_system).
+                "U_keep_nospam",
                 // create_tox (jni-c-toxcore.c) sets UDP and LAN discovery from the Tor choice alone.
                 "udp_enabled", "local_discovery_enabled"};
         /** The debug-only category of switches that weaken the profile: its rows read in the danger colour. */

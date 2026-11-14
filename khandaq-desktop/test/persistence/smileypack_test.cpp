@@ -68,6 +68,7 @@ private slots:
     void testSmilifyEmojiPresentationSelector();
     void testSmilifyKeepsKeycapsWhole();
     void testSmilifySetsJoinedSequencesInTheEmojiFont();
+    void testSmilifySetsToneSequencesInTheEmojiFont();
     void testSmilifyDrawsBlockedSequencesApart();
     void testSmilifyAsciiEmoticonBetweenWords();
     void testSmilifyMixedScripts();
@@ -156,13 +157,14 @@ void TestSmileyPack::testSmilifyWholeCharactersOnly()
     QCOMPARE(smileyPack.smileyfied("👍"), SmileyPack::getAsRichText("👍"));
 
     // 👍🏽 is U+1F44D U+1F3FD. The pack has 👍 and not 👍🏽: the picture of 👍 followed by the medium
-    // skin tone alone (a brown square) is what the QA run saw.
+    // skin tone alone (a brown square) is what the QA run saw. It is one character, set in the emoji
+    // font (testSmilifySetsToneSequencesInTheEmojiFont).
     const QString thumbsUpMedium = QStringLiteral("👍🏽");
-    QCOMPARE(smileyPack.smileyfied(thumbsUpMedium), thumbsUpMedium);
+    QCOMPARE(smileyPack.smileyfied(thumbsUpMedium), SmileyPack::getInEmojiFont(thumbsUpMedium));
 
     // A character left to the system font does not keep the next one from its picture.
     QCOMPARE(smileyPack.smileyfied(thumbsUpMedium + "👍"),
-             QString(thumbsUpMedium + SmileyPack::getAsRichText("👍")));
+             QString(SmileyPack::getInEmojiFont(thumbsUpMedium) + SmileyPack::getAsRichText("👍")));
 }
 
 /**
@@ -247,6 +249,28 @@ void TestSmileyPack::testSmilifySetsJoinedSequencesInTheEmojiFont()
 }
 
 /**
+ * @brief Test that an emoji with a skin tone, which the pack has no picture of, is set in the colour
+ *  emoji font as one character
+ */
+void TestSmileyPack::testSmilifySetsToneSequencesInTheEmojiFont()
+{
+    SmileyPack smileyPack{*settings};
+
+    // QA live 2026-11-14: ✌🏽 (U+270C U+1F3FD) was the text font's ✌ and a brown square on the Mac.
+    // ✌ alone keeps its picture.
+    const QString victoryMedium = QStringLiteral("✌🏽");
+    QCOMPARE(smileyPack.smileyfied(victoryMedium), SmileyPack::getInEmojiFont(victoryMedium));
+    QCOMPARE(smileyPack.smileyfied(QStringLiteral("✌")), SmileyPack::getAsRichText(QStringLiteral("✌")));
+    QCOMPARE(smileyPack.smileyfied("a " + victoryMedium + " " + QStringLiteral("✌")),
+             QString("a " + SmileyPack::getInEmojiFont(victoryMedium) + " "
+                     + SmileyPack::getAsRichText(QStringLiteral("✌"))));
+
+    // The tone with an emoji presentation selector before it is still the same character.
+    const QString victoryAsEmojiMedium = QStringLiteral("✌") + EMOJI_PRESENTATION + QStringLiteral("🏽");
+    QCOMPARE(smileyPack.smileyfied(victoryAsEmojiMedium), SmileyPack::getInEmojiFont(victoryAsEmojiMedium));
+}
+
+/**
  * @brief Test that the joined sequences the emoji picker does not offer (Android's
  *  KhandaqEmojiFilter) are drawn apart, each member with its picture where the pack has one
  */
@@ -270,13 +294,13 @@ void TestSmileyPack::testSmilifyDrawsBlockedSequencesApart()
              QString(SmileyPack::getAsRichText("👨") + SmileyPack::getAsRichText("👨")
                      + SmileyPack::getAsRichText("👦")));
 
-    // A skin tone does not hide a sequence: men, a heart, light and medium-light skin tones. The
-    // members with a skin tone stay text, the heart gets its picture.
+    // A skin tone does not hide a sequence: men, a heart, light and medium-light skin tones. Each
+    // member with a skin tone is a character of its own in the emoji font, the heart gets its picture.
     const QString coupleWithTones = QStringLiteral("👨🏻") + ZERO_WIDTH_JOINER + QStringLiteral("❤")
                                     + EMOJI_PRESENTATION + ZERO_WIDTH_JOINER + QStringLiteral("👨🏼");
     QCOMPARE(smileyPack.smileyfied(coupleWithTones),
-             QString(QStringLiteral("👨🏻") + SmileyPack::getAsRichText("❤") + EMOJI_PRESENTATION
-                     + QStringLiteral("👨🏼")));
+             QString(SmileyPack::getInEmojiFont(QStringLiteral("👨🏻")) + SmileyPack::getAsRichText("❤")
+                     + EMOJI_PRESENTATION + SmileyPack::getInEmojiFont(QStringLiteral("👨🏼"))));
 
     // A blocked sequence does not touch the one next to it.
     const QString pirateFlag = QStringLiteral("🏴") + ZERO_WIDTH_JOINER + QStringLiteral("☠")
@@ -342,10 +366,14 @@ void TestSmileyPack::testSmilifyMixedScripts()
 {
     SmileyPack smileyPack{*settings};
 
-    // The message of the cross-platform QA run: the pack has none of its emoji whole.
+    // The message of the cross-platform QA run: the pack has none of its emoji whole. The thumb with a
+    // skin tone is set in the emoji font, the flag is left to the system font.
     const QString qaMessage = QStringLiteral(
         "Тест 1 с мака: кириллица, emoji 👍🏽🇹🇷, арабский السلام عليكم, цифры 12345");
-    QCOMPARE(smileyPack.smileyfied(qaMessage), qaMessage);
+    QCOMPARE(smileyPack.smileyfied(qaMessage),
+             QString(QStringLiteral("Тест 1 с мака: кириллица, emoji ")
+                     + SmileyPack::getInEmojiFont(QStringLiteral("👍🏽"))
+                     + QStringLiteral("🇹🇷, арабский السلام عليكم, цифры 12345")));
 
     QCOMPARE(smileyPack.smileyfied("Привет👍мир 🇷🇺 السلام😊عليكم"),
              QString("Привет" + SmileyPack::getAsRichText("👍") + "мир "

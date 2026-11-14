@@ -152,12 +152,27 @@ int skipExtenders(const QString& text, int position)
     return position;
 }
 
+bool hasSkinTone(const QString& text, int from, int to)
+{
+    for (int position = from; position < to;) {
+        int length = 0;
+        if (isSkinTone(codePointAt(text, position, &length))) {
+            return true;
+        }
+        position += length;
+    }
+    return false;
+}
+
 /**
  * @brief Finds the joined emoji sequences of a text: an emoji, and one or more times a joiner and
- * an emoji, each with its extenders
+ * an emoji, each with its extenders; and an emoji with a skin tone, which is one character too
  * @return The start and the end of each sequence
  * @note Found by the code points rather than by Qt's cluster rules: Qt 5.12 (the Windows build)
  * ends the character at a joiner that is followed by an emoji newer than Unicode 10.
+ * @note KHANDAQ (QA live 2026-11-14): ✌🏽 left to the system font was the text font's ✌ and the
+ * tone alone, a brown square: ✌ is drawn as text unless it is asked for as an emoji, and the pack
+ * has no picture with a tone. In the emoji font it is one picture.
  */
 QVector<QPair<int, int>> joinedSequences(const QString& text)
 {
@@ -171,7 +186,7 @@ QVector<QPair<int, int>> joinedSequences(const QString& text)
         }
         const int start = position;
         int end = skipExtenders(text, position + length);
-        bool joined = false;
+        bool joined = hasSkinTone(text, position + length, end);
         while (end + 1 < text.size() && text.at(end) == ZERO_WIDTH_JOINER) {
             int memberLength = 0;
             if (!isSequenceMember(codePointAt(text, end + 1, &memberLength))) {

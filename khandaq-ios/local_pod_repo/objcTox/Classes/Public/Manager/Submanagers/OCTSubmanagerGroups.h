@@ -169,6 +169,10 @@ extern NSString *const kOCTNgcSignedHistoryVerdictStoredNotification;
 
 - (NSTimeInterval)groupPeerLastSeenDateIntervalForPeerId:(uint32_t)peerId inChat:(OCTChat *)chat;
 
+/**
+ * The members of the group online now besides you: the peers toxcore lists for the group, you left
+ * out, whose connection is not NONE. peerCount, by contrast, counts you too.
+ */
 - (int32_t)onlineGroupPeerCountForChat:(OCTChat *)chat;
 
 - (nullable NSString *)groupSelfPeerNameForChat:(OCTChat *)chat error:(NSError **)error;

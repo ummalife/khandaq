@@ -1301,8 +1301,20 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)chat.groupNumber;
     int32_t onlineCount = 0;
 
+    // KHANDAQ (QA-Live 14.11, F12): the members online besides you, as the desktop and Android count
+    // them. toxcore lists you among the confirmed peers of the group (you are its peer 0, always
+    // confirmed) and never reports your own connection as NONE, so you were always counted: with
+    // everyone else offline the chat list read "1 online".
+    NSError *selfPeerIdError = nil;
+    uint32_t selfPeerId = [tox groupSelfPeerIdForGroupNumber:groupNumber error:&selfPeerIdError];
+
     for (NSDictionary *entry in [tox groupPeersForGroupNumber:groupNumber error:nil]) {
         uint32_t peerId = [entry[@"peerId"] unsignedIntValue];
+
+        if (! selfPeerIdError && peerId == selfPeerId) {
+            continue;
+        }
+
         OCTToxConnectionStatus status = [tox groupPeerConnectionStatusForGroupNumber:groupNumber
                                                                               peerId:peerId
                                                                                error:nil];

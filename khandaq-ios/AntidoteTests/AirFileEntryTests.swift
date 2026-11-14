@@ -237,3 +237,65 @@ class ChatFileEntryActivationTests: CellSnapshotTest {
         XCTAssertEqual(opened, 1, "the photo did not open")
     }
 }
+
+/**
+ The banner of a video being prepared (large media): it stays up until its job ends, with the progress,
+ and the end of an older job leaves the banner of a newer one alone. It used to take itself down the
+ moment it came up, so a long preparation looked like nothing was happening.
+ */
+class VideoSendBannerTests: XCTestCase {
+    func testTheBannerStaysUpUntilItsOwnJobEnds() {
+        let host = UIViewController()
+        host.loadViewIfNeeded()
+        let overlay = VideoSendProgressOverlay.shared
+        defer {
+            overlay.hide()
+            drainMainQueue()
+        }
+
+        let first = overlay.show(on: host, message: "Preparing video...")
+        // Twice: a hide() queued from inside show() would run after a single drain.
+        drainMainQueue()
+        drainMainQueue()
+        XCTAssertEqual(progressViews(in: host.view).count, 1, "the banner took itself down")
+
+        let second = overlay.show(on: host, message: "Preparing video...")
+        drainMainQueue()
+        drainMainQueue()
+        XCTAssertNotEqual(first, second)
+        XCTAssertEqual(progressViews(in: host.view).count, 1, "one banner in place of the other")
+
+        overlay.update(progress: 0.5, banner: second)
+        overlay.update(progress: 0.9, banner: first)
+        drainMainQueue()
+        XCTAssertEqual(progressViews(in: host.view).first?.progress ?? 0, 0.5, accuracy: 0.001)
+
+        overlay.hide(banner: first)
+        drainMainQueue()
+        XCTAssertEqual(progressViews(in: host.view).count, 1, "the end of the older job took the newer banner down")
+
+        overlay.hide(banner: second)
+        drainMainQueue()
+        XCTAssertTrue(progressViews(in: host.view).isEmpty)
+    }
+
+    /// Cancel on the banner ends the preparation without an alert: the person asked for it.
+    func testACancelledPreparationSaysNothing() {
+        XCTAssertTrue(VideoSendError.isCancellation(VideoSendError.cancelled))
+        XCTAssertNil(VideoSendError.cancelled.errorDescription)
+        XCTAssertFalse(VideoSendError.isCancellation(VideoSendError.preparationFailed))
+        XCTAssertFalse(VideoSendError.isCancellation(NSError(domain: NSCocoaErrorDomain, code: NSUserCancelledError)))
+    }
+
+    private func drainMainQueue() {
+        let drained = expectation(description: "the main queue ran what was queued before")
+        DispatchQueue.main.async {
+            drained.fulfill()
+        }
+        wait(for: [drained], timeout: 2)
+    }
+
+    private func progressViews(in view: UIView) -> [UIProgressView] {
+        return view.subviews.compactMap { $0 as? UIProgressView } + view.subviews.flatMap { progressViews(in: $0) }
+    }
+}

@@ -427,6 +427,7 @@
 /* Error */
 "error_internal_message" = "Внутренняя ошибка";
 "video_send_preparing" = "Подготовка видео...";
+"media_pick_loading" = "Файлы загружаются из медиатеки...";
 "video_send_preparation_failed" = "Не удалось подготовить видео к отправке.";
 "video_send_too_large" = "Видео слишком большое (макс. 500 МБ).";
 "video_send_busy" = "Другое видео ещё обрабатывается. Подождите.";

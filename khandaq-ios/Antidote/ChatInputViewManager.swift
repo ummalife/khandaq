@@ -15,6 +15,9 @@ fileprivate struct Constants {
 }
 
 fileprivate let videoSendQueue = DispatchQueue(label: "khandaq.video.send", qos: .userInitiated)
+/// KHANDAQ (large media): photos are encoded as JPEG here, one after another, so their file messages
+/// keep the order they were chosen in.
+fileprivate let imageEncodeQueue = DispatchQueue(label: "khandaq.image.encode", qos: .userInitiated)
 
 /**
     Manager responsible for sending messages and files, updating typing notification,
@@ -454,6 +457,11 @@ fileprivate extension ChatInputViewManager {
             var configuration = PHPickerConfiguration()
             configuration.filter = .any(of: [.images, .videos])
             configuration.selectionLimit = 10
+            // KHANDAQ (large media): the file as it is in the library. With the default the system may
+            // transcode a video before handing it over, a long wait for a big one, while the app
+            // transcodes it anyway when it is large (VideoSendPreprocessor, to HEVC) and re-encodes
+            // every photo as JPEG.
+            configuration.preferredAssetRepresentationMode = .current
 
             let controller = PHPickerViewController(configuration: configuration)
             controller.delegate = self
@@ -522,19 +530,24 @@ fileprivate extension ChatInputViewManager {
         }
 
         isVideoSendInProgress = true
-        VideoSendProgressOverlay.shared.show(on: presentingViewController,
-                                             message: String(localized: "video_send_preparing"),
-                                             onCancel: { [weak self] in
+        let banner = VideoSendProgressOverlay.shared.show(on: presentingViewController,
+                                                          message: String(localized: "video_send_preparing"),
+                                                          onCancel: { [weak self] in
             VideoSendPreprocessor.shared.cancelActivePreparation()
             VideoSendProgressOverlay.shared.hide()
             self?.isVideoSendInProgress = false
         })
 
         VideoSendPreprocessor.shared.prepareVideo(at: sourceURL, progress: { progress in
-            VideoSendProgressOverlay.shared.update(progress: progress)
+            VideoSendProgressOverlay.shared.update(progress: progress, banner: banner)
         }, completion: { [weak self] result in
             DispatchQueue.main.async {
-                VideoSendProgressOverlay.shared.hide()
+                // KHANDAQ (large media): Cancel took the banner down and let another video start; the
+                // preparation it stopped has nothing to send, and a cancelled video ends its sequence.
+                if case .failure(let error) = result, VideoSendError.isCancellation(error) {
+                    return
+                }
+                VideoSendProgressOverlay.shared.hide(banner: banner)
 
                 guard let self = self else {
                     completion?()
@@ -641,13 +654,27 @@ fileprivate extension ChatInputViewManager {
         enqueueVideoSend(from: url)
     }
 
-    func sendImageData(_ image: UIImage, fileName: String?) {
-        guard let data = UIImageJPEGRepresentation(image, 0.9) else {
-            showMediaPickFailed()
-            return
+    /// KHANDAQ (large media): the JPEG is encoded off the main queue (a full-size photo takes a
+    /// noticeable moment, and the preview hands over up to ten); the file message is created on the main
+    /// queue after the ones before it. `completion` runs there after it, unless the chat is gone by then.
+    func sendImageData(_ image: UIImage, fileName: String?, completion: (() -> Void)? = nil) {
+        imageEncodeQueue.async {
+            let data = autoreleasepool {
+                UIImageJPEGRepresentation(image, 0.9)
+            }
+            DispatchQueue.main.async {
+                guard self.submanagerFiles != nil, !self.chat.isInvalidated else {
+                    return
+                }
+                if let data = data {
+                    self.sendFileData(data, fileName: Self.normalizedImageFileName(fileName))
+                }
+                else {
+                    self.showMediaPickFailed()
+                }
+                completion?()
+            }
         }
-
-        sendFileData(data, fileName: Self.normalizedImageFileName(fileName))
     }
 
     func sendFileData(_ data: Data, fileName: String) {
@@ -804,45 +831,16 @@ fileprivate extension ChatInputViewManager {
         presentingViewController.present(controller, animated: true, completion: nil)
     }
 
+    /// KHANDAQ (large media): the banner while the items load (unless a video is being prepared and its
+    /// banner is up), in the order they were chosen. The providers answer on queues of their own, and
+    /// all of them appended to one array here. Not called back after Cancel on the banner.
     @available(iOS 14.0, *)
     func loadPreviewItems(fromPickerResults results: [PHPickerResult], completion: @escaping ([MediaSendPreviewItem]) -> Void) {
-        var loaded: [MediaSendPreviewItem] = []
-        let group = DispatchGroup()
-
-        for result in results {
-            let provider = result.itemProvider
-            let movieType = movieTypeIdentifiers().first(where: { provider.hasItemConformingToTypeIdentifier($0) })
-
-            if let movieType = movieType {
-                group.enter()
-                provider.loadFileRepresentation(forTypeIdentifier: movieType) { url, _ in
-                    defer { group.leave() }
-                    guard let url = url else {
-                        return
-                    }
-
-                    do {
-                        let staged = try VideoSendPreprocessor.shared.stagePickerVideo(at: url)
-                        loaded.append(.video(staged, fileName: provider.suggestedName))
-                    } catch {
-                    }
-                }
-                continue
-            }
-
-            if provider.canLoadObject(ofClass: UIImage.self) {
-                group.enter()
-                provider.loadObject(ofClass: UIImage.self) { object, _ in
-                    defer { group.leave() }
-                    if let image = object as? UIImage {
-                        loaded.append(.image(image, fileName: nil))
-                    }
-                }
-            }
-        }
-
-        group.notify(queue: .main) {
-            completion(loaded)
+        PickedMediaLoader.load(results,
+                               movieTypes: movieTypeIdentifiers(),
+                               bannerHost: isVideoSendInProgress ? nil : presentingViewController,
+                               message: String(localized: "media_pick_loading")) { loaded in
+            completion(loaded.items)
         }
     }
 
@@ -940,26 +938,40 @@ fileprivate extension ChatInputViewManager {
     func sendConfirmedPreviewItems(_ items: [MediaSendPreviewItem], caption: String) {
         let trimmedCaption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        var images: [(image: UIImage, fileName: String?)] = []
         var videos: [(url: URL, fileName: String?)] = []
         for item in items {
             switch item {
             case .image(let image, let fileName):
-                sendImageData(image, fileName: fileName)
+                images.append((image, fileName))
             case .video(let url, let fileName):
                 videos.append((url, fileName))
             }
         }
 
-        if videos.isEmpty {
-            // Photos create their file message synchronously, so the caption now pairs with the last one.
-            if !trimmedCaption.isEmpty {
-                sendCaptionMessage(trimmedCaption)
+        let afterPhotos = { [weak self] in
+            guard let self = self else {
+                return
             }
-            return
+            if videos.isEmpty {
+                // The photos' file messages exist by now, so the caption pairs with the last one.
+                if !trimmedCaption.isEmpty {
+                    self.sendCaptionMessage(trimmedCaption)
+                }
+                return
+            }
+
+            // Video prep is async — let the LAST video carry the caption so it follows the video's file message.
+            self.enqueueVideoSendSequence(videos, caption: trimmedCaption)
         }
 
-        // Video prep is async — let the LAST video carry the caption so it follows the video's file message.
-        enqueueVideoSendSequence(videos, caption: trimmedCaption)
+        guard let last = images.indices.last else {
+            afterPhotos()
+            return
+        }
+        for (index, photo) in images.enumerated() {
+            sendImageData(photo.image, fileName: photo.fileName, completion: index == last ? afterPhotos : nil)
+        }
     }
 
     func sendCaptionMessage(_ text: String) {

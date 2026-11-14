@@ -541,6 +541,7 @@
 "group_msg_sender_unverified" = "مُعاد من السجل، لم يتم التحقق من المرسل";
 "alert_ok" = "موافق";
 "video_send_preparing" = "جاري تحضير الفيديو...";
+"media_pick_loading" = "جاري جلب الملفات من المكتبة...";
 "video_send_preparation_failed" = "تعذر تحضير الفيديو للإرسال.";
 "video_send_too_large" = "حجم الفيديو كبير جدا (الحد الأقصى 500 ميغابايت).";
 "video_send_busy" = "لا يزال هناك فيديو آخر قيد التحضير. يرجى الانتظار.";

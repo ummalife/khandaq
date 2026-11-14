@@ -430,6 +430,7 @@
 "error_internal_message" = "Internal error";
 /* Video send */
 "video_send_preparing" = "Preparing video...";
+"media_pick_loading" = "Getting the files from the library...";
 "video_send_preparation_failed" = "Could not prepare video for sending.";
 "video_send_too_large" = "Video is too large (max 500 MB).";
 "video_send_busy" = "Another video is still being prepared. Please wait.";

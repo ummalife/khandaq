@@ -541,6 +541,7 @@
 "group_msg_sender_unverified" = "来自历史转发，发送者未验证";
 "alert_ok" = "确定";
 "video_send_preparing" = "正在准备视频...";
+"media_pick_loading" = "正在从图库获取文件...";
 "video_send_preparation_failed" = "无法准备要发送的视频。";
 "video_send_too_large" = "视频太大（最大 500 MB）。";
 "video_send_busy" = "还有一个视频正在准备中，请稍候。";

@@ -390,6 +390,12 @@ private:
     void createAirGroup(const QString& name, Air::GroupPrivacy privacy,
                         const QVector<Air::InviteCandidate>& invited);
     void joinAirGroup(const QString& groupKey);
+    /**
+     * Opens the group the user just joined. A group they were still leaving is joined only after
+     * toxcore let go of the old instance (Core::replaceLeavingGroup), once this has returned: it
+     * opens when Core::groupJoined puts it in the list (onGroupJoined).
+     */
+    void openJoinedGroup(const GroupId& groupId);
     /** The contacts New group offers to invite. */
     QVector<Air::InviteCandidate> inviteCandidates() const;
     /** The legacy form, kept for importing a file of IDs. */
@@ -497,6 +503,8 @@ private:
     QMap<GroupId, std::shared_ptr<IChatLog>> groupChatLogs;
     QMap<GroupId, std::shared_ptr<GroupChatroom>> groupChatrooms;
     QMap<GroupId, QSharedPointer<GroupChatForm>> groupChatForms;
+    /** The group the user joined that opens once it comes into the list (openJoinedGroup). */
+    GroupId groupToOpenWhenJoined;
     Core* core = nullptr;
 
 

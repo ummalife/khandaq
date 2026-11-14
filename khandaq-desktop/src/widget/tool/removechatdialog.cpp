@@ -19,6 +19,8 @@
 
 #include "removechatdialog.h"
 #include "src/model/chat.h"
+#include "src/model/group.h"
+#include "src/widget/air/airstrings.h"
 
 #include <QPushButton>
 
@@ -30,13 +32,27 @@ RemoveChatDialog::RemoveChatDialog(QWidget* parent, const Chat& contact)
     setAttribute(Qt::WA_QuitOnClose, false);
     ui.setupUi(this);
     QString name = contact.getDisplayedName().toHtmlEscaped();
-    QString text = tr("Are you sure you want to remove %1 from your contacts list?")
-                       .arg(QString("<b>%1</b>").arg(name));
-
-    ui.label->setText(text);
     auto removeButton = ui.buttonBox->button(QDialogButtonBox::Ok);
     auto cancelButton = ui.buttonBox->button(QDialogButtonBox::Cancel);
-    removeButton->setText(tr("Remove"));
+    if (qobject_cast<const Group*>(&contact)) {
+        // KHANDAQ (QA live 2026-11-14): the list's Leave group asked whether to remove the group
+        // "from your contacts list". A group is left: ask in the words of the group dossier.
+        using AirStrings::Text;
+        setWindowTitle(AirStrings::text(Text::GroupLeave));
+        const QString boldName = QString("<b>%1</b>").arg(name);
+        ui.label->setText(AirStrings::text(Text::GroupLeaveTitle).arg(boldName)
+                          + QStringLiteral("<br><br>")
+                          + AirStrings::text(Text::GroupLeaveMessage).toHtmlEscaped());
+        // Its description for screen readers speaks of a friend; the box's own text says enough.
+        ui.removeHistory->setAccessibleDescription(QString());
+        removeButton->setText(AirStrings::text(Text::GroupLeaveVerb));
+    } else {
+        QString text = tr("Are you sure you want to remove %1 from your contacts list?")
+                           .arg(QString("<b>%1</b>").arg(name));
+
+        ui.label->setText(text);
+        removeButton->setText(tr("Remove"));
+    }
     cancelButton->setDefault(true);
     adjustSize();
     connect(ui.buttonBox, &QDialogButtonBox::accepted, this, &RemoveChatDialog::onAccepted);

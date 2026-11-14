@@ -76,13 +76,98 @@ final class GroupPeerKeys
     }
 
     /**
-     * The member is gone from the group: it left (QUIT) or was kicked. A timeout or a lost connection keeps it
-     * a member, offline.
+     * The member is gone from the group: it was kicked, or it said it was leaving (a leave notice) shortly before
+     * this exit. Anything else keeps it a member, offline.
+     *
+     * <p>KHANDAQ (QA live, F11): toxcore sends the same QUIT when a member leaves and when its app simply closes
+     * (tox_kill sends it for every group, with no part message), so QUIT alone ended the membership of everyone
+     * who closed the app: Windows closed its window and Android dropped QA Windows from the group. The member
+     * that leaves now says so first ({@link #isLeaveNotice}); a QUIT without that is an app that closed. The
+     * notice counts for any exit that follows it, since the QUIT itself can be lost and end as a timeout.
      */
-    static boolean leftForGood(final int exitType)
+    static boolean leftForGood(final int exitType, final boolean saidItWasLeaving)
     {
-        return exitType == ToxVars.Tox_Group_Exit_Type.TOX_GROUP_EXIT_TYPE_QUIT.value
-               || exitType == ToxVars.Tox_Group_Exit_Type.TOX_GROUP_EXIT_TYPE_KICK.value;
+        return saidItWasLeaving || exitType == ToxVars.Tox_Group_Exit_Type.TOX_GROUP_EXIT_TYPE_KICK.value;
+    }
+
+    // KHANDAQ (QA live, F11): the leave notice. A Khandaq client sends it to the whole group, lossless, just
+    // before tox_group_leave when the user leaves or deletes a group, and never when the app closes, rejoins a
+    // group or disconnects from it. The standard NGC header and the next free Khandaq id (0x41-0x43 are the
+    // edits, deletes and reactions): magic(6) | 0x01 | 0x44, nothing after it. The same packet on the desktop
+    // (src/model/air/airgroupleave.h) and on iOS (OCTGroupLeaveNotice).
+    static final byte NGC_PKT_LEAVE_NOTICE = 0x44;
+    private static final byte[] NGC_MAGIC = {0x66, 0x77, (byte) 0x88, 0x11, 0x34, 0x35};
+    private static final byte NGC_VERSION = 0x01;
+    static final int LEAVE_NOTICE_LENGTH = NGC_MAGIC.length + 2;
+
+    /** How long a notice waits for its exit: the QUIT follows at once, a timeout after a lost QUIT within a minute. */
+    static final long LEAVE_NOTICE_WINDOW_MS = 5L * 60L * 1000L;
+
+    private static final Map<String, Long> LEAVE_NOTICE_AT_MS = new ConcurrentHashMap<>();
+
+    static byte[] leaveNoticePacket()
+    {
+        final byte[] packet = new byte[LEAVE_NOTICE_LENGTH];
+        System.arraycopy(NGC_MAGIC, 0, packet, 0, NGC_MAGIC.length);
+        packet[NGC_MAGIC.length] = NGC_VERSION;
+        packet[NGC_MAGIC.length + 1] = NGC_PKT_LEAVE_NOTICE;
+        return packet;
+    }
+
+    /** A later version may add bytes after the header; they are not read. */
+    static boolean isLeaveNotice(final byte[] data, final long length)
+    {
+        if (data == null || length < LEAVE_NOTICE_LENGTH || data.length < LEAVE_NOTICE_LENGTH)
+        {
+            return false;
+        }
+        for (int i = 0; i < NGC_MAGIC.length; i++)
+        {
+            if (data[i] != NGC_MAGIC[i])
+            {
+                return false;
+            }
+        }
+        return data[NGC_MAGIC.length] == NGC_VERSION && data[NGC_MAGIC.length + 1] == NGC_PKT_LEAVE_NOTICE;
+    }
+
+    private static String memberSlot(final String groupIdentifier, final String publicKey)
+    {
+        return groupIdentifier.toLowerCase(Locale.ROOT) + "|" + publicKey.toLowerCase(Locale.ROOT);
+    }
+
+    /** The member with this key said it is leaving the group. The key is taken when the notice comes in. */
+    static void noteLeaveNotice(final String groupIdentifier, final String publicKey, final long nowMs)
+    {
+        if (groupIdentifier == null || groupIdentifier.isEmpty() || !isKey(publicKey))
+        {
+            return;
+        }
+        LEAVE_NOTICE_AT_MS.put(memberSlot(groupIdentifier, publicKey), nowMs);
+    }
+
+    /**
+     * At the member's exit: whether it said it was leaving within {@link #LEAVE_NOTICE_WINDOW_MS}. The notice is
+     * used up either way, so a later exit of the same key (it came back and closed the app) is not a leave.
+     */
+    static boolean takeLeaveNotice(final String groupIdentifier, final String publicKey, final long nowMs)
+    {
+        if (groupIdentifier == null || groupIdentifier.isEmpty() || !isKey(publicKey))
+        {
+            return false;
+        }
+        final Long at = LEAVE_NOTICE_AT_MS.remove(memberSlot(groupIdentifier, publicKey));
+        return at != null && nowMs >= at && nowMs - at <= LEAVE_NOTICE_WINDOW_MS;
+    }
+
+    /** A join of the key drops a notice its exit never used: it is in the group again. */
+    static void forgetLeaveNotice(final String groupIdentifier, final String publicKey)
+    {
+        if (groupIdentifier == null || groupIdentifier.isEmpty() || !isKey(publicKey))
+        {
+            return;
+        }
+        LEAVE_NOTICE_AT_MS.remove(memberSlot(groupIdentifier, publicKey));
     }
 
     /** The marked keys of one group as they are stored: lower case, comma separated. Anything else is dropped. */

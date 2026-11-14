@@ -312,6 +312,7 @@ private:
                                     size_t length, void* vCore);
     static void onGroupCustomPrivatePacket(Tox* tox, uint32_t groupId, uint32_t peerId,
                                            const uint8_t* data, size_t length, void* vCore);
+    void sendGroupLeaveNotice(int groupId) const;
     void handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const uint8_t* data,
                                      size_t length, bool isPrivate);
 

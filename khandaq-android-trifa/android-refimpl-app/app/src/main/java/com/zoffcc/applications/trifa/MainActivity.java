@@ -9404,15 +9404,20 @@ public class MainActivity extends AppCompatActivity
         // one remembered while it was there. Asked by peer id, toxcore gave none, and a member who left was kept.
         final String exit_peer_pubkey = HelperGroup.take_exiting_group_peer_pubkey(group_number, temp_group_identifier,
                                                                                   peer_id);
+        // KHANDAQ (QA live, F11): toxcore sends the same QUIT when a member leaves and when its app closes. The
+        // member that leaves sends a leave notice first; without one, the exit is an app that closed.
+        final boolean said_it_was_leaving = HelperGroup.take_group_leave_notice(temp_group_identifier,
+                                                                                exit_peer_pubkey);
         HelperGroup.record_group_peer_last_seen_on_exit(temp_group_identifier, exit_peer_pubkey);
         HelperGroup.handle_group_peer_transport_lost(group_number, peer_id, a_Tox_Group_Exit_Type);
-        // intentional leave/kick -> not a member anymore, drop from members DB
+        // a leave (with its notice) or a kick -> not a member anymore, drop from members DB
         HelperGroup.remove_group_peer_from_db_on_exit(group_number, temp_group_identifier, exit_peer_pubkey,
-                                                      a_Tox_Group_Exit_Type);
+                                                      a_Tox_Group_Exit_Type, said_it_was_leaving);
         HelperGroup.sync_group_peers_from_tox_to_db(group_number);
         update_group_in_friendlist(temp_group_identifier);
         update_group_in_groupmessagelist(temp_group_identifier, true);
-        HelperGroup.notify_group_peer_exit(group_number, peer_id, a_Tox_Group_Exit_Type);
+        HelperGroup.notify_group_peer_exit(group_number, peer_id, a_Tox_Group_Exit_Type, said_it_was_leaving,
+                                           exit_peer_pubkey);
         update_savedata_file_wrapper();
     }
 
@@ -9636,6 +9641,14 @@ public class MainActivity extends AppCompatActivity
         }
         catch (Exception e)
         {
+        }
+
+        // KHANDAQ (QA live, F11): a member that leaves says so first, so that its exit is a leave and not an app
+        // that closed. Read before the mute check: a member that is muted here still leaves the member list.
+        if (GroupPeerKeys.isLeaveNotice(data, length))
+        {
+            HelperGroup.on_group_leave_notice(group_number, peer_id);
+            return;
         }
 
         // check for muted or kicked peers

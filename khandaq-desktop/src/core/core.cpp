@@ -31,6 +31,7 @@
 #include "src/core/toxoptions.h"
 #include "src/core/toxstring.h"
 #include "src/core/khandaqlimits.h"
+#include "src/model/air/airgroupleave.h"
 #include "src/model/air/airmessagemarks.h"
 #include "src/model/groupinvite.h"
 #include "src/model/status.h"
@@ -831,6 +832,12 @@ void Core::onGroupCustomPacket(Tox* tox, uint32_t groupId, uint32_t peerId, cons
 {
     std::ignore = tox;
     auto core = static_cast<Core*>(vCore);
+    // QA live F11: a member says it is leaving. The member list here is toxcore's own, which drops
+    // the member at its exit either way, so there is nothing to keep; Android and iOS act on it.
+    if (Air::isGroupLeaveNotice(data, length)) {
+        qDebug() << "Group" << groupId << "peer" << peerId << "says it is leaving";
+        return;
+    }
     // Edits, deletions and reactions go to the whole group (stage 3, item 10). As on Android, one
     // that comes privately is not read, nor one of an observer. The sender is resolved now:
     // toxcore reuses peer ids.
@@ -1112,6 +1119,7 @@ void Core::removeGroup(int groupId)
 {
     QMutexLocker ml{&coreLoopLock};
 
+    sendGroupLeaveNotice(groupId);
     Tox_Err_Group_Leave error;
     tox_group_leave(tox.get(), groupId, nullptr, 0, &error);
     if (PARSE_ERR(error)) {
@@ -1123,9 +1131,27 @@ void Core::quitGroupChat(int groupId) const
 {
     QMutexLocker ml{&coreLoopLock};
 
+    sendGroupLeaveNotice(groupId);
     Tox_Err_Group_Leave error;
     tox_group_leave(tox.get(), groupId, nullptr, 0, &error);
     PARSE_ERR(error);
+}
+
+/**
+ * @brief QA live F11: tells the members that we leave the group, right before tox_group_leave.
+ *
+ * toxcore's QUIT that follows is the same one tox_kill sends when the app closes, and Android and iOS
+ * read a QUIT without this notice as an app that closed. Not for the rejoin of a stuck instance
+ * (handleGroupInviteRequest), where we stay. Called with coreLoopLock held.
+ */
+void Core::sendGroupLeaveNotice(int groupId) const
+{
+    const QByteArray notice = Air::groupLeaveNoticePacket();
+    Tox_Err_Group_Send_Custom_Packet error;
+    const bool sent = tox_group_send_custom_packet(tox.get(), static_cast<uint32_t>(groupId), true,
+                                                   reinterpret_cast<const uint8_t*>(notice.constData()),
+                                                   static_cast<size_t>(notice.size()), &error);
+    qDebug() << "Group" << groupId << "leave notice sent:" << sent << "error:" << static_cast<int>(error);
 }
 
 /**

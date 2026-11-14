@@ -309,6 +309,7 @@
 		B3C344185621760000000003 /* AirFileEntryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344185621760000000002 /* AirFileEntryTests.swift */; };
 		B3C344153578340000000003 /* AirGroupModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344153578340000000002 /* AirGroupModelTests.swift */; };
 		KQONLINE0000000000000001 /* GroupOnlineCountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQONLINE0000000000000002 /* GroupOnlineCountTests.swift */; };
+		KQLEAVE00000000000000001 /* GroupLeaveNoticeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQLEAVE00000000000000002 /* GroupLeaveNoticeTests.swift */; };
 		B3C344111661920000000003 /* AirRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344111661920000000002 /* AirRequestTests.swift */; };
 		B3C343706707940000000003 /* AirNewContactModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C343706707940000000002 /* AirNewContactModelTests.swift */; };
 		B3C343693019790000000003 /* AirLocalStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C343693019790000000002 /* AirLocalStoreTests.swift */; };
@@ -862,6 +863,7 @@
 		B3C344185621760000000002 /* AirFileEntryTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirFileEntryTests.swift; sourceTree = "<group>"; };
 		B3C344153578340000000002 /* AirGroupModelTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirGroupModelTests.swift; sourceTree = "<group>"; };
 		KQONLINE0000000000000002 /* GroupOnlineCountTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupOnlineCountTests.swift; sourceTree = "<group>"; };
+		KQLEAVE00000000000000002 /* GroupLeaveNoticeTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupLeaveNoticeTests.swift; sourceTree = "<group>"; };
 		B3C344111661920000000002 /* AirRequestTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirRequestTests.swift; sourceTree = "<group>"; };
 		B3C343706707940000000002 /* AirNewContactModelTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirNewContactModelTests.swift; sourceTree = "<group>"; };
 		B3C343693019790000000002 /* AirLocalStoreTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirLocalStoreTests.swift; sourceTree = "<group>"; };
@@ -1049,6 +1051,7 @@
 				B3C344185621760000000002 /* AirFileEntryTests.swift */,
 				B3C344153578340000000002 /* AirGroupModelTests.swift */,
 				KQONLINE0000000000000002 /* GroupOnlineCountTests.swift */,
+				KQLEAVE00000000000000002 /* GroupLeaveNoticeTests.swift */,
 				B3C344111661920000000002 /* AirRequestTests.swift */,
 				B3C343706707940000000002 /* AirNewContactModelTests.swift */,
 				B3C343693019790000000002 /* AirLocalStoreTests.swift */,
@@ -2393,6 +2396,7 @@
 				B3C344185621760000000003 /* AirFileEntryTests.swift in Sources */,
 				B3C344153578340000000003 /* AirGroupModelTests.swift in Sources */,
 				KQONLINE0000000000000001 /* GroupOnlineCountTests.swift in Sources */,
+				KQLEAVE00000000000000001 /* GroupLeaveNoticeTests.swift in Sources */,
 				B3C344111661920000000003 /* AirRequestTests.swift in Sources */,
 				B3C343706707940000000003 /* AirNewContactModelTests.swift in Sources */,
 				B3C343693019790000000003 /* AirLocalStoreTests.swift in Sources */,

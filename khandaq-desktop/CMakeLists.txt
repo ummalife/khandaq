@@ -300,6 +300,8 @@ set(${PROJECT_NAME}_SOURCES
   src/model/air/airconversation.h
   src/model/air/airgroup.cpp
   src/model/air/airgroup.h
+  src/model/air/airgroupleave.cpp
+  src/model/air/airgroupleave.h
   src/model/air/airlocalstore.cpp
   src/model/air/airlocalstore.h
   src/model/air/airmessagemarks.cpp

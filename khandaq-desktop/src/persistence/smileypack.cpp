@@ -25,6 +25,7 @@
 #include <QMap>
 #include <QPair>
 #include <QRegularExpression>
+#include <QSet>
 #include <QStandardPaths>
 #include <QStringBuilder>
 #include <QTextBoundaryFinder>
@@ -101,6 +102,41 @@ const QStringList BLOCKED_SEQUENCES = {
     fromCodePoints({0x1F469, 0x200D, 0x1F469}),                          // two mothers, any children
     fromCodePoints({0x1F468, 0x200D, 0x1F91D, 0x200D, 0x1F468}),         // men holding hands
     fromCodePoints({0x1F469, 0x200D, 0x1F91D, 0x200D, 0x1F469}),         // women holding hands
+};
+
+// KHANDAQ (owner, 2026-11-14): the single emoji that Android's picker does not offer either
+// (KhandaqEmojiFilter BLOCKED_SYMBOLS, BLOCKED_CREATURES and BLOCKED_PAIRS, the same request of
+// 17 Aug 2026): symbols of other religions and of the occult, devils and the like, same-sex pairs.
+// The desktop's packs had ⛪, the zodiac, 🔯, 👻 👽 👾 👹 👺 😈 👿 and 👬 👭 in the picker. Only the
+// picker leaves them out: a message that carries one shows it as before. Compared without U+FE0F
+// and the skin tones, like BLOCKED_SEQUENCES. Keep in step with KhandaqEmojiFilter.java.
+const QSet<uint> BLOCKED_SINGLES = {
+    0x271D,  // latin cross
+    0x2626,  // orthodox cross
+    0x2721,  // star of David
+    0x1F52F, // six-pointed star with dot
+    0x1F54E, // menorah
+    0x1F549, // om
+    0x2638,  // wheel of dharma
+    0x262F,  // yin yang
+    0x1F6D0, // place of worship
+    0x26EA,  // church
+    0x1F54D, // synagogue
+    0x1F6D5, // hindu temple
+    0x26E9,  // shinto shrine
+    0x2648, 0x2649, 0x264A, 0x264B, 0x264C, 0x264D, // zodiac, aries to virgo
+    0x264E, 0x264F, 0x2650, 0x2651, 0x2652, 0x2653, // zodiac, libra to pisces
+    0x26CE,  // ophiuchus
+    0x1F47F, // angry face with horns
+    0x1F608, // smiling face with horns
+    0x1F479, // ogre
+    0x1F47A, // goblin
+    0x1F47B, // ghost
+    0x1F47D, // alien
+    0x1F47E, // alien monster
+    0x1F46C, // two men holding hands
+    0x1F46D, // two women holding hands
+    0x26A7,  // transgender symbol
 };
 
 bool isSkinTone(uint codePoint)
@@ -221,6 +257,28 @@ bool isBlockedSequence(const QString& sequence)
         }
     }
     return false;
+}
+
+/**
+ * @brief Whether the text is one of BLOCKED_SINGLES, in any spelling and any skin tone
+ */
+bool isBlockedSingle(const QString& emoticon)
+{
+    uint single = 0;
+    int count = 0;
+    for (int position = 0; position < emoticon.size();) {
+        int length = 0;
+        const uint codePoint = codePointAt(emoticon, position, &length);
+        position += length;
+        if (codePoint == 0xFE0F || isSkinTone(codePoint)) {
+            continue;
+        }
+        single = codePoint;
+        if (++count > 1) {
+            return false;
+        }
+    }
+    return count == 1 && BLOCKED_SINGLES.contains(single);
 }
 
 /**
@@ -598,6 +656,21 @@ QList<QStringList> SmileyPack::getEmoticons() const
 {
     QMutexLocker locker(&loadingMutex);
     return emoticons;
+}
+
+/**
+ * @brief Whether the picker offers this emoticon, given with all of its spellings
+ * @note The same as Android's picker (KhandaqEmojiFilter): no single emoji of BLOCKED_SINGLES and
+ * no joined sequence of BLOCKED_SEQUENCES, in any spelling and any skin tone.
+ */
+bool SmileyPack::isOfferedInPicker(const QStringList& emoticonSet)
+{
+    for (const QString& emoticon : emoticonSet) {
+        if (isBlockedSingle(emoticon) || isBlockedSequence(emoticon)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 /**

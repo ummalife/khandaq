@@ -44,6 +44,7 @@ public:
 
     QString smileyfied(const QString& msg);
     QList<QStringList> getEmoticons() const;
+    static bool isOfferedInPicker(const QStringList& emoticonSet);
     std::shared_ptr<QIcon> getAsIcon(const QString& emoticon) const;
     static QString getAsRichText(const QString& key);
     static QString getInEmojiFont(const QString& sequence);

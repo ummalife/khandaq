@@ -1,0 +1,4 @@
+{
+  "en-US": "Leaving a group now reaches the others even through a relay. The app keeps the group in the background for 12 seconds after you leave, so the notice that you left can be sent again; for you the group is gone at once. If the app is closed in those seconds, it finishes leaving at the next start. A friend's late invitation no longer brings you back into a group you left: it waits as a card.",
+  "ru-RU": "Выход из группы теперь доходит до остальных и через ретранслятор. После выхода приложение ещё 12 секунд держит группу в фоне, чтобы уведомление о выходе успело уйти повторно, а у вас группа исчезает сразу. Если закрыть приложение в эти секунды, выход завершится при следующем запуске. Запоздалое приглашение друга больше не возвращает вас в группу, из которой вы вышли: оно ждёт карточкой."
+}

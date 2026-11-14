@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-14T14:54:46Z",
+  "generated_at": "2026-11-14T19:23:27Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,38 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.55",
+      "date": "2026-11-14",
+      "title": "Leaving a group reaches the others even through a relay",
+      "summary": "A member who leaves a group sends the others a short notice first. Through a relay that notice could be lost, and the others then kept the member listed for about a minute. Khandaq now keeps a group you leave in the background for 12 seconds, so the notice can be sent again; for you the group is gone at once. The fix is in Khandaq for the computer 0.2.55, Android 0.2.55 and iPhone build 142998.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "Your leave reaches the group even through a relay",
+          "description": "Leaving a group sends the other members a short notice, and right after it the app let go of the group, so the notice had a single try. Through a relay it was sometimes lost, and the others kept you listed, as online, for about a minute. The app now keeps the group in the background for 12 seconds after you leave, long enough for the notice to be sent again; for you the group is gone at once. If the app is closed or stops in those seconds, it finishes leaving when it next starts. Joining the group again in those seconds works as any join.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux",
+            "android",
+            "ios"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "A late invitation does not bring you back into a group you left",
+          "description": "Joining a group by its ID also asks your friends who are in it to invite you. An invitation that came after you had left the group took you back in at once. It now waits as a card with Join, like any invitation.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux",
+            "android"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.54",
       "date": "2026-11-14",

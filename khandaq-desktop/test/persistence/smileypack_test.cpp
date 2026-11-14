@@ -72,6 +72,8 @@ private slots:
     void testSmilifyDrawsBlockedSequencesApart();
     void testSmilifyAsciiEmoticonBetweenWords();
     void testSmilifyMixedScripts();
+    void testPickerLeavesOutWhatAndroidDoesNotOffer();
+    void testPickerOffersTheRestOfThePack();
 private:
     std::unique_ptr<QGuiApplication> app;
     std::unique_ptr<MockSettings> settings;
@@ -381,6 +383,68 @@ void TestSmileyPack::testSmilifyMixedScripts()
                      + SmileyPack::getAsRichText("😊") + "عليكم"));
 }
 
+
+/**
+ * @brief Test that the picker does not offer what Android's picker does not (KhandaqEmojiFilter)
+ */
+void TestSmileyPack::testPickerLeavesOutWhatAndroidDoesNotOffer()
+{
+    const QStringList singles = {
+        QStringLiteral("⛪"), QStringLiteral("♈"), QStringLiteral("♓"), QStringLiteral("⛎"),
+        QStringLiteral("🔯"), QStringLiteral("✝"), QStringLiteral("☦"), QStringLiteral("✡"),
+        QStringLiteral("🕎"), QStringLiteral("🕉"), QStringLiteral("☸"), QStringLiteral("☯"),
+        QStringLiteral("🛐"), QStringLiteral("🕍"), QStringLiteral("🛕"), QStringLiteral("⛩"),
+        QStringLiteral("👻"), QStringLiteral("👽"), QStringLiteral("👾"), QStringLiteral("👹"),
+        QStringLiteral("👺"), QStringLiteral("😈"), QStringLiteral("👿"), QStringLiteral("👬"),
+        QStringLiteral("👭"), QStringLiteral("⚧"),
+    };
+    for (const QString& single : singles) {
+        QVERIFY2(!SmileyPack::isOfferedInPicker({single}), qPrintable(single));
+        QVERIFY2(!SmileyPack::isOfferedInPicker({single + EMOJI_PRESENTATION}), qPrintable(single));
+    }
+    // Any skin tone, and every spelling of the emoticon: a text one among them.
+    QVERIFY(!SmileyPack::isOfferedInPicker({QStringLiteral("👬🏽")}));
+    QVERIFY(!SmileyPack::isOfferedInPicker({QStringLiteral(">:)"), QStringLiteral("😈")}));
+    // The joined sequences the picker does not offer are left out as well.
+    const QString rainbowFlag =
+        QStringLiteral("🏳") + EMOJI_PRESENTATION + ZERO_WIDTH_JOINER + QStringLiteral("🌈");
+    QVERIFY(!SmileyPack::isOfferedInPicker({rainbowFlag}));
+
+    // The rest is offered: the mosque, the Kaaba, the star and crescent, a face, a skin tone, a
+    // text emoticon, the neighbours of the zodiac. A blocked emoji inside a longer text is not one.
+    const QStringList offered = {
+        QStringLiteral("🕌"), QStringLiteral("🕋"), QStringLiteral("☪"), QStringLiteral("😊"),
+        QStringLiteral("👍🏽"), QStringLiteral(":-)"), QStringLiteral("♻"), QStringLiteral("⛔"),
+        QStringLiteral("⛪⛪"),
+    };
+    for (const QString& emoticon : offered) {
+        QVERIFY2(SmileyPack::isOfferedInPicker({emoticon}), qPrintable(emoticon));
+    }
+    QVERIFY(SmileyPack::isOfferedInPicker({}));
+}
+
+/**
+ * @brief Test that the picker leaves out of the emojione pack only what Android does not offer
+ */
+void TestSmileyPack::testPickerOffersTheRestOfThePack()
+{
+    SmileyPack smileyPack{*settings};
+    const QList<QStringList> all = smileyPack.getEmoticons();
+    const QString expected = QStringLiteral("⛪♈♉♊♋♌♍♎♏♐♑♒♓⛎🔯👻👽👾👹👺😈👿👬👭");
+    int leftOut = 0;
+    for (const QStringList& set : all) {
+        if (SmileyPack::isOfferedInPicker(set)) {
+            continue;
+        }
+        ++leftOut;
+        QString bare = set.first();
+        bare.remove(EMOJI_PRESENTATION);
+        QVERIFY2(expected.contains(bare), qPrintable(set.join(QLatin1Char(' '))));
+    }
+    // The 24 of them, eight signs of the zodiac twice: the pack has them with and without U+FE0F.
+    QCOMPARE(leftOut, 32);
+    QCOMPARE(all.size(), 832);
+}
 
 QTEST_GUILESS_MAIN(TestSmileyPack)
 #include "smileypack_test.moc"

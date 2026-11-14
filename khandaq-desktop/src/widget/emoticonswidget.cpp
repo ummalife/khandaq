@@ -49,7 +49,13 @@ EmoticonsWidget::EmoticonsWidget(SmileyPack& smileyPack, Settings& settings,
     const int maxRows = 8;
     const int itemsPerPage = maxRows * maxCols;
 
-    const QList<QStringList>& emoticons = smileyPack.getEmoticons();
+    // KHANDAQ (owner, 2026-11-14): what Android's picker does not offer is not offered here either.
+    QList<QStringList> emoticons;
+    for (const QStringList& set : smileyPack.getEmoticons()) {
+        if (SmileyPack::isOfferedInPicker(set)) {
+            emoticons.append(set);
+        }
+    }
     int itemCount = emoticons.size();
     int pageCount = ceil(float(itemCount) / float(itemsPerPage));
     int currPage = 0;

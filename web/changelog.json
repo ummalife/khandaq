@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-14T14:47:24Z",
+  "generated_at": "2026-11-14T14:54:46Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,87 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.54",
+      "date": "2026-11-14",
+      "title": "Android: leaving a group shows at once, and your ID stays the same",
+      "summary": "Khandaq for Android 0.2.54 fixes what our live checks across phones and computers turned up. A member who leaves a group is taken off the list at once, and closing the app is not taken for leaving. Adding a contact no longer changes your ID behind your back. A long message goes as several messages instead of being cut, a file you send keeps its name, and joined emoji such as the heart on fire are drawn whole.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "A member who leaves a group is gone at once",
+          "description": "Leaving a group now sends the other members a short notice first. Android takes the member off the member list, the counts and the group page as soon as the notice arrives, and writes that they left once. Before, a member who had left could stay listed. If the notice is lost on the way, as can happen through a relay, the member goes when the exit itself comes through. Closing the app is not leaving: a member who only closed it stays in the group, offline.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Your ID no longer changes when you add a contact",
+          "description": "Each contact you added, or whose request you accepted, gave your ID a new antispam part without a word, so the ID you had shared stopped working and requests sent to it were lost. The antispam part now changes only when you ask for it, under You, Change antispam. An ID that has already changed is not brought back: if you added contacts after sharing your ID, share your current ID again.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "A long message goes as several messages instead of being cut",
+          "description": "A direct message longer than one message can carry lost its end. It now goes as several messages, cut between whole characters, whether the contact is online or the message waits for them.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "A file you send keeps its name",
+          "description": "A photo or a file sent from Android reached the other side under a made-up name such as 9ded_1000000022.png. It now goes out under the name it was picked with; for a photo picked from the phone's own gallery the gallery's name is used.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "File entries keep their layout and Save to phone",
+          "description": "After several files in a row, an entry could show a squeezed name with a blank gap under it, or have no Save to phone at all, even after the chat was reopened. Each entry now keeps its own layout and its Save to phone.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "A contact whose request you accepted is not waiting for your reply",
+          "description": "Right after you accepted someone's contact request, Android showed them as your own unanswered request until they first came online. They now read like any other offline contact.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "Chat previews keep whole characters and drop byte counts",
+          "description": "A preview in the chat list, in a notification or of a draft could end in half an emoji, and the preview of a file showed its size in bytes. A preview is now cut between whole characters, and a file's preview shows its name.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "The group page shows a join or a leave at once",
+          "description": "The group page showed the old member count for up to three seconds after someone joined or left, and could drop a member who had only closed the app until the list was read again. An offline founder was shown as a plain member. The count now changes at once, a member who closed the app stays, and the founder stays the founder.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "Joined emoji such as ❤️‍🔥 are whole",
+          "description": "Joined emoji that the app's emoji set has no picture of, such as the heart on fire, were drawn in pieces in messages and in the message field. When the phone's own font has the emoji, it now draws it whole. A few joined emoji that the emoji picker does not offer stay drawn apart.",
+          "platforms": [
+            "android"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.53",
       "date": "2026-11-14",

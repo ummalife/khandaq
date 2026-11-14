@@ -61,9 +61,20 @@ didReceiveInviteFromFriendNumber:(OCTToxFriendNumber)friendNumber
                                    password:(nullable NSString *)password
                                       error:(NSError **)error;
 
+/**
+ * KHANDAQ (QA live, F11): when the leave notice to the group was queued, tox_group_leave follows about 12 s later,
+ * once toxcore has resent the notice; for the app the group is gone at once all the same, and YES is returned.
+ */
 - (BOOL)leaveGroupWithNumber:(OCTToxGroupNumber)groupNumber
                 partMessage:(nullable NSString *)partMessage
                       error:(NSError **)error;
+
+/**
+ * KHANDAQ (QA live, F11): leaves at once the groups whose leave still waits for the notice's resends, clears their
+ * record in the profile and saves it. The app calls it before the manager goes: quit, logout, switching or deleting
+ * the profile, a tox restart. Main queue.
+ */
+- (void)leavePendingGroupsNow;
 
 - (BOOL)sendMessage:(NSString *)message
                type:(OCTToxMessageType)type

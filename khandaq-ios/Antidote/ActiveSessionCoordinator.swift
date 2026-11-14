@@ -332,6 +332,9 @@ class ActiveSessionCoordinator: NSObject {
     }
 
     func shutdownForToxRestart() {
+        // KHANDAQ (QA live, F11): on quit and before a tox restart, the groups whose leave still waits for the
+        // notice's resends are left and the profile is saved without them.
+        toxManager?.groups.leavePendingGroupsNow()
         MessageDeliveryWatchdog.shared.stop()
         offlineWatchdog?.stop()
         networkReachabilityMonitor.stop()

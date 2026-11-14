@@ -10,11 +10,16 @@ import java.util.Set;
 import static com.zoffcc.applications.trifa.GroupPeerKeys.decodeDepartures;
 import static com.zoffcc.applications.trifa.GroupPeerKeys.encodeDepartures;
 import static com.zoffcc.applications.trifa.GroupPeerKeys.LEAVE_NOTICE_WINDOW_MS;
+import static com.zoffcc.applications.trifa.GroupPeerKeys.dropLapsedLeaveNotice;
+import static com.zoffcc.applications.trifa.GroupPeerKeys.exitTellsTheLeave;
 import static com.zoffcc.applications.trifa.GroupPeerKeys.forgetLeaveNotice;
 import static com.zoffcc.applications.trifa.GroupPeerKeys.isLeaveNotice;
+import static com.zoffcc.applications.trifa.GroupPeerKeys.isLeaving;
 import static com.zoffcc.applications.trifa.GroupPeerKeys.leaveNoticePacket;
+import static com.zoffcc.applications.trifa.GroupPeerKeys.leavingKeys;
 import static com.zoffcc.applications.trifa.GroupPeerKeys.leftForGood;
 import static com.zoffcc.applications.trifa.GroupPeerKeys.noteLeaveNotice;
+import static com.zoffcc.applications.trifa.GroupPeerKeys.onlineWithoutLeaving;
 import static com.zoffcc.applications.trifa.GroupPeerKeys.takeLeaveNotice;
 import static com.zoffcc.applications.trifa.GroupPeerKeys.offlineWithoutDeparted;
 import static com.zoffcc.applications.trifa.GroupPeerKeys.remember;
@@ -167,6 +172,143 @@ public class GroupPeerKeysTest
         assertFalse(takeLeaveNotice(group, MAC, 2_100L));
         assertFalse(takeLeaveNotice("another-group", IPHONE, 2_100L));
         assertTrue(takeLeaveNotice(group, IPHONE, 2_100L));
+    }
+
+    private static final int QUIT = ToxVars.Tox_Group_Exit_Type.TOX_GROUP_EXIT_TYPE_QUIT.value;
+    private static final int TIMEOUT = ToxVars.Tox_Group_Exit_Type.TOX_GROUP_EXIT_TYPE_TIMEOUT.value;
+    private static final int DISCONNECTED = ToxVars.Tox_Group_Exit_Type.TOX_GROUP_EXIT_TYPE_DISCONNECTED.value;
+    private static final int KICK = ToxVars.Tox_Group_Exit_Type.TOX_GROUP_EXIT_TYPE_KICK.value;
+
+    /**
+     * QA live 2026-11-14: QA Mac left a group over a relay. Android had the notice at once, but toxcore's QUIT was
+     * lost and its exit came as a timeout 54 s later; until then Android listed and counted QA Mac. The member is
+     * out at its notice now.
+     */
+    @Test
+    public void a_member_that_said_it_is_leaving_is_out_until_its_exit()
+    {
+        final String group = "group-leaving-at-once";
+        assertTrue(leavingKeys(group, 1_000L).isEmpty());
+        assertTrue(noteLeaveNotice(group, IPHONE, 1_000L));
+        assertTrue(isLeaving(group, IPHONE, 1_000L));
+        // toxcore's key in either case; the keys listed are lower case, as the peer lists are compared.
+        assertTrue(isLeaving(group, lower(IPHONE), 55_000L));
+        assertEquals(new HashSet<>(Collections.singletonList(lower(IPHONE))), leavingKeys(group, 55_000L));
+        // Another member, or the same key in another group, is not leaving.
+        assertFalse(isLeaving(group, MAC, 1_000L));
+        assertFalse(isLeaving("another-group", IPHONE, 1_000L));
+        assertTrue(leavingKeys("another-group", 1_000L).isEmpty());
+        // One leave may send the notice twice: the repeat puts no one out again, and the window is the first one's.
+        assertFalse(noteLeaveNotice(group, IPHONE, 2_000L));
+        assertFalse(isLeaving(group, IPHONE, 1_000L + LEAVE_NOTICE_WINDOW_MS + 1));
+        // The exit, a timeout after the QUIT was lost on a relay, uses the notice up: a leave, and nothing more.
+        assertTrue(takeLeaveNotice(group, IPHONE, 55_000L));
+        assertFalse(isLeaving(group, IPHONE, 55_001L));
+        assertTrue(leavingKeys(group, 55_001L).isEmpty());
+    }
+
+    @Test
+    public void the_exit_after_a_notice_tells_the_group_nothing_more()
+    {
+        // Told at the notice: whatever exit follows it adds no "left the group".
+        assertFalse(exitTellsTheLeave(QUIT, true));
+        assertFalse(exitTellsTheLeave(TIMEOUT, true));
+        assertFalse(exitTellsTheLeave(KICK, true));
+        // A kick with no notice is told at the exit.
+        assertTrue(exitTellsTheLeave(KICK, false));
+        // An app that closed, a timeout, a lost connection: no one left.
+        assertFalse(exitTellsTheLeave(QUIT, false));
+        assertFalse(exitTellsTheLeave(TIMEOUT, false));
+        assertFalse(exitTellsTheLeave(DISCONNECTED, false));
+        // The member that said it was leaving is gone for good at that exit all the same.
+        assertTrue(leftForGood(TIMEOUT, true));
+        assertFalse(leftForGood(QUIT, false));
+    }
+
+    @Test
+    public void members_that_are_leaving_are_out_of_the_online_count()
+    {
+        final Set<String> live = new HashSet<>(Arrays.asList(lower(IPHONE), lower(MAC), lower(NEWCOMER)));
+        final Set<String> leaving = new HashSet<>(Collections.singletonList(lower(IPHONE)));
+        // Three online with this device; QA iPhone said it is leaving and toxcore still counts it.
+        assertEquals(2L, onlineWithoutLeaving(3L, live, leaving));
+        // Its exit came: toxcore neither lists nor counts it, nothing more to take out.
+        assertEquals(2L, onlineWithoutLeaving(2L, new HashSet<>(Arrays.asList(lower(MAC), lower(NEWCOMER))),
+                                              leaving));
+        // No one leaving, or no peer list: the count as toxcore gives it; never below zero.
+        assertEquals(3L, onlineWithoutLeaving(3L, live, new HashSet<String>()));
+        assertEquals(3L, onlineWithoutLeaving(3L, null, leaving));
+        assertEquals(0L, onlineWithoutLeaving(0L, live, leaving));
+        assertEquals(0L, onlineWithoutLeaving(-1L, live, leaving));
+    }
+
+    @Test
+    public void a_member_that_is_leaving_is_marked_but_not_in_the_offline_count_to_take_out()
+    {
+        // QA Mac left earlier and is still in toxcore's saved peers; QA iPhone is leaving, marked at its notice and
+        // still online in toxcore, so toxcore's offline count (2: QA Mac and another) does not have it.
+        final Set<String> departed = new HashSet<>(Arrays.asList(lower(IPHONE), lower(MAC)));
+        final Set<String> leaving = new HashSet<>(Collections.singletonList(lower(IPHONE)));
+        assertEquals(1L, offlineWithoutDeparted(2L, departed, new HashSet<>(Collections.singletonList(lower(MAC))),
+                                                leaving));
+        // The saved peers not read yet: the marks of the members not leaving are taken out.
+        assertEquals(1L, offlineWithoutDeparted(2L, departed, null, leaving));
+        // No one leaving: as before.
+        assertEquals(0L, offlineWithoutDeparted(2L, departed, null, null));
+        assertEquals(offlineWithoutDeparted(2L, departed, null),
+                     offlineWithoutDeparted(2L, departed, null, new HashSet<String>()));
+    }
+
+    @Test
+    public void a_join_ends_the_leave()
+    {
+        final String group = "group-leaving-join";
+        assertTrue(noteLeaveNotice(group, MAC, 5_000L));
+        // It joined again before any exit: in the group, listed and counted.
+        forgetLeaveNotice(group, MAC);
+        assertFalse(isLeaving(group, MAC, 5_100L));
+        assertTrue(leavingKeys(group, 5_100L).isEmpty());
+        assertFalse(takeLeaveNotice(group, MAC, 5_200L));
+        // A notice after the join puts it out again.
+        assertTrue(noteLeaveNotice(group, MAC, 6_000L));
+        assertTrue(isLeaving(group, MAC, 6_000L));
+    }
+
+    @Test
+    public void a_notice_no_exit_follows_lapses_and_the_member_is_one_again()
+    {
+        final String group = "group-leaving-lapse";
+        final long noticed = 100_000L;
+        assertTrue(noteLeaveNotice(group, NEWCOMER, noticed));
+        // Within the window it is not dropped.
+        assertFalse(dropLapsedLeaveNotice(group, NEWCOMER, noticed, noticed + LEAVE_NOTICE_WINDOW_MS));
+        assertTrue(isLeaving(group, NEWCOMER, noticed + LEAVE_NOTICE_WINDOW_MS));
+        // After it the member is listed and counted again, and the notice is dropped, once.
+        final long later = noticed + LEAVE_NOTICE_WINDOW_MS + 1_000L;
+        assertFalse(isLeaving(group, NEWCOMER, later));
+        assertTrue(leavingKeys(group, later).isEmpty());
+        assertTrue(dropLapsedLeaveNotice(group, NEWCOMER, noticed, later));
+        assertFalse(dropLapsedLeaveNotice(group, NEWCOMER, noticed, later));
+        // Its exit, long after, is an app that closed.
+        assertFalse(takeLeaveNotice(group, NEWCOMER, later + 1));
+
+        // A notice its exit used, or one a later notice replaced, is not dropped.
+        assertTrue(noteLeaveNotice(group, NEWCOMER, 200_000L));
+        assertTrue(takeLeaveNotice(group, NEWCOMER, 254_000L));
+        assertFalse(dropLapsedLeaveNotice(group, NEWCOMER, 200_000L, 200_000L + LEAVE_NOTICE_WINDOW_MS + 1_000L));
+        assertTrue(noteLeaveNotice(group, NEWCOMER, 300_000L));
+        assertFalse(dropLapsedLeaveNotice(group, NEWCOMER, 200_000L, 300_000L + LEAVE_NOTICE_WINDOW_MS + 1_000L));
+        assertTrue(dropLapsedLeaveNotice(group, NEWCOMER, 300_000L, 300_000L + LEAVE_NOTICE_WINDOW_MS + 1_000L));
+
+        // A lapsed notice not dropped yet does not hold back the next one.
+        assertTrue(noteLeaveNotice(group, MAC, noticed));
+        assertTrue(noteLeaveNotice(group, MAC, later));
+        assertTrue(isLeaving(group, MAC, later));
+        // No key or no group: no one is put out.
+        assertFalse(noteLeaveNotice(group, "not-a-key", noticed));
+        assertFalse(noteLeaveNotice(null, MAC, noticed));
+        assertFalse(isLeaving(null, MAC, noticed));
+        assertTrue(leavingKeys(null, noticed).isEmpty());
     }
 
     @Test

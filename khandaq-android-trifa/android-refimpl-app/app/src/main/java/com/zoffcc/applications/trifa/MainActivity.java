@@ -9410,7 +9410,12 @@ public class MainActivity extends AppCompatActivity
         final boolean said_it_was_leaving = HelperGroup.take_group_leave_notice(temp_group_identifier,
                                                                                 exit_peer_pubkey);
         HelperGroup.record_group_peer_last_seen_on_exit(temp_group_identifier, exit_peer_pubkey);
-        HelperGroup.handle_group_peer_transport_lost(group_number, peer_id, a_Tox_Group_Exit_Type);
+        // KHANDAQ (QA live, F11): a member that said it was leaving lost no connection, also when its exit comes as
+        // a timeout after a QUIT lost on a relay. It is out of the group since its notice.
+        if (!said_it_was_leaving)
+        {
+            HelperGroup.handle_group_peer_transport_lost(group_number, peer_id, a_Tox_Group_Exit_Type);
+        }
         // a leave (with its notice) or a kick -> not a member anymore, drop from members DB
         HelperGroup.remove_group_peer_from_db_on_exit(group_number, temp_group_identifier, exit_peer_pubkey,
                                                       a_Tox_Group_Exit_Type, said_it_was_leaving);

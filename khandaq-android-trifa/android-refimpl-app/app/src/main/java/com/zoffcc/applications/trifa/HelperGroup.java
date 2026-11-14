@@ -8712,7 +8712,13 @@ public class HelperGroup
         t.start();
     }
 
-    private static final ConcurrentHashMap<String, Boolean> group_pending_flush_running = new ConcurrentHashMap<>();
+    /**
+     * KHANDAQ (0.2.56): one flush of a group's waiting messages at a time. The flush runs from the watchdog's tick
+     * and the connected callback (toxcore's thread), the thread a queued send starts, the post-join discovery and
+     * Retry; two at once read the same PENDING rows and both sent them, so the members got a waiting message
+     * twice. A flush asked for while one runs is taken by that one as one more pass, and the caller does not wait.
+     */
+    private static final CoalescingGate pending_group_flush_gate = new CoalescingGate();
 
     static void schedule_pending_group_message_flush(@NonNull final String group_identifier)
     {
@@ -8721,26 +8727,38 @@ public class HelperGroup
             return;
         }
         final String key = group_identifier.toLowerCase(Locale.ENGLISH);
-        if (group_pending_flush_running.putIfAbsent(key, Boolean.TRUE) != null)
+        if (!pending_group_flush_gate.request(key))
         {
+            // The flush running for this group makes one more pass, which takes the message just queued.
             return;
         }
-        final Thread t = new Thread(() ->
-        {
-            try
-            {
-                flush_pending_group_messages(group_identifier);
-            }
-            finally
-            {
-                group_pending_flush_running.remove(key);
-            }
-        }, "grp-pending-flush-" + group_identifier_short(group_identifier, false));
+        final Thread t = new Thread(
+                () -> pending_group_flush_gate.runPasses(key, () -> flush_pending_group_messages_pass(group_identifier)),
+                "grp-pending-flush-" + group_identifier_short(group_identifier, false));
         t.setDaemon(true);
-        t.start();
+        try
+        {
+            t.start();
+        }
+        catch (Throwable e)
+        {
+            pending_group_flush_gate.abandon(key);
+            Log.w(TAG, "schedule_pending_group_message_flush:EE:" + e.getMessage());
+        }
     }
 
     static void flush_pending_group_messages(@NonNull final String group_identifier)
+    {
+        if (TextUtils.isEmpty(group_identifier))
+        {
+            return;
+        }
+        pending_group_flush_gate.run(group_identifier.toLowerCase(Locale.ENGLISH),
+                                     () -> flush_pending_group_messages_pass(group_identifier));
+    }
+
+    /** One pass over the group's waiting messages, oldest first; only through pending_group_flush_gate. */
+    private static void flush_pending_group_messages_pass(@NonNull final String group_identifier)
     {
         if (!is_tox_started || orma == null || TextUtils.isEmpty(group_identifier))
         {

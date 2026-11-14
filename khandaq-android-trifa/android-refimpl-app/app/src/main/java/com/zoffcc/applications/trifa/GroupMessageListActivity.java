@@ -2396,9 +2396,16 @@ public class GroupMessageListActivity extends AppCompatActivity
                     final String gid = get_current_group_id();
                     if (gid != null && !gid.equals("-1"))
                     {
-                        final long group_num = tox_group_by_groupid__wrapper(gid);
-                        send_group_text_message_resilient(gid, group_num,
-                                HelperLocationMessage.encode(latitude, longitude));
+                        // KHANDAQ (0.2.56): the pin goes the way a caption does, which records it on this side,
+                        // sent or waiting for the group to connect. Its result was dropped: a pin shared into a
+                        // group not connected yet was lost, and one sent at once never showed in our own chat.
+                        // Off the main thread: a send to a group still connecting waits for it a little.
+                        final String pin = HelperLocationMessage.encode(latitude, longitude);
+                        final android.content.Context app = getApplicationContext();
+                        final Thread send = new Thread(() -> MediaSendPreviewHelper.sendGroupCaption(app, gid, pin),
+                                                       "grp-location-send");
+                        send.setDaemon(true);
+                        send.start();
                     }
                     else
                     {

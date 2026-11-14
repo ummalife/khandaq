@@ -449,6 +449,12 @@ public:
      */
     QString getPendingGroupLeaves() const;
     void setPendingGroupLeaves(const QString& stored);
+    /**
+     * 0.2.56: the chat ids of the groups joined by their ID that toxcore has not synced yet
+     * (Core), which it does not save: they are joined again at the next start.
+     */
+    QString getUnsyncedGroupJoins() const;
+    void setUnsyncedGroupJoins(const QString& stored);
 
     StyleType getStylePreference() const;
     void setStylePreference(StyleType newValue);
@@ -750,6 +756,7 @@ private:
     QStringList favoriteChats;
     QByteArray airLocalStore;
     QString pendingGroupLeaves;
+    QString unsyncedGroupJoins;
 
     static CompatibleRecursiveMutex bigLock;
     static const QString globalSettingsFile;

@@ -854,13 +854,18 @@ void Core::onGroupPeerExit(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Grou
 
 void Core::onGroupSelfJoin(Tox* tox, uint32_t groupId, void* vCore)
 {
-    std::ignore = tox;
     const auto core = static_cast<Core*>(vCore);
     if (core->ignoresGroup(groupId)) {
         return;
     }
     qDebug() << QString("Group %1 self joined").arg(groupId);
     emit core->saveRequest();
+    // 0.2.56: a group joined by its ID is in that save once it has its shared state, whose name is
+    // never empty; the next start loads it. A member that had none to give leaves it for then.
+    Tox_Err_Group_State_Queries nameError;
+    if (tox_group_get_name_size(tox, groupId, &nameError) > 0) {
+        core->forgetUnsyncedGroupJoin(groupChatId(tox, groupId));
+    }
     // Do NOT kickstart here: we just successfully joined; a reconnect would
     // tear the fresh connection down again and loop join/rejoin forever.
     emit core->groupPeerlistChanged(groupId);
@@ -1317,6 +1322,8 @@ void Core::leaveGroupAfterNotice(int groupId)
     // A join by ID asked our friends for an invite: a late one must not join the group again, as
     // on iOS (OCTSubmanagerGroupsImpl).
     forgetFriendAssistedJoin(groupChatId(tox.get(), groupNumber));
+    // 0.2.56: nor does the next start join it again.
+    forgetUnsyncedGroupJoin(groupChatId(tox.get(), groupNumber));
     if (sendGroupLeaveNotice(groupId)) {
         // Our own peer counts as one.
         Tox_Err_Group_Peer_Query peerError;
@@ -1448,6 +1455,61 @@ void Core::leaveStoredGroups(const QString& stored)
     const QString kept = getPendingGroupLeaves();
     if (kept != stored) {
         emit pendingGroupLeavesChanged(kept);
+    }
+}
+
+void Core::rejoinStoredGroups(const QString& stored)
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    QString selfName = getUsername();
+    if (selfName.isEmpty()) {
+        selfName = tr("User");
+    }
+    ToxString cSelfName(selfName);
+    for (const QByteArray& chatId : Air::PendingGroupLeaves::parseStore(stored)) {
+        const uint8_t* const id = reinterpret_cast<const uint8_t*>(chatId.constData());
+        Tox_Err_Group_State_Queries stateError;
+        const uint32_t loaded = tox_group_by_chat_id(tox.get(), id, &stateError);
+        if (stateError == TOX_ERR_GROUP_STATE_QUERIES_OK
+            && loaded != std::numeric_limits<uint32_t>::max()) {
+            qDebug() << "Group" << loaded << "joined by its ID had synced before the app closed";
+            continue;
+        }
+        Tox_Err_Group_Join error;
+        const uint32_t groupNumber = tox_group_join(tox.get(), id, cSelfName.data(),
+                                                    cSelfName.size(), nullptr, 0, &error);
+        qDebug() << "Group joined by its ID again at start:" << groupNumber
+                 << "error:" << static_cast<int>(error);
+        if (error != TOX_ERR_GROUP_JOIN_OK || groupNumber == std::numeric_limits<uint32_t>::max()) {
+            continue;
+        }
+        unsyncedGroupJoins.append(chatId);
+        // Friends come online later: their invite is asked for then as well.
+        requestGroupInviteFromFriends(chatId);
+    }
+    const QString kept = getUnsyncedGroupJoins();
+    if (kept != stored) {
+        emit unsyncedGroupJoinsChanged(kept);
+    }
+}
+
+QString Core::getUnsyncedGroupJoins() const
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    // The same lines as the leaves: the chat ids in hex.
+    return Air::PendingGroupLeaves::store(unsyncedGroupJoins);
+}
+
+/**
+ * @brief 0.2.56: a group joined by its ID that synced, or that we leave: the profile keeps its
+ * chat id no more. Called with coreLoopLock held.
+ */
+void Core::forgetUnsyncedGroupJoin(const QByteArray& chatId)
+{
+    if (!chatId.isEmpty() && unsyncedGroupJoins.removeAll(chatId) > 0) {
+        emit unsyncedGroupJoinsChanged(getUnsyncedGroupJoins());
     }
 }
 
@@ -1694,12 +1756,27 @@ void Core::loadGroups()
     QMutexLocker ml{&coreLoopLock};
 
     const uint32_t groupCount = tox_group_get_number_groups(tox.get());
-    if (groupCount == 0) {
+    if (groupCount == 0 && unsyncedGroupJoins.isEmpty()) {
         return;
     }
 
     std::vector<uint32_t> groupNumbers(groupCount);
-    tox_group_get_grouplist(tox.get(), groupNumbers.data());
+    if (groupCount > 0) {
+        tox_group_get_grouplist(tox.get(), groupNumbers.data());
+    }
+    // 0.2.56: toxcore lists only the groups it saves; one joined by its ID shows before it synced
+    // as well (rejoinStoredGroups).
+    for (const QByteArray& chatId : unsyncedGroupJoins) {
+        Tox_Err_Group_State_Queries stateError;
+        const uint32_t groupNumber = tox_group_by_chat_id(
+            tox.get(), reinterpret_cast<const uint8_t*>(chatId.constData()), &stateError);
+        if (stateError == TOX_ERR_GROUP_STATE_QUERIES_OK
+            && groupNumber != std::numeric_limits<uint32_t>::max()
+            && std::find(groupNumbers.begin(), groupNumbers.end(), groupNumber)
+                   == groupNumbers.end()) {
+            groupNumbers.push_back(groupNumber);
+        }
+    }
 
     for (uint32_t groupNumber : groupNumbers) {
         // QA live F11: a group whose leave the profile kept was left by leaveStoredGroups, and
@@ -2194,6 +2271,12 @@ uint32_t Core::joinGroupByChatId(const QByteArray& chatId)
     // Fresh tox_group_join already starts the DHT announce lookup; in parallel
     // ask friends that may be group members to invite us in instantly.
     requestGroupInviteFromFriends(chatId);
+    // 0.2.56: toxcore does not save the group before it synced; until then the profile keeps its
+    // chat id, and the next start joins it again (rejoinStoredGroups).
+    if (!unsyncedGroupJoins.contains(chatId)) {
+        unsyncedGroupJoins.append(chatId);
+        emit unsyncedGroupJoinsChanged(getUnsyncedGroupJoins());
+    }
     emit saveRequest();
     emit groupJoined(groupNum, getGroupPersistentId(groupNum));
     return groupNum;

@@ -600,6 +600,7 @@ void Settings::loadPersonal(const Profile& profile, bool newProfile)
     ps.beginGroup("Groups");
     {
         pendingGroupLeaves = ps.value("pendingLeaves", QString()).toString();
+        unsyncedGroupJoins = ps.value("unsyncedJoins", QString()).toString();
     }
     ps.endGroup();
 
@@ -876,6 +877,7 @@ void Settings::savePersonal(QString profileName, const ToxEncrypt* passkey)
     ps.beginGroup("Groups");
     {
         ps.setValue("pendingLeaves", pendingGroupLeaves);
+        ps.setValue("unsyncedJoins", unsyncedGroupJoins);
     }
     ps.endGroup();
 
@@ -2293,6 +2295,17 @@ QString Settings::getPendingGroupLeaves() const
 void Settings::setPendingGroupLeaves(const QString& stored)
 {
     setVal(pendingGroupLeaves, stored);
+}
+
+QString Settings::getUnsyncedGroupJoins() const
+{
+    QMutexLocker locker{&bigLock};
+    return unsyncedGroupJoins;
+}
+
+void Settings::setUnsyncedGroupJoins(const QString& stored)
+{
+    setVal(unsyncedGroupJoins, stored);
 }
 
 bool Settings::getAutoLogin() const

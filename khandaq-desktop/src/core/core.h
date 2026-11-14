@@ -144,6 +144,15 @@ public:
     /** QA live F11: what the profile keeps of our leaves that are not done and saved yet. */
     QString getPendingGroupLeaves() const;
     /**
+     * 0.2.56: the groups joined by their ID that had not synced when the profile last kept them
+     * (getUnsyncedGroupJoins). toxcore saves a group only once it synced, so they are joined again
+     * now; those it loaded synced meanwhile and are forgotten. Called after leaveStoredGroups,
+     * before start(), so that the groups load with them.
+     */
+    void rejoinStoredGroups(const QString& stored);
+    /** 0.2.56: what the profile keeps of the groups joined by their ID that did not sync yet. */
+    QString getUnsyncedGroupJoins() const;
+    /**
      * QA live F11: every leave that waits for its notice is done now, and toxcore lets go of the
      * groups: the profile closes. Returns once that is done on the thread of the node.
      */
@@ -243,6 +252,8 @@ signals:
     void saveRequest();
     /** QA live F11: what the profile keeps of our leaves changed (getPendingGroupLeaves). */
     void pendingGroupLeavesChanged(const QString& stored);
+    /** 0.2.56: what the profile keeps of our unsynced joins changed (getUnsyncedGroupJoins). */
+    void unsyncedGroupJoinsChanged(const QString& stored);
 
     /**
      * @deprecated prefer signals using ToxPk
@@ -387,6 +398,7 @@ private:
     void kickstartGroupConnection(uint32_t groupNum) const;
     void maintainGroups();
     void requestGroupInviteFromFriends(const QByteArray& chatId);
+    void forgetUnsyncedGroupJoin(const QByteArray& chatId);
     void resendPendingGroupInviteRequests(uint32_t friendId);
     void handleGroupInviteRequestPacket(uint32_t friendId, const uint8_t* data, size_t length);
     bool autoAcceptRequestedGroupInvite(const GroupInvite& inviteInfo);
@@ -436,6 +448,10 @@ private:
     // QA live F11: the joins of groups we were leaving, which wait for toxcore to delete the old
     // instance: it refuses to join a chat id it still has. Under coreLoopLock.
     std::vector<std::function<void()>> joinsAfterGroupLeaves;
+    // 0.2.56: the chat ids of the groups joined by their ID that did not sync yet: toxcore saves
+    // a group only once it has its shared state (gc_group_is_valid), so the profile keeps them
+    // until then. Under coreLoopLock.
+    QList<QByteArray> unsyncedGroupJoins;
     // 0.2.56: a file we send into a group whose chunks have yet to go (Air::GroupFileQueue).
     struct OutgoingGroupFile
     {

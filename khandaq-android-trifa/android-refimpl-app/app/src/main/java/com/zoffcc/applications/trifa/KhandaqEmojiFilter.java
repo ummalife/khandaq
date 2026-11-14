@@ -154,6 +154,69 @@ final class KhandaqEmojiFilter
         }
     }
 
+    /** BLOCKED_CONTAINS as {@link #isBlockedSequence} compares it: without U+FE0F and skin tones. */
+    private static final String[] BLOCKED_CONTAINS_BARE = bareAll(BLOCKED_CONTAINS);
+
+    private static boolean isSkinTone(final int codePoint)
+    {
+        return codePoint >= 0x1F3FB && codePoint <= 0x1F3FF;
+    }
+
+    /** The text without U+FE0F and the skin tones U+1F3FB..U+1F3FF. */
+    static String withoutSelectorsAndSkinTones(final String text)
+    {
+        final StringBuilder bare = new StringBuilder(text.length());
+        text.codePoints()
+            .filter(codePoint -> codePoint != 0xFE0F && !isSkinTone(codePoint))
+            .forEach(bare::appendCodePoint);
+        return bare.toString();
+    }
+
+    private static String[] bareAll(final String[] texts)
+    {
+        final String[] bare = new String[texts.length];
+        for (int i = 0; i < texts.length; i++)
+        {
+            bare[i] = withoutSelectorsAndSkinTones(texts[i]);
+        }
+        return bare;
+    }
+
+    /**
+     * KHANDAQ (owner, 2026-11-14; QA live F14): whether a joined (ZWJ) sequence in a message is one
+     * the picker does not offer. Such a sequence is drawn apart, as its members, never as one
+     * picture or one glyph of the system font: see {@link KhandaqJoinedEmoji}.
+     *
+     * Compared without U+FE0F and the skin tones: a message can carry any spelling and any skin
+     * tone of a sequence, and the picker drops a sequence with all of its skin tones. Keep in step
+     * with BLOCKED_SEQUENCES of the desktop (khandaq-desktop/src/persistence/smileypack.cpp).
+     *
+     * Never throws, like {@link #isBlocked}.
+     */
+    static boolean isBlockedSequence(final String sequence)
+    {
+        try
+        {
+            if (sequence == null || sequence.isEmpty())
+            {
+                return false;
+            }
+            final String bare = withoutSelectorsAndSkinTones(sequence);
+            for (final String needle : BLOCKED_CONTAINS_BARE)
+            {
+                if (bare.contains(needle))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+    }
+
     /**
      * @return true when the user asked for emoji depicting living beings to be hidden as well.
      *

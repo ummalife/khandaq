@@ -1115,7 +1115,7 @@
 "air_new_group_name_note" = "Everyone you invite sees it. Later the topic can change, the name cannot.";
 "air_new_group_privacy" = "Who can join";
 "air_group_privacy_invite_only" = "By invitation only";
-"air_group_privacy_invite_only_note" = "Only people invited by a member can join.";
+"air_group_privacy_invite_only_note" = "Only people invited by a member can join. The group key does not let anyone in.";
 "air_group_privacy_open" = "Open to anyone with the group key";
 "air_group_privacy_open_note" = "Anyone who has the group key can join, no invitation needed.";
 "air_new_group_invite_note" = "Invitations go at once, so only contacts online can be invited here. Invite the others later from the group dossier.";

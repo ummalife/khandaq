@@ -1104,7 +1104,7 @@
 "air_new_group_name_note" = "سيراه كل من تدعوهم. يمكن لاحقًا تغيير الموضوع، أما الاسم فلا.";
 "air_new_group_privacy" = "من يمكنه الانضمام";
 "air_group_privacy_invite_only" = "بالدعوة فقط";
-"air_group_privacy_invite_only_note" = "لا ينضم إلا من يدعوه أحد الأعضاء.";
+"air_group_privacy_invite_only_note" = "لا ينضم إلا من يدعوه أحد الأعضاء. لا يمكن الانضمام بمفتاح المجموعة.";
 "air_group_privacy_open" = "مفتوحة لكل من لديه مفتاح المجموعة";
 "air_group_privacy_open_note" = "يمكن لأي شخص لديه مفتاح المجموعة الانضمام دون دعوة.";
 "air_new_group_invite_note" = "تُرسل الدعوات فورًا، لذا لا يمكن هنا دعوة إلا المتصلين. ادعُ الآخرين لاحقًا من ملف المجموعة.";

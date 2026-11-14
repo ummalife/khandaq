@@ -23,8 +23,12 @@ final class AirNewGroupController: AirScrollController, UIAdaptivePresentationCo
     private let createButton = AirButton(style: .ink, title: String(localized: "air_new_group_create"))
     private let whyLabel = AirKit.note("")
 
+    /// The answers in the order the sheet lists them: open by the group key first, as a new group is
+    /// unless the founder closes it.
+    private static let privacyOptions: [AirGroupPrivacy] = [.openById, .inviteOnly]
+
     /// `inviteOnly` is the answer chosen when the sheet opens.
-    init(candidates: [AirInviteCandidate], inviteOnly: Bool = true) {
+    init(candidates: [AirInviteCandidate], inviteOnly: Bool = false) {
         self.candidates = candidates
         self.privacy = inviteOnly ? .inviteOnly : .openById
         super.init(nibName: nil, bundle: nil)
@@ -61,7 +65,7 @@ final class AirNewGroupController: AirScrollController, UIAdaptivePresentationCo
         addSection(String(localized: "air_new_group_name"), views: [nameField, nameNote])
 
         // Who can join.
-        choiceRows = [AirGroupPrivacy.inviteOnly, AirGroupPrivacy.openById].map { option in
+        choiceRows = AirNewGroupController.privacyOptions.map { option in
             let row = AirChoiceRow(title: option.title, detail: option.consequence)
             row.accessibilityIdentifier = option == .inviteOnly ? "air.newGroup.privacy.inviteOnly" : "air.newGroup.privacy.open"
             row.addTarget(self, action: #selector(choiceTapped(_:)), for: .touchUpInside)
@@ -126,7 +130,7 @@ final class AirNewGroupController: AirScrollController, UIAdaptivePresentationCo
     }
 
     private func updateChoice() {
-        for (row, option) in zip(choiceRows, [AirGroupPrivacy.inviteOnly, AirGroupPrivacy.openById]) {
+        for (row, option) in zip(choiceRows, AirNewGroupController.privacyOptions) {
             row.isSelected = option == privacy
         }
     }
@@ -154,10 +158,10 @@ final class AirNewGroupController: AirScrollController, UIAdaptivePresentationCo
     // MARK: Actions
 
     @objc private func choiceTapped(_ row: AirChoiceRow) {
-        guard let index = choiceRows.firstIndex(where: { $0 === row }) else {
+        guard let index = choiceRows.firstIndex(where: { $0 === row }), index < AirNewGroupController.privacyOptions.count else {
             return
         }
-        privacy = index == 0 ? .inviteOnly : .openById
+        privacy = AirNewGroupController.privacyOptions[index]
         updateChoice()
     }
 

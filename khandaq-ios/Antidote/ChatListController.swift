@@ -321,14 +321,15 @@ private extension ChatListController {
                 self.delegate?.chatListController(self, didRequestAddContactWithAddress: nil)
             },
             // KHANDAQ (redesign stage 3, E15): one "New group"; who can join is chosen on its sheet, where
-            // "by invitation only" is the answer it opens with.
+            // "open to anyone with the group key" is the answer it opens with (by invitation only stays
+            // one tap away).
             AirCreateSheetController.Action(title: String(localized: "air_new_group_title"),
                                             icon: "users",
                                             identifier: "air.newGroup") { [weak self] in
                 guard let self = self else {
                     return
                 }
-                self.delegate?.chatListControllerDidRequestCreatePrivateGroup(self)
+                self.delegate?.chatListControllerDidRequestCreateGroup(self)
             },
             // KHANDAQ (redesign stage 5, E15): joining by the group key. A cold join by key alone may
             // wait for a member to come online; objcTox also asks the contacts among the members for an

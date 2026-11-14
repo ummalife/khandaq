@@ -34,6 +34,7 @@
 
 #include <set>
 #include <deque>
+#include <vector>
 
 
 class MockGroupMessageSender : public ICoreGroupMessageSender
@@ -43,11 +44,27 @@ public:
 
     uint32_t sendGroupMessage(int groupId, const QString& message) override;
 
+    void sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t messageId) override;
+
+    struct Receipt
+    {
+        int groupId;
+        ToxPk author;
+        uint32_t messageId;
+    };
+
     size_t numSentActions = 0;
     size_t numSentMessages = 0;
+    std::vector<Receipt> receipts;
     /** The id toxcore gives the next message, as tox_group_send_message hands it back. */
     uint32_t nextWireId = 0x0A0B0C0D;
 };
+
+void MockGroupMessageSender::sendGroupDeliveryReceipt(int groupId, const ToxPk& author,
+                                                      uint32_t messageId)
+{
+    receipts.push_back({groupId, author, messageId});
+}
 
 uint32_t MockGroupMessageSender::sendGroupAction(int groupId, const QString& action)
 {
@@ -107,6 +124,7 @@ private slots:
     void testSelfReceive();
     void testBlacklist();
     void messagesCarryTheIdsToxcoreGaveThem();
+    void aShownMessageIsConfirmedToItsAuthor();
 
     void onMessageSent(DispatchedMessageId id, Message message)
     {
@@ -287,6 +305,36 @@ void TestGroupMessageDispatcher::messagesCarryTheIdsToxcoreGaveThem()
     g->regeneratePeerList();
     groupMessageDispatcher->sendMessage(false, "Alone");
     QVERIFY(sentMessages.back().wireId.isEmpty());
+}
+
+/**
+ * @brief A received message that is shown goes back to its author as a delivery receipt with the
+ * id toxcore gave it, as the Android and iOS clients confirm it. Nothing is confirmed for a message
+ * of our own, of a blocked peer, or one without an id: there is nothing the author could match.
+ */
+void TestGroupMessageDispatcher::aShownMessageIsConfirmedToItsAuthor()
+{
+    uint8_t id[ToxPk::size] = {1};
+    const ToxPk author(id);
+    groupMessageDispatcher->onMessageReceived(author, false, "Theirs", 0xDEADBEEF);
+    groupMessageDispatcher->onMessageReceived(author, true, "An action", 0x01020304);
+    QCOMPARE(messageSender->receipts.size(), size_t{2});
+    QCOMPARE(messageSender->receipts[0].groupId, static_cast<int>(g->getId()));
+    QCOMPARE(messageSender->receipts[0].author, author);
+    QCOMPARE(messageSender->receipts[0].messageId, uint32_t{0xDEADBEEF});
+    QCOMPARE(messageSender->receipts[1].messageId, uint32_t{0x01020304});
+
+    groupMessageDispatcher->onMessageReceived(author, false, "No id");
+    QCOMPARE(messageSender->receipts.size(), size_t{2});
+
+    uint8_t selfId[ToxPk::size] = {0};
+    groupMessageDispatcher->onMessageReceived(ToxPk(selfId), false, "Ours", 0x0BADF00D);
+    QCOMPARE(messageSender->receipts.size(), size_t{2});
+
+    groupSettings->setBlackList({author.toString()});
+    groupMessageDispatcher->onMessageReceived(author, false, "Blocked", 0x0BADF00D);
+    QCOMPARE(messageSender->receipts.size(), size_t{2});
+    QCOMPARE(receivedMessages.size(), size_t{3});
 }
 
 // Cannot be guiless due to a settings instance in GroupMessageDispatcher

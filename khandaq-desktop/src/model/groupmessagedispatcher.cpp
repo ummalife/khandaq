@@ -105,6 +105,8 @@ void GroupMessageDispatcher::onMessageReceived(const ToxPk& sender, bool isActio
     Message message = processor.processIncomingCoreMessage(isAction, content);
     if (wireId != 0) {
         message.wireId = Air::groupWireId(wireId);
+        // Only a message that is shown here is confirmed: none from ourselves or a blocked peer.
+        messageSender.sendGroupDeliveryReceipt(static_cast<int>(group.getId()), sender, wireId);
     }
     emit messageReceived(sender, message);
 }

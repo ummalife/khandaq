@@ -23,6 +23,8 @@
 
 #include <cstdint>
 
+class ToxPk;
+
 class ICoreGroupMessageSender
 {
 public:
@@ -39,4 +41,11 @@ public:
      */
     virtual uint32_t sendGroupAction(int groupId, const QString& message) = 0;
     virtual uint32_t sendGroupMessage(int groupId, const QString& message) = 0;
+
+    /**
+     * Tells the author of a group message, privately, that it arrived here. `messageId` is the id
+     * toxcore handed the receive callback. The Android and iOS clients send the same receipt: the
+     * author's "delivered" mark and its history-sync retries both wait for one.
+     */
+    virtual void sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t messageId) = 0;
 };

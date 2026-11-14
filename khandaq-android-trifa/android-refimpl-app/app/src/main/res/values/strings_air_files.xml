@@ -28,4 +28,7 @@
     <string name="air_file_decline_title">Decline the file?</string>
     <string name="air_file_decline_message">It does not download to this phone. The sender sees that it did not go through.</string>
     <string name="air_file_waits_group">Goes when the group is online</string>
+    <!-- 0.2.56: our file from Send on, while its copy for sending is made, and a copy that failed -->
+    <string name="air_file_preparing">Preparing the file</string>
+    <string name="air_file_prepare_failed">The file was not sent. Try again</string>
 </resources>

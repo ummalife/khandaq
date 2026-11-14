@@ -354,7 +354,7 @@ public class MainActivity extends AppCompatActivity
     final static boolean NDK_STDOUT_LOGGING = false; // set "false" for release builds
     final static boolean DEBUG_BATTERY_OPTIMIZATION_LOGGING = false;  // set "false" for release builds
     final static boolean INSANE_TRACE_LOGGING = false; // set "false" for release builds
-    final static int ORMA_CURRENT_DB_SCHEMA_VERSION = 10245; // increase for database schema changes
+    final static int ORMA_CURRENT_DB_SCHEMA_VERSION = 10246; // increase for database schema changes
     final static boolean DB_ENCRYPT = true; // set "true" always!
     final static boolean VFS_ENCRYPT = true; // set "true" always!
     final static boolean AEC_DEBUG_DUMP = false; // set "false" for release builds
@@ -2813,6 +2813,13 @@ public class MainActivity extends AppCompatActivity
         if (new_version == 10245) {
             run_multi_sql("ALTER TABLE Message ADD COLUMN ft_id_anchor_hex TEXT");
             run_multi_sql("CREATE INDEX `index_ft_id_anchor_hex_on_Message` ON `Message` (`ft_id_anchor_hex`)");
+        }
+
+        // KHANDAQ (0.2.56): an outgoing file whose copy for sending is still being written; no transfer starts
+        // from such a row. Rows from before were all complete copies, hence false.
+        if (new_version == 10246) {
+            run_multi_sql("ALTER TABLE Message ADD COLUMN ft_outgoing_preparing BOOLEAN NOT NULL DEFAULT false");
+            run_multi_sql("CREATE INDEX `index_ft_outgoing_preparing_on_Message` ON `Message` (`ft_outgoing_preparing`)");
         }
     }
 
@@ -10976,6 +10983,8 @@ public class MainActivity extends AppCompatActivity
                                         // HINT: real file (no storage framework) and correct directory, delete the file now
                                         try
                                         {
+                                            // KHANDAQ (0.2.56): a copy still being written for sending stops first.
+                                            HelperFiletransfer.stop_outgoing_copy(m_to_delete);
                                             // KHANDAQ (QA live, F4): with the copy goes the folder of its own it lies in.
                                             HelperFiletransfer.delete_outgoing_copy(m_to_delete.filename_fullpath);
                                         }

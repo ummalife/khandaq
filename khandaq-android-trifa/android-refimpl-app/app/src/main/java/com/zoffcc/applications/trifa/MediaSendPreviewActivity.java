@@ -455,6 +455,8 @@ public class MediaSendPreviewActivity extends AppCompatActivity
                         }
                         else
                         {
+                            // KHANDAQ (0.2.56): no frame came; the loading spinner goes, or it would say it still comes.
+                            target.setImageDrawable(null);
                             target.setBackgroundColor(Color.DKGRAY);
                         }
                     });

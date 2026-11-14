@@ -1060,6 +1060,8 @@ public class TrifaToxService extends Service
                     set_all_friends_offline();
                     set_all_conferences_inactive();
                     set_all_filetransfers_inactive();
+                    // KHANDAQ (0.2.56): copies for sending that the end of the last run cut short.
+                    HelperFiletransfer.discard_unfinished_outgoing_copies();
                     MainActivity.init_tox_callbacks();
                     HelperGeneric.update_savedata_file_wrapper();
                 }
@@ -1887,11 +1889,14 @@ public class TrifaToxService extends Service
 
             try
             {
+                // KHANDAQ (0.2.56): a file whose copy for sending is still being written is no transfer yet, however
+                // long ago it was sent: its copy queues it once complete (OutgoingFilePreparation).
                 List<com.zoffcc.applications.sorm.Message> pending_ft = orma.selectFromMessage().
                         directionEq(1).
                         TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
                         ft_outgoing_startedEq(false).
                         ft_outgoing_queuedEq(false).
+                        ft_outgoing_preparingEq(false).
                         stateEq(TOX_FILE_CONTROL_PAUSE.value).
                         sent_timestampLt(System.currentTimeMillis() - 1500).
                         orderBySent_timestampAsc().
@@ -1911,6 +1916,7 @@ public class TrifaToxService extends Service
                         directionEq(1).
                         TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
                         ft_outgoing_queuedEq(true).
+                        ft_outgoing_preparingEq(false).
                         stateNotEq(TOX_FILE_CONTROL_CANCEL.value).
                         orderBySent_timestampAsc().
                         toList();

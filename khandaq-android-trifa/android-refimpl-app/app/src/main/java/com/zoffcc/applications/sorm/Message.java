@@ -133,6 +133,12 @@ public class Message
     @Column(indexed = true, helpers = Column.Helpers.ALL)
     public String ft_id_anchor_hex;
 
+    // KHANDAQ (0.2.56): an outgoing file whose copy into the outgoing folder is still being written. Set when
+    // the row is created at Send and cleared once the copy is complete; no transfer starts from a row that has
+    // it (OutgoingFilePreparation).
+    @Column(indexed = true, helpers = Column.Helpers.ALL)
+    public boolean ft_outgoing_preparing;
+
     static Message deep_copy(Message in)
     {
         Message out = new Message();
@@ -172,6 +178,7 @@ public class Message
         out.reactions = in.reactions;
         out.reactions_pending = in.reactions_pending;
         out.ft_id_anchor_hex = in.ft_id_anchor_hex;
+        out.ft_outgoing_preparing = in.ft_outgoing_preparing;
 
         return out;
     }
@@ -179,7 +186,7 @@ public class Message
     @Override
     public String toString()
     {
-        return "id=" + id + ", message_id=" + message_id + ", tox_friendpubkey=" + tox_friendpubkey + ", direction=" + direction + ", TOX_MESSAGE_TYPE=" + TOX_MESSAGE_TYPE + ", TRIFA_MESSAGE_TYPE=" + TRIFA_MESSAGE_TYPE + ", state=" + state + ", ft_accepted=" + ft_accepted + ", ft_outgoing_started=" + ft_outgoing_started + ", filedb_id=" + filedb_id + ", filetransfer_id=" + filetransfer_id + ", sent_timestamp=" + sent_timestamp + ", sent_timestamp_ms=" + sent_timestamp_ms + ", rcvd_timestamp=" + rcvd_timestamp + ", rcvd_timestamp_ms=" + rcvd_timestamp_ms + ", read=" + read + ", send_retries=" + send_retries + ", is_new=" + is_new + ", text=" + text + ", filename_fullpath=" + filename_fullpath + ", msg_id_hash=" + msg_id_hash + ", raw_msgv2_bytes=" + raw_msgv2_bytes + ", msg_version=" + msg_version + ", resend_count=" + resend_count + ", storage_frame_work=" + storage_frame_work + ", ft_outgoing_queued=" + ft_outgoing_queued + ", msg_at_relay=" + msg_at_relay + ", msg_idv3_hash=" + msg_idv3_hash + ", sent_push=" + sent_push + ", filetransfer_kind=" + filetransfer_kind + ", edited=" + edited + ", edited_timestamp=" + edited_timestamp + ", edit_pending=" + edit_pending + ", reactions=" + reactions + ", reactions_pending=" + reactions_pending + ", ft_id_anchor_hex=" + ft_id_anchor_hex;
+        return "id=" + id + ", message_id=" + message_id + ", tox_friendpubkey=" + tox_friendpubkey + ", direction=" + direction + ", TOX_MESSAGE_TYPE=" + TOX_MESSAGE_TYPE + ", TRIFA_MESSAGE_TYPE=" + TRIFA_MESSAGE_TYPE + ", state=" + state + ", ft_accepted=" + ft_accepted + ", ft_outgoing_started=" + ft_outgoing_started + ", filedb_id=" + filedb_id + ", filetransfer_id=" + filetransfer_id + ", sent_timestamp=" + sent_timestamp + ", sent_timestamp_ms=" + sent_timestamp_ms + ", rcvd_timestamp=" + rcvd_timestamp + ", rcvd_timestamp_ms=" + rcvd_timestamp_ms + ", read=" + read + ", send_retries=" + send_retries + ", is_new=" + is_new + ", text=" + text + ", filename_fullpath=" + filename_fullpath + ", msg_id_hash=" + msg_id_hash + ", raw_msgv2_bytes=" + raw_msgv2_bytes + ", msg_version=" + msg_version + ", resend_count=" + resend_count + ", storage_frame_work=" + storage_frame_work + ", ft_outgoing_queued=" + ft_outgoing_queued + ", msg_at_relay=" + msg_at_relay + ", msg_idv3_hash=" + msg_idv3_hash + ", sent_push=" + sent_push + ", filetransfer_kind=" + filetransfer_kind + ", edited=" + edited + ", edited_timestamp=" + edited_timestamp + ", edit_pending=" + edit_pending + ", reactions=" + reactions + ", reactions_pending=" + reactions_pending + ", ft_id_anchor_hex=" + ft_id_anchor_hex + ", ft_outgoing_preparing=" + ft_outgoing_preparing;
     }
 
 
@@ -263,6 +270,7 @@ public class Message
                 out.reactions = rs.getString("reactions");
                 out.reactions_pending = rs.getBoolean("reactions_pending");
                 out.ft_id_anchor_hex = rs.getString("ft_id_anchor_hex");
+                out.ft_outgoing_preparing = rs.getBoolean("ft_outgoing_preparing");
 
                 list.add(out);
             }
@@ -339,6 +347,7 @@ public class Message
                     + ",reactions"
                     + ",reactions_pending"
                     + ",ft_id_anchor_hex"
+                    + ",ft_outgoing_preparing"
                     + ")" +
                     "values" +
                     "("
@@ -377,6 +386,7 @@ public class Message
                     + ",?33"
                     + ",?34"
                     + ",?35"
+                    + ",?36"
                     + ")";
 
             insert_pstmt = sqldb.prepareStatement(insert_pstmt_sql);
@@ -417,6 +427,7 @@ public class Message
             insert_pstmt.setString(33, this.reactions);
             insert_pstmt.setBoolean(34, this.reactions_pending);
             insert_pstmt.setString(35, this.ft_id_anchor_hex);
+            insert_pstmt.setBoolean(36, this.ft_outgoing_preparing);
             // @formatter:on
 
             if (ORMA_TRACE)
@@ -1139,6 +1150,22 @@ public class Message
         }
         this.sql_set = this.sql_set + " ft_id_anchor_hex=?" + (BINDVAR_OFFSET_SET + bind_set_count) + " ";
         bind_set_vars.add(new OrmaBindvar(BINDVAR_TYPE_String, ft_id_anchor_hex));
+        bind_set_count++;
+        return this;
+    }
+
+    public Message ft_outgoing_preparing(boolean ft_outgoing_preparing)
+    {
+        if (this.sql_set.equals(""))
+        {
+            this.sql_set = " set ";
+        }
+        else
+        {
+            this.sql_set = this.sql_set + " , ";
+        }
+        this.sql_set = this.sql_set + " ft_outgoing_preparing=?" + (BINDVAR_OFFSET_SET + bind_set_count) + " ";
+        bind_set_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, ft_outgoing_preparing));
         bind_set_count++;
         return this;
     }
@@ -2641,6 +2668,14 @@ public class Message
     {
         this.sql_where = this.sql_where + " and ft_id_anchor_hex=?" + (BINDVAR_OFFSET_WHERE + bind_where_count) + " ";
         bind_where_vars.add(new OrmaBindvar(BINDVAR_TYPE_String, ft_id_anchor_hex));
+        bind_where_count++;
+        return this;
+    }
+
+    public Message ft_outgoing_preparingEq(boolean ft_outgoing_preparing)
+    {
+        this.sql_where = this.sql_where + " and ft_outgoing_preparing=?" + (BINDVAR_OFFSET_WHERE + bind_where_count) + " ";
+        bind_where_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, ft_outgoing_preparing));
         bind_where_count++;
         return this;
     }

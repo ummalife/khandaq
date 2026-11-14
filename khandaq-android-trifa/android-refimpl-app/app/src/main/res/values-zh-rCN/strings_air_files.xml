@@ -28,4 +28,7 @@
     <string name="air_file_decline_title">拒绝这个文件？</string>
     <string name="air_file_decline_message">文件不会下载到这部手机，发送方会看到它没有送达。</string>
     <string name="air_file_waits_group">群组连上后发送</string>
+    <!-- 0.2.56: our file from Send on, while its copy for sending is made, and a copy that failed -->
+    <string name="air_file_preparing">正在准备文件</string>
+    <string name="air_file_prepare_failed">文件未发送，请重试</string>
 </resources>

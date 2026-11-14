@@ -37,6 +37,7 @@
 #include <tox/tox.h>
 
 #include <QElapsedTimer>
+#include <QHash>
 #include <QMutex>
 #include <QObject>
 #include <QThread>
@@ -44,6 +45,7 @@
 
 #include <functional>
 #include <memory>
+#include <vector>
 
 class CoreAV;
 class CoreFile;
@@ -131,6 +133,19 @@ public:
     uint32_t joinGroupByChatId(const QByteArray& chatId);
     uint32_t joinGroupByChatIdHex(const QString& hexId);
     void quitGroupChat(int groupId) const;
+    /**
+     * QA live F11: the groups whose leave the profile kept (getPendingGroupLeaves), left now and
+     * without a notice: the app closed or crashed before their time came. Called right after
+     * makeToxCore, before start(), so that none of them is loaded.
+     */
+    void leaveStoredGroups(const QString& stored);
+    /** QA live F11: what the profile keeps of our leaves that are not done and saved yet. */
+    QString getPendingGroupLeaves() const;
+    /**
+     * QA live F11: every leave that waits for its notice is done now, and toxcore lets go of the
+     * groups: the profile closes. Returns once that is done on the thread of the node.
+     */
+    void leavePendingGroupsNow();
 
     QString getUsername() const override;
     Status::Status getStatus() const;
@@ -213,6 +228,8 @@ signals:
     void failedToSetTyping(bool typing);
 
     void saveRequest();
+    /** QA live F11: what the profile keeps of our leaves changed (getPendingGroupLeaves). */
+    void pendingGroupLeavesChanged(const QString& stored);
 
     /**
      * @deprecated prefer signals using ToxPk
@@ -313,7 +330,12 @@ private:
                                     size_t length, void* vCore);
     static void onGroupCustomPrivatePacket(Tox* tox, uint32_t groupId, uint32_t peerId,
                                            const uint8_t* data, size_t length, void* vCore);
-    void sendGroupLeaveNotice(int groupId) const;
+    bool sendGroupLeaveNotice(int groupId) const;
+    void leaveGroupAfterNotice(int groupId);
+    void leaveRecordedGroup(const Air::PendingGroupLeaves::Leave& leave, const char* event);
+    uint32_t replaceLeavingGroup(const QByteArray& chatId, std::function<void()> join);
+    void iterateTox();
+    bool ignoresGroup(uint32_t groupNumber) const;
     void handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const uint8_t* data,
                                      size_t length, bool isPrivate);
 
@@ -378,6 +400,15 @@ private:
     // QA live F11: members that said they are leaving a group. Under coreLoopLock: the toxcore
     // callbacks run in process(), which holds it. Mutable: quitGroupChat() is const.
     mutable Air::GroupLeaveNotices groupLeaveNotices;
+    // QA live F11: our leaves that wait for their notice, under coreLoopLock.
+    Air::PendingGroupLeaves pendingGroupLeaves;
+    // QA live F11: the groups we called tox_group_leave on, which toxcore deletes at the next
+    // tox_iterate (iterateTox); with the chat id while the profile keeps it, and an empty one when
+    // it does not. Under coreLoopLock.
+    QHash<int, QByteArray> exitingGroups;
+    // QA live F11: the joins of groups we were leaving, which wait for toxcore to delete the old
+    // instance: it refuses to join a chat id it still has. Under coreLoopLock.
+    std::vector<std::function<void()>> joinsAfterGroupLeaves;
 
     std::unique_ptr<QThread> coreThread;
     const IBootstrapListGenerator& bootstrapListGenerator;

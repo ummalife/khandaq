@@ -171,6 +171,13 @@ constexpr int leastSingleHeight = 420;
 /** The least width of a conversation in a window of its own, as the old window had it. */
 constexpr int leastSeparateWidth = 720;
 
+/**
+ * How long a group the user joined still opens by itself when it comes into the list
+ * (Widget::openJoinedGroup): the join of a group being left runs after the next tox_iterate, well
+ * within this even on a busy core.
+ */
+constexpr int joinedGroupOpenWaitMs = 10000;
+
 const QString activateHandlerKey("activate");
 const QString saveHandlerKey("save");
 /** The event another instance posts with a tox: link it was started with (AppManager::run). */
@@ -2638,7 +2645,11 @@ void Widget::onGroupPeerlistChanged(uint32_t groupnumber)
 {
     const GroupId& groupId = groupList->id2Key(groupnumber);
     Group* g = groupList->findGroup(groupId);
-    assert(g);
+    if (!g) {
+        // A late signal for a group that is gone from the list: nothing to update.
+        qWarning() << "onGroupPeerlistChanged: no group for number" << groupnumber;
+        return;
+    }
     g->regeneratePeerList();
 }
 
@@ -2807,7 +2818,11 @@ void Widget::onGroupPeerNameChanged(uint32_t groupnumber, const ToxPk& peerPk, c
 {
     const GroupId& groupId = groupList->id2Key(groupnumber);
     Group* g = groupList->findGroup(groupId);
-    assert(g);
+    if (!g) {
+        // A late signal for a group that is gone from the list: nothing to update.
+        qWarning() << "onGroupPeerNameChanged: no group for number" << groupnumber;
+        return;
+    }
 
     const QString setName = friendList->decideNickname(peerPk, newName);
     g->updateUsername(peerPk, newName);
@@ -2817,7 +2832,11 @@ void Widget::onGroupTitleChanged(uint32_t groupnumber, const QString& author, co
 {
     const GroupId& groupId = groupList->id2Key(groupnumber);
     Group* g = groupList->findGroup(groupId);
-    assert(g);
+    if (!g) {
+        // A late signal for a group that is gone from the list: nothing to update.
+        qWarning() << "onGroupTitleChanged: no group for number" << groupnumber;
+        return;
+    }
 
     GroupWidget* widget = groupWidgets[groupId];
     if (widget->isActive()) {
@@ -3056,6 +3075,10 @@ void Widget::onEmptyGroupCreated(uint32_t groupnumber, const GroupId& groupId, c
 void Widget::onGroupJoined(int groupNum, const GroupId& groupId)
 {
     createGroup(groupNum, groupId);
+    if (!groupToOpenWhenJoined.isEmpty() && groupId == groupToOpenWhenJoined) {
+        groupToOpenWhenJoined = GroupId();
+        openAirEntry(AirSource::groupEntryId(groupId));
+    }
 }
 
 /**
@@ -3925,11 +3948,26 @@ void Widget::joinAirGroup(const QString& groupKey)
         return;
     }
     newGroup->close();
-    // Core::groupJoined has put the group in the list: it opens, waiting for the members.
-    const Group* const group = groupList->findGroup(core->getGroupPersistentId(groupNumber));
-    if (group) {
-        openAirEntry(AirSource::groupEntryId(group->getPersistentId()));
+    // It opens, waiting for the members.
+    openJoinedGroup(GroupId(QByteArray::fromHex(groupKey.toLatin1())));
+}
+
+void Widget::openJoinedGroup(const GroupId& groupId)
+{
+    if (groupList->findGroup(groupId)) {
+        // Core::groupJoined has put it in the list already.
+        groupToOpenWhenJoined = GroupId();
+        openAirEntry(AirSource::groupEntryId(groupId));
+        return;
     }
+    // QA live F11: a group the user was still leaving joins after the next tox_iterate. Should
+    // the join not happen, the group does not open by itself on a later one.
+    groupToOpenWhenJoined = groupId;
+    QTimer::singleShot(joinedGroupOpenWaitMs, this, [this, groupId] {
+        if (groupToOpenWhenJoined == groupId) {
+            groupToOpenWhenJoined = GroupId();
+        }
+    });
 }
 
 void Widget::openImportContacts()
@@ -4060,10 +4098,9 @@ void Widget::joinAirInvite(const QString& inviteId)
         return;
     }
     airLocal->removeInvite(inviteId);
-    // The group is in the list now (Core::groupJoined): it opens, as a joined conversation does.
-    const Group* const group = groupList->findGroup(core->getGroupPersistentId(groupNumber));
-    if (group) {
-        openAirEntry(AirSource::groupEntryId(group->getPersistentId()));
+    // It opens, as a joined conversation does. toxcore's invitation starts with the chat id.
+    if (invite.data.size() >= GroupId::size) {
+        openJoinedGroup(GroupId(invite.data.left(GroupId::size)));
     }
 }
 

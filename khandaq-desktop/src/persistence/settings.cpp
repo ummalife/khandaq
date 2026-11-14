@@ -597,6 +597,12 @@ void Settings::loadPersonal(const Profile& profile, bool newProfile)
     }
     ps.endGroup();
 
+    ps.beginGroup("Groups");
+    {
+        pendingGroupLeaves = ps.value("pendingLeaves", QString()).toString();
+    }
+    ps.endGroup();
+
     ps.beginGroup("Proxy");
     {
         proxyType = static_cast<ProxyType>(ps.value("proxyType", 0 /* ProxyType::None */).toInt());
@@ -864,6 +870,12 @@ void Settings::savePersonal(QString profileName, const ToxEncrypt* passkey)
         ps.setValue("favoriteChats", favoriteChats.join('\n'));
         ps.setValue("airLocalStore", QString::fromUtf8(airLocalStore));
         ps.setValue("friendSortingMethod", static_cast<int>(sortingMode));
+    }
+    ps.endGroup();
+
+    ps.beginGroup("Groups");
+    {
+        ps.setValue("pendingLeaves", pendingGroupLeaves);
     }
     ps.endGroup();
 
@@ -2270,6 +2282,17 @@ QByteArray Settings::getAirLocalStore() const
 void Settings::setAirLocalStore(const QByteArray& data)
 {
     setVal(airLocalStore, data);
+}
+
+QString Settings::getPendingGroupLeaves() const
+{
+    QMutexLocker locker{&bigLock};
+    return pendingGroupLeaves;
+}
+
+void Settings::setPendingGroupLeaves(const QString& stored)
+{
+    setVal(pendingGroupLeaves, stored);
 }
 
 bool Settings::getAutoLogin() const

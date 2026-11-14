@@ -97,6 +97,30 @@ QByteArray parseGroupChatIdHex(const QString& hexInput)
     return bytes;
 }
 
+// QA live F11: the clock of the leaves that wait for their notice, which a change of the wall
+// clock does not move.
+qint64 monotonicMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
+// The chat id of the group with this number; empty when toxcore has no group with it.
+QByteArray groupChatId(const Tox* tox, uint32_t groupNumber)
+{
+    QByteArray chatId(TOX_GROUP_CHAT_ID_SIZE, '\0');
+    uint8_t* const data = reinterpret_cast<uint8_t*>(chatId.data());
+    Tox_Err_Group_State_Queries error;
+    if (!tox_group_get_chat_id(tox, groupNumber, data, &error)) {
+        return {};
+    }
+    return chatId;
+}
+
+// Defined with the friend-assisted join below.
+void forgetFriendAssistedJoin(const QByteArray& chatId);
+
 } // namespace
 
 Core::Core(QThread* coreThread_, IBootstrapListGenerator& bootstrapListGenerator_, const ICoreSettings& settings_)
@@ -387,7 +411,12 @@ void Core::process()
 
     ASSERT_CORE_THREAD;
 
-    tox_iterate(tox.get(), this);
+    // QA live F11: our leaves whose notice had its time; toxcore lets go of the groups in the
+    // tox_iterate right below.
+    for (const Air::PendingGroupLeaves::Leave& leave : pendingGroupLeaves.takeDue(monotonicMs())) {
+        leaveRecordedGroup(leave, "due");
+    }
+    iterateTox();
     ext->process();
     maintainGroups();
 
@@ -412,6 +441,39 @@ void Core::process()
     unsigned sleeptime =
         qMin(tox_iteration_interval(tox.get()), getCoreFile()->corefileIterationInterval());
     toxTimer->start(sleeptime);
+}
+
+/**
+ * @brief tox_iterate, after which toxcore has let go of the groups we left before it (QA live F11).
+ *
+ * toxcore deletes a group we left in the next tox_iterate, and calls back for it until then: those
+ * callbacks are ignored (ignoresGroup). Only then is the save asked for, as the save holds every
+ * group toxcore still has, and only after it the profile stops keeping the chat id.
+ * A group left during the tox_iterate, by a callback, is deleted by the next one, and so the joins
+ * that wait are run after it. Called with coreLoopLock held.
+ */
+void Core::iterateTox()
+{
+    const QHash<int, QByteArray> exited = exitingGroups;
+    std::vector<std::function<void()>> joins;
+    joins.swap(joinsAfterGroupLeaves);
+
+    tox_iterate(tox.get(), this);
+
+    if (!exited.isEmpty()) {
+        bool kept = false;
+        for (auto it = exited.constBegin(); it != exited.constEnd(); ++it) {
+            exitingGroups.remove(it.key());
+            kept = kept || !it.value().isEmpty();
+        }
+        emit saveRequest();
+        if (kept) {
+            emit pendingGroupLeavesChanged(getPendingGroupLeaves());
+        }
+    }
+    for (const std::function<void()>& join : joins) {
+        join();
+    }
 }
 
 bool Core::checkConnection()
@@ -727,6 +789,9 @@ void Core::onGroupMessage(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Messa
 {
     std::ignore = tox;
     Core* core = static_cast<Core*>(vCore);
+    if (core->ignoresGroup(groupId)) {
+        return;
+    }
     bool isAction = type == TOX_MESSAGE_TYPE_ACTION;
     QString message = ToxString(cMessage, length).getQString();
     emit core->groupMessageReceived(groupId, peerId, message, isAction, messageId);
@@ -736,6 +801,9 @@ void Core::onGroupPeerJoin(Tox* tox, uint32_t groupId, uint32_t peerId, void* vC
 {
     std::ignore = tox;
     const auto core = static_cast<Core*>(vCore);
+    if (core->ignoresGroup(groupId)) {
+        return;
+    }
     qDebug() << QString("Group %1 peer %2 joined").arg(groupId).arg(peerId);
     // QA live F11: a key that said it was leaving and joins again is a member again.
     const ToxPk joined = core->getGroupPeerPk(static_cast<int>(groupId), static_cast<int>(peerId));
@@ -762,6 +830,9 @@ void Core::onGroupPeerExit(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Grou
     std::ignore = partMessage;
     std::ignore = partMessageLength;
     const auto core = static_cast<Core*>(vCore);
+    if (core->ignoresGroup(groupId)) {
+        return;
+    }
     // QA live F11: the exit a leave notice waited for. The member was gone since the notice, and
     // stays gone while toxcore still lists it, unconfirmed, after the exit.
     const bool announced = core->groupLeaveNotices.exited(static_cast<int>(groupId), peerId,
@@ -775,6 +846,9 @@ void Core::onGroupSelfJoin(Tox* tox, uint32_t groupId, void* vCore)
 {
     std::ignore = tox;
     const auto core = static_cast<Core*>(vCore);
+    if (core->ignoresGroup(groupId)) {
+        return;
+    }
     qDebug() << QString("Group %1 self joined").arg(groupId);
     emit core->saveRequest();
     // Do NOT kickstart here: we just successfully joined; a reconnect would
@@ -794,6 +868,9 @@ void Core::onGroupModeration(Tox* tox, uint32_t groupId, uint32_t sourcePeerId,
     std::ignore = sourcePeerId;
     std::ignore = targetPeerId;
     const auto core = static_cast<Core*>(vCore);
+    if (core->ignoresGroup(groupId)) {
+        return;
+    }
     qDebug() << QString("Group %1 moderation event %2").arg(groupId).arg(static_cast<int>(modType));
     emit core->groupModerationChanged(static_cast<int>(groupId));
     // A removed peer leaves the peer list as well.
@@ -804,7 +881,11 @@ void Core::onGroupVoiceState(Tox* tox, uint32_t groupId, Tox_Group_Voice_State v
 {
     std::ignore = tox;
     std::ignore = voiceState;
-    emit static_cast<Core*>(vCore)->groupModerationChanged(static_cast<int>(groupId));
+    auto* const core = static_cast<Core*>(vCore);
+    if (core->ignoresGroup(groupId)) {
+        return;
+    }
+    emit core->groupModerationChanged(static_cast<int>(groupId));
 }
 
 void Core::onGroupPrivacyState(Tox* tox, uint32_t groupId, Tox_Group_Privacy_State privacyState,
@@ -812,7 +893,11 @@ void Core::onGroupPrivacyState(Tox* tox, uint32_t groupId, Tox_Group_Privacy_Sta
 {
     std::ignore = tox;
     std::ignore = privacyState;
-    emit static_cast<Core*>(vCore)->groupModerationChanged(static_cast<int>(groupId));
+    auto* const core = static_cast<Core*>(vCore);
+    if (core->ignoresGroup(groupId)) {
+        return;
+    }
+    emit core->groupModerationChanged(static_cast<int>(groupId));
 }
 
 void Core::onGroupPrivateMessage(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Message_Type type,
@@ -820,6 +905,9 @@ void Core::onGroupPrivateMessage(Tox* tox, uint32_t groupId, uint32_t peerId, To
 {
     std::ignore = tox;
     auto* const core = static_cast<Core*>(vCore);
+    if (core->ignoresGroup(groupId)) {
+        return;
+    }
     const ToxPk peerPk = core->getGroupPeerPk(static_cast<int>(groupId), static_cast<int>(peerId));
     if (peerPk.isEmpty()) {
         return;
@@ -833,6 +921,9 @@ void Core::onGroupJoinFail(Tox* tox, uint32_t groupId, Tox_Group_Join_Fail failT
 {
     std::ignore = tox;
     const auto core = static_cast<Core*>(vCore);
+    if (core->ignoresGroup(groupId)) {
+        return;
+    }
     qWarning() << QString("Group %1 join failed: %2").arg(groupId).arg(static_cast<int>(failType));
     core->kickstartGroupConnection(groupId);
 }
@@ -842,6 +933,9 @@ void Core::onGroupCustomPacket(Tox* tox, uint32_t groupId, uint32_t peerId, cons
 {
     std::ignore = tox;
     auto core = static_cast<Core*>(vCore);
+    if (core->ignoresGroup(groupId)) {
+        return;
+    }
     // QA live F11: a member says it is leaving, and it is gone from the member list at once. Over
     // a TCP relay the QUIT that follows is often lost: toxcore drops the member only when it times
     // out, about a minute later, and lists it until then (Air::GroupLeaveNotices).
@@ -854,8 +948,18 @@ void Core::onGroupCustomPacket(Tox* tox, uint32_t groupId, uint32_t peerId, cons
                                          QDateTime::currentMSecsSinceEpoch());
             emit core->groupPeerlistChanged(group);
             // A notice that no exit follows lapses: the member shows again if toxcore still has it.
-            QTimer::singleShot(Air::GroupLeaveNotices::windowMs + 1000, core,
-                               [core, group] { emit core->groupPeerlistChanged(group); });
+            // Only while the group is still ours: we may have left it in the meantime, and toxcore
+            // may have given its number to another group since.
+            const QByteArray chatId = groupChatId(tox, groupId);
+            QTimer::singleShot(Air::GroupLeaveNotices::windowMs + 1000, core, [core, group, chatId] {
+                QMutexLocker ml{&core->coreLoopLock};
+                const uint32_t groupNumber = static_cast<uint32_t>(group);
+                if (chatId.isEmpty() || core->ignoresGroup(groupNumber)
+                    || groupChatId(core->tox.get(), groupNumber) != chatId) {
+                    return;
+                }
+                emit core->groupPeerlistChanged(group);
+            });
         }
         return;
     }
@@ -881,6 +985,9 @@ void Core::onGroupCustomPrivatePacket(Tox* tox, uint32_t groupId, uint32_t peerI
 {
     std::ignore = tox;
     auto core = static_cast<Core*>(vCore);
+    if (core->ignoresGroup(groupId)) {
+        return;
+    }
     core->handleNgcFileTransferPacket(groupId, peerId, data, length, true);
 }
 
@@ -888,9 +995,12 @@ void Core::onGroupPeerNameChange(Tox* tox, uint32_t groupId, uint32_t peerId, co
                                  size_t length, void* vCore)
 {
     std::ignore = tox;
+    auto* core = static_cast<Core*>(vCore);
+    if (core->ignoresGroup(groupId)) {
+        return;
+    }
     const auto newName = ToxString(name, length).getQString();
     qDebug() << QString("Group %1, peer %2, name changed to %3").arg(groupId).arg(peerId).arg(newName);
-    auto* core = static_cast<Core*>(vCore);
     auto peerPk = core->getGroupPeerPk(groupId, peerId);
     // QA live F11: a member that said it is leaving is not listed; its name would list it again.
     if (!peerPk.isEmpty()
@@ -906,6 +1016,9 @@ void Core::onGroupTopicChange(Tox* tox, uint32_t groupId, uint32_t peerId, const
 {
     std::ignore = tox;
     Core* core = static_cast<Core*>(vCore);
+    if (core->ignoresGroup(groupId)) {
+        return;
+    }
     emit core->saveRequest();
     // The NGC group NAME (shared state) is the authoritative display title,
     // matching the Android client. The topic must not hijack the title.
@@ -1146,34 +1259,26 @@ void Core::removeGroup(int groupId)
 {
     QMutexLocker ml{&coreLoopLock};
 
-    sendGroupLeaveNotice(groupId);
-    groupLeaveNotices.forgetGroup(groupId);
-    Tox_Err_Group_Leave error;
-    tox_group_leave(tox.get(), groupId, nullptr, 0, &error);
-    if (PARSE_ERR(error)) {
-        emit saveRequest();
-    }
+    leaveGroupAfterNotice(groupId);
 }
 
 void Core::quitGroupChat(int groupId) const
 {
     QMutexLocker ml{&coreLoopLock};
 
-    sendGroupLeaveNotice(groupId);
-    groupLeaveNotices.forgetGroup(groupId);
-    Tox_Err_Group_Leave error;
-    tox_group_leave(tox.get(), groupId, nullptr, 0, &error);
-    PARSE_ERR(error);
+    // A leave changes what the core holds; the signature stays as it was, and no Core is const.
+    const_cast<Core*>(this)->leaveGroupAfterNotice(groupId);
 }
 
 /**
- * @brief QA live F11: tells the members that we leave the group, right before tox_group_leave.
+ * @brief QA live F11: tells the members that we leave the group, before tox_group_leave.
  *
  * toxcore's QUIT that follows is the same one tox_kill sends when the app closes, and Android and iOS
  * read a QUIT without this notice as an app that closed. Not for the rejoin of a stuck instance
- * (handleGroupInviteRequest), where we stay. Called with coreLoopLock held.
+ * (autoAcceptRequestedGroupInvite), where we stay. Called with coreLoopLock held.
+ * @return Whether toxcore queued the notice.
  */
-void Core::sendGroupLeaveNotice(int groupId) const
+bool Core::sendGroupLeaveNotice(int groupId) const
 {
     const QByteArray notice = Air::groupLeaveNoticePacket();
     Tox_Err_Group_Send_Custom_Packet error;
@@ -1181,6 +1286,190 @@ void Core::sendGroupLeaveNotice(int groupId) const
                                                    reinterpret_cast<const uint8_t*>(notice.constData()),
                                                    static_cast<size_t>(notice.size()), &error);
     qDebug() << "Group" << groupId << "leave notice sent:" << sent << "error:" << static_cast<int>(error);
+    return sent;
+}
+
+/**
+ * @brief QA live F11: our leave of a group, the notice first.
+ *
+ * toxcore deletes a group at the tox_iterate after tox_group_leave, and with it the connections
+ * that still carry the notice. So the group stays while toxcore may resend the notice, and is left
+ * when its time comes (process()); nothing of it is shown meanwhile (ignoresGroup), and the profile
+ * keeps its chat id. A notice that was not queued has nothing to wait for, and neither has one for
+ * a group without another member: toxcore takes that as sent, and nobody gets it nor resends it,
+ * while the group could connect to members only to leave them. Such a group is left at once, and
+ * the save follows the tox_iterate that deletes it (iterateTox). Called with coreLoopLock held.
+ */
+void Core::leaveGroupAfterNotice(int groupId)
+{
+    const uint32_t groupNumber = static_cast<uint32_t>(groupId);
+    groupLeaveNotices.forgetGroup(groupId);
+    // A join by ID asked our friends for an invite: a late one must not join the group again, as
+    // on iOS (OCTSubmanagerGroupsImpl).
+    forgetFriendAssistedJoin(groupChatId(tox.get(), groupNumber));
+    if (sendGroupLeaveNotice(groupId)) {
+        // Our own peer counts as one.
+        Tox_Err_Group_Peer_Query peerError;
+        const uint32_t peerCount = tox_group_peer_count(tox.get(), groupNumber, &peerError);
+        const QByteArray chatId = groupChatId(tox.get(), groupNumber);
+        if (peerError == TOX_ERR_GROUP_PEER_QUERY_OK && peerCount > 1 && !chatId.isEmpty()) {
+            pendingGroupLeaves.record(groupId, chatId, QByteArray(), monotonicMs());
+            qDebug() << "Group" << groupId << "leave pending for"
+                     << Air::PendingGroupLeaves::delayMs << "ms";
+            emit pendingGroupLeavesChanged(getPendingGroupLeaves());
+            return;
+        }
+    }
+    Tox_Err_Group_Leave error;
+    tox_group_leave(tox.get(), groupNumber, nullptr, 0, &error);
+    if (PARSE_ERR(error)) {
+        exitingGroups.insert(groupId, QByteArray());
+    }
+}
+
+/**
+ * @brief QA live F11: a leave that waited for its notice, done now.
+ *
+ * Unless the number no longer holds that group: it is never looked up again by the chat id, which
+ * may be a group joined since. toxcore lets go of the group at the next tox_iterate (iterateTox).
+ * Called with coreLoopLock held.
+ * @param event What brought the leave on, for the log.
+ */
+void Core::leaveRecordedGroup(const Air::PendingGroupLeaves::Leave& leave, const char* event)
+{
+    const uint32_t groupNumber = static_cast<uint32_t>(leave.group);
+    if (groupChatId(tox.get(), groupNumber) != leave.chatId) {
+        qDebug() << "Group" << leave.group << "leave" << event << "- the group is gone";
+        emit pendingGroupLeavesChanged(getPendingGroupLeaves());
+        return;
+    }
+    const QByteArray& part = leave.partMessage;
+    const uint8_t* const partData =
+        part.isEmpty() ? nullptr : reinterpret_cast<const uint8_t*>(part.constData());
+    Tox_Err_Group_Leave error;
+    const bool left = tox_group_leave(tox.get(), groupNumber, partData,
+                                      static_cast<size_t>(part.size()), &error);
+    qDebug() << "Group" << leave.group << "leave" << event << "- left:" << left
+             << "error:" << static_cast<int>(error);
+    if (left) {
+        exitingGroups.insert(leave.group, leave.chatId);
+    } else {
+        emit pendingGroupLeavesChanged(getPendingGroupLeaves());
+    }
+}
+
+/**
+ * @brief QA live F11: the join of a group that we are leaving.
+ *
+ * The members were told that we leave, and we stay gone for them until we join again: so the old
+ * instance is left now, without another notice, and @a join runs once toxcore deleted it, after the
+ * next tox_iterate (iterateTox), since toxcore refuses to join a chat id it still has. The group
+ * shows when it is joined (groupJoined). Called with coreLoopLock held.
+ * @return The number of the old instance then; UINT32_MAX when we are not leaving the group, and
+ * the caller joins it at once.
+ */
+uint32_t Core::replaceLeavingGroup(const QByteArray& chatId, std::function<void()> join)
+{
+    Air::PendingGroupLeaves::Leave cancelled;
+    if (pendingGroupLeaves.cancel(chatId, &cancelled)) {
+        const uint32_t groupNumber = static_cast<uint32_t>(cancelled.group);
+        bool left = false;
+        Tox_Err_Group_Leave error = TOX_ERR_GROUP_LEAVE_OK;
+        if (groupChatId(tox.get(), groupNumber) == chatId) {
+            left = tox_group_leave(tox.get(), groupNumber, nullptr, 0, &error);
+        }
+        qDebug() << "Group" << cancelled.group << "leave cancelled by rejoin - left:" << left
+                 << "error:" << static_cast<int>(error);
+        emit pendingGroupLeavesChanged(getPendingGroupLeaves());
+        if (!left) {
+            return std::numeric_limits<uint32_t>::max();
+        }
+        exitingGroups.insert(cancelled.group, QByteArray());
+        joinsAfterGroupLeaves.push_back(std::move(join));
+        return groupNumber;
+    }
+    for (auto it = exitingGroups.begin(); it != exitingGroups.end(); ++it) {
+        if (groupChatId(tox.get(), static_cast<uint32_t>(it.key())) != chatId) {
+            continue;
+        }
+        if (!it.value().isEmpty()) {
+            // Joined again: it is not left at the next start.
+            it.value().clear();
+            emit pendingGroupLeavesChanged(getPendingGroupLeaves());
+        }
+        joinsAfterGroupLeaves.push_back(std::move(join));
+        return static_cast<uint32_t>(it.key());
+    }
+    return std::numeric_limits<uint32_t>::max();
+}
+
+/**
+ * @brief QA live F11: whether toxcore's callbacks for this group are ignored: we leave it, and for
+ * the person it is gone. No UI, history, notification, receipt or answer to a packet comes of it.
+ * Called with coreLoopLock held.
+ */
+bool Core::ignoresGroup(uint32_t groupNumber) const
+{
+    const int group = static_cast<int>(groupNumber);
+    return pendingGroupLeaves.containsGroup(group) || exitingGroups.contains(group);
+}
+
+void Core::leaveStoredGroups(const QString& stored)
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    for (const QByteArray& chatId : Air::PendingGroupLeaves::parseStore(stored)) {
+        const uint8_t* const id = reinterpret_cast<const uint8_t*>(chatId.constData());
+        Tox_Err_Group_State_Queries stateError;
+        const uint32_t groupNumber = tox_group_by_chat_id(tox.get(), id, &stateError);
+        if (stateError != TOX_ERR_GROUP_STATE_QUERIES_OK
+            || groupNumber == std::numeric_limits<uint32_t>::max()) {
+            qDebug() << "Group leave finished at start - the group is gone";
+            continue;
+        }
+        Tox_Err_Group_Leave error;
+        const bool left = tox_group_leave(tox.get(), groupNumber, nullptr, 0, &error);
+        qDebug() << "Group" << groupNumber << "leave finished at start - left:" << left
+                 << "error:" << static_cast<int>(error);
+        if (left) {
+            exitingGroups.insert(static_cast<int>(groupNumber), chatId);
+        }
+    }
+    const QString kept = getPendingGroupLeaves();
+    if (kept != stored) {
+        emit pendingGroupLeavesChanged(kept);
+    }
+}
+
+QString Core::getPendingGroupLeaves() const
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    QList<QByteArray> chatIds = pendingGroupLeaves.chatIds();
+    for (const QByteArray& chatId : exitingGroups) {
+        if (!chatId.isEmpty() && !chatIds.contains(chatId)) {
+            chatIds.append(chatId);
+        }
+    }
+    return Air::PendingGroupLeaves::store(chatIds);
+}
+
+void Core::leavePendingGroupsNow()
+{
+    if (QThread::currentThread() != coreThread.get() && coreThread->isRunning()) {
+        // The tox_iterate below calls back as the loop does: on the thread of the node.
+        QMetaObject::invokeMethod(this, &Core::leavePendingGroupsNow, Qt::BlockingQueuedConnection);
+        return;
+    }
+
+    QMutexLocker ml{&coreLoopLock};
+
+    for (const Air::PendingGroupLeaves::Leave& leave : pendingGroupLeaves.takeAll()) {
+        leaveRecordedGroup(leave, "flushed");
+    }
+    if (!exitingGroups.isEmpty()) {
+        iterateTox();
+    }
 }
 
 /**
@@ -1403,6 +1692,11 @@ void Core::loadGroups()
     tox_group_get_grouplist(tox.get(), groupNumbers.data());
 
     for (uint32_t groupNumber : groupNumbers) {
+        // QA live F11: a group whose leave the profile kept was left by leaveStoredGroups, and
+        // toxcore lists it until the first tox_iterate.
+        if (ignoresGroup(groupNumber)) {
+            continue;
+        }
         Tox_Err_Group_State_Queries error;
         QString name;
         const GroupId persistentId = getGroupPersistentId(groupNumber);
@@ -1785,6 +2079,17 @@ uint32_t Core::joinGroupchat(const GroupInvite& inviteInfo)
     const uint8_t* const inviteData = reinterpret_cast<const uint8_t*>(invite.constData());
     const size_t inviteLength = static_cast<size_t>(invite.length());
 
+    // QA live F11: an invite into a group we are leaving is accepted once toxcore let go of it.
+    // The invite starts with the chat id.
+    if (invite.size() >= TOX_GROUP_CHAT_ID_SIZE) {
+        const uint32_t leavingNum =
+            replaceLeavingGroup(invite.left(TOX_GROUP_CHAT_ID_SIZE),
+                                [this, inviteInfo] { joinGroupchat(inviteInfo); });
+        if (leavingNum != std::numeric_limits<uint32_t>::max()) {
+            return leavingNum;
+        }
+    }
+
     QString selfName = getUsername();
     if (selfName.isEmpty()) {
         selfName = tr("User");
@@ -1819,6 +2124,13 @@ uint32_t Core::joinGroupByChatId(const QByteArray& chatId)
     if (chatId.size() != TOX_GROUP_CHAT_ID_SIZE) {
         qWarning() << "joinGroupByChatId: invalid chat id size" << chatId.size();
         return std::numeric_limits<uint32_t>::max();
+    }
+
+    // QA live F11: a group we are leaving is joined again once toxcore let go of it.
+    const uint32_t leavingNum =
+        replaceLeavingGroup(chatId, [this, chatId] { joinGroupByChatId(chatId); });
+    if (leavingNum != std::numeric_limits<uint32_t>::max()) {
+        return leavingNum;
     }
 
     Tox_Err_Group_State_Queries stateError;
@@ -1920,6 +2232,12 @@ constexpr int64_t GROUP_INVITE_REQUEST_RESEND_MS = 30 * 1000;
 constexpr int64_t GROUP_INVITE_REPLY_MIN_INTERVAL_MS = 60 * 1000;
 // chat ids (raw 32 bytes) we asked friends to invite us to → request time
 std::unordered_map<std::string, int64_t> pendingFriendAssistedJoins;
+
+void forgetFriendAssistedJoin(const QByteArray& chatId)
+{
+    pendingFriendAssistedJoins.erase(std::string(chatId.constData(), static_cast<size_t>(chatId.size())));
+}
+
 // receiver side: (friendId, groupNum) → last time we sent them an invite
 std::unordered_map<uint64_t, int64_t> lastGroupInviteReplyMs;
 // sender side: (friendId, chat id hash) → last time we sent the request
@@ -2131,6 +2449,10 @@ void Core::maintainGroups()
 
     std::vector<uint32_t> groupList(groupCount);
     tox_group_get_grouplist(tox.get(), groupList.data());
+    // QA live F11: a group we leave is neither kept connected nor asked for again (ignoresGroup).
+    groupList.erase(std::remove_if(groupList.begin(), groupList.end(),
+                                   [this](uint32_t groupNum) { return ignoresGroup(groupNum); }),
+                    groupList.end());
 
     for (uint32_t groupNum : groupList) {
         Tox_Err_Group_State_Queries privacyError;
@@ -2882,8 +3204,9 @@ void Core::handleGroupInviteRequestPacket(uint32_t friendId, const uint8_t* data
     const uint8_t* chatId = data + 2;
     Tox_Err_Group_State_Queries stateError;
     const uint32_t groupNum = tox_group_by_chat_id(tox.get(), chatId, &stateError);
-    if (stateError != TOX_ERR_GROUP_STATE_QUERIES_OK || groupNum == std::numeric_limits<uint32_t>::max()) {
-        return; // we are not in that group — silently ignore
+    if (stateError != TOX_ERR_GROUP_STATE_QUERIES_OK
+        || groupNum == std::numeric_limits<uint32_t>::max() || ignoresGroup(groupNum)) {
+        return; // we are not in that group, or leave it (QA live F11) — silently ignore
     }
 
     // KHANDAQ (audit 2026-08-20): only auto-invite into groups whose chat id is enough to join
@@ -2965,9 +3288,14 @@ bool Core::autoAcceptRequestedGroupInvite(const GroupInvite& inviteInfo)
         // accept (which creates a fresh instance) — drop it first. toxcore
         // reuses the freed slot, so the accept normally gets the same number.
         qDebug() << "autoAcceptRequestedGroupInvite: replacing stuck group instance" << existingNum;
-        Tox_Err_Group_Leave leaveError;
-        tox_group_leave(tox.get(), existingNum, nullptr, 0, &leaveError);
-        PARSE_ERR(leaveError);
+        // QA live F11: an instance whose leave waits for its notice is left by joinGroupchat, which
+        // accepts the invite once toxcore let go of it.
+        const QByteArray inviteChatId(invite.constData(), TOX_GROUP_CHAT_ID_SIZE);
+        if (pendingGroupLeaves.groupOf(inviteChatId) < 0) {
+            Tox_Err_Group_Leave leaveError;
+            tox_group_leave(tox.get(), existingNum, nullptr, 0, &leaveError);
+            PARSE_ERR(leaveError);
+        }
 
         const uint32_t newGroupNum = joinGroupchat(inviteInfo);
         if (newGroupNum == std::numeric_limits<uint32_t>::max()) {

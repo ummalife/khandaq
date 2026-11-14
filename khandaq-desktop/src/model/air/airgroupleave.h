@@ -21,6 +21,9 @@
 
 #include <QByteArray>
 #include <QHash>
+#include <QList>
+#include <QString>
+#include <QVector>
 #include <QtGlobal>
 
 #include <cstddef>
@@ -75,6 +78,52 @@ private:
     static bool waits(const Notice& notice, qint64 nowMs);
 
     QHash<int, QHash<QByteArray, Notice>> groups;
+};
+
+// QA live F11: our own leaves, which wait for their notice. toxcore deletes a group at the
+// tox_iterate after tox_group_leave, and with it the connections that still carry the notice: the
+// notice got one try, and over a TCP relay it was sometimes lost, so the members listed us until
+// toxcore timed us out, about a minute later. So a group whose notice was queued for another member
+// stays in toxcore for delayMs, and is left then; for the person it is gone at once, and nothing of
+// it is shown meanwhile. The chat ids are kept with the profile until the save without the group:
+// a leave that a crash cut short is finished at the next start.
+class PendingGroupLeaves
+{
+public:
+    // toxcore resends a lossless packet that was not acknowledged about 3, 5 and 9 seconds after
+    // it was first sent (gcc_resend_packets in group_connection.c): the wait covers all three.
+    static constexpr qint64 delayMs = 12 * 1000;
+
+    struct Leave
+    {
+        int group = -1;
+        QByteArray chatId;
+        QByteArray partMessage;
+        qint64 dueMs = 0;
+    };
+
+    // We leave the group with this number and chat id, delayMs after nowMs. A leave that was
+    // pending for the same number or the same chat id is replaced.
+    void record(int group, const QByteArray& chatId, const QByteArray& partMessage, qint64 nowMs);
+    // The leaves that are due at nowMs, taken out, in the order they were recorded.
+    QVector<Leave> takeDue(qint64 nowMs);
+    // Every leave, taken out: the profile closes.
+    QVector<Leave> takeAll();
+    // The leave pending for this chat id, taken out: the group is joined again. False when none is.
+    bool cancel(const QByteArray& chatId, Leave* cancelled = nullptr);
+    bool containsGroup(int group) const;
+    // The number of the group whose leave is pending with this chat id; -1 when none is.
+    int groupOf(const QByteArray& chatId) const;
+    QList<QByteArray> chatIds() const;
+
+    // What the profile keeps: the chat ids in hex, one per line.
+    static QString store(const QList<QByteArray>& chatIds);
+    // The chat ids that store() wrote. A line that holds no chat id, or one seen before, is
+    // skipped.
+    static QList<QByteArray> parseStore(const QString& stored);
+
+private:
+    QVector<Leave> leaves;
 };
 
 } // namespace Air

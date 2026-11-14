@@ -39,6 +39,7 @@ add_subdirectory(test/mock)
 add_subdirectory(test/dbutility)
 
 auto_test(core core "${${PROJECT_NAME}_RESOURCES}" "mock_library")
+auto_test(core coregroupleave "${${PROJECT_NAME}_RESOURCES}" "mock_library")
 auto_test(core chatid "" "")
 auto_test(core toxid "" "")
 auto_test(core toxstring "" "")

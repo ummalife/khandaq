@@ -96,6 +96,7 @@ class TestAirMedia : public QObject
     Q_OBJECT
 private slots:
     void aVoiceNoteIsKnownByItsWholeSuffixInAnyCase();
+    void aFileTakenInWithoutAskingGetsAFreeName();
     void theirFileWaitsForAcceptOrDecline();
     void ourFileWaitsForTheOtherSide();
     void aMovingFileSaysWhatIsLeft();
@@ -119,6 +120,35 @@ void TestAirMedia::aVoiceNoteIsKnownByItsWholeSuffixInAnyCase()
     QVERIFY(!Air::isVoiceNote(QStringLiteral("voice.m4a")));
     QVERIFY(!Air::isVoiceNote(QStringLiteral("voice.file.m4a.exe")));
     QVERIFY(!Air::isVoiceNote(QString()));
+}
+
+/**
+ * QA live 2026-11-14: Accept and Listen take a voice note into the app's folder without asking
+ * where; a note of the same name already there keeps its file.
+ */
+void TestAirMedia::aFileTakenInWithoutAskingGetsAFreeName()
+{
+    QStringList there;
+    const auto taken = [&there](const QString& path) { return there.contains(path); };
+    const QString folder = QStringLiteral("/data/voice");
+
+    QCOMPARE(Air::freeFilePath(folder, QStringLiteral("voice_3F9A.file.m4a"), taken),
+             QStringLiteral("/data/voice/voice_3F9A.file.m4a"));
+    there << QStringLiteral("/data/voice/voice_3F9A.file.m4a");
+    // The number goes before the first dot, so the name still ends in ".file.m4a".
+    const QString second = Air::freeFilePath(folder, QStringLiteral("voice_3F9A.file.m4a"), taken);
+    QCOMPARE(second, QStringLiteral("/data/voice/voice_3F9A (1).file.m4a"));
+    QVERIFY(Air::isVoiceNote(second));
+    there << second;
+    QCOMPARE(Air::freeFilePath(folder, QStringLiteral("voice_3F9A.file.m4a"), taken),
+             QStringLiteral("/data/voice/voice_3F9A (2).file.m4a"));
+    // A name without a dot takes the number at its end; no name has no path.
+    there << QStringLiteral("/data/voice/note");
+    QCOMPARE(Air::freeFilePath(folder, QStringLiteral("note"), taken),
+             QStringLiteral("/data/voice/note (1)"));
+    QCOMPARE(Air::freeFilePath(folder, QString(), taken), QString());
+    // Without a way to ask, the name is taken as it is.
+    QCOMPARE(Air::freeFilePath(folder, QStringLiteral("note"), nullptr), QStringLiteral("/data/voice/note"));
 }
 
 void TestAirMedia::theirFileWaitsForAcceptOrDecline()

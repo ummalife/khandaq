@@ -67,6 +67,7 @@ private slots:
     void theBarStaysBetweenEmptyAndFull();
     void aClickOnTheWaveMovesTheNoteFromTheStartEdge();
     void aNoteThatIsNotHereShowsItsSizeAndWaits();
+    void aNoteThatCanBeFetchedIsAskedForByListen();
     void aNoteThatIsHereShowsItsLength();
     void eachPhaseOfACallHasItsOwnButtons();
     void theBandSaysTheStateInWords();
@@ -127,6 +128,31 @@ void TestAirMediaParts::aNoteThatIsNotHereShowsItsSizeAndWaits()
     QVERIFY(!listen->isEnabled());
     QVERIFY(shownTexts(note).contains(QStringLiteral("38 KB")));
     QCOMPARE(note.spokenText(), QStringLiteral("Voice message, 38 KB"));
+}
+
+/** QA live 2026-11-14: Listen on a note that waits for Accept asks for it, with no question where. */
+void TestAirMediaParts::aNoteThatCanBeFetchedIsAskedForByListen()
+{
+    AirVoiceNote note;
+    QSignalSpy asked(&note, &AirVoiceNote::listenRequested);
+    note.setNote(QString(), -1, false, QStringLiteral("38 KB"), true);
+    AirButton* const listen = buttonOf(&note, "voiceListen");
+    QVERIFY(listen->isEnabled());
+    QCOMPARE(listen->text(), QStringLiteral("Listen"));
+    QVERIFY(shownTexts(note).contains(QStringLiteral("38 KB")));
+    QTest::mouseClick(listen, Qt::LeftButton);
+    QCOMPARE(asked.count(), 1);
+
+    // On its way (accepted, not here yet): the button waits again, and a click asks for nothing.
+    note.setNote(QString(), -1, false, QStringLiteral("38 KB"), false);
+    QVERIFY(!listen->isEnabled());
+    QTest::mouseClick(listen, Qt::LeftButton);
+    QCOMPARE(asked.count(), 1);
+
+    // Here: Listen plays it, and asks for nothing.
+    note.setNote(QStringLiteral("/nowhere/voice_3.file.m4a"), 42500, true, QStringLiteral("38 KB"), true);
+    QVERIFY(listen->isEnabled());
+    QCOMPARE(note.spokenText(), QStringLiteral("Voice message, 0:42"));
 }
 
 void TestAirMediaParts::aNoteThatIsHereShowsItsLength()

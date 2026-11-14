@@ -512,6 +512,8 @@ AirVoiceNote::AirVoiceNote(QWidget* parent)
     connect(button, &AirButton::clicked, this, [this] {
         if (here) {
             AirVoicePlayer::instance().toggle(path);
+        } else if (fetchable) {
+            emit listenRequested();
         }
     });
     connect(wave, &AirVoiceWave::seekRequested, this, [this](double share) {
@@ -534,12 +536,14 @@ AirVoiceNote::~AirVoiceNote()
     Translator::unregister(this);
 }
 
-void AirVoiceNote::setNote(const QString& path_, qint64 lengthMs, bool here_, const QString& sizeText_)
+void AirVoiceNote::setNote(const QString& path_, qint64 lengthMs, bool here_, const QString& sizeText_,
+                           bool fetchable_)
 {
     path = path_;
     headerLengthMs = lengthMs;
     here = here_;
     sizeText = sizeText_;
+    fetchable = !here_ && fetchable_;
     refresh();
 }
 
@@ -579,7 +583,7 @@ void AirVoiceNote::refresh()
     const AirVoicePlayer& player = AirVoicePlayer::instance();
     const bool playing = here && player.isPlaying(path);
     button->setText(AirStrings::text(playing ? Text::VoicePause : Text::VoiceListen));
-    button->setEnabled(here);
+    button->setEnabled(here || fetchable);
     wave->setEnabled(here);
 
     qint64 length = player.lengthMs(path);

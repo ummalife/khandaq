@@ -162,7 +162,8 @@ private:
 /**
  * A voice note in the transcript: Listen and Pause on a button of one width, the wave, and the
  * length in tabular figures (the time played while it plays). A note that is not here yet shows its
- * size, and its button waits.
+ * size. Its button waits, unless the note can be fetched now: then Listen asks for it
+ * (listenRequested).
  */
 class AirVoiceNote : public QWidget
 {
@@ -171,11 +172,19 @@ public:
     explicit AirVoiceNote(QWidget* parent = nullptr);
     ~AirVoiceNote() override;
 
-    /** lengthMs comes from the file's header (-1 when unknown); sizeText shows until it is here. */
-    void setNote(const QString& path, qint64 lengthMs, bool here, const QString& sizeText);
+    /**
+     * lengthMs comes from the file's header (-1 when unknown); sizeText shows until it is here.
+     * fetchable: the note is not here but can be asked for now, so Listen is pressed for it.
+     */
+    void setNote(const QString& path, qint64 lengthMs, bool here, const QString& sizeText,
+                 bool fetchable = false);
 
     /** What a screen reader says for it: "Voice message, 0:42". */
     QString spokenText() const;
+
+signals:
+    /** Listen was pressed for a note that is not here and can be fetched. */
+    void listenRequested();
 
 private:
     void restyle();
@@ -191,6 +200,7 @@ private:
     QString sizeText;
     qint64 headerLengthMs = -1;
     bool here = false;
+    bool fetchable = false;
 };
 
 /**

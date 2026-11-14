@@ -32,6 +32,7 @@
 #include "src/widget/tool/imessageboxmanager.h"
 #include "src/widget/translator.h"
 
+#include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
@@ -257,6 +258,7 @@ FileTransferWidget::FileTransferWidget(QWidget* parent, CoreFile& _coreFile, Tox
 
     voice = new AirVoiceNote(this);
     voice->hide();
+    connect(voice, &AirVoiceNote::listenRequested, this, [this] { acceptVoiceNote(true); });
     column->addWidget(voice);
 
     // The glyph, the name and the size on one line.
@@ -430,7 +432,18 @@ void FileTransferWidget::refresh()
             QFile file(voicePath);
             voiceLengthMs = file.open(QIODevice::ReadOnly) ? Air::mp4DurationMs(file) : -1;
         }
-        voice->setNote(fileInfo.filePath, voiceLengthMs, now.here, sizeText());
+        // A note of a person that waits for Accept: Listen fetches it (acceptVoiceNote).
+        const bool fetchable = now.incoming && !now.group && fileInfo.status == ToxFile::INITIALIZING;
+        voice->setNote(fileInfo.filePath, voiceLengthMs, now.here, sizeText(), fetchable);
+        if (playWhenHere && now.here) {
+            playWhenHere = false;
+            AirVoicePlayer& player = AirVoicePlayer::instance();
+            if (!player.isPlaying(fileInfo.filePath)) {
+                player.toggle(fileInfo.filePath);
+            }
+        } else if (fileInfo.status == ToxFile::CANCELED || fileInfo.status == ToxFile::BROKEN) {
+            playWhenHere = false;
+        }
     }
 
     // Under a picture or a voice note the line is the transfer alone.
@@ -521,6 +534,42 @@ void FileTransferWidget::act(Air::FileAction action)
 }
 
 void FileTransferWidget::accept()
+{
+    if (Air::isVoiceNote(fileInfo.fileName)) {
+        acceptVoiceNote(false);
+        return;
+    }
+    acceptAsked();
+}
+
+void FileTransferWidget::acceptVoiceNote(bool play)
+{
+    // KHANDAQ (QA live 2026-11-14): a voice note is listened to, not kept as a file. It had to be
+    // accepted and saved somewhere before Listen would play it. Accept and Listen now take it into
+    // the app's own folder without asking where. It still comes only when one of them is pressed.
+    const QDir appData(settings.getPaths().getAppDataDirPath());
+    const QString folder = appData.filePath(QStringLiteral("voice"));
+    QString path;
+    if (appData.mkpath(QStringLiteral("voice"))) {
+        path = Air::freeFilePath(folder, fileInfo.fileName,
+                                 [](const QString& candidate) { return QFileInfo::exists(candidate); });
+    }
+    QFile probe(path);
+    const bool writable = !path.isEmpty() && probe.open(QIODevice::WriteOnly);
+    if (writable) {
+        probe.remove();
+    }
+    if (!writable) {
+        // The folder of the app cannot be written to: where the file goes is asked, as for any file.
+        qWarning() << "Voice notes cannot be written to" << folder;
+        acceptAsked();
+        return;
+    }
+    playWhenHere = play;
+    coreFile.acceptFileRecvRequest(fileInfo.friendId, fileInfo.fileNum, path);
+}
+
+void FileTransferWidget::acceptAsked()
 {
     // Asked over the window, which it belongs to, rather than as a window of its own.
     const QString path = QFileDialog::getSaveFileName(window(), AirStrings::text(Text::FileSaveTitle),

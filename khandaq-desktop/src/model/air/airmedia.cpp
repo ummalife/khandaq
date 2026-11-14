@@ -19,6 +19,7 @@
 
 #include "airmedia.h"
 
+#include <QDir>
 #include <QIODevice>
 #include <QRegularExpression>
 
@@ -157,6 +158,24 @@ bool isVoiceNote(const QString& fileName)
 {
     static const QString suffix = QStringLiteral(".file.m4a");
     return fileName.size() > suffix.size() && fileName.endsWith(suffix, Qt::CaseInsensitive);
+}
+
+QString freeFilePath(const QString& folder, const QString& fileName,
+                     const std::function<bool(const QString&)>& taken)
+{
+    if (fileName.isEmpty()) {
+        return QString();
+    }
+    const QDir dir(folder);
+    const int dot = fileName.indexOf(QLatin1Char('.'));
+    // A name that starts with its dot, or has none, takes the number at its end.
+    const QString base = dot > 0 ? fileName.left(dot) : fileName;
+    const QString rest = dot > 0 ? fileName.mid(dot) : QString();
+    QString path = dir.filePath(fileName);
+    for (int number = 1; taken && taken(path); ++number) {
+        path = dir.filePath(QStringLiteral("%1 (%2)%3").arg(base).arg(number).arg(rest));
+    }
+    return path;
 }
 
 bool FileEntryState::isProblem() const

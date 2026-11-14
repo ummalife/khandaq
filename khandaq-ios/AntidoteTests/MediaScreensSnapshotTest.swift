@@ -24,6 +24,11 @@ class MediaScreensSnapshotTest: SnapshotBaseTest {
         let controller = MediaSendPreviewController(items: [.image(MediaScreensSnapshotTest.photo(), fileName: "north-exit.jpg")])
         host(controller)
         assertEveryControlIsAnIconWithAName(in: controller.view)
+        // The caption shows no placeholder, so VoiceOver has only its label to name it by.
+        let captions = controller.view.textViews
+        XCTAssertEqual(captions.count, 1, "the preview has no caption, or more than one")
+        XCTAssertEqual(captions.first?.accessibilityLabel, String(localized: "media_send_caption_hint"),
+                       "the caption has no name")
         verifyView(controller.view)
     }
 
@@ -94,5 +99,12 @@ private extension UIView {
             found += view.buttons
         }
         return found
+    }
+
+    /// Every text view under this view.
+    var textViews: [UITextView] {
+        return subviews.flatMap { view -> [UITextView] in
+            (view as? UITextView).map { [$0] } ?? view.textViews
+        }
     }
 }

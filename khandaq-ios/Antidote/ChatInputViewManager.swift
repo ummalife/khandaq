@@ -86,29 +86,34 @@ extension ChatInputViewManager: ChatInputViewDelegate {
         // Геолокация) instead of a native bottom action sheet.
         var items: [AttachmentMenuController.Item] = []
 
-        items.append(.init(title: String(localized: "attach_gallery"), systemImage: "photo.on.rectangle") { [weak self] in
+        items.append(.init(title: String(localized: "attach_gallery"), systemImage: "photo.on.rectangle",
+                           identifier: "air.attach.gallery") { [weak self] in
             self?.presentPhotoLibraryPicker()
         })
 
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
-            items.append(.init(title: String(localized: "photo_from_camera"), systemImage: "camera") { [weak self] in
+            items.append(.init(title: String(localized: "photo_from_camera"), systemImage: "camera",
+                               identifier: "air.attach.camera") { [weak self] in
                 self?.presentCameraPicker()
             })
         }
 
         // KHANDAQ (#135): the "Аудио" menu item must pick an existing audio FILE, not start a
         // voice recording (hold-to-record on the voice button already covers voice notes).
-        items.append(.init(title: String(localized: "attach_audio"), systemImage: "music.note") { [weak self] in
+        items.append(.init(title: String(localized: "attach_audio"), systemImage: "music.note",
+                           identifier: "air.attach.audio") { [weak self] in
             self?.presentAudioFilePicker()
         })
 
         // KHANDAQ (Figma iOS page): generic "Файл" item — any document, like the group chat has.
-        items.append(.init(title: String(localized: "attach_file"), systemImage: "doc") { [weak self] in
+        items.append(.init(title: String(localized: "attach_file"), systemImage: "doc",
+                           identifier: "air.attach.file") { [weak self] in
             self?.presentDocumentFilePicker()
         })
 
         if let shareLocation = onShareLocation {
-            items.append(.init(title: String(localized: "attach_location"), systemImage: "location") {
+            items.append(.init(title: String(localized: "attach_location"), systemImage: "location",
+                               identifier: "air.attach.location") {
                 shareLocation()
             })
         }

@@ -11,6 +11,9 @@ final class AttachmentMenuController: UIViewController {
     struct Item {
         let title: String
         let systemImage: String
+        /// KHANDAQ (accessibility): the row's stable accessibility identifier (air.attach.*), so UI
+        /// tests find a row in every language.
+        let identifier: String
         let action: () -> Void
     }
 
@@ -36,12 +39,18 @@ final class AttachmentMenuController: UIViewController {
         super.viewDidLoad()
 
         view.backgroundColor = .clear
+        // KHANDAQ (accessibility): the menu is modal for VoiceOver too. It is presented over full screen,
+        // so the chat stays in the view hierarchy under the dim; this keeps VoiceOver inside the menu.
+        view.accessibilityViewIsModal = true
 
         // Full-screen dim button BELOW the card handles outside-taps; the card (added after) is on top
         // and receives row taps — no gesture-vs-control conflicts.
         let dimButton = UIButton(type: .custom)
         dimButton.backgroundColor = UIColor.black.withAlphaComponent(0.12)
         dimButton.addTarget(self, action: #selector(backgroundTapped), for: .touchUpInside)
+        // KHANDAQ (accessibility): this full-screen button has no name, and VoiceOver could focus it.
+        // For VoiceOver the menu closes with the escape gesture instead (accessibilityPerformEscape).
+        dimButton.isAccessibilityElement = false
         view.addSubview(dimButton)
         dimButton.snp.makeConstraints { $0.edges.equalTo(view) }
 
@@ -89,9 +98,17 @@ final class AttachmentMenuController: UIViewController {
         row.tintColor = theme.colorForType(.NormalText)
         row.contentHorizontalAlignment = .left
         row.snp.makeConstraints { $0.height.equalTo(52.0) }
+        // KHANDAQ (accessibility): the row is a button without a title (its words are a label inside),
+        // so it had no accessibility label of its own. The row is one button element named by its item;
+        // the icon and the label inside are not read on their own.
+        row.isAccessibilityElement = true
+        row.accessibilityTraits = UIAccessibilityTraitButton
+        row.accessibilityLabel = item.title
+        row.accessibilityIdentifier = item.identifier
 
         let iconView = UIImageView()
         iconView.isUserInteractionEnabled = false
+        iconView.isAccessibilityElement = false
         iconView.contentMode = .scaleAspectFit
         iconView.tintColor = theme.colorForType(.NormalText)
         if #available(iOS 13.0, *) {
@@ -102,6 +119,7 @@ final class AttachmentMenuController: UIViewController {
 
         let label = UILabel()
         label.isUserInteractionEnabled = false
+        label.isAccessibilityElement = false
         label.text = item.title
         label.font = UIFont.systemFont(ofSize: 16.0)
         label.textColor = theme.colorForType(.NormalText)
@@ -135,5 +153,12 @@ final class AttachmentMenuController: UIViewController {
 
     @objc private func backgroundTapped() {
         dismiss(animated: true, completion: nil)
+    }
+
+    /// KHANDAQ (accessibility): VoiceOver's escape gesture (a two-finger Z) closes the menu, as a tap
+    /// beside it does.
+    override func accessibilityPerformEscape() -> Bool {
+        dismiss(animated: true, completion: nil)
+        return true
     }
 }

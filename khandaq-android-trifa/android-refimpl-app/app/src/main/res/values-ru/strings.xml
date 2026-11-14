@@ -997,6 +997,7 @@
     <string name="notification_channel_toxservice_desc">Поддерживает соединение Khandaq. Без оповещений.</string>
     <string name="notification_channel_fcm_wake">Push-пробуждение</string>
     <string name="notification_channel_fcm_wake_desc">Будит Khandaq при новом сообщении</string>
+    <string name="notification_fcm_wake_waiting">Кто-то из контактов пытается с вами связаться. Откройте приложение, чтобы подключиться.</string>
     <string name="notification_channel_message_sound">Новое сообщение</string>
     <string name="notification_channel_message_sound_vibrate">Новое сообщение (звук и вибрация)</string>
     <string name="notification_channel_message_vibrate">Новое сообщение (вибрация)</string>

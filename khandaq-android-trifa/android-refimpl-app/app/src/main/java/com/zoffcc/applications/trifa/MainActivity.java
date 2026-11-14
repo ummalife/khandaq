@@ -4397,6 +4397,9 @@ public class MainActivity extends AppCompatActivity
         // just in case, update own activity pointer!
         main_activity_s = this;
 
+        // KHANDAQ (0.2.56): the app is open, so the notification of a wake has done its work.
+        WakePush.cancelWaiting(this);
+
         // Pending FCM token from legacy NEED_ACK row (auto-apply, no dialog)
         try
         {

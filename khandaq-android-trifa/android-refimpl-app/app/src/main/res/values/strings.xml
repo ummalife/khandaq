@@ -145,6 +145,7 @@
     <string name="notification_channel_toxservice_desc">Keeps Khandaq connected. No alerts.</string>
     <string name="notification_channel_fcm_wake">Push wake</string>
     <string name="notification_channel_fcm_wake_desc">Wakes Khandaq when a message arrives</string>
+    <string name="notification_fcm_wake_waiting">A contact is trying to reach you. Open the app to connect.</string>
     <string name="notification_channel_message_sound">New message</string>
     <string name="notification_channel_message_sound_vibrate">New message (sound and vibrate)</string>
     <string name="notification_channel_message_vibrate">New message (vibrate)</string>

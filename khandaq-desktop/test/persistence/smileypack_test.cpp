@@ -68,6 +68,19 @@ QString inPictureSize(const QString& sequence)
     return SmileyPack::getInEmojiFont(sequence, PICTURE_SIZE);
 }
 
+/**
+ * A flag or a keycap the pack has no picture of, as smileyfied() sets it: like a sequence, but as
+ * text on Windows, whose emoji font draws neither (QA live 2026-11-14).
+ */
+QString flagOrKeycapInPictureSize(const QString& character)
+{
+#if defined(Q_OS_WIN)
+    return character;
+#else
+    return inPictureSize(character);
+#endif
+}
+
 /** The format the rich text gives to the first character of the given text in it. */
 QTextCharFormat formatOf(const QTextDocument& document, const QString& text)
 {
@@ -213,13 +226,14 @@ void TestSmileyPack::testSmilifyKeepsFlagsWhole()
     SmileyPack smileyPack{*settings};
 
     // 🇹🇷 is U+1F1F9 U+1F1F7. The pack has both letters alone and not the flag. The system's emoji
-    // font draws it, as big as the pictures (QA live 2026-11-14: it was as big as the text).
+    // font draws it, as big as the pictures (QA live 2026-11-14: it was as big as the text); on
+    // Windows, whose emoji font has no flags, it stays text.
     const QString turkey = QStringLiteral("🇹🇷");
-    QCOMPARE(smileyPack.smileyfied(turkey), inPictureSize(turkey));
+    QCOMPARE(smileyPack.smileyfied(turkey), flagOrKeycapInPictureSize(turkey));
 
     // Letters pair up from the start of a run: 🇹🇷🇷🇺 is Turkey, then Russia, which the pack has.
     QCOMPARE(smileyPack.smileyfied(turkey + "🇷🇺"),
-             QString(inPictureSize(turkey) + SmileyPack::getAsRichText("🇷🇺")));
+             QString(flagOrKeycapInPictureSize(turkey) + SmileyPack::getAsRichText("🇷🇺")));
 
     // A letter without a pair is a character of its own and keeps its picture.
     QCOMPARE(smileyPack.smileyfied("🇷🇺🇹"),
@@ -375,16 +389,18 @@ void TestSmileyPack::testSmilifyKeepsKeycapsWhole()
     SmileyPack smileyPack{*settings};
 
     // The keycap one is "1", U+FE0F and U+20E3. The pack has no keycaps: the system's emoji font
-    // draws it, as big as the pictures (QA live 2026-11-14: the text font drew a 1 in a frame).
+    // draws it, as big as the pictures (QA live 2026-11-14: the text font drew a 1 in a frame); on
+    // Windows the text font still does, Qt 5 drew the frame beside the 1 in Segoe UI Emoji.
     const QString keycapOne = QStringLiteral("1") + EMOJI_PRESENTATION + COMBINING_KEYCAP;
-    QCOMPARE(smileyPack.smileyfied(keycapOne), inPictureSize(keycapOne));
+    QCOMPARE(smileyPack.smileyfied(keycapOne), flagOrKeycapInPictureSize(keycapOne));
     QCOMPARE(smileyPack.smileyfied(keycapOne + " 😊"),
-             QString(inPictureSize(keycapOne) + " " + SmileyPack::getAsRichText("😊")));
+             QString(flagOrKeycapInPictureSize(keycapOne) + " "
+                     + SmileyPack::getAsRichText("😊")));
 
     // Without U+FE0F it is a keycap too; a digit alone stays text.
     const QString keycapHash = QStringLiteral("#") + COMBINING_KEYCAP;
     QCOMPARE(smileyPack.smileyfied(QStringLiteral("1 ") + keycapHash),
-             QString(QStringLiteral("1 ") + inPictureSize(keycapHash)));
+             QString(QStringLiteral("1 ") + flagOrKeycapInPictureSize(keycapHash)));
 }
 
 /**
@@ -416,7 +432,8 @@ void TestSmileyPack::testSmilifyMixedScripts()
         "Тест 1 с мака: кириллица, emoji 👍🏽🇹🇷, арабский السلام عليكم, цифры 12345");
     QCOMPARE(smileyPack.smileyfied(qaMessage),
              QString(QStringLiteral("Тест 1 с мака: кириллица, emoji ")
-                     + inPictureSize(QStringLiteral("👍🏽")) + inPictureSize(QStringLiteral("🇹🇷"))
+                     + inPictureSize(QStringLiteral("👍🏽"))
+                     + flagOrKeycapInPictureSize(QStringLiteral("🇹🇷"))
                      + QStringLiteral(", арабский السلام عليكم, цифры 12345")));
 
     QCOMPARE(smileyPack.smileyfied("Привет👍мир 🇷🇺 السلام😊عليكم"),
@@ -535,17 +552,23 @@ void TestSmileyPack::testEmojiFontRangesLeaveBlockedSequencesApart()
     QCOMPARE(textOf(ranges.at(1)), thumbsUpMedium);
     QVERIFY(SmileyPack::emojiFontRanges(QStringLiteral("no sequence 😊 here 1")).isEmpty());
 
-    // Flags and keycaps too, in the order of the text.
+    // Flags and keycaps too, in the order of the text; on Windows, whose emoji font draws neither,
+    // only the sequence.
     const QString keycapOne = QStringLiteral("1") + EMOJI_PRESENTATION + COMBINING_KEYCAP;
     const QString more = QStringLiteral("🇹🇷 ") + keycapOne + QStringLiteral(" ") + doctor;
     const QVector<QPair<int, int>> moreRanges = SmileyPack::emojiFontRanges(more);
+    const auto moreTextOf = [&more](const QPair<int, int>& range) {
+        return more.mid(range.first, range.second - range.first);
+    };
+#if defined(Q_OS_WIN)
+    QCOMPARE(moreRanges.size(), 1);
+    QCOMPARE(moreTextOf(moreRanges.at(0)), doctor);
+#else
     QCOMPARE(moreRanges.size(), 3);
-    QCOMPARE(more.mid(moreRanges.at(0).first, moreRanges.at(0).second - moreRanges.at(0).first),
-             QStringLiteral("🇹🇷"));
-    QCOMPARE(more.mid(moreRanges.at(1).first, moreRanges.at(1).second - moreRanges.at(1).first),
-             keycapOne);
-    QCOMPARE(more.mid(moreRanges.at(2).first, moreRanges.at(2).second - moreRanges.at(2).first),
-             doctor);
+    QCOMPARE(moreTextOf(moreRanges.at(0)), QStringLiteral("🇹🇷"));
+    QCOMPARE(moreTextOf(moreRanges.at(1)), keycapOne);
+    QCOMPARE(moreTextOf(moreRanges.at(2)), doctor);
+#endif
 }
 
 /**

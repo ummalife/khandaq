@@ -142,6 +142,8 @@ private:
     };
 
     void forget(const QString& entryId);
+    /** When the request of a contact made by accepting it came, in seconds since 1970; else 0. */
+    qint64 askedSeconds(const ToxPk& publicKey) const;
     Conversation read(const IChatLog& log, bool group) const;
     Air::Entry friendEntry(Friend& frnd, const IChatLog* log, qint64 nowSeconds, bool settling,
                            const QSet<QString>& favorites);

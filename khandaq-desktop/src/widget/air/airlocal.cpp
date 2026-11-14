@@ -170,6 +170,18 @@ void AirLocal::removeRequest(const ToxPk& publicKey)
     }
 }
 
+void AirLocal::acceptRequest(const ToxPk& publicKey)
+{
+    if (store.acceptRequest(publicKey.toString())) {
+        saveRequests();
+    }
+}
+
+QDateTime AirLocal::askedAt(const ToxPk& publicKey) const
+{
+    return store.askedAt(publicKey.toString());
+}
+
 QVector<Air::LocalStore::WaitingInvite> AirLocal::invites() const
 {
     return store.invites();

@@ -82,7 +82,7 @@ struct Reach
         Relay,
         /** Not online; secondsAgo since they were last seen. */
         Away,
-        /** Added, but never online since: our request has not been answered yet. */
+        /** Added by our request and never online since: it has not been answered yet. */
         Pending,
         /**
          * Not linked yet, but active within the last day while our own node has only just come
@@ -113,9 +113,11 @@ struct Reach
     /**
      * lastSeenSeconds is 0 or less when the friend was never online since being added.
      * selfLinkSettling: our own node came online less than a minute ago.
+     * askedSeconds: for a contact made by accepting their request, when it came (they were online
+     * then); 0 or less for a contact made by our own request.
      */
     static Reach friendReach(int toxConnection, qint64 lastSeenSeconds, qint64 nowSeconds,
-                             bool selfLinkSettling);
+                             bool selfLinkSettling, qint64 askedSeconds = 0);
 
     /** A message sent now would arrive now. */
     bool isLive() const;

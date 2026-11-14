@@ -210,7 +210,7 @@ Reach Reach::group(int online)
 }
 
 Reach Reach::friendReach(int toxConnection, qint64 lastSeenSeconds, qint64 nowSeconds,
-                         bool selfLinkSettling)
+                         bool selfLinkSettling, qint64 askedSeconds)
 {
     if (toxConnection == toxConnectionUdp) {
         return direct();
@@ -218,8 +218,15 @@ Reach Reach::friendReach(int toxConnection, qint64 lastSeenSeconds, qint64 nowSe
     if (toxConnection == toxConnectionTcp) {
         return relay();
     }
+    // KHANDAQ (QA 2026-11-14, F2): toxcore has no last-online time for anyone who has not connected
+    // since being added, also when they asked us and we accepted, and that read as our request
+    // waiting for a reply. No request of ours waits for them: they were online when their request
+    // came, which stands for the time they were last seen until toxcore has one.
     if (lastSeenSeconds <= 0) {
-        return pending();
+        if (askedSeconds <= 0) {
+            return pending();
+        }
+        lastSeenSeconds = askedSeconds;
     }
     const qint64 secondsAgo = std::max<qint64>(0, nowSeconds - lastSeenSeconds);
     if (selfLinkSettling && secondsAgo < oneDaySeconds) {

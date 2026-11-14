@@ -37,6 +37,7 @@ const QString contactsField = QStringLiteral("contacts");
 const QString hoursField = QStringLiteral("hours");
 const QString mutedField = QStringLiteral("muted");
 const QString verifiedField = QStringLiteral("verifiedAt");
+const QString askedField = QStringLiteral("askedAt");
 const QString blockedField = QStringLiteral("blocked");
 const QString requestsField = QStringLiteral("requests");
 const QString invitesField = QStringLiteral("invites");
@@ -122,7 +123,7 @@ bool LocalStore::WaitingInvite::operator==(const WaitingInvite& other) const
 
 bool LocalStore::Contact::isEmpty() const
 {
-    return hours.isEmpty() && !muted && verifiedAt < 0;
+    return hours.isEmpty() && !muted && verifiedAt < 0 && askedAt < 0;
 }
 
 QString LocalStore::hashedKey(const QString& publicKey)
@@ -160,6 +161,7 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
         }
         contact.muted = fields.value(mutedField).toBool();
         contact.verifiedAt = static_cast<qint64>(fields.value(verifiedField).toDouble(-1));
+        contact.askedAt = static_cast<qint64>(fields.value(askedField).toDouble(-1));
         if (!contact.isEmpty()) {
             contacts.insert(it.key(), contact);
         }
@@ -233,6 +235,9 @@ QByteArray LocalStore::save() const
         fields.insert(mutedField, it.value().muted);
         if (it.value().verifiedAt >= 0) {
             fields.insert(verifiedField, static_cast<double>(it.value().verifiedAt));
+        }
+        if (it.value().askedAt >= 0) {
+            fields.insert(askedField, static_cast<double>(it.value().askedAt));
         }
         stored.insert(it.key(), fields);
     }
@@ -514,6 +519,28 @@ bool LocalStore::hasRequest(const QString& publicKey) const
     const QString key = normalizedKey(publicKey);
     return std::any_of(waitingRequests.cbegin(), waitingRequests.cend(),
                        [&key](const WaitingRequest& request) { return request.publicKey == key; });
+}
+
+bool LocalStore::acceptRequest(const QString& publicKey)
+{
+    const QString key = normalizedKey(publicKey);
+    const auto waiting =
+        std::find_if(waitingRequests.cbegin(), waitingRequests.cend(),
+                     [&key](const WaitingRequest& request) { return request.publicKey == key; });
+    if (waiting == waitingRequests.cend()) {
+        return false;
+    }
+    const QString hashed = hashedKey(key);
+    Contact contact = contacts.value(hashed);
+    contact.askedAt = waiting->date;
+    store(hashed, contact);
+    return removeRequest(key);
+}
+
+QDateTime LocalStore::askedAt(const QString& publicKey) const
+{
+    const qint64 at = contacts.value(hashedKey(publicKey)).askedAt;
+    return at < 0 ? QDateTime() : QDateTime::fromMSecsSinceEpoch(at);
 }
 
 bool LocalStore::addRequest(const QString& publicKey, const QString& message, const QDateTime& at)

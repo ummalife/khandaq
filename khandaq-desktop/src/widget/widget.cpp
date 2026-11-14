@@ -1421,8 +1421,11 @@ void Widget::addFriend(uint32_t friendId, const ToxPk& friendPk)
     assert(core != nullptr);
     settings.updateFriendAddress(friendPk.toString());
     // Whichever way they became a contact, a request from them is answered now.
+    // KHANDAQ (QA 2026-11-14, F2): and the contact keeps the time it came. Until they first
+    // connect toxcore has no last-online time for them, which the list read as our own request
+    // waiting for a reply; that they asked is known only here.
     if (airLocal) {
-        airLocal->removeRequest(friendPk);
+        airLocal->acceptRequest(friendPk);
     }
     if (airSource) {
         airSource->setRequestHidden(friendPk.toString(), false);

@@ -19,6 +19,7 @@
 
 #include "chattextedit.h"
 
+#include "src/persistence/smileypack.h"
 #include "src/widget/air/airtokens.h"
 #include "src/widget/translator.h"
 
@@ -29,11 +30,41 @@
 #include <QKeyEvent>
 #include <QMimeData>
 #include <QResizeEvent>
+#include <QSyntaxHighlighter>
 #include <QTextDocument>
 #include <QUrl>
 #include <QtGlobal>
 
 namespace {
+
+/**
+ * @brief Sets the joined emoji sequences of the field in the colour emoji font of the system
+ *
+ * KHANDAQ (QA live 2026-11-14): Qt 5 took the members of a sequence that have a text glyph (♀, ⚕,
+ * ☠, ❤) from the text font, and the field showed 👨‍⚕️ as 👨 and ⚕ and 🏴‍☠️ as a flag and a skull,
+ * while the message showed one picture. Only the drawing changes: a highlighter formats the
+ * layout, not the text, so what is sent and the typing notice stay as they were.
+ */
+class EmojiSequenceHighlighter final : public QSyntaxHighlighter
+{
+public:
+    explicit EmojiSequenceHighlighter(QTextDocument* document)
+        : QSyntaxHighlighter(document)
+    {
+        emojiFormat.setFontFamily(SmileyPack::emojiFontFamily());
+    }
+
+protected:
+    void highlightBlock(const QString& text) override
+    {
+        for (const auto& range : SmileyPack::emojiFontRanges(text)) {
+            setFormat(range.first, range.second - range.first, emojiFormat);
+        }
+    }
+
+private:
+    QTextCharFormat emojiFormat;
+};
 
 QString localPathFromUriOrPath(const QString& value)
 {
@@ -127,6 +158,7 @@ ChatTextEdit::ChatTextEdit(QWidget* parent)
     setMaximumHeight(MESSAGE_EDIT_MAX_HEIGHT);
     // The padding of the field is all the room around the text.
     document()->setDocumentMargin(0);
+    new EmojiSequenceHighlighter(document());
 
     connect(this, &QTextEdit::textChanged, this, &ChatTextEdit::updateHeightForContent);
 

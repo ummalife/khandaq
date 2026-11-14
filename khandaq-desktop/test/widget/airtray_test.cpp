@@ -18,7 +18,11 @@
 */
 
 #include "src/widget/air/airtray.h"
+#include "src/persistence/smileypack.h"
 
+#include <QLabel>
+#include <QSignalSpy>
+#include <QTextDocument>
 #include <QVBoxLayout>
 #include <QtTest/QtTest>
 
@@ -47,6 +51,7 @@ class TestAirTray : public QObject
     Q_OBJECT
 private slots:
     void aShortColumnKeepsWhatStandsAroundTheTray();
+    void aRowDrawsAJoinedEmojiWholeAndKeepsItsClicks();
 };
 
 /**
@@ -91,6 +96,47 @@ void TestAirTray::aShortColumnKeepsWhatStandsAroundTheTray()
     QTRY_VERIFY(tray->height() >= tray->minimumSizeHint().height());
     QVERIFY(transcript->height() >= transcript->minimumHeight());
     QVERIFY(field->height() >= field->minimumHeight());
+}
+
+/**
+ * KHANDAQ (QA live 2026-11-14): the row of a message on its way drew 👨‍⚕️ as 👨 and ⚕. Its words are
+ * rich text with the sequence in the emoji font; they read as typed, and a click or the context
+ * menu on them still opens what can be done with the message.
+ */
+void TestAirTray::aRowDrawsAJoinedEmojiWholeAndKeepsItsClicks()
+{
+    const QString doctor =
+        QStringLiteral("👨") + QChar(0x200D) + QStringLiteral("⚕") + QChar(0xFE0F);
+    AirQueueItem item;
+    item.id = 7;
+    item.time = QStringLiteral("9:41");
+    item.text = QStringLiteral("<b>a & b</b> ") + doctor + QStringLiteral("\nsecond line");
+    QWidget window;
+    auto* const row = new AirQueueRow(item, Air::EntryStatus::Transit, &window);
+    window.resize(560, 120);
+    row->setGeometry(0, 0, 560, 120);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+    QLabel* words = nullptr;
+    for (QLabel* label : row->findChildren<QLabel*>()) {
+        if (label->textFormat() == Qt::RichText) {
+            words = label;
+        }
+    }
+    QVERIFY(words);
+    QTextDocument shown;
+    shown.setHtml(words->text());
+    QCOMPARE(shown.toPlainText(), item.text);
+    QVERIFY(words->text().contains(SmileyPack::getInEmojiFont(doctor, 0)));
+
+    QSignalSpy actions(row, &AirQueueRow::actionsRequested);
+    const QPoint onTheWords = words->mapTo(&window, QPoint(4, words->height() / 2));
+    QTest::mouseClick(window.windowHandle(), Qt::LeftButton, Qt::NoModifier, onTheWords);
+    QTRY_COMPARE(actions.count(), 1);
+    QCOMPARE(actions.first().first().toLongLong(), item.id);
+    QTest::mouseClick(window.windowHandle(), Qt::RightButton, Qt::NoModifier, onTheWords);
+    QTRY_COMPARE(actions.count(), 2);
 }
 
 QTEST_MAIN(TestAirTray)

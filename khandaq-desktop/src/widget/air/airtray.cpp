@@ -19,6 +19,7 @@
 
 #include "airtray.h"
 
+#include "src/persistence/smileypack.h"
 #include "src/widget/air/airstrings.h"
 #include "src/widget/air/airstyle.h"
 #include "src/widget/air/airwidgets.h"
@@ -107,8 +108,14 @@ AirQueueRow::AirQueueRow(const AirQueueItem& item, Air::EntryStatus status_, QWi
     textColumn = new QVBoxLayout();
     textColumn->setSpacing(0);
     textLabel = makeLabel(TextRole::Body, this);
+    // KHANDAQ (QA live 2026-11-14): as plain text, the row drew 👨‍⚕️ as 👨 and ⚕ while the message
+    // showed one picture. As rich text its joined sequences are in the emoji font, as there.
+    textLabel->setTextFormat(Qt::RichText);
+    // Rich text gives the label a text control that takes clicks and has a menu of its own (Copy,
+    // Select All): the clicks and the menu stay the row's, as with the plain text.
+    textLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
     textLabel->setWordWrap(true);
-    textLabel->setText(item.text);
+    textLabel->setText(SmileyPack::plainTextAsRichText(item.text));
     textLabel->setMaximumWidth(Size::textMeasure);
     textLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     textColumn->addWidget(textLabel);

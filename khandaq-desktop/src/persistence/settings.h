@@ -449,7 +449,7 @@ public:
     bool isCurstomEmojiFont() const;
     void setCurstomEmojiFont(bool value);
 
-    int getEmojiFontPointSize() const;
+    int getEmojiFontPointSize() const override;
     void setEmojiFontPointSize(int value);
 
     QString getContactNote(const ToxPk& id) const override;

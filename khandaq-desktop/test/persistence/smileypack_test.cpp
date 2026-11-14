@@ -27,6 +27,8 @@
 #include <QStandardPaths>
 
 #include <QGuiApplication>
+#include <QTextBlock>
+#include <QTextDocument>
 
 #include <memory>
 
@@ -35,12 +37,21 @@ class MockSettings : public QObject, public ISmileySettings
 Q_OBJECT
 public:
     QString getSmileyPack() const override;
+    int getEmojiFontPointSize() const override;
     SIGNAL_IMPL(MockSettings, smileyPackChanged, const QString& name);
 };
 
 QString MockSettings::getSmileyPack() const
 {
     return ":/smileys/emojione/emoticons.xml";
+}
+
+/** The size of the pack's pictures, which a sequence in the emoji font takes too. */
+constexpr int PICTURE_SIZE = 24;
+
+int MockSettings::getEmojiFontPointSize() const
+{
+    return PICTURE_SIZE;
 }
 
 namespace {
@@ -50,6 +61,27 @@ const QChar ZERO_WIDTH_JOINER{0x200D};
 const QChar TEXT_PRESENTATION{0xFE0E};
 const QChar EMOJI_PRESENTATION{0xFE0F};
 const QChar COMBINING_KEYCAP{0x20E3};
+
+/** A sequence as smileyfied() sets it: in the emoji font, as big as the pictures of the pack. */
+QString inPictureSize(const QString& sequence)
+{
+    return SmileyPack::getInEmojiFont(sequence, PICTURE_SIZE);
+}
+
+/** The format the rich text gives to the first character of the given text in it. */
+QTextCharFormat formatOf(const QTextDocument& document, const QString& text)
+{
+    const int at = document.toPlainText().indexOf(text);
+    for (QTextBlock block = document.begin(); block.isValid(); block = block.next()) {
+        for (auto it = block.begin(); !it.atEnd(); ++it) {
+            const QTextFragment fragment = it.fragment();
+            if (at >= fragment.position() && at < fragment.position() + fragment.length()) {
+                return fragment.charFormat();
+            }
+        }
+    }
+    return {};
+}
 } // namespace
 
 class TestSmileyPack : public QObject
@@ -74,6 +106,9 @@ private slots:
     void testSmilifyMixedScripts();
     void testPickerLeavesOutWhatAndroidDoesNotOffer();
     void testPickerOffersTheRestOfThePack();
+    void testSequencesAreAsBigAsThePictures();
+    void testEmojiFontRangesLeaveBlockedSequencesApart();
+    void testPlainTextAsRichTextKeepsTheText();
 private:
     std::unique_ptr<QGuiApplication> app;
     std::unique_ptr<MockSettings> settings;
@@ -162,11 +197,11 @@ void TestSmileyPack::testSmilifyWholeCharactersOnly()
     // skin tone alone (a brown square) is what the QA run saw. It is one character, set in the emoji
     // font (testSmilifySetsToneSequencesInTheEmojiFont).
     const QString thumbsUpMedium = QStringLiteral("👍🏽");
-    QCOMPARE(smileyPack.smileyfied(thumbsUpMedium), SmileyPack::getInEmojiFont(thumbsUpMedium));
+    QCOMPARE(smileyPack.smileyfied(thumbsUpMedium), inPictureSize(thumbsUpMedium));
 
     // A character left to the system font does not keep the next one from its picture.
     QCOMPARE(smileyPack.smileyfied(thumbsUpMedium + "👍"),
-             QString(SmileyPack::getInEmojiFont(thumbsUpMedium) + SmileyPack::getAsRichText("👍")));
+             QString(inPictureSize(thumbsUpMedium) + SmileyPack::getAsRichText("👍")));
 }
 
 /**
@@ -177,13 +212,14 @@ void TestSmileyPack::testSmilifyKeepsFlagsWhole()
 {
     SmileyPack smileyPack{*settings};
 
-    // 🇹🇷 is U+1F1F9 U+1F1F7. The pack has both letters alone and not the flag.
+    // 🇹🇷 is U+1F1F9 U+1F1F7. The pack has both letters alone and not the flag. The system's emoji
+    // font draws it, as big as the pictures (QA live 2026-11-14: it was as big as the text).
     const QString turkey = QStringLiteral("🇹🇷");
-    QCOMPARE(smileyPack.smileyfied(turkey), turkey);
+    QCOMPARE(smileyPack.smileyfied(turkey), inPictureSize(turkey));
 
     // Letters pair up from the start of a run: 🇹🇷🇷🇺 is Turkey, then Russia, which the pack has.
     QCOMPARE(smileyPack.smileyfied(turkey + "🇷🇺"),
-             QString(turkey + SmileyPack::getAsRichText("🇷🇺")));
+             QString(inPictureSize(turkey) + SmileyPack::getAsRichText("🇷🇺")));
 
     // A letter without a pair is a character of its own and keeps its picture.
     QCOMPARE(smileyPack.smileyfied("🇷🇺🇹"),
@@ -202,13 +238,13 @@ void TestSmileyPack::testSmilifyKeepsJoinedSequencesWhole()
     // set in the emoji font (testSmilifySetsJoinedSequencesInTheEmojiFont).
     const QString family = QStringLiteral("👨") + ZERO_WIDTH_JOINER + QStringLiteral("👩")
                            + ZERO_WIDTH_JOINER + QStringLiteral("👧");
-    QCOMPARE(smileyPack.smileyfied(family), SmileyPack::getInEmojiFont(family));
+    QCOMPARE(smileyPack.smileyfied(family), inPictureSize(family));
 
     // The heart on fire is newer than the cluster rules of Qt 5.12 (the Windows build), which end
     // the character at the joiner; the fire after it is still a part of it.
     const QString heartOnFire =
         QStringLiteral("❤") + EMOJI_PRESENTATION + ZERO_WIDTH_JOINER + QStringLiteral("🔥");
-    QCOMPARE(smileyPack.smileyfied(heartOnFire), SmileyPack::getInEmojiFont(heartOnFire));
+    QCOMPARE(smileyPack.smileyfied(heartOnFire), inPictureSize(heartOnFire));
 
     // Qt 5.15 holds the heart on fire together by its own rules. What holds it on Qt 5.12 is that
     // an emoji right after a joiner stays text even where the cluster rules end the character at
@@ -218,7 +254,7 @@ void TestSmileyPack::testSmilifyKeepsJoinedSequencesWhole()
 
     // The emoji around a sequence keep their pictures.
     QCOMPARE(smileyPack.smileyfied("😊" + family + "😊"),
-             QString(SmileyPack::getAsRichText("😊") + SmileyPack::getInEmojiFont(family)
+             QString(SmileyPack::getAsRichText("😊") + inPictureSize(family)
                      + SmileyPack::getAsRichText("😊")));
 }
 
@@ -233,7 +269,7 @@ void TestSmileyPack::testSmilifySetsJoinedSequencesInTheEmojiFont()
     // QA live: the pirate flag (U+1F3F4 U+200D U+2620 U+FE0F) was a flag and a skull on Qt 5.
     const QString pirateFlag = QStringLiteral("🏴") + ZERO_WIDTH_JOINER + QStringLiteral("☠")
                                + EMOJI_PRESENTATION;
-    const QString inFont = SmileyPack::getInEmojiFont(pirateFlag);
+    const QString inFont = inPictureSize(pirateFlag);
     QVERIFY(inFont.startsWith(QStringLiteral("<span style=\"font-family:'")));
     QVERIFY(inFont.contains(pirateFlag));
     QCOMPARE(smileyPack.smileyfied(pirateFlag), inFont);
@@ -242,12 +278,12 @@ void TestSmileyPack::testSmilifySetsJoinedSequencesInTheEmojiFont()
     // A skin tone on a member is a part of the sequence: the woman runner, medium skin tone.
     const QString runner = QStringLiteral("🏃🏽") + ZERO_WIDTH_JOINER + QStringLiteral("♀")
                            + EMOJI_PRESENTATION;
-    QCOMPARE(smileyPack.smileyfied(runner), SmileyPack::getInEmojiFont(runner));
+    QCOMPARE(smileyPack.smileyfied(runner), inPictureSize(runner));
 
     // A man and a woman are not two fathers: 👨‍👩‍👦 stays one character.
     const QString parents = QStringLiteral("👨") + ZERO_WIDTH_JOINER + QStringLiteral("👩")
                             + ZERO_WIDTH_JOINER + QStringLiteral("👦");
-    QCOMPARE(smileyPack.smileyfied(parents), SmileyPack::getInEmojiFont(parents));
+    QCOMPARE(smileyPack.smileyfied(parents), inPictureSize(parents));
 }
 
 /**
@@ -261,15 +297,15 @@ void TestSmileyPack::testSmilifySetsToneSequencesInTheEmojiFont()
     // QA live 2026-11-14: ✌🏽 (U+270C U+1F3FD) was the text font's ✌ and a brown square on the Mac.
     // ✌ alone keeps its picture.
     const QString victoryMedium = QStringLiteral("✌🏽");
-    QCOMPARE(smileyPack.smileyfied(victoryMedium), SmileyPack::getInEmojiFont(victoryMedium));
+    QCOMPARE(smileyPack.smileyfied(victoryMedium), inPictureSize(victoryMedium));
     QCOMPARE(smileyPack.smileyfied(QStringLiteral("✌")), SmileyPack::getAsRichText(QStringLiteral("✌")));
     QCOMPARE(smileyPack.smileyfied("a " + victoryMedium + " " + QStringLiteral("✌")),
-             QString("a " + SmileyPack::getInEmojiFont(victoryMedium) + " "
+             QString("a " + inPictureSize(victoryMedium) + " "
                      + SmileyPack::getAsRichText(QStringLiteral("✌"))));
 
     // The tone with an emoji presentation selector before it is still the same character.
     const QString victoryAsEmojiMedium = QStringLiteral("✌") + EMOJI_PRESENTATION + QStringLiteral("🏽");
-    QCOMPARE(smileyPack.smileyfied(victoryAsEmojiMedium), SmileyPack::getInEmojiFont(victoryAsEmojiMedium));
+    QCOMPARE(smileyPack.smileyfied(victoryAsEmojiMedium), inPictureSize(victoryAsEmojiMedium));
 }
 
 /**
@@ -301,14 +337,14 @@ void TestSmileyPack::testSmilifyDrawsBlockedSequencesApart()
     const QString coupleWithTones = QStringLiteral("👨🏻") + ZERO_WIDTH_JOINER + QStringLiteral("❤")
                                     + EMOJI_PRESENTATION + ZERO_WIDTH_JOINER + QStringLiteral("👨🏼");
     QCOMPARE(smileyPack.smileyfied(coupleWithTones),
-             QString(SmileyPack::getInEmojiFont(QStringLiteral("👨🏻")) + SmileyPack::getAsRichText("❤")
-                     + EMOJI_PRESENTATION + SmileyPack::getInEmojiFont(QStringLiteral("👨🏼"))));
+             QString(inPictureSize(QStringLiteral("👨🏻")) + SmileyPack::getAsRichText("❤")
+                     + EMOJI_PRESENTATION + inPictureSize(QStringLiteral("👨🏼"))));
 
     // A blocked sequence does not touch the one next to it.
     const QString pirateFlag = QStringLiteral("🏴") + ZERO_WIDTH_JOINER + QStringLiteral("☠")
                                + EMOJI_PRESENTATION;
     QCOMPARE(smileyPack.smileyfied(pirateFlag + " " + twoFathers),
-             QString(SmileyPack::getInEmojiFont(pirateFlag) + " " + SmileyPack::getAsRichText("👨")
+             QString(inPictureSize(pirateFlag) + " " + SmileyPack::getAsRichText("👨")
                      + SmileyPack::getAsRichText("👨") + SmileyPack::getAsRichText("👦")));
 }
 
@@ -338,11 +374,17 @@ void TestSmileyPack::testSmilifyKeepsKeycapsWhole()
 {
     SmileyPack smileyPack{*settings};
 
-    // The keycap one is "1", U+FE0F and U+20E3.
+    // The keycap one is "1", U+FE0F and U+20E3. The pack has no keycaps: the system's emoji font
+    // draws it, as big as the pictures (QA live 2026-11-14: the text font drew a 1 in a frame).
     const QString keycapOne = QStringLiteral("1") + EMOJI_PRESENTATION + COMBINING_KEYCAP;
-    QCOMPARE(smileyPack.smileyfied(keycapOne), keycapOne);
+    QCOMPARE(smileyPack.smileyfied(keycapOne), inPictureSize(keycapOne));
     QCOMPARE(smileyPack.smileyfied(keycapOne + " 😊"),
-             QString(keycapOne + " " + SmileyPack::getAsRichText("😊")));
+             QString(inPictureSize(keycapOne) + " " + SmileyPack::getAsRichText("😊")));
+
+    // Without U+FE0F it is a keycap too; a digit alone stays text.
+    const QString keycapHash = QStringLiteral("#") + COMBINING_KEYCAP;
+    QCOMPARE(smileyPack.smileyfied(QStringLiteral("1 ") + keycapHash),
+             QString(QStringLiteral("1 ") + inPictureSize(keycapHash)));
 }
 
 /**
@@ -369,13 +411,13 @@ void TestSmileyPack::testSmilifyMixedScripts()
     SmileyPack smileyPack{*settings};
 
     // The message of the cross-platform QA run: the pack has none of its emoji whole. The thumb with a
-    // skin tone is set in the emoji font, the flag is left to the system font.
+    // skin tone and the flag are set in the emoji font; the digits stay text.
     const QString qaMessage = QStringLiteral(
         "Тест 1 с мака: кириллица, emoji 👍🏽🇹🇷, арабский السلام عليكم, цифры 12345");
     QCOMPARE(smileyPack.smileyfied(qaMessage),
              QString(QStringLiteral("Тест 1 с мака: кириллица, emoji ")
-                     + SmileyPack::getInEmojiFont(QStringLiteral("👍🏽"))
-                     + QStringLiteral("🇹🇷, арабский السلام عليكم, цифры 12345")));
+                     + inPictureSize(QStringLiteral("👍🏽")) + inPictureSize(QStringLiteral("🇹🇷"))
+                     + QStringLiteral(", арабский السلام عليكم, цифры 12345")));
 
     QCOMPARE(smileyPack.smileyfied("Привет👍мир 🇷🇺 السلام😊عليكم"),
              QString("Привет" + SmileyPack::getAsRichText("👍") + "мир "
@@ -444,6 +486,87 @@ void TestSmileyPack::testPickerOffersTheRestOfThePack()
     // The 24 of them, eight signs of the zodiac twice: the pack has them with and without U+FE0F.
     QCOMPARE(leftOut, 32);
     QCOMPARE(all.size(), 832);
+}
+
+/**
+ * @brief KHANDAQ (QA live 2026-11-14): a sequence in the emoji font is as big as the pictures of
+ * the pack in the same message (👍🏽 was half as big as 👍); without pictures, as big as the text.
+ */
+void TestSmileyPack::testSequencesAreAsBigAsThePictures()
+{
+    const QString thumbsUpMedium = QStringLiteral("👍🏽");
+    QTextDocument message;
+    message.setHtml(QStringLiteral("a ") + inPictureSize(thumbsUpMedium));
+    const QTextCharFormat sized = formatOf(message, thumbsUpMedium);
+    QCOMPARE(sized.font().family(), SmileyPack::emojiFontFamily());
+    QCOMPARE(sized.intProperty(QTextFormat::FontPixelSize), PICTURE_SIZE);
+    QVERIFY(!formatOf(message, QStringLiteral("a")).hasProperty(QTextFormat::FontPixelSize));
+
+    QTextDocument plain;
+    plain.setHtml(QStringLiteral("a ") + SmileyPack::getInEmojiFont(thumbsUpMedium, 0));
+    const QTextCharFormat unsized = formatOf(plain, thumbsUpMedium);
+    QCOMPARE(unsized.font().family(), SmileyPack::emojiFontFamily());
+    QVERIFY(!unsized.hasProperty(QTextFormat::FontPixelSize));
+
+    SmileyPack smileyPack{*settings};
+    QVERIFY(smileyPack.smileyfied(thumbsUpMedium)
+                .contains(QStringLiteral("font-size:%1px").arg(PICTURE_SIZE)));
+}
+
+/**
+ * @brief The text being typed has its joined sequences set in the emoji font, all but those the
+ * picker does not offer
+ */
+void TestSmileyPack::testEmojiFontRangesLeaveBlockedSequencesApart()
+{
+    const QString doctor = QStringLiteral("👨") + ZERO_WIDTH_JOINER + QStringLiteral("⚕")
+                           + EMOJI_PRESENTATION;
+    const QString twoFathers = QStringLiteral("👨") + ZERO_WIDTH_JOINER + QStringLiteral("👨");
+    const QString thumbsUpMedium = QStringLiteral("👍🏽");
+    const QString text = QStringLiteral("a ") + doctor + QStringLiteral(" b ") + twoFathers
+                         + QStringLiteral(" ") + thumbsUpMedium;
+
+    const QVector<QPair<int, int>> ranges = SmileyPack::emojiFontRanges(text);
+    QCOMPARE(ranges.size(), 2);
+    const auto textOf = [&text](const QPair<int, int>& range) {
+        return text.mid(range.first, range.second - range.first);
+    };
+    QCOMPARE(textOf(ranges.at(0)), doctor);
+    QCOMPARE(textOf(ranges.at(1)), thumbsUpMedium);
+    QVERIFY(SmileyPack::emojiFontRanges(QStringLiteral("no sequence 😊 here 1")).isEmpty());
+
+    // Flags and keycaps too, in the order of the text.
+    const QString keycapOne = QStringLiteral("1") + EMOJI_PRESENTATION + COMBINING_KEYCAP;
+    const QString more = QStringLiteral("🇹🇷 ") + keycapOne + QStringLiteral(" ") + doctor;
+    const QVector<QPair<int, int>> moreRanges = SmileyPack::emojiFontRanges(more);
+    QCOMPARE(moreRanges.size(), 3);
+    QCOMPARE(more.mid(moreRanges.at(0).first, moreRanges.at(0).second - moreRanges.at(0).first),
+             QStringLiteral("🇹🇷"));
+    QCOMPARE(more.mid(moreRanges.at(1).first, moreRanges.at(1).second - moreRanges.at(1).first),
+             keycapOne);
+    QCOMPARE(more.mid(moreRanges.at(2).first, moreRanges.at(2).second - moreRanges.at(2).first),
+             doctor);
+}
+
+/**
+ * @brief A plain text shown as rich text reads as typed: its markup characters, line breaks and
+ * runs of spaces kept, its sequences in the emoji font and those the picker does not offer apart
+ */
+void TestSmileyPack::testPlainTextAsRichTextKeepsTheText()
+{
+    const QString doctor = QStringLiteral("👨") + ZERO_WIDTH_JOINER + QStringLiteral("⚕")
+                           + EMOJI_PRESENTATION;
+    const QString typed = QStringLiteral("<b>a &amp; b</b>  two spaces\nnext line ") + doctor;
+    QTextDocument shown;
+    shown.setHtml(SmileyPack::plainTextAsRichText(typed));
+    QCOMPARE(shown.toPlainText(), typed);
+    QCOMPARE(formatOf(shown, doctor).font().family(), SmileyPack::emojiFontFamily());
+    QVERIFY(!formatOf(shown, doctor).hasProperty(QTextFormat::FontPixelSize));
+
+    const QString twoFathers = QStringLiteral("👨") + ZERO_WIDTH_JOINER + QStringLiteral("👨");
+    QTextDocument apart;
+    apart.setHtml(SmileyPack::plainTextAsRichText(twoFathers));
+    QCOMPARE(apart.toPlainText(), QStringLiteral("👨👨"));
 }
 
 QTEST_GUILESS_MAIN(TestSmileyPack)

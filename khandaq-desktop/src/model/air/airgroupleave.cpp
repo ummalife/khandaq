@@ -19,12 +19,16 @@
 
 #include "airgroupleave.h"
 
+#include <QStringList>
+
 #include <cstring>
 
 namespace Air {
 
 namespace {
 const uint8_t leaveNotice[] = {0x66, 0x77, 0x88, 0x11, 0x34, 0x35, 0x01, 0x44};
+// TOX_GROUP_CHAT_ID_SIZE.
+constexpr int chatIdSize = 32;
 } // namespace
 
 QByteArray groupLeaveNoticePacket()
@@ -117,6 +121,115 @@ bool GroupLeaveNotices::hidesAny(int group) const
 void GroupLeaveNotices::forgetGroup(int group)
 {
     groups.remove(group);
+}
+
+void PendingGroupLeaves::record(int group, const QByteArray& chatId, const QByteArray& partMessage,
+                                qint64 nowMs)
+{
+    for (auto it = leaves.begin(); it != leaves.end();) {
+        if (it->group == group || it->chatId == chatId) {
+            it = leaves.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    Leave leave;
+    leave.group = group;
+    leave.chatId = chatId;
+    leave.partMessage = partMessage;
+    leave.dueMs = nowMs + delayMs;
+    leaves.append(leave);
+}
+
+QVector<PendingGroupLeaves::Leave> PendingGroupLeaves::takeDue(qint64 nowMs)
+{
+    QVector<Leave> due;
+    for (auto it = leaves.begin(); it != leaves.end();) {
+        if (nowMs >= it->dueMs) {
+            due.append(*it);
+            it = leaves.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    return due;
+}
+
+QVector<PendingGroupLeaves::Leave> PendingGroupLeaves::takeAll()
+{
+    QVector<Leave> all;
+    all.swap(leaves);
+    return all;
+}
+
+bool PendingGroupLeaves::cancel(const QByteArray& chatId, Leave* cancelled)
+{
+    for (auto it = leaves.begin(); it != leaves.end(); ++it) {
+        if (it->chatId != chatId) {
+            continue;
+        }
+        if (cancelled) {
+            *cancelled = *it;
+        }
+        leaves.erase(it);
+        return true;
+    }
+    return false;
+}
+
+bool PendingGroupLeaves::containsGroup(int group) const
+{
+    for (const Leave& leave : leaves) {
+        if (leave.group == group) {
+            return true;
+        }
+    }
+    return false;
+}
+
+int PendingGroupLeaves::groupOf(const QByteArray& chatId) const
+{
+    for (const Leave& leave : leaves) {
+        if (leave.chatId == chatId) {
+            return leave.group;
+        }
+    }
+    return -1;
+}
+
+QList<QByteArray> PendingGroupLeaves::chatIds() const
+{
+    QList<QByteArray> ids;
+    for (const Leave& leave : leaves) {
+        ids.append(leave.chatId);
+    }
+    return ids;
+}
+
+QString PendingGroupLeaves::store(const QList<QByteArray>& chatIds)
+{
+    QStringList lines;
+    for (const QByteArray& chatId : chatIds) {
+        lines.append(QString::fromLatin1(chatId.toHex()).toUpper());
+    }
+    return lines.join(QLatin1Char('\n'));
+}
+
+QList<QByteArray> PendingGroupLeaves::parseStore(const QString& stored)
+{
+    QList<QByteArray> chatIds;
+    for (const QString& line : stored.split(QLatin1Char('\n'))) {
+        const QString hex = line.trimmed();
+        const QByteArray chatId = QByteArray::fromHex(hex.toLatin1());
+        // fromHex() skips what is no hex digit: only a line that comes back the same is a chat id.
+        if (chatId.size() != chatIdSize
+            || QString::fromLatin1(chatId.toHex()).compare(hex, Qt::CaseInsensitive) != 0
+            || chatIds.contains(chatId)) {
+            continue;
+        }
+        chatIds.append(chatId);
+    }
+    return chatIds;
 }
 
 } // namespace Air

@@ -32,8 +32,11 @@ bool isNotice(const QByteArray& packet)
 
 const QByteArray keyA(32, 'a');
 const QByteArray keyB(32, 'b');
+const QByteArray chatA(32, '\x0a');
+const QByteArray chatB(32, '\x0b');
 constexpr qint64 at = 1000000;
 constexpr qint64 relayTimeout = 54 * 1000;
+constexpr qint64 delay = PendingGroupLeaves::delayMs;
 } // namespace
 
 // QA live F11: a member that leaves a group says so first, since toxcore's QUIT is the same when its
@@ -50,6 +53,13 @@ private slots:
     void aNoticeThatNoExitFollowsLapses();
     void anotherPeersExitChangesNothing();
     void leavingTheGroupForgetsItsNotices();
+    void ourLeaveWaitsForTheResendsOfItsNotice();
+    void aGroupWeLeaveIsKnownByItsNumberAndItsChatId();
+    void leavingAgainReplacesTheLeave();
+    void joiningAgainCancelsTheLeave();
+    void closingTheProfileTakesEveryLeave();
+    void theProfileKeepsTheChatIds();
+    void aStoredLineThatHoldsNoChatIdIsSkipped();
 };
 
 void TestAirGroupLeave::theNoticeIsTheNgcHeaderWithId0x44()
@@ -140,6 +150,129 @@ void TestAirGroupLeave::leavingTheGroupForgetsItsNotices()
     notices.forgetGroup(3);
     QVERIFY(!notices.hidesAny(3));
     QVERIFY(!notices.hides(3, keyA, at));
+}
+
+// QA live F11: our own leave waits while toxcore resends its notice, at about +3, +5 and +9 s.
+void TestAirGroupLeave::ourLeaveWaitsForTheResendsOfItsNotice()
+{
+    QVERIFY(delay > 9 * 1000);
+    PendingGroupLeaves leaves;
+    leaves.record(3, chatA, QByteArray(), at);
+    QVERIFY(leaves.takeDue(at).isEmpty());
+    QVERIFY(leaves.takeDue(at + delay - 1).isEmpty());
+    QVERIFY(leaves.containsGroup(3));
+    const QVector<PendingGroupLeaves::Leave> due = leaves.takeDue(at + delay);
+    QCOMPARE(due.size(), 1);
+    QCOMPARE(due.first().group, 3);
+    QCOMPARE(due.first().chatId, chatA);
+    QVERIFY(due.first().partMessage.isEmpty());
+    // Taken out, so that it is left once.
+    QVERIFY(!leaves.containsGroup(3));
+    QVERIFY(leaves.takeDue(at + 2 * delay).isEmpty());
+}
+
+void TestAirGroupLeave::aGroupWeLeaveIsKnownByItsNumberAndItsChatId()
+{
+    PendingGroupLeaves leaves;
+    QVERIFY(!leaves.containsGroup(3));
+    QCOMPARE(leaves.groupOf(chatA), -1);
+    leaves.record(3, chatA, QByteArray(), at);
+    leaves.record(5, chatB, QByteArray("bye"), at + 1000);
+    QVERIFY(leaves.containsGroup(3));
+    QVERIFY(leaves.containsGroup(5));
+    QVERIFY(!leaves.containsGroup(4));
+    QCOMPARE(leaves.groupOf(chatA), 3);
+    QCOMPARE(leaves.groupOf(chatB), 5);
+    QCOMPARE(leaves.groupOf(QByteArray(32, '\x0c')), -1);
+    QCOMPARE(leaves.chatIds(), (QList<QByteArray>{chatA, chatB}));
+    // Each is due in its own time.
+    QVector<PendingGroupLeaves::Leave> due = leaves.takeDue(at + delay);
+    QCOMPARE(due.size(), 1);
+    QCOMPARE(due.first().group, 3);
+    QVERIFY(leaves.containsGroup(5));
+    due = leaves.takeDue(at + 1000 + delay);
+    QCOMPARE(due.size(), 1);
+    QCOMPARE(due.first().group, 5);
+    QCOMPARE(due.first().partMessage, QByteArray("bye"));
+    QVERIFY(leaves.chatIds().isEmpty());
+}
+
+void TestAirGroupLeave::leavingAgainReplacesTheLeave()
+{
+    PendingGroupLeaves leaves;
+    leaves.record(3, chatA, QByteArray(), at);
+    leaves.record(3, chatA, QByteArray(), at + 5000);
+    QCOMPARE(leaves.chatIds().size(), 1);
+    QVERIFY(leaves.takeDue(at + delay).isEmpty());
+    // The same chat id under another number is the same group.
+    leaves.record(6, chatA, QByteArray(), at + 5000);
+    QVERIFY(!leaves.containsGroup(3));
+    QCOMPARE(leaves.groupOf(chatA), 6);
+    // So is the same number with another chat id: the number holds one group at a time.
+    leaves.record(6, chatB, QByteArray(), at + 5000);
+    QCOMPARE(leaves.groupOf(chatA), -1);
+    QCOMPARE(leaves.chatIds(), QList<QByteArray>{chatB});
+    QCOMPARE(leaves.takeDue(at + 5000 + delay).size(), 1);
+}
+
+void TestAirGroupLeave::joiningAgainCancelsTheLeave()
+{
+    PendingGroupLeaves leaves;
+    leaves.record(3, chatA, QByteArray(), at);
+    leaves.record(5, chatB, QByteArray(), at);
+    QVERIFY(!leaves.cancel(QByteArray(32, '\x0c')));
+    PendingGroupLeaves::Leave cancelled;
+    QVERIFY(leaves.cancel(chatA, &cancelled));
+    QCOMPARE(cancelled.group, 3);
+    QCOMPARE(cancelled.chatId, chatA);
+    // Its time never comes: the new instance may get the same number and has the same chat id.
+    QVERIFY(!leaves.containsGroup(3));
+    QCOMPARE(leaves.groupOf(chatA), -1);
+    const QVector<PendingGroupLeaves::Leave> due = leaves.takeDue(at + delay);
+    QCOMPARE(due.size(), 1);
+    QCOMPARE(due.first().group, 5);
+    QVERIFY(!leaves.cancel(chatA));
+}
+
+void TestAirGroupLeave::closingTheProfileTakesEveryLeave()
+{
+    PendingGroupLeaves leaves;
+    QVERIFY(leaves.takeAll().isEmpty());
+    leaves.record(3, chatA, QByteArray(), at);
+    leaves.record(5, chatB, QByteArray(), at + 1000);
+    const QVector<PendingGroupLeaves::Leave> all = leaves.takeAll();
+    QCOMPARE(all.size(), 2);
+    QCOMPARE(all.at(0).group, 3);
+    QCOMPARE(all.at(1).group, 5);
+    QVERIFY(!leaves.containsGroup(3));
+    QVERIFY(leaves.chatIds().isEmpty());
+    QVERIFY(leaves.takeDue(at + 2 * delay).isEmpty());
+}
+
+void TestAirGroupLeave::theProfileKeepsTheChatIds()
+{
+    QCOMPARE(PendingGroupLeaves::store({}), QString());
+    QVERIFY(PendingGroupLeaves::parseStore(QString()).isEmpty());
+    const QString stored = PendingGroupLeaves::store({chatA, chatB});
+    QCOMPARE(stored, QString(QStringLiteral("0A")).repeated(32) + QLatin1Char('\n')
+                         + QString(QStringLiteral("0B")).repeated(32));
+    QCOMPARE(PendingGroupLeaves::parseStore(stored), (QList<QByteArray>{chatA, chatB}));
+}
+
+void TestAirGroupLeave::aStoredLineThatHoldsNoChatIdIsSkipped()
+{
+    const QString a = QString(QStringLiteral("0a")).repeated(32);
+    const QString b = QString(QStringLiteral("0B")).repeated(32);
+    const QStringList lines{QString(),
+                            a,
+                            QStringLiteral("  ") + b + QStringLiteral(" "),
+                            b.left(62),
+                            b.left(63),
+                            QString(QStringLiteral("0G")).repeated(32),
+                            b + QStringLiteral("0B"),
+                            a};
+    QCOMPARE(PendingGroupLeaves::parseStore(lines.join(QLatin1Char('\n'))),
+             (QList<QByteArray>{chatA, chatB}));
 }
 
 QTEST_GUILESS_MAIN(TestAirGroupLeave)

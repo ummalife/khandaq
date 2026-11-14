@@ -443,6 +443,13 @@ public:
     QByteArray getAirLocalStore() const;
     void setAirLocalStore(const QByteArray& data);
 
+    /**
+     * QA live F11: the chat ids of the groups whose leave is not done and saved yet (Core), so that
+     * a leave that the app closing or a crash cut short is finished at the next start.
+     */
+    QString getPendingGroupLeaves() const;
+    void setPendingGroupLeaves(const QString& stored);
+
     StyleType getStylePreference() const;
     void setStylePreference(StyleType newValue);
 
@@ -742,6 +749,7 @@ private:
     ThemeMode themeMode = ThemeMode::System;
     QStringList favoriteChats;
     QByteArray airLocalStore;
+    QString pendingGroupLeaves;
 
     static CompatibleRecursiveMutex bigLock;
     static const QString globalSettingsFile;

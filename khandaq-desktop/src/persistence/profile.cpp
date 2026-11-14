@@ -336,6 +336,16 @@ bool Profile::initCore(const QByteArray& toxsave, Settings& s, bool isNewProfile
 
     // save tox file when Core requests it
     connect(core.get(), &Core::saveRequest, this, &Profile::onSaveToxSave);
+    // QA live F11: the groups whose leave is not done and saved yet are kept with the profile, and
+    // a leave that the app closing or a crash cut short is finished now, before the groups load.
+    connect(core.get(), &Core::pendingGroupLeavesChanged, this, [this](const QString& stored) {
+        if (isRemoved) {
+            return;
+        }
+        settings.setPendingGroupLeaves(stored);
+        settings.savePersonal();
+    });
+    core->leaveStoredGroups(settings.getPendingGroupLeaves());
     // react to avatar changes
     connect(core.get(), &Core::friendAvatarRemoved, this, &Profile::removeAvatar);
     connect(core.get(), &Core::friendAvatarChanged, this, &Profile::setFriendAvatar);
@@ -469,6 +479,12 @@ Profile* Profile::createProfile(const QString& name, const QString& password, Se
 Profile::~Profile()
 {
     if (isRemoved) {
+        // QA live F11: our leaves that wait for their notice are done before toxcore goes. Nothing
+        // the core says reaches the removed profile any more: it saves nothing.
+        if (core) {
+            disconnect(core.get(), nullptr, this, nullptr);
+            core->leavePendingGroupsNow();
+        }
         settings.unloadPersonal(*this);
         return;
     }
@@ -480,7 +496,12 @@ Profile::~Profile()
         return;
     }
 
+    // QA live F11: our leaves that wait for their notice are done now, and toxcore let go of the
+    // groups, so that the save below holds none of them; only after it the profile stops keeping
+    // their chat ids.
+    core->leavePendingGroupsNow();
     onSaveToxSave();
+    settings.setPendingGroupLeaves(core->getPendingGroupLeaves());
     settings.savePersonal();
     settings.sync();
     settings.unloadPersonal(*this);

@@ -28,6 +28,12 @@ import java.util.regex.Pattern;
  * store keeps every pending request in the encrypted globals table (the one drafts use) as a
  * single JSON value until it is accepted or declined.
  *
+ * <p>KHANDAQ (QA live, F2): it also remembers the requests we accepted. toxcore does not say which side
+ * asked, and Air reads a contact never seen online as our own request that waits for an answer
+ * ("waiting for reply", "request sent"); a contact added by accepting their request is never seen
+ * either until the first link, so it looked the same, also after a restart. The keys we accepted
+ * are kept as a second JSON value of the same table, with the time each request reached us.
+ *
  * <p>Reads and writes may come from any thread: the toxcore callback adds, the UI answers, the
  * Air repository reads. Writes reach the database on one background thread, in order. Listeners
  * are told on the main thread.
@@ -38,6 +44,11 @@ final class AirRequestStore
 
     static final String OPTS_KEY = "air_incoming_requests";
     static final int MAX_REQUESTS = 50;
+    static final String ACCEPTED_OPTS_KEY = "air_accepted_requests";
+    /** As many as the block list keeps: one per contact ever accepted on this device, at most. */
+    static final int MAX_ACCEPTED = 1000;
+    /** {@link #acceptedRequestMs} of a key whose request we did not accept. */
+    static final long NOT_ACCEPTED = -1L;
     /** TOX_MAX_FRIEND_REQUEST_LENGTH: toxcore never delivers more, the cap only guards the store. */
     static final int MAX_MESSAGE_LENGTH = 1016;
 
@@ -136,6 +147,9 @@ final class AirRequestStore
     private static List<Pending> cache = null;
     /** The database the cache was read from: a profile switch replaces it, and the cache goes. */
     private static Object cacheSource = null;
+    /** The requests we accepted, as Pending without their words; newest first, null until read. */
+    private static List<Pending> acceptedCache = null;
+    private static Object acceptedSource = null;
     private static final CopyOnWriteArrayList<Listener> LISTENERS = new CopyOnWriteArrayList<>();
     private static ExecutorService writer = null;
     private static Handler mainHandler = null;
@@ -232,6 +246,61 @@ final class AirRequestStore
         notifyListeners();
     }
 
+    /**
+     * Notes that we accepted the request from this key. Call it before the contact is added, so that no
+     * build of the list sees the new contact without the mark, and before {@link #remove}: the mark takes
+     * the time the waiting request reached us (the person was online then), 0 when none waits.
+     */
+    static void markAccepted(String publicKey)
+    {
+        final String json;
+        synchronized (LOCK)
+        {
+            final Pending mark = acceptedMark(loadedLocked(), publicKey);
+            if (mark == null)
+            {
+                return;
+            }
+            acceptedCache = withAdded(acceptedLoadedLocked(), mark, MAX_ACCEPTED);
+            json = encode(acceptedCache);
+        }
+        persist(ACCEPTED_OPTS_KEY, json);
+    }
+
+    /**
+     * When the request we accepted from this key reached us, 0 when that is not known, or
+     * {@link #NOT_ACCEPTED}. Reads the database the first time; call it off the main thread.
+     */
+    static long acceptedRequestMs(String publicKey)
+    {
+        synchronized (LOCK)
+        {
+            return acceptedMs(acceptedLoadedLocked(), publicKey);
+        }
+    }
+
+    /** The key is no longer one whose request we accepted: the contact is removed, or we asked them ourselves. */
+    static void forgetAccepted(String publicKey)
+    {
+        final Pending probe = Pending.of(publicKey, "", 0);
+        if (probe == null)
+        {
+            return;
+        }
+        final String json;
+        synchronized (LOCK)
+        {
+            final List<Pending> current = acceptedLoadedLocked();
+            if (find(current, probe.publicKey) == null)
+            {
+                return;
+            }
+            acceptedCache = without(current, Collections.singleton(probe.publicKey));
+            json = acceptedCache.isEmpty() ? null : encode(acceptedCache);
+        }
+        persist(ACCEPTED_OPTS_KEY, json);
+    }
+
     static void addListener(Listener listener)
     {
         if (listener != null)
@@ -261,7 +330,27 @@ final class AirRequestStore
         return cache;
     }
 
+    private static List<Pending> acceptedLoadedLocked()
+    {
+        final Object source = TrifaToxService.orma;
+        if (source == null)
+        {
+            return acceptedCache == null ? Collections.<Pending>emptyList() : acceptedCache;
+        }
+        if (acceptedCache == null || acceptedSource != source)
+        {
+            acceptedCache = decode(HelperGeneric.get_g_opts(ACCEPTED_OPTS_KEY), MAX_ACCEPTED);
+            acceptedSource = source;
+        }
+        return acceptedCache;
+    }
+
     private static void persist(final String jsonOrNull)
+    {
+        persist(OPTS_KEY, jsonOrNull);
+    }
+
+    private static void persist(final String optsKey, final String jsonOrNull)
     {
         final ExecutorService executor;
         synchronized (LOCK)
@@ -283,11 +372,11 @@ final class AirRequestStore
             }
             if (jsonOrNull == null)
             {
-                HelperGeneric.del_g_opts(OPTS_KEY);
+                HelperGeneric.del_g_opts(optsKey);
             }
             else
             {
-                HelperGeneric.set_g_opts(OPTS_KEY, jsonOrNull);
+                HelperGeneric.set_g_opts(optsKey, jsonOrNull);
             }
         });
     }
@@ -316,6 +405,12 @@ final class AirRequestStore
     /** The list with the request added: one entry per key, newest first, at most MAX_REQUESTS. */
     static List<Pending> withAdded(List<Pending> current, Pending incoming)
     {
+        return withAdded(current, incoming, MAX_REQUESTS);
+    }
+
+    /** As above, at most {@code max} entries. */
+    static List<Pending> withAdded(List<Pending> current, Pending incoming, int max)
+    {
         final List<Pending> next = new ArrayList<>(current.size() + 1);
         Pending merged = incoming;
         for (Pending existing : current)
@@ -333,11 +428,34 @@ final class AirRequestStore
         }
         next.add(merged);
         Collections.sort(next, NEWEST_FIRST);
-        while (next.size() > MAX_REQUESTS)
+        while (next.size() > max)
         {
             next.remove(next.size() - 1);
         }
         return Collections.unmodifiableList(next);
+    }
+
+    /**
+     * The mark of a request we accept from this key: the time the waiting request reached us, never its
+     * words; 0 when none waits. Null when the key is not a 64-hex public key.
+     */
+    static Pending acceptedMark(List<Pending> waiting, String publicKey)
+    {
+        final Pending probe = Pending.of(publicKey, "", 0);
+        if (probe == null)
+        {
+            return null;
+        }
+        final Pending request = find(waiting, probe.publicKey);
+        return request == null ? probe : Pending.of(probe.publicKey, "", request.receivedMs);
+    }
+
+    /** When the accepted request from this key reached us, 0 when not known, or NOT_ACCEPTED. */
+    static long acceptedMs(List<Pending> accepted, String publicKey)
+    {
+        final Pending probe = Pending.of(publicKey, "", 0);
+        final Pending mark = probe == null ? null : find(accepted, probe.publicKey);
+        return mark == null ? NOT_ACCEPTED : mark.receivedMs;
     }
 
     static List<Pending> without(List<Pending> current, Collection<String> publicKeys)
@@ -370,6 +488,12 @@ final class AirRequestStore
     /** Reads what {@link #encode} wrote. Damaged entries are skipped, never fatal. */
     static List<Pending> decode(String json)
     {
+        return decode(json, MAX_REQUESTS);
+    }
+
+    /** As above, keeping at most {@code max} entries. */
+    static List<Pending> decode(String json, int max)
+    {
         List<Pending> result = Collections.emptyList();
         if (json == null || json.trim().isEmpty())
         {
@@ -399,7 +523,7 @@ final class AirRequestStore
                                                longField(object, FIELD_RECEIVED_MS));
             if (pending != null)
             {
-                result = withAdded(result, pending);
+                result = withAdded(result, pending, max);
             }
         }
         return result;

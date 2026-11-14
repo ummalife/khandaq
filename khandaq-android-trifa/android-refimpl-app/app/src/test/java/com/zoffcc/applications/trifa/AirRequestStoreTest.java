@@ -147,4 +147,48 @@ public class AirRequestStoreTest
         assertEquals(pending(KEY_A, "dup", 9), list.get(0));
         assertEquals(pending(KEY_B, "", 0), list.get(1));
     }
+
+    // ---- requests we accepted (QA live, F2) ----
+
+    @Test
+    public void theAcceptedMarkTakesTheTimeOfTheWaitingRequestButNotItsWords()
+    {
+        final List<AirRequestStore.Pending> waiting = AirRequestStore.withAdded(EMPTY, pending(KEY_A, "hi, it's me", 1234));
+        assertEquals(pending(KEY_A, "", 1234), AirRequestStore.acceptedMark(waiting, KEY_A.toLowerCase(Locale.ROOT)));
+        // Accepted on a path without a card: the time is not known.
+        assertEquals(pending(KEY_B, "", 0), AirRequestStore.acceptedMark(waiting, KEY_B));
+        assertNull(AirRequestStore.acceptedMark(waiting, "not a key"));
+    }
+
+    @Test
+    public void onlyAnAcceptedKeyHasAnAcceptedTime()
+    {
+        List<AirRequestStore.Pending> accepted = AirRequestStore.withAdded(EMPTY, pending(KEY_A, "", 1234),
+                                                                           AirRequestStore.MAX_ACCEPTED);
+        accepted = AirRequestStore.withAdded(accepted, pending(KEY_B, "", 0), AirRequestStore.MAX_ACCEPTED);
+        assertEquals(1234L, AirRequestStore.acceptedMs(accepted, KEY_A.toLowerCase(Locale.ROOT)));
+        assertEquals(0L, AirRequestStore.acceptedMs(accepted, KEY_B));
+        assertEquals(AirRequestStore.NOT_ACCEPTED, AirRequestStore.acceptedMs(accepted, key(7)));
+        assertEquals(AirRequestStore.NOT_ACCEPTED, AirRequestStore.acceptedMs(accepted, null));
+        assertEquals(AirRequestStore.NOT_ACCEPTED,
+                     AirRequestStore.acceptedMs(AirRequestStore.without(accepted, Collections.singleton(KEY_A)), KEY_A));
+    }
+
+    @Test
+    public void theAcceptedListOutlivesTheCapOfWaitingCardsAndSurvivesARestart()
+    {
+        List<AirRequestStore.Pending> accepted = EMPTY;
+        for (int i = 0; i < 60; i++)
+        {
+            accepted = AirRequestStore.withAdded(accepted, pending(key(i), "", 1000 + i), AirRequestStore.MAX_ACCEPTED);
+        }
+        assertEquals(60, accepted.size());
+        // What a restart reads back from the globals table.
+        final List<AirRequestStore.Pending> read = AirRequestStore.decode(AirRequestStore.encode(accepted),
+                                                                          AirRequestStore.MAX_ACCEPTED);
+        assertEquals(accepted, read);
+        assertEquals(1000L, AirRequestStore.acceptedMs(read, key(0)));
+        // The cards themselves keep their own cap.
+        assertEquals(AirRequestStore.MAX_REQUESTS, AirRequestStore.decode(AirRequestStore.encode(accepted)).size());
+    }
 }

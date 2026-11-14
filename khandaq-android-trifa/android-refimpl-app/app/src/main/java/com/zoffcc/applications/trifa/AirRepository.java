@@ -644,6 +644,13 @@ final class AirRepository
         }
         if (neverConnected(friend, publicKey))
         {
+            // KHANDAQ (QA live, F2): only our own request waits for a reply; a contact whose request we
+            // accepted is away since that request reached us, until the first link.
+            final long acceptedMs = AirRequestStore.acceptedRequestMs(publicKey);
+            if (acceptedMs != AirRequestStore.NOT_ACCEPTED)
+            {
+                return AirModel.Reach.acceptedRequest(acceptedMs / 1000L, nowSeconds, selfLinkSettling);
+            }
             return AirModel.Reach.PENDING;
         }
         final long lastSeenMs = FriendPresenceHelper.resolve_last_seen_ms(friend);

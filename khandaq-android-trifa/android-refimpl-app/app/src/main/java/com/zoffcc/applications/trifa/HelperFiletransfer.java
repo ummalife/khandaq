@@ -29,6 +29,7 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
+import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.os.Handler;
 import android.os.Looper;
@@ -58,6 +59,8 @@ import java.io.InputStream;
 import java.net.URLConnection;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
@@ -70,7 +73,6 @@ import static com.zoffcc.applications.trifa.HelperFriend.friend_call_push_url;
 import static com.zoffcc.applications.trifa.HelperFriend.is_friend_online_real;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperGeneric.dp2px;
-import static com.zoffcc.applications.trifa.HelperGeneric.get_fileExt;
 import static com.zoffcc.applications.trifa.HelperGeneric.set_message_accepted_from_id;
 import static com.zoffcc.applications.trifa.HelperMessage.set_message_queueing_from_id;
 import static com.zoffcc.applications.trifa.HelperMessage.set_message_start_sending_from_id;
@@ -1726,63 +1728,26 @@ public class HelperFiletransfer
                 sha256(TrifaSetPatternActivity.StringToBytes2(filepath))).
                 substring(1, 5).toLowerCase();
 
-        String filename_sd_card = remove_bad_chars_from_outgoing_sdcard_filename(
-                new_fake_filename_prefix + "_" + filename);
-        //Log.i(TAG, "copy_outgoing_file_to_sdcard_dir:" + filename_sd_card + " : " + new_fake_filename_prefix + " : " +
-        //           filepath + " : " + filename);
-
-        if (filename_sd_card == null)
-        {
-            Log.i(TAG, "copy_outgoing_file_to_sdcard_dir:003");
-            return null;
-        }
-
+        // KHANDAQ (QA live, F4): each copy gets a folder of its own under the outgoing folder and keeps the
+        // picked name in it. The copy used to lie in the outgoing folder itself as "<4 hex>_<name>" (a random
+        // number in front when that was taken), and that name went to the peer as the file's name: iOS and
+        // the desktop showed "9ded_photo.png". Rows written before keep their flat paths, which every reader
+        // takes whole (filename_fullpath, or path_name and file_name), and delete_outgoing_copy leaves the
+        // outgoing folder itself in place.
+        File file = null;
         try
         {
-
-            File dir = new File(SD_CARD_FILES_OUTGOING_WRAPPER_DIR);
-            dir.mkdirs();
-            String filename2 = filename_sd_card;
-            File file = new File(SD_CARD_FILES_OUTGOING_WRAPPER_DIR, filename2);
-
-            long counter = 0;
-            while (file.exists())
+            file = claim_outgoing_copy(SD_CARD_FILES_OUTGOING_WRAPPER_DIR, new_fake_filename_prefix, filename);
+            if (file == null)
             {
-                String extension = get_fileExt(filename_sd_card);
-                if ((extension != null) && (extension.length() > 0))
-                {
-                    extension = "." + extension;
-                }
-                else
-                {
-                    extension = "";
-                }
-
-                //filename2 = remove_bad_chars_from_outgoing_sdcard_filename(
-                //        filename_sd_card + "." + (long) ((Math.random() * 10000000d)) + extension);
-
-                filename2 = (long) ((Math.random() * 1000000d)) + "_" + filename_sd_card;
-
-                if (filename2 == null)
-                {
-                    Log.i(TAG, "copy_outgoing_file_to_sdcard_dir:004");
-                    return null;
-                }
-
-                file = new File(dir, filename2);
-                counter++;
-
-                // Log.i(TAG, "copy_outgoing_file_to_sdcard_dir:" + filename2 + " " + SD_CARD_FILES_OUTGOING_WRAPPER_DIR);
-
-                if (counter > 5000)
-                {
-                    Log.i(TAG, "copy_outgoing_file_to_sdcard_dir:005");
-                    return null;
-                }
+                Log.i(TAG, "copy_outgoing_file_to_sdcard_dir:005");
+                return null;
             }
 
-            ret.filepath_wrapped = SD_CARD_FILES_OUTGOING_WRAPPER_DIR;
-            ret.filename_wrapped = filename2;
+            ret.filepath_wrapped = file.getParentFile().getAbsolutePath();
+            // The name as made safe for the copy (outgoing_copy_file_name): the copy lies under it and goes out
+            // with it.
+            ret.filename_wrapped = file.getName();
 
             // now write that contents of the virtual file to the actual file on SD card ----------------
             // Log.i(TAG, "copy_outgoing_file_to_sdcard_dir:filepath=" + filepath);
@@ -1800,6 +1765,7 @@ public class HelperFiletransfer
             if (in == null)
             {
                 Log.i(TAG, "copy_outgoing_file_to_sdcard_dir:in==null");
+                delete_outgoing_copy(file.getAbsolutePath());
                 return null;
             }
             // KHANDAQ (audit #21): close BOTH streams in a finally. Previously a mid-copy failure (storage
@@ -1808,8 +1774,7 @@ public class HelperFiletransfer
             BufferedOutputStream out = null;
             try
             {
-                out = new BufferedOutputStream(
-                        new FileOutputStream(SD_CARD_FILES_OUTGOING_WRAPPER_DIR + "/" + filename2));
+                out = new BufferedOutputStream(new FileOutputStream(file));
 
                 // KHANDAQ (perf): 256KB chunks instead of 4KB — far fewer read/write syscalls.
                 final int chunk_size = 256 * 1024;
@@ -1828,12 +1793,11 @@ public class HelperFiletransfer
             }
             // now write that contents of the virtual file to the actual file on SD card ----------------
 
-            File file2 = new File(SD_CARD_FILES_OUTGOING_WRAPPER_DIR, filename2);
-            ret.file_size_wrapped = file2.length();
+            ret.file_size_wrapped = file.length();
 
             if (ret.file_size_wrapped < 1)
             {
-                file2.delete();
+                delete_outgoing_copy(file.getAbsolutePath());
                 Log.i(TAG, "copy_outgoing_file_to_sdcard_dir:006");
                 return null;
             }
@@ -1844,7 +1808,256 @@ public class HelperFiletransfer
         {
             Log.i(TAG, "copy_outgoing_file_to_sdcard_dir:007:" + e.getMessage());
             e.printStackTrace();
+            // KHANDAQ (QA live, F4): a copy cut short (storage full, the provider gone) does not stay behind.
+            if (file != null)
+            {
+                delete_outgoing_copy(file.getAbsolutePath());
+            }
             return null;
+        }
+    }
+
+    /**
+     * KHANDAQ (QA live, F4): the file of a new copy, created empty in a folder of its own under the outgoing
+     * folder: [prefix]/[name], or [prefix]_1/[name] and on when that path is taken (the same file sent twice,
+     * two at once), so that no two copies share a path. The name is made safe first (outgoing_copy_file_name),
+     * and a copy is made only where its path stays in the outgoing folder (outgoing_copy_target). Null when
+     * 5000 are taken.
+     */
+    static File claim_outgoing_copy(final String outgoingDir, final String prefix, final String name)
+            throws java.io.IOException
+    {
+        if ((outgoingDir == null) || outgoingDir.isEmpty())
+        {
+            return null;
+        }
+        final String safe_name = outgoing_copy_file_name(name, prefix);
+        for (int attempt = 0; attempt <= 5000; attempt++)
+        {
+            final File file = outgoing_copy_target(outgoingDir, outgoing_copy_dir_name(prefix, attempt), safe_name);
+            if (file == null)
+            {
+                // With the name made safe, only a folder that links elsewhere gets here; the next one is tried.
+                continue;
+            }
+            final File dir = file.getParentFile();
+            try
+            {
+                if (create_outgoing_copy_file(dir, file))
+                {
+                    return file;
+                }
+            }
+            catch (java.io.IOException e)
+            {
+                remove_outgoing_copy_dir(dir, outgoingDir);
+                throw e;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * KHANDAQ (QA live, F4): [outgoing]/[folder]/[name] as a file, or null when that path leads anywhere else,
+     * by "..", a separator or a link. Checked on the normalized path, which is the one stored and shown, and
+     * again with links resolved (is_inside_outgoing_dir), which is where the bytes would go.
+     */
+    private static File outgoing_copy_target(final String outgoingDir, final String folder, final String name)
+    {
+        final Path base = Paths.get(outgoingDir).normalize();
+        final Path target = base.resolve(folder).resolve(name).normalize();
+        if (!target.startsWith(base))
+        {
+            return null;
+        }
+        if (target.getNameCount() != base.getNameCount() + 2)
+        {
+            return null;
+        }
+        final File file = target.toFile();
+        if (!is_inside_outgoing_dir(file, outgoingDir))
+        {
+            return null;
+        }
+        return file;
+    }
+
+    /**
+     * KHANDAQ (QA live, F4): whether the file lies in the outgoing folder, both with all links resolved. A path
+     * that cannot be resolved does not.
+     */
+    private static boolean is_inside_outgoing_dir(final File file, final String outgoingDir)
+    {
+        try
+        {
+            final String real_dir = new File(outgoingDir).getCanonicalPath();
+            return file.getCanonicalPath().startsWith(real_dir + File.separator);
+        }
+        catch (java.io.IOException e)
+        {
+            return false;
+        }
+    }
+
+    /**
+     * KHANDAQ (QA live, F4): creates the copy's file empty; false when a copy is there already, or a copy
+     * from before the folders has the folder's name ("9ded_1" for a file named "1"). The folder is made
+     * again when the last copy in it was removed in between (delete_outgoing_copy).
+     */
+    private static boolean create_outgoing_copy_file(final File dir, final File file) throws java.io.IOException
+    {
+        for (int tries = 0; ; tries++)
+        {
+            dir.mkdirs();
+            if (dir.isFile())
+            {
+                return false;
+            }
+            try
+            {
+                return file.createNewFile();
+            }
+            catch (java.io.IOException e)
+            {
+                if (dir.isDirectory() || (tries >= 2))
+                {
+                    throw e;
+                }
+            }
+        }
+    }
+
+    /**
+     * KHANDAQ (QA live, F4): the longest name a copy may have, in UTF-8 bytes: the longest file name Android's
+     * file systems take, and the longest name toxcore sends with a file.
+     */
+    static final int OUTGOING_COPY_NAME_MAX_BYTES = TOX_MAX_FILENAME_LENGTH;
+    /** An extension longer than this, dot included, is not kept apart when a name is cut. */
+    private static final int OUTGOING_COPY_EXTENSION_MAX_CHARS = 16;
+
+    /**
+     * KHANDAQ (QA live, F4): the name a copy keeps on disk and goes out with: the picked name, made safe for
+     * a path. The name comes from another app (a provider's display name, the photo picker, a share), so it
+     * may hold anything. Path separators and control characters become "_". Leading dots go, so "." and ".."
+     * are nothing, and any other ".." becomes "_". A name over OUTGOING_COPY_NAME_MAX_BYTES is cut, keeping
+     * its extension. A name with nothing left is the prefix and "_", the form every copy had before.
+     */
+    static String outgoing_copy_file_name(final String filename, final String prefix)
+    {
+        final String picked = (filename == null) ? "" : filename;
+        final StringBuilder safe = new StringBuilder(picked.length());
+        for (int i = 0; i < picked.length(); i++)
+        {
+            final char c = picked.charAt(i);
+            if ((safe.length() == 0) && (c == '.'))
+            {
+                continue;
+            }
+            safe.append(((c == '/') || (c == '\\') || (c == ':') || Character.isISOControl(c)) ? '_' : c);
+        }
+        final String name = cut_outgoing_copy_name(safe.toString().replace("..", "_"));
+        if (name.trim().isEmpty())
+        {
+            return prefix + "_";
+        }
+        return name;
+    }
+
+    /** The name cut to OUTGOING_COPY_NAME_MAX_BYTES after a whole character, its extension kept when short. */
+    private static String cut_outgoing_copy_name(final String name)
+    {
+        if (AirUtf8Limit.utf8Length(name, 0, name.length()) <= OUTGOING_COPY_NAME_MAX_BYTES)
+        {
+            return name;
+        }
+        final int dot = name.lastIndexOf('.');
+        final String extension = ((dot > 0) && ((name.length() - dot) <= OUTGOING_COPY_EXTENSION_MAX_CHARS))
+                                 ? name.substring(dot) : "";
+        final String stem = name.substring(0, name.length() - extension.length());
+        final int room = OUTGOING_COPY_NAME_MAX_BYTES - AirUtf8Limit.utf8Length(extension, 0, extension.length());
+        int end = AirUtf8Limit.fittingChars(stem, room);
+        // A dot left at the end of the cut would stand next to the extension's own, a ".." again.
+        while ((end > 0) && !extension.isEmpty() && (stem.charAt(end - 1) == '.'))
+        {
+            end--;
+        }
+        return stem.substring(0, end) + extension;
+    }
+
+    /** KHANDAQ (QA live, F4): the folder of a copy under the outgoing folder; the next one when it is taken. */
+    static String outgoing_copy_dir_name(final String prefix, final int attempt)
+    {
+        return attempt <= 0 ? prefix : prefix + "_" + attempt;
+    }
+
+    /**
+     * KHANDAQ (QA live, F4): removes this app's copy of a file we sent, and the folder of its own it lies in
+     * (copy_outgoing_file_to_sdcard_dir) once that is empty. A copy from before those folders lies in the
+     * outgoing folder itself, which stays. Anything outside the outgoing folder is left alone.
+     */
+    static boolean delete_outgoing_copy(final String fullpath)
+    {
+        return delete_outgoing_copy(fullpath, SD_CARD_FILES_OUTGOING_WRAPPER_DIR);
+    }
+
+    /** As above, with the outgoing folder given (MainActivity sets it with a slash at the end). */
+    static boolean delete_outgoing_copy(final String fullpath, final String outgoingDir)
+    {
+        if ((fullpath == null) || (outgoingDir == null) || outgoingDir.isEmpty())
+        {
+            return false;
+        }
+        try
+        {
+            final Path base = Paths.get(outgoingDir).normalize();
+            final Path target = Paths.get(fullpath).normalize();
+            // Normalized first: a path that only starts with the outgoing folder's name ("outgoing/../x") is
+            // not in it. The folder itself is never one copy.
+            if (!target.startsWith(base))
+            {
+                return false;
+            }
+            if (target.getNameCount() <= base.getNameCount())
+            {
+                return false;
+            }
+            final File file = target.toFile();
+            // Nor is a place a link leads to.
+            if (!is_inside_outgoing_dir(file, outgoingDir))
+            {
+                return false;
+            }
+            final boolean deleted = file.delete();
+            final File dir = file.getParentFile();
+            if (dir != null)
+            {
+                remove_outgoing_copy_dir(dir, outgoingDir);
+            }
+            return deleted;
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "delete_outgoing_copy:EE:" + e.getMessage());
+            return false;
+        }
+    }
+
+    /** KHANDAQ (QA live, F4): removes the folder of a copy once nothing is left in it; never the outgoing folder. */
+    private static void remove_outgoing_copy_dir(final File dir, final String outgoingDir)
+    {
+        try
+        {
+            final File parent = dir.getParentFile();
+            if ((parent != null) && new File(outgoingDir).getCanonicalFile().equals(parent.getCanonicalFile()))
+            {
+                // Removing a folder fails while anything is in it, so another copy there stays with its folder.
+                //noinspection ResultOfMethodCallIgnored
+                dir.delete();
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "remove_outgoing_copy_dir:EE:" + e.getMessage());
         }
     }
 
@@ -2675,6 +2888,13 @@ public class HelperFiletransfer
     static String resolve_attachment_display_name(final Context context, final Uri uri, final String preferredName)
     {
         String name = preferredName;
+        // KHANDAQ (QA live, F4): the system Photo Picker names a photo after its gallery id; the peer gets the
+        // gallery's name of it instead (qa-stripes-android.png, not 1000000022.png) when this app may read it.
+        final String galleryName = photo_picker_gallery_name(context, uri, name);
+        if (galleryName != null)
+        {
+            name = galleryName;
+        }
         if ((name == null) || name.isEmpty())
         {
             try
@@ -2707,6 +2927,107 @@ public class HelperFiletransfer
         }
 
         return name;
+    }
+
+    /** KHANDAQ (QA live, F4): the provider the system Photo Picker serves this device's own photos from. */
+    private static final String PHOTO_PICKER_LOCAL_AUTHORITY = "com.android.providers.media.photopicker";
+    /** KHANDAQ (QA live, F4): uids per Android user (UserHandle.PER_USER_RANGE), for the user of this app. */
+    private static final int PER_USER_UID_RANGE = 100000;
+
+    /**
+     * KHANDAQ (QA live, F4): the name the gallery has for a photo or a video picked from this device with the
+     * system Photo Picker. The picker keeps the file itself hidden and names every pick after its gallery id
+     * ("1000000022.png"); the gallery answers with the real name when this app may read photos and videos.
+     * Null for any other uri, when the picker gave a real name, and when the gallery does not answer.
+     */
+    private static String photo_picker_gallery_name(final Context context, final Uri uri, final String pickerName)
+    {
+        if ((context == null) || (uri == null))
+        {
+            return null;
+        }
+        try
+        {
+            final String mediaId = photo_picker_local_media_id(uri.getAuthority(), uri.getPathSegments(),
+                                                               android.os.Process.myUid() / PER_USER_UID_RANGE);
+            if (mediaId == null)
+            {
+                return null;
+            }
+            if ((pickerName != null) && (!pickerName.isEmpty())
+                && (!is_photo_picker_placeholder_name(pickerName, mediaId)))
+            {
+                return null;
+            }
+            try (Cursor cur = context.getContentResolver().query(MediaStore.Files.getContentUri("external"),
+                                                                 new String[]{MediaStore.MediaColumns.DISPLAY_NAME},
+                                                                 MediaStore.MediaColumns._ID + "=?",
+                                                                 new String[]{mediaId}, null))
+            {
+                if ((cur != null) && cur.moveToFirst())
+                {
+                    final int idx = cur.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME);
+                    if ((idx >= 0) && (!cur.isNull(idx)))
+                    {
+                        final String name = cur.getString(idx);
+                        if ((name != null) && (!name.trim().isEmpty()))
+                        {
+                            return name;
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "photo_picker_gallery_name:EE:" + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * KHANDAQ (QA live, F4): the gallery id of a pick from this device's own photos with the system Photo
+     * Picker: content://media/picker/[user]/com.android.providers.media.photopicker/media/[id], with
+     * picker_get_content in place of picker when the picker stood in for a GET_CONTENT. Null for any other
+     * uri, a photo from a cloud provider or another user's among them.
+     */
+    static String photo_picker_local_media_id(final String authority, final List<String> segments, final int userId)
+    {
+        if ((!"media".equals(authority)) || (segments == null) || (segments.size() != 5))
+        {
+            return null;
+        }
+        final String root = segments.get(0);
+        if (((!"picker".equals(root)) && (!"picker_get_content".equals(root)))
+            || (!String.valueOf(userId).equals(segments.get(1)))
+            || (!PHOTO_PICKER_LOCAL_AUTHORITY.equals(segments.get(2)))
+            || (!"media".equals(segments.get(3))))
+        {
+            return null;
+        }
+        final String id = segments.get(4);
+        if ((id == null) || id.isEmpty() || (id.length() > 18))
+        {
+            return null;
+        }
+        for (int i = 0; i < id.length(); i++)
+        {
+            if ((id.charAt(i) < '0') || (id.charAt(i) > '9'))
+            {
+                return null;
+            }
+        }
+        return id;
+    }
+
+    /** KHANDAQ (QA live, F4): the Photo Picker's own name for a pick: its gallery id, with an extension or not. */
+    static boolean is_photo_picker_placeholder_name(final String name, final String mediaId)
+    {
+        if ((name == null) || (mediaId == null) || mediaId.isEmpty())
+        {
+            return false;
+        }
+        return name.equals(mediaId) || name.startsWith(mediaId + ".");
     }
 
     static String buildOutgoingFileMessageText(Context context, String filename, long file_size)
@@ -3206,6 +3527,23 @@ public class HelperFiletransfer
         }
     }
 
+    /**
+     * KHANDAQ (QA live, F3): a file of theirs that is here. Its row in the file table comes only with the whole
+     * file (MainActivity, file_recv_chunk) and goes with a failed one (fail_incoming_filetransfer), and its
+     * transfer is over by then. A retry that ran late used to set such a file back to RESUME
+     * (retry_incoming_filetransfer), and that state stays in the database: the file is still here.
+     */
+    static boolean incoming_file_is_here(final int state, final long filedb_id, final long filetransfer_id)
+    {
+        return (filedb_id != -1) && ((state == TOX_FILE_CONTROL_CANCEL.value) || (filetransfer_id <= 0));
+    }
+
+    /** KHANDAQ (QA live, F3): a retry of a file of theirs has a transfer to resume and no whole file yet. */
+    static boolean incoming_retry_applies(final long filedb_id, final long filetransfer_id)
+    {
+        return (filetransfer_id > 0) && (filedb_id == -1);
+    }
+
     static void retry_incoming_filetransfer(final Message message)
     {
         if (message == null)
@@ -3214,19 +3552,27 @@ public class HelperFiletransfer
         }
         try
         {
-            if (accept_paused_incoming_filetransfer(message))
+            // KHANDAQ (QA live, F3): the retry works on the message as it is now, not as it was when the retry
+            // was asked for. A row drawn while the file comes posts one (schedule_auto_retry_dm_incoming_file),
+            // and a small file can be whole before it runs: with the transfer of the old copy, the finished file
+            // was set back to RESUME for good, and its row lost "Save to phone", also after the chat was opened
+            // again (QA: a TXT that came right after a PNG and a PDF).
+            final Message current = (Message) orma.selectFromMessage().idEq(message.id).get(0);
+            if (!incoming_retry_applies(current.filedb_id, current.filetransfer_id))
             {
-                update_single_message_from_messge_id(message.id, true);
+                Log.i(TAG, "retry_incoming_filetransfer:nothing_to_retry:" + current.id);
                 return;
             }
-            if (message.filetransfer_id > 0)
+            if (accept_paused_incoming_filetransfer(current))
             {
-                tox_file_control(tox_friend_by_public_key__wrapper(message.tox_friendpubkey),
-                                 get_filetransfer_filenum_from_id(message.filetransfer_id), TOX_FILE_CONTROL_RESUME.value);
-                set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_RESUME.value);
-                set_message_state_from_id(message.id, TOX_FILE_CONTROL_RESUME.value);
-                update_single_message_from_messge_id(message.id, true);
+                update_single_message_from_messge_id(current.id, true);
+                return;
             }
+            tox_file_control(tox_friend_by_public_key__wrapper(current.tox_friendpubkey),
+                             get_filetransfer_filenum_from_id(current.filetransfer_id), TOX_FILE_CONTROL_RESUME.value);
+            set_filetransfer_state_from_id(current.filetransfer_id, TOX_FILE_CONTROL_RESUME.value);
+            set_message_state_from_id(current.id, TOX_FILE_CONTROL_RESUME.value);
+            update_single_message_from_messge_id(current.id, true);
         }
         catch (Exception ignored)
         {

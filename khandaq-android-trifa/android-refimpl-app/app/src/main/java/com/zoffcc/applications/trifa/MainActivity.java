@@ -9400,10 +9400,15 @@ public class MainActivity extends AppCompatActivity
         //           a_Tox_Group_Exit_Type);
 
         final String temp_group_identifier = tox_group_by_groupnum__wrapper(group_number);
-        HelperGroup.record_group_peer_last_seen_on_exit(group_number, peer_id);
+        // KHANDAQ (QA live, F11): toxcore has already dropped the peer when it calls this, so the peer's key is the
+        // one remembered while it was there. Asked by peer id, toxcore gave none, and a member who left was kept.
+        final String exit_peer_pubkey = HelperGroup.take_exiting_group_peer_pubkey(group_number, temp_group_identifier,
+                                                                                  peer_id);
+        HelperGroup.record_group_peer_last_seen_on_exit(temp_group_identifier, exit_peer_pubkey);
         HelperGroup.handle_group_peer_transport_lost(group_number, peer_id, a_Tox_Group_Exit_Type);
         // intentional leave/kick -> not a member anymore, drop from members DB
-        HelperGroup.remove_group_peer_from_db_on_exit(group_number, peer_id, a_Tox_Group_Exit_Type);
+        HelperGroup.remove_group_peer_from_db_on_exit(group_number, temp_group_identifier, exit_peer_pubkey,
+                                                      a_Tox_Group_Exit_Type);
         HelperGroup.sync_group_peers_from_tox_to_db(group_number);
         update_group_in_friendlist(temp_group_identifier);
         update_group_in_groupmessagelist(temp_group_identifier, true);
@@ -9422,6 +9427,8 @@ public class MainActivity extends AppCompatActivity
         {
         }
         final String temp_group_identifier = tox_group_by_groupnum__wrapper(group_number);
+        // KHANDAQ (QA live, F11): for this peer's exit, when toxcore no longer has the key.
+        GroupPeerKeys.remember(temp_group_identifier, peer_id, group_peer_pubkey);
 
         int peer_role = tox_group_peer_get_role(group_number, peer_id);
         if (peer_role < 0)
@@ -10879,7 +10886,8 @@ public class MainActivity extends AppCompatActivity
                                         // HINT: real file (no storage framework) and correct directory, delete the file now
                                         try
                                         {
-                                            new File(m_to_delete.filename_fullpath).delete();
+                                            // KHANDAQ (QA live, F4): with the copy goes the folder of its own it lies in.
+                                            HelperFiletransfer.delete_outgoing_copy(m_to_delete.filename_fullpath);
                                         }
                                         catch (Exception e)
                                         {
@@ -11631,7 +11639,8 @@ public class MainActivity extends AppCompatActivity
                                         // HINT: real file (no storage framework) and correct directory, delete the file now
                                         try
                                         {
-                                            new File(m_to_delete.filename_fullpath).delete();
+                                            // KHANDAQ (QA live, F4): with the copy goes the folder of its own it lies in.
+                                            HelperFiletransfer.delete_outgoing_copy(m_to_delete.filename_fullpath);
                                         }
                                         catch (Exception e)
                                         {

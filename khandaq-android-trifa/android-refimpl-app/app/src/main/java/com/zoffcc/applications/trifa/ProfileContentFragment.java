@@ -1128,7 +1128,8 @@ sayPhotoFailure(R.string.profile_avatar_error_generic);
                     sayPhotoFailure(R.string.profile_avatar_error_unsupported);
                     try
                     {
-                        new java.io.File(local_image_path).delete();
+                        // KHANDAQ (QA live, F4): the folder of its own the copy lies in goes with it.
+                        HelperFiletransfer.delete_outgoing_copy(local_image_path);
                     }
                     catch (Exception ignored)
                     {
@@ -1171,7 +1172,8 @@ sayPhotoFailure(R.string.profile_avatar_error_generic);
 
                 try
                 {
-                    file.delete();
+                    // KHANDAQ (QA live, F4): the folder of its own the copy lies in goes with it.
+                    HelperFiletransfer.delete_outgoing_copy(file.getAbsolutePath());
                 }
                 catch (Exception ignored)
                 {

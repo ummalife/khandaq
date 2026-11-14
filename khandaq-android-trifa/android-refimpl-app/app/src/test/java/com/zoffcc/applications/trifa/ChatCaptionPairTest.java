@@ -5,9 +5,13 @@ import com.zoffcc.applications.sorm.Message;
 import org.junit.Test;
 
 import static com.zoffcc.applications.trifa.ChatCaptionHelper.is_caption_pair;
+import static com.zoffcc.applications.trifa.ChatCaptionHelper.shows_media_inline;
 import static com.zoffcc.applications.trifa.ChatCaptionHelper.within_window;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_TYPE_TEXT;
+import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_CONTROL.TOX_FILE_CONTROL_CANCEL;
+import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_CONTROL.TOX_FILE_CONTROL_PAUSE;
+import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_CONTROL.TOX_FILE_CONTROL_RESUME;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -92,6 +96,27 @@ public class ChatCaptionPairTest
         // The sender's clock is off by an hour, both rows arrived 1.5 s apart.
         assertTrue(is_caption_pair(file(0, T0, T0), text(0, T0 + 3_600_000, T0 + 1_500, "caption")));
         assertFalse(is_caption_pair(file(0, T0, T0), text(0, T0 + 3_600_000, T0 + 7_000, "not a caption")));
+    }
+
+    @Test
+    public void our_photo_takes_its_caption_from_the_moment_it_is_sent()
+    {
+        // QA live (F3): the caption stood as an entry of its own until delivery, then moved into the photo.
+        assertTrue(shows_media_inline(1, TOX_FILE_CONTROL_PAUSE.value, -1, 7));   // waits for the peer
+        assertTrue(shows_media_inline(1, TOX_FILE_CONTROL_RESUME.value, -1, 7));  // on its way
+        assertTrue(shows_media_inline(1, TOX_FILE_CONTROL_CANCEL.value, 42, -1)); // delivered
+        assertFalse(shows_media_inline(1, TOX_FILE_CONTROL_CANCEL.value, -1, 7)); // cancelled: a file row
+    }
+
+    @Test
+    public void their_photo_takes_its_caption_once_it_is_here()
+    {
+        assertFalse(shows_media_inline(0, TOX_FILE_CONTROL_PAUSE.value, -1, 7));
+        assertFalse(shows_media_inline(0, TOX_FILE_CONTROL_RESUME.value, -1, 7));
+        assertFalse(shows_media_inline(0, TOX_FILE_CONTROL_CANCEL.value, -1, 7));
+        assertTrue(shows_media_inline(0, TOX_FILE_CONTROL_CANCEL.value, 42, -1));
+        // QA live (F3): a photo that is here, set back to RESUME by a retry that ran late.
+        assertTrue(shows_media_inline(0, TOX_FILE_CONTROL_RESUME.value, 42, -1));
     }
 
     @Test

@@ -209,7 +209,11 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
             if (my_msg.direction == 0)
             {
                 // incoming file -----------
-                if (my_msg.state == TOX_FILE_CONTROL_CANCEL.value)
+                // KHANDAQ (QA live, F3): a file that is here is drawn as one also when a late retry left it in
+                // RESUME (HelperFiletransfer.retry_incoming_filetransfer, now fixed); only this holder offers
+                // "Save to phone".
+                if ((my_msg.state == TOX_FILE_CONTROL_CANCEL.value)
+                    || HelperFiletransfer.incoming_file_is_here(my_msg.state, my_msg.filedb_id, my_msg.filetransfer_id))
                 {
                     // ------- STATE: CANCEL -------------
                     return Message_model.FILE_INCOMING_STATE_CANCEL;

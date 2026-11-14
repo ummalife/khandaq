@@ -19,6 +19,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.graphics.drawable.DrawableCompat;
 import androidx.core.widget.TextViewCompat;
@@ -276,6 +277,24 @@ final class AirTranscript
         }
         views(itemView);
         final Context context = text.getContext();
+        bodyFace(text);
+
+        final TextView retry = itemView.findViewById(R.id.air_entry_retry);
+        if (retry != null)
+        {
+            AirUi.markAsButton(retry);
+            retry.setContentDescription(context.getString(R.string.air_failed_retry) + ". "
+                                        + context.getString(R.string.air_failed_retry_hint));
+        }
+    }
+
+    /**
+     * The body face of an entry's words, without the bubble's padding, spacing and link colours that
+     * EmojiTextViewLinks starts with. Links stay ink, underlined. Also the caption of a file entry.
+     */
+    static void bodyFace(final EmojiTextViewLinks text)
+    {
+        final Context context = text.getContext();
         final int ink = AirUi.color(context, R.color.kq_ink);
         TextViewCompat.setTextAppearance(text, R.style.TextAppearance_KQ_Body);
         text.setIncludeFontPadding(false);
@@ -291,14 +310,22 @@ final class AirTranscript
         text.setCustomModeColor(ink);
         text.setSelectedStateColor(AirUi.color(context, R.color.kq_ink_2));
         text.enableUnderLine();
+    }
 
-        final TextView retry = itemView.findViewById(R.id.air_entry_retry);
-        if (retry != null)
-        {
-            AirUi.markAsButton(retry);
-            retry.setContentDescription(context.getString(R.string.air_failed_retry) + ". "
-                                        + context.getString(R.string.air_failed_retry_hint));
-        }
+    /**
+     * The body size and line of an entry's words: the size the user picked in the app's settings,
+     * relative to the design's body size. {@code emojiProbe} is the plain text whose emoji may take the
+     * sticker size, or null for the usual one.
+     */
+    static void bodySize(final EmojiTextViewLinks text, @Nullable final CharSequence emojiProbe)
+    {
+        final Resources res = text.getResources();
+        final float factor = textFactor();
+        text.setTextSize(TypedValue.COMPLEX_UNIT_PX, res.getDimension(R.dimen.kq_text_body) * factor);
+        // setLineHeight keeps a spacing equal to the line it asks for, so the bubble's multiplier goes first.
+        text.setLineSpacing(0f, 1f);
+        TextViewCompat.setLineHeight(text, Math.round(res.getDimension(R.dimen.kq_line_body) * factor));
+        ChatBubbleUiHelper.configure_message_emoji_size(text, emojiProbe, PREF__global_font_size, false);
     }
 
     /**
@@ -322,14 +349,7 @@ final class AirTranscript
         final boolean outgoing = m.direction == 1;
         final boolean callNote = HelperMessageEdit.isLocalCallLogRow(m);
 
-        final float factor = textFactor();
-        views.text.setTextSize(TypedValue.COMPLEX_UNIT_PX, res.getDimension(R.dimen.kq_text_body) * factor);
-        // setLineHeight keeps a spacing equal to the line it asks for, so the bubble's multiplier goes first.
-        views.text.setLineSpacing(0f, 1f);
-        TextViewCompat.setLineHeight(views.text, Math.round(res.getDimension(R.dimen.kq_line_body) * factor));
-        ChatBubbleUiHelper.configure_message_emoji_size(views.text,
-                                                        (parsed != null && parsed.reply == null && !locationBound)
-                                                        ? parsed.bodyText : null, PREF__global_font_size, false);
+        bodySize(views.text, (parsed != null && parsed.reply == null && !locationBound) ? parsed.bodyText : null);
         views.text.setTextColor(AirUi.color(context, callNote ? R.color.kq_ink_2 : R.color.kq_ink));
         // KHANDAQ (redesign, E9): a call is an entry with the phone glyph before its words.
         TextViewCompat.setCompoundDrawablesRelative(views.text, callNote ? callGlyph(context) : null, null,

@@ -218,6 +218,22 @@ final class AirModel
             return away(secondsAgo);
         }
 
+        /**
+         * KHANDAQ (QA live, F2): a contact we added by accepting their request and have not seen online
+         * since. toxcore cannot tell it from our own request still waiting for an answer, so it read as
+         * {@link #PENDING}. They were online when their request reached us: that is when they were last
+         * seen; {@code requestReceivedSeconds} 0 or less when that time is not known.
+         */
+        static Reach acceptedRequest(final long requestReceivedSeconds, final long nowSeconds,
+                                     final boolean selfLinkSettling)
+        {
+            if (requestReceivedSeconds <= 0L)
+            {
+                return AWAY_LONG_AGO;
+            }
+            return friend(TOX_CONNECTION_NONE, requestReceivedSeconds, nowSeconds, selfLinkSettling);
+        }
+
         @Override
         public boolean equals(final Object other)
         {

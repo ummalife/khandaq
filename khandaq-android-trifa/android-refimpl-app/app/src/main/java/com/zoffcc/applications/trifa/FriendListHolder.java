@@ -605,6 +605,8 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
             Log.i(TAG, "onMenuItemClick:8:EE:" + e.getMessage());
         }
         AirContactMarks.forget(pubkey);
+        // KHANDAQ (QA live, F2): so does the mark of their request we accepted.
+        AirRequestStore.forgetAccepted(pubkey);
         // KHANDAQ (redesign, E12): their invitations go too, toxcore joins only through them.
         AirInviteStore.removeFrom(pubkey);
         AirRepository.requestRefresh();

@@ -564,6 +564,15 @@ final class ChatListUiHelper
 
     private static String format_message_body(final Context context, final String text, final String filename)
     {
+        // KHANDAQ (QA live, F8): a file that reached us keeps TRIfA's text "[name]\n[N] bytes", and the row
+        // showed it whole: "qa-note-win.txt 4440 bytes", a raw count in English words. A photo, a video or a
+        // voice note reads as it does elsewhere in the list, any other file as its name.
+        final String received = received_file_name(text);
+        if (received != null)
+        {
+            final String media = media_kind_label(context, filename, received);
+            return truncate_preview(media != null ? media : received);
+        }
         String body = sanitize_preview_body(text);
         if (TextUtils.isEmpty(body))
         {
@@ -589,7 +598,47 @@ final class ChatListUiHelper
         return truncate_preview(body);
     }
 
+    /**
+     * KHANDAQ (QA live, F8): the name in TRIfA's text of a file that reached us, "[name]\n[N] bytes"
+     * (MainActivity, HelperGroup); null for any other text.
+     */
+    static String received_file_name(final String text)
+    {
+        if (text == null)
+        {
+            return null;
+        }
+        final int newline = text.indexOf('\n');
+        if (newline <= 0)
+        {
+            return null;
+        }
+        final String size = text.substring(newline + 1).trim();
+        final String unit = " bytes";
+        final int digits = size.length() - unit.length();
+        if ((digits <= 0) || !size.endsWith(unit))
+        {
+            return null;
+        }
+        for (int i = 0; i < digits; i++)
+        {
+            if ((size.charAt(i) < '0') || (size.charAt(i) > '9'))
+            {
+                return null;
+            }
+        }
+        final String name = text.substring(0, newline).trim();
+        return name.isEmpty() ? null : name;
+    }
+
     private static String media_preview_label(final Context context, final String filename, final String text)
+    {
+        final String media = media_kind_label(context, filename, text);
+        return media != null ? media : context.getString(R.string.chat_list_preview_file);
+    }
+
+    /** The label of a photo, a video or a voice note (a sound file too); null for any other file. */
+    private static String media_kind_label(final Context context, final String filename, final String text)
     {
         if (isVoiceMessagePath(filename) || isVoiceMessagePath(text)
                 || isVoiceMessagePath(display_name_from_message_text(text)))
@@ -611,6 +660,6 @@ final class ChatListUiHelper
         {
             return context.getString(R.string.voice_message_label);
         }
-        return context.getString(R.string.chat_list_preview_file);
+        return null;
     }
 }

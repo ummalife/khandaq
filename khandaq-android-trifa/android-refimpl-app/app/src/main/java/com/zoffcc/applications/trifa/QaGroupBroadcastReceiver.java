@@ -217,6 +217,8 @@ public class QaGroupBroadcastReceiver extends BroadcastReceiver
                     Log.w(TAG, "qa_group_broadcast:fail action=" + action + " reason=invalid_tox_id");
                     return;
                 }
+                // KHANDAQ (QA live, F2): the same mark as Accept on the card.
+                AirRequestStore.markAccepted(friendPk);
                 HelperFriend.add_friend_to_system(friendPk, false, null);
                 HelperGeneric.logI(TAG, "qa_group_broadcast:done action=" + action + " tox_id=" + friendPk);
                 return;

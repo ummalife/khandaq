@@ -25,6 +25,7 @@ import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.core.widget.ImageViewCompat;
 
+import com.luseen.autolinklibrary.EmojiTextViewLinks;
 import com.zoffcc.applications.sorm.FileDB;
 import com.zoffcc.applications.sorm.Filetransfer;
 import com.zoffcc.applications.sorm.GroupMessage;
@@ -645,6 +646,16 @@ final class AirFileEntry
             v.author.setVisibility(shownAuthor != null ? View.VISIBLE : View.GONE);
         }
         v.root.setTag(R.id.air_file_spoken_author, fullAuthor);
+        if (v.caption instanceof EmojiTextViewLinks)
+        {
+            // KHANDAQ (QA live, F3): the caption is the entry's text and reads as a text entry does. It
+            // kept the bubble's 10dp/7dp padding, font and spacing from EmojiTextViewLinks and the legacy
+            // text size from ChatCaptionHelper, so under the photo it stood inset ("centred") and larger
+            // than the same words as an entry of their own.
+            final EmojiTextViewLinks caption = (EmojiTextViewLinks) v.caption;
+            AirTranscript.bodyFace(caption);
+            AirTranscript.bodySize(caption, caption.getText());
+        }
         if (v.caption != null)
         {
             v.caption.setTextColor(AirUi.color(context, R.color.kq_ink));
@@ -661,12 +672,19 @@ final class AirFileEntry
         if (v.previewContainer != null)
         {
             v.previewContainer.setVisibility(View.VISIBLE);
+            // KHANDAQ (QA live, F3): the row holders size this container for their old bubbles: a photo's
+            // hugs its bitmap (wrap_content width), a finished file of theirs is pinned to 150dp. A recycled
+            // row kept the last of them, so a plain file after a photo had its name cut down to the width of
+            // its actions with the size right after it, and under the 150dp a blank gap. The entry's content
+            // always takes the column's width and the height of what it holds.
+            matchColumn(v.previewContainer);
         }
         // A photo of theirs shows once it is here; until then the entry says the file and what it waits for.
         if (v.preview != null && (!e.picture || (!e.outgoing && e.state != State.DONE)))
         {
             v.preview.setVisibility(View.GONE);
         }
+        framesFollowPreview(v.preview);
         final boolean pictured = visible(v.preview);
         final boolean playable = visible(v.player);
         // Under a photo or a voice note the first line goes: the preview already says what the file is.
@@ -741,6 +759,14 @@ final class AirFileEntry
             v.row.setBackground(null);
             v.row.setPadding(0, 0, 0, 0);
             v.row.setAlpha(1f);
+            if (e.picture || e.voice || !head)
+            {
+                // KHANDAQ (QA live, F3): a photo, a video or a voice note opens from its preview or player,
+                // never from this row; the open action a plain file's row got in an earlier bind of this
+                // recycled row belongs to that other file.
+                v.row.setOnClickListener(null);
+                v.row.setClickable(false);
+            }
             final boolean says = head || visible(v.bar) || visible(v.note) || offers;
             v.row.setVisibility(says ? View.VISIBLE : View.GONE);
             setTopMargin(v.row, head ? 0 : res.getDimensionPixelSize(R.dimen.kq_space_6));
@@ -950,6 +976,35 @@ final class AirFileEntry
         });
     }
 
+    /**
+     * KHANDAQ (QA live, F3): ChatFileBubbleHelper.ensureMediaPreviewFrame and
+     * ChatTransferProgressHelper.wrapPreviewWithOverlay put the preview into id-less frames that stay
+     * once made, and {@link #size} gives the outer one the box of the photo it held. Without a picture
+     * the frames go with the preview: left visible they kept that box as a blank gap above a plain file.
+     */
+    private static void framesFollowPreview(@Nullable final View preview)
+    {
+        if (preview == null)
+        {
+            return;
+        }
+        final int shown = preview.getVisibility() == View.VISIBLE ? View.VISIBLE : View.GONE;
+        View child = preview;
+        while (child.getParent() instanceof FrameLayout)
+        {
+            final View frame = (View) child.getParent();
+            if (frame.getId() != View.NO_ID)
+            {
+                return;
+            }
+            if (frame.getVisibility() != shown)
+            {
+                frame.setVisibility(shown);
+            }
+            child = frame;
+        }
+    }
+
     /** The preview, or the frame the video chrome or the transfer overlay put around it. */
     private static View boxOf(final View preview)
     {
@@ -1059,6 +1114,19 @@ final class AirFileEntry
     private static boolean visible(@Nullable final View view)
     {
         return view != null && view.getVisibility() == View.VISIBLE;
+    }
+
+    /** The full width of the entry's column and the height of what the view holds; set only when it differs. */
+    private static void matchColumn(final View view)
+    {
+        final ViewGroup.LayoutParams params = view.getLayoutParams();
+        if (params != null && (params.width != ViewGroup.LayoutParams.MATCH_PARENT
+                               || params.height != ViewGroup.LayoutParams.WRAP_CONTENT))
+        {
+            params.width = ViewGroup.LayoutParams.MATCH_PARENT;
+            params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+            view.setLayoutParams(params);
+        }
     }
 
     private static void setTopMargin(@Nullable final View view, final int top)

@@ -1555,6 +1555,8 @@ public class AirFragment extends Fragment
             joinInvite(request);
             return;
         }
+        // KHANDAQ (QA live, F2): marked first, so the new contact never reads as our own pending request.
+        AirRequestStore.markAccepted(request.publicKey);
         HelperFriend.add_friend_to_system(request.publicKey, false, null);
         AirRequestStore.remove(request.publicKey);
         AirRepository.requestRefresh();

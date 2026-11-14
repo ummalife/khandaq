@@ -1845,7 +1845,10 @@ public class HelperGroup
             if (group_num >= 0)
             {
                 final long online = Math.max(0L, tox_group_peer_count(group_num));
-                final long offline = Math.max(0L, tox_group_offline_peer_count(group_num));
+                // KHANDAQ (QA live, F11): toxcore's offline count is its saved peers, and those keep a member who
+                // left until the slot is wanted for another peer. "3 members" stayed after one of three left.
+                final long offline = group_offline_count_without_departed(group_identifier, group_num,
+                                                                          tox_group_offline_peer_count(group_num));
                 if (online > 0 || offline > 0)
                 {
                     result = new long[]{online, offline};
@@ -2032,12 +2035,12 @@ public class HelperGroup
     private static final ConcurrentHashMap<String, Long> group_last_outgoing_file_sweep_ms =
             new ConcurrentHashMap<>();
 
-    static void record_group_peer_last_seen_on_exit(final long group_number, final long peer_id)
+    // KHANDAQ (QA live, F11): the key comes in from the exit callback (take_exiting_group_peer_pubkey). Looked up
+    // here by peer id it was always empty, toxcore having dropped the peer already, so a last sighting was never kept.
+    static void record_group_peer_last_seen_on_exit(final String group_identifier, final String pubkey)
     {
         try
         {
-            final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
-            final String pubkey = tox_group_peer_get_public_key__wrapper(group_number, peer_id);
             if (TextUtils.isEmpty(group_identifier) || TextUtils.isEmpty(pubkey))
             {
                 return;
@@ -3501,6 +3504,13 @@ public class HelperGroup
         {
             return;
         }
+        // KHANDAQ (QA live, F11): a member who left stays in toxcore's saved peers, and the import of those
+        // (sync_saved_group_peers_to_db) wrote the deleted row straight back. Only a new join brings such a key back
+        // (record_group_peer_on_join clears the mark first).
+        if (is_group_peer_departed(group_identifier, peer_pubkey))
+        {
+            return;
+        }
 
         try
         {
@@ -3611,6 +3621,8 @@ public class HelperGroup
                             {
                                 continue;
                             }
+                            // KHANDAQ (QA live, F11): for this peer's exit, when toxcore no longer has the key.
+                            GroupPeerKeys.remember(group_identifier, peer, pubkey);
                             live_pubkeys.add(pubkey.toLowerCase(Locale.ENGLISH));
                             touch_group_peer_online(group_identifier, pubkey);
                             int role = tox_group_peer_get_role(group_number, peer);
@@ -3651,6 +3663,10 @@ public class HelperGroup
         }
         try
         {
+            // KHANDAQ (QA live, F11): the whole roster as read, for dropping the marks of members who left once
+            // toxcore no longer keeps their key; only after a read without failures.
+            final java.util.HashSet<String> saved = new java.util.HashSet<>();
+            boolean read_whole_roster = true;
             for (long slot = 0; slot < GC_MAX_SAVED_PEERS; slot++)
             {
                 try
@@ -3661,6 +3677,7 @@ public class HelperGroup
                         continue;
                     }
                     final String key = pubkey.toLowerCase(Locale.ENGLISH);
+                    saved.add(key);
                     if (live_pubkeys.contains(key))
                     {
                         continue;
@@ -3669,7 +3686,12 @@ public class HelperGroup
                 }
                 catch (Exception ignored)
                 {
+                    read_whole_roster = false;
                 }
+            }
+            if (read_whole_roster)
+            {
+                forget_group_departures_not_saved(group_identifier, saved);
             }
         }
         catch (Exception e)
@@ -3807,6 +3829,10 @@ public class HelperGroup
         {
             return;
         }
+        // KHANDAQ (QA live, F11): the key is remembered for this peer's exit, when toxcore no longer has it; and a
+        // key that left and joins again (a peer reconnecting keeps its key) is a member again.
+        GroupPeerKeys.remember(group_identifier, peer_id, group_peer_pubkey);
+        clear_group_peer_departed(group_identifier, group_peer_pubkey);
         dedupe_stale_pubkey_for_same_display_name(group_identifier, group_number, peer_id, group_peer_pubkey);
         ensure_group_peer_recorded(group_identifier, group_number, group_peer_pubkey, null);
         update_group_peer_in_db(group_number, group_identifier, peer_id, group_peer_pubkey, peer_role);
@@ -3870,33 +3896,61 @@ public class HelperGroup
     }
 
     /**
+     * KHANDAQ (QA live, F11): the key of a peer that is leaving. toxcore 0.2.19 drops the peer before it calls
+     * peer_exit (group_chats.c, peer_delete), so asked by peer id it has no key any more; the key is the one this
+     * device remembered while the peer was there (GroupPeerKeys). The remembered entry goes either way: toxcore
+     * gives the id to the next peer that joins.
+     */
+    static String take_exiting_group_peer_pubkey(final long group_number, final String group_identifier,
+                                                 final long peer_id)
+    {
+        final String remembered = GroupPeerKeys.take(group_identifier, peer_id);
+        final String live = tox_group_peer_get_public_key__wrapper(group_number, peer_id);
+        return is_valid_group_peer_pubkey(live) ? live : remembered;
+    }
+
+    /**
      * Drop a peer from the members DB only when they intentionally left or were kicked.
      * Disconnect/timeout peers stay in the roster as offline members.
      */
-    static void remove_group_peer_from_db_on_exit(final long group_number, final long peer_id,
-                                                  final int exit_type)
+    static void remove_group_peer_from_db_on_exit(final long group_number, final String group_identifier,
+                                                  final String pubkey, final int exit_type)
     {
         try
         {
-            final boolean permanent_leave =
-                    exit_type == ToxVars.Tox_Group_Exit_Type.TOX_GROUP_EXIT_TYPE_QUIT.value
-                    || exit_type == ToxVars.Tox_Group_Exit_Type.TOX_GROUP_EXIT_TYPE_KICK.value;
-            if (!permanent_leave)
+            if (!GroupPeerKeys.leftForGood(exit_type))
             {
-                record_group_peer_last_seen_on_exit(group_number, peer_id);
+                record_group_peer_last_seen_on_exit(group_identifier, pubkey);
                 return;
             }
 
-            final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
-            final String pubkey = tox_group_peer_get_public_key__wrapper(group_number, peer_id);
             if (TextUtils.isEmpty(group_identifier) || TextUtils.isEmpty(pubkey))
+            {
+                HelperGeneric.logI(TAG, "remove_group_peer_from_db_on_exit:no_key exit_type=" + exit_type);
+                return;
+            }
+            // KHANDAQ (QA live, F11): a key that is in the group right now did not leave. That is a peer that came
+            // back under the same key before its old entry was dropped, or a stale remembered key.
+            if (get_group_peernum_from_peer_pubkey(group_identifier, pubkey) >= 0)
             {
                 return;
             }
-            orma.deleteFromGroupPeerDB().
-                    group_identifierEq(group_identifier.toLowerCase()).
-                    tox_group_peer_pubkeyEq(pubkey).
-                    execute();
+            // Marked before the row goes, so that nothing that finds the row missing can write it back. toxcore keeps
+            // the key in its saved peers, and the import of those (sync_saved_group_peers_to_db) re-created the row.
+            mark_group_peer_departed(group_identifier, pubkey);
+            // Rows carry the key in either case (see lookup_group_peer_by_pubkey).
+            final List<GroupPeerDB> rows = orma.selectFromGroupPeerDB().
+                    group_identifierEq(group_identifier.toLowerCase()).toList();
+            for (final GroupPeerDB row : rows)
+            {
+                if ((row != null) && pubkey.equalsIgnoreCase(row.tox_group_peer_pubkey))
+                {
+                    orma.deleteFromGroupPeerDB().
+                            group_identifierEq(group_identifier.toLowerCase()).
+                            tox_group_peer_pubkeyEq(row.tox_group_peer_pubkey).
+                            execute();
+                }
+            }
             group_peer_last_online_ms.remove(group_peer_seen_key(group_identifier, pubkey));
             HelperGeneric.logI(TAG, "remove_group_peer_from_db_on_exit:id="
                     + group_identifier_short(group_identifier, false)
@@ -3905,6 +3959,117 @@ public class HelperGroup
         }
         catch (Exception ignored)
         {
+        }
+    }
+
+    // KHANDAQ (QA live, F11): the keys this device saw leave a group for good, kept for as long as toxcore's saved
+    // peers may still hold them. One g_opts row per group (no schema change), read once per group and then kept
+    // here; written under the lock.
+    private static final String GROUP_DEPARTED_PEERS_KEY_PREFIX = "kqngcdeparted_";
+    private static final ConcurrentHashMap<String, java.util.Set<String>> group_departed_peers =
+            new ConcurrentHashMap<>();
+    private static final Object group_departed_peers_lock = new Object();
+
+    /** The group's marked keys, lower case; null before the database is open (it is read again next time). */
+    @Nullable
+    private static java.util.Set<String> group_departed_peer_keys(final String group_identifier)
+    {
+        final String id = group_identifier.toLowerCase(Locale.ROOT);
+        final java.util.Set<String> known = group_departed_peers.get(id);
+        if ((known != null) || (orma == null))
+        {
+            return known;
+        }
+        final java.util.Set<String> read = GroupPeerKeys.decodeDepartures(
+                HelperGeneric.get_g_opts(GROUP_DEPARTED_PEERS_KEY_PREFIX + id));
+        final java.util.Set<String> earlier = group_departed_peers.putIfAbsent(id, read);
+        return (earlier != null) ? earlier : read;
+    }
+
+    static boolean is_group_peer_departed(final String group_identifier, final String pubkey)
+    {
+        if (TextUtils.isEmpty(group_identifier) || TextUtils.isEmpty(pubkey))
+        {
+            return false;
+        }
+        final java.util.Set<String> departed = group_departed_peer_keys(group_identifier);
+        return (departed != null) && departed.contains(pubkey.toLowerCase(Locale.ROOT));
+    }
+
+    private static void mark_group_peer_departed(final String group_identifier, final String pubkey)
+    {
+        synchronized (group_departed_peers_lock)
+        {
+            final java.util.Set<String> departed = group_departed_peer_keys(group_identifier);
+            if ((departed != null) && departed.add(pubkey.toLowerCase(Locale.ROOT)))
+            {
+                save_group_departed_peer_keys(group_identifier, departed);
+            }
+        }
+    }
+
+    /** A key that joins again is a member again. */
+    private static void clear_group_peer_departed(final String group_identifier, final String pubkey)
+    {
+        if (!is_group_peer_departed(group_identifier, pubkey))
+        {
+            return;
+        }
+        synchronized (group_departed_peers_lock)
+        {
+            final java.util.Set<String> departed = group_departed_peer_keys(group_identifier);
+            if ((departed != null) && departed.remove(pubkey.toLowerCase(Locale.ROOT)))
+            {
+                save_group_departed_peer_keys(group_identifier, departed);
+            }
+        }
+    }
+
+    /**
+     * Drops the marks of keys toxcore no longer keeps in its saved peers: such a key comes back only by joining
+     * again, and a join clears its mark anyway. {@code saved} is the whole saved roster, lower case.
+     */
+    private static void forget_group_departures_not_saved(final String group_identifier,
+                                                          final java.util.Set<String> saved)
+    {
+        final java.util.Set<String> marked = group_departed_peer_keys(group_identifier);
+        if ((marked == null) || marked.isEmpty())
+        {
+            return;
+        }
+        synchronized (group_departed_peers_lock)
+        {
+            final java.util.Set<String> departed = group_departed_peer_keys(group_identifier);
+            if ((departed != null) && departed.retainAll(saved))
+            {
+                save_group_departed_peer_keys(group_identifier, departed);
+            }
+        }
+    }
+
+    /** toxcore's offline count without the members this device saw leave (GroupPeerKeys.offlineWithoutDeparted). */
+    private static long group_offline_count_without_departed(final String group_identifier, final long group_num,
+                                                             final long tox_offline)
+    {
+        final java.util.Set<String> departed = group_departed_peer_keys(group_identifier);
+        if ((departed == null) || departed.isEmpty())
+        {
+            return Math.max(0L, tox_offline);
+        }
+        return GroupPeerKeys.offlineWithoutDeparted(tox_offline, departed,
+                                                    get_saved_peer_roster_cached(group_identifier, group_num));
+    }
+
+    private static void save_group_departed_peer_keys(final String group_identifier, final java.util.Set<String> departed)
+    {
+        final String key = GROUP_DEPARTED_PEERS_KEY_PREFIX + group_identifier.toLowerCase(Locale.ROOT);
+        if (departed.isEmpty())
+        {
+            HelperGeneric.del_g_opts(key);
+        }
+        else
+        {
+            HelperGeneric.set_g_opts(key, GroupPeerKeys.encodeDepartures(departed));
         }
     }
 
@@ -11564,7 +11729,10 @@ public class HelperGroup
 
             if (do_notification)
             {
-                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, m.text,
+                // KHANDAQ (QA live, F8): the file's kind in words, as for a file of one person
+                // (MainActivity), not its stored text "[name]\n[N] bytes".
+                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname,
+                                        HelperMsgNotification.media_label_for_filename(context_s, filename_corrected),
                                         m.sent_timestamp, m.tox_group_peer_pubkey);
             }
         }

@@ -132,6 +132,34 @@ final class MessageSplitter
         return ranges;
     }
 
+    /**
+     * KHANDAQ (QA live, F15): where to cut text so that at most maxChars chars stay and every grapheme cluster
+     * stays whole, for a text that is shortened to a number of chars (the chat list preview). When the first
+     * cluster alone is longer than that, the cut falls between two code points, never inside a surrogate
+     * pair. text.length() when the text fits.
+     */
+    static int wholeCharacterCut(final String text, final int maxChars)
+    {
+        final int length = text.length();
+        if (maxChars >= length)
+        {
+            return length;
+        }
+        if (maxChars <= 0)
+        {
+            return 0;
+        }
+        final BreakIterator clusters = BreakIterator.getCharacterInstance(Locale.ROOT);
+        clusters.setText(text);
+        final int cut = lastWholeCharacter(text, clusters, 0, 0, maxChars);
+        if (cut > 0)
+        {
+            return cut;
+        }
+        return Character.isHighSurrogate(text.charAt(maxChars - 1)) && Character.isLowSurrogate(text.charAt(maxChars))
+               ? maxChars - 1 : maxChars;
+    }
+
     /** The head, text[start, from), as a part of its own, unless there is none. */
     private static void addHead(final List<int[]> ranges, final String text, final int start, final int from)
     {

@@ -44,6 +44,14 @@ static const NSTimeInterval kOCTGroupInviteRequestTTLSec = 600.0;
 static const NSTimeInterval kOCTGroupInviteAcceptQuietSec = 60.0;
 static const NSTimeInterval kOCTGroupMaintenanceInviteIntervalSec = 15.0;
 static const NSTimeInterval kOCTGroupReconnectSuppressSec = 300.0;
+// KHANDAQ (QA live, F11): the leave notice. toxcore sends the same QUIT when a member leaves and when its
+// app simply closes (tox_kill sends it for every group, with no part message), so a member that leaves says
+// so first, to the whole group and lossless, right before tox_group_leave: the standard NGC header and the
+// next free Khandaq id (0x41-0x43 are the edits, deletes and reactions), magic(6) | 0x01 | 0x44, nothing
+// after it. The same packet on Android (GroupPeerKeys) and on the desktop (src/model/air/airgroupleave.h).
+static const uint8_t kOCTGroupLeaveNotice[8] = {0x66, 0x77, 0x88, 0x11, 0x34, 0x35, 0x01, 0x44};
+// How long a notice waits for its exit: the QUIT follows at once, a timeout after a lost QUIT within a minute.
+static const NSTimeInterval kOCTGroupLeaveNoticeWindowSec = 300.0;
 // KHANDAQ (#25): opening a group chat forces an immediate reconnect of a stalled group instead of
 // waiting up to 90s for the maintenance tick. Rate-limited so rapid open/close can't hammer.
 static const NSTimeInterval kOCTGroupForegroundReconnectMinIntervalSec = 5.0;
@@ -92,6 +100,9 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 // KHANDAQ: pubkeys we've already announced as "joined" (group:pubkey), so a peer that merely
 // reconnects / re-appears on our own reconnect doesn't spam another "X joined" notice every time.
 @property (nonatomic, strong) NSMutableSet<NSString *> *groupAnnouncedJoinPubkeys;
+// KHANDAQ (QA live, F11): the members that said they are leaving (chat:peerId -> @{at, pubkey}), until the
+// exit that follows reads it. Keyed by peer id: toxcore has dropped the peer, and its key, by its exit.
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *groupLeaveNotices;
 // KHANDAQ: stable pubkey-based group peer name resolver (declared so the receive callbacks above can
 // call it before its definition further down).
 - (nullable NSString *)groupPeerNameByPubkeyForGroupNumber:(OCTToxGroupNumber)groupNumber
@@ -202,6 +213,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     self.groupPeerReconnectSuppressUntil = [NSMutableDictionary dictionary];
     self.groupLastForegroundReconnectMs = [NSMutableDictionary dictionary];
     self.groupAnnouncedJoinPubkeys = [NSMutableSet set];
+    self.groupLeaveNotices = [NSMutableDictionary dictionary];
 
     NSNotificationCenter *center = [self.dataSource managerGetNotificationCenter];
 
@@ -422,6 +434,15 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
         // answer cannot join it again, and let a new invite to it ask the user again.
         [self clearPendingFriendAssistedJoinForChatIdHex:chatIdHex];
         [self forgetGroupInviteAcceptedForChatIdHex:chatIdHex];
+
+        // KHANDAQ (QA live, F11): the members hear that we leave before toxcore's QUIT, which is the same one
+        // an app sends when it closes. Not on a rejoin of a stuck instance (it leaves through OCTTox directly).
+        NSError *noticeError = nil;
+        BOOL noticeSent = [tox groupSendCustomPacket:[OCTSubmanagerGroupsImpl groupLeaveNoticePacket]
+                                         groupNumber:groupNumber
+                                            lossless:YES
+                                               error:&noticeError];
+        OCTLogInfo(@"NGC leave notice group=%u sent=%d error=%@", groupNumber, noticeSent, noticeError);
 
         result = [tox groupLeaveWithGroupNumber:groupNumber
                                     partMessage:partMessage
@@ -2404,6 +2425,9 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     uint32_t selfPeerId = [tox groupSelfPeerIdForGroupNumber:groupNumber error:nil];
 
     if (chat) {
+        // KHANDAQ (QA live, F11): a notice its exit never used is not for the peer that has the id now.
+        [self forgetGroupLeaveNoticeForChatKey:chat.uniqueIdentifier peerId:peerId];
+
         // KHANDAQ: capture whether this pubkey was ALREADY a known member (persisted from a prior
         // session, peerLastSeenDateInterval > 0) BEFORE we stamp lastSeen below — so a long-time member
         // who merely reconnects / flaps online does not re-announce "joined", even after an app restart
@@ -2575,12 +2599,24 @@ partMessage:(NSString *)partMessage
                                                                               forChat:chat
                                                                                peerId:peerId];
 
-        if (exitType == OCTToxGroupExitTypeTimeout || exitType == OCTToxGroupExitTypeDisconnected) {
+        // KHANDAQ (QA live, F11): only a member that said it was leaving, or was kicked, left the group. A QUIT
+        // without a leave notice is an app that closed, and was announced as "left the group" before.
+        NSString *leavingPubkey = nil;
+        BOOL saidItWasLeaving = [self takeGroupLeaveNoticeForChatKey:chat.uniqueIdentifier
+                                                              peerId:peerId
+                                                                  at:[[NSDate date] timeIntervalSince1970]
+                                                        publicKeyHex:&leavingPubkey];
+        if (! [OCTSubmanagerGroupsImpl groupExitEndsMembership:exitType saidItWasLeaving:saidItWasLeaving]) {
             [self markGroupPeerReconnectSuppressForChat:chat peerId:peerId];
             [self refreshPeersForChat:chat];
-            OCTLogInfo(@"NGC group peer exit (reconnect noise) group=%u peer=%u type=%ld name=%@",
+            OCTLogInfo(@"NGC group peer exit (closed or reconnect noise) group=%u peer=%u type=%ld name=%@",
                        groupNumber, peerId, (long)exitType, name);
             return;
+        }
+
+        // It left: if it ever comes back, that join is news again.
+        if (leavingPubkey.length > 0) {
+            [self forgetAnnouncedJoinForChat:chat pubkeyLower:leavingPubkey.lowercaseString];
         }
 
         [self refreshPeersForChat:chat];
@@ -3293,6 +3329,20 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     }
 
     if ([self isBlockedIncomingPeerId:peerId groupNumber:groupNumber]) {
+        return;
+    }
+
+    // KHANDAQ (QA live, F11): a member says it is leaving; its exit, which follows, is then a leave.
+    if ([OCTSubmanagerGroupsImpl isGroupLeaveNoticePacket:data]) {
+        OCTChat *chat = [[self.dataSource managerGetRealmManager] chatWithGroupNumber:groupNumber];
+        NSString *pubkey = [tox groupPeerPublicKeyHexForGroupNumber:groupNumber peerId:peerId error:nil];
+        if (chat.uniqueIdentifier.length > 0) {
+            [self noteGroupLeaveNoticeForChatKey:chat.uniqueIdentifier
+                                          peerId:peerId
+                                    publicKeyHex:pubkey
+                                              at:[[NSDate date] timeIntervalSince1970]];
+        }
+        OCTLogInfo(@"NGC leave notice received group=%u peer=%u", groupNumber, peerId);
         return;
     }
 
@@ -5956,6 +6006,118 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         return name;
     }
     return [NSString stringWithFormat:@"Peer %u", peerId];
+}
+
+#pragma mark - Leave notice (QA live, F11)
+
++ (NSData *)groupLeaveNoticePacket
+{
+    return [NSData dataWithBytes:kOCTGroupLeaveNotice length:sizeof(kOCTGroupLeaveNotice)];
+}
+
+/// A later version may add bytes after the header; they are not read.
++ (BOOL)isGroupLeaveNoticePacket:(NSData *)data
+{
+    return data.length >= sizeof(kOCTGroupLeaveNotice)
+        && memcmp(data.bytes, kOCTGroupLeaveNotice, sizeof(kOCTGroupLeaveNotice)) == 0;
+}
+
+/// A kick, or any exit after the member said it was leaving: the QUIT itself can be lost and end as a timeout.
++ (BOOL)groupExitEndsMembership:(OCTToxGroupExitType)exitType saidItWasLeaving:(BOOL)saidItWasLeaving
+{
+    return saidItWasLeaving || exitType == OCTToxGroupExitTypeKick;
+}
+
+/// Made on first use as well as in -configure, so the notices work on a submanager that was never configured.
+- (NSMutableDictionary<NSString *, NSDictionary *> *)groupLeaveNoticeStore
+{
+    @synchronized(self) {
+        if (! self.groupLeaveNotices) {
+            self.groupLeaveNotices = [NSMutableDictionary dictionary];
+        }
+        return self.groupLeaveNotices;
+    }
+}
+
+- (NSString *)groupLeaveNoticeKeyForChatKey:(NSString *)chatKey peerId:(uint32_t)peerId
+{
+    return [NSString stringWithFormat:@"%@:%u", chatKey, peerId];
+}
+
+- (void)noteGroupLeaveNoticeForChatKey:(NSString *)chatKey
+                                peerId:(uint32_t)peerId
+                          publicKeyHex:(nullable NSString *)publicKeyHex
+                                    at:(NSTimeInterval)now
+{
+    if (chatKey.length == 0) {
+        return;
+    }
+    NSMutableDictionary<NSString *, NSDictionary *> *store = [self groupLeaveNoticeStore];
+    @synchronized(store) {
+        store[[self groupLeaveNoticeKeyForChatKey:chatKey peerId:peerId]] = @{
+            @"at": @(now),
+            @"pubkey": publicKeyHex ?: @"",
+        };
+    }
+}
+
+/// Whether the member on this id said it was leaving within the window. Used up either way, so a later exit
+/// of the same id (it came back and closed the app) is not a leave.
+- (BOOL)takeGroupLeaveNoticeForChatKey:(NSString *)chatKey
+                                peerId:(uint32_t)peerId
+                                    at:(NSTimeInterval)now
+                          publicKeyHex:(NSString *_Nullable *_Nullable)publicKeyHex
+{
+    if (chatKey.length == 0) {
+        return NO;
+    }
+    NSDictionary *notice = nil;
+    NSMutableDictionary<NSString *, NSDictionary *> *store = [self groupLeaveNoticeStore];
+    @synchronized(store) {
+        NSString *key = [self groupLeaveNoticeKeyForChatKey:chatKey peerId:peerId];
+        notice = store[key];
+        [store removeObjectForKey:key];
+    }
+    if (! notice) {
+        return NO;
+    }
+    NSTimeInterval at = [notice[@"at"] doubleValue];
+    if (now < at || now - at > kOCTGroupLeaveNoticeWindowSec) {
+        return NO;
+    }
+    if (publicKeyHex) {
+        *publicKeyHex = notice[@"pubkey"];
+    }
+    return YES;
+}
+
+- (void)forgetGroupLeaveNoticeForChatKey:(NSString *)chatKey peerId:(uint32_t)peerId
+{
+    if (chatKey.length == 0) {
+        return;
+    }
+    NSMutableDictionary<NSString *, NSDictionary *> *store = [self groupLeaveNoticeStore];
+    @synchronized(store) {
+        [store removeObjectForKey:[self groupLeaveNoticeKeyForChatKey:chatKey peerId:peerId]];
+    }
+}
+
+/// The member left: a later join of its key is announced again (the join announces a key once per chat).
+- (void)forgetAnnouncedJoinForChat:(OCTChat *)chat pubkeyLower:(NSString *)pubkeyLower
+{
+    if (chat.uniqueIdentifier.length == 0 || pubkeyLower.length == 0) {
+        return;
+    }
+    [self.groupAnnouncedJoinPubkeys removeObject:[NSString stringWithFormat:@"%@:%@", chat.uniqueIdentifier, pubkeyLower]];
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString *key = [self persistentAnnouncedJoinsKeyForChat:chat];
+    NSArray *existing = [defaults arrayForKey:key];
+    if (! [existing containsObject:pubkeyLower]) {
+        return;
+    }
+    NSMutableArray *updated = [existing mutableCopy];
+    [updated removeObject:pubkeyLower];
+    [defaults setObject:updated forKey:key];
 }
 
 #pragma mark - Reconnect noise & send precheck

@@ -64,7 +64,6 @@ import static com.zoffcc.applications.trifa.MainActivity.tox_group_disconnect;
 import static com.zoffcc.applications.trifa.HelperGroup.get_effective_group_title;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_name;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_is_connected;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_leave;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FL_NOTIFICATION_ICON_ALPHA_NOT_SELECTED;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FL_NOTIFICATION_ICON_ALPHA_SELECTED;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FL_NOTIFICATION_ICON_SIZE_DP_NOT_SELECTED;
@@ -423,7 +422,7 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
             final long group_num = tox_group_by_groupid__wrapper(group_identifier);
             if (group_num >= 0)
             {
-                tox_group_leave(group_num, "left");
+                HelperGroup.leave_group_with_notice(group_num, "left");
             }
             GroupInviteAcceptPolicy.forget(group_identifier);
             HelperGeneric.update_savedata_file_wrapper_async(); // KHANDAQ (ANR): group already left in live tox; persist off-thread
@@ -512,7 +511,7 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
         if (f2.group_identifier != null)
         {
             final long group_num = tox_group_by_groupid__wrapper(f2.group_identifier);
-            tox_group_leave(group_num, "bye");
+            HelperGroup.leave_group_with_notice(group_num, "bye");
             GroupInviteAcceptPolicy.forget(f2.group_identifier);
             HelperGeneric.update_savedata_file_wrapper_async(); // KHANDAQ (ANR): already left in live tox; persist off-thread
         }

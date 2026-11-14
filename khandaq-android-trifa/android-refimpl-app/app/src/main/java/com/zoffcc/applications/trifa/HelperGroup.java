@@ -1677,7 +1677,7 @@ public class HelperGroup
             final long group_num = tox_group_by_groupid__wrapper(group_identifier);
             if (group_num >= 0)
             {
-                tox_group_leave(group_num, "removed");
+                leave_group_with_notice(group_num, "removed");
                 update_savedata_file_wrapper();
             }
             HelperGeneric.logI(TAG, "remove_legacy_public_community_group:done gn=" + group_num);
@@ -1738,7 +1738,7 @@ public class HelperGroup
                 if (should_leave)
                 {
                     HelperGeneric.logI(TAG, "prune_stale_tox_groups:leave gn=" + group_num + " id=" + group_identifier);
-                    tox_group_leave(group_num, "pruned");
+                    leave_group_with_notice(group_num, "pruned");
                     try
                     {
                         set_group_group_we_left(group_identifier);
@@ -3832,6 +3832,7 @@ public class HelperGroup
         // KHANDAQ (QA live, F11): the key is remembered for this peer's exit, when toxcore no longer has it; and a
         // key that left and joins again (a peer reconnecting keeps its key) is a member again.
         GroupPeerKeys.remember(group_identifier, peer_id, group_peer_pubkey);
+        GroupPeerKeys.forgetLeaveNotice(group_identifier, group_peer_pubkey);
         clear_group_peer_departed(group_identifier, group_peer_pubkey);
         dedupe_stale_pubkey_for_same_display_name(group_identifier, group_number, peer_id, group_peer_pubkey);
         ensure_group_peer_recorded(group_identifier, group_number, group_peer_pubkey, null);
@@ -3901,6 +3902,60 @@ public class HelperGroup
      * device remembered while the peer was there (GroupPeerKeys). The remembered entry goes either way: toxcore
      * gives the id to the next peer that joins.
      */
+    /**
+     * KHANDAQ (QA live, F11): a member said it is leaving (GroupPeerKeys.isLeaveNotice). Its key is taken now,
+     * while toxcore still has the peer; the exit that follows reads the notice (take_group_leave_notice).
+     */
+    static void on_group_leave_notice(final long group_number, final long peer_id)
+    {
+        try
+        {
+            final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
+            final String pubkey = tox_group_peer_get_public_key__wrapper(group_number, peer_id);
+            if (TextUtils.isEmpty(group_identifier) || !is_valid_group_peer_pubkey(pubkey))
+            {
+                HelperGeneric.logI(TAG, "on_group_leave_notice:no_key gn=" + group_number + " pid=" + peer_id);
+                return;
+            }
+            GroupPeerKeys.noteLeaveNotice(group_identifier, pubkey, System.currentTimeMillis());
+            HelperGeneric.logI(TAG, "on_group_leave_notice:id=" + group_identifier_short(group_identifier, false)
+                    + " pid=" + peer_id + " pubkey=" + pubkey.substring(0, 6));
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "on_group_leave_notice:EE:" + e.getMessage());
+        }
+    }
+
+    static boolean take_group_leave_notice(final String group_identifier, final String pubkey)
+    {
+        return GroupPeerKeys.takeLeaveNotice(group_identifier, pubkey, System.currentTimeMillis());
+    }
+
+    /**
+     * KHANDAQ (QA live, F11): the user leaves the group (leave, delete, the app removing a group the user left).
+     * The other members hear it first (a leave notice), because toxcore's QUIT that follows is the same one an app
+     * sends when it closes. Not for a rejoin of a stuck instance: that member stays.
+     */
+    static void leave_group_with_notice(final long group_num, final String part_message)
+    {
+        if (group_num < 0)
+        {
+            return;
+        }
+        try
+        {
+            final byte[] notice = GroupPeerKeys.leaveNoticePacket();
+            final int sent = tox_group_send_custom_packet(group_num, 1, notice, notice.length);
+            HelperGeneric.logI(TAG, "leave_group_with_notice:gn=" + group_num + " notice=" + sent);
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "leave_group_with_notice:EE:" + e.getMessage());
+        }
+        tox_group_leave(group_num, part_message);
+    }
+
     static String take_exiting_group_peer_pubkey(final long group_number, final String group_identifier,
                                                  final long peer_id)
     {
@@ -3910,15 +3965,16 @@ public class HelperGroup
     }
 
     /**
-     * Drop a peer from the members DB only when they intentionally left or were kicked.
-     * Disconnect/timeout peers stay in the roster as offline members.
+     * Drop a peer from the members DB only when it left (it sent a leave notice first) or was kicked.
+     * A member whose app closed, timed out or lost its connection stays in the roster, offline.
      */
     static void remove_group_peer_from_db_on_exit(final long group_number, final String group_identifier,
-                                                  final String pubkey, final int exit_type)
+                                                  final String pubkey, final int exit_type,
+                                                  final boolean said_it_was_leaving)
     {
         try
         {
-            if (!GroupPeerKeys.leftForGood(exit_type))
+            if (!GroupPeerKeys.leftForGood(exit_type, said_it_was_leaving))
             {
                 record_group_peer_last_seen_on_exit(group_identifier, pubkey);
                 return;
@@ -4530,7 +4586,8 @@ public class HelperGroup
         }
     }
 
-    static void notify_group_peer_exit(final long group_number, final long peer_id, final int exit_type)
+    static void notify_group_peer_exit(final long group_number, final long peer_id, final int exit_type,
+                                       final boolean said_it_was_leaving, final String exit_peer_pubkey)
     {
         try
         {
@@ -4540,8 +4597,9 @@ public class HelperGroup
                 return;
             }
 
-            if (exit_type == ToxVars.Tox_Group_Exit_Type.TOX_GROUP_EXIT_TYPE_TIMEOUT.value
-                    || exit_type == ToxVars.Tox_Group_Exit_Type.TOX_GROUP_EXIT_TYPE_DISCONNECTED.value)
+            // KHANDAQ (QA live, F11): only a member that said it was leaving, or was kicked, "left the group". A
+            // QUIT without a leave notice is an app that closed: no notice, as for a timeout.
+            if (!GroupPeerKeys.leftForGood(exit_type, said_it_was_leaving))
             {
                 markGroupPeerReconnectNoise(group_identifier, peer_id);
                 return;
@@ -4553,7 +4611,7 @@ public class HelperGroup
             }
 
             add_system_message_to_group_chat(group_identifier,
-                    formatGroupPeerLeftMessage(group_number, peer_id, exit_type));
+                    formatGroupPeerLeftMessage(group_number, group_identifier, peer_id, exit_type, exit_peer_pubkey));
         }
         catch (Exception e)
         {
@@ -4747,11 +4805,29 @@ public class HelperGroup
         return ctx.getString(R.string.group_sys_peer_joined, resolveGroupPeerLabel(group_number, peer_id));
     }
 
-    private static String formatGroupPeerLeftMessage(final long group_number, final long peer_id, final int exit_type)
+    private static String formatGroupPeerLeftMessage(final long group_number, final String group_identifier,
+                                                     final long peer_id, final int exit_type,
+                                                     final String exit_peer_pubkey)
     {
         final Context ctx = groupNotifyContext();
-        return ctx.getString(R.string.group_sys_peer_left,
-                resolveGroupPeerLabel(group_number, peer_id),
+        // KHANDAQ (QA live, F11): toxcore has dropped the peer by now, so its name is found by the key it had.
+        String label = null;
+        if (is_valid_group_peer_pubkey(exit_peer_pubkey))
+        {
+            try
+            {
+                label = pick_non_hex_group_peer_name(
+                        tox_group_peer_get_name__wrapper(group_identifier, exit_peer_pubkey, peer_id), exit_peer_pubkey);
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+        if (label == null || label.isEmpty() || label.equals("-1"))
+        {
+            label = resolveGroupPeerLabel(group_number, peer_id);
+        }
+        return ctx.getString(R.string.group_sys_peer_left, label,
                 humanizeExitReason(ctx, ToxVars.Tox_Group_Exit_Type.value_str(exit_type)));
     }
 

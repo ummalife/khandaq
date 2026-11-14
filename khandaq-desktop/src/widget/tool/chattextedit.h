@@ -37,6 +37,22 @@ public:
      */
     void setEditLastHandler(std::function<bool()> handler);
 
+    /** What a paste brings into the field, in the order it is tried. */
+    enum class PasteKind
+    {
+        /** Files of this computer: they are sent, as when they are dropped. */
+        Files,
+        /** The text, inserted as typed; also what a paste with nothing else comes to. */
+        Text,
+        /** A picture with no text beside it, offered to be sent. */
+        Image,
+    };
+    /**
+     * Files when the paste holds files of this computer, then any text that is more than spaces
+     * and line breaks, and a picture only when there is no such text.
+     */
+    static PasteKind pasteKind(bool hasLocalFiles, const QString& text, bool hasImage);
+
 signals:
     void enterPressed();
     void escapePressed();

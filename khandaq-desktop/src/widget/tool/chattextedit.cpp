@@ -109,14 +109,37 @@ QStringList existingLocalFilePaths(const QStringList& candidates)
     return paths;
 }
 
-QStringList localFilePathsFromMimeData(const QMimeData* mimeData)
+/**
+ * The files a text names, one per line, or none: a text is files only when every line of it
+ * names one. A text with a path among its lines is text, and the first line that names no file
+ * ends the search, so a long text costs no look at the disk for each of its lines.
+ */
+QStringList localFilePathsFromText(QString text)
+{
+    text.replace(QLatin1Char('\r'), QLatin1Char('\n'));
+    QStringList paths;
+    for (const QString& line : text.split(QLatin1Char('\n'), QString::SkipEmptyParts)) {
+        if (line.trimmed().isEmpty()) {
+            continue;
+        }
+        const QStringList found = existingLocalFilePaths({line});
+        if (found.isEmpty()) {
+            return {};
+        }
+        paths.append(found);
+    }
+    return paths;
+}
+
+/** The files a paste brings: its local file URLs, or else the files its text names (text). */
+QStringList localFilePathsFromMimeData(const QMimeData* mimeData, const QString& text)
 {
     if (!mimeData) {
         return {};
     }
 
-    QStringList candidates;
     if (mimeData->hasUrls()) {
+        QStringList candidates;
         for (const QUrl& url : mimeData->urls()) {
             if (url.isLocalFile()) {
                 candidates.append(url.toLocalFile());
@@ -124,17 +147,13 @@ QStringList localFilePathsFromMimeData(const QMimeData* mimeData)
                 candidates.append(url.toString());
             }
         }
-    }
-
-    if (mimeData->hasText()) {
-        QString text = mimeData->text();
-        text.replace(QLatin1Char('\r'), QLatin1Char('\n'));
-        for (const QString& line : text.split(QLatin1Char('\n'), QString::SkipEmptyParts)) {
-            candidates.append(line);
+        const QStringList paths = existingLocalFilePaths(candidates);
+        if (!paths.isEmpty()) {
+            return paths;
         }
     }
 
-    return existingLocalFilePaths(candidates);
+    return localFilePathsFromText(text);
 }
 
 // kq-compose textarea: as high as "Send" for one line, growing up to the compose maximum, with
@@ -246,7 +265,12 @@ void ChatTextEdit::resizeEvent(QResizeEvent* event)
 void ChatTextEdit::updateHeightForContent()
 {
     QTextDocument* const doc = document();
-    doc->setTextWidth(viewport()->width());
+    // KHANDAQ (0.2.56): setting the width lays the whole text out again, even the same width, and
+    // this runs at every keystroke: a long pasted text froze the window at each letter.
+    const qreal width = viewport()->width();
+    if (doc->textWidth() != width) {
+        doc->setTextWidth(width);
+    }
 
     const int contentHeight = static_cast<int>(doc->size().height());
     const int targetHeight =
@@ -265,34 +289,53 @@ void ChatTextEdit::sendKeyEvent(QKeyEvent* event)
     emit keyPressEvent(event);
 }
 
+ChatTextEdit::PasteKind ChatTextEdit::pasteKind(bool hasLocalFiles, const QString& text,
+                                                bool hasImage)
+{
+    if (hasLocalFiles) {
+        return PasteKind::Files;
+    }
+    // KHANDAQ (0.2.56): the text before a picture. Excel, Word and other programs put a picture
+    // of what was copied beside its text, and the field took the picture: in a group, where no
+    // picture is taken, nothing came at all. A browser's Copy image puts no text.
+    if (!text.trimmed().isEmpty()) {
+        return PasteKind::Text;
+    }
+    return hasImage ? PasteKind::Image : PasteKind::Text;
+}
+
 bool ChatTextEdit::tryHandlePaste(const QMimeData* mimeData)
 {
     if (!mimeData) {
         return false;
     }
 
-    if (mimeData->hasImage()) {
-        const QImage image = qvariant_cast<QImage>(mimeData->imageData());
-        if (!image.isNull()) {
-            emit pasteImage(QPixmap::fromImage(image));
-            return true;
-        }
-
-        const QClipboard* const clipboard = QApplication::clipboard();
-        if (clipboard) {
-            const QPixmap pixmap = clipboard->pixmap();
-            if (!pixmap.isNull()) {
-                emit pasteImage(pixmap);
-                return true;
-            }
-        }
+    const QString text = mimeData->hasText() ? mimeData->text() : QString();
+    const QStringList paths = localFilePathsFromMimeData(mimeData, text);
+    switch (pasteKind(!paths.isEmpty(), text, mimeData->hasImage())) {
+    case PasteKind::Files:
+        emit pasteFiles(paths);
+        return true;
+    case PasteKind::Text:
+        // QTextEdit inserts it as plain text.
+        return false;
+    case PasteKind::Image:
+        break;
     }
 
-    const QStringList paths = localFilePathsFromMimeData(mimeData);
-    if (!paths.isEmpty()) {
-        emit pasteFiles(paths);
+    const QImage image = qvariant_cast<QImage>(mimeData->imageData());
+    if (!image.isNull()) {
+        emit pasteImage(QPixmap::fromImage(image));
         return true;
     }
 
+    const QClipboard* const clipboard = QApplication::clipboard();
+    if (clipboard) {
+        const QPixmap pixmap = clipboard->pixmap();
+        if (!pixmap.isNull()) {
+            emit pasteImage(pixmap);
+            return true;
+        }
+    }
     return false;
 }

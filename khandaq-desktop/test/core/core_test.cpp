@@ -25,7 +25,9 @@
 #include "src/model/ibootstraplistgenerator.h"
 #include "src/persistence/settings.h"
 #include "mock/mockcoresettings.h"
+#include "src/core/khandaqlimits.h"
 
+#include <QTemporaryDir>
 #include <QtTest/QtTest>
 #include <QtGlobal>
 #include <limits>
@@ -61,6 +63,7 @@ private slots:
     void change_status();
     void change_nospam();
     void msgv3_receipt_is_not_a_message();
+    void group_file_chunks_go_from_the_core_loop();
 
 private:
     /* Test Variables */
@@ -322,6 +325,42 @@ void TestCore::msgv3_receipt_is_not_a_message()
     // also aborts on an attempt to send one.
     QSKIP("this toxcore has no msgV3 receipts");
 #endif
+}
+
+void TestCore::group_file_chunks_go_from_the_core_loop()
+{
+    // 0.2.56: a file of more than one packet goes into a group from the loop of the node, a few
+    // chunks at each turn; the call that sends it only queues it. Alice is alone in the group:
+    // toxcore takes the packets for nobody, and the loop keeps its pace all the same.
+    const int group = alice->createGroup(QStringLiteral("Files"), TOX_GROUP_PRIVACY_STATE_PUBLIC);
+    QVERIFY(group >= 0);
+    // 8 chunks: more than the pace lets go at once, so they take a few turns.
+    const qint64 size = 7 * static_cast<qint64>(NGC_CHUNK_PAYLOAD_MAX) + 1234;
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("video.mp4"));
+    {
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write(QByteArray(static_cast<int>(size), 'x')), size);
+    }
+
+    QSignalSpy started(alice.get(), &Core::groupFileSendStarted);
+    QSignalSpy progress(alice.get(), &Core::groupFileSendProgress);
+    QSignalSpy sent(alice.get(), &Core::groupFileSent);
+    QSignalSpy failed(alice.get(), &Core::groupFileSendFailed);
+    QVERIFY(alice->sendGroupFileFromPath(group, QStringLiteral("video.mp4"), path));
+    QCOMPARE(started.count(), 1);
+    QCOMPARE(sent.count(), 0);
+
+    QTRY_VERIFY_WITH_TIMEOUT(sent.count() == 1 || failed.count() == 1, connected_message_wait);
+    QCOMPARE(failed.count(), 0);
+    const QByteArray fileId = started.at(0).at(4).toByteArray();
+    QCOMPARE(sent.at(0).at(4).toByteArray(), fileId);
+    QVERIFY(progress.count() >= 1);
+    QCOMPARE(progress.last().at(0).toByteArray(), fileId);
+    const qint64 lastProgress = progress.last().at(1).toLongLong();
+    QVERIFY(lastProgress > 0 && lastProgress < size);
 }
 
 QTEST_GUILESS_MAIN(TestCore)

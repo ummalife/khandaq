@@ -106,6 +106,11 @@ qint64 monotonicMs()
         .count();
 }
 
+// 0.2.56: while files go into groups, the loop turns this often, as for the files of a friend
+// (CoreFile::corefileIterationInterval), and their progress is told this often.
+constexpr unsigned groupFileTurnMs = 10;
+constexpr qint64 groupFileProgressMs = 250;
+
 // The chat id of the group with this number; empty when toxcore has no group with it.
 QByteArray groupChatId(const Tox* tox, uint32_t groupNumber)
 {
@@ -417,6 +422,8 @@ void Core::process()
         leaveRecordedGroup(leave, "due");
     }
     iterateTox();
+    // 0.2.56: once toxcore has read the acknowledgements of those before.
+    sendGroupFileChunks();
     ext->process();
     maintainGroups();
 
@@ -440,6 +447,9 @@ void Core::process()
 
     unsigned sleeptime =
         qMin(tox_iteration_interval(tox.get()), getCoreFile()->corefileIterationInterval());
+    if (!groupFileQueue.isEmpty()) {
+        sleeptime = qMin(sleeptime, groupFileTurnMs);
+    }
     toxTimer->start(sleeptime);
 }
 
@@ -3060,62 +3070,182 @@ bool Core::sendGroupFileFromPath(int groupId, const QString& fileName, const QSt
         in.close();
         return sendGroupFile(groupId, wireName, localPath, payload);
     }
+    in.close();
 
-    const uint32_t totalChunks =
-        static_cast<uint32_t>((static_cast<uint64_t>(fileSize) + NGC_CHUNK_PAYLOAD_MAX - 1)
-                              / NGC_CHUNK_PAYLOAD_MAX);
+    // 0.2.56: the chunks go from the loop of the node, at their pace (sendGroupFileChunks); the
+    // window's thread only queues the file. Air::GroupFileQueue says why.
+    OutgoingGroupFile send;
+    send.group = groupId;
+    send.chatId = groupChatId(tox.get(), static_cast<uint32_t>(groupId));
+    send.fileName = wireName;
+    send.localPath = localPath;
+    send.size = fileSize;
+    if (send.chatId.isEmpty()) {
+        return false;
+    }
+    groupFileQueue.add(groupId, msgId, fileSize);
+    if (groupFileQueue.isFirst(msgId)) {
+        // The group sends nothing else: the BEGIN goes at once, so a group that refuses it now is
+        // said at once, as before. A file that waits for another one sends its BEGIN in its turn.
+        if (!sendGroupFileBegin(send, msgId)) {
+            groupFileQueue.remove(msgId);
+            return false;
+        }
+        Air::GroupFileQueue::Packet begin;
+        begin.fileId = msgId;
+        begin.group = groupId;
+        begin.chunk = -1;
+        groupFileQueue.sent(begin);
+    }
+    outgoingGroupFiles.insert(msgId, send);
+    ngcFileMsgIdSeen(msgId);
+    emit groupFileSendStarted(groupId, wireName, localPath, fileSize, msgId);
+    return true;
+}
 
+/**
+ * @brief Whether the group of the file is still the one it was chosen for: not left, and its
+ * number not given to another group meanwhile. Called with coreLoopLock held.
+ */
+bool Core::sendsGroupFileTo(const OutgoingGroupFile& send) const
+{
+    const uint32_t groupNumber = static_cast<uint32_t>(send.group);
+    return !ignoresGroup(groupNumber) && groupChatId(tox.get(), groupNumber) == send.chatId;
+}
+
+/**
+ * @brief The BEGIN of a file that goes in chunks, which opens the file for them. False when the
+ * file cannot be read as it was chosen, or the group refuses the packet. Called with coreLoopLock
+ * held.
+ */
+bool Core::sendGroupFileBegin(OutgoingGroupFile& send, const QByteArray& fileId)
+{
+    if (!sendsGroupFileTo(send)) {
+        return false;
+    }
+    std::shared_ptr<QFile> file = std::make_shared<QFile>(send.localPath);
+    if (!file->open(QIODevice::ReadOnly) || file->size() != send.size) {
+        qWarning() << "sendGroupFileBegin: cannot read" << send.localPath << "as it was chosen";
+        return false;
+    }
+
+    const int totalChunks = Air::GroupFileQueue::chunkCount(send.size);
     QByteArray beginPkt(static_cast<int>(NGC_FILE_BEGIN_SIZE), 0);
     uint8_t* bp = reinterpret_cast<uint8_t*>(beginPkt.data());
     ngcPutMagic(bp);
     bp[7] = NGC_PKT_FILE_BEGIN;
-    memcpy(bp + 8, msgId.constData(), 32);
-    ngcPutFilename(bp + 44, wireName);
-    ngcPutU64Be(bp + 299, static_cast<uint64_t>(fileSize));
+    memcpy(bp + 8, fileId.constData(), 32);
+    ngcPutFilename(bp + 44, send.fileName);
+    ngcPutU64Be(bp + 299, static_cast<uint64_t>(send.size));
     ngcPutU32Be(bp + 307, static_cast<uint32_t>(NGC_CHUNK_PAYLOAD_MAX));
-    ngcPutU32Be(bp + 311, totalChunks);
+    ngcPutU32Be(bp + 311, static_cast<uint32_t>(totalChunks));
 
     Tox_Err_Group_Send_Custom_Packet error;
-    tox_group_send_custom_packet(tox.get(), static_cast<uint32_t>(groupId), true,
+    tox_group_send_custom_packet(tox.get(), static_cast<uint32_t>(send.group), true,
                                  reinterpret_cast<const uint8_t*>(beginPkt.constData()),
                                  static_cast<size_t>(beginPkt.size()), &error);
     if (error != TOX_ERR_GROUP_SEND_CUSTOM_PACKET_OK) {
-        in.close();
+        qWarning() << "sendGroupFileBegin: the group refused the BEGIN, error"
+                   << static_cast<int>(error);
+        return false;
+    }
+    send.file = file;
+    return true;
+}
+
+/**
+ * @brief One chunk of a file whose BEGIN went. False when the file cannot be read any more, or
+ * the group is gone or refuses the packet. Called with coreLoopLock held.
+ */
+bool Core::sendGroupFileChunk(OutgoingGroupFile& send, const QByteArray& fileId, int chunk)
+{
+    if (!send.file || !sendsGroupFileTo(send)) {
+        return false;
+    }
+    const qint64 bytes = Air::GroupFileQueue::chunkBytes(send.size, chunk);
+    if (bytes <= 0) {
+        return false;
+    }
+    QByteArray chunkPkt(static_cast<int>(NGC_FILE_CHUNK_HEADER_SIZE + bytes), 0);
+    uint8_t* cp = reinterpret_cast<uint8_t*>(chunkPkt.data());
+    ngcPutMagic(cp);
+    cp[7] = NGC_PKT_FILE_CHUNK;
+    memcpy(cp + 8, fileId.constData(), 32);
+    ngcPutU32Be(cp + 40, static_cast<uint32_t>(chunk));
+    ngcPutU32Be(cp + 44, static_cast<uint32_t>(bytes));
+    char* const payload = chunkPkt.data() + NGC_FILE_CHUNK_HEADER_SIZE;
+    if (!send.file->seek(Air::GroupFileQueue::chunkOffset(chunk))
+        || send.file->read(payload, bytes) != bytes) {
+        qWarning() << "sendGroupFileChunk: cannot read chunk" << chunk << "of" << send.localPath;
         return false;
     }
 
-    std::array<char, NGC_CHUNK_PAYLOAD_MAX> buf{};
-    for (uint32_t idx = 0; idx < totalChunks; ++idx) {
-        const qint64 toRead = qMin(static_cast<qint64>(NGC_CHUNK_PAYLOAD_MAX),
-                                   fileSize - static_cast<qint64>(idx) * static_cast<qint64>(NGC_CHUNK_PAYLOAD_MAX));
-        const qint64 read = in.read(buf.data(), toRead);
-        if (read != toRead) {
-            in.close();
-            return false;
+    Tox_Err_Group_Send_Custom_Packet error;
+    tox_group_send_custom_packet(tox.get(), static_cast<uint32_t>(send.group), true,
+                                 reinterpret_cast<const uint8_t*>(chunkPkt.constData()),
+                                 static_cast<size_t>(chunkPkt.size()), &error);
+    if (error != TOX_ERR_GROUP_SEND_CUSTOM_PACKET_OK) {
+        qWarning() << "sendGroupFileChunk: the group refused chunk" << chunk << ", error"
+                   << static_cast<int>(error);
+        return false;
+    }
+    return true;
+}
+
+/**
+ * @brief 0.2.56: the packets of the files we send into groups that their pace lets go now, in
+ * the order of Air::GroupFileQueue. Called by process(), with coreLoopLock held, right after the
+ * tox_iterate that read the acknowledgements of the packets before.
+ */
+void Core::sendGroupFileChunks()
+{
+    const qint64 nowMs = monotonicMs();
+    Air::GroupFileQueue::Packet packet;
+    while (groupFileQueue.next(&packet) && groupFilePace.ready(nowMs)) {
+        const auto it = outgoingGroupFiles.find(packet.fileId);
+        if (it == outgoingGroupFiles.end()) {
+            groupFileQueue.remove(packet.fileId);
+            continue;
         }
+        OutgoingGroupFile& send = it.value();
+        const bool begin = packet.chunk < 0;
+        if (begin ? !sendGroupFileBegin(send, packet.fileId)
+                  : !sendGroupFileChunk(send, packet.fileId, packet.chunk)) {
+            failGroupFileSend(packet.fileId, begin ? "BEGIN" : "chunk");
+            continue;
+        }
+        const qint64 bytes =
+            begin ? static_cast<qint64>(NGC_FILE_BEGIN_SIZE)
+                  : static_cast<qint64>(NGC_FILE_CHUNK_HEADER_SIZE)
+                        + Air::GroupFileQueue::chunkBytes(send.size, packet.chunk);
+        // toxcore sends the packet to every member but us, and our own peer counts as one.
+        Tox_Err_Group_Peer_Query peerError;
+        const uint32_t peers =
+            tox_group_peer_count(tox.get(), static_cast<uint32_t>(send.group), &peerError);
+        groupFilePace.spend(Air::UploadPace::cost(bytes, static_cast<int>(peers) - 1));
 
-        QByteArray chunkPkt(static_cast<int>(NGC_FILE_CHUNK_HEADER_SIZE + read), 0);
-        uint8_t* cp = reinterpret_cast<uint8_t*>(chunkPkt.data());
-        ngcPutMagic(cp);
-        cp[7] = NGC_PKT_FILE_CHUNK;
-        memcpy(cp + 8, msgId.constData(), 32);
-        ngcPutU32Be(cp + 40, idx);
-        ngcPutU32Be(cp + 44, static_cast<uint32_t>(read));
-        memcpy(cp + NGC_FILE_CHUNK_HEADER_SIZE, buf.data(), static_cast<size_t>(read));
-
-        tox_group_send_custom_packet(tox.get(), static_cast<uint32_t>(groupId), true,
-                                     reinterpret_cast<const uint8_t*>(chunkPkt.constData()),
-                                     static_cast<size_t>(chunkPkt.size()), &error);
-        if (error != TOX_ERR_GROUP_SEND_CUSTOM_PACKET_OK) {
-            in.close();
-            return false;
+        if (groupFileQueue.sent(packet)) {
+            const OutgoingGroupFile done = send;
+            outgoingGroupFiles.erase(it);
+            emit groupFileSent(done.group, done.fileName, done.localPath, done.size,
+                               packet.fileId);
+        } else if (nowMs - send.toldMs >= groupFileProgressMs) {
+            send.toldMs = nowMs;
+            emit groupFileSendProgress(packet.fileId, groupFileQueue.bytesSent(packet.fileId));
         }
     }
-    in.close();
+}
 
-    ngcFileMsgIdSeen(msgId);
-    emit groupFileSent(groupId, wireName, localPath, fileSize, msgId);
-    return true;
+/**
+ * @brief The file stops before its last chunk, and the conversation says it was not sent.
+ * Called with coreLoopLock held.
+ */
+void Core::failGroupFileSend(const QByteArray& fileId, const char* reason)
+{
+    qWarning() << "A file sent into a group stopped at its" << reason;
+    groupFileQueue.remove(fileId);
+    outgoingGroupFiles.remove(fileId);
+    emit groupFileSendFailed(fileId);
 }
 
 /**

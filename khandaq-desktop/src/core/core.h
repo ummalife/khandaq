@@ -32,6 +32,7 @@
 
 #include "util/strongtype.h"
 #include "util/compatiblerecursivemutex.h"
+#include "src/model/air/airgroupfilequeue.h"
 #include "src/model/air/airgroupleave.h"
 #include "src/model/status.h"
 #include <tox/tox.h>
@@ -50,6 +51,7 @@
 class CoreAV;
 class CoreFile;
 class CoreExt;
+class QFile;
 class QNetworkConfigurationManager;
 class IAudioControl;
 class ICoreSettings;
@@ -192,6 +194,12 @@ public slots:
     void sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t messageId) override;
     bool sendGroupFile(int groupId, const QString& fileName, const QString& localPath,
                        const QByteArray& fileData);
+    /**
+     * A file of more than one packet goes as its BEGIN and then its chunks, which the loop of the
+     * node sends at their pace (sendGroupFileChunks): groupFileSendStarted, then
+     * groupFileSendProgress, then groupFileSent or groupFileSendFailed. False when the file cannot
+     * be read, or the group refuses its BEGIN now (it is not connected): nothing is sent then.
+     */
     bool sendGroupFileFromPath(int groupId, const QString& fileName, const QString& localPath);
     void changeGroupTitle(int groupId, const QString& title);
     bool sendAction(uint32_t friendId, const QString& action, ReceiptNum& receipt) override;
@@ -284,6 +292,14 @@ signals:
     void groupFileReceived(int groupnumber, ToxPk sender, const QString& fileName,
                            const QByteArray& fileData, const QDateTime& timestamp, bool wasSynced,
                            const QByteArray& fileId);
+    /** A file of more than one packet that we send into the group: its chunks go from now on. */
+    void groupFileSendStarted(int groupnumber, const QString& fileName, const QString& localPath,
+                              qint64 fileSize, const QByteArray& fileId);
+    /** How many bytes of the file have gone so far, a few times a second. */
+    void groupFileSendProgress(const QByteArray& fileId, qint64 bytesSent);
+    /** The file stopped before its last chunk: the group is gone, or refused it, or the file. */
+    void groupFileSendFailed(const QByteArray& fileId);
+    /** Every packet of the file went to toxcore. */
     void groupFileSent(int groupnumber, const QString& fileName, const QString& localPath,
                        qint64 fileSize, const QByteArray& fileId);
     void actionSentResult(uint32_t friendId, const QString& action, int success);
@@ -343,6 +359,12 @@ private:
     bool ignoresGroup(uint32_t groupNumber) const;
     void handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const uint8_t* data,
                                      size_t length, bool isPrivate);
+    struct OutgoingGroupFile;
+    bool sendsGroupFileTo(const OutgoingGroupFile& send) const;
+    bool sendGroupFileBegin(OutgoingGroupFile& send, const QByteArray& fileId);
+    bool sendGroupFileChunk(OutgoingGroupFile& send, const QByteArray& fileId, int chunk);
+    void sendGroupFileChunks();
+    void failGroupFileSend(const QByteArray& fileId, const char* reason);
 
     static void onLosslessPacket(Tox* tox, uint32_t friendId,
                                    const uint8_t* data, size_t length, void* core);
@@ -414,6 +436,26 @@ private:
     // QA live F11: the joins of groups we were leaving, which wait for toxcore to delete the old
     // instance: it refuses to join a chat id it still has. Under coreLoopLock.
     std::vector<std::function<void()>> joinsAfterGroupLeaves;
+    // 0.2.56: a file we send into a group whose chunks have yet to go (Air::GroupFileQueue).
+    struct OutgoingGroupFile
+    {
+        int group = -1;
+        // The group's chat id when the file was chosen: a group we leave meanwhile can give its
+        // number to another one.
+        QByteArray chatId;
+        QString fileName;
+        QString localPath;
+        qint64 size = 0;
+        // Open from its BEGIN to its last chunk.
+        std::shared_ptr<QFile> file;
+        // When its progress was last told (monotonicMs).
+        qint64 toldMs = 0;
+    };
+    // 0.2.56: the files we send into groups, by file id; their order and their pace. Under
+    // coreLoopLock: sendGroupFileFromPath adds them, process() sends their packets.
+    QHash<QByteArray, OutgoingGroupFile> outgoingGroupFiles;
+    Air::GroupFileQueue groupFileQueue;
+    Air::UploadPace groupFilePace;
 
     std::unique_ptr<QThread> coreThread;
     const IBootstrapListGenerator& bootstrapListGenerator;

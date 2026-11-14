@@ -905,6 +905,9 @@ void Widget::onCoreChanged(Core& core_)
     connect(core, &Core::groupMessageEffect, this, &Widget::onGroupMessageEffect);
     connect(core, &Core::groupFileReceived, this, &Widget::onGroupFileReceived);
     connect(core, &Core::groupFileSent, this, &Widget::onGroupFileSent);
+    connect(core, &Core::groupFileSendStarted, this, &Widget::onGroupFileSendStarted);
+    connect(core, &Core::groupFileSendProgress, this, &Widget::onGroupFileSendProgress);
+    connect(core, &Core::groupFileSendFailed, this, &Widget::onGroupFileSendFailed);
     connect(core, &Core::groupPeerlistChanged, this, &Widget::onGroupPeerlistChanged);
     connect(core, &Core::groupPeerNameChanged, this, &Widget::onGroupPeerNameChanged);
     connect(core, &Core::groupTitleChanged, this, &Widget::onGroupTitleChanged);
@@ -2664,6 +2667,13 @@ QString sanitizeGroupFileName(const QString& fileName)
     return name;
 }
 
+// The number of a file we send into a group, as ToxFile wants one.
+uint32_t nextSentGroupFileNumber()
+{
+    static uint32_t groupFileNum = 800000;
+    return ++groupFileNum;
+}
+
 QString uniqueFilePath(const QDir& dir, const QString& fileName)
 {
     QString candidate = dir.filePath(fileName);
@@ -2704,18 +2714,22 @@ QDir Widget::groupDownloadDir(const Group* g) const
 void Widget::dispatchGroupFileToChatLog(const GroupId& groupId, const ToxPk& sender,
                                         ToxFile file)
 {
+    // INITIALIZING creates the history record, FINISHED marks it complete and
+    // makes the widget render the final state (preview + open buttons).
+    file.status = ToxFile::INITIALIZING;
+    updateGroupFileInChatLog(groupId, sender, file);
+    file.status = ToxFile::FINISHED;
+    updateGroupFileInChatLog(groupId, sender, file);
+}
+
+void Widget::updateGroupFileInChatLog(const GroupId& groupId, const ToxPk& sender,
+                                      const ToxFile& file)
+{
     auto chatLogIt = groupChatLogs.find(groupId);
     if (chatLogIt == groupChatLogs.end()) {
         return;
     }
-    auto chatHistory = std::static_pointer_cast<ChatHistory>(chatLogIt.value());
-
-    // INITIALIZING creates the history record, FINISHED marks it complete and
-    // makes the widget render the final state (preview + open buttons).
-    file.status = ToxFile::INITIALIZING;
-    chatHistory->onFileUpdated(sender, file);
-    file.status = ToxFile::FINISHED;
-    chatHistory->onFileUpdated(sender, file);
+    std::static_pointer_cast<ChatHistory>(chatLogIt.value())->onFileUpdated(sender, file);
 }
 
 void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QString& fileName,
@@ -2800,18 +2814,76 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
 void Widget::onGroupFileSent(int groupnumber, const QString& fileName, const QString& localPath,
                              qint64 fileSize, const QByteArray& fileId)
 {
+    // A file whose chunks went: its entry is there since the first of them.
+    const auto sending = groupFileSends.find(fileId);
+    if (sending != groupFileSends.end()) {
+        const GroupId sentTo = sending->groupId;
+        ToxFile file = sending->file;
+        groupFileSends.erase(sending);
+        file.progress.addSample(file.progress.getFileSize(), QTime::currentTime());
+        file.status = ToxFile::FINISHED;
+        updateGroupFileInChatLog(sentTo, core->getSelfPublicKey(), file);
+        return;
+    }
+
     const GroupId& groupId = groupList->id2Key(groupnumber);
     if (!groupList->findGroup(groupId)) {
         return;
     }
 
-    static uint32_t groupFileNum = 800000;
-    ToxFile file(++groupFileNum, static_cast<uint32_t>(groupnumber), sanitizeGroupFileName(fileName),
-                 localPath, static_cast<uint64_t>(fileSize), ToxFile::SENDING);
+    ToxFile file(nextSentGroupFileNumber(), static_cast<uint32_t>(groupnumber),
+                 sanitizeGroupFileName(fileName), localPath, static_cast<uint64_t>(fileSize),
+                 ToxFile::SENDING);
     file.progress.addSample(file.progress.getFileSize(), QTime::currentTime());
     file.resumeFileId = fileId;
 
     dispatchGroupFileToChatLog(groupId, core->getSelfPublicKey(), file);
+}
+
+void Widget::onGroupFileSendStarted(int groupnumber, const QString& fileName,
+                                    const QString& localPath, qint64 fileSize,
+                                    const QByteArray& fileId)
+{
+    const GroupId& groupId = groupList->id2Key(groupnumber);
+    if (!groupList->findGroup(groupId)) {
+        return;
+    }
+
+    ToxFile file(nextSentGroupFileNumber(), static_cast<uint32_t>(groupnumber),
+                 sanitizeGroupFileName(fileName), localPath, static_cast<uint64_t>(fileSize),
+                 ToxFile::SENDING);
+    file.resumeFileId = fileId;
+    // INITIALIZING creates the history record; TRANSMITTING shows the bar, which the chunks move.
+    file.status = ToxFile::INITIALIZING;
+    updateGroupFileInChatLog(groupId, core->getSelfPublicKey(), file);
+    file.status = ToxFile::TRANSMITTING;
+    file.progress.addSample(0, QTime::currentTime());
+    updateGroupFileInChatLog(groupId, core->getSelfPublicKey(), file);
+    groupFileSends.insert(fileId, GroupFileSend{groupId, file});
+}
+
+void Widget::onGroupFileSendProgress(const QByteArray& fileId, qint64 bytesSent)
+{
+    const auto sending = groupFileSends.find(fileId);
+    if (sending == groupFileSends.end()) {
+        return;
+    }
+    sending->file.progress.addSample(static_cast<uint64_t>(bytesSent), QTime::currentTime());
+    updateGroupFileInChatLog(sending->groupId, core->getSelfPublicKey(), sending->file);
+}
+
+void Widget::onGroupFileSendFailed(const QByteArray& fileId)
+{
+    const auto sending = groupFileSends.find(fileId);
+    if (sending == groupFileSends.end()) {
+        return;
+    }
+    const GroupId sentTo = sending->groupId;
+    ToxFile file = sending->file;
+    groupFileSends.erase(sending);
+    // The history keeps it as not sent; the entry says so.
+    file.status = ToxFile::BROKEN;
+    updateGroupFileInChatLog(sentTo, core->getSelfPublicKey(), file);
 }
 
 void Widget::onGroupPeerNameChanged(uint32_t groupnumber, const ToxPk& peerPk, const QString& newName)

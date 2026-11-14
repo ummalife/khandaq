@@ -244,6 +244,11 @@ public slots:
                              const QByteArray& fileId);
     void onGroupFileSent(int groupnumber, const QString& fileName, const QString& localPath,
                          qint64 fileSize, const QByteArray& fileId);
+    /** 0.2.56: a file we send into a group in chunks shows its progress while they go. */
+    void onGroupFileSendStarted(int groupnumber, const QString& fileName, const QString& localPath,
+                                qint64 fileSize, const QByteArray& fileId);
+    void onGroupFileSendProgress(const QByteArray& fileId, qint64 bytesSent);
+    void onGroupFileSendFailed(const QByteArray& fileId);
     /** An edit, a deletion or a reaction a friend sent (stage 3, item 10). */
     void onFriendMessageEffect(uint32_t friendnumber, const QByteArray& packet);
     /** An edit, a deletion or a reaction a member sent to a group (stage 3, item 10). */
@@ -357,6 +362,7 @@ private:
                                        bool isAction);
     QDir groupDownloadDir(const Group* g) const;
     void dispatchGroupFileToChatLog(const GroupId& groupId, const ToxPk& sender, ToxFile file);
+    void updateGroupFileInChatLog(const GroupId& groupId, const ToxPk& sender, const ToxFile& file);
     void saveWindowGeometry();
     void saveSplitterGeometry();
     void cycleChats(bool forward);
@@ -511,6 +517,14 @@ private:
     QMap<GroupId, std::shared_ptr<IChatLog>> groupChatLogs;
     QMap<GroupId, std::shared_ptr<GroupChatroom>> groupChatrooms;
     QMap<GroupId, QSharedPointer<GroupChatForm>> groupChatForms;
+    /** 0.2.56: a file we send into a group while its chunks go (Core::groupFileSendStarted). */
+    struct GroupFileSend
+    {
+        GroupId groupId;
+        ToxFile file;
+    };
+    /** By the id of the file in its packets. */
+    QHash<QByteArray, GroupFileSend> groupFileSends;
     /** The group the user joined that opens once it comes into the list (openJoinedGroup). */
     GroupId groupToOpenWhenJoined;
     Core* core = nullptr;

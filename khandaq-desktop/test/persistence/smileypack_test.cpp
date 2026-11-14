@@ -67,6 +67,8 @@ private slots:
     void testSmilifyKeepsJoinedSequencesWhole();
     void testSmilifyEmojiPresentationSelector();
     void testSmilifyKeepsKeycapsWhole();
+    void testSmilifySetsJoinedSequencesInTheEmojiFont();
+    void testSmilifyDrawsBlockedSequencesApart();
     void testSmilifyAsciiEmoticonBetweenWords();
     void testSmilifyMixedScripts();
 private:
@@ -192,16 +194,17 @@ void TestSmileyPack::testSmilifyKeepsJoinedSequencesWhole()
 {
     SmileyPack smileyPack{*settings};
 
-    // A family: the pack has the man, the woman and the girl, not the family.
+    // A family: the pack has the man, the woman and the girl, not the family. It is one character,
+    // set in the emoji font (testSmilifySetsJoinedSequencesInTheEmojiFont).
     const QString family = QStringLiteral("👨") + ZERO_WIDTH_JOINER + QStringLiteral("👩")
                            + ZERO_WIDTH_JOINER + QStringLiteral("👧");
-    QCOMPARE(smileyPack.smileyfied(family), family);
+    QCOMPARE(smileyPack.smileyfied(family), SmileyPack::getInEmojiFont(family));
 
     // The heart on fire is newer than the cluster rules of Qt 5.12 (the Windows build), which end
     // the character at the joiner; the fire after it is still a part of it.
     const QString heartOnFire =
         QStringLiteral("❤") + EMOJI_PRESENTATION + ZERO_WIDTH_JOINER + QStringLiteral("🔥");
-    QCOMPARE(smileyPack.smileyfied(heartOnFire), heartOnFire);
+    QCOMPARE(smileyPack.smileyfied(heartOnFire), SmileyPack::getInEmojiFont(heartOnFire));
 
     // Qt 5.15 holds the heart on fire together by its own rules. What holds it on Qt 5.12 is that
     // an emoji right after a joiner stays text even where the cluster rules end the character at
@@ -211,7 +214,76 @@ void TestSmileyPack::testSmilifyKeepsJoinedSequencesWhole()
 
     // The emoji around a sequence keep their pictures.
     QCOMPARE(smileyPack.smileyfied("😊" + family + "😊"),
-             QString(SmileyPack::getAsRichText("😊") + family + SmileyPack::getAsRichText("😊")));
+             QString(SmileyPack::getAsRichText("😊") + SmileyPack::getInEmojiFont(family)
+                     + SmileyPack::getAsRichText("😊")));
+}
+
+/**
+ * @brief Test that a joined sequence the pack has no picture of is set in the colour emoji font of
+ *  the system, so that Qt 5 does not take its members from two fonts
+ */
+void TestSmileyPack::testSmilifySetsJoinedSequencesInTheEmojiFont()
+{
+    SmileyPack smileyPack{*settings};
+
+    // QA live: the pirate flag (U+1F3F4 U+200D U+2620 U+FE0F) was a flag and a skull on Qt 5.
+    const QString pirateFlag = QStringLiteral("🏴") + ZERO_WIDTH_JOINER + QStringLiteral("☠")
+                               + EMOJI_PRESENTATION;
+    const QString inFont = SmileyPack::getInEmojiFont(pirateFlag);
+    QVERIFY(inFont.startsWith(QStringLiteral("<span style=\"font-family:'")));
+    QVERIFY(inFont.contains(pirateFlag));
+    QCOMPARE(smileyPack.smileyfied(pirateFlag), inFont);
+    QCOMPARE(smileyPack.smileyfied("a " + pirateFlag + " b"), QString("a " + inFont + " b"));
+
+    // A skin tone on a member is a part of the sequence: the woman runner, medium skin tone.
+    const QString runner = QStringLiteral("🏃🏽") + ZERO_WIDTH_JOINER + QStringLiteral("♀")
+                           + EMOJI_PRESENTATION;
+    QCOMPARE(smileyPack.smileyfied(runner), SmileyPack::getInEmojiFont(runner));
+
+    // A man and a woman are not two fathers: 👨‍👩‍👦 stays one character.
+    const QString parents = QStringLiteral("👨") + ZERO_WIDTH_JOINER + QStringLiteral("👩")
+                            + ZERO_WIDTH_JOINER + QStringLiteral("👦");
+    QCOMPARE(smileyPack.smileyfied(parents), SmileyPack::getInEmojiFont(parents));
+}
+
+/**
+ * @brief Test that the joined sequences the emoji picker does not offer (Android's
+ *  KhandaqEmojiFilter) are drawn apart, each member with its picture where the pack has one
+ */
+void TestSmileyPack::testSmilifyDrawsBlockedSequencesApart()
+{
+    SmileyPack smileyPack{*settings};
+
+    // 🏳️‍🌈 is U+1F3F3 U+FE0F U+200D U+1F308. The pack has the rainbow, not the white flag: the
+    // flag stays text, the rainbow gets its picture, and there is no joiner between them.
+    const QString whiteFlag = QStringLiteral("🏳") + EMOJI_PRESENTATION;
+    QCOMPARE(smileyPack.smileyfied(whiteFlag + ZERO_WIDTH_JOINER + QStringLiteral("🌈")),
+             QString(whiteFlag + SmileyPack::getAsRichText("🌈")));
+    // The same without U+FE0F.
+    QCOMPARE(smileyPack.smileyfied(QStringLiteral("🏳") + ZERO_WIDTH_JOINER + QStringLiteral("🌈")),
+             QString(QStringLiteral("🏳") + SmileyPack::getAsRichText("🌈")));
+
+    // Two fathers and a son: three pictures.
+    const QString twoFathers = QStringLiteral("👨") + ZERO_WIDTH_JOINER + QStringLiteral("👨")
+                               + ZERO_WIDTH_JOINER + QStringLiteral("👦");
+    QCOMPARE(smileyPack.smileyfied(twoFathers),
+             QString(SmileyPack::getAsRichText("👨") + SmileyPack::getAsRichText("👨")
+                     + SmileyPack::getAsRichText("👦")));
+
+    // A skin tone does not hide a sequence: men, a heart, light and medium-light skin tones. The
+    // members with a skin tone stay text, the heart gets its picture.
+    const QString coupleWithTones = QStringLiteral("👨🏻") + ZERO_WIDTH_JOINER + QStringLiteral("❤")
+                                    + EMOJI_PRESENTATION + ZERO_WIDTH_JOINER + QStringLiteral("👨🏼");
+    QCOMPARE(smileyPack.smileyfied(coupleWithTones),
+             QString(QStringLiteral("👨🏻") + SmileyPack::getAsRichText("❤") + EMOJI_PRESENTATION
+                     + QStringLiteral("👨🏼")));
+
+    // A blocked sequence does not touch the one next to it.
+    const QString pirateFlag = QStringLiteral("🏴") + ZERO_WIDTH_JOINER + QStringLiteral("☠")
+                               + EMOJI_PRESENTATION;
+    QCOMPARE(smileyPack.smileyfied(pirateFlag + " " + twoFathers),
+             QString(SmileyPack::getInEmojiFont(pirateFlag) + " " + SmileyPack::getAsRichText("👨")
+                     + SmileyPack::getAsRichText("👨") + SmileyPack::getAsRichText("👦")));
 }
 
 /**

@@ -22,12 +22,18 @@
 
 #include <QDir>
 #include <QDomElement>
+#include <QMap>
+#include <QPair>
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QStringBuilder>
 #include <QTextBoundaryFinder>
+#include <QVector>
 #include <QtConcurrent/QtConcurrentRun>
 #include <QTimer>
+
+#include <initializer_list>
+#include <iterator>
 
 #if defined(Q_OS_FREEBSD)
 #include <locale.h>
@@ -66,6 +72,177 @@ constexpr int CLEANUP_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 const QChar ZERO_WIDTH_JOINER{0x200D};
 const QChar EMOJI_PRESENTATION{0xFE0F};
+
+const QString EMOJI_FONT_PATTERN = QStringLiteral("<span style=\"font-family:'%1'\">%2</span>");
+
+QString fromCodePoints(std::initializer_list<uint> codePoints)
+{
+    QString text;
+    for (const uint codePoint : codePoints) {
+        text += QString::fromUcs4(&codePoint, 1);
+    }
+    return text;
+}
+
+// KHANDAQ (owner, 2026-11-14; QA live F14): the joined sequences that Android's emoji picker does
+// not offer (KhandaqEmojiFilter.BLOCKED_CONTAINS, a user's request of 17 Aug 2026) are not drawn
+// as one picture here either: their joiners are taken out of what is drawn, and the members are
+// drawn apart, as before #95 made every joined sequence one character. Written without U+FE0F and the
+// skin tones, which are taken out of a sequence before it is compared, so that every spelling and
+// every skin tone of these hits. Keep in step with KhandaqEmojiFilter.java.
+const QStringList BLOCKED_SEQUENCES = {
+    fromCodePoints({0x1F3F3, 0x200D, 0x1F308}),                          // rainbow flag
+    fromCodePoints({0x1F3F3, 0x200D, 0x26A7}),                           // transgender flag
+    fromCodePoints({0x1F468, 0x200D, 0x2764, 0x200D, 0x1F468}),          // couple with heart, men
+    fromCodePoints({0x1F469, 0x200D, 0x2764, 0x200D, 0x1F469}),          // couple with heart, women
+    fromCodePoints({0x1F468, 0x200D, 0x2764, 0x200D, 0x1F48B, 0x200D, 0x1F468}), // kiss, men
+    fromCodePoints({0x1F469, 0x200D, 0x2764, 0x200D, 0x1F48B, 0x200D, 0x1F469}), // kiss, women
+    fromCodePoints({0x1F468, 0x200D, 0x1F468}),                          // two fathers, any children
+    fromCodePoints({0x1F469, 0x200D, 0x1F469}),                          // two mothers, any children
+    fromCodePoints({0x1F468, 0x200D, 0x1F91D, 0x200D, 0x1F468}),         // men holding hands
+    fromCodePoints({0x1F469, 0x200D, 0x1F91D, 0x200D, 0x1F469}),         // women holding hands
+};
+
+bool isSkinTone(uint codePoint)
+{
+    return codePoint >= 0x1F3FB && codePoint <= 0x1F3FF;
+}
+
+/**
+ * @brief What follows an emoji inside its sequence: the presentation selectors, a skin tone, the
+ * keycap mark and the tag letters of a subdivision flag
+ */
+bool isSequenceExtender(uint codePoint)
+{
+    return codePoint == 0xFE0F || codePoint == 0xFE0E || codePoint == 0x20E3 || isSkinTone(codePoint)
+           || (codePoint >= 0xE0020 && codePoint <= 0xE007F);
+}
+
+/**
+ * @brief An emoji that can stand on either side of a joiner: the symbols and pictographs of the
+ * BMP that have an emoji form (U+203C to U+3299: ☠, ❤, ♀, ⚕ ...), without the combining marks for
+ * symbols (U+20D0 to U+20FF, the keycap mark among them), and everything from U+1F000 on
+ */
+bool isSequenceMember(uint codePoint)
+{
+    return (codePoint >= 0x203C && codePoint <= 0x3299 && !(codePoint >= 0x20D0 && codePoint <= 0x20FF))
+           || (codePoint >= 0x1F000 && codePoint <= 0x1FAFF && !isSkinTone(codePoint));
+}
+
+uint codePointAt(const QString& text, int position, int* length)
+{
+    const QChar first = text.at(position);
+    if (first.isHighSurrogate() && position + 1 < text.size() && text.at(position + 1).isLowSurrogate()) {
+        *length = 2;
+        return QChar::surrogateToUcs4(first, text.at(position + 1));
+    }
+    *length = 1;
+    return first.unicode();
+}
+
+int skipExtenders(const QString& text, int position)
+{
+    while (position < text.size()) {
+        int length = 0;
+        if (!isSequenceExtender(codePointAt(text, position, &length))) {
+            break;
+        }
+        position += length;
+    }
+    return position;
+}
+
+/**
+ * @brief Finds the joined emoji sequences of a text: an emoji, and one or more times a joiner and
+ * an emoji, each with its extenders
+ * @return The start and the end of each sequence
+ * @note Found by the code points rather than by Qt's cluster rules: Qt 5.12 (the Windows build)
+ * ends the character at a joiner that is followed by an emoji newer than Unicode 10.
+ */
+QVector<QPair<int, int>> joinedSequences(const QString& text)
+{
+    QVector<QPair<int, int>> sequences;
+    int position = 0;
+    while (position < text.size()) {
+        int length = 0;
+        if (!isSequenceMember(codePointAt(text, position, &length))) {
+            position += length;
+            continue;
+        }
+        const int start = position;
+        int end = skipExtenders(text, position + length);
+        bool joined = false;
+        while (end + 1 < text.size() && text.at(end) == ZERO_WIDTH_JOINER) {
+            int memberLength = 0;
+            if (!isSequenceMember(codePointAt(text, end + 1, &memberLength))) {
+                break;
+            }
+            end = skipExtenders(text, end + 1 + memberLength);
+            joined = true;
+        }
+        if (joined) {
+            sequences.append({start, end});
+        }
+        position = end;
+    }
+    return sequences;
+}
+
+bool isBlockedSequence(const QString& sequence)
+{
+    QString bare;
+    bare.reserve(sequence.size());
+    for (int position = 0; position < sequence.size();) {
+        int length = 0;
+        const uint codePoint = codePointAt(sequence, position, &length);
+        if (codePoint != 0xFE0F && !isSkinTone(codePoint)) {
+            bare += sequence.mid(position, length);
+        }
+        position += length;
+    }
+    for (const QString& blocked : BLOCKED_SEQUENCES) {
+        if (bare.contains(blocked)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * @brief The text with the joiners of the blocked sequences taken out, so that no font draws such
+ * a sequence as one character and each member is a character of its own, with its picture where
+ * the pack has one (🏳️‍🌈 is the font's white flag and the pack's rainbow, as before #95)
+ * @note Only what is drawn changes: the history keeps the message as it came.
+ */
+QString withBlockedSequencesApart(const QString& text)
+{
+    const QVector<QPair<int, int>> sequences = joinedSequences(text);
+    QString result(text);
+    for (auto it = sequences.crbegin(); it != sequences.crend(); ++it) {
+        const int start = it->first;
+        const int end = it->second;
+        if (!isBlockedSequence(text.mid(start, end - start))) {
+            continue;
+        }
+        for (int position = end - 1; position >= start; --position) {
+            if (result.at(position) == ZERO_WIDTH_JOINER) {
+                result.remove(position, 1);
+            }
+        }
+    }
+    return result;
+}
+
+QString emojiFontFamily()
+{
+#if defined(Q_OS_MACOS)
+    return QStringLiteral("Apple Color Emoji");
+#elif defined(Q_OS_WIN)
+    return QStringLiteral("Segoe UI Emoji");
+#else
+    return QStringLiteral("Noto Color Emoji");
+#endif
+}
 
 /**
  * @brief Construct list of standard directories with "emoticons" sub dir, whether these directories
@@ -166,6 +343,20 @@ SmileyPack::~SmileyPack()
 QString SmileyPack::getAsRichText(const QString& key)
 {
     return RICH_TEXT_PATTERN.arg(key);
+}
+
+/**
+ * @brief A joined emoji sequence the pack has no picture of, set in the colour emoji font of the
+ * system
+ *
+ * KHANDAQ (QA 2026-11-14): left to the font of the message, Qt 5 took the members that have a text
+ * glyph (☠ of the pirate flag U+1F3F4 U+200D U+2620 U+FE0F, ❤ of the heart on fire, ♀ and ⚕ of the
+ * people) from another font than the emoji before the joiner, and the sequence fell apart into a
+ * flag and a skull. Set in one emoji font, it is one picture.
+ */
+QString SmileyPack::getInEmojiFont(const QString& sequence)
+{
+    return EMOJI_FONT_PATTERN.arg(emojiFontFamily(), sequence);
 }
 
 void SmileyPack::cleanupIconsCache()
@@ -328,20 +519,29 @@ void SmileyPack::constructRegex()
 
 /**
  * @brief Replaces all found text emoticons to HTML reference with its according icon filename
- * @param msg Message where to search for emoticons
+ * @param message Message where to search for emoticons
  * @return Formatted copy of message
  * @note An emoji that is only a part of a character, such as 👍 of 👍🏽, stays text.
+ * @note A joined sequence the pack has no picture of is set in the emoji font of the system
+ * (getInEmojiFont), except the sequences the picker does not offer, which are drawn apart.
  */
-QString SmileyPack::smileyfied(const QString& msg)
+QString SmileyPack::smileyfied(const QString& message)
 {
     QMutexLocker locker(&loadingMutex);
+    // KHANDAQ (owner, 2026-11-14; QA live F14): the sequences the picker does not offer are drawn
+    // apart. Done before anything else, so that their members are characters of their own below.
+    const QString msg = withBlockedSequencesApart(message);
     QString result(msg);
 
-    int replaceDiff = 0;
-    QRegularExpressionMatchIterator iter = smilify.globalMatch(msg);
-    if (!iter.hasNext()) {
-        return result;
+    // The pictures and the sequences set in the emoji font, by where they start in msg.
+    QMap<int, QPair<int, QString>> replacements;
+    for (const auto& sequence : joinedSequences(msg)) {
+        replacements.insert(sequence.first,
+                            {sequence.second - sequence.first,
+                             getInEmojiFont(msg.mid(sequence.first, sequence.second - sequence.first))});
     }
+
+    QRegularExpressionMatchIterator iter = smilify.globalMatch(msg);
     // KHANDAQ (QA 2026-11-14, F1): a key of the pack can be a part of a longer character: 👍 of 👍🏽,
     // the letters 🇹 and 🇷 of the flag 🇹🇷, 👨 of the family U+1F468 U+200D U+1F469 U+200D U+1F467.
     // Replacing such a part with its picture left the rest of the character alone (the skin tone as
@@ -357,11 +557,22 @@ QString SmileyPack::smileyfied(const QString& msg)
         if (!isWholeCharacter(graphemes, msg, startPos, startPos + keyLength)) {
             continue;
         }
-        QString imgRichText = SmileyPack::getAsRichText(match.captured());
-        result.replace(startPos + replaceDiff, keyLength, imgRichText);
-        replaceDiff += imgRichText.length() - keyLength;
+        // A key inside a joined sequence is never a whole character; this keeps the two apart
+        // even where Qt's cluster rules and the sequences found above disagree.
+        const auto next = replacements.lowerBound(startPos);
+        const auto previous = next == replacements.begin() ? replacements.end() : std::prev(next);
+        if ((next != replacements.end() && next.key() < startPos + keyLength)
+            || (previous != replacements.end() && previous.key() + previous.value().first > startPos)) {
+            continue;
+        }
+        replacements.insert(startPos, {keyLength, SmileyPack::getAsRichText(match.captured())});
     }
 
+    // From the end, so that the positions before each replacement stay where they were.
+    for (auto it = replacements.constEnd(); it != replacements.constBegin();) {
+        --it;
+        result.replace(it.key(), it.value().first, it.value().second);
+    }
     return result;
 }
 

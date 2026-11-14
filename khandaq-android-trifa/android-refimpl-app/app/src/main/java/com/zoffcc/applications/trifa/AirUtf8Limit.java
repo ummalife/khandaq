@@ -67,8 +67,14 @@ final class AirUtf8Limit implements InputFilter
     /** How many chars from the start of text fit into room bytes, never half of a surrogate pair. */
     static int fittingChars(final CharSequence text, final int room)
     {
+        return fittingChars(text, 0, room);
+    }
+
+    /** How many chars of text from index from on fit into room bytes, never half of a surrogate pair. */
+    static int fittingChars(final CharSequence text, final int from, final int room)
+    {
         int used = 0;
-        int i = 0;
+        int i = from;
         while (i < text.length())
         {
             final int step = charsAt(text, i, text.length());
@@ -80,7 +86,7 @@ final class AirUtf8Limit implements InputFilter
             used += bytes;
             i += step;
         }
-        return i;
+        return i - from;
     }
 
     private static int charsAt(final CharSequence text, final int i, final int to)

@@ -151,13 +151,13 @@
         <item quantity="many">المتبقي: %1$d بايت</item>
         <item quantity="other">المتبقي: %1$d بايت</item>
     </plurals>
-    <plurals name="air_compose_bytes_over">
-        <item quantity="zero">أكثر من الحد بـ %1$d بايت: سيُقطع آخر النص</item>
-        <item quantity="one">أكثر من الحد بـ %1$d بايت: سيُقطع آخر النص</item>
-        <item quantity="two">أكثر من الحد بـ %1$d بايت: سيُقطع آخر النص</item>
-        <item quantity="few">أكثر من الحد بـ %1$d بايت: سيُقطع آخر النص</item>
-        <item quantity="many">أكثر من الحد بـ %1$d بايت: سيُقطع آخر النص</item>
-        <item quantity="other">أكثر من الحد بـ %1$d بايت: سيُقطع آخر النص</item>
+    <plurals name="air_compose_parts">
+        <item quantity="zero">ستُرسل مقسّمة إلى %1$d رسالة</item>
+        <item quantity="one">ستُرسل مقسّمة إلى %1$d رسالة</item>
+        <item quantity="two">ستُرسل مقسّمة إلى %1$d رسالتين</item>
+        <item quantity="few">ستُرسل مقسّمة إلى %1$d رسائل</item>
+        <item quantity="many">ستُرسل مقسّمة إلى %1$d رسالة</item>
+        <item quantity="other">ستُرسل مقسّمة إلى %1$d رسالة</item>
     </plurals>
     <plurals name="air_compose_bytes_over_edit">
         <item quantity="zero">أكثر من الحد بـ %1$d بايت: لن يُحفظ هكذا</item>

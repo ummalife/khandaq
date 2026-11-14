@@ -1205,6 +1205,8 @@ final class AirChatPanel implements AirDossier.Listener, AirContactMarks.Listene
     /**
      * The room left in the message once only a tenth of it remains. A long text to someone online whose
      * app puts pieces back together goes whole, so it has no limit; a correction holds less than a message.
+     * KHANDAQ (QA live, F13): past the limit a new text goes as several messages (MessageSplitter), so the
+     * counter says how many; it said the end would be cut. A correction is still refused past its limit.
      */
     private void updateCounter()
     {
@@ -1218,6 +1220,7 @@ final class AirChatPanel implements AirDossier.Listener, AirContactMarks.Listene
             {
                 final boolean edit = ChatReplyPreviewController.isEditActive();
                 Integer remaining = null;
+                int parts = 1;
                 if (edit)
                 {
                     remaining = AirConversationModel.composeRemaining(utf8Length(body),
@@ -1225,17 +1228,22 @@ final class AirChatPanel implements AirDossier.Listener, AirContactMarks.Listene
                 }
                 else if (!s.canChunk)
                 {
-                    // The reply header travels in the same message.
-                    remaining = AirConversationModel.composeRemaining(utf8Length(
-                            MessageReplyHelper.encode(ChatReplyPreviewController.peekPending(), body)));
+                    // The reply header travels in the same message, the first one.
+                    final String outgoing = MessageReplyHelper.encode(ChatReplyPreviewController.peekPending(), body);
+                    remaining = AirConversationModel.composeRemaining(utf8Length(outgoing));
+                    if (remaining != null && remaining < 0)
+                    {
+                        parts = MessageSplitter.ranges(outgoing, outgoing.length() - body.length(),
+                                                       AirConversationModel.COMPOSE_LIMIT_BYTES).size();
+                    }
                 }
                 if (remaining != null)
                 {
                     final int left = remaining;
-                    over = left < 0;
+                    over = edit && left < 0;
                     text = left >= 0 ? quantity(R.plurals.air_compose_bytes_left, left)
-                                     : quantity(edit ? R.plurals.air_compose_bytes_over_edit
-                                                     : R.plurals.air_compose_bytes_over, -left);
+                                     : edit ? quantity(R.plurals.air_compose_bytes_over_edit, -left)
+                                            : quantity(R.plurals.air_compose_parts, parts);
                 }
             }
         }
@@ -1901,8 +1909,10 @@ final class AirChatPanel implements AirDossier.Listener, AirContactMarks.Listene
     /**
      * Stores a text as unsent (message id -1) without touching toxcore, for the service loop to send once
      * our own node and the person are online. Returns the row id, or -1 when nothing could be stored.
+     * KHANDAQ (QA live, F13): the caller gives the sent time, so the parts of a long text wait, and
+     * leave, in their order.
      */
-    static long queueUnsentText(final String friendPublicKey, final String text)
+    static long queueUnsentText(final String friendPublicKey, final String text, final long sentTimestamp)
     {
         if (TrifaToxService.orma == null || TextUtils.isEmpty(friendPublicKey) || TextUtils.isEmpty(text))
         {
@@ -1915,7 +1925,7 @@ final class AirChatPanel implements AirDossier.Listener, AirContactMarks.Listene
         m.TRIFA_MESSAGE_TYPE = TRIFA_MSG_TYPE_TEXT.value;
         m.rcvd_timestamp = 0L;
         m.is_new = false;
-        m.sent_timestamp = System.currentTimeMillis();
+        m.sent_timestamp = sentTimestamp;
         m.read = false;
         m.text = text;
         m.msg_version = 0;

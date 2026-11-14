@@ -143,11 +143,11 @@
         <item quantity="many">осталось %1$d байт</item>
         <item quantity="other">осталось %1$d байта</item>
     </plurals>
-    <plurals name="air_compose_bytes_over">
-        <item quantity="one">на %1$d байт больше предела: конец обрежется</item>
-        <item quantity="few">на %1$d байта больше предела: конец обрежется</item>
-        <item quantity="many">на %1$d байт больше предела: конец обрежется</item>
-        <item quantity="other">на %1$d байта больше предела: конец обрежется</item>
+    <plurals name="air_compose_parts">
+        <item quantity="one">уйдёт %1$d сообщением</item>
+        <item quantity="few">уйдёт %1$d сообщениями</item>
+        <item quantity="many">уйдёт %1$d сообщениями</item>
+        <item quantity="other">уйдёт %1$d сообщения</item>
     </plurals>
     <plurals name="air_compose_bytes_over_edit">
         <item quantity="one">на %1$d байт больше предела: так не сохранится</item>

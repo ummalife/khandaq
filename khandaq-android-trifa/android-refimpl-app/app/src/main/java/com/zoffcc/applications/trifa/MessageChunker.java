@@ -99,6 +99,17 @@ public final class MessageChunker
     }
 
     /**
+     * KHANDAQ (0.2.56): whether chunks can carry this text at all: sendChunked refuses a payload over
+     * MAX_MESSAGE_BYTES, so a longer text must go as several messages (MessageSplitter) even to a friend who
+     * reassembles chunks. It went in chunks, failed every time, and waited forever.
+     */
+    static boolean canCarry(final String text)
+    {
+        return text != null
+               && TEXT_PAYLOAD_PREFIX_BYTES + (long) text.getBytes(StandardCharsets.UTF_8).length <= MAX_MESSAGE_BYTES;
+    }
+
+    /**
      * KHANDAQ: whether this friend puts chunks back together and keeps the text. iOS, desktop and other
      * Tox clients drop 182/183, and Khandaq for Android builds before the keepalive flag lost the
      * reassembled text, so to all of them a chunked text would show as sent and never arrive.

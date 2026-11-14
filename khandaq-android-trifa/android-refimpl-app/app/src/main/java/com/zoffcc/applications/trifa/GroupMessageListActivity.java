@@ -104,6 +104,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -564,9 +566,25 @@ public class GroupMessageListActivity extends AppCompatActivity
         // do NOT pre-focus the input: with SOFT_INPUT_STATE_HIDDEN a tap on an
         // already-focused field is not a focus change and some IMEs never open.
         ChatInputBarHelper.ensureImeOpensOnTap(ml_new_group_message);
+        // KHANDAQ (0.2.56): text shared into a group (ShareActivity, show_messagelist_for_id) fills the field
+        // as it does in a chat with one person. It was put in the intent and never read, so it was lost.
+        boolean restored_shared_text = false;
         try
         {
-            if ((group_id != null) && (!group_id.equals("-1")))
+            final String fillouttext = intent.getStringExtra("fillouttext");
+            if ((fillouttext != null) && (fillouttext.length() > 0))
+            {
+                ml_new_group_message.setText("");
+                ml_new_group_message.append(fillouttext);
+                restored_shared_text = true;
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        try
+        {
+            if (!restored_shared_text && (group_id != null) && (!group_id.equals("-1")))
             {
                 final String draft = ChatDraftHelper.load_group_draft(group_id);
                 if ((draft != null) && (!draft.isEmpty()))
@@ -2749,7 +2767,25 @@ public class GroupMessageListActivity extends AppCompatActivity
         }
     }
 
-    private void finish_group_text_send(final String send_group_id, final GroupMessage m, final long message_id)
+    /**
+     * KHANDAQ (0.2.56): the parts of a long group text go one after the other, and so do texts sent in a
+     * row, on this one thread: NGC delivers one member's messages in the order they were sent, so the
+     * members read them in that order. A thread per text could interleave two texts.
+     */
+    private static final ExecutorService GROUP_TEXT_SENDER = Executors.newSingleThreadExecutor(runnable ->
+    {
+        final Thread thread = new Thread(runnable, "grp-txt-send");
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    /**
+     * Part index of a group text came back from toxcore. Waiting for the group, it and the parts after it
+     * wait together, so they still go in order. A refusal stops the text: the parts before it are in the
+     * chat, so the field keeps the text from this part on (wire from unsent_start), not all of it.
+     */
+    private void finish_group_text_send(final String send_group_id, final List<GroupMessage> parts, final int index,
+                                        final String wire, final int unsent_start, final long message_id)
     {
         if (PREF__X_battery_saving_mode)
         {
@@ -2759,12 +2795,17 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         if (message_id == GROUP_SEND_QUEUE_WHEN_UNCONNECTED)
         {
-            m.message_id_tox = PENDING_GROUP_MESSAGE_ID_TOX;
-            insert_into_group_message_db(m, true);
+            for (int i = index; i < parts.size(); i++)
+            {
+                final GroupMessage m = parts.get(i);
+                m.message_id_tox = PENDING_GROUP_MESSAGE_ID_TOX;
+                insert_into_group_message_db(m, true);
+            }
             schedule_pending_group_message_flush(send_group_id);
         }
         else if (HelperFriend.is_group_text_send_success(message_id))
         {
+            final GroupMessage m = parts.get(index);
             m.message_id_tox = fourbytes_of_long_to_hex(message_id);
             insert_into_group_message_db(m, true);
         }
@@ -2773,10 +2814,10 @@ public class GroupMessageListActivity extends AppCompatActivity
             AirComposerNotice.say(group_send_failure_reason(message_id), true, AirErrorCode.groupSend(message_id));
             try
             {
-                // KHANDAQ (#T5): restore only the VISIBLE text — m.text is the raw wire form
+                // KHANDAQ (#T5): restore only the VISIBLE text — the first part opens with the raw wire form
                 // (reply header + [KQ|m|…] mention block); dumping it back would leak markers into
                 // the input field AND the persisted draft.
-                final String restored = GroupMentionHelper.cleanForClipboard(m.text);
+                final String restored = GroupMentionHelper.cleanForClipboard(wire.substring(unsent_start));
                 ml_new_group_message.setText(restored);
                 ml_new_group_message.setSelection(restored.length());
                 ChatDraftHelper.save_group_draft(send_group_id, restored);
@@ -2838,25 +2879,16 @@ public class GroupMessageListActivity extends AppCompatActivity
                 return;
             }
 
-            // KHANDAQ (redesign, E13): nothing is cut any more. toxcore refuses a group message over 1372
-            // bytes, so over that Send waits, the field and the reply stay, and the counter says by how much.
+            // KHANDAQ (redesign, E13): nothing is cut. toxcore refuses a group message over 1372 bytes,
+            // KHANDAQ (0.2.56): so a longer text goes as several messages (AirGroupModel.textParts); Send
+            // refused it, and a long paste could not go at all.
             final java.util.List<GroupMentionHelper.MentionEntry> mentions =
                     GroupMentionHelper.collectMentionsForOutgoing(normalized, group_id);
-            final String withMentions = GroupMentionHelper.encodeMentionsBlock(normalized, mentions);
-            final int over_bytes = AirGroupPanel.bytesOver(
-                    MessageReplyHelper.encode(ChatReplyPreviewController.peekPending(), withMentions));
-            if (over_bytes > 0)
+            String withMentions = GroupMentionHelper.encodeMentionsBlock(normalized, mentions);
+            if (!AirGroupModel.headFits(MessageReplyHelper.encode(ChatReplyPreviewController.peekPending(),
+                                                                  withMentions), normalized))
             {
-                if (airPanel != null)
-                {
-                    airPanel.sayOverLimit(over_bytes);
-                }
-                else
-                {
-                    AirComposerNotice.say(getResources().getQuantityString(R.plurals.air_compose_bytes_over_group,
-                                                                           over_bytes, over_bytes), false);
-                }
-                return;
+                withMentions = normalized;
             }
 
             msg = ChatReplyPreviewController.composeOutgoingText(withMentions);
@@ -2870,30 +2902,15 @@ public class GroupMessageListActivity extends AppCompatActivity
 
             try
             {
-                GroupMessage m = new GroupMessage();
-                m.is_new = false; // own messages are always "not new"
-                m.tox_group_peer_pubkey = tox_group_self_get_public_key(
+                final String self_pubkey = tox_group_self_get_public_key(
                         tox_group_by_groupid__wrapper(group_id)).toUpperCase();
-                m.direction = 1; // msg sent
-                m.TOX_MESSAGE_TYPE = 0;
-                m.read = true; // !!!! there is not "read status" with conferences in Tox !!!!
-                m.tox_group_peername = null;
-                m.private_message = 0;
-                m.group_identifier = group_id.toLowerCase();
-                m.TRIFA_MESSAGE_TYPE = TRIFA_MSG_TYPE_TEXT.value;
-                m.sent_timestamp = System.currentTimeMillis();
-                m.rcvd_timestamp = System.currentTimeMillis(); // since we do not have anything better assume "now"
-                m.text = msg;
-                m.was_synced = false;
-                m.TRIFA_SYNC_TYPE = TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NONE.value;
-
-                m.tox_group_peer_role = -1;
+                int self_role = -1;
                 try
                 {
                     int peer_role_get = tox_group_self_get_role(tox_group_by_groupid__wrapper(group_id));
                     if (peer_role_get >= 0)
                     {
-                        m.tox_group_peer_role = peer_role_get;
+                        self_role = peer_role_get;
                     }
 
                 }
@@ -2902,10 +2919,35 @@ public class GroupMessageListActivity extends AppCompatActivity
                     e.printStackTrace();
                 }
 
-                if ((msg != null) && (!msg.equalsIgnoreCase("")))
+                final List<int[]> ranges = AirGroupModel.textParts(msg, normalized);
+                if (!ranges.isEmpty())
                 {
-                    final String send_msg = msg;
-                    final GroupMessage pending = m;
+                    // Each part is a row of its own, a millisecond after the one before: the chat sorts by
+                    // time, and rows that are added one by one land in the order they were sent.
+                    final long first_sent_timestamp = System.currentTimeMillis();
+                    final List<GroupMessage> parts = new ArrayList<>(ranges.size());
+                    for (int i = 0; i < ranges.size(); i++)
+                    {
+                        GroupMessage m = new GroupMessage();
+                        m.is_new = false; // own messages are always "not new"
+                        m.tox_group_peer_pubkey = self_pubkey;
+                        m.direction = 1; // msg sent
+                        m.TOX_MESSAGE_TYPE = 0;
+                        m.read = true; // !!!! there is not "read status" with conferences in Tox !!!!
+                        m.tox_group_peername = null;
+                        m.private_message = 0;
+                        m.group_identifier = group_id.toLowerCase();
+                        m.TRIFA_MESSAGE_TYPE = TRIFA_MSG_TYPE_TEXT.value;
+                        m.sent_timestamp = first_sent_timestamp + i;
+                        m.rcvd_timestamp = m.sent_timestamp; // since we do not have anything better assume "now"
+                        m.text = msg.substring(ranges.get(i)[0], ranges.get(i)[1]);
+                        m.was_synced = false;
+                        m.TRIFA_SYNC_TYPE = TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NONE.value;
+                        m.tox_group_peer_role = self_role;
+                        parts.add(m);
+                    }
+
+                    final String wire = msg;
                     final String send_group_id = group_id;
                     HelperGeneric.clear_chat_input_field(ml_new_group_message);
                     ChatDraftHelper.clear_group_draft(group_id);
@@ -2914,14 +2956,22 @@ public class GroupMessageListActivity extends AppCompatActivity
                         emojiPopup.dismiss();
                     }
 
-                    final Thread send_thread = new Thread(() ->
+                    GROUP_TEXT_SENDER.execute(() ->
                     {
                         final long group_num = tox_group_by_groupid__wrapper(send_group_id);
-                        final long message_id = send_group_text_message_resilient(send_group_id, group_num, send_msg);
-                        runOnUiThread(() -> finish_group_text_send(send_group_id, pending, message_id));
-                    }, "grp-txt-send");
-                    send_thread.setDaemon(true);
-                    send_thread.start();
+                        for (int i = 0; i < parts.size(); i++)
+                        {
+                            final int index = i;
+                            final long message_id = send_group_text_message_resilient(send_group_id, group_num,
+                                                                                      parts.get(i).text);
+                            runOnUiThread(() -> finish_group_text_send(send_group_id, parts, index, wire,
+                                                                       ranges.get(index)[0], message_id));
+                            if (!HelperFriend.is_group_text_send_success(message_id))
+                            {
+                                break;
+                            }
+                        }
+                    });
                 }
             }
             catch (Exception e)

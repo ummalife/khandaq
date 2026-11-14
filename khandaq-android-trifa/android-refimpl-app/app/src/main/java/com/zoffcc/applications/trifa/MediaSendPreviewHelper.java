@@ -370,45 +370,57 @@ public final class MediaSendPreviewHelper
         {
             TrifaToxService.wakeup_tox_thread();
 
+            // KHANDAQ (0.2.56): a caption longer than one group message goes as several, as a long text from
+            // the field does (AirGroupModel.textParts). It was cut at tox_max_message_length() chars, which
+            // lost its end, and a Cyrillic caption of that many chars was twice the bytes toxcore takes, so
+            // it was refused and not sent at all.
             final String trimmed = caption.trim();
-            final String msg = trimmed.substring(0,
-                    (int) Math.min(MainActivity.tox_max_message_length(), trimmed.length()));
+            final List<int[]> parts = AirGroupModel.textParts(trimmed, trimmed);
 
             final long group_num = HelperGroup.tox_group_by_groupid__wrapper(groupId);
-            final long message_id = HelperGroup.send_group_text_message_resilient(groupId, group_num, msg);
-            final boolean queued = (message_id == HelperGroup.GROUP_SEND_QUEUE_WHEN_UNCONNECTED);
-            // KHANDAQ (QA 02.10): record the caption on this side whether it went out now or was queued.
-            // Only the queued case used to be written down, so a caption sent straight away reached the
-            // group but never appeared in the sender's own chat, not even after reopening it (the group
-            // activity's own send path has always recorded both).
-            if (queued || (message_id >= 0))
+            final long first_sent_timestamp = System.currentTimeMillis();
+            for (int i = 0; i < parts.size(); i++)
             {
-                final com.zoffcc.applications.sorm.GroupMessage m = new com.zoffcc.applications.sorm.GroupMessage();
-                m.is_new = false;
-                m.tox_group_peer_pubkey = MainActivity.tox_group_self_get_public_key(group_num).toUpperCase();
-                m.direction = 1;
-                m.TOX_MESSAGE_TYPE = 0;
-                m.read = true;
-                m.tox_group_peername = null;
-                m.private_message = 0;
-                m.group_identifier = groupId.toLowerCase();
-                m.TRIFA_MESSAGE_TYPE = TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_TYPE_TEXT.value;
-                m.sent_timestamp = System.currentTimeMillis();
-                m.rcvd_timestamp = System.currentTimeMillis();
-                m.text = msg;
-                m.was_synced = false;
-                m.TRIFA_SYNC_TYPE = TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NONE.value;
-                m.message_id_tox = queued ? HelperGroup.PENDING_GROUP_MESSAGE_ID_TOX
-                                          : HelperGeneric.fourbytes_of_long_to_hex(message_id);
-                HelperGroup.insert_into_group_message_db(m, true);
+                final String msg = trimmed.substring(parts.get(i)[0], parts.get(i)[1]);
+                final long message_id = HelperGroup.send_group_text_message_resilient(groupId, group_num, msg);
+                final boolean queued = (message_id == HelperGroup.GROUP_SEND_QUEUE_WHEN_UNCONNECTED);
+                if (!queued && (message_id < 0))
+                {
+                    Log.i(TAG, "sendGroupCaption:not sent res=" + message_id + " part=" + i + "/" + parts.size());
+                    break;
+                }
+                // A part that waits for the group takes the parts after it along, so they go in order.
+                final int last = queued ? parts.size() - 1 : i;
+                for (int j = i; j <= last; j++)
+                {
+                    // KHANDAQ (QA 02.10): record the caption on this side whether it went out now or was
+                    // queued. Only the queued case used to be written down, so a caption sent straight away
+                    // reached the group but never appeared in the sender's own chat, not even after
+                    // reopening it (the group activity's own send path has always recorded both).
+                    final com.zoffcc.applications.sorm.GroupMessage m = new com.zoffcc.applications.sorm.GroupMessage();
+                    m.is_new = false;
+                    m.tox_group_peer_pubkey = MainActivity.tox_group_self_get_public_key(group_num).toUpperCase();
+                    m.direction = 1;
+                    m.TOX_MESSAGE_TYPE = 0;
+                    m.read = true;
+                    m.tox_group_peername = null;
+                    m.private_message = 0;
+                    m.group_identifier = groupId.toLowerCase();
+                    m.TRIFA_MESSAGE_TYPE = TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_TYPE_TEXT.value;
+                    m.sent_timestamp = first_sent_timestamp + j;
+                    m.rcvd_timestamp = m.sent_timestamp;
+                    m.text = trimmed.substring(parts.get(j)[0], parts.get(j)[1]);
+                    m.was_synced = false;
+                    m.TRIFA_SYNC_TYPE = TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NONE.value;
+                    m.message_id_tox = queued ? HelperGroup.PENDING_GROUP_MESSAGE_ID_TOX
+                                              : HelperGeneric.fourbytes_of_long_to_hex(message_id);
+                    HelperGroup.insert_into_group_message_db(m, true);
+                }
                 if (queued)
                 {
                     HelperGroup.schedule_pending_group_message_flush(groupId);
+                    break;
                 }
-            }
-            else
-            {
-                Log.i(TAG, "sendGroupCaption:not sent res=" + message_id);
             }
         }
         catch (Exception e)

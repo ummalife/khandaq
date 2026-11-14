@@ -53,6 +53,19 @@ final class MessageSplitter
         return parts;
     }
 
+    /**
+     * KHANDAQ (0.2.56): the parts a waiting direct text goes as when one message cannot carry it and chunks
+     * cannot either (TrifaToxService.resend_unsent_text_messages): the reply header that opens it stays in
+     * the first part, as when the text was new. One part, the text itself, when it fits.
+     */
+    static List<String> splitWaitingText(final String text)
+    {
+        final String body = text == null ? null : MessageReplyHelper.parse(text).bodyText;
+        final int headChars = body != null && !body.isEmpty() && text.endsWith(body)
+                              ? text.length() - body.length() : 0;
+        return split(text, headChars, ToxVars.TOX_MSGV3_MAX_MESSAGE_LENGTH);
+    }
+
     /** Where each part of {@link #split} lies in text, as {start, end}. */
     static List<int[]> ranges(final String text, final int headChars, final int maxBytes)
     {

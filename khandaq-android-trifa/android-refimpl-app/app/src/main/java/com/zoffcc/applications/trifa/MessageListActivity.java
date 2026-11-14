@@ -2258,8 +2258,9 @@ public class MessageListActivity extends AppCompatActivity
         final boolean friendOnline = (chunkFriendNum >= 0) &&
                 (MainActivity.tox_friend_get_connection_status(chunkFriendNum)
                         != ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value);
+        // KHANDAQ (0.2.56): a text over what chunks carry (MessageChunker.canCarry) goes in parts too.
         final List<int[]> parts = (MessageChunker.shouldChunk(fullText) && friendOnline
-                                   && MessageChunker.canReassemble(chunkFriendNum))
+                                   && MessageChunker.canReassemble(chunkFriendNum) && MessageChunker.canCarry(fullText))
                 ? java.util.Collections.singletonList(new int[]{0, fullText.length()})
                 : MessageSplitter.ranges(fullText, replyHeadChars, TOX_MSGV3_MAX_MESSAGE_LENGTH);
         if (parts.isEmpty())

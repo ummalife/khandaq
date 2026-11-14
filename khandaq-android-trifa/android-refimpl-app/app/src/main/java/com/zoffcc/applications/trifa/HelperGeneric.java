@@ -3768,13 +3768,22 @@ public class HelperGeneric
             return result;
         }
 
-        // KHANDAQ (#14): not chunked → a single Tox message must fit the protocol limit, so trim as a
-        // safety net (the chunked path above already sent the full text to an online friend). Short
-        // messages are unchanged; this only prevents an over-length message from being rejected.
-        message = trim_to_utf8_length_bytes(message, ToxVars.TOX_MSGV3_MAX_MESSAGE_LENGTH);
-        if (message == null)
+        // KHANDAQ (#14): not chunked → a single Tox message must fit the protocol limit.
+        // KHANDAQ (0.2.56): a longer text is not sent, rather than cut to the limit as it was here, which lost
+        // its end without a word (a waiting long text that went out before the friend's keepalive said it
+        // takes chunks). It waits as if the friend were offline (-3), and resend_unsent_text_messages sends
+        // it in parts (split_waiting_texts_that_cannot_go_whole). New texts arrive here already in parts.
+        if (MessageChunker.needsChunks(message))
         {
-            message = "";
+            HelperGeneric.logI(TAG, "tox_friend_send_message_wrapper:too_long_for_one_message bytes="
+                                    + message.getBytes(StandardCharsets.UTF_8).length);
+            final MainActivity.send_message_result result = new MainActivity.send_message_result();
+            result.msg_v2 = false;
+            result.msg_hash_hex = "";
+            result.msg_hash_v3_hex = "";
+            result.raw_message_buf_hex = "";
+            result.msg_num = -3L;
+            return result;
         }
 
         if (live_conn == TOX_CONNECTION_NONE.value && relay_pubkey == null)

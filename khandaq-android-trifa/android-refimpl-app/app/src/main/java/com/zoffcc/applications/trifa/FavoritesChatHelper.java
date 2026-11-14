@@ -29,7 +29,6 @@ import static com.zoffcc.applications.trifa.HelperGeneric.copy_vfs_file_to_real_
 import static com.zoffcc.applications.trifa.HelperGeneric.display_toast;
 import static com.zoffcc.applications.trifa.HelperGeneric.logI;
 import static com.zoffcc.applications.trifa.HelperGeneric.normalize_chat_input_text;
-import static com.zoffcc.applications.trifa.HelperGeneric.trim_to_utf8_length_bytes;
 import static com.zoffcc.applications.trifa.HelperMessage.insert_into_message_db;
 import static com.zoffcc.applications.trifa.MainActivity.friend_list_fragment;
 import static com.zoffcc.applications.trifa.MainActivity.SD_CARD_TMP_DIR;
@@ -42,7 +41,6 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MS
 import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_CONTROL.TOX_FILE_CONTROL_CANCEL;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_KIND.TOX_FILE_KIND_DATA;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_my_toxid;
-import static com.zoffcc.applications.trifa.ToxVars.TOX_MSGV3_MAX_MESSAGE_LENGTH;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_PUBLIC_KEY_SIZE;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
 import static com.zoffcc.applications.trifa.TrifaToxService.orma;
@@ -220,9 +218,10 @@ final class FavoritesChatHelper
             return -1L;
         }
 
-        final String msg = trim_to_utf8_length_bytes(
-                normalize_chat_input_text(rawText),
-                TOX_MSGV3_MAX_MESSAGE_LENGTH);
+        // KHANDAQ (0.2.56): a note stays on this device, so no Tox limit applies and the whole text is kept,
+        // as the send path expects (#14). It was cut at TOX_MSGV3_MAX_MESSAGE_LENGTH bytes, so a long paste
+        // into Saved Messages lost its end without a word.
+        final String msg = normalize_chat_input_text(rawText);
         if (TextUtils.isEmpty(msg))
         {
             return -1L;

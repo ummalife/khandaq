@@ -219,6 +219,37 @@ public class MessageSplitterTest
                      MessageSplitter.split(repeat("h", 1400) + " tail", 1400, LIMIT));
     }
 
+    /**
+     * KHANDAQ (0.2.56): a waiting text one message cannot carry went, once its friend was online but could
+     * not take chunks right then, as one message cut at the limit. It now goes in parts, and its reply
+     * header stays in the first one as when the text was new.
+     */
+    @Test
+    public void a_waiting_text_goes_in_parts_with_its_reply_header_in_the_first()
+    {
+        final String header = "[KQ|7|ABCDEF12|1731370000000|Khandaq Demo]\nHello\n[KQ/end]\n";
+        final String body = repeat("ответ ", 400).trim();
+        final List<String> parts = MessageSplitter.splitWaitingText(header + body);
+        assertEquals(MessageSplitter.split(header + body, header.length(), LIMIT), parts);
+        assertTrue(parts.size() >= 4);
+        assertTrue(parts.get(0).startsWith(header));
+        assertEquals("Hello", MessageReplyHelper.parse(parts.get(0)).reply.previewText);
+        final List<String> bodies = new ArrayList<>(parts);
+        bodies.set(0, parts.get(0).substring(header.length()));
+        assertEquals(body, String.join(" ", bodies));
+        for (final String part : parts)
+        {
+            assertFits(part);
+        }
+
+        // Plain text is cut as a new one is, and a text that fits stays one message, as it is.
+        final String plain = repeat("x", 3000);
+        assertEquals(MessageSplitter.split(plain, 0, LIMIT), MessageSplitter.splitWaitingText(plain));
+        assertEquals(Collections.singletonList(header + "short"), MessageSplitter.splitWaitingText(header + "short"));
+        assertTrue(MessageSplitter.splitWaitingText("").isEmpty());
+        assertTrue(MessageSplitter.splitWaitingText(null).isEmpty());
+    }
+
     @Test
     public void the_parts_leave_in_order_and_each_finds_its_own_wake_push()
     {

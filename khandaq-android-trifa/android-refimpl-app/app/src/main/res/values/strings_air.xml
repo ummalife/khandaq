@@ -143,10 +143,6 @@
         <item quantity="one">%1$d byte over the limit: too long to save</item>
         <item quantity="other">%1$d bytes over the limit: too long to save</item>
     </plurals>
-    <plurals name="air_compose_bytes_over_group">
-        <item quantity="one">%1$d byte over the limit: shorten the message to send it</item>
-        <item quantity="other">%1$d bytes over the limit: shorten the message to send it</item>
-    </plurals>
     <string name="air_compose_send">Send</string>
     <string name="air_compose_voice">Voice message: hold to record</string>
     <string name="air_compose_attach">Attach a file</string>

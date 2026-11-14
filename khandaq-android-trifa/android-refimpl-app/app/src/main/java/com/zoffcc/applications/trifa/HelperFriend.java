@@ -1624,6 +1624,8 @@ public class HelperFriend
                 return context_s.getString(R.string.add_friend_failed);
             }
             AirBlockList.unblock(friend_public_key);
+            // KHANDAQ (QA live, F2): this contact is ours to wait for now, not one whose request we accepted.
+            AirRequestStore.forgetAccepted(friend_public_key);
             AirRepository.requestRefresh();
             return null;
         }
@@ -1699,6 +1701,8 @@ public class HelperFriend
             HelperGeneric.update_savedata_file_wrapper_async();
             // Asking a blocked key again lifts the block (design/DESIGN.md, Block).
             AirBlockList.unblock(friend_public_key);
+            // KHANDAQ (QA live, F2): this contact is ours to wait for now, not one whose request we accepted.
+            AirRequestStore.forgetAccepted(friend_public_key);
             if (persist_new_friend_contact(friend_public_key, friendnum))
             {
                 display_toast(context_s.getString(R.string.add_friend_success), false, 300);

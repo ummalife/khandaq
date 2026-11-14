@@ -404,6 +404,25 @@ public class AirModelTest
     }
 
     @Test
+    public void a_contact_whose_request_we_accepted_never_reads_as_our_pending_request()
+    {
+        // QA live (F2): accepted, not online since: "waiting for reply" and "request sent" were wrong.
+        final long now = 1_000_000L;
+
+        assertEquals(Reach.away(180), Reach.acceptedRequest(now - 180, now, false));
+        assertEquals(Reach.CONNECTING, Reach.acceptedRequest(now - 180, now, true));
+        assertEquals(Reach.away(8 * 86400), Reach.acceptedRequest(now - 8 * 86400, now, true));
+        // The time of the request is not known (accepted on a path that had no card).
+        assertEquals(Reach.AWAY_LONG_AGO, Reach.acceptedRequest(0, now, false));
+        assertEquals(Reach.AWAY_LONG_AGO, Reach.acceptedRequest(0, now, true));
+        for (final long seen : new long[]{0L, now - 180, now, now + 30})
+        {
+            assertFalse(Reach.acceptedRequest(seen, now, false).kind == Reach.Kind.PENDING);
+            assertFalse(Reach.acceptedRequest(seen, now, true).kind == Reach.Kind.PENDING);
+        }
+    }
+
+    @Test
     public void only_a_working_link_counts_as_live()
     {
         assertTrue(Reach.DIRECT.isLive());

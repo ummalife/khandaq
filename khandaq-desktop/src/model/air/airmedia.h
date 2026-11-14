@@ -26,6 +26,8 @@
 #include <QString>
 #include <QVector>
 
+#include <functional>
+
 class QIODevice;
 
 /**
@@ -51,6 +53,16 @@ constexpr qint64 fileLimitShownBytes = 200LL * 1000 * 1000;
  * name says so; nothing about the file is trusted from it.
  */
 bool isVoiceNote(const QString& fileName);
+
+/**
+ * Where a received file goes when nobody is asked where: in folder under its own name, or, while a
+ * file of that name is there (taken), with " (1)", " (2)" ... after the part before its first dot,
+ * as the files accepted by themselves are named (Widget::acceptFileTransfer). The name came through
+ * CoreFile::getCleanFileName, so it has no path in it.
+ * @return The path; empty for an empty name.
+ */
+QString freeFilePath(const QString& folder, const QString& fileName,
+                     const std::function<bool(const QString&)>& taken);
 
 /** What a file entry offers, in the order it shows them. */
 enum class FileAction

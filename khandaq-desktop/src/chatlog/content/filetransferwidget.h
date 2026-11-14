@@ -90,6 +90,10 @@ private:
     void setActions(const QVector<Air::FileAction>& actions);
     void act(Air::FileAction action);
     void accept();
+    /** Asks where to save the file, then accepts it there. */
+    void acceptAsked();
+    /** Accepts a voice note into the app's folder of voice notes; play: it plays once it is here. */
+    void acceptVoiceNote(bool play);
     void sendAgain();
     void open();
     void showInFolder();
@@ -132,4 +136,6 @@ private:
     QFutureWatcher<QImage> previewLoad;
     qint64 voiceLengthMs = -1;
     QString voicePath;
+    /** Listen was pressed for the voice note before it was here: it plays when it comes. */
+    bool playWhenHere = false;
 };

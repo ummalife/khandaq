@@ -144,6 +144,23 @@
                                     tssent:(UInt32)tssent
                                     tsrcvd:(UInt32)tsrcvd;
 
+/**
+ * KHANDAQ (caption above its own photo): a text this device sends, sorted at the moment it was sent.
+ *
+ * @param sentDateInterval The moment the text was sent, to the fraction of a second. tssent is the same
+ *        moment in whole seconds, as msgV3 carries it.
+ */
+- (OCTMessageAbstract *)addMessageWithText:(NSString *)text
+                                      type:(OCTToxMessageType)type
+                                      chat:(OCTChat *)chat
+                                    sender:(OCTFriend *)sender
+                                 messageId:(OCTToxMessageId)messageId
+                              msgv3HashHex:(NSString *)msgv3HashHex
+                                  sentPush:(BOOL)sentPush
+                                    tssent:(UInt32)tssent
+                                    tsrcvd:(UInt32)tsrcvd
+                          sentDateInterval:(NSTimeInterval)sentDateInterval;
+
 - (OCTMessageAbstract *)addGroupMessageWithText:(NSString *)text
                                            type:(OCTToxMessageType)type
                                            chat:(OCTChat *)chat

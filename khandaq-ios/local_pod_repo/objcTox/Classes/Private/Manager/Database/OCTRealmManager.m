@@ -1022,6 +1022,29 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
                                     tssent:(UInt32)tssent
                                     tsrcvd:(UInt32)tsrcvd
 {
+    return [self addMessageWithText:text
+                               type:type
+                               chat:chat
+                             sender:sender
+                          messageId:messageId
+                       msgv3HashHex:msgv3HashHex
+                           sentPush:sentPush
+                             tssent:tssent
+                             tsrcvd:tsrcvd
+                   sentDateInterval:0];
+}
+
+- (OCTMessageAbstract *)addMessageWithText:(NSString *)text
+                                      type:(OCTToxMessageType)type
+                                      chat:(OCTChat *)chat
+                                    sender:(OCTFriend *)sender
+                                 messageId:(OCTToxMessageId)messageId
+                              msgv3HashHex:(NSString *)msgv3HashHex
+                                  sentPush:(BOOL)sentPush
+                                    tssent:(UInt32)tssent
+                                    tsrcvd:(UInt32)tsrcvd
+                          sentDateInterval:(NSTimeInterval)sentDateInterval
+{
     NSParameterAssert(text);
 
     OCTLogInfo(@"adding messageText to chat %@", chat);
@@ -1034,7 +1057,14 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     messageText.msgv3HashHex = msgv3HashHex;
     messageText.sentPush = sentPush;
 
-    return [self addMessageAbstractWithChat:chat sender:sender messageText:messageText messageFile:nil messageCall:nil tssent:tssent tsrcvd:tsrcvd];
+    return [self addMessageAbstractWithChat:chat
+                                     sender:sender
+                                messageText:messageText
+                                messageFile:nil
+                                messageCall:nil
+                                     tssent:tssent
+                                     tsrcvd:tsrcvd
+                           sentDateInterval:sentDateInterval];
 }
 
 - (OCTMessageAbstract *)addGroupMessageWithText:(NSString *)text
@@ -2419,6 +2449,29 @@ static NSString *OCTGroupFileBaseName(NSString *fileName)
                                             tssent:(UInt32)tssent
                                             tsrcvd:(UInt32)tsrcvd
 {
+    return [self addMessageAbstractWithChat:chat
+                                     sender:sender
+                                messageText:messageText
+                                messageFile:messageFile
+                                messageCall:messageCall
+                                     tssent:tssent
+                                     tsrcvd:tsrcvd
+                           sentDateInterval:0];
+}
+
+/**
+ * @param sentDateInterval For a text this device sends, the moment it was sent, to the fraction of a
+ *        second; 0 for anything else.
+ */
+- (OCTMessageAbstract *)addMessageAbstractWithChat:(OCTChat *)chat
+                                            sender:(OCTFriend *)sender
+                                       messageText:(OCTMessageText *)messageText
+                                       messageFile:(OCTMessageFile *)messageFile
+                                       messageCall:(OCTMessageCall *)messageCall
+                                            tssent:(UInt32)tssent
+                                            tsrcvd:(UInt32)tsrcvd
+                                  sentDateInterval:(NSTimeInterval)sentDateInterval
+{
     NSParameterAssert(chat);
 
     NSAssert( (messageText && ! messageFile && ! messageCall) ||
@@ -2436,6 +2489,13 @@ static NSString *OCTGroupFileBaseName(NSString *fileName)
     // message lands in its true chronological slot — matching its displayed tssent label — and the order
     // is identical across devices. dateInterval == arrival here, so MIN keeps future-skewed senders put.
     messageAbstract.sortTimestamp = (tssent > 0) ? MIN((NSTimeInterval)tssent, messageAbstract.dateInterval) : messageAbstract.dateInterval;
+    if (sentDateInterval > 0) {
+        // KHANDAQ (caption above its own photo): a text this device sends sorts at the moment it was
+        // sent, to the fraction of a second, as a file sorts by its own fractional time. By tssent,
+        // whole seconds as msgV3 carries them, it sorted before a photo sent a moment earlier in the
+        // same second, so a caption went above its photo and was not merged into it.
+        messageAbstract.sortTimestamp = MIN(sentDateInterval, messageAbstract.dateInterval);
+    }
     messageAbstract.messageText = messageText;
     messageAbstract.messageFile = messageFile;
     messageAbstract.messageCall = messageCall;

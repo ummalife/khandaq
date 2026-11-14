@@ -93,6 +93,7 @@
 		116046191D8D434B002287C8 /* ChangePinTimeoutController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116046181D8D434B002287C8 /* ChangePinTimeoutController.swift */; };
 		1160B67E1D5F9993002DF75B /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1160B67D1D5F9993002DF75B /* KeychainManager.swift */; };
 		1160B6821D5FC7CC002DF75B /* KeychainManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1160B6801D5FC7CC002DF75B /* KeychainManagerTests.swift */; };
+		KQCAPORDER00000000000001 /* OwnCaptionOrderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQCAPORDER00000000000002 /* OwnCaptionOrderTests.swift */; };
 		1160B68B1D5FD8DE002DF75B /* LaunchPlaceholderController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1160B6891D5FD8DE002DF75B /* LaunchPlaceholderController.swift */; };
 		11628E321CA2FBD1008C097E /* FilePreviewControllerDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11628E311CA2FBD1008C097E /* FilePreviewControllerDataSource.swift */; };
 		11628E3E1CA30C13008C097E /* QuickLookPreviewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11628E3D1CA30C13008C097E /* QuickLookPreviewController.swift */; };
@@ -601,6 +602,7 @@
 		116046181D8D434B002287C8 /* ChangePinTimeoutController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChangePinTimeoutController.swift; sourceTree = "<group>"; };
 		1160B67D1D5F9993002DF75B /* KeychainManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
 		1160B6801D5FC7CC002DF75B /* KeychainManagerTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KeychainManagerTests.swift; sourceTree = "<group>"; };
+		KQCAPORDER00000000000002 /* OwnCaptionOrderTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OwnCaptionOrderTests.swift; sourceTree = "<group>"; };
 		1160B6891D5FD8DE002DF75B /* LaunchPlaceholderController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LaunchPlaceholderController.swift; sourceTree = "<group>"; };
 		11628E311CA2FBD1008C097E /* FilePreviewControllerDataSource.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FilePreviewControllerDataSource.swift; sourceTree = "<group>"; };
 		11628E3D1CA30C13008C097E /* QuickLookPreviewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = QuickLookPreviewController.swift; sourceTree = "<group>"; };
@@ -1222,6 +1224,7 @@
 				1173F05A1BC5D94400B88B7B /* Info.plist */,
 				9CDC09241C34083100DC0D63 /* FriendListDataSourceTest.swift */,
 				1160B6801D5FC7CC002DF75B /* KeychainManagerTests.swift */,
+				KQCAPORDER00000000000002 /* OwnCaptionOrderTests.swift */,
 				11F83BDA1CAFB2A20074FE11 /* SwiftSupport.swift */,
 				1173F06F1BC5D9CA00B88B7B /* ThemeTest.swift */,
 				113F030D1CAFCCE20009ABE1 /* SnapshotTests */,
@@ -2360,6 +2363,7 @@
 				113F03191CAFDB0D0009ABE1 /* ChatIncomingTextCellSnapshotTest.swift in Sources */,
 				1173F0701BC5D9CA00B88B7B /* ThemeTest.swift in Sources */,
 				1160B6821D5FC7CC002DF75B /* KeychainManagerTests.swift in Sources */,
+				KQCAPORDER00000000000001 /* OwnCaptionOrderTests.swift in Sources */,
 				113F031B1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift in Sources */,
 				B2SWIPET000000000000001 /* ChatListSwipeNavigationTest.swift in Sources */,
 				B2BAIR060611000000000001 /* AirListModelTests.swift in Sources */,

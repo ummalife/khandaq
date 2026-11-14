@@ -399,7 +399,8 @@ private extension AirListDataSource {
             let reach = AirReach.friend(connection: friend.connectionStatus,
                                         lastSeenOnlineInterval: friend.lastSeenOnlineInterval,
                                         now: now,
-                                        selfLinkSettling: linkSettling)
+                                        selfLinkSettling: linkSettling,
+                                        askedAt: AirLocalStore.shared.askedAt(publicKey: friend.publicKey))
             entries.append(AirEntry(id: friend.publicKey,
                                     kind: .contact,
                                     title: friend.nickname.isEmpty ? friend.publicKey : friend.nickname,
@@ -486,7 +487,8 @@ private extension AirListDataSource {
             reach = AirReach.friend(connection: friend.connectionStatus,
                                     lastSeenOnlineInterval: friend.lastSeenOnlineInterval,
                                     now: now,
-                                    selfLinkSettling: linkSettling)
+                                    selfLinkSettling: linkSettling,
+                                    askedAt: AirLocalStore.shared.askedAt(publicKey: friend.publicKey))
             title = friend.nickname.isEmpty ? friend.publicKey : friend.nickname
         }
         else {
@@ -813,7 +815,7 @@ private extension AirListDataSource {
             return
         }
         do {
-            try submanagerFriends.approve(request)
+            try submanagerFriends.approveKeepingItsTime(request)
         }
         catch let error as NSError {
             handleErrorWithType(.toxAddFriend, error: error)

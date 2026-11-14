@@ -80,7 +80,7 @@ extension FriendRequestController {
 
     @objc func acceptButtonPressed() {
         do {
-            try submanagerFriends.approve(request)
+            try submanagerFriends.approveKeepingItsTime(request)
             delegate?.friendRequestControllerDidFinish(self)
         }
         catch let error as NSError {

@@ -250,7 +250,7 @@ enum QaCommandHandler {
             for index in 0..<requests.count {
                 let request = requests[index]
                 do {
-                    try toxManager.friends.approve(request)
+                    try toxManager.friends.approveKeepingItsTime(request)
                     count += 1
                 } catch {
                     // skip failed request
@@ -333,7 +333,7 @@ enum QaCommandHandler {
             let request = requests[index]
             if request.publicKey.uppercased().hasSuffix(String(key.suffix(64)))
                 || request.publicKey.uppercased() == key {
-                try? toxManager.friends.approve(request)
+                try? toxManager.friends.approveKeepingItsTime(request)
                 return
             }
         }

@@ -23,33 +23,91 @@
 #include "src/core/khandaqlimits.h"
 
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QtEndian>
 #include <QtTest/QtTest>
 
 #include <tox/tox.h>
 
 namespace {
 constexpr qint64 payload = static_cast<qint64>(NGC_CHUNK_PAYLOAD_MAX);
+
+// The packets of a chunked file as Android lays them out (NgcGroupFileTransfer.buildBeginPacket
+// and buildChunkPacket): magic, version and packet id, the msg id, then big-endian numbers.
+QByteArray ngcPacket(char packetId, const QByteArray& msgId, int size)
+{
+    QByteArray packet(size, '\0');
+    const char head[] = {'\x66', '\x77', '\x88', '\x11', '\x34', '\x35', '\x01'};
+    packet.replace(0, static_cast<int>(sizeof(head)), head, static_cast<int>(sizeof(head)));
+    packet[7] = packetId;
+    packet.replace(8, msgId.size(), msgId);
+    return packet;
+}
+
+QByteArray beginPacket(const QByteArray& msgId, const QString& name, qint64 size)
+{
+    QByteArray packet = ngcPacket('\x12', msgId, static_cast<int>(NGC_FILE_BEGIN_SIZE));
+    // A zero create_ts(4) at 40, then the name at 44, padded with zeros to 255 bytes.
+    const QByteArray utf8 = name.toUtf8();
+    packet.replace(44, utf8.size(), utf8);
+    qToBigEndian(static_cast<quint64>(size), packet.data() + 299);
+    qToBigEndian(static_cast<quint32>(payload), packet.data() + 307);
+    qToBigEndian(static_cast<quint32>((size + payload - 1) / payload), packet.data() + 311);
+    return packet;
+}
+
+QByteArray chunkPacket(const QByteArray& msgId, const QByteArray& file, int index)
+{
+    const QByteArray bytes =
+        file.mid(static_cast<int>(index * payload), static_cast<int>(payload));
+    QByteArray packet =
+        ngcPacket('\x13', msgId, static_cast<int>(NGC_FILE_CHUNK_HEADER_SIZE) + bytes.size());
+    qToBigEndian(static_cast<quint32>(index), packet.data() + 40);
+    qToBigEndian(static_cast<quint32>(bytes.size()), packet.data() + 44);
+    packet.replace(static_cast<int>(NGC_FILE_CHUNK_HEADER_SIZE), bytes.size(), bytes);
+    return packet;
+}
+
+void hand(Core& core, int group, uint32_t peer, const QByteArray& packet, bool isPrivate)
+{
+    core.handleNgcFileTransferPacket(static_cast<uint32_t>(group), peer,
+                                     reinterpret_cast<const uint8_t*>(packet.constData()),
+                                     static_cast<size_t>(packet.size()), isPrivate);
+}
+
+// Where the receiver assembles a chunked file (core.cpp, the BEGIN of handleNgcFileTransferPacket).
+QString scratchPath(const QByteArray& msgId)
+{
+    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+           + QStringLiteral("/ngc_files/") + QString::fromLatin1(msgId.toHex())
+           + QStringLiteral(".part");
+}
 } // namespace
 
 // 0.2.56: what the window's thread sees of a file it sends into a group, on cores that are never
 // started: a group founded here is all there is, and nothing goes out. A file of more than one
 // packet is queued and its chunks are left to the loop of the node; their order and pace are
-// Air::GroupFileQueue's and Air::UploadPace's (airgroupfilequeue_test).
+// Air::GroupFileQueue's and Air::UploadPace's (airgroupfilequeue_test). The packets of a file
+// that comes are handed to the core as toxcore's callbacks would, from a member that is not there.
 class TestCoreGroupFile : public QObject
 {
     Q_OBJECT
 private slots:
     void initTestCase();
+    void cleanupTestCase();
     void aFileOfSeveralChunksIsQueuedForTheLoop();
     void aGroupThatRefusesTheBeginRefusesTheFile();
     void aFileThatWaitsForAnotherSendsItsBeginInItsTurn();
     void aFileOfOnePacketGoesAtOnce();
     void aFileThatCannotBeReadIsRefused();
+    void aChunkedFileThatComesPrivatelyArrives();
+    void aChunkedFileThatComesBothWaysArrivesOnce();
 
 private:
     ToxCorePtr makeCore();
     QString writeFile(const QString& name, qint64 size);
+    QByteArray fileBytes(qint64 size);
 
     QTemporaryDir dir;
     MockSettings settings;
@@ -69,20 +127,35 @@ QString TestCoreGroupFile::writeFile(const QString& name, qint64 size)
     if (!file.open(QIODevice::WriteOnly)) {
         return QString();
     }
+    file.write(fileBytes(size));
+    return path;
+}
+
+QByteArray TestCoreGroupFile::fileBytes(qint64 size)
+{
     QByteArray bytes(static_cast<int>(size), '\0');
     for (int i = 0; i < bytes.size(); ++i) {
         bytes[i] = static_cast<char>(i % 251);
     }
-    file.write(bytes);
-    return path;
+    return bytes;
 }
 
 void TestCoreGroupFile::initTestCase()
 {
     QVERIFY(dir.isValid());
+    // The files that come are assembled under the app's data: the tests keep theirs apart.
+    QStandardPaths::setTestModeEnabled(true);
     settings.setProxyAddr(QString());
     settings.setProxyPort(0);
     settings.setProxyType(MockSettings::ProxyType::ptNone);
+}
+
+void TestCoreGroupFile::cleanupTestCase()
+{
+    const QString data = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir(data + QStringLiteral("/ngc_files")).removeRecursively();
+    // And the folders test mode made for it, as far up as they are empty.
+    QDir().rmpath(data);
 }
 
 void TestCoreGroupFile::aFileOfSeveralChunksIsQueuedForTheLoop()
@@ -194,6 +267,72 @@ void TestCoreGroupFile::aFileThatCannotBeReadIsRefused()
     const QString path = writeFile(QStringLiteral("nowhere.bin"), 2 * payload);
     QVERIFY(!core->sendGroupFileFromPath(group + 1, QStringLiteral("nowhere.bin"), path));
     QCOMPARE(started.count(), 0);
+}
+
+void TestCoreGroupFile::aChunkedFileThatComesPrivatelyArrives()
+{
+    ToxCorePtr core = makeCore();
+    QVERIFY(core);
+    const int group = core->createGroup(QStringLiteral("Files"), TOX_GROUP_PRIVACY_STATE_PUBLIC);
+    QVERIFY(group >= 0);
+    Tox_Err_Group_Self_Query selfError;
+    const uint32_t peer =
+        tox_group_self_get_peer_id(core->getTox(), static_cast<uint32_t>(group), &selfError) + 1;
+    const QByteArray msgId(32, 'p');
+    const QByteArray file = fileBytes(2 * payload + 1234);
+    QSignalSpy received(core.get(), &Core::groupFileReceived);
+
+    // Android sends a large file to each member alone: its BEGIN and every chunk.
+    hand(*core, group, peer, beginPacket(msgId, QStringLiteral("clip.mp4"), file.size()), true);
+    hand(*core, group, peer, chunkPacket(msgId, file, 0), true);
+    hand(*core, group, peer, chunkPacket(msgId, file, 1), true);
+    QCOMPARE(received.count(), 0);
+    hand(*core, group, peer, chunkPacket(msgId, file, 2), true);
+
+    QCOMPARE(received.count(), 1);
+    const QList<QVariant> args = received.takeFirst();
+    QCOMPARE(args.at(0).toInt(), group);
+    QCOMPARE(args.at(2).toString(), QStringLiteral("clip.mp4"));
+    QCOMPARE(args.at(3).toByteArray(), file);
+    QCOMPARE(args.at(5).toBool(), false);
+    QCOMPARE(args.at(6).toByteArray(), msgId);
+    QVERIFY(!QFile::exists(scratchPath(msgId)));
+}
+
+void TestCoreGroupFile::aChunkedFileThatComesBothWaysArrivesOnce()
+{
+    ToxCorePtr core = makeCore();
+    QVERIFY(core);
+    const int group = core->createGroup(QStringLiteral("Files"), TOX_GROUP_PRIVACY_STATE_PUBLIC);
+    QVERIFY(group >= 0);
+    Tox_Err_Group_Self_Query selfError;
+    const uint32_t peer =
+        tox_group_self_get_peer_id(core->getTox(), static_cast<uint32_t>(group), &selfError) + 1;
+    const QByteArray msgId(32, 'q');
+    const QByteArray file = fileBytes(2 * payload + 77);
+    const QByteArray begin = beginPacket(msgId, QStringLiteral("photo.jpg"), file.size());
+    QSignalSpy received(core.get(), &Core::groupFileReceived);
+
+    // Both copies of the BEGIN open one assembly, and both copies of a chunk fill one place.
+    hand(*core, group, peer, begin, false);
+    hand(*core, group, peer, chunkPacket(msgId, file, 0), true);
+    hand(*core, group, peer, begin, true);
+    hand(*core, group, peer, chunkPacket(msgId, file, 0), false);
+    hand(*core, group, peer, chunkPacket(msgId, file, 2), false);
+    QCOMPARE(received.count(), 0);
+    hand(*core, group, peer, chunkPacket(msgId, file, 1), true);
+    QCOMPARE(received.count(), 1);
+    QCOMPARE(received.at(0).at(3).toByteArray(), file);
+
+    // The copies that come after it change nothing, and a late BEGIN opens no assembly again.
+    hand(*core, group, peer, chunkPacket(msgId, file, 2), true);
+    hand(*core, group, peer, chunkPacket(msgId, file, 1), false);
+    hand(*core, group, peer, begin, true);
+    QVERIFY(!QFile::exists(scratchPath(msgId)));
+    for (int chunk = 0; chunk < 3; ++chunk) {
+        hand(*core, group, peer, chunkPacket(msgId, file, chunk), true);
+    }
+    QCOMPARE(received.count(), 1);
 }
 
 QTEST_GUILESS_MAIN(TestCoreGroupFile)

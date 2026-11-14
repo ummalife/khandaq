@@ -2397,6 +2397,9 @@ uint32_t chatIdHash32(const uint8_t* chatId)
 //   pkt 0x11 (live file, broadcast):  msg_id(32) create_ts(4) filename(255) data[1..36701]
 //   pkt 0x12 (chunked begin):         same header + total_size(8) chunk_size(4) total_chunks(4)
 //   pkt 0x13 (chunked data):            msg_id(32) chunk_index(4) chunk_size(4) data[...]
+//     0x12 and 0x13 come either way: this client and iOS broadcast them, Android sends each
+//     member a private copy (NgcGroupFileTransfer.sendChunkWithRetry).
+//   pkt 0x14 (a receiver asks for chunks again): not answered, see handleNgcFileTransferPacket.
 //   pkt 0x03 (history-sync file, private): msg_id(32) orig_sender_pk(32) ts(4)
 //                                          peer_name(25) filename(255) data[1..36701]
 // KHANDAQ (audit F-6): this client is a history-sync CONSUMER only — it never emits 0x01 (request),
@@ -2722,6 +2725,14 @@ void Core::sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t m
  * @brief Parse an incoming NGC custom packet; handle TRIfA-style file transfers.
  * Live files (pkt 0x11) arrive as broadcast custom packets, history-sync files
  * (pkt 0x03) as private custom packets from a peer that resyncs history to us.
+ * A chunked file (pkts 0x12 and 0x13) is taken either way: Android sends it to each member as
+ * private packets only, so dropping those lost every large file from Android. Copies of one file
+ * meet in one assembly, keyed by its msg id: a repeated BEGIN keeps what came, a chunk already
+ * held is ignored, and a file that already arrived opens no assembly again.
+ * pkt 0x14 (Android and iOS ask the sender for missing chunks) is not answered: this client keeps
+ * nothing of a file once its last chunk went, the two senders of 0x14 lay it out differently
+ * (Android: chunk count and a bitmap of the missing ones; iOS: a list of indices, including the
+ * chunks still to come), and serving it would be a resend path of its own, under the same pace.
  */
 void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const uint8_t* data,
                                        size_t length, bool isPrivate)
@@ -2755,11 +2766,16 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         return;
     }
 
-    if (pktId == NGC_PKT_FILE_BEGIN && !isPrivate) {
+    if (pktId == NGC_PKT_FILE_BEGIN) {
         if (length < NGC_FILE_BEGIN_SIZE) {
             return;
         }
         const QByteArray msgId(reinterpret_cast<const char*>(data + 8), 32);
+        // The file already arrived: a copy of its BEGIN that comes late, by the other way or with a
+        // resend, would only hold a scratch file of its size until the sweep below.
+        if (ngcSeenFileMsgIds.contains(msgId)) {
+            return;
+        }
         const QString key = ngcAssemblyKey(groupId, msgId);
         // KHANDAQ (audit F-5): bind the assembly to the peer that opened it. Assemblies are keyed only
         // by (group, msgId) and the BEGIN is broadcast to the whole group, so without this any other
@@ -2919,7 +2935,7 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         return;
     }
 
-    if (pktId == NGC_PKT_FILE_CHUNK && !isPrivate) {
+    if (pktId == NGC_PKT_FILE_CHUNK) {
         if (length < NGC_FILE_CHUNK_HEADER_SIZE + 1) {
             return;
         }

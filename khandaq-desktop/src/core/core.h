@@ -157,6 +157,13 @@ public:
      * groups: the profile closes. Returns once that is done on the thread of the node.
      */
     void leavePendingGroupsNow();
+    /**
+     * A file packet a member of the group sent to all (isPrivate false) or to us alone (true), as
+     * toxcore's custom packet callbacks hand it over on the thread of the node. Public so that the
+     * tests can hand packets over without a network.
+     */
+    void handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const uint8_t* data,
+                                     size_t length, bool isPrivate);
 
     QString getUsername() const override;
     Status::Status getStatus() const;
@@ -368,8 +375,6 @@ private:
     uint32_t replaceLeavingGroup(const QByteArray& chatId, std::function<void()> join);
     void iterateTox();
     bool ignoresGroup(uint32_t groupNumber) const;
-    void handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const uint8_t* data,
-                                     size_t length, bool isPrivate);
     struct OutgoingGroupFile;
     bool sendsGroupFileTo(const OutgoingGroupFile& send) const;
     bool sendGroupFileBegin(OutgoingGroupFile& send, const QByteArray& fileId);

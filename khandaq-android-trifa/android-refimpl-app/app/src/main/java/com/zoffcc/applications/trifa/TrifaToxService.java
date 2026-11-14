@@ -836,6 +836,11 @@ public class TrifaToxService extends Service
         int conf_ = 0;
         for (conf_ = 0; conf_ < safe_num_groups; conf_++)
         {
+            // KHANDAQ (QA live, F11): a group we are leaving is not ours any more, toxcore only keeps it a little.
+            if (HelperGroup.is_group_leave_pending(group_numbers[conf_]))
+            {
+                continue;
+            }
             groupid_buf3.clear();
 
             if (tox_group_get_chat_id(group_numbers[conf_], groupid_buf3) == 0)
@@ -1015,6 +1020,10 @@ public class TrifaToxService extends Service
                 HelperGeneric.logI(TAG, "is_tox_started:==============================");
                 HelperGeneric.logI(TAG, "is_tox_started=" + is_tox_started);
                 HelperGeneric.logI(TAG, "is_tox_started:==============================");
+
+                // KHANDAQ (QA live, F11): groups the app was leaving when it stopped go before anything can read the
+                // groups of this tox instance into the list or the database.
+                HelperGroup.leave_groups_pending_at_last_stop();
 
                 is_tox_started = true;
                 // KHANDAQ (logout crash fix): tox is up again, so we are no longer "logged out". Clearing
@@ -1571,6 +1580,7 @@ public class TrifaToxService extends Service
                     try
                     {
                         MainActivity.tox_iterate();
+                        HelperGroup.run_pending_group_leaves();
                         HelperGroup.maintain_all_groups();
                     }
                     catch (Throwable t)
@@ -1654,6 +1664,9 @@ public class TrifaToxService extends Service
                 {
                     e.printStackTrace();
                 }
+
+                // KHANDAQ (QA live, F11): groups still being left are left now, and saved without them.
+                HelperGroup.flush_pending_group_leaves();
 
                 try
                 {

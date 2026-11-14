@@ -9159,8 +9159,16 @@ public class MainActivity extends AppCompatActivity
     // -------- called by native new Group methods --------
     // -------- called by native new Group methods --------
 
+    // KHANDAQ (QA live, F11): a group we left stays in toxcore for a few seconds after our leave notice
+    // (HelperGroup.leave_group_with_notice). Its callbacks are not for the app any more: each callback with a
+    // group number returns at once for it (HelperGroup.is_group_leave_pending).
+
     static void android_tox_callback_group_message_cb_method(long group_number, long peer_id, int a_TOX_MESSAGE_TYPE, String message_orig, long length, long message_id)
     {
+        if (HelperGroup.is_group_leave_pending(group_number))
+        {
+            return;
+        }
         android_tox_callback_group_message_cb_method_wrapper(group_number, peer_id, a_TOX_MESSAGE_TYPE, message_orig,
                                                              length, message_id, false);
         global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
@@ -9168,6 +9176,10 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_private_message_cb_method(long group_number, long peer_id, int a_TOX_MESSAGE_TYPE, String message_orig, long length)
     {
+        if (HelperGroup.is_group_leave_pending(group_number))
+        {
+            return;
+        }
         android_tox_callback_group_message_cb_method_wrapper(group_number, peer_id, a_TOX_MESSAGE_TYPE, message_orig,
                                                              length, 0, true);
         global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
@@ -9175,6 +9187,10 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_privacy_state_cb_method(long group_number, final int a_TOX_GROUP_PRIVACY_STATE)
     {
+        if (HelperGroup.is_group_leave_pending(group_number))
+        {
+            return;
+        }
         HelperGeneric.logI(TAG,
               "group_privacy_state_cb:group_number=" + group_number + " privacy_state=" + a_TOX_GROUP_PRIVACY_STATE);
         final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
@@ -9254,6 +9270,20 @@ public class MainActivity extends AppCompatActivity
             if (!from_card && GroupInviteAcceptPolicy.recentlyAccepted(incoming_chat_id, System.currentTimeMillis()))
             {
                 HelperGeneric.logI(TAG, "group_invite_cb:an invite to this group was taken less than a minute ago, ignoring");
+                return null;
+            }
+            // KHANDAQ (QA live, F11): a group we are still leaving: accepting now would make a second instance of
+            // it next to the old one, so the old one goes first. The tox thread (an invitation that answers our
+            // join by ID) cannot wait for that; the accept runs from another thread then.
+            if (!HelperGroup.finish_pending_group_leave_before_join(incoming_chat_id))
+            {
+                if (HelperGroup.on_tox_thread())
+                {
+                    final byte[] retry_data = Arrays.copyOf(invite_data, (int) Math.min(invite_data_length,
+                                                                                          invite_data.length));
+                    new Thread(() -> join_group_invite(friend_number, retry_data, retry_data.length, from_card),
+                               "ngc-join-after-leave").start();
+                }
                 return null;
             }
             final long existing_gn = HelperGroup.tox_group_by_groupid__wrapper(incoming_chat_id);
@@ -9359,6 +9389,10 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_peer_join_cb_method(long group_number, long peer_id)
     {
+        if (HelperGroup.is_group_leave_pending(group_number))
+        {
+            return;
+        }
         HelperGeneric.logI(TAG, "group_peer_join_cb:group_number=" + group_number + " peer_id=" + peer_id
                 + " id=" + tox_group_by_groupnum__wrapper(group_number));
 
@@ -9397,6 +9431,10 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_peer_exit_cb_method(long group_number, long peer_id, int a_Tox_Group_Exit_Type)
     {
+        if (HelperGroup.is_group_leave_pending(group_number))
+        {
+            return;
+        }
         // HelperGeneric.logI(TAG, "group_peer_exit_cb:group_number=" + group_number + " peer_id=" + peer_id + " exit_type=" +
         //           a_Tox_Group_Exit_Type);
 
@@ -9430,6 +9468,10 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_peer_name_cb_method(long group_number, long peer_id)
     {
+        if (HelperGroup.is_group_leave_pending(group_number))
+        {
+            return;
+        }
         String group_peer_pubkey = null;
         try
         {
@@ -9455,6 +9497,10 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_join_fail_cb_method(long group_number, int a_Tox_Group_Join_Fail)
     {
+        if (HelperGroup.is_group_leave_pending(group_number))
+        {
+            return;
+        }
         HelperGeneric.logI(TAG, "group_join_fail_cb:group_number=" + group_number + " fail=" + a_Tox_Group_Join_Fail);
         HelperGroup.handle_group_join_fail_async(group_number, a_Tox_Group_Join_Fail);
         update_savedata_file_wrapper();
@@ -9462,6 +9508,10 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_self_join_cb_method(long group_number)
     {
+        if (HelperGroup.is_group_leave_pending(group_number))
+        {
+            return;
+        }
         HelperGeneric.logI(TAG, "group_self_join_cb:group_number=" + group_number);
         final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
 
@@ -9493,6 +9543,10 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_moderation_cb_method(long group_number, long source_peer_id, long target_peer_id, int a_Tox_Group_Mod_Event)
     {
+        if (HelperGroup.is_group_leave_pending(group_number))
+        {
+            return;
+        }
         try
         {
             if ((source_peer_id == UINT32_MAX_JAVA) || (target_peer_id == UINT32_MAX_JAVA))
@@ -9548,6 +9602,10 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_connection_status_cb_method(long group_number, int a_TOX_GROUP_CONNECTION_STATUS)
     {
+        if (HelperGroup.is_group_leave_pending(group_number))
+        {
+            return;
+        }
         HelperGeneric.logI(TAG, "group_connection_status_cb:group_number=" + group_number + " status=" + a_TOX_GROUP_CONNECTION_STATUS
                 + " id=" + tox_group_by_groupnum__wrapper(group_number));
 
@@ -9586,6 +9644,10 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_topic_cb_method(long group_number, long peer_id, String topic, long topic_length)
     {
+        if (HelperGroup.is_group_leave_pending(group_number))
+        {
+            return;
+        }
         // HelperGeneric.logI(TAG, "group_topic_cb: groupnum=" + group_number + " peer=" + peer_id + " topic=" + topic);
         if (topic == null)
         {
@@ -9640,6 +9702,10 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_custom_packet_cb_method(long group_number, long peer_id, final byte[] data, long length)
     {
+        if (HelperGroup.is_group_leave_pending(group_number))
+        {
+            return;
+        }
         try
         {
             // HelperGeneric.logI(TAG,
@@ -9830,6 +9896,10 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_custom_private_packet_cb_method(long group_number, long peer_id, final byte[] data, long length)
     {
+        if (HelperGroup.is_group_leave_pending(group_number))
+        {
+            return;
+        }
         try
         {
             //HelperGeneric.logI(TAG,

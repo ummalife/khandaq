@@ -33,6 +33,7 @@
 #include <QtConcurrent/QtConcurrentRun>
 #include <QTimer>
 
+#include <algorithm>
 #include <initializer_list>
 #include <iterator>
 
@@ -73,6 +74,7 @@ constexpr int CLEANUP_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 const QChar ZERO_WIDTH_JOINER{0x200D};
 const QChar EMOJI_PRESENTATION{0xFE0F};
+const QChar COMBINING_ENCLOSING_KEYCAP{0x20E3};
 
 const QString EMOJI_FONT_PATTERN = QStringLiteral("<span style=\"font-family:'%1'\">%2</span>");
 const QString EMOJI_FONT_SIZED_PATTERN =
@@ -241,6 +243,73 @@ QVector<QPair<int, int>> joinedSequences(const QString& text)
         position = end;
     }
     return sequences;
+}
+
+bool isRegionalIndicator(uint codePoint)
+{
+    return codePoint >= 0x1F1E6 && codePoint <= 0x1F1FF;
+}
+
+bool isKeycapBase(uint codePoint)
+{
+    return (codePoint >= '0' && codePoint <= '9') || codePoint == '#' || codePoint == '*';
+}
+
+/**
+ * @brief Finds the flags (two regional indicator letters, paired from the start of a run) and the
+ * keycaps (a digit, # or *, U+FE0F if any and U+20E3) of a text
+ * @return The start and the end of each
+ * @note KHANDAQ (QA live 2026-11-14): left to the system font, 🇹🇷 was as big as the text next to
+ * the pack's 🇷🇺, and 1️⃣ was the text font's 1 in a frame.
+ */
+QVector<QPair<int, int>> flagsAndKeycaps(const QString& text)
+{
+    QVector<QPair<int, int>> characters;
+    int position = 0;
+    while (position < text.size()) {
+        int length = 0;
+        const uint codePoint = codePointAt(text, position, &length);
+        int end = position + length;
+        if (isRegionalIndicator(codePoint) && end < text.size()) {
+            int nextLength = 0;
+            if (isRegionalIndicator(codePointAt(text, end, &nextLength))) {
+                characters.append({position, end + nextLength});
+                position = end + nextLength;
+                continue;
+            }
+        } else if (isKeycapBase(codePoint)) {
+            if (end < text.size() && text.at(end) == EMOJI_PRESENTATION) {
+                ++end;
+            }
+            if (end < text.size() && text.at(end) == COMBINING_ENCLOSING_KEYCAP) {
+                characters.append({position, end + 1});
+                position = end + 1;
+                continue;
+            }
+        }
+        position += length;
+    }
+    return characters;
+}
+
+/**
+ * @brief The emoji of a text that the system's emoji font draws: its joined sequences, flags and
+ * keycaps, by where they start
+ */
+QVector<QPair<int, int>> emojiCharacters(const QString& text)
+{
+    QVector<QPair<int, int>> characters = joinedSequences(text);
+    for (const auto& character : flagsAndKeycaps(text)) {
+        const bool inSequence = std::any_of(
+            characters.cbegin(), characters.cend(), [&character](const QPair<int, int>& sequence) {
+                return character.first < sequence.second && sequence.first < character.second;
+            });
+        if (!inSequence) {
+            characters.append(character);
+        }
+    }
+    std::sort(characters.begin(), characters.end());
+    return characters;
 }
 
 bool isBlockedSequence(const QString& sequence)
@@ -447,17 +516,17 @@ QString SmileyPack::emojiFontFamily()
 }
 
 /**
- * @brief Where a plain text has joined sequences to set in the emoji font: all of them but those
- * the picker does not offer, which are left to be drawn apart
+ * @brief Where a plain text has emoji to set in the emoji font: its joined sequences but those the
+ * picker does not offer, which are left to be drawn apart, its flags and its keycaps
  * @param text A plain text
- * @return The start and the end of each sequence
+ * @return The start and the end of each
  * @note For a text that stays as it is, such as the one being typed; a text shown as rich text is
  * set by plainTextAsRichText().
  */
 QVector<QPair<int, int>> SmileyPack::emojiFontRanges(const QString& text)
 {
     QVector<QPair<int, int>> ranges;
-    for (const auto& sequence : joinedSequences(text)) {
+    for (const auto& sequence : emojiCharacters(text)) {
         if (!isBlockedSequence(text.mid(sequence.first, sequence.second - sequence.first))) {
             ranges.append(sequence);
         }
@@ -478,7 +547,7 @@ QString SmileyPack::plainTextAsRichText(const QString& text)
     const QString apart = withBlockedSequencesApart(text);
     QString html;
     int position = 0;
-    for (const auto& sequence : joinedSequences(apart)) {
+    for (const auto& sequence : emojiCharacters(apart)) {
         html += apart.mid(position, sequence.first - position).toHtmlEscaped();
         html += getInEmojiFont(
             apart.mid(sequence.first, sequence.second - sequence.first).toHtmlEscaped(), 0);
@@ -697,6 +766,21 @@ QString SmileyPack::smileyfied(const QString& message)
             continue;
         }
         replacements.insert(startPos, {keyLength, SmileyPack::getAsRichText(match.captured())});
+    }
+
+    // A flag or a keycap the pack has no picture of is set in the emoji font too, as big as the
+    // pictures; one the pack has keeps its picture.
+    for (const auto& character : flagsAndKeycaps(msg)) {
+        const auto next = replacements.lowerBound(character.first);
+        const auto previous = next == replacements.begin() ? replacements.end() : std::prev(next);
+        if ((next != replacements.end() && next.key() < character.second)
+            || (previous != replacements.end()
+                && previous.key() + previous.value().first > character.first)) {
+            continue;
+        }
+        const int length = character.second - character.first;
+        const QString inFont = getInEmojiFont(msg.mid(character.first, length), pictureSize);
+        replacements.insert(character.first, {length, inFont});
     }
 
     // From the end, so that the positions before each replacement stay where they were.

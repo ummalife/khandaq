@@ -212,13 +212,14 @@ void TestSmileyPack::testSmilifyKeepsFlagsWhole()
 {
     SmileyPack smileyPack{*settings};
 
-    // 🇹🇷 is U+1F1F9 U+1F1F7. The pack has both letters alone and not the flag.
+    // 🇹🇷 is U+1F1F9 U+1F1F7. The pack has both letters alone and not the flag. The system's emoji
+    // font draws it, as big as the pictures (QA live 2026-11-14: it was as big as the text).
     const QString turkey = QStringLiteral("🇹🇷");
-    QCOMPARE(smileyPack.smileyfied(turkey), turkey);
+    QCOMPARE(smileyPack.smileyfied(turkey), inPictureSize(turkey));
 
     // Letters pair up from the start of a run: 🇹🇷🇷🇺 is Turkey, then Russia, which the pack has.
     QCOMPARE(smileyPack.smileyfied(turkey + "🇷🇺"),
-             QString(turkey + SmileyPack::getAsRichText("🇷🇺")));
+             QString(inPictureSize(turkey) + SmileyPack::getAsRichText("🇷🇺")));
 
     // A letter without a pair is a character of its own and keeps its picture.
     QCOMPARE(smileyPack.smileyfied("🇷🇺🇹"),
@@ -373,11 +374,17 @@ void TestSmileyPack::testSmilifyKeepsKeycapsWhole()
 {
     SmileyPack smileyPack{*settings};
 
-    // The keycap one is "1", U+FE0F and U+20E3.
+    // The keycap one is "1", U+FE0F and U+20E3. The pack has no keycaps: the system's emoji font
+    // draws it, as big as the pictures (QA live 2026-11-14: the text font drew a 1 in a frame).
     const QString keycapOne = QStringLiteral("1") + EMOJI_PRESENTATION + COMBINING_KEYCAP;
-    QCOMPARE(smileyPack.smileyfied(keycapOne), keycapOne);
+    QCOMPARE(smileyPack.smileyfied(keycapOne), inPictureSize(keycapOne));
     QCOMPARE(smileyPack.smileyfied(keycapOne + " 😊"),
-             QString(keycapOne + " " + SmileyPack::getAsRichText("😊")));
+             QString(inPictureSize(keycapOne) + " " + SmileyPack::getAsRichText("😊")));
+
+    // Without U+FE0F it is a keycap too; a digit alone stays text.
+    const QString keycapHash = QStringLiteral("#") + COMBINING_KEYCAP;
+    QCOMPARE(smileyPack.smileyfied(QStringLiteral("1 ") + keycapHash),
+             QString(QStringLiteral("1 ") + inPictureSize(keycapHash)));
 }
 
 /**
@@ -404,13 +411,13 @@ void TestSmileyPack::testSmilifyMixedScripts()
     SmileyPack smileyPack{*settings};
 
     // The message of the cross-platform QA run: the pack has none of its emoji whole. The thumb with a
-    // skin tone is set in the emoji font, the flag is left to the system font.
+    // skin tone and the flag are set in the emoji font; the digits stay text.
     const QString qaMessage = QStringLiteral(
         "Тест 1 с мака: кириллица, emoji 👍🏽🇹🇷, арабский السلام عليكم, цифры 12345");
     QCOMPARE(smileyPack.smileyfied(qaMessage),
              QString(QStringLiteral("Тест 1 с мака: кириллица, emoji ")
-                     + inPictureSize(QStringLiteral("👍🏽"))
-                     + QStringLiteral("🇹🇷, арабский السلام عليكم, цифры 12345")));
+                     + inPictureSize(QStringLiteral("👍🏽")) + inPictureSize(QStringLiteral("🇹🇷"))
+                     + QStringLiteral(", арабский السلام عليكم, цифры 12345")));
 
     QCOMPARE(smileyPack.smileyfied("Привет👍мир 🇷🇺 السلام😊عليكم"),
              QString("Привет" + SmileyPack::getAsRichText("👍") + "мир "
@@ -526,7 +533,19 @@ void TestSmileyPack::testEmojiFontRangesLeaveBlockedSequencesApart()
     };
     QCOMPARE(textOf(ranges.at(0)), doctor);
     QCOMPARE(textOf(ranges.at(1)), thumbsUpMedium);
-    QVERIFY(SmileyPack::emojiFontRanges(QStringLiteral("no sequence 😊 here")).isEmpty());
+    QVERIFY(SmileyPack::emojiFontRanges(QStringLiteral("no sequence 😊 here 1")).isEmpty());
+
+    // Flags and keycaps too, in the order of the text.
+    const QString keycapOne = QStringLiteral("1") + EMOJI_PRESENTATION + COMBINING_KEYCAP;
+    const QString more = QStringLiteral("🇹🇷 ") + keycapOne + QStringLiteral(" ") + doctor;
+    const QVector<QPair<int, int>> moreRanges = SmileyPack::emojiFontRanges(more);
+    QCOMPARE(moreRanges.size(), 3);
+    QCOMPARE(more.mid(moreRanges.at(0).first, moreRanges.at(0).second - moreRanges.at(0).first),
+             QStringLiteral("🇹🇷"));
+    QCOMPARE(more.mid(moreRanges.at(1).first, moreRanges.at(1).second - moreRanges.at(1).first),
+             keycapOne);
+    QCOMPARE(more.mid(moreRanges.at(2).first, moreRanges.at(2).second - moreRanges.at(2).first),
+             doctor);
 }
 
 /**

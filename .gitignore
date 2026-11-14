@@ -77,6 +77,14 @@ web/downloads/*.zip
 web/downloads/*.tar.gz
 web/downloads/*.deb
 
+# Large generated / fixture artifacts that are intentionally not committed.
+# These are regenerated locally from build/test tooling and should never enter git history.
+**/rnnoise_data*.c
+**/rnnoise_data*.h
+**/*.realm
+**/sqlite-jdbc-*.jar
+**/sorma2/test/*.jar
+
 # Local QA screenshots (not for repo).
 #
 # KHANDAQ (re-audit 2026-08-22, W-02): anchored to the repository root. A bare `assets/` matches

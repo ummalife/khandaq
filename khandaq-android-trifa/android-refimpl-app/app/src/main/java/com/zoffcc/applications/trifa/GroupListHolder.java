@@ -425,7 +425,9 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
                 HelperGroup.leave_group_with_notice(group_num, "left");
             }
             GroupInviteAcceptPolicy.forget(group_identifier);
-            HelperGeneric.update_savedata_file_wrapper_async(); // KHANDAQ (ANR): group already left in live tox; persist off-thread
+            // KHANDAQ (ANR): persisted off-thread. A leave that waits for its notice (F11) keeps the group in toxcore
+            // until then, and run_pending_group_leaves saves the profile again without it.
+            HelperGeneric.update_savedata_file_wrapper_async();
             set_group_group_we_left(group_identifier);
             set_group_inactive(group_identifier);
             try
@@ -513,7 +515,8 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
             final long group_num = tox_group_by_groupid__wrapper(f2.group_identifier);
             HelperGroup.leave_group_with_notice(group_num, "bye");
             GroupInviteAcceptPolicy.forget(f2.group_identifier);
-            HelperGeneric.update_savedata_file_wrapper_async(); // KHANDAQ (ANR): already left in live tox; persist off-thread
+            // KHANDAQ (ANR): persisted off-thread; a leave that waits for its notice saves again when done (F11).
+            HelperGeneric.update_savedata_file_wrapper_async();
         }
 
         HelperGeneric.logI(TAG, "onMenuItemClick:info:33");

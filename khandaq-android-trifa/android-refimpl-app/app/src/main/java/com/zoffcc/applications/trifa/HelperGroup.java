@@ -335,6 +335,12 @@ public class HelperGroup
 
     public static long tox_group_by_groupid__wrapper(@NonNull String group_id_string)
     {
+        // KHANDAQ (QA live, F11): a group we left is gone for the app at once, also while toxcore keeps it for its
+        // leave notice (GroupPendingLeaves). Before, toxcore deleted it on the next tox_iterate.
+        if (GroupPendingLeaves.holdsChatId(group_id_string))
+        {
+            return -1;
+        }
         ByteBuffer group_id_buffer = ByteBuffer.allocateDirect(GROUP_ID_LENGTH);
         byte[] data = HelperGeneric.hex_to_bytes(group_id_string.toUpperCase());
         group_id_buffer.put(data);
@@ -1515,7 +1521,7 @@ public class HelperGroup
         }
         for (final long gn : groups)
         {
-            if (gn < 0)
+            if (gn < 0 || is_group_leave_pending(gn))
             {
                 continue;
             }
@@ -1710,7 +1716,7 @@ public class HelperGroup
 
             for (long group_num : group_numbers)
             {
-                if (group_num < 0)
+                if (group_num < 0 || is_group_leave_pending(group_num))
                 {
                     continue;
                 }
@@ -2534,6 +2540,10 @@ public class HelperGroup
 
             for (long group_num : groups)
             {
+                if (is_group_leave_pending(group_num))
+                {
+                    continue;
+                }
                 try
                 {
                     tox_group_self_set_name(group_num, sanitized);
@@ -4044,25 +4054,269 @@ public class HelperGroup
      * KHANDAQ (QA live, F11): the user leaves the group (leave, delete, the app removing a group the user left).
      * The other members hear it first (a leave notice), because toxcore's QUIT that follows is the same one an app
      * sends when it closes. Not for a rejoin of a stuck instance: that member stays.
+     *
+     * <p>toxcore deletes a group on the next tox_iterate after tox_group_leave, before it could resend a notice
+     * lost on a relay. A notice toxcore queued for another member is therefore followed by the leave only
+     * {@link GroupPendingLeaves#LEAVE_DELAY_MS} later (run_pending_group_leaves); for the app the group is gone at
+     * once.
      */
     static void leave_group_with_notice(final long group_num, final String part_message)
     {
-        if (group_num < 0)
+        if (group_num < 0 || is_group_leave_pending(group_num))
         {
             return;
         }
+        // A friend's late answer to our join by ID is taken at once (group_invite_cb): it would bring the user back
+        // into the group they leave, as on the desktop and iOS.
+        clear_pending_friend_assisted_join(tox_group_by_groupnum__wrapper(group_num));
+        int sent = 0;
         try
         {
             final byte[] notice = GroupPeerKeys.leaveNoticePacket();
-            final int sent = tox_group_send_custom_packet(group_num, 1, notice, notice.length);
+            sent = tox_group_send_custom_packet(group_num, 1, notice, notice.length);
             HelperGeneric.logI(TAG, "leave_group_with_notice:gn=" + group_num + " notice=" + sent);
         }
         catch (Exception e)
         {
             Log.w(TAG, "leave_group_with_notice:EE:" + e.getMessage());
         }
+        if (GroupPendingLeaves.noticeWasQueued(sent, tox_group_peer_count(group_num))
+            && record_pending_group_leave(group_num, part_message))
+        {
+            return;
+        }
         tox_group_leave(group_num, part_message);
     }
+
+    // KHANDAQ (QA live, F11): the chat ids of the groups being left (GroupPendingLeaves), so that a group the app
+    // was killed in the middle of leaving is left at the next start. One g_opts row (no schema change).
+    private static final String PENDING_GROUP_LEAVES_KEY = "kqngcpendingleaves";
+    private static final Object pending_group_leaves_store_lock = new Object();
+
+    /** KHANDAQ (QA live, F11): true while we leave this group: toxcore still has it, the app does not. */
+    static boolean is_group_leave_pending(final long group_number)
+    {
+        return GroupPendingLeaves.holdsGroupNumber(group_number);
+    }
+
+    private static boolean record_pending_group_leave(final long group_num, final String part_message)
+    {
+        final long now = System.currentTimeMillis();
+        final String group_identifier = tox_group_by_groupnum__wrapper(group_num);
+        if (!GroupPendingLeaves.record(group_num, group_identifier, part_message, now))
+        {
+            return false;
+        }
+        save_pending_group_leaves();
+        // The battery saving mode must not put the tox loop to sleep before the leave is due.
+        global_last_activity_for_battery_savings_ts = now;
+        HelperGeneric.logI(TAG, "pending_group_leave:recorded gn=" + group_num + " id="
+                + group_identifier_short(group_identifier, false) + " due_in_ms=" + GroupPendingLeaves.LEAVE_DELAY_MS);
+        return true;
+    }
+
+    private static void save_pending_group_leaves()
+    {
+        synchronized (pending_group_leaves_store_lock)
+        {
+            final java.util.Set<String> chat_ids = GroupPendingLeaves.chatIds();
+            if (chat_ids.isEmpty())
+            {
+                HelperGeneric.del_g_opts(PENDING_GROUP_LEAVES_KEY);
+            }
+            else
+            {
+                HelperGeneric.set_g_opts(PENDING_GROUP_LEAVES_KEY, GroupPendingLeaves.encode(chat_ids));
+            }
+        }
+    }
+
+    private static final GroupPendingLeaves.Tox pending_group_leave_tox = new GroupPendingLeaves.Tox()
+    {
+        @Override
+        public String chatIdOf(final long group_number)
+        {
+            return tox_group_by_groupnum__wrapper(group_number);
+        }
+
+        @Override
+        public void leave(final long group_number, final String part_message)
+        {
+            tox_group_leave(group_number, part_message);
+        }
+    };
+
+    /** On the tox thread. True when toxcore left the group; false when its number holds another group or none. */
+    private static boolean leave_pending_group_now(final GroupPendingLeaves.Leave leave, final String event)
+    {
+        final boolean left = GroupPendingLeaves.leaveNow(leave, pending_group_leave_tox);
+        HelperGeneric.logI(TAG, "pending_group_leave:" + event + " gn=" + leave.groupNumber + " id="
+                + group_identifier_short(leave.chatId, false) + " left=" + left);
+        return left;
+    }
+
+    /**
+     * KHANDAQ (QA live, F11): on the tox thread, after each tox_iterate of its loop. That iterate deleted the groups
+     * left on the pass before; the leaves due now follow. The profile is saved once toxcore no longer has a group,
+     * and only then is it taken off the persisted list.
+     */
+    static void run_pending_group_leaves()
+    {
+        if (GroupPendingLeaves.isEmpty())
+        {
+            return;
+        }
+        try
+        {
+            boolean done = GroupPendingLeaves.dropLeft();
+            for (final GroupPendingLeaves.Leave leave : GroupPendingLeaves.takeDue(System.currentTimeMillis()))
+            {
+                if (!leave_pending_group_now(leave, leave.cancelled ? "left_for_rejoin" : "due"))
+                {
+                    done = true;
+                }
+            }
+            if (done)
+            {
+                update_savedata_file_wrapper();
+                save_pending_group_leaves();
+            }
+        }
+        catch (Throwable t)
+        {
+            Log.w(TAG, "run_pending_group_leaves:EE:" + t.getMessage());
+        }
+    }
+
+    /**
+     * KHANDAQ (QA live, F11): on the tox thread, when its loop has stopped and before tox is killed (quit, log out,
+     * profile switch or delete): every group being left is left now, and the profile is saved without it.
+     */
+    static void flush_pending_group_leaves()
+    {
+        if (GroupPendingLeaves.isEmpty())
+        {
+            return;
+        }
+        try
+        {
+            for (final GroupPendingLeaves.Leave leave : GroupPendingLeaves.takeAll())
+            {
+                leave_pending_group_now(leave, "flushed");
+            }
+            // toxcore deletes a group it left only in a tox_iterate, and saves it with the profile until then.
+            MainActivity.tox_iterate();
+            GroupPendingLeaves.dropLeft();
+            // The stop interrupts this thread, and an interrupted thread skips the save (semaphore_tox_savedata).
+            final boolean interrupted = Thread.interrupted();
+            try
+            {
+                update_savedata_file_wrapper();
+            }
+            finally
+            {
+                if (interrupted)
+                {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            save_pending_group_leaves();
+        }
+        catch (Throwable t)
+        {
+            Log.w(TAG, "flush_pending_group_leaves:EE:" + t.getMessage());
+        }
+    }
+
+    /**
+     * KHANDAQ (QA live, F11): on the tox thread, right after the tox instance is created from the saved profile and
+     * before its groups are read into the list and the database. A group the app was leaving when it was killed is
+     * left now, without a notice: it could not be delivered any more. toxcore deletes it in the first tox_iterate,
+     * and run_pending_group_leaves saves the profile then.
+     */
+    static void leave_groups_pending_at_last_stop()
+    {
+        try
+        {
+            GroupPendingLeaves.clear();
+            if (MainActivity.identity_load_blocked)
+            {
+                // Not the user's profile (#244): its groups say nothing about the list, which waits for the real one.
+                return;
+            }
+            final java.util.Set<String> stored = GroupPendingLeaves.decode(
+                    HelperGeneric.get_g_opts(PENDING_GROUP_LEAVES_KEY));
+            if (stored.isEmpty())
+            {
+                return;
+            }
+            for (final String group_identifier : stored)
+            {
+                final long group_num = tox_group_by_groupid__wrapper(group_identifier);
+                if (group_num >= 0)
+                {
+                    tox_group_leave(group_num, null);
+                    GroupPendingLeaves.noteLeft(group_num, group_identifier);
+                }
+                HelperGeneric.logI(TAG, "pending_group_leave:startup gn=" + group_num + " id="
+                        + group_identifier_short(group_identifier, false) + " left=" + (group_num >= 0));
+            }
+            // What toxcore no longer has is done; the rest waits for the first tox_iterate.
+            save_pending_group_leaves();
+        }
+        catch (Throwable t)
+        {
+            Log.w(TAG, "leave_groups_pending_at_last_stop:EE:" + t.getMessage());
+        }
+    }
+
+    static boolean on_tox_thread()
+    {
+        return Thread.currentThread() == TrifaToxService.ToxServiceThread;
+    }
+
+    /**
+     * KHANDAQ (QA live, F11): before a join (by ID or link, an invitation): is the group still being left? toxcore
+     * still has the old instance then; tox_group_join fails and tox_group_invite_accept makes a second one. The wait
+     * ends (GroupPendingLeaves.cancel) and the tox thread leaves the old instance on its next pass, without a new
+     * notice; the join runs once toxcore has deleted it. True when the join can run; false if the old instance is
+     * still there after the wait. The tox thread cannot wait for itself: there it is false at once, and the caller
+     * runs the join again from another thread.
+     */
+    static boolean finish_pending_group_leave_before_join(final String group_identifier)
+    {
+        if (!GroupPendingLeaves.holdsChatId(group_identifier))
+        {
+            return true;
+        }
+        final GroupPendingLeaves.Leave cancelled = GroupPendingLeaves.cancel(group_identifier,
+                                                                              System.currentTimeMillis());
+        HelperGeneric.logI(TAG, "pending_group_leave:cancelled_by_rejoin gn="
+                + ((cancelled != null) ? cancelled.groupNumber : -1L) + " id="
+                + group_identifier_short(group_identifier, false));
+        if (on_tox_thread())
+        {
+            return false;
+        }
+        final long deadline = System.currentTimeMillis() + PENDING_GROUP_LEAVE_REJOIN_WAIT_MS;
+        while (GroupPendingLeaves.holdsChatId(group_identifier) && System.currentTimeMillis() < deadline)
+        {
+            TrifaToxService.wakeup_tox_thread();
+            try
+            {
+                Thread.sleep(50L);
+            }
+            catch (InterruptedException e)
+            {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        return !GroupPendingLeaves.holdsChatId(group_identifier);
+    }
+
+    // Two passes of the tox loop: the leave, then the tox_iterate that deletes the group. Ample also on a slow loop.
+    private static final long PENDING_GROUP_LEAVE_REJOIN_WAIT_MS = 3_000L;
 
     /**
      * KHANDAQ (QA live, F11): the key of a peer that is leaving. toxcore 0.2.19 drops the peer before it calls
@@ -9769,7 +10023,7 @@ public class HelperGroup
 
             for (long group_num : group_numbers)
             {
-                if (group_num < 0)
+                if (group_num < 0 || is_group_leave_pending(group_num))
                 {
                     continue;
                 }
@@ -9900,7 +10154,7 @@ public class HelperGroup
                 group_maintain_tick = 0;
                 for (long group_num : group_numbers)
                 {
-                    if (group_num < 0)
+                    if (group_num < 0 || is_group_leave_pending(group_num))
                     {
                         continue;
                     }
@@ -10240,6 +10494,13 @@ public class HelperGroup
             HelperGeneric.logI(TAG, "join_group:group_id:>" + normalized_group_id + "<");
 
             if (!wait_for_tox_ready(12000L))
+            {
+                say_join_failure(join_public_group_failure_message(-1L), show_toast, failures);
+                return false;
+            }
+
+            // KHANDAQ (QA live, F11): a group we are still leaving: the old instance goes first.
+            if (!finish_pending_group_leave_before_join(normalized_group_id))
             {
                 say_join_failure(join_public_group_failure_message(-1L), show_toast, failures);
                 return false;

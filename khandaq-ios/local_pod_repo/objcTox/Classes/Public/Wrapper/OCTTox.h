@@ -125,6 +125,13 @@
 - (void)performSyncBlockOnToxQueue:(void (^)(void))block;
 
 /**
+ * KHANDAQ (QA live, F11): runs one tox_iterate now, on the tox_iterate queue (inline when already on it), as the
+ * main loop does. toxcore deletes a group it was asked to leave only on its next iterate and saves it until then:
+ * a caller that saves, or joins the same group again, right after a leave runs this first.
+ */
+- (void)iterateOnce;
+
+/**
  * Reset the offline rebootstrap timer so the next iterate pass can rebootstrap sooner.
  */
 - (void)resetOfflineRebootstrapTimer;

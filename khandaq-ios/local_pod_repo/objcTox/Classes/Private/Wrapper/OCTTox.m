@@ -260,6 +260,13 @@ static void perform_khandaq_offline_rebootstrap(Tox *tox)
     dispatch_sync(queue, block);
 }
 
+- (void)iterateOnce
+{
+    [self performSyncBlockOnToxQueue:^{
+        tox_iterate(self.tox, (__bridge void *)self);
+    }];
+}
+
 - (void)resetOfflineRebootstrapTimer
 {
     last_check_time = (long long)([[NSDate date] timeIntervalSince1970] * 1000.0);

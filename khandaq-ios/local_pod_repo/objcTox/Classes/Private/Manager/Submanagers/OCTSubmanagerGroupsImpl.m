@@ -23,6 +23,7 @@
 #import "OCTNgcSignedHistory.h"
 #import "OCTNgcGroupLiveAudio.h"
 #import "OCTNgcGroupLiveVideo.h"
+#import "OCTGroupPendingLeaves.h"
 #import "OCTSettingsStorageObject.h"
 #import <toxcore/tox.h>
 
@@ -52,6 +53,9 @@ static const NSTimeInterval kOCTGroupReconnectSuppressSec = 300.0;
 static const uint8_t kOCTGroupLeaveNotice[8] = {0x66, 0x77, 0x88, 0x11, 0x34, 0x35, 0x01, 0x44};
 // How long a notice waits for its exit: the QUIT follows at once, a timeout after a lost QUIT within a minute.
 static const NSTimeInterval kOCTGroupLeaveNoticeWindowSec = 300.0;
+// KHANDAQ (QA live, F11): the chat ids of the leaves that wait for their notice's resends (OCTGroupPendingLeaves),
+// in the profile's ngc key-value table, so that a leave cut short by a kill or a crash is done at the next start.
+static NSString *const kOCTGroupPendingLeavesStoreKey = @"kqpendingleaves";
 // KHANDAQ (#25): opening a group chat forces an immediate reconnect of a stalled group instead of
 // waiting up to 90s for the maintenance tick. Rate-limited so rapid open/close can't hammer.
 static const NSTimeInterval kOCTGroupForegroundReconnectMinIntervalSec = 5.0;
@@ -103,6 +107,17 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 // KHANDAQ (QA live, F11): the members that said they are leaving (chat:peerId -> @{at, pubkey}), until the
 // exit that follows reads it. Keyed by peer id: toxcore has dropped the peer, and its key, by its exit.
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *groupLeaveNotices;
+// KHANDAQ (QA live, F11): the leaves whose tox_group_leave waits for the notice's resends (-leaveGroupWithNumber:).
+@property (nonatomic, strong, readonly) OCTGroupPendingLeaves *pendingGroupLeaves;
+// KHANDAQ (QA live, F11): group numbers just left for a pending leave, until the main queue has run what toxcore
+// reported of them before it deleted them. Counted: a number can be left twice in that time.
+@property (nonatomic, strong, readonly) NSCountedSet<NSNumber *> *pendingGroupLeaveDrains;
+// KHANDAQ (QA live, F11): each schedule of the due check bumps it, so only the latest one runs. Main queue.
+@property (nonatomic, assign) NSUInteger pendingGroupLeaveCheckGeneration;
+#if TARGET_OS_IPHONE
+// KHANDAQ (QA live, F11): held while a leave is pending, so that the app is not suspended before it is done.
+@property (nonatomic, assign) UIBackgroundTaskIdentifier pendingGroupLeaveBackgroundTask;
+#endif
 // KHANDAQ: stable pubkey-based group peer name resolver (declared so the receive callbacks above can
 // call it before its definition further down).
 - (nullable NSString *)groupPeerNameByPubkeyForGroupNumber:(OCTToxGroupNumber)groupNumber
@@ -131,6 +146,33 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
         dispatch_source_cancel(_groupsMaintenanceTimer);
         _groupsMaintenanceTimer = nil;
     }
+
+#if TARGET_OS_IPHONE
+    // KHANDAQ (QA live, F11): a manager let go of with a leave still pending gives the background time back (the app
+    // leaves the pending groups before it lets go: -leavePendingGroupsNow).
+    if (_pendingGroupLeaveBackgroundTask != UIBackgroundTaskInvalid) {
+        [[UIApplication sharedApplication] endBackgroundTask:_pendingGroupLeaveBackgroundTask];
+    }
+#endif
+}
+
+- (instancetype)init
+{
+    self = [super init];
+
+    if (! self) {
+        return nil;
+    }
+
+    // KHANDAQ (QA live, F11): made here rather than in -configure, so that the deferred leave works on a submanager
+    // that was never configured, as the leave notices do.
+    _pendingGroupLeaves = [OCTGroupPendingLeaves new];
+    _pendingGroupLeaveDrains = [NSCountedSet set];
+#if TARGET_OS_IPHONE
+    _pendingGroupLeaveBackgroundTask = UIBackgroundTaskInvalid;
+#endif
+
+    return self;
 }
 
 #pragma mark - Tox queue helpers
@@ -181,6 +223,13 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 
     for (NSNumber *number in [tox groupNumbers]) {
         OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)number.unsignedIntValue;
+
+        // KHANDAQ (QA live, F11): a group whose leave is pending is not the group of its chat id any more: the user
+        // left it, and a join of the chat id makes a new instance (-leavePendingGroupsBeforeRejoinOfChatIdHex:onTox:).
+        if ([self.pendingGroupLeaves containsGroupNumber:groupNumber]) {
+            continue;
+        }
+
         NSString *existingChatIdHex = [tox groupChatIdHexForGroupNumber:groupNumber error:nil];
 
         if (existingChatIdHex.length > 0 &&
@@ -214,6 +263,9 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     self.groupLastForegroundReconnectMs = [NSMutableDictionary dictionary];
     self.groupAnnouncedJoinPubkeys = [NSMutableSet set];
     self.groupLeaveNotices = [NSMutableDictionary dictionary];
+
+    // KHANDAQ (QA live, F11): before anything lists the groups.
+    [self leaveGroupsOfStoredPendingLeaves];
 
     NSNotificationCenter *center = [self.dataSource managerGetNotificationCenter];
 
@@ -378,13 +430,21 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 
     __block OCTToxGroupNumber groupNumber = kOCTToxGroupNumberFailure;
     __block NSError *localError = nil;
+    __block NSArray<OCTGroupPendingLeave *> *rejoinedLeaves = nil;
 
     [self performSyncOnToxQueue:^(OCTTox *tox) {
+        // KHANDAQ (QA live, F11): toxcore refuses the join while the instance whose leave is pending exists.
+        rejoinedLeaves = [self leavePendingGroupsBeforeRejoinOfChatIdHex:normalizedChatIdHex onTox:tox];
+
         groupNumber = [tox groupJoinWithChatIdHex:normalizedChatIdHex
                                          peerName:peerName
                                          password:password
                                             error:&localError];
     }];
+
+    if (rejoinedLeaves.count > 0) {
+        [self pendingGroupLeavesDidChange];
+    }
 
     if (groupNumber == kOCTToxGroupNumberFailure) {
         if (error) {
@@ -428,6 +488,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 
     __block BOOL result = NO;
     __block NSError *localError = nil;
+    __block NSString *deferredChatIdHex = nil;
 
     [self performSyncOnToxQueue:^(OCTTox *tox) {
         // KHANDAQ (join by ID): stop asking friends to let us into a group we are leaving, so a late
@@ -442,14 +503,39 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                          groupNumber:groupNumber
                                             lossless:YES
                                                error:&noticeError];
-        OCTLogInfo(@"NGC leave notice group=%u sent=%d error=%@", groupNumber, noticeSent, noticeError);
+        const uint32_t confirmedPeerCount = [tox groupPeerCountForGroupNumber:groupNumber error:nil];
+        OCTLogInfo(@"NGC leave notice group=%u sent=%d peers=%u error=%@", groupNumber, noticeSent, confirmedPeerCount, noticeError);
+
+        // KHANDAQ (QA live, F11): toxcore deletes the group, with its connections and its send queue, on the iterate
+        // after tox_group_leave, so the notice got a single try, and over a relay it was sometimes lost. A notice that
+        // was queued to another member keeps the group until toxcore has resent it: the leave is pending
+        // (OCTGroupPendingLeaves), and the group is gone for the app at once all the same. A notice that went to no
+        // one (not sent, or no other member confirmed) has nothing to wait for.
+        if ([OCTGroupPendingLeaves leaveWaitsForNoticeSent:noticeSent confirmedPeerCount:confirmedPeerCount]) {
+            NSString *noticeChatIdHex = [self normalizedGroupChatIdHexString:[tox groupChatIdHexForGroupNumber:groupNumber error:nil]];
+
+            if (noticeChatIdHex.length == 64) {
+                deferredChatIdHex = noticeChatIdHex;
+                result = YES;
+                return;
+            }
+        }
 
         result = [tox groupLeaveWithGroupNumber:groupNumber
                                     partMessage:partMessage
                                           error:&localError];
+
+        // KHANDAQ (QA live, F11): toxcore deletes a group it was asked to leave only on its next iterate, and saves it
+        // until then (gc_group_is_valid ignores flag_exit): that iterate runs now, so that the save below has it no more.
+        if (result) {
+            [tox iterateOnce];
+        }
     }];
 
-    if (result) {
+    if (deferredChatIdHex) {
+        [self recordPendingGroupLeaveOfGroupNumber:groupNumber chatIdHex:deferredChatIdHex partMessage:partMessage];
+    }
+    else if (result) {
         // KHANDAQ: persist immediately so a left/deleted group does not reappear after a crash or
         // relaunch (toxcore otherwise keeps it in the in-memory save until the next periodic write).
         [self.dataSource managerSaveTox];
@@ -705,6 +791,12 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 
         for (NSNumber *number in groupNumbers) {
             OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)number.unsignedIntValue;
+
+            // KHANDAQ (QA live, F11): a group whose leave is pending is gone for the app: its chat is not made again.
+            if ([self.pendingGroupLeaves containsGroupNumber:groupNumber]) {
+                continue;
+            }
+
             NSString *chatIdHex = [tox groupChatIdHexForGroupNumber:groupNumber error:nil];
 
             if (chatIdHex.length == 0) {
@@ -793,8 +885,13 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     __block NSString *resolvedChatIdHex = chatIdHex;
     __block OCTToxGroupPrivacyState privacyState = OCTToxGroupPrivacyStatePublic;
     __block BOOL reusedExistingGroup = NO;
+    __block NSArray<OCTGroupPendingLeave *> *rejoinedLeaves = nil;
 
     [self performSyncOnToxQueue:^(OCTTox *tox) {
+        // KHANDAQ (QA live, F11): the instance whose leave is pending is still connected, and toxcore would take the
+        // invite next to it as a second one. It is gone before the stuck-instance check below, which runs as before.
+        rejoinedLeaves = [self leavePendingGroupsBeforeRejoinOfChatIdHex:chatIdHex onTox:tox];
+
         existingGroupNumber = [self groupNumberInToxForChatIdHex:chatIdHex onTox:tox];
 
         if (existingGroupNumber != kOCTToxGroupNumberFailure) {
@@ -834,6 +931,10 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
             [tox groupReconnectWithGroupNumber:groupNumber error:nil];
         }
     }];
+
+    if (rejoinedLeaves.count > 0) {
+        [self pendingGroupLeavesDidChange];
+    }
 
     if (groupNumber == kOCTToxGroupNumberFailure) {
         if (error) {
@@ -2320,6 +2421,11 @@ groupNumber:(OCTToxGroupNumber)groupNumber
      peerId:(uint32_t)peerId
   messageId:(uint32_t)messageId
 {
+    // KHANDAQ (QA live, F11): nothing of a group being left, here and in every group callback below.
+    if ([self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
     uint32_t selfPeerId = [tox groupSelfPeerIdForGroupNumber:groupNumber error:nil];
 
     if (selfPeerId > 0 && peerId == selfPeerId) {
@@ -2425,6 +2531,10 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 - (void)tox:(OCTTox *)tox groupConnectionStatusChanged:(int32_t)status
 groupNumber:(OCTToxGroupNumber)groupNumber
 {
+    if ([self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
     OCTLogInfo(@"NGC group connection group=%u status=%d", groupNumber, status);
 
     OCTChat *chat = [[self.dataSource managerGetRealmManager] chatWithGroupNumber:groupNumber];
@@ -2465,6 +2575,10 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
 - (void)tox:(OCTTox *)tox groupPeerJoinWithGroupNumber:(OCTToxGroupNumber)groupNumber peerId:(uint32_t)peerId
 {
+    if ([self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
     OCTChat *chat = [[self.dataSource managerGetRealmManager] chatWithGroupNumber:groupNumber];
     uint32_t selfPeerId = [tox groupSelfPeerIdForGroupNumber:groupNumber error:nil];
 
@@ -2546,6 +2660,10 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 groupNumber:(OCTToxGroupNumber)groupNumber
      peerId:(uint32_t)peerId
 {
+    if ([self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
     OCTChat *chat = [realmManager chatWithGroupNumber:groupNumber];
 
@@ -2651,6 +2769,10 @@ groupNumber:(OCTToxGroupNumber)groupNumber
        name:(NSString *)name
 partMessage:(NSString *)partMessage
 {
+    if ([self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
     OCTChat *chat = [[self.dataSource managerGetRealmManager] chatWithGroupNumber:groupNumber];
     uint32_t selfPeerId = [tox groupSelfPeerIdForGroupNumber:groupNumber error:nil];
 
@@ -3385,6 +3507,10 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
      peerId:(uint32_t)peerId
        data:(NSData *)data
 {
+    if ([self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
     uint32_t selfPeerId = [tox groupSelfPeerIdForGroupNumber:groupNumber error:nil];
 
     if (selfPeerId > 0 && peerId == selfPeerId) {
@@ -3449,6 +3575,10 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
      peerId:(uint32_t)peerId
        data:(NSData *)data
 {
+    if ([self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
     uint32_t selfPeerId = [tox groupSelfPeerIdForGroupNumber:groupNumber error:nil];
 
     if (selfPeerId > 0 && peerId == selfPeerId) {
@@ -3500,6 +3630,10 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
  targetPeerId:(uint32_t)targetPeerId
           event:(OCTToxGroupModEvent)event
 {
+    if ([self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
     OCTChat *chat = [[self.dataSource managerGetRealmManager] chatWithGroupNumber:groupNumber];
 
     if (chat) {
@@ -3517,6 +3651,10 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
 groupNumber:(OCTToxGroupNumber)groupNumber
      peerId:(uint32_t)peerId
 {
+    if ([self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
     OCTChat *chat = [[self.dataSource managerGetRealmManager] chatWithGroupNumber:groupNumber];
 
     if (chat && topic.length > 0) {
@@ -3527,6 +3665,10 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 - (void)tox:(OCTTox *)tox groupPasswordUpdate:(NSString *)password
 groupNumber:(OCTToxGroupNumber)groupNumber
 {
+    if ([self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
     OCTChat *chat = [[self.dataSource managerGetRealmManager] chatWithGroupNumber:groupNumber];
 
     if (chat) {
@@ -3537,6 +3679,10 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 - (void)tox:(OCTTox *)tox groupTopicLockUpdate:(OCTToxGroupTopicLock)topicLock
 groupNumber:(OCTToxGroupNumber)groupNumber
 {
+    if ([self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
     OCTChat *chat = [[self.dataSource managerGetRealmManager] chatWithGroupNumber:groupNumber];
 
     if (chat) {
@@ -3547,6 +3693,10 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 - (void)tox:(OCTTox *)tox groupPeerLimitUpdate:(uint16_t)peerLimit
 groupNumber:(OCTToxGroupNumber)groupNumber
 {
+    if ([self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
     OCTChat *chat = [[self.dataSource managerGetRealmManager] chatWithGroupNumber:groupNumber];
 
     if (chat) {
@@ -3557,6 +3707,10 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 - (void)tox:(OCTTox *)tox groupPrivacyStateUpdate:(OCTToxGroupPrivacyState)privacyState
 groupNumber:(OCTToxGroupNumber)groupNumber
 {
+    if ([self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
     OCTChat *chat = [[self.dataSource managerGetRealmManager] chatWithGroupNumber:groupNumber];
 
     if (chat) {
@@ -3569,6 +3723,10 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 - (void)tox:(OCTTox *)tox groupVoiceStateUpdate:(OCTToxGroupVoiceState)voiceState
 groupNumber:(OCTToxGroupNumber)groupNumber
 {
+    if ([self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
     OCTChat *chat = [[self.dataSource managerGetRealmManager] chatWithGroupNumber:groupNumber];
 
     if (chat) {
@@ -3579,6 +3737,10 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 - (void)tox:(OCTTox *)tox groupJoinFail:(OCTToxGroupJoinFail)failType
 groupNumber:(OCTToxGroupNumber)groupNumber
 {
+    if ([self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
     OCTChat *chat = [[self.dataSource managerGetRealmManager] chatWithGroupNumber:groupNumber];
 
     if (! chat) {
@@ -3602,6 +3764,10 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 groupNumber:(OCTToxGroupNumber)groupNumber
      peerId:(uint32_t)peerId
 {
+    if ([self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
     if ([self isBlockedIncomingPeerId:peerId groupNumber:groupNumber]) {
         return;
     }
@@ -3974,9 +4140,12 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     __block BOOL success = NO;
     __block NSError *localError = nil;
     __block OCTToxGroupNumber joinedGroupNumber = kOCTToxGroupNumberFailure;
+    __block NSArray<OCTGroupPendingLeave *> *rejoinedLeaves = nil;
 
     [self performSyncOnToxQueue:^(OCTTox *tox) {
-        if (chat.groupNumber >= 0) {
+        // KHANDAQ (QA live, F11): not the instance whose leave is pending, which is gone for the app: the group is
+        // joined again below.
+        if (chat.groupNumber >= 0 && ! [self.pendingGroupLeaves containsGroupNumber:(OCTToxGroupNumber)chat.groupNumber]) {
             OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)chat.groupNumber;
             NSString *chatIdHex = [tox groupChatIdHexForGroupNumber:groupNumber error:nil];
 
@@ -4010,12 +4179,19 @@ groupNumber:(OCTToxGroupNumber)groupNumber
             return;
         }
 
+        // KHANDAQ (QA live, F11): a join path too: toxcore refuses it while the instance whose leave is pending exists.
+        rejoinedLeaves = [self leavePendingGroupsBeforeRejoinOfChatIdHex:chatIdHex onTox:tox];
+
         joinedGroupNumber = [tox groupJoinWithChatIdHex:chatIdHex
                                                  peerName:resolvedPeerName
                                                  password:chat.groupPassword
                                                     error:&localError];
         success = joinedGroupNumber != kOCTToxGroupNumberFailure;
     }];
+
+    if (rejoinedLeaves.count > 0) {
+        [self pendingGroupLeavesDidChange];
+    }
 
     if (! success) {
         if (error) {
@@ -4076,7 +4252,9 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         initWithSendPacketBlock:^BOOL(uint32_t groupNumber, NSData *packet, NSError **error) {
             __strong typeof(weakSelf) self = weakSelf;
 
-            if (! self) {
+            // KHANDAQ (QA live, F11): nothing more goes to a group whose leave is pending (the same in each send block
+            // below): for the user it is gone, as it was when tox_group_leave came at once.
+            if (! self || [self.pendingGroupLeaves containsGroupNumber:groupNumber]) {
                 return NO;
             }
 
@@ -4167,7 +4345,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         initWithSendPacketBlock:^BOOL(uint32_t groupNumber, NSData *packet, BOOL lossless, NSError **error) {
             __strong typeof(weakSelf) self = weakSelf;
 
-            if (! self) {
+            if (! self || [self.pendingGroupLeaves containsGroupNumber:groupNumber]) {
                 return NO;
             }
 
@@ -4190,7 +4368,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         initWithSendPacketBlock:^BOOL(uint32_t groupNumber, NSData *packet, BOOL lossless, NSError **error) {
             __strong typeof(weakSelf) self = weakSelf;
 
-            if (! self) {
+            if (! self || [self.pendingGroupLeaves containsGroupNumber:groupNumber]) {
                 return NO;
             }
 
@@ -4224,7 +4402,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     self.hskAnnounce = [[OCTNgcHskAnnounce alloc]
         initWithSendBroadcastBlock:^BOOL(uint32_t groupNumber, NSData *packet) {
             __strong typeof(weakSelf) self = weakSelf;
-            if (! self) {
+            if (! self || [self.pendingGroupLeaves containsGroupNumber:groupNumber]) {
                 return NO;
             }
             return [[self.dataSource managerGetTox] groupSendCustomPacket:packet
@@ -4303,7 +4481,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     self.signedHistory = [[OCTNgcSignedHistory alloc]
         initWithSendPrivateBlock:^BOOL(uint32_t groupNumber, uint32_t peerId, NSData *packet) {
             __strong typeof(weakSelf) self = weakSelf;
-            if (! self) {
+            if (! self || [self.pendingGroupLeaves containsGroupNumber:groupNumber]) {
                 return NO;
             }
             // Unicast, like the unsigned history it travels beside: a broadcast would hand every
@@ -4367,7 +4545,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         initWithSendPrivatePacketBlock:^BOOL(uint32_t groupNumber, uint32_t peerId, NSData *packet, NSError **error) {
             __strong typeof(weakSelf) self = weakSelf;
 
-            if (! self) {
+            if (! self || [self.pendingGroupLeaves containsGroupNumber:groupNumber]) {
                 return NO;
             }
 
@@ -4753,6 +4931,11 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
     if (chat || ! createIfNeeded) {
         return chat;
+    }
+
+    // KHANDAQ (QA live, F11): the chat of a group whose leave is pending is not made again.
+    if ([self.pendingGroupLeaves containsGroupNumber:groupNumber]) {
+        return nil;
     }
 
     OCTTox *tox = [self.dataSource managerGetTox];
@@ -6323,6 +6506,298 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     NSMutableArray *updated = [existing mutableCopy];
     [updated removeObject:pubkeyLower];
     [defaults setObject:updated forKey:key];
+}
+
+#pragma mark - Deferred leave (QA live, F11)
+
+- (void)leavePendingGroupsNow
+{
+    [self completePendingGroupLeaves:[self.pendingGroupLeaves allEntries] event:@"flushed"];
+}
+
+/// The group callbacks drop what toxcore reports of a group being left: no UI, rows, notifications, receipts or
+/// answers. That is a group whose leave is pending, and one just left until the main queue has run what toxcore
+/// reported of it before deleting it, the iterate after tox_group_leave included (the group callbacks reach the main
+/// queue in their order). Code that is not a callback checks the pending leaves alone: when it runs, a group just
+/// left is deleted, and its number may already be the group joined again.
+- (BOOL)isGroupNumberBeingLeft:(OCTToxGroupNumber)groupNumber
+{
+    if ([self.pendingGroupLeaves containsGroupNumber:groupNumber]) {
+        return YES;
+    }
+
+    NSCountedSet<NSNumber *> *drains = self.pendingGroupLeaveDrains;
+
+    @synchronized(drains) {
+        return [drains countForObject:@(groupNumber)] > 0;
+    }
+}
+
+/// The clock of the pending leaves: the uptime, which dispatch_after counts in too, so that a change of the wall
+/// clock moves no leave. It is never stored.
+- (NSTimeInterval)pendingGroupLeaveClock
+{
+    return [NSProcessInfo processInfo].systemUptime;
+}
+
+/// Main queue: the leave notice of the group was queued, so its tox_group_leave waits for the resends.
+- (void)recordPendingGroupLeaveOfGroupNumber:(OCTToxGroupNumber)groupNumber
+                                   chatIdHex:(NSString *)chatIdHex
+                                 partMessage:(NSString *)partMessage
+{
+    [self.pendingGroupLeaves recordLeaveOfGroupNumber:groupNumber
+                                            chatIdHex:chatIdHex
+                                          partMessage:partMessage
+                                                   at:[self pendingGroupLeaveClock]];
+    OCTLogInfo(@"NGC pending leave recorded group=%u in=%.0fs", groupNumber, [OCTGroupPendingLeaves delay]);
+
+    [self storePendingGroupLeaves];
+    [self pendingGroupLeavesDidChange];
+}
+
+/// On the tox queue: the leave itself, when it is due, at a flush, at the start or before a rejoin. A group is left
+/// only while its number still holds its chat id; the chat id is never looked for under another number, which may be
+/// the group joined again. toxcore deletes the groups on the iterate run here, so a save after this has them no more,
+/// and their numbers stay "being left" until the main queue has run what that iterate and the ones before it queued.
+- (NSUInteger)leaveGroupsOfPendingLeaves:(NSArray<OCTGroupPendingLeave *> *)entries
+                                   event:(NSString *)event
+                                   onTox:(OCTTox *)tox
+{
+    NSMutableArray<NSNumber *> *leftGroupNumbers = [NSMutableArray array];
+
+    for (OCTGroupPendingLeave *entry in entries) {
+        NSString *chatIdHex = [tox groupChatIdHexForGroupNumber:entry.groupNumber error:nil];
+        const BOOL sameGroup = chatIdHex.length > 0 && [chatIdHex caseInsensitiveCompare:entry.chatIdHex] == NSOrderedSame;
+
+        if (sameGroup) {
+            [self beginPendingGroupLeaveDrainForGroupNumber:entry.groupNumber];
+        }
+
+        const BOOL left = sameGroup && [tox groupLeaveWithGroupNumber:entry.groupNumber
+                                                          partMessage:entry.partMessage
+                                                                error:nil];
+        OCTLogInfo(@"NGC pending leave %@ group=%u sameGroup=%d left=%d", event, entry.groupNumber, sameGroup, left);
+
+        if (sameGroup) {
+            [leftGroupNumbers addObject:@(entry.groupNumber)];
+        }
+    }
+
+    if (leftGroupNumbers.count == 0) {
+        return 0;
+    }
+
+    [tox iterateOnce];
+
+    __weak typeof(self) weakSelf = self;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        __strong typeof(weakSelf) self = weakSelf;
+
+        for (NSNumber *groupNumber in leftGroupNumbers) {
+            [self endPendingGroupLeaveDrainForGroupNumber:groupNumber.unsignedIntValue];
+        }
+    });
+
+    return leftGroupNumbers.count;
+}
+
+- (void)beginPendingGroupLeaveDrainForGroupNumber:(OCTToxGroupNumber)groupNumber
+{
+    NSCountedSet<NSNumber *> *drains = self.pendingGroupLeaveDrains;
+
+    @synchronized(drains) {
+        [drains addObject:@(groupNumber)];
+    }
+}
+
+- (void)endPendingGroupLeaveDrainForGroupNumber:(OCTToxGroupNumber)groupNumber
+{
+    NSCountedSet<NSNumber *> *drains = self.pendingGroupLeaveDrains;
+
+    @synchronized(drains) {
+        [drains removeObject:@(groupNumber)];
+    }
+}
+
+/// Drops these leaves and writes what is still pending to the profile. Any queue.
+- (void)removePendingGroupLeaves:(NSArray<OCTGroupPendingLeave *> *)entries
+{
+    for (OCTGroupPendingLeave *entry in entries) {
+        [self.pendingGroupLeaves removeEntry:entry];
+    }
+
+    [self storePendingGroupLeaves];
+}
+
+/// Main queue: the due-path, also run at once for every leave at a flush. The groups are left and deleted, the
+/// profile is saved without them, and only then do their chat ids leave the stored list: a stop between the two
+/// leaves them again at the next start, and never brings one back.
+- (void)completePendingGroupLeaves:(NSArray<OCTGroupPendingLeave *> *)entries event:(NSString *)event
+{
+    if (entries.count == 0) {
+        return;
+    }
+
+    [self performSyncOnToxQueue:^(OCTTox *tox) {
+        [self leaveGroupsOfPendingLeaves:entries event:event onTox:tox];
+    }];
+
+    [self.dataSource managerSaveTox];
+    [self removePendingGroupLeaves:entries];
+    [self pendingGroupLeavesDidChange];
+}
+
+/// On the tox queue, right before a join of this chat id (by the ID or a link, an invite, a stuck instance). toxcore
+/// still has the instance whose leave is pending: a join by the ID fails on it, and an invite makes a second instance
+/// next to it. Its leave is dropped, so that no due-path runs against the new instance, and it is left now, without a
+/// new notice; toxcore deletes it before the caller joins. Its chat id leaves the stored list at once, before any
+/// save: the group is joined again, and a start that found the id would leave the new instance. Returns the leaves
+/// dropped: the caller then runs -pendingGroupLeavesDidChange on the main queue.
+- (NSArray<OCTGroupPendingLeave *> *)leavePendingGroupsBeforeRejoinOfChatIdHex:(NSString *)chatIdHex onTox:(OCTTox *)tox
+{
+    NSArray<OCTGroupPendingLeave *> *entries = [self.pendingGroupLeaves entriesForChatIdHex:chatIdHex];
+
+    if (entries.count > 0) {
+        [self leaveGroupsOfPendingLeaves:entries event:@"cancelled by rejoin" onTox:tox];
+        [self removePendingGroupLeaves:entries];
+    }
+
+    return entries;
+}
+
+/// At the start, before anything lists the groups: the leaves that were pending when the app stopped (it was killed,
+/// it crashed, its background time ran out) saved the profile with their groups in it. They are left now, without a
+/// notice, which could reach no one now, and toxcore deletes them on the iterate run with that.
+- (void)leaveGroupsOfStoredPendingLeaves
+{
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    NSArray<NSString *> *chatIdHexes = [OCTGroupPendingLeaves chatIdHexesFromSerialized:[realmManager ngcValueForKey:kOCTGroupPendingLeavesStoreKey]];
+
+    if (chatIdHexes.count == 0) {
+        return;
+    }
+
+    [self performSyncOnToxQueue:^(OCTTox *tox) {
+        NSMutableArray<OCTGroupPendingLeave *> *entries = [NSMutableArray array];
+
+        for (NSString *chatIdHex in chatIdHexes) {
+            OCTToxGroupNumber groupNumber = [self groupNumberInToxForChatIdHex:chatIdHex onTox:tox];
+
+            if (groupNumber == kOCTToxGroupNumberFailure) {
+                OCTLogInfo(@"NGC pending leave startup: the group is not in the profile");
+                continue;
+            }
+
+            [entries addObject:[[OCTGroupPendingLeave alloc] initWithGroupNumber:groupNumber
+                                                                       chatIdHex:chatIdHex
+                                                                     partMessage:nil
+                                                                           dueAt:0]];
+        }
+
+        [self leaveGroupsOfPendingLeaves:entries event:@"startup" onTox:tox];
+    }];
+
+    // The profile is saved without the groups first, and only then is the list cleared (nothing is pending this
+    // early): a stop between the two leaves them again at the next start.
+    [self.dataSource managerSaveTox];
+    [self storePendingGroupLeaves];
+}
+
+/// The chat ids of the pending leaves, in the profile: written when a leave is recorded and when one is done.
+- (void)storePendingGroupLeaves
+{
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+
+    if (realmManager && ! [realmManager setNgcValue:[self.pendingGroupLeaves serializedChatIds] forKey:kOCTGroupPendingLeavesStoreKey]) {
+        OCTLogWarn(@"NGC pending leave list not stored");
+    }
+}
+
+/// After a leave was recorded or done: the background task and the due check follow. Main queue.
+- (void)pendingGroupLeavesDidChange
+{
+    if (! [NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self pendingGroupLeavesDidChange];
+        });
+        return;
+    }
+
+    [self updatePendingGroupLeaveBackgroundTask];
+    [self schedulePendingGroupLeaveCheck];
+}
+
+/// One check, at the earliest due leave; scheduling again replaces it.
+- (void)schedulePendingGroupLeaveCheck
+{
+    const NSUInteger generation = ++self.pendingGroupLeaveCheckGeneration;
+
+    if (self.pendingGroupLeaves.count == 0) {
+        return;
+    }
+
+    const NSTimeInterval delay = MAX([self.pendingGroupLeaves nextDueAt] - [self pendingGroupLeaveClock], 0.0);
+    __weak typeof(self) weakSelf = self;
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        __strong typeof(weakSelf) self = weakSelf;
+
+        if (self && self.pendingGroupLeaveCheckGeneration == generation) {
+            [self leaveDuePendingGroups];
+        }
+    });
+}
+
+- (void)leaveDuePendingGroups
+{
+    NSArray<OCTGroupPendingLeave *> *due = [self.pendingGroupLeaves dueEntriesAt:[self pendingGroupLeaveClock]];
+
+    if (due.count == 0) {
+        [self schedulePendingGroupLeaveCheck];
+        return;
+    }
+
+    [self completePendingGroupLeaves:due event:@"due"];
+}
+
+/// iOS: a background task is held while a leave is pending, so that a leave made just before the app went to the
+/// background is still done. When the system ends that time first, the groups are left at once. Main queue.
+- (void)updatePendingGroupLeaveBackgroundTask
+{
+#if TARGET_OS_IPHONE
+    UIApplication *application = [UIApplication sharedApplication];
+
+    if (self.pendingGroupLeaves.count == 0) {
+        if (self.pendingGroupLeaveBackgroundTask != UIBackgroundTaskInvalid) {
+            [application endBackgroundTask:self.pendingGroupLeaveBackgroundTask];
+            self.pendingGroupLeaveBackgroundTask = UIBackgroundTaskInvalid;
+        }
+        return;
+    }
+
+    if (self.pendingGroupLeaveBackgroundTask != UIBackgroundTaskInvalid) {
+        return;
+    }
+
+    __weak typeof(self) weakSelf = self;
+
+    self.pendingGroupLeaveBackgroundTask = [application beginBackgroundTaskWithName:@"NGC pending leave" expirationHandler:^{
+        __strong typeof(weakSelf) self = weakSelf;
+
+        if (! self) {
+            return;
+        }
+
+        [self completePendingGroupLeaves:[self.pendingGroupLeaves allEntries] event:@"flushed, background time ended"];
+
+        // Ended above once nothing is pending; never left running past its expiry.
+        if (self.pendingGroupLeaveBackgroundTask != UIBackgroundTaskInvalid) {
+            [application endBackgroundTask:self.pendingGroupLeaveBackgroundTask];
+            self.pendingGroupLeaveBackgroundTask = UIBackgroundTaskInvalid;
+        }
+    }];
+#endif
 }
 
 #pragma mark - Reconnect noise & send precheck

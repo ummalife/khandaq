@@ -68,6 +68,8 @@ extension RunningCoordinator: ActiveSessionCoordinatorDelegate {
     }
 
     func activeSessionCoordinatorDeleteProfile(_ coordinator: ActiveSessionCoordinator) {
+        // KHANDAQ (QA live, F11): the groups whose leave still waits for the notice's resends are left first.
+        toxManager?.groups.leavePendingGroupsNow()
         delegate?.runningCoordinatorDeleteProfile(self)
     }
 
@@ -142,6 +144,9 @@ private extension RunningCoordinator {
             KeychainManager().deleteActiveAccountData()
         }
 
+        // KHANDAQ (QA live, F11): a logout (also the way to another profile) leaves the groups whose leave still
+        // waits for the notice's resends and saves the profile without them.
+        toxManager?.groups.leavePendingGroupsNow()
         delegate?.runningCoordinatorDidLogout(self, importToxProfileFromURL: url)
     }
 }

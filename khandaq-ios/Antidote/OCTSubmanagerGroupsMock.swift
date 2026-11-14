@@ -114,6 +114,10 @@ class OCTSubmanagerGroupsMock: NSObject, OCTSubmanagerGroups {
         // nop
     }
 
+    func leavePendingGroupsNow() {
+        // nop
+    }
+
     func sendMessage(_ message: String!, type: OCTToxMessageType, groupNumber: OCTToxGroupNumber, messageId: UnsafeMutablePointer<UInt32>?) throws {
         // nop
     }

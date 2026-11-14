@@ -1,0 +1,4 @@
+{
+  "en-US": "Leaving a group now tells the others, and Android takes the member off the list at once; closing the app is not leaving. Your ID no longer changes each time you add a contact: if you added contacts after sharing your ID, share it again. A long message goes as several messages instead of being cut. A file you send keeps its name, and file entries keep Save to phone. Joined emoji such as ❤️‍🔥 are drawn whole.",
+  "ru-RU": "Выход из группы теперь виден остальным сразу: Android убирает участника из списка, а закрытое приложение выходом не считается. Ваш ID больше не меняется при каждом новом контакте: если вы добавляли контакты после того, как поделились ID, поделитесь им снова. Длинное сообщение уходит несколькими, а не обрезается. Отправленный файл сохраняет своё имя, у файлов в чате снова есть «Сохранить на телефон». Составные эмодзи вроде ❤️‍🔥 рисуются целиком."
+}

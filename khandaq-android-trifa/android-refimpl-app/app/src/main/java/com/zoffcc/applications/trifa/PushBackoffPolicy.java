@@ -1,6 +1,9 @@
 package com.zoffcc.applications.trifa;
 
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,6 +29,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>Pure static logic over an explicit state map, so it is unit-testable without an Android runtime
  * or a network — same reason as {@link NgcHistorySyncBudget}. The map is concurrent because the old
  * plain HashMap was reached from more than one thread.
+ *
+ * <p>KHANDAQ (0.2.56): it also holds when an undelivered message wakes its friend again ({@link #slotToSend}).
  */
 final class PushBackoffPolicy
 {
@@ -136,6 +141,101 @@ final class PushBackoffPolicy
     static boolean refusalUsesWakeAttempt(final int httpCode)
     {
         return httpCode >= 300 && httpCode < 600 && httpCode != 429;
+    }
+
+    /** KHANDAQ (0.2.56): whether a wake's answer uses up its slot: it got through, or it is a refusal that counts. */
+    static boolean wakeAttemptUsed(final int httpCode)
+    {
+        return ((httpCode >= 200) && (httpCode < 300)) || refusalUsesWakeAttempt(httpCode);
+    }
+
+    // ------------------------------------------------------------------ when an undelivered message wakes again
+
+    /**
+     * KHANDAQ: the wake slots of an undelivered message, counted from when it was sent: slot n is due at
+     * sent_timestamp + WAKE_SLOTS_MS[n], and sent_push is the first slot not used or skipped yet. Extended past the
+     * old 12-minute cliff with an hourly tail up to ~6 h, so a message to a friend who stays offline keeps getting
+     * an occasional wake. TrifaToxService.PUSH_WAKE_BACKOFF_MS is this array.
+     */
+    static final long[] WAKE_SLOTS_MS = {
+            10_000L, 45_000L, 120_000L, 300_000L, 720_000L,        // 10s, 45s, 2m, 5m, 12m
+            1_800_000L, 3_600_000L, 7_200_000L, 14_400_000L, 21_600_000L // 30m, 1h, 2h, 4h, 6h
+    };
+
+    /**
+     * KHANDAQ (0.2.56): the wake slot a message is due for now, or -1 when none is.
+     *
+     * <p>That is the LAST slot whose time has passed, never one of the slots missed before it; after its wake,
+     * sent_push becomes slot + 1. Push was off from 0.2.7 on, so when it came back every old undelivered message
+     * had all its slots overdue, and each 5-second pass used one: all ten went out within a minute. Now a message
+     * older than the whole schedule is woken for once and is done, one an hour old is woken for once and goes on
+     * at the 2-hour slot, and a fresh message keeps the schedule as it was.
+     */
+    static int slotToSend(final long sentTimestampMs, final long nowMs, final int sentPush)
+    {
+        final int next = Math.max(0, sentPush);
+        if (next >= WAKE_SLOTS_MS.length)
+        {
+            return -1;
+        }
+        final long age = nowMs - sentTimestampMs;
+        if (age < WAKE_SLOTS_MS[next])
+        {
+            return -1;
+        }
+        int slot = next;
+        while ((slot + 1 < WAKE_SLOTS_MS.length) && (age >= WAKE_SLOTS_MS[slot + 1]))
+        {
+            slot++;
+        }
+        return slot;
+    }
+
+    /** KHANDAQ (0.2.56): one message a wake is due for: its row, and the slot it is due for. */
+    static final class DueWake
+    {
+        final long messageId;
+        final int slot;
+
+        DueWake(final long messageId, final int slot)
+        {
+            this.messageId = messageId;
+            this.slot = slot;
+        }
+    }
+
+    /**
+     * KHANDAQ (0.2.56): the wakes due in one pass of resend_push_for_v3_messages, by friend. A friend with thirty
+     * waiting messages was called thirty times a pass; now once, and since one wake brings the friend online for
+     * all of them, each of those messages moves past its own slot on that one answer. Friends come in the order of
+     * their oldest due message.
+     */
+    static final class DueWakes
+    {
+        private final Map<String, List<DueWake>> byFriend = new LinkedHashMap<>();
+
+        /** Adds a message when a wake is due for it now. */
+        void add(final String friendPubkey, final long messageId, final long sentTimestampMs, final int sentPush,
+                 final long nowMs)
+        {
+            final int slot = slotToSend(sentTimestampMs, nowMs, sentPush);
+            if ((slot < 0) || (friendPubkey == null) || friendPubkey.isEmpty())
+            {
+                return;
+            }
+            List<DueWake> due = byFriend.get(friendPubkey);
+            if (due == null)
+            {
+                due = new ArrayList<>();
+                byFriend.put(friendPubkey, due);
+            }
+            due.add(new DueWake(messageId, slot));
+        }
+
+        Map<String, List<DueWake>> byFriend()
+        {
+            return byFriend;
+        }
     }
 
     /** Test seam. */

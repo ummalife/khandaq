@@ -53,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -73,6 +74,7 @@ import static com.zoffcc.applications.trifa.HelperFiletransfer.start_outgoing_ft
 import static com.zoffcc.applications.trifa.HelperFriend.add_friend_real_norequest;
 import static com.zoffcc.applications.trifa.HelperFriend.remove_legacy_echobot_contact_if_present;
 import static com.zoffcc.applications.trifa.HelperFriend.friend_call_push_url;
+import static com.zoffcc.applications.trifa.HelperFriend.friend_call_push_url_for_due_messages;
 import static com.zoffcc.applications.trifa.HelperFriend.get_friend_msgv3_capability;
 import static com.zoffcc.applications.trifa.HelperFriend.is_friend_online;
 import static com.zoffcc.applications.trifa.HelperFriend.is_friend_online_real;
@@ -2370,10 +2372,10 @@ public class TrifaToxService extends Service
     // time keeps getting occasional FCM wakes instead of giving up after 12 min. Stops immediately on the
     // read/delivery receipt (readEq(false) filter). Duplicate wakes are harmless (relay coalesces; a wake
     // only wakes, never resends the message).
-    static final long[] PUSH_WAKE_BACKOFF_MS = {
-            10_000L, 45_000L, 120_000L, 300_000L, 720_000L,        // 10s, 45s, 2m, 5m, 12m
-            1_800_000L, 3_600_000L, 7_200_000L, 14_400_000L, 21_600_000L // 30m, 1h, 2h, 4h, 6h
-    };
+    // KHANDAQ (0.2.56): the schedule and the rule that picks a slot live in PushBackoffPolicy (slotToSend): a
+    // message goes for the last slot that has passed, never for the ones it missed, and a friend gets one wake a
+    // pass for all of their due messages.
+    static final long[] PUSH_WAKE_BACKOFF_MS = PushBackoffPolicy.WAKE_SLOTS_MS;
     static final int PUSH_WAKE_MAX_ATTEMPTS = PUSH_WAKE_BACKOFF_MS.length; // 10
 
     static void resend_push_for_v3_messages()
@@ -2399,20 +2401,24 @@ public class TrifaToxService extends Service
 
             if ((m_push != null) && (m_push.size() > 0))
             {
+                // KHANDAQ (0.2.56): push was off from 0.2.7 on, and with it back every old undelivered message had
+                // all its slots overdue. Each pass then used one slot per message, so every such message sent all
+                // ten wakes within a minute, and a friend with thirty of them was called thirty times a pass. Now a
+                // message is due for the last slot it has reached, and a friend gets one wake for all of theirs.
+                final PushBackoffPolicy.DueWakes due = new PushBackoffPolicy.DueWakes();
                 Iterator<com.zoffcc.applications.sorm.Message> ii = m_push.iterator();
                 while (ii.hasNext())
                 {
                     Message m_resend_push = (Message) ii.next();
                     if ((m_resend_push.msg_idv3_hash != null) && (m_resend_push.msg_idv3_hash.length() > 3))
                     {
-                        // attempt N is due only once (sent_time + backoff[N]) has passed; sent_push is
-                        // incremented on each successful push (update_message_in_db_sent_push_set).
-                        final int attempt = Math.max(0, Math.min(m_resend_push.sent_push, PUSH_WAKE_BACKOFF_MS.length - 1));
-                        if (now >= (m_resend_push.sent_timestamp + PUSH_WAKE_BACKOFF_MS[attempt]))
-                        {
-                            friend_call_push_url(m_resend_push.tox_friendpubkey, m_resend_push.sent_timestamp);
-                        }
+                        due.add(m_resend_push.tox_friendpubkey, m_resend_push.id, m_resend_push.sent_timestamp,
+                                m_resend_push.sent_push, now);
                     }
+                }
+                for (Map.Entry<String, List<PushBackoffPolicy.DueWake>> friend_due : due.byFriend().entrySet())
+                {
+                    friend_call_push_url_for_due_messages(friend_due.getKey(), friend_due.getValue());
                 }
             }
 

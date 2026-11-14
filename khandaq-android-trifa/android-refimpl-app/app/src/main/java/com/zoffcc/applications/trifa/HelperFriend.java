@@ -30,11 +30,14 @@ import com.zoffcc.applications.sorm.FriendList;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import androidx.annotation.NonNull;
@@ -49,6 +52,7 @@ import okhttp3.Response;
 import static com.zoffcc.applications.trifa.CombinedFriendsAndConferences.COMBINED_IS_FRIEND;
 import static com.zoffcc.applications.trifa.HelperGeneric.display_toast;
 import static com.zoffcc.applications.trifa.HelperMessage.get_message_in_db_sent_push_is_read;
+import static com.zoffcc.applications.trifa.HelperMessage.update_message_in_db_sent_push_after_slot;
 import static com.zoffcc.applications.trifa.HelperMessage.update_message_in_db_sent_push_set;
 import static com.zoffcc.applications.trifa.HelperRelay.get_pushurl_for_friend;
 import static com.zoffcc.applications.trifa.HelperRelay.is_valid_pushurl_for_friend_with_whitelist;
@@ -2515,8 +2519,6 @@ public class HelperFriend
      */
     static boolean friend_do_actual_weburl_call(final String friend_pubkey, final String pushurl_for_friend, final long message_timestamp_circa, final boolean update_message_flag)
     {
-        OkHttpClient client = null;
-
         if (!update_message_flag)
         {
             if (get_message_in_db_sent_push_is_read(friend_pubkey, message_timestamp_circa))
@@ -2526,13 +2528,31 @@ public class HelperFriend
             }
         }
 
+        final int answer = send_wake_request(pushurl_for_friend);
+        // KHANDAQ (0.2.56): a refusal is an attempt too, so the next one waits for its turn.
+        if (update_message_flag && PushBackoffPolicy.wakeAttemptUsed(answer))
+        {
+            update_message_in_db_sent_push_set(friend_pubkey, message_timestamp_circa);
+        }
+
+        return false;
+    }
+
+    /**
+     * KHANDAQ (0.2.56): sends one wake to a friend's push URL. Returns the relay's HTTP answer, or -1 when nothing
+     * went out (inside a 429 backoff) or nothing came back.
+     */
+    static int send_wake_request(final String pushurl_for_friend)
+    {
+        OkHttpClient client = null;
+
         // KHANDAQ (audit 2026-08-20): a 429 used to cost a flat two hours, which turned a transient
         // relay condition into a long local outage — see PushBackoffPolicy for the whole reason.
         // Now: one minute for the first refusal, doubling, same two-hour ceiling at the end.
         if (PushBackoffPolicy.shouldSkip(pushurl_for_friend, System.currentTimeMillis()))
         {
             Log.i(TAG, "friend_call_push_url:HTTP 429: too many requests -> backoff");
-            return false;
+            return -1;
         }
 
         if (PREF__orbot_enabled)
@@ -2621,16 +2641,8 @@ public class HelperFriend
                     // A call that got through clears the streak, so the next 429 starts short again
                     // instead of inheriting a penalty earned an hour ago.
                     PushBackoffPolicy.recordSuccess(pushurl_for_friend);
-                    if (update_message_flag)
-                    {
-                        update_message_in_db_sent_push_set(friend_pubkey, message_timestamp_circa);
-                    }
             }
-            else if (update_message_flag && PushBackoffPolicy.refusalUsesWakeAttempt(response.code()))
-            {
-                // KHANDAQ (0.2.56): a refusal is an attempt too, so the next one waits for its turn.
-                update_message_in_db_sent_push_set(friend_pubkey, message_timestamp_circa);
-            }
+            return response.code();
         }
         catch (Exception e1)
         {
@@ -2638,7 +2650,7 @@ public class HelperFriend
             e1.printStackTrace();
         }
 
-        return false;
+        return -1;
     }
 
     /** The push address a wake signal for this friend goes to, or null when none can go. */
@@ -2699,6 +2711,77 @@ public class HelperFriend
                     }
                 };
                 t.start();
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
+
+    /** KHANDAQ (0.2.56): friends whose wake from friend_call_push_url_for_due_messages has not been answered yet. */
+    private static final Set<String> due_wakes_in_flight = ConcurrentHashMap.newKeySet();
+
+    /**
+     * KHANDAQ (0.2.56): one wake for all of a friend's messages that are due one (PushBackoffPolicy.DueWakes). One
+     * wake brings the friend online for all of them, so when it counts, each moves past the slot it was due for.
+     * The passes come every 5 seconds and a wake through Orbot can take longer, so a friend whose wake is still on
+     * its way is not called again.
+     */
+    static void friend_call_push_url_for_due_messages(final String friend_pubkey,
+                                                      final List<PushBackoffPolicy.DueWake> due)
+    {
+        try
+        {
+            if ((due == null) || due.isEmpty())
+            {
+                return;
+            }
+
+            final String pushurl_for_friend = wake_url_for_friend(friend_pubkey);
+            if ((pushurl_for_friend == null) || !due_wakes_in_flight.add(friend_pubkey))
+            {
+                return;
+            }
+
+            final List<PushBackoffPolicy.DueWake> due_now = new ArrayList<>(due);
+            Thread t = new Thread()
+            {
+                @Override
+                public void run()
+                {
+                    try
+                    {
+                        if (PushBackoffPolicy.wakeAttemptUsed(send_wake_request(pushurl_for_friend)))
+                        {
+                            for (final PushBackoffPolicy.DueWake d : due_now)
+                            {
+                                update_message_in_db_sent_push_after_slot(d.messageId, d.slot);
+                            }
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Log.i(TAG, "friend_call_push_url_for_due_messages:EE2:" + e.getMessage());
+                    }
+                    finally
+                    {
+                        due_wakes_in_flight.remove(friend_pubkey);
+                    }
+                }
+            };
+
+            boolean started = false;
+            try
+            {
+                t.start();
+                started = true;
+            }
+            finally
+            {
+                if (!started)
+                {
+                    due_wakes_in_flight.remove(friend_pubkey);
+                }
             }
         }
         catch (Exception ignored)

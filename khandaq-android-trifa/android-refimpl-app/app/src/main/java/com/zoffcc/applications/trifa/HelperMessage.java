@@ -1432,6 +1432,32 @@ public class HelperMessage
         }
     }
 
+    /**
+     * KHANDAQ (0.2.56): after the wake for its slot (PushBackoffPolicy.slotToSend), a message waits for the slot
+     * after it. Never moves a message back: another wake may have moved it further meanwhile.
+     */
+    static void update_message_in_db_sent_push_after_slot(final long message_id, final int slot)
+    {
+        try
+        {
+            orma.updateMessage().
+                    idEq(message_id).
+                    sent_pushLt(slot + 1).
+                    sent_push(slot + 1).
+                    execute();
+
+            final Message m = (Message) orma.selectFromMessage().
+                    idEq(message_id).
+                    toList().get(0);
+
+            update_single_message(m, true);
+        }
+        catch (Exception e)
+        {
+            // e.printStackTrace();
+        }
+    }
+
     static void send_msgv3_high_level_ack(final long friend_number, String msgV3hash_hex_string)
     {
         if (msgV3hash_hex_string.length() < TOX_HASH_LENGTH)

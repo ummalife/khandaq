@@ -35,6 +35,7 @@ import androidx.core.widget.TextViewCompat;
 import com.zoffcc.applications.sorm.GroupDB;
 import com.zoffcc.applications.sorm.GroupMessage;
 
+import java.lang.ref.WeakReference;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -70,6 +71,8 @@ public final class AirGroupDossierActivity extends AirScreenActivity
     private static final int GROUP_KEY_HEX_LENGTH = ToxVars.TOX_GROUP_CHAT_ID_SIZE * 2;
     private static final Object WORKER_LOCK = new Object();
     private static Handler worker = null;
+    /** The page on screen, between onResume and onPause: a join or an exit reads its group at once. */
+    private static volatile WeakReference<AirGroupDossierActivity> onScreen = new WeakReference<>(null);
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final Runnable poll = new Runnable()
@@ -168,10 +171,31 @@ public final class AirGroupDossierActivity extends AirScreenActivity
         refresh();
     }
 
+    /**
+     * KHANDAQ (QA live 2026-11-14): a member joined or left a group (HelperGroup.on_group_members_changed, on
+     * toxcore's thread). The page of that group on screen reads it now; it showed the count from before until
+     * its next read, up to 3 s later.
+     */
+    static void membersChanged(final String groupIdentifier)
+    {
+        final AirGroupDossierActivity page = onScreen.get();
+        if (page == null || groupIdentifier == null || !groupIdentifier.equalsIgnoreCase(page.groupId))
+        {
+            return;
+        }
+        page.main.post(() -> {
+            if (!page.destroyed && !page.isFinishing())
+            {
+                page.refresh();
+            }
+        });
+    }
+
     @Override
     protected void onResume()
     {
         super.onResume();
+        onScreen = new WeakReference<>(this);
         main.removeCallbacks(poll);
         main.postDelayed(poll, POLL_MS);
         // E21: the invite picker closes when there is nobody to invite; its words come back here.
@@ -181,6 +205,10 @@ public final class AirGroupDossierActivity extends AirScreenActivity
     @Override
     protected void onPause()
     {
+        if (onScreen.get() == this)
+        {
+            onScreen = new WeakReference<>(null);
+        }
         main.removeCallbacks(poll);
         super.onPause();
     }

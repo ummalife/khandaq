@@ -3107,6 +3107,11 @@ public class HelperGroup
             // so doing it uncached froze the app (ANR). Use a short-TTL cache instead.
             final java.util.HashSet<String> tox_known_pubkeys =
                     get_saved_peer_roster_cached(group_identifier, group_num);
+            // KHANDAQ (QA live 2026-11-14): toxcore leaves out of the roster the members online when it is read, so
+            // a roster read while a member was online lacks them. At their exit the page, read at once, dropped them
+            // until the roster was read again (up to 8 s): a member who closed the app looked as if they had left.
+            // A member seen online after the roster was read is not judged by it.
+            final Long roster_read_ms = saved_peer_roster_cache_ts.get(group_identifier.toLowerCase(Locale.ENGLISH));
 
             final List<GroupPeerDB> db_peers = orma.selectFromGroupPeerDB().
                     group_identifierEq(group_identifier.toLowerCase()).
@@ -3129,7 +3134,9 @@ public class HelperGroup
                 }
                 // Skip stale DB rows that toxcore no longer tracks (keeps counts consistent across
                 // devices). Only applied when we actually have toxcore's roster (group loaded).
-                if (tox_known_pubkeys != null && !tox_known_pubkeys.contains(key))
+                if (tox_known_pubkeys != null && !tox_known_pubkeys.contains(key)
+                    && !AirGroupModel.seenSinceRosterRead(
+                        resolve_group_peer_last_seen_ms(group_identifier, pubkey, db_peer), roster_read_ms))
                 {
                     continue;
                 }
@@ -3538,7 +3545,9 @@ public class HelperGroup
                 return;
             }
 
-            int role = ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_USER.value;
+            // KHANDAQ (QA live 2026-11-14): a member recorded from toxcore's saved peers, offline, has no role toxcore
+            // reports; it was stored as a member, and an offline founder was shown as one. No role until one is known.
+            int role = AirGroupModel.ROLE_UNKNOWN;
             long peer_num = -1L;
             if (group_number >= 0)
             {
@@ -3547,11 +3556,9 @@ public class HelperGroup
                     peer_num = get_group_peernum_from_peer_pubkey(group_identifier, peer_pubkey);
                     if (peer_num >= 0)
                     {
-                        final int peer_role = tox_group_peer_get_role(group_number, peer_num);
-                        if (peer_role >= 0)
-                        {
-                            role = peer_role;
-                        }
+                        role = AirGroupModel.roleToStore(AirGroupModel.ROLE_UNKNOWN,
+                                                         tox_group_peer_get_role(group_number, peer_num),
+                                                         group_peer_role_is_known(group_number, peer_pubkey));
                     }
                 }
                 catch (Exception ignored)
@@ -3572,7 +3579,7 @@ public class HelperGroup
         {
             try
             {
-                int role = ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_USER.value;
+                int role = AirGroupModel.ROLE_UNKNOWN;
                 long peer_num = -1L;
                 if (group_number >= 0)
                 {
@@ -4306,6 +4313,13 @@ public class HelperGroup
                 return;
             }
 
+            final GroupPeerDB existing = lookup_group_peer_by_pubkey(group_identifier, group_peer_pubkey);
+            if (existing == null)
+            {
+                // Nothing to update.
+                return;
+            }
+
             String peer_name = null;
             // KHANDAQ: resolve the name by PUBKEY (the wrapper maps it to the peer's CURRENT peer_id
             // internally). NEVER resolve by the raw peer_id here — NGC reuses peer_ids on rejoin, so a
@@ -4322,11 +4336,7 @@ public class HelperGroup
 
             if (peer_name == null)
             {
-                final GroupPeerDB existing = lookup_group_peer_by_pubkey(group_identifier, group_peer_pubkey);
-                if (existing != null)
-                {
-                    peer_name = pick_non_hex_group_peer_name(existing.peer_name, group_peer_pubkey);
-                }
+                peer_name = pick_non_hex_group_peer_name(existing.peer_name, group_peer_pubkey);
             }
 
             if (peer_name == null)
@@ -4345,15 +4355,104 @@ public class HelperGroup
                 peer_name = HelperFriend.peer_pubkey_short_id(group_peer_pubkey);
             }
 
-            orma.updateGroupPeerDB().group_identifierEq(group_identifier).tox_group_peer_pubkeyEq(group_peer_pubkey).
+            // KHANDAQ (QA live 2026-11-14): an offline member is shown with the stored role; an offline founder was
+            // sometimes shown as a member. Only a role toxcore reports for a peer it has confirmed, in a connected
+            // group, is stored.
+            final int role = AirGroupModel.roleToStore(existing.Tox_Group_Role, aTox_Group_Role,
+                                                       group_peer_role_is_known(group_number, group_peer_pubkey));
+
+            // The row found above, by the group and the key exactly as it stores them: the lookup finds a key stored in
+            // either case, and an update by the key as toxcore spells it (upper case) would change nothing in a row
+            // stored in lower case.
+            orma.updateGroupPeerDB().group_identifierEq(existing.group_identifier).
+                    tox_group_peer_pubkeyEq(existing.tox_group_peer_pubkey).
                     peer_name(peer_name).
-                    Tox_Group_Role(aTox_Group_Role).
+                    Tox_Group_Role(role).
                     last_update_timestamp(System.currentTimeMillis()).
                     execute();
         }
         catch (Exception ignored)
         {
         }
+    }
+
+    /**
+     * KHANDAQ (QA live 2026-11-14): whether the role toxcore reports for this peer is the member's own: the group
+     * is connected and toxcore has confirmed the peer. After a member's exit toxcore keeps adding it back,
+     * unconfirmed, while it tries to reconnect, and reports a peer it has not confirmed as a plain member: the
+     * founder, offline, was shown as a member every other read of the group's page. A peer toxcore has not
+     * confirmed has no name yet: toxcore takes the name from the peer's info, the packet that confirms the peer.
+     */
+    static boolean group_peer_role_is_known(final long group_number, final long peer_id)
+    {
+        if (peer_id < 0 || !group_roles_are_known(group_number))
+        {
+            return false;
+        }
+        try
+        {
+            return !TextUtils.isEmpty(tox_group_peer_get_name(group_number, peer_id));
+        }
+        catch (Throwable e)
+        {
+            return false;
+        }
+    }
+
+    /** As above, for a member known by key: its peer id now, as toxcore has it. */
+    static boolean group_peer_role_is_known(final long group_number, final String peer_pubkey)
+    {
+        if (group_number < 0 || TextUtils.isEmpty(peer_pubkey))
+        {
+            return false;
+        }
+        try
+        {
+            return group_peer_role_is_known(group_number,
+                                            MainActivity.tox_group_peer_by_public_key(group_number, peer_pubkey));
+        }
+        catch (Throwable e)
+        {
+            return false;
+        }
+    }
+
+    /**
+     * Whether toxcore's roles for the group's other members can be trusted. They can once the group is
+     * connected; before it syncs, toxcore reports every member it has not confirmed as a plain member.
+     */
+    static boolean group_roles_are_known(final long group_number)
+    {
+        if (group_number < 0)
+        {
+            return false;
+        }
+        try
+        {
+            return tox_group_is_connected(group_number)
+                   == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value;
+        }
+        catch (Throwable e)
+        {
+            return false;
+        }
+    }
+
+    /**
+     * KHANDAQ (QA live 2026-11-14): a member joined or left the group. The member count is read again at once,
+     * not from its cache, and the group's page on screen reads the group now. Until its next read, up to 3 s
+     * later, it showed the count from before.
+     */
+    static void on_group_members_changed(final String group_identifier)
+    {
+        if (group_identifier == null)
+        {
+            return;
+        }
+        final String key = group_identifier.toLowerCase(Locale.ROOT);
+        ngc_member_count_cache_ts.remove(key);
+        ngc_member_count_cache.remove(key);
+        AirGroupDossierActivity.membersChanged(group_identifier);
     }
 
     static void group_notification_silent_peer_set(final String group_identifier, final String group_peer_pubkey, boolean silent)
@@ -4379,13 +4478,16 @@ public class HelperGroup
             }
 
             final long group_num = tox_group_by_groupid__wrapper(group_identifier);
-            int role = ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_USER.value;
+            // As in ensure_group_peer_recorded: no role until toxcore reports one for a connected group.
+            int role = AirGroupModel.ROLE_UNKNOWN;
             try
             {
                 final long peer_num = get_group_peernum_from_peer_pubkey(group_identifier, group_peer_pubkey);
                 if ((group_num >= 0) && (peer_num >= 0))
                 {
-                    role = tox_group_peer_get_role(group_num, peer_num);
+                    role = AirGroupModel.roleToStore(AirGroupModel.ROLE_UNKNOWN,
+                                                     tox_group_peer_get_role(group_num, peer_num),
+                                                     group_peer_role_is_known(group_num, group_peer_pubkey));
                 }
             }
             catch (Exception ignored)

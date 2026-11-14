@@ -173,6 +173,50 @@ public class AirGroupModelTest
         assertFalse(AirGroupModel.isKnownRole(AirGroupModel.ROLE_UNKNOWN));
     }
 
+    /**
+     * Android only (QA live 2026-11-14): the stored role an offline member is shown with. An offline founder was
+     * sometimes shown as a member; a role read before the group synced had been stored.
+     */
+    @Test
+    public void a_stored_role_takes_only_what_a_connected_group_reports_and_the_founder_stays()
+    {
+        final int unknown = AirGroupModel.ROLE_UNKNOWN;
+        // Connected: the role toxcore reports, also a change of role.
+        assertEquals(ROLE_MODERATOR, AirGroupModel.roleToStore(ROLE_USER, ROLE_MODERATOR, true));
+        assertEquals(ROLE_USER, AirGroupModel.roleToStore(ROLE_MODERATOR, ROLE_USER, true));
+        assertEquals(ROLE_FOUNDER, AirGroupModel.roleToStore(unknown, ROLE_FOUNDER, true));
+        assertEquals(ROLE_OBSERVER, AirGroupModel.roleToStore(unknown, ROLE_OBSERVER, true));
+        // Not connected yet: toxcore says "member" of everyone it has not confirmed. Nothing is stored.
+        assertEquals(ROLE_FOUNDER, AirGroupModel.roleToStore(ROLE_FOUNDER, ROLE_USER, false));
+        assertEquals(unknown, AirGroupModel.roleToStore(unknown, ROLE_USER, false));
+        assertEquals(ROLE_MODERATOR, AirGroupModel.roleToStore(ROLE_MODERATOR, ROLE_USER, false));
+        // The founder stays the founder whatever a read says.
+        for (final int role : ROLES)
+        {
+            assertEquals(ROLE_FOUNDER, AirGroupModel.roleToStore(ROLE_FOUNDER, role, true));
+        }
+        // A failed read keeps what is stored; a stored value that is no role is none.
+        assertEquals(ROLE_USER, AirGroupModel.roleToStore(ROLE_USER, -1, true));
+        assertEquals(unknown, AirGroupModel.roleToStore(unknown, -1, true));
+        assertEquals(unknown, AirGroupModel.roleToStore(7, -1, true));
+        assertEquals(ROLE_USER, AirGroupModel.roleToStore(7, ROLE_USER, true));
+    }
+
+    @Test
+    public void a_member_seen_online_since_the_roster_was_read_stays_listed()
+    {
+        final long read = 1_000_000L;
+        // QA live 2026-11-14: the roster was read while the member was online, so toxcore left them out; they
+        // closed the app after that read and stay listed, offline, instead of looking as if they had left.
+        assertTrue(AirGroupModel.seenSinceRosterRead(read + 30_000L, read));
+        assertTrue(AirGroupModel.seenSinceRosterRead(read, read));
+        // Last seen before the read: toxcore's roster decides, as before.
+        assertFalse(AirGroupModel.seenSinceRosterRead(read - 1L, read));
+        // Never seen online, or no roster read yet (then the whole stored list is shown anyway).
+        assertFalse(AirGroupModel.seenSinceRosterRead(0L, read));
+        assertFalse(AirGroupModel.seenSinceRosterRead(read + 30_000L, null));
+    }
+
     @Test
     public void a_member_without_a_role_shown_offers_no_action_and_asks_nobody()
     {

@@ -273,4 +273,12 @@ class AirNetworkTests: XCTestCase {
         XCTAssertNil(user.delegate, "a session that shuts down keeps its own delegate")
         XCTAssertNil(groups.delegate, "a session that shuts down keeps its own delegate")
     }
+
+    /// A wake push used to only wait 25 seconds on connections that died while the phone slept, so the
+    /// message it announced rarely arrived in time. It reconnects first now.
+    func testAWakePushReconnectsAtOnce() {
+        let bootstrap = OCTSubmanagerBootstrapMock()
+        AppDelegate.reconnectForWake(bootstrap)
+        XCTAssertEqual(bootstrap.rebootstrapCount, 1, "the wake did not ask for an urgent reconnect")
+    }
 }

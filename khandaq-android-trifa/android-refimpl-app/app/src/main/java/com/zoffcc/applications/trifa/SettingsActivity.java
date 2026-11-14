@@ -94,6 +94,8 @@ public class SettingsActivity extends AppCompatPreferenceActivity
 {
     private static final String TAG = "trifa.SettingsActivity";
     private Toolbar settingsToolbar;
+    /** KHANDAQ (0.2.56): Back out of an opened page where onBackPressed is not called (Android 13+). */
+    private final FrameworkBackCallback pageBack = new FrameworkBackCallback(this, this::navigateUp);
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -118,12 +120,21 @@ public class SettingsActivity extends AppCompatPreferenceActivity
             }
         });
         updateSettingsToolbarTitle();
+        getFragmentManager().addOnBackStackChangedListener(this::updatePageBack);
+        updatePageBack();
     }
 
+    /** Android 12 and older; from 13 on, pageBack takes Back while navigateUp has a page to pop. */
     @Override
     public void onBackPressed()
     {
         navigateUp();
+    }
+
+    /** Everywhere else navigateUp only finishes the screen, so Back is left to the platform there. */
+    private void updatePageBack()
+    {
+        pageBack.setWanted(!onIsMultiPane() && getFragmentManager().getBackStackEntryCount() > 0);
     }
 
     private void navigateUp()

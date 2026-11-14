@@ -237,6 +237,7 @@ public class ConferenceMessageListActivity extends AppCompatActivity
                         return true;
                     }
                 }).build();
+        DrawerBackHelper.attach(this, conference_message_drawer);
 
 
         rootView = (ViewGroup) findViewById(R.id.emoji_bar);
@@ -926,19 +927,6 @@ public class ConferenceMessageListActivity extends AppCompatActivity
 
         ret.ret_value = true;
         return ret;
-    }
-
-    @Override
-    public void onBackPressed()
-    {
-        if (conference_message_drawer.isDrawerOpen())
-        {
-            conference_message_drawer.closeDrawer();
-        }
-        else
-        {
-            super.onBackPressed();
-        }
     }
 
     long peer_pubkey_to_long_in_list(String peer_pubkey)

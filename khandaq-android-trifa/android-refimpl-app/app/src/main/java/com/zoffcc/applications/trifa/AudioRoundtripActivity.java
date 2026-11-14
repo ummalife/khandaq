@@ -557,13 +557,8 @@ public class AudioRoundtripActivity extends AppCompatActivity
         }
     }
 
-    @Override
-    public void onBackPressed()
-    {
-        requestStopTest();
-        super.onBackPressed();
-    }
-
+    // KHANDAQ (0.2.56): no onBackPressed (Android 16 does not call it): Back leaves the screen, and
+    // onPause stops the test on that way out as on every other.
     @Override
     protected void onPause()
     {

@@ -338,6 +338,21 @@ public class AirFragment extends Fragment
         return false;
     }
 
+    /** Whether handleBackPress has something to end: the main screen takes Back only then. */
+    boolean hasBackToHandle()
+    {
+        return searching || filter != AirModel.Filter.ALL;
+    }
+
+    private void updateBackCallback()
+    {
+        final MainActivity activity = mainActivity();
+        if (activity != null)
+        {
+            activity.updateMainBackCallback();
+        }
+    }
+
     /** New contact's "Open Requests": the Requests filter, a search ended first. */
     void showRequests()
     {
@@ -948,6 +963,7 @@ public class AirFragment extends Fragment
         searching = next;
         cancel.setVisibility(searching ? View.VISIBLE : View.GONE);
         foldTopRow(searching, animated);
+        updateBackCallback();
     }
 
     private void foldTopRow(final boolean fold, final boolean animated)
@@ -1132,6 +1148,7 @@ public class AirFragment extends Fragment
             return;
         }
         filter = next;
+        updateBackCallback();
         render();
         if (list != null)
         {

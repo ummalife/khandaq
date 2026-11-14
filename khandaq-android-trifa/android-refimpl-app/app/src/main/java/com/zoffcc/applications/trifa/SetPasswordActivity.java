@@ -24,6 +24,7 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
@@ -56,6 +57,15 @@ public class SetPasswordActivity extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
+        // Back does nothing here. KHANDAQ (0.2.56): through the dispatcher, as Android 16 no longer calls
+        // onBackPressed for an app that targets it.
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true)
+        {
+            @Override
+            public void handleOnBackPressed()
+            {
+            }
+        });
 
         Log.i(TAG, "onCreate");
 
@@ -488,12 +498,5 @@ public class SetPasswordActivity extends AppCompatActivity
             mAuthTask = null;
             showProgress(false);
         }
-    }
-
-    @Override
-    public void onBackPressed()
-    {
-        // super.onBackPressed();
-        // do nothing!!
     }
 }

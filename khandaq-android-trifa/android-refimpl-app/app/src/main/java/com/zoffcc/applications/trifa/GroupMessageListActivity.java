@@ -519,6 +519,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                 return true;
             }
         }).build();
+        DrawerBackHelper.attach(this, group_message_drawer);
 
         HelperToolbar.enableUpNavigation(this, toolbar);
 
@@ -3521,19 +3522,6 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         ret.ret_value = true;
         return ret;
-    }
-
-    @Override
-    public void onBackPressed()
-    {
-        if (group_message_drawer != null && group_message_drawer.isDrawerOpen())
-        {
-            group_message_drawer.closeDrawer();
-        }
-        else
-        {
-            super.onBackPressed();
-        }
     }
 
     synchronized void update_group_all_users()

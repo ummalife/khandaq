@@ -29,6 +29,7 @@ import com.vanniktech.emoji.EmojiPopup;
 import java.util.ArrayList;
 import java.util.List;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -47,11 +48,31 @@ public class MediaSendPreviewActivity extends AppCompatActivity
     private PreviewAdapter previewAdapter;
     private ImageButton editButton;
     private int editingPosition = -1;
+    /**
+     * KHANDAQ (0.2.56): Back closes the open emoji panel first; on only while it is open, as Android 16 no
+     * longer calls onBackPressed for an app that targets it. Back that leaves sends nothing: the result
+     * stays RESULT_CANCELED, which only the send button changes.
+     */
+    private final OnBackPressedCallback emojiBackCallback = new OnBackPressedCallback(false)
+    {
+        @Override
+        public void handleOnBackPressed()
+        {
+            if (emojiPopup != null && emojiPopup.isShowing())
+            {
+                emojiPopup.dismiss();
+                return;
+            }
+            setEnabled(false);
+            getOnBackPressedDispatcher().onBackPressed();
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
+        getOnBackPressedDispatcher().addCallback(this, emojiBackCallback);
         setContentView(R.layout.activity_media_send_preview);
         ViewUtil.applyImeBottomInsets(this); // KHANDAQ (#1): keep the caption field above the keyboard on edge-to-edge
 
@@ -129,10 +150,15 @@ public class MediaSendPreviewActivity extends AppCompatActivity
         sendButton.setOnClickListener(sendListener);
 
         emojiPopup = EmojiPopup.Builder.fromRootView(findViewById(R.id.media_preview_root)).
-                setOnEmojiPopupShownListener(() -> emojiButton.setImageDrawable(
-                        new IconicsDrawable(this).icon(FontAwesome.Icon.faw_keyboard).
-                                color(Color.WHITE).sizeDp(24))).
-                setOnEmojiPopupDismissListener(() -> emojiButton.setImageResource(R.drawable.ic_emoji_smile_24)).
+                setOnEmojiPopupShownListener(() -> {
+                    emojiButton.setImageDrawable(new IconicsDrawable(this).icon(FontAwesome.Icon.faw_keyboard).
+                            color(Color.WHITE).sizeDp(24));
+                    emojiBackCallback.setEnabled(true);
+                }).
+                setOnEmojiPopupDismissListener(() -> {
+                    emojiButton.setImageResource(R.drawable.ic_emoji_smile_24);
+                    emojiBackCallback.setEnabled(false);
+                }).
                 setBackgroundColor(getResources().getColor(R.color.md_grey_800)).
                 build(captionField);
 
@@ -257,18 +283,6 @@ public class MediaSendPreviewActivity extends AppCompatActivity
         {
             sayEditFailed();
         }
-    }
-
-    @Override
-    public void onBackPressed()
-    {
-        if (emojiPopup != null && emojiPopup.isShowing())
-        {
-            emojiPopup.dismiss();
-            return;
-        }
-        setResult(Activity.RESULT_CANCELED);
-        super.onBackPressed();
     }
 
     private void updateCounter(final int position)

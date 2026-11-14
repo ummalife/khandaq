@@ -60,6 +60,8 @@ public class IOBrowser extends ListActivity
     private String root = "/";
     private String cur_path = root;
     private boolean at_root_dir = true;
+    /** KHANDAQ (0.2.56): Back goes up a folder where onBackPressed is not called (Android 13+). */
+    private final FrameworkBackCallback folderBack = new FrameworkBackCallback(this, this::goUp);
 
     public static class dir_item
     {
@@ -247,6 +249,7 @@ public class IOBrowser extends ListActivity
         }
 
         setListAdapter(new IconicList());
+        folderBack.setWanted(!at_root_dir);
     }
 
     @Override
@@ -382,16 +385,23 @@ public class IOBrowser extends ListActivity
         }
     }
 
+    /** Android 12 and older; from 13 on, folderBack takes Back below the root. */
     @Override
     public void onBackPressed()
     {
         if (!at_root_dir)
         {
-            getFileList(path.get(1));
+            goUp();
         }
         else
         {
             super.onBackPressed();
         }
+    }
+
+    /** The folder above: below the root, the list starts with the root and "..". */
+    private void goUp()
+    {
+        getFileList(path.get(1));
     }
 }

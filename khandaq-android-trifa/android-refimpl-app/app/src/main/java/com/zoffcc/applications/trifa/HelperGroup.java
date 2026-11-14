@@ -11564,7 +11564,10 @@ public class HelperGroup
 
             if (do_notification)
             {
-                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, m.text,
+                // KHANDAQ (QA live, F8): the file's kind in words, as for a file of one person
+                // (MainActivity), not its stored text "[name]\n[N] bytes".
+                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname,
+                                        HelperMsgNotification.media_label_for_filename(context_s, filename_corrected),
                                         m.sent_timestamp, m.tox_group_peer_pubkey);
             }
         }

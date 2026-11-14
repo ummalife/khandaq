@@ -678,11 +678,25 @@ public class HelperFriend
         }
         String result = MainActivity.tox_friend_get_public_key(friend_number);
         // ConcurrentHashMap forbids null values — only cache a real pubkey.
-        if (result != null)
+        // KHANDAQ (0.2.56): nor the JNI's "-1" for a number no friend has yet (see is_friend_pubkey_answer).
+        if (is_friend_pubkey_answer(result))
         {
             MainActivity.cache_fnum_pubkey.put(friend_number, result);
         }
         return result;
+    }
+
+    /**
+     * KHANDAQ (0.2.56): true for a public key from tox_friend_get_public_key, false for its "-1" (toxcore has no
+     * friend with that number) or null (no Tox). The service asks for friend 0 while it loads groups, also when
+     * there is no friend yet; a cached "-1" then stayed with number 0 after the first contact got it, so until
+     * the next start the texts and files that contact sent, and the files sent to it, were stored under "-1":
+     * the chat never showed them and an outgoing file never went. Like the not-found sentinel in
+     * tox_friend_by_public_key__wrapper (audit #32), it is returned but not cached.
+     */
+    static boolean is_friend_pubkey_answer(final String answer)
+    {
+        return (answer != null) && (answer.length() == TOX_PUBLIC_KEY_SIZE * 2);
     }
 
     static void del_friend_avatar(String friend_pubkey, String avatar_path_name, String avatar_file_name)

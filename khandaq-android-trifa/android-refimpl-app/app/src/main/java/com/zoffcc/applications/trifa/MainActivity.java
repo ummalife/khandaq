@@ -10879,7 +10879,8 @@ public class MainActivity extends AppCompatActivity
                                         // HINT: real file (no storage framework) and correct directory, delete the file now
                                         try
                                         {
-                                            new File(m_to_delete.filename_fullpath).delete();
+                                            // KHANDAQ (QA live, F4): with the copy goes the folder of its own it lies in.
+                                            HelperFiletransfer.delete_outgoing_copy(m_to_delete.filename_fullpath);
                                         }
                                         catch (Exception e)
                                         {
@@ -11631,7 +11632,8 @@ public class MainActivity extends AppCompatActivity
                                         // HINT: real file (no storage framework) and correct directory, delete the file now
                                         try
                                         {
-                                            new File(m_to_delete.filename_fullpath).delete();
+                                            // KHANDAQ (QA live, F4): with the copy goes the folder of its own it lies in.
+                                            HelperFiletransfer.delete_outgoing_copy(m_to_delete.filename_fullpath);
                                         }
                                         catch (Exception e)
                                         {

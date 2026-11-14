@@ -35,7 +35,6 @@ import androidx.core.widget.TextViewCompat;
 import com.zoffcc.applications.sorm.GroupDB;
 import com.zoffcc.applications.sorm.GroupMessage;
 
-import java.io.File;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -911,7 +910,8 @@ public final class AirGroupDossierActivity extends AirScreenActivity
                      && m.filename_fullpath.startsWith(MainActivity.SD_CARD_FILES_OUTGOING_WRAPPER_DIR))
             {
                 // This app's copy of a file we sent; the original stays where it was picked from.
-                if (!new File(m.filename_fullpath).delete())
+                // KHANDAQ (QA live, F4): the folder of its own the copy lies in goes with it.
+                if (!HelperFiletransfer.delete_outgoing_copy(m.filename_fullpath))
                 {
                     Log.i(TAG, "clear:copy:gone");
                 }

@@ -4,6 +4,8 @@ import android.util.Log;
 
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
@@ -410,12 +412,29 @@ public final class KhandaqPushCapability
         return postJson(url, body, null);
     }
 
+    /**
+     * KHANDAQ (0.2.56): the proxy for a request to the relay, or null for the usual way. Through Orbot while the
+     * app talks through it, as the wake itself goes (HelperFriend.friend_do_actual_weburl_call): a registration
+     * shows the relay this phone's address, and with push on by default every install registers now.
+     */
+    static Proxy relayProxy(final boolean orbotEnabled)
+    {
+        if (!orbotEnabled)
+        {
+            return null;
+        }
+        return new Proxy(Proxy.Type.SOCKS, new InetSocketAddress(TRIFAGlobals.ORBOT_PROXY_HOST,
+                                                                 (int) TRIFAGlobals.ORBOT_PROXY_PORT));
+    }
+
     private static int postJson(final String url, final String body, final String[] out)
     {
         HttpURLConnection conn = null;
         try
         {
-            conn = (HttpURLConnection) new URL(url).openConnection();
+            final Proxy proxy = relayProxy(MainActivity.PREF__orbot_enabled);
+            conn = (HttpURLConnection) (proxy == null ? new URL(url).openConnection()
+                                                      : new URL(url).openConnection(proxy));
             conn.setRequestMethod("POST");
             conn.setConnectTimeout(8000);
             conn.setReadTimeout(8000);

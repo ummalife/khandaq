@@ -556,7 +556,8 @@ public class MainActivity extends AppCompatActivity
     static boolean PREF__allow_file_sharing_to_trifa_via_intent = true;
     static boolean PREF__compact_friendlist = false;
     static boolean PREF__compact_chatlist = true;
-    static boolean PREF__use_push_service = false;
+    // KHANDAQ (0.2.56): on by default, see PushServicePreference.
+    static boolean PREF__use_push_service = PushServicePreference.DEFAULT;
     static String[] PREF__toxirc_muted_peers = {};
     static boolean PREF__hide_setup_push_tip = true;
     static boolean PREF__show_friendnumber_on_friendlist = false;
@@ -875,6 +876,8 @@ public class MainActivity extends AppCompatActivity
         final SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
 
         FavoritesChatHelper.ensureInitialized(this);
+        // KHANDAQ (0.2.56): the database is open now; store the FCM token that came before it was.
+        HelperRelay.apply_notification_token_waiting_for_db();
 
         if (PREF__window_security)
         {
@@ -1386,12 +1389,12 @@ public class MainActivity extends AppCompatActivity
 
         try
         {
-            PREF__use_push_service = settings.getBoolean("use_push_service", false);
+            PREF__use_push_service = PushServicePreference.load(settings);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__use_push_service = false;
+            PREF__use_push_service = PushServicePreference.DEFAULT;
         }
 
         try
@@ -4285,12 +4288,12 @@ public class MainActivity extends AppCompatActivity
 
         try
         {
-            PREF__use_push_service = settings.getBoolean("use_push_service", false);
+            PREF__use_push_service = PushServicePreference.load(settings);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__use_push_service = false;
+            PREF__use_push_service = PushServicePreference.DEFAULT;
         }
 
         try
@@ -4397,6 +4400,8 @@ public class MainActivity extends AppCompatActivity
         // Pending FCM token from legacy NEED_ACK row (auto-apply, no dialog)
         try
         {
+            // KHANDAQ (0.2.56): and one that came before the database was open (kept again while it is not).
+            HelperRelay.apply_notification_token_waiting_for_db();
             if (get_g_opts(NOTIFICATION_TOKEN_DB_KEY_NEED_ACK) != null)
             {
                 HelperRelay.apply_notification_token_auto(get_g_opts(NOTIFICATION_TOKEN_DB_KEY_NEED_ACK));

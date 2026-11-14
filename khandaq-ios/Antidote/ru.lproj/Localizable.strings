@@ -861,9 +861,10 @@
 "air_compose_hint_live_format" = "Уйдёт сразу: %@ в сети";
 "air_compose_hint_saved" = "Заметка останется только на этом устройстве";
 "air_compose_hint_wait_format" = "Подождёт в пути: %@ не в сети. Уйдёт само";
+"air_compose_parts_format" = "Уйдёт %d сообщениями";
 "air_compose_placeholder" = "Сообщение";
 "air_compose_send" = "Отправить";
-"air_compose_send_blocked" = "Сообщение длиннее предела. Сократите его, чтобы отправить";
+"air_compose_send_blocked" = "Сейчас отправить нельзя: почему, сказано под полем";
 "air_compose_voice" = "Голосовое сообщение";
 "air_day_a11y_format" = "в сети %@";
 "air_day_a11y_none" = "отметок нет";

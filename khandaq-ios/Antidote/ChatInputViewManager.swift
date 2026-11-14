@@ -153,27 +153,48 @@ extension ChatInputViewManager: ChatInputViewDelegate {
             return
         }
 
-        // HINT: call OCTSubmanagerChatsImpl.m -> sendMessageToChat()
-        submanagerChats.sendMessage(to: chat, text: outgoing, type: .normal, successBlock: { _ in
-            DispatchQueue.main.async {
-                view.text = ""
-                self.endUserInteraction()
+        // KHANDAQ (long texts): a text longer than one message goes as several, in order, through
+        // OCTSubmanagerChatsImpl.m -> sendMessagePartsToChat(). The field is cleared once the core has
+        // taken a part or kept a refused one with "Retry"; one wake-up signal covers every part.
+        let parts = AirComposeLimit.parts(ofComposed: outgoing, body: text)
+        var cleared = false
+        var alerted = false
+        var pushScheduled = false
+        let clearField = {
+            guard !cleared else {
+                return
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
-                // The contact (and with it the chat) may have been removed in the meantime.
-                guard !self.chat.isInvalidated else {
+            cleared = true
+            view.text = ""
+            self.endUserInteraction()
+        }
+        submanagerChats.sendMessageParts(to: chat, parts: parts, type: .normal, successBlock: { _, _ in
+            DispatchQueue.main.async {
+                clearField()
+                guard !pushScheduled else {
                     return
                 }
-                os_log("PUSH:10_seconds")
-                self.submanagerChats.sendMessagePush(to: self.chat)
+                pushScheduled = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                    // The contact (and with it the chat) may have been removed in the meantime.
+                    guard !self.chat.isInvalidated else {
+                        return
+                    }
+                    os_log("PUSH:10_seconds")
+                    self.submanagerChats.sendMessagePush(to: self.chat)
+                }
             }
-        }, failureBlock: { error in
+        }, failureBlock: { error, index in
             DispatchQueue.main.async {
-                if let keep = self.onSendFailed, keep(outgoing, error as NSError?) {
-                    view.text = ""
-                    self.endUserInteraction()
+                let part = parts.indices.contains(index) ? parts[index] : outgoing
+                if let keep = self.onSendFailed, keep(part, error as NSError?) {
+                    clearField()
                     return
                 }
+                guard !alerted else {
+                    return
+                }
+                alerted = true
                 // E21: without an error the words still say what failed.
                 handleErrorWithType(.sendMessageToFriend, error: error as NSError?)
             }
@@ -952,13 +973,21 @@ fileprivate extension ChatInputViewManager {
             return
         }
 
-        submanagerChats.sendMessage(to: chat, text: outgoing, type: .normal, successBlock: { [weak self] message in
+        // KHANDAQ (long texts): a caption longer than one message goes as several; the first is the
+        // caption of the media, the rest follow it as texts.
+        let parts = AirComposeLimit.parts(ofComposed: outgoing, body: text)
+        var alerted = false
+        submanagerChats.sendMessageParts(to: chat, parts: parts, type: .normal, successBlock: { [weak self] message, index in
             // Mark as caption so it renders merged into the preceding media bubble (Telegram-style).
-            if let message = message {
+            if index == 0, let message = message {
                 self?.submanagerObjects.markMessage(asCaption: message)
             }
-        }, failureBlock: { error in
+        }, failureBlock: { error, _ in
             DispatchQueue.main.async {
+                guard !alerted else {
+                    return
+                }
+                alerted = true
                 // E21: without an error the words still say what failed.
                 handleErrorWithType(.sendMessageToFriend, error: error as NSError?)
             }

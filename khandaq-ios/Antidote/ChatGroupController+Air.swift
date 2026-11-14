@@ -158,8 +158,8 @@ extension ChatGroupController {
         return name.isEmpty ? nil : name
     }
 
-    /// The counter once a tenth of the room is left; over the limit the send button waits. The reply
-    /// header travels in the same message.
+    /// The counter once a tenth of the room is left, then how many messages a longer text goes as:
+    /// ChatGroupInputViewManager sends it in parts. The reply header travels in the first one.
     func updateGroupComposeLimit() {
         guard let hintView = chatInputView?.hintView else {
             return
@@ -170,10 +170,9 @@ extension ChatGroupController {
             chatInputView.sendBlocked = false
             return
         }
-        let bytes = MessageReplyHelper.encode(replyController.pendingMeta, bodyText: text).utf8.count
-        let remaining = AirGroupComposeLimit.remaining(forBytes: bytes)
-        hintView.setCounter(remaining: remaining)
-        chatInputView.sendBlocked = (remaining ?? 0) < 0
+        let head = MessageReplyHelper.encode(replyController.pendingMeta, bodyText: "")
+        hintView.setCounter(text: AirComposeLimit.counterText(for: text, head: head, maxBytes: AirGroupComposeLimit.bytes))
+        chatInputView.sendBlocked = false
     }
 
     // MARK: Asking for the right to write

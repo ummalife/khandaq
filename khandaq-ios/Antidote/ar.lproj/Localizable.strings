@@ -848,9 +848,10 @@
 "air_compose_hint_live_format" = "ستُرسل فورًا: %@ متصل";
 "air_compose_hint_saved" = "ستبقى الملاحظة على هذا الجهاز فقط";
 "air_compose_hint_wait_format" = "ستنتظر في الطريق: %@ غير متصل. ستُرسل تلقائيًا";
+"air_compose_parts_format" = "ستُرسل في %d رسائل";
 "air_compose_placeholder" = "رسالة";
 "air_compose_send" = "إرسال";
-"air_compose_send_blocked" = "الرسالة أطول من الحد المسموح. اختصرها لإرسالها";
+"air_compose_send_blocked" = "لا يمكن إرسالها الآن: السطر تحت الحقل يوضح السبب";
 "air_compose_voice" = "رسالة صوتية";
 "air_day_a11y_format" = "متصل %@";
 "air_day_a11y_none" = "لا توجد علامات";

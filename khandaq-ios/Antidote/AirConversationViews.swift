@@ -1194,13 +1194,18 @@ final class AirComposeHintView: UIView {
 
     /// `remaining` from AirComposeLimit; nil hides the counter.
     func setCounter(remaining: Int?) {
-        guard let remaining = remaining else {
+        setCounter(text: remaining.map { AirComposeLimit.counterText(remaining: $0) }, warning: (remaining ?? 0) < 0)
+    }
+
+    /// The words of the counter, from AirComposeLimit.counterText(for:); nil hides it. A warning is red.
+    func setCounter(text: String?, warning: Bool = false) {
+        guard let text = text else {
             counter.isHidden = true
             updateAccessibility()
             return
         }
-        counter.text = AirComposeLimit.counterText(remaining: remaining)
-        counter.textColor = remaining < 0 ? KQColor.danger : KQColor.ink3
+        counter.text = text
+        counter.textColor = warning ? KQColor.danger : KQColor.ink3
         counter.isHidden = false
         updateAccessibility()
     }

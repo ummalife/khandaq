@@ -134,13 +134,33 @@ extension ChatGroupInputViewManager: ChatInputViewDelegate {
 
         let outgoing = outgoingTextComposer?(text) ?? text
 
-        submanagerGroups.sendMessage(to: chat, text: outgoing, type: .normal, successBlock: { _ in
+        // KHANDAQ (long texts): toxcore refuses a group message longer than 1372 bytes, so a longer text
+        // goes as several, in order.
+        sendParts(AirComposeLimit.parts(ofComposed: outgoing, body: text, maxBytes: AirGroupComposeLimit.bytes),
+                  from: 0,
+                  clearing: view)
+    }
+
+    /// Sends `parts` from `index` on, one after another. The field is cleared once the first is taken;
+    /// a part refused after that puts what was not sent back into it.
+    private func sendParts(_ parts: [String], from index: Int, clearing view: ChatInputView) {
+        guard parts.indices.contains(index) else {
+            return
+        }
+        submanagerGroups.sendMessage(to: chat, text: parts[index], type: .normal, successBlock: { _ in
             DispatchQueue.main.async {
-                view.text = ""
-                self.saveEnteredText()
+                if index == 0 {
+                    view.text = ""
+                    self.saveEnteredText()
+                }
+                self.sendParts(parts, from: index + 1, clearing: view)
             }
         }, failureBlock: { error in
             DispatchQueue.main.async {
+                if index > 0 {
+                    view.text = parts[index...].joined(separator: "\n")
+                    self.saveEnteredText()
+                }
                 // E21: without an error the words still say what failed.
                 handleErrorWithType(.sendMessageToFriend, error: error as NSError?)
             }
@@ -292,11 +312,22 @@ extension ChatGroupInputViewManager: MediaSendPreviewControllerDelegate {
     }
 
     // Sends the caption text right after the media and flags it so it renders merged into the bubble.
+    // A caption longer than one message goes as several: the first is the caption, the rest follow it.
     func sendCaptionMessage(_ text: String) {
         let outgoing = outgoingTextComposer?(text) ?? text
-        submanagerGroups.sendMessage(to: chat, text: outgoing, type: .normal, successBlock: { [weak self] message in
-            if let message = message {
+        sendCaptionParts(AirComposeLimit.parts(ofComposed: outgoing, body: text, maxBytes: AirGroupComposeLimit.bytes), from: 0)
+    }
+
+    private func sendCaptionParts(_ parts: [String], from index: Int) {
+        guard parts.indices.contains(index) else {
+            return
+        }
+        submanagerGroups.sendMessage(to: chat, text: parts[index], type: .normal, successBlock: { [weak self] message in
+            if index == 0, let message = message {
                 self?.submanagerObjects.markMessage(asCaption: message)
+            }
+            DispatchQueue.main.async {
+                self?.sendCaptionParts(parts, from: index + 1)
             }
         }, failureBlock: { error in
             DispatchQueue.main.async {

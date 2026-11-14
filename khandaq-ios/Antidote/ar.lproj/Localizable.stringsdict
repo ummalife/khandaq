@@ -338,6 +338,30 @@
 			<string>%d رسالة</string>
 		</dict>
 	</dict>
+	<key>air_compose_parts_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>ستُرسل في %#@messages@</string>
+		<key>messages</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>%d رسالة</string>
+			<key>one</key>
+			<string>%d رسالة</string>
+			<key>two</key>
+			<string>%d رسالتين</string>
+			<key>few</key>
+			<string>%d رسائل</string>
+			<key>many</key>
+			<string>%d رسالة</string>
+			<key>other</key>
+			<string>%d رسالة</string>
+		</dict>
+	</dict>
 	<key>air_nc_verdict_left</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

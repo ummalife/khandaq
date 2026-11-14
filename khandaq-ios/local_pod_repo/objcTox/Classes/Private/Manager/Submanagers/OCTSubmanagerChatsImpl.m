@@ -277,6 +277,15 @@ static NSURLSession *khandaqPinnedPushSession(void)
 #endif
 }
 
+/**
+ * Wakes a friend who is offline for a message sent to them, again and again until that message is
+ * delivered (triggerPush).
+ */
+- (void)wakeFriendWithPushToken:(NSString *)pushToken forMessageWithHash:(NSString *)msgv3HashHex inChat:(OCTChat *)chat
+{
+    triggerPush(pushToken, msgv3HashHex, self, chat);
+}
+
 - (void)triggerWakePushForChat:(OCTChat *)chat
 {
     NSParameterAssert(chat);
@@ -639,15 +648,75 @@ static void triggerPush(NSString *used_pushToken,
              successBlock:(void (^)(OCTMessageAbstract *message))userSuccessBlock
              failureBlock:(void (^)(NSError *error))userFailureBlock
 {
+    // KHANDAQ (caption above its own photo): the moment of sending, to the fraction of a second. The
+    // text is stored only once the send operation has run, and it sorted by its whole-second msgV3
+    // timestamp, so it went before a photo sent a moment earlier: a caption showed above its photo.
+    [self sendMessageToChat:chat
+                       text:text
+                       type:type
+           sentDateInterval:[[NSDate date] timeIntervalSince1970]
+                 msgv3tssec:0
+                 wakeFriend:YES
+               successBlock:userSuccessBlock
+               failureBlock:userFailureBlock];
+}
+
+- (void)sendMessagePartsToChat:(OCTChat *)chat
+                         parts:(NSArray<NSString *> *)parts
+                          type:(OCTToxMessageType)type
+                  successBlock:(void (^)(OCTMessageAbstract *message, NSInteger index))userSuccessBlock
+                  failureBlock:(void (^)(NSError *error, NSInteger index))userFailureBlock
+{
+    NSParameterAssert(chat);
+    NSParameterAssert(parts);
+
+    // KHANDAQ (long texts): the parts of one text, sent in order on the serial send queue. A receiver
+    // sorts them by their whole-second msgV3 timestamps, where parts stamped in the same second tie and
+    // can show in any order, so part i is stamped i seconds after the first; here they sort by the
+    // moment of sending, a millisecond apart. Only the first part wakes a friend who is offline: the
+    // wake-up loop of one message covers the text, and the push relay counts every wake.
+    NSTimeInterval firstSentDateInterval = [[NSDate date] timeIntervalSince1970];
+    UInt32 firstSeconds = (UInt32)[[NSNumber numberWithDouble:firstSentDateInterval] integerValue];
+
+    [parts enumerateObjectsUsingBlock:^(NSString *part, NSUInteger index, BOOL *stop) {
+        [self sendMessageToChat:chat
+                           text:part
+                           type:type
+               sentDateInterval:firstSentDateInterval + index * 0.001
+                     msgv3tssec:firstSeconds + (UInt32)index
+                     wakeFriend:(index == 0)
+                   successBlock:^(OCTMessageAbstract *message) {
+            if (userSuccessBlock) {
+                userSuccessBlock(message, (NSInteger)index);
+            }
+        }
+                   failureBlock:^(NSError *error) {
+            if (userFailureBlock) {
+                userFailureBlock(error, (NSInteger)index);
+            }
+        }];
+    }];
+}
+
+/**
+ * @param sentDateInterval The moment of sending, to the fraction of a second: the text sorts by it here.
+ * @param stampedSeconds The msgV3 timestamp the receiver sorts the text by; 0 takes the whole seconds
+ *        of sentDateInterval.
+ * @param wakeFriend Whether a friend who is offline is woken for this text.
+ */
+- (void)sendMessageToChat:(OCTChat *)chat
+                     text:(NSString *)text
+                     type:(OCTToxMessageType)type
+         sentDateInterval:(NSTimeInterval)sentDateInterval
+               msgv3tssec:(UInt32)stampedSeconds
+               wakeFriend:(BOOL)wakeFriend
+             successBlock:(void (^)(OCTMessageAbstract *message))userSuccessBlock
+             failureBlock:(void (^)(NSError *error))userFailureBlock
+{
     NSParameterAssert(chat);
     NSParameterAssert(text);
 
     OCTFriend *friend = [chat.friends firstObject];
-
-    // KHANDAQ (caption above its own photo): the moment of sending, to the fraction of a second. The
-    // text is stored only once the send operation has run, and it sorted by its whole-second msgV3
-    // timestamp, so it went before a photo sent a moment earlier: a caption showed above its photo.
-    NSTimeInterval sentDateInterval = [[NSDate date] timeIntervalSince1970];
 
     uint8_t *message_v3_hash_bin = calloc(1, TOX_MSGV3_MSGID_LENGTH);
     uint8_t *message_v3_hash_hexstr = calloc(1, (TOX_MSGV3_MSGID_LENGTH * 2) + 1);
@@ -663,7 +732,7 @@ static void triggerPush(NSString *used_pushToken,
         msgv3HashHex = [[NSString alloc] initWithBytes:message_v3_hash_hexstr length:(TOX_MSGV3_MSGID_LENGTH * 2) encoding:NSUTF8StringEncoding];
 
         // HINT: set sent timestamp to now() as unixtimestamp value
-        msgv3tssec = [[NSNumber numberWithDouble: sentDateInterval] integerValue];
+        msgv3tssec = (stampedSeconds > 0) ? stampedSeconds : [[NSNumber numberWithDouble: sentDateInterval] integerValue];
 
         free(message_v3_hash_bin);
         free(message_v3_hash_hexstr);
@@ -705,8 +774,9 @@ static void triggerPush(NSString *used_pushToken,
 
         if ((error.code == OCTToxErrorFriendSendMessageFriendNotConnected) &&
             [strongSelf.dataSource managerUseFauxOfflineMessaging]) {
-            NSString *friend_pushToken = friend.pushToken;
-            triggerPush(friend_pushToken, msgv3HashHex, strongSelf, chat);
+            if (wakeFriend) {
+                [strongSelf wakeFriendWithPushToken:friend.pushToken forMessageWithHash:msgv3HashHex inChat:chat];
+            }
             successBlock(-1);
             return;
         }

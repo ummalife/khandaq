@@ -157,6 +157,21 @@ class OCTSubmanagerChatsMock: NSObject, OCTSubmanagerChats {
         }
     }
 
+    /// The parts of one long text, each stored as sendMessage stores a text.
+    func sendMessageParts(to chat: OCTChat!,
+                          parts: [String]!,
+                          type: OCTToxMessageType,
+                          successBlock userSuccessBlock: ((OCTMessageAbstract?, Int) -> Void)!,
+                          failureBlock userFailureBlock: ((Error?, Int) -> Void)!) {
+        for (index, part) in (parts ?? []).enumerated() {
+            sendMessage(to: chat, text: part, type: type, successBlock: { message in
+                userSuccessBlock?(message, index)
+            }, failureBlock: { error in
+                userFailureBlock?(error, index)
+            })
+        }
+    }
+
     func setIsTyping(_ isTyping: Bool, in chat: OCTChat!) throws {
         // nop
     }

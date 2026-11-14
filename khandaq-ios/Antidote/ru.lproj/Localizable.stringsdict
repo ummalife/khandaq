@@ -102,6 +102,26 @@
 			<string>%d байта</string>
 		</dict>
 	</dict>
+	<key>air_compose_parts_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>Уйдёт %#@messages@</string>
+		<key>messages</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d сообщением</string>
+			<key>few</key>
+			<string>%d сообщениями</string>
+			<key>many</key>
+			<string>%d сообщениями</string>
+			<key>other</key>
+			<string>%d сообщениями</string>
+		</dict>
+	</dict>
 	<key>air_presence_away_days</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

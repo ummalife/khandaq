@@ -859,9 +859,10 @@
 "air_compose_hint_live_format" = "Goes right away: %@ is online";
 "air_compose_hint_saved" = "The note stays only on this device";
 "air_compose_hint_wait_format" = "Waits in transit: %@ is offline. It will go on its own";
+"air_compose_parts_format" = "Goes as %d messages";
 "air_compose_placeholder" = "Message";
 "air_compose_send" = "Send";
-"air_compose_send_blocked" = "The message is over the limit. Shorten it to send it";
+"air_compose_send_blocked" = "It cannot be sent right now: the line under the field says why";
 "air_compose_voice" = "Voice message";
 "air_day_a11y_format" = "online %@";
 "air_day_a11y_none" = "no marks";

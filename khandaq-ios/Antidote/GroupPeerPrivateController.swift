@@ -379,11 +379,10 @@ private extension GroupPeerPrivateController {
             chatInputView.sendBlocked = !groupRight.canWritePrivately
             return
         }
-        // An NGC private message carries the whole text in one packet, as a group message does.
-        let remaining = AirGroupComposeLimit.remaining(forBytes: text.utf8.count)
-        hintView.setCounter(remaining: remaining)
-        // Over the limit, or nobody to take it now: the button waits, the line above says why.
-        chatInputView.sendBlocked = (remaining ?? 0) < 0 || !isMemberOnline
+        // An NGC private message carries as much as a group message: a longer text goes in parts.
+        hintView.setCounter(text: AirComposeLimit.counterText(for: text, maxBytes: AirGroupComposeLimit.bytes))
+        // Nobody to take it now: the button waits, the line above says why.
+        chatInputView.sendBlocked = !isMemberOnline
     }
 }
 
@@ -469,18 +468,37 @@ extension GroupPeerPrivateController: ChatInputViewDelegate {
             return
         }
 
-        submanagerGroups.sendPrivateMessage(text,
+        // KHANDAQ (long texts): toxcore refuses a private message longer than a group message, so a
+        // longer text goes as several, in order.
+        sendPrivateParts(AirComposeLimit.parts(of: text, maxBytes: AirGroupComposeLimit.bytes), from: 0)
+    }
+
+    /// Sends `parts` from `index` on, one after another. The field is cleared once the first is taken;
+    /// a part refused after that puts what was not sent back into it.
+    private func sendPrivateParts(_ parts: [String], from index: Int) {
+        guard parts.indices.contains(index) else {
+            return
+        }
+        submanagerGroups.sendPrivateMessage(parts[index],
                                             toPeerId: peerId,
                                             in: chat,
                                             successBlock: { [weak self] _ in
                                                 // Realm notification reloads the table.
-                                                self?.chatInputView.text = ""
+                                                if index == 0 {
+                                                    self?.chatInputView.text = ""
+                                                }
+                                                DispatchQueue.main.async {
+                                                    self?.sendPrivateParts(parts, from: index + 1)
+                                                }
                                             },
                                             failureBlock: { [weak self] error in
                                                 // The text stays in the field; the line under it says
                                                 // what failed (E21: where the operation is).
                                                 guard let self = self else {
                                                     return
+                                                }
+                                                if index > 0 {
+                                                    self.chatInputView.text = parts[index...].joined(separator: "\n")
                                                 }
                                                 let words = errorAlert(for: .sendGroupPrivateMessage, error: error as NSError?)
                                                 self.sendFailure = words?.title ?? String(localized: "group_private_message_failed")

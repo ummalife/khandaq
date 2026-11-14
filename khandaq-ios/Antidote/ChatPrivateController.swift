@@ -3731,7 +3731,8 @@ extension ChatPrivateController {
         hintView.setHint(ownNode ?? hint, animated: animated)
     }
 
-    /// The length counter once a tenth of the room is left; over the limit the send button waits.
+    /// The length counter once a tenth of the room is left, then how many messages a longer text goes
+    /// as. Nothing waits for its length: ChatInputViewManager sends a long text in parts.
     fileprivate func updateComposeLimit() {
         guard let hintView = chatInputView?.hintView else {
             return
@@ -3742,11 +3743,10 @@ extension ChatPrivateController {
             chatInputView.sendBlocked = false
             return
         }
-        // The reply header travels in the same message.
-        let bytes = MessageReplyHelper.encode(replyController.pendingMeta, bodyText: text).utf8.count
-        let remaining = AirComposeLimit.remaining(forBytes: bytes)
-        hintView.setCounter(remaining: remaining)
-        chatInputView.sendBlocked = (remaining ?? 0) < 0
+        // The reply header travels in the first message.
+        let head = MessageReplyHelper.encode(replyController.pendingMeta, bodyText: "")
+        hintView.setCounter(text: AirComposeLimit.counterText(for: text, head: head))
+        chatInputView.sendBlocked = false
     }
 
     // MARK: Search

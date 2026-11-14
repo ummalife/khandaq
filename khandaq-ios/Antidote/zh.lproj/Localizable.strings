@@ -848,9 +848,10 @@
 "air_compose_hint_live_format" = "会立即发出：%@ 在线";
 "air_compose_hint_saved" = "笔记只保存在此设备上";
 "air_compose_hint_wait_format" = "将在传送中等待：%@ 不在线，之后会自动发出";
+"air_compose_parts_format" = "将分 %d 条消息发出";
 "air_compose_placeholder" = "消息";
 "air_compose_send" = "发送";
-"air_compose_send_blocked" = "消息超出长度上限，请缩短后再发送";
+"air_compose_send_blocked" = "现在无法发送：输入框下方的说明给出了原因";
 "air_compose_voice" = "语音消息";
 "air_day_a11y_format" = "在线时段：%@";
 "air_day_a11y_none" = "没有记录";

@@ -81,6 +81,28 @@
              failureBlock:(void (^)(NSError *error))userFailureBlock;
 
 /**
+ * Send the parts of one long text to specific chat, in order, each as sendMessageToChat sends a text.
+ *
+ * The receiver sorts a message by its msgV3 timestamp, which has whole seconds, so part i is stamped
+ * i seconds after the first: parts sent within one second keep their order there. Only the first part
+ * wakes a friend who is offline: its wake-up loop covers the text, and the push relay counts each wake.
+ *
+ * @param chat Chat send the parts to.
+ * @param parts Texts that each fit one message.
+ * @param type Type of message to send.
+ * @param successBlock Block called for each part that was successfully sent, in order.
+ * @param message Message that was sent.
+ * @param index Index of the part in `parts`.
+ * @param failureBlock Block called for each part submanager failed to send.
+ * @param error Error that occurred. See OCTToxErrorFriendSendMessage for all error codes.
+ */
+- (void)sendMessagePartsToChat:(OCTChat *)chat
+                         parts:(NSArray<NSString *> *)parts
+                          type:(OCTToxMessageType)type
+                  successBlock:(void (^)(OCTMessageAbstract *message, NSInteger index))userSuccessBlock
+                  failureBlock:(void (^)(NSError *error, NSInteger index))userFailureBlock;
+
+/**
  * Trigger PUSH Message to yourself
  */
 - (void)sendOwnPush;

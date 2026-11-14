@@ -4066,6 +4066,9 @@ public class HelperGroup
         {
             return;
         }
+        // A friend's late answer to our join by ID is taken at once (group_invite_cb): it would bring the user back
+        // into the group they leave, as on the desktop and iOS.
+        clear_pending_friend_assisted_join(tox_group_by_groupnum__wrapper(group_num));
         int sent = 0;
         try
         {

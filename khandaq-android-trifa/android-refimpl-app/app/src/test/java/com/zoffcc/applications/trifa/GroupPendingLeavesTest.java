@@ -318,4 +318,36 @@ public class GroupPendingLeavesTest
         assertFalse(GroupPendingLeaves.noticeWasQueued(-104, 5));
         assertFalse(GroupPendingLeaves.noticeWasQueued(-101, 5));
     }
+
+    @Test
+    public void leaving_forgets_the_invitation_we_asked_friends_for() throws Exception
+    {
+        // An invitation that answers our own join by ID is taken at once (group_invite_cb). One that comes after the
+        // user left the group, while toxcore still holds it or later, would bring them back into it.
+        final String helper = source("HelperGroup.java");
+        final int leave = helper.indexOf("static void leave_group_with_notice(");
+        assertTrue(leave > 0);
+        final int forget = helper.indexOf("clear_pending_friend_assisted_join(tox_group_by_groupnum__wrapper(group_num))",
+                                          leave);
+        assertTrue(forget > leave);
+        assertTrue(forget < helper.indexOf("GroupPeerKeys.leaveNoticePacket()", leave));
+        final String main = source("MainActivity.java");
+        final int invite = main.indexOf("static void android_tox_callback_group_invite_cb_method(");
+        assertTrue(invite > 0);
+        assertTrue(main.indexOf("HelperGroup.is_pending_friend_assisted_join(incoming_id)", invite) > invite);
+    }
+
+    private static String source(final String name) throws java.io.IOException
+    {
+        // Gradle runs unit tests from the module directory; an IDE may use the project root.
+        for (final String root : new String[]{"src/main/java", "app/src/main/java"})
+        {
+            final java.io.File file = new java.io.File(root, "com/zoffcc/applications/trifa/" + name);
+            if (file.isFile())
+            {
+                return new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+            }
+        }
+        throw new AssertionError(name + " not found from " + new java.io.File("").getAbsolutePath());
+    }
 }

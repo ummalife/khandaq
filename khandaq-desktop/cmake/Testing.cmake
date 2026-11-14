@@ -95,6 +95,7 @@ auto_test(widget airtray "res/air.qrc" "") # the Plex faces
 auto_test(widget airmediaparts "" "")
 auto_test(widget airyoupage "" "")
 auto_test(widget chatquotepreview "res/air.qrc" "") # the x icon
+auto_test(widget removechatdialog "" "mock_library")
 
 if (UNIX)
   auto_test(platform posixsignalnotifier "" "")

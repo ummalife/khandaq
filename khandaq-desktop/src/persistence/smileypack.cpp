@@ -25,6 +25,7 @@
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QStringBuilder>
+#include <QTextBoundaryFinder>
 #include <QtConcurrent/QtConcurrentRun>
 #include <QTimer>
 
@@ -62,6 +63,9 @@ const QString RICH_TEXT_PATTERN = QStringLiteral("<img title=\"%1\" src=\"key:%1
 const QString EMOTICONS_FILE_NAME = QStringLiteral("emoticons.xml");
 
 constexpr int CLEANUP_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+
+const QChar ZERO_WIDTH_JOINER{0x200D};
+const QChar EMOJI_PRESENTATION{0xFE0F};
 
 /**
  * @brief Construct list of standard directories with "emoticons" sub dir, whether these directories
@@ -101,6 +105,38 @@ bool isAscii(const QString& string)
     constexpr auto asciiExtMask = 0x80;
 
     return (string.toUtf8()[0] & asciiExtMask) == 0;
+}
+
+/**
+ * @brief Tells whether a key found in a message is the whole character the reader sees there
+ * @param graphemes Grapheme cluster boundaries of the message
+ * @param message The message the key was found in
+ * @param start Where the key starts
+ * @param end Where the key ends
+ * @return True if the key is a grapheme cluster of its own, alone or followed by U+FE0F only
+ */
+bool isWholeCharacter(QTextBoundaryFinder& graphemes, const QString& message, int start, int end)
+{
+    const auto atBoundary = [&graphemes](int position) -> bool {
+        graphemes.setPosition(position);
+        return graphemes.isAtBoundary();
+    };
+    // KHANDAQ (QA 2026-11-14, F1): Qt 5.12, which the Windows build bundles, has the cluster rules
+    // of Unicode 10: a joiner (U+200D) followed by an emoji that was not joinable then ends the
+    // character, so the fire of the heart on fire (U+2764 U+FE0F U+200D U+1F525) looks like a
+    // character of its own. An emoji after a joiner is a part of a sequence whatever the rules of
+    // the Qt at hand say.
+    if (!atBoundary(start) || (start > 0 && message.at(start - 1) == ZERO_WIDTH_JOINER)) {
+        return false;
+    }
+    // KHANDAQ (QA 2026-11-14, F1): U+FE0F only asks for the colour picture of the emoji before it,
+    // and the pack has that picture under the bare key (U+2764 U+FE0F is U+2764 there). The
+    // selector stays in the text after the picture, as it always has, so a copy keeps what the
+    // sender typed.
+    if (end < message.size() && message.at(end) == EMOJI_PRESENTATION) {
+        ++end;
+    }
+    return atBoundary(end);
 }
 
 } // namespace
@@ -294,6 +330,7 @@ void SmileyPack::constructRegex()
  * @brief Replaces all found text emoticons to HTML reference with its according icon filename
  * @param msg Message where to search for emoticons
  * @return Formatted copy of message
+ * @note An emoji that is only a part of a character, such as 👍 of 👍🏽, stays text.
  */
 QString SmileyPack::smileyfied(const QString& msg)
 {
@@ -301,11 +338,25 @@ QString SmileyPack::smileyfied(const QString& msg)
     QString result(msg);
 
     int replaceDiff = 0;
-    QRegularExpressionMatchIterator iter = smilify.globalMatch(result);
+    QRegularExpressionMatchIterator iter = smilify.globalMatch(msg);
+    if (!iter.hasNext()) {
+        return result;
+    }
+    // KHANDAQ (QA 2026-11-14, F1): a key of the pack can be a part of a longer character: 👍 of 👍🏽,
+    // the letters 🇹 and 🇷 of the flag 🇹🇷, 👨 of the family U+1F468 U+200D U+1F469 U+200D U+1F467.
+    // Replacing such a part with its picture left the rest of the character alone (the skin tone as
+    // a brown square, the flag as two letters in circles). A part stays text, and the system font
+    // draws the whole character. A key that is the whole character still gets its picture, the
+    // longest key first as before: the regex tries the keys of several code points (the flags)
+    // before the others.
+    QTextBoundaryFinder graphemes(QTextBoundaryFinder::Grapheme, msg);
     while (iter.hasNext()) {
         QRegularExpressionMatch match = iter.next();
         int startPos = match.capturedStart();
         int keyLength = match.capturedLength();
+        if (!isWholeCharacter(graphemes, msg, startPos, startPos + keyLength)) {
+            continue;
+        }
         QString imgRichText = SmileyPack::getAsRichText(match.captured());
         result.replace(startPos + replaceDiff, keyLength, imgRichText);
         replaceDiff += imgRichText.length() - keyLength;

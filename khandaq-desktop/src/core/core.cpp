@@ -2191,6 +2191,31 @@ uint32_t Core::joinGroupchat(const GroupInvite& inviteInfo)
         if (leavingNum != std::numeric_limits<uint32_t>::max()) {
             return leavingNum;
         }
+        // 0.2.56: toxcore takes an invite into a group it has already (gc_accept_invite does not
+        // look, unlike a join by its ID), and would then hold the group twice. It hands over no
+        // invite into such a group, but an invitation kept with the profile can be joined after
+        // the group was joined by its ID.
+        const QByteArray chatId = invite.left(TOX_GROUP_CHAT_ID_SIZE);
+        Tox_Err_Group_State_Queries stateError;
+        const uint32_t existingNum = tox_group_by_chat_id(
+            tox.get(), reinterpret_cast<const uint8_t*>(chatId.constData()), &stateError);
+        if (stateError == TOX_ERR_GROUP_STATE_QUERIES_OK
+            && existingNum != std::numeric_limits<uint32_t>::max()) {
+            Tox_Err_Group_State_Queries nameError;
+            if (tox_group_get_name_size(tox.get(), existingNum, &nameError) > 0) {
+                // It synced, and holds our place in the group: it opens, as a join by its ID does.
+                return joinGroupByChatId(chatId);
+            }
+            // It never synced, so nothing of it is lost: it is left without a notice, and the
+            // invite accepted once toxcore let go of it, as for a group we are leaving.
+            Tox_Err_Group_Leave leaveError;
+            if (tox_group_leave(tox.get(), existingNum, nullptr, 0, &leaveError)) {
+                qDebug() << "Group" << existingNum << "that never synced is replaced by an invite";
+                exitingGroups.insert(static_cast<int>(existingNum), QByteArray());
+                joinsAfterGroupLeaves.push_back([this, inviteInfo] { joinGroupchat(inviteInfo); });
+                return existingNum;
+            }
+        }
     }
 
     QString selfName = getUsername();

@@ -21,6 +21,7 @@
 #include "mock/mockcoresettings.h"
 #include "src/core/core.h"
 #include "src/model/air/airgroupleave.h"
+#include "src/model/groupinvite.h"
 
 #include <QMutex>
 #include <QSignalSpy>
@@ -50,7 +51,8 @@ QByteArray chatIdOf(const Core& core, int group)
 
 // 0.2.56: a group joined by its ID, on cores that are never started unless a test says so: such a
 // group never finds a member, and so never syncs. toxcore saves a group only once it synced, so
-// the profile keeps the chat ids of those joins, and the next start joins them again.
+// the profile keeps the chat ids of those joins, and the next start joins them again. An
+// invitation into such a group replaces it; one into a group that synced opens that group.
 class TestCoreGroupJoin : public QObject
 {
     Q_OBJECT
@@ -61,6 +63,8 @@ private slots:
     void aKeptJoinThatToxcoreLoadedIsForgotten();
     void aGroupLeftBeforeItSyncsIsForgotten();
     void theGroupsLoadWithTheOnesJoinedAgain();
+    void anInvitationReplacesAGroupThatNeverSynced();
+    void anInvitationIntoAGroupThatSyncedOpensIt();
 
 private:
     ToxCorePtr makeCore(const QByteArray& savedata = QByteArray());
@@ -233,6 +237,51 @@ void TestCoreGroupJoin::theGroupsLoadWithTheOnesJoinedAgain()
     QVERIFY(shown.contains(joinedId));
     // A group that did not sync has no name yet: it shows with the start of its key.
     QVERIFY(!titles.contains(QString()));
+}
+
+void TestCoreGroupJoin::anInvitationReplacesAGroupThatNeverSynced()
+{
+    const QByteArray chatId = foundGroup();
+    QCOMPARE(chatId.size(), TOX_GROUP_CHAT_ID_SIZE);
+    ToxCorePtr core = makeCore();
+    QVERIFY(core);
+    const uint32_t stuck = core->joinGroupByChatId(chatId);
+    QVERIFY(stuck != std::numeric_limits<uint32_t>::max());
+    const QString kept = core->getUnsyncedGroupJoins();
+    QVector<int> joined;
+    connect(core.get(), &Core::groupJoined, this, [&joined](int number) { joined.append(number); });
+
+    // An invitation kept with the profile from before the join: toxcore would take it beside the
+    // group it has. The group goes first; here no friend sent the invitation, and toxcore refuses
+    // it then.
+    const GroupInvite invite(0, chatId + QByteArray(32, '\0'), QStringLiteral("Join"));
+    QCOMPARE(core->joinGroupchat(invite), stuck);
+    QVERIFY(hasGroup(*core, chatId));
+    core->leavePendingGroupsNow();
+    QVERIFY(!hasGroup(*core, chatId));
+    QVERIFY(joined.isEmpty());
+    // Until the group syncs, the next start joins it by its ID again.
+    QCOMPARE(core->getUnsyncedGroupJoins(), kept);
+}
+
+void TestCoreGroupJoin::anInvitationIntoAGroupThatSyncedOpensIt()
+{
+    ToxCorePtr core = makeCore();
+    QVERIFY(core);
+    const int group = core->createGroup(QStringLiteral("Synced"), TOX_GROUP_PRIVACY_STATE_PUBLIC);
+    QVERIFY(group >= 0);
+    const QByteArray chatId = chatIdOf(*core, group);
+    QVector<int> joined;
+    connect(core.get(), &Core::groupJoined, this, [&joined](int number) { joined.append(number); });
+
+    // It holds our place in the group: it stays, and opens as a join by its ID does.
+    const GroupInvite invite(0, chatId + QByteArray(32, '\0'), QStringLiteral("Synced"));
+    QCOMPARE(core->joinGroupchat(invite), static_cast<uint32_t>(group));
+    QCOMPARE(joined, QVector<int>{group});
+    core->leavePendingGroupsNow();
+    QVERIFY(hasGroup(*core, chatId));
+    QCOMPARE(chatIdOf(*core, group), chatId);
+    QCOMPARE(static_cast<int>(tox_group_get_number_groups(core->getTox())), 1);
 }
 
 QTEST_GUILESS_MAIN(TestCoreGroupJoin)

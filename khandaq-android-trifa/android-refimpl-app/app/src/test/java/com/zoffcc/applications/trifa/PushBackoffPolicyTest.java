@@ -148,4 +148,20 @@ public class PushBackoffPolicyTest
         assertEquals(0, PushBackoffPolicy.strikesForTest(URL));
         assertEquals(0, PushBackoffPolicy.strikesForTest(OTHER));
     }
+
+    @Test
+    public void aRefusedWakeUsesUpAnAttemptAndA429OrNoAnswerDoesNot()
+    {
+        // KHANDAQ (0.2.56): refused wakes went out again on every 5-second pass while push was on.
+        for (final int refused : new int[]{301, 400, 401, 403, 404, 410, 500, 502, 503})
+        {
+            assertTrue("HTTP " + refused, PushBackoffPolicy.refusalUsesWakeAttempt(refused));
+        }
+        assertFalse("a 429 has its own backoff", PushBackoffPolicy.refusalUsesWakeAttempt(429));
+        assertFalse("a call that got through is counted where it succeeds",
+                    PushBackoffPolicy.refusalUsesWakeAttempt(200));
+        assertFalse(PushBackoffPolicy.refusalUsesWakeAttempt(204));
+        assertFalse("no answer at all", PushBackoffPolicy.refusalUsesWakeAttempt(-1));
+        assertFalse(PushBackoffPolicy.refusalUsesWakeAttempt(0));
+    }
 }

@@ -126,6 +126,18 @@ final class PushBackoffPolicy
         }
     }
 
+    /**
+     * KHANDAQ (0.2.56): whether a refusal from the relay uses up one of a message's wake attempts
+     * (TrifaToxService.PUSH_WAKE_BACKOFF_MS), as a call that got through does. Uncounted, a refused wake went out
+     * again on every 5-second pass of resend_push_for_v3_messages for as long as the message stayed undelivered:
+     * a token the relay cannot reach, or a wake it refuses without the recipient's capability. A 429 has its own
+     * backoff above, and a call that got no answer at all (no network) uses up nothing.
+     */
+    static boolean refusalUsesWakeAttempt(final int httpCode)
+    {
+        return httpCode >= 300 && httpCode < 600 && httpCode != 429;
+    }
+
     /** Test seam. */
     static void resetAllForTest()
     {

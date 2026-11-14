@@ -2626,6 +2626,11 @@ public class HelperFriend
                         update_message_in_db_sent_push_set(friend_pubkey, message_timestamp_circa);
                     }
             }
+            else if (update_message_flag && PushBackoffPolicy.refusalUsesWakeAttempt(response.code()))
+            {
+                // KHANDAQ (0.2.56): a refusal is an attempt too, so the next one waits for its turn.
+                update_message_in_db_sent_push_set(friend_pubkey, message_timestamp_circa);
+            }
         }
         catch (Exception e1)
         {

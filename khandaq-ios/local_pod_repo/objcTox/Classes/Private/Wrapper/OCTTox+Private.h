@@ -107,6 +107,12 @@ tox_group_private_message_cb groupPrivateMessageCallback;
  */
 + (NSUInteger)utf8LengthOfMessage:(NSString *)message fittingLength:(NSUInteger)maxLength;
 
+/**
+ * The status of a group as OCTToxDelegate and -groupConnectionStatusForGroupNumber: give it (1 connected,
+ * 0 connecting, -1 disconnected) for the GC_Conn_State the group connection callback passes.
+ */
++ (int32_t)groupConnectionStatusFromCConnectionState:(int32_t)state;
+
 - (BOOL)sendLosslessPacketWithFriendNumber:(OCTToxFriendNumber)friendNumber
                                       bytes:(NSData *)bytes
                                       error:(NSError **)error;

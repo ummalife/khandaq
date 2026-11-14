@@ -3814,6 +3814,25 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
     return fitting;
 }
 
+// GC_Conn_State of toxcore's group_common.h, which is not a public header: what the group connection
+// callback passes as its status.
+enum {
+    kOCTGroupConnStateConnecting = 2,
+    kOCTGroupConnStateConnected = 3,
+};
+
++ (int32_t)groupConnectionStatusFromCConnectionState:(int32_t)state
+{
+    switch (state) {
+        case kOCTGroupConnStateConnected:
+            return 1;
+        case kOCTGroupConnStateConnecting:
+            return 0;
+        default:
+            return -1;
+    }
+}
+
 @end
 
 #pragma mark -  Callbacks
@@ -4472,12 +4491,17 @@ void groupConnectionStatusCallback(
     void *userData)
 {
     OCTTox *tox = (__bridge OCTTox *)(userData);
+    // KHANDAQ (group connection): toxcore passes its own connection state here (1 disconnected,
+    // 2 connecting, 3 connected), not the 1 / 0 / -1 of tox_group_is_connected that the delegate and
+    // every poll speak. Every state read as connected, so a group still connecting, or disconnected,
+    // had its waiting messages sent into it as if it were connected.
+    int32_t connectionStatus = [OCTTox groupConnectionStatusFromCConnectionState:status];
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        OCTLogCInfo(@"groupConnectionStatusCallback group=%u status=%d", tox, groupNumber, status);
+        OCTLogCInfo(@"groupConnectionStatusCallback group=%u state=%d status=%d", tox, groupNumber, status, connectionStatus);
 
         if ([tox.delegate respondsToSelector:@selector(tox:groupConnectionStatusChanged:groupNumber:)]) {
-            [tox.delegate tox:tox groupConnectionStatusChanged:status groupNumber:groupNumber];
+            [tox.delegate tox:tox groupConnectionStatusChanged:connectionStatus groupNumber:groupNumber];
         }
     });
 }

@@ -59,6 +59,26 @@ static NSString *const kOCTGroupPendingLeavesStoreKey = @"kqpendingleaves";
 // KHANDAQ (#25): opening a group chat forces an immediate reconnect of a stalled group instead of
 // waiting up to 90s for the maintenance tick. Rate-limited so rapid open/close can't hammer.
 static const NSTimeInterval kOCTGroupForegroundReconnectMinIntervalSec = 5.0;
+// KHANDAQ (group connection): a group message sent once a peer joins is sent again this long after,
+// in case the group connects only with the sync response that follows the join.
+static const NSTimeInterval kOCTGroupPendingFlushAfterJoinSec = 3.0;
+
+/**
+ * KHANDAQ (group connection): whether a message sent to the group now reaches somebody, for the status
+ * -[OCTTox groupConnectionStatusForGroupNumber:error:] gave. toxcore sends a group message to its
+ * confirmed peers only, yet refuses one only while the group is disconnected: still connecting with
+ * nobody confirmed, it reports the message sent. A group can also stay connecting with peers confirmed
+ * (it connects on a sync response, which comes for the handshakes it started), and a message sent then
+ * does reach them. The peer count counts this client too. Call on the tox queue.
+ */
+static BOOL OCTGroupIsReadyToSend(OCTTox *tox, OCTToxGroupNumber groupNumber, int32_t connectionStatus)
+{
+    if (connectionStatus == 1) {
+        return YES;
+    }
+
+    return connectionStatus == 0 && [tox groupPeerCountForGroupNumber:groupNumber error:nil] > 1;
+}
 
 NSString *const kOCTSubmanagerGroupsErrorDomain = @"OCTSubmanagerGroupsErrorDomain";
 
@@ -1041,6 +1061,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 
     OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)chat.groupNumber;
     __block BOOL sent = NO;
+    BOOL waitsForConnection = NO;
 
     for (NSUInteger attempt = 0; attempt < 4; attempt++) {
         if (attempt > 0) {
@@ -1053,16 +1074,37 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
             }];
         }
 
+        __block BOOL ready = NO;
         __block uint32_t localMessageId = 0;
         __block NSError *localError = nil;
+        BOOL firstAttempt = (attempt == 0);
 
+        // KHANDAQ (group connection): toxcore refuses a group message only while the group is
+        // disconnected. Still connecting, as after every reconnect, it "sends" the message to the
+        // peers it has confirmed, none yet, and reports success: the message showed as sent and reached
+        // nobody. Until a message reaches somebody it waits in the pending queue, which is sent once it
+        // does (a peer joins, the group connects, the group maintenance).
         [self performSyncOnToxQueue:^(OCTTox *tox) {
-            sent = [tox groupSendMessage:text
-                                    type:type
-                             groupNumber:groupNumber
-                               messageId:&localMessageId
-                                   error:&localError];
+            int32_t connectionStatus = [tox groupConnectionStatusForGroupNumber:groupNumber error:nil];
+            ready = OCTGroupIsReadyToSend(tox, groupNumber, connectionStatus);
+
+            if (ready) {
+                sent = [tox groupSendMessage:text
+                                        type:type
+                                 groupNumber:groupNumber
+                                   messageId:&localMessageId
+                                       error:&localError];
+            }
+            else if (connectionStatus < 0 && firstAttempt) {
+                // Disconnected: reconnect it, as the retries below did, and wait for the connection.
+                [tox groupReconnectWithGroupNumber:groupNumber error:nil];
+            }
         }];
+
+        if (! ready) {
+            waitsForConnection = YES;
+            break;
+        }
 
         if (sent) {
             messageId = localMessageId;
@@ -1081,11 +1123,11 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     }
 
     if (! sent) {
-        if ([self shouldQueueGroupMessageForError:error]) {
+        if (waitsForConnection || [self shouldQueueGroupMessageForError:error]) {
             OCTMessageAbstract *pendingMessage = [realmManager addGroupPendingMessageWithText:text
                                                                                          type:type
                                                                                          chat:chat];
-            OCTLogInfo(@"NGC group message queued while disconnected chat=%@", chat.uniqueIdentifier);
+            OCTLogInfo(@"NGC group message queued until the group is connected chat=%@", chat.uniqueIdentifier);
 
             if (successBlock) {
                 successBlock(pendingMessage);
@@ -2551,9 +2593,11 @@ groupNumber:(OCTToxGroupNumber)groupNumber
             [self clearPendingFriendAssistedJoinForChatIdHex:chat.groupChatIdHex];
             [self flushPendingGroupMessagesForChat:chat];
         }
-        else if (status <= 0) {
-            [tox groupReconnectWithGroupNumber:groupNumber error:nil];
-        }
+        // KHANDAQ (group connection): no reconnect from here. The status used to come as toxcore's raw
+        // state, never 0 or below, so a reconnect here never ran; now that 0 and -1 do come, a group
+        // still connecting must be left to connect (a reconnect restarts its announce lookup), and a
+        // disconnected one is reconnected, as before, by the group maintenance, when its chat is
+        // opened and when a message is sent to it.
 
         [self refreshPeersForChat:chat];
 
@@ -2615,6 +2659,13 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         if (peerCount > 1) {
             [self clearPendingFriendAssistedJoinForChatIdHex:chat.groupChatIdHex];
         }
+
+        // KHANDAQ (group connection): a peer confirmed is the moment a waiting message first reaches
+        // somebody. toxcore marks the group connected when a sync response comes, and reports that
+        // outside the pass that calls the connection callback, so the callback seldom comes: send what
+        // waits now, and once more a moment later for the sync response after the join.
+        [self flushPendingGroupMessagesForChat:chat];
+        [self schedulePendingGroupMessagesFlushForChatUniqueIdentifier:chat.uniqueIdentifier];
 
         if (selfPeerId == 0 || peerId != selfPeerId) {
             // Announce a peer's FIRST-ever join only: not already known from a prior session (persistent),
@@ -5401,9 +5452,31 @@ groupNumber:(OCTToxGroupNumber)groupNumber
            error.code == OCTToxErrorGroupSendMessageFailSend;
 }
 
+/**
+ * KHANDAQ (group connection): whether a message sent to the group now reaches anybody. See
+ * OCTGroupIsReadyToSend. -isGroupConnectedForChat: also counts a group still connecting with nobody
+ * confirmed, which is right for what the screen shows but not for sending.
+ */
+- (BOOL)isGroupReadyToSendForChat:(OCTChat *)chat
+{
+    if (chat.groupNumber < 0) {
+        return NO;
+    }
+
+    OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)chat.groupNumber;
+    __block BOOL ready = NO;
+
+    [self performSyncOnToxQueue:^(OCTTox *tox) {
+        int32_t connectionStatus = [tox groupConnectionStatusForGroupNumber:groupNumber error:nil];
+        ready = OCTGroupIsReadyToSend(tox, groupNumber, connectionStatus);
+    }];
+
+    return ready;
+}
+
 - (void)flushPendingGroupMessagesForChat:(OCTChat *)chat
 {
-    if (! chat || chat.groupNumber < 0 || ! [self isGroupConnectedForChat:chat]) {
+    if (! chat || chat.groupNumber < 0 || ! [self isGroupReadyToSendForChat:chat]) {
         return;
     }
 
@@ -5425,6 +5498,32 @@ groupNumber:(OCTToxGroupNumber)groupNumber
             [self flushPendingGroupFileMessage:pendingMessage chat:chat groupNumber:groupNumber];
         }
     }
+}
+
+- (void)schedulePendingGroupMessagesFlushForChatUniqueIdentifier:(NSString *)chatUniqueIdentifier
+{
+    if (chatUniqueIdentifier.length == 0) {
+        return;
+    }
+
+    __weak typeof(self) weakSelf = self;
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kOCTGroupPendingFlushAfterJoinSec * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        __strong typeof(weakSelf) self = weakSelf;
+
+        if (! self) {
+            return;
+        }
+
+        // The chat may have been left in the meantime.
+        OCTChat *chat = [[self.dataSource managerGetRealmManager] objectWithUniqueIdentifier:chatUniqueIdentifier
+                                                                                       class:[OCTChat class]];
+
+        if (chat && ! chat.isInvalidated && chat.groupNumber >= 0 &&
+            ! [self isGroupNumberBeingLeft:(OCTToxGroupNumber)chat.groupNumber]) {
+            [self flushPendingGroupMessagesForChat:chat];
+        }
+    });
 }
 
 - (void)flushAllPendingGroupMessagesIfNeeded
@@ -5573,6 +5672,11 @@ groupNumber:(OCTToxGroupNumber)groupNumber
             if (connectionStatus > 0) {
                 [self flushPendingGroupMessagesForChat:chat];
                 [connectedGroupNumbers addObject:@(groupNumber)];
+            }
+            else if (OCTGroupIsReadyToSend(tox, groupNumber, connectionStatus)) {
+                // KHANDAQ (group connection): still connecting, with a peer confirmed: what waits
+                // reaches that peer.
+                [self flushPendingGroupMessagesForChat:chat];
             }
         }
     }];

@@ -256,7 +256,8 @@ groupNumber:(OCTToxGroupNumber)groupNumber
   messageId:(uint32_t)messageId;
 
 /**
- * Group connection status changed. 1 = connected, 0 = connecting, -1 = invalid group.
+ * Group connection status changed. 1 = connected, 0 = connecting, -1 = disconnected or invalid group,
+ * as -[OCTTox groupConnectionStatusForGroupNumber:error:] answers.
  */
 - (void)tox:(OCTTox *)tox groupConnectionStatusChanged:(int32_t)status
 groupNumber:(OCTToxGroupNumber)groupNumber;

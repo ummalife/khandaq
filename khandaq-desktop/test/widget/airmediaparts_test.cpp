@@ -18,20 +18,44 @@
 */
 
 #include "src/widget/air/airmediaparts.h"
+#include "src/widget/air/airstyle.h"
 #include "src/widget/air/airwidgets.h"
 
 #include <QApplication>
+#include <QImage>
 #include <QLabel>
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 
 #include <limits>
 
+using AirTokens::Color;
+
 namespace {
 
 AirButton* buttonOf(QWidget* parent, const char* name)
 {
     return parent->findChild<AirButton*>(QLatin1String(name));
+}
+
+AirPlayButton* playButtonOf(AirVoiceNote& note)
+{
+    return note.findChild<AirPlayButton*>(QStringLiteral("voiceListen"));
+}
+
+/** The button drawn on its own, without a window behind it. */
+QImage drawn(AirPlayButton& button)
+{
+    button.resize(button.sizeHint());
+    QImage image(button.size(), QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+    button.render(&image, QPoint(), QRegion(), QWidget::DrawChildren);
+    return image;
+}
+
+bool isColour(const QImage& image, int x, int y, Color colour)
+{
+    return QColor(image.pixel(x, y)).rgb() == AirStyle::instance().color(colour).rgb();
 }
 
 /** The buttons of the band that would show with it, by their object names. */
@@ -69,6 +93,7 @@ private slots:
     void aNoteThatIsNotHereShowsItsSizeAndWaits();
     void aNoteThatCanBeFetchedIsAskedForByListen();
     void aNoteThatIsHereShowsItsLength();
+    void thePlayButtonIsADiscWithATriangleOrTwoBars();
     void eachPhaseOfACallHasItsOwnButtons();
     void theBandSaysTheStateInWords();
     void theButtonsOfTheBandAskForTheirActions();
@@ -123,7 +148,7 @@ void TestAirMediaParts::aNoteThatIsNotHereShowsItsSizeAndWaits()
 {
     AirVoiceNote note;
     note.setNote(QStringLiteral("/nowhere/voice_1.file.m4a"), -1, false, QStringLiteral("38 KB"));
-    AirButton* const listen = buttonOf(&note, "voiceListen");
+    AirPlayButton* const listen = playButtonOf(note);
     QVERIFY(listen);
     QVERIFY(!listen->isEnabled());
     QVERIFY(shownTexts(note).contains(QStringLiteral("38 KB")));
@@ -136,7 +161,8 @@ void TestAirMediaParts::aNoteThatCanBeFetchedIsAskedForByListen()
     AirVoiceNote note;
     QSignalSpy asked(&note, &AirVoiceNote::listenRequested);
     note.setNote(QString(), -1, false, QStringLiteral("38 KB"), true);
-    AirButton* const listen = buttonOf(&note, "voiceListen");
+    AirPlayButton* const listen = playButtonOf(note);
+    QVERIFY(listen);
     QVERIFY(listen->isEnabled());
     QCOMPARE(listen->text(), QStringLiteral("Listen"));
     QVERIFY(shownTexts(note).contains(QStringLiteral("38 KB")));
@@ -159,11 +185,40 @@ void TestAirMediaParts::aNoteThatIsHereShowsItsLength()
 {
     AirVoiceNote note;
     note.setNote(QStringLiteral("/nowhere/voice_2.file.m4a"), 42500, true, QStringLiteral("38 KB"));
-    AirButton* const listen = buttonOf(&note, "voiceListen");
+    AirPlayButton* const listen = playButtonOf(note);
+    QVERIFY(listen);
     QVERIFY(listen->isEnabled());
     QCOMPARE(listen->text(), QStringLiteral("Listen"));
+    // QA live 2026-11-14: a play button as in Telegram. The word is not drawn: it is what a screen
+    // reader says, and the tooltip.
+    QVERIFY(!listen->isPlaying());
+    QCOMPARE(listen->toolTip(), QStringLiteral("Listen"));
+    QCOMPARE(listen->sizeHint(), QSize(36, 36));
     QVERIFY(shownTexts(note).contains(QStringLiteral("0:42")));
     QCOMPARE(note.spokenText(), QStringLiteral("Voice message, 0:42"));
+}
+
+void TestAirMediaParts::thePlayButtonIsADiscWithATriangleOrTwoBars()
+{
+    AirPlayButton button;
+    const QImage play = drawn(button);
+    // Outside the disc nothing is drawn; inside it, ink; the triangle in the middle, on-ink.
+    QCOMPARE(qAlpha(play.pixel(1, 1)), 0);
+    QVERIFY(isColour(play, 18, 5, Color::Ink));
+    QVERIFY(isColour(play, 19, 18, Color::OnInk));
+
+    button.setPlaying(true);
+    QVERIFY(button.isPlaying());
+    const QImage pause = drawn(button);
+    // Two bars with ink between them where the triangle was.
+    QVERIFY(isColour(pause, 18, 18, Color::Ink));
+    QVERIFY(isColour(pause, 14, 18, Color::OnInk));
+    QVERIFY(isColour(pause, 22, 18, Color::OnInk));
+
+    // A button that waits is grey: no ink disc.
+    button.setPlaying(false);
+    button.setEnabled(false);
+    QVERIFY(isColour(drawn(button), 18, 5, Color::Sunken));
 }
 
 void TestAirMediaParts::eachPhaseOfACallHasItsOwnButtons()

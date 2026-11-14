@@ -843,6 +843,13 @@ static void triggerPush(NSString *used_pushToken,
                                     msgv3HashHex:(NSString *)msgv3HashHex
                                    sendTimestamp:(uint32_t)sendTimestamp
 {
+    // KHANDAQ (msgV3 receipt shown as "_"): without a whole hash OCTTox sends the receipt as a bare
+    // "_" that names no message, and a peer that does not read receipts (the desktop) shows it as a
+    // message. Never send one, as Android's send_msgv3_high_level_ack does not.
+    if (msgv3HashHex.length < (TOX_MSGV3_MSGID_LENGTH * 2)) {
+        return;
+    }
+
     OCTSendMessageOperation *operation = [[OCTSendMessageOperation alloc] initWithTox:[self.dataSource managerGetTox]
                                                                          friendNumber:friendNumber
                                                                           messageType:OCTToxMessageTypeHighlevelack

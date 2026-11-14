@@ -40,6 +40,16 @@ void friendLosslessPacketCallback(void *cTox, uint32_t friendNumber, const uint8
 - (BOOL)handleIncomingGroupReactionPacketWithGroupNumber:(OCTToxGroupNumber)groupNumber peerId:(uint32_t)peerId data:(NSData *)data;
 @end
 
+// KHANDAQ (msgV3 receipt shown as "_"): the 1:1 message receive path and the msgV3 receipt sender,
+// declared here so MsgV3ReceiptTests can check which message gets a receipt. cType is a
+// TOX_MESSAGE_TYPE (0 normal, 1 action, 2 receipt).
+void friendMessageCallback(void *cTox, uint32_t friendNumber, uint32_t cType, const uint8_t *cMessage, size_t length, void *userData);
+
+@interface OCTSubmanagerChatsImpl : NSObject
+@property (strong, nonatomic, readonly) NSOperationQueue *sendMessageQueue;
+- (void)tox:(OCTTox *)tox sendFriendHighlevelACK:(NSString *)message friendNumber:(OCTToxFriendNumber)friendNumber msgv3HashHex:(NSString *)msgv3HashHex sendTimestamp:(uint32_t)sendTimestamp;
+@end
+
 #undef LOG_INFO
 #undef LOG_DEBUG
 #import "DDLog.h"

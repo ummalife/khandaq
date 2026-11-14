@@ -29,6 +29,7 @@
 #include <QtTest/QtTest>
 #include <QtGlobal>
 #include <limits>
+#include <QMutexLocker>
 #include <QSignalSpy>
 
 #include <iostream>
@@ -59,6 +60,7 @@ private slots:
     void change_status_message();
     void change_status();
     void change_nospam();
+    void msgv3_receipt_is_not_a_message();
 
 private:
     /* Test Variables */
@@ -280,6 +282,46 @@ void TestCore::change_nospam()
     QVERIFY(alice->getSelfId().getPublicKey() == before.getPublicKey());
     // ToxId compares the keys alone: the whole ID tells the two apart.
     QVERIFY(alice->getSelfId().toString() != before.toString());
+}
+
+void TestCore::msgv3_receipt_is_not_a_message()
+{
+    // KHANDAQ (msgV3 receipt shown as "_"): the iPhone answers a message with a msgV3 receipt, a
+    // message of type TOX_MESSAGE_TYPE_HIGH_LEVEL_ACK whose text is "_". Alice sends Bob exactly
+    // that, then a normal message. Both travel in order on one connection, so once the normal one
+    // has arrived the receipt has been handled too, and it must not have become a message.
+#ifdef TOX_MSGV3_MSGID_LENGTH
+    const QVector<uint32_t> aliceFriends = alice->getFriendList();
+    QCOMPARE(aliceFriends.size(), 1);
+    const uint32_t bobOnAlice = aliceFriends.first();
+    QVERIFY(alice->getFriendPublicKey(bobOnAlice) == bob->getSelfPublicKey());
+
+    QSignalSpy bobMessages(bob.get(), &Core::friendMessageReceived);
+
+    // Straight through toxcore, as a phone sends it: the desktop itself never sends one. Under the
+    // core's own lock, since its thread iterates the same Tox.
+    Tox_Err_Friend_Send_Message receiptError = TOX_ERR_FRIEND_SEND_MESSAGE_OK;
+    {
+        QMutexLocker locker{&alice->getCoreLoopLock()};
+        const uint8_t receiptText[] = {'_'};
+        tox_friend_send_message(alice->getTox(), bobOnAlice, TOX_MESSAGE_TYPE_HIGH_LEVEL_ACK,
+                                receiptText, sizeof(receiptText), &receiptError);
+    }
+    QCOMPARE(receiptError, TOX_ERR_FRIEND_SEND_MESSAGE_OK);
+
+    const QString after{QStringLiteral("after the receipt")};
+    ReceiptNum receipt;
+    QVERIFY(alice->sendMessage(bobOnAlice, after, receipt));
+
+    QTRY_VERIFY_WITH_TIMEOUT(!bobMessages.isEmpty(), connected_message_wait);
+    QCOMPARE(bobMessages.count(), 1);
+    QCOMPARE(bobMessages[0][1].toString(), after);
+    QCOMPARE(bobMessages[0][2].toBool(), false);
+#else
+    // An upstream toxcore has neither the type nor its packet, so there is nothing to receive; it
+    // also aborts on an attempt to send one.
+    QSKIP("this toxcore has no msgV3 receipts");
+#endif
 }
 
 QTEST_GUILESS_MAIN(TestCore)

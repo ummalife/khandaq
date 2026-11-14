@@ -4120,7 +4120,13 @@ void friendMessageCallback(
             }
 
             // HINT: now send msgV3 high level ACK
-            if ([tox.delegate respondsToSelector:@selector(tox:sendFriendHighlevelACK:friendNumber:msgv3HashHex:sendTimestamp:)]) {
+            // KHANDAQ (msgV3 receipt shown as "_"): only for a msgV3 message. The receipt names the
+            // message by its hash, so one for a message without a hash (every message from the
+            // desktop, which sends no msgV3) names nothing: it went out as a bare "_", and the
+            // desktop showed it as a message from this phone after each one it sent. Android acks
+            // only a message with a hash (HelperGeneric.receive_incoming_message).
+            if (msgv3HashHexStr != nil &&
+                [tox.delegate respondsToSelector:@selector(tox:sendFriendHighlevelACK:friendNumber:msgv3HashHex:sendTimestamp:)]) {
                 NSString *message = @"_";
                 [tox.delegate tox:tox sendFriendHighlevelACK:message friendNumber:friendNumber
                             msgv3HashHex:msgv3HashHexStr sendTimestamp:msgv3_timstamp_int];

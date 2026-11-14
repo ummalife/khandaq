@@ -644,6 +644,11 @@ static void triggerPush(NSString *used_pushToken,
 
     OCTFriend *friend = [chat.friends firstObject];
 
+    // KHANDAQ (caption above its own photo): the moment of sending, to the fraction of a second. The
+    // text is stored only once the send operation has run, and it sorted by its whole-second msgV3
+    // timestamp, so it went before a photo sent a moment earlier: a caption showed above its photo.
+    NSTimeInterval sentDateInterval = [[NSDate date] timeIntervalSince1970];
+
     uint8_t *message_v3_hash_bin = calloc(1, TOX_MSGV3_MSGID_LENGTH);
     uint8_t *message_v3_hash_hexstr = calloc(1, (TOX_MSGV3_MSGID_LENGTH * 2) + 1);
 
@@ -658,7 +663,7 @@ static void triggerPush(NSString *used_pushToken,
         msgv3HashHex = [[NSString alloc] initWithBytes:message_v3_hash_hexstr length:(TOX_MSGV3_MSGID_LENGTH * 2) encoding:NSUTF8StringEncoding];
 
         // HINT: set sent timestamp to now() as unixtimestamp value
-        msgv3tssec = [[NSNumber numberWithDouble: [[NSDate date] timeIntervalSince1970]] integerValue];
+        msgv3tssec = [[NSNumber numberWithDouble: sentDateInterval] integerValue];
 
         free(message_v3_hash_bin);
         free(message_v3_hash_hexstr);
@@ -688,7 +693,7 @@ static void triggerPush(NSString *used_pushToken,
         }
 
         OCTRealmManager *realmManager = [strongSelf.dataSource managerGetRealmManager];
-        OCTMessageAbstract *message = [realmManager addMessageWithText:text type:type chat:chat sender:nil messageId:messageId msgv3HashHex:msgv3HashHex sentPush:sent_push tssent:msgv3tssec tsrcvd:0];
+        OCTMessageAbstract *message = [realmManager addMessageWithText:text type:type chat:chat sender:nil messageId:messageId msgv3HashHex:msgv3HashHex sentPush:sent_push tssent:msgv3tssec tsrcvd:0 sentDateInterval:sentDateInterval];
 
         if (userSuccessBlock) {
             userSuccessBlock(message);

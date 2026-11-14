@@ -30,6 +30,24 @@
 #import <objcTox/OCTToxConstants.h>
 #import <objcTox/OCTView.h>
 
+// The order of a 1:1 chat (QA-Live 14.11): objcTox's realm manager, declared here so the tests can keep
+// a chat in a Realm of their own, store a file message as sending a file does, and read the chat in the
+// order the app shows it. objcTox is unchanged by these declarations.
+@interface OCTRealmManager : NSObject
+- (instancetype)initWithDatabaseFileURL:(NSURL *)fileURL encryptionKey:(NSData *)encryptionKey;
+- (void)addObject:(OCTObject *)object;
+- (OCTChat *)getOrCreateChatWithFriend:(OCTFriend *)friend;
+- (RLMResults *)objectsWithClass:(Class)class predicate:(NSPredicate *)predicate;
+- (OCTMessageAbstract *)addMessageWithFileNumber:(OCTToxFileNumber)fileNumber
+                                        fileType:(OCTMessageFileType)fileType
+                                        fileSize:(OCTToxFileSize)fileSize
+                                        fileName:(NSString *)fileName
+                                        filePath:(NSString *)filePath
+                                         fileUTI:(NSString *)fileUTI
+                                            chat:(OCTChat *)chat
+                                          sender:(OCTFriend *)sender;
+@end
+
 // Redesign stage 3, item 10: the receive paths of the KQ packets (1:1 186, 187, 188 and group 0x41,
 // 0x42, 0x43), declared here so the tests can hand them the bytes Android sends. objcTox is unchanged.
 void friendLosslessPacketCallback(void *cTox, uint32_t friendNumber, const uint8_t *data, size_t length, void *userData);

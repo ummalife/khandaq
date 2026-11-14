@@ -131,8 +131,8 @@
     <plurals name="air_compose_bytes_left">
         <item quantity="other">还剩 %1$d 字节</item>
     </plurals>
-    <plurals name="air_compose_bytes_over">
-        <item quantity="other">超出上限 %1$d 字节：结尾会被截断</item>
+    <plurals name="air_compose_parts">
+        <item quantity="other">将分 %1$d 条消息发出</item>
     </plurals>
     <plurals name="air_compose_bytes_over_edit">
         <item quantity="other">超出上限 %1$d 字节：无法保存</item>

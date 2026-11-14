@@ -26,7 +26,7 @@ import static com.zoffcc.applications.trifa.TrifaToxService.orma;
 
 final class ChatListUiHelper
 {
-    private static final int PREVIEW_MAX_CHARS = 120;
+    static final int PREVIEW_MAX_CHARS = 120;
 
     private ChatListUiHelper()
     {
@@ -505,12 +505,23 @@ final class ChatListUiHelper
         {
             return "";
         }
+        return clip_preview(body);
+    }
+
+    /**
+     * The preview as one line of at most PREVIEW_MAX_CHARS chars. KHANDAQ (QA live, F15): the cut leaves every
+     * character whole. It was made at a fixed number of chars, so a preview could end in half a surrogate
+     * pair: the row's description then broke the dump of the accessibility tree ("Bad surrogate pair"), and
+     * a flag or a ZWJ sequence cut in two read as another emoji. Notifications and drafts show the same text.
+     */
+    static String clip_preview(final String body)
+    {
         final String single = body.replace('\n', ' ').replace('\r', ' ').trim();
         if (single.length() <= PREVIEW_MAX_CHARS)
         {
             return single;
         }
-        return single.substring(0, PREVIEW_MAX_CHARS - 3) + "...";
+        return single.substring(0, MessageSplitter.wholeCharacterCut(single, PREVIEW_MAX_CHARS - 3)) + "...";
     }
 
     private static String format_group_message_preview(final Context context, final GroupMessage message)

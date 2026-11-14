@@ -113,7 +113,6 @@ import static com.zoffcc.applications.trifa.HelperGeneric.get_uniq_tmp_filename;
 import static com.zoffcc.applications.trifa.HelperGeneric.seconds_time_format_or_empty;
 import static com.zoffcc.applications.trifa.HelperGeneric.set_g_opts;
 import static com.zoffcc.applications.trifa.HelperGeneric.tox_friend_send_message_wrapper;
-import static com.zoffcc.applications.trifa.HelperGeneric.trim_to_utf8_length_bytes;
 import static com.zoffcc.applications.trifa.HelperMessage.insert_into_message_db;
 import static com.zoffcc.applications.trifa.HelperMessage.update_single_message_from_messge_id;
 import static com.zoffcc.applications.trifa.HelperMsgNotification.change_msg_notification;
@@ -2182,14 +2181,16 @@ public class MessageListActivity extends AppCompatActivity
             return;
         }
 
-        final String fullText = rawStandalone
-                ? message
-                : ChatReplyPreviewController.composeOutgoingText(
-                        HelperGeneric.normalize_chat_input_text(message));
+        final String body = rawStandalone ? message : HelperGeneric.normalize_chat_input_text(message);
+        final String fullText = rawStandalone ? message : ChatReplyPreviewController.composeOutgoingText(body);
         if ((fullText == null) || fullText.isEmpty())
         {
             return;
         }
+        // KHANDAQ (QA live, F13): a reply's header opens the text. When the text goes as several messages,
+        // the header stays in the first one.
+        final int replyHeadChars = (body != null) && (fullText.length() > body.length()) && fullText.endsWith(body)
+                                   ? fullText.length() - body.length() : 0;
 
         if (FavoritesChatHelper.isFavoritesChat(friend_pubkey))
         {
@@ -2216,15 +2217,24 @@ public class MessageListActivity extends AppCompatActivity
         // node is up, as it does for a friend who is offline, and the tray shows it meanwhile.
         if (!is_tox_started)
         {
-            final String queued = trim_to_utf8_length_bytes(fullText, TOX_MSGV3_MAX_MESSAGE_LENGTH);
-            if ((queued == null) || queued.isEmpty())
+            // KHANDAQ (QA live, F13): a text longer than one message waits as several, one row each, as it
+            // will go. It was cut to one message here, and its end was lost.
+            final List<int[]> parts = MessageSplitter.ranges(fullText, replyHeadChars, TOX_MSGV3_MAX_MESSAGE_LENGTH);
+            if (parts.isEmpty())
             {
                 return;
             }
-            if (AirChatPanel.queueUnsentText(friend_pubkey, queued) <= 0)
+            final long first_sent_timestamp = System.currentTimeMillis();
+            for (int i = 0; i < parts.size(); i++)
             {
-                AirComposerNotice.say(getString(R.string.dm_send_failed_not_ready), true);
-                return;
+                final String queued = fullText.substring(parts.get(i)[0], parts.get(i)[1]);
+                if (AirChatPanel.queueUnsentText(friend_pubkey, queued,
+                                                 MessageSplitter.partSentTimestamp(first_sent_timestamp, i)) <= 0)
+                {
+                    AirComposerNotice.say(getString(R.string.dm_send_failed_not_ready), true);
+                    keep_unsent_parts_in_field(fullText, parts, i);
+                    return;
+                }
             }
             HelperGeneric.clear_chat_input_field(ml_new_message);
             ChatDraftHelper.clear_friend_draft(friend_pubkey);
@@ -2242,15 +2252,17 @@ public class MessageListActivity extends AppCompatActivity
         // chunker ever saw them. Only a friend whose keepalive says it reassembles chunks gets them
         // (MessageChunker.canReassemble): iOS, desktop and older Android builds get the length-capped
         // message, as an offline friend does.
+        // KHANDAQ (QA live, F13): to them a longer text now goes as several messages, each one a row of
+        // its own, sent as one message always was (MessageSplitter); the length cap lost its end.
         final long chunkFriendNum = tox_friend_by_public_key__wrapper(friend_pubkey);
         final boolean friendOnline = (chunkFriendNum >= 0) &&
                 (MainActivity.tox_friend_get_connection_status(chunkFriendNum)
                         != ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value);
-        final String msg = (MessageChunker.shouldChunk(fullText) && friendOnline
-                            && MessageChunker.canReassemble(chunkFriendNum))
-                ? fullText
-                : trim_to_utf8_length_bytes(fullText, TOX_MSGV3_MAX_MESSAGE_LENGTH);
-        if ((msg == null) || msg.isEmpty())
+        final List<int[]> parts = (MessageChunker.shouldChunk(fullText) && friendOnline
+                                   && MessageChunker.canReassemble(chunkFriendNum))
+                ? java.util.Collections.singletonList(new int[]{0, fullText.length()})
+                : MessageSplitter.ranges(fullText, replyHeadChars, TOX_MSGV3_MAX_MESSAGE_LENGTH);
+        if (parts.isEmpty())
         {
             return;
         }
@@ -2260,87 +2272,97 @@ public class MessageListActivity extends AppCompatActivity
         // stored as unsent and waits in the tray; the service loop sends it when the link is back.
         wakeup_tox_thread();
 
-        Message m = new Message();
-        m.tox_friendpubkey = friend_pubkey;
-        m.direction = 1; // msg sent
-        m.TOX_MESSAGE_TYPE = 0;
-        m.TRIFA_MESSAGE_TYPE = TRIFA_MSG_TYPE_TEXT.value;
-        m.rcvd_timestamp = 0L;
-        m.is_new = false; // own messages are always "not new"
-        m.sent_timestamp = System.currentTimeMillis();
-        m.read = false;
-        m.text = msg;
-        m.msg_version = 0;
-        m.resend_count = 0; // we have tried to resend this message "0" times
-        m.sent_push = 0;
-        m.msg_idv3_hash = "";
-        m.msg_id_hash = "";
-        m.raw_msgv2_bytes = "";
-
-        MainActivity.send_message_result result = tox_friend_send_message_wrapper(friend_pubkey, 0, msg,
-                                                                                  (m.sent_timestamp / 1000));
-
-        if (result == null)
+        final long first_sent_timestamp = System.currentTimeMillis();
+        boolean refusal_said = false;
+        for (int i = 0; i < parts.size(); i++)
         {
-            AirComposerNotice.say(getString(R.string.dm_send_failed_friend), true);
-            return;
-        }
+            final String msg = fullText.substring(parts.get(i)[0], parts.get(i)[1]);
 
-        long res = result.msg_num;
-
-        if (HelperFriend.is_dm_message_send_success(res))
-        {
-            m.resend_count = 1; // we sent the message successfully
-            m.message_id = res;
-        }
-        else
-        {
-            m.resend_count = 0; // sending was NOT successfull
-            m.message_id = -1;
-            // KHANDAQ (redesign, stage 2): a message that waits for the person (or for our own link) is
-            // not an error: the tray and the hint under the field say it. Other refusals still speak up.
-            if ((res != -3L) && HelperFriend.is_self_tox_connected_to_dht())
-            {
-                AirComposerNotice.say(HelperFriend.dm_send_failure_reason(res, friend_pubkey), true);
-            }
-        }
-
-        if (result.msg_v2)
-        {
-            m.msg_version = 1;
-        }
-        else
-        {
+            Message m = new Message();
+            m.tox_friendpubkey = friend_pubkey;
+            m.direction = 1; // msg sent
+            m.TOX_MESSAGE_TYPE = 0;
+            m.TRIFA_MESSAGE_TYPE = TRIFA_MSG_TYPE_TEXT.value;
+            m.rcvd_timestamp = 0L;
+            m.is_new = false; // own messages are always "not new"
+            m.sent_timestamp = MessageSplitter.partSentTimestamp(first_sent_timestamp, i);
+            m.read = false;
+            m.text = msg;
             m.msg_version = 0;
-        }
+            m.resend_count = 0; // we have tried to resend this message "0" times
+            m.sent_push = 0;
+            m.msg_idv3_hash = "";
+            m.msg_id_hash = "";
+            m.raw_msgv2_bytes = "";
 
-        if ((result.msg_hash_hex != null) && (!result.msg_hash_hex.equalsIgnoreCase("")))
-        {
-            // msgV2 message -----------
-            m.msg_id_hash = result.msg_hash_hex;
-            // msgV2 message -----------
-        }
+            MainActivity.send_message_result result = tox_friend_send_message_wrapper(friend_pubkey, 0, msg,
+                                                                                      (m.sent_timestamp / 1000));
 
-        if ((result.msg_hash_v3_hex != null) && (!result.msg_hash_v3_hex.equalsIgnoreCase("")))
-        {
-            // msgV3 message -----------
-            m.msg_idv3_hash = result.msg_hash_v3_hex;
-            // msgV3 message -----------
-        }
+            if (result == null)
+            {
+                AirComposerNotice.say(getString(R.string.dm_send_failed_friend), true);
+                keep_unsent_parts_in_field(fullText, parts, i);
+                return;
+            }
 
-        if ((result.raw_message_buf_hex != null) && (!result.raw_message_buf_hex.equalsIgnoreCase("")))
-        {
-            // save raw message bytes of this v2 msg into the database
-            // we need it if we want to resend it later
-            m.raw_msgv2_bytes = result.raw_message_buf_hex;
-        }
+            long res = result.msg_num;
 
-        long row_id = insert_into_message_db(m, true);
-        m.id = row_id;
+            if (HelperFriend.is_dm_message_send_success(res))
+            {
+                m.resend_count = 1; // we sent the message successfully
+                m.message_id = res;
+            }
+            else
+            {
+                m.resend_count = 0; // sending was NOT successfull
+                m.message_id = -1;
+                // KHANDAQ (redesign, stage 2): a message that waits for the person (or for our own link) is
+                // not an error: the tray and the hint under the field say it. Other refusals still speak up,
+                // once for all the parts of a text.
+                if ((res != -3L) && !refusal_said && HelperFriend.is_self_tox_connected_to_dht())
+                {
+                    AirComposerNotice.say(HelperFriend.dm_send_failure_reason(res, friend_pubkey), true);
+                    refusal_said = true;
+                }
+            }
 
-        if (!HelperFriend.is_dm_message_send_success(res))
-        {
-            friend_call_push_url(friend_pubkey, m.sent_timestamp);
+            if (result.msg_v2)
+            {
+                m.msg_version = 1;
+            }
+            else
+            {
+                m.msg_version = 0;
+            }
+
+            if ((result.msg_hash_hex != null) && (!result.msg_hash_hex.equalsIgnoreCase("")))
+            {
+                // msgV2 message -----------
+                m.msg_id_hash = result.msg_hash_hex;
+                // msgV2 message -----------
+            }
+
+            if ((result.msg_hash_v3_hex != null) && (!result.msg_hash_v3_hex.equalsIgnoreCase("")))
+            {
+                // msgV3 message -----------
+                m.msg_idv3_hash = result.msg_hash_v3_hex;
+                // msgV3 message -----------
+            }
+
+            if ((result.raw_message_buf_hex != null) && (!result.raw_message_buf_hex.equalsIgnoreCase("")))
+            {
+                // save raw message bytes of this v2 msg into the database
+                // we need it if we want to resend it later
+                m.raw_msgv2_bytes = result.raw_message_buf_hex;
+            }
+
+            long row_id = insert_into_message_db(m, true);
+            m.id = row_id;
+
+            if (!HelperFriend.is_dm_message_send_success(res))
+            {
+                friend_call_push_url(friend_pubkey, m.sent_timestamp);
+            }
         }
 
         HelperGeneric.clear_chat_input_field(ml_new_message);
@@ -2350,6 +2372,22 @@ public class MessageListActivity extends AppCompatActivity
             emojiPopup.dismiss();
         }
         stop_self_typing_indicator_s();
+    }
+
+    /**
+     * KHANDAQ (QA live, F13): part failed of a text that goes as several messages. The parts before it are
+     * in the chat, so the field keeps the rest instead of the whole text, which would send them twice.
+     * Before the first part, the field keeps the text as it is.
+     */
+    private void keep_unsent_parts_in_field(final String fullText, final List<int[]> parts, final int failed)
+    {
+        if ((failed <= 0) || (failed >= parts.size()) || (ml_new_message == null))
+        {
+            return;
+        }
+        final String rest = fullText.substring(parts.get(failed)[0]);
+        ml_new_message.setText(rest);
+        ml_new_message.setSelection(rest.length());
     }
 
     /* HINT: send a message to a friend */

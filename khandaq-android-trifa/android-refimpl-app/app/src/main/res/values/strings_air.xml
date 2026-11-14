@@ -135,9 +135,9 @@
         <item quantity="one">%1$d byte left</item>
         <item quantity="other">%1$d bytes left</item>
     </plurals>
-    <plurals name="air_compose_bytes_over">
-        <item quantity="one">%1$d byte over the limit: the end will be cut</item>
-        <item quantity="other">%1$d bytes over the limit: the end will be cut</item>
+    <plurals name="air_compose_parts">
+        <item quantity="one">Goes as %1$d message</item>
+        <item quantity="other">Goes as %1$d messages</item>
     </plurals>
     <plurals name="air_compose_bytes_over_edit">
         <item quantity="one">%1$d byte over the limit: too long to save</item>

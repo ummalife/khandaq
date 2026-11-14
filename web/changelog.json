@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-13T22:43:03Z",
+  "generated_at": "2026-11-14T14:10:20Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,112 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.52",
+      "date": "2026-11-14",
+      "title": "Leaving a group shows at once, and emoji are whole on the computer",
+      "summary": "A member who leaves a group now tells the others, and Khandaq for the computer and for iPhone take them off the list at once instead of about a minute later. Closing the app is no longer taken for leaving. On the computer, emoji with a skin tone, flags and joined emoji are drawn whole and as big as the others, and Listen plays a voice message without asking where to save it. iPhone build 142997 carries the iPhone side of these fixes.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "A member who leaves a group is gone at once",
+          "description": "Leaving a group now sends the other members a short notice first. Khandaq for the computer and for iPhone take the member off the list and the count as soon as the notice arrives; before, the member stayed listed, as online, for about a minute. If the notice is lost on the way, as can happen through a relay, the member goes after that minute, as before. Closing the app is not leaving: a member who only closed it stays in the group, offline, and is not shown as having left.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux",
+            "ios"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Emoji with a skin tone, flags and joined emoji are whole on the computer",
+          "description": "The computer drew 👍🏽 as a thumb and a coloured square, 🏴‍☠️ as a flag and a skull, and 👨‍⚕️ as a man and a staff, in messages, in the message field and in the row of a message on its way. Each is now one emoji, set in the system's colour emoji font and as big as the emoji around it, and so are flags and keycaps such as 🇹🇷 and 1️⃣. A few joined emoji that the phones' emoji picker does not offer stay drawn apart, as on Android.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Listen plays a voice message without asking where to save it",
+          "description": "A voice message that waited for Accept had to be saved somewhere through a file dialog before Listen would play it. Listen now fetches it into the app's own folder and plays it when it is here; Accept fetches it the same way without playing. Nothing comes unless you press one of them.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "No stray “_” after each message to an iPhone",
+          "description": "Every message the computer sent to an iPhone came back as a new message from the iPhone that read only “_”. The iPhone sent a delivery receipt for a message that had nothing to confirm; it no longer does, and the computer ignores such receipts.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux",
+            "ios"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Group messages that reach the computer count as delivered",
+          "description": "The phones confirm every group message they show to its author, and the computer did not. A phone's message in a group of computers stayed at sent, and the phone kept asking the group for it again. The computer now confirms the messages it shows.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "A contact whose request you accepted is not waiting for your reply",
+          "description": "Right after you accepted someone's contact request, the computer and iPhone showed them as your own unanswered request until they first came online. They now read like any other offline contact. A contact you asked yourself still reads as waiting for a reply.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux",
+            "ios"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "A caption sent with a photo stays with the photo on iPhone",
+          "description": "On the iPhone that sent a photo with a caption, the caption often showed as a separate message above the photo. It now joins the photo's bubble.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "A group's online count on iPhone leaves you out",
+          "description": "The chat list on iPhone counted you among a group's members online, one more than the group's header. It now counts only the others, like the computer and Android.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "The paperclip menu on iPhone works with VoiceOver",
+          "description": "Gallery, Camera, Audio, File and Location are read by name, VoiceOver stays inside the menu, and the escape gesture closes it. The rows of the message menu, the two cards of an empty contact list and the caption field before sending are read by name too.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "Leave group in the computer's chat list speaks of the group",
+          "description": "It opened the question for a contact, “Remove friend”. It now asks to leave the group, in the words of the group's page.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.51",
       "date": "2026-11-14",

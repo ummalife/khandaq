@@ -970,6 +970,38 @@ QString commandIdCandidate(const QString& raw)
     return hasDigit ? text : QString{};
 }
 
+CommandOffer CommandOffer::of(const QString& raw, const KeyTest& isGroup, const KeyTest& isContact)
+{
+    CommandOffer offer;
+    // The link of a group's QR code: compactAddress has taken "khandaq:" off already.
+    const QString groupLink = QStringLiteral("GROUP:");
+    const QString compact = compactAddress(raw);
+    if (compact.startsWith(groupLink)) {
+        const QString key = compact.mid(groupLink.size());
+        if (key.size() == toxKeyHexLength && isAllHex(key)) {
+            offer.groupKey = key;
+            offer.groupListed = isGroup && isGroup(key);
+        }
+        return offer;
+    }
+
+    const QString hex = commandIdCandidate(raw);
+    if (hex.size() != toxKeyHexLength) {
+        offer.contactId = hex;
+        return offer;
+    }
+    if (isGroup && isGroup(hex)) {
+        offer.groupKey = hex;
+        offer.groupListed = true;
+        return offer;
+    }
+    offer.contactId = hex;
+    if (!isContact || !isContact(hex)) {
+        offer.groupKey = hex;
+    }
+    return offer;
+}
+
 QString IdVerdict::address() const
 {
     return kind == Kind::Ok || kind == Kind::Blocked ? value : QString{};

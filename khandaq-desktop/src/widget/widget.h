@@ -52,6 +52,10 @@ namespace Ui {
 class MainWindow;
 }
 
+namespace Air {
+struct CommandOffer;
+}
+
 class AddFriendForm;
 class AirBand;
 class AirCommandIdRow;
@@ -403,6 +407,10 @@ private:
     /** The conversation column with nothing open: where to look and what to paste. */
     void showNoChat();
     void showCommandIdStart(const QString& hex);
+    /** What the command line offers for text, as the rows over the list show it. */
+    Air::CommandOffer commandOffer(const QString& text) const;
+    /** The group with this key: opened when it is in the list, otherwise joined from New group. */
+    void openGroupByKey(const QString& groupKey);
     void onRequestSent(const ToxPk& friendPk, const QString& message);
     /** The person New contact waits on came online: they accepted the request. */
     void followNewContact();
@@ -560,6 +568,8 @@ private:
     AirNewGroup* newGroup = nullptr;
     /** "New contact with this ID" over the list while the command line holds the start of one. */
     AirCommandIdRow* commandIdRow = nullptr;
+    /** Under it, the group for a whole group key: Join it, or Open it once it is in the list. */
+    AirCommandIdRow* commandGroupRow = nullptr;
     /** Out of the content column while a conversation is open, so the window deletes it. */
     QPointer<AirNoChat> noChatView;
 

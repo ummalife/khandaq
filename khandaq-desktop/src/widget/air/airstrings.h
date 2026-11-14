@@ -266,6 +266,10 @@ enum class Text
     CmdIdOwn,
     CmdIdBad,
     CmdIdContact,
+    CmdJoinGroup,
+    CmdJoinGroupNote,
+    CmdOpenGroup,
+    CmdGroupListed,
     NoChatOpen,
     // Requests and group invitations (E12).
     InviteTag,

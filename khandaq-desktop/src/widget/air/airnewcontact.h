@@ -144,7 +144,9 @@ private:
 /**
  * The row over the Air list while the command line holds the start of an ID (E3): a dashed tile
  * with the add-person icon, "New contact with this ID" and what is missing or wrong so far. A click
- * on it, or Enter in the command line, opens New contact with those characters.
+ * on it, or Enter in the command line, opens New contact with those characters. For a whole group
+ * key (Air::CommandOffer) a second row offers the group, with the icon of a group: Join it, or
+ * Open it, by name, once it is in the list.
  */
 class AirCommandIdRow : public QAbstractButton
 {
@@ -159,6 +161,13 @@ public:
     /** The hex the command line holds so far, and the verdict New contact would give it. */
     void setIdStart(const QString& hex, const Air::IdVerdict& verdict);
     QString idStart() const;
+    /**
+     * The row offers the group with this whole key instead: Join, or Open with the name of the
+     * group when it is in the list (listed).
+     */
+    void setGroup(const QString& key, bool listed, const QString& name = QString());
+    /** The key of the group the row offers, or a null string while it offers New contact. */
+    QString groupKey() const;
 
     QSize sizeHint() const override;
 
@@ -169,9 +178,14 @@ protected:
 
 private:
     void retranslate();
+    /** What the row says under its title. */
+    QString note() const;
 
     QString hex;
     Air::IdVerdict verdict;
+    QString group;
+    bool groupListed = false;
+    QString groupName;
     bool hovered = false;
 };
 

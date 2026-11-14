@@ -3710,16 +3710,27 @@ void Widget::setupAir()
         }
     });
 
-    // The start of an ID in the command line (E3): a row over the list offers New contact.
+    // The start of an ID in the command line (E3): a row over the list offers New contact, and a
+    // whole group key one more that joins the group, or opens it once it is in the list.
     commandIdRow = new AirCommandIdRow(ui->statusPanel);
     commandIdRow->hide();
     ui->statusLayout->insertWidget(ui->statusLayout->indexOf(airList), commandIdRow);
+    commandGroupRow = new AirCommandIdRow(ui->statusPanel);
+    commandGroupRow->setObjectName(QStringLiteral("commandGroup"));
+    commandGroupRow->hide();
+    ui->statusLayout->insertWidget(ui->statusLayout->indexOf(airList), commandGroupRow);
     connect(airBand, &AirBand::idStartChanged, this, &Widget::showCommandIdStart);
     connect(commandIdRow, &AirCommandIdRow::clicked, this, [this] {
         const QString idStart = commandIdRow->idStart();
         airBand->commandLine()->clear();
         openNewContact(idStart);
     });
+    connect(commandGroupRow, &AirCommandIdRow::clicked, this, [this] {
+        const QString groupKey = commandGroupRow->groupKey();
+        airBand->commandLine()->clear();
+        openGroupByKey(groupKey);
+    });
+    connect(airBand, &AirBand::groupKeyEntered, this, &Widget::openGroupByKey);
 
     // Saved Messages: kept in the profile database whether the history is on or off.
     History* const history = profile.getHistory();
@@ -3734,7 +3745,17 @@ void Widget::setupAir()
     airSource->watchNotes(*notesLog);
 
     connect(airController, &AirController::chatRequested, this, &Widget::openAirEntry);
-    connect(airController, &AirController::newContactRequested, this, &Widget::openNewContact);
+    connect(airController, &AirController::newContactRequested, this,
+            [this](const QString& address) {
+                // Enter takes what the rows over the list offer: the key of a group in the list
+                // opens that group, as its row alone says.
+                const Air::CommandOffer offer = commandOffer(address);
+                if (offer.groupListed) {
+                    openGroupByKey(offer.groupKey);
+                    return;
+                }
+                openNewContact(address);
+            });
     connect(airController, &AirController::favoriteToggled, this,
             [this](const QString& entryId, bool favorite) {
                 settings.setFavoriteChat(entryId, favorite);
@@ -3993,15 +4014,58 @@ void Widget::showNoChat()
 
 void Widget::showCommandIdStart(const QString& hex)
 {
-    if (!commandIdRow || !newContact) {
+    if (!commandIdRow || !commandGroupRow || !newContact) {
         return;
     }
-    if (hex.isEmpty()) {
+    // hex is the start of an ID only: the line itself also tells a group's link and its key.
+    const Air::CommandOffer offer = hex.isEmpty() ? commandOffer(airBand->commandLine()->text())
+                                                  : commandOffer(hex);
+    if (offer.contactId.isEmpty()) {
         commandIdRow->hide();
+    } else {
+        commandIdRow->setIdStart(offer.contactId, newContact->commandVerdict(offer.contactId));
+        commandIdRow->show();
+    }
+    if (offer.groupKey.isEmpty()) {
+        commandGroupRow->hide();
         return;
     }
-    commandIdRow->setIdStart(hex, newContact->commandVerdict(hex));
-    commandIdRow->show();
+    const Group* const group =
+        groupList->findGroup(GroupId(QByteArray::fromHex(offer.groupKey.toLatin1())));
+    commandGroupRow->setGroup(offer.groupKey, offer.groupListed,
+                              group ? group->getDisplayedName() : QString());
+    commandGroupRow->show();
+}
+
+Air::CommandOffer Widget::commandOffer(const QString& text) const
+{
+    const auto isGroup = [this](const QString& key) {
+        return groupList->findGroup(GroupId(QByteArray::fromHex(key.toLatin1()))) != nullptr;
+    };
+    // A key that is a contact's, a request's or your own is no group to join.
+    const auto isContact = [this](const QString& key) {
+        if (friendList->findFriend(ToxPk(key)) || core->getSelfPublicKey().toString() == key) {
+            return true;
+        }
+        const QVector<Air::Request> requests = airSource->requests();
+        return std::any_of(requests.cbegin(), requests.cend(), [&key](const Air::Request& request) {
+            return request.publicKey == key;
+        });
+    };
+    return Air::CommandOffer::of(text, isGroup, isContact);
+}
+
+void Widget::openGroupByKey(const QString& groupKey)
+{
+    const GroupId groupId(QByteArray::fromHex(groupKey.toLatin1()));
+    if (groupList->findGroup(groupId)) {
+        if (newGroup) {
+            newGroup->close();
+        }
+        openAirEntry(AirSource::groupEntryId(groupId));
+        return;
+    }
+    openJoinGroup(groupKey);
 }
 
 void Widget::onRequestSent(const ToxPk& friendPk, const QString& message)

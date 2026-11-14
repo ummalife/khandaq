@@ -232,10 +232,18 @@ bool AirBand::eventFilter(QObject* watched, QEvent* event)
         case Qt::Key_Return:
         case Qt::Key_Enter: {
             // The start of an ID goes to New contact, which says what is missing or wrong.
-            const QString idStart = Air::commandIdCandidate(command->lineEdit()->text());
+            const QString text = command->lineEdit()->text();
+            const QString idStart = Air::commandIdCandidate(text);
             if (!idStart.isEmpty()) {
                 command->lineEdit()->clear();
                 emit contactAddressEntered(idStart);
+                return true;
+            }
+            // The link of a group is that group's key and nothing else.
+            const QString groupKey = Air::CommandOffer::of(text, {}, {}).groupKey;
+            if (!groupKey.isEmpty()) {
+                command->lineEdit()->clear();
+                emit groupKeyEntered(groupKey);
                 return true;
             }
             emit activateRequested();

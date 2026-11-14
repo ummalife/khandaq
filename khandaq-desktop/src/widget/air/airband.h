@@ -64,6 +64,11 @@ signals:
      */
     void contactAddressEntered(const QString& address);
     /**
+     * Enter was pressed on the link of a group ("khandaq:group:" and its key, as in its QR code):
+     * the key goes to the group, to open or to join it, instead of a search.
+     */
+    void groupKeyEntered(const QString& groupKey);
+    /**
      * The command line holds the start of an ID (Air::commandIdCandidate) as its upper-case hex, or
      * an empty string once it holds anything else.
      */

@@ -1417,6 +1417,26 @@
         <translation>уже в контактах</translation>
     </message>
     <message>
+        <source>Join the group with this key</source>
+        <comment>command line: row over the matches when it holds a whole group key</comment>
+        <translation>Войти в группу с этим ключом</translation>
+    </message>
+    <message>
+        <source>if the group is open to anyone with its key</source>
+        <comment>command line: note of the Join row</comment>
+        <translation>если группа открыта по ключу</translation>
+    </message>
+    <message>
+        <source>Open %1</source>
+        <comment>command line: row over the matches when it holds the key of a group in the list; %1 is the group</comment>
+        <translation>Открыть %1</translation>
+    </message>
+    <message>
+        <source>already in your groups</source>
+        <comment>command line: note of the row of a group in the list</comment>
+        <translation>уже в ваших группах</translation>
+    </message>
+    <message>
         <source>Choose a conversation in the list. To add someone, paste their ID into the line at the top.</source>
         <comment>the conversation column while no conversation is open</comment>
         <translation>Выберите чат в списке. Чтобы добавить человека, вставьте его ID в строку вверху.</translation>

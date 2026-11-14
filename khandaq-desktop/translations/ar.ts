@@ -1453,6 +1453,26 @@
         <translation>موجود في جهات الاتصال</translation>
     </message>
     <message>
+        <source>Join the group with this key</source>
+        <comment>command line: row over the matches when it holds a whole group key</comment>
+        <translation>الانضمام إلى المجموعة بهذا المفتاح</translation>
+    </message>
+    <message>
+        <source>if the group is open to anyone with its key</source>
+        <comment>command line: note of the Join row</comment>
+        <translation>إذا كانت المجموعة مفتوحة لكل من لديه مفتاحها</translation>
+    </message>
+    <message>
+        <source>Open %1</source>
+        <comment>command line: row over the matches when it holds the key of a group in the list; %1 is the group</comment>
+        <translation>فتح %1</translation>
+    </message>
+    <message>
+        <source>already in your groups</source>
+        <comment>command line: note of the row of a group in the list</comment>
+        <translation>موجودة في مجموعاتك</translation>
+    </message>
+    <message>
         <source>Choose a conversation in the list. To add someone, paste their ID into the line at the top.</source>
         <comment>the conversation column while no conversation is open</comment>
         <translation>اختر محادثة من القائمة. لإضافة شخص، الصق معرّفه في السطر في الأعلى.</translation>

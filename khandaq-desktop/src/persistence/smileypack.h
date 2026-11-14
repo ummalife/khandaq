@@ -23,6 +23,7 @@
 #include <QMap>
 #include <QMutex>
 #include <QRegularExpression>
+#include <QVector>
 
 #include <memory>
 
@@ -47,7 +48,10 @@ public:
     static bool isOfferedInPicker(const QStringList& emoticonSet);
     std::shared_ptr<QIcon> getAsIcon(const QString& emoticon) const;
     static QString getAsRichText(const QString& key);
-    static QString getInEmojiFont(const QString& sequence);
+    static QString getInEmojiFont(const QString& sequence, int pixelSize);
+    static QString emojiFontFamily();
+    static QVector<QPair<int, int>> emojiFontRanges(const QString& text);
+    static QString plainTextAsRichText(const QString& text);
 
 private slots:
     void onSmileyPackChanged();

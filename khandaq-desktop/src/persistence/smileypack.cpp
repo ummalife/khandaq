@@ -75,6 +75,10 @@ const QChar ZERO_WIDTH_JOINER{0x200D};
 const QChar EMOJI_PRESENTATION{0xFE0F};
 
 const QString EMOJI_FONT_PATTERN = QStringLiteral("<span style=\"font-family:'%1'\">%2</span>");
+const QString EMOJI_FONT_SIZED_PATTERN =
+    QStringLiteral("<span style=\"font-family:'%1'; font-size:%2px\">%3</span>");
+// The line breaks and the runs of spaces of a plain text, kept in rich text.
+const QString PLAIN_TEXT_PATTERN = QStringLiteral("<span style=\"white-space:pre-wrap\">%1</span>");
 
 QString fromCodePoints(std::initializer_list<uint> codePoints)
 {
@@ -306,17 +310,6 @@ QString withBlockedSequencesApart(const QString& text)
     return result;
 }
 
-QString emojiFontFamily()
-{
-#if defined(Q_OS_MACOS)
-    return QStringLiteral("Apple Color Emoji");
-#elif defined(Q_OS_WIN)
-    return QStringLiteral("Segoe UI Emoji");
-#else
-    return QStringLiteral("Noto Color Emoji");
-#endif
-}
-
 /**
  * @brief Construct list of standard directories with "emoticons" sub dir, whether these directories
  * exist or not
@@ -426,10 +419,73 @@ QString SmileyPack::getAsRichText(const QString& key)
  * glyph (☠ of the pirate flag U+1F3F4 U+200D U+2620 U+FE0F, ❤ of the heart on fire, ♀ and ⚕ of the
  * people) from another font than the emoji before the joiner, and the sequence fell apart into a
  * flag and a skull. Set in one emoji font, it is one picture.
+ * @param pixelSize The size of the pack's pictures around it; 0 leaves it the size of the text
+ * around it, as a plain text that has no pictures has it
+ * @note KHANDAQ (QA live 2026-11-14): at the size of the text, a sequence was half as big as the
+ * pictures of the pack in the same message (24 px by default): 👍🏽 next to 👍.
  */
-QString SmileyPack::getInEmojiFont(const QString& sequence)
+QString SmileyPack::getInEmojiFont(const QString& sequence, int pixelSize)
 {
-    return EMOJI_FONT_PATTERN.arg(emojiFontFamily(), sequence);
+    if (pixelSize <= 0) {
+        return EMOJI_FONT_PATTERN.arg(emojiFontFamily(), sequence);
+    }
+    return EMOJI_FONT_SIZED_PATTERN.arg(emojiFontFamily(), QString::number(pixelSize), sequence);
+}
+
+/**
+ * @brief The colour emoji font of the system
+ */
+QString SmileyPack::emojiFontFamily()
+{
+#if defined(Q_OS_MACOS)
+    return QStringLiteral("Apple Color Emoji");
+#elif defined(Q_OS_WIN)
+    return QStringLiteral("Segoe UI Emoji");
+#else
+    return QStringLiteral("Noto Color Emoji");
+#endif
+}
+
+/**
+ * @brief Where a plain text has joined sequences to set in the emoji font: all of them but those
+ * the picker does not offer, which are left to be drawn apart
+ * @param text A plain text
+ * @return The start and the end of each sequence
+ * @note For a text that stays as it is, such as the one being typed; a text shown as rich text is
+ * set by plainTextAsRichText().
+ */
+QVector<QPair<int, int>> SmileyPack::emojiFontRanges(const QString& text)
+{
+    QVector<QPair<int, int>> ranges;
+    for (const auto& sequence : joinedSequences(text)) {
+        if (!isBlockedSequence(text.mid(sequence.first, sequence.second - sequence.first))) {
+            ranges.append(sequence);
+        }
+    }
+    return ranges;
+}
+
+/**
+ * @brief A plain text as rich text, its joined sequences in the emoji font at the size of the text
+ * and the sequences the picker does not offer drawn apart, as a message shows them
+ * @param text A plain text, as typed
+ * @return The text escaped, its line breaks and spaces kept
+ * @note KHANDAQ (QA live 2026-11-14): a QLabel with the plain text drew 👨‍⚕️ as 👨 and ⚕, as the
+ * message itself was before getInEmojiFont().
+ */
+QString SmileyPack::plainTextAsRichText(const QString& text)
+{
+    const QString apart = withBlockedSequencesApart(text);
+    QString html;
+    int position = 0;
+    for (const auto& sequence : joinedSequences(apart)) {
+        html += apart.mid(position, sequence.first - position).toHtmlEscaped();
+        html += getInEmojiFont(
+            apart.mid(sequence.first, sequence.second - sequence.first).toHtmlEscaped(), 0);
+        position = sequence.second;
+    }
+    html += apart.mid(position).toHtmlEscaped();
+    return PLAIN_TEXT_PATTERN.arg(html);
 }
 
 void SmileyPack::cleanupIconsCache()
@@ -606,12 +662,14 @@ QString SmileyPack::smileyfied(const QString& message)
     const QString msg = withBlockedSequencesApart(message);
     QString result(msg);
 
-    // The pictures and the sequences set in the emoji font, by where they start in msg.
+    // The pictures and the sequences set in the emoji font, by where they start in msg. The
+    // sequences are as big as the pictures.
+    const int pictureSize = settings.getEmojiFontPointSize();
     QMap<int, QPair<int, QString>> replacements;
     for (const auto& sequence : joinedSequences(msg)) {
+        const int length = sequence.second - sequence.first;
         replacements.insert(sequence.first,
-                            {sequence.second - sequence.first,
-                             getInEmojiFont(msg.mid(sequence.first, sequence.second - sequence.first))});
+                            {length, getInEmojiFont(msg.mid(sequence.first, length), pictureSize)});
     }
 
     QRegularExpressionMatchIterator iter = smilify.globalMatch(msg);

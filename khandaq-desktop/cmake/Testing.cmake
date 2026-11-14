@@ -96,6 +96,7 @@ auto_test(widget airmediaparts "" "")
 auto_test(widget airyoupage "" "")
 auto_test(widget chatquotepreview "res/air.qrc" "") # the x icon
 auto_test(widget removechatdialog "" "mock_library")
+auto_test(widget chattextedit "" "")
 
 if (UNIX)
   auto_test(platform posixsignalnotifier "" "")

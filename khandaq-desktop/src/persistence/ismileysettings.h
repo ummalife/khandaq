@@ -28,5 +28,7 @@ class ISmileySettings
 public:
     virtual ~ISmileySettings();
     virtual QString getSmileyPack() const = 0;
+    /** @brief The size of the pack's pictures in a message, in pixels */
+    virtual int getEmojiFontPointSize() const = 0;
     DECLARE_SIGNAL(smileyPackChanged, const QString& name);
 };

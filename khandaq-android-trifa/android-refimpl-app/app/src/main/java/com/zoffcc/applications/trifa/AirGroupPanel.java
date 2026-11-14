@@ -334,7 +334,8 @@ final class AirGroupPanel
 
     /**
      * As above, for a reader that already asked whether the group is connected: toxcore's role while the
-     * member is in the peer list, else the one last stored here. A role no row would show is not looked up.
+     * member is in the peer list and confirmed, else the one last stored here. A role no row would show is not
+     * looked up.
      */
     static int roleOf(final String groupId, final long groupNum, final String publicKey, final boolean groupConnected)
     {
@@ -347,7 +348,9 @@ final class AirGroupPanel
             try
             {
                 final long peerId = MainActivity.tox_group_peer_by_public_key(groupNum, publicKey);
-                if (peerId >= 0)
+                // KHANDAQ (QA live 2026-11-14): a member toxcore lists again, unconfirmed, while it reconnects is
+                // reported as a plain member (HelperGroup.group_peer_role_is_known): the stored role then.
+                if (HelperGroup.group_peer_role_is_known(groupNum, peerId))
                 {
                     final int role = MainActivity.tox_group_peer_get_role(groupNum, peerId);
                     if (AirGroupModel.isKnownRole(role))

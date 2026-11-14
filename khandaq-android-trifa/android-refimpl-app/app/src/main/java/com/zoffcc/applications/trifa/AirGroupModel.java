@@ -80,6 +80,44 @@ final class AirGroupModel
     }
 
     /**
+     * KHANDAQ (QA live 2026-11-14): the role another member's stored row keeps when toxcore reports one. A
+     * member who is offline is shown with this stored role, and an offline founder was sometimes shown as a
+     * member. A role read before the group synced was stored, and one read of a member toxcore listed again,
+     * unconfirmed, while it reconnected: toxcore reports such members as members (see {@link #shownRole}).
+     *
+     * <ul>
+     * <li>A role read while the group is not connected, or of a peer toxcore has not confirmed, is not stored.</li>
+     * <li>A failed read (no known role) keeps what is stored.</li>
+     * <li>The founder stays the founder: toxcore gives that role to no one and takes it from no one.</li>
+     * </ul>
+     *
+     * @param readIsKnown whether toxcore's read is the member's own role: the group is connected and the peer
+     *                    confirmed (HelperGroup.group_peer_role_is_known)
+     * @return the role to store; {@link #ROLE_UNKNOWN} while none is known
+     */
+    static int roleToStore(final int stored, final int read, final boolean readIsKnown)
+    {
+        if (stored == ROLE_FOUNDER || !readIsKnown || !isKnownRole(read))
+        {
+            return isKnownRole(stored) ? stored : ROLE_UNKNOWN;
+        }
+        return read;
+    }
+
+    /**
+     * KHANDAQ (QA live 2026-11-14): whether a member missing from toxcore's saved-peer roster is still listed
+     * offline. toxcore leaves out of that roster the members online when it is read, so a member seen online at
+     * or after the read is missing from it for that reason alone; one last seen before it was dropped by toxcore.
+     *
+     * @param lastSeenMs   when the member was last seen online, 0 if never
+     * @param rosterReadMs when the roster was read, null while it has not been
+     */
+    static boolean seenSinceRosterRead(final long lastSeenMs, final Long rosterReadMs)
+    {
+        return rosterReadMs != null && lastSeenMs > 0L && lastSeenMs >= rosterReadMs;
+    }
+
+    /**
      * Whether {@code actor} may give {@code target} the role {@code role}: the founder gives any role but
      * founder to anyone else; a moderator moves members and observers between those two roles.
      */

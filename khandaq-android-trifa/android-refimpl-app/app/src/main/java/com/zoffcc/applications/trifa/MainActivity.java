@@ -9379,6 +9379,7 @@ public class MainActivity extends AppCompatActivity
         }
         update_group_messages_peer_role(temp_group_identifier, group_peer_pubkey, peer_role);
         HelperGroup.record_group_peer_on_join(group_number, temp_group_identifier, peer_id, group_peer_pubkey, peer_role);
+        HelperGroup.on_group_members_changed(temp_group_identifier);
         HelperGroup.notify_group_peer_joined(group_number, peer_id);
         update_group_in_friendlist(temp_group_identifier);
         update_group_in_groupmessagelist(temp_group_identifier, true);
@@ -9414,6 +9415,7 @@ public class MainActivity extends AppCompatActivity
         HelperGroup.remove_group_peer_from_db_on_exit(group_number, temp_group_identifier, exit_peer_pubkey,
                                                       a_Tox_Group_Exit_Type, said_it_was_leaving);
         HelperGroup.sync_group_peers_from_tox_to_db(group_number);
+        HelperGroup.on_group_members_changed(temp_group_identifier);
         update_group_in_friendlist(temp_group_identifier);
         update_group_in_groupmessagelist(temp_group_identifier, true);
         HelperGroup.notify_group_peer_exit(group_number, peer_id, a_Tox_Group_Exit_Type, said_it_was_leaving,

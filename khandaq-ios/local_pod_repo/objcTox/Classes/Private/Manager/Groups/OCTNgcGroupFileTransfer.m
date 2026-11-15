@@ -15,7 +15,9 @@ static const uint8_t kOCTNgcPktFileChunk = 0x13;
 // can be lossy/rate-limited). The receiver asks for the chunk indices it is still missing; the
 // original sender re-sends just those. Without this a single lost chunk left the file stuck loading.
 static const uint8_t kOCTNgcPktFileRequest = 0x14;
-static const int kOCTNgcNackMaxRounds = 24;          // stop asking after this many stalled rounds
+// Silent rounds IN A ROW after which an assembly is dropped (24 x 2.5 s = the 60 s of kOCTNgcAssemblyStaleTimeout),
+// and the most requests one file sends.
+static const int kOCTNgcNackMaxRounds = 24;
 static const int kOCTNgcNackMaxIndicesPerPacket = 256;
 // KHANDAQ (audit 2026-08-20): how often ONE peer may have us re-broadcast chunks of ONE file.
 //
@@ -90,6 +92,8 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 @property (nonatomic, strong) dispatch_source_t nackTimer;
 @property (nonatomic, assign) int lastReceivedCount;
 @property (nonatomic, assign) int nackRounds;
+// KHANDAQ (0.2.56): the requests for missing chunks this assembly sent. Each one goes to the whole group.
+@property (nonatomic, assign) int nackRequestsSent;
 @end
 
 @implementation OCTNgcIncomingAssembly
@@ -978,6 +982,12 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     assembly.lastReceivedCount = assembly.receivedCount;
 
     if (! stalled) {
+        // KHANDAQ (0.2.56): a chunk came, so the count of silent rounds starts again: an assembly is dropped
+        // after kOCTNgcNackMaxRounds silent rounds in a row, as kOCTNgcAssemblyStaleTimeout says. The count
+        // never went back to zero, so a sender that paces its chunks for a big group (one every few seconds:
+        // the desktop waits up to 40 s) had every file of more than about a dozen chunks dropped half way,
+        // and nothing sent it again.
+        assembly.nackRounds = 0;
         return;
     }
 
@@ -992,6 +1002,14 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return;
     }
 
+    // KHANDAQ (0.2.56): a slowly paced transfer is silent at most rounds, and a request goes to the whole
+    // group. Now that such a transfer lives on, one file still asks kOCTNgcNackMaxRounds times at most, as
+    // many as the rounds that ended it before.
+    if (assembly.nackRequestsSent >= kOCTNgcNackMaxRounds) {
+        return;
+    }
+
+    assembly.nackRequestsSent++;
     [self sendNackForAssembly:assembly];
 }
 

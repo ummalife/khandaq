@@ -36,6 +36,13 @@
 
 @end
 
+@interface OCTNgcGroupFileTransfer (StallTests)
+
+- (NSMutableDictionary<NSString *, id> *)assemblies;
+- (void)nackTickForAssembly:(id)assembly assemblyKey:(NSString *)assemblyKey;
+
+@end
+
 /**
  * KHANDAQ (long texts, group connection).
  *
@@ -929,6 +936,103 @@
         @"completions": completions,
         @"mocks": @[dataSource, tox, realmManager, transfer, answers],
     };
+}
+
+#pragma mark - A group file that comes slowly
+
+// KHANDAQ (0.2.56): an incoming chunked file is dropped after 24 silent rounds of 2.5 s IN A ROW (a minute).
+// The count never went back to zero when a chunk came, so a file paced for a big group (a chunk every few
+// seconds) was dropped half way. Its requests for missing chunks go to the whole group, so one file still
+// sends 24 at most.
+
+- (void)testAGroupFileThatKeepsComingSlowlyIsNotDropped
+{
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *transfer = [self stallTestTransferCollectingPackets:packets];
+    id assembly = [self stallTestAssemblyWithChunks:100];
+    transfer.assemblies[@"slow"] = assembly;
+
+    // A chunk, then two rounds without one, forty times: eighty silent rounds in all, never three in a row.
+    for (int chunk = 0; chunk < 40; chunk++) {
+        [self stallTestAssembly:assembly receiveChunk:chunk];
+
+        for (int round = 0; round < 3; round++) {
+            [transfer nackTickForAssembly:assembly assemblyKey:@"slow"];
+        }
+    }
+
+    XCTAssertEqual(transfer.assemblies[@"slow"], assembly);
+    XCTAssertEqual(packets.count, 24u);
+
+    for (NSData *packet in packets) {
+        XCTAssertGreaterThan(packet.length, 7u);
+        XCTAssertEqual(((const uint8_t *)packet.bytes)[7], 0x14);
+    }
+}
+
+- (void)testAGroupFileSilentForAMinuteInARowIsDropped
+{
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *transfer = [self stallTestTransferCollectingPackets:packets];
+    id assembly = [self stallTestAssemblyWithChunks:100];
+    transfer.assemblies[@"silent"] = assembly;
+
+    [self stallTestAssembly:assembly receiveChunk:0];
+    [transfer nackTickForAssembly:assembly assemblyKey:@"silent"];
+
+    for (int round = 0; round < 24; round++) {
+        [transfer nackTickForAssembly:assembly assemblyKey:@"silent"];
+    }
+
+    XCTAssertEqual(transfer.assemblies[@"silent"], assembly);
+    XCTAssertEqual(packets.count, 24u);
+
+    [transfer nackTickForAssembly:assembly assemblyKey:@"silent"];
+
+    XCTAssertNil(transfer.assemblies[@"silent"]);
+    XCTAssertEqual(packets.count, 24u);
+}
+
+- (OCTNgcGroupFileTransfer *)stallTestTransferCollectingPackets:(NSMutableArray<NSData *> *)packets
+{
+    return [[OCTNgcGroupFileTransfer alloc] initWithSendPacketBlock:^BOOL (uint32_t groupNumber, NSData *packet, NSError **error) {
+        [packets addObject:packet];
+        return YES;
+    } incomingFilesDirectory:^NSString *(uint32_t groupNumber) {
+        return NSTemporaryDirectory();
+    } incomingBeginBlock:nil incomingCompleteBlock:^(uint32_t groupNumber, uint32_t peerId, NSString *senderPublicKeyHex,
+                                                    NSString *fileName, NSString *filePath, uint64_t fileSize, NSString *msgIdHex) {
+        XCTFail(@"The file is not complete");
+    } transferProgressBlock:nil];
+}
+
+- (id)stallTestAssemblyWithChunks:(int)chunks
+{
+    Class assemblyClass = NSClassFromString(@"OCTNgcIncomingAssembly");
+    XCTAssertNotNil(assemblyClass);
+
+    id assembly = [assemblyClass new];
+    NSMutableArray<NSNumber *> *received = [NSMutableArray arrayWithCapacity:chunks];
+
+    for (int i = 0; i < chunks; i++) {
+        [received addObject:@NO];
+    }
+
+    [assembly setValue:received forKey:@"received"];
+    [assembly setValue:@(chunks) forKey:@"totalChunks"];
+    [assembly setValue:@0 forKey:@"receivedCount"];
+    // As -startNackTimerForAssembly:assemblyKey: leaves it.
+    [assembly setValue:@(-1) forKey:@"lastReceivedCount"];
+    [assembly setValue:[NSMutableData dataWithLength:32] forKey:@"msgId"];
+    [assembly setValue:@5 forKey:@"groupNumber"];
+    return assembly;
+}
+
+- (void)stallTestAssembly:(id)assembly receiveChunk:(int)chunk
+{
+    NSMutableArray<NSNumber *> *received = [assembly valueForKey:@"received"];
+    received[chunk] = @YES;
+    [assembly setValue:@([[assembly valueForKey:@"receivedCount"] intValue] + 1) forKey:@"receivedCount"];
 }
 
 @end

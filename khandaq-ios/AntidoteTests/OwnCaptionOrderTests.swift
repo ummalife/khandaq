@@ -155,14 +155,16 @@ final class OwnCaptionOrderTests: XCTestCase {
         wait(for: [try send(text)], timeout: 5)
     }
 
-    /// The chat as ChatPrivateController lists it: by sortTimestamp, the newest first.
+    /// The chat as ChatPrivateController lists it: in the chat's order (sortTimestamp, then dateInterval), the
+    /// newest first.
     private func shownOrder() throws -> [String] {
         let realmManager = try XCTUnwrap(self.realmManager)
         let chat = try XCTUnwrap(self.chat)
         let messageClass: AnyClass = try XCTUnwrap(self.messageClass)
+        let chatOrder = try appClass("OCTMessageAbstract", as: OCTMessageAbstract.Type.self).chatOrderSortDescriptors(ascending: false)
         let messages = realmManager.objects(with: messageClass,
                                             predicate: NSPredicate(format: "chatUniqueIdentifier == %@", chat.uniqueIdentifier))
-            .sortedResults(usingKeyPath: "sortTimestamp", ascending: false)
+            .sortedResults(using: chatOrder)
         return (0..<messages.count).map { index -> String in
             let message = messages.object(at: index) as? NSObject
             return message?.value(forKeyPath: "messageText.text") as? String

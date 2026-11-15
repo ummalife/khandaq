@@ -191,8 +191,10 @@ enum ChatListContent {
             }
         }
 
+        // KHANDAQ (0.2.56): in the conversation's order (OCTMessageAbstract.chatOrderSortDescriptors), so the
+        // preview shows the parts of a long text as the conversation does.
         let allMessages = submanagerObjects.messages(predicate: NSPredicate(format: "chatUniqueIdentifier == %@", chat.uniqueIdentifier))
-            .sortedResultsUsingProperty("dateInterval", ascending: true)
+            .sortedResultsUsingDescriptors(OCTMessageAbstract.chatOrderSortDescriptors(ascending: true))
 
         var recent = [OCTMessageAbstract]()
         let total = allMessages.count

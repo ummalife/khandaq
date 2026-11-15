@@ -3519,6 +3519,62 @@ public class HelperGroup
         return get_group_display_name(group_identifier, "");
     }
 
+    /**
+     * KHANDAQ (0.2.56): the name a group is listed under: the title toxcore has for it (get_effective_group_title),
+     * else the stored name, else the start of its ID. As the chat list and the group's dialogs name it.
+     */
+    static String group_list_title(@Nullable final String effective_title, @Nullable final String stored_name,
+                                   @Nullable final String group_identifier)
+    {
+        if (effective_title != null && !effective_title.trim().isEmpty())
+        {
+            return effective_title;
+        }
+        if (stored_name != null && !stored_name.trim().isEmpty())
+        {
+            return stored_name;
+        }
+        return group_identifier == null ? "" : group_identifier.substring(0, Math.min(8, group_identifier.length()));
+    }
+
+    /**
+     * KHANDAQ (0.2.56): stores the group's title as toxcore has it at the join, by the rule the start of the app
+     * applies (TrifaToxService, where the groups are loaded): its topic, else its name, and nothing while toxcore
+     * has neither, so a name the group has (the invitation's, MainActivity.join_invite) is not replaced by an
+     * empty one.
+     *
+     * <p>A group joined by its ID is stored before toxcore knows its name, and toxcore does not report the topic it
+     * gets with the join (handle_gc_topic calls back only once connected), so the stored name stayed empty until
+     * the app started again. The chat list asks toxcore and showed the name; the lists that read the stored one
+     * (sharing into a chat, the search) showed the start of the ID.
+     */
+    static void store_group_title_from_tox(final long group_num, final String group_identifier)
+    {
+        if (group_num < 0 || TextUtils.isEmpty(group_identifier))
+        {
+            return;
+        }
+        try
+        {
+            final String topic = tox_group_get_topic(group_num);
+            if (is_valid_group_title_string(topic))
+            {
+                update_group_in_db_name(group_identifier, topic);
+                update_group_in_db_topic(group_identifier, topic);
+                return;
+            }
+            final String name = tox_group_get_name(group_num);
+            if (is_valid_group_title_string(name))
+            {
+                update_group_in_db_name(group_identifier, name);
+            }
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "store_group_title_from_tox:EE:" + e.getMessage());
+        }
+    }
+
     static boolean save_group_title_if_changed(final String group_identifier, final String raw_title)
     {
         final String new_title = sanitize_group_topic(raw_title);
@@ -8487,6 +8543,8 @@ public class HelperGroup
         apply_group_self_display_name(group_num);
         TrifaToxService.wakeup_tox_thread();
         sync_group_peers_from_tox_to_db(group_num);
+        // KHANDAQ (0.2.56): toxcore has the group's name and topic now; a group joined by its ID has none stored.
+        store_group_title_from_tox(group_num, group_identifier);
         update_group_in_friendlist(group_identifier);
 
         final int conn = tox_group_is_connected(group_num);

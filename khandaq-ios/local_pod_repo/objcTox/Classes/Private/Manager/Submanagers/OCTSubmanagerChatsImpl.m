@@ -160,9 +160,16 @@ static NSURLSession *khandaqPinnedPushSession(void)
     return session;
 }
 
+// KHANDAQ (review 0.2.56): how far ahead of the clock the msgV3 stamp of a text may run (see
+// +textStampAfterStamp:now:): far more than a long text needs (a part a second; a megabyte is some 800
+// parts), and a clock set back by more than this starts the stamps from it again.
+static const NSTimeInterval kOCTTextStampMaxLeadSec = 3600.0;
+
 @interface OCTSubmanagerChatsImpl ()
 
 @property (strong, nonatomic, readonly) NSOperationQueue *sendMessageQueue;
+// KHANDAQ (review 0.2.56): the msgV3 stamp of the last text sent to each chat (chat id -> seconds).
+@property (strong, nonatomic, readonly) NSMutableDictionary<NSString *, NSNumber *> *lastTextStamps;
 
 @end
 
@@ -179,8 +186,39 @@ static NSURLSession *khandaqPinnedPushSession(void)
 
     _sendMessageQueue = [NSOperationQueue new];
     _sendMessageQueue.maxConcurrentOperationCount = 1;
+    _lastTextStamps = [NSMutableDictionary new];
 
     return self;
+}
+
+/**
+ * KHANDAQ (review 0.2.56): the msgV3 stamp of a text, whole seconds the receiver sorts it by, given the
+ * stamp of the text sent to its chat before it: the clock, or one second after that stamp when the clock
+ * has not passed it yet. Texts sent within one second, as the parts of a long text are, then keep their
+ * order, and so does a text sent right after them. The stamps were the parts' own (the first one's
+ * second plus i), and a text sent next, stamped with the clock, sorted among the last parts once they
+ * all arrived late. A stamp more than kOCTTextStampMaxLeadSec ahead (a clock set back) is let go.
+ */
++ (UInt32)textStampAfterStamp:(UInt32)lastStamp now:(NSTimeInterval)now
+{
+    UInt32 clock = (UInt32)MAX(floor(now), 0.0);
+
+    if (lastStamp < clock || (NSTimeInterval)lastStamp - clock >= kOCTTextStampMaxLeadSec) {
+        return clock;
+    }
+
+    return lastStamp + 1;
+}
+
+- (UInt32)nextTextStampForChat:(OCTChat *)chat now:(NSTimeInterval)now
+{
+    NSString *key = chat.uniqueIdentifier ?: @"";
+
+    @synchronized(self.lastTextStamps) {
+        UInt32 stamp = [OCTSubmanagerChatsImpl textStampAfterStamp:self.lastTextStamps[key].unsignedIntValue now:now];
+        self.lastTextStamps[key] = @(stamp);
+        return stamp;
+    }
 }
 
 - (void)dealloc
@@ -655,7 +693,6 @@ static void triggerPush(NSString *used_pushToken,
                        text:text
                        type:type
            sentDateInterval:[[NSDate date] timeIntervalSince1970]
-                 msgv3tssec:0
                  wakeFriend:YES
                successBlock:userSuccessBlock
                failureBlock:userFailureBlock];
@@ -672,18 +709,17 @@ static void triggerPush(NSString *used_pushToken,
 
     // KHANDAQ (long texts): the parts of one text, sent in order on the serial send queue. A receiver
     // sorts them by their whole-second msgV3 timestamps, where parts stamped in the same second tie and
-    // can show in any order, so part i is stamped i seconds after the first; here they sort by the
-    // moment of sending, a millisecond apart. Only the first part wakes a friend who is offline: the
-    // wake-up loop of one message covers the text, and the push relay counts every wake.
+    // can show in any order, so each is stamped at least a second after the one before it (see
+    // +textStampAfterStamp:now:); here they sort by the moment of sending, a millisecond apart. Only the
+    // first part wakes a friend who is offline: the wake-up loop of one message covers the text, and the
+    // push relay counts every wake.
     NSTimeInterval firstSentDateInterval = [[NSDate date] timeIntervalSince1970];
-    UInt32 firstSeconds = (UInt32)[[NSNumber numberWithDouble:firstSentDateInterval] integerValue];
 
     [parts enumerateObjectsUsingBlock:^(NSString *part, NSUInteger index, BOOL *stop) {
         [self sendMessageToChat:chat
                            text:part
                            type:type
                sentDateInterval:firstSentDateInterval + index * 0.001
-                     msgv3tssec:firstSeconds + (UInt32)index
                      wakeFriend:(index == 0)
                    successBlock:^(OCTMessageAbstract *message) {
             if (userSuccessBlock) {
@@ -700,15 +736,14 @@ static void triggerPush(NSString *used_pushToken,
 
 /**
  * @param sentDateInterval The moment of sending, to the fraction of a second: the text sorts by it here.
- * @param stampedSeconds The msgV3 timestamp the receiver sorts the text by; 0 takes the whole seconds
- *        of sentDateInterval.
+ *        The msgV3 timestamp the receiver sorts it by is its whole seconds, or a second after the stamp
+ *        of the text sent to the chat before (+textStampAfterStamp:now:).
  * @param wakeFriend Whether a friend who is offline is woken for this text.
  */
 - (void)sendMessageToChat:(OCTChat *)chat
                      text:(NSString *)text
                      type:(OCTToxMessageType)type
          sentDateInterval:(NSTimeInterval)sentDateInterval
-               msgv3tssec:(UInt32)stampedSeconds
                wakeFriend:(BOOL)wakeFriend
              successBlock:(void (^)(OCTMessageAbstract *message))userSuccessBlock
              failureBlock:(void (^)(NSError *error))userFailureBlock
@@ -732,7 +767,7 @@ static void triggerPush(NSString *used_pushToken,
         msgv3HashHex = [[NSString alloc] initWithBytes:message_v3_hash_hexstr length:(TOX_MSGV3_MSGID_LENGTH * 2) encoding:NSUTF8StringEncoding];
 
         // HINT: set sent timestamp to now() as unixtimestamp value
-        msgv3tssec = (stampedSeconds > 0) ? stampedSeconds : [[NSNumber numberWithDouble: sentDateInterval] integerValue];
+        msgv3tssec = [self nextTextStampForChat:chat now:sentDateInterval];
 
         free(message_v3_hash_bin);
         free(message_v3_hash_hexstr);

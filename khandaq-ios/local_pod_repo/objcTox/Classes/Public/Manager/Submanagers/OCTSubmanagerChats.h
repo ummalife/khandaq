@@ -83,9 +83,10 @@
 /**
  * Send the parts of one long text to specific chat, in order, each as sendMessageToChat sends a text.
  *
- * The receiver sorts a message by its msgV3 timestamp, which has whole seconds, so part i is stamped
- * i seconds after the first: parts sent within one second keep their order there. Only the first part
- * wakes a friend who is offline: its wake-up loop covers the text, and the push relay counts each wake.
+ * The receiver sorts a message by its msgV3 timestamp, which has whole seconds, so a text to a chat is
+ * stamped at least a second after the text sent to it before: the parts, sent within one second, and a
+ * text sent right after them keep their order there. Only the first part wakes a friend who is offline:
+ * its wake-up loop covers the text, and the push relay counts each wake.
  *
  * @param chat Chat send the parts to.
  * @param parts Texts that each fit one message.

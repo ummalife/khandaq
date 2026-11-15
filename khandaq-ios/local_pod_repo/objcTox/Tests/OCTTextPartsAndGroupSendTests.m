@@ -21,6 +21,7 @@
 
 @interface OCTSubmanagerChatsImpl (TextPartsTests)
 
++ (UInt32)textStampAfterStamp:(UInt32)lastStamp now:(NSTimeInterval)now;
 - (void)wakeFriendWithPushToken:(NSString *)pushToken forMessageWithHash:(NSString *)msgv3HashHex inChat:(OCTChat *)chat;
 
 @end
@@ -186,7 +187,8 @@
     XCTAssertEqualObjects(succeeded, (@[@0, @1, @2]));
     XCTAssertEqual(wakes, 1u, @"each part woke the friend: the relay counts every wake");
 
-    // Part i is stamped i seconds after the first, so whole-second stamps cannot tie at the receiver.
+    // Each part is stamped a second after the one before it, so whole-second stamps cannot tie at the
+    // receiver.
     UInt32 first = sentStamps.firstObject.unsignedIntValue;
     XCTAssertEqualWithAccuracy((NSTimeInterval)first, before, 2.0, @"the first part is stamped with the moment of sending");
     XCTAssertEqualObjects(sentStamps, (@[@(first), @(first + 1), @(first + 2)]));
@@ -199,6 +201,130 @@
     XCTAssertLessThan(storedDates[2].doubleValue - storedDates[0].doubleValue, 1.0);
 
     [partial stopMocking];
+}
+
+#pragma mark - The stamps of the texts to a chat
+
+- (void)testAStampIsTheClockOrASecondAfterTheStampBeforeIt
+{
+    // The first text to a chat, and one sent once the clock has passed the stamp before it: the clock.
+    XCTAssertEqual([OCTSubmanagerChatsImpl textStampAfterStamp:0 now:1000.7], 1000u);
+    XCTAssertEqual([OCTSubmanagerChatsImpl textStampAfterStamp:999 now:1000.0], 1000u);
+    XCTAssertEqual([OCTSubmanagerChatsImpl textStampAfterStamp:1000 now:1005.2], 1005u);
+
+    // One sent within the second of the stamp before it, or while the stamps run ahead of the clock:
+    // a second after that stamp, so the two cannot tie at the receiver.
+    XCTAssertEqual([OCTSubmanagerChatsImpl textStampAfterStamp:1000 now:1000.9], 1001u);
+    XCTAssertEqual([OCTSubmanagerChatsImpl textStampAfterStamp:1040 now:1000.0], 1041u);
+
+    // A clock set back by an hour or more starts the stamps from it again.
+    XCTAssertEqual([OCTSubmanagerChatsImpl textStampAfterStamp:1000 + 3599 now:1000.0], 4600u);
+    XCTAssertEqual([OCTSubmanagerChatsImpl textStampAfterStamp:1000 + 3600 now:1000.0], 1000u);
+}
+
+/// The parts of a long text ran some seconds ahead of the clock, and a text sent right after them was
+/// stamped with the clock: at a receiver that got them all late it sorted among the last parts.
+- (void)testATextSentRightAfterThePartsOfALongTextIsStampedAfterThem
+{
+    NSDictionary *rig = [self friendSendRig];
+    OCTSubmanagerChatsImpl *submanager = rig[@"submanager"];
+    OCTChat *chat = [self chatWithFriendNumber:5];
+    NSTimeInterval before = [[NSDate date] timeIntervalSince1970];
+
+    [self sendParts:@[@"first", @"second", @"third"] thenText:@"next" toChat:chat withSubmanager:submanager];
+
+    NSMutableArray<NSNumber *> *stamps = [NSMutableArray new];
+    for (NSArray<NSNumber *> *send in rig[@"sends"]) {
+        [stamps addObject:send.lastObject];
+    }
+    XCTAssertEqual(stamps.count, 4u);
+    UInt32 first = stamps.firstObject.unsignedIntValue;
+    XCTAssertEqualWithAccuracy((NSTimeInterval)first, before, 2.0, @"the first part is stamped with the moment of sending");
+    XCTAssertEqualObjects(stamps, (@[@(first), @(first + 1), @(first + 2), @(first + 3)]),
+                          @"the text after the parts can tie with them or sort among them at the receiver");
+}
+
+- (void)testTheStampsOfTheTextsToOneChatDoNotRunAheadInAnother
+{
+    NSDictionary *rig = [self friendSendRig];
+    OCTSubmanagerChatsImpl *submanager = rig[@"submanager"];
+    OCTChat *chat = [self chatWithFriendNumber:5];
+    OCTChat *otherChat = [self chatWithFriendNumber:6];
+
+    [self sendParts:@[@"first", @"second", @"third"] thenText:@"next" toChat:chat withSubmanager:submanager];
+    NSTimeInterval before = [[NSDate date] timeIntervalSince1970];
+    [self sendParts:@[] thenText:@"hello" toChat:otherChat withSubmanager:submanager];
+
+    NSArray<NSArray<NSNumber *> *> *sends = rig[@"sends"];
+    XCTAssertEqual(sends.count, 5u);
+    XCTAssertEqualObjects(sends.lastObject.firstObject, @6);
+    XCTAssertEqualWithAccuracy(sends.lastObject.lastObject.doubleValue, before, 2.0,
+                               @"a text to another chat took the stamps of the first one");
+    XCTAssertLessThan(sends.lastObject.lastObject.unsignedIntValue, sends[3].lastObject.unsignedIntValue);
+}
+
+/**
+ * A chats submanager whose tox sends every text at once and records, in order, the friend number and
+ * the msgV3 stamp of each in "sends".
+ */
+- (NSDictionary *)friendSendRig
+{
+    id dataSource = OCMProtocolMock(@protocol(OCTSubmanagerDataSource));
+    id tox = OCMClassMock([OCTTox class]);
+    id realmManager = OCMClassMock([OCTRealmManager class]);
+    OCMStub([dataSource managerGetTox]).andReturn(tox);
+    OCMStub([dataSource managerGetRealmManager]).andReturn(realmManager);
+
+    NSMutableArray<NSArray<NSNumber *> *> *sends = [NSMutableArray new];
+    [[[[tox stub] ignoringNonObjectArgs] andDo:^(NSInvocation *invocation) {
+        OCTToxFriendNumber friendNumber = 0;
+        UInt32 stamp = 0;
+        [invocation getArgument:&friendNumber atIndex:2];
+        [invocation getArgument:&stamp atIndex:6];
+        @synchronized(sends) {
+            [sends addObject:@[@(friendNumber), @(stamp)]];
+        }
+        OCTToxMessageId messageId = 1;
+        [invocation setReturnValue:&messageId];
+    }] sendMessageWithFriendNumber:0 type:0 message:[OCMArg any] msgv3HashHex:[OCMArg any] msgv3tssec:0 error:[OCMArg anyObjectRef]];
+
+    OCTSubmanagerChatsImpl *submanager = [OCTSubmanagerChatsImpl new];
+    submanager.dataSource = dataSource;
+
+    // The data source is weak: the mocks live as long as the rig.
+    return @{@"submanager" : submanager, @"sends" : sends, @"mocks" : @[dataSource, tox, realmManager]};
+}
+
+- (OCTChat *)chatWithFriendNumber:(OCTToxFriendNumber)friendNumber
+{
+    OCTFriend *friend = [OCTFriend new];
+    friend.friendNumber = friendNumber;
+    OCTChat *chat = [OCTChat new];
+    [chat.friends addObject:friend];
+    return chat;
+}
+
+/// Sends `parts` as the parts of one text, then `text` on its own, and waits until all of them went.
+- (void)sendParts:(NSArray<NSString *> *)parts
+         thenText:(NSString *)text
+           toChat:(OCTChat *)chat
+   withSubmanager:(OCTSubmanagerChatsImpl *)submanager
+{
+    XCTestExpectation *sent = [self expectationWithDescription:@"every text sent"];
+    sent.expectedFulfillmentCount = parts.count + 1;
+
+    [submanager sendMessagePartsToChat:chat parts:parts type:OCTToxMessageTypeNormal successBlock:^(OCTMessageAbstract *message, NSInteger index) {
+        [sent fulfill];
+    } failureBlock:^(NSError *error, NSInteger index) {
+        XCTFail(@"part %ld failed: %@", (long)index, error);
+    }];
+    [submanager sendMessageToChat:chat text:text type:OCTToxMessageTypeNormal successBlock:^(OCTMessageAbstract *message) {
+        [sent fulfill];
+    } failureBlock:^(NSError *error) {
+        XCTFail(@"the text failed: %@", error);
+    }];
+
+    [self waitForExpectationsWithTimeout:5.0 handler:nil];
 }
 
 #pragma mark - A message to a group that is not connected

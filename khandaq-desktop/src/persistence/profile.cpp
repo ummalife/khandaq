@@ -510,9 +510,13 @@ Profile::~Profile()
     // groups, so that the save below holds none of them; only after it the profile stops keeping
     // their chat ids.
     core->leavePendingGroupsNow();
+    // 0.2.56: our joins by ID that did not sync are read before the save, as the loop of the node
+    // still turns. A group that syncs in between is then in both, and the next start keeps the one
+    // in the save (Core::rejoinStoredGroups); read after the save, it was in neither, and lost.
+    const QString unsyncedGroupJoins = core->getUnsyncedGroupJoins();
     onSaveToxSave();
     settings.setPendingGroupLeaves(core->getPendingGroupLeaves());
-    settings.setUnsyncedGroupJoins(core->getUnsyncedGroupJoins());
+    settings.setUnsyncedGroupJoins(unsyncedGroupJoins);
     settings.savePersonal();
     settings.sync();
     settings.unloadPersonal(*this);

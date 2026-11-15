@@ -26,7 +26,7 @@ import java.util.Set;
  *   <li>a row the peer served to us: it holds what it serves;</li>
  *   <li>a row already queued to the peer, unless the peer dropped out or joined again within
  *       {@link #DELIVERY_GRACE_MS} of it: toxcore queues a lossless packet and loses it when the peer
- *       times out, 58 s after its last ping;</li>
+ *       times out, 58 s after its last ping by toxcore's monotonic clock;</li>
  *   <li>a row queued to the peer {@link #MAX_SENDS_PER_FULL_INTERVAL} times since the last full serve,
  *       so a peer whose link carries nothing is not fed the same rows at every rejoin.</li>
  * </ul>
@@ -38,13 +38,21 @@ import java.util.Set;
  * <p>Nothing changes on the wire: iOS and the desktop get the same packets, only fewer of them.
  *
  * <p>Pure static logic over an explicit state map, like {@link NgcHistoryRequestPolicy}, so it is
- * unit-tested without a Tox instance or a database: see {@code NgcHistoryServeLedgerTest}.
+ * unit-tested without a Tox instance or a database: see {@code NgcHistoryServeLedgerTest}. The callers
+ * pass both clocks in: the wall clock ({@code nowMs}) for the full serves and the absences, the
+ * monotonic one ({@code nowUptimeMs}, SystemClock.uptimeMillis()) for the delivery grace.
  */
 final class NgcHistoryServeLedger
 {
     /** A full serve at least this often per peer. Well inside the 130-minute history window. */
     static final long FULL_SERVE_INTERVAL_MS = 30L * 60L * 1000L;
-    /** A row queued this long before the peer's exit or join may have been lost with its connection. */
+    /**
+     * A row queued this long before the peer's exit or join may have been lost with its connection. On the
+     * monotonic clock (SystemClock.uptimeMillis(), CLOCK_MONOTONIC), the one toxcore times a peer out by: it
+     * stops in deep sleep, and the Tox service holds no wake lock. On the wall clock, a phone that slept for
+     * more than half a minute after a serve saw the exit past the grace, and the rows lost with the
+     * connection waited for the next full serve.
+     */
     static final long DELIVERY_GRACE_MS = 90_000L;
     /** A peer away this long may come back with a new database: its next serve is full. */
     static final long LONG_ABSENCE_MS = 10L * 60L * 1000L;
@@ -69,8 +77,8 @@ final class NgcHistoryServeLedger
     /** Package-private, so the ledger builds it without a synthetic accessor (lint SyntheticAccessor). */
     static final class PeerState
     {
-        /** Rows queued to this peer that are still expected to arrive: message id -> when. */
-        final Map<String, Long> queuedAtMs = new HashMap<>();
+        /** Rows queued to this peer that are still expected to arrive: message id -> when, on the monotonic clock. */
+        final Map<String, Long> queuedAtUptimeMs = new HashMap<>();
         /** How often each row was queued to this peer since the last full serve. */
         final Map<String, Integer> sends = new HashMap<>();
         /** Rows this peer showed it holds. */
@@ -80,7 +88,7 @@ final class NgcHistoryServeLedger
 
         int entries()
         {
-            return queuedAtMs.size() + sends.size() + held.size();
+            return queuedAtUptimeMs.size() + sends.size() + held.size();
         }
     }
 
@@ -187,7 +195,7 @@ final class NgcHistoryServeLedger
             serve.skipHeld++;
             return false;
         }
-        if (st.queuedAtMs.containsKey(id))
+        if (st.queuedAtUptimeMs.containsKey(id))
         {
             serve.skipQueued++;
             return false;
@@ -202,8 +210,12 @@ final class NgcHistoryServeLedger
         return true;
     }
 
-    /** The row went into toxcore's queue for this peer. */
-    static synchronized void markQueued(final Serve serve, final String messageIdTox, final long nowMs)
+    /**
+     * The row went into toxcore's queue for this peer.
+     *
+     * @param nowUptimeMs SystemClock.uptimeMillis(), the clock of {@link #DELIVERY_GRACE_MS}
+     */
+    static synchronized void markQueued(final Serve serve, final String messageIdTox, final long nowUptimeMs)
     {
         final String id = messageId(messageIdTox);
         final PeerState st = serve.key == null ? null : STATES.get(serve.key);
@@ -212,7 +224,7 @@ final class NgcHistoryServeLedger
             return;
         }
         final int before = st.entries();
-        st.queuedAtMs.put(id, nowMs);
+        st.queuedAtUptimeMs.put(id, nowUptimeMs);
         final Integer sends = st.sends.get(id);
         st.sends.put(id, sends == null ? 1 : sends + 1);
         afterChange(serve.key, st, before);
@@ -234,8 +246,14 @@ final class NgcHistoryServeLedger
         afterChange(k, st, before);
     }
 
-    /** The peer left or timed out: what was queued to it shortly before may be lost. */
-    static synchronized void onPeerExited(final String groupIdentifier, final String peerPubkey, final long nowMs)
+    /**
+     * The peer left or timed out: what was queued to it shortly before may be lost.
+     *
+     * @param nowMs       System.currentTimeMillis(), the clock of {@link #LONG_ABSENCE_MS}
+     * @param nowUptimeMs SystemClock.uptimeMillis(), the clock of {@link #DELIVERY_GRACE_MS}
+     */
+    static synchronized void onPeerExited(final String groupIdentifier, final String peerPubkey, final long nowMs,
+                                          final long nowUptimeMs)
     {
         final String k = key(groupIdentifier, peerPubkey);
         final PeerState st = k == null ? null : STATES.get(k);
@@ -245,15 +263,16 @@ final class NgcHistoryServeLedger
         }
         final int before = st.entries();
         st.lastExitMs = nowMs;
-        dropRecentlyQueued(st, nowMs);
+        dropRecentlyQueued(st, nowUptimeMs);
         afterChange(k, st, before);
     }
 
     /**
      * The peer joined (again). Queued rows go the way of an exit, in case its exit was never reported; a
-     * peer back from a long absence is a stranger again.
+     * peer back from a long absence is a stranger again. The clocks as for {@link #onPeerExited}.
      */
-    static synchronized void onPeerJoined(final String groupIdentifier, final String peerPubkey, final long nowMs)
+    static synchronized void onPeerJoined(final String groupIdentifier, final String peerPubkey, final long nowMs,
+                                          final long nowUptimeMs)
     {
         final String k = key(groupIdentifier, peerPubkey);
         final PeerState st = k == null ? null : STATES.get(k);
@@ -268,7 +287,7 @@ final class NgcHistoryServeLedger
             return;
         }
         final int before = st.entries();
-        dropRecentlyQueued(st, nowMs);
+        dropRecentlyQueued(st, nowUptimeMs);
         afterChange(k, st, before);
     }
 
@@ -288,14 +307,14 @@ final class NgcHistoryServeLedger
         return false;
     }
 
-    private static void dropRecentlyQueued(final PeerState st, final long nowMs)
+    private static void dropRecentlyQueued(final PeerState st, final long nowUptimeMs)
     {
-        final Iterator<Map.Entry<String, Long>> it = st.queuedAtMs.entrySet().iterator();
+        final Iterator<Map.Entry<String, Long>> it = st.queuedAtUptimeMs.entrySet().iterator();
         while (it.hasNext())
         {
             final long queuedAt = it.next().getValue();
-            // Also a row "queued in the future", after the clock was set back.
-            if (queuedAt > nowMs - DELIVERY_GRACE_MS)
+            // Recent on the monotonic clock, which a clock set back does not move.
+            if (queuedAt > nowUptimeMs - DELIVERY_GRACE_MS)
             {
                 it.remove();
             }

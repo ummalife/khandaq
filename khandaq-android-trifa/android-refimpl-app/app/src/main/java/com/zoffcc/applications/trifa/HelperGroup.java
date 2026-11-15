@@ -30,6 +30,7 @@ import android.media.MediaExtractor;
 import android.media.MediaFormat;
 import android.media.MediaMuxer;
 import android.net.Uri;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -11396,8 +11397,9 @@ public class HelperGroup
                                     NgcSignedHistory.sendSignedTextTo(group_identifier, peer_pubkey, gm);
                                     if (send_ngch_syncmsg(group_identifier, peer_pubkey, gm))
                                     {
+                                        // The monotonic clock: toxcore's peer timeout stops in deep sleep too.
                                         NgcHistoryServeLedger.markQueued(ledger_serve, gm.message_id_tox,
-                                                                         System.currentTimeMillis());
+                                                                         SystemClock.uptimeMillis());
                                     }
                                 }
                             }

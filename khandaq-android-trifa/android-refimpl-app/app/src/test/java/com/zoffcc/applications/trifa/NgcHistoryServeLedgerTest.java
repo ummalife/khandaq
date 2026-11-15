@@ -29,6 +29,8 @@ public class NgcHistoryServeLedgerTest
     private static final String PEER_GONE = "D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4";
     private static final String NEWCOMER = "E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5";
     private static final long T0 = 1_700_000_000_000L;
+    /** SystemClock.uptimeMillis() at T0: the monotonic clock counts from the boot, two hours ago. */
+    private static final long U0 = 7_200_000L;
 
     private static final class Row
     {
@@ -51,8 +53,19 @@ public class NgcHistoryServeLedgerTest
         return new Row(String.format(Locale.ROOT, "%08x", nextId++), author, confirmedBy);
     }
 
+    /** The monotonic clock at wall time nowMs, for a phone that has not slept since T0. */
+    private static long awake(final long nowMs)
+    {
+        return U0 + (nowMs - T0);
+    }
+
     /** What sync_group_message_history does with the rows of one serve; returns the rows sent. */
     private static int serve(final String peer, final List<Row> rows, final long nowMs)
+    {
+        return serve(peer, rows, nowMs, awake(nowMs));
+    }
+
+    private static int serve(final String peer, final List<Row> rows, final long nowMs, final long nowUptimeMs)
     {
         final NgcHistoryServeLedger.Serve s = NgcHistoryServeLedger.beginServe(GROUP, peer, nowMs);
         int sent = 0;
@@ -61,10 +74,22 @@ public class NgcHistoryServeLedgerTest
             if (NgcHistoryServeLedger.shouldSend(s, r.id, r.author, r.confirmedBy))
             {
                 sent++;
-                NgcHistoryServeLedger.markQueued(s, r.id, nowMs);
+                NgcHistoryServeLedger.markQueued(s, r.id, nowUptimeMs);
             }
         }
         return sent;
+    }
+
+    /** The member's exit as the exit callback reports it, on a phone that has not slept since T0. */
+    private static void exited(final String peer, final long nowMs)
+    {
+        NgcHistoryServeLedger.onPeerExited(GROUP, peer, nowMs, awake(nowMs));
+    }
+
+    /** The member's join as the join callback reports it, on a phone that has not slept since T0. */
+    private static void joined(final String peer, final long nowMs)
+    {
+        NgcHistoryServeLedger.onPeerJoined(GROUP, peer, nowMs, awake(nowMs));
     }
 
     private static List<Row> rowsBy(final List<Row> rows, final String author)
@@ -147,19 +172,19 @@ public class NgcHistoryServeLedgerTest
             final boolean iosExits = t % 180 == 170;
             if (bExits)
             {
-                NgcHistoryServeLedger.onPeerExited(GROUP, PEER_B, now);
+                exited(PEER_B, now);
             }
             if (iosExits)
             {
-                NgcHistoryServeLedger.onPeerExited(GROUP, PEER_IOS, now);
+                exited(PEER_IOS, now);
             }
             if (bJoins)
             {
-                NgcHistoryServeLedger.onPeerJoined(GROUP, PEER_B, now);
+                joined(PEER_B, now);
             }
             if (iosJoins)
             {
-                NgcHistoryServeLedger.onPeerJoined(GROUP, PEER_IOS, now);
+                joined(PEER_IOS, now);
             }
             boolean trigger = bJoins || bExits || iosJoins || iosExits;
             if (trigger)
@@ -231,7 +256,7 @@ public class NgcHistoryServeLedgerTest
         {
             rows.add(row(i % 2 == 0 ? SELF : PEER_B));
         }
-        NgcHistoryServeLedger.onPeerJoined(GROUP, NEWCOMER, T0);
+        joined(NEWCOMER, T0);
         assertEquals(30, serve(NEWCOMER, rows, T0));
     }
 
@@ -264,7 +289,7 @@ public class NgcHistoryServeLedgerTest
         rows.add(unconfirmed);
 
         assertEquals("first serve: full", 3, serve(PEER_B, rows, T0));
-        NgcHistoryServeLedger.onPeerExited(GROUP, PEER_B, T0 + 1_000L);
+        exited(PEER_B, T0 + 1_000L);
         NgcHistoryServeLedger.markHeld(GROUP, PEER_B.toLowerCase(Locale.ROOT), receipted.id.toUpperCase(Locale.ROOT));
 
         final NgcHistoryServeLedger.Serve s = NgcHistoryServeLedger.beginServe(GROUP, PEER_B, T0 + 30_000L);
@@ -286,7 +311,7 @@ public class NgcHistoryServeLedgerTest
         rows.add(notEchoed);
 
         assertEquals(2, serve(PEER_B, rows, T0));
-        NgcHistoryServeLedger.onPeerExited(GROUP, PEER_B, T0 + 1_000L);
+        exited(PEER_B, T0 + 1_000L);
         NgcHistoryServeLedger.markHeld(GROUP, PEER_B, echoed.id);
         assertEquals(1, serve(PEER_B, rows, T0 + 30_000L));
     }
@@ -300,13 +325,13 @@ public class NgcHistoryServeLedgerTest
         assertEquals(1, serve(PEER_B, rows, T0));
         assertEquals("queued, and the member is still there", 0, serve(PEER_B, rows, T0 + 20_000L));
 
-        NgcHistoryServeLedger.onPeerExited(GROUP, PEER_B, T0 + 58_000L);
-        NgcHistoryServeLedger.onPeerJoined(GROUP, PEER_B, T0 + 63_000L);
+        exited(PEER_B, T0 + 58_000L);
+        joined(PEER_B, T0 + 63_000L);
         assertEquals("lost with the connection", 1, serve(PEER_B, rows, T0 + 63_000L));
 
         // Queued at +63 s; the member stays for longer than the grace before it drops.
-        NgcHistoryServeLedger.onPeerExited(GROUP, PEER_B, T0 + 63_000L + NgcHistoryServeLedger.DELIVERY_GRACE_MS + 1);
-        NgcHistoryServeLedger.onPeerJoined(GROUP, PEER_B, T0 + 200_000L);
+        exited(PEER_B, T0 + 63_000L + NgcHistoryServeLedger.DELIVERY_GRACE_MS + 1);
+        joined(PEER_B, T0 + 200_000L);
         assertEquals("delivered long before the member dropped", 0, serve(PEER_B, rows, T0 + 200_000L));
     }
 
@@ -316,8 +341,28 @@ public class NgcHistoryServeLedgerTest
         final List<Row> rows = new ArrayList<>();
         rows.add(row(PEER_IOS));
         assertEquals(1, serve(PEER_B, rows, T0));
-        NgcHistoryServeLedger.onPeerJoined(GROUP, PEER_B, T0 + 10_000L);
+        joined(PEER_B, T0 + 10_000L);
         assertEquals(1, serve(PEER_B, rows, T0 + 30_000L));
+    }
+
+    /**
+     * The phone sleeps for a minute right after a serve. toxcore times the member out by CLOCK_MONOTONIC, which
+     * stood still meanwhile: the exit comes 58 s after the serve on that clock, two minutes after it on the wall
+     * clock, past the grace. What was queued went with the connection all the same, and is served again.
+     */
+    @Test
+    public void aRowQueuedBeforeThePhoneSleptIsServedAgainAfterTheTimeout()
+    {
+        final List<Row> rows = new ArrayList<>();
+        rows.add(row(PEER_IOS));
+        assertEquals(1, serve(PEER_B, rows, T0));
+
+        final long sleptMs = 60_000L;
+        assertTrue(sleptMs + 58_000L > NgcHistoryServeLedger.DELIVERY_GRACE_MS);
+        NgcHistoryServeLedger.onPeerExited(GROUP, PEER_B, T0 + sleptMs + 58_000L, awake(T0 + 58_000L));
+        NgcHistoryServeLedger.onPeerJoined(GROUP, PEER_B, T0 + sleptMs + 63_000L, awake(T0 + 63_000L));
+        assertEquals("lost with the connection", 1,
+                     serve(PEER_B, rows, T0 + sleptMs + 63_000L, awake(T0 + 63_000L)));
     }
 
     @Test
@@ -330,8 +375,8 @@ public class NgcHistoryServeLedgerTest
         for (int i = 0; i < 20; i++)
         {
             sent += serve(PEER_B, rows, now);
-            NgcHistoryServeLedger.onPeerExited(GROUP, PEER_B, now + 58_000L);
-            NgcHistoryServeLedger.onPeerJoined(GROUP, PEER_B, now + 63_000L);
+            exited(PEER_B, now + 58_000L);
+            joined(PEER_B, now + 63_000L);
             now += 63_000L;
         }
         assertEquals(NgcHistoryServeLedger.MAX_SENDS_PER_FULL_INTERVAL, sent);
@@ -365,12 +410,12 @@ public class NgcHistoryServeLedgerTest
         NgcHistoryServeLedger.markHeld(GROUP, PEER_B, held.id);
         assertEquals("first serve: full", 1, serve(PEER_B, rows, T0));
 
-        NgcHistoryServeLedger.onPeerExited(GROUP, PEER_B, T0 + 60_000L);
-        NgcHistoryServeLedger.onPeerJoined(GROUP, PEER_B, T0 + 120_000L);
+        exited(PEER_B, T0 + 60_000L);
+        joined(PEER_B, T0 + 120_000L);
         assertEquals("away for a minute", 0, serve(PEER_B, rows, T0 + 120_000L));
 
-        NgcHistoryServeLedger.onPeerExited(GROUP, PEER_B, T0 + 180_000L);
-        NgcHistoryServeLedger.onPeerJoined(GROUP, PEER_B, T0 + 180_000L + NgcHistoryServeLedger.LONG_ABSENCE_MS);
+        exited(PEER_B, T0 + 180_000L);
+        joined(PEER_B, T0 + 180_000L + NgcHistoryServeLedger.LONG_ABSENCE_MS);
         assertEquals("away long enough to have reinstalled", 1,
                      serve(PEER_B, rows, T0 + 180_000L + NgcHistoryServeLedger.LONG_ABSENCE_MS));
     }
@@ -389,7 +434,7 @@ public class NgcHistoryServeLedgerTest
         assertTrue(NgcHistoryServeLedger.shouldSend(s, "1234567", SELF));
         assertTrue(NgcHistoryServeLedger.shouldSend(s, "1234567g", SELF));
         assertTrue(NgcHistoryServeLedger.shouldSend(s, HelperGroup.PENDING_GROUP_MESSAGE_ID_TOX, SELF));
-        NgcHistoryServeLedger.markQueued(s, null, T0 + 20_000L);
+        NgcHistoryServeLedger.markQueued(s, null, awake(T0 + 20_000L));
         NgcHistoryServeLedger.markHeld(GROUP, PEER_B, "zz");
         NgcHistoryServeLedger.markHeld(GROUP, null, rows.get(0).id);
         NgcHistoryServeLedger.markHeld(null, PEER_B, rows.get(0).id);
@@ -397,9 +442,9 @@ public class NgcHistoryServeLedgerTest
         final NgcHistoryServeLedger.Serve unnamed = NgcHistoryServeLedger.beginServe(GROUP, null, T0);
         assertTrue(unnamed.full);
         assertTrue(NgcHistoryServeLedger.shouldSend(unnamed, rows.get(0).id, SELF));
-        NgcHistoryServeLedger.markQueued(unnamed, rows.get(0).id, T0);
-        NgcHistoryServeLedger.onPeerExited(GROUP, null, T0);
-        NgcHistoryServeLedger.onPeerJoined(null, PEER_B, T0);
+        NgcHistoryServeLedger.markQueued(unnamed, rows.get(0).id, awake(T0));
+        NgcHistoryServeLedger.onPeerExited(GROUP, null, T0, awake(T0));
+        NgcHistoryServeLedger.onPeerJoined(null, PEER_B, T0, awake(T0));
     }
 
     @Test
@@ -411,7 +456,7 @@ public class NgcHistoryServeLedgerTest
         assertEquals(1, serve(PEER_B, rows, T0));
         NgcHistoryServeLedger.markHeld(GROUP.toLowerCase(Locale.ROOT), PEER_B.toLowerCase(Locale.ROOT),
                                        r.id.toUpperCase(Locale.ROOT));
-        NgcHistoryServeLedger.onPeerExited(GROUP, PEER_B, T0 + 1_000L);
+        exited(PEER_B, T0 + 1_000L);
         final NgcHistoryServeLedger.Serve s = NgcHistoryServeLedger.beginServe(GROUP.toUpperCase(Locale.ROOT),
                                                                                PEER_B.toUpperCase(Locale.ROOT),
                                                                                T0 + 30_000L);
@@ -427,7 +472,9 @@ public class NgcHistoryServeLedgerTest
         rows.add(held);
         NgcHistoryServeLedger.markHeld(GROUP, PEER_B, held.id);
         assertEquals(1, serve(PEER_B, rows, T0));
-        assertEquals("a serve before the last full one is full", 1, serve(PEER_B, rows, T0 - 60_000L));
+        // The wall clock goes back a minute; the monotonic one goes on.
+        assertEquals("a serve before the last full one is full", 1,
+                     serve(PEER_B, rows, T0 - 60_000L, awake(T0 + 1_000L)));
     }
 
     @Test

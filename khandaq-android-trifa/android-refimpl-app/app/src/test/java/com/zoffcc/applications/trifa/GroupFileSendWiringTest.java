@@ -269,6 +269,22 @@ public class GroupFileSendWiringTest
         return n;
     }
 
+    @Test
+    public void the_row_of_our_file_says_sent_once_it_went() throws Exception
+    {
+        // QA live: the "sent" of a paced file came within the per-chunk throttle of its last chunk and was eaten;
+        // the row said "54 KB left, sending" until the chat was opened again.
+        final String sent = body(code("NgcGroupFileTransfer.java"), "static void outgoingSent(");
+        assertTrue(sent.contains("HelperGroup.refresh_group_file_row(g.group_identifier, g.msg_id_hash)"));
+        final String row = body(code("HelperGroup.java"), "static void refresh_group_file_row(");
+        assertTrue(row.indexOf("ngc_progress_refresh_ts.remove(") < row.indexOf("post_group_file_progress_refresh("));
+        // Every end of an own send that went goes through outgoingSent, after its progress says the whole file.
+        final String send = body(code("NgcGroupFileTransfer.java"), "private static void sendChunkedFrom(");
+        assertEquals(2, count(send, "outgoingSent(g)"));
+        final String image = body(code("HelperGroup.java"), "static void send_group_image(");
+        assertEquals(1, count(image, "NgcGroupFileTransfer.outgoingSent(g)"));
+    }
+
     private static String body(final String text, final String head)
     {
         final int at = text.indexOf(head);

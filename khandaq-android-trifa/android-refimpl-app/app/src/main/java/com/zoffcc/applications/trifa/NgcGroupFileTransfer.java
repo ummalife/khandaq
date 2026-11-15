@@ -2804,6 +2804,9 @@ public final class NgcGroupFileTransfer
         }
         WAITS.remove(g.group_identifier, g.msg_id_hash);
         clearOutgoingPending(g.group_identifier, g.msg_id_hash);
+        // KHANDAQ (0.2.56, QA live): its "sent" came within the per-chunk throttle of its last chunk, which ate it:
+        // the row said "54 KB left, sending" for minutes after the file went, until the chat was opened again.
+        HelperGroup.refresh_group_file_row(g.group_identifier, g.msg_id_hash);
     }
 
     /** KHANDAQ (0.2.56): the user cancelled our file: it waits for nothing, and a restart does not bring it back. */

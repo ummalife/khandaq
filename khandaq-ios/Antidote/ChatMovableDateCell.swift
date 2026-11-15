@@ -57,6 +57,15 @@ class ChatMovableDateCell: BaseCell {
     /// Set it in createViews of the subclass, before the constraints are installed.
     var revealsTime = true
 
+    /// KHANDAQ (0.2.56): views of the row that take a sideways drag themselves, which the swipe to reply
+    /// leaves to them: the wave of a voice note scrubs (ChatGenericFileCell).
+    var replySwipeExcludedViews: [UIView] {
+        return []
+    }
+
+    /// KHANDAQ (0.2.56): the swipe toward the start edge that answers this message.
+    fileprivate var replySwipe: ChatReplySwipe!
+
     /**
         Superview for content that should move while panning table to the left.
      */
@@ -254,9 +263,9 @@ class ChatMovableDateCell: BaseCell {
         contentView.addSubview(unreadLabel)
         transcriptUnreadLabel = unreadLabel
 
-        let swipeReply = UISwipeGestureRecognizer(target: self, action: #selector(handleReplySwipe))
-        swipeReply.direction = .right
-        movableContentView.addGestureRecognizer(swipeReply)
+        // KHANDAQ (0.2.56): swipe toward the start edge to answer, as in Telegram. It replaces the swipe to
+        // the right that answered from the other edge, so no drag answers twice.
+        replySwipe = ChatReplySwipe(cell: self)
 
         // Using empty view for multiple selection background.
         multipleSelectionBackgroundView = UIView()
@@ -372,6 +381,19 @@ class ChatMovableDateCell: BaseCell {
         }
 
         super.setSelected(selected, animated: animated)
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        // A swipe under way belongs to the message the row showed, not to the one it shows next.
+        replySwipe.reset()
+    }
+
+    /// The day and unread marks above the message, which stay where they are while the swipe to reply
+    /// moves the row.
+    fileprivate var replySwipeStillViews: [UIView] {
+        let marks: [UIView?] = [daySeparatorContainer, unreadSeparatorContainer, transcriptDayLabel, transcriptUnreadLabel]
+        return marks.compactMap { $0 }
     }
 
     override func layoutSubviews() {
@@ -490,9 +512,214 @@ extension ChatMovableDateCell {
     @objc func pinAction() {
         delegate?.chatMovableDateCellPinPressed(self)
     }
+}
 
-    @objc func handleReplySwipe() {
-        replySwipeDelegate?.chatCellDidRequestReply(self)
+/// KHANDAQ (0.2.56, owner decision 3): swipe a message toward the start edge to answer it, as in Telegram
+/// and as ReplySwipeCallback does on Android: left, or right in a right-to-left layout; the other way does
+/// nothing. The row follows the finger up to ChatReplySwipeGeometry.maxOffset while a reply badge in the
+/// colours of the day pill grows in the strip it leaves; past the reply point the finger feels one light
+/// tick and a release answers. The row springs back either way; the day and unread marks above the message
+/// stay where they are.
+///
+/// Which sideways drag is which: a drag toward the start edge that starts on a message that can be
+/// answered (ChatReplySwipeDelegate.chatCellCanReply) is this swipe; a drag on a view that takes drags
+/// itself (replySwipeExcludedViews, the wave of a voice note) stays that view's; any other drag goes on to
+/// the table. In the conversation with one person the table has a pan of its own that slides the rows
+/// aside to show their time: it begins only on a row that still hides its time, which no message that
+/// can be answered does (ChatPrivateController.gestureRecognizerShouldBegin), so the two never meet.
+///
+/// The row is moved by a transform on each view of its content rather than on the content view, whose
+/// frame the cell sets on every layout and whose transform the arrival of an entry animates
+/// (AirEntryTextCell): Auto Layout keeps a transform it did not set, so the row stays with the finger
+/// through a layout pass.
+fileprivate final class ChatReplySwipe: NSObject, UIGestureRecognizerDelegate {
+    private weak var cell: ChatMovableDateCell?
+    private let pan = UIPanGestureRecognizer()
+    private let badge = UIView()
+    private var feedback: UIImpactFeedbackGenerator?
+    private var isRightToLeft = false
+    private var isPastTrigger = false
+    private var isSpringingBack = false
+    /// Where the finger came down on the row, in the cell. The recognizer's own translation is still zero
+    /// when it asks whether to begin (it starts counting there), so the drag is measured from here.
+    private var touchDown: CGPoint?
+
+    init(cell: ChatMovableDateCell) {
+        self.cell = cell
+        super.init()
+
+        pan.addTarget(self, action: #selector(panned(_:)))
+        pan.delegate = self
+        pan.maximumNumberOfTouches = 1
+        cell.contentView.addGestureRecognizer(pan)
+
+        let diameter = ChatReplySwipeGeometry.badgeDiameter
+        let iconSize = ChatReplySwipeGeometry.iconSize
+        badge.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
+        badge.layer.cornerRadius = diameter / 2
+        // The colours of the day pill: the theme's chat-incoming-bubble and chat-list-cell-message are
+        // these tokens, which follow the light and the dark theme by themselves.
+        badge.backgroundColor = KQColor.sunken
+        badge.isUserInteractionEnabled = false
+        badge.isAccessibilityElement = false
+        badge.alpha = 0
+        badge.isHidden = true
+
+        // The reply arrow of the message menu, the glyph Android draws too.
+        let icon = UIImageView(image: ChatReactionPopup.sharedGlyph(for: "arrowshape.turn.up.left")
+                                      ?? UIImage(systemName: "arrowshape.turn.up.left.fill")?.withRenderingMode(.alwaysTemplate))
+        icon.tintColor = KQColor.ink2
+        icon.contentMode = .scaleAspectFit
+        icon.frame = CGRect(x: (diameter - iconSize) / 2, y: (diameter - iconSize) / 2, width: iconSize, height: iconSize)
+        badge.addSubview(icon)
+        cell.contentView.addSubview(badge)
+    }
+
+    /// Puts the row back at rest at once and ends a swipe under way without answering.
+    func reset() {
+        if pan.state == .began || pan.state == .changed {
+            pan.isEnabled = false
+            pan.isEnabled = true
+        }
+        stopSpringBack()
+        feedback = nil
+        isPastTrigger = false
+        touchDown = nil
+        apply(offset: 0)
+        badge.isHidden = true
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard let cell = cell else {
+            return false
+        }
+        if let view = touch.view, cell.replySwipeExcludedViews.contains(where: { view.isDescendant(of: $0) }) {
+            return false
+        }
+        // The day and unread marks above the message are not the message.
+        guard cell.movableContentView.bounds.contains(touch.location(in: cell.movableContentView)) else {
+            return false
+        }
+        if pan.numberOfTouches == 0 {
+            touchDown = touch.location(in: cell)
+        }
+        return true
+    }
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let cell = cell, !cell.isEditing, let delegate = cell.replySwipeDelegate, let touchDown = touchDown else {
+            return false
+        }
+        let location = pan.location(in: cell)
+        let movement = CGPoint(x: location.x - touchDown.x, y: location.y - touchDown.y)
+        let isRightToLeft = cell.effectiveUserInterfaceLayoutDirection == .rightToLeft
+        guard ChatReplySwipeGeometry.beginsSwipe(translation: movement, isRightToLeft: isRightToLeft) else {
+            return false
+        }
+        return delegate.chatCellCanReply(cell)
+    }
+
+    @objc private func panned(_ recognizer: UIPanGestureRecognizer) {
+        guard let cell = cell else {
+            return
+        }
+
+        switch recognizer.state {
+            case .began:
+                // Caught again while it springs back: it follows the finger from rest at once.
+                stopSpringBack()
+                isRightToLeft = cell.effectiveUserInterfaceLayoutDirection == .rightToLeft
+                isPastTrigger = false
+                badge.isHidden = false
+                feedback = UIImpactFeedbackGenerator(style: .light)
+                feedback?.prepare()
+                follow(recognizer, in: cell)
+            case .changed:
+                follow(recognizer, in: cell)
+            case .ended:
+                // What the finger felt decides, as on Android; the row must still be one to answer.
+                let answers = isPastTrigger && cell.replySwipeDelegate?.chatCellCanReply(cell) == true
+                springBack()
+                if answers {
+                    cell.replySwipeDelegate?.chatCellDidRequestReply(cell)
+                }
+            default:
+                // Cancelled or failed: back to rest without answering.
+                springBack()
+        }
+    }
+
+    private func follow(_ recognizer: UIPanGestureRecognizer, in cell: ChatMovableDateCell) {
+        let offset = ChatReplySwipeGeometry.offset(forTranslation: recognizer.translation(in: cell).x,
+                                                    isRightToLeft: isRightToLeft)
+        apply(offset: offset)
+        let past = ChatReplySwipeGeometry.isPastTrigger(offset)
+        if past && !isPastTrigger {
+            // One light tick each time the finger goes past the reply point.
+            feedback?.impactOccurred()
+            feedback?.prepare()
+        }
+        isPastTrigger = past
+    }
+
+    /// The views of the row's content: all of the content view but the marks above the message and the badge.
+    private func movingViews(of cell: ChatMovableDateCell) -> [UIView] {
+        let still = cell.replySwipeStillViews + [badge]
+        return cell.contentView.subviews.filter { view in !still.contains(where: { $0 === view }) }
+    }
+
+    private func apply(offset: CGFloat) {
+        guard let cell = cell else {
+            return
+        }
+
+        let moved = offset == 0 ? CGAffineTransform.identity : CGAffineTransform(translationX: offset, y: 0)
+        movingViews(of: cell).forEach { $0.transform = moved }
+
+        let progress = ChatReplySwipeGeometry.badgeProgress(forOffset: offset)
+        let scale = max(progress, 0.01)
+        badge.alpha = progress
+        // Mirrored in a right-to-left layout, where the arrow points the other way.
+        badge.transform = CGAffineTransform(scaleX: isRightToLeft ? -scale : scale, y: scale)
+        // Level with the message, below the marks; the centre is the same whatever the transform.
+        badge.center = CGPoint(x: ChatReplySwipeGeometry.badgeCenterX(rowWidth: cell.contentView.bounds.width,
+                                                                      offset: offset,
+                                                                      isRightToLeft: isRightToLeft),
+                               y: cell.movableContentView.center.y)
+    }
+
+    private func stopSpringBack() {
+        guard isSpringingBack, let cell = cell else {
+            return
+        }
+        isSpringingBack = false
+        (movingViews(of: cell) + [badge]).forEach { $0.layer.removeAllAnimations() }
+    }
+
+    private func springBack() {
+        feedback = nil
+        isPastTrigger = false
+        isSpringingBack = true
+        let back = {
+            self.apply(offset: 0)
+        }
+        let done: (Bool) -> Void = { [weak self] finished in
+            guard let self = self, finished, self.isSpringingBack else {
+                return
+            }
+            self.isSpringingBack = false
+            self.badge.isHidden = true
+        }
+        if UIAccessibilityIsReduceMotionEnabled() {
+            UIView.animate(withDuration: KQMotion.duration(KQMotion.state), delay: 0,
+                           options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState],
+                           animations: back, completion: done)
+        }
+        else {
+            UIView.animate(withDuration: KQMotion.layout, delay: 0, usingSpringWithDamping: 0.8,
+                           initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState],
+                           animations: back, completion: done)
+        }
     }
 }
 

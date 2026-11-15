@@ -61,6 +61,7 @@
 		113F03191CAFDB0D0009ABE1 /* ChatIncomingTextCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F03181CAFDB0D0009ABE1 /* ChatIncomingTextCellSnapshotTest.swift */; };
 		113F031B1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F031A1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift */; };
 		B2SWIPET000000000000001 /* ChatListSwipeNavigationTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2SWIPET000000000000002 /* ChatListSwipeNavigationTest.swift */; };
+		B2RSWIPET000000000000001 /* ChatReplySwipeGeometryTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2RSWIPET000000000000002 /* ChatReplySwipeGeometryTest.swift */; };
 		KHLOCTEST000000000000001 /* LocalizationTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHLOCTEST000000000000002 /* LocalizationTest.swift */; };
 		KHLOCTEST000000000000003 /* MessageForwarderTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHLOCTEST000000000000004 /* MessageForwarderTest.swift */; };
 		KHLOCTEST000000000000005 /* KhandaqBrandingTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHLOCTEST000000000000006 /* KhandaqBrandingTest.swift */; };
@@ -183,6 +184,7 @@
 		11B252FA1C4A614D0068F47C /* ChatIncomingTextCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B252F91C4A614D0068F47C /* ChatIncomingTextCell.swift */; };
 		11B252FE1C4A615E0068F47C /* ChatOutgoingTextCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B252FD1C4A615E0068F47C /* ChatOutgoingTextCell.swift */; };
 		11B253021C4A61D00068F47C /* ChatMovableDateCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B253011C4A61D00068F47C /* ChatMovableDateCell.swift */; };
+		B2RSWIPE0000000000000001 /* ChatReplySwipeGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2RSWIPE0000000000000002 /* ChatReplySwipeGeometry.swift */; };
 		11B253041C4A61D50068F47C /* ChatMovableDateCellModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B253031C4A61D50068F47C /* ChatMovableDateCellModel.swift */; };
 		11B253141C4A79A50068F47C /* BubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B253131C4A79A50068F47C /* BubbleView.swift */; };
 		11B2534F1C4AD2550068F47C /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B2534E1C4AD2550068F47C /* AudioPlayer.swift */; };
@@ -576,6 +578,7 @@
 		113F03181CAFDB0D0009ABE1 /* ChatIncomingTextCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatIncomingTextCellSnapshotTest.swift; sourceTree = "<group>"; };
 		113F031A1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListCellSnapshotTest.swift; sourceTree = "<group>"; };
 		B2SWIPET000000000000002 /* ChatListSwipeNavigationTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListSwipeNavigationTest.swift; sourceTree = "<group>"; };
+		B2RSWIPET000000000000002 /* ChatReplySwipeGeometryTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatReplySwipeGeometryTest.swift; sourceTree = "<group>"; };
 		KHLOCTEST000000000000002 /* LocalizationTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LocalizationTest.swift; sourceTree = "<group>"; };
 		KHLOCTEST000000000000004 /* MessageForwarderTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MessageForwarderTest.swift; sourceTree = "<group>"; };
 		KHLOCTEST000000000000006 /* KhandaqBrandingTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KhandaqBrandingTest.swift; sourceTree = "<group>"; };
@@ -695,6 +698,7 @@
 		11B252F91C4A614D0068F47C /* ChatIncomingTextCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatIncomingTextCell.swift; sourceTree = "<group>"; };
 		11B252FD1C4A615E0068F47C /* ChatOutgoingTextCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatOutgoingTextCell.swift; sourceTree = "<group>"; };
 		11B253011C4A61D00068F47C /* ChatMovableDateCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatMovableDateCell.swift; sourceTree = "<group>"; };
+		B2RSWIPE0000000000000002 /* ChatReplySwipeGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatReplySwipeGeometry.swift; sourceTree = "<group>"; };
 		11B253031C4A61D50068F47C /* ChatMovableDateCellModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatMovableDateCellModel.swift; sourceTree = "<group>"; };
 		11B253131C4A79A50068F47C /* BubbleView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BubbleView.swift; sourceTree = "<group>"; };
 		11B253491C4AD2200068F47C /* isotoxin_Calltone.aac */ = {isa = PBXFileReference; lastKnownFileType = file; path = isotoxin_Calltone.aac; sourceTree = "<group>"; };
@@ -1037,6 +1041,7 @@
 				113F03181CAFDB0D0009ABE1 /* ChatIncomingTextCellSnapshotTest.swift */,
 				113F031A1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift */,
 				B2SWIPET000000000000002 /* ChatListSwipeNavigationTest.swift */,
+				B2RSWIPET000000000000002 /* ChatReplySwipeGeometryTest.swift */,
 				B2BAIR050611000000000001 /* AirListModelTests.swift */,
 				B2BAIR051111000000000001 /* AirConversationModelTests.swift */,
 				B3C344352129930000000002 /* MediaScreensSnapshotTest.swift */,
@@ -1315,6 +1320,7 @@
 				9CE0BDEF1C4522BF00DCE357 /* ChatListCell.swift */,
 				9CE0BDF21C4522C800DCE357 /* ChatListCellModel.swift */,
 				11B253011C4A61D00068F47C /* ChatMovableDateCell.swift */,
+				B2RSWIPE0000000000000002 /* ChatReplySwipeGeometry.swift */,
 				11B253031C4A61D50068F47C /* ChatMovableDateCellModel.swift */,
 				116634AB1C6F407D0072C980 /* ChatOutgoingCallCell.swift */,
 				116634AE1C6F40820072C980 /* ChatOutgoingCallCellModel.swift */,
@@ -2220,6 +2226,7 @@
 				116634EC1C7B90F20072C980 /* FriendRequestController.swift in Sources */,
 				11CFCD0B1C2745230046BD94 /* UserStatus.swift in Sources */,
 				11B253021C4A61D00068F47C /* ChatMovableDateCell.swift in Sources */,
+				B2RSWIPE0000000000000001 /* ChatReplySwipeGeometry.swift in Sources */,
 				11B253041C4A61D50068F47C /* ChatMovableDateCellModel.swift in Sources */,
 				1164C8F61BC98F8300B91107 /* UIViewControllerExtension.swift in Sources */,
 				11FA0EF31BC5A6AF00F3DA5B /* ChatsTabCoordinator.swift in Sources */,
@@ -2384,6 +2391,7 @@
 				KQCAPORDER00000000000001 /* OwnCaptionOrderTests.swift in Sources */,
 				113F031B1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift in Sources */,
 				B2SWIPET000000000000001 /* ChatListSwipeNavigationTest.swift in Sources */,
+				B2RSWIPET000000000000001 /* ChatReplySwipeGeometryTest.swift in Sources */,
 				B2BAIR060611000000000001 /* AirListModelTests.swift in Sources */,
 				B2BAIR061111000000000001 /* AirConversationModelTests.swift in Sources */,
 				B3C344352129930000000003 /* MediaScreensSnapshotTest.swift in Sources */,

@@ -6,6 +6,9 @@ import UIKit
 import SnapKit
 
 protocol ChatReplySwipeDelegate: class {
+    /// Whether the message of the row can be answered now (a text or a file, while not choosing
+    /// messages, where you may write); the swipe to reply does not start otherwise.
+    func chatCellCanReply(_ cell: ChatMovableDateCell) -> Bool
     func chatCellDidRequestReply(_ cell: ChatMovableDateCell)
 }
 

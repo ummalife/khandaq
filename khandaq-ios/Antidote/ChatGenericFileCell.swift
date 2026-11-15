@@ -295,6 +295,11 @@ class ChatGenericFileCell: ChatMovableDateCell {
         fileModel = nil
     }
 
+    // KHANDAQ (0.2.56): a drag on the wave of a voice note scrubs it and never answers the message.
+    override var replySwipeExcludedViews: [UIView] {
+        return [voiceMessageView.scrubArea]
+    }
+
     override func setEditing(_ editing: Bool, animated: Bool) {
         super.setEditing(editing, animated: animated)
 

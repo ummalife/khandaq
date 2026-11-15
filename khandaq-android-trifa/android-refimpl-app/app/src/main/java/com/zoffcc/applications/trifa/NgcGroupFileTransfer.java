@@ -1167,7 +1167,7 @@ public final class NgcGroupFileTransfer
 
         final long offset = (long) chunkIndex * asm.chunkPayload;
         final byte[] chunkData = Arrays.copyOfRange(data, FILE_CHUNK_HEADER, FILE_CHUNK_HEADER + chunkSize);
-        write_chunk_to_VFS_file(asm.outPath, offset, chunkSize, chunkData);
+        writeChunk(asm, offset, chunkSize, chunkData);
 
         asm.received[chunkIndex] = true;
         asm.receivedCount++;
@@ -1299,6 +1299,31 @@ public final class NgcGroupFileTransfer
         return asm;
     }
 
+    /**
+     * KHANDAQ (0.2.56): the write cache (HelperGeneric.write_chunk_to_VFS_file) opens its file with a FileOutputStream
+     * the first time this process writes to it, and that empties the file (O_TRUNC). A download resumed after a
+     * restart from its .rxmap kept as zeros every chunk its map said it had, and came out whole and wrong (QA live
+     * 2026-11-15: 77 of 86 chunks zero, sha256 different). Such a file is written in place while no cache holds it.
+     */
+    private static void writeChunk(final IncomingAssembly asm, final long offset, final int size, final byte[] data)
+    {
+        if (bypassesWriteCache(asm.resumedFromDisk, HelperGeneric.has_vfs_write_cache(asm.outPath)))
+        {
+            HelperGeneric.write_chunk_to_VFS_file__no_extra_write_cache(asm.outPath, offset, size, data);
+            return;
+        }
+        write_chunk_to_VFS_file(asm.outPath, offset, size, data);
+    }
+
+    /**
+     * KHANDAQ (0.2.56): a file with chunks on disk from before this process is written in place; a cache this
+     * process opened holds only what it wrote itself, so it keeps the cache.
+     */
+    static boolean bypassesWriteCache(final boolean resumedFromDisk, final boolean cacheOpen)
+    {
+        return resumedFromDisk && !cacheOpen;
+    }
+
     // ---- Persistent received-chunk bitmap (resume partial downloads across app restarts) ----
 
     private static final int RXMAP_MAGIC = 0x52584d31; // "RXM1"
@@ -1380,6 +1405,7 @@ public final class NgcGroupFileTransfer
             }
             asm.receivedCount = count;
             asm.bytesReceived = bytes;
+            asm.resumedFromDisk = count > 0;
             // Leave lastChunkTs = 0 so the assembly reads as "stalled" and the first selective NACK
             // fires immediately to resume, instead of being suppressed as "in progress".
             if (count > 0)
@@ -3106,6 +3132,8 @@ public final class NgcGroupFileTransfer
         volatile long lastChunkTs;
         /** When this assembly was opened — an assembly that never got a chunk still has an age to rank by. */
         long createdTs;
+        /** KHANDAQ (0.2.56): its .rxmap gave it chunks already on disk; they are kept (writeChunk). */
+        boolean resumedFromDisk;
     }
 
     private static final class OrphanChunk

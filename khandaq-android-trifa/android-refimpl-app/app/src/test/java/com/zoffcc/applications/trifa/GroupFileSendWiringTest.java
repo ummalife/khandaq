@@ -238,6 +238,27 @@ public class GroupFileSendWiringTest
         assertTrue(row.contains("outgoingGroupPhase(message.group_identifier, message.msg_id_hash)"));
     }
 
+    @Test
+    public void a_download_resumed_after_a_restart_keeps_its_chunks() throws Exception
+    {
+        // QA live 2026-11-15: the write cache opened the partial file with a FileOutputStream, which empties it, so
+        // a download resumed from its .rxmap came out whole with 77 of its 86 chunks zero.
+        assertTrue(NgcGroupFileTransfer.bypassesWriteCache(true, false));
+        assertFalse(NgcGroupFileTransfer.bypassesWriteCache(true, true));
+        assertFalse(NgcGroupFileTransfer.bypassesWriteCache(false, false));
+        assertFalse(NgcGroupFileTransfer.bypassesWriteCache(false, true));
+
+        final String ngc = code("NgcGroupFileTransfer.java");
+        final String apply = body(ngc, "private static void applyChunk(");
+        assertTrue(apply.contains("writeChunk(asm, offset, chunkSize, chunkData)"));
+        assertFalse(apply.contains("write_chunk_to_VFS_file("));
+        final String write = body(ngc, "private static void writeChunk(");
+        final int bypass = write.indexOf("bypassesWriteCache(asm.resumedFromDisk, HelperGeneric.has_vfs_write_cache(asm.outPath))");
+        assertTrue(bypass > 0);
+        assertTrue(write.indexOf("write_chunk_to_VFS_file__no_extra_write_cache(", bypass) > bypass);
+        assertTrue(body(ngc, "private static void loadReceivedBitmap(").contains("asm.resumedFromDisk = count > 0"));
+    }
+
     private static int count(final String text, final String what)
     {
         int n = 0;

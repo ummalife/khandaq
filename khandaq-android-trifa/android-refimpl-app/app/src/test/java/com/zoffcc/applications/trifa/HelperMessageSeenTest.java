@@ -634,6 +634,19 @@ public class HelperMessageSeenTest
     }
 
     @Test
+    public void an_incoming_data_file_keeps_its_tox_file_id_as_the_anchor_of_its_receipt() throws Exception
+    {
+        // Desktop and iOS send their files as DATA, not FTV2: without the anchor no receipt went out for them.
+        final String recv = method(read(JAVA + "MainActivity.java"),
+                                   "    static void android_tox_callback_file_recv_cb_method(");
+        final String data = recv.substring(recv.indexOf("else // DATA file ft"));
+        assertTrue(bare(data).contains(bare("tox_file_get_file_id(friend_number, file_number, file_id_buffer) == 0")));
+        final int anchor = data.indexOf("m.ft_id_anchor_hex = file_id_buffer_hex;");
+        assertTrue(anchor > 0);
+        assertTrue(anchor < data.indexOf("HelperMessage.insert_into_message_db(m,"));
+    }
+
+    @Test
     public void seen_is_brand_teal_and_delivered_takes_the_muted_ink_of_the_time() throws Exception
     {
         final String transcript = read(JAVA + "AirTranscript.java");

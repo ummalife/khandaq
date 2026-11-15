@@ -117,6 +117,11 @@ final class SwipeAndLanguageUITests: XCTestCase {
         if name.contains("FirstLaunch") {
             app.launchArguments.append("DEMO_IMPORT_FILE")
         }
+        // The play button of a voice note is looked at in the theme of the run (KHANDAQ_UITEST_DARK=1),
+        // chosen in the app: a headless simulator keeps every app light whatever appearance it is given.
+        if name.contains("VoicePlay") {
+            app.launchArguments += ["-user-info/theme-preference", env["KHANDAQ_UITEST_DARK"] == "1" ? "dark" : "light"]
+        }
         app.launch()
         launchedAt = Date()
         dismissSystemAlerts()
@@ -4448,5 +4453,71 @@ extension SwipeAndLanguageUITests {
         app.terminate()
         requestOpenInKhandaq("launch")
         moveHandedFileIn("i-launch", lang: lang)
+    }
+}
+
+// MARK: - The play button of a voice note
+
+extension SwipeAndLanguageUITests {
+    /// KHANDAQ (0.2.56, owner request): a voice note plays from a round play button, as in Telegram, in
+    /// place of the word "Listen". In Amina's conversation the button at rest is named Listen, says the
+    /// length of the note and takes a finger (44 points); a tap plays the note and names it Pause, and the
+    /// end of the note names it Listen again. Saves the note at rest and while it plays to
+    /// $KHANDAQ_UITEST_ARTIFACTS/voice-play-<lang>[-dark][-<size>]/, in the theme of the run
+    /// (KHANDAQ_UITEST_DARK=1, chosen in the app by setUp), its language (KHANDAQ_UITEST_LANG=ar lays the
+    /// app out right to left) and its text size (KHANDAQ_UITEST_TEXT_SIZE). Under UI_TESTING the notes
+    /// play without a sound.
+    func testVoicePlayButtonWalkScreens() {
+        let env = ProcessInfo.processInfo.environment
+        let lang = env["KHANDAQ_UITEST_LANG"] ?? "en"
+        let dark = env["KHANDAQ_UITEST_DARK"] == "1"
+        var folder = "voice-play-\(lang)" + (dark ? "-dark" : "")
+        if let size = env["KHANDAQ_UITEST_TEXT_SIZE"], !size.isEmpty {
+            folder += "-" + auditSlug(size.replacingOccurrences(of: "UICTContentSizeCategory", with: ""))
+        }
+        auditDir = Self.artifactsDir + folder + "/"
+        try? FileManager.default.createDirectory(atPath: auditDir, withIntermediateDirectories: true)
+        guard let people = Self.demoPeople[lang] else {
+            XCTFail("no demo names for \(lang)")
+            return
+        }
+        openAir()
+        XCTAssertTrue(waitForScreen(dark: dark), "the walk is not in the \(dark ? "dark" : "light") theme")
+        XCTAssertTrue(openConversation(with: people.amina), "no conversation with \(people.amina)")
+
+        let play = app.buttons["air.voice.play"].firstMatch
+        XCTAssertTrue(play.waitForExistence(timeout: 5), "no voice note in the conversation")
+        let listen = appString("air_voice_listen", lang)
+        let pause = appString("air_voice_pause", lang)
+        XCTAssertEqual(play.label, listen, "the button at rest is not named by its word")
+        XCTAssertFalse((play.value as? String ?? "").isEmpty, "the button does not say the length of the note")
+        XCTAssertGreaterThanOrEqual(play.frame.width, 44, "the button is narrower than a finger")
+        XCTAssertGreaterThanOrEqual(play.frame.height, 44, "the button is lower than a finger")
+        XCTAssertTrue(play.isEnabled, "the note of the demo world cannot play")
+        auditShot("voice-idle")
+
+        play.tap()
+        XCTAssertTrue(waitUntilNamed(play, pause), "the button did not turn into Pause")
+        // The frame at once, without the wait of auditShot: the note plays for three seconds only.
+        let playing = XCUIScreen.main.screenshot()
+        XCTAssertEqual(play.label, pause, "the note ended before its frame was taken")
+        auditCounter += 1
+        try? playing.pngRepresentation.write(
+                to: URL(fileURLWithPath: auditDir + String(format: "%03d-", auditCounter) + "voice-playing.png"))
+        XCTAssertTrue(waitUntilNamed(play, listen, timeout: 6), "the button did not turn back into Listen at the end")
+        app.returnToAir()
+    }
+
+    /// Waits for `element` to be named `label`; the note of the demo world plays for three seconds only.
+    private func waitUntilNamed(_ element: XCUIElement, _ label: String, timeout: TimeInterval = 3) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if element.exists, element.label == label {
+                return true
+            }
+            usleep(100_000)
+        }
+        while Date() < deadline
+        return false
     }
 }

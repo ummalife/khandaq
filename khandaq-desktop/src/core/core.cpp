@@ -3348,8 +3348,9 @@ bool Core::sendGroupFileBegin(OutgoingGroupFile& send, const QByteArray& fileId)
     if (!sendsGroupFileTo(send)) {
         return false;
     }
-    std::shared_ptr<QFile> file = std::make_shared<QFile>(send.localPath);
-    if (!file->open(QIODevice::ReadOnly) || file->size() != send.size) {
+    // Not "file": that is a member of Core, and the Windows build (-Wshadow -Werror) stops on it.
+    std::shared_ptr<QFile> source = std::make_shared<QFile>(send.localPath);
+    if (!source->open(QIODevice::ReadOnly) || source->size() != send.size) {
         qWarning() << "sendGroupFileBegin: cannot read" << send.localPath << "as it was chosen";
         return false;
     }
@@ -3374,7 +3375,7 @@ bool Core::sendGroupFileBegin(OutgoingGroupFile& send, const QByteArray& fileId)
                    << static_cast<int>(error);
         return false;
     }
-    send.file = file;
+    send.file = source;
     return true;
 }
 

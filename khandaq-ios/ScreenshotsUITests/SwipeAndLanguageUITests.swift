@@ -71,7 +71,19 @@ final class SwipeAndLanguageUITests: XCTestCase {
         // Default to English so the assertions are predictable; KHANDAQ_UITEST_LANG overrides it when
         // a run needs to look at another language (e.g. the longest one, ru).
         let env = ProcessInfo.processInfo.environment
-        let uiLang = env["KHANDAQ_UITEST_LANG"] ?? "en"
+        // The swipe to reply right to left runs in Arabic: the app lays itself out by the language chosen
+        // in it (AppLanguage), so forcing the system's direction alone leaves an English interface left to
+        // right.
+        let replySwipeRightToLeft = name.contains("ReplySwipeRightToLeft")
+        let uiLang = replySwipeRightToLeft ? "ar" : (env["KHANDAQ_UITEST_LANG"] ?? "en")
+        if replySwipeRightToLeft {
+            app.launchArguments += ["-AppleTextDirection", "YES", "-NSForceRightToLeftWritingDirection", "YES"]
+        }
+        // The swipe to reply is looked at in the light and the dark theme, chosen in the app: a headless
+        // simulator kept every app light whatever appearance it was given.
+        if name.contains("ReplySwipe") {
+            app.launchArguments += ["-user-info/theme-preference", name.contains("Dark") ? "dark" : "light"]
+        }
         if env["KHANDAQ_UITEST_SYSTEM_LANG"] == "1" {
             // The system speaks the run's language and the app follows it: an empty choice of its own
             // is no language, so the app takes the system's (stage 5, right to left set by the system).
@@ -3504,6 +3516,211 @@ final class SwipeAndLanguageUITests: XCTestCase {
         // The shared assets are template images; their buttons keep the accessibility labels, so
         // assert the header still exposes its actions rather than pixel-matching here.
         XCTAssertGreaterThan(header.buttons.count, 1, "group header lost its action buttons")
+    }
+
+    // MARK: - Swipe to reply
+
+    /// KHANDAQ (0.2.56, owner decision 3): swipe a message toward the start edge to answer it, as in
+    /// Telegram. In the conversation with one person and in the group you founded: a drag away from the
+    /// start edge answers nothing, a drag short of the reply point answers nothing, a drag past it opens
+    /// the reply bar, which is then closed again so no answer stays pending. In the group where you only
+    /// read nothing answers. Saves the reply bar to $KHANDAQ_UITEST_ARTIFACTS/reply-swipe-<lang>[-rtl][-dark]/;
+    /// a watcher of the run, as for holdForScreenshot, takes the frames of the rows held by the finger,
+    /// the badge out.
+    func testReplySwipeWalkScreens() {
+        walkReplySwipe(rightToLeft: false, dark: false)
+    }
+
+    /// The same in the dark theme (setUp), for the colours of the badge.
+    func testReplySwipeDarkWalkScreens() {
+        walkReplySwipe(rightToLeft: false, dark: true)
+    }
+
+    /// The same in Arabic with the system's direction forced right to left (setUp): the start edge is the
+    /// right one, so a drag to the right answers and a drag to the left does not.
+    func testReplySwipeRightToLeftWalkScreens() {
+        walkReplySwipe(rightToLeft: true, dark: false)
+    }
+
+    /// What is not the swipe stays as it was, in the conversation with one person: a drag up the
+    /// transcript, a little toward the start edge, is the transcript's and answers nothing; a press held
+    /// on a message opens its menu, whose Reply opens the reply bar (closed again); a drag along the wave
+    /// of a voice note toward the start edge scrubs the note and answers nothing, unless the note is not
+    /// on this device, when the wave takes no drag and the swipe answers. Saves the frames to
+    /// $KHANDAQ_UITEST_ARTIFACTS/reply-swipe-<lang>-other/.
+    func testReplySwipeLeavesOtherGesturesWalkScreens() {
+        let lang = ProcessInfo.processInfo.environment["KHANDAQ_UITEST_LANG"] ?? "en"
+        auditDir = Self.artifactsDir + "reply-swipe-\(lang)-other/"
+        try? FileManager.default.createDirectory(atPath: auditDir, withIntermediateDirectories: true)
+        guard let people = Self.demoPeople[lang] else {
+            XCTFail("no demo names for \(lang)")
+            return
+        }
+        openAir()
+        XCTAssertTrue(openConversation(with: people.amina), "no conversation with \(people.amina)")
+        guard let row = lowestTranscriptEntry() else {
+            XCTFail("no message in the conversation")
+            return
+        }
+        let header = replyHeader(lang)
+
+        let start = row.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.75))
+        drag(from: start, to: start.withOffset(CGVector(dx: -40, dy: -220)), holdFor: "vertical-held")
+        XCTAssertFalse(header.waitForExistence(timeout: 2), "a drag up the transcript answered")
+
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.75)).press(forDuration: 1.2)
+        let reply = app.buttons[appString("chat_reply_action", lang)].firstMatch
+        XCTAssertTrue(reply.waitForExistence(timeout: 3), "a press held on a message opened no menu")
+        auditShot("message-menu")
+        if reply.exists {
+            reply.tap()
+            XCTAssertTrue(header.waitForExistence(timeout: 3), "the Reply of the message menu did not answer")
+            closeReplyBar(header, rightToLeft: false)
+        }
+
+        let listen = app.buttons[appString("air_voice_listen", lang)].firstMatch
+        guard listen.waitForExistence(timeout: 3) else {
+            XCTFail("no voice note in the conversation")
+            return
+        }
+        // The wave runs from just after the button to the length of the note.
+        let wave = listen.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5))
+        drag(from: wave.withOffset(CGVector(dx: 150, dy: 0)), to: wave.withOffset(CGVector(dx: 40, dy: 0)),
+             holdFor: "wave-held")
+        if listen.isEnabled {
+            XCTAssertFalse(header.waitForExistence(timeout: 2), "a drag along the wave of a voice note answered")
+            auditShot("wave-scrubbed")
+        }
+        else {
+            XCTAssertTrue(header.waitForExistence(timeout: 3), "a swipe on a voice note not on this device did not answer")
+            auditShot("wave-not-here-reply-bar")
+            closeReplyBar(header, rightToLeft: false)
+        }
+        app.returnToAir()
+    }
+
+    private func walkReplySwipe(rightToLeft: Bool, dark: Bool) {
+        let lang = rightToLeft ? "ar" : (ProcessInfo.processInfo.environment["KHANDAQ_UITEST_LANG"] ?? "en")
+        auditDir = Self.artifactsDir + "reply-swipe-\(lang)" + (rightToLeft ? "-rtl" : "") + (dark ? "-dark" : "") + "/"
+        try? FileManager.default.createDirectory(atPath: auditDir, withIntermediateDirectories: true)
+        guard let people = Self.demoPeople[lang], let groups = Self.groupWalkTexts[lang] else {
+            XCTFail("no demo names for \(lang)")
+            return
+        }
+        openAir()
+        XCTAssertTrue(waitForScreen(dark: dark), "the walk is not in the \(dark ? "dark" : "light") theme")
+
+        XCTAssertTrue(openConversation(with: people.amina), "no conversation with \(people.amina)")
+        checkReplySwipe(lang, rightToLeft: rightToLeft, shot: "direct")
+        XCTAssertTrue(openGroup(named: groups.founderGroup), "no group \(groups.founderGroup)")
+        checkReplySwipe(lang, rightToLeft: rightToLeft, shot: "group")
+
+        XCTAssertTrue(openGroup(named: groups.observerGroup), "no group \(groups.observerGroup)")
+        if let row = lowestTranscriptEntry() {
+            dragRow(row, by: 160, towardStartEdge: true, rightToLeft: rightToLeft)
+            XCTAssertFalse(replyHeader(lang).waitForExistence(timeout: 2), "a swipe answered where you only read")
+            auditShot("observer-no-reply")
+        }
+        else {
+            XCTFail("no message to swipe where you only read")
+        }
+        app.returnToAir()
+    }
+
+    /// In the open conversation, on its lowest message: the drag away from the start edge, the short drag
+    /// and the drag past the reply point, the last two held for a frame of the watcher.
+    private func checkReplySwipe(_ lang: String, rightToLeft: Bool, shot: String) {
+        guard let row = lowestTranscriptEntry() else {
+            XCTFail("no message to swipe in \(shot)")
+            return
+        }
+        let header = replyHeader(lang)
+        XCTAssertFalse(header.exists, "an answer was pending before the swipe in \(shot)")
+
+        dragRow(row, by: 160, towardStartEdge: false, rightToLeft: rightToLeft)
+        XCTAssertFalse(header.waitForExistence(timeout: 2), "a swipe away from the start edge answered in \(shot)")
+
+        dragRow(row, by: 34, towardStartEdge: true, rightToLeft: rightToLeft, holdFor: "\(shot)-short-held")
+        XCTAssertFalse(header.waitForExistence(timeout: 2), "a swipe short of the reply point answered in \(shot)")
+
+        dragRow(row, by: 160, towardStartEdge: true, rightToLeft: rightToLeft, holdFor: "\(shot)-past-held")
+        XCTAssertTrue(header.waitForExistence(timeout: 3), "a swipe toward the start edge did not answer in \(shot)")
+        auditShot("\(shot)-reply-bar")
+        closeReplyBar(header, rightToLeft: rightToLeft)
+        XCTAssertFalse(header.exists, "the reply bar did not close in \(shot)")
+    }
+
+    /// The header of the reply bar ("In reply to <name>").
+    private func replyHeader(_ lang: String) -> XCUIElement {
+        let format = appString("chat_reply_header", lang)
+        let prefix = (format.components(separatedBy: "%@").first ?? format).trimmingCharacters(in: .whitespaces)
+        return app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", prefix)).firstMatch
+    }
+
+    /// The lowest message of the transcript whole on the screen: a row that reads as a message.
+    private func lowestTranscriptEntry() -> XCUIElement? {
+        let log = transcript()
+        guard log.waitForExistence(timeout: 5) else {
+            return nil
+        }
+        usleep(800_000)
+        let bounds = log.frame
+        var lowest: (cell: XCUIElement, bottom: CGFloat)?
+        for index in 0..<log.cells.count {
+            let cell = log.cells.element(boundBy: index)
+            guard cell.exists, let value = cell.value as? String, !value.isEmpty else {
+                continue
+            }
+            let frame = cell.frame
+            guard frame.minY >= bounds.minY, frame.maxY <= bounds.maxY + 1, frame.maxY > (lowest?.bottom ?? -1) else {
+                continue
+            }
+            lowest = (cell, frame.maxY)
+        }
+        return lowest?.cell
+    }
+
+    /// Drags the row sideways by `distance` points toward the start edge or away from it, from the middle
+    /// of the row and low in it, on the words of the message (the day mark is at its top).
+    private func dragRow(_ row: XCUIElement, by distance: CGFloat, towardStartEdge: Bool, rightToLeft: Bool,
+                         holdFor shot: String? = nil) {
+        let leftward = towardStartEdge != rightToLeft
+        let start = row.coordinate(withNormalizedOffset: CGVector(dx: leftward ? 0.45 : 0.55, dy: 0.75))
+        drag(from: start, to: start.withOffset(CGVector(dx: leftward ? -distance : distance, dy: 0)), holdFor: shot)
+    }
+
+    /// Drags from `start` to `end`, slowly enough for a row to follow the finger, and lets go. With
+    /// `holdFor` the finger stays three seconds first, and the run's watcher takes <holdFor>.png of the
+    /// screen meanwhile; without a watcher the walk goes on without the frame.
+    private func drag(from start: XCUICoordinate, to end: XCUICoordinate, holdFor shot: String? = nil) {
+        guard let shot = shot else {
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
+            return
+        }
+        let request = (auditDir as NSString).appendingPathComponent(shot + ".request")
+        FileManager.default.createFile(atPath: request, contents: Data())
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 3)
+        let deadline = Date().addingTimeInterval(4)
+        while FileManager.default.fileExists(atPath: request), Date() < deadline {
+            usleep(200_000)
+        }
+        try? FileManager.default.removeItem(atPath: request)
+    }
+
+    /// Closes the reply bar with its cross, at the end of the bar's first line (the start of it in a
+    /// right-to-left layout), so no answer stays pending for the conversation.
+    private func closeReplyBar(_ header: XCUIElement, rightToLeft: Bool) {
+        let frame = header.frame
+        let cross = app.buttons.matching(NSPredicate(format: "label IN {'Close', 'xmark', 'Cancel'}")).allElementsBoundByIndex
+            .first { $0.isHittable && abs($0.frame.midY - frame.maxY) < 30 }
+        if let cross = cross {
+            cross.tap()
+        }
+        else {
+            let x = rightToLeft ? frame.minX - 22 : frame.maxX + 22
+            app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: x, dy: frame.maxY)).tap()
+        }
+        waitUntilGone(header, timeout: 3)
     }
 
     // MARK: - Swipe

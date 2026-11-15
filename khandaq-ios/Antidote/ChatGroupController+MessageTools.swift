@@ -218,6 +218,14 @@ extension ChatGroupController {
 }
 
 extension ChatGroupController: ChatReplySwipeDelegate {
+    func chatCellCanReply(_ cell: ChatMovableDateCell) -> Bool {
+        // As startReply and the message menu: only where you may write, and only what can be quoted.
+        guard groupComposeRight == .write, !tableView.isEditing, let indexPath = tableView.indexPath(for: cell) else {
+            return false
+        }
+        return quoteText(for: messageEntry(atDisplayIndex: indexPath.row).message) != nil
+    }
+
     func chatCellDidRequestReply(_ cell: ChatMovableDateCell) {
         chatMovableDateCellReplyPressed(cell)
     }

@@ -32,6 +32,11 @@ final class ChatVoiceMessageView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// The wave, where a drag scrubs; the swipe that answers the message leaves a drag there to it.
+    var scrubArea: UIView {
+        return waveformView
+    }
+
     /// The button plays only a note that is on this device.
     func apply(enabled: Bool) {
         playButton.isEnabled = enabled

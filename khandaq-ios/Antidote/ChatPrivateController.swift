@@ -1674,14 +1674,36 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
 }
 
 extension ChatPrivateController: ChatReplySwipeDelegate {
+    func chatCellCanReply(_ cell: ChatMovableDateCell) -> Bool {
+        guard let tableView = tableView, !tableView.isEditing, let indexPath = tableView.indexPath(for: cell) else {
+            return false
+        }
+        // As on Android: a message there is something to quote from (a text or a file), not a call.
+        return MessageReplyHelper.previewText(for: messageEntry(atDisplayIndex: indexPath.row).message) != nil
+    }
+
     func chatCellDidRequestReply(_ cell: ChatMovableDateCell) {
         chatMovableDateCellReplyPressed(cell)
     }
 }
 
 extension ChatPrivateController: UIGestureRecognizerDelegate {
+    /// KHANDAQ (0.2.56): the row a sideways drag starts on decides what the drag is. Toward the start edge
+    /// on a message that can be answered, it is the swipe to reply (ChatReplySwipe). This pan, which slides
+    /// the rows aside to show their time, begins only where a time is hidden: on a row that reveals its
+    /// time (revealsTime; transcript entries, files and calls show theirs in their own column), and only
+    /// while "Always show date on Messages" is off, as panOnTableView moves nothing otherwise. It used to
+    /// begin on any sideways drag, with nothing to show, and so took the drag from the swipe to reply.
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let panGR = gestureRecognizer as? UIPanGestureRecognizer else {
+            return false
+        }
+
+        guard UserDefaultsManager().DateonmessageMode == false,
+              let tableView = tableView,
+              let indexPath = tableView.indexPathForRow(at: panGR.location(in: tableView)),
+              let cell = tableView.cellForRow(at: indexPath) as? ChatMovableDateCell,
+              cell.revealsTime else {
             return false
         }
 

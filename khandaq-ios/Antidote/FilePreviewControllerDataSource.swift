@@ -33,7 +33,9 @@ class FilePreviewControllerDataSource: NSObject , QuickLookPreviewControllerData
             ]),
         ])
 
-        self.messages = submanagerObjects.messages(predicate: predicate).sortedResultsUsingProperty("dateInterval", ascending: true)
+        // KHANDAQ (0.2.56): in the conversation's order (OCTMessageAbstract.chatOrderSortDescriptors).
+        self.messages = submanagerObjects.messages(predicate: predicate)
+            .sortedResultsUsingDescriptors(OCTMessageAbstract.chatOrderSortDescriptors(ascending: true))
 
         super.init()
 

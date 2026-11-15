@@ -204,7 +204,9 @@ class ChatPrivateController: PortraitChatController {
         // KHANDAQ (#H5): sort by sortTimestamp (sender send-time, clamped), NOT dateInterval (local
         // arrival). A late/offline-flushed message then lands in its true chronological slot — matching
         // its displayed time — and the order is identical across devices.
-        self.messages = submanagerObjects.messages(predicate: predicate).sortedResultsUsingProperty("sortTimestamp", ascending: false)
+        // KHANDAQ (0.2.56): then by arrival: the parts of a long text share their whole-second send time.
+        self.messages = submanagerObjects.messages(predicate: predicate)
+            .sortedResultsUsingDescriptors(OCTMessageAbstract.chatOrderSortDescriptors(ascending: false))
         self.visibleMessages = Constants.MessagesPortionSize
 
         self.timeFormatter = DateFormatter(type: .time)

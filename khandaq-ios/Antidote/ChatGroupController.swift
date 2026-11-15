@@ -1890,7 +1890,9 @@ private extension ChatGroupController {
         // KHANDAQ (#H5): sort by sortTimestamp (group live == arrival, sync == clamped original) for a
         // stable order that matches displayed times. (Group LIVE cross-device order still depends on
         // per-device arrival — no sender wire ts on the NGC live path — but 1:1 + sync are now stable.)
-        return submanagerObjects.messages(predicate: predicate).sortedResultsUsingProperty("sortTimestamp", ascending: false)
+        // KHANDAQ (0.2.56): then by arrival: synced rows carry whole seconds.
+        return submanagerObjects.messages(predicate: predicate)
+            .sortedResultsUsingDescriptors(OCTMessageAbstract.chatOrderSortDescriptors(ascending: false))
     }
 }
 

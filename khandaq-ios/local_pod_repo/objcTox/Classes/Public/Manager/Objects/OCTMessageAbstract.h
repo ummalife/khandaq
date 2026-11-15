@@ -150,6 +150,15 @@
  */
 - (BOOL)isOutgoing;
 
+/**
+ * KHANDAQ (0.2.56): the order of a chat's messages, oldest first when ascending: by sortTimestamp, then by
+ * dateInterval, when the row was stored. A message carries its send time in whole seconds (msgV3, the
+ * history sync), so the parts of a long text, sent within one second, tied on sortTimestamp and showed in
+ * no given order. They were stored in the order they came, and dateInterval keeps it.
+ */
++ (nonnull NSArray<RLMSortDescriptor *> *)chatOrderSortDescriptorsAscending:(BOOL)ascending
+    NS_SWIFT_NAME(chatOrderSortDescriptors(ascending:));
+
 @end
 
 RLM_ARRAY_TYPE(OCTMessageAbstract)

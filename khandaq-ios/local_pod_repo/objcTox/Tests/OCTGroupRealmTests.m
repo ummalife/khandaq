@@ -8,6 +8,7 @@
 
 #import "OCTRealmManager.h"
 #import "OCTChat.h"
+#import "OCTFriend.h"
 #import "OCTMessageAbstract.h"
 #import "OCTMessageFile.h"
 #import "OCTMessageText.h"
@@ -205,7 +206,103 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
     }
 }
 
+#pragma mark - The order of a chat
+
+// KHANDAQ (0.2.56): Android sends a long text as parts, one right after another, and msgV3 stamps each with
+// its send time in whole seconds. The parts tied on sortTimestamp, which alone ordered the conversation, so
+// they showed in no given order. They keep the order they came in.
+- (void)testThePartsOfALongTextFromAFriendKeepTheOrderTheyCameIn
+{
+    OCTFriend *friend = [OCTFriend new];
+    friend.nickname = @"friend";
+    friend.publicKey = kGroupRealmTestsPeerKeyHex;
+    [self.realmManager addObject:friend];
+    OCTChat *chat = [self.realmManager getOrCreateChatWithFriend:friend];
+
+    // A second before now, so that sortTimestamp is the send time and not the arrival.
+    const UInt32 sentSecond = (UInt32)[[NSDate date] timeIntervalSince1970] - 1;
+    NSArray<NSString *> *parts = [self partsOfALongText];
+
+    for (NSUInteger index = 0; index < parts.count; index++) {
+        [self.realmManager addMessageWithText:parts[index]
+                                         type:OCTToxMessageTypeNormal
+                                         chat:chat
+                                       sender:friend
+                                    messageId:(OCTToxMessageId)(index + 1)
+                                 msgv3HashHex:nil
+                                     sentPush:NO
+                                       tssent:sentSecond
+                                       tsrcvd:sentSecond];
+    }
+
+    XCTAssertEqualObjects([self textsInTheOrderOfChat:chat ascending:NO], parts.reverseObjectEnumerator.allObjects,
+                          @"the parts of a long text are out of order, newest first");
+    XCTAssertEqualObjects([self textsInTheOrderOfChat:chat ascending:YES], parts, @"the parts are out of order");
+    XCTAssertEqualObjects(chat.lastMessage.messageText.text, parts.lastObject);
+}
+
+// KHANDAQ (0.2.56): the history sync carries the time of a message in whole seconds too. The parts of a long text
+// a member wrote in the group, synced to somebody who joined later, tied on sortTimestamp and dateInterval alike.
+- (void)testThePartsOfALongTextSyncedIntoAGroupKeepTheOrderTheyCameIn
+{
+    OCTChat *chat = [self groupChat];
+    const NSTimeInterval sentSecond = floor([[NSDate date] timeIntervalSince1970]) - 60.0;
+    NSArray<NSString *> *parts = [self partsOfALongText];
+    NSMutableArray<OCTMessageAbstract *> *rows = [NSMutableArray new];
+
+    for (NSUInteger index = 0; index < parts.count; index++) {
+        [rows addObject:[self.realmManager addGroupSyncedMessageWithText:parts[index]
+                                                                    type:OCTToxMessageTypeNormal
+                                                                    chat:chat
+                                                                  peerId:kGroupRealmTestsPeerId
+                                                                peerName:@"member"
+                                                         senderPubkeyHex:kGroupRealmTestsPeerKeyHex
+                                                               messageId:(OCTToxMessageId)(index + 1)
+                                                            dateInterval:sentSecond]];
+    }
+
+    XCTAssertEqualObjects([self textsInTheOrderOfChat:chat ascending:NO], parts.reverseObjectEnumerator.allObjects,
+                          @"the synced parts of a long text are out of order, newest first");
+    XCTAssertEqualObjects([self textsInTheOrderOfChat:chat ascending:YES], parts, @"the synced parts are out of order");
+
+    // The time shown and the dedup keep the time the member sent them at.
+    for (OCTMessageAbstract *row in rows) {
+        XCTAssertEqual(row.dateInterval, sentSecond);
+        XCTAssertEqual(row.groupSyncDedupTimestamp, sentSecond);
+        XCTAssertLessThan(row.sortTimestamp, sentSecond + 1.0);
+    }
+
+    // With a part removed, the chat's last message is still the last part.
+    [self.realmManager removeMessages:@[rows.firstObject]];
+    XCTAssertEqualObjects(chat.lastMessage.messageText.text, parts.lastObject);
+}
+
 #pragma mark - Rig
+
+- (NSArray<NSString *> *)partsOfALongText
+{
+    NSMutableArray<NSString *> *parts = [NSMutableArray new];
+
+    for (NSUInteger index = 1; index <= 12; index++) {
+        [parts addObject:[NSString stringWithFormat:@"part %lu of a long generated text", (unsigned long)index]];
+    }
+
+    return parts;
+}
+
+- (NSArray<NSString *> *)textsInTheOrderOfChat:(OCTChat *)chat ascending:(BOOL)ascending
+{
+    RLMResults *timeline = [[OCTMessageAbstract objectsInRealm:self.realmManager.realm
+                                                         where:@"chatUniqueIdentifier == %@", chat.uniqueIdentifier]
+                            sortedResultsUsingDescriptors:[OCTMessageAbstract chatOrderSortDescriptorsAscending:ascending]];
+    NSMutableArray<NSString *> *texts = [NSMutableArray new];
+
+    for (OCTMessageAbstract *message in timeline) {
+        [texts addObject:message.messageText.text ?: @"(no text)"];
+    }
+
+    return texts;
+}
 
 /** The texts of both history sync queries, which must agree, in the order they are served. */
 - (NSArray<NSString *> *)textsTheHistorySyncServesInChat:(OCTChat *)chat

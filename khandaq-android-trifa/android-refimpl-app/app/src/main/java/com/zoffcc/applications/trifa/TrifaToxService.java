@@ -1027,6 +1027,9 @@ public class TrifaToxService extends Service
                 // groups of this tox instance into the list or the database.
                 HelperGroup.leave_groups_pending_at_last_stop();
 
+                // KHANDAQ (0.2.56): a new session, also after a profile switch or a service restart in this
+                // process: what the last one queued to group peers went with it (NgcHistoryServeLedger).
+                NgcHistoryServeLedger.reset();
                 is_tox_started = true;
                 // KHANDAQ (logout crash fix): tox is up again, so we are no longer "logged out". Clearing
                 // here (cold start AND same-process re-login) re-enables the reloadProfileFromTox guard

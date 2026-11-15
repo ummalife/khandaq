@@ -369,6 +369,24 @@ public class NgcHistoryServeLedgerTest
                      serve(PEER_B, rows, T0 + sleptMs + 63_000L, awake(T0 + 63_000L)));
     }
 
+    /**
+     * Tox starts again in the same process (a profile switch, the service started again): what the last session
+     * queued went with its toxcore instance. The new session takes nothing for queued, and serves in full first.
+     */
+    @Test
+    public void aNewToxSessionDoesNotTrustWhatTheLastOneQueued()
+    {
+        final List<Row> rows = new ArrayList<>();
+        rows.add(row(PEER_IOS));
+        assertEquals(1, serve(PEER_B, rows, T0));
+        assertEquals("queued, and the member is still there", 0, serve(PEER_B, rows, T0 + 20_000L));
+
+        NgcHistoryServeLedger.reset();
+        assertEquals(0, NgcHistoryServeLedger.trackedEntriesForTest());
+        assertEquals("the new session's first serve", 1, serve(PEER_B, rows, T0 + 30_000L));
+        assertTrue(lastServe.full);
+    }
+
     @Test
     public void aRowIsSentAtMostThreeTimesBetweenFullServes()
     {

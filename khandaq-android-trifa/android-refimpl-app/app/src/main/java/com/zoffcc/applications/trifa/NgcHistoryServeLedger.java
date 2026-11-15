@@ -387,11 +387,22 @@ final class NgcHistoryServeLedger
         }
     }
 
-    /** Test seam. */
-    static synchronized void resetAllForTest()
+    /**
+     * A new Tox session. What the last one queued went with its toxcore instance, so nothing is taken for
+     * queued, and the first serve to each peer is full again. TrifaToxService calls it when Tox starts: the
+     * static ledger outlives a restart of Tox in the same process (a profile switch, the service started
+     * again).
+     */
+    static synchronized void reset()
     {
         STATES.clear();
         trackedEntries = 0;
+    }
+
+    /** Test seam. */
+    static synchronized void resetAllForTest()
+    {
+        reset();
     }
 
     /** Test seam. */

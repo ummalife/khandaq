@@ -234,9 +234,14 @@ public:
     Outbox* getOutbox();
     SavedNotes* getSavedNotes();
 
+    /**
+     * direction: whether we send the file or receive it. The sender alone does not tell: in a
+     * group it is a member, never the chat.
+     */
     void addNewFileMessage(const ChatId& chatId, const QByteArray& fileId,
                            const QString& fileName, const QString& filePath, int64_t size,
-                           const ToxPk& sender, const QDateTime& time, QString const& dispName);
+                           const ToxPk& sender, const QDateTime& time, QString const& dispName,
+                           ToxFile::FileDirection direction);
 
     void addNewSystemMessage(const ChatId& chatId, const SystemMessage& systemMessage);
 

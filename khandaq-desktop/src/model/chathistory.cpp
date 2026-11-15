@@ -249,7 +249,7 @@ void ChatHistory::onFileUpdated(const ToxPk& sender, const ToxFile& file)
             // with a different order when loading from history
             history->addNewFileMessage(chat.getPersistentId(), file.resumeFileId, file.fileName,
                                        file.filePath, file.progress.getFileSize(), sender,
-                                       QDateTime::currentDateTime(), username);
+                                       QDateTime::currentDateTime(), username, file.direction);
             break;
         }
         case ToxFile::CANCELED:

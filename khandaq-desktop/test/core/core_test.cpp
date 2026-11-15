@@ -436,14 +436,18 @@ void TestCore::group_file_goes_to_a_member_in_the_core_loop()
     const QByteArray fileId = started.at(0).at(4).toByteArray();
     QCOMPARE(sent.count(), 0);
 
-    // Its last chunk went to toxcore from the loop, the bar moved on the way, and nothing waited.
-    QTRY_COMPARE_WITH_TIMEOUT(sent.count(), 1, connected_message_wait);
+    // Its last chunk went to toxcore from the loop, and the bar moved on the way.
+    QTRY_VERIFY_WITH_TIMEOUT(!progress.isEmpty() && progress.last().at(1).toLongLong() == size,
+                             connected_message_wait);
+    QCOMPARE(progress.at(0).at(0).toByteArray(), fileId);
+    // QA of 0.2.56 (H1): it is sent once toxcore would have timed out a member that lacked it, and
+    // nothing waited meanwhile.
+    QCOMPARE(sent.count(), 0);
+    QTRY_COMPARE_WITH_TIMEOUT(sent.count(), 1,
+                              Air::GroupFileQueue::lostLookbackMs + connected_message_wait);
     QCOMPARE(sent.at(0).at(0).toInt(), group);
     QCOMPARE(sent.at(0).at(3).toLongLong(), size);
     QCOMPARE(sent.at(0).at(4).toByteArray(), fileId);
-    QVERIFY(progress.count() >= 1);
-    QCOMPARE(progress.at(0).at(0).toByteArray(), fileId);
-    QVERIFY(progress.last().at(1).toLongLong() < size);
     QCOMPARE(waiting.count(), 0);
     QCOMPARE(failed.count(), 0);
 }

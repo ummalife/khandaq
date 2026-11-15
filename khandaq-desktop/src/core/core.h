@@ -213,9 +213,9 @@ public slots:
     /**
      * A file of more than one packet goes as its BEGIN and then its chunks, which the loop of the
      * node sends at their pace (sendGroupFileChunks): groupFileSendStarted, then
-     * groupFileSendProgress, then groupFileSent or groupFileSendFailed. False when the file cannot
-     * be read, or the group would refuse its packets now (it is not connected, or we only observe
-     * there): nothing is sent then.
+     * groupFileSendProgress, then groupFileSent once its members had it, or groupFileSendFailed.
+     * False when the file cannot be read, or the group would refuse its packets now (it is not
+     * connected, or we only observe there): nothing is sent then.
      */
     bool sendGroupFileFromPath(int groupId, const QString& fileName, const QString& localPath);
     void changeGroupTitle(int groupId, const QString& title);
@@ -336,9 +336,15 @@ signals:
      * came (Air::GroupFileQueue::restartMs).
      */
     void groupFileSendWaiting(const QByteArray& fileId, bool waiting);
-    /** The file stopped before its last chunk: the group is gone, or refused it, or the file. */
+    /**
+     * The file stopped before its last chunk: the group is gone, or refused it, or the file; or
+     * nobody was left to have it whole (Air::GroupFileQueue::delivered).
+     */
     void groupFileSendFailed(const QByteArray& fileId);
-    /** Every packet of the file went to toxcore. */
+    /**
+     * Every packet of the file went to toxcore, and the members that toxcore did not time out had
+     * it (Air::GroupFileQueue::delivered).
+     */
     void groupFileSent(int groupnumber, const QString& fileName, const QString& localPath,
                        qint64 fileSize, const QByteArray& fileId);
     void actionSentResult(uint32_t friendId, const QString& action, int success);
@@ -503,6 +509,10 @@ private:
     // coreLoopLock: sendGroupFileFromPath adds them, process() sends their packets.
     QHash<QByteArray, OutgoingGroupFile> outgoingGroupFiles;
     Air::GroupFileQueue groupFileQueue;
+    // 0.2.56: the public key of each member of each group by its peer id, from when it joined:
+    // toxcore lets go of a member before it says that the member left (peer_delete in
+    // group_chats.c). Under coreLoopLock.
+    QHash<quint64, QByteArray> groupPeerKeys;
     Air::UploadPace groupFilePace;
 
     std::unique_ptr<QThread> coreThread;

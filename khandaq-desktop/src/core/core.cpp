@@ -107,6 +107,12 @@ qint64 monotonicMs()
         .count();
 }
 
+// The slot of a member of a group in Core::groupPeerKeys.
+quint64 groupPeerSlot(uint32_t groupId, uint32_t peerId)
+{
+    return (static_cast<quint64>(groupId) << 32) | peerId;
+}
+
 // 0.2.56: while files go into groups, the loop turns this often, as for the files of a friend
 // (CoreFile::corefileIterationInterval), and their progress is told this often.
 constexpr unsigned groupFileTurnMs = 10;
@@ -826,6 +832,12 @@ void Core::onGroupPeerJoin(Tox* tox, uint32_t groupId, uint32_t peerId, void* vC
     const ToxPk joined = core->getGroupPeerPk(static_cast<int>(groupId), static_cast<int>(peerId));
     if (!joined.isEmpty()) {
         core->groupLeaveNotices.joined(static_cast<int>(groupId), joined.getByteArray());
+        core->groupPeerKeys.insert(groupPeerSlot(groupId, peerId), joined.getByteArray());
+        // QA of 0.2.56 (H1): a member that toxcore timed out gets what it may lack of our files.
+        for (const QByteArray& fileId :
+             core->groupFileQueue.memberJoined(static_cast<int>(groupId), joined.getByteArray())) {
+            emit core->groupFileSendWaiting(fileId, false);
+        }
     }
     emit core->groupPeerlistChanged(groupId);
     // first peers bring the synced shared state — refresh the real group name
@@ -841,7 +853,6 @@ void Core::onGroupPeerExit(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Grou
                            size_t partMessageLength, void* vCore)
 {
     std::ignore = tox;
-    std::ignore = exitType;
     std::ignore = name;
     std::ignore = nameLength;
     std::ignore = partMessage;
@@ -849,6 +860,16 @@ void Core::onGroupPeerExit(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Grou
     const auto core = static_cast<Core*>(vCore);
     if (core->ignoresGroup(groupId)) {
         return;
+    }
+    // QA of 0.2.56 (H1): a member whose connection stalled lacks what went of our files since,
+    // and gets it once it is back (Air::GroupFileQueue::memberTimedOut).
+    const QByteArray left = core->groupPeerKeys.take(groupPeerSlot(groupId, peerId));
+    if (exitType == TOX_GROUP_EXIT_TYPE_TIMEOUT && !left.isEmpty()) {
+        const int others = core->groupFileMembers(static_cast<int>(groupId));
+        for (const QByteArray& fileId : core->groupFileQueue.memberTimedOut(
+                 static_cast<int>(groupId), left, others, monotonicMs())) {
+            core->failGroupFileSend(fileId, "member's time-outs");
+        }
     }
     // QA live F11: the exit a leave notice waited for. The member was gone since the notice, and
     // stays gone while toxcore still lists it, unconfirmed, after the exit.
@@ -1361,6 +1382,10 @@ void Core::leaveGroupAfterNotice(int groupId)
 {
     const uint32_t groupNumber = static_cast<uint32_t>(groupId);
     groupLeaveNotices.forgetGroup(groupId);
+    // toxcore says nothing more of its members, and may give its number to another group.
+    for (auto it = groupPeerKeys.begin(); it != groupPeerKeys.end();) {
+        it = (it.key() >> 32) == groupNumber ? groupPeerKeys.erase(it) : std::next(it);
+    }
     // A join by ID asked our friends for an invite: a late one must not join the group again, as
     // on iOS (OCTSubmanagerGroupsImpl).
     forgetFriendAssistedJoin(groupChatId(tox.get(), groupNumber));
@@ -3436,6 +3461,20 @@ void Core::sendGroupFileChunks()
     for (const QByteArray& fileId : groupFileQueue.waitedTooLong(nowMs)) {
         failGroupFileSend(fileId, "wait for a member");
     }
+    // QA of 0.2.56 (H1): a file is sent once its members had it, not when its last chunk went.
+    QList<QByteArray> unreached;
+    for (const QByteArray& fileId : groupFileQueue.delivered(nowMs, &unreached)) {
+        const auto it = outgoingGroupFiles.find(fileId);
+        if (it == outgoingGroupFiles.end()) {
+            continue;
+        }
+        const OutgoingGroupFile done = it.value();
+        outgoingGroupFiles.erase(it);
+        emit groupFileSent(done.group, done.fileName, done.localPath, done.size, fileId);
+    }
+    for (const QByteArray& fileId : unreached) {
+        failGroupFileSend(fileId, "members' time-outs");
+    }
     tellGroupFilesWaiting();
     Air::GroupFileQueue::Packet packet;
     while (groupFileQueue.next(&packet, nowMs) && groupFilePace.ready(nowMs)) {
@@ -3454,10 +3493,9 @@ void Core::sendGroupFileChunks()
         groupFilePace.spend(groupFileQueue.cost(packet));
 
         if (groupFileQueue.sent(packet, nowMs)) {
-            const OutgoingGroupFile done = send;
-            outgoingGroupFiles.erase(it);
-            emit groupFileSent(done.group, done.fileName, done.localPath, done.size,
-                               packet.fileId);
+            // Its last chunk went: it is sent once its members had it (above).
+            send.toldMs = nowMs;
+            emit groupFileSendProgress(packet.fileId, send.size);
         } else if (nowMs - send.toldMs >= groupFileProgressMs) {
             send.toldMs = nowMs;
             emit groupFileSendProgress(packet.fileId, groupFileQueue.bytesSent(packet.fileId));
@@ -3472,7 +3510,9 @@ void Core::sendGroupFileChunks()
 void Core::tellGroupFilesWaiting()
 {
     for (auto it = outgoingGroupFiles.begin(); it != outgoingGroupFiles.end(); ++it) {
-        const bool waits = groupFileQueue.waits(it.value().group);
+        // One whose last chunk went has nothing to wait for.
+        const bool waits =
+            !groupFileQueue.lingers(it.key()) && groupFileQueue.waits(it.value().group);
         if (it.value().waiting != waits) {
             it.value().waiting = waits;
             emit groupFileSendWaiting(it.key(), waits);
@@ -3501,8 +3541,8 @@ int Core::groupFileMembers(int groupId) const
 }
 
 /**
- * @brief The file stops before its last chunk, and the conversation says it was not sent.
- * Called with coreLoopLock held.
+ * @brief The file stops, before its last chunk or before its members had it, and the conversation
+ * says it was not sent. Called with coreLoopLock held.
  */
 void Core::failGroupFileSend(const QByteArray& fileId, const char* reason)
 {

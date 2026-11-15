@@ -22,6 +22,7 @@
 #include <QByteArray>
 #include <QHash>
 #include <QList>
+#include <QPair>
 #include <QtGlobal>
 
 #include <cstdint>
@@ -104,6 +105,31 @@ public:
      * for room as a new file does. One file always goes.
      */
     static constexpr qint64 restartMs = 2 * windowMs;
+    /**
+     * QA of 0.2.56 (H1): a member's connection can stall for good. toxcore keeps, in the receive
+     * array of 8192 entries of a connection, the copy of a packet that came before the one ahead of
+     * it, also when its later copy came in order (group_connection.c), and refuses the packet that
+     * comes to that entry 8192 messages later, which it then asks for again and again. The member
+     * takes nothing more from us, toxcore takes our packets for it all the same, and it times the
+     * member out once the oldest packet the member did not acknowledge is GC_CONFIRMED_PEER_TIMEOUT
+     * (58 s) old, or once the member said nothing for as long, counting in whole seconds
+     * (gcc_resend_packets). A member that toxcore did not time out within lostLookbackMs after a
+     * packet went had it, and one it timed out had what went lostLookbackMs before our last packet.
+     * The member then joins again. If it had timed us out as well, that is on a new connection,
+     * which can stall the same way. If its toxcore still held ours (we came back within its 58 s),
+     * it takes us back on the old one (handle_gc_handshake_request) and keeps the part of a packet
+     * it had there (last_chunk_id, recv_array): from then on it drops every fragment of ours
+     * (handle_gc_packet_fragment), so such a member gets no further and the queue gives it up.
+     */
+    static constexpr qint64 lostLookbackMs = 70 * 1000;
+    /**
+     * A file of at most this many chunks goes again whole to a member back from a time-out: a new
+     * connection takes some 290 chunks of 28 entries each before it may stall again, and a receiver
+     * that dropped what it had (iOS does after a minute) gets the file whole. A larger file goes on
+     * from where the member was, as a whole one would stall at the same place every time. A
+     * receiver keeps what it has on a repeated BEGIN.
+     */
+    static constexpr int wholeResendChunks = 250;
 
     /**
      * How many members a packet into the group goes to now (one until it is said), at nowMs (a
@@ -125,6 +151,27 @@ public:
     /** The groups with a file to send. */
     QList<int> groups() const;
     /**
+     * toxcore timed the member out of the group at nowMs (TOX_GROUP_EXIT_TYPE_TIMEOUT), and others
+     * are left in it. Of each file of the group that began before the member joined, the member had
+     * what went lostLookbackMs before the file's last packet: once the member is back
+     * (memberJoined), the file goes again from its BEGIN and on from there. A member that timed out
+     * twice in a row so without getting further gets no more of the same: returns those of its
+     * files that nobody else is left to have, which are not sent.
+     */
+    QList<QByteArray> memberTimedOut(int group, const QByteArray& member, int others, qint64 nowMs);
+    /**
+     * The member joined the group: what it may lack of the files it timed out on goes again, from
+     * their BEGIN. Returns those files.
+     */
+    QList<QByteArray> memberJoined(int group, const QByteArray& member);
+    /**
+     * The files whose last chunk went lostLookbackMs before nowMs, and whose members that toxcore
+     * timed out on them are back for them or were away for aloneLimitMs: they are done. Those that
+     * nobody else was left to have when their last member timed out go into failed; the others
+     * were had whole by the members toxcore did not time out.
+     */
+    QList<QByteArray> delivered(qint64 nowMs, QList<QByteArray>* failed);
+    /**
      * The packet whose turn it is at nowMs (a steady clock); false when nothing waits, or only
      * groups that wait.
      */
@@ -134,17 +181,34 @@ public:
     /**
      * The next packet of its group went at nowMs, and its cost counts for the group; a BEGIN
      * first brings the group level with the files that go. True when it was the last of its file,
-     * which is then done. Any other packet changes nothing.
+     * which then waits for its members to have it (delivered), while the group's next file goes.
+     * Any other packet changes nothing.
      */
     bool sent(const Packet& packet, qint64 nowMs);
-    /** The file is not sent: it failed, or its group is gone. */
+    /** The file is not sent: it failed, it was cancelled, or its group is gone. */
     void remove(const QByteArray& fileId);
-    /** The bytes of the file whose chunks went. */
+    /** The bytes of the file whose chunks went: from where it goes on, once it goes again. */
     qint64 bytesSent(const QByteArray& fileId) const;
     bool contains(const QByteArray& fileId) const;
+    /** Whether the last chunk of the file went, and it waits for its members to have it. */
+    bool lingers(const QByteArray& fileId) const;
+    /** Whether no file has a packet left to send: those whose last chunk went may wait. */
     bool isEmpty() const;
 
 private:
+    /** A member toxcore timed out while a file went (memberTimedOut). */
+    struct Absence
+    {
+        /** The first chunk the member may lack. */
+        int from = 0;
+        /** When toxcore last timed the member out (a steady clock); -1 while it is back. */
+        qint64 awayMs = -1;
+        /** Whether the file went again from its BEGIN since the member was back. */
+        bool resumed = false;
+        /** How many time-outs in a row since such a BEGIN found the member no further. */
+        int fruitless = 0;
+    };
+
     struct File
     {
         QByteArray fileId;
@@ -157,8 +221,24 @@ private:
         qint64 lastMs = 0;
         /** The order in which its BEGIN went among those of all files: the last began last. */
         qint64 begun = 0;
+        /** The chunk its next BEGIN leads to, where a member back from a time-out was; -1: 0. */
+        int resumeAt = -1;
+        /** What was next to go, at most once a second since its last BEGIN: (when, chunk). */
+        QList<QPair<qint64, int>> trail;
+        /** What was next to go before the trail: where its last BEGIN led. */
+        int trailBase = 0;
+        /** The members that toxcore timed out while it went, by public key. */
+        QHash<QByteArray, Absence> absences;
+        /** The members that joined after its last BEGIN, which they never had. */
+        QList<QByteArray> latecomers;
+        /** Whether nobody else was left in the group when a member last timed out on it. */
+        bool leftAlone = false;
     };
 
+    /** The first chunk of the file that a member which had all that went until atMs may lack. */
+    static int firstLacked(const File& file, qint64 atMs);
+    /** The member is back: the file goes again from its BEGIN for it. False when it does not. */
+    static bool takeBack(File& file, const QByteArray& member);
     int indexOf(const QByteArray& fileId) const;
     int firstOf(int group) const;
     void dropTurnIfDone(int group);
@@ -171,6 +251,8 @@ private:
 
     /** In the order they were added. */
     QList<File> files;
+    /** The files whose last chunk went, until they are done (delivered). */
+    QList<File> lingering;
     /** The groups with a file to send; of two that cost the same, the first goes first. */
     QList<int> turns;
     /** What the packets of each of those groups have cost the pace. */

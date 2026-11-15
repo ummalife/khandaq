@@ -32,6 +32,8 @@ const QByteArray fileA(32, 'a');
 const QByteArray fileB(32, 'b');
 const QByteArray fileC(32, 'c');
 const QByteArray fileD(32, 'd');
+const QByteArray memberB(32, 'B');
+const QByteArray memberC(32, 'C');
 
 QString shown(const GroupFileQueue::Packet& packet)
 {
@@ -67,6 +69,22 @@ qint64 chunkTo(int members)
 {
     return UploadPace::cost(chunkPacket, members);
 }
+
+// Sends the BEGIN of the only file there is at *nowMs, then a chunk every 250 ms up to the one
+// before untilChunk: chunk n goes at 250 * (n + 1) ms after the BEGIN. Says whether all went in turn.
+bool sendSteadily(GroupFileQueue& queue, int fromChunk, int untilChunk, qint64* nowMs)
+{
+    if (step(queue, *nowMs) != QStringLiteral("1:a:begin")) {
+        return false;
+    }
+    for (int chunk = fromChunk; chunk < untilChunk; ++chunk) {
+        *nowMs += 250;
+        if (step(queue, *nowMs) != QStringLiteral("1:a:%1").arg(chunk)) {
+            return false;
+        }
+    }
+    return true;
+}
 } // namespace
 
 // 0.2.56: the chunks of a file the desktop sends into a group go from the thread of the node, a few
@@ -100,6 +118,13 @@ private slots:
     void aCostlyPacketIsPaidForByTheWaitAfterIt();
     void thePaceSaysWhenTheNextPacketMayGo();
     void aPacketCostsItsBytesForEachMember();
+    void aMemberBackFromATimeOutGetsALargeFileOnFromWhereItWas();
+    void aMemberBackFromATimeOutGetsASmallFileWhole();
+    void aFileWaitsForItsMembersAfterItsLastChunk();
+    void aFileGoesAgainForAMemberTimedOutAfterItsLastChunk();
+    void aFileNobodyWasLeftToHaveIsNotSent();
+    void aMemberThatGetsNoFurtherGetsNoMoreOfTheFile();
+    void aMemberThatJoinedAfterTheBeginGetsNothingAgain();
 };
 
 void TestAirGroupFileQueue::aFileIsCutIntoChunksOfThePacketPayload()
@@ -144,11 +169,15 @@ void TestAirGroupFileQueue::aFileGoesAsItsBeginThenItsChunksInOrder()
     QVERIFY(!queue.sent(packet, 0));
     QVERIFY(queue.next(&packet, 0));
     QCOMPARE(shown(packet), QStringLiteral("4:a:2"));
-    // The last chunk ends the file.
+    // The last chunk ends what goes of the file, which then waits for its members to have it.
     QVERIFY(queue.sent(packet, 0));
     QVERIFY(queue.isEmpty());
-    QVERIFY(!queue.contains(fileA));
     QVERIFY(!queue.next(&packet, 0));
+    QList<QByteArray> failed;
+    QVERIFY(queue.delivered(GroupFileQueue::lostLookbackMs - 1, &failed).isEmpty());
+    QCOMPARE(queue.delivered(GroupFileQueue::lostLookbackMs, &failed), QList<QByteArray>{fileA});
+    QVERIFY(failed.isEmpty());
+    QVERIFY(!queue.contains(fileA));
 }
 
 void TestAirGroupFileQueue::theFilesOfAGroupGoOneAfterAnother()
@@ -674,6 +703,197 @@ void TestAirGroupFileQueue::aPacketCostsItsBytesForEachMember()
     // not get the rest of the file at once.
     QCOMPARE(UploadPace::cost(chunkPacket, 0), chunkPacket);
     QCOMPARE(UploadPace::cost(chunkPacket, -1), chunkPacket);
+}
+
+/**
+ * @brief QA of 0.2.56 (H1): toxcore stalls a member's connection after some 290 chunks and times the
+ * member out 58 s later, and the member joins again on a new connection. The whole file again,
+ * from its BEGIN as for a member that is back (setMembers), stalled at the same place every time,
+ * so a large file never arrived. It goes on from what the member had: what went 70 s before the
+ * file's last packet.
+ */
+void TestAirGroupFileQueue::aMemberBackFromATimeOutGetsALargeFileOnFromWhereItWas()
+{
+    GroupFileQueue queue;
+    const int chunks = GroupFileQueue::wholeResendChunks + 150;
+    queue.add(1, fileA, chunks * payload);
+    queue.setMembers(1, 2, 0);
+    qint64 nowMs = 0;
+    QVERIFY(sendSteadily(queue, 0, 360, &nowMs));
+    QCOMPARE(nowMs, qint64{90000});
+
+    // B had what went until 20 s: chunk 80 was next then.
+    QVERIFY(queue.memberTimedOut(1, memberB, 1, nowMs).isEmpty());
+    // The file goes on for C meanwhile.
+    QCOMPARE(step(queue, nowMs + 250), QStringLiteral("1:a:360"));
+    queue.memberJoined(1, memberB);
+    QCOMPARE(step(queue, nowMs + 500), QStringLiteral("1:a:begin"));
+    QCOMPARE(queue.bytesSent(fileA), GroupFileQueue::chunkOffset(80));
+    QCOMPARE(step(queue, nowMs + 750), QStringLiteral("1:a:80"));
+    QCOMPARE(step(queue, nowMs + 1000), QStringLiteral("1:a:81"));
+
+    // A member that joins again after it was back changes nothing.
+    queue.memberJoined(1, memberB);
+    QCOMPARE(step(queue, nowMs + 1250), QStringLiteral("1:a:82"));
+}
+
+/**
+ * @brief A small file goes again whole to a member back from a time-out: the new connection takes
+ * all of it, and a receiver that dropped what it had, as iOS does after a minute, gets it all.
+ */
+void TestAirGroupFileQueue::aMemberBackFromATimeOutGetsASmallFileWhole()
+{
+    GroupFileQueue queue;
+    queue.add(1, fileA, GroupFileQueue::wholeResendChunks * payload);
+    queue.setMembers(1, 2, 0);
+    qint64 nowMs = 0;
+    QVERIFY(sendSteadily(queue, 0, 240, &nowMs));
+
+    QVERIFY(queue.memberTimedOut(1, memberB, 1, nowMs).isEmpty());
+    queue.memberJoined(1, memberB);
+    QCOMPARE(step(queue, nowMs + 250), QStringLiteral("1:a:begin"));
+    QCOMPARE(step(queue, nowMs + 500), QStringLiteral("1:a:0"));
+}
+
+/**
+ * @brief The last chunk of a file can go while the connection of a member is stalled: the file is
+ * not done until toxcore could have timed the member out, nor while a member it timed out is away.
+ * The group's next file goes meanwhile.
+ */
+void TestAirGroupFileQueue::aFileWaitsForItsMembersAfterItsLastChunk()
+{
+    GroupFileQueue queue;
+    queue.add(1, fileA, 2 * payload);
+    queue.add(1, fileB, payload);
+    queue.setMembers(1, 2, 0);
+    QCOMPARE(drain(queue, 3, 1000), (QStringList{"1:a:begin", "1:a:0", "1:a:1"}));
+    QCOMPARE(drain(queue, 2, 2000), (QStringList{"1:b:begin", "1:b:0"}));
+    QVERIFY(queue.contains(fileA));
+    QCOMPARE(queue.bytesSent(fileA), 2 * payload);
+
+    QList<QByteArray> failed;
+    const qint64 lingerEnd = 1000 + GroupFileQueue::lostLookbackMs;
+    QVERIFY(queue.delivered(lingerEnd - 1, &failed).isEmpty());
+    // B timed out on it, C stays: it waits for B to be back, at most aloneLimitMs.
+    QVERIFY(queue.memberTimedOut(1, memberB, 1, lingerEnd - 1).isEmpty());
+    QVERIFY(queue.delivered(lingerEnd, &failed).isEmpty());
+    QVERIFY(queue.delivered(lingerEnd - 2 + GroupFileQueue::aloneLimitMs, &failed).isEmpty());
+    // B did not come back: C had them whole.
+    QCOMPARE(queue.delivered(lingerEnd - 1 + GroupFileQueue::aloneLimitMs, &failed),
+             (QList<QByteArray>{fileA, fileB}));
+    QVERIFY(failed.isEmpty());
+}
+
+/**
+ * @brief A member that toxcore timed out after the last chunk of a file went gets the rest of the
+ * file once it is back, behind the files its group sends meanwhile, and the file is done only after
+ * that.
+ */
+void TestAirGroupFileQueue::aFileGoesAgainForAMemberTimedOutAfterItsLastChunk()
+{
+    GroupFileQueue queue;
+    const int chunks = GroupFileQueue::wholeResendChunks + 50;
+    queue.add(1, fileA, chunks * payload);
+    queue.setMembers(1, 2, 0);
+    qint64 nowMs = 0;
+    QVERIFY(sendSteadily(queue, 0, chunks, &nowMs));
+    QCOMPARE(nowMs, qint64{75000});
+    queue.add(1, fileB, payload);
+    QCOMPARE(step(queue, nowMs + 250), QStringLiteral("1:b:begin"));
+
+    // B and then C stalled at chunk 20 and timed out: what went until 5 s, chunk 20, they had.
+    // The next file began after they stalled: it goes again from its BEGIN, then the rest of the
+    // first one.
+    QVERIFY(queue.memberTimedOut(1, memberB, 1, nowMs + 1000).isEmpty());
+    QVERIFY(queue.memberTimedOut(1, memberC, 0, nowMs + 1100).isEmpty());
+    queue.memberJoined(1, memberC);
+    queue.memberJoined(1, memberB);
+    QCOMPARE(drain(queue, 5, nowMs + 2000),
+             (QStringList{"1:b:begin", "1:b:0", "1:a:begin", "1:a:20", "1:a:21"}));
+    nowMs += 2000;
+    QList<QByteArray> failed;
+    QCOMPARE(queue.delivered(nowMs, &failed), QList<QByteArray>{});
+
+    for (int chunk = 22; chunk < chunks; ++chunk) {
+        QCOMPARE(step(queue, nowMs), QStringLiteral("1:a:%1").arg(chunk));
+    }
+    QCOMPARE(queue.delivered(nowMs + GroupFileQueue::lostLookbackMs, &failed),
+             (QList<QByteArray>{fileB, fileA}));
+    QVERIFY(failed.isEmpty());
+}
+
+/**
+ * @brief The members of a group timed out after the last chunk of its file, and none came back
+ * within aloneLimitMs: nobody had it whole, and it is not sent.
+ */
+void TestAirGroupFileQueue::aFileNobodyWasLeftToHaveIsNotSent()
+{
+    GroupFileQueue queue;
+    queue.add(1, fileA, 2 * payload);
+    queue.setMembers(1, 1, 0);
+    QCOMPARE(drain(queue, 3, 0), (QStringList{"1:a:begin", "1:a:0", "1:a:1"}));
+
+    QVERIFY(queue.memberTimedOut(1, memberB, 0, 50000).isEmpty());
+    QList<QByteArray> failed;
+    QVERIFY(queue.delivered(50000 + GroupFileQueue::aloneLimitMs - 1, &failed).isEmpty());
+    QVERIFY(queue.delivered(50000 + GroupFileQueue::aloneLimitMs, &failed).isEmpty());
+    QCOMPARE(failed, QList<QByteArray>{fileA});
+    QVERIFY(!queue.contains(fileA));
+}
+
+/**
+ * @brief A member whose new connection stalls again before the file gets further, twice in a row,
+ * gets no more of it: alone, the file is not sent; with others, it goes on for them.
+ */
+void TestAirGroupFileQueue::aMemberThatGetsNoFurtherGetsNoMoreOfTheFile()
+{
+    for (const int others : {0, 1}) {
+        GroupFileQueue queue;
+        const int chunks = GroupFileQueue::wholeResendChunks + 150;
+        queue.add(1, fileA, chunks * payload);
+        queue.setMembers(1, 1 + others, 0);
+        qint64 nowMs = 0;
+        QVERIFY(sendSteadily(queue, 0, 360, &nowMs));
+
+        // Chunk 80 went last at 20 s; then B gets only a few chunks each time it is back.
+        QVERIFY(queue.memberTimedOut(1, memberB, others, nowMs).isEmpty());
+        for (int round = 0; round < 2; ++round) {
+            queue.memberJoined(1, memberB);
+            QVERIFY(sendSteadily(queue, 80, 84, &nowMs));
+            nowMs += GroupFileQueue::lostLookbackMs;
+            const QList<QByteArray> hopeless = queue.memberTimedOut(1, memberB, others, nowMs);
+            QCOMPARE(hopeless, round == 1 && others == 0 ? QList<QByteArray>{fileA}
+                                                         : QList<QByteArray>{});
+        }
+        if (others == 1) {
+            // B is back, and the file goes on for C from where it was.
+            queue.memberJoined(1, memberB);
+            QCOMPARE(step(queue, nowMs), QStringLiteral("1:a:84"));
+        }
+    }
+}
+
+/**
+ * @brief A member that joined after the BEGIN of a file never had it, and gets nothing of it again
+ * when it times out and joins once more, as one that joins while the file goes gets none of it.
+ */
+void TestAirGroupFileQueue::aMemberThatJoinedAfterTheBeginGetsNothingAgain()
+{
+    GroupFileQueue queue;
+    const int chunks = GroupFileQueue::wholeResendChunks + 150;
+    queue.add(1, fileA, chunks * payload);
+    queue.setMembers(1, 1, 0);
+    qint64 nowMs = 0;
+    QVERIFY(sendSteadily(queue, 0, 100, &nowMs));
+    queue.memberJoined(1, memberC);
+    for (int chunk = 100; chunk < 360; ++chunk) {
+        nowMs += 250;
+        QCOMPARE(step(queue, nowMs), QStringLiteral("1:a:%1").arg(chunk));
+    }
+
+    QVERIFY(queue.memberTimedOut(1, memberC, 1, nowMs).isEmpty());
+    queue.memberJoined(1, memberC);
+    QCOMPARE(step(queue, nowMs + 250), QStringLiteral("1:a:360"));
 }
 
 QTEST_GUILESS_MAIN(TestAirGroupFileQueue)

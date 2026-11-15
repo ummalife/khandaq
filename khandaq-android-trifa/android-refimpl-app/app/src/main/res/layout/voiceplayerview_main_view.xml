@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     KHANDAQ (redesign, stage 3b): a voice note is a player, as ChatVoiceMessageView on iOS (design/DESIGN.md,
-    "Files, voice and calls on the phone"): Listen and Pause in words, the wave that fills in ink as it
+    "Files, voice and calls on the phone"): Listen and Pause, the wave that fills in ink as it
     plays, and the length in tabular figures at the end, the time played while it plays.
+    0.2.56 (QA live): Listen and Pause are a round play button, as in Telegram and on the desktop; the
+    words are what TalkBack says. The rest of the button's target is the gap before the wave.
     The ids the player classes look up are kept.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -21,10 +23,11 @@
         android:minHeight="@dimen/kq_size_target_android"
         android:orientation="horizontal">
 
-        <TextView
+        <ImageButton
             android:id="@+id/imgPlay"
             style="@style/Widget.KQ.Air.VoiceButton"
-            android:text="@string/air_voice_listen" />
+            android:contentDescription="@string/air_voice_listen"
+            android:src="@drawable/air_voice_ic_play" />
 
         <ProgressBar
             android:id="@+id/pb_play"
@@ -34,17 +37,17 @@
             android:focusable="true"
             android:visibility="gone" />
 
-        <TextView
+        <ImageButton
             android:id="@+id/imgPause"
             style="@style/Widget.KQ.Air.VoiceButton"
-            android:text="@string/air_voice_pause"
+            android:contentDescription="@string/air_voice_pause"
+            android:src="@drawable/air_voice_ic_pause"
             android:visibility="gone" />
 
         <LinearLayout
             android:id="@+id/containerLinearLayout"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/kq_space_10"
             android:layout_marginEnd="@dimen/kq_space_10"
             android:layout_weight="1"
             android:gravity="center_vertical"

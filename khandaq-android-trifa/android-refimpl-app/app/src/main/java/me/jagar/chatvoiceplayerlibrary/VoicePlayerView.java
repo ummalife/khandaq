@@ -54,8 +54,9 @@ public class VoicePlayerView extends LinearLayout
     private String shareTitle = "Share Voice";
 
     private LinearLayout main_layout, padded_layout, container_layout;
-    // KHANDAQ (redesign, stage 3b): Listen and Pause are words now, as on iOS.
-    private TextView imgPlay, imgPause;
+    // KHANDAQ (0.2.56, QA live): Listen and Pause are a round play button, as in Telegram and on the desktop
+    // (air_voice_bg_play); their words are the content descriptions TalkBack says.
+    private ImageView imgPlay, imgPause;
     private ImageView imgShare;
     private SeekBar seekBar;
     private ProgressBar progressBar;
@@ -203,7 +204,7 @@ public class VoicePlayerView extends LinearLayout
         shareShape.setColor(shareBackgroundColor);
         shareShape.setCornerRadius(shareCornerRadius);
 
-        // The redesign's layouts pass no colour here: Listen and Pause keep the design's button ground.
+        // The redesign's layouts pass no colour here: Listen and Pause keep the design's disc.
         if (playPaueseBackgroundColor != Color.TRANSPARENT) {
             imgPlay.setBackground(playPauseShape);
             imgPause.setBackground(playPauseShape);
@@ -722,19 +723,19 @@ public class VoicePlayerView extends LinearLayout
             this.container_layout = container_layout;
         }
 
-        public TextView getImgPlay() {
+        public ImageView getImgPlay() {
             return imgPlay;
         }
 
-        public void setImgPlay(TextView imgPlay) {
+        public void setImgPlay(ImageView imgPlay) {
             this.imgPlay = imgPlay;
         }
 
-        public TextView getImgPause() {
+        public ImageView getImgPause() {
             return imgPause;
         }
 
-        public void setImgPause(TextView imgPause) {
+        public void setImgPause(ImageView imgPause) {
             this.imgPause = imgPause;
         }
 

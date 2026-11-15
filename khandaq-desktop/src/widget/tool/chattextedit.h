@@ -50,9 +50,12 @@ public:
     /**
      * Files when the paste holds files of this computer, then any text that is more than spaces
      * and line breaks, and a picture only when there is no such text. A text that is only a web,
-     * file or data address beside a picture is the picture's, as a browser's Copy image puts it.
+     * file or data address beside a picture is the picture's when the html of the paste shows
+     * only pictures, as a browser's Copy image puts it. hasImage is false where no picture is
+     * taken: nothing then connects to pasteImage.
      */
-    static PasteKind pasteKind(bool hasLocalFiles, const QString& text, bool hasImage);
+    static PasteKind pasteKind(bool hasLocalFiles, const QString& text, bool hasImage,
+                               const QString& html = QString());
 
 signals:
     void enterPressed();

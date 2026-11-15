@@ -28,9 +28,11 @@
 #include <QFileInfo>
 #include <QImage>
 #include <QKeyEvent>
+#include <QMetaMethod>
 #include <QMimeData>
 #include <QResizeEvent>
 #include <QSyntaxHighlighter>
+#include <QTextBlock>
 #include <QTextDocument>
 #include <QUrl>
 #include <QtGlobal>
@@ -173,6 +175,33 @@ bool isOnlyAnAddress(const QString& text)
     return url.isValid() && schemes.contains(url.scheme(), Qt::CaseInsensitive);
 }
 
+/**
+ * Whether the HTML of a paste shows pictures and no text: the img a browser's Copy image puts
+ * beside the picture. A spreadsheet or an editor that puts a picture of the cells or the lines
+ * beside their text has that text in its HTML too, a cell holding only a link among them.
+ */
+bool showsOnlyPictures(const QString& html)
+{
+    if (html.isEmpty()) {
+        return false;
+    }
+    // Parsed only: nothing is laid out, so no picture it names is loaded.
+    QTextDocument document;
+    document.setHtml(html);
+    bool picture = false;
+    for (QTextBlock block = document.begin(); block.isValid(); block = block.next()) {
+        for (QTextBlock::iterator it = block.begin(); !it.atEnd(); ++it) {
+            const QTextFragment fragment = it.fragment();
+            if (fragment.charFormat().isImageFormat()) {
+                picture = true;
+            } else if (!fragment.text().trimmed().isEmpty()) {
+                return false;
+            }
+        }
+    }
+    return picture;
+}
+
 // kq-compose textarea: as high as "Send" for one line, growing up to the compose maximum, with
 // 8 px above the text and the rest below it (the padding is set by the form's style sheet).
 constexpr int MESSAGE_EDIT_MIN_HEIGHT = AirTokens::Size::control;
@@ -307,17 +336,20 @@ void ChatTextEdit::sendKeyEvent(QKeyEvent* event)
 }
 
 ChatTextEdit::PasteKind ChatTextEdit::pasteKind(bool hasLocalFiles, const QString& text,
-                                                bool hasImage)
+                                                bool hasImage, const QString& html)
 {
     if (hasLocalFiles) {
         return PasteKind::Files;
     }
     // KHANDAQ (0.2.56): the text before a picture. Excel, Word and other programs put a picture
     // of what was copied beside its text, and the field took the picture: in a group, where no
-    // picture is taken, nothing came at all. A browser's Copy image puts no text, or the address
-    // of the picture: a picture with only its address beside it is the picture.
+    // picture is taken, nothing came at all. A browser's Copy image puts no text, or an address
+    // beside the picture and HTML that shows only the picture: that is the picture. The address
+    // is not matched with the src of the img, as a browser may put the address of the picture it
+    // chose from srcset or of a link around it.
     const QString trimmed = text.trimmed();
-    if (!trimmed.isEmpty() && !(hasImage && isOnlyAnAddress(trimmed))) {
+    if (!trimmed.isEmpty()
+        && !(hasImage && isOnlyAnAddress(trimmed) && showsOnlyPictures(html))) {
         return PasteKind::Text;
     }
     return hasImage ? PasteKind::Image : PasteKind::Text;
@@ -331,7 +363,12 @@ bool ChatTextEdit::tryHandlePaste(const QMimeData* mimeData)
 
     const QString text = mimeData->hasText() ? mimeData->text() : QString();
     const QStringList paths = localFilePathsFromMimeData(mimeData, text);
-    switch (pasteKind(!paths.isEmpty(), text, mimeData->hasImage())) {
+    // KHANDAQ (0.2.56): a picture counts only where it is taken, the chat with a person; in a
+    // group the text beside it is pasted instead of nothing.
+    const QMetaMethod imageSignal = QMetaMethod::fromSignal(&ChatTextEdit::pasteImage);
+    const bool takesImage = mimeData->hasImage() && isSignalConnected(imageSignal);
+    const QString html = takesImage && mimeData->hasHtml() ? mimeData->html() : QString();
+    switch (pasteKind(!paths.isEmpty(), text, takesImage, html)) {
     case PasteKind::Files:
         emit pasteFiles(paths);
         return true;

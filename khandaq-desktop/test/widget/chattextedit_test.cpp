@@ -50,6 +50,21 @@ void copy(const QString& text, bool withPicture, const QString& html = QString()
     }
     QApplication::clipboard()->setMimeData(data);
 }
+
+/** What a browser's Copy image puts as the HTML of the picture at address. */
+QString imageHtml(const QString& address)
+{
+    return QStringLiteral("<meta charset='utf-8'><img src=\"") + address
+           + QStringLiteral("\" alt=\"A\"/>");
+}
+
+/** What Excel puts as the HTML of one cell that holds only a link, in short. */
+QString cellHtml(const QString& address)
+{
+    return QStringLiteral("<html><body><table><tr><!--StartFragment--><td><a href=\"") + address
+           + QStringLiteral("\">") + address
+           + QStringLiteral("</a></td><!--EndFragment--></tr></table></body></html>");
+}
 } // namespace
 
 class TestChatTextEdit : public QObject
@@ -62,6 +77,8 @@ private slots:
     void aPictureWithoutTextIsOffered();
     void pasteKindTakesThePictureBesideOnlyItsAddress();
     void aPictureWithOnlyItsAddressBesideItIsOffered();
+    void aCellWithOnlyALinkIsPastedAsItsText();
+    void whereNoPictureIsTakenTheTextBesideItIsPasted();
     void aTextIsFilesOnlyWhenEveryLineNamesOne();
     void aLongTextIsPastedWholeAndTypingOnStaysQuick();
 };
@@ -143,28 +160,50 @@ void TestChatTextEdit::aPictureWithoutTextIsOffered()
 /**
  * KHANDAQ (0.2.56): a browser's Copy image may put the address of the picture as its text, and
  * the link came instead of the picture. A text that is one web, file or data address is the
- * picture's; any other text beside a picture is still the text, and an address alone is text.
+ * picture's when the HTML beside it shows only a picture; any other text beside a picture is
+ * still the text, and so is an address alone, or one whose HTML holds text, as a spreadsheet's.
  */
 void TestChatTextEdit::pasteKindTakesThePictureBesideOnlyItsAddress()
 {
     using Kind = ChatTextEdit::PasteKind;
     const QString address = QStringLiteral("https://example.org/a.png");
-    QCOMPARE(ChatTextEdit::pasteKind(false, address, true), Kind::Image);
-    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral(" HTTP://EXAMPLE.ORG/A.PNG\r\n"), true),
+    const QString html = imageHtml(address);
+    QCOMPARE(ChatTextEdit::pasteKind(false, address, true, html), Kind::Image);
+    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral(" HTTP://EXAMPLE.ORG/A.PNG\r\n"), true,
+                                     html),
              Kind::Image);
-    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral("file:///tmp/a.png"), true),
+    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral("file:///tmp/a.png"), true,
+                                     imageHtml(QStringLiteral("file:///tmp/a.png"))),
              Kind::Image);
-    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral("data:image/png;base64,iVBORw0KGgo="),
-                                     true),
+    const QString data = QStringLiteral("data:image/png;base64,iVBORw0KGgo=");
+    QCOMPARE(ChatTextEdit::pasteKind(false, data, true, imageHtml(data)), Kind::Image);
+    // Windows wraps the HTML of the clipboard; the address of a sharp screen's picture or of a
+    // link around it is not the src.
+    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral("https://example.org/a@2x.png"), true,
+                                     QStringLiteral("<html><body>\r\n<!--StartFragment--><img "
+                                                    "src=\"https://example.org/a.png\"><!--"
+                                                    "EndFragment-->\r\n</body></html>")),
              Kind::Image);
 
-    QCOMPARE(ChatTextEdit::pasteKind(false, address, false), Kind::Text);
-    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral("Look: ") + address, true), Kind::Text);
-    QCOMPARE(ChatTextEdit::pasteKind(false, address + QStringLiteral("\n") + address, true),
+    QCOMPARE(ChatTextEdit::pasteKind(false, address, false, html), Kind::Text);
+    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral("Look: ") + address, true, html),
              Kind::Text);
-    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral("ftp://example.org/a.png"), true),
+    QCOMPARE(ChatTextEdit::pasteKind(false, address + QStringLiteral("\n") + address, true, html),
              Kind::Text);
-    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral("example.org/a.png"), true), Kind::Text);
+    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral("ftp://example.org/a.png"), true, html),
+             Kind::Text);
+    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral("example.org/a.png"), true, html),
+             Kind::Text);
+    // What the code sees beside the picture is not a browser's picture alone.
+    QCOMPARE(ChatTextEdit::pasteKind(false, address, true), Kind::Text);
+    QCOMPARE(ChatTextEdit::pasteKind(false, address, true, cellHtml(address)), Kind::Text);
+    QCOMPARE(ChatTextEdit::pasteKind(false, address, true,
+                                     QStringLiteral("<p>Caption</p>") + imageHtml(address)),
+             Kind::Text);
+    QCOMPARE(ChatTextEdit::pasteKind(false, address, true,
+                                     QStringLiteral("<a href=\"") + address
+                                         + QStringLiteral("\"></a>")),
+             Kind::Text);
 }
 
 void TestChatTextEdit::aPictureWithOnlyItsAddressBesideItIsOffered()
@@ -184,6 +223,52 @@ void TestChatTextEdit::aPictureWithOnlyItsAddressBesideItIsOffered()
     QTest::keySequence(&edit, QKeySequence::Paste);
     QCOMPARE(pictures.count(), 1);
     QCOMPARE(edit.toPlainText(), QStringLiteral("Look: ") + address);
+}
+
+/**
+ * KHANDAQ (0.2.56): Excel and LibreOffice put a picture of the cell beside its text; a cell that
+ * holds only a link is the link, not its picture.
+ */
+void TestChatTextEdit::aCellWithOnlyALinkIsPastedAsItsText()
+{
+    ChatTextEdit edit;
+    QSignalSpy pictures(&edit, &ChatTextEdit::pasteImage);
+    const QString address = QStringLiteral("https://example.org/report");
+    copy(address + QStringLiteral("\r\n"), true, cellHtml(address));
+
+    QTest::keySequence(&edit, QKeySequence::Paste);
+    QCOMPARE(pictures.count(), 0);
+    QCOMPARE(edit.toPlainText(), address + QStringLiteral("\n"));
+}
+
+/**
+ * KHANDAQ (0.2.56): only the chat with a person takes a picture (ChatForm connects pasteImage).
+ * Elsewhere, a group among them, a browser's Copy image pasted nothing, its address included:
+ * the text beside a picture is pasted there, and a picture alone leaves the field as it was.
+ * This field has nothing connected to pasteImage; a QSignalSpy would connect it.
+ */
+void TestChatTextEdit::whereNoPictureIsTakenTheTextBesideItIsPasted()
+{
+    ChatTextEdit edit;
+    const QString address = QStringLiteral("https://example.org/a.png");
+    copy(address, true, imageHtml(address));
+
+    QTest::keySequence(&edit, QKeySequence::Paste);
+    QCOMPARE(edit.toPlainText(), address);
+    edit.paste();
+    QCOMPARE(edit.toPlainText(), address + address);
+
+    copy(QString(), true, imageHtml(address));
+    QTest::keySequence(&edit, QKeySequence::Paste);
+    edit.paste();
+    QCOMPARE(edit.toPlainText(), address + address);
+
+    // Where it is taken, the same paste is the picture.
+    QSignalSpy pictures(&edit, &ChatTextEdit::pasteImage);
+    copy(address, true, imageHtml(address));
+    edit.paste();
+    QCOMPARE(pictures.count(), 1);
+    QCOMPARE(edit.toPlainText(), address + address);
 }
 
 void TestChatTextEdit::aTextIsFilesOnlyWhenEveryLineNamesOne()

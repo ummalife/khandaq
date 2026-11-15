@@ -864,11 +864,17 @@ void Core::onGroupPeerExit(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Grou
     // QA of 0.2.56 (H1): a member whose connection stalled lacks what went of our files since,
     // and gets it once it is back (Air::GroupFileQueue::memberTimedOut).
     const QByteArray left = core->groupPeerKeys.take(groupPeerSlot(groupId, peerId));
-    if (exitType == TOX_GROUP_EXIT_TYPE_TIMEOUT && !left.isEmpty()) {
+    if (exitType == TOX_GROUP_EXIT_TYPE_TIMEOUT) {
         const int others = core->groupFileMembers(static_cast<int>(groupId));
-        for (const QByteArray& fileId : core->groupFileQueue.memberTimedOut(
-                 static_cast<int>(groupId), left, others, monotonicMs())) {
-            core->failGroupFileSend(fileId, "member's time-outs");
+        if (!left.isEmpty()) {
+            for (const QByteArray& fileId : core->groupFileQueue.memberTimedOut(
+                     static_cast<int>(groupId), left, others, monotonicMs())) {
+                core->failGroupFileSend(fileId, "member's time-outs");
+            }
+        }
+        // The texts that wait for a member's receipt reached nobody (GroupMessageDispatcher).
+        if (others <= 0) {
+            emit core->groupMembersTimedOut(static_cast<int>(groupId));
         }
     }
     // QA live F11: the exit a leave notice waited for. The member was gone since the notice, and
@@ -2852,6 +2858,12 @@ void Core::sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t m
     }
 }
 
+bool Core::sendsFileInto(int groupId) const
+{
+    QMutexLocker ml{&coreLoopLock};
+    return groupFileQueue.sendsInto(groupId);
+}
+
 /**
  * @brief Parse an incoming NGC custom packet; handle TRIfA-style file transfers.
  * Live files (pkt 0x11) arrive as broadcast custom packets, history-sync files
@@ -2872,6 +2884,14 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         return;
     }
     const uint8_t pktId = data[7];
+
+    // QA of 0.2.56 (H1): a member confirms a text of ours (sendGroupDeliveryReceipt).
+    if (pktId == NGC_PKT_DELIVERY_RECEIPT) {
+        if (isPrivate && length == NGC_DELIVERY_RECEIPT_SIZE) {
+            emit groupDeliveryReceipt(static_cast<int>(groupId), ngcReadU32Be(data + 8));
+        }
+        return;
+    }
 
     if (pktId == NGC_PKT_FILE && !isPrivate) {
         if (length <= NGC_FILE_HEADER_SIZE

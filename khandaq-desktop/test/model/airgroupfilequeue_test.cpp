@@ -769,6 +769,10 @@ void TestAirGroupFileQueue::aFileWaitsForItsMembersAfterItsLastChunk()
     QCOMPARE(drain(queue, 3, 1000), (QStringList{"1:a:begin", "1:a:0", "1:a:1"}));
     QCOMPARE(drain(queue, 2, 2000), (QStringList{"1:b:begin", "1:b:0"}));
     QVERIFY(queue.contains(fileA));
+    QVERIFY(queue.lingers(fileA));
+    // The texts of the group wait for a member to confirm them meanwhile (GroupMessageDispatcher).
+    QVERIFY(queue.sendsInto(1));
+    QVERIFY(!queue.sendsInto(2));
     QCOMPARE(queue.bytesSent(fileA), 2 * payload);
 
     QList<QByteArray> failed;
@@ -782,6 +786,7 @@ void TestAirGroupFileQueue::aFileWaitsForItsMembersAfterItsLastChunk()
     QCOMPARE(queue.delivered(lingerEnd - 1 + GroupFileQueue::aloneLimitMs, &failed),
              (QList<QByteArray>{fileA, fileB}));
     QVERIFY(failed.isEmpty());
+    QVERIFY(!queue.sendsInto(1));
 }
 
 /**

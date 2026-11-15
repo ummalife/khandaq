@@ -60,4 +60,11 @@ public:
      * author's "delivered" mark and its history-sync retries both wait for one.
      */
     virtual void sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t messageId) = 0;
+
+    /**
+     * Whether a file we send goes into the group, or waits for its members to have it
+     * (Air::GroupFileQueue::delivered). Its packets can stall the connection of a member for good,
+     * and the texts with them (QA of 0.2.56, H1).
+     */
+    virtual bool sendsFileInto(int groupId) const = 0;
 };

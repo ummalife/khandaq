@@ -208,6 +208,7 @@ public slots:
     SendResult sendGroupMessage(int groupId, const QString& message, uint32_t& wireId) override;
     SendResult sendGroupAction(int groupId, const QString& message, uint32_t& wireId) override;
     void sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t messageId) override;
+    bool sendsFileInto(int groupId) const override;
     bool sendGroupFile(int groupId, const QString& fileName, const QString& localPath,
                        const QByteArray& fileData);
     /**
@@ -329,6 +330,10 @@ signals:
                               qint64 fileSize, const QByteArray& fileId);
     /** How many bytes of the file have gone so far, a few times a second. */
     void groupFileSendProgress(const QByteArray& fileId, qint64 bytesSent);
+    /** A member confirmed our text that toxcore gave this id (sendGroupDeliveryReceipt). */
+    void groupDeliveryReceipt(int groupnumber, uint32_t messageId);
+    /** toxcore timed out the last member of the group but us. */
+    void groupMembersTimedOut(int groupnumber);
     /**
      * The group of the file has nobody to send it to (waiting), and nothing of it goes; or has
      * again, and the file goes from its start. After Air::GroupFileQueue::aloneLimitMs of

@@ -25,21 +25,28 @@
 
 constexpr int GroupMessageDispatcher::joinGraceMs;
 constexpr int GroupMessageDispatcher::joinGraceLimit;
+constexpr int GroupMessageDispatcher::confirmLimitMs;
 
 GroupMessageDispatcher::GroupMessageDispatcher(Group& g_, MessageProcessor processor_,
                                                ICoreIdHandler& idHandler_,
                                                ICoreGroupMessageSender& messageSender_,
-                                               const IGroupSettings& groupSettings_, int graceMs)
+                                               const IGroupSettings& groupSettings_, int graceMs,
+                                               int confirmMs_)
     : group(g_)
     , processor(processor_)
     , idHandler(idHandler_)
     , messageSender(messageSender_)
     , groupSettings(groupSettings_)
+    , confirmMs(confirmMs_)
 {
     processor.enableMentions();
     graceTimer.setSingleShot(true);
     graceTimer.setInterval(graceMs);
     connect(&graceTimer, &QTimer::timeout, this, &GroupMessageDispatcher::sendWaiting);
+    unconfirmedTimer.setSingleShot(true);
+    connect(&unconfirmedTimer, &QTimer::timeout, this,
+            &GroupMessageDispatcher::completeUnconfirmed);
+    clock.start();
     // A member who joins, the group that connects: what waits may go now. The texts give the
     // member the grace first, and each member who joins in it has it in full too, up to
     // joinGraceLimit graces in all. The first member who comes into a group we were alone in has
@@ -93,7 +100,7 @@ GroupMessageDispatcher::sendMessage(bool isAction, QString const& content)
         emit messageSent(messageId, message);
         switch (result) {
         case SendResult::Sent:
-            emit messageComplete(messageId);
+            wentToToxcore(messageId, message.wireId);
             break;
         case SendResult::NotReady:
             waiting.push_back({messageId, message});
@@ -140,13 +147,71 @@ void GroupMessageDispatcher::sendWaiting()
         if (!text.message.wireId.isEmpty()) {
             emit messageWireIdAssigned(text.id, text.message.wireId);
         }
-        emit messageComplete(text.id);
+        wentToToxcore(text.id, text.message.wireId);
+    }
+}
+
+void GroupMessageDispatcher::wentToToxcore(DispatchedMessageId id, const QByteArray& wireId)
+{
+    if (wireId.isEmpty() || !messageSender.sendsFileInto(static_cast<int>(group.getId()))) {
+        emit messageComplete(id);
+        return;
+    }
+    unconfirmed.push_back({id, wireId, clock.elapsed()});
+    if (!unconfirmedTimer.isActive()) {
+        unconfirmedTimer.start(static_cast<int>(confirmMs));
+    }
+}
+
+void GroupMessageDispatcher::completeUnconfirmed()
+{
+    const qint64 nowMs = clock.elapsed();
+    while (!unconfirmed.empty() && nowMs - unconfirmed.front().sentMs >= confirmMs) {
+        const DispatchedMessageId id = unconfirmed.front().id;
+        unconfirmed.pop_front();
+        emit messageComplete(id);
+    }
+    if (!unconfirmed.empty()) {
+        unconfirmedTimer.start(
+            static_cast<int>(confirmMs - (nowMs - unconfirmed.front().sentMs)));
+    }
+}
+
+void GroupMessageDispatcher::onDeliveryReceipt(uint32_t messageId)
+{
+    const QByteArray wireId = Air::groupWireId(messageId);
+    for (auto it = unconfirmed.begin(); it != unconfirmed.end(); ++it) {
+        if (it->wireId == wireId) {
+            const DispatchedMessageId id = it->id;
+            unconfirmed.erase(it);
+            emit messageComplete(id);
+            return;
+        }
+    }
+}
+
+void GroupMessageDispatcher::onMembersTimedOut()
+{
+    // A member that had one of them would have confirmed it by now: toxcore times out a member
+    // a minute after its connection stalled.
+    std::deque<UnconfirmedText> lost;
+    lost.swap(unconfirmed);
+    unconfirmedTimer.stop();
+    for (const UnconfirmedText& text : lost) {
+        emit messageBroken(text.id, BrokenMessageReason::unknown);
     }
 }
 
 void GroupMessageDispatcher::dropWaiting(bool broken)
 {
     graceTimer.stop();
+    // The texts that went are sent, as toxcore took them: none waits for a member any more.
+    unconfirmedTimer.stop();
+    std::deque<UnconfirmedText> went;
+    went.swap(unconfirmed);
+    for (const UnconfirmedText& text : went) {
+        emit messageComplete(text.id);
+    }
     // Out of the queue before anyone hears of it.
     std::deque<WaitingText> dropped;
     dropped.swap(waiting);

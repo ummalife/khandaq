@@ -192,6 +192,8 @@ public:
     bool contains(const QByteArray& fileId) const;
     /** Whether the last chunk of the file went, and it waits for its members to have it. */
     bool lingers(const QByteArray& fileId) const;
+    /** Whether a file goes into the group, or waits for its members to have it. */
+    bool sendsInto(int group) const;
     /** Whether no file has a packet left to send: those whose last chunk went may wait. */
     bool isEmpty() const;
 

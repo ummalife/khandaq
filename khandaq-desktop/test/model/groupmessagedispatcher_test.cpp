@@ -48,6 +48,12 @@ public:
 
     void sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t messageId) override;
 
+    bool sendsFileInto(int groupId) const override
+    {
+        std::ignore = groupId;
+        return fileGoes;
+    }
+
     struct Receipt
     {
         int groupId;
@@ -66,6 +72,8 @@ public:
     bool ready = true;
     /** Texts that cannot go as they are, as one too long: Core refuses them ready or not. */
     QStringList refused;
+    /** Whether a file of ours goes into the group (Core::sendsFileInto). */
+    bool fileGoes = false;
 
 private:
     SendResult take(const QString& text, uint32_t& wireId);
@@ -168,6 +176,11 @@ private slots:
     void whatWaitsFailsWhenTheGroupIsLeft();
     void aMemberWhoJoinsInTheGraceHasItInFull();
     void aStreamOfJoinsDoesNotHoldWhatWaitsForGood();
+    void aTextThatWentWithAFileWaitsForAMemberToConfirmIt();
+    void aTextThatWaitedAndWentWithAFileWaitsToo();
+    void aTextThatWentWithAFileFailsWhenTheLastMemberTimesOut();
+    void aTextNobodyConfirmsIsSentAfterAWhile();
+    void aTextThatWaitsForAConfirmationIsSentWhenTheGroupGoes();
 
     void onMessageSent(DispatchedMessageId id, Message message)
     {
@@ -212,6 +225,8 @@ private:
 namespace {
 // The grace of the tests: short, so that they do not wait two seconds each.
 constexpr int testGraceMs = 50;
+// How long a text that went with a file waits for a member to confirm it, in the tests.
+constexpr int testConfirmMs = 1000;
 constexpr int waitMs = 5000;
 
 std::vector<QString> texts(std::initializer_list<const char*> list)
@@ -252,7 +267,7 @@ void TestGroupMessageDispatcher::init()
     messageProcessor = std::unique_ptr<MessageProcessor>(new MessageProcessor(*sharedProcessorParams));
     groupMessageDispatcher = std::unique_ptr<GroupMessageDispatcher>(
         new GroupMessageDispatcher(*g, *messageProcessor, *coreIdHandler, *messageSender,
-                                   *groupSettings, testGraceMs));
+                                   *groupSettings, testGraceMs, testConfirmMs));
 
     connect(groupMessageDispatcher.get(), &GroupMessageDispatcher::messageSent, this,
             &TestGroupMessageDispatcher::onMessageSent);
@@ -729,5 +744,114 @@ void TestGroupMessageDispatcher::aStreamOfJoinsDoesNotHoldWhatWaitsForGood()
 }
 
 // Cannot be guiless due to a settings instance in GroupMessageDispatcher
+/**
+ * @brief QA of 0.2.56 (H1): a text that toxcore takes while a file of ours goes into the group
+ * waits for a member to confirm it. The file can stall the members' connections for good, and
+ * toxcore takes texts for them all the same: such a text was shown as sent and never arrived. Its
+ * own receipt makes it sent, not that of another text.
+ */
+void TestGroupMessageDispatcher::aTextThatWentWithAFileWaitsForAMemberToConfirmIt()
+{
+    messageSender->fileGoes = true;
+    const uint32_t firstWireId = messageSender->nextWireId;
+    const auto first = groupMessageDispatcher->sendMessage(false, "with the file");
+    groupMessageDispatcher->sendMessage(false, "and another");
+    QCOMPARE(messageSender->numSentMessages, size_t{2});
+    QCOMPARE(outgoingMessages.size(), size_t{2});
+
+    groupMessageDispatcher->onDeliveryReceipt(firstWireId + 1);
+    QCOMPARE(outgoingMessages, std::set<DispatchedMessageId>{first.first});
+    // A second receipt, or one for a text that waits for none, changes nothing.
+    groupMessageDispatcher->onDeliveryReceipt(firstWireId + 1);
+    groupMessageDispatcher->onDeliveryReceipt(firstWireId + 7);
+    QCOMPARE(outgoingMessages, std::set<DispatchedMessageId>{first.first});
+    groupMessageDispatcher->onDeliveryReceipt(firstWireId);
+    QVERIFY(outgoingMessages.empty());
+    QVERIFY(brokenMessages.empty());
+
+    // Without a file, a text is sent once toxcore took it, as before.
+    messageSender->fileGoes = false;
+    groupMessageDispatcher->sendMessage(false, "after the file");
+    QVERIFY(outgoingMessages.empty());
+}
+
+/**
+ * @brief A text that waited for the group and went while a file goes waits for a confirmation too.
+ */
+void TestGroupMessageDispatcher::aTextThatWaitedAndWentWithAFileWaitsToo()
+{
+    messageSender->ready = false;
+    messageSender->fileGoes = true;
+    groupMessageDispatcher->sendMessage(false, "waits");
+    QCOMPARE(messageSender->numSentMessages, size_t{0});
+    const uint32_t wireId = messageSender->nextWireId;
+    memberJoins(*groupQuery, *g, *messageSender);
+    QTRY_COMPARE_WITH_TIMEOUT(messageSender->numSentMessages, size_t{1}, waitMs);
+    QCOMPARE(outgoingMessages.size(), size_t{1});
+
+    groupMessageDispatcher->onDeliveryReceipt(wireId);
+    QVERIFY(outgoingMessages.empty());
+}
+
+/**
+ * @brief toxcore times out the last member before any confirmed the texts that went with a file:
+ * a member that had one would have confirmed it, as toxcore times a stalled member out a minute
+ * later. They reached nobody, and fail. A text confirmed before stays sent.
+ */
+void TestGroupMessageDispatcher::aTextThatWentWithAFileFailsWhenTheLastMemberTimesOut()
+{
+    messageSender->fileGoes = true;
+    const uint32_t firstWireId = messageSender->nextWireId;
+    groupMessageDispatcher->sendMessage(false, "arrived");
+    const auto lost = groupMessageDispatcher->sendMessage(false, "lost with the file");
+    groupMessageDispatcher->onDeliveryReceipt(firstWireId);
+    QCOMPARE(outgoingMessages.size(), size_t{1});
+
+    groupMessageDispatcher->onMembersTimedOut();
+    QCOMPARE(brokenMessages, std::vector<DispatchedMessageId>{lost.first});
+    // Nothing waits any more: neither a late receipt nor the end of the wait sends it.
+    groupMessageDispatcher->onDeliveryReceipt(firstWireId + 1);
+    QTest::qWait(testConfirmMs + 200);
+    QCOMPARE(outgoingMessages, std::set<DispatchedMessageId>{lost.first});
+}
+
+/**
+ * @brief A text that went with a file and that nobody confirms is sent once toxcore would have
+ * timed out a stalled member, as one that has a member which does not send receipts.
+ */
+void TestGroupMessageDispatcher::aTextNobodyConfirmsIsSentAfterAWhile()
+{
+    messageSender->fileGoes = true;
+    QElapsedTimer waited;
+    waited.start();
+    groupMessageDispatcher->sendMessage(false, "to members that send no receipts");
+    QTest::qWait(testConfirmMs / 4);
+    groupMessageDispatcher->sendMessage(false, "a while later");
+    QCOMPARE(outgoingMessages.size(), size_t{2});
+
+    QTRY_COMPARE_WITH_TIMEOUT(outgoingMessages.size(), size_t{1}, waitMs);
+    QVERIFY(waited.elapsed() >= testConfirmMs - 50);
+    QTRY_VERIFY_WITH_TIMEOUT(outgoingMessages.empty(), waitMs);
+    QVERIFY(waited.elapsed() >= testConfirmMs + testConfirmMs / 4 - 50);
+    QVERIFY(brokenMessages.empty());
+    // A time-out after that breaks nothing.
+    groupMessageDispatcher->onMembersTimedOut();
+    QVERIFY(brokenMessages.empty());
+}
+
+/**
+ * @brief The group leaves this window: a text that waits for a confirmation went to toxcore and is
+ * sent, so that no later start sends it again.
+ */
+void TestGroupMessageDispatcher::aTextThatWaitsForAConfirmationIsSentWhenTheGroupGoes()
+{
+    messageSender->fileGoes = true;
+    groupMessageDispatcher->sendMessage(false, "went");
+    QCOMPARE(outgoingMessages.size(), size_t{1});
+    groupMessageDispatcher->dropWaiting(true);
+    QVERIFY(outgoingMessages.empty());
+    QVERIFY(brokenMessages.empty());
+}
+
 QTEST_GUILESS_MAIN(TestGroupMessageDispatcher)
 #include "groupmessagedispatcher_test.moc"

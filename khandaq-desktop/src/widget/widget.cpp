@@ -909,6 +909,8 @@ void Widget::onCoreChanged(Core& core_)
     connect(core, &Core::groupFileSendProgress, this, &Widget::onGroupFileSendProgress);
     connect(core, &Core::groupFileSendWaiting, this, &Widget::onGroupFileSendWaiting);
     connect(core, &Core::groupFileSendFailed, this, &Widget::onGroupFileSendFailed);
+    connect(core, &Core::groupDeliveryReceipt, this, &Widget::onGroupDeliveryReceipt);
+    connect(core, &Core::groupMembersTimedOut, this, &Widget::onGroupMembersTimedOut);
     connect(core, &Core::groupPeerlistChanged, this, &Widget::onGroupPeerlistChanged);
     connect(core, &Core::groupPeerNameChanged, this, &Widget::onGroupPeerNameChanged);
     connect(core, &Core::groupTitleChanged, this, &Widget::onGroupTitleChanged);
@@ -2602,6 +2604,22 @@ void Widget::onGroupMessageReceived(int groupnumber, int peernumber, const QStri
     ToxPk author = core->getGroupPeerPk(groupnumber, peernumber);
 
     dispatcher->onMessageReceived(author, isAction, message, messageId);
+}
+
+void Widget::onGroupDeliveryReceipt(int groupnumber, uint32_t messageId)
+{
+    const GroupId& groupId = groupList->id2Key(groupnumber);
+    if (const auto dispatcher = groupMessageDispatchers.value(groupId)) {
+        dispatcher->onDeliveryReceipt(messageId);
+    }
+}
+
+void Widget::onGroupMembersTimedOut(int groupnumber)
+{
+    const GroupId& groupId = groupList->id2Key(groupnumber);
+    if (const auto dispatcher = groupMessageDispatchers.value(groupId)) {
+        dispatcher->onMembersTimedOut();
+    }
 }
 
 void Widget::onFriendMessageEffect(uint32_t friendnumber, const QByteArray& packet)

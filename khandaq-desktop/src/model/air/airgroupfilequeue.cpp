@@ -399,6 +399,19 @@ bool GroupFileQueue::lingers(const QByteArray& fileId) const
     return false;
 }
 
+bool GroupFileQueue::sendsInto(int group) const
+{
+    if (firstOf(group) >= 0) {
+        return true;
+    }
+    for (const File& file : lingering) {
+        if (file.group == group) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool GroupFileQueue::isEmpty() const
 {
     return files.isEmpty();

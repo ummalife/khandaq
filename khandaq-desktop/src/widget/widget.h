@@ -252,6 +252,8 @@ public slots:
     void onGroupFileSendProgress(const QByteArray& fileId, qint64 bytesSent);
     void onGroupFileSendWaiting(const QByteArray& fileId, bool waiting);
     void onGroupFileSendFailed(const QByteArray& fileId);
+    void onGroupDeliveryReceipt(int groupnumber, uint32_t messageId);
+    void onGroupMembersTimedOut(int groupnumber);
     /** An edit, a deletion or a reaction a friend sent (stage 3, item 10). */
     void onFriendMessageEffect(uint32_t friendnumber, const QByteArray& packet);
     /** An edit, a deletion or a reaction a member sent to a group (stage 3, item 10). */

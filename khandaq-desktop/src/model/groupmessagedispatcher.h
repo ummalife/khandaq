@@ -21,6 +21,7 @@
 
 #include "src/core/icoregroupmessagesender.h"
 #include "src/core/icoreidhandler.h"
+#include "src/model/air/airgroupfilequeue.h"
 #include "src/model/group.h"
 #include "src/model/imessagedispatcher.h"
 #include "src/model/message.h"
@@ -43,6 +44,12 @@ class IGroupSettings;
  * grace of the first member who comes into a group we were alone in wait for it too. One that
  * cannot go as it is fails and lets the others go. A message that waits is pending in the
  * history, whose next start sends it again (ChatHistory::dispatchUnsentMessages).
+ *
+ * A text is sent once toxcore took it, but one that toxcore took while a file of ours goes into
+ * the group (ICoreGroupMessageSender::sendsFileInto) is sent once a member confirms it: the file
+ * can stall a member's connection for good, and toxcore takes texts for that member all the same
+ * (QA of 0.2.56, H1). It fails when toxcore times out the last member first. One that nobody
+ * confirms within confirmLimitMs is sent too: a stalled member is timed out sooner.
  */
 class GroupMessageDispatcher : public IMessageDispatcher
 {
@@ -58,10 +65,13 @@ public:
      * graces in all: a stream of joins does not hold the texts that wait back for good.
      */
     static constexpr int joinGraceLimit = 5;
+    /** How long a text that went with a file waits for a member to confirm it (see above). */
+    static constexpr int confirmLimitMs = static_cast<int>(Air::GroupFileQueue::lostLookbackMs);
 
     GroupMessageDispatcher(Group& g_, MessageProcessor processor, ICoreIdHandler& idHandler,
                            ICoreGroupMessageSender& messageSender,
-                           const IGroupSettings& groupSettings, int graceMs = joinGraceMs);
+                           const IGroupSettings& groupSettings, int graceMs = joinGraceMs,
+                           int confirmMs_ = confirmLimitMs);
 
     std::pair<DispatchedMessageId, DispatchedMessageId> sendMessage(bool isAction,
                                                                     QString const& content) override;
@@ -77,6 +87,10 @@ public:
      * pending in the history, which the next start sends, or go with that history.
      */
     void dropWaiting(bool broken);
+    /** A member confirmed our text that toxcore gave this id (Core::groupDeliveryReceipt). */
+    void onDeliveryReceipt(uint32_t messageId);
+    /** toxcore timed out the last member of the group (Core::groupMembersTimedOut). */
+    void onMembersTimedOut();
 
 private:
     struct WaitingText
@@ -84,11 +98,22 @@ private:
         DispatchedMessageId id;
         Message message;
     };
+    /** A text that went with a file, until a member confirms it. */
+    struct UnconfirmedText
+    {
+        DispatchedMessageId id;
+        QByteArray wireId;
+        qint64 sentMs;
+    };
 
     /** Hands the text to toxcore; one that went gets the id toxcore gave it. */
     ICoreGroupMessageSender::SendResult send(Message& message);
     /** Sends the texts that wait, in order, until the group takes no more. */
     void sendWaiting();
+    /** The text went: it is sent, or waits for a member to confirm it. */
+    void wentToToxcore(DispatchedMessageId id, const QByteArray& wireId);
+    /** The texts that waited confirmLimitMs for a member to confirm them are sent. */
+    void completeUnconfirmed();
 
     Group& group;
     MessageProcessor processor;
@@ -102,4 +127,10 @@ private:
     QElapsedTimer graceBegan;
     /** Whether the peer list last had someone else in it: the first one to come has the grace. */
     bool someoneElse = false;
+    /** The texts that went with a file, in the order they went. */
+    std::deque<UnconfirmedText> unconfirmed;
+    /** How long each of them waits for a member to confirm it (confirmLimitMs). */
+    qint64 confirmMs;
+    QTimer unconfirmedTimer;
+    QElapsedTimer clock;
 };

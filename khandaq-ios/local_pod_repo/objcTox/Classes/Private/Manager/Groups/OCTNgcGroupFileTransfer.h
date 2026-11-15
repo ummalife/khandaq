@@ -56,6 +56,8 @@ typedef void (^OCTNgcGroupFileTransferProgressBlock)(uint32_t groupNumber,
 
 // KHANDAQ (audit F-5): peerPublicKeyHex identifies the peer that actually delivered the packet, so a
 // chunked assembly can be bound to the peer that opened it (peerId alone is re-assigned on reconnect).
+// KHANDAQ (0.2.56): call it on the main thread. The directory block is called right here, and the begin,
+// complete and progress blocks come on the main queue: they may all use the Realm, which lives there.
 - (void)handleIncomingPacketWithGroupNumber:(uint32_t)groupNumber
                                      peerId:(uint32_t)peerId
                            peerPublicKeyHex:(nullable NSString *)peerPublicKeyHex

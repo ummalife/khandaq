@@ -265,23 +265,35 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
     const uint8_t pkt = bytes[7];
 
-    // KHANDAQ (audit): this packet callback is delivered on the MAIN thread, but the Single/Chunk
-    // handlers do synchronous file I/O (writeToFile:) that jank the UI. Run all incoming assembly on
-    // the serial sendQueue — it preserves chunk order, the @synchronized guards make the handlers
-    // thread-safe, and they already hop their Realm/delegate updates back to the main queue.
+    // KHANDAQ (0.2.56): the directory block reads the Realm (it looks the group's chat up), and the Realm
+    // lives on the main thread, the thread of this callback. It ran on sendQueue with the handlers below
+    // and threw "Realm accessed from incorrect thread" on EVERY incoming group file, a photo of a few
+    // kilobytes as much as a video. Look it up here, before the hop: only a SINGLE or a BEGIN stores a file.
+    NSString *directory = nil;
+
+    if (pkt == kOCTNgcPktFileSingle || pkt == kOCTNgcPktFileBegin) {
+        directory = self.incomingFilesDirectoryBlock(groupNumber) ?: @"";
+    }
+
+    // KHANDAQ (audit): the Single/Chunk handlers do synchronous file I/O (writeToFile:) that would jank
+    // the UI, so all incoming assembly runs on the serial sendQueue: it keeps the chunks in order and the
+    // @synchronized guards make the handlers thread-safe. Nothing on that queue may touch the Realm: the
+    // directory is looked up above, and every block that updates the chat is handed to the main queue.
     dispatch_async(self.sendQueue, ^{
         switch (pkt) {
             case kOCTNgcPktFileSingle:
                 [self handleIncomingSingleWithGroupNumber:groupNumber
                                                    peerId:peerId
                                          peerPublicKeyHex:peerPublicKeyHex
-                                                     data:data];
+                                                     data:data
+                                                directory:directory];
                 break;
             case kOCTNgcPktFileBegin:
                 [self handleIncomingBeginWithGroupNumber:groupNumber
                                                   peerId:peerId
                                         peerPublicKeyHex:peerPublicKeyHex
-                                                    data:data];
+                                                    data:data
+                                               directory:directory];
                 break;
             case kOCTNgcPktFileChunk:
                 [self handleIncomingChunkWithGroupNumber:groupNumber
@@ -536,6 +548,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
                                      peerId:(uint32_t)peerId
                            peerPublicKeyHex:(NSString *)peerPublicKeyHex
                                        data:(NSData *)data
+                                  directory:(NSString *)directory
 {
     if (data.length <= kOCTNgcSingleFileHeader || data.length > kOCTNgcMaxPacketSize) {
         return;
@@ -549,8 +562,6 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     if (fileSize < 1 || fileSize > kOCTNgcMaxFileTransferBytes) {
         return;
     }
-
-    NSString *directory = self.incomingFilesDirectoryBlock(groupNumber);
 
     if (directory.length == 0) {
         return;
@@ -566,19 +577,38 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
     // KHANDAQ (audit F-5): a single-packet file carries an attacker-choosable msgId just like a chunked
     // one, so hand the delivering peer's key up with it — the row it lands on is matched on that key.
-    self.incomingCompleteBlock(groupNumber,
-                               peerId,
-                               peerPublicKeyHex,
-                               [localName lastPathComponent],
-                               localName,
-                               fileSize,
-                               msgIdHex);
+    [self reportIncomingFileWithGroupNumber:groupNumber
+                                     peerId:peerId
+                           peerPublicKeyHex:peerPublicKeyHex
+                                   fileName:[localName lastPathComponent]
+                                   filePath:localName
+                                   fileSize:fileSize
+                                   msgIdHex:msgIdHex];
+}
+
+// KHANDAQ (0.2.56): the complete block writes the file's row in the Realm, which lives on the main thread.
+// It was called right here on sendQueue and threw, so it goes to the main queue, as the begin and progress
+// blocks already do. That queue is FIFO, so the row still sees its BEGIN and its progress before this.
+- (void)reportIncomingFileWithGroupNumber:(uint32_t)groupNumber
+                                   peerId:(uint32_t)peerId
+                         peerPublicKeyHex:(NSString *)peerPublicKeyHex
+                                 fileName:(NSString *)fileName
+                                 filePath:(NSString *)filePath
+                                 fileSize:(uint64_t)fileSize
+                                 msgIdHex:(NSString *)msgIdHex
+{
+    OCTNgcGroupFileTransferIncomingFileBlock completeBlock = self.incomingCompleteBlock;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        completeBlock(groupNumber, peerId, peerPublicKeyHex, fileName, filePath, fileSize, msgIdHex);
+    });
 }
 
 - (void)handleIncomingBeginWithGroupNumber:(uint32_t)groupNumber
                                     peerId:(uint32_t)peerId
                           peerPublicKeyHex:(NSString *)peerPublicKeyHex
                                       data:(NSData *)data
+                                 directory:(NSString *)directory
 {
     if (data.length < kOCTNgcFileBeginHeader) {
         return;
@@ -617,8 +647,6 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     if ((uint64_t)totalChunks != expectedChunks || expectedChunks > maxLegitChunks) {
         return;
     }
-
-    NSString *directory = self.incomingFilesDirectoryBlock(groupNumber);
 
     if (directory.length == 0) {
         return;
@@ -826,13 +854,13 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         NSString *displayName = assembly.displayFilename.length > 0 ? assembly.displayFilename : assembly.filename;
         // KHANDAQ (audit F-5): report the BEGIN opener, not whoever happened to deliver the last chunk
         // — they are the same peer by the guard above, but the opener is what the row was stamped with.
-        self.incomingCompleteBlock(groupNumber,
-                                   peerId,
-                                   assembly.originPublicKeyHex,
-                                   displayName,
-                                   assembly.outPath,
-                                   assembly.totalSize,
-                                   msgIdHex);
+        [self reportIncomingFileWithGroupNumber:groupNumber
+                                         peerId:peerId
+                               peerPublicKeyHex:assembly.originPublicKeyHex
+                                       fileName:displayName
+                                       filePath:assembly.outPath
+                                       fileSize:assembly.totalSize
+                                       msgIdHex:msgIdHex];
     }
 }
 

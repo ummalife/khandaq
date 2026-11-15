@@ -27,18 +27,33 @@
 
 #include <QObject>
 #include <QString>
+#include <QTimer>
 
 #include <cstdint>
+#include <deque>
 
 class IGroupSettings;
 
+/**
+ * Sends the texts of a group. One the group does not take now (Air::groupTakesText) is shown and
+ * waits on this device, and the ones after it wait behind it: they go in order once the group
+ * takes them, a while after the peer list changes (joinGraceMs) or with the next text sent. One
+ * that cannot go as it is fails and lets the others go. A message that waits is pending in the
+ * history, whose next start sends it again (ChatHistory::dispatchUnsentMessages).
+ */
 class GroupMessageDispatcher : public IMessageDispatcher
 {
     Q_OBJECT
 public:
+    /**
+     * How long the texts that wait give a member who just joined: toxcore drops a text from a
+     * peer it has no peer info for, and ours reaches them a moment after they are confirmed here.
+     */
+    static constexpr int joinGraceMs = 2000;
+
     GroupMessageDispatcher(Group& g_, MessageProcessor processor, ICoreIdHandler& idHandler,
                            ICoreGroupMessageSender& messageSender,
-                           const IGroupSettings& groupSettings);
+                           const IGroupSettings& groupSettings, int graceMs = joinGraceMs);
 
     std::pair<DispatchedMessageId, DispatchedMessageId> sendMessage(bool isAction,
                                                                     QString const& content) override;
@@ -49,10 +64,23 @@ public:
                            uint32_t wireId = 0);
 
 private:
+    struct WaitingText
+    {
+        DispatchedMessageId id;
+        Message message;
+    };
+
+    /** Hands the text to toxcore; one that went gets the id toxcore gave it. */
+    ICoreGroupMessageSender::SendResult send(Message& message);
+    /** Sends the texts that wait, in order, until the group takes no more. */
+    void sendWaiting();
+
     Group& group;
     MessageProcessor processor;
     ICoreIdHandler& idHandler;
     ICoreGroupMessageSender& messageSender;
     const IGroupSettings& groupSettings;
     DispatchedMessageId nextMessageId{0};
+    std::deque<WaitingText> waiting;
+    QTimer graceTimer;
 };

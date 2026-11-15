@@ -41,9 +41,9 @@
 class MockGroupMessageSender : public ICoreGroupMessageSender
 {
 public:
-    uint32_t sendGroupAction(int groupId, const QString& action) override;
+    SendResult sendGroupAction(int groupId, const QString& action, uint32_t& wireId) override;
 
-    uint32_t sendGroupMessage(int groupId, const QString& message) override;
+    SendResult sendGroupMessage(int groupId, const QString& message, uint32_t& wireId) override;
 
     void sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t messageId) override;
 
@@ -61,7 +61,28 @@ public:
     std::vector<Receipt> receipts;
     /** The id toxcore gives the next message, as tox_group_send_message hands it back. */
     uint32_t nextWireId = 0x0A0B0C0D;
+    /** Whether the group takes a text now, as Core asks toxcore (Air::groupTakesText). */
+    bool ready = true;
+    /** Texts that cannot go as they are, as one too long: Core refuses them ready or not. */
+    QStringList refused;
+
+private:
+    SendResult take(const QString& text, uint32_t& wireId);
 };
+
+ICoreGroupMessageSender::SendResult MockGroupMessageSender::take(const QString& text,
+                                                                 uint32_t& wireId)
+{
+    wireId = 0;
+    if (refused.contains(text)) {
+        return SendResult::Failed;
+    }
+    if (!ready) {
+        return SendResult::NotReady;
+    }
+    wireId = nextWireId++;
+    return SendResult::Sent;
+}
 
 void MockGroupMessageSender::sendGroupDeliveryReceipt(int groupId, const ToxPk& author,
                                                       uint32_t messageId)
@@ -69,20 +90,27 @@ void MockGroupMessageSender::sendGroupDeliveryReceipt(int groupId, const ToxPk& 
     receipts.push_back({groupId, author, messageId});
 }
 
-uint32_t MockGroupMessageSender::sendGroupAction(int groupId, const QString& action)
+ICoreGroupMessageSender::SendResult
+MockGroupMessageSender::sendGroupAction(int groupId, const QString& action, uint32_t& wireId)
 {
     std::ignore = groupId;
-    std::ignore = action;
-    numSentActions++;
-    return nextWireId++;
+    const SendResult result = take(action, wireId);
+    if (result == SendResult::Sent) {
+        numSentActions++;
+    }
+    return result;
 }
 
-uint32_t MockGroupMessageSender::sendGroupMessage(int groupId, const QString& message)
+ICoreGroupMessageSender::SendResult
+MockGroupMessageSender::sendGroupMessage(int groupId, const QString& message, uint32_t& wireId)
 {
     std::ignore = groupId;
-    numSentMessages++;
-    sentTexts.push_back(message);
-    return nextWireId++;
+    const SendResult result = take(message, wireId);
+    if (result == SendResult::Sent) {
+        numSentMessages++;
+        sentTexts.push_back(message);
+    }
+    return result;
 }
 
 class MockGroupSettings : public QObject, public IGroupSettings
@@ -123,12 +151,17 @@ private slots:
     void init();
     void testSignals();
     void testMessageSending();
-    void testEmptyGroup();
+    void aTextWaitsWhileNobodyElseIsInTheGroup();
     void testSelfReceive();
     void testBlacklist();
     void messagesCarryTheIdsToxcoreGaveThem();
     void aShownMessageIsConfirmedToItsAuthor();
     void aLongTextGoesInPartsWithinTheGroupLimit();
+    void whatWaitedGoesInOrderAGraceAfterAMemberJoins();
+    void whatWaitedGoesOnceTheGroupConnects();
+    void aNewTextGoesBehindTheOnesThatWait();
+    void aTextThatCannotGoDoesNotHoldTheOthers();
+    void theWaitingPartsOfALongTextGoInOrder();
 
     void onMessageSent(DispatchedMessageId id, Message message)
     {
@@ -165,7 +198,33 @@ private:
     std::deque<Message> sentMessages;
     std::deque<Message> receivedMessages;
     std::unique_ptr<FriendList> friendList;
+    /** The messages that failed, and the ids the ones that waited went with, as told. */
+    std::vector<DispatchedMessageId> brokenMessages;
+    std::vector<std::pair<DispatchedMessageId, QByteArray>> assignedWireIds;
 };
+
+namespace {
+// The grace of the tests: short, so that they do not wait two seconds each.
+constexpr int testGraceMs = 50;
+constexpr int waitMs = 5000;
+
+std::vector<QString> texts(std::initializer_list<const char*> list)
+{
+    std::vector<QString> result;
+    for (const char* text : list) {
+        result.push_back(QString::fromUtf8(text));
+    }
+    return result;
+}
+
+/** What the members did meanwhile: the peer list read again, with one other member in it. */
+void memberJoins(MockGroupQuery& query, Group& group, MockGroupMessageSender& sender)
+{
+    sender.ready = true;
+    query.setAsFunctionalGroup();
+    group.regeneratePeerList();
+}
+} // namespace
 
 TestGroupMessageDispatcher::TestGroupMessageDispatcher() {}
 
@@ -187,7 +246,7 @@ void TestGroupMessageDispatcher::init()
     messageProcessor = std::unique_ptr<MessageProcessor>(new MessageProcessor(*sharedProcessorParams));
     groupMessageDispatcher = std::unique_ptr<GroupMessageDispatcher>(
         new GroupMessageDispatcher(*g, *messageProcessor, *coreIdHandler, *messageSender,
-                                   *groupSettings));
+                                   *groupSettings, testGraceMs));
 
     connect(groupMessageDispatcher.get(), &GroupMessageDispatcher::messageSent, this,
             &TestGroupMessageDispatcher::onMessageSent);
@@ -195,10 +254,21 @@ void TestGroupMessageDispatcher::init()
             &TestGroupMessageDispatcher::onMessageComplete);
     connect(groupMessageDispatcher.get(), &GroupMessageDispatcher::messageReceived, this,
             &TestGroupMessageDispatcher::onMessageReceived);
+    connect(groupMessageDispatcher.get(), &GroupMessageDispatcher::messageBroken, this,
+            [this](DispatchedMessageId id, BrokenMessageReason reason) {
+                std::ignore = reason;
+                brokenMessages.push_back(id);
+            });
+    connect(groupMessageDispatcher.get(), &GroupMessageDispatcher::messageWireIdAssigned, this,
+            [this](DispatchedMessageId id, const QByteArray& wireId) {
+                assignedWireIds.emplace_back(id, wireId);
+            });
 
     outgoingMessages = std::set<DispatchedMessageId>();
     sentMessages = std::deque<Message>();
     receivedMessages = std::deque<Message>();
+    brokenMessages.clear();
+    assignedWireIds.clear();
 }
 
 /**
@@ -240,19 +310,32 @@ void TestGroupMessageDispatcher::testMessageSending()
 }
 
 /**
- * @brief Tests that if we are the only member in a group we do _not_ send messages to core. Toxcore
- * isn't too happy if we send messages and we're the only one in the group
+ * @brief 0.2.56: alone in the group, toxcore takes a text for nobody and says it went. Core does
+ * not hand it over then, and the text waits: shown, neither complete nor failed, and it does not
+ * go by itself while nothing changes in the group.
  */
-void TestGroupMessageDispatcher::testEmptyGroup()
+void TestGroupMessageDispatcher::aTextWaitsWhileNobodyElseIsInTheGroup()
 {
+    QCOMPARE(GroupMessageDispatcher::joinGraceMs, 2000);
     groupQuery->setAsEmptyGroup();
     g->regeneratePeerList();
+    messageSender->ready = false;
 
     groupMessageDispatcher->sendMessage(false, "Test");
     groupMessageDispatcher->sendMessage(true, "Test");
 
     QVERIFY(messageSender->numSentMessages == 0);
     QVERIFY(messageSender->numSentActions == 0);
+    QCOMPARE(sentMessages.size(), size_t{2});
+    QCOMPARE(outgoingMessages.size(), size_t{2});
+    QVERIFY(brokenMessages.empty());
+
+    // The core becomes ready, but nothing says so: the texts wait for a change of the peer list
+    // or the next text.
+    messageSender->ready = true;
+    QTest::qWait(testGraceMs * 4);
+    QVERIFY(messageSender->numSentMessages == 0);
+    QCOMPARE(outgoingMessages.size(), size_t{2});
 }
 
 /**
@@ -304,11 +387,14 @@ void TestGroupMessageDispatcher::messagesCarryTheIdsToxcoreGaveThem()
     groupMessageDispatcher->onMessageReceived(ToxPk(id), false, "No id");
     QVERIFY(receivedMessages.back().wireId.isEmpty());
 
-    // Alone in the group nothing is sent, so nothing has an id either.
-    groupQuery->setAsEmptyGroup();
-    g->regeneratePeerList();
-    groupMessageDispatcher->sendMessage(false, "Alone");
+    // Alone in the group nothing is sent, so nothing has an id either, until it goes.
+    messageSender->ready = false;
+    const auto alone = groupMessageDispatcher->sendMessage(false, "Alone");
     QVERIFY(sentMessages.back().wireId.isEmpty());
+    memberJoins(*groupQuery, *g, *messageSender);
+    QTRY_COMPARE_WITH_TIMEOUT(assignedWireIds.size(), size_t{1}, waitMs);
+    QCOMPARE(assignedWireIds[0].first, alone.first);
+    QCOMPARE(assignedWireIds[0].second, QByteArray::fromHex("0a0b0c0e"));
 }
 
 /**
@@ -389,6 +475,131 @@ void TestGroupMessageDispatcher::aLongTextGoesInPartsWithinTheGroupLimit()
         }
         QCOMPARE(joined, text);
     }
+}
+
+/**
+ * @brief 0.2.56: the texts that waited go once a member is there, in the order they were written,
+ * a grace after the member joined: toxcore drops a text from a peer it has no info for, and ours
+ * reaches the member a moment after they are confirmed here. Each gets the id toxcore gave it then.
+ */
+void TestGroupMessageDispatcher::whatWaitedGoesInOrderAGraceAfterAMemberJoins()
+{
+    groupQuery->setAsEmptyGroup();
+    g->regeneratePeerList();
+    messageSender->ready = false;
+    const auto first = groupMessageDispatcher->sendMessage(false, "First");
+    const auto second = groupMessageDispatcher->sendMessage(false, "Second");
+
+    memberJoins(*groupQuery, *g, *messageSender);
+    // Not at once: the member has the grace first.
+    QVERIFY(messageSender->sentTexts.empty());
+    QCOMPARE(outgoingMessages.size(), size_t{2});
+
+    QTRY_COMPARE_WITH_TIMEOUT(messageSender->sentTexts.size(), size_t{2}, waitMs);
+    QCOMPARE(messageSender->sentTexts, texts({"First", "Second"}));
+    QVERIFY(outgoingMessages.empty());
+    QCOMPARE(assignedWireIds.size(), size_t{2});
+    QCOMPARE(assignedWireIds[0].first, first.first);
+    QCOMPARE(assignedWireIds[0].second, QByteArray::fromHex("0a0b0c0d"));
+    QCOMPARE(assignedWireIds[1].first, second.first);
+    QCOMPARE(assignedWireIds[1].second, QByteArray::fromHex("0a0b0c0e"));
+    // Shown without an id, as nothing pointed at them before they went.
+    QVERIFY(sentMessages[0].wireId.isEmpty());
+    QVERIFY(sentMessages[1].wireId.isEmpty());
+}
+
+/**
+ * @brief The group that connects reads its peer list again with nobody new in it (the members it
+ * had confirmed while it was connecting): what waited goes then too.
+ */
+void TestGroupMessageDispatcher::whatWaitedGoesOnceTheGroupConnects()
+{
+    messageSender->ready = false;
+    groupMessageDispatcher->sendMessage(false, "Hello");
+    QCOMPARE(outgoingMessages.size(), size_t{1});
+
+    messageSender->ready = true;
+    g->regeneratePeerList();
+    QTRY_COMPARE_WITH_TIMEOUT(messageSender->sentTexts, texts({"Hello"}), waitMs);
+    QVERIFY(outgoingMessages.empty());
+}
+
+/**
+ * @brief A text written while others wait goes behind them: it tries them first and goes after
+ * them, or waits behind them; while a member who just joined has the grace, it waits for it too.
+ */
+void TestGroupMessageDispatcher::aNewTextGoesBehindTheOnesThatWait()
+{
+    messageSender->ready = false;
+    groupMessageDispatcher->sendMessage(false, "A");
+    messageSender->ready = true;
+    groupMessageDispatcher->sendMessage(false, "B");
+    QCOMPARE(messageSender->sentTexts, texts({"A", "B"}));
+    QVERIFY(outgoingMessages.empty());
+
+    messageSender->ready = false;
+    groupMessageDispatcher->sendMessage(false, "C");
+    groupMessageDispatcher->sendMessage(false, "D");
+    QCOMPARE(outgoingMessages.size(), size_t{2});
+
+    memberJoins(*groupQuery, *g, *messageSender);
+    groupMessageDispatcher->sendMessage(false, "E");
+    QCOMPARE(messageSender->sentTexts, texts({"A", "B"}));
+    QTRY_COMPARE_WITH_TIMEOUT(messageSender->sentTexts, texts({"A", "B", "C", "D", "E"}), waitMs);
+    QVERIFY(outgoingMessages.empty());
+}
+
+/**
+ * @brief A text that cannot go as it is (too long) fails, waiting or not; the ones behind it go.
+ */
+void TestGroupMessageDispatcher::aTextThatCannotGoDoesNotHoldTheOthers()
+{
+    messageSender->refused = QStringList{QStringLiteral("Too long"), QStringLiteral("Refused")};
+    messageSender->ready = false;
+    groupMessageDispatcher->sendMessage(false, "Before");
+    const auto tooLong = groupMessageDispatcher->sendMessage(false, "Too long");
+    groupMessageDispatcher->sendMessage(false, "After");
+    QVERIFY(brokenMessages.empty());
+
+    memberJoins(*groupQuery, *g, *messageSender);
+    QTRY_COMPARE_WITH_TIMEOUT(messageSender->sentTexts, texts({"Before", "After"}), waitMs);
+    QCOMPARE(brokenMessages, std::vector<DispatchedMessageId>{tooLong.first});
+    QCOMPARE(outgoingMessages, std::set<DispatchedMessageId>{tooLong.first});
+
+    // Ready, it fails at once and does not wait.
+    const auto refused = groupMessageDispatcher->sendMessage(false, "Refused");
+    groupMessageDispatcher->sendMessage(false, "Fine");
+    QCOMPARE(brokenMessages.size(), size_t{2});
+    QCOMPARE(brokenMessages[1], refused.first);
+    QCOMPARE(messageSender->sentTexts, texts({"Before", "After", "Fine"}));
+}
+
+/**
+ * @brief The parts of a long text that waits go in the order of the text.
+ */
+void TestGroupMessageDispatcher::theWaitingPartsOfALongTextGoInOrder()
+{
+    MessageProcessor::SharedParams groupParams(Core::getMaxGroupMessageSize(), 10 * 1024 * 1024);
+    MessageProcessor groupProcessor(groupParams);
+    GroupMessageDispatcher dispatcher(*g, groupProcessor, *coreIdHandler, *messageSender,
+                                      *groupSettings, testGraceMs);
+    QString text;
+    for (int i = 0; i < 400; ++i) {
+        text += QStringLiteral("Part of the text %1, ").arg(i);
+    }
+    messageSender->ready = false;
+    const auto ids = dispatcher.sendMessage(false, text);
+    QVERIFY(ids.second.get() > ids.first.get());
+    QVERIFY(messageSender->sentTexts.empty());
+
+    memberJoins(*groupQuery, *g, *messageSender);
+    const size_t parts = static_cast<size_t>(ids.second.get() - ids.first.get() + 1);
+    QTRY_COMPARE_WITH_TIMEOUT(messageSender->sentTexts.size(), parts, waitMs);
+    QString joined;
+    for (const QString& part : messageSender->sentTexts) {
+        joined += part;
+    }
+    QCOMPARE(joined, text);
 }
 
 // Cannot be guiless due to a settings instance in GroupMessageDispatcher

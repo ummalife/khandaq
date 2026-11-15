@@ -31,6 +31,7 @@
 #include "src/core/toxoptions.h"
 #include "src/core/toxstring.h"
 #include "src/core/khandaqlimits.h"
+#include "src/model/air/airgroup.h"
 #include "src/model/air/airgroupleave.h"
 #include "src/model/air/airmessagemarks.h"
 #include "src/model/groupinvite.h"
@@ -1200,13 +1201,16 @@ void Core::sendTyping(uint32_t friendId, bool typing)
     }
 }
 
-uint32_t Core::sendGroupMessageWithType(int groupId, const QString& message, Tox_Message_Type type)
+Core::SendResult Core::sendGroupMessageWithType(int groupId, const QString& message,
+                                                Tox_Message_Type type, uint32_t& wireId)
 {
     QMutexLocker ml{&coreLoopLock};
+    wireId = 0;
+    const uint32_t groupNumber = static_cast<uint32_t>(groupId);
 
     // Only revive a genuinely disconnected group; a full reconnect on every
     // outgoing message would drop all peer connections each time we type.
-    reconnectGroupIfDisconnected(static_cast<uint32_t>(groupId));
+    reconnectGroupIfDisconnected(groupNumber);
 
     // A group message has its own limit, TOX_GROUP_MAX_MESSAGE_LENGTH, larger than the one of a
     // friend message; toxcore refuses a longer one.
@@ -1215,7 +1219,20 @@ uint32_t Core::sendGroupMessageWithType(int groupId, const QString& message, Tox
     if (size > maxSize) {
         qCritical() << "Core::sendGroupMessageWithType called with message of size:" << size
                     << "when max is:" << maxSize << ". Ignoring.";
-        return 0;
+        return SendResult::Failed;
+    }
+
+    // 0.2.56: toxcore takes a text while it has confirmed nobody else, and says it went. Such a
+    // text waits on this device instead, until the group takes it (GroupMessageDispatcher).
+    Tox_Err_Group_Is_Connected connectionError;
+    const int32_t connection = tox_group_is_connected(tox.get(), groupNumber, &connectionError);
+    Tox_Err_Group_Peer_Query peerError;
+    const uint32_t peerCount = tox_group_peer_count(tox.get(), groupNumber, &peerError);
+    if (connectionError != TOX_ERR_GROUP_IS_CONNECTED_OK || peerError != TOX_ERR_GROUP_PEER_QUERY_OK
+        || !Air::groupTakesText(connection, peerCount)) {
+        qDebug() << "Group" << groupId << "takes no text now: connection" << connection << "peers"
+                 << peerCount;
+        return SendResult::NotReady;
     }
 
     ToxString cMsg(message);
@@ -1224,24 +1241,30 @@ uint32_t Core::sendGroupMessageWithType(int groupId, const QString& message, Tox
     uint32_t messageId = 0;
     tox_group_send_message(tox.get(), groupId, type, cMsg.data(), cMsg.size(), &messageId, &error);
     if (!PARSE_ERR(error)) {
+        // Neither says anything about the text itself: it may go later.
+        if (error == TOX_ERR_GROUP_SEND_MESSAGE_DISCONNECTED
+            || error == TOX_ERR_GROUP_SEND_MESSAGE_FAIL_SEND) {
+            return SendResult::NotReady;
+        }
         emit groupSentFailed(groupId);
-        return 0;
+        return SendResult::Failed;
     }
-    return messageId;
+    wireId = messageId;
+    return SendResult::Sent;
 }
 
-uint32_t Core::sendGroupMessage(int groupId, const QString& message)
+Core::SendResult Core::sendGroupMessage(int groupId, const QString& message, uint32_t& wireId)
 {
     QMutexLocker ml{&coreLoopLock};
 
-    return sendGroupMessageWithType(groupId, message, TOX_MESSAGE_TYPE_NORMAL);
+    return sendGroupMessageWithType(groupId, message, TOX_MESSAGE_TYPE_NORMAL, wireId);
 }
 
-uint32_t Core::sendGroupAction(int groupId, const QString& message)
+Core::SendResult Core::sendGroupAction(int groupId, const QString& message, uint32_t& wireId)
 {
     QMutexLocker ml{&coreLoopLock};
 
-    return sendGroupMessageWithType(groupId, message, TOX_MESSAGE_TYPE_ACTION);
+    return sendGroupMessageWithType(groupId, message, TOX_MESSAGE_TYPE_ACTION, wireId);
 }
 
 void Core::changeGroupTitle(int groupId, const QString& title)

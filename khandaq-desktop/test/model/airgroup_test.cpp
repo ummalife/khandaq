@@ -25,6 +25,7 @@
 #include <QTranslator>
 #include <QtTest/QtTest>
 
+#include <limits>
 #include <memory>
 
 /**
@@ -50,6 +51,7 @@ private slots:
     void headerAndHintCountTheMembersAndTheOnesOnline();
     void everyoneOnlineNobodyOnlineAloneAndNotConnected();
     void countsNeverContradictEachOther();
+    void aTextGoesOnlyOnceTheGroupConfirmedSomeoneElse();
     void observersAndTheVoiceStateDecideWhoWrites();
     void founderAndModeratorsChangeRolesWithinTheirRights();
     void everyChangeIsAskedInOneSentenceAndToldOnceDone();
@@ -346,6 +348,24 @@ void TestAirGroup::countsNeverContradictEachOther()
     QCOMPARE(AirStrings::groupHintText(Air::GroupHint::make(capped), capped),
              QStringLiteral("All 3 get it now: everyone is online"));
     QCOMPARE(Air::GroupReach::make(4, 4, -2, true).online, 0);
+}
+
+/**
+ * 0.2.56: toxcore's connection (-1 disconnected, 0 connecting, 1 connected) and its peer count,
+ * which counts you too: a text goes to a connected group that confirmed someone else, never to one
+ * connected with you alone (a group just made, or every member timed out), nor when the count
+ * failed (UINT32_MAX).
+ */
+void TestAirGroup::aTextGoesOnlyOnceTheGroupConfirmedSomeoneElse()
+{
+    QVERIFY(Air::groupTakesText(1, 2));
+    QVERIFY(Air::groupTakesText(1, 50));
+    QVERIFY(!Air::groupTakesText(1, 1));
+    QVERIFY(!Air::groupTakesText(1, 0));
+    QVERIFY(!Air::groupTakesText(1, std::numeric_limits<quint32>::max()));
+    QVERIFY(!Air::groupTakesText(0, 2));
+    QVERIFY(!Air::groupTakesText(0, 1));
+    QVERIFY(!Air::groupTakesText(-1, 2));
 }
 
 void TestAirGroup::observersAndTheVoiceStateDecideWhoWrites()

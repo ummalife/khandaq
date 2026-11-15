@@ -99,6 +99,8 @@ ChatHistory::ChatHistory(Chat& chat_, History* history_, const ICoreIdHandler& c
             &ChatHistory::onMessageReceived);
     connect(&messageDispatcher, &IMessageDispatcher::messageBroken, this,
             &ChatHistory::onMessageBroken);
+    connect(&messageDispatcher, &IMessageDispatcher::messageWireIdAssigned, this,
+            &ChatHistory::onMessageWireIdAssigned);
 
     // Defer messageSent callback until we finish firing off all our unsent messages.
     // If it was connected all our unsent messages would be re-added ot history again
@@ -361,6 +363,16 @@ void ChatHistory::onMessageBroken(DispatchedMessageId id, BrokenMessageReason re
 
     if (queued) {
         emit queueChanged();
+    }
+}
+
+void ChatHistory::onMessageWireIdAssigned(DispatchedMessageId id, const QByteArray& wireId)
+{
+    // A message that waited went: the reactions to it find it by the id it went with, now and
+    // after the next start. One the log has not loaded keeps none.
+    const Message* const message = sessionChatLog.onMessageWireIdAssigned(id, wireId);
+    if (message && canUseHistory()) {
+        keepWireId(coreIdHandler.getSelfPublicKey(), *message);
     }
 }
 

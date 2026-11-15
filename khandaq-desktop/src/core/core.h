@@ -205,8 +205,8 @@ public slots:
     void setStatusMessage(const QString& message);
 
     bool sendMessage(uint32_t friendId, const QString& message, ReceiptNum& receipt) override;
-    uint32_t sendGroupMessage(int groupId, const QString& message) override;
-    uint32_t sendGroupAction(int groupId, const QString& message) override;
+    SendResult sendGroupMessage(int groupId, const QString& message, uint32_t& wireId) override;
+    SendResult sendGroupAction(int groupId, const QString& message, uint32_t& wireId) override;
     void sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t messageId) override;
     bool sendGroupFile(int groupId, const QString& fileName, const QString& localPath,
                        const QByteArray& fileData);
@@ -403,7 +403,8 @@ private:
                                    const uint8_t* data, size_t length, void* core);
     static void onReadReceiptCallback(Tox* tox, uint32_t friendId, uint32_t receipt, void* core);
 
-    uint32_t sendGroupMessageWithType(int groupId, const QString& message, Tox_Message_Type type);
+    SendResult sendGroupMessageWithType(int groupId, const QString& message,
+                                        Tox_Message_Type type, uint32_t& wireId);
     bool sendMessageWithType(uint32_t friendId, const QString& message, Tox_Message_Type type, ReceiptNum& receipt);
     bool checkConnection();
     /** Counts the relays the node holds a connection to, at most every few seconds. */

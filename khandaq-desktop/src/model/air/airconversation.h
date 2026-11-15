@@ -48,7 +48,10 @@ enum class EntryStatus
 {
     /** Incoming messages and notes to yourself: no mark at all. */
     None,
-    /** Waits on this device until the person is online (an amber clock, in the tray). */
+    /**
+     * Waits on this device until the person is online (an amber clock, in the tray), or until the
+     * group takes it.
+     */
     Transit,
     /** The person is online and the message is leaving right now (a faint clock). */
     Sending,
@@ -73,6 +76,13 @@ EntryStatus outgoingTextStatus(bool isSaved, bool isDelivered, bool handedOver, 
  */
 EntryStatus directTextStatus(bool isSaved, bool isDelivered, bool gaveUp, bool handedOver,
                              bool personOnline);
+
+/**
+ * Our text in a group: in transit while it waits on this device for the group to take it
+ * (groupTakesText), failed when it could not go. One that went has no mark, as before: nobody
+ * confirms a group message.
+ */
+EntryStatus groupTextStatus(bool waits, bool gaveUp);
 
 /** The icon of the design-system sprite for the mark, empty for no mark. */
 QString statusIconName(EntryStatus status);

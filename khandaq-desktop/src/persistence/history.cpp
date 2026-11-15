@@ -762,7 +762,8 @@ QList<History::HistMessage> History::getUndeliveredMessagesForChat(const ChatId&
             "WHERE history.chat_id = ");
     QVector<QByteArray> boundParams;
     addChatIdSubQuery(queryString, boundParams, chatId);
-    queryString += QStringLiteral(" AND history.message_type = 'T';");
+    // In the order they were written: they are sent again in it.
+    queryString += QStringLiteral(" AND history.message_type = 'T' ORDER BY history.id;");
     db->execNow({queryString, boundParams, rowCallback});
 
     return ret;

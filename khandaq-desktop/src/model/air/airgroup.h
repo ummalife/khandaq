@@ -121,6 +121,17 @@ struct GroupReach
     bool operator==(const GroupReach& other) const;
 };
 
+/**
+ * Whether a text sent to the group now reaches someone, as toxcore has it at the moment of sending:
+ * connection is tox_group_is_connected of this fork (-1 disconnected, 0 connecting, 1 connected),
+ * peerCount is tox_group_peer_count, which counts you too and is UINT32_MAX when it fails.
+ * Connected alone is not enough: toxcore calls a group connected at its first sync response, before
+ * it confirmed anyone, and keeps it so after every member timed out; a group just made is connected
+ * with its founder alone. tox_group_send_message sends to the confirmed members only, and succeeds
+ * with none. The rule of Android and iOS too (0.2.56).
+ */
+bool groupTakesText(int connection, quint32 peerCount);
+
 /** The line under the field of a group: who gets a message sent now. */
 struct GroupHint
 {
@@ -155,9 +166,10 @@ struct GroupHint
     static GroupHint make(const GroupReach& reach, NetworkState self = NetworkState::Direct);
     /**
      * Whether Send waits, for want of anyone to get the message: no connection, nobody else in the
-     * group, or nobody else online. NGC keeps no history, and this client neither keeps group
-     * messages for later nor serves them to members who come online, so a message sent then would
-     * reach nobody (the phones differ here: they keep and sync group history).
+     * group, or nobody else online. NGC keeps no history, and this client serves none to members
+     * who come online, so a message sent then would reach nobody (the phones differ here: they keep
+     * and sync group history). One that gets to toxcore all the same, as the last member leaves,
+     * waits on this device until the group takes it (groupTakesText, GroupMessageDispatcher).
      */
     bool sendWaits() const;
     bool operator==(const GroupHint& other) const;

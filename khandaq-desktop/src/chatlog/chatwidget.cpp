@@ -232,6 +232,7 @@ ChatWidget::ChatWidget(IChatLog& chatLog_, const Core& core_, DocumentCache& doc
     , messageBoxManager{messageBoxManager_}
 {
     personChat = kind == Kind::Person;
+    groupChat = kind == Kind::Group;
     notesChat = kind == Kind::Notes;
     // Every entry an element of its own for a screen reader, with what the phones say for it.
     AirAccessible::install();
@@ -1641,9 +1642,11 @@ ChatMessage::AirLook ChatWidget::lookOf(const ChatLogItem& item) const
         look.spokenWho = item.getDisplayName();
     }
     const ChatLogItem::ContentType type = item.getContentType();
-    look.hasMark = personChat && isSelf
-                   && (type == ChatLogItem::ContentType::message
-                       || type == ChatLogItem::ContentType::fileTransfer);
+    look.hasMark = isSelf
+                   && ((personChat
+                        && (type == ChatLogItem::ContentType::message
+                            || type == ChatLogItem::ContentType::fileTransfer))
+                       || (groupChat && type == ChatLogItem::ContentType::message));
     look.status = look.hasMark ? statusOf(item) : Air::EntryStatus::None;
     return look;
 }
@@ -1658,6 +1661,10 @@ Air::EntryStatus ChatWidget::statusOf(const ChatLogItem& item) const
         return Air::EntryStatus::None;
     }
     const MessageState state = item.getContentAsMessage().state;
+    if (groupChat) {
+        return Air::groupTextStatus(state == MessageState::pending,
+                                    state == MessageState::broken);
+    }
     // toxcore takes a message as soon as the person is online, so a pending one has left this
     // computer then: there is no "sending" state on the desktop.
     return Air::directTextStatus(false, state == MessageState::complete,

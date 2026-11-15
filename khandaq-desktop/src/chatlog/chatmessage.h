@@ -67,7 +67,7 @@ public:
         QString who;
         /** The author's tone; -1 signs the entry in ink-2, as our own messages are signed. */
         int tone = -1;
-        /** Our own messages to a person carry a state mark; others have none. */
+        /** Our own messages to a person and our texts in a group carry a state mark. */
         bool hasMark = false;
         Air::EntryStatus status = Air::EntryStatus::None;
         /** Who wrote it, as a screen reader says it: "You" or the whole name; empty in notes. */

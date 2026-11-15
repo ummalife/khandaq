@@ -24,6 +24,7 @@
 #include <QRegularExpression>
 
 #include <algorithm>
+#include <limits>
 
 namespace Air {
 
@@ -169,6 +170,11 @@ int GroupReach::recipients() const
 bool GroupReach::operator==(const GroupReach& other) const
 {
     return total == other.total && online == other.online && connected == other.connected;
+}
+
+bool groupTakesText(int connection, quint32 peerCount)
+{
+    return connection == 1 && peerCount > 1 && peerCount != std::numeric_limits<quint32>::max();
 }
 
 GroupHint GroupHint::make(const GroupReach& reach, NetworkState self)

@@ -138,6 +138,13 @@ void TestAirConversation::statusFollowsTheMessageAndThePerson()
     QCOMPARE(Air::directTextStatus(false, false, false, true, false), EntryStatus::Transit);
     QCOMPARE(Air::directTextStatus(true, false, true, true, true), EntryStatus::None);
 
+    // 0.2.56: our text in a group is in transit while it waits on this device, and carries no mark
+    // once it went: nobody confirms it.
+    QCOMPARE(Air::groupTextStatus(true, false), EntryStatus::Transit);
+    QCOMPARE(Air::groupTextStatus(false, false), EntryStatus::None);
+    QCOMPARE(Air::groupTextStatus(false, true), EntryStatus::Failed);
+    QCOMPARE(Air::groupTextStatus(true, true), EntryStatus::Failed);
+
     // The list row says the same as the conversation.
     QCOMPARE(Air::rowDelivery(EntryStatus::Transit), Air::Delivery::Transit);
     QCOMPARE(Air::rowDelivery(EntryStatus::Sending), Air::Delivery::Transit);

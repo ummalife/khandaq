@@ -35,12 +35,24 @@ public:
     ICoreGroupMessageSender(ICoreGroupMessageSender&&) = default;
     ICoreGroupMessageSender& operator=(ICoreGroupMessageSender&&) = default;
 
+    /** What became of a text handed to a group. */
+    enum class SendResult
+    {
+        /** toxcore took it for the members it confirmed. */
+        Sent,
+        /** Nobody would get it now (Air::groupTakesText): it may go once the group is ready. */
+        NotReady,
+        /** It cannot go as it is: too long, not allowed, refused by toxcore. */
+        Failed,
+    };
+
     /**
-     * Sends a message or an action to a group. Returns the id toxcore gave it, which the edits,
-     * deletions and reactions of the members point at, or 0 when it did not go.
+     * Sends a message or an action to a group. wireId is set to the id toxcore gave a text that
+     * went, which the edits, deletions and reactions of the members point at, and to 0 otherwise.
      */
-    virtual uint32_t sendGroupAction(int groupId, const QString& message) = 0;
-    virtual uint32_t sendGroupMessage(int groupId, const QString& message) = 0;
+    virtual SendResult sendGroupAction(int groupId, const QString& message, uint32_t& wireId) = 0;
+    virtual SendResult sendGroupMessage(int groupId, const QString& message,
+                                        uint32_t& wireId) = 0;
 
     /**
      * Tells the author of a group message, privately, that it arrived here. `messageId` is the id

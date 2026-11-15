@@ -154,6 +154,7 @@ void Group::regeneratePeerList()
     if (oldPeerNames.size() != peerDisplayNames.size() || oldPeerNames != peerDisplayNames) {
         emit numPeersChanged(getPeersCount());
     }
+    emit peerListRefreshed();
 }
 
 void Group::updateUsername(ToxPk pk, const QString newName)

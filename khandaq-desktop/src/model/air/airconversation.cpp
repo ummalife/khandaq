@@ -99,6 +99,14 @@ EntryStatus directTextStatus(bool isSaved, bool isDelivered, bool gaveUp, bool h
     return outgoingTextStatus(false, false, handedOver, personOnline);
 }
 
+EntryStatus groupTextStatus(bool waits, bool gaveUp)
+{
+    if (gaveUp) {
+        return EntryStatus::Failed;
+    }
+    return waits ? EntryStatus::Transit : EntryStatus::None;
+}
+
 QString statusIconName(EntryStatus status)
 {
     switch (status) {

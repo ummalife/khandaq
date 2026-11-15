@@ -315,6 +315,12 @@ signals:
                               qint64 fileSize, const QByteArray& fileId);
     /** How many bytes of the file have gone so far, a few times a second. */
     void groupFileSendProgress(const QByteArray& fileId, qint64 bytesSent);
+    /**
+     * The group of the file has nobody to send it to (waiting), and nothing of it goes; or has
+     * again, and the file goes from its start. After Air::GroupFileQueue::aloneLimitMs of
+     * waiting it fails.
+     */
+    void groupFileSendWaiting(const QByteArray& fileId, bool waiting);
     /** The file stopped before its last chunk: the group is gone, or refused it, or the file. */
     void groupFileSendFailed(const QByteArray& fileId);
     /** Every packet of the file went to toxcore. */
@@ -380,6 +386,7 @@ private:
     bool sendGroupFileBegin(OutgoingGroupFile& send, const QByteArray& fileId);
     bool sendGroupFileChunk(OutgoingGroupFile& send, const QByteArray& fileId, int chunk);
     void sendGroupFileChunks();
+    void tellGroupFilesWaiting();
     int groupFileMembers(int groupId) const;
     void failGroupFileSend(const QByteArray& fileId, const char* reason);
 
@@ -472,6 +479,8 @@ private:
         std::shared_ptr<QFile> file;
         // When its progress was last told (monotonicMs).
         qint64 toldMs = 0;
+        // Whether it was last told to wait for a member of its group (groupFileSendWaiting).
+        bool waiting = false;
     };
     // 0.2.56: the files we send into groups, by file id; their order and their pace. Under
     // coreLoopLock: sendGroupFileFromPath adds them, process() sends their packets.

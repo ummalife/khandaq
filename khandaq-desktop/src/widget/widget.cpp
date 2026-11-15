@@ -907,6 +907,7 @@ void Widget::onCoreChanged(Core& core_)
     connect(core, &Core::groupFileSent, this, &Widget::onGroupFileSent);
     connect(core, &Core::groupFileSendStarted, this, &Widget::onGroupFileSendStarted);
     connect(core, &Core::groupFileSendProgress, this, &Widget::onGroupFileSendProgress);
+    connect(core, &Core::groupFileSendWaiting, this, &Widget::onGroupFileSendWaiting);
     connect(core, &Core::groupFileSendFailed, this, &Widget::onGroupFileSendFailed);
     connect(core, &Core::groupPeerlistChanged, this, &Widget::onGroupPeerlistChanged);
     connect(core, &Core::groupPeerNameChanged, this, &Widget::onGroupPeerNameChanged);
@@ -2870,6 +2871,25 @@ void Widget::onGroupFileSendProgress(const QByteArray& fileId, qint64 bytesSent)
     }
     sending->file.progress.addSample(static_cast<uint64_t>(bytesSent), QTime::currentTime());
     updateGroupFileInChatLog(sending->groupId, core->getSelfPublicKey(), sending->file);
+}
+
+void Widget::onGroupFileSendWaiting(const QByteArray& fileId, bool waiting)
+{
+    const auto sending = groupFileSends.find(fileId);
+    if (sending == groupFileSends.end()) {
+        return;
+    }
+    ToxFile& file = sending->file;
+    if (waiting) {
+        // Nobody in the group to send it to: the entry says it waits for someone.
+        file.status = ToxFile::PAUSED;
+    } else {
+        // It goes again from its start (Air::GroupFileQueue::setMembers), and the bar with it.
+        file.status = ToxFile::TRANSMITTING;
+        file.progress = ToxFileProgress(file.progress.getFileSize());
+        file.progress.addSample(0, QTime::currentTime());
+    }
+    updateGroupFileInChatLog(sending->groupId, core->getSelfPublicKey(), file);
 }
 
 void Widget::onGroupFileSendFailed(const QByteArray& fileId)

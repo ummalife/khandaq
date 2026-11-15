@@ -2102,6 +2102,11 @@
         <translation>等待 %1 接收</translation>
     </message>
     <message>
+        <source>Waits for someone in the group to come online</source>
+        <comment>file entry of ours in a group where nobody else is online now: it goes when someone is</comment>
+        <translation>等待群组中有人上线</translation>
+    </message>
+    <message>
         <source>The download stopped</source>
         <comment>file entry of theirs that broke or was cancelled</comment>
         <translation>下载已中断</translation>

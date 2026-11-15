@@ -430,6 +430,7 @@ const Source sources[] = {
     {Text::FilePaused, QT_TRANSLATE_NOOP3("Air", "Paused", "file entry: we paused the transfer")},
     {Text::FilePausedThere, QT_TRANSLATE_NOOP3("Air", "Paused on the other side", "file entry: the other person paused the transfer, only they can go on")},
     {Text::FileWaitsAccept, QT_TRANSLATE_NOOP3("Air", "Waits for %1 to accept it", "file entry of ours: %1 is the person who has to accept it")},
+    {Text::FileWaitsMembers, QT_TRANSLATE_NOOP3("Air", "Waits for someone in the group to come online", "file entry of ours in a group where nobody else is online now: it goes when someone is")},
     {Text::FileDownloadStopped, QT_TRANSLATE_NOOP3("Air", "The download stopped", "file entry of theirs that broke or was cancelled")},
     {Text::FileNotSent, QT_TRANSLATE_NOOP3("Air", "Not sent", "file entry of ours that broke or was cancelled")},
     {Text::FileNameAndSize, QT_TRANSLATE_NOOP3("Air", "%1, %2", "what a screen reader says for a file: %1 the name, %2 the size or the length")},
@@ -1613,6 +1614,8 @@ QString fileNoteText(const Air::FileEntryState& state, const QString& person, co
         return text(Text::FilePausedThere);
     case Air::FileNote::WaitsAccept:
         return text(Text::FileWaitsAccept).arg(person);
+    case Air::FileNote::WaitsMembers:
+        return text(Text::FileWaitsMembers);
     case Air::FileNote::DownloadStopped:
         return text(Text::FileDownloadStopped);
     case Air::FileNote::NotSent:

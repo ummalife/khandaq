@@ -216,6 +216,11 @@ FileEntryState fileEntryState(const FileFacts& facts)
         break;
     }
     case ToxFile::PAUSED:
+        // Nobody pauses a group file: ours waits for a member to send it to.
+        if (facts.group && !facts.incoming) {
+            state.note = FileNote::WaitsMembers;
+            break;
+        }
         // Only the side that paused can go on.
         if (facts.pausedHere) {
             state.note = FileNote::Paused;

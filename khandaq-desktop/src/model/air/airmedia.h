@@ -89,6 +89,8 @@ enum class FileNote
     PausedThere,
     /** Ours, offered and not yet accepted: "Waits for Yusuf to accept it". */
     WaitsAccept,
+    /** Ours, into a group that has nobody to send it to now. */
+    WaitsMembers,
     /** Theirs stopped before the end; Tox cannot ask for it again, only they can send it again. */
     DownloadStopped,
     /** Ours stopped before the end. */

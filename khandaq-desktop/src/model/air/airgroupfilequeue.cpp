@@ -24,6 +24,7 @@
 namespace Air {
 
 // C++11 wants a definition of what qMin takes by reference.
+constexpr qint64 GroupFileQueue::aloneLimitMs;
 constexpr qint64 UploadPace::bytesPerSecond;
 constexpr qint64 UploadPace::burstMs;
 constexpr qint64 UploadPace::burstBytes;
@@ -67,16 +68,49 @@ void GroupFileQueue::add(int group, const QByteArray& fileId, qint64 size)
     file.chunks = chunkCount(size);
     files.append(file);
     if (!turns.contains(group)) {
-        costs.insert(group, leastCost());
+        costs.insert(group, leastCost(group));
         turns.append(group);
     }
 }
 
-void GroupFileQueue::setMembers(int group, int members_)
+void GroupFileQueue::setMembers(int group, int members_, qint64 nowMs)
 {
-    if (turns.contains(group)) {
-        members.insert(group, members_);
+    if (!turns.contains(group)) {
+        return;
     }
+    members.insert(group, members_);
+    if (members_ <= 0) {
+        if (!aloneSince.contains(group)) {
+            aloneSince.insert(group, nowMs);
+        }
+        return;
+    }
+    if (aloneSince.remove(group) == 0) {
+        return;
+    }
+    const int index = firstOf(group);
+    if (index >= 0) {
+        files[index].next = -1;
+    }
+    // Level with the groups that went on meanwhile, not ahead of them by what they sent.
+    costs[group] = qMax(costs.value(group), leastCost(group));
+}
+
+bool GroupFileQueue::waits(int group) const
+{
+    return aloneSince.contains(group);
+}
+
+QList<QByteArray> GroupFileQueue::waitedTooLong(qint64 nowMs) const
+{
+    QList<QByteArray> fileIds;
+    for (const File& file : files) {
+        const auto since = aloneSince.constFind(file.group);
+        if (since != aloneSince.constEnd() && nowMs - since.value() >= aloneLimitMs) {
+            fileIds.append(file.fileId);
+        }
+    }
+    return fileIds;
 }
 
 QList<int> GroupFileQueue::groups() const
@@ -88,7 +122,7 @@ bool GroupFileQueue::next(Packet* packet) const
 {
     int chosen = -1;
     for (const int group : turns) {
-        if (chosen < 0 || costs.value(group) < costs.value(chosen)) {
+        if (!waits(group) && (chosen < 0 || costs.value(group) < costs.value(chosen))) {
             chosen = group;
         }
     }
@@ -200,15 +234,27 @@ void GroupFileQueue::dropTurnIfDone(int group)
         turns.removeAll(group);
         costs.remove(group);
         members.remove(group);
+        aloneSince.remove(group);
     }
 }
 
-qint64 GroupFileQueue::leastCost() const
+/** The least cost of the other groups that send now; while all of them wait, of those. */
+qint64 GroupFileQueue::leastCost(int except) const
 {
+    bool found = false;
     qint64 least = 0;
-    for (int i = 0; i < turns.size(); ++i) {
-        const qint64 spent = costs.value(turns.at(i));
-        least = i == 0 ? spent : qMin(least, spent);
+    for (const bool waiting : {false, true}) {
+        for (const int group : turns) {
+            if (group == except || waits(group) != waiting) {
+                continue;
+            }
+            const qint64 spent = costs.value(group);
+            least = found ? qMin(least, spent) : spent;
+            found = true;
+        }
+        if (found) {
+            break;
+        }
     }
     return least;
 }

@@ -68,11 +68,31 @@ public:
      * starts level with the one that has cost the least, not ahead of all the others.
      */
     void add(int group, const QByteArray& fileId, qint64 size);
-    /** How many members a packet into the group goes to now; one until it is said. */
-    void setMembers(int group, int members);
+    /**
+     * How long a group may have nobody to send to before its files are said not sent. A member
+     * that drops off stays a peer for toxcore until GC_CONFIRMED_PEER_TIMEOUT (58 s) passes
+     * without a word from it, so a group looks empty about a minute after the last member went.
+     * Two minutes more let a member whose link went for a while (a laptop that slept, a phone
+     * between networks) come back for the file. Past them the conversation says the file was not
+     * sent, rather than show it going to nobody while the group's next files wait behind it.
+     */
+    static constexpr qint64 aloneLimitMs = 2 * 60 * 1000;
+
+    /**
+     * How many members a packet into the group goes to now (one until it is said), at nowMs (a
+     * steady clock). With none, the group's files wait: toxcore takes a packet for nobody and
+     * says it went. When a member is there again, the file the group sends starts again from its
+     * BEGIN: what went before was lost with the member that left, and a member that comes had
+     * none of it. A receiver that stayed keeps what it has, as its sender's BEGIN never wipes it.
+     */
+    void setMembers(int group, int members, qint64 nowMs);
+    /** Whether the group has nobody to send to (setMembers). */
+    bool waits(int group) const;
+    /** The files of the groups that have had nobody to send to for aloneLimitMs. */
+    QList<QByteArray> waitedTooLong(qint64 nowMs) const;
     /** The groups with a file to send. */
     QList<int> groups() const;
-    /** The packet whose turn it is; false when nothing waits. */
+    /** The packet whose turn it is; false when nothing waits, or only groups that wait. */
     bool next(Packet* packet) const;
     /** What the packet costs the pace: its bytes once for each member of its group (UploadPace). */
     qint64 cost(const Packet& packet) const;
@@ -105,7 +125,7 @@ private:
     int indexOf(const QByteArray& fileId) const;
     int firstOf(int group) const;
     void dropTurnIfDone(int group);
-    qint64 leastCost() const;
+    qint64 leastCost(int except) const;
 
     /** In the order they were added. */
     QList<File> files;
@@ -115,6 +135,8 @@ private:
     QHash<int, qint64> costs;
     /** How many members each of those groups sends to (setMembers). */
     QHash<int, int> members;
+    /** Since when each of those groups that waits has had nobody to send to. */
+    QHash<int, qint64> aloneSince;
 };
 
 // The pace of those packets. toxcore tells nothing of how full a member's send array is: a packet

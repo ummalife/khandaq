@@ -417,6 +417,7 @@ enum class Text
     FilePaused,
     FilePausedThere,
     FileWaitsAccept,
+    FileWaitsMembers,
     FileDownloadStopped,
     FileNotSent,
     FileNameAndSize,

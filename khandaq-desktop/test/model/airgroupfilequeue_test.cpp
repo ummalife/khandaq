@@ -68,6 +68,9 @@ private slots:
     void theGroupsShareThePaceByWhatTheyCost();
     void aGroupThatComesStartsLevelWithTheOthers();
     void aPacketCostsItsBytesForEachMemberOfItsGroup();
+    void aGroupWithNobodyToSendToWaits();
+    void aFileStartsAgainWhenAMemberIsBack();
+    void theFilesOfAGroupWaitAtMostTheAloneLimit();
     void onlyTheFileItsGroupSendsNowMayBeginAtOnce();
     void aFileThatFailsLetsTheNextOneGo();
     void aPacketThatIsNotTheNextOneChangesNothing();
@@ -155,8 +158,8 @@ void TestAirGroupFileQueue::theGroupsShareThePaceByWhatTheyCost()
     GroupFileQueue queue;
     queue.add(1, fileA, 1000 * payload);
     queue.add(2, fileB, 1000 * payload);
-    queue.setMembers(1, 1);
-    queue.setMembers(2, 49);
+    queue.setMembers(1, 1, 0);
+    queue.setMembers(2, 49, 0);
     qint64 cost[3] = {0, 0, 0};
     int chunks[3] = {0, 0, 0};
     GroupFileQueue::Packet packet;
@@ -193,7 +196,7 @@ void TestAirGroupFileQueue::aPacketCostsItsBytesForEachMemberOfItsGroup()
     QVERIFY(queue.next(&packet));
     // One member until the core says how many there are.
     QCOMPARE(queue.cost(packet), static_cast<qint64>(NGC_FILE_BEGIN_SIZE));
-    queue.setMembers(1, 3);
+    queue.setMembers(1, 3, 0);
     QCOMPARE(queue.cost(packet), 3 * static_cast<qint64>(NGC_FILE_BEGIN_SIZE));
     queue.sent(packet);
     QVERIFY(queue.next(&packet));
@@ -202,8 +205,73 @@ void TestAirGroupFileQueue::aPacketCostsItsBytesForEachMemberOfItsGroup()
     QVERIFY(queue.next(&packet));
     QCOMPARE(queue.cost(packet), 3 * (static_cast<qint64>(NGC_FILE_CHUNK_HEADER_SIZE) + 10));
     // A group that has no file to send is not kept.
-    queue.setMembers(2, 7);
+    queue.setMembers(2, 7, 0);
     QCOMPARE(queue.groups(), QList<int>{1});
+}
+
+void TestAirGroupFileQueue::aGroupWithNobodyToSendToWaits()
+{
+    GroupFileQueue queue;
+    queue.add(1, fileA, 3 * payload);
+    queue.add(2, fileB, 2 * payload);
+    queue.setMembers(1, 0, 1000);
+    QVERIFY(queue.waits(1));
+    QVERIFY(!queue.waits(2));
+    // toxcore would take its packets for nobody: the other group goes on alone.
+    QCOMPARE(drain(queue), (QStringList{"2:b:begin", "2:b:0", "2:b:1"}));
+    GroupFileQueue::Packet packet;
+    QVERIFY(!queue.next(&packet));
+    QVERIFY(queue.contains(fileA));
+    QCOMPARE(queue.bytesSent(fileA), qint64{0});
+    // A group of one waits from its first file on.
+    queue.add(3, fileC, payload);
+    queue.setMembers(3, 0, 1000);
+    QVERIFY(!queue.next(&packet));
+}
+
+void TestAirGroupFileQueue::aFileStartsAgainWhenAMemberIsBack()
+{
+    GroupFileQueue queue;
+    queue.add(1, fileA, 3 * payload);
+    queue.add(2, fileB, 100 * payload);
+    queue.setMembers(1, 1, 0);
+    queue.setMembers(2, 1, 0);
+    QCOMPARE(drain(queue, 4), (QStringList{"1:a:begin", "2:b:begin", "1:a:0", "2:b:0"}));
+    QCOMPARE(queue.bytesSent(fileA), payload);
+
+    queue.setMembers(1, 0, 1000);
+    QCOMPARE(drain(queue, 10).size(), 10);
+    // Whoever left took the chunks it had not acknowledged, and whoever comes had none: the
+    // file goes again from its BEGIN, level with the group that went on meanwhile.
+    queue.setMembers(1, 1, 5000);
+    QVERIFY(!queue.waits(1));
+    QCOMPARE(queue.bytesSent(fileA), qint64{0});
+    QCOMPARE(drain(queue, 4), (QStringList{"1:a:begin", "2:b:11", "1:a:0", "2:b:12"}));
+    // Members that stay say nothing new: the file goes on.
+    queue.setMembers(1, 3, 6000);
+    QCOMPARE(drain(queue, 1), QStringList{"1:a:1"});
+}
+
+void TestAirGroupFileQueue::theFilesOfAGroupWaitAtMostTheAloneLimit()
+{
+    GroupFileQueue queue;
+    queue.add(1, fileA, 2 * payload);
+    queue.add(2, fileB, payload);
+    queue.add(1, fileC, payload);
+    const qint64 alone = 1000;
+    queue.setMembers(1, 0, alone);
+    queue.setMembers(2, 1, alone);
+    // Still alone a turn later: it has waited since it first was.
+    queue.setMembers(1, 0, alone + 500);
+    QVERIFY(queue.waitedTooLong(alone + GroupFileQueue::aloneLimitMs - 1).isEmpty());
+    QCOMPARE(queue.waitedTooLong(alone + GroupFileQueue::aloneLimitMs),
+             (QList<QByteArray>{fileA, fileC}));
+
+    // A member that comes back in time sets the clock back too.
+    queue.setMembers(1, 1, alone + 1000);
+    queue.setMembers(1, 0, alone + 2000);
+    QVERIFY(queue.waitedTooLong(alone + GroupFileQueue::aloneLimitMs + 1).isEmpty());
+    QCOMPARE(queue.waitedTooLong(alone + 2000 + GroupFileQueue::aloneLimitMs).size(), 2);
 }
 
 void TestAirGroupFileQueue::onlyTheFileItsGroupSendsNowMayBeginAtOnce()

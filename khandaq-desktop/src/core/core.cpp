@@ -447,7 +447,9 @@ void Core::process()
 
     unsigned sleeptime =
         qMin(tox_iteration_interval(tox.get()), getCoreFile()->corefileIterationInterval());
-    if (!groupFileQueue.isEmpty()) {
+    // Not while every group with a file waits for a member: nothing of them can go.
+    Air::GroupFileQueue::Packet nextGroupFilePacket;
+    if (groupFileQueue.next(&nextGroupFilePacket)) {
         sleeptime = qMin(sleeptime, groupFileTurnMs);
     }
     toxTimer->start(sleeptime);
@@ -3208,7 +3210,7 @@ bool Core::sendGroupFileFromPath(int groupId, const QString& fileName, const QSt
         return false;
     }
     groupFileQueue.add(groupId, msgId, fileSize);
-    groupFileQueue.setMembers(groupId, groupFileMembers(groupId));
+    groupFileQueue.setMembers(groupId, groupFileMembers(groupId), monotonicMs());
     if (groupFileQueue.isFirst(msgId)) {
         // The group sends nothing else: the BEGIN goes at once, so a group that refuses it now is
         // said at once, as before. A file that waits for another one sends its BEGIN in its turn.
@@ -3326,8 +3328,12 @@ void Core::sendGroupFileChunks()
 {
     const qint64 nowMs = monotonicMs();
     for (const int group : groupFileQueue.groups()) {
-        groupFileQueue.setMembers(group, groupFileMembers(group));
+        groupFileQueue.setMembers(group, groupFileMembers(group), nowMs);
     }
+    for (const QByteArray& fileId : groupFileQueue.waitedTooLong(nowMs)) {
+        failGroupFileSend(fileId, "wait for a member");
+    }
+    tellGroupFilesWaiting();
     Air::GroupFileQueue::Packet packet;
     while (groupFileQueue.next(&packet) && groupFilePace.ready(nowMs)) {
         const auto it = outgoingGroupFiles.find(packet.fileId);
@@ -3357,12 +3363,32 @@ void Core::sendGroupFileChunks()
 }
 
 /**
+ * @brief Says which files wait for a member of their group to send to (Air::GroupFileQueue::waits)
+ * where that changed. Called with coreLoopLock held.
+ */
+void Core::tellGroupFilesWaiting()
+{
+    for (auto it = outgoingGroupFiles.begin(); it != outgoingGroupFiles.end(); ++it) {
+        const bool waits = groupFileQueue.waits(it.value().group);
+        if (it.value().waiting != waits) {
+            it.value().waiting = waits;
+            emit groupFileSendWaiting(it.key(), waits);
+        }
+    }
+}
+
+/**
  * @brief How many members a packet into the group goes to: toxcore sends it to every peer it
- * confirmed but us, and our own peer counts as one. One when toxcore cannot say: the packet
- * itself finds out. Called with coreLoopLock held.
+ * confirmed but us, and our own peer counts as one. One when toxcore cannot say, or the group is
+ * not connected: the packet itself finds out, and the file stops at once as before. Called with
+ * coreLoopLock held.
  */
 int Core::groupFileMembers(int groupId) const
 {
+    Tox_Err_Group_Is_Connected connectionError;
+    if (tox_group_is_connected(tox.get(), static_cast<uint32_t>(groupId), &connectionError) < 0) {
+        return 1;
+    }
     Tox_Err_Group_Peer_Query error;
     const uint32_t peers = tox_group_peer_count(tox.get(), static_cast<uint32_t>(groupId), &error);
     if (error != TOX_ERR_GROUP_PEER_QUERY_OK || peers == 0) {

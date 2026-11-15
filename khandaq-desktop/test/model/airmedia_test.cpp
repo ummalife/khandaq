@@ -104,6 +104,7 @@ private slots:
     void aStoppedFileSaysWhichWayItWent();
     void aFileThatIsHereOpens();
     void aGroupFileHasNothingToAnswer();
+    void ourGroupFileWaitsForSomeoneToSendItTo();
     void theMarkOfOurFileFollowsTheTransfer();
     void theLengthOfANoteComesFromItsMovieHeader();
     void aBrokenHeaderHasNoLength();
@@ -246,6 +247,19 @@ void TestAirMedia::aGroupFileHasNothingToAnswer()
     Air::FileFacts ours = facts(ToxFile::INITIALIZING, false);
     ours.group = true;
     QCOMPARE(Air::fileEntryState(ours).note, FileNote::None);
+}
+
+void TestAirMedia::ourGroupFileWaitsForSomeoneToSendItTo()
+{
+    // Nobody pauses a group file: ours stops while nobody else in the group is online.
+    Air::FileFacts ours = facts(ToxFile::PAUSED, false);
+    ours.group = true;
+    QCOMPARE(Air::fileEntryState(ours).note, FileNote::WaitsMembers);
+    QVERIFY(Air::fileEntryState(ours).actions.isEmpty());
+    QVERIFY(!Air::fileEntryState(ours).isProblem());
+    // A paused file of a person is still the one its side paused.
+    ours.group = false;
+    QCOMPARE(Air::fileEntryState(ours).note, FileNote::PausedThere);
 }
 
 void TestAirMedia::theMarkOfOurFileFollowsTheTransfer()

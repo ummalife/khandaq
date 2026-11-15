@@ -248,6 +248,7 @@ public slots:
     void onGroupFileSendStarted(int groupnumber, const QString& fileName, const QString& localPath,
                                 qint64 fileSize, const QByteArray& fileId);
     void onGroupFileSendProgress(const QByteArray& fileId, qint64 bytesSent);
+    void onGroupFileSendWaiting(const QByteArray& fileId, bool waiting);
     void onGroupFileSendFailed(const QByteArray& fileId);
     /** An edit, a deletion or a reaction a friend sent (stage 3, item 10). */
     void onFriendMessageEffect(uint32_t friendnumber, const QByteArray& packet);

@@ -541,6 +541,85 @@
     [rig[@"partial"] stopMocking];
 }
 
+#pragma mark - A new message and what waits for the group
+
+- (void)testANewMessageGoesAfterWhatWaitedForTheGroup
+{
+    OCTMessageAbstract *held = [self queuedText:@"first"];
+    NSDictionary *rig = [self rigWithQueue:@[held]];
+
+    OCTMessageAbstract *message = [self sendText:@"second" withRig:rig];
+    XCTAssertEqualObjects(rig[@"sent"], (@[@"first", @"second"]), @"the new message overtook the one that waited");
+    XCTAssertFalse(held.groupPendingSend);
+    XCTAssertFalse(message.groupPendingSend, @"queued although the group could take it");
+
+    [rig[@"partial"] stopMocking];
+}
+
+- (void)testANewMessageWaitsBehindWhatNobodyCanGetYet
+{
+    OCTMessageAbstract *held = [self queuedText:@"first"];
+    NSDictionary *rig = [self rigWithQueue:@[held]];
+    NSMutableDictionary *group = rig[@"group"];
+    group[@"status"] = @0;
+    group[@"peers"] = @1;
+
+    OCTMessageAbstract *message = [self sendText:@"second" withRig:rig];
+    XCTAssertEqualObjects(rig[@"sent"], @[]);
+    XCTAssertTrue(message.groupPendingSend);
+
+    // Somebody is there: both go, in the order they were written.
+    group[@"peers"] = @2;
+    XCTAssertTrue([rig[@"submanager"] flushPendingGroupMessagesForChat:rig[@"chat"]]);
+    XCTAssertEqualObjects(rig[@"sent"], (@[@"first", @"second"]));
+
+    [rig[@"partial"] stopMocking];
+}
+
+- (void)testATextToxcoreRefusedForGoodDoesNotHoldUpANewMessage
+{
+    OCTMessageAbstract *refused = [self queuedText:@"too long"];
+    NSDictionary *rig = [self rigWithQueue:@[refused]];
+    rig[@"refusals"][@"too long"] = @(OCTToxErrorGroupSendMessageTooLong);
+
+    OCTMessageAbstract *message = [self sendText:@"next" withRig:rig];
+    XCTAssertEqualObjects(rig[@"sent"], @[@"next"]);
+    XCTAssertFalse(message.groupPendingSend, @"the new message waited behind one that can never go");
+
+    [rig[@"partial"] stopMocking];
+}
+
+- (void)testARefusalOfANewMessageSentAfterTheQueueReachesTheCaller
+{
+    OCTMessageAbstract *held = [self queuedText:@"first"];
+    NSDictionary *rig = [self rigWithQueue:@[held]];
+    rig[@"refusals"][@"second"] = @(OCTToxErrorGroupSendMessagePermissions);
+
+    __block NSError *refusal = nil;
+    [rig[@"submanager"] sendMessageToChat:rig[@"chat"] text:@"second" type:OCTToxMessageTypeNormal successBlock:^(OCTMessageAbstract *message) {
+        XCTFail(@"a message toxcore refused was taken: %@", message);
+    } failureBlock:^(NSError *error) {
+        refusal = error;
+    }];
+    XCTAssertEqual(refusal.code, OCTToxErrorGroupSendMessagePermissions);
+    XCTAssertEqualObjects(rig[@"sent"], @[@"first"]);
+    XCTAssertEqual([rig[@"queue"] count], 1u, @"the refused message was queued");
+
+    [rig[@"partial"] stopMocking];
+}
+
+- (OCTMessageAbstract *)sendText:(NSString *)text withRig:(NSDictionary *)rig
+{
+    __block OCTMessageAbstract *answer = nil;
+    [rig[@"submanager"] sendMessageToChat:rig[@"chat"] text:text type:OCTToxMessageTypeNormal successBlock:^(OCTMessageAbstract *message) {
+        answer = message;
+    } failureBlock:^(NSError *error) {
+        XCTFail(@"the message was refused: %@", error);
+    }];
+    XCTAssertNotNil(answer, @"the send did not answer");
+    return answer;
+}
+
 /**
  * Group 3, with two peers (this client among them) until "group" says otherwise ("peerScript" answers the
  * next peer counts first), whose queue holds what of "queue" is still queued, in its order, as the query

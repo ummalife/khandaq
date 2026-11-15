@@ -1062,6 +1062,12 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
         return;
     }
 
+    // KHANDAQ (review 0.2.56): a new message goes after what already waits for the group. What can go now
+    // goes first; while something still waits for somebody to get it, the new message waits behind it. A
+    // queued text toxcore refuses for good holds nothing up (-flushPendingGroupMessagesForChat:), and the new
+    // message itself is sent here, not through the queue, so a refusal of it still reaches the caller.
+    BOOL waitsBehind = ! [self flushPendingGroupMessagesForChat:chat];
+
     OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)chat.groupNumber;
     __block BOOL sent = NO;
     BOOL waitsForConnection = NO;
@@ -1090,7 +1096,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
         // maintenance).
         [self performSyncOnToxQueue:^(OCTTox *tox) {
             int32_t connectionStatus = [tox groupConnectionStatusForGroupNumber:groupNumber error:nil];
-            ready = OCTGroupIsReadyToSend(tox, groupNumber, connectionStatus);
+            ready = ! waitsBehind && OCTGroupIsReadyToSend(tox, groupNumber, connectionStatus);
 
             if (ready) {
                 sent = [tox groupSendMessage:text

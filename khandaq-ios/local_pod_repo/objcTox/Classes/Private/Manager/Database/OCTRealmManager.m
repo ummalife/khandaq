@@ -296,6 +296,12 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     RLMRealmConfiguration *configuration = [RLMRealmConfiguration defaultConfiguration];
     configuration.fileURL = fileURL;
     configuration.schemaVersion = kCurrentSchemeVersion;
+    // KHANDAQ (0.2.57): the copy of the default configuration carries deleteRealmIfMigrationNeeded, which init
+    // sets for the stray default.realm once the first profile of the process is open. Realm then deletes, not
+    // migrates, a profile of an older schema opened after that one (switching profiles, logging in again),
+    // and the migration block is never run. A profile always migrates; a file Realm cannot open is moved
+    // aside by init.
+    configuration.deleteRealmIfMigrationNeeded = NO;
     configuration.migrationBlock = [self realmMigrationBlock];
     configuration.encryptionKey = encryptionKey;
 

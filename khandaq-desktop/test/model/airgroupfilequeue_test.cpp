@@ -65,6 +65,9 @@ private slots:
     void aFileGoesAsItsBeginThenItsChunksInOrder();
     void theFilesOfAGroupGoOneAfterAnother();
     void theGroupsTakeTurns();
+    void theGroupsShareThePaceByWhatTheyCost();
+    void aGroupThatComesStartsLevelWithTheOthers();
+    void aPacketCostsItsBytesForEachMemberOfItsGroup();
     void onlyTheFileItsGroupSendsNowMayBeginAtOnce();
     void aFileThatFailsLetsTheNextOneGo();
     void aPacketThatIsNotTheNextOneChangesNothing();
@@ -137,12 +140,70 @@ void TestAirGroupFileQueue::theFilesOfAGroupGoOneAfterAnother()
 
 void TestAirGroupFileQueue::theGroupsTakeTurns()
 {
+    // Groups whose packets cost the same take turns.
     GroupFileQueue queue;
     queue.add(1, fileA, 3 * payload);
     queue.add(2, fileB, payload);
     queue.add(1, fileC, payload);
     QCOMPARE(drain(queue), (QStringList{"1:a:begin", "2:b:begin", "1:a:0", "2:b:0", "1:a:1",
                                         "1:a:2", "1:c:begin", "1:c:0"}));
+}
+
+void TestAirGroupFileQueue::theGroupsShareThePaceByWhatTheyCost()
+{
+    // A group of two beside a group of fifty: each chunk to the large one costs 49 times as much.
+    GroupFileQueue queue;
+    queue.add(1, fileA, 1000 * payload);
+    queue.add(2, fileB, 1000 * payload);
+    queue.setMembers(1, 1);
+    queue.setMembers(2, 49);
+    qint64 cost[3] = {0, 0, 0};
+    int chunks[3] = {0, 0, 0};
+    GroupFileQueue::Packet packet;
+    for (int i = 0; i < 500 && queue.next(&packet); ++i) {
+        cost[packet.group] += queue.cost(packet);
+        chunks[packet.group] += packet.chunk >= 0 ? 1 : 0;
+        queue.sent(packet);
+    }
+    // Each took half of the pace, one chunk of the large group apart at most: the small group
+    // sent 49 chunks for each of the other's, where turns of a packet each gave both the same.
+    QVERIFY(chunks[2] >= 2);
+    QVERIFY2(qAbs(cost[1] - cost[2]) <= 49 * chunkPacket,
+             qPrintable(QStringLiteral("%1 %2").arg(cost[1]).arg(cost[2])));
+    QVERIFY2(chunks[1] >= 40 * chunks[2],
+             qPrintable(QStringLiteral("%1 %2").arg(chunks[1]).arg(chunks[2])));
+}
+
+void TestAirGroupFileQueue::aGroupThatComesStartsLevelWithTheOthers()
+{
+    GroupFileQueue queue;
+    queue.add(1, fileA, 100 * payload);
+    drain(queue, 21);
+    // A group that comes later does not take all the turns it missed: it goes level with the
+    // one that has cost the least, and they take turns from there.
+    queue.add(2, fileB, 100 * payload);
+    QCOMPARE(drain(queue, 5), (QStringList{"1:a:20", "2:b:begin", "2:b:0", "1:a:21", "2:b:1"}));
+}
+
+void TestAirGroupFileQueue::aPacketCostsItsBytesForEachMemberOfItsGroup()
+{
+    GroupFileQueue queue;
+    queue.add(1, fileA, payload + 10);
+    GroupFileQueue::Packet packet;
+    QVERIFY(queue.next(&packet));
+    // One member until the core says how many there are.
+    QCOMPARE(queue.cost(packet), static_cast<qint64>(NGC_FILE_BEGIN_SIZE));
+    queue.setMembers(1, 3);
+    QCOMPARE(queue.cost(packet), 3 * static_cast<qint64>(NGC_FILE_BEGIN_SIZE));
+    queue.sent(packet);
+    QVERIFY(queue.next(&packet));
+    QCOMPARE(queue.cost(packet), 3 * chunkPacket);
+    queue.sent(packet);
+    QVERIFY(queue.next(&packet));
+    QCOMPARE(queue.cost(packet), 3 * (static_cast<qint64>(NGC_FILE_CHUNK_HEADER_SIZE) + 10));
+    // A group that has no file to send is not kept.
+    queue.setMembers(2, 7);
+    QCOMPARE(queue.groups(), QList<int>{1});
 }
 
 void TestAirGroupFileQueue::onlyTheFileItsGroupSendsNowMayBeginAtOnce()

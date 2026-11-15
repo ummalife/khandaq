@@ -380,6 +380,7 @@ private:
     bool sendGroupFileBegin(OutgoingGroupFile& send, const QByteArray& fileId);
     bool sendGroupFileChunk(OutgoingGroupFile& send, const QByteArray& fileId, int chunk);
     void sendGroupFileChunks();
+    int groupFileMembers(int groupId) const;
     void failGroupFileSend(const QByteArray& fileId, const char* reason);
 
     static void onLosslessPacket(Tox* tox, uint32_t friendId,

@@ -3208,6 +3208,7 @@ bool Core::sendGroupFileFromPath(int groupId, const QString& fileName, const QSt
         return false;
     }
     groupFileQueue.add(groupId, msgId, fileSize);
+    groupFileQueue.setMembers(groupId, groupFileMembers(groupId));
     if (groupFileQueue.isFirst(msgId)) {
         // The group sends nothing else: the BEGIN goes at once, so a group that refuses it now is
         // said at once, as before. A file that waits for another one sends its BEGIN in its turn.
@@ -3324,6 +3325,9 @@ bool Core::sendGroupFileChunk(OutgoingGroupFile& send, const QByteArray& fileId,
 void Core::sendGroupFileChunks()
 {
     const qint64 nowMs = monotonicMs();
+    for (const int group : groupFileQueue.groups()) {
+        groupFileQueue.setMembers(group, groupFileMembers(group));
+    }
     Air::GroupFileQueue::Packet packet;
     while (groupFileQueue.next(&packet) && groupFilePace.ready(nowMs)) {
         const auto it = outgoingGroupFiles.find(packet.fileId);
@@ -3338,15 +3342,7 @@ void Core::sendGroupFileChunks()
             failGroupFileSend(packet.fileId, begin ? "BEGIN" : "chunk");
             continue;
         }
-        const qint64 bytes =
-            begin ? static_cast<qint64>(NGC_FILE_BEGIN_SIZE)
-                  : static_cast<qint64>(NGC_FILE_CHUNK_HEADER_SIZE)
-                        + Air::GroupFileQueue::chunkBytes(send.size, packet.chunk);
-        // toxcore sends the packet to every member but us, and our own peer counts as one.
-        Tox_Err_Group_Peer_Query peerError;
-        const uint32_t peers =
-            tox_group_peer_count(tox.get(), static_cast<uint32_t>(send.group), &peerError);
-        groupFilePace.spend(Air::UploadPace::cost(bytes, static_cast<int>(peers) - 1));
+        groupFilePace.spend(groupFileQueue.cost(packet));
 
         if (groupFileQueue.sent(packet)) {
             const OutgoingGroupFile done = send;
@@ -3358,6 +3354,21 @@ void Core::sendGroupFileChunks()
             emit groupFileSendProgress(packet.fileId, groupFileQueue.bytesSent(packet.fileId));
         }
     }
+}
+
+/**
+ * @brief How many members a packet into the group goes to: toxcore sends it to every peer it
+ * confirmed but us, and our own peer counts as one. One when toxcore cannot say: the packet
+ * itself finds out. Called with coreLoopLock held.
+ */
+int Core::groupFileMembers(int groupId) const
+{
+    Tox_Err_Group_Peer_Query error;
+    const uint32_t peers = tox_group_peer_count(tox.get(), static_cast<uint32_t>(groupId), &error);
+    if (error != TOX_ERR_GROUP_PEER_QUERY_OK || peers == 0) {
+        return 1;
+    }
+    return static_cast<int>(peers) - 1;
 }
 
 /**

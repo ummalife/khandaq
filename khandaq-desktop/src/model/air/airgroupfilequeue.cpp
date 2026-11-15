@@ -67,16 +67,32 @@ void GroupFileQueue::add(int group, const QByteArray& fileId, qint64 size)
     file.chunks = chunkCount(size);
     files.append(file);
     if (!turns.contains(group)) {
+        costs.insert(group, leastCost());
         turns.append(group);
     }
 }
 
+void GroupFileQueue::setMembers(int group, int members_)
+{
+    if (turns.contains(group)) {
+        members.insert(group, members_);
+    }
+}
+
+QList<int> GroupFileQueue::groups() const
+{
+    return turns;
+}
+
 bool GroupFileQueue::next(Packet* packet) const
 {
-    if (turns.isEmpty()) {
-        return false;
+    int chosen = -1;
+    for (const int group : turns) {
+        if (chosen < 0 || costs.value(group) < costs.value(chosen)) {
+            chosen = group;
+        }
     }
-    const int index = firstOf(turns.first());
+    const int index = chosen < 0 ? -1 : firstOf(chosen);
     if (index < 0) {
         return false;
     }
@@ -85,6 +101,17 @@ bool GroupFileQueue::next(Packet* packet) const
     packet->group = file.group;
     packet->chunk = file.next;
     return true;
+}
+
+qint64 GroupFileQueue::cost(const Packet& packet) const
+{
+    const int index = indexOf(packet.fileId);
+    const qint64 size = index >= 0 ? files.at(index).size : 0;
+    const qint64 bytes = packet.chunk < 0
+                             ? static_cast<qint64>(NGC_FILE_BEGIN_SIZE)
+                             : static_cast<qint64>(NGC_FILE_CHUNK_HEADER_SIZE)
+                                   + chunkBytes(size, packet.chunk);
+    return UploadPace::cost(bytes, members.value(packet.group, 1));
 }
 
 bool GroupFileQueue::sent(const Packet& packet)
@@ -97,15 +124,16 @@ bool GroupFileQueue::sent(const Packet& packet)
     if (file.fileId != packet.fileId || file.next != packet.chunk) {
         return false;
     }
+    costs[packet.group] += cost(packet);
     ++file.next;
     const bool done = file.next >= file.chunks;
     if (done) {
         files.removeAt(index);
     }
+    // Of two groups that cost the same, the other one goes first.
     turns.removeAll(packet.group);
-    if (firstOf(packet.group) >= 0) {
-        turns.append(packet.group);
-    }
+    turns.append(packet.group);
+    dropTurnIfDone(packet.group);
     return done;
 }
 
@@ -170,7 +198,19 @@ void GroupFileQueue::dropTurnIfDone(int group)
 {
     if (firstOf(group) < 0) {
         turns.removeAll(group);
+        costs.remove(group);
+        members.remove(group);
     }
+}
+
+qint64 GroupFileQueue::leastCost() const
+{
+    qint64 least = 0;
+    for (int i = 0; i < turns.size(); ++i) {
+        const qint64 spent = costs.value(turns.at(i));
+        least = i == 0 ? spent : qMin(least, spent);
+    }
+    return least;
 }
 
 qint64 UploadPace::cost(qint64 packetBytes, int members)

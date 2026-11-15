@@ -219,6 +219,7 @@ public:
     ~History();
 
     bool isValid();
+    void sync();
 
     bool historyExists(const ChatId& chatId);
 

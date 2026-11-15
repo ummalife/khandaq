@@ -3011,9 +3011,12 @@ void Widget::titleChangedByUser(const QString& title)
 void Widget::onGroupPeerAudioPlaying(int groupnumber, ToxPk peerPk)
 {
     const GroupId& groupId = groupList->id2Key(groupnumber);
-    assert(groupList->findGroup(groupId));
+    // Audio queued before the group went has nobody to show it (discardGroup).
+    const QSharedPointer<GroupChatForm> form = groupChatForms.value(groupId);
+    if (!form) {
+        return;
+    }
 
-    auto form = groupChatForms[groupId].data();
     form->peerAudioPlaying(peerPk);
 }
 
@@ -3098,7 +3101,11 @@ void Widget::discardGroup(Group* g, bool fake, bool historyRemoved)
     }
     groupChatForms.erase(groupChatFormIt);
     groupAlertConnections.remove(groupId);
-    // The chat log holds the dispatcher, and both the group.
+    // The chat log holds the dispatcher, and both the group. The callbacks of the texts it put in
+    // the history run on the database thread and use it: the ones still queued run first.
+    if (History* const history = profile.getHistory()) {
+        history->sync();
+    }
     groupChatLogs.remove(groupId);
     groupMessageDispatchers.remove(groupId);
 

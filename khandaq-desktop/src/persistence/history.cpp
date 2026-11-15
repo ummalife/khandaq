@@ -229,6 +229,21 @@ bool History::isValid()
 }
 
 /**
+ * @brief Waits until every query still queued has run, with the callback it carries.
+ *
+ * A chat log (ChatHistory) hands such callbacks to addNewMessage; they run on the database thread
+ * and use the chat log. Call this before a chat log goes while the history stays.
+ */
+void History::sync()
+{
+    if (!isValid()) {
+        return;
+    }
+
+    db->sync();
+}
+
+/**
  * @brief Checks if a chat has history
  * @param chatId
  * @return True if it does, false otherwise.

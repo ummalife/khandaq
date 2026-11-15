@@ -16,6 +16,7 @@
 #import "OCTFriend.h"
 #import "OCTMessageAbstract.h"
 #import "OCTMessageFile.h"
+#import "OCTMessageText.h"
 #import "OCTNgcGroupFileTransfer.h"
 
 @interface OCTSubmanagerChatsImpl (TextPartsTests)
@@ -30,7 +31,7 @@
 - (BOOL)prepareChatForGroupActivity:(OCTChat *)chat peerName:(NSString *)peerName error:(NSError **)error;
 - (BOOL)precheckCanSendInChat:(OCTChat *)chat error:(NSError **)error;
 - (void)scheduleHistSyncBroadcastForGroupNumber:(OCTToxGroupNumber)groupNumber;
-- (void)flushPendingGroupMessagesForChat:(OCTChat *)chat;
+- (BOOL)flushPendingGroupMessagesForChat:(OCTChat *)chat;
 
 @end
 
@@ -453,13 +454,121 @@
     return message;
 }
 
+- (OCTMessageAbstract *)queuedText:(NSString *)text
+{
+    // Not kept by any Realm either.
+    OCTMessageText *messageText = [OCTMessageText new];
+    messageText.text = text;
+    messageText.type = OCTToxMessageTypeNormal;
+    OCTMessageAbstract *message = [OCTMessageAbstract new];
+    message.messageText = messageText;
+    message.groupPendingSend = YES;
+    message.dateInterval = [[NSDate date] timeIntervalSince1970];
+    return message;
+}
+
+#pragma mark - A flush of the group queue
+
+- (void)testAFlushWithNothingQueuedLeavesTheToxQueueAlone
+{
+    NSDictionary *rig = [self rigWithQueue:@[]];
+
+    XCTAssertTrue([rig[@"submanager"] flushPendingGroupMessagesForChat:rig[@"chat"]]);
+    XCTAssertEqualObjects(rig[@"group"][@"passes"], @0, @"an empty queue waited for the tox queue");
+
+    [rig[@"partial"] stopMocking];
+}
+
+- (void)testAQueuedTextGoesOnTheToxQueue
+{
+    OCTMessageAbstract *held = [self queuedText:@"salam"];
+    NSDictionary *rig = [self rigWithQueue:@[held]];
+
+    XCTAssertTrue([rig[@"submanager"] flushPendingGroupMessagesForChat:rig[@"chat"]]);
+    XCTAssertEqualObjects(rig[@"sent"], @[@"salam"]);
+    XCTAssertEqualObjects(rig[@"group"][@"outside"], @0, @"toxcore was called outside the tox queue");
+    XCTAssertFalse(held.groupPendingSend);
+    XCTAssertTrue(held.messageText.isDelivered);
+
+    [rig[@"partial"] stopMocking];
+}
+
+- (void)testQueuedTextsWaitWhenTheLastPeerLeftAfterTheFlushLooked
+{
+    OCTMessageAbstract *first = [self queuedText:@"first"];
+    OCTMessageAbstract *second = [self queuedText:@"second"];
+    NSDictionary *rig = [self rigWithQueue:@[first, second]];
+    // The flush finds a peer; by the time the first text goes, it has timed out.
+    NSMutableDictionary *group = rig[@"group"];
+    group[@"peers"] = @1;
+    [group[@"peerScript"] addObject:@2];
+
+    XCTAssertFalse([rig[@"submanager"] flushPendingGroupMessagesForChat:rig[@"chat"]]);
+    XCTAssertEqualObjects(rig[@"sent"], @[], @"sent into a group nobody else was in any longer");
+    XCTAssertTrue(first.groupPendingSend);
+    XCTAssertTrue(second.groupPendingSend);
+
+    [rig[@"partial"] stopMocking];
+}
+
+- (void)testAQueuedTextToxcoreCannotSendNowHoldsWhatWasWrittenAfterIt
+{
+    OCTMessageAbstract *first = [self queuedText:@"first"];
+    OCTMessageAbstract *second = [self queuedText:@"second"];
+    NSDictionary *rig = [self rigWithQueue:@[first, second]];
+    rig[@"refusals"][@"first"] = @(OCTToxErrorGroupSendMessageDisconnected);
+
+    XCTAssertFalse([rig[@"submanager"] flushPendingGroupMessagesForChat:rig[@"chat"]]);
+    XCTAssertEqualObjects(rig[@"sent"], @[], @"the second text overtook the first");
+    XCTAssertTrue(first.groupPendingSend);
+    XCTAssertTrue(second.groupPendingSend);
+
+    [rig[@"partial"] stopMocking];
+}
+
+- (void)testAQueuedTextToxcoreRefusesForGoodHoldsNothingUp
+{
+    OCTMessageAbstract *refused = [self queuedText:@"too long"];
+    OCTMessageAbstract *after = [self queuedText:@"after"];
+    NSDictionary *rig = [self rigWithQueue:@[refused, after]];
+    rig[@"refusals"][@"too long"] = @(OCTToxErrorGroupSendMessageTooLong);
+
+    XCTAssertTrue([rig[@"submanager"] flushPendingGroupMessagesForChat:rig[@"chat"]]);
+    XCTAssertEqualObjects(rig[@"sent"], @[@"after"], @"a text toxcore will never take held up the next one");
+    XCTAssertTrue(refused.groupPendingSend, @"kept, as before");
+    XCTAssertFalse(after.groupPendingSend);
+
+    [rig[@"partial"] stopMocking];
+}
+
 /**
- * Group 3, with two peers (this client among them) until "group" says otherwise, whose queue holds what
- * of `messages` is still queued, as the query does. A file transfer that keeps the completion of each send
- * in "completions" instead of sending. Keeps every mock alive: the submanager holds its data source weakly.
+ * Group 3, with two peers (this client among them) until "group" says otherwise ("peerScript" answers the
+ * next peer counts first), whose queue holds what of "queue" is still queued, in its order, as the query
+ * does. toxcore takes every text, into "sent", unless "refusals" names the error code it refuses it with;
+ * "passes" counts the passes on the tox queue, "outside" the calls into toxcore made outside one. A text
+ * queued is added to "queue", and so is a text stored as sent at once. The file transfer keeps the
+ * completion of each send in "completions" instead of sending. Keeps every mock alive: the submanager
+ * holds its data source weakly.
  */
 - (NSDictionary *)rigWithQueue:(NSArray<OCTMessageAbstract *> *)messages
 {
+    NSMutableArray<OCTMessageAbstract *> *queue = [messages mutableCopy];
+    NSMutableDictionary *group = [@{
+        @"status": @1,
+        @"peers": @2,
+        @"peerScript": [NSMutableArray new],
+        @"passes": @0,
+        @"outside": @0,
+        @"onToxQueue": @NO,
+    } mutableCopy];
+    NSMutableArray<NSString *> *sent = [NSMutableArray new];
+    NSMutableDictionary<NSString *, NSNumber *> *refusals = [NSMutableDictionary new];
+    void (^noteCall)(void) = ^{
+        if (! [group[@"onToxQueue"] boolValue]) {
+            group[@"outside"] = @([group[@"outside"] integerValue] + 1);
+        }
+    };
+
     id dataSource = OCMProtocolMock(@protocol(OCTSubmanagerDataSource));
     id tox = OCMClassMock([OCTTox class]);
     id realmManager = OCMClassMock([OCTRealmManager class]);
@@ -470,18 +579,49 @@
     OCMStub([tox performSyncBlockOnToxQueue:[OCMArg any]]).andDo(^(NSInvocation *invocation) {
         void (^__unsafe_unretained block)(void) = nil;
         [invocation getArgument:&block atIndex:2];
+        // A pass inside a pass runs inline, as on the tox queue itself.
+        BOOL outer = ! [group[@"onToxQueue"] boolValue];
+        if (outer) {
+            group[@"passes"] = @([group[@"passes"] integerValue] + 1);
+            group[@"onToxQueue"] = @YES;
+        }
         block();
+        if (outer) {
+            group[@"onToxQueue"] = @NO;
+        }
     });
 
-    NSMutableDictionary *group = [@{@"status": @1, @"peers": @2} mutableCopy];
     [[[[tox stub] ignoringNonObjectArgs] andDo:^(NSInvocation *invocation) {
+        noteCall();
         int32_t status = [group[@"status"] intValue];
         [invocation setReturnValue:&status];
     }] groupConnectionStatusForGroupNumber:0 error:[OCMArg anyObjectRef]];
     [[[[tox stub] ignoringNonObjectArgs] andDo:^(NSInvocation *invocation) {
+        noteCall();
+        NSMutableArray<NSNumber *> *script = group[@"peerScript"];
         uint32_t peers = [group[@"peers"] unsignedIntValue];
+        if (script.count > 0) {
+            peers = script.firstObject.unsignedIntValue;
+            [script removeObjectAtIndex:0];
+        }
         [invocation setReturnValue:&peers];
     }] groupPeerCountForGroupNumber:0 error:[OCMArg anyObjectRef]];
+    [[[[tox stub] ignoringNonObjectArgs] andDo:^(NSInvocation *invocation) {
+        noteCall();
+        __unsafe_unretained NSString *text = nil;
+        NSError *__autoreleasing *errorPointer = NULL;
+        [invocation getArgument:&text atIndex:2];
+        [invocation getArgument:&errorPointer atIndex:6];
+        NSNumber *refusal = refusals[text];
+        BOOL result = (refusal == nil);
+        if (result) {
+            [sent addObject:[text copy]];
+        }
+        else if (errorPointer) {
+            *errorPointer = [NSError errorWithDomain:kOCTToxErrorDomain code:refusal.integerValue userInfo:nil];
+        }
+        [invocation setReturnValue:&result];
+    }] groupSendMessage:[OCMArg any] type:0 groupNumber:0 messageId:NULL error:[OCMArg anyObjectRef]];
 
     // Every answer is kept: the invocation does not hold what it returns.
     NSMutableArray<NSArray *> *answers = [NSMutableArray new];
@@ -489,7 +629,7 @@
         NSPredicate *queued = [NSPredicate predicateWithBlock:^BOOL(OCTMessageAbstract *message, NSDictionary *bindings) {
             return message.groupPendingSend;
         }];
-        NSArray *answer = [messages filteredArrayUsingPredicate:queued];
+        NSArray *answer = [queue filteredArrayUsingPredicate:queued];
         [answers addObject:answer];
         __unsafe_unretained NSArray *result = answer;
         [invocation setReturnValue:&result];
@@ -501,6 +641,30 @@
         [invocation getArgument:&block atIndex:3];
         block(object);
     });
+    [[[[realmManager stub] ignoringNonObjectArgs] andDo:^(NSInvocation *invocation) {
+        __unsafe_unretained OCTMessageAbstract *message = nil;
+        [invocation getArgument:&message atIndex:2];
+        message.groupPendingSend = NO;
+        message.messageText.isDelivered = YES;
+    }] markGroupPendingMessageSent:[OCMArg any] messageId:0];
+    [[[[realmManager stub] ignoringNonObjectArgs] andDo:^(NSInvocation *invocation) {
+        __unsafe_unretained NSString *text = nil;
+        [invocation getArgument:&text atIndex:2];
+        OCTMessageAbstract *message = [self queuedText:text];
+        [queue addObject:message];
+        __unsafe_unretained id result = message;
+        [invocation setReturnValue:&result];
+    }] addGroupPendingMessageWithText:[OCMArg any] type:0 chat:[OCMArg any]];
+    [[[[realmManager stub] ignoringNonObjectArgs] andDo:^(NSInvocation *invocation) {
+        __unsafe_unretained NSString *text = nil;
+        [invocation getArgument:&text atIndex:2];
+        OCTMessageAbstract *message = [self queuedText:text];
+        message.groupPendingSend = NO;
+        message.messageText.isDelivered = YES;
+        [queue addObject:message];
+        __unsafe_unretained id result = message;
+        [invocation setReturnValue:&result];
+    }] addGroupMessageWithText:[OCMArg any] type:0 chat:[OCMArg any] peerId:0 peerName:[OCMArg any] messageId:0];
 
     NSMutableArray *completions = [NSMutableArray new];
     [[[[transfer stub] ignoringNonObjectArgs] andDo:^(NSInvocation *invocation) {
@@ -513,6 +677,9 @@
     submanager.dataSource = dataSource;
     [submanager setValue:transfer forKey:@"fileTransfer"];
     id partial = OCMPartialMock(submanager);
+    OCMStub([partial defaultGroupPeerName]).andReturn(@"me");
+    OCMStub([partial prepareChatForGroupActivity:[OCMArg any] peerName:[OCMArg any] error:[OCMArg anyObjectRef]]).andReturn(YES);
+    OCMStub([partial precheckCanSendInChat:[OCMArg any] error:[OCMArg anyObjectRef]]).andReturn(YES);
     [[[partial stub] ignoringNonObjectArgs] scheduleHistSyncBroadcastForGroupNumber:0];
 
     OCTChat *chat = [OCTChat new];
@@ -524,6 +691,9 @@
         @"partial": partial,
         @"chat": chat,
         @"group": group,
+        @"queue": queue,
+        @"sent": sent,
+        @"refusals": refusals,
         @"completions": completions,
         @"mocks": @[dataSource, tox, realmManager, transfer, answers],
     };

@@ -5498,30 +5498,46 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     return ready;
 }
 
-- (void)flushPendingGroupMessagesForChat:(OCTChat *)chat
+/**
+ * Sends what waits for the group, in the order it was written, if somebody in the group can get it now.
+ * NO when something stays waiting for that (the group is not ready, or toxcore said it is not); YES
+ * otherwise, also when nothing waited.
+ */
+- (BOOL)flushPendingGroupMessagesForChat:(OCTChat *)chat
 {
-    if (! chat || chat.groupNumber < 0 || ! [self isGroupReadyToSendForChat:chat]) {
-        return;
+    if (! chat || chat.isInvalidated) {
+        return NO;
     }
 
-    OCTTox *tox = [self.dataSource managerGetTox];
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
     RLMResults *pendingMessages = [realmManager pendingGroupMessagesForChat:chat];
 
+    // KHANDAQ (review 0.2.56): the queue first; it is empty nearly always. Whether the group is ready is
+    // asked on the tox queue, and a bootstrap holds that queue for its DNS lookup: every flush waited on
+    // it, mostly on the main queue, for nothing to send.
     if (pendingMessages.count == 0) {
-        return;
+        return YES;
+    }
+
+    if (chat.groupNumber < 0 || ! [self isGroupReadyToSendForChat:chat]) {
+        return NO;
     }
 
     OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)chat.groupNumber;
 
     for (OCTMessageAbstract *pendingMessage in pendingMessages) {
         if (pendingMessage.messageText) {
-            [self flushPendingGroupTextMessage:pendingMessage chat:chat groupNumber:groupNumber tox:tox realmManager:realmManager];
+            if (! [self flushPendingGroupTextMessage:pendingMessage chat:chat groupNumber:groupNumber realmManager:realmManager]) {
+                // Nobody can get it now: it waits for the next flush, and so does what was written after it.
+                return NO;
+            }
         }
         else if (pendingMessage.messageFile) {
             [self flushPendingGroupFileMessage:pendingMessage chat:chat groupNumber:groupNumber];
         }
     }
+
+    return YES;
 }
 
 - (void)schedulePendingGroupMessagesFlushForChatUniqueIdentifier:(NSString *)chatUniqueIdentifier
@@ -5564,38 +5580,60 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     }
 }
 
-- (void)flushPendingGroupTextMessage:(OCTMessageAbstract *)pendingMessage
+/**
+ * Sends one queued text. NO when nobody in the group can get it now: it stays queued. YES when it went,
+ * and also when toxcore refused it for another reason (too long, no right to write): it stays queued
+ * then as well, but what was written after it does not wait for it.
+ */
+- (BOOL)flushPendingGroupTextMessage:(OCTMessageAbstract *)pendingMessage
                                 chat:(OCTChat *)chat
                          groupNumber:(OCTToxGroupNumber)groupNumber
-                                 tox:(OCTTox *)tox
                         realmManager:(OCTRealmManager *)realmManager
 {
     OCTMessageText *messageText = pendingMessage.messageText;
     NSString *text = messageText.text;
+    OCTToxMessageType type = messageText.type;
 
     if (text.length == 0) {
-        return;
+        return YES;
     }
 
-    uint32_t messageId = 0;
-    NSError *error = nil;
-    BOOL sent = [tox groupSendMessage:text
-                                 type:messageText.type
-                          groupNumber:groupNumber
-                            messageId:&messageId
-                                error:&error];
+    __block BOOL ready = NO;
+    __block BOOL sent = NO;
+    __block uint32_t messageId = 0;
+    __block NSError *error = nil;
+
+    // KHANDAQ (review 0.2.56): on the tox queue, as every other call into toxcore here, and in one pass
+    // with the check that somebody can get it: the last peer can time out between a check and a send.
+    [self performSyncOnToxQueue:^(OCTTox *tox) {
+        int32_t connectionStatus = [tox groupConnectionStatusForGroupNumber:groupNumber error:nil];
+        ready = OCTGroupIsReadyToSend(tox, groupNumber, connectionStatus);
+
+        if (ready) {
+            sent = [tox groupSendMessage:text
+                                    type:type
+                             groupNumber:groupNumber
+                               messageId:&messageId
+                                   error:&error];
+        }
+    }];
+
+    if (! ready) {
+        return NO;
+    }
 
     if (! sent) {
         if ([self shouldQueueGroupMessageForError:error]) {
-            return;
+            return NO;
         }
 
         OCTLogInfo(@"NGC pending group message send failed chat=%@ error=%@", chat.uniqueIdentifier, error);
-        return;
+        return YES;
     }
 
     [realmManager markGroupPendingMessageSent:pendingMessage messageId:messageId];
     [self scheduleHistSyncBroadcastForGroupNumber:groupNumber];
+    return YES;
 }
 
 - (void)flushPendingGroupFileMessage:(OCTMessageAbstract *)pendingMessage

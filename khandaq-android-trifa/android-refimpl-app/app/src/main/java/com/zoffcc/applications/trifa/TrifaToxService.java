@@ -2929,6 +2929,10 @@ public class TrifaToxService extends Service
                 }
                 orma.updateMessage().idEq(m.id).text(parts.get(0)).execute();
                 m.text = parts.get(0);
+                // KHANDAQ (0.2.56): the parts are a second apart (MessageSplitter.PART_GAP_MS), and may run ahead of
+                // the clock: a text written next goes after the last one (DirectTextStamps).
+                DirectTextStamps.OUTGOING.sentAt(m.tox_friendpubkey,
+                                                 MessageSplitter.partSentTimestamp(m.sent_timestamp, parts.size() - 1));
                 HelperMessage.update_single_message(m, true);
                 HelperGeneric.logI(TAG, "split_waiting_texts:id=" + m.id + " parts=" + parts.size());
                 split = true;

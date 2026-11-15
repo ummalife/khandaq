@@ -99,10 +99,76 @@ public class LongTextSourceTest
         assertEquals(1, resend.split("friend_call_push_url\\(", -1).length - 1);
     }
 
+    @Test
+    public void a_long_direct_text_and_the_text_after_it_keep_their_order_on_the_iphone() throws Exception
+    {
+        // The iPhone sorts a text by the whole seconds of its msgV3 stamp, which each send and resend takes from
+        // the row's sent time; parts a tenth of a second apart shared one (DirectTextStamps, PART_GAP_MS).
+        // The whole activity, not one method: the send loop may move (the media caption sends through it too),
+        // and a merge that took the clock back for either of the two texts that start here would show.
+        final String activity = bare(read("MessageListActivity.java"));
+        assertEquals(2, count(activity, bare("final long first_sent_timestamp = DirectTextStamps.OUTGOING"
+                                             + ".firstSentTimestamp(friend_pubkey, parts.size(), System.currentTimeMillis());")));
+        assertEquals(0, count(activity, bare("first_sent_timestamp = System.currentTimeMillis()")));
+        assertEquals(1, count(activity, bare("m.sent_timestamp = MessageSplitter.partSentTimestamp(first_sent_timestamp, i);")));
+        // The parts that wait before Tox runs (a caption's say whether its chat is on screen).
+        assertEquals(1, count(activity, bare("MessageSplitter.partSentTimestamp(first_sent_timestamp, i)) <= 0)"))
+                        + count(activity, bare("MessageSplitter.partSentTimestamp(first_sent_timestamp, i), showInList) <= 0)")));
+        // Every part goes stamped with its own row's time.
+        assertEquals(1, count(activity, "tox_friend_send_message_wrapper("));
+        assertEquals(1, count(activity, bare("(m.sent_timestamp / 1000), wakes);")));
+
+        // The parts of a waiting text split before it goes: the text after it goes after its last part.
+        final String split = bare(method(read("TrifaToxService.java"),
+                                         "static boolean split_waiting_texts_that_cannot_go_whole("));
+        assertTrue(split.contains(bare("MessageSplitter.partSentTimestamp(m.sent_timestamp, i)")));
+        assertTrue(split.contains(bare("DirectTextStamps.OUTGOING.sentAt(m.tox_friendpubkey,"
+                                       + " MessageSplitter.partSentTimestamp(m.sent_timestamp, parts.size() - 1));")));
+
+        // A text that waits or goes again carries the stamp of its row, as when it was new, never the clock.
+        final String service = read("TrifaToxService.java");
+        assertTrue(bare(method(service, "static void resend_unsent_text_messages()")).contains(
+                bare("tox_friend_send_message_wrapper( m_unsent.tox_friendpubkey, 0, m_unsent.text,"
+                     + " (m_unsent.sent_timestamp / 1000));")));
+        assertTrue(bare(method(service, "static void resend_v2_messages(boolean at_relay)")).contains(
+                bare("tox_friend_send_message_wrapper( m_resend_v2.tox_friendpubkey, 0, m_resend_v2.text,"
+                     + " (m_resend_v2.sent_timestamp / 1000));")));
+        final String resend = bare(method(read("HelperGeneric.java"),
+                                          "public static boolean tox_friend_resend_msgv3_wrapper(Message m)"));
+        assertTrue(resend.contains(bare("MessageChunker.sendChunked(friendnum, m.text, hex_to_bytes(m.msg_idv3_hash),"
+                                        + " (m.sent_timestamp / 1000))")));
+        assertTrue(resend.contains(bare("hash_bytes, (m.sent_timestamp / 1000));")));
+        assertTrue(bare(method(read("MessageDeliveryWatchdog.java"), "private static void watch_undelivered_direct_messages()"))
+                           .contains(bare("tox_friend_send_message_wrapper( m.tox_friendpubkey, 0, m.text,"
+                                          + " (m.sent_timestamp / 1000));")));
+        assertTrue(bare(method(read("MessageDeliveryRetryHelper.java"), "static void retryDirectMessage("))
+                           .contains(bare("tox_friend_send_message_wrapper( message.tox_friendpubkey, 0, message.text,"
+                                          + " (message.sent_timestamp / 1000));")));
+
+        // A wake finds its row as DirectTextStampsTest models it: the earliest of the person's sent rows in a
+        // window around the sent time.
+        assertTrue(bare(method(read("HelperMessage.java"), "static void update_message_in_db_sent_push_set(")).contains(
+                bare("sent_timestampBetween(sent_timestamp - PUSH_URL_TRIGGER_GET_MESSAGE_FOR_delta_ms_prev,"
+                     + " sent_timestamp + PUSH_URL_TRIGGER_GET_MESSAGE_FOR_delta_ms_after). directionEq(1)."
+                     + " orderBySent_timestampAsc(). limit(1)")));
+    }
+
     /** The source with each run of white space as one space, so a check does not hang on line breaks. */
     private static String flat(final String source)
     {
         return source.replaceAll("\\s+", " ");
+    }
+
+    /** The source without white space, so a check does not hang on how a call is wrapped. */
+    private static String bare(final String source)
+    {
+        return source.replaceAll("\\s+", "");
+    }
+
+    /** How many times part is in source. */
+    private static int count(final String source, final String part)
+    {
+        return source.split(java.util.regex.Pattern.quote(part), -1).length - 1;
     }
 
     /** The text of the method that starts with signature, up to its closing brace at class level. */

@@ -260,6 +260,23 @@ public class MessageSplitterTest
         assertEquals(1000L + 9 * MessageSplitter.PART_GAP_MS, MessageSplitter.partSentTimestamp(1000L, 9));
     }
 
+    /**
+     * KHANDAQ (0.2.56): a part goes stamped with the whole seconds of its sent time, and the iPhone sorts by them.
+     * Parts a tenth of a second apart shared a stamp, up to ten of them, and showed in any order there.
+     */
+    @Test
+    public void each_part_is_stamped_a_second_after_the_one_before()
+    {
+        for (long first = 1_731_600_000_000L; first < 1_731_600_002_000L; first += 7L)
+        {
+            for (int i = 1; i < 60; i++)
+            {
+                assertEquals("first=" + first + " part " + i, MessageSplitter.partSentTimestamp(first, i - 1) / 1000L + 1L,
+                             MessageSplitter.partSentTimestamp(first, i) / 1000L);
+            }
+        }
+    }
+
     @Test
     public void only_the_last_part_of_a_text_wakes_a_friend_who_is_offline()
     {

@@ -28,8 +28,11 @@ final class MessageSplitter
      * window that reaches PUSH_URL_TRIGGER_GET_MESSAGE_FOR_delta_ms_prev back and takes the earliest row
      * (update_message_in_db_sent_push_set). Parts a millisecond apart would all count their pushes on
      * the first part, and resend_push_for_v3_messages would wake the friend for the others every 5 s.
+     * KHANDAQ (0.2.56): a second, not a tenth of one. Each send and resend stamps a part for msgV3 with the
+     * whole seconds of its sent time, and the iPhone sorts by them: up to ten parts had one stamp and showed
+     * in any order there (DirectTextStamps).
      */
-    static final long PART_GAP_MS = TRIFAGlobals.PUSH_URL_TRIGGER_GET_MESSAGE_FOR_delta_ms_prev + 1L;
+    static final long PART_GAP_MS = 1000L;
 
     private MessageSplitter()
     {

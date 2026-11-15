@@ -2224,7 +2224,10 @@ public class MessageListActivity extends AppCompatActivity
             {
                 return;
             }
-            final long first_sent_timestamp = System.currentTimeMillis();
+            // KHANDAQ (0.2.56): the parts a second apart, after the text sent to the person before; they go with
+            // the whole seconds of these times, which the iPhone sorts by (DirectTextStamps).
+            final long first_sent_timestamp = DirectTextStamps.OUTGOING.firstSentTimestamp(friend_pubkey, parts.size(),
+                                                                                         System.currentTimeMillis());
             for (int i = 0; i < parts.size(); i++)
             {
                 final String queued = fullText.substring(parts.get(i)[0], parts.get(i)[1]);
@@ -2273,7 +2276,12 @@ public class MessageListActivity extends AppCompatActivity
         // stored as unsent and waits in the tray; the service loop sends it when the link is back.
         wakeup_tox_thread();
 
-        final long first_sent_timestamp = System.currentTimeMillis();
+        // KHANDAQ (0.2.56): each part a second after the one before, and the text after the last text sent to the
+        // person: a part goes stamped with the whole seconds of its sent time, now and when it goes again, and the
+        // iPhone sorts by them. Parts a tenth of a second apart shared a stamp and showed in any order there
+        // (DirectTextStamps).
+        final long first_sent_timestamp = DirectTextStamps.OUTGOING.firstSentTimestamp(friend_pubkey, parts.size(),
+                                                                                     System.currentTimeMillis());
         boolean refusal_said = false;
         for (int i = 0; i < parts.size(); i++)
         {

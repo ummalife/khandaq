@@ -133,6 +133,9 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 @property (nonatomic, strong, readonly) NSCountedSet<NSNumber *> *pendingGroupLeaveDrains;
 // KHANDAQ (QA live, F11): each schedule of the due check bumps it, so only the latest one runs. Main queue.
 @property (nonatomic, assign) NSUInteger pendingGroupLeaveCheckGeneration;
+// KHANDAQ (review 0.2.56): the transfer ids of the queued group files a flush is sending now, so that the
+// flushes that come meanwhile (peer joins, connection changes, maintenance) do not send them again. Main queue.
+@property (nonatomic, strong, readonly) NSMutableSet<NSString *> *groupFileSendsInFlight;
 #if TARGET_OS_IPHONE
 // KHANDAQ (QA live, F11): held while a leave is pending, so that the app is not suspended before it is done.
 @property (nonatomic, assign) UIBackgroundTaskIdentifier pendingGroupLeaveBackgroundTask;
@@ -187,6 +190,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     // that was never configured, as the leave notices do.
     _pendingGroupLeaves = [OCTGroupPendingLeaves new];
     _pendingGroupLeaveDrains = [NSCountedSet set];
+    _groupFileSendsInFlight = [NSMutableSet set];
 #if TARGET_OS_IPHONE
     _pendingGroupLeaveBackgroundTask = UIBackgroundTaskInvalid;
 #endif
@@ -1633,6 +1637,10 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     [[self.dataSource managerGetRealmManager] updateObject:message.messageFile withBlock:^(OCTMessageFile *file) {
         file.fileType = OCTMessageFileTypeCanceled;
         file.groupTransferProgress = 0.0f;
+    }];
+    // KHANDAQ (review 0.2.56): a queued file called off leaves the queue as well.
+    [[self.dataSource managerGetRealmManager] updateObject:message withBlock:^(OCTMessageAbstract *abstract) {
+        abstract.groupPendingSend = NO;
     }];
 
     return YES;
@@ -5594,6 +5602,18 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                          groupNumber:(OCTToxGroupNumber)groupNumber
 {
     OCTMessageFile *messageFile = pendingMessage.messageFile;
+
+    // KHANDAQ (review 0.2.56): a queued file that already went, or that the person called off, is not sent
+    // again: it only leaves the queue. (A cancel marks the file and leaves it queued; the transfer refuses
+    // a cancelled id only until the app quits, so after a restart the flush sent the whole file again.)
+    if (messageFile.fileType == OCTMessageFileTypeReady || messageFile.isDelivered ||
+        messageFile.fileType == OCTMessageFileTypeCanceled) {
+        [[self.dataSource managerGetRealmManager] updateObject:pendingMessage withBlock:^(OCTMessageAbstract *abstract) {
+            abstract.groupPendingSend = NO;
+        }];
+        return;
+    }
+
     NSString *filePath = [messageFile filePath];
     NSString *msgIdHex = messageFile.groupMsgIdHashHex;
 
@@ -5601,6 +5621,14 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         return;
     }
 
+    // KHANDAQ (review 0.2.56): one send of a queued file at a time. A flush comes on every peer join,
+    // connection change and maintenance tick, and each one sent the whole file again while the send a
+    // flush before had started was still under way.
+    if ([self.groupFileSendsInFlight containsObject:msgIdHex]) {
+        return;
+    }
+
+    [self.groupFileSendsInFlight addObject:msgIdHex];
     [self setupFileTransferIfNeeded];
 
     __weak typeof(self) weakSelf = self;
@@ -5627,6 +5655,13 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                    return;
                                }
 
+                               [self.groupFileSendsInFlight removeObject:msgIdHex];
+
+                               if (chat.isInvalidated || pendingMessage.isInvalidated || messageFile.isInvalidated) {
+                                   // The chat, and its messages, were removed while the file was sent.
+                                   return;
+                               }
+
                                OCTRealmManager *realm = [self.dataSource managerGetRealmManager];
 
                                if (success) {
@@ -5642,8 +5677,24 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                    return;
                                }
 
-                               if (chat.isInvalidated || pendingMessage.isInvalidated) {
-                                   // The chat, and its messages, were removed while the file was sent.
+                               // A file that went meanwhile is never taken back.
+                               if (messageFile.fileType == OCTMessageFileTypeReady || messageFile.isDelivered) {
+                                   [realm updateObject:pendingMessage withBlock:^(OCTMessageAbstract *abstract) {
+                                       abstract.groupPendingSend = NO;
+                                   }];
+                                   return;
+                               }
+
+                               // One the person called off stays called off and leaves the queue.
+                               if (messageFile.fileType == OCTMessageFileTypeCanceled ||
+                                   ([sendError.domain isEqualToString:kOCTNgcGroupFileTransferErrorDomain] &&
+                                    sendError.code == OCTNgcGroupFileTransferErrorCancelled)) {
+                                   [realm updateObject:messageFile withBlock:^(OCTMessageFile *file) {
+                                       file.fileType = OCTMessageFileTypeCanceled;
+                                   }];
+                                   [realm updateObject:pendingMessage withBlock:^(OCTMessageAbstract *abstract) {
+                                       abstract.groupPendingSend = NO;
+                                   }];
                                    return;
                                }
 

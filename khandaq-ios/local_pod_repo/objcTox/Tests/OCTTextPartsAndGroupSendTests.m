@@ -15,6 +15,8 @@
 #import "OCTChat.h"
 #import "OCTFriend.h"
 #import "OCTMessageAbstract.h"
+#import "OCTMessageFile.h"
+#import "OCTNgcGroupFileTransfer.h"
 
 @interface OCTSubmanagerChatsImpl (TextPartsTests)
 
@@ -28,6 +30,7 @@
 - (BOOL)prepareChatForGroupActivity:(OCTChat *)chat peerName:(NSString *)peerName error:(NSError **)error;
 - (BOOL)precheckCanSendInChat:(OCTChat *)chat error:(NSError **)error;
 - (void)scheduleHistSyncBroadcastForGroupNumber:(OCTToxGroupNumber)groupNumber;
+- (void)flushPendingGroupMessagesForChat:(OCTChat *)chat;
 
 @end
 
@@ -317,6 +320,212 @@
         @"pending": @(pending),
         @"stored": @(stored),
         @"reconnects": @(reconnects),
+    };
+}
+
+#pragma mark - A queued group file
+
+- (void)testAQueuedFileGoesOnceWhileItIsBeingSent
+{
+    OCTMessageAbstract *held = [self queuedFileWithTransferId:@"a1"];
+    NSDictionary *rig = [self rigWithQueue:@[held]];
+    OCTSubmanagerGroupsImpl *submanager = rig[@"submanager"];
+    NSMutableArray *completions = rig[@"completions"];
+
+    // A peer joins, the connection changes, the maintenance ticks: three flushes while the file goes.
+    [submanager flushPendingGroupMessagesForChat:rig[@"chat"]];
+    [submanager flushPendingGroupMessagesForChat:rig[@"chat"]];
+    [submanager flushPendingGroupMessagesForChat:rig[@"chat"]];
+    XCTAssertEqual(completions.count, 1u, @"a flush sent the whole file again while it was being sent");
+
+    void (^completion)(BOOL, NSError *) = completions.firstObject;
+    completion(YES, nil);
+    XCTAssertEqual(held.messageFile.fileType, OCTMessageFileTypeReady);
+    XCTAssertTrue(held.messageFile.isDelivered);
+    XCTAssertFalse(held.groupPendingSend);
+
+    [submanager flushPendingGroupMessagesForChat:rig[@"chat"]];
+    XCTAssertEqual(completions.count, 1u, @"a file that went was sent again");
+
+    [rig[@"partial"] stopMocking];
+}
+
+- (void)testAQueuedFileWhoseSendFailedWhileNobodyCouldGetItGoesAgain
+{
+    OCTMessageAbstract *held = [self queuedFileWithTransferId:@"a2"];
+    NSDictionary *rig = [self rigWithQueue:@[held]];
+    OCTSubmanagerGroupsImpl *submanager = rig[@"submanager"];
+    NSMutableArray *completions = rig[@"completions"];
+    NSMutableDictionary *group = rig[@"group"];
+
+    [submanager flushPendingGroupMessagesForChat:rig[@"chat"]];
+    XCTAssertEqual(completions.count, 1u);
+
+    // The peers time out while it goes, and the send fails.
+    group[@"peers"] = @1;
+    void (^completion)(BOOL, NSError *) = completions.firstObject;
+    completion(NO, [NSError errorWithDomain:kOCTNgcGroupFileTransferErrorDomain
+                                       code:OCTNgcGroupFileTransferErrorSendFailed
+                                   userInfo:nil]);
+    XCTAssertTrue(held.groupPendingSend, @"the file left the queue while nobody could get it");
+    XCTAssertEqual(held.messageFile.fileType, OCTMessageFileTypeLoading);
+
+    // Somebody is back: the next flush sends it again.
+    group[@"peers"] = @2;
+    [submanager flushPendingGroupMessagesForChat:rig[@"chat"]];
+    XCTAssertEqual(completions.count, 2u, @"the file stayed marked as being sent");
+
+    [rig[@"partial"] stopMocking];
+}
+
+- (void)testAFileThatWentIsNotTakenBackByASendThatFailed
+{
+    OCTMessageAbstract *held = [self queuedFileWithTransferId:@"a3"];
+    NSDictionary *rig = [self rigWithQueue:@[held]];
+    NSMutableArray *completions = rig[@"completions"];
+
+    [rig[@"submanager"] flushPendingGroupMessagesForChat:rig[@"chat"]];
+    XCTAssertEqual(completions.count, 1u);
+
+    held.messageFile.fileType = OCTMessageFileTypeReady;
+    held.messageFile.isDelivered = YES;
+    void (^completion)(BOOL, NSError *) = completions.firstObject;
+    completion(NO, [NSError errorWithDomain:kOCTNgcGroupFileTransferErrorDomain
+                                       code:OCTNgcGroupFileTransferErrorSendFailed
+                                   userInfo:nil]);
+    XCTAssertEqual(held.messageFile.fileType, OCTMessageFileTypeReady, @"a file that went was marked failed");
+    XCTAssertTrue(held.messageFile.isDelivered);
+    XCTAssertFalse(held.groupPendingSend);
+
+    [rig[@"partial"] stopMocking];
+}
+
+- (void)testAQueuedFileThatWentOrWasCalledOffLeavesTheQueueUnsent
+{
+    OCTMessageAbstract *went = [self queuedFileWithTransferId:@"a4"];
+    went.messageFile.fileType = OCTMessageFileTypeReady;
+    went.messageFile.isDelivered = YES;
+    OCTMessageAbstract *calledOff = [self queuedFileWithTransferId:@"a5"];
+    calledOff.messageFile.fileType = OCTMessageFileTypeCanceled;
+    NSDictionary *rig = [self rigWithQueue:@[went, calledOff]];
+
+    [rig[@"submanager"] flushPendingGroupMessagesForChat:rig[@"chat"]];
+    XCTAssertEqual([rig[@"completions"] count], 0u, @"sent again");
+    XCTAssertFalse(went.groupPendingSend);
+    XCTAssertFalse(calledOff.groupPendingSend);
+    XCTAssertEqual(went.messageFile.fileType, OCTMessageFileTypeReady);
+    XCTAssertEqual(calledOff.messageFile.fileType, OCTMessageFileTypeCanceled);
+
+    [rig[@"partial"] stopMocking];
+}
+
+- (void)testAQueuedFileCalledOffLeavesTheQueue
+{
+    OCTMessageAbstract *held = [self queuedFileWithTransferId:@"a6"];
+    NSDictionary *rig = [self rigWithQueue:@[held]];
+    // Nobody can get it, so it waits.
+    NSMutableDictionary *group = rig[@"group"];
+    group[@"peers"] = @1;
+
+    NSError *error = nil;
+    XCTAssertTrue([rig[@"submanager"] cancelGroupFileTransferForMessage:held error:&error], @"%@", error);
+    XCTAssertEqual(held.messageFile.fileType, OCTMessageFileTypeCanceled);
+    XCTAssertFalse(held.groupPendingSend, @"a file called off still waited to be sent");
+
+    group[@"peers"] = @2;
+    [rig[@"submanager"] flushPendingGroupMessagesForChat:rig[@"chat"]];
+    XCTAssertEqual([rig[@"completions"] count], 0u, @"a file called off was sent");
+
+    [rig[@"partial"] stopMocking];
+}
+
+- (OCTMessageAbstract *)queuedFileWithTransferId:(NSString *)transferId
+{
+    // Objects no Realm keeps, as in the test of the parts of a long text.
+    OCTMessageFile *file = [OCTMessageFile new];
+    file.fileType = OCTMessageFileTypeLoading;
+    file.internalFilePath = @"Documents/Uploads/queued.jpg";
+    file.groupMsgIdHashHex = transferId;
+    OCTMessageAbstract *message = [OCTMessageAbstract new];
+    message.messageFile = file;
+    message.groupPendingSend = YES;
+    message.dateInterval = [[NSDate date] timeIntervalSince1970];
+    return message;
+}
+
+/**
+ * Group 3, with two peers (this client among them) until "group" says otherwise, whose queue holds what
+ * of `messages` is still queued, as the query does. A file transfer that keeps the completion of each send
+ * in "completions" instead of sending. Keeps every mock alive: the submanager holds its data source weakly.
+ */
+- (NSDictionary *)rigWithQueue:(NSArray<OCTMessageAbstract *> *)messages
+{
+    id dataSource = OCMProtocolMock(@protocol(OCTSubmanagerDataSource));
+    id tox = OCMClassMock([OCTTox class]);
+    id realmManager = OCMClassMock([OCTRealmManager class]);
+    id transfer = OCMClassMock([OCTNgcGroupFileTransfer class]);
+    OCMStub([dataSource managerGetTox]).andReturn(tox);
+    OCMStub([dataSource managerGetRealmManager]).andReturn(realmManager);
+    OCMStub([dataSource managerIsToxConnected]).andReturn(YES);
+    OCMStub([tox performSyncBlockOnToxQueue:[OCMArg any]]).andDo(^(NSInvocation *invocation) {
+        void (^__unsafe_unretained block)(void) = nil;
+        [invocation getArgument:&block atIndex:2];
+        block();
+    });
+
+    NSMutableDictionary *group = [@{@"status": @1, @"peers": @2} mutableCopy];
+    [[[[tox stub] ignoringNonObjectArgs] andDo:^(NSInvocation *invocation) {
+        int32_t status = [group[@"status"] intValue];
+        [invocation setReturnValue:&status];
+    }] groupConnectionStatusForGroupNumber:0 error:[OCMArg anyObjectRef]];
+    [[[[tox stub] ignoringNonObjectArgs] andDo:^(NSInvocation *invocation) {
+        uint32_t peers = [group[@"peers"] unsignedIntValue];
+        [invocation setReturnValue:&peers];
+    }] groupPeerCountForGroupNumber:0 error:[OCMArg anyObjectRef]];
+
+    // Every answer is kept: the invocation does not hold what it returns.
+    NSMutableArray<NSArray *> *answers = [NSMutableArray new];
+    OCMStub([realmManager pendingGroupMessagesForChat:[OCMArg any]]).andDo(^(NSInvocation *invocation) {
+        NSPredicate *queued = [NSPredicate predicateWithBlock:^BOOL(OCTMessageAbstract *message, NSDictionary *bindings) {
+            return message.groupPendingSend;
+        }];
+        NSArray *answer = [messages filteredArrayUsingPredicate:queued];
+        [answers addObject:answer];
+        __unsafe_unretained NSArray *result = answer;
+        [invocation setReturnValue:&result];
+    });
+    OCMStub([realmManager updateObject:[OCMArg any] withBlock:[OCMArg any]]).andDo(^(NSInvocation *invocation) {
+        __unsafe_unretained id object = nil;
+        void (^__unsafe_unretained block)(id) = nil;
+        [invocation getArgument:&object atIndex:2];
+        [invocation getArgument:&block atIndex:3];
+        block(object);
+    });
+
+    NSMutableArray *completions = [NSMutableArray new];
+    [[[[transfer stub] ignoringNonObjectArgs] andDo:^(NSInvocation *invocation) {
+        void (^__unsafe_unretained completion)(BOOL, NSError *) = nil;
+        [invocation getArgument:&completion atIndex:6];
+        [completions addObject:[completion copy]];
+    }] sendFileAtPath:[OCMArg any] groupNumber:0 msgIdHex:[OCMArg any] progress:[OCMArg any] completion:[OCMArg any]];
+
+    OCTSubmanagerGroupsImpl *submanager = [OCTSubmanagerGroupsImpl new];
+    submanager.dataSource = dataSource;
+    [submanager setValue:transfer forKey:@"fileTransfer"];
+    id partial = OCMPartialMock(submanager);
+    [[[partial stub] ignoringNonObjectArgs] scheduleHistSyncBroadcastForGroupNumber:0];
+
+    OCTChat *chat = [OCTChat new];
+    chat.isGroup = YES;
+    chat.groupNumber = 3;
+
+    return @{
+        @"submanager": submanager,
+        @"partial": partial,
+        @"chat": chat,
+        @"group": group,
+        @"completions": completions,
+        @"mocks": @[dataSource, tox, realmManager, transfer, answers],
     };
 }
 

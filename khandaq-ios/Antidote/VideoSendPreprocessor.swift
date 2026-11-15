@@ -57,12 +57,26 @@ final class VideoSendPreprocessor {
     /// handing a file over to be sent. The preparation stays the one in progress until then.
     private var isCancelled = false
     private var activeExportSession: AVAssetExportSession?
+    /// KHANDAQ (review 0.2.56): the number of the preparation under way (processingQueue only), and the
+    /// last number given out (under `preparationNumbers`). A chat cancels only its own preparation: one
+    /// that cancelled whatever was under way stopped the video of another chat.
+    private var activePreparation = 0
+    private let preparationNumbers = NSLock()
+    private var lastPreparation = 0
 
     private init() {}
 
+    /// Prepares the video and returns the number of this preparation for `cancelPreparation`. One video
+    /// is prepared at a time: another one asked for meanwhile ends as `busy`.
+    @discardableResult
     func prepareVideo(at sourceURL: URL,
                       progress: @escaping (Float) -> Void,
-                      completion: @escaping (Result<URL, Error>) -> Void) {
+                      completion: @escaping (Result<URL, Error>) -> Void) -> Int {
+        preparationNumbers.lock()
+        lastPreparation += 1
+        let number = lastPreparation
+        preparationNumbers.unlock()
+
         processingQueue.async { [weak self] in
             guard let self = self else {
                 DispatchQueue.main.async {
@@ -80,6 +94,7 @@ final class VideoSendPreprocessor {
 
             self.isProcessing = true
             self.isCancelled = false
+            self.activePreparation = number
             autoreleasepool {
                 self.prepareVideoOnBackground(at: sourceURL, progress: progress) { result in
                     // An export ends on a queue of AVFoundation's; the state is kept on ours.
@@ -87,6 +102,7 @@ final class VideoSendPreprocessor {
                         let cancelled = self.isCancelled
                         self.isProcessing = false
                         self.isCancelled = false
+                        self.activePreparation = 0
                         self.activeExportSession = nil
                         if cancelled, case .success(let preparedURL) = result {
                             try? FileManager.default.removeItem(at: preparedURL)
@@ -98,12 +114,14 @@ final class VideoSendPreprocessor {
                 }
             }
         }
+        return number
     }
 
-    /// Stops the preparation under way: its completion then reports `VideoSendError.cancelled`.
-    func cancelActivePreparation() {
+    /// Stops the preparation with this number while it is under way: its completion then reports
+    /// `VideoSendError.cancelled`. Another preparation, or one that has ended, is left alone.
+    func cancelPreparation(_ number: Int) {
         processingQueue.async { [weak self] in
-            guard let self = self, self.isProcessing else {
+            guard let self = self, self.isProcessing, self.activePreparation == number else {
                 return
             }
             self.isCancelled = true

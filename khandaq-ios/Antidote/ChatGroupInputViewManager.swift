@@ -19,7 +19,12 @@ class ChatGroupInputViewManager: NSObject {
     fileprivate weak var submanagerGroups: OCTSubmanagerGroups!
     fileprivate weak var submanagerObjects: OCTSubmanagerObjects!
     fileprivate weak var presentingViewController: UIViewController!
-    fileprivate var isVideoSendInProgress = false
+    /// KHANDAQ (review 0.2.56): the video this group prepares, by its banner and its preparation. The
+    /// preprocessor and the banner serve every chat: this one stops and takes down only its own.
+    fileprivate var videoSend: (banner: Int, preparation: Int)?
+    fileprivate var isVideoSendInProgress: Bool {
+        return videoSend != nil
+    }
     fileprivate let voiceRecorder = GroupVoiceMessageRecorder()
     fileprivate var voiceHold = VoiceHoldGate()
 
@@ -419,39 +424,44 @@ private extension ChatGroupInputViewManager {
         }
     }
 
-    func enqueueVideoSend(from sourceURL: URL, caption: String = "", completion: (() -> Void)? = nil) {
+    /// `completion` runs on the main queue once the video went, failed or was cancelled (true).
+    func enqueueVideoSend(from sourceURL: URL, caption: String = "", completion: ((_ cancelled: Bool) -> Void)? = nil) {
         guard !isVideoSendInProgress else {
             showVideoSendError(VideoSendError.busy, retryURL: sourceURL)
-            completion?()
+            completion?(false)
             return
         }
 
-        isVideoSendInProgress = true
-        let banner = VideoSendProgressOverlay.shared.show(on: presentingViewController,
-                                                          message: String(localized: "video_send_preparing"),
-                                                          onCancel: { [weak self] in
-            VideoSendPreprocessor.shared.cancelActivePreparation()
-            VideoSendProgressOverlay.shared.hide()
-            self?.isVideoSendInProgress = false
+        // Read only after show() returned, by Cancel, the progress and the end of the job: by then it
+        // holds the banner's number.
+        var banner = 0
+        banner = VideoSendProgressOverlay.shared.show(on: presentingViewController,
+                                                      message: String(localized: "video_send_preparing"),
+                                                      onCancel: { [weak self] in
+            self?.cancelVideoSend(banner: banner)
         })
 
-        VideoSendPreprocessor.shared.prepareVideo(at: sourceURL, progress: { progress in
+        let preparation = VideoSendPreprocessor.shared.prepareVideo(at: sourceURL, progress: { progress in
             VideoSendProgressOverlay.shared.update(progress: progress, banner: banner)
         }, completion: { [weak self] result in
             DispatchQueue.main.async {
-                // KHANDAQ (large media): Cancel took the banner down and let another video start; the
-                // preparation it stopped has nothing to send, and a cancelled video ends its sequence.
+                VideoSendProgressOverlay.shared.hide(banner: banner)
+                // Over, unless Cancel let another video of this group start already.
+                if self?.videoSend?.banner == banner {
+                    self?.videoSend = nil
+                }
+
+                // KHANDAQ (large media): a cancelled preparation has nothing to send, and a cancelled
+                // video ends its sequence.
                 if case .failure(let error) = result, VideoSendError.isCancellation(error) {
+                    completion?(true)
                     return
                 }
-                VideoSendProgressOverlay.shared.hide(banner: banner)
 
                 guard let self = self else {
-                    completion?()
+                    completion?(false)
                     return
                 }
-
-                self.isVideoSendInProgress = false
 
                 switch result {
                 case .success(let preparedURL):
@@ -460,9 +470,21 @@ private extension ChatGroupInputViewManager {
                     self.showVideoSendError(error, retryURL: sourceURL)
                 }
 
-                completion?()
+                completion?(false)
             }
         })
+        videoSend = (banner: banner, preparation: preparation)
+    }
+
+    /// Stops the video this group prepares and takes its banner down, so that another one can start at
+    /// once; with `banner`, only while that banner's video is the one in progress.
+    func cancelVideoSend(banner: Int? = nil) {
+        guard let videoSend = videoSend, banner == nil || banner == videoSend.banner else {
+            return
+        }
+        self.videoSend = nil
+        VideoSendPreprocessor.shared.cancelPreparation(videoSend.preparation)
+        VideoSendProgressOverlay.shared.hide(banner: videoSend.banner)
     }
 
     func sendPreparedVideo(at url: URL, caption: String = "") {

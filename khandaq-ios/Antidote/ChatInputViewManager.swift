@@ -35,7 +35,12 @@ class ChatInputViewManager: NSObject {
     fileprivate weak var presentingViewController: UIViewController!
 
     fileprivate var inactivityTimer: Timer?
-    fileprivate var isVideoSendInProgress = false
+    /// KHANDAQ (review 0.2.56): the video this chat prepares, by its banner and its preparation. The
+    /// preprocessor and the banner serve every chat: this one stops and takes down only its own.
+    fileprivate var videoSend: (banner: Int, preparation: Int)?
+    fileprivate var isVideoSendInProgress: Bool {
+        return videoSend != nil
+    }
     fileprivate let voiceRecorder = GroupVoiceMessageRecorder()
     fileprivate var voiceHold = VoiceHoldGate()
 
@@ -77,8 +82,9 @@ class ChatInputViewManager: NSObject {
     }
 
     deinit {
-        VideoSendPreprocessor.shared.cancelActivePreparation()
-        VideoSendProgressOverlay.shared.hide()
+        // KHANDAQ (review 0.2.56): only the video of this chat. A screen that went away stopped whatever
+        // video was being prepared and took whatever banner was up down, those of another chat too.
+        cancelVideoSend()
         endUserInteraction()
     }
 }
@@ -178,13 +184,14 @@ extension ChatInputViewManager: ChatInputViewDelegate {
                     return
                 }
                 pushScheduled = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                // The signal goes also once this screen is gone, and does not keep the screen until then.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak submanagerChats = self.submanagerChats, chat = self.chat] in
                     // The contact (and with it the chat) may have been removed in the meantime.
-                    guard !self.chat.isInvalidated else {
+                    guard let submanagerChats = submanagerChats, let chat = chat, !chat.isInvalidated else {
                         return
                     }
                     os_log("PUSH:10_seconds")
-                    self.submanagerChats.sendMessagePush(to: self.chat)
+                    submanagerChats.sendMessagePush(to: chat)
                 }
             }
         }, failureBlock: { error, index in
@@ -216,13 +223,14 @@ extension ChatInputViewManager: ChatInputViewDelegate {
             DispatchQueue.main.async {
                 completion(true)
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+            // The signal goes also once this screen is gone, and does not keep the screen until then.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak submanagerChats = self.submanagerChats, chat = self.chat] in
                 // The contact (and with it the chat) may have been removed in the meantime.
-                guard !self.chat.isInvalidated else {
+                guard let submanagerChats = submanagerChats, let chat = chat, !chat.isInvalidated else {
                     return
                 }
                 os_log("PUSH:10_seconds")
-                self.submanagerChats.sendMessagePush(to: self.chat)
+                submanagerChats.sendMessagePush(to: chat)
             }
         }, failureBlock: { _ in
             DispatchQueue.main.async {
@@ -522,39 +530,44 @@ fileprivate extension ChatInputViewManager {
         showMediaPickFailed()
     }
 
-    func enqueueVideoSend(from sourceURL: URL, caption: String = "", completion: (() -> Void)? = nil) {
+    /// `completion` runs on the main queue once the video went, failed or was cancelled (true).
+    func enqueueVideoSend(from sourceURL: URL, caption: String = "", completion: ((_ cancelled: Bool) -> Void)? = nil) {
         guard !isVideoSendInProgress else {
             showVideoSendError(VideoSendError.busy, retryURL: sourceURL)
-            completion?()
+            completion?(false)
             return
         }
 
-        isVideoSendInProgress = true
-        let banner = VideoSendProgressOverlay.shared.show(on: presentingViewController,
-                                                          message: String(localized: "video_send_preparing"),
-                                                          onCancel: { [weak self] in
-            VideoSendPreprocessor.shared.cancelActivePreparation()
-            VideoSendProgressOverlay.shared.hide()
-            self?.isVideoSendInProgress = false
+        // Read only after show() returned, by Cancel, the progress and the end of the job: by then it
+        // holds the banner's number.
+        var banner = 0
+        banner = VideoSendProgressOverlay.shared.show(on: presentingViewController,
+                                                      message: String(localized: "video_send_preparing"),
+                                                      onCancel: { [weak self] in
+            self?.cancelVideoSend(banner: banner)
         })
 
-        VideoSendPreprocessor.shared.prepareVideo(at: sourceURL, progress: { progress in
+        let preparation = VideoSendPreprocessor.shared.prepareVideo(at: sourceURL, progress: { progress in
             VideoSendProgressOverlay.shared.update(progress: progress, banner: banner)
         }, completion: { [weak self] result in
             DispatchQueue.main.async {
-                // KHANDAQ (large media): Cancel took the banner down and let another video start; the
-                // preparation it stopped has nothing to send, and a cancelled video ends its sequence.
+                VideoSendProgressOverlay.shared.hide(banner: banner)
+                // Over, unless Cancel let another video of this chat start already.
+                if self?.videoSend?.banner == banner {
+                    self?.videoSend = nil
+                }
+
+                // KHANDAQ (large media): a cancelled preparation has nothing to send, and a cancelled
+                // video ends its sequence.
                 if case .failure(let error) = result, VideoSendError.isCancellation(error) {
+                    completion?(true)
                     return
                 }
-                VideoSendProgressOverlay.shared.hide(banner: banner)
 
                 guard let self = self else {
-                    completion?()
+                    completion?(false)
                     return
                 }
-
-                self.isVideoSendInProgress = false
 
                 switch result {
                 case .success(let preparedURL):
@@ -563,9 +576,21 @@ fileprivate extension ChatInputViewManager {
                     self.showVideoSendError(error, retryURL: sourceURL)
                 }
 
-                completion?()
+                completion?(false)
             }
         })
+        videoSend = (banner: banner, preparation: preparation)
+    }
+
+    /// Stops the video this chat prepares and takes its banner down, so that another one can start at
+    /// once; with `banner`, only while that banner's video is the one in progress.
+    func cancelVideoSend(banner: Int? = nil) {
+        guard let videoSend = videoSend, banner == nil || banner == videoSend.banner else {
+            return
+        }
+        self.videoSend = nil
+        VideoSendPreprocessor.shared.cancelPreparation(videoSend.preparation)
+        VideoSendProgressOverlay.shared.hide(banner: videoSend.banner)
     }
 
     func enqueueVideoSendSequence(_ videos: [(url: URL, fileName: String?)], caption: String = "") {
@@ -598,18 +623,23 @@ fileprivate extension ChatInputViewManager {
         }
 
         var remaining = videos
-        func sendNext() {
+        // KHANDAQ (review 0.2.56): the sequence does not keep the screen. It did, so a screen that went
+        // away stopped none of its videos, and the next one was put up on a screen no longer there.
+        func sendNext(with manager: ChatInputViewManager) {
             guard !remaining.isEmpty else {
                 return
             }
             let video = remaining.removeFirst()
             // The last video carries the caption so it lands right after that video's file message.
             let itemCaption = remaining.isEmpty ? caption : ""
-            enqueueVideoSend(from: video.url, caption: itemCaption) {
-                sendNext()
+            manager.enqueueVideoSend(from: video.url, caption: itemCaption) { [weak manager] cancelled in
+                guard !cancelled, let manager = manager else {
+                    return
+                }
+                sendNext(with: manager)
             }
         }
-        sendNext()
+        sendNext(with: self)
     }
 
     func sendPreparedVideo(at url: URL, caption: String = "") {

@@ -4,9 +4,10 @@
  * KHANDAQ (#209): Telegram-style swipe-to-reply for the message RecyclerViews.
  * A single ItemTouchHelper callback attached at the list level covers every row type
  * (text/file/photo/video/voice, incoming + outgoing) without per-holder wiring. The swipe
- * never "commits" (getSwipeThreshold is huge) — instead we rubber-band-translate the row,
- * latch when it passes the trigger distance while the finger is down, and fire the reply on
- * release via clearView(). Vertical scrolling is untouched (0 drag dirs, one swipe direction).
+ * never "commits" (getSwipeThreshold is huge, and since 0.2.56 so is getSwipeEscapeVelocity) —
+ * instead we rubber-band-translate the row, latch when it passes the trigger distance while the
+ * finger is down, and fire the reply on release via clearView(). Vertical scrolling is untouched
+ * (0 drag dirs, one swipe direction).
  * KHANDAQ (0.2.56): the row goes toward the start edge, as in Telegram: to the left, and to the
  * right in a right-to-left layout (ItemTouchHelper.START). It went to the right before. A reply
  * badge (the chat date pill colours) grows in the space the row leaves, and a light haptic tick
@@ -97,10 +98,24 @@ public class ReplySwipeCallback extends ItemTouchHelper.SimpleCallback
         return 1000f;
     }
 
+    /**
+     * KHANDAQ (0.2.56, QA 15.11): nor by its speed. ItemTouchHelper also commits a swipe when the finger leaves at
+     * this velocity or faster (120 dp/s by default), whatever getSwipeThreshold says, and a committed swipe never
+     * reaches clearView(): the row stayed 72 dp aside with the badge on until it left the screen, the release made
+     * no reply, and the next touch on the row made it. Out of reach, every release slides the row back and ends in
+     * clearView().
+     */
+    @Override
+    public float getSwipeEscapeVelocity(final float defaultValue)
+    {
+        return Float.MAX_VALUE;
+    }
+
     @Override
     public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction)
     {
-        // unreachable because getSwipeThreshold is huge; the reply fires from clearView()
+        // unreachable: neither the distance (getSwipeThreshold) nor the speed (getSwipeEscapeVelocity) can commit
+        // the swipe; the reply fires from clearView()
     }
 
     @Override

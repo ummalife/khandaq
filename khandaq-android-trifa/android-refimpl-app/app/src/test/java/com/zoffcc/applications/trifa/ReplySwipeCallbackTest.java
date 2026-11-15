@@ -3,6 +3,7 @@ package com.zoffcc.applications.trifa;
 import org.junit.Test;
 
 import java.io.File;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
@@ -62,5 +63,39 @@ public class ReplySwipeCallbackTest
                                          StandardCharsets.UTF_8);
         assertTrue(source.contains("super(0, ItemTouchHelper.START);"));
         assertFalse(source.contains("ItemTouchHelper.RIGHT"));
+    }
+
+    /**
+     * KHANDAQ (0.2.56, QA 15.11): after a quick swipe the row stayed 72 dp aside, with the badge on and no reply.
+     * ItemTouchHelper (recyclerview 1.3.2, checkHorizontalSwipe) commits a swipe when the finger leaves at
+     * getSwipeEscapeVelocity() or faster, whatever getSwipeThreshold() says, and a committed swipe never reaches
+     * clearView(). The swipe that stuck: 600 px in 405 ms on the 420 dpi emulator.
+     */
+    @Test
+    public void a_quick_swipe_never_commits_so_the_row_always_slides_back() throws Exception
+    {
+        final ReplySwipeCallback callback = callbackWithoutContext();
+        final float density = 2.625f;
+        final float defaultEscape = 120f * density; // recyclerview's item_touch_helper_swipe_escape_velocity
+        // ItemTouchHelper measures the velocity capped at this (item_touch_helper_swipe_escape_max_velocity)
+        final float measurable = callback.getSwipeVelocityThreshold(800f * density);
+        final float stuckSwipe = 600f / 0.405f;
+        assertTrue("a swipe this quick commits", callback.getSwipeEscapeVelocity(defaultEscape) > stuckSwipe);
+        assertTrue("some swipe commits by its speed", callback.getSwipeEscapeVelocity(defaultEscape) > measurable);
+        // and no drag is long enough: past this share of the list width it would commit too
+        assertTrue(callback.getSwipeThreshold(null) > 1f);
+    }
+
+    /**
+     * The callback builds its badge from a Context, which a JVM test does not have; the swipe decisions under test
+     * read no field, so an instance made without running its constructor is enough.
+     */
+    private static ReplySwipeCallback callbackWithoutContext() throws Exception
+    {
+        final Field field = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe");
+        field.setAccessible(true);
+        final Object unsafe = field.get(null);
+        return (ReplySwipeCallback) unsafe.getClass().getMethod("allocateInstance", Class.class)
+                                          .invoke(unsafe, ReplySwipeCallback.class);
     }
 }

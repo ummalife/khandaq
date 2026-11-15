@@ -1960,6 +1960,17 @@ public class TrifaToxService extends Service
             catch (Exception ignored)
             {
             }
+
+            // KHANDAQ (0.2.56): our group files that wait for a member go once their group has one. Nothing else
+            // brought them back: a member's arrival and the group's connection only ever retried incoming files.
+            try
+            {
+                NgcGroupFileTransfer.resumeWaitingSends();
+            }
+            catch (Exception e)
+            {
+                HelperGeneric.logI(TAG, "resumeWaitingSends:EE:" + e.getMessage());
+            }
         }
     }
 

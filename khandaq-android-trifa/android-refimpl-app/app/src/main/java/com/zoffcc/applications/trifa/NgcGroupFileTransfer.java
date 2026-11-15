@@ -23,8 +23,6 @@ import static com.zoffcc.applications.trifa.HelperGeneric.write_chunk_to_VFS_fil
 import static com.zoffcc.applications.trifa.HelperFiletransfer.get_incoming_filetransfer_local_filename;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.isGroupMessageMediaReady;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.isIocipherVirtualPath;
-import static com.zoffcc.applications.trifa.HelperGroup.arm_ngc_outgoing_file_timeout;
-import static com.zoffcc.applications.trifa.HelperGroup.disarm_ngc_outgoing_file_timeout;
 import static com.zoffcc.applications.trifa.HelperGroup.mark_ngc_file_transfer_failed;
 import static com.zoffcc.applications.trifa.HelperGroup.notify_group_file_send_progress_bytes;
 import static com.zoffcc.applications.trifa.HelperGroup.notify_group_file_recv_progress_bytes;
@@ -97,30 +95,66 @@ public final class NgcGroupFileTransfer
      */
     private static final int MAX_INCOMING_ASSEMBLIES = 24;
 
-    private static final long GROUP_SEND_CONN_WAIT_MS = 45_000L;
-    // KHANDAQ: minimum gap between selective NACKs for the same file. Lowered from 12s so a stalled
-    // chunked download recovers in a few seconds (parity with iOS' ~2.5s NACK timer) instead of
-    // forcing the user to tap "retry". Flooding is still prevented: the receiver only NACKs once the
-    // flow has been idle for NGC_NACK_STALL_MS and hasIncomingAssemblyInProgress() suppresses requests
-    // while chunks are actively arriving.
-    private static final long FILE_RESEND_REQUEST_COOLDOWN_MS = 4_000L;
-    private static final Map<String, Long> fileResendRequestTs = new ConcurrentHashMap<>();
-    /** BEGIN sent on broadcast before unicast upgrade — must be re-sent privately once a peer is picked. */
-    private static final Map<String, byte[]> pendingPrivateBeginResend = new ConcurrentHashMap<>();
-    /** Keys (group:msg) with a send queued or running — guards against duplicate resend pile-up. */
-    private static final java.util.Set<String> inflightChunkedSends = ConcurrentHashMap.newKeySet();
+    /**
+     * KHANDAQ (0.2.56): keys (group:msg) of files whose own send is queued or running (sendGroupFileChunked,
+     * sendGroupFileSmall), and of those a resend for one member's request is (handleIncomingFileRequest). Each kind
+     * once per file. Apart, so that a resend that runs for one member cannot swallow the file's own send.
+     */
+    private static final java.util.Set<String> inflightOwnSends = ConcurrentHashMap.newKeySet();
+    private static final java.util.Set<String> inflightServes = ConcurrentHashMap.newKeySet();
     /** Diagnostic: counts every incoming chunk packet that reaches the callback (delivery vs processing). */
     private static final java.util.concurrent.atomic.AtomicLong recvChunkPktCount =
             new java.util.concurrent.atomic.AtomicLong();
     /** Diagnostic: chunks dropped because they came from a peer that does not own the transfer. */
     private static final java.util.concurrent.atomic.AtomicLong rejectedForeignChunkCount =
             new java.util.concurrent.atomic.AtomicLong();
-    /** Abort a send if a single chunk can't be queued within this window — frees the executor for other files. */
-    private static final long CHUNK_SEND_STALL_MS = 20_000L;
     /** While incoming chunks arrive faster than this, suppress resend requests (transfer is healthy). */
     private static final long INCOMING_PROGRESS_STALL_MS = 8_000L;
-    private static final long CHUNK_CONN_RETRY_WAIT_MS = 5_000L;
-    private static final long PEER_SEND_CONN_WAIT_MS = 15_000L;
+
+    /** KHANDAQ (0.2.56): one pace for every group file packet this device sends (NgcUploadPace). */
+    private static final NgcUploadPace PACE = new NgcUploadPace();
+    /** KHANDAQ (0.2.56): our group files that wait for a member to send them to (NgcOutgoingFileWaits). */
+    private static final NgcOutgoingFileWaits WAITS = new NgcOutgoingFileWaits();
+    /** KHANDAQ (0.2.56): how often each incoming file asked its sender for missing chunks (NgcFileNackBudget). */
+    private static final NgcFileNackBudget NACKS = new NgcFileNackBudget();
+    /**
+     * KHANDAQ (0.2.56): a file whose group has had nobody to send to for this long, in the middle of its send, waits
+     * for a member (WAITS) instead of going on. A member a moment away (a peer list read between two of toxcore's
+     * updates) does not stop it.
+     */
+    private static final long NO_MEMBER_GRACE_MS = 5_000L;
+    /**
+     * KHANDAQ (0.2.56): every member refused the packet for this long: they are gone, or stuck. Not a live member
+     * whose send array is full: toxcore drops a member whose oldest unacknowledged packet is GC_CONFIRMED_PEER_TIMEOUT
+     * (58 s) old ("Send array stuck; timing out peer"), so its refusals end well within this. The file then waits for
+     * a member like one that found nobody. It used to be said not sent after 20 s of refusals.
+     */
+    private static final long REFUSED_LIMIT_MS = 75_000L;
+    /** A packet went to at least one member. */
+    private static final int SEND_OK = 1;
+    /** Nobody took the packet: no member to send to for NO_MEMBER_GRACE_MS, or refused by all for REFUSED_LIMIT_MS. */
+    private static final int SEND_NO_MEMBER = -1;
+    /** The file was cancelled, or the thread interrupted. */
+    private static final int SEND_STOPPED = -2;
+    /**
+     * KHANDAQ (0.2.56): g_opts key prefix ("kqngcsend_" + group|msg) of our group files that have not gone whole yet,
+     * in the key/value table the cancel tombstone uses (no schema change). Set when a file's send begins, removed
+     * once it went whole; a restart brings the files that still have it back to wait for a member.
+     */
+    private static final String PENDING_SEND_PREFIX = "kqngcsend_";
+    /** keyLike pattern of PENDING_SEND_PREFIX: its "_" escaped, as LIKE reads it as any character. */
+    private static final String PENDING_SEND_LIKE = "kqngcsend\\_%";
+    /** Keys (group|msg) of our pending files: those marked in this run, and those the database had at its start. */
+    private static final java.util.Set<String> pendingSends = ConcurrentHashMap.newKeySet();
+    private static final java.util.concurrent.atomic.AtomicBoolean pendingSendsLoadQueued =
+            new java.util.concurrent.atomic.AtomicBoolean();
+    private static volatile boolean pendingSendsLoaded = false;
+    /** The database work of the send states (pending marks, finding a waiting file's row): off the tox thread. */
+    private static final ExecutorService STATE_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        final Thread t = new Thread(r, "ngc-group-file-state");
+        t.setDaemon(true);
+        return t;
+    });
 
     /** Outgoing FT targets: one requester peer (resend) or fan-out to every online peer. */
     private static final class PeerSendTargets
@@ -137,11 +171,19 @@ public final class NgcGroupFileTransfer
 
         void refreshOnlinePeers(final long groupNum)
         {
-            if (!fanOutAllOnline || groupNum < 0)
+            if (groupNum < 0)
             {
                 return;
             }
-            peerIds = HelperGroup.pickChunkedFileUnicastPeerIds(groupNum);
+            if (fanOutAllOnline)
+            {
+                peerIds = HelperGroup.pickChunkedFileUnicastPeerIds(groupNum);
+            }
+            else if (peerIds.length > 0 && !isGroupPeer(groupNum, peerIds[0]))
+            {
+                // KHANDAQ (0.2.56): the member who asked has left: nobody to serve.
+                peerIds = new long[0];
+            }
         }
 
         boolean hasPrivatePeer()
@@ -172,47 +214,27 @@ public final class NgcGroupFileTransfer
         }
     }
 
-    /** Wait for a transport path to at least one peer; private send works even when group_conn flaps. */
-    private static PeerSendTargets resolveSendTargets(final long groupNum, final GroupMessage g,
-                                                      final long requestedPeerId)
+    /** Whether the peer is still in the group's peer list (toxcore lists the peers it has not timed out). */
+    static boolean isGroupPeer(final long groupNum, final long peerId)
     {
-        if (groupNum < 0)
+        try
         {
-            return new PeerSendTargets(new long[0], true);
-        }
-        if (requestedPeerId >= 0L)
-        {
-            return new PeerSendTargets(new long[]{requestedPeerId}, false);
-        }
-
-        final long deadline = System.currentTimeMillis() + GROUP_SEND_CONN_WAIT_MS;
-        while (System.currentTimeMillis() < deadline)
-        {
-            if (g != null && HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash))
+            final long[] peers = MainActivity.tox_group_get_peerlist(groupNum);
+            if (peers != null)
             {
-                break;
-            }
-            final long[] online = HelperGroup.pickChunkedFileUnicastPeerIds(groupNum);
-            if (online.length > 0)
-            {
-                return new PeerSendTargets(online, true);
-            }
-            TrifaToxService.wakeup_tox_thread();
-            if (g != null && g.group_identifier != null)
-            {
-                maybeReconnectIfDisconnected(groupNum, g);
-            }
-            try
-            {
-                Thread.sleep(500L);
-            }
-            catch (InterruptedException e)
-            {
-                Thread.currentThread().interrupt();
-                break;
+                for (final long p : peers)
+                {
+                    if (p == peerId)
+                    {
+                        return true;
+                    }
+                }
             }
         }
-        return new PeerSendTargets(HelperGroup.pickChunkedFileUnicastPeerIds(groupNum), true);
+        catch (Exception ignored)
+        {
+        }
+        return false;
     }
 
     /** How many user-initiated files upload in parallel (they share one tox connection but interleave chunks). */
@@ -428,7 +450,7 @@ public final class NgcGroupFileTransfer
     }
 
     /**
-     * One in-flight (queued or running) send per message — receiver resend requests arrive every ~12s and
+     * One in-flight (queued or running) send per message and kind — receiver resend requests arrive every ~12s and
      * would otherwise pile up full re-sends on the single executor, starving freshly picked user files.
      */
     private static void enqueueChunkedSend(final GroupMessage g, final long targetPeerId, final boolean[] wanted)
@@ -445,57 +467,118 @@ public final class NgcGroupFileTransfer
             return;
         }
         final String key = beginResendKey(g.group_identifier, g.msg_id_hash);
-        if (!inflightChunkedSends.add(key))
+        final boolean isUserSend = targetPeerId < 0L;
+        // KHANDAQ (0.2.56): a resend for one member's request is not needed while the file's own send goes to every
+        // member, and must never take the place of that send: the file then stayed unsent with nothing to send it.
+        final boolean queued = isUserSend
+                ? inflightOwnSends.add(key)
+                : (!inflightOwnSends.contains(key) && inflightServes.add(key));
+        if (!queued)
         {
             HelperGeneric.logI(TAG, "send:skip already in-flight msg=" + g.msg_id_hash.substring(0, 8));
             return;
         }
-        final boolean isUserSend = targetPeerId < 0L;
+        if (isUserSend)
+        {
+            WAITS.remove(g.group_identifier, g.msg_id_hash);
+        }
         final ExecutorService exec = isUserSend ? SEND_EXECUTOR : RESEND_EXECUTOR;
         if (isUserSend)
         {
             activeUserSends.incrementAndGet();
         }
-        exec.execute(() ->
+        try
         {
-            try
+            exec.execute(() ->
             {
-                if (wanted != null)
+                try
                 {
-                    sendGroupFileSelectiveOnWorker(g, targetPeerId, wanted);
+                    if (wanted != null)
+                    {
+                        sendGroupFileSelectiveOnWorker(g, targetPeerId, wanted);
+                    }
+                    else
+                    {
+                        sendGroupFileChunkedOnWorker(g, targetPeerId);
+                    }
                 }
-                else
+                finally
                 {
-                    sendGroupFileChunkedOnWorker(g, targetPeerId);
+                    (isUserSend ? inflightOwnSends : inflightServes).remove(key);
+                    if (isUserSend)
+                    {
+                        activeUserSends.decrementAndGet();
+                    }
                 }
-            }
-            finally
+            });
+        }
+        catch (RuntimeException e)
+        {
+            (isUserSend ? inflightOwnSends : inflightServes).remove(key);
+            if (isUserSend)
             {
-                inflightChunkedSends.remove(key);
-                if (isUserSend)
-                {
-                    activeUserSends.decrementAndGet();
-                }
+                activeUserSends.decrementAndGet();
+                waitForMember(g, "send not queued: " + e.getMessage());
             }
-        });
+        }
     }
 
     static void sendGroupFileSmall(final GroupMessage g)
     {
-        SEND_EXECUTOR.execute(() ->
+        if (g == null || g.group_identifier == null || g.msg_id_hash == null)
         {
-            // KHANDAQ (audit2 #5): small files never pass through sendChunkWithRetry, so the
-            // cancellation gate has to sit here — checked at emit time, not at enqueue time.
-            if (g != null && HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash))
+            return;
+        }
+        final String key = beginResendKey(g.group_identifier, g.msg_id_hash);
+        if (!inflightOwnSends.add(key))
+        {
+            HelperGeneric.logI(TAG, "send:skip already in-flight msg=" + g.msg_id_hash.substring(0, 8));
+            return;
+        }
+        WAITS.remove(g.group_identifier, g.msg_id_hash);
+        try
+        {
+            SEND_EXECUTOR.execute(() ->
             {
-                return;
-            }
-            HelperGroup.send_group_image(g);
-        });
+                try
+                {
+                    // KHANDAQ (audit2 #5): small files never pass through the chunk sender, so the
+                    // cancellation gate has to sit here — checked at emit time, not at enqueue time.
+                    if (HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash))
+                    {
+                        return;
+                    }
+                    HelperGroup.send_group_image(g);
+                }
+                finally
+                {
+                    inflightOwnSends.remove(key);
+                }
+            });
+        }
+        catch (RuntimeException e)
+        {
+            inflightOwnSends.remove(key);
+            waitForMember(g, "send not queued: " + e.getMessage());
+        }
     }
 
+    /**
+     * KHANDAQ (0.2.56): the send of a file of more than one packet: its BEGIN, then its chunks, each to every member
+     * at the pace (NgcUploadPace).
+     *
+     * <p>The file's own send ({@code targetPeerId < 0}) says how the file stands: it goes, it waits for a member to
+     * send it to (WAITS), it went, or it failed for a reason of this device (no file, too large, no such group).
+     * Before, a group with nobody else online was waited for 45 s, the BEGIN 20 s more, and the file said not sent;
+     * and a resend pushed its chunks back to back until toxcore refused them, then said not sent again after 20 s.
+     *
+     * <p>A resend for one member's request ({@code targetPeerId >= 0}) serves that member and leaves the file's state
+     * alone: it reported progress and "failed" for a file that had gone, and its chunks moved the resume point of the
+     * file's own send.
+     */
     private static void sendGroupFileChunkedOnWorker(final GroupMessage g, final long targetPeerId)
     {
+        final boolean ownSend = targetPeerId < 0L;
         try
         {
             TrifaToxService.wakeup_tox_thread();
@@ -504,202 +587,184 @@ public final class NgcGroupFileTransfer
             if (src == null || src.size < 1L)
             {
                 HelperGeneric.logI(TAG, "send:missing file " + g.filename_fullpath);
-                mark_ngc_file_transfer_failed(g.group_identifier, g.msg_id_hash);
-                disarm_ngc_outgoing_file_timeout(g.group_identifier, g.msg_id_hash);
+                failOwnSend(g, ownSend);
                 return;
             }
-
-            final long fileSize = src.size;
-            if (fileSize > KHANDAQ_MAX_FILE_TRANSFER_BYTES)
-            {
-                HelperGeneric.logI(TAG, "send:file too large " + fileSize);
-                mark_ngc_file_transfer_failed(g.group_identifier, g.msg_id_hash);
-                disarm_ngc_outgoing_file_timeout(g.group_identifier, g.msg_id_hash);
-                return;
-            }
-
-            final long groupNum = tox_group_by_groupid__wrapper(g.group_identifier);
-            if (groupNum < 0)
-            {
-                mark_ngc_file_transfer_failed(g.group_identifier, g.msg_id_hash);
-                disarm_ngc_outgoing_file_timeout(g.group_identifier, g.msg_id_hash);
-                return;
-            }
-
-            FileTransferDebug.logGroupConnection(groupNum);
-
-            // KHANDAQ: large (chunked) media lacked the readiness gate that small files already have,
-            // so a video sent before the group was actually CONNECTED sat at 0% then hit "Upload
-            // Failed". Gate ONLY on the group being connected — the chunk send broadcasts via the group
-            // mesh (tox_group_send_custom_packet), which does NOT require a peer with a direct UDP/TCP
-            // status; requiring an "online peer" here wrongly blocked media when peers were reachable
-            // but their per-peer connection status still read NONE. If not connected in time, re-queue
-            // an auto-retry instead of failing. (targetPeerId >= 0 is a unicast re-send to a known peer
-            // — that path waits on the peer separately below.)
-            if (targetPeerId < 0L && !waitForGroupConnected(groupNum, g, GROUP_SEND_CONN_WAIT_MS))
-            {
-                if (g != null && HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash))
-                {
-                    return;
-                }
-                HelperGeneric.logI(TAG, "send:group not ready for chunked send — auto-retry queued");
-                HelperGroup.schedule_auto_retry_group_file_send(g);
-                return;
-            }
-
-            // Only now arm the stall watchdog — it must not count the time we spent waiting for the
-            // group to connect, otherwise it would fire at 0% before the first chunk ever goes out.
-            arm_ngc_outgoing_file_timeout(g.group_identifier, g.msg_id_hash);
-
-            final PeerSendTargets sendTargets = resolveSendTargets(groupNum, g, targetPeerId);
-            if (sendTargets.hasPrivatePeer())
-            {
-                HelperGeneric.logI(TAG, "send:unicast " + sendTargets.describe());
-                for (final long peerId : sendTargets.peerIds)
-                {
-                    // KHANDAQ (#126): best-effort 2s nudge only — the real reachability test is the
-                    // private-send return code in sendChunkWithRetry; don't burn 15s/peer on a NONE status.
-                    waitForPeerOnline(groupNum, peerId, 2000L);
-                }
-            }
-            else
-            {
-                HelperGeneric.logI(TAG, "send:peer pending — will upgrade during chunk send");
-            }
-
-            record_ngc_transfer_started(g.group_identifier, g.msg_id_hash);
-            notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash, 0L, fileSize);
-
-            byte[] msgId;
-            try
-            {
-                msgId = hex_to_bytes(g.msg_id_hash);
-            }
-            catch (Exception e)
-            {
-                msgId = new byte[32];
-            }
-            if (msgId.length != 32)
-            {
-                final byte[] fixed = new byte[32];
-                System.arraycopy(msgId, 0, fixed, 0, Math.min(msgId.length, 32));
-                msgId = fixed;
-            }
-
-            final int totalChunks = (int) ((fileSize + CHUNK_PAYLOAD_MAX - 1) / CHUNK_PAYLOAD_MAX);
-            final int lastSentChunk = HelperGroup.ngc_outgoing_last_chunk_index(g.group_identifier, g.msg_id_hash);
-            final int startChunk = lastSentChunk + 1;
-
-            if (lastSentChunk < 0)
-            {
-                ensureSendTransportReady(groupNum, sendTargets, g);
-                final byte[] beginPkt = buildBeginPacket(msgId, g.file_name, fileSize, totalChunks);
-                final int beginRes = sendNgcFilePacket(groupNum, sendTargets, beginPkt, g);
-                if (!HelperGroup.is_ngc_custom_packet_send_ok(beginRes))
-                {
-                    HelperGeneric.logI(TAG, "send:begin failed res=" + beginRes + " " + sendTargets.describe()
-                            + " " + HelperGroup.describe_ngc_custom_packet_error(beginRes));
-                    mark_ngc_file_transfer_failed(g.group_identifier, g.msg_id_hash);
-                    disarm_ngc_outgoing_file_timeout(g.group_identifier, g.msg_id_hash);
-                    return;
-                }
-                if (!sendTargets.hasPrivatePeer())
-                {
-                    pendingPrivateBeginResend.put(beginResendKey(g.group_identifier, g.msg_id_hash), beginPkt);
-                    HelperGeneric.logI(TAG, "send:begin queued private-resend (broadcast path)");
-                }
-                notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash, 0L, fileSize);
-            }
-            else if (startChunk >= totalChunks)
-            {
-                disarm_ngc_outgoing_file_timeout(g.group_identifier, g.msg_id_hash);
-                notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash, fileSize, fileSize);
-                HelperGroup.clear_ngc_outgoing_send_resume_state(g.group_identifier, g.msg_id_hash);
-                HelperGeneric.logI(TAG, "send:already complete chunks=" + totalChunks);
-                return;
-            }
-            else
-            {
-                HelperGeneric.logI(TAG, "send:resume from chunk " + startChunk + " last=" + lastSentChunk);
-                final long resumeBytes = Math.min(fileSize, (long) startChunk * CHUNK_PAYLOAD_MAX);
-                notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash, resumeBytes, fileSize);
-            }
-
-            final byte[] readBuf = new byte[CHUNK_PAYLOAD_MAX];
             try (InputStream in = src.stream)
             {
-                if (startChunk > 0)
-                {
-                    long toSkip = (long) startChunk * CHUNK_PAYLOAD_MAX;
-                    while (toSkip > 0)
-                    {
-                        final long skipped = in.skip(toSkip);
-                        if (skipped <= 0)
-                        {
-                            break;
-                        }
-                        toSkip -= skipped;
-                    }
-                }
-
-                for (int idx = startChunk; idx < totalChunks; idx++)
-                {
-                    if (HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash))
-                    {
-                        HelperGeneric.logI(TAG, "send:cancelled");
-                        disarm_ngc_outgoing_file_timeout(g.group_identifier, g.msg_id_hash);
-                        return;
-                    }
-
-                    final int toRead = (int) Math.min(CHUNK_PAYLOAD_MAX, fileSize - (long) idx * CHUNK_PAYLOAD_MAX);
-                    int read = 0;
-                    while (read < toRead)
-                    {
-                        final int n = in.read(readBuf, read, toRead - read);
-                        if (n < 0)
-                        {
-                            HelperGeneric.logI(TAG, "send:unexpected EOF at chunk " + idx);
-                            mark_ngc_file_transfer_failed(g.group_identifier, g.msg_id_hash);
-                            disarm_ngc_outgoing_file_timeout(g.group_identifier, g.msg_id_hash);
-                            return;
-                        }
-                        read += n;
-                    }
-
-                    final byte[] chunkPkt = buildChunkPacket(msgId, idx, readBuf, read);
-                    final int res = sendChunkWithRetry(groupNum, sendTargets, g, chunkPkt);
-                    if (!HelperGroup.is_ngc_custom_packet_send_ok(res))
-                    {
-                        HelperGeneric.logI(TAG, "send:chunk " + idx + " failed res=" + res + " "
-                                + sendTargets.describe() + " "
-                                + HelperGroup.describe_ngc_custom_packet_error(res));
-                        mark_ngc_file_transfer_failed(g.group_identifier, g.msg_id_hash);
-                        disarm_ngc_outgoing_file_timeout(g.group_identifier, g.msg_id_hash);
-                        return;
-                    }
-
-                    HelperGroup.record_ngc_outgoing_chunk_sent(g.group_identifier, g.msg_id_hash, idx);
-                    TrifaToxService.wakeup_tox_thread();
-                    final long bytesDone = Math.min(fileSize, (long) (idx + 1) * CHUNK_PAYLOAD_MAX);
-                    notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash, bytesDone, fileSize);
-                    throttleAfterChunkSend(idx, fileSize);
-                }
+                sendChunkedFrom(g, targetPeerId, ownSend, in, src.size);
             }
-
-            disarm_ngc_outgoing_file_timeout(g.group_identifier, g.msg_id_hash);
-            notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash, fileSize, fileSize);
-            HelperGroup.clear_ngc_outgoing_send_resume_state(g.group_identifier, g.msg_id_hash);
-            pendingPrivateBeginResend.remove(beginResendKey(g.group_identifier, g.msg_id_hash));
-            HelperGeneric.logI(TAG, "send:done chunks=" + totalChunks + " bytes=" + fileSize);
         }
         catch (Exception e)
         {
             HelperGeneric.logI(TAG, "send:EE:" + e.getMessage());
             if (g != null)
             {
-                mark_ngc_file_transfer_failed(g.group_identifier, g.msg_id_hash);
-                disarm_ngc_outgoing_file_timeout(g.group_identifier, g.msg_id_hash);
+                failOwnSend(g, ownSend);
             }
+        }
+    }
+
+    private static void sendChunkedFrom(final GroupMessage g, final long targetPeerId, final boolean ownSend,
+                                        final InputStream in, final long fileSize) throws IOException
+    {
+        if (fileSize > KHANDAQ_MAX_FILE_TRANSFER_BYTES)
+        {
+            HelperGeneric.logI(TAG, "send:file too large " + fileSize);
+            failOwnSend(g, ownSend);
+            return;
+        }
+
+        final long groupNum = tox_group_by_groupid__wrapper(g.group_identifier);
+        if (groupNum < 0)
+        {
+            failOwnSend(g, ownSend);
+            return;
+        }
+
+        FileTransferDebug.logGroupConnection(groupNum);
+
+        final PeerSendTargets sendTargets = ownSend
+                ? new PeerSendTargets(HelperGroup.pickChunkedFileUnicastPeerIds(groupNum), true)
+                : new PeerSendTargets(new long[]{targetPeerId}, false);
+        if (!sendTargets.hasPrivatePeer())
+        {
+            // KHANDAQ (0.2.56): nobody else in the group, or nobody online: the file waits for a member.
+            endUnsent(g, ownSend, SEND_NO_MEMBER, "send");
+            return;
+        }
+        HelperGeneric.logI(TAG, "send:unicast " + sendTargets.describe() + (ownSend ? "" : " (request)"));
+        for (final long peerId : sendTargets.peerIds)
+        {
+            // KHANDAQ (#126): best-effort 2s nudge only — the real reachability test is the
+            // private-send return code; don't burn 15s/peer on a NONE status.
+            waitForPeerOnline(groupNum, peerId, 2000L);
+        }
+
+        if (ownSend)
+        {
+            record_ngc_transfer_started(g.group_identifier, g.msg_id_hash);
+            notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash, 0L, fileSize);
+        }
+
+        byte[] msgId;
+        try
+        {
+            msgId = hex_to_bytes(g.msg_id_hash);
+        }
+        catch (Exception e)
+        {
+            msgId = new byte[32];
+        }
+        if (msgId.length != 32)
+        {
+            final byte[] fixed = new byte[32];
+            System.arraycopy(msgId, 0, fixed, 0, Math.min(msgId.length, 32));
+            msgId = fixed;
+        }
+
+        final int totalChunks = (int) ((fileSize + CHUNK_PAYLOAD_MAX - 1) / CHUNK_PAYLOAD_MAX);
+        final int lastSentChunk = ownSend
+                ? HelperGroup.ngc_outgoing_last_chunk_index(g.group_identifier, g.msg_id_hash) : -1;
+        final int startChunk = lastSentChunk + 1;
+        if (startChunk >= totalChunks)
+        {
+            notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash, fileSize, fileSize);
+            HelperGroup.clear_ngc_outgoing_send_resume_state(g.group_identifier, g.msg_id_hash);
+            outgoingSent(g);
+            HelperGeneric.logI(TAG, "send:already complete chunks=" + totalChunks);
+            return;
+        }
+
+        // KHANDAQ (0.2.56): the BEGIN goes first, on a resume too: a member that came since has nothing of the file,
+        // and one that has a part of it keeps that part (a BEGIN of the same file never wipes an assembly). Without it
+        // a resumed send's chunks reached nobody who could keep them.
+        final PacedSend send = new PacedSend(groupNum, sendTargets, g,
+                                             buildBeginPacket(msgId, g.file_name, fileSize, totalChunks));
+        final int beginRes = send.begin();
+        if (beginRes != SEND_OK)
+        {
+            endUnsent(g, ownSend, beginRes, "BEGIN");
+            return;
+        }
+
+        if (startChunk > 0)
+        {
+            HelperGeneric.logI(TAG, "send:resume from chunk " + startChunk + " last=" + lastSentChunk);
+            notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash,
+                                                  Math.min(fileSize, (long) startChunk * CHUNK_PAYLOAD_MAX), fileSize);
+        }
+
+        final byte[] readBuf = new byte[CHUNK_PAYLOAD_MAX];
+        if (startChunk > 0)
+        {
+            skipFully(in, (long) startChunk * CHUNK_PAYLOAD_MAX, readBuf);
+        }
+
+        for (int idx = startChunk; idx < totalChunks; idx++)
+        {
+            final int toRead = (int) Math.min(CHUNK_PAYLOAD_MAX, fileSize - (long) idx * CHUNK_PAYLOAD_MAX);
+            try
+            {
+                readFully(in, readBuf, toRead);
+            }
+            catch (IOException e)
+            {
+                HelperGeneric.logI(TAG, "send:unexpected EOF at chunk " + idx);
+                failOwnSend(g, ownSend);
+                return;
+            }
+
+            final int res = send.chunk(buildChunkPacket(msgId, idx, readBuf, toRead));
+            if (res != SEND_OK)
+            {
+                endUnsent(g, ownSend, res, "chunk " + idx);
+                return;
+            }
+
+            if (ownSend)
+            {
+                HelperGroup.record_ngc_outgoing_chunk_sent(g.group_identifier, g.msg_id_hash, idx);
+                final long bytesDone = Math.min(fileSize, (long) (idx + 1) * CHUNK_PAYLOAD_MAX);
+                notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash, bytesDone, fileSize);
+            }
+            TrifaToxService.wakeup_tox_thread();
+        }
+
+        if (ownSend)
+        {
+            notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash, fileSize, fileSize);
+            HelperGroup.clear_ngc_outgoing_send_resume_state(g.group_identifier, g.msg_id_hash);
+            outgoingSent(g);
+        }
+        HelperGeneric.logI(TAG, "send:done chunks=" + totalChunks + " bytes=" + fileSize
+                + (ownSend ? "" : " (request of peer " + targetPeerId + ")"));
+    }
+
+    /** A packet did not go: an own send waits for a member when nobody took it; a stop (cancel) changes nothing. */
+    private static void endUnsent(final GroupMessage g, final boolean ownSend, final int res, final String what)
+    {
+        if (res == SEND_NO_MEMBER)
+        {
+            HelperGeneric.logI(TAG, "send:" + what + " went to nobody msg=" + g.msg_id_hash.substring(0, 8)
+                    + (ownSend ? "" : " (request)"));
+            if (ownSend)
+            {
+                waitForMember(g, "no member took the " + what);
+            }
+        }
+        else
+        {
+            HelperGeneric.logI(TAG, "send:stopped at " + what + " msg=" + g.msg_id_hash.substring(0, 8));
+        }
+    }
+
+    /** An own send failed for a reason of this device: the file is said not sent, and its "Send again" tries it. */
+    private static void failOwnSend(final GroupMessage g, final boolean ownSend)
+    {
+        if (ownSend && g != null)
+        {
+            mark_ngc_file_transfer_failed(g.group_identifier, g.msg_id_hash);
         }
     }
 
@@ -788,6 +853,9 @@ public final class NgcGroupFileTransfer
                     // (resend requests make the sender re-emit BEGIN; resetting here lost all prior chunks).
                     HelperGeneric.logI(TAG, "handleBegin:dup-skip msg=" + msgIdHex.substring(0, 8)
                             + " progress=" + existingAsm.receivedCount + "/" + existingAsm.totalChunks);
+                    // KHANDAQ (0.2.56): its sender is there: the file is not silent (NgcFileNackBudget). Its requests
+                    // stay counted, as an answer to each of them starts with this BEGIN.
+                    NACKS.heard(receiveDoneKey(groupId, msgIdHex));
                     flushOrphanChunks(groupNumber, assemblyKey);
                     return;
                 }
@@ -875,6 +943,8 @@ public final class NgcGroupFileTransfer
 
             record_ngc_transfer_started(groupId, msgIdHex);
             notify_group_file_recv_progress_bytes(groupId, msgIdHex, 0L, totalSize);
+            // KHANDAQ (0.2.56): the file starts here, with all its requests for missing chunks (NgcFileNackBudget).
+            NACKS.restart(receiveDoneKey(groupId, msgIdHex));
 
             if (dbMessage == null)
             {
@@ -1085,6 +1155,13 @@ public final class NgcGroupFileTransfer
 
         if (asm.received[chunkIndex])
         {
+            // KHANDAQ (0.2.56): its sender sends the file again (a send that waited for us goes again from its first
+            // chunk): that is not silence, and the requests for missing chunks wait until it stops. A big file that
+            // came again was otherwise given up while its first part came, and spent its requests on a sender busy
+            // sending (NgcFileNackBudget).
+            final String dupMsgIdHex = bytebuffer_to_hexstring(ByteBuffer.wrap(msgId), true);
+            NACKS.heard(receiveDoneKey(asm.groupId, dupMsgIdHex));
+            HelperGroup.arm_ngc_incoming_file_timeout(asm.groupId, dupMsgIdHex);
             return;
         }
 
@@ -1100,6 +1177,8 @@ public final class NgcGroupFileTransfer
         global_last_activity_incoming_ft_ts = System.currentTimeMillis();
 
         final String msgIdHex = bytebuffer_to_hexstring(ByteBuffer.wrap(msgId), true);
+        // KHANDAQ (0.2.56): a new chunk: the file is not silent (NgcFileNackBudget), its requests stay counted.
+        NACKS.heard(receiveDoneKey(asm.groupId, msgIdHex));
         if ((chunkIndex & 127) == 0 || chunkIndex + 1 >= asm.totalChunks)
         {
             HelperGeneric.logI(TAG, "handleChunk:recv msg=" + msgIdHex.substring(0, 8) + " idx=" + chunkIndex
@@ -1111,6 +1190,7 @@ public final class NgcGroupFileTransfer
         if (asm.receivedCount >= asm.totalChunks)
         {
             markReceiveComplete(asm.groupId, msgIdHex);
+            NACKS.forget(receiveDoneKey(asm.groupId, msgIdHex));
             // Persist the buffered tail to disk NOW, else the file looks short after restart and re-downloads.
             HelperGeneric.flush_close_vfs_write_cache(asm.outPath);
             deleteReceivedBitmap(asm.outPath);
@@ -1933,47 +2013,6 @@ public final class NgcGroupFileTransfer
         }
     }
 
-    static boolean waitForGroupConnected(final long groupNum, final GroupMessage g, final long timeoutMs)
-    {
-        final int connected = TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value;
-        final long deadline = System.currentTimeMillis() + timeoutMs;
-        while (System.currentTimeMillis() < deadline)
-        {
-            if (g != null && HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash))
-            {
-                break;
-            }
-            try
-            {
-                if (tox_group_is_connected(groupNum) == connected)
-                {
-                    return true;
-                }
-            }
-            catch (Exception ignored)
-            {
-            }
-            TrifaToxService.wakeup_tox_thread();
-            try
-            {
-                Thread.sleep(500L);
-            }
-            catch (InterruptedException e)
-            {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-        try
-        {
-            return tox_group_is_connected(groupNum) == connected;
-        }
-        catch (Exception e)
-        {
-            return false;
-        }
-    }
-
     /** Wait until a specific peer has direct or relay transport (required for private custom packets). */
     static boolean waitForPeerOnline(final long groupNum, final long peerId, final long timeoutMs)
     {
@@ -2094,15 +2133,16 @@ public final class NgcGroupFileTransfer
 
             HelperGeneric.logI(TAG, "handleFileRequest:resend group=" + groupId + " msg=" + msgIdHex.substring(0, 8)
                     + " requester_peer=" + peerId + (wanted != null ? " selective" : " full"));
-            HelperGroup.clear_ngc_file_transfer_failed(groupId, msgIdHex);
-            HelperGroup.record_ngc_transfer_started(groupId, msgIdHex);
+            // KHANDAQ (0.2.56): serving one member leaves the file's own state alone. The failed mark and the start
+            // of a transfer were set here, so a file that had gone showed as going at 0 % again, and with no
+            // progress from the selective resend, as not sent 30 s later; and the full resend cleared the resume
+            // point of the file's own send.
             if (wanted != null)
             {
                 sendGroupFileChunkedSelective(outgoing, peerId, wanted);
             }
             else
             {
-                HelperGroup.clear_ngc_outgoing_send_resume_state(groupId, msgIdHex);
                 sendGroupFileChunked(outgoing, peerId);
             }
         }
@@ -2131,15 +2171,18 @@ public final class NgcGroupFileTransfer
             return;
         }
 
-        final String cooldownKey = message.group_identifier.toLowerCase(Locale.ROOT) + "|"
-                + message.msg_id_hash.toLowerCase(Locale.ROOT);
-        final long now = System.currentTimeMillis();
-        final Long last = fileResendRequestTs.get(cooldownKey);
-        if (last != null && (now - last) < FILE_RESEND_REQUEST_COOLDOWN_MS)
+        // KHANDAQ (0.2.56): a file asks NgcFileNackBudget.MAX_REQUESTS times at most, MIN_GAP_MS (the 4 s this gap
+        // always was) apart. It asked every few seconds for as long as its sender was online, with no end.
+        final String nackKey = receiveDoneKey(message.group_identifier, message.msg_id_hash);
+        if (!NACKS.takeRequest(nackKey, nowMs()))
         {
             return;
         }
-        fileResendRequestTs.put(cooldownKey, now);
+        if (NACKS.requestsTaken(nackKey) >= NgcFileNackBudget.MAX_REQUESTS)
+        {
+            HelperGeneric.logI(TAG, "sendFileResendRequest:last of " + NgcFileNackBudget.MAX_REQUESTS
+                    + " requests msg=" + message.msg_id_hash.substring(0, 8));
+        }
 
         try
         {
@@ -2321,7 +2364,11 @@ public final class NgcGroupFileTransfer
         }
     }
 
-    /** Resend only the chunks the receiver marked missing — avoids re-streaming the whole file each retry. */
+    /**
+     * Resend only the chunks the receiver marked missing — avoids re-streaming the whole file each retry. KHANDAQ
+     * (0.2.56): at the pace, like every other packet of a group file; it pushed them back to back and gave up at the
+     * first refusal (-99) of toxcore's full send array.
+     */
     private static void sendGroupFileSelectiveOnWorker(final GroupMessage g, final long targetPeerId,
                                                        final boolean[] wanted)
     {
@@ -2334,45 +2381,46 @@ public final class NgcGroupFileTransfer
                 HelperGeneric.logI(TAG, "send:selective missing file " + g.filename_fullpath);
                 return;
             }
-            final long fileSize = src.size;
-            final long groupNum = tox_group_by_groupid__wrapper(g.group_identifier);
-            if (groupNum < 0)
-            {
-                return;
-            }
-            final PeerSendTargets targets = resolveSendTargets(groupNum, g, targetPeerId);
-
-            byte[] msgId;
-            try
-            {
-                msgId = hex_to_bytes(g.msg_id_hash);
-            }
-            catch (Exception e)
-            {
-                msgId = new byte[32];
-            }
-            if (msgId.length != 32)
-            {
-                final byte[] fixed = new byte[32];
-                System.arraycopy(msgId, 0, fixed, 0, Math.min(msgId.length, 32));
-                msgId = fixed;
-            }
-
-            final int totalChunks = (int) ((fileSize + CHUNK_PAYLOAD_MAX - 1) / CHUNK_PAYLOAD_MAX);
-            // (Re)send BEGIN so a receiver that lost its assembly can rebuild; existing assemblies dup-skip it.
-            final byte[] beginPkt = buildBeginPacket(msgId, g.file_name, fileSize, totalChunks);
-            sendNgcFilePacket(groupNum, targets, beginPkt, g);
-
-            int sent = 0;
-            final byte[] readBuf = new byte[CHUNK_PAYLOAD_MAX];
             try (InputStream in = src.stream)
             {
+                final long fileSize = src.size;
+                final long groupNum = tox_group_by_groupid__wrapper(g.group_identifier);
+                if (groupNum < 0)
+                {
+                    return;
+                }
+                final PeerSendTargets targets = new PeerSendTargets(new long[]{targetPeerId}, false);
+
+                byte[] msgId;
+                try
+                {
+                    msgId = hex_to_bytes(g.msg_id_hash);
+                }
+                catch (Exception e)
+                {
+                    msgId = new byte[32];
+                }
+                if (msgId.length != 32)
+                {
+                    final byte[] fixed = new byte[32];
+                    System.arraycopy(msgId, 0, fixed, 0, Math.min(msgId.length, 32));
+                    msgId = fixed;
+                }
+
+                final int totalChunks = (int) ((fileSize + CHUNK_PAYLOAD_MAX - 1) / CHUNK_PAYLOAD_MAX);
+                // (Re)send BEGIN so a receiver that lost its assembly can rebuild; existing assemblies dup-skip it.
+                final PacedSend send = new PacedSend(groupNum, targets, g,
+                                                     buildBeginPacket(msgId, g.file_name, fileSize, totalChunks));
+                if (send.begin() != SEND_OK)
+                {
+                    HelperGeneric.logI(TAG, "send:selective BEGIN went to nobody peer=" + targetPeerId);
+                    return;
+                }
+
+                int sent = 0;
+                final byte[] readBuf = new byte[CHUNK_PAYLOAD_MAX];
                 for (int idx = 0; idx < totalChunks; idx++)
                 {
-                    if (HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash))
-                    {
-                        return;
-                    }
                     final int toRead = (int) Math.min(CHUNK_PAYLOAD_MAX, fileSize - (long) idx * CHUNK_PAYLOAD_MAX);
                     if (idx >= wanted.length || !wanted[idx])
                     {
@@ -2380,19 +2428,17 @@ public final class NgcGroupFileTransfer
                         continue;
                     }
                     readFully(in, readBuf, toRead);
-                    final byte[] pkt = buildChunkPacket(msgId, idx, readBuf, toRead);
-                    final int res = sendChunkWithRetry(groupNum, targets, g, pkt);
-                    if (!HelperGroup.is_ngc_custom_packet_send_ok(res))
+                    final int res = send.chunk(buildChunkPacket(msgId, idx, readBuf, toRead));
+                    if (res != SEND_OK)
                     {
-                        HelperGeneric.logI(TAG, "send:selective chunk " + idx + " failed res=" + res);
+                        HelperGeneric.logI(TAG, "send:selective chunk " + idx + " not sent res=" + res);
                         return;
                     }
                     sent++;
                     TrifaToxService.wakeup_tox_thread();
-                    throttleAfterChunkSend(idx, fileSize);
                 }
+                HelperGeneric.logI(TAG, "send:selective done sent=" + sent + "/" + totalChunks);
             }
-            HelperGeneric.logI(TAG, "send:selective done sent=" + sent + "/" + totalChunks);
         }
         catch (Exception e)
         {
@@ -2435,158 +2481,11 @@ public final class NgcGroupFileTransfer
         }
     }
 
-    /**
-     * Light pacing only — the {@code -99} backpressure in {@link #sendChunkWithRetry} is the real flow
-     * control. We just nudge the tox thread regularly so it drains the lossless send_array promptly.
-     */
-    private static void throttleAfterChunkSend(final int chunkIndex, final long fileSize)
-    {
-        if ((chunkIndex & 7) == 7)
-        {
-            TrifaToxService.wakeup_tox_thread();
-        }
-        try
-        {
-            if ((chunkIndex & 63) == 63)
-            {
-                Thread.sleep(4L);
-            }
-        }
-        catch (InterruptedException e)
-        {
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    private static int sendNgcFilePacket(final long groupNum, final PeerSendTargets sendTargets, final byte[] pkt,
-                                         final GroupMessage g)
-    {
-        return sendChunkWithRetry(groupNum, sendTargets, g, pkt);
-    }
-
     private static String beginResendKey(final String groupId, final String msgIdHash)
     {
         return groupId.toLowerCase(Locale.ROOT) + ":" + msgIdHash.toLowerCase(Locale.ROOT);
     }
 
-    private static void ensureSendTransportReady(final long groupNum, final PeerSendTargets sendTargets,
-                                                 final GroupMessage g)
-    {
-        final long deadline = System.currentTimeMillis() + GROUP_SEND_CONN_WAIT_MS;
-        while (System.currentTimeMillis() < deadline)
-        {
-            if (g != null && HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash))
-            {
-                break;
-            }
-            refreshSendPeerTargets(groupNum, sendTargets, g);
-            if (sendTargets.hasPrivatePeer())
-            {
-                for (final long peerId : sendTargets.peerIds)
-                {
-                    if (waitForPeerOnline(groupNum, peerId, 3_000L))
-                    {
-                        return;
-                    }
-                }
-            }
-            if (waitForGroupConnected(groupNum, g, 3_000L))
-            {
-                return;
-            }
-            TrifaToxService.wakeup_tox_thread();
-            if (g != null && g.group_identifier != null)
-            {
-                maybeReconnectIfDisconnected(groupNum, g);
-            }
-            try
-            {
-                Thread.sleep(500L);
-            }
-            catch (InterruptedException e)
-            {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-    }
-
-    private static void resendPendingBeginViaPrivate(final long groupNum, final PeerSendTargets sendTargets,
-                                                     final GroupMessage g)
-    {
-        if (g == null || g.group_identifier == null || g.msg_id_hash == null)
-        {
-            return;
-        }
-        final byte[] beginPkt = pendingPrivateBeginResend.remove(
-                beginResendKey(g.group_identifier, g.msg_id_hash));
-        if (beginPkt == null)
-        {
-            return;
-        }
-        // KHANDAQ (audit2 #5): this BEGIN goes out via tox_group_send_custom_private_packet directly,
-        // bypassing the cancellation check inside sendChunkWithRetry — gate it explicitly and drop the
-        // queued packet instead of re-queueing it.
-        if (HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash))
-        {
-            return;
-        }
-        refreshSendPeerTargets(groupNum, sendTargets, g);
-        if (!sendTargets.hasPrivatePeer())
-        {
-            pendingPrivateBeginResend.put(beginResendKey(g.group_identifier, g.msg_id_hash), beginPkt);
-            return;
-        }
-        int okCount = 0;
-        for (final long peerId : sendTargets.peerIds)
-        {
-            if (!waitForPeerOnline(groupNum, peerId, PEER_SEND_CONN_WAIT_MS))
-            {
-                continue;
-            }
-            final int res = tox_group_send_custom_private_packet(groupNum, peerId, 1, beginPkt, beginPkt.length);
-            if (HelperGroup.is_ngc_custom_packet_send_ok(res))
-            {
-                okCount++;
-            }
-        }
-        if (okCount > 0)
-        {
-            HelperGeneric.logI(TAG, "send:begin-resend-via-private " + sendTargets.describe());
-        }
-        else
-        {
-            pendingPrivateBeginResend.put(beginResendKey(g.group_identifier, g.msg_id_hash), beginPkt);
-            HelperGeneric.logI(TAG, "send:begin-resend-via-private failed " + sendTargets.describe());
-        }
-    }
-
-    private static void refreshSendPeerTargets(final long groupNum, final PeerSendTargets sendTargets,
-                                               final GroupMessage g)
-    {
-        if (sendTargets == null || !sendTargets.fanOutAllOnline)
-        {
-            return;
-        }
-        final int prevCount = sendTargets.peerIds.length;
-        sendTargets.peerIds = HelperGroup.pickChunkedFileUnicastPeerIds(groupNum);
-        if (sendTargets.peerIds.length > prevCount)
-        {
-            HelperGeneric.logI(TAG, "send:upgrade unicast " + sendTargets.describe());
-            TrifaToxService.wakeup_tox_thread();
-            if (g != null && g.group_identifier != null)
-            {
-                maybeReconnectIfDisconnected(groupNum, g);
-            }
-            resendPendingBeginViaPrivate(groupNum, sendTargets, g);
-        }
-    }
-
-    /**
-     * Sends one chunk via private lossless fan-out. The tox lossless layer guarantees delivery + order
-     * (own ACK/retransmit, 8192-entry send_array), so we stream chunks back-to-back and only throttle
-     * when the queue is full ({@code -99}) — that is the real backpressure signal.
-     */
     private static boolean isGroupTransportConnected(final long groupNum)
     {
         try
@@ -2605,7 +2504,7 @@ public final class NgcGroupFileTransfer
      * tears down the lossless session (drops in-flight chunks + a 2s stall), so it must never fire on routine
      * send_array backpressure or brief peer flaps mid-transfer — doing so was what stalled large transfers.
      */
-    private static void maybeReconnectIfDisconnected(final long groupNum, final GroupMessage g)
+    static void maybeReconnectIfDisconnected(final long groupNum, final GroupMessage g)
     {
         if (g == null || g.group_identifier == null)
         {
@@ -2625,73 +2524,513 @@ public final class NgcGroupFileTransfer
         HelperGroup.kickstart_group_connection(groupNum, g.group_identifier);
     }
 
-    private static int sendChunkWithRetry(final long groupNum, final PeerSendTargets sendTargets,
-                                          final GroupMessage g, final byte[] chunkPkt)
+    /** A monotonic clock in milliseconds, for the pace and the budgets (the wall clock can step). */
+    static long nowMs()
     {
-        final long deadline = System.currentTimeMillis() + CHUNK_SEND_STALL_MS;
-        int attempt = 0;
-        while (System.currentTimeMillis() < deadline)
+        return System.nanoTime() / 1_000_000L;
+    }
+
+    /** Sleeps; false when the thread was interrupted (its flag set again). */
+    static boolean sleepQuietly(final long ms)
+    {
+        try
         {
-            if (g != null && HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash))
-            {
-                return -99;
-            }
-            attempt++;
-            refreshSendPeerTargets(groupNum, sendTargets, g);
+            Thread.sleep(ms);
+            return true;
+        }
+        catch (InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
 
-            if (sendTargets.hasPrivatePeer())
-            {
-                int bestRes = -99;
-                for (final long peerId : sendTargets.peerIds)
-                {
-                    final int res = tox_group_send_custom_private_packet(
-                            groupNum, peerId, 1, chunkPkt, chunkPkt.length);
-                    if (HelperGroup.is_ngc_custom_packet_send_ok(res))
-                    {
-                        bestRes = res;
-                    }
-                }
-                if (HelperGroup.is_ngc_custom_packet_send_ok(bestRes))
-                {
-                    return bestRes;
-                }
+    static boolean isStopped(final GroupMessage g)
+    {
+        return Thread.currentThread().isInterrupted()
+               || (g != null && HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash));
+    }
 
-                // every peer rejected -> send_array is full (flow control). brief backoff while ACKs drain.
-                if ((attempt & 63) == 0)
-                {
-                    HelperGeneric.logI(TAG, "send:chunk backpressure attempt=" + attempt + " "
-                            + sendTargets.describe());
-                }
-                TrifaToxService.wakeup_tox_thread();
-                try
-                {
-                    Thread.sleep(Math.min(120L, 10L + attempt * 2L));
-                }
-                catch (InterruptedException e)
-                {
-                    Thread.currentThread().interrupt();
-                    return -99;
-                }
-                continue;
-            }
-
-            HelperGeneric.logI(TAG, "send:chunk waiting for private peer");
-            TrifaToxService.wakeup_tox_thread();
-            if (g != null && g.group_identifier != null)
+    /**
+     * KHANDAQ (0.2.56): waits until the pace lets a packet go (NgcUploadPace); false when the file was stopped
+     * meanwhile. The packet's cost is spent by the caller once it went ({@link #spendPace}).
+     */
+    static boolean awaitPace(final GroupMessage g)
+    {
+        while (true)
+        {
+            final long waitMs;
+            synchronized (PACE)
             {
-                maybeReconnectIfDisconnected(groupNum, g);
+                final long now = nowMs();
+                if (PACE.ready(now))
+                {
+                    return true;
+                }
+                waitMs = PACE.msUntilReady(now);
             }
-            try
+            if (isStopped(g) || !sleepQuietly(Math.max(1L, Math.min(waitMs, 50L))))
             {
-                Thread.sleep(CHUNK_CONN_RETRY_WAIT_MS);
-            }
-            catch (InterruptedException e)
-            {
-                Thread.currentThread().interrupt();
-                return -99;
+                return false;
             }
         }
-        return -99;
+    }
+
+    /** KHANDAQ (0.2.56): a packet of this many bytes went to this many members (NgcUploadPace.cost). */
+    static void spendPace(final long packetBytes, final int members)
+    {
+        PACE.spend(NgcUploadPace.cost(packetBytes, members));
+    }
+
+    /**
+     * KHANDAQ (0.2.56): the packets of one file to its members, at the pace. A member that comes while the file goes
+     * gets the BEGIN before its next chunk: a receiver keeps chunks only for a file whose BEGIN it has (others are
+     * dropped after a minute), and with the BEGIN it asks for the chunks it missed. A member that leaves and comes
+     * back gets the BEGIN again.
+     */
+    private static final class PacedSend
+    {
+        private final long groupNum;
+        private final PeerSendTargets targets;
+        private final GroupMessage g;
+        private final byte[] beginPkt;
+        /** The members that took the BEGIN. */
+        private final java.util.Set<Long> begun = new java.util.HashSet<>();
+        private int refusals = 0;
+
+        PacedSend(final long groupNum, final PeerSendTargets targets, final GroupMessage g, final byte[] beginPkt)
+        {
+            this.groupNum = groupNum;
+            this.targets = targets;
+            this.g = g;
+            this.beginPkt = beginPkt;
+        }
+
+        int begin()
+        {
+            return send(beginPkt, true);
+        }
+
+        int chunk(final byte[] chunkPkt)
+        {
+            return send(chunkPkt, false);
+        }
+
+        /**
+         * SEND_OK once the packet went to at least one member; SEND_NO_MEMBER when the group had nobody to send to
+         * for NO_MEMBER_GRACE_MS, or every member refused it for REFUSED_LIMIT_MS; SEND_STOPPED on a cancel.
+         * Refusals are toxcore's send array, full until the member acknowledges what it has: they are waited out.
+         */
+        private int send(final byte[] pkt, final boolean isBegin)
+        {
+            long nobodySinceMs = -1L;
+            long refusedSinceMs = -1L;
+            int attempt = 0;
+            while (true)
+            {
+                if (isStopped(g))
+                {
+                    return SEND_STOPPED;
+                }
+                targets.refreshOnlinePeers(groupNum);
+                if (!targets.hasPrivatePeer())
+                {
+                    begun.clear();
+                    final long now = nowMs();
+                    if (nobodySinceMs < 0L)
+                    {
+                        nobodySinceMs = now;
+                    }
+                    if ((now - nobodySinceMs) >= NO_MEMBER_GRACE_MS)
+                    {
+                        return SEND_NO_MEMBER;
+                    }
+                    TrifaToxService.wakeup_tox_thread();
+                    maybeReconnectIfDisconnected(groupNum, g);
+                    if (!sleepQuietly(500L))
+                    {
+                        return SEND_STOPPED;
+                    }
+                    continue;
+                }
+                nobodySinceMs = -1L;
+                keepBegunOfTargets();
+                if (!isBegin && !sendBeginToNewMembers())
+                {
+                    return SEND_STOPPED;
+                }
+                if (!awaitPace(g))
+                {
+                    return SEND_STOPPED;
+                }
+                int took = 0;
+                for (final long peerId : targets.peerIds)
+                {
+                    final int res = tox_group_send_custom_private_packet(groupNum, peerId, 1, pkt, pkt.length);
+                    if (HelperGroup.is_ngc_custom_packet_send_ok(res))
+                    {
+                        took++;
+                        if (isBegin)
+                        {
+                            begun.add(peerId);
+                        }
+                    }
+                }
+                if (took > 0)
+                {
+                    spendPace(pkt.length, took);
+                    return SEND_OK;
+                }
+
+                // Every member refused it: their send arrays are full until they acknowledge, or they are gone.
+                final long now = nowMs();
+                if (refusedSinceMs < 0L)
+                {
+                    refusedSinceMs = now;
+                }
+                if ((now - refusedSinceMs) >= REFUSED_LIMIT_MS)
+                {
+                    return SEND_NO_MEMBER;
+                }
+                attempt++;
+                refusals++;
+                if ((refusals & 63) == 1)
+                {
+                    HelperGeneric.logI(TAG, "send:backpressure refusals=" + refusals + " " + targets.describe());
+                }
+                TrifaToxService.wakeup_tox_thread();
+                if (!sleepQuietly(Math.min(120L, 10L + attempt * 2L)))
+                {
+                    return SEND_STOPPED;
+                }
+            }
+        }
+
+        /** A member that left loses its BEGIN: if it comes back, it gets the BEGIN again. */
+        private void keepBegunOfTargets()
+        {
+            final java.util.Set<Long> now = new java.util.HashSet<>();
+            for (final long peerId : targets.peerIds)
+            {
+                now.add(peerId);
+            }
+            begun.retainAll(now);
+        }
+
+        /** The BEGIN to each member that does not have it, one try each; false on a cancel. */
+        private boolean sendBeginToNewMembers()
+        {
+            for (final long peerId : targets.peerIds)
+            {
+                if (begun.contains(peerId))
+                {
+                    continue;
+                }
+                if (!awaitPace(g))
+                {
+                    return false;
+                }
+                final int res = tox_group_send_custom_private_packet(groupNum, peerId, 1, beginPkt,
+                                                                     beginPkt.length);
+                if (HelperGroup.is_ngc_custom_packet_send_ok(res))
+                {
+                    spendPace(beginPkt.length, 1);
+                    begun.add(peerId);
+                    HelperGeneric.logI(TAG, "send:begin to member that came peer=" + peerId);
+                }
+            }
+            return true;
+        }
+    }
+
+    // ---- KHANDAQ (0.2.56): how our group files stand ----
+
+    private static String stateKey(final String groupId, final String msgIdHash)
+    {
+        return groupId.toLowerCase(Locale.ROOT) + "|" + msgIdHash.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * KHANDAQ (0.2.56): our file has nobody to go to. It waits for a member (WAITS) instead of being said not sent,
+     * and goes again from its BEGIN, from its first chunk, once its group has one (resumeWaitingSends): what went
+     * before was lost with the members that left, and a member that comes has none of it.
+     */
+    static void waitForMember(final GroupMessage g, final String why)
+    {
+        if (g == null || g.group_identifier == null || g.msg_id_hash == null)
+        {
+            return;
+        }
+        HelperGeneric.logI(TAG, "send:waits for a member (" + why + ") msg=" + g.msg_id_hash.substring(0, 8));
+        markOutgoingPending(g.group_identifier, g.msg_id_hash);
+        HelperGroup.clear_ngc_outgoing_send_resume_state(g.group_identifier, g.msg_id_hash);
+        HelperGroup.clear_ngc_file_transfer_progress(g.group_identifier, g.msg_id_hash);
+        WAITS.add(g.group_identifier, g.msg_id_hash);
+        HelperGroup.refresh_group_file_row(g.group_identifier, g.msg_id_hash);
+    }
+
+    /** KHANDAQ (0.2.56): our file went whole: no longer pending, and nothing brings it back. */
+    static void outgoingSent(final GroupMessage g)
+    {
+        if (g == null || g.group_identifier == null || g.msg_id_hash == null)
+        {
+            return;
+        }
+        WAITS.remove(g.group_identifier, g.msg_id_hash);
+        clearOutgoingPending(g.group_identifier, g.msg_id_hash);
+    }
+
+    /** KHANDAQ (0.2.56): the user cancelled our file: it waits for nothing, and a restart does not bring it back. */
+    static void forgetOutgoing(final String groupId, final String msgIdHash)
+    {
+        if (groupId == null || msgIdHash == null)
+        {
+            return;
+        }
+        WAITS.remove(groupId, msgIdHash);
+        clearOutgoingPending(groupId, msgIdHash);
+    }
+
+    /**
+     * KHANDAQ (0.2.56): our file is ours to send until it went whole, across a restart too (PENDING_SEND_PREFIX).
+     * The mark is written off the calling thread.
+     */
+    static void markOutgoingPending(final String groupId, final String msgIdHash)
+    {
+        if (groupId == null || msgIdHash == null)
+        {
+            return;
+        }
+        final String key = stateKey(groupId, msgIdHash);
+        if (!pendingSends.add(key))
+        {
+            return;
+        }
+        runState(() -> HelperGeneric.set_g_opts(PENDING_SEND_PREFIX + key, "1"));
+    }
+
+    /** The file is no longer pending. Removed from the database also when this run never read the mark. */
+    private static void clearOutgoingPending(final String groupId, final String msgIdHash)
+    {
+        final String key = stateKey(groupId, msgIdHash);
+        pendingSends.remove(key);
+        runState(() -> HelperGeneric.del_g_opts(PENDING_SEND_PREFIX + key));
+    }
+
+    private static void runState(final Runnable work)
+    {
+        try
+        {
+            STATE_EXECUTOR.execute(() ->
+            {
+                try
+                {
+                    work.run();
+                }
+                catch (Exception e)
+                {
+                    HelperGeneric.logI(TAG, "state:EE:" + e.getMessage());
+                }
+            });
+        }
+        catch (RuntimeException e)
+        {
+            HelperGeneric.logI(TAG, "state:not queued:" + e.getMessage());
+        }
+    }
+
+    /** KHANDAQ (0.2.56): our file waits for a member to send it to. */
+    static boolean isOutgoingWaiting(final String groupId, final String msgIdHash)
+    {
+        return WAITS.contains(groupId, msgIdHash);
+    }
+
+    /** KHANDAQ (0.2.56): the own send of our file is queued or running. */
+    static boolean isOutgoingGoing(final String groupId, final String msgIdHash)
+    {
+        return groupId != null && msgIdHash != null && inflightOwnSends.contains(beginResendKey(groupId, msgIdHash));
+    }
+
+    /**
+     * KHANDAQ (0.2.56): our file has not gone whole yet: its send began and did not end. Memory only, never blocks:
+     * the marks of earlier runs are read once in the background, and their rows drawn again then.
+     */
+    static boolean isOutgoingPending(final String groupId, final String msgIdHash)
+    {
+        if (groupId == null || msgIdHash == null)
+        {
+            return false;
+        }
+        ensurePendingSendsLoaded();
+        return pendingSends.contains(stateKey(groupId, msgIdHash));
+    }
+
+    /**
+     * KHANDAQ (0.2.56): our file is ours to send and nothing brings it: pending, and neither going, nor waiting for a
+     * member (the service's tick brings those), nor failed, nor sent.
+     */
+    static boolean needsOutgoingResume(final String groupId, final String msgIdHash)
+    {
+        return isOutgoingPending(groupId, msgIdHash) && !isOutgoingGoing(groupId, msgIdHash)
+               && !isOutgoingWaiting(groupId, msgIdHash)
+               && !HelperGroup.is_ngc_file_transfer_failed(groupId, msgIdHash)
+               && !HelperGroup.is_ngc_outgoing_send_complete(groupId, msgIdHash);
+    }
+
+    /**
+     * KHANDAQ (0.2.56): the service's tick (every 4 s while we are online). Our files that wait for a member go once
+     * their group has had someone to send to for NgcOutgoingFileWaits.PEER_SETTLE_MS. Runs on the tox thread, so
+     * only toxcore is asked here; finding the rows and the sends run on STATE_EXECUTOR.
+     */
+    static void resumeWaitingSends()
+    {
+        ensurePendingSendsLoaded();
+        final long now = nowMs();
+        for (final String groupId : WAITS.groups())
+        {
+            final long groupNum = tox_group_by_groupid__wrapper(groupId);
+            final boolean reachable = groupNum >= 0 && HelperGroup.pickChunkedFileUnicastPeerIds(groupNum).length > 0;
+            final List<NgcOutgoingFileWaits.File> due = WAITS.due(groupId, reachable, now);
+            if (due.isEmpty())
+            {
+                continue;
+            }
+            HelperGeneric.logI(TAG, "send:the group has a member, " + due.size() + " waiting file(s) go gn=" + groupNum);
+            try
+            {
+                STATE_EXECUTOR.execute(() -> resumeDue(due));
+            }
+            catch (RuntimeException e)
+            {
+                for (final NgcOutgoingFileWaits.File f : due)
+                {
+                    WAITS.add(f.groupId, f.msgIdHash);
+                }
+            }
+        }
+    }
+
+    private static void resumeDue(final List<NgcOutgoingFileWaits.File> due)
+    {
+        for (final NgcOutgoingFileWaits.File f : due)
+        {
+            try
+            {
+                final GroupMessage m = HelperGroup.find_group_message_by_msg_id_hash(f.groupId, f.msgIdHash);
+                if (m == null || m.direction != 1)
+                {
+                    // The message is gone (deleted): nothing to send.
+                    clearOutgoingPending(f.groupId, f.msgIdHash);
+                    continue;
+                }
+                // The automatic path: it never lifts a user's cancel.
+                HelperGroup.resume_group_file_send(m);
+            }
+            catch (Exception e)
+            {
+                HelperGeneric.logI(TAG, "send:resume:EE:" + e.getMessage());
+                WAITS.add(f.groupId, f.msgIdHash);
+            }
+        }
+    }
+
+    /** Reads the pending marks of earlier runs once, in the background; again on a later call if it failed. */
+    private static void ensurePendingSendsLoaded()
+    {
+        if (pendingSendsLoaded || TrifaToxService.orma == null || !pendingSendsLoadQueued.compareAndSet(false, true))
+        {
+            return;
+        }
+        try
+        {
+            STATE_EXECUTOR.execute(NgcGroupFileTransfer::loadPendingSends);
+        }
+        catch (RuntimeException e)
+        {
+            pendingSendsLoadQueued.set(false);
+        }
+    }
+
+    /** The files an earlier run did not send whole wait for a member now, and their rows say so. */
+    private static void loadPendingSends()
+    {
+        try
+        {
+            final List<com.zoffcc.applications.sorm.TRIFADatabaseGlobalsNew> rows =
+                    TrifaToxService.orma.selectFromTRIFADatabaseGlobalsNew().keyLike(PENDING_SEND_LIKE).toList();
+            int waiting = 0;
+            if (rows != null)
+            {
+                for (final com.zoffcc.applications.sorm.TRIFADatabaseGlobalsNew row : rows)
+                {
+                    if (row == null || row.key == null || !row.key.startsWith(PENDING_SEND_PREFIX))
+                    {
+                        continue;
+                    }
+                    final String key = row.key.substring(PENDING_SEND_PREFIX.length());
+                    final int bar = key.indexOf('|');
+                    if (bar <= 0 || bar >= key.length() - 1)
+                    {
+                        continue;
+                    }
+                    final String groupId = key.substring(0, bar);
+                    final String msgIdHash = key.substring(bar + 1);
+                    // Went whole or goes in this run already: the mark is on its way out, or no longer needed here.
+                    if (HelperGroup.is_ngc_outgoing_send_complete(groupId, msgIdHash)
+                        || isOutgoingGoing(groupId, msgIdHash))
+                    {
+                        continue;
+                    }
+                    pendingSends.add(key);
+                    WAITS.add(groupId, msgIdHash);
+                    HelperGroup.refresh_group_file_row(groupId, msgIdHash);
+                    waiting++;
+                }
+            }
+            pendingSendsLoaded = true;
+            HelperGeneric.logI(TAG, "send:pending from earlier runs=" + waiting);
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "send:pending load:EE:" + e.getMessage());
+            pendingSendsLoadQueued.set(false);
+        }
+    }
+
+    // ---- KHANDAQ (0.2.56): how often an incoming file asks for missing chunks (NgcFileNackBudget) ----
+
+    /** The user asked for the incoming file: it may ask its sender for what it misses again, all its requests. */
+    static void restartReceiveRequests(final String groupId, final String msgIdHash)
+    {
+        if (groupId != null && msgIdHash != null)
+        {
+            NACKS.restart(receiveDoneKey(groupId, msgIdHash));
+        }
+    }
+
+    /**
+     * A round of the receive watchdog found the incoming file silent, its sender online. True once its silence has
+     * lasted NgcFileNackBudget.SILENCE_LIMIT_MS: the file is given up.
+     */
+    static boolean receiveSilentRound(final String groupId, final String msgIdHash)
+    {
+        return groupId != null && msgIdHash != null
+               && NACKS.silentRound(receiveDoneKey(groupId, msgIdHash), nowMs());
+    }
+
+    /** A round of the receive watchdog found the sender of the incoming file away: not the file's silence. */
+    static void receiveSenderAway(final String groupId, final String msgIdHash)
+    {
+        if (groupId != null && msgIdHash != null)
+        {
+            NACKS.senderAway(receiveDoneKey(groupId, msgIdHash));
+        }
+    }
+
+    /** The incoming file was given up and nothing started it over: the automatic retries leave it alone. */
+    static boolean hasGivenUpReceive(final String groupId, final String msgIdHash)
+    {
+        return groupId != null && msgIdHash != null && NACKS.gaveUp(receiveDoneKey(groupId, msgIdHash));
     }
 
     private static final class OutgoingFileSource

@@ -2227,13 +2227,32 @@ public class HelperGroup
         {
             return;
         }
-        if (HelperFiletransfer.isGroupMessageMediaReady(message, null))
+        if (outgoing)
         {
-            return;
+            // KHANDAQ (0.2.56): our file is whole on this device, so isGroupMessageMediaReady said "ready" for every
+            // one of them and no outgoing file was ever sent again from here. What counts is whether it is still ours
+            // to send and nothing brings it (a file that waits for a member goes from the service's tick).
+            if (!NgcGroupFileTransfer.needsOutgoingResume(message.group_identifier, message.msg_id_hash))
+            {
+                return;
+            }
         }
-        if (!outgoing && !is_group_message_sender_online(message))
+        else
         {
-            return;
+            if (HelperFiletransfer.isGroupMessageMediaReady(message, null))
+            {
+                return;
+            }
+            if (!is_group_message_sender_online(message))
+            {
+                return;
+            }
+            // KHANDAQ (0.2.56): a file given up after a minute of silence asks no more by itself; its row offers to
+            // download it again (NgcFileNackBudget).
+            if (NgcGroupFileTransfer.hasGivenUpReceive(message.group_identifier, message.msg_id_hash))
+            {
+                return;
+            }
         }
 
         final String key = ngc_file_progress_key(message.group_identifier, message.msg_id_hash);
@@ -2327,7 +2346,9 @@ public class HelperGroup
 
             for (GroupMessage gm : outgoing)
             {
-                if (HelperFiletransfer.isGroupMessageMediaReady(gm, null))
+                // KHANDAQ (0.2.56): not isGroupMessageMediaReady, which is true for every file of ours (it is whole
+                // here) and so skipped them all: whether it is still ours to send and nothing brings it.
+                if (!NgcGroupFileTransfer.needsOutgoingResume(gm.group_identifier, gm.msg_id_hash))
                 {
                     continue;
                 }
@@ -2336,9 +2357,9 @@ public class HelperGroup
                 // KHANDAQ (audit3 #2): describing the guard as "skips user cancels" was wrong — the
                 // call below is is_ngc_send_cancelled(), which skips a row for THREE reasons:
                 //   1. the user cancelled it -> persisted tombstone, must stay cancelled forever;
-                //   2. it was superseded in this session by a newer send for the same group
-                //      (cancelStaleOutgoingChunkedSends -> ngc_cancelled_sends). That map is memory
-                //      only, so after a restart such a row is not skipped and does auto-resume here;
+                //   2. it is in ngc_cancelled_sends, the session-only cancel. KHANDAQ (0.2.56): a newer send
+                //      no longer supersedes a file (cancelStaleOutgoingChunkedSends is gone), so only a user
+                //      cancel puts a file there, together with its tombstone;
                 //   3. the tombstone row could not be read at all right now (audit3 #1 fails closed).
                 //      Nothing is cached in that case, so the row is simply reconsidered the next time
                 //      this runs (group reconnect / peer online) instead of being sent blind.
@@ -6163,6 +6184,8 @@ public class HelperGroup
         if ((data_length > TOX_MAX_NGC_FILE_AND_HEADER_SIZE) || (data_length < (header + 1)))
         {
             HelperGeneric.logI(TAG, "send_group_image: data length has wrong size: " + data_length);
+            // KHANDAQ (0.2.56): said on its row too, which otherwise kept it as a file still to send.
+            mark_ngc_file_transfer_failed(g.group_identifier, g.msg_id_hash);
             AirComposerNotice.say(context_s.getString(R.string.group_file_send_failed), true);
             return;
         }
@@ -6277,10 +6300,14 @@ public class HelperGroup
 
         TrifaToxService.wakeup_tox_thread();
         FileTransferDebug.logGroupConnection(groupNum);
-        if (!NgcGroupFileTransfer.waitForGroupConnected(groupNum, g, 45_000L))
+        // KHANDAQ (0.2.56): the file goes as one packet to the group, and toxcore takes a packet for nobody and says it
+        // went: with no member to send to, the file showed as sent and reached no one (as texts did, fixed in #128).
+        // It waits for a member now, and goes from the service's tick once the group has one. It waited 45 s for a
+        // connection before, and then for a retry that never came.
+        final long[] members = pickChunkedFileUnicastPeerIds(groupNum);
+        if (members.length == 0)
         {
-            HelperGeneric.logI(TAG, "send_group_image: group not connected — queue retry");
-            schedule_auto_retry_group_file_send(g);
+            NgcGroupFileTransfer.waitForMember(g, "small file, nobody to send to");
             return;
         }
 
@@ -6290,6 +6317,10 @@ public class HelperGroup
         byte[] data = new byte[(int)data_length];
         data_buf.rewind();
         data_buf.get(data);
+        if (!NgcGroupFileTransfer.awaitPace(g))
+        {
+            return;
+        }
         FileTransferDebug.logGroupCustomPacketSend(groupNum, (int) data_length);
         final int sendRes = tox_group_send_custom_packet(groupNum,
                                      1,
@@ -6300,14 +6331,25 @@ public class HelperGroup
         {
             HelperGeneric.logI(TAG, "send_group_image: packet failed res=" + sendRes
                     + " (" + HelperGroup.describe_ngc_custom_packet_error(sendRes) + ")");
+            if (sendRes == NGC_CUSTOM_PACKET_DISCONNECTED)
+            {
+                // KHANDAQ (0.2.56): the group lost its connection: the file waits for it, not "not sent".
+                NgcGroupFileTransfer.waitForMember(g, "small file, group disconnected");
+                return;
+            }
             mark_ngc_file_transfer_failed(g.group_identifier, g.msg_id_hash);
             AirComposerNotice.say(context_s.getString(R.string.group_file_send_failed), true);
             return;
         }
+        NgcGroupFileTransfer.spendPace(data_length, members.length);
 
         notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash, length_sum, length_sum);
+        NgcGroupFileTransfer.outgoingSent(g);
         HelperGeneric.logI(TAG, "send_group_image:done bytes=" + length_sum + " res=" + sendRes);
     }
+
+    /** tox_group_send_custom_packet's TOX_ERR_GROUP_SEND_CUSTOM_PACKET_DISCONNECTED (5), as the JNI returns it. */
+    static final int NGC_CUSTOM_PACKET_DISCONNECTED = -105;
 
     /** JNI returns {@code 1} on success, {@code 0} or negative on failure — never treat {@code 0} as ok. */
     static boolean is_ngc_custom_packet_send_ok(final int result)
@@ -6351,45 +6393,6 @@ public class HelperGroup
         return "err_" + result;
     }
 
-    static void cancelStaleOutgoingChunkedSends(final String groupId, final String activeMsgIdHash)
-    {
-        if (groupId == null || activeMsgIdHash == null)
-        {
-            return;
-        }
-        try
-        {
-            final List<GroupMessage> pending = orma.selectFromGroupMessage().
-                    group_identifierEq(groupId.toLowerCase(Locale.ROOT)).
-                    directionEq(1).
-                    TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
-                    toList();
-            for (final GroupMessage gm : pending)
-            {
-                if (gm == null || gm.msg_id_hash == null
-                        || activeMsgIdHash.equalsIgnoreCase(gm.msg_id_hash))
-                {
-                    continue;
-                }
-                if (!NgcGroupFileTransfer.shouldUseChunkedTransfer(gm.filesize))
-                {
-                    continue;
-                }
-                if (is_ngc_outgoing_send_complete(groupId, gm.msg_id_hash)
-                        || HelperFiletransfer.isGroupMessageMediaReady(gm, null))
-                {
-                    continue;
-                }
-                cancel_ngc_file_send(groupId, gm.msg_id_hash);
-                HelperGeneric.logI(TAG, "cancelStaleOutgoingChunkedSends:msg="
-                        + gm.msg_id_hash.substring(0, 8));
-            }
-        }
-        catch (Exception ignored)
-        {
-        }
-    }
-
     static void send_group_file(final GroupMessage g)
     {
         if (g == null)
@@ -6397,9 +6400,13 @@ public class HelperGroup
             return;
         }
 
+        // KHANDAQ (0.2.56): the file is ours to send until it went whole, across a restart too.
+        NgcGroupFileTransfer.markOutgoingPending(g.group_identifier, g.msg_id_hash);
         if (NgcGroupFileTransfer.shouldUseChunkedTransfer(g.filesize))
         {
-            cancelStaleOutgoingChunkedSends(g.group_identifier, g.msg_id_hash);
+            // KHANDAQ (0.2.56): a new file no longer stops the group's other unsent files (it called
+            // cancelStaleOutgoingChunkedSends here): such a file waits for a member now, and the files that go share
+            // the pace (NgcUploadPace) instead of holding a send thread. Stopped, a waiting file stayed unsent.
             NgcGroupFileTransfer.sendGroupFileChunked(g);
         }
         else
@@ -6587,7 +6594,9 @@ public class HelperGroup
     // download bypass the global attachment-download policy (Никогда / Wi-Fi-only) for that file only.
     private static final java.util.Set<String> ngc_manual_download_requested =
             java.util.concurrent.ConcurrentHashMap.newKeySet();
-    private static final ConcurrentHashMap<String, Runnable> ngc_outgoing_file_timeout_tasks = new ConcurrentHashMap<>();
+    // KHANDAQ (0.2.56): no outgoing watchdog any more (arm_ngc_outgoing_file_timeout). It never fired for a file of
+    // ours, which is whole on this device, and it would have said "not sent" of a file that waits for a member: the
+    // send says how its file stands now (NgcGroupFileTransfer).
     private static final ConcurrentHashMap<String, Runnable> ngc_incoming_file_timeout_tasks = new ConcurrentHashMap<>();
 
     private static final long NGC_INCOMING_FILE_TIMEOUT_MS = 30_000L;
@@ -6679,6 +6688,9 @@ public class HelperGroup
             }
         }
         cancel_ngc_file_send(groupId, msgIdHash);
+        // KHANDAQ (0.2.56): the user took the file back: it no longer waits for a member, and a restart does not
+        // bring it back. Its "Send again" (retry_group_file_send) makes it ours to send again.
+        NgcGroupFileTransfer.forgetOutgoing(groupId, msgIdHash);
     }
 
     /**
@@ -7091,6 +7103,17 @@ public class HelperGroup
                     && NgcGroupFileTransfer.shouldUseChunkedTransfer(m.filesize)
                     && is_group_message_sender_online(m))
             {
+                // KHANDAQ (0.2.56): a file with no new chunk for a minute in a row of its sender online is given up,
+                // as on iOS: it says it did not come and offers to download it again, and asks no more by itself. It
+                // was asked for every few seconds for as long as its sender was online (NgcFileNackBudget caps the
+                // requests as well).
+                if (NgcGroupFileTransfer.receiveSilentRound(groupId, msgIdHash))
+                {
+                    HelperGeneric.logI(TAG, "ngc_incoming:silent for a minute, given up msg="
+                            + msgIdHash.substring(0, Math.min(8, msgIdHash.length())));
+                    mark_ngc_file_transfer_failed(groupId, msgIdHash);
+                    return;
+                }
                 clear_ngc_file_transfer_failed(groupId, msgIdHash);
                 // Only re-ask when the transfer has actually stalled (no new chunk for a few seconds),
                 // so an in-progress download isn't flooded with redundant requests. Re-arm fast so a
@@ -7104,6 +7127,8 @@ public class HelperGroup
                 return;
             }
 
+            // KHANDAQ (0.2.56): its sender is away: the minute of silence starts again once it is back.
+            NgcGroupFileTransfer.receiveSenderAway(groupId, msgIdHash);
             // Sender offline / not a chunked transfer: keep polling cheaply and only give up (show the
             // manual "retry" affordance) once there's been no progress for the full stall window.
             if (is_ngc_transfer_stalled(groupId, msgIdHash))
@@ -7199,6 +7224,9 @@ public class HelperGroup
             return;
         }
         ngc_manual_download_requested.add(ngc_file_progress_key(groupId, msgIdHash));
+        // KHANDAQ (0.2.56): and the file may ask its sender for its missing chunks again, all its requests
+        // (NgcFileNackBudget): the automatic retries never give those back.
+        NgcGroupFileTransfer.restartReceiveRequests(groupId, msgIdHash);
     }
 
     static void clear_ngc_manual_download_requested(final String groupId, final String msgIdHash)
@@ -7278,7 +7306,8 @@ public class HelperGroup
         {
             return;
         }
-        if (is_ngc_file_transfer_failed(message.group_identifier, message.msg_id_hash))
+        if (is_ngc_file_transfer_failed(message.group_identifier, message.msg_id_hash)
+            || NgcGroupFileTransfer.hasGivenUpReceive(message.group_identifier, message.msg_id_hash))
         {
             return;
         }
@@ -7325,50 +7354,6 @@ public class HelperGroup
         return ageMs >= NGC_TRANSFER_STALL_MS;
     }
 
-    static void arm_ngc_outgoing_file_timeout(final String groupId, final String msgIdHash)
-    {
-        if (main_handler_s == null || groupId == null || msgIdHash == null)
-        {
-            return;
-        }
-
-        disarm_ngc_outgoing_file_timeout(groupId, msgIdHash);
-
-        final String key = ngc_file_progress_key(groupId, msgIdHash);
-        final Runnable timeoutTask = () ->
-        {
-            ngc_outgoing_file_timeout_tasks.remove(key);
-            if (NgcGroupFileTransfer.isReceiveComplete(groupId, msgIdHash))
-            {
-                return;
-            }
-            final int pct = ngc_file_transfer_progress_percent(groupId, msgIdHash);
-            if (pct >= 100)
-            {
-                return;
-            }
-            mark_ngc_file_transfer_failed(groupId, msgIdHash);
-        };
-
-        ngc_outgoing_file_timeout_tasks.put(key, timeoutTask);
-        main_handler_s.postDelayed(timeoutTask, NGC_TRANSFER_STALL_MS);
-    }
-
-    static void disarm_ngc_outgoing_file_timeout(final String groupId, final String msgIdHash)
-    {
-        if (main_handler_s == null || groupId == null || msgIdHash == null)
-        {
-            return;
-        }
-
-        final String key = ngc_file_progress_key(groupId, msgIdHash);
-        final Runnable timeoutTask = ngc_outgoing_file_timeout_tasks.remove(key);
-        if (timeoutTask != null)
-        {
-            main_handler_s.removeCallbacks(timeoutTask);
-        }
-    }
-
     static void clear_ngc_file_transfer_progress(final String groupId, final String msgIdHash)
     {
         if (groupId == null || msgIdHash == null)
@@ -7382,6 +7367,20 @@ public class HelperGroup
 
     private static final ConcurrentHashMap<String, Long> ngc_progress_refresh_ts = new ConcurrentHashMap<>();
     private static final long PROGRESS_REFRESH_MIN_INTERVAL_MS = 300L;
+
+    /**
+     * KHANDAQ (0.2.56): draws the row of a group file again now: its state changed (it waits for a member, or goes
+     * again). Past the per-chunk throttle, which would otherwise eat a one-off change.
+     */
+    static void refresh_group_file_row(final String groupId, final String msgIdHash)
+    {
+        if (groupId == null || msgIdHash == null)
+        {
+            return;
+        }
+        ngc_progress_refresh_ts.remove(ngc_file_progress_key(groupId, msgIdHash));
+        post_group_file_progress_refresh(groupId, msgIdHash);
+    }
 
     private static void post_group_file_progress_refresh(final String groupId, final String msgIdHash)
     {

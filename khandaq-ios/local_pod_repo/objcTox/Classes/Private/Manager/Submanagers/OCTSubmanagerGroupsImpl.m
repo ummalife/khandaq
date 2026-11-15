@@ -5033,6 +5033,13 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     OCTTox *tox = [self.dataSource managerGetTox];
     NSString *chatIdHex = [tox groupChatIdHexForGroupNumber:groupNumber error:nil];
 
+    // KHANDAQ (0.2.56): an incoming group file now finishes on main, a moment after its last packet. A group
+    // left in that moment has no chat id any more, and a chat made without one asserts in Debug and is a
+    // chat of no group in Release; the file has no chat to go to then.
+    if (chatIdHex.length == 0) {
+        return nil;
+    }
+
     return [realmManager getOrCreateGroupChatWithGroupNumber:groupNumber
                                                    chatIdHex:chatIdHex
                                                    groupName:nil

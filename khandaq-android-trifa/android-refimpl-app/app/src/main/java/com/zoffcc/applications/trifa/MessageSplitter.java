@@ -41,6 +41,21 @@ final class MessageSplitter
         return firstSentMs + index * PART_GAP_MS;
     }
 
+    /**
+     * KHANDAQ (0.2.56): whether part index of a text of count parts wakes a friend who is offline. Only the
+     * last one does. Each part used to ask the relay twice when it was sent (the send wrapper, then the
+     * activity), and again at every step of resend_push_for_v3_messages. The relay takes
+     * PUSH_RATE_LIMIT_PER_MIN wakes a minute from one address (120 unless set), so a text of about 60 parts
+     * got 429s, and PushBackoffPolicy then held back every wake to that friend, a call's too, for a minute
+     * and longer. The last part leaves last, so its wakes go on until the whole text has arrived; the other
+     * parts start with their wakes spent (TrifaToxService.PUSH_WAKE_MAX_ATTEMPTS). Rows that wait in the
+     * queue take one wake a round for all of a friend's rows (resend_unsent_text_messages).
+     */
+    static boolean partWakes(final int index, final int count)
+    {
+        return index >= count - 1;
+    }
+
     /** The parts text goes as, in order: one when it fits, none when it is empty. */
     static List<String> split(final String text, final int headChars, final int maxBytes)
     {

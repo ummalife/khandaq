@@ -260,6 +260,26 @@ public class MessageSplitterTest
         assertEquals(1000L + 9 * MessageSplitter.PART_GAP_MS, MessageSplitter.partSentTimestamp(1000L, 9));
     }
 
+    @Test
+    public void only_the_last_part_of_a_text_wakes_a_friend_who_is_offline()
+    {
+        // A text of its own wakes as it always did.
+        assertTrue(MessageSplitter.partWakes(0, 1));
+        assertFalse(MessageSplitter.partWakes(0, 2));
+        assertTrue(MessageSplitter.partWakes(1, 2));
+        // 150 parts once asked the relay 300 times at once; it takes 120 a minute from one address.
+        int wakes = 0;
+        for (int i = 0; i < 150; i++)
+        {
+            if (MessageSplitter.partWakes(i, 150))
+            {
+                wakes++;
+                assertEquals(149, i);
+            }
+        }
+        assertEquals(1, wakes);
+    }
+
     /**
      * Random texts of whole characters: every part fits, no part is white space or starts with a line
      * break or ends with white space, nothing but white space at a cut is lost, and every cut falls

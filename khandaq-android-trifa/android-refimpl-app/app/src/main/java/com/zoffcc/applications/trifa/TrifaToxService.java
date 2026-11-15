@@ -2755,6 +2755,9 @@ public class TrifaToxService extends Service
 
             int sent_this_round = 0;
             final int max_per_round = 10;
+            // KHANDAQ (0.2.56): the friends woken in this round. The relay counts every wake (120 a minute
+            // from one address), and the parts of a long text that waits here would each ask at once.
+            final java.util.Set<String> woken_this_round = new java.util.HashSet<>();
             Iterator<com.zoffcc.applications.sorm.Message> ii = unsent.iterator();
 
             while (ii.hasNext())
@@ -2765,9 +2768,13 @@ public class TrifaToxService extends Service
                 {
                     // KHANDAQ (redesign, stage 2): messages now queue while our own node is offline too.
                     // The one push per message waits until we are online, or it is spent on a dead link.
+                    // KHANDAQ (0.2.56): one wake a round wakes the friend for every row that waits for them.
                     if ((m_unsent.sent_push < 1) && HelperFriend.is_self_tox_connected_to_dht())
                     {
-                        friend_call_push_url(m_unsent.tox_friendpubkey, m_unsent.sent_timestamp);
+                        if (woken_this_round.add(m_unsent.tox_friendpubkey))
+                        {
+                            friend_call_push_url(m_unsent.tox_friendpubkey, m_unsent.sent_timestamp);
+                        }
                         orma.updateMessage().idEq(m_unsent.id).sent_push(1).execute();
                     }
                     continue;

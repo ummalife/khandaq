@@ -3675,8 +3675,10 @@ public class HelperGeneric
      *
      *    boolean msg_v2: true if msgv2 was used, false otherwise
      *
+     * KHANDAQ (0.2.56): may_wake says whether a friend who is offline gets a wake push for this message.
+     * Only the last part of a long text asks for one (MessageSplitter.partWakes).
      */
-    public static MainActivity.send_message_result tox_friend_send_message_wrapper(final String friend_pubkey, int a_TOX_MESSAGE_TYPE, @NonNull String message, long timestamp_unixtime_seconds)
+    public static MainActivity.send_message_result tox_friend_send_message_wrapper(final String friend_pubkey, int a_TOX_MESSAGE_TYPE, @NonNull String message, long timestamp_unixtime_seconds, final boolean may_wake)
     {
         // Log.d(TAG, "tox_friend_send_message_wrapper:" + friend_pubkey);
         long friendnum_to_use = tox_friend_by_public_key__wrapper(friend_pubkey);
@@ -3744,7 +3746,7 @@ public class HelperGeneric
             }
             else
             {
-                need_call_push_url = true;
+                need_call_push_url = may_wake;
             }
         }
 
@@ -3894,6 +3896,13 @@ public class HelperGeneric
                 return result;
             }
         }
+    }
+
+    /** A message of its own: a friend who is offline gets a wake push for it. */
+    public static MainActivity.send_message_result tox_friend_send_message_wrapper(final String friend_pubkey, int a_TOX_MESSAGE_TYPE, @NonNull String message, long timestamp_unixtime_seconds)
+    {
+        return tox_friend_send_message_wrapper(friend_pubkey, a_TOX_MESSAGE_TYPE, message, timestamp_unixtime_seconds,
+                                               true);
     }
 
     static void set_new_random_nospam_value()

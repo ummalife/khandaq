@@ -2278,6 +2278,9 @@ public class MessageListActivity extends AppCompatActivity
         for (int i = 0; i < parts.size(); i++)
         {
             final String msg = fullText.substring(parts.get(i)[0], parts.get(i)[1]);
+            // KHANDAQ (0.2.56): a friend who is offline is woken once for the text, by its last part; the
+            // other parts start with their wakes spent (MessageSplitter.partWakes).
+            final boolean wakes = MessageSplitter.partWakes(i, parts.size());
 
             Message m = new Message();
             m.tox_friendpubkey = friend_pubkey;
@@ -2291,13 +2294,13 @@ public class MessageListActivity extends AppCompatActivity
             m.text = msg;
             m.msg_version = 0;
             m.resend_count = 0; // we have tried to resend this message "0" times
-            m.sent_push = 0;
+            m.sent_push = wakes ? 0 : TrifaToxService.PUSH_WAKE_MAX_ATTEMPTS;
             m.msg_idv3_hash = "";
             m.msg_id_hash = "";
             m.raw_msgv2_bytes = "";
 
             MainActivity.send_message_result result = tox_friend_send_message_wrapper(friend_pubkey, 0, msg,
-                                                                                      (m.sent_timestamp / 1000));
+                                                                                      (m.sent_timestamp / 1000), wakes);
 
             if (result == null)
             {
@@ -2360,7 +2363,7 @@ public class MessageListActivity extends AppCompatActivity
             long row_id = insert_into_message_db(m, true);
             m.id = row_id;
 
-            if (!HelperFriend.is_dm_message_send_success(res))
+            if (wakes && !HelperFriend.is_dm_message_send_success(res))
             {
                 friend_call_push_url(friend_pubkey, m.sent_timestamp);
             }

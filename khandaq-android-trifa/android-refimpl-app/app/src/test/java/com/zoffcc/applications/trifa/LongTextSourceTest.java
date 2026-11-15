@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -70,6 +71,38 @@ public class LongTextSourceTest
         assertTrue(split > 0 && resend.indexOf("tox_friend_send_message_wrapper(") > split);
         // A text over what chunks carry goes in parts when it is new too.
         assertTrue(read("MessageListActivity.java").contains("&& MessageChunker.canCarry(fullText))"));
+    }
+
+    @Test
+    public void a_long_direct_text_wakes_a_friend_who_is_offline_once() throws Exception
+    {
+        // Each part asked the relay twice and again at every resend step; past ~60 parts the relay said 429
+        // and the phone held back its wakes to that friend, a call's too (MessageSplitter.partWakes).
+        // The whole activity, not one method: the send loop may move (the media caption sends through it too).
+        final String send = flat(read("MessageListActivity.java"));
+        assertTrue(send.contains("final boolean wakes = MessageSplitter.partWakes(i, parts.size());"));
+        assertTrue(send.contains("m.sent_push = wakes ? 0 : TrifaToxService.PUSH_WAKE_MAX_ATTEMPTS;"));
+        assertTrue(send.contains("(m.sent_timestamp / 1000), wakes);"));
+        assertTrue(send.contains("if (wakes && !HelperFriend.is_dm_message_send_success(res))"));
+        // The wrapper wakes only when it is asked to; a message of its own still asks.
+        final String helper = read("HelperGeneric.java");
+        assertTrue(method(helper, "public static MainActivity.send_message_result tox_friend_send_message_wrapper(")
+                           .contains("need_call_push_url = may_wake;"));
+        assertTrue(flat(helper).contains("return tox_friend_send_message_wrapper(friend_pubkey, a_TOX_MESSAGE_TYPE, message,"
+                                         + " timestamp_unixtime_seconds, true);"));
+        // Rows that wait in the queue (parts written before Tox ran, a text split there) wake a friend once
+        // a round.
+        final String resend = flat(method(read("TrifaToxService.java"), "static void resend_unsent_text_messages()"));
+        assertTrue(resend.contains("if (woken_this_round.add(m_unsent.tox_friendpubkey)) {"
+                                   + " friend_call_push_url(m_unsent.tox_friendpubkey, m_unsent.sent_timestamp); }"));
+        // ... and nothing else in that loop wakes anyone.
+        assertEquals(1, resend.split("friend_call_push_url\\(", -1).length - 1);
+    }
+
+    /** The source with each run of white space as one space, so a check does not hang on line breaks. */
+    private static String flat(final String source)
+    {
+        return source.replaceAll("\\s+", " ");
     }
 
     /** The text of the method that starts with signature, up to its closing brace at class level. */

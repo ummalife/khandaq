@@ -915,6 +915,7 @@ void Widget::onCoreChanged(Core& core_)
     connect(core, &Core::groupPeerAudioPlaying, this, &Widget::onGroupPeerAudioPlaying);
     connect(core, &Core::emptyGroupCreated, this, &Widget::onEmptyGroupCreated);
     connect(core, &Core::groupJoined, this, &Widget::onGroupJoined);
+    connect(core, &Core::groupInviteAcceptFailed, this, &Widget::onGroupInviteAcceptFailed);
     connect(core, &Core::groupPrivateMessageReceived, this, &Widget::onGroupPrivateMessageReceived);
     connect(core, &Core::friendTypingChanged, this, &Widget::onFriendTypingChanged);
     connect(core, &Core::groupSentFailed, this, &Widget::onGroupSendFailed);
@@ -2505,12 +2506,56 @@ void Widget::onGroupInviteReceived(const GroupInvite& inviteInfo)
 
 void Widget::onGroupInviteAccepted(const GroupInvite& inviteInfo)
 {
-    const uint32_t groupId = core->joinGroupchat(inviteInfo);
-    if (groupId == std::numeric_limits<uint32_t>::max()) {
+    if (!acceptGroupInvite(inviteInfo, QString())) {
         qWarning() << "onGroupInviteAccepted: Unable to accept group invite";
         AirDialog::notice(this, AirStrings::text(AirStrings::Text::ErrorJoinGroupTitle),
                           AirStrings::text(AirStrings::Text::TryAgain));
     }
+}
+
+bool Widget::acceptGroupInvite(const GroupInvite& inviteInfo, const QString& inviteId)
+{
+    // toxcore's invitation starts with the chat id.
+    const QByteArray& invite = inviteInfo.getInvite();
+    if (invite.size() < GroupId::size) {
+        return core->joinGroupchat(inviteInfo) != std::numeric_limits<uint32_t>::max();
+    }
+    const GroupId groupId(invite.left(GroupId::size));
+    if (invitesJoining.contains(groupId)) {
+        // Its group is being joined already; a second accept would replace what the first joins.
+        return true;
+    }
+    // Before the accept: the group joined at once is said within it (onGroupJoined).
+    invitesJoining.insert(groupId, inviteId);
+    if (core->joinGroupchat(inviteInfo) != std::numeric_limits<uint32_t>::max()) {
+        return true;
+    }
+    invitesJoining.remove(groupId);
+    return false;
+}
+
+void Widget::onGroupInviteAcceptFailed(const QByteArray& chatId)
+{
+    if (chatId.size() != GroupId::size) {
+        return;
+    }
+    const GroupId groupId(chatId);
+    // The instance toxcore let go of for the invitation, a group joined by its ID that never
+    // synced, still shows: its number may come to another group. Only the row goes: the next
+    // start joins that group by its ID again.
+    if (Group* const stale = groupList->findGroup(groupId)) {
+        discardGroup(stale, true);
+    }
+    if (groupToOpenWhenJoined == groupId) {
+        groupToOpenWhenJoined = GroupId();
+    }
+    if (invitesJoining.remove(groupId) == 0) {
+        // Not one the user accepted: one asked of friends is joined without a word.
+        return;
+    }
+    // As for an invitation refused at once: its card, if it has one, stays for another try.
+    AirDialog::notice(this, AirStrings::text(AirStrings::Text::ErrorJoinGroupTitle),
+                      AirStrings::text(AirStrings::Text::TryAgain));
 }
 
 void Widget::onGroupJoinFailed(const QString& reason)
@@ -3167,6 +3212,15 @@ void Widget::onEmptyGroupCreated(uint32_t groupnumber, const GroupId& groupId, c
 void Widget::onGroupJoined(int groupNum, const GroupId& groupId)
 {
     createGroup(groupNum, groupId);
+    // An invitation into it that the user accepted is done (acceptGroupInvite): its card goes.
+    const auto joining = invitesJoining.find(groupId);
+    if (joining != invitesJoining.end()) {
+        const QString inviteId = joining.value();
+        invitesJoining.erase(joining);
+        if (airLocal && !inviteId.isEmpty()) {
+            airLocal->removeInvite(inviteId);
+        }
+    }
     if (!groupToOpenWhenJoined.isEmpty() && groupId == groupToOpenWhenJoined) {
         groupToOpenWhenJoined = GroupId();
         openAirEntry(AirSource::groupEntryId(groupId));
@@ -4246,17 +4300,17 @@ void Widget::joinAirInvite(const QString& inviteId)
         airController->lightRequest(Air::Request::invitationId(inviteId));
         return;
     }
-    const uint32_t groupNumber =
-        core->joinGroupchat(GroupInvite(inviter->getId(), invite.data, invite.groupName));
-    if (groupNumber == std::numeric_limits<uint32_t>::max()) {
+    if (!acceptGroupInvite(GroupInvite(inviter->getId(), invite.data, invite.groupName),
+                           inviteId)) {
         AirDialog::notice(this, AirStrings::text(Text::ErrorJoinGroupTitle),
                           AirStrings::text(Text::TryAgain));
         return;
     }
-    airLocal->removeInvite(inviteId);
     // It opens, as a joined conversation does. toxcore's invitation starts with the chat id.
     if (invite.data.size() >= GroupId::size) {
         openJoinedGroup(GroupId(invite.data.left(GroupId::size)));
+    } else {
+        airLocal->removeInvite(inviteId);
     }
 }
 

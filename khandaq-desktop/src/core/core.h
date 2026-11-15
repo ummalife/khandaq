@@ -296,6 +296,13 @@ signals:
     void groupPeerAudioPlaying(int groupnumber, ToxPk peerPk);
     void groupSentFailed(int groupId);
     void groupJoined(int groupnumber, GroupId groupId);
+    /**
+     * 0.2.56: an invite into a group that toxcore still held (one we leave, or one joined by its ID
+     * that never synced) is accepted once toxcore let go of that instance, and joinGroupchat
+     * returned that instance's number; toxcore refused the invite then. No instance of the group
+     * is left: whatever showed the old one is stale.
+     */
+    void groupInviteAcceptFailed(const QByteArray& chatId);
     /** A role in the group changed, someone was removed, or the voice or privacy state changed. */
     void groupModerationChanged(int groupnumber);
     /** A peer of the group wrote to us alone. */
@@ -380,6 +387,7 @@ private:
     void leaveGroupAfterNotice(int groupId);
     void leaveRecordedGroup(const Air::PendingGroupLeaves::Leave& leave, const char* event);
     uint32_t replaceLeavingGroup(const QByteArray& chatId, std::function<void()> join);
+    void acceptDeferredGroupInvite(const GroupInvite& inviteInfo);
     void iterateTox();
     bool ignoresGroup(uint32_t groupNumber) const;
     struct OutgoingGroupFile;

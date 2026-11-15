@@ -234,6 +234,7 @@ public slots:
     void onGroupJoined(int groupNum, const GroupId& groupId);
     void onGroupInviteReceived(const GroupInvite& inviteInfo);
     void onGroupInviteAccepted(const GroupInvite& inviteInfo);
+    void onGroupInviteAcceptFailed(const QByteArray& chatId);
     void onGroupJoinFailed(const QString& reason);
     void onGroupJoinSucceeded();
     void onGroupJoinByIdPrompt();
@@ -426,6 +427,11 @@ private:
     /** Decline on a card: it leaves at once, and a toast can bring it back for five seconds. */
     void declineAirRequest(const QString& requestId);
     void joinAirInvite(const QString& inviteId);
+    /**
+     * Accepts the invitation, whose card (@a inviteId; none when empty) goes once its group is
+     * joined. False when toxcore refused it now.
+     */
+    bool acceptGroupInvite(const GroupInvite& inviteInfo, const QString& inviteId);
     void showAirEntryMenu(const QString& entryId, const QPoint& globalPos);
     void showAirBackgroundMenu(const QPoint& globalPos);
     void showStatusMenu(const QPoint& globalPos);
@@ -528,6 +534,13 @@ private:
     QHash<QByteArray, GroupFileSend> groupFileSends;
     /** The group the user joined that opens once it comes into the list (openJoinedGroup). */
     GroupId groupToOpenWhenJoined;
+    /**
+     * 0.2.56: the invitations the user accepts, by their group, with the id of their card (none for
+     * one accepted by itself): the card goes once the group is joined (onGroupJoined), as toxcore
+     * may accept an invitation only after it let go of another instance of its group, and refuse it
+     * then (onGroupInviteAcceptFailed).
+     */
+    QMap<GroupId, QString> invitesJoining;
     Core* core = nullptr;
 
 

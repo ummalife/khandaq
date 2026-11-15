@@ -266,8 +266,11 @@ enum MessageReplyHelper {
         previewForDisplay(text, maxLen: 200)
     }
 
+    /// KHANDAQ (0.2.56): a "]" ends the header on every reader, so a name with one is cut there and the rest
+    /// spills into the quote; Android takes it out of the name too.
     private static func sanitizeField(_ value: String) -> String {
         stripControlChars(value)
+            .replacingOccurrences(of: "]", with: " ")
             .replacingOccurrences(of: "|", with: " ")
             .replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\r", with: " ")

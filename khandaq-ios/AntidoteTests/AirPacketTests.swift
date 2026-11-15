@@ -184,4 +184,20 @@ class AirPacketTests: XCTestCase {
         XCTAssertEqual(MessageReplyHelper.parse("[KQ is a word here]").bodyText, "[KQ is a word here]")
         XCTAssertEqual(MessageReplyHelper.parse("see [KQ|x] inside").bodyText, "see [KQ|x] inside")
     }
+
+    /// KHANDAQ (0.2.56): the header of a reply ends at its first "]", so a "]" in the author's name cut it
+    /// there and the rest of the name spilled into the quote.
+    func testABracketInTheAuthorsNameDoesNotCutTheReplyHeader() throws {
+        var meta = MessageReplyHelper.ReplyMeta()
+        meta.localMessageId = 7
+        meta.senderPubkeyTail = "ABCDEF12"
+        meta.sortTimestampMs = 1_700_000_000_000
+        meta.senderName = "Amina [work]"
+        meta.previewText = "quote"
+        let parsed = MessageReplyHelper.parse(MessageReplyHelper.encode(meta, bodyText: "Салам"))
+        let reply = try XCTUnwrap(parsed.reply)
+        XCTAssertEqual(reply.senderName, "Amina [work")
+        XCTAssertEqual(reply.previewText, "quote")
+        XCTAssertEqual(parsed.bodyText, "Салам")
+    }
 }

@@ -114,6 +114,12 @@ regexes = [
   '''(?i)88ACED36E3BEC19E5F0A6B7C2D9E1F3A4B5C6D7E8F90A1B2C3D4E5F6A7B8C9D0''',
   '''(?i)5D0A7C3E9B1F4A6C8E2D0B5F7A9C1E3D5B7F9A1C3E5D7B9F1A3C5E7D9B1F3A5C''',
   '''(?i)0B1C2D3E4F5061728394A5B6C7D8E9F00112233445566778899AABBCCDDEEFF0''',
+  # KHANDAQ (0.2.56): two more made-up keys of the Android unit tests. The pull-request scans of #129 and
+  # #130 stopped on them: GroupTextPartsTest (also AirInviteStoreTest) spells the hex digits in order four
+  # times, FriendKeyCacheTest uses a random-looking one; both sit in `private static final String KEY`.
+  # Added by Claude (AI assistant), each value checked against the sources.
+  '''(?i)0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF''',
+  '''(?i)B5C3C8BF283B99D7D19E7AB638A675E82A9F4E27036DBCA184F3C44BF3387D21''',
   # The demo CONTACT's public key (ToxSaveSummaryTest): a real, always-online bot whose whole Tox ID is
   # handed out on purpose, in the App Review notes, so that reviewers can add it. Like any Tox public key
   # it is an address, not a credential: knowing it lets you send a friend request and nothing more.

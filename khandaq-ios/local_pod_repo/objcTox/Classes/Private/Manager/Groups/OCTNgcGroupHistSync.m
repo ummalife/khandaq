@@ -489,6 +489,12 @@ static const NSUInteger kOCTNgcHistBudgetMaxBytesPerGroupPerSession = 8 * 1024 *
         return nil;
     }
 
+    // KHANDAQ (0.2.56): nor a message still waiting in the outbox: it goes live, with its id, once somebody
+    // is there (OCTRealmManager -groupHistorySyncPacketsForGroupNumber:packetFromMessage:).
+    if (message.groupPendingSend) {
+        return nil;
+    }
+
     if (message.messageText) {
         return [self buildSyncMessagePacketForMessage:message groupNumber:groupNumber signedTwin:signedTwin];
     }

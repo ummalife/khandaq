@@ -8297,6 +8297,15 @@ public class MainActivity extends AppCompatActivity
             // --- notification ---
             // --- notification ---
 
+            // KHANDAQ (0.2.57): the Tox file id is this incoming 1:1 file's durable anchor (reactions, deletes,
+            // read receipts), as in the FTV2 branch above. Desktop and iOS send their files as DATA: without the
+            // anchor Android never reported such a file as seen. Left unset when toxcore cannot give the id.
+            final ByteBuffer file_id_buffer = ByteBuffer.allocateDirect(TOX_FILE_ID_LENGTH);
+            final String file_id_buffer_hex =
+                    tox_file_get_file_id(friend_number, file_number, file_id_buffer) == 0
+                    ? HelperGeneric.bytesToHex(file_id_buffer.array(), file_id_buffer.arrayOffset(),
+                                               file_id_buffer.limit()).toUpperCase()
+                    : null;
 
             Filetransfer f = new Filetransfer();
             f.tox_public_key_string = HelperFriend.tox_friend_get_public_key__wrapper(friend_number);
@@ -8340,6 +8349,7 @@ public class MainActivity extends AppCompatActivity
             m.text = filename + "\n" + file_size + " bytes";
             m.sent_push = 0;
             m.filetransfer_kind = TOX_FILE_KIND_DATA.value;
+            m.ft_id_anchor_hex = file_id_buffer_hex;
             long new_msg_id = -1;
 
             if (message_list_activity != null)

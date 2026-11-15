@@ -19,6 +19,10 @@ enum MessageReplyHelper {
         var senderName: String = ""
         var previewText: String = ""
         var legacyQuote = false
+        /// KHANDAQ (0.2.56): how the bar above the field names the author when the header names them
+        /// otherwise: "You" over a reply to your own message, whose header names you as the others know
+        /// you. It never goes on the wire; nil for a reply that arrived.
+        var localSenderName: String?
     }
 
     struct ParsedMessage {

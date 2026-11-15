@@ -11,6 +11,15 @@ protocol ChatReplySwipeDelegate: class {
 
 /// Shared reply state + preview bar for chat screens.
 final class ChatReplyController {
+    /// KHANDAQ (0.2.56): you in the chat a reply goes to, for the header of a reply to your own message.
+    struct OwnAuthor {
+        /// Your name as the others in the chat see it.
+        var name: String?
+        /// Your public key in a 1:1 chat. nil in a group: iOS names a group member in a reply by name
+        /// only, whoever wrote the message.
+        var publicKey: String?
+    }
+
     private(set) var pendingMeta: MessageReplyHelper.ReplyMeta?
     let previewView = ChatReplyPreviewView()
 
@@ -67,9 +76,28 @@ final class ChatReplyController {
         return encoded
     }
 
-    func startReply(to message: OCTMessageAbstract, submanagerObjects: OCTSubmanagerObjects, theme: Theme) {
-        guard let preview = MessageReplyHelper.previewText(for: message) else {
+    func startReply(to message: OCTMessageAbstract,
+                    submanagerObjects: OCTSubmanagerObjects,
+                    own: OwnAuthor,
+                    theme: Theme) {
+        let friend = { (uniqueIdentifier: String) in
+            submanagerObjects.object(withUniqueIdentifier: uniqueIdentifier, for: .friend) as? OCTFriend
+        }
+        guard let meta = ChatReplyController.replyMeta(for: message, own: own, friend: friend) else {
             return
+        }
+
+        pendingMeta = meta
+        previewView.show(meta: meta, theme: theme)
+    }
+
+    /// The reply to `message`: the header it puts before the text, and how the bar names the author.
+    /// `friend` finds the contact who wrote a message by the contact's unique identifier.
+    static func replyMeta(for message: OCTMessageAbstract,
+                          own: OwnAuthor,
+                          friend: (String) -> OCTFriend?) -> MessageReplyHelper.ReplyMeta? {
+        guard let preview = MessageReplyHelper.previewText(for: message) else {
+            return nil
         }
 
         var meta = MessageReplyHelper.ReplyMeta()
@@ -78,12 +106,16 @@ final class ChatReplyController {
         meta.previewText = preview
 
         if message.isOutgoing() {
-            meta.senderName = String(localized: "chat_reply_self_name")
+            // KHANDAQ (0.2.56): the header travels, and every client shows the name it carries (Android
+            // and the desktop as well), so it names you as the others know you. "You" there named the
+            // reader on the other side. Only the bar above your field says "You".
+            meta.senderName = own.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            meta.senderPubkeyTail = MessageReplyHelper.pubkeyTail(own.publicKey)
+            meta.localSenderName = String(localized: "chat_reply_self_name")
         }
-        else if let senderId = message.senderUniqueIdentifier,
-                let friend = submanagerObjects.object(withUniqueIdentifier: senderId, for: .friend) as? OCTFriend {
-            meta.senderPubkeyTail = MessageReplyHelper.pubkeyTail(friend.publicKey)
-            meta.senderName = friendDisplayName(friend)
+        else if let senderId = message.senderUniqueIdentifier, let author = friend(senderId) {
+            meta.senderPubkeyTail = MessageReplyHelper.pubkeyTail(author.publicKey)
+            meta.senderName = friendDisplayName(author)
         }
         else if let peerName = message.messageText?.groupPeerName ?? message.messageFile?.groupPeerName,
                 !peerName.isEmpty {
@@ -95,8 +127,7 @@ final class ChatReplyController {
             meta.senderName = String(localized: "chat_reply_unknown_sender")
         }
 
-        pendingMeta = meta
-        previewView.show(meta: meta, theme: theme)
+        return meta
     }
 
     func scrollToReplyTarget(_ meta: MessageReplyHelper.ReplyMeta,
@@ -174,7 +205,7 @@ final class ChatReplyController {
         }
     }
 
-    private func friendDisplayName(_ friend: OCTFriend) -> String {
+    private static func friendDisplayName(_ friend: OCTFriend) -> String {
         if let name = friend.name, !name.isEmpty {
             return name
         }

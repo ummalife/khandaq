@@ -83,6 +83,7 @@ class ChatsTabCoordinator: ActiveSessionNavigationCoordinator {
                     submanagerObjects: submanagerObjects,
                     submanagerFriends: submanagerFriends,
                     submanagerChats: submanagerChats,
+                    submanagerUser: submanagerUser,
                     delegate: self)
 
             navigationController.popToRootViewController(animated: false)
@@ -102,6 +103,7 @@ class ChatsTabCoordinator: ActiveSessionNavigationCoordinator {
                 submanagerChats: submanagerChats,
                 submanagerObjects: submanagerObjects,
                 submanagerFiles: submanagerFiles,
+                submanagerUser: submanagerUser,
                 delegate: self)
 
         navigationController.popToRootViewController(animated: false)

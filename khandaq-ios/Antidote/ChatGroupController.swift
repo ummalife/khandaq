@@ -32,6 +32,7 @@ class ChatGroupController: PortraitChatController {
     weak var submanagerGroups: OCTSubmanagerGroups!
     weak var submanagerObjects: OCTSubmanagerObjects!
     fileprivate weak var submanagerFriends: OCTSubmanagerFriends!
+    weak var submanagerUser: OCTSubmanagerUser!
     weak var submanagerChats: OCTSubmanagerChats!
 
     var messages: Results<OCTMessageAbstract>
@@ -111,6 +112,7 @@ class ChatGroupController: PortraitChatController {
          submanagerObjects: OCTSubmanagerObjects,
          submanagerFriends: OCTSubmanagerFriends,
          submanagerChats: OCTSubmanagerChats,
+         submanagerUser: OCTSubmanagerUser,
          delegate: ChatGroupControllerDelegate) {
 
         self.theme = theme
@@ -119,6 +121,7 @@ class ChatGroupController: PortraitChatController {
         self.submanagerObjects = submanagerObjects
         self.submanagerFriends = submanagerFriends
         self.submanagerChats = submanagerChats
+        self.submanagerUser = submanagerUser
         self.delegate = delegate
 
         self.showsSystemMessages = UserDefaultsManager().groupShowSystemMessages

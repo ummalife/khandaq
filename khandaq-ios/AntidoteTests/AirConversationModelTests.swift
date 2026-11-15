@@ -320,6 +320,54 @@ class AirConversationModelTests: XCTestCase {
         XCTAssertEqual(String(localized: "air_transit_format", 3), "3 в пути")
     }
 
+    // MARK: - Replies to your own message
+
+    /// A reply to your own message (QA-Live 15.11): its header named you "You", and every client shows the
+    /// name a header carries, so the friend read the quote as their own words. The header names you as the
+    /// friend knows you: your name and your key. Only the bar above your field still says "You".
+    func testAReplyToYourOwnMessageNamesYouAsYourFriendKnowsYou() throws {
+        let key = "7f3a91c05d2e8b4416a9c3e07d5f2b8164e0a3c9d7b25f1e8a4c6d0b3f9e2a71"
+        let meta = try XCTUnwrap(ChatReplyController.replyMeta(for: try ownMessage("Bring the blue folder"),
+                                                               own: ChatReplyController.OwnAuthor(name: " Lucy QA ", publicKey: key),
+                                                               friend: { _ in nil }))
+
+        let read = try XCTUnwrap(MessageReplyHelper.parse(MessageReplyHelper.encode(meta, bodyText: "Done")).reply,
+                                 "the friend reads no reply")
+        XCTAssertEqual(read.senderName, "Lucy QA", "the friend is not told who wrote the quoted message")
+        XCTAssertEqual(read.senderPubkeyTail, "3F9E2A71", "the friend is not told your key")
+        XCTAssertEqual(read.previewText, "Bring the blue folder")
+        XCTAssertEqual(meta.localSenderName, "You", "the bar above the field does not say You")
+
+        use("ru")
+        let russian = try XCTUnwrap(ChatReplyController.replyMeta(for: try ownMessage("Bring the blue folder"),
+                                                                  own: ChatReplyController.OwnAuthor(name: "Lucy QA", publicKey: key),
+                                                                  friend: { _ in nil }))
+        let readInRussian = try XCTUnwrap(MessageReplyHelper.parse(MessageReplyHelper.encode(russian, bodyText: "Done")).reply)
+        XCTAssertEqual(readInRussian.senderName, "Lucy QA", "the header names you by a word of your own language")
+        XCTAssertEqual(russian.localSenderName, String(localized: "chat_reply_self_name"))
+    }
+
+    /// In a group the header names you by the name you have there, with no key: iOS names nobody in a group
+    /// reply by key, so a receiver matches the quote by its time, as for every member.
+    func testAReplyToYourOwnMessageInAGroupCarriesTheNameYouHaveThere() throws {
+        let meta = try XCTUnwrap(ChatReplyController.replyMeta(for: try ownMessage("Who brings the projector?"),
+                                                               own: ChatReplyController.OwnAuthor(name: "Lucy at fix-ios-1", publicKey: nil),
+                                                               friend: { _ in nil }))
+
+        let read = try XCTUnwrap(MessageReplyHelper.parse(MessageReplyHelper.encode(meta, bodyText: "I do")).reply)
+        XCTAssertEqual(read.senderName, "Lucy at fix-ios-1")
+        XCTAssertEqual(read.senderPubkeyTail, "")
+    }
+
+    /// A reply chosen and left unsent is kept per chat. One kept by the build before, without the bar's
+    /// name, still comes back.
+    func testAReplyKeptByTheBuildBeforeStillComesBack() throws {
+        let kept = #"{"localMessageId":42,"senderPubkeyTail":"AB12","sortTimestampMs":1800000000000,"senderName":"Amina","previewText":"See you","legacyQuote":false}"#
+        let meta = try JSONDecoder().decode(MessageReplyHelper.ReplyMeta.self, from: Data(kept.utf8))
+        XCTAssertEqual(meta.senderName, "Amina")
+        XCTAssertNil(meta.localSenderName)
+    }
+
     // MARK: - Key
 
     func testKeyIsReadInGroupsOfFour() {
@@ -467,6 +515,24 @@ private extension AirConversationModelTests {
     func use(_ language: String) {
         AppLanguage.set(language)
         XCTAssertEqual(AppLanguage.current, language)
+    }
+
+    /// A text of yours as objcTox keeps it: no sender. Made from the app's classes, looked up by name:
+    /// objcTox is linked into this bundle as well, and the two copies do not mix (OwnCaptionOrderTests).
+    func ownMessage(_ text: String) throws -> OCTMessageAbstract {
+        let messageText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        messageText.text = text
+        let message = try appClass("OCTMessageAbstract", as: OCTMessageAbstract.Type.self).init()
+        message.dateInterval = 1_800_000_000.25
+        message.sortTimestamp = message.dateInterval
+        message.messageText = messageText
+        XCTAssertTrue(message.isOutgoing())
+        return message
+    }
+
+    func appClass<T>(_ name: String, as type: T.Type) throws -> T {
+        let cls = try XCTUnwrap(NSClassFromString(name), "no class \(name)")
+        return unsafeBitCast(cls, to: type)
     }
 
     func date(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int) -> Date {

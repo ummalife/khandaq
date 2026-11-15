@@ -221,6 +221,23 @@ public class GroupFileSendWiringTest
                            .contains("NgcGroupFileTransfer.hasGivenUpReceive("));
     }
 
+    @Test
+    public void the_chat_list_marks_our_group_file_by_its_send() throws Exception
+    {
+        // The list read our group file's mark from its message id, which a file never gets: always in transit.
+        final String delivery = body(code("AirRepository.java"), "static AirModel.Delivery groupDelivery(");
+        final int file = delivery.indexOf("message.TRIFA_MESSAGE_TYPE == TRIFA_MSG_FILE.value");
+        assertTrue(file > 0);
+        final int phase = delivery.indexOf(
+                "ChatTransferProgressHelper.outgoingGroupPhase(message.group_identifier, message.msg_id_hash)");
+        assertTrue(phase > file);
+        assertTrue(delivery.indexOf("return AirModel.Delivery.ofGroupFile(", file) > file);
+        assertTrue(phase < delivery.indexOf("MessageStatusHelper.resolveGroupOutgoing(message)"));
+        // The same phase as the file's row.
+        final String row = body(code("ChatTransferProgressHelper.java"), "static Snapshot snapshotFromGroupMessage(");
+        assertTrue(row.contains("outgoingGroupPhase(message.group_identifier, message.msg_id_hash)"));
+    }
+
     private static int count(final String text, final String what)
     {
         int n = 0;

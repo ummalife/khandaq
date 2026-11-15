@@ -250,14 +250,7 @@ final class ChatTransferProgressHelper
             // KHANDAQ (audit2 #5, audit3 #3): the user's cancel outlives the process, so it is read here, from the
             // memory-only cache: this runs while binding a row on the main thread. FAILED is the phase that shows the
             // retry button, the only affordance that lifts the cancel again (HelperGroup.retry_group_file_send).
-            final String gid = message.group_identifier;
-            final String msg = message.msg_id_hash;
-            final Phase phase = outgoingGroupPhase(HelperGroup.is_ngc_outgoing_send_complete(gid, msg),
-                                                   HelperGroup.is_ngc_send_cancelled_by_user_cached(gid, msg),
-                                                   HelperGroup.is_ngc_file_transfer_failed(gid, msg),
-                                                   NgcGroupFileTransfer.isOutgoingWaiting(gid, msg),
-                                                   NgcGroupFileTransfer.isOutgoingGoing(gid, msg),
-                                                   NgcGroupFileTransfer.isOutgoingPending(gid, msg));
+            final Phase phase = outgoingGroupPhase(message.group_identifier, message.msg_id_hash);
             switch (phase)
             {
                 case COMPLETE:
@@ -336,6 +329,20 @@ final class ChatTransferProgressHelper
         }
 
         return completeSnapshot(outgoing);
+    }
+
+    /**
+     * KHANDAQ (0.2.56): the phase of one of our group files now, as its row and the chat list show it. Memory only,
+     * never blocks: the row binds on the main thread.
+     */
+    static Phase outgoingGroupPhase(final String groupId, final String msgIdHash)
+    {
+        return outgoingGroupPhase(HelperGroup.is_ngc_outgoing_send_complete(groupId, msgIdHash),
+                                  HelperGroup.is_ngc_send_cancelled_by_user_cached(groupId, msgIdHash),
+                                  HelperGroup.is_ngc_file_transfer_failed(groupId, msgIdHash),
+                                  NgcGroupFileTransfer.isOutgoingWaiting(groupId, msgIdHash),
+                                  NgcGroupFileTransfer.isOutgoingGoing(groupId, msgIdHash),
+                                  NgcGroupFileTransfer.isOutgoingPending(groupId, msgIdHash));
     }
 
     /**

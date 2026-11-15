@@ -298,6 +298,29 @@ final class AirModel
                                                                     personOnline));
         }
 
+        /**
+         * KHANDAQ (0.2.56): one of our group files, by its send ({@link ChatTransferProgressHelper#outgoingGroupPhase}):
+         * in transit while it waits for a member or goes, sent once it went, and no mark when it did not go
+         * (cancelled, or "Not sent" for a reason of this device) and will not on its own, as a cancelled 1:1 file.
+         */
+        static Delivery ofGroupFile(final ChatTransferProgressHelper.Phase phase)
+        {
+            if (phase == null)
+            {
+                return SENT;
+            }
+            switch (phase)
+            {
+                case PENDING:
+                case TRANSFERRING:
+                    return TRANSIT;
+                case FAILED:
+                    return null;
+                default:
+                    return SENT;
+            }
+        }
+
         private static Delivery of(final AirConversationModel.EntryStatus status)
         {
             switch (status)

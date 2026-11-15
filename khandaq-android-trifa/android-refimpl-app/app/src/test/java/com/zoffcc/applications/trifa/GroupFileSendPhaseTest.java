@@ -6,6 +6,7 @@ import static com.zoffcc.applications.trifa.ChatTransferProgressHelper.Phase;
 import static com.zoffcc.applications.trifa.ChatTransferProgressHelper.isAbandonableQueuedSend;
 import static com.zoffcc.applications.trifa.ChatTransferProgressHelper.outgoingGroupPhase;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -68,5 +69,18 @@ public class GroupFileSendPhaseTest
     {
         // A row of an earlier run that went whole: no mark, no send. It showed as waiting forever.
         assertEquals(Phase.COMPLETE, phase(false, false, false, false, false, false));
+    }
+
+    @Test
+    public void the_chat_list_counts_only_a_file_that_waits_or_goes()
+    {
+        // Every group file of ours counted as in transit in the chat list, for good: it never gets a message id.
+        assertEquals(AirModel.Delivery.TRANSIT, AirModel.Delivery.ofGroupFile(Phase.PENDING));
+        assertEquals(AirModel.Delivery.TRANSIT, AirModel.Delivery.ofGroupFile(Phase.TRANSFERRING));
+        assertEquals(AirModel.Delivery.SENT, AirModel.Delivery.ofGroupFile(Phase.COMPLETE));
+        assertEquals(AirModel.Delivery.SENT,
+                     AirModel.Delivery.ofGroupFile(phase(false, false, false, false, false, false)));
+        // Cancelled, or not sent for a reason of this device: it will not go on its own, so it has no mark.
+        assertNull(AirModel.Delivery.ofGroupFile(Phase.FAILED));
     }
 }

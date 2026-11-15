@@ -60,6 +60,8 @@ private slots:
     void pasteKindPrefersTextToAPicture();
     void aTextWithAPictureBesideItIsPastedAsText();
     void aPictureWithoutTextIsOffered();
+    void pasteKindTakesThePictureBesideOnlyItsAddress();
+    void aPictureWithOnlyItsAddressBesideItIsOffered();
     void aTextIsFilesOnlyWhenEveryLineNamesOne();
     void aLongTextIsPastedWholeAndTypingOnStaysQuick();
 };
@@ -136,6 +138,52 @@ void TestChatTextEdit::aPictureWithoutTextIsOffered()
     QCOMPARE(pictures.count(), 1);
     QCOMPARE(pictures.first().first().value<QPixmap>().size(), QSize(32, 16));
     QVERIFY(edit.toPlainText().isEmpty());
+}
+
+/**
+ * KHANDAQ (0.2.56): a browser's Copy image may put the address of the picture as its text, and
+ * the link came instead of the picture. A text that is one web, file or data address is the
+ * picture's; any other text beside a picture is still the text, and an address alone is text.
+ */
+void TestChatTextEdit::pasteKindTakesThePictureBesideOnlyItsAddress()
+{
+    using Kind = ChatTextEdit::PasteKind;
+    const QString address = QStringLiteral("https://example.org/a.png");
+    QCOMPARE(ChatTextEdit::pasteKind(false, address, true), Kind::Image);
+    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral(" HTTP://EXAMPLE.ORG/A.PNG\r\n"), true),
+             Kind::Image);
+    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral("file:///tmp/a.png"), true),
+             Kind::Image);
+    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral("data:image/png;base64,iVBORw0KGgo="),
+                                     true),
+             Kind::Image);
+
+    QCOMPARE(ChatTextEdit::pasteKind(false, address, false), Kind::Text);
+    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral("Look: ") + address, true), Kind::Text);
+    QCOMPARE(ChatTextEdit::pasteKind(false, address + QStringLiteral("\n") + address, true),
+             Kind::Text);
+    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral("ftp://example.org/a.png"), true),
+             Kind::Text);
+    QCOMPARE(ChatTextEdit::pasteKind(false, QStringLiteral("example.org/a.png"), true), Kind::Text);
+}
+
+void TestChatTextEdit::aPictureWithOnlyItsAddressBesideItIsOffered()
+{
+    ChatTextEdit edit;
+    QSignalSpy pictures(&edit, &ChatTextEdit::pasteImage);
+    const QString address = QStringLiteral("https://example.org/a.png");
+    copy(address, true, QStringLiteral("<img src=\"https://example.org/a.png\">"));
+
+    QTest::keySequence(&edit, QKeySequence::Paste);
+    QCOMPARE(pictures.count(), 1);
+    QCOMPARE(pictures.first().first().value<QPixmap>().size(), QSize(32, 16));
+    QVERIFY(edit.toPlainText().isEmpty());
+
+    // A word beside the address makes it a text again.
+    copy(QStringLiteral("Look: ") + address, true);
+    QTest::keySequence(&edit, QKeySequence::Paste);
+    QCOMPARE(pictures.count(), 1);
+    QCOMPARE(edit.toPlainText(), QStringLiteral("Look: ") + address);
 }
 
 void TestChatTextEdit::aTextIsFilesOnlyWhenEveryLineNamesOne()

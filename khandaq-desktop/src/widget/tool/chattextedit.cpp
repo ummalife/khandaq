@@ -156,6 +156,23 @@ QStringList localFilePathsFromMimeData(const QMimeData* mimeData, const QString&
     return localFilePathsFromText(text);
 }
 
+/**
+ * Whether a text with no spaces around it is one web, file or data address and nothing more:
+ * what a browser's Copy image may put as the text of the picture.
+ */
+bool isOnlyAnAddress(const QString& text)
+{
+    for (const QChar c : text) {
+        if (c.isSpace()) {
+            return false;
+        }
+    }
+    static const QStringList schemes{QStringLiteral("http"), QStringLiteral("https"),
+                                     QStringLiteral("file"), QStringLiteral("data")};
+    const QUrl url(text);
+    return url.isValid() && schemes.contains(url.scheme(), Qt::CaseInsensitive);
+}
+
 // kq-compose textarea: as high as "Send" for one line, growing up to the compose maximum, with
 // 8 px above the text and the rest below it (the padding is set by the form's style sheet).
 constexpr int MESSAGE_EDIT_MIN_HEIGHT = AirTokens::Size::control;
@@ -297,8 +314,10 @@ ChatTextEdit::PasteKind ChatTextEdit::pasteKind(bool hasLocalFiles, const QStrin
     }
     // KHANDAQ (0.2.56): the text before a picture. Excel, Word and other programs put a picture
     // of what was copied beside its text, and the field took the picture: in a group, where no
-    // picture is taken, nothing came at all. A browser's Copy image puts no text.
-    if (!text.trimmed().isEmpty()) {
+    // picture is taken, nothing came at all. A browser's Copy image puts no text, or the address
+    // of the picture: a picture with only its address beside it is the picture.
+    const QString trimmed = text.trimmed();
+    if (!trimmed.isEmpty() && !(hasImage && isOnlyAnAddress(trimmed))) {
         return PasteKind::Text;
     }
     return hasImage ? PasteKind::Image : PasteKind::Text;

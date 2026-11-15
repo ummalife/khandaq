@@ -218,6 +218,35 @@ void bringForward(QWidget* mainWindow)
     mainWindow->activateWindow();
 }
 
+/**
+ * KHANDAQ (0.2.57): an offer of a file of the person whose entry the chat shows, ended, under the
+ * same Tox file id: from before an interruption that outlasted the wait, a restart of either side,
+ * or Send again (Air::fileResume). An entry that still moves is not one: CoreFile goes on with it.
+ * @param shown Takes the file of that entry.
+ */
+Air::FileResume knownOffer(const ChatHistory* chatLog, const ToxFile& offer, ToxFile* shown)
+{
+    if (!chatLog || !chatLog->findFileEntry(offer.resumeFileId, ToxFile::RECEIVING, shown)) {
+        return {};
+    }
+    const bool ended = shown->status == ToxFile::BROKEN || shown->status == ToxFile::CANCELED
+                       || shown->status == ToxFile::FINISHED;
+    if (!ended) {
+        return {};
+    }
+    Air::FileHere here;
+    here.id = shown->resumeFileId;
+    here.size = static_cast<qint64>(shown->progress.getFileSize());
+    here.status = shown->status;
+    // Only an interruption goes on by itself: one the person cancelled waits for them again, or
+    // for the downloads rule, as a new offer does.
+    here.accepted = shown->status == ToxFile::BROKEN && !shown->filePath.isEmpty();
+    const QFileInfo partial(shown->filePath);
+    here.bytes = here.accepted && partial.isFile() ? partial.size() : 0;
+    return Air::fileResume(offer.resumeFileId, static_cast<qint64>(offer.progress.getFileSize()),
+                           here);
+}
+
 } // namespace
 
 bool Widget::toxActivateEventHandler(const QByteArray& data, void* userData)
@@ -465,7 +494,8 @@ void Widget::init()
     connect(actionLogout, &QAction::triggered, this, &Widget::askLogout);
 
 
-    connect(coreFile, &CoreFile::fileReceiveRequested, this, &Widget::onFileReceiveRequested);
+    // KHANDAQ (0.2.57): the alert of a file offered is in dispatchFile, which knows whether the
+    // offer is a new file or goes on in its entry.
     connect(ui->addButton, &QPushButton::clicked, this, [this] { openNewContact(QString()); });
     connect(ui->groupButton, &QPushButton::clicked, this, &Widget::onGroupClicked);
     connect(ui->transferButton, &QPushButton::clicked, this, &Widget::onTransferClicked);
@@ -1398,7 +1428,39 @@ void Widget::dispatchFile(ToxFile file)
 
     auto pk = f->getPublicKey();
 
-    if (file.status == ToxFile::INITIALIZING && file.direction == ToxFile::RECEIVING) {
+    const bool offered =
+        file.status == ToxFile::INITIALIZING && file.direction == ToxFile::RECEIVING;
+    // KHANDAQ (0.2.57): an offer of a file the chat has an entry of goes on in it, with no alert.
+    // CoreFile took one that waited for its sender already (continued); one that ended is looked
+    // up here.
+    Air::FileResume resume;
+    if (offered && file.continued) {
+        resume.step = Air::FileResume::Step::WaitInEntry;
+    } else if (offered) {
+        ToxFile shown;
+        resume = knownOffer(friendChatLogs.value(pk).get(), file, &shown);
+        CoreFile* const coreFile = core->getCoreFile();
+        switch (resume.step) {
+        case Air::FileResume::Step::EndQuietly:
+            // All of it is here: its entry, its notification and the file stay as they are.
+            coreFile->finishFileRecvQuietly(file.friendId, file.fileNum,
+                                            static_cast<uint64_t>(resume.offset));
+            return;
+        case Air::FileResume::Step::GoOn:
+            file.continued = true;
+            coreFile->resumeFileRecv(file.friendId, file.fileNum, shown.filePath,
+                                     static_cast<uint64_t>(resume.offset));
+            break;
+        case Air::FileResume::Step::WaitInEntry:
+            file.continued = true;
+            break;
+        case Air::FileResume::Step::NewEntry:
+            onFileReceiveRequested(file);
+            break;
+        }
+    }
+
+    if (offered && resume.step != Air::FileResume::Step::GoOn) {
         // Download attachments (Settings, Network): Never leaves every file waiting for Accept,
         // except where a folder was chosen for this contact; Small files takes them up to the limit.
         const QString autoAcceptDir =
@@ -1425,7 +1487,7 @@ void Widget::dispatchFile(ToxFile file)
     const auto senderPk = (file.direction == ToxFile::SENDING) ? core->getSelfPublicKey() : pk;
     friendChatLogs[pk]->onFileUpdated(senderPk, file);
     // KHANDAQ (0.2.57): a file that comes while the person reads the chat is seen at once.
-    if (file.status == ToxFile::INITIALIZING && file.direction == ToxFile::RECEIVING) {
+    if (offered && !file.continued) {
         reportSeen(pk);
     }
 

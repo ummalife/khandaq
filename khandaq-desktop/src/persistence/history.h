@@ -253,6 +253,18 @@ public:
     void addNewSystemMessage(const ChatId& chatId, const SystemMessage& systemMessage);
 
     void setFileFinished(const QByteArray& fileId, bool success, const QString& filePath, const QByteArray& fileHash);
+    /**
+     * KHANDAQ (0.2.57): a file offered again with the id of its row goes on in that row, the
+     * newest of the chat in that direction: its end writes that row, as for a new one.
+     */
+    void reopenFileMessage(const ChatId& chatId, const QByteArray& fileId,
+                           ToxFile::FileDirection direction);
+    /**
+     * KHANDAQ (0.2.57): the row of an incoming file that was accepted says interrupted (BROKEN),
+     * with the path it goes to, until its end writes it again: after a restart, what came of it is
+     * known, and an offer of it goes on from there.
+     */
+    void setFileUnderway(const ChatId& chatId, const QByteArray& fileId, const QString& filePath);
     size_t getNumMessagesForChat(const ChatId& chatId);
     size_t getNumMessagesForChatBeforeDate(const ChatId& chatId, const QDateTime& date);
     QList<HistMessage> getMessagesForChat(const ChatId& chatId, size_t firstIdx, size_t lastIdx);

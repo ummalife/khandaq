@@ -323,8 +323,15 @@ void FileTransferWidget::onFileTransferUpdate(ToxFile file)
     const bool sameState = file.status == fileInfo.status
                            && file.pauseStatus.localPaused() == fileInfo.pauseStatus.localPaused()
                            && file.pauseStatus.remotePaused() == fileInfo.pauseStatus.remotePaused()
-                           && file.filePath == fileInfo.filePath;
+                           && file.filePath == fileInfo.filePath
+                           && file.connectionLost == fileInfo.connectionLost;
     fileInfo = file;
+    // KHANDAQ (0.2.57): Send again goes on in this entry, so it can be offered again once that
+    // transfer has ended too.
+    if (file.status != ToxFile::FINISHED && file.status != ToxFile::CANCELED
+        && file.status != ToxFile::BROKEN) {
+        resent = false;
+    }
     // While it moves, the bar and the words go on a few times a second, not at every packet.
     if (sameState && file.status == ToxFile::TRANSMITTING && lastProgress.isValid()
         && lastProgress.elapsed() < progressEveryMs) {
@@ -350,7 +357,7 @@ Air::EntryStatus FileTransferWidget::status() const
     if (group || fileInfo.direction != ToxFile::SENDING) {
         return Air::EntryStatus::None;
     }
-    return Air::fileStatus(fileInfo.status, personOnline);
+    return Air::fileStatus(fileInfo, personOnline);
 }
 
 bool FileTransferWidget::hasHeightForWidth() const
@@ -384,6 +391,7 @@ Air::FileFacts FileTransferWidget::facts() const
     const bool onDisk = !fileInfo.filePath.isEmpty() && QFileInfo(fileInfo.filePath).isFile();
     result.here = fileInfo.status == ToxFile::FINISHED && onDisk;
     result.canSendAgain = !result.incoming && !group && !resent && personOnline && onDisk;
+    result.waitsConnection = fileInfo.connectionLost;
     return result;
 }
 
@@ -640,7 +648,11 @@ void FileTransferWidget::sendAgain()
         return;
     }
     resent = true;
-    coreFile.sendFile(fileInfo.friendId, fileInfo.fileName, fileInfo.filePath, info.size());
+    // KHANDAQ (0.2.57): the same file goes under the same Tox file id, so the person can go on
+    // with what they have of it, in its entry. A file changed since is another file.
+    const bool same = static_cast<uint64_t>(info.size()) == fileInfo.progress.getFileSize();
+    coreFile.sendFile(fileInfo.friendId, fileInfo.fileName, fileInfo.filePath, info.size(),
+                      same ? fileInfo.resumeFileId : QByteArray());
     refresh();
 }
 

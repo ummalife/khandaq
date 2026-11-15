@@ -193,6 +193,17 @@ FileEntryState fileEntryState(const FileFacts& facts)
     FileEntryState state;
     // A group file has nothing to answer: it arrives whole or not at all.
     const bool controls = !facts.group;
+    // KHANDAQ (0.2.57): a transfer whose friend went offline waits, never fails: the bar stays at
+    // what came, and only Cancel is offered until they are back.
+    if (facts.waitsConnection && controls) {
+        if (facts.status == ToxFile::TRANSMITTING || facts.status == ToxFile::PAUSED) {
+            state.progress =
+                std::isfinite(facts.progress) ? qBound(0.0, facts.progress, 1.0) : 0.0;
+        }
+        state.note = FileNote::WaitsConnection;
+        state.actions = {FileAction::Cancel};
+        return state;
+    }
     switch (facts.status) {
     case ToxFile::INITIALIZING:
         if (facts.incoming) {
@@ -274,6 +285,36 @@ EntryStatus fileStatus(ToxFile::FileStatus status, bool personOnline)
         return EntryStatus::Failed;
     }
     return EntryStatus::None;
+}
+
+EntryStatus fileStatus(const ToxFile& file, bool personOnline)
+{
+    return fileStatus(file.connectionLost ? ToxFile::INITIALIZING : file.status, personOnline);
+}
+
+FileResume fileResume(const QByteArray& offerId, qint64 offerSize, const FileHere& here)
+{
+    FileResume resume;
+    if (offerId.isEmpty() || offerId != here.id || offerSize != here.size || offerSize < 0) {
+        return resume;
+    }
+    if (here.status == ToxFile::FINISHED) {
+        resume.step = FileResume::Step::EndQuietly;
+        resume.offset = qMax<qint64>(0, offerSize - 1);
+        return resume;
+    }
+    if (!here.accepted) {
+        resume.step = FileResume::Step::WaitInEntry;
+        return resume;
+    }
+    resume.step = FileResume::Step::GoOn;
+    if (here.bytes > 0 && here.bytes < offerSize) {
+        resume.offset = here.bytes;
+    } else if (here.bytes == offerSize && offerSize > 0) {
+        // All of it came, but its end did not: the last byte once more ends it as usual.
+        resume.offset = offerSize - 1;
+    }
+    return resume;
 }
 
 qint64 mp4DurationMs(QIODevice& device)

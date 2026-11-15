@@ -23,6 +23,7 @@
 #include "src/model/air/airconversation.h"
 #include "src/model/systemmessage.h"
 
+#include <QByteArray>
 #include <QString>
 #include <QVector>
 
@@ -101,6 +102,11 @@ enum class FileNote
     DownloadStopped,
     /** Ours stopped before the end. */
     NotSent,
+    /**
+     * KHANDAQ (0.2.57): the friend went offline in the middle of it; it goes on by itself, from
+     * where it stopped, once they are back.
+     */
+    WaitsConnection,
 };
 
 /** What the entry knows about its transfer. */
@@ -121,6 +127,8 @@ struct FileFacts
     bool here = false;
     /** Ours stopped, the file is still at its path and the person is online: it can go again. */
     bool canSendAgain = false;
+    /** KHANDAQ (0.2.57): the friend went offline in the middle of it (ToxFile::connectionLost). */
+    bool waitsConnection = false;
 };
 
 struct FileEntryState
@@ -143,6 +151,54 @@ FileEntryState fileEntryState(const FileFacts& facts);
  * moves (amber while they are offline), red when it stopped.
  */
 EntryStatus fileStatus(ToxFile::FileStatus status, bool personOnline);
+/** The mark of a file; one that waits for its friend to come back waits as an offer does. */
+EntryStatus fileStatus(const ToxFile& file, bool personOnline);
+
+/**
+ * KHANDAQ (0.2.57): what a file of theirs this side has is, for an offer of a file with its id
+ * (fileResume): the id, the size and the state of its entry, whether it was accepted, and how much
+ * of it the file it goes to holds.
+ */
+struct FileHere
+{
+    QByteArray id;
+    qint64 size = 0;
+    ToxFile::FileStatus status = ToxFile::INITIALIZING;
+    /** It was accepted, and what came of it is at its path. */
+    bool accepted = false;
+    /** The bytes at its path; 0 when there is nothing there. */
+    qint64 bytes = 0;
+};
+
+/** What an offer does with the entry of the same file (fileResume). */
+struct FileResume
+{
+    enum class Step
+    {
+        /** Another file: a new entry, as for any offer. */
+        NewEntry,
+        /**
+         * All of it is here already, and its sender did not learn it before the connection went:
+         * the last byte comes once more, so both sides end, and nothing here changes.
+         */
+        EndQuietly,
+        /** It goes on in its entry by itself from offset, since it was accepted. */
+        GoOn,
+        /** It waits in its entry for Accept, or for the downloads rule, from the start. */
+        WaitInEntry,
+    };
+    Step step = Step::NewEntry;
+    /** Where it goes on from, in bytes: what toxcore seeks to before the accept. */
+    qint64 offset = 0;
+};
+
+/**
+ * KHANDAQ (0.2.57): the standard resume of toxcore. The sender offers the file again with the same
+ * id, kind, size and name; this side seeks to what it has before it accepts. Another id or another
+ * size is another file. What is here goes on from its length; a file that is whole goes on from
+ * its last byte, which comes once more; one longer than its size starts again.
+ */
+FileResume fileResume(const QByteArray& offerId, qint64 offerSize, const FileHere& here);
 
 // ---- voice notes ----
 

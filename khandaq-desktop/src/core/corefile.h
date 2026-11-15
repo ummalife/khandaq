@@ -32,6 +32,7 @@
 #include <QHash>
 #include <QMutex>
 #include <QObject>
+#include <QSet>
 #include <QString>
 
 #include <cstddef>
@@ -51,8 +52,12 @@ public:
     void handleAvatarOffer(uint32_t friendId, uint32_t fileId, bool accept, uint64_t filesize);
     static CoreFilePtr makeCoreFile(Core* core, Tox* tox, CompatibleRecursiveMutex& coreLoopLock);
 
-    void sendFile(uint32_t friendId, QString filename, QString filePath,
-                         long long filesize);
+    /**
+     * fileId: KHANDAQ (0.2.57), the Tox file id the file had before (Send again), so its receiver
+     * can go on with what it has of it; empty for a new file, which toxcore gives an id of its own.
+     */
+    void sendFile(uint32_t friendId, QString filename, QString filePath, long long filesize,
+                  const QByteArray& fileId = QByteArray());
     void sendAvatarFile(uint32_t friendId, const QByteArray& data);
     void pauseResumeFile(uint32_t friendId, uint32_t fileId);
     void cancelFileSend(uint32_t friendId, uint32_t fileId);
@@ -60,8 +65,24 @@ public:
     void cancelFileRecv(uint32_t friendId, uint32_t fileId);
     void rejectFileRecvRequest(uint32_t friendId, uint32_t fileId);
     void acceptFileRecvRequest(uint32_t friendId, uint32_t fileId, QString path);
+    /**
+     * KHANDAQ (0.2.57): accepts an offer of a file partly here (Air::fileResume): toxcore seeks to
+     * offset before the accept, and what comes is appended to path from there.
+     */
+    void resumeFileRecv(uint32_t friendId, uint32_t fileId, QString path, uint64_t offset);
+    /**
+     * KHANDAQ (0.2.57): accepts an offer of a file that is all here already from offset, its last
+     * byte, so both sides end; nothing is written and nothing is signalled for it.
+     */
+    void finishFileRecvQuietly(uint32_t friendId, uint32_t fileId, uint64_t offset);
 
     unsigned corefileIterationInterval();
+    /**
+     * KHANDAQ (0.2.57): called by the core loop after tox_iterate, with its lock held. Offers again
+     * our files that waited for a friend who is back, and ends as stopped those of a friend who is
+     * back and offered nothing again for a while: an older client that cannot go on.
+     */
+    void process(qint64 nowMs);
 
 signals:
     void fileSendStarted(ToxFile file);
@@ -81,6 +102,15 @@ private:
     ToxFile* findFile(uint32_t friendId, uint32_t fileId);
     void addFile(uint32_t friendId, uint32_t fileId, const ToxFile& file);
     void removeFile(uint32_t friendId, uint32_t fileId);
+    /** The transfers of a friend who went offline wait for them, under numbers of their own. */
+    void keepForFriend(uint32_t friendId);
+    void offerAgain(uint32_t friendId, qint64 nowMs);
+    /** An offer that goes on with a file that waits for its sender; false when none waits. */
+    bool takeWaitingFile(const ToxFile& offer);
+    /** Seeks to offset, opens the file there and accepts the offer, unless it is paused here. */
+    bool startReceiving(ToxFile& file, uint64_t offset);
+    /** Ends an incoming file that waited for its sender as stopped, keeping what came of it. */
+    void endWaitingFile(uint64_t key);
     static constexpr uint64_t getFriendKey(uint32_t friendId, uint32_t fileId)
     {
         return (static_cast<std::uint64_t>(friendId) << 32) + fileId;
@@ -100,10 +130,22 @@ private:
     static QString getCleanFileName(QString filename);
 
 private slots:
-    void onConnectionStatusChanged(uint32_t friendId, Status::Status state);
+    /** Called on the core thread, in tox_iterate (Qt::DirectConnection). */
+    void onFriendLinkChanged(uint32_t friendId, int toxConnection);
 
 private:
     QHash<uint64_t, ToxFile> fileMap;
+    /** Friends back online, whose files that waited process() offers again. */
+    QSet<uint32_t> friendsBack;
+    /**
+     * Incoming files that wait for their sender, by key: when the sender came back (monotonic ms),
+     * or -1 while they are offline.
+     */
+    QHash<uint64_t, qint64> waitingSince;
+    /** Incoming files that are all here already: their last byte comes once more, unseen. */
+    QSet<uint64_t> quietFiles;
+    /** Numbers for files that wait, which toxcore never gives (it gives below 1 << 24). */
+    uint32_t nextWaitingNumber = 0;
     Tox* tox;
     CompatibleRecursiveMutex* coreLoopLock = nullptr;
 };

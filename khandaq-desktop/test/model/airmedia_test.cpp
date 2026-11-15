@@ -106,6 +106,11 @@ private slots:
     void aGroupFileHasNothingToAnswer();
     void ourGroupFileWaitsForSomeoneToSendItTo();
     void theMarkOfOurFileFollowsTheTransfer();
+    void aFileWhoseFriendWentOfflineWaitsAndNeverFails();
+    void anOfferOfAFilePartlyHereGoesOnFromWhatIsHere();
+    void anOfferOfAFileAllHereEndsQuietly();
+    void anOfferOfAnotherFileIsANewEntry();
+    void anOfferOfAFileNeverAcceptedWaitsInItsEntry();
     void theLengthOfANoteComesFromItsMovieHeader();
     void aBrokenHeaderHasNoLength();
     void lengthsReadAsClocks();
@@ -271,6 +276,122 @@ void TestAirMedia::theMarkOfOurFileFollowsTheTransfer()
     QCOMPARE(Air::fileStatus(ToxFile::PAUSED, true), Air::EntryStatus::Sending);
     QCOMPARE(Air::fileStatus(ToxFile::BROKEN, true), Air::EntryStatus::Failed);
     QCOMPARE(Air::fileStatus(ToxFile::CANCELED, true), Air::EntryStatus::Failed);
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): either way, a transfer whose friend went offline keeps the bar where it
+ * was and says it waits for the connection: never failed, and Cancel still works.
+ */
+void TestAirMedia::aFileWhoseFriendWentOfflineWaitsAndNeverFails()
+{
+    for (const bool incoming : {true, false}) {
+        Air::FileFacts waiting = facts(ToxFile::TRANSMITTING, incoming);
+        waiting.progress = 0.4;
+        waiting.waitsConnection = true;
+        const Air::FileEntryState state = Air::fileEntryState(waiting);
+        QCOMPARE(state.note, FileNote::WaitsConnection);
+        QCOMPARE(state.progress, 0.4);
+        QCOMPARE(state.actions, QVector<FileAction>{FileAction::Cancel});
+        QVERIFY(!state.isProblem());
+    }
+    // One that was not accepted yet has no bar, and cannot be accepted until they are back.
+    Air::FileFacts offer = facts(ToxFile::INITIALIZING, true);
+    offer.waitsConnection = true;
+    QCOMPARE(Air::fileEntryState(offer).note, FileNote::WaitsConnection);
+    QVERIFY(Air::fileEntryState(offer).progress < 0);
+    QCOMPARE(Air::fileEntryState(offer).actions, QVector<FileAction>{FileAction::Cancel});
+    // A group file is out of it: it has its own way.
+    Air::FileFacts groupFile = facts(ToxFile::PAUSED, false);
+    groupFile.group = true;
+    groupFile.waitsConnection = true;
+    QCOMPARE(Air::fileEntryState(groupFile).note, FileNote::WaitsMembers);
+
+    ToxFile ours(1, 0, QStringLiteral("video.mp4"), QString(), 1000, ToxFile::SENDING);
+    ours.status = ToxFile::TRANSMITTING;
+    ours.connectionLost = true;
+    QCOMPARE(Air::fileStatus(ours, false), Air::EntryStatus::Transit);
+    ours.connectionLost = false;
+    QCOMPARE(Air::fileStatus(ours, true), Air::EntryStatus::Sending);
+}
+
+namespace {
+Air::FileHere fileHere(ToxFile::FileStatus status, bool accepted, qint64 bytes)
+{
+    Air::FileHere here;
+    here.id = QByteArray(32, '\x07');
+    here.size = 1000;
+    here.status = status;
+    here.accepted = accepted;
+    here.bytes = bytes;
+    return here;
+}
+} // namespace
+
+/** @brief KHANDAQ (0.2.57): the same id and size, n bytes here: seek to n, in the same entry. */
+void TestAirMedia::anOfferOfAFilePartlyHereGoesOnFromWhatIsHere()
+{
+    const QByteArray id(32, '\x07');
+    Air::FileResume resume = Air::fileResume(id, 1000, fileHere(ToxFile::BROKEN, true, 400));
+    QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
+    QCOMPARE(resume.offset, qint64{400});
+    // Nothing here, or the data is gone: from the start, in the same entry.
+    resume = Air::fileResume(id, 1000, fileHere(ToxFile::BROKEN, true, 0));
+    QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
+    QCOMPARE(resume.offset, qint64{0});
+    // More than its size is not this file: it starts again.
+    resume = Air::fileResume(id, 1000, fileHere(ToxFile::BROKEN, true, 1200));
+    QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
+    QCOMPARE(resume.offset, qint64{0});
+    // All of it came but not its end: the last byte once more ends it as usual.
+    resume = Air::fileResume(id, 1000, fileHere(ToxFile::BROKEN, true, 1000));
+    QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
+    QCOMPARE(resume.offset, qint64{999});
+}
+
+/** @brief KHANDAQ (0.2.57): a file all here: seek to size - 1, no new card, nothing shown. */
+void TestAirMedia::anOfferOfAFileAllHereEndsQuietly()
+{
+    const QByteArray id(32, '\x07');
+    Air::FileResume resume = Air::fileResume(id, 1000, fileHere(ToxFile::FINISHED, true, 1000));
+    QCOMPARE(resume.step, Air::FileResume::Step::EndQuietly);
+    QCOMPARE(resume.offset, qint64{999});
+    // Whatever is at its path now: what was done stays done.
+    resume = Air::fileResume(id, 1000, fileHere(ToxFile::FINISHED, true, 0));
+    QCOMPARE(resume.step, Air::FileResume::Step::EndQuietly);
+    Air::FileHere empty = fileHere(ToxFile::FINISHED, true, 0);
+    empty.size = 0;
+    resume = Air::fileResume(id, 0, empty);
+    QCOMPARE(resume.step, Air::FileResume::Step::EndQuietly);
+    QCOMPARE(resume.offset, qint64{0});
+}
+
+/** @brief KHANDAQ (0.2.57): another id, or another size, is another file: a new entry. */
+void TestAirMedia::anOfferOfAnotherFileIsANewEntry()
+{
+    const Air::FileHere here = fileHere(ToxFile::BROKEN, true, 400);
+    QCOMPARE(Air::fileResume(QByteArray(32, '\x08'), 1000, here).step,
+             Air::FileResume::Step::NewEntry);
+    QCOMPARE(Air::fileResume(here.id, 1001, here).step, Air::FileResume::Step::NewEntry);
+    QCOMPARE(Air::fileResume(QByteArray(), 1000, here).step, Air::FileResume::Step::NewEntry);
+    Air::FileHere noId = here;
+    noId.id.clear();
+    QCOMPARE(Air::fileResume(QByteArray(), 1000, noId).step, Air::FileResume::Step::NewEntry);
+    QCOMPARE(Air::fileResume(QByteArray(32, '\x07'), 1000, noId).step,
+             Air::FileResume::Step::NewEntry);
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): one never accepted, or cancelled, waits in its entry for Accept or for
+ * the downloads rule, as a new offer does.
+ */
+void TestAirMedia::anOfferOfAFileNeverAcceptedWaitsInItsEntry()
+{
+    const QByteArray id(32, '\x07');
+    for (const ToxFile::FileStatus status : {ToxFile::BROKEN, ToxFile::CANCELED}) {
+        const Air::FileResume resume = Air::fileResume(id, 1000, fileHere(status, false, 0));
+        QCOMPARE(resume.step, Air::FileResume::Step::WaitInEntry);
+        QCOMPARE(resume.offset, qint64{0});
+    }
 }
 
 void TestAirMedia::theLengthOfANoteComesFromItsMovieHeader()

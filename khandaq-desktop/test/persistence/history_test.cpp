@@ -102,10 +102,14 @@ private slots:
     void textsBetweenTwoPeopleKeepTheirMsgV3Ids();
     void aReadReceiptFindsOnlyOurOwnMessage();
     void theNewestMessageOfThePersonIsWhatWeSaw();
+    void anAcceptedFileOfThePersonIsKeptAsInterrupted();
+    void aFileThatGoesOnAfterARestartEndsInItsRow();
 
 private:
-    /** The one file of the group, as a later start reads it. */
-    ToxFile storedFile();
+    /** The one file of the chat, as a later start reads it. */
+    ToxFile storedFile(const ChatId& chat = family);
+    /** A later start of the app: a history of its own on the same database. */
+    void restart();
     /** Lets the history learn the row of what it put in (History::onFileInserted). */
     void letRowsIn();
 
@@ -144,9 +148,9 @@ void TestHistory::cleanupTestCase()
     settings.reset();
 }
 
-ToxFile TestHistory::storedFile()
+ToxFile TestHistory::storedFile(const ChatId& chat)
 {
-    const auto messages = history->getMessagesForChat(family, 0, 1);
+    const auto messages = history->getMessagesForChat(chat, 0, 1);
     if (messages.size() != 1
         || messages.first().content.getType() != HistMessageContentType::file) {
         return ToxFile();
@@ -158,6 +162,15 @@ void TestHistory::letRowsIn()
 {
     history->sync();
     QCoreApplication::processEvents();
+}
+
+void TestHistory::restart()
+{
+    history->sync();
+    history.reset();
+    auto db = std::make_shared<RawDatabase>(file->fileName(), QString(), QByteArray());
+    history = std::make_shared<History>(db, *settings, messageBoxes);
+    QVERIFY(history->isValid());
 }
 
 /**
@@ -327,6 +340,67 @@ void TestHistory::theNewestMessageOfThePersonIsWhatWeSaw()
 
     // Another chat has none of it.
     QVERIFY(history->newestIncomingAnchor(ToxPk(QByteArray(ToxPk::size, 'o')), self).isEmpty());
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): a file of the person, once accepted, is kept as interrupted with the
+ * path it goes to, until its end writes the row again: a restart in the middle of it knows what
+ * came.
+ */
+void TestHistory::anAcceptedFileOfThePersonIsKeptAsInterrupted()
+{
+    history->addNewFileMessage(maryam, fileId, QStringLiteral("video.mp4"), QString(), 5000, maryam,
+                               QDateTime::currentDateTime(), QStringLiteral("Maryam"),
+                               ToxFile::RECEIVING);
+    history->setFileUnderway(maryam, fileId, filePath);
+    history->sync();
+    QCOMPARE(storedFile(maryam).status, ToxFile::BROKEN);
+    QCOMPARE(storedFile(maryam).filePath, filePath);
+    QCOMPARE(storedFile(maryam).resumeFileId, fileId);
+
+    letRowsIn();
+    history->setFileFinished(fileId, true, filePath, QByteArray("hash"));
+    history->sync();
+    QCOMPARE(storedFile(maryam).status, ToxFile::FINISHED);
+
+    // The same id in another chat is another file.
+    const ToxPk other{QByteArray(ToxPk::size, 'o')};
+    history->addNewFileMessage(other, fileId, QStringLiteral("video.mp4"), QString(), 5000, other,
+                               QDateTime::currentDateTime(), QStringLiteral("Omar"),
+                               ToxFile::RECEIVING);
+    history->setFileUnderway(maryam, fileId, QStringLiteral("/files/elsewhere.mp4"));
+    history->sync();
+    QCOMPARE(storedFile(other).status, ToxFile::CANCELED);
+    QCOMPARE(storedFile(other).filePath, QString());
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): after a restart, a file offered again with the id of its row goes on in
+ * that row: its end writes it, and no row is added. Its hash may not be known.
+ */
+void TestHistory::aFileThatGoesOnAfterARestartEndsInItsRow()
+{
+    history->addNewFileMessage(maryam, fileId, QStringLiteral("video.mp4"), QString(), 5000, maryam,
+                               QDateTime::currentDateTime(), QStringLiteral("Maryam"),
+                               ToxFile::RECEIVING);
+    history->setFileUnderway(maryam, fileId, filePath);
+    letRowsIn();
+    restart();
+    QCOMPARE(storedFile(maryam).status, ToxFile::BROKEN);
+
+    // Without the row again, its end has nowhere to go.
+    history->setFileFinished(fileId, true, filePath, QByteArray());
+    history->sync();
+    QCOMPARE(storedFile(maryam).status, ToxFile::BROKEN);
+
+    restart();
+    history->reopenFileMessage(maryam, fileId, ToxFile::SENDING);
+    history->reopenFileMessage(maryam, fileId, ToxFile::RECEIVING);
+    history->setFileFinished(fileId, true, filePath, QByteArray());
+    history->sync();
+    QCOMPARE(storedFile(maryam).status, ToxFile::FINISHED);
+    QCOMPARE(storedFile(maryam).filePath, filePath);
+    QCOMPARE(history->getNumMessagesForChat(maryam), size_t{1});
 }
 
 int main(int argc, char* argv[])

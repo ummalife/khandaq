@@ -434,6 +434,11 @@ const Source sources[] = {
     {Text::FileWaitsMembers, QT_TRANSLATE_NOOP3("Air", "Waits for someone in the group to come online", "file entry of ours in a group where nobody else is online now: it goes when someone is")},
     {Text::FileDownloadStopped, QT_TRANSLATE_NOOP3("Air", "The download stopped", "file entry of theirs that broke or was cancelled")},
     {Text::FileNotSent, QT_TRANSLATE_NOOP3("Air", "Not sent", "file entry of ours that broke or was cancelled")},
+    {Text::FileWaitsConnection,
+     QT_TRANSLATE_NOOP3("Air", "Waiting for the connection",
+                        "file entry, either way: the other person went offline in the middle of "
+                        "the transfer; it goes on by itself from where it stopped once they are "
+                        "back")},
     {Text::FileNameAndSize, QT_TRANSLATE_NOOP3("Air", "%1, %2", "what a screen reader says for a file: %1 the name, %2 the size or the length")},
     {Text::FileSaveTitle, QT_TRANSLATE_NOOP3("Air", "Save the file", "title of the dialog that chooses where a received file goes")},
     {Text::GroupFileLimit, QT_TRANSLATE_NOOP3("Air", "A group takes files up to %1", "group: tooltip of the paperclip and the reason of a refusal; %1 is a size such as 200 MB")},
@@ -1625,6 +1630,8 @@ QString fileNoteText(const Air::FileEntryState& state, const QString& person, co
         return text(Text::FileDownloadStopped);
     case Air::FileNote::NotSent:
         return text(Text::FileNotSent);
+    case Air::FileNote::WaitsConnection:
+        return text(Text::FileWaitsConnection);
     }
     return QString();
 }

@@ -421,6 +421,7 @@ enum class Text
     FileWaitsMembers,
     FileDownloadStopped,
     FileNotSent,
+    FileWaitsConnection,
     FileNameAndSize,
     FileSaveTitle,
     GroupFileLimit,

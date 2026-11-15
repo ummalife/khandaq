@@ -1661,7 +1661,7 @@ Air::EntryStatus ChatWidget::statusOf(const ChatLogItem& item) const
     if (item.getContentType() == ChatLogItem::ContentType::fileTransfer) {
         // Two checks once the person has all of it, a clock while it waits or moves.
         const ChatLogFile& file = item.getContentAsFile();
-        return Air::seenStatus(Air::fileStatus(file.file.status, personOnline), seen(file.timestamp));
+        return Air::seenStatus(Air::fileStatus(file.file, personOnline), seen(file.timestamp));
     }
     if (item.getContentType() != ChatLogItem::ContentType::message) {
         return Air::EntryStatus::None;

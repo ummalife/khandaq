@@ -1015,6 +1015,51 @@ void History::setMessageText(const ChatId& chatId, const ToxPk& author, const QD
     db->execLater(RawDatabase::Query(queryString, boundParams));
 }
 
+void History::reopenFileMessage(const ChatId& chatId, const QByteArray& fileId,
+                                ToxFile::FileDirection direction)
+{
+    // A row this run inserted and that has not ended is still known to it.
+    if (historyAccessBlocked() || fileInfos.contains(fileId) || erasedFiles.contains(fileId)) {
+        return;
+    }
+    QVector<QByteArray> boundParams{fileId};
+    QString queryString = QStringLiteral("SELECT file_transfers.id FROM file_transfers "
+                                         "JOIN history ON history.id = file_transfers.id "
+                                         "WHERE file_transfers.file_restart_id = ? "
+                                         "AND file_transfers.direction = %1 AND history.chat_id = ")
+                              .arg(static_cast<int>(direction));
+    addChatIdSubQuery(queryString, boundParams, chatId);
+    queryString += QStringLiteral(" ORDER BY file_transfers.id DESC LIMIT 1;");
+    RowId found{-1};
+    db->execNow({queryString, boundParams,
+                 [&found](const QVector<QVariant>& row) { found = RowId{row[0].toLongLong()}; }});
+    if (found.get() != -1) {
+        fileInfos[fileId].fileId = found;
+    }
+}
+
+void History::setFileUnderway(const ChatId& chatId, const QByteArray& fileId,
+                              const QString& filePath)
+{
+    if (historyAccessBlocked() || erasedFiles.contains(fileId)) {
+        return;
+    }
+    // By the id rather than the row: the row of a new file may not be in yet, and the queue of the
+    // database runs this after the insert.
+    QVector<QByteArray> boundParams{filePath.toUtf8(), fileId};
+    QString queryString =
+        QStringLiteral("UPDATE file_transfers SET file_state = %1, file_path = ? WHERE id = "
+                       "(SELECT max(file_transfers.id) FROM file_transfers "
+                       "JOIN history ON history.id = file_transfers.id "
+                       "WHERE file_transfers.file_restart_id = ? "
+                       "AND file_transfers.direction = %2 AND history.chat_id = ")
+            .arg(static_cast<int>(ToxFile::BROKEN))
+            .arg(static_cast<int>(ToxFile::RECEIVING));
+    addChatIdSubQuery(queryString, boundParams, chatId);
+    queryString += QStringLiteral(");");
+    db->execLater(RawDatabase::Query(queryString, boundParams));
+}
+
 void History::eraseFileEntry(const ChatId& chatId, const QByteArray& fileId)
 {
     if (historyAccessBlocked()) {

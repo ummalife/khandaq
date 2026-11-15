@@ -100,6 +100,8 @@ private slots:
     void ourOwnEchoChangesNothing();
     void aGroupReactionNamesWhoseMessageItIs();
     void aFileIsFoundByItsToxFileId();
+    void aFileThatWaitsForItsFriendKeepsItsEntry();
+    void aFileThatGoesOnMovesInTheEntryItHad();
     void aMessageWithoutAnIdIsNeverAnchored();
     void aMessageThatWaitedIsFoundByTheIdItWentWith();
 
@@ -374,6 +376,97 @@ void TestSessionChatLog::aFileIsFoundByItsToxFileId()
     QCOMPARE(deleted.change, Change::Deleted);
     QCOMPARE(deleted.file.fileName, QStringLiteral("Смета.pdf"));
     QVERIFY(!chatLog->isShown(ChatLogIdx(0)));
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): the friend went offline in the middle of a file: it waits under a number
+ * of its own (CoreFile::keepForFriend), in the entry it had, and its id says which entry that is.
+ */
+void TestSessionChatLog::aFileThatWaitsForItsFriendKeepsItsEntry()
+{
+    const ToxPk maryam = keyOf(0x11);
+    ToxFile file(3, 0, QStringLiteral("Видео.mp4"), QStringLiteral("/files/video.mp4"), 5000,
+                 ToxFile::RECEIVING);
+    file.resumeFileId = QByteArray(32, '\x09');
+    /* ChatLogIdx(0) */ chatLog->onFileUpdated(maryam, file);
+    file.status = ToxFile::TRANSMITTING;
+    chatLog->onFileUpdated(maryam, file);
+
+    ToxFile waiting = file;
+    waiting.fileNum = 0x80000000u;
+    waiting.connectionLost = true;
+    chatLog->onFileUpdated(maryam, waiting);
+    QCOMPARE(chatLog->getNextIdx(), ChatLogIdx(1));
+    QVERIFY(chatLog->at(ChatLogIdx(0)).getContentAsFile().file.connectionLost);
+    QCOMPARE(chatLog->at(ChatLogIdx(0)).getContentAsFile().file.fileNum, 0x80000000u);
+    QVERIFY(chatLog->isCurrentFile(file));
+
+    // Offered again under a new number, it is still that entry; Cancel there ends it.
+    ToxFile again = file;
+    again.fileNum = 7;
+    again.status = ToxFile::INITIALIZING;
+    again.continued = true;
+    chatLog->onFileUpdated(maryam, again);
+    QCOMPARE(chatLog->getNextIdx(), ChatLogIdx(1));
+    QCOMPARE(chatLog->at(ChatLogIdx(0)).getContentAsFile().file.fileNum, 7u);
+    again.status = ToxFile::CANCELED;
+    chatLog->onFileUpdated(maryam, again);
+    QVERIFY(!chatLog->isCurrentFile(again));
+    QCOMPARE(chatLog->at(ChatLogIdx(0)).getContentAsFile().file.status, ToxFile::CANCELED);
+
+    // The same file the other way is another transfer.
+    ToxFile ours = file;
+    ours.direction = ToxFile::SENDING;
+    QVERIFY(!chatLog->isCurrentFile(ours));
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): an offer of a file whose entry ended goes on in that entry when it says
+ * so (continued); any other offer, of the same id too, makes a new entry as before.
+ */
+void TestSessionChatLog::aFileThatGoesOnMovesInTheEntryItHad()
+{
+    const ToxPk maryam = keyOf(0x11);
+    ToxFile file(3, 0, QStringLiteral("Видео.mp4"), QStringLiteral("/files/video.mp4"), 5000,
+                 ToxFile::RECEIVING);
+    file.resumeFileId = QByteArray(32, '\x09');
+    /* ChatLogIdx(0) */ chatLog->onFileUpdated(maryam, file);
+    file.status = ToxFile::BROKEN;
+    chatLog->onFileUpdated(maryam, file);
+    /* ChatLogIdx(1) */ chatLog->onMessageReceived(maryam, createMessage("Потом"));
+
+    ToxFile found;
+    QVERIFY(chatLog->findFileEntry(file.resumeFileId, ToxFile::RECEIVING, &found));
+    QCOMPARE(found.status, ToxFile::BROKEN);
+    QCOMPARE(found.filePath, file.filePath);
+    QVERIFY(!chatLog->findFileEntry(file.resumeFileId, ToxFile::SENDING, nullptr));
+    QVERIFY(!chatLog->findFileEntry(QByteArray(32, '\x0a'), ToxFile::RECEIVING, nullptr));
+    QVERIFY(!chatLog->findFileEntry(QByteArray(), ToxFile::RECEIVING, nullptr));
+
+    qRegisterMetaType<ChatLogIdx>();
+    QSignalSpy updated(chatLog.get(), &SessionChatLog::itemUpdated);
+    ToxFile again(8, 0, file.fileName, file.filePath, 5000, ToxFile::RECEIVING);
+    again.resumeFileId = file.resumeFileId;
+    again.continued = true;
+    chatLog->onFileUpdated(maryam, again);
+    QCOMPARE(chatLog->getNextIdx(), ChatLogIdx(2));
+    QCOMPARE(updated.count(), 1);
+    QCOMPARE(qvariant_cast<ChatLogIdx>(updated.at(0).at(0)), ChatLogIdx(0));
+    QCOMPARE(chatLog->at(ChatLogIdx(0)).getContentAsFile().file.fileNum, 8u);
+    again.status = ToxFile::FINISHED;
+    chatLog->onFileUpdated(maryam, again);
+    QCOMPARE(chatLog->at(ChatLogIdx(0)).getContentAsFile().file.status, ToxFile::FINISHED);
+
+    // Not one that goes on: a new entry, whatever its id.
+    ToxFile fresh = again;
+    fresh.fileNum = 9;
+    fresh.status = ToxFile::INITIALIZING;
+    fresh.continued = false;
+    /* ChatLogIdx(2) */ chatLog->onFileUpdated(maryam, fresh);
+    QCOMPARE(chatLog->getNextIdx(), ChatLogIdx(3));
+    // The newest entry of that id is the one an offer goes on with.
+    QVERIFY(chatLog->findFileEntry(file.resumeFileId, ToxFile::RECEIVING, &found));
+    QCOMPARE(found.fileNum, 9u);
 }
 
 /**

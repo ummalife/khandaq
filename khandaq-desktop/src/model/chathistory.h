@@ -93,6 +93,12 @@ public:
     Air::SeenAnchor newestIncomingAnchor() const;
     /** Whether the person's text with this msgV3 id is here already: it came again. */
     bool hasIncomingText(const ToxPk& sender, const QByteArray& msgV3Id) const;
+    /**
+     * KHANDAQ (0.2.57): the newest entry loaded of the file with this Tox file id, in this
+     * direction (SessionChatLog::findFileEntry): what an offer of it goes on with.
+     */
+    bool findFileEntry(const QByteArray& fileId, ToxFile::FileDirection direction,
+                       ToxFile* found) const;
 
 signals:
     /** A message joined the queue, left it, or failed. */
@@ -177,4 +183,6 @@ private:
     Air::EntryMarksStore* entryStore = nullptr;
     /** A conversation between two people, not a group. */
     bool friendChat = false;
+    /** KHANDAQ (0.2.57): files of the person accepted in this run, whose row says so already. */
+    QSet<QByteArray> underwayFiles;
 };

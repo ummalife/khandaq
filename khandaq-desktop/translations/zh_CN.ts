@@ -2122,6 +2122,11 @@
         <translation>未发送</translation>
     </message>
     <message>
+        <source>Waiting for the connection</source>
+        <comment>file entry, either way: the other person went offline in the middle of the transfer; it goes on by itself from where it stopped once they are back</comment>
+        <translation>等待连接</translation>
+    </message>
+    <message>
         <source>%1, %2</source>
         <comment>what a screen reader says for a file: %1 the name, %2 the size or the length</comment>
         <translation>%1，%2</translation>

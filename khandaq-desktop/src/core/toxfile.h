@@ -60,6 +60,11 @@ struct ToxFile
 
     void setFilePath(QString path);
     bool open(bool write);
+    /**
+     * Opens the file to receive into from offset on: what is there before it stays and anything
+     * after it goes. At 0 it is open(true).
+     */
+    bool openAt(uint64_t offset);
 
     uint8_t fileKind;
     uint32_t fileNum;
@@ -74,4 +79,14 @@ struct ToxFile
     std::shared_ptr<QCryptographicHash> hashGenerator = std::make_shared<QCryptographicHash>(QCryptographicHash::Sha256);
     ToxFilePause pauseStatus;
     ToxFileProgress progress;
+    /**
+     * KHANDAQ (0.2.57): the friend went offline in the middle of it. toxcore has forgotten it then,
+     * but it stays where it was, waiting for them; it goes on by itself when they are back.
+     */
+    bool connectionLost = false;
+    /**
+     * KHANDAQ (0.2.57): an offer of a file that already has its entry in the chat (the same Tox
+     * file id): it goes on in that entry instead of making a new one.
+     */
+    bool continued = false;
 };

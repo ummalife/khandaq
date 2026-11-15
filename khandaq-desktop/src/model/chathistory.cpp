@@ -241,6 +241,18 @@ void ChatHistory::onFileUpdated(const ToxPk& sender, const ToxFile& file)
     if (canUseHistory()) {
         switch (file.status) {
         case ToxFile::INITIALIZING: {
+            // KHANDAQ (0.2.57): an entry that shows the transfer already (one that waits for its
+            // friend, or was offered again) keeps its row, and a file that goes on in an entry of
+            // before has that row again; the session log makes no new entry for either.
+            if (sessionChatLog.isCurrentFile(file)) {
+                break;
+            }
+            if (file.continued
+                && sessionChatLog.findFileEntry(file.resumeFileId, file.direction, nullptr)) {
+                history->reopenFileMessage(chat.getPersistentId(), file.resumeFileId,
+                                           file.direction);
+                break;
+            }
             auto selfPk = coreIdHandler.getSelfPublicKey();
             QString username(selfPk == sender ? coreIdHandler.getUsername() : chat.getDisplayedName(sender));
 
@@ -253,16 +265,39 @@ void ChatHistory::onFileUpdated(const ToxPk& sender, const ToxFile& file)
                                        QDateTime::currentDateTime(), username, file.direction);
             break;
         }
+        case ToxFile::TRANSMITTING:
+            // KHANDAQ (0.2.57): a file of the person, once accepted, is in its row as interrupted,
+            // with the path it goes to: what came of it stays there for an offer of it later, after
+            // a restart too. Its end writes the row again.
+            if (friendChat && file.direction == ToxFile::RECEIVING
+                && !underwayFiles.contains(file.resumeFileId)) {
+                underwayFiles.insert(file.resumeFileId);
+                history->setFileUnderway(chat.getPersistentId(), file.resumeFileId,
+                                         file.filePath);
+            }
+            break;
+        case ToxFile::BROKEN:
+            // KHANDAQ (0.2.57): between two people an interrupted file keeps its row as it is, so
+            // an offer of it later goes on with what came.
+            underwayFiles.remove(file.resumeFileId);
+            if (friendChat) {
+                break;
+            }
+            history->setFileFinished(file.resumeFileId, false, file.filePath,
+                                     file.hashGenerator ? file.hashGenerator->result()
+                                                        : QByteArray());
+            break;
         case ToxFile::CANCELED:
-        case ToxFile::FINISHED:
-        case ToxFile::BROKEN: {
+        case ToxFile::FINISHED: {
+            underwayFiles.remove(file.resumeFileId);
             const bool isSuccess = file.status == ToxFile::FINISHED;
+            // The hash is not known for a transfer that went on from the middle of the file.
             history->setFileFinished(file.resumeFileId, isSuccess, file.filePath,
-                                     file.hashGenerator->result());
+                                     file.hashGenerator ? file.hashGenerator->result()
+                                                        : QByteArray());
             break;
         }
         case ToxFile::PAUSED:
-        case ToxFile::TRANSMITTING:
         default:
             break;
         }
@@ -537,6 +572,12 @@ Air::SeenAnchor ChatHistory::newestIncomingAnchor() const
     return {};
 }
 
+bool ChatHistory::findFileEntry(const QByteArray& fileId, ToxFile::FileDirection direction,
+                                ToxFile* found) const
+{
+    return sessionChatLog.findFileEntry(fileId, direction, found);
+}
+
 bool ChatHistory::hasIncomingText(const ToxPk& sender, const QByteArray& msgV3Id) const
 {
     if (!friendChat || msgV3Id.isEmpty()) {
@@ -756,7 +797,13 @@ void ChatHistory::loadHistoryIntoSessionChatLog(ChatLogIdx start) const
         switch (message.content.getType()) {
         case HistMessageContentType::file: {
             const auto date = message.timestamp;
-            const auto file = message.content.asFile();
+            auto file = message.content.asFile();
+            // KHANDAQ (0.2.57): the friend a file of the history goes to again (Send again); the
+            // history keeps no number, and 0 was another friend.
+            const Friend* const person = qobject_cast<const Friend*>(&chat);
+            if (person) {
+                file.friendId = person->getId();
+            }
             const Air::EntryMarks marks =
                 entryStore ? entryStore->entryMarks(Air::fileEntryKey(chatKey(), file.resumeFileId))
                            : Air::EntryMarks();

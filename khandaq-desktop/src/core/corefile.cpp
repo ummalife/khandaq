@@ -23,6 +23,7 @@
 #include "toxfile.h"
 #include "toxstring.h"
 #include "src/persistence/settings.h"
+#include "src/model/air/airmedia.h"
 #include "src/model/status.h"
 #include "src/model/toxclientstandards.h"
 #include "util/compatiblerecursivemutex.h"
@@ -32,6 +33,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QImageReader>
 #include <QRegularExpression>
 #include <QThread>
@@ -68,6 +70,24 @@ bool khandaqImageDimensionsSane(const QByteArray& data)
     return static_cast<qint64>(dims.width()) * static_cast<qint64>(dims.height()) <= kMaxPixels
            && dims.width() <= kMaxSide && dims.height() <= kMaxSide;
 }
+
+/**
+ * KHANDAQ (0.2.57): how long an incoming file waits for its sender to offer it again once they are
+ * back. A client that goes on offers it as soon as it sees them; one that cannot (0.2.56 and older)
+ * never does, and its entry then ends as stopped instead of waiting for ever.
+ */
+constexpr qint64 waitForOfferMs = 60 * 1000;
+/** Files that wait for their friend are numbered from here: toxcore numbers stay below 1 << 24. */
+constexpr uint32_t waitingNumberBase = 0x80000000u;
+
+/** The file id of a file, as toxcore takes it: 32 bytes, or none. */
+const uint8_t* toxFileId(const QByteArray& fileId)
+{
+    if (fileId.size() != TOX_FILE_ID_LENGTH) {
+        return nullptr;
+    }
+    return reinterpret_cast<const uint8_t*>(fileId.constData());
+}
 } // namespace
 
 /**
@@ -81,7 +101,10 @@ CoreFilePtr CoreFile::makeCoreFile(Core *core, Tox *tox, CompatibleRecursiveMute
     assert(tox != nullptr);
     connectCallbacks(*tox);
     CoreFilePtr result = CoreFilePtr{new CoreFile{tox, coreLoopLock}};
-    connect(core, &Core::friendStatusChanged, result.get(), &CoreFile::onConnectionStatusChanged);
+    // KHANDAQ (0.2.57): at once, in tox_iterate: toxcore has just forgotten the transfers with the
+    // friend (break_files), and an offer of one of them again may come in the same iteration.
+    connect(core, &Core::friendLinkChanged, result.get(), &CoreFile::onFriendLinkChanged,
+            Qt::DirectConnection);
 
     return result;
 }
@@ -109,7 +132,7 @@ unsigned CoreFile::corefileIterationInterval()
     constexpr unsigned fileInterval = 10, idleInterval = 1000;
 
     for (ToxFile& file : fileMap) {
-        if (file.status == ToxFile::TRANSMITTING) {
+        if (file.status == ToxFile::TRANSMITTING && !file.connectionLost) {
             return fileInterval;
         }
     }
@@ -163,14 +186,15 @@ void CoreFile::sendAvatarFile(uint32_t friendId, const QByteArray& data)
 }
 
 void CoreFile::sendFile(uint32_t friendId, QString filename, QString filePath,
-                        long long filesize)
+                        long long filesize, const QByteArray& fileId)
 {
     QMutexLocker locker{coreLoopLock};
 
     ToxString fileName(filename);
     Tox_Err_File_Send sendErr;
+    const uint8_t* const sameId = toxFileId(fileId);
     uint32_t fileNum = tox_file_send(tox, friendId, TOX_FILE_KIND_DATA, filesize,
-                                     nullptr, fileName.data(), fileName.size(), &sendErr);
+                                     sameId, fileName.data(), fileName.size(), &sendErr);
 
     if (!PARSE_ERR(sendErr)) {
         emit fileSendFailed(friendId, fileName.getQString());
@@ -179,6 +203,7 @@ void CoreFile::sendFile(uint32_t friendId, QString filename, QString filePath,
     qDebug() << QString("sendFile: Created file sender %1 with friend %2").arg(fileNum).arg(friendId);
 
     ToxFile file{fileNum, friendId, fileName.getQString(), filePath, static_cast<uint64_t>(filesize), ToxFile::SENDING};
+    file.continued = sameId != nullptr;
     file.resumeFileId.resize(TOX_FILE_ID_LENGTH);
     Tox_Err_File_Get fileGetErr;
     tox_file_get_file_id(tox, friendId, fileNum, reinterpret_cast<uint8_t*>(file.resumeFileId.data()),
@@ -202,6 +227,10 @@ void CoreFile::pauseResumeFile(uint32_t friendId, uint32_t fileId)
     ToxFile* file = findFile(friendId, fileId);
     if (!file) {
         qWarning("pauseResumeFileSend: No such file in queue");
+        return;
+    }
+    if (file->connectionLost) {
+        qWarning() << "pauseResumeFileSend: The file waits for its friend";
         return;
     }
 
@@ -242,10 +271,13 @@ void CoreFile::cancelFileSend(uint32_t friendId, uint32_t fileId)
         return;
     }
 
-    Tox_Err_File_Control err;
-    tox_file_control(tox, file->friendId, file->fileNum, TOX_FILE_CONTROL_CANCEL, &err);
-    if (!PARSE_ERR(err)) {
-        return;
+    // A file that waits for its friend is not in toxcore any more.
+    if (!file->connectionLost) {
+        Tox_Err_File_Control err;
+        tox_file_control(tox, file->friendId, file->fileNum, TOX_FILE_CONTROL_CANCEL, &err);
+        if (!PARSE_ERR(err)) {
+            return;
+        }
     }
     file->status = ToxFile::CANCELED;
     emit fileTransferCancelled(*file);
@@ -261,10 +293,12 @@ void CoreFile::cancelFileRecv(uint32_t friendId, uint32_t fileId)
         qWarning("cancelFileRecv: No such file in queue");
         return;
     }
-    Tox_Err_File_Control err;
-    tox_file_control(tox, file->friendId, file->fileNum, TOX_FILE_CONTROL_CANCEL, &err);
-    if (!PARSE_ERR(err)) {
-        return;
+    if (!file->connectionLost) {
+        Tox_Err_File_Control err;
+        tox_file_control(tox, file->friendId, file->fileNum, TOX_FILE_CONTROL_CANCEL, &err);
+        if (!PARSE_ERR(err)) {
+            return;
+        }
     }
     file->status = ToxFile::CANCELED;
     emit fileTransferCancelled(*file);
@@ -280,10 +314,12 @@ void CoreFile::rejectFileRecvRequest(uint32_t friendId, uint32_t fileId)
         qWarning("rejectFileRecvRequest: No such file in queue");
         return;
     }
-    Tox_Err_File_Control err;
-    tox_file_control(tox, file->friendId, file->fileNum, TOX_FILE_CONTROL_CANCEL, &err);
-    if (!PARSE_ERR(err)) {
-        return;
+    if (!file->connectionLost) {
+        Tox_Err_File_Control err;
+        tox_file_control(tox, file->friendId, file->fileNum, TOX_FILE_CONTROL_CANCEL, &err);
+        if (!PARSE_ERR(err)) {
+            return;
+        }
     }
     file->status = ToxFile::CANCELED;
     emit fileTransferCancelled(*file);
@@ -297,6 +333,10 @@ void CoreFile::acceptFileRecvRequest(uint32_t friendId, uint32_t fileId, QString
     ToxFile* file = findFile(friendId, fileId);
     if (!file) {
         qWarning("acceptFileRecvRequest: No such file in queue");
+        return;
+    }
+    if (file->connectionLost) {
+        qWarning() << "acceptFileRecvRequest: The file waits for its sender";
         return;
     }
     file->setFilePath(path);
@@ -315,6 +355,55 @@ void CoreFile::acceptFileRecvRequest(uint32_t friendId, uint32_t fileId, QString
     }
     file->status = ToxFile::TRANSMITTING;
     emit fileTransferAccepted(*file);
+}
+
+void CoreFile::resumeFileRecv(uint32_t friendId, uint32_t fileId, QString path, uint64_t offset)
+{
+    QMutexLocker locker{coreLoopLock};
+
+    ToxFile* file = findFile(friendId, fileId);
+    if (!file || file->connectionLost || file->status != ToxFile::INITIALIZING) {
+        qWarning("resumeFileRecv: No such offer");
+        return;
+    }
+    file->setFilePath(path);
+    file->continued = true;
+    if (!startReceiving(*file, offset)) {
+        // It waits for Accept in its entry then.
+        return;
+    }
+    emit fileTransferAccepted(*file);
+}
+
+void CoreFile::finishFileRecvQuietly(uint32_t friendId, uint32_t fileId, uint64_t offset)
+{
+    QMutexLocker locker{coreLoopLock};
+
+    ToxFile* file = findFile(friendId, fileId);
+    if (!file || file->connectionLost || file->status != ToxFile::INITIALIZING) {
+        qWarning("finishFileRecvQuietly: No such offer");
+        return;
+    }
+    if (offset > 0) {
+        Tox_Err_File_Seek seekErr;
+        tox_file_seek(tox, friendId, fileId, offset, &seekErr);
+        if (seekErr != TOX_ERR_FILE_SEEK_OK) {
+            qWarning() << "finishFileRecvQuietly: seek failed with" << seekErr;
+            offset = 0;
+        }
+    }
+    file->progress = ToxFileProgress(file->progress.getFileSize());
+    file->progress.addSample(offset);
+    Tox_Err_File_Control err;
+    tox_file_control(tox, friendId, fileId, TOX_FILE_CONTROL_RESUME, &err);
+    if (!PARSE_ERR(err)) {
+        tox_file_control(tox, friendId, fileId, TOX_FILE_CONTROL_CANCEL, &err);
+        removeFile(friendId, fileId);
+        return;
+    }
+    qDebug() << "finishFileRecvQuietly: a file that is here already ends from byte" << offset;
+    file->status = ToxFile::TRANSMITTING;
+    quietFiles.insert(getFriendKey(friendId, fileId));
 }
 
 ToxFile* CoreFile::findFile(uint32_t friendId, uint32_t fileId)
@@ -351,6 +440,8 @@ void CoreFile::removeFile(uint32_t friendId, uint32_t fileId)
     }
     fileMap[key].file->close();
     fileMap.remove(key);
+    waitingSince.remove(key);
+    quietFiles.remove(key);
 }
 
 QString CoreFile::getCleanFileName(QString filename)
@@ -422,6 +513,10 @@ void CoreFile::onFileReceiveCallback(Tox* tox, uint32_t friendId, uint32_t fileI
     if (!PARSE_ERR(fileGetErr)) {
         return;
     }
+    // KHANDAQ (0.2.57): the sender offers again a file that waits here for it.
+    if (kind == TOX_FILE_KIND_DATA && coreFile->takeWaitingFile(file)) {
+        return;
+    }
     coreFile->addFile(friendId, fileId, file);
     if (kind != TOX_FILE_KIND_AVATAR) {
         emit coreFile->fileReceiveRequested(file);
@@ -480,7 +575,10 @@ void CoreFile::onFileControlCallback(Tox* tox, uint32_t friendId, uint32_t fileI
         if (file->fileKind != TOX_FILE_KIND_AVATAR)
             qDebug() << "File transfer" << friendId << ":" << fileId << "cancelled by friend";
         file->status = ToxFile::CANCELED;
-        emit coreFile->fileTransferCancelled(*file);
+        // The last byte of a file that is here already: nothing shows it.
+        if (!coreFile->quietFiles.contains(getFriendKey(friendId, fileId))) {
+            emit coreFile->fileTransferCancelled(*file);
+        }
         coreFile->removeFile(friendId, fileId);
     } else if (control == TOX_FILE_CONTROL_PAUSE) {
         qDebug() << "onFileControlCallback: Received pause for file " << friendId << ":" << fileId;
@@ -492,8 +590,16 @@ void CoreFile::onFileControlCallback(Tox* tox, uint32_t friendId, uint32_t fileI
             qDebug() << "Avatar transfer" << fileId << "to friend" << friendId << "accepted";
         else
             qDebug() << "onFileControlCallback: Received resume for file " << friendId << ":" << fileId;
+        const bool accepted = file->status == ToxFile::INITIALIZING;
         file->pauseStatus.remoteResume();
         file->status = file->pauseStatus.paused() ? ToxFile::PAUSED : ToxFile::TRANSMITTING;
+        // KHANDAQ (0.2.57): ours, paused here, was offered again: toxcore sends it once accepted,
+        // so it is paused again there.
+        if (accepted && file->direction == ToxFile::SENDING && file->pauseStatus.localPaused()) {
+            Tox_Err_File_Control err;
+            tox_file_control(tox, friendId, fileId, TOX_FILE_CONTROL_PAUSE, &err);
+            PARSE_ERR(err);
+        }
         emit coreFile->fileTransferRemotePausedUnpaused(*file, false);
     } else {
         qWarning() << "Unhandled file control " << control << " for file " << friendId << ':' << fileId;
@@ -542,8 +648,24 @@ void CoreFile::onFileDataCallback(Tox* tox, uint32_t friendId, uint32_t fileId, 
             coreFile->removeFile(friendId, fileId);
             return;
         }
-        file->progress.addSample(file->progress.getBytesSent() + length);
-        file->hashGenerator->addData(reinterpret_cast<const char*>(data.get()), length);
+        // KHANDAQ (0.2.57): the chunks start where the receiver asked, after a seek: the progress
+        // goes by the position, and a hash knows only a file read whole and in order.
+        if (pos != file->progress.getBytesSent()) {
+            qDebug() << "onFileDataCallback: file" << friendId << ':' << fileId
+                     << "goes on from byte" << pos;
+            file->progress = ToxFileProgress(file->progress.getFileSize());
+            if (pos == 0) {
+                file->hashGenerator =
+                    std::make_shared<QCryptographicHash>(QCryptographicHash::Sha256);
+            } else {
+                file->hashGenerator.reset();
+            }
+        }
+        file->progress.addSample(pos + static_cast<uint64_t>(nread));
+        if (file->hashGenerator) {
+            file->hashGenerator->addData(reinterpret_cast<const char*>(data.get()),
+                                         static_cast<int>(nread));
+        }
     }
 
     Tox_Err_File_Send_Chunk err;
@@ -567,6 +689,16 @@ void CoreFile::onFileRecvChunkCallback(Tox* tox, uint32_t friendId, uint32_t fil
         Tox_Err_File_Control err;
         tox_file_control(tox, friendId, fileId, TOX_FILE_CONTROL_CANCEL, &err);
         PARSE_ERR(err);
+        return;
+    }
+
+    // KHANDAQ (0.2.57): the last byte of a file that is here already ends both sides, unseen.
+    if (coreFile->quietFiles.contains(getFriendKey(friendId, fileId))) {
+        if (!length) {
+            qDebug() << "onFileRecvChunkCallback: a file that is here already ended" << friendId
+                     << ':' << fileId;
+            coreFile->removeFile(friendId, fileId);
+        }
         return;
     }
 
@@ -636,11 +768,16 @@ void CoreFile::onFileRecvChunkCallback(Tox* tox, uint32_t friendId, uint32_t fil
         const char* payload = reinterpret_cast<const char*>(data) + TOX_FILE_ID_LENGTH;
         file->file->write(payload, static_cast<qint64>(payloadLen));
         file->progress.addSample(file->progress.getBytesSent() + payloadLen);
-        file->hashGenerator->addData(payload, static_cast<qint64>(payloadLen));
+        if (file->hashGenerator) {
+            file->hashGenerator->addData(payload, static_cast<qint64>(payloadLen));
+        }
     } else {
         file->file->write(reinterpret_cast<const char*>(data), length);
         file->progress.addSample(file->progress.getBytesSent() + length);
-        file->hashGenerator->addData(reinterpret_cast<const char*>(data), length);
+        // A transfer that went on from the middle of the file knows no hash of it.
+        if (file->hashGenerator) {
+            file->hashGenerator->addData(reinterpret_cast<const char*>(data), length);
+        }
     }
 
     if (file->fileKind != TOX_FILE_KIND_AVATAR) {
@@ -648,22 +785,250 @@ void CoreFile::onFileRecvChunkCallback(Tox* tox, uint32_t friendId, uint32_t fil
     }
 }
 
-void CoreFile::onConnectionStatusChanged(uint32_t friendId, Status::Status state)
+void CoreFile::onFriendLinkChanged(uint32_t friendId, int toxConnection)
 {
-    bool isOffline = state == Status::Status::Offline;
-    // TODO: Actually resume broken file transfers
-    // We need to:
-    // - Start a new file transfer with the same 32byte file ID with toxcore
-    // - Seek to the correct position again
-    // - Update the fileNum in our ToxFile
-    // - Update the users of our signals to check the 32byte tox file ID, not the uint32_t file_num
-    // (fileId)
-    ToxFile::FileStatus status = !isOffline ? ToxFile::TRANSMITTING : ToxFile::BROKEN;
-    for (uint64_t key : fileMap.keys()) {
-        if (key >> 32 != friendId)
-            continue;
-        fileMap[key].status = status;
-        emit fileTransferBrokenUnbroken(fileMap[key], isOffline);
-        removeFile(friendId, fileMap[key].fileNum);
+    QMutexLocker locker{coreLoopLock};
+    if (toxConnection == TOX_CONNECTION_NONE) {
+        keepForFriend(friendId);
+    } else {
+        // Ours are offered again once tox_iterate is done (process).
+        friendsBack.insert(friendId);
     }
+}
+
+void CoreFile::process(qint64 nowMs)
+{
+    QMutexLocker locker{coreLoopLock};
+    if (!friendsBack.isEmpty()) {
+        const QSet<uint32_t> back = friendsBack;
+        friendsBack.clear();
+        for (const uint32_t friendId : back) {
+            offerAgain(friendId, nowMs);
+        }
+    }
+    QVector<uint64_t> ended;
+    for (auto it = waitingSince.cbegin(); it != waitingSince.cend(); ++it) {
+        if (it.value() >= 0 && nowMs - it.value() >= waitForOfferMs) {
+            ended.append(it.key());
+        }
+    }
+    for (const uint64_t key : ended) {
+        qDebug() << "process: the sender of file" << (key >> 32) << ':' << (key & 0xffffffffu)
+                 << "is back and did not offer it again";
+        endWaitingFile(key);
+    }
+}
+
+/**
+ * KHANDAQ (0.2.57): the friend went offline. toxcore has forgotten every transfer with them before
+ * it said so (break_files), so their numbers go to new transfers. A file between two people waits
+ * for them under a number of its own: ours is offered again with the same file id when they are
+ * back, theirs goes on when they offer it so. qTox ended them all as broken.
+ */
+void CoreFile::keepForFriend(uint32_t friendId)
+{
+    for (const uint64_t key : fileMap.keys()) {
+        if (key >> 32 != friendId) {
+            continue;
+        }
+        ToxFile file = fileMap.value(key);
+        if (file.connectionLost) {
+            // It waits already, and waits for them again.
+            if (waitingSince.contains(key)) {
+                waitingSince.insert(key, -1);
+            }
+            continue;
+        }
+        const bool quiet = quietFiles.contains(key);
+        removeFile(friendId, file.fileNum);
+        if (file.fileKind == TOX_FILE_KIND_AVATAR || quiet) {
+            continue;
+        }
+        if (file.fileKind != TOX_FILE_KIND_DATA) {
+            // toxcore keeps a file of its second version (FTV2), but we cannot go on with one.
+            file.status = ToxFile::BROKEN;
+            emit fileTransferBrokenUnbroken(file, true);
+            continue;
+        }
+        file.connectionLost = true;
+        file.progress.resetSpeed();
+        file.fileNum = waitingNumberBase | (nextWaitingNumber++ & ~waitingNumberBase);
+        const uint64_t waitingKey = getFriendKey(friendId, file.fileNum);
+        fileMap.insert(waitingKey, file);
+        if (file.direction == ToxFile::RECEIVING) {
+            waitingSince.insert(waitingKey, -1);
+        }
+        qDebug() << "keepForFriend: file" << friendId << ':' << key << "waits for the friend at"
+                 << file.progress.getBytesSent() << "of" << file.progress.getFileSize();
+        emit fileTransferBrokenUnbroken(file, true);
+    }
+}
+
+/** KHANDAQ (0.2.57): the friend is back. Ours that waited are offered again with their own id. */
+void CoreFile::offerAgain(uint32_t friendId, qint64 nowMs)
+{
+    for (const uint64_t key : fileMap.keys()) {
+        if (key >> 32 != friendId || !fileMap.value(key).connectionLost) {
+            continue;
+        }
+        if (fileMap.value(key).direction == ToxFile::RECEIVING) {
+            // Theirs: the sender offers it again, if it can; it is not waited for for ever.
+            if (waitingSince.value(key, -1) < 0) {
+                waitingSince.insert(key, nowMs);
+            }
+            continue;
+        }
+        ToxFile file = fileMap.value(key);
+        ToxString fileName(file.fileName);
+        Tox_Err_File_Send sendErr;
+        const uint32_t fileNum =
+            tox_file_send(tox, friendId, TOX_FILE_KIND_DATA, file.progress.getFileSize(),
+                          toxFileId(file.resumeFileId), fileName.data(), fileName.size(), &sendErr);
+        if (!PARSE_ERR(sendErr)) {
+            // It waits for the next time they are back.
+            continue;
+        }
+        fileMap.remove(key);
+        file.fileNum = fileNum;
+        file.connectionLost = false;
+        file.continued = true;
+        file.status = ToxFile::INITIALIZING;
+        file.pauseStatus.remoteResume();
+        // It goes on from where the receiver asks (onFileDataCallback); its progress and hash stay
+        // until then, and both go on if that is where it stopped.
+        if (!file.open(false)) {
+            qWarning() << "offerAgain: Can't open file, error:" << file.file->errorString();
+        }
+        addFile(friendId, fileNum, file);
+        qDebug() << "offerAgain: file" << friendId << ':' << fileNum
+                 << "offered again with its own id";
+        emit fileSendStarted(file);
+    }
+}
+
+/**
+ * KHANDAQ (0.2.57): the offer of a file of the person that waits here for them, the same file id
+ * and size. It goes on in its entry: from what came, by itself, when it was accepted; otherwise it
+ * waits for Accept again.
+ */
+bool CoreFile::takeWaitingFile(const ToxFile& offer)
+{
+    uint64_t waitingKey = 0;
+    bool found = false;
+    QVector<uint64_t> replaced;
+    for (auto it = fileMap.cbegin(); it != fileMap.cend(); ++it) {
+        const ToxFile& waiting = it.value();
+        if ((it.key() >> 32) != offer.friendId || !waiting.connectionLost
+            || waiting.direction != ToxFile::RECEIVING) {
+            continue;
+        }
+        if (waiting.resumeFileId == offer.resumeFileId) {
+            waitingKey = it.key();
+            found = waiting.progress.getFileSize() == offer.progress.getFileSize();
+        } else if (waiting.fileName == offer.fileName
+                   && waiting.progress.getFileSize() == offer.progress.getFileSize()) {
+            // Sent again under a new id, as an older client does: this one ends now.
+            replaced.append(it.key());
+        }
+    }
+    for (const uint64_t key : replaced) {
+        qDebug() << "takeWaitingFile: the sender offers file" << (key & 0xffffffffu)
+                 << "again under a new id";
+        endWaitingFile(key);
+    }
+    if (!found) {
+        return false;
+    }
+
+    ToxFile file = fileMap.value(waitingKey);
+    fileMap.remove(waitingKey);
+    waitingSince.remove(waitingKey);
+    file.fileNum = offer.fileNum;
+    file.connectionLost = false;
+    file.continued = true;
+    file.pauseStatus.remoteResume();
+    const bool accepted = file.status == ToxFile::TRANSMITTING || file.status == ToxFile::PAUSED;
+    addFile(offer.friendId, offer.fileNum, file);
+    ToxFile* const taken = findFile(offer.friendId, offer.fileNum);
+    if (accepted) {
+        Air::FileHere here;
+        here.id = file.resumeFileId;
+        here.size = static_cast<qint64>(file.progress.getFileSize());
+        here.status = file.status;
+        here.accepted = true;
+        const QFileInfo partial(file.filePath);
+        here.bytes = partial.isFile() ? partial.size() : 0;
+        const Air::FileResume resume =
+            Air::fileResume(offer.resumeFileId, static_cast<qint64>(offer.progress.getFileSize()),
+                            here);
+        qDebug() << "takeWaitingFile: file" << offer.friendId << ':' << offer.fileNum
+                 << "goes on from byte" << resume.offset;
+        if (startReceiving(*taken, static_cast<uint64_t>(resume.offset))) {
+            if (taken->status == ToxFile::PAUSED) {
+                emit fileTransferPaused(*taken);
+            } else {
+                emit fileTransferAccepted(*taken);
+            }
+            return true;
+        }
+    }
+    // It waits for Accept in its entry, as an offer does.
+    taken->status = ToxFile::INITIALIZING;
+    taken->progress = ToxFileProgress(taken->progress.getFileSize());
+    emit fileReceiveRequested(*taken);
+    return true;
+}
+
+bool CoreFile::startReceiving(ToxFile& file, uint64_t offset)
+{
+    if (offset > 0) {
+        Tox_Err_File_Seek seekErr;
+        tox_file_seek(tox, file.friendId, file.fileNum, offset, &seekErr);
+        if (seekErr != TOX_ERR_FILE_SEEK_OK) {
+            qWarning() << "startReceiving: seek failed with" << seekErr << ", from the start";
+            offset = 0;
+        }
+    }
+    file.file->close();
+    if (!file.openAt(offset)) {
+        qWarning() << "startReceiving: Unable to open file" << file.filePath
+                   << file.file->errorString();
+        return false;
+    }
+    // The hash goes on only with all that came before; from the start it is a new one.
+    if (offset == 0) {
+        file.hashGenerator = std::make_shared<QCryptographicHash>(QCryptographicHash::Sha256);
+    } else if (offset != file.progress.getBytesSent()) {
+        file.hashGenerator.reset();
+    }
+    file.progress = ToxFileProgress(file.progress.getFileSize());
+    file.progress.addSample(offset);
+    if (file.pauseStatus.localPaused()) {
+        // Paused here: Resume accepts it (pauseResumeFile).
+        file.status = ToxFile::PAUSED;
+        return true;
+    }
+    Tox_Err_File_Control err;
+    tox_file_control(tox, file.friendId, file.fileNum, TOX_FILE_CONTROL_RESUME, &err);
+    if (!PARSE_ERR(err)) {
+        file.file->close();
+        return false;
+    }
+    file.status = ToxFile::TRANSMITTING;
+    return true;
+}
+
+void CoreFile::endWaitingFile(uint64_t key)
+{
+    const auto found = fileMap.constFind(key);
+    if (found == fileMap.cend()) {
+        waitingSince.remove(key);
+        return;
+    }
+    ToxFile file = found.value();
+    removeFile(static_cast<uint32_t>(key >> 32), file.fileNum);
+    // What came of it stays at its path: its entry says stopped, and an offer later goes on.
+    file.connectionLost = false;
+    file.status = ToxFile::BROKEN;
+    emit fileTransferBrokenUnbroken(file, true);
 }

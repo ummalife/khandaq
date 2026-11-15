@@ -26,6 +26,8 @@
 #include "src/persistence/settings.h"
 #include "mock/mockcoresettings.h"
 #include "src/core/khandaqlimits.h"
+#include "src/core/corefile.h"
+#include "src/model/air/airmedia.h"
 #include "src/model/groupinvite.h"
 
 #include <QTemporaryDir>
@@ -37,6 +39,7 @@
 
 #include <iostream>
 #include <memory>
+#include <random>
 
 Q_DECLARE_METATYPE(QList<DhtServer>)
 Q_DECLARE_METATYPE(ToxPk)
@@ -70,6 +73,9 @@ private slots:
     void group_file_goes_to_a_member_in_the_core_loop();
     void a_group_being_left_takes_no_text();
     void an_invite_from_a_friend_online_replaces_a_group_joined_by_its_id();
+    void a_file_goes_on_from_where_it_stopped_once_the_friend_is_back();
+    void an_offer_of_a_file_partly_here_goes_on_from_what_is_here();
+    void an_offer_of_a_file_all_here_ends_quietly();
 
 private:
     /** Alice makes a group, and Bob joins it by her invite: both count the two of them then. */
@@ -87,6 +93,119 @@ private:
 namespace {
 const int bootstrap_timeout = 15000;
 const int connected_message_wait = 5000;
+/**
+ * How long a node that hears nothing more from a friend takes to call them offline
+ * (FRIEND_CONNECTION_TIMEOUT of toxcore, 32 s), with room for the link to come back after it.
+ */
+const int friend_timeout = 50000;
+/** What a file sends in a packet at most (MAX_FILE_DATA_SIZE of toxcore). */
+const qint64 fileChunkMax = 1371;
+
+/** KHANDAQ (0.2.57): what the core thread of a node says of its files and friends, for the test. */
+class NodeLog : public QObject
+{
+public:
+    NodeLog(Core& core)
+    {
+        CoreFile& files = *core.getCoreFile();
+        connect(&files, &CoreFile::fileReceiveRequested, this, keep(&offered),
+                Qt::DirectConnection);
+        connect(&files, &CoreFile::fileSendStarted, this, keep(&started), Qt::DirectConnection);
+        connect(&files, &CoreFile::fileTransferAccepted, this, keep(&accepted),
+                Qt::DirectConnection);
+        connect(&files, &CoreFile::fileTransferFinished, this, keep(&finished),
+                Qt::DirectConnection);
+        connect(&files, &CoreFile::fileTransferCancelled, this, keep(&cancelled),
+                Qt::DirectConnection);
+        connect(&files, &CoreFile::fileTransferBrokenUnbroken, this,
+                [this](ToxFile file, bool) {
+                    const QMutexLocker locker{&lock};
+                    waiting.append(file);
+                },
+                Qt::DirectConnection);
+        connect(&files, &CoreFile::fileTransferInfo, this,
+                [this](ToxFile file) {
+                    const QMutexLocker locker{&lock};
+                    bytes = file.progress.getBytesSent();
+                    if (file.continued && firstContinued == 0) {
+                        firstContinued = bytes;
+                    }
+                },
+                Qt::DirectConnection);
+        connect(&core, &Core::friendLinkChanged, this,
+                [this](uint32_t friendId, int link) {
+                    const QMutexLocker locker{&lock};
+                    links[friendId] = link;
+                },
+                Qt::DirectConnection);
+    }
+
+    QList<ToxFile> of(const QList<ToxFile>& list)
+    {
+        const QMutexLocker locker{&lock};
+        return list;
+    }
+    qint64 lastBytes()
+    {
+        const QMutexLocker locker{&lock};
+        return static_cast<qint64>(bytes);
+    }
+    /** The bytes of the first transfer info of a file that went on: where it went on from. */
+    qint64 firstContinuedBytes()
+    {
+        const QMutexLocker locker{&lock};
+        return static_cast<qint64>(firstContinued);
+    }
+    bool online(uint32_t friendId)
+    {
+        const QMutexLocker locker{&lock};
+        return links.value(friendId, TOX_CONNECTION_NONE) != TOX_CONNECTION_NONE;
+    }
+
+    QList<ToxFile> offered;
+    QList<ToxFile> started;
+    QList<ToxFile> accepted;
+    QList<ToxFile> finished;
+    QList<ToxFile> cancelled;
+    QList<ToxFile> waiting;
+
+private:
+    std::function<void(ToxFile)> keep(QList<ToxFile>* list)
+    {
+        return [this, list](ToxFile file) {
+            const QMutexLocker locker{&lock};
+            list->append(file);
+        };
+    }
+
+    QMutex lock;
+    uint64_t bytes = 0;
+    uint64_t firstContinued = 0;
+    QHash<uint32_t, int> links;
+};
+
+/** A file of size bytes that no shift of itself matches, so a part from a wrong place shows. */
+QByteArray fileBytes(int size, unsigned seed)
+{
+    std::mt19937 random(seed);
+    QByteArray bytes(size, Qt::Uninitialized);
+    for (int i = 0; i < size; ++i) {
+        bytes[i] = static_cast<char>(random() & 0xff);
+    }
+    return bytes;
+}
+
+bool writeFile(const QString& path, const QByteArray& bytes)
+{
+    QFile file(path);
+    return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size();
+}
+
+QByteArray readFile(const QString& path)
+{
+    QFile file(path);
+    return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+}
 
 void bootstrapToxes(Core& alice, MockBootstrapListGenerator& alicesNodes,
     Core& bob, MockBootstrapListGenerator& bobsNodes)
@@ -636,6 +755,170 @@ void TestCore::an_invite_from_a_friend_online_replaces_a_group_joined_by_its_id(
     QCOMPARE(numberOnAlice(), joins().at(2));
 
     alice->removeGroup(static_cast<int>(numberOnAlice()));
+}
+
+/**
+ * KHANDAQ (0.2.57): the link between Alice and Bob goes in the middle of a file of Alice, as when
+ * the network goes, and comes back. Alice's node stops for longer than toxcore waits for a friend,
+ * so both call the other offline and forget the transfer. Both keep it waiting; once they are
+ * linked again Alice offers it with the same Tox file id by herself, and Bob's node goes on with it
+ * from what came, asking his window nothing. The file ends whole, byte for byte.
+ */
+void TestCore::a_file_goes_on_from_where_it_stopped_once_the_friend_is_back()
+{
+    const QVector<uint32_t> aliceFriends = alice->getFriendList();
+    QCOMPARE(aliceFriends.size(), 1);
+    const uint32_t bobOnAlice = aliceFriends.first();
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QByteArray content = fileBytes(6 * 1024 * 1024, 57);
+    const QString source = dir.filePath(QStringLiteral("film.mkv"));
+    const QString target = dir.filePath(QStringLiteral("film here.mkv"));
+    QVERIFY(writeFile(source, content));
+
+    NodeLog aliceLog(*alice);
+    NodeLog bobLog(*bob);
+    alice->getCoreFile()->sendFile(bobOnAlice, QStringLiteral("film.mkv"), source, content.size());
+    QTRY_COMPARE_WITH_TIMEOUT(bobLog.of(bobLog.offered).size(), 1, connected_message_wait);
+    const ToxFile offer = bobLog.of(bobLog.offered).first();
+    QCOMPARE(offer.resumeFileId.size(), TOX_FILE_ID_LENGTH);
+    bob->getCoreFile()->acceptFileRecvRequest(offer.friendId, offer.fileNum, target);
+    QTRY_VERIFY_WITH_TIMEOUT(bobLog.lastBytes() >= 256 * 1024, connected_message_wait);
+
+    qint64 here = 0;
+    {
+        // Alice's node stops: nothing of hers reaches Bob, as without a network. His node calls
+        // her offline and keeps the file waiting at what came.
+        const QMutexLocker stopped{&alice->getCoreLoopLock()};
+        QTRY_COMPARE_WITH_TIMEOUT(bobLog.of(bobLog.waiting).size(), 1, friend_timeout);
+        const ToxFile waiting = bobLog.of(bobLog.waiting).first();
+        QVERIFY(waiting.connectionLost);
+        QCOMPARE(waiting.status, ToxFile::TRANSMITTING);
+        QCOMPARE(waiting.resumeFileId, offer.resumeFileId);
+        QCOMPARE(waiting.filePath, target);
+        QVERIFY(waiting.fileNum >= 0x80000000u);
+        here = static_cast<qint64>(waiting.progress.getBytesSent());
+        QVERIFY(here > 0 && here < content.size());
+        QCOMPARE(QFileInfo(target).size(), here);
+    }
+
+    // Her node goes on: it learns Bob went, keeps the file waiting too, and once they are linked
+    // again offers it with its id; it goes on by itself where Bob's part ends.
+    QTRY_VERIFY_WITH_TIMEOUT(bobLog.of(bobLog.finished).size() == 1
+                                 && aliceLog.of(aliceLog.finished).size() == 1,
+                             friend_timeout);
+    QCOMPARE(aliceLog.of(aliceLog.waiting).size(), 1);
+    QVERIFY(aliceLog.of(aliceLog.waiting).first().connectionLost);
+    QCOMPARE(aliceLog.of(aliceLog.cancelled).size(), 0);
+    QCOMPARE(aliceLog.of(aliceLog.started).size(), 2);
+    QVERIFY(aliceLog.of(aliceLog.started).last().continued);
+    QCOMPARE(aliceLog.of(aliceLog.started).last().resumeFileId, offer.resumeFileId);
+    QCOMPARE(bobLog.of(bobLog.offered).size(), 1);
+    QVERIFY(bobLog.of(bobLog.accepted).last().continued);
+    QVERIFY(bobLog.of(bobLog.finished).first().continued);
+    QVERIFY(aliceLog.firstContinuedBytes() > here);
+    QVERIFY(aliceLog.firstContinuedBytes() <= here + fileChunkMax);
+    QCOMPARE(QFileInfo(target).size(), static_cast<qint64>(content.size()));
+    QVERIFY(readFile(target) == content);
+}
+
+/**
+ * KHANDAQ (0.2.57): an offer of a file that is partly here already, after a restart of either side
+ * or Send again: the same Tox file id as the entry of it. Bob, as his window does for that entry
+ * (Air::fileResume), seeks to what he has before he accepts; Alice reads on from there, and the
+ * file ends whole, byte for byte.
+ */
+void TestCore::an_offer_of_a_file_partly_here_goes_on_from_what_is_here()
+{
+    const uint32_t bobOnAlice = alice->getFriendList().first();
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QByteArray content = fileBytes(2 * 1024 * 1024 + 333, 1116);
+    const QString source = dir.filePath(QStringLiteral("album.zip"));
+    const QString target = dir.filePath(QStringLiteral("album here.zip"));
+    QVERIFY(writeFile(source, content));
+    // What came before: not a whole number of packets.
+    const qint64 here = 700001;
+    QVERIFY(writeFile(target, content.left(static_cast<int>(here))));
+    const QByteArray fileId(TOX_FILE_ID_LENGTH, '\x5a');
+
+    NodeLog aliceLog(*alice);
+    NodeLog bobLog(*bob);
+    alice->getCoreFile()->sendFile(bobOnAlice, QStringLiteral("album.zip"), source, content.size(),
+                                   fileId);
+    QTRY_COMPARE_WITH_TIMEOUT(bobLog.of(bobLog.offered).size(), 1, connected_message_wait);
+    const ToxFile offer = bobLog.of(bobLog.offered).first();
+    QCOMPARE(offer.resumeFileId, fileId);
+    QVERIFY(aliceLog.of(aliceLog.started).first().continued);
+
+    Air::FileHere entry;
+    entry.id = fileId;
+    entry.size = content.size();
+    entry.status = ToxFile::BROKEN;
+    entry.accepted = true;
+    entry.bytes = QFileInfo(target).size();
+    const Air::FileResume resume = Air::fileResume(
+        offer.resumeFileId, static_cast<qint64>(offer.progress.getFileSize()), entry);
+    QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
+    QCOMPARE(resume.offset, here);
+    bob->getCoreFile()->resumeFileRecv(offer.friendId, offer.fileNum, target,
+                                       static_cast<uint64_t>(resume.offset));
+    QTRY_VERIFY_WITH_TIMEOUT(bobLog.of(bobLog.finished).size() == 1
+                                 && aliceLog.of(aliceLog.finished).size() == 1,
+                             bootstrap_timeout);
+
+    QVERIFY(aliceLog.firstContinuedBytes() > here);
+    QVERIFY(aliceLog.firstContinuedBytes() <= here + fileChunkMax);
+    QVERIFY(bobLog.firstContinuedBytes() > here);
+    QVERIFY(bobLog.of(bobLog.finished).first().continued);
+    QVERIFY(readFile(target) == content);
+}
+
+/**
+ * KHANDAQ (0.2.57): an offer of a file that is all here already: the connection went before its
+ * sender learnt it was done. Bob seeks to its last byte, so both sides end as usual, and nothing on
+ * his side changes or says anything: no entry, no notification, no second copy.
+ */
+void TestCore::an_offer_of_a_file_all_here_ends_quietly()
+{
+    const uint32_t bobOnAlice = alice->getFriendList().first();
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QByteArray content = fileBytes(300 * 1024 + 7, 2026);
+    const QString source = dir.filePath(QStringLiteral("plan.pdf"));
+    const QString target = dir.filePath(QStringLiteral("plan here.pdf"));
+    QVERIFY(writeFile(source, content));
+    QVERIFY(writeFile(target, content));
+    const QByteArray fileId(TOX_FILE_ID_LENGTH, '\x6b');
+
+    NodeLog aliceLog(*alice);
+    NodeLog bobLog(*bob);
+    alice->getCoreFile()->sendFile(bobOnAlice, QStringLiteral("plan.pdf"), source, content.size(),
+                                   fileId);
+    QTRY_COMPARE_WITH_TIMEOUT(bobLog.of(bobLog.offered).size(), 1, connected_message_wait);
+    const ToxFile offer = bobLog.of(bobLog.offered).first();
+
+    Air::FileHere entry;
+    entry.id = fileId;
+    entry.size = content.size();
+    entry.status = ToxFile::FINISHED;
+    entry.accepted = true;
+    entry.bytes = content.size();
+    const Air::FileResume resume = Air::fileResume(
+        offer.resumeFileId, static_cast<qint64>(offer.progress.getFileSize()), entry);
+    QCOMPARE(resume.step, Air::FileResume::Step::EndQuietly);
+    QCOMPARE(resume.offset, static_cast<qint64>(content.size() - 1));
+    bob->getCoreFile()->finishFileRecvQuietly(offer.friendId, offer.fileNum,
+                                              static_cast<uint64_t>(resume.offset));
+    QTRY_COMPARE_WITH_TIMEOUT(aliceLog.of(aliceLog.finished).size(), 1, bootstrap_timeout);
+
+    // Its end reaches Bob's node too; his side says nothing of it.
+    QTest::qWait(500);
+    QCOMPARE(bobLog.of(bobLog.finished).size(), 0);
+    QCOMPARE(bobLog.of(bobLog.cancelled).size(), 0);
+    QCOMPARE(bobLog.of(bobLog.accepted).size(), 0);
+    QCOMPARE(bobLog.lastBytes(), qint64{0});
+    QVERIFY(readFile(target) == content);
 }
 
 QTEST_GUILESS_MAIN(TestCore)

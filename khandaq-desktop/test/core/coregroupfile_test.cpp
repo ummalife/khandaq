@@ -97,8 +97,8 @@ private slots:
     void initTestCase();
     void cleanupTestCase();
     void aFileOfSeveralChunksIsQueuedForTheLoop();
-    void aGroupThatRefusesTheBeginRefusesTheFile();
-    void aFileThatWaitsForAnotherSendsItsBeginInItsTurn();
+    void aGroupThatIsNotConnectedRefusesTheFile();
+    void aFileThatWaitsForAnotherIsRefusedOnceTheGroupIsNotConnected();
     void aFileOfOnePacketGoesAtOnce();
     void aFileThatCannotBeReadIsRefused();
     void aChunkedFileThatComesPrivatelyArrives();
@@ -173,7 +173,7 @@ void TestCoreGroupFile::aFileOfSeveralChunksIsQueuedForTheLoop()
 
     QVERIFY(core->sendGroupFileFromPath(group, QStringLiteral("video.mp4"), path));
 
-    // The window's thread queued the file and sent its BEGIN; the chunks wait for the loop.
+    // The window's thread queued the file; its BEGIN and its chunks wait for the loop.
     QCOMPARE(started.count(), 1);
     const QList<QVariant> args = started.takeFirst();
     QCOMPARE(args.at(0).toInt(), group);
@@ -185,7 +185,7 @@ void TestCoreGroupFile::aFileOfSeveralChunksIsQueuedForTheLoop()
     QCOMPARE(failed.count(), 0);
 }
 
-void TestCoreGroupFile::aGroupThatRefusesTheBeginRefusesTheFile()
+void TestCoreGroupFile::aGroupThatIsNotConnectedRefusesTheFile()
 {
     ToxCorePtr core = makeCore();
     QVERIFY(core);
@@ -202,12 +202,12 @@ void TestCoreGroupFile::aGroupThatRefusesTheBeginRefusesTheFile()
     QCOMPARE(started.count(), 0);
     QCOMPARE(sent.count(), 0);
 
-    // Nothing of it waits either: the next file is the first of the group, and refused the same.
+    // Nothing of it waits either: the next file is refused the same.
     QVERIFY(!core->sendGroupFileFromPath(group, QStringLiteral("refused.bin"), path));
     QCOMPARE(started.count(), 0);
 }
 
-void TestCoreGroupFile::aFileThatWaitsForAnotherSendsItsBeginInItsTurn()
+void TestCoreGroupFile::aFileThatWaitsForAnotherIsRefusedOnceTheGroupIsNotConnected()
 {
     ToxCorePtr core = makeCore();
     QVERIFY(core);
@@ -217,20 +217,16 @@ void TestCoreGroupFile::aFileThatWaitsForAnotherSendsItsBeginInItsTurn()
     const QString second = writeFile(QStringLiteral("second.bin"), 2 * payload);
     QSignalSpy started(core.get(), &Core::groupFileSendStarted);
 
+    // Both wait for the loop, the second for the chunks of the first.
     QVERIFY(core->sendGroupFileFromPath(group, QStringLiteral("first.bin"), first));
-    Tox_Err_Group_Disconnect disconnectError;
-    QVERIFY(tox_group_disconnect(core->getTox(), static_cast<uint32_t>(group), &disconnectError));
-    // The second file waits for the chunks of the first: its BEGIN is not sent now, so the group
-    // cannot refuse it yet. Its turn will, and the conversation will say it was not sent.
     QVERIFY(core->sendGroupFileFromPath(group, QStringLiteral("second.bin"), second));
     QCOMPARE(started.count(), 2);
     QVERIFY(started.at(0).at(4).toByteArray() != started.at(1).at(4).toByteArray());
 
-    // Another group sends its own first file at once, and refuses it at once.
-    const int other = core->createGroup(QStringLiteral("Other"), TOX_GROUP_PRIVACY_STATE_PUBLIC);
-    QVERIFY(other >= 0);
-    QVERIFY(tox_group_disconnect(core->getTox(), static_cast<uint32_t>(other), &disconnectError));
-    QVERIFY(!core->sendGroupFileFromPath(other, QStringLiteral("second.bin"), second));
+    // A file chosen once the group is not connected is refused at once, though it would wait.
+    Tox_Err_Group_Disconnect disconnectError;
+    QVERIFY(tox_group_disconnect(core->getTox(), static_cast<uint32_t>(group), &disconnectError));
+    QVERIFY(!core->sendGroupFileFromPath(group, QStringLiteral("second.bin"), second));
     QCOMPARE(started.count(), 2);
 }
 

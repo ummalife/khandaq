@@ -44,6 +44,9 @@ namespace Air {
 // next packet is the one of the group that has cost the least so far, its bytes counted once for
 // every member they went to. Taking turns a packet each held a file to a group of two to the speed
 // of one beside it to a group of fifty, whose every chunk costs the pace 49 times as much.
+// Two rules keep the chunks of a file within a receiver's minute (urgentMs, windowMs): a file
+// whose last packet went a while ago goes before the share, and a file begins only while the ones
+// already going leave room for its chunks in the pace.
 class GroupFileQueue
 {
 public:
@@ -77,6 +80,20 @@ public:
      * sent, rather than show it going to nobody while the group's next files wait behind it.
      */
     static constexpr qint64 aloneLimitMs = 2 * 60 * 1000;
+    /**
+     * A receiver drops a file whose next packet does not come within a minute of the one before
+     * (NGC_ASSEMBLY_STALL_MS in core.cpp; iOS has the same minute), and the sender cannot tell.
+     * A file whose last packet went urgentMs ago goes first, the one that waited the longest
+     * before the others, and a file begins only while the chunks of the files that go, its own
+     * with them, cost the pace at most windowMs together. A file then waits at most urgentMs, and
+     * then for the files that went first: 40 seconds in all. The window is the shorter of the two,
+     * so the files that go first take at most three fifths of the pace: the others share the rest
+     * by what they cost, rather than a packet each in turn. With members enough that one chunk
+     * costs more than windowMs (above some 210 of them) a file goes alone, a chunk as soon as the
+     * pace lets it; past some 850 even that is more than a minute, which only a faster pace fixes.
+     */
+    static constexpr qint64 urgentMs = 25 * 1000;
+    static constexpr qint64 windowMs = 15 * 1000;
 
     /**
      * How many members a packet into the group goes to now (one until it is said), at nowMs (a
@@ -92,20 +109,21 @@ public:
     QList<QByteArray> waitedTooLong(qint64 nowMs) const;
     /** The groups with a file to send. */
     QList<int> groups() const;
-    /** The packet whose turn it is; false when nothing waits, or only groups that wait. */
-    bool next(Packet* packet) const;
+    /**
+     * The packet whose turn it is at nowMs (a steady clock); false when nothing waits, or only
+     * groups that wait.
+     */
+    bool next(Packet* packet, qint64 nowMs) const;
     /** What the packet costs the pace: its bytes once for each member of its group (UploadPace). */
     qint64 cost(const Packet& packet) const;
     /**
-     * The next packet of its group went, in its turn (next()) or before it, and its cost counts
-     * for the group. True when it was the last of its file, which is then done. Any other packet
-     * changes nothing.
+     * The next packet of its group went at nowMs, and its cost counts for the group; a BEGIN
+     * first brings the group level with the files that go. True when it was the last of its file,
+     * which is then done. Any other packet changes nothing.
      */
-    bool sent(const Packet& packet);
+    bool sent(const Packet& packet, qint64 nowMs);
     /** The file is not sent: it failed, or its group is gone. */
     void remove(const QByteArray& fileId);
-    /** Whether the file is the one its group sends now, so that its BEGIN may go at once. */
-    bool isFirst(const QByteArray& fileId) const;
     /** The bytes of the file whose chunks went. */
     qint64 bytesSent(const QByteArray& fileId) const;
     bool contains(const QByteArray& fileId) const;
@@ -120,12 +138,19 @@ private:
         int chunks = 0;
         /** The packet to send: -1, the BEGIN, then the chunks. */
         int next = -1;
+        /** When its last packet went. */
+        qint64 lastMs = 0;
     };
 
     int indexOf(const QByteArray& fileId) const;
     int firstOf(int group) const;
     void dropTurnIfDone(int group);
     qint64 leastCost(int except) const;
+    qint64 leastGoingCost(int except) const;
+    /** Whether the file the group sends has begun and the group does not wait. */
+    bool goes(int group) const;
+    /** What a whole chunk to the group costs the pace now. */
+    qint64 chunkCost(int group) const;
 
     /** In the order they were added. */
     QList<File> files;

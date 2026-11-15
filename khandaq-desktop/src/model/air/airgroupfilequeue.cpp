@@ -25,6 +25,8 @@ namespace Air {
 
 // C++11 wants a definition of what qMin takes by reference.
 constexpr qint64 GroupFileQueue::aloneLimitMs;
+constexpr qint64 GroupFileQueue::urgentMs;
+constexpr qint64 GroupFileQueue::windowMs;
 constexpr qint64 UploadPace::bytesPerSecond;
 constexpr qint64 UploadPace::burstMs;
 constexpr qint64 UploadPace::burstBytes;
@@ -118,11 +120,35 @@ QList<int> GroupFileQueue::groups() const
     return turns;
 }
 
-bool GroupFileQueue::next(Packet* packet) const
+bool GroupFileQueue::next(Packet* packet, qint64 nowMs) const
 {
+    // A file whose last packet went urgentMs ago goes first, the one that waited the longest.
     int chosen = -1;
     for (const int group : turns) {
-        if (!waits(group) && (chosen < 0 || costs.value(group) < costs.value(chosen))) {
+        if (!goes(group)) {
+            continue;
+        }
+        const qint64 lastMs = files.at(firstOf(group)).lastMs;
+        if (nowMs - lastMs >= urgentMs
+            && (chosen < 0 || lastMs < files.at(firstOf(chosen)).lastMs)) {
+            chosen = group;
+        }
+    }
+    if (chosen < 0) {
+        // Else the group that has cost the least, of those whose file goes or may begin: one
+        // begins while the files that go leave room for its chunks, or when none goes.
+        qint64 going = 0;
+        for (const int group : turns) {
+            going += goes(group) ? chunkCost(group) : 0;
+        }
+        const qint64 room = UploadPace::bytesPerSecond * windowMs / 1000;
+        for (const int group : turns) {
+            if (waits(group) || (chosen >= 0 && costs.value(group) >= costs.value(chosen))) {
+                continue;
+            }
+            if (!goes(group) && going > 0 && going + chunkCost(group) > room) {
+                continue;
+            }
             chosen = group;
         }
     }
@@ -148,7 +174,7 @@ qint64 GroupFileQueue::cost(const Packet& packet) const
     return UploadPace::cost(bytes, members.value(packet.group, 1));
 }
 
-bool GroupFileQueue::sent(const Packet& packet)
+bool GroupFileQueue::sent(const Packet& packet, qint64 nowMs)
 {
     const int index = firstOf(packet.group);
     if (index < 0) {
@@ -158,7 +184,13 @@ bool GroupFileQueue::sent(const Packet& packet)
     if (file.fileId != packet.fileId || file.next != packet.chunk) {
         return false;
     }
+    if (packet.chunk < 0) {
+        // A file begins level with the files that go, not behind them by the time it waited for
+        // room among them (next) or for a member (setMembers): it would take that time from them.
+        costs[packet.group] = qMax(costs.value(packet.group), leastGoingCost(packet.group));
+    }
     costs[packet.group] += cost(packet);
+    file.lastMs = nowMs;
     ++file.next;
     const bool done = file.next >= file.chunks;
     if (done) {
@@ -180,12 +212,6 @@ void GroupFileQueue::remove(const QByteArray& fileId)
     const int group = files.at(index).group;
     files.removeAt(index);
     dropTurnIfDone(group);
-}
-
-bool GroupFileQueue::isFirst(const QByteArray& fileId) const
-{
-    const int index = indexOf(fileId);
-    return index >= 0 && firstOf(files.at(index).group) == index;
 }
 
 qint64 GroupFileQueue::bytesSent(const QByteArray& fileId) const
@@ -238,6 +264,17 @@ void GroupFileQueue::dropTurnIfDone(int group)
     }
 }
 
+bool GroupFileQueue::goes(int group) const
+{
+    const int index = firstOf(group);
+    return index >= 0 && files.at(index).next >= 0 && !waits(group);
+}
+
+qint64 GroupFileQueue::chunkCost(int group) const
+{
+    return UploadPace::cost(static_cast<qint64>(NGC_MAX_PACKET_SIZE), members.value(group, 1));
+}
+
 /** The least cost of the other groups that send now; while all of them wait, of those. */
 qint64 GroupFileQueue::leastCost(int except) const
 {
@@ -255,6 +292,22 @@ qint64 GroupFileQueue::leastCost(int except) const
         if (found) {
             break;
         }
+    }
+    return least;
+}
+
+/** The least cost of the other groups whose file goes; 0 while none does. */
+qint64 GroupFileQueue::leastGoingCost(int except) const
+{
+    bool found = false;
+    qint64 least = 0;
+    for (const int group : turns) {
+        if (group == except || !goes(group)) {
+            continue;
+        }
+        const qint64 spent = costs.value(group);
+        least = found ? qMin(least, spent) : spent;
+        found = true;
     }
     return least;
 }

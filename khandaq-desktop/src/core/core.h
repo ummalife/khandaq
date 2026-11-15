@@ -214,7 +214,8 @@ public slots:
      * A file of more than one packet goes as its BEGIN and then its chunks, which the loop of the
      * node sends at their pace (sendGroupFileChunks): groupFileSendStarted, then
      * groupFileSendProgress, then groupFileSent or groupFileSendFailed. False when the file cannot
-     * be read, or the group refuses its BEGIN now (it is not connected): nothing is sent then.
+     * be read, or the group would refuse its packets now (it is not connected, or we only observe
+     * there): nothing is sent then.
      */
     bool sendGroupFileFromPath(int groupId, const QString& fileName, const QString& localPath);
     void changeGroupTitle(int groupId, const QString& title);

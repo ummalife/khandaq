@@ -449,7 +449,7 @@ void Core::process()
         qMin(tox_iteration_interval(tox.get()), getCoreFile()->corefileIterationInterval());
     // Not while every group with a file waits for a member: nothing of them can go.
     Air::GroupFileQueue::Packet nextGroupFilePacket;
-    if (groupFileQueue.next(&nextGroupFilePacket)) {
+    if (groupFileQueue.next(&nextGroupFilePacket, monotonicMs())) {
         sleeptime = qMin(sleeptime, groupFileTurnMs);
     }
     toxTimer->start(sleeptime);
@@ -3209,21 +3209,15 @@ bool Core::sendGroupFileFromPath(int groupId, const QString& fileName, const QSt
     if (send.chatId.isEmpty()) {
         return false;
     }
+    // A group that would refuse the packets of the file now is said at once, as before: one that
+    // is not connected, or where we only observe. The BEGIN goes from the loop, in its turn and
+    // once the files going leave room for its chunks (Air::GroupFileQueue).
+    if (getGroupConnection(groupId) < 0 || getGroupSelfRole(groupId) == TOX_GROUP_ROLE_OBSERVER) {
+        qWarning() << "sendGroupFileFromPath: the group takes no packets now";
+        return false;
+    }
     groupFileQueue.add(groupId, msgId, fileSize);
     groupFileQueue.setMembers(groupId, groupFileMembers(groupId), monotonicMs());
-    if (groupFileQueue.isFirst(msgId)) {
-        // The group sends nothing else: the BEGIN goes at once, so a group that refuses it now is
-        // said at once, as before. A file that waits for another one sends its BEGIN in its turn.
-        if (!sendGroupFileBegin(send, msgId)) {
-            groupFileQueue.remove(msgId);
-            return false;
-        }
-        Air::GroupFileQueue::Packet begin;
-        begin.fileId = msgId;
-        begin.group = groupId;
-        begin.chunk = -1;
-        groupFileQueue.sent(begin);
-    }
     outgoingGroupFiles.insert(msgId, send);
     ngcFileMsgIdSeen(msgId);
     emit groupFileSendStarted(groupId, wireName, localPath, fileSize, msgId);
@@ -3335,7 +3329,7 @@ void Core::sendGroupFileChunks()
     }
     tellGroupFilesWaiting();
     Air::GroupFileQueue::Packet packet;
-    while (groupFileQueue.next(&packet) && groupFilePace.ready(nowMs)) {
+    while (groupFileQueue.next(&packet, nowMs) && groupFilePace.ready(nowMs)) {
         const auto it = outgoingGroupFiles.find(packet.fileId);
         if (it == outgoingGroupFiles.end()) {
             groupFileQueue.remove(packet.fileId);
@@ -3350,7 +3344,7 @@ void Core::sendGroupFileChunks()
         }
         groupFilePace.spend(groupFileQueue.cost(packet));
 
-        if (groupFileQueue.sent(packet)) {
+        if (groupFileQueue.sent(packet, nowMs)) {
             const OutgoingGroupFile done = send;
             outgoingGroupFiles.erase(it);
             emit groupFileSent(done.group, done.fileName, done.localPath, done.size,

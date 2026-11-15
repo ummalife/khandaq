@@ -61,6 +61,8 @@ final class AirFileEntry
 {
     enum State
     {
+        /** KHANDAQ (0.2.56): ours, its copy for sending still being written (OutgoingFilePreparation). */
+        PREPARING,
         WAITING,
         MOVING,
         PAUSED,
@@ -212,6 +214,12 @@ final class AirFileEntry
         e.name = ChatMediaHelper.messageMediaDisplayLabel(context, m);
         e.path = m.filename_fullpath;
         e.state = directState(m, outgoing, HelperFiletransfer.is_message_file_complete(m));
+        // KHANDAQ (0.2.56): from Send on, while the copy is made; the row's flag also outlives the copy's process.
+        final OutgoingFilePreparation.Job copy = outgoing ? OutgoingFilePreparation.ACTIVE.get(m.id) : null;
+        if (outgoing && ((copy != null) || m.ft_outgoing_preparing))
+        {
+            e.state = State.PREPARING;
+        }
         e.total = ChatFileBubbleHelper.resolveMessageFileSize(m);
         if (e.total <= 0)
         {
@@ -237,6 +245,16 @@ final class AirFileEntry
                                                                                                      m, outgoing);
         switch (e.state)
         {
+            case PREPARING:
+                // The bar is the copy's: the bytes copied of the file's size.
+                e.note = context.getString(R.string.air_file_preparing);
+                if (copy != null)
+                {
+                    e.done = Math.max(0L, Math.min(copy.copiedBytes(), e.total));
+                }
+                e.bar = e.total > 0;
+                e.cancel = view -> calls.onCancel();
+                break;
             case WAITING:
                 if (outgoing)
                 {
@@ -680,9 +698,15 @@ final class AirFileEntry
             matchColumn(v.previewContainer);
         }
         // A photo of theirs shows once it is here; until then the entry says the file and what it waits for.
-        if (v.preview != null && (!e.picture || (!e.outgoing && e.state != State.DONE)))
+        // KHANDAQ (0.2.56): ours, likewise until its copy is complete: the preview and the player would read
+        // the copy's place, which holds nothing before.
+        if (v.preview != null && (!e.picture || (!e.outgoing && e.state != State.DONE) || e.state == State.PREPARING))
         {
             v.preview.setVisibility(View.GONE);
+        }
+        if (v.player != null && e.state == State.PREPARING)
+        {
+            v.player.setVisibility(View.GONE);
         }
         framesFollowPreview(v.preview);
         final boolean pictured = visible(v.preview);
@@ -759,11 +783,12 @@ final class AirFileEntry
             v.row.setBackground(null);
             v.row.setPadding(0, 0, 0, 0);
             v.row.setAlpha(1f);
-            if (e.picture || e.voice || !head)
+            if (e.picture || e.voice || !head || e.state == State.PREPARING)
             {
                 // KHANDAQ (QA live, F3): a photo, a video or a voice note opens from its preview or player,
                 // never from this row; the open action a plain file's row got in an earlier bind of this
-                // recycled row belongs to that other file.
+                // recycled row belongs to that other file. KHANDAQ (0.2.56): a file whose copy is still being
+                // written does not open at all.
                 v.row.setOnClickListener(null);
                 v.row.setClickable(false);
             }

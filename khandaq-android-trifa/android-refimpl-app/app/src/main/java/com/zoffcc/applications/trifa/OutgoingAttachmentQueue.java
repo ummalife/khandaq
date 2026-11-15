@@ -326,8 +326,13 @@ public final class OutgoingAttachmentQueue
         }
     }
 
-    private static final long GROUP_SEND_STALL_MS = 30_000L;
-
+    /**
+     * KHANDAQ (0.2.56): the files of a batch go one after another; the next one starts once this one's send no longer
+     * goes: it went, failed, or waits for a member to send it to (NgcGroupFileTransfer says which, on its row). This
+     * said a file not sent itself after 30 s without progress, which a file waiting for a member always reached, and
+     * a file at the pace could; and it set the file's transfer as just started, which wiped the "sent" of a file that
+     * had already gone.
+     */
     private static void waitForGroupFileSend(final GroupMessageListActivity.GroupOutgoingFileHandle handle,
                                              final long timeoutMs)
     {
@@ -335,91 +340,18 @@ public final class OutgoingAttachmentQueue
         {
             return;
         }
-
-        if (!handle.chunked)
-        {
-            HelperGroup.record_ngc_transfer_started(handle.groupId, handle.msgIdHash);
-            final long deadline = System.currentTimeMillis() + 60_000L;
-            while (System.currentTimeMillis() < deadline)
-            {
-                if (HelperGroup.is_ngc_file_transfer_failed(handle.groupId, handle.msgIdHash))
-                {
-                    return;
-                }
-                final int percent = HelperGroup.ngc_file_transfer_progress_percent(
-                        handle.groupId, handle.msgIdHash);
-                if (percent >= 100 || HelperGroup.is_ngc_outgoing_send_complete(handle.groupId, handle.msgIdHash))
-                {
-                    return;
-                }
-                try
-                {
-                    Thread.sleep(WAIT_STEP_MS);
-                }
-                catch (InterruptedException ignored)
-                {
-                }
-            }
-            return;
-        }
-
-        HelperGroup.record_ngc_transfer_started(handle.groupId, handle.msgIdHash);
-
         final long deadline = System.currentTimeMillis() + timeoutMs;
-        long lastProgressTs = System.currentTimeMillis();
-        boolean sawProgress = false;
-        while (System.currentTimeMillis() < deadline)
+        while (System.currentTimeMillis() < deadline
+               && NgcGroupFileTransfer.isOutgoingGoing(handle.groupId, handle.msgIdHash))
         {
-            if (HelperGroup.is_ngc_file_transfer_failed(handle.groupId, handle.msgIdHash))
-            {
-                return;
-            }
-
-            final int percent = HelperGroup.ngc_file_transfer_progress_percent(
-                    handle.groupId, handle.msgIdHash);
-            if (percent >= 100 || HelperGroup.is_ngc_outgoing_send_complete(handle.groupId, handle.msgIdHash))
-            {
-                return;
-            }
-
-            if (percent >= 0)
-            {
-                sawProgress = true;
-                lastProgressTs = System.currentTimeMillis();
-            }
-
-            if (!sawProgress && (System.currentTimeMillis() - lastProgressTs) >= GROUP_SEND_STALL_MS)
-            {
-                HelperGroup.mark_ngc_file_transfer_failed(handle.groupId, handle.msgIdHash);
-                return;
-            }
-
-            if (sawProgress && percent < 0)
-            {
-                if (HelperGroup.is_ngc_outgoing_send_complete(handle.groupId, handle.msgIdHash))
-                {
-                    return;
-                }
-            }
-
-            if (HelperGroup.is_ngc_outgoing_send_complete(handle.groupId, handle.msgIdHash))
-            {
-                return;
-            }
-
             try
             {
                 Thread.sleep(WAIT_STEP_MS);
             }
             catch (InterruptedException ignored)
             {
+                return;
             }
-        }
-
-        if (!HelperGroup.is_ngc_outgoing_send_complete(handle.groupId, handle.msgIdHash)
-                && (!sawProgress || HelperGroup.ngc_file_transfer_progress_percent(handle.groupId, handle.msgIdHash) < 100))
-        {
-            HelperGroup.mark_ngc_file_transfer_failed(handle.groupId, handle.msgIdHash);
         }
     }
 

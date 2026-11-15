@@ -1879,47 +1879,63 @@ public class MessageListActivity extends AppCompatActivity
         // permission is missing the grid stays hidden and the Галерея chip (system picker) is the fallback.
         final androidx.recyclerview.widget.RecyclerView grid = content.findViewById(R.id.attach_media_grid);
         final android.widget.Button sendSelected = content.findViewById(R.id.attach_send_selected);
-        final java.util.ArrayList<Uri> recentMedia = MediaSendPreviewHelper.queryRecentMedia(this, 60);
-        if (!recentMedia.isEmpty())
+        // KHANDAQ (0.2.56): the recent media are read off the main thread, a spinner in their place meanwhile.
+        // On a phone with a large gallery the query held the sheet back before it opened.
+        if (MediaSendPreviewHelper.hasMediaReadPermission(this))
         {
-            grid.setLayoutManager(new androidx.recyclerview.widget.GridLayoutManager(this, 4));
-            grid.setAdapter(new MediaGridAdapter(recentMedia,
-                    uri ->
-                    {   // quick single send (no selection active)
-                        sheet.dismiss();
-                        sendPickedMediaToPreview(java.util.Collections.singletonList(uri));
-                    },
-                    selectedList ->
-                    {   // selection changed -> update the "Отправить (N)" button
-                        if (selectedList.isEmpty())
-                        {
-                            sendSelected.setVisibility(View.GONE);
-                            sendSelected.setTag(null);
-                        }
-                        else
-                        {
-                            sendSelected.setText(getString(R.string.attach_send_selected, selectedList.size()));
-                            sendSelected.setTag(new java.util.ArrayList<>(selectedList));
-                            sendSelected.setVisibility(View.VISIBLE);
-                        }
-                    }));
-            sendSelected.setOnClickListener(v ->
+            final View mediaLoading = content.findViewById(R.id.attach_media_loading);
+            mediaLoading.setVisibility(View.VISIBLE);
+            final Context app = getApplicationContext();
+            new Thread(() ->
             {
-                final Object tag = sendSelected.getTag();
-                if (tag instanceof java.util.List)
+                final java.util.ArrayList<Uri> recentMedia = MediaSendPreviewHelper.queryRecentMedia(app, 60);
+                runOnUiThread(() ->
                 {
-                    @SuppressWarnings("unchecked")
-                    final java.util.List<Uri> sel = (java.util.List<Uri>) tag;
-                    if (!sel.isEmpty())
+                    mediaLoading.setVisibility(View.GONE);
+                    if (recentMedia.isEmpty() || isFinishing() || isDestroyed())
                     {
-                        sheet.dismiss();
-                        sendPickedMediaToPreview(sel);
+                        return;
                     }
-                }
-            });
-            grid.setVisibility(View.VISIBLE);
+                    grid.setLayoutManager(new androidx.recyclerview.widget.GridLayoutManager(this, 4));
+                    grid.setAdapter(new MediaGridAdapter(recentMedia,
+                            uri ->
+                            {   // quick single send (no selection active)
+                                sheet.dismiss();
+                                sendPickedMediaToPreview(java.util.Collections.singletonList(uri));
+                            },
+                            selectedList ->
+                            {   // selection changed -> update the "Send (N)" button
+                                if (selectedList.isEmpty())
+                                {
+                                    sendSelected.setVisibility(View.GONE);
+                                    sendSelected.setTag(null);
+                                }
+                                else
+                                {
+                                    sendSelected.setText(getString(R.string.attach_send_selected, selectedList.size()));
+                                    sendSelected.setTag(new java.util.ArrayList<>(selectedList));
+                                    sendSelected.setVisibility(View.VISIBLE);
+                                }
+                            }));
+                    sendSelected.setOnClickListener(v ->
+                    {
+                        final Object tag = sendSelected.getTag();
+                        if (tag instanceof java.util.List)
+                        {
+                            @SuppressWarnings("unchecked")
+                            final java.util.List<Uri> sel = (java.util.List<Uri>) tag;
+                            if (!sel.isEmpty())
+                            {
+                                sheet.dismiss();
+                                sendPickedMediaToPreview(sel);
+                            }
+                        }
+                    });
+                    grid.setVisibility(View.VISIBLE);
+                });
+            }, "attach-recent-media").start();
         }
-        else if (!MediaSendPreviewHelper.hasMediaReadPermission(this))
+        else
         {
             try
             {
@@ -2183,6 +2199,29 @@ public class MessageListActivity extends AppCompatActivity
 
         final String body = rawStandalone ? message : HelperGeneric.normalize_chat_input_text(message);
         final String fullText = rawStandalone ? message : ChatReplyPreviewController.composeOutgoingText(body);
+        send_composed_text_message(this, this, friend_pubkey, body, fullText);
+    }
+
+    /**
+     * KHANDAQ (0.2.56): the caption of media sent from the preview, once its files are queued
+     * (MediaSendPreviewHelper.sendConfirmedMedia). It was composed at Send. It may go long after, with the
+     * field of the chat on screen in use again, so nothing of a field is touched. On the main thread.
+     */
+    static void send_caption_text(final String friend_pubkey, final String body, final String fullText)
+    {
+        send_composed_text_message(context_s, null, friend_pubkey, body, fullText);
+    }
+
+    /**
+     * A text as composed (a reply's header in front), sent to the person or stored as unsent.
+     * KHANDAQ (0.2.56): composer is the chat whose field held the text; the field empties once it went, with
+     * the draft, the emoji panel and the typing mark. Null for a caption (send_caption_text): no field is
+     * touched, and its rows join the list only when the chat on screen is theirs.
+     */
+    private static void send_composed_text_message(final Context c, final MessageListActivity composer,
+                                                   final String friend_pubkey, final String body,
+                                                   final String fullText)
+    {
         if ((fullText == null) || fullText.isEmpty())
         {
             return;
@@ -2191,24 +2230,28 @@ public class MessageListActivity extends AppCompatActivity
         // the header stays in the first one.
         final int replyHeadChars = (body != null) && (fullText.length() > body.length()) && fullText.endsWith(body)
                                    ? fullText.length() - body.length() : 0;
+        final boolean showInList = (composer != null) || is_chat_on_screen(friend_pubkey);
 
         if (FavoritesChatHelper.isFavoritesChat(friend_pubkey))
         {
             // KHANDAQ (#14): Saved Messages are stored locally — no Tox per-message length limit, keep full text.
-            final long rowId = FavoritesChatHelper.sendTextMessage(fullText, true);
+            final long rowId = FavoritesChatHelper.sendTextMessage(fullText, showInList);
             if (rowId <= 0)
             {
-                AirComposerNotice.say(getString(R.string.dm_send_failed_friend), true);
+                AirComposerNotice.say(c.getString(R.string.dm_send_failed_friend), true);
                 return;
             }
 
-            HelperGeneric.clear_chat_input_field(ml_new_message);
-            ChatDraftHelper.clear_friend_draft(friend_pubkey);
-            if (emojiPopup != null)
+            if (composer != null)
             {
-                emojiPopup.dismiss();
+                HelperGeneric.clear_chat_input_field(ml_new_message);
+                ChatDraftHelper.clear_friend_draft(friend_pubkey);
+                if (composer.emojiPopup != null)
+                {
+                    composer.emojiPopup.dismiss();
+                }
+                stop_self_typing_indicator_s();
             }
-            stop_self_typing_indicator_s();
             return;
         }
 
@@ -2232,18 +2275,25 @@ public class MessageListActivity extends AppCompatActivity
             {
                 final String queued = fullText.substring(parts.get(i)[0], parts.get(i)[1]);
                 if (AirChatPanel.queueUnsentText(friend_pubkey, queued,
-                                                 MessageSplitter.partSentTimestamp(first_sent_timestamp, i)) <= 0)
+                                                 MessageSplitter.partSentTimestamp(first_sent_timestamp, i),
+                                                 showInList) <= 0)
                 {
-                    AirComposerNotice.say(getString(R.string.dm_send_failed_not_ready), true);
-                    keep_unsent_parts_in_field(fullText, parts, i);
+                    AirComposerNotice.say(c.getString(R.string.dm_send_failed_not_ready), true);
+                    if (composer != null)
+                    {
+                        composer.keep_unsent_parts_in_field(fullText, parts, i);
+                    }
                     return;
                 }
             }
-            HelperGeneric.clear_chat_input_field(ml_new_message);
-            ChatDraftHelper.clear_friend_draft(friend_pubkey);
-            if (emojiPopup != null)
+            if (composer != null)
             {
-                emojiPopup.dismiss();
+                HelperGeneric.clear_chat_input_field(ml_new_message);
+                ChatDraftHelper.clear_friend_draft(friend_pubkey);
+                if (composer.emojiPopup != null)
+                {
+                    composer.emojiPopup.dismiss();
+                }
             }
             return;
         }
@@ -2312,8 +2362,11 @@ public class MessageListActivity extends AppCompatActivity
 
             if (result == null)
             {
-                AirComposerNotice.say(getString(R.string.dm_send_failed_friend), true);
-                keep_unsent_parts_in_field(fullText, parts, i);
+                AirComposerNotice.say(c.getString(R.string.dm_send_failed_friend), true);
+                if (composer != null)
+                {
+                    composer.keep_unsent_parts_in_field(fullText, parts, i);
+                }
                 return;
             }
 
@@ -2368,7 +2421,7 @@ public class MessageListActivity extends AppCompatActivity
                 m.raw_msgv2_bytes = result.raw_message_buf_hex;
             }
 
-            long row_id = insert_into_message_db(m, true);
+            long row_id = insert_into_message_db(m, showInList);
             m.id = row_id;
 
             if (wakes && !HelperFriend.is_dm_message_send_success(res))
@@ -2377,13 +2430,24 @@ public class MessageListActivity extends AppCompatActivity
             }
         }
 
-        HelperGeneric.clear_chat_input_field(ml_new_message);
-        ChatDraftHelper.clear_friend_draft(friend_pubkey);
-        if (emojiPopup != null)
+        if (composer != null)
         {
-            emojiPopup.dismiss();
+            HelperGeneric.clear_chat_input_field(ml_new_message);
+            ChatDraftHelper.clear_friend_draft(friend_pubkey);
+            if (composer.emojiPopup != null)
+            {
+                composer.emojiPopup.dismiss();
+            }
+            stop_self_typing_indicator_s();
         }
-        stop_self_typing_indicator_s();
+    }
+
+    /** KHANDAQ (0.2.56): whether this person's chat is the one on screen, its list showing. */
+    private static boolean is_chat_on_screen(final String friend_pubkey)
+    {
+        final MessageListActivity chat = message_list_activity;
+        return (chat != null) && (friend_pubkey != null) && (MainActivity.message_list_fragment != null)
+               && friend_pubkey.equalsIgnoreCase(chat.get_friend_pubkey());
     }
 
     /**
@@ -2823,19 +2887,31 @@ public class MessageListActivity extends AppCompatActivity
     // per-send disk ordering and avoids disk thrash on multi-select.
     private static final java.util.concurrent.ExecutorService OUTGOING_COPY_EXEC =
             java.util.concurrent.Executors.newSingleThreadExecutor();
-    // Returned synchronously by the small-file branch once the send is ACCEPTED for async copy+insert.
-    // Positive so queue callers treat it as success; it is never a real message id (the row is created
-    // only after the copy completes), so a caller's idEq() lookup simply finds nothing (handled).
-    private static final long OUTGOING_FILE_ACCEPTED_ASYNC = Long.MAX_VALUE;
+    // KHANDAQ (0.2.56): where a copy's progress and end go. All on the main looper: posts there keep their
+    // order, which after_outgoing_file_preparations relies on.
+    private static final Handler OUTGOING_FILE_MAIN = new Handler(Looper.getMainLooper());
 
     // KHANDAQ (ANR): shared tail of the small-file send path — build the Filetransfer + Message rows and
     // kick the transfer. MUST run on the main thread (inserts touch the RecyclerView; finish_...enqueue
     // does the native tox_file_send). Called synchronously for real-file sources (voice — the caller
-    // deletes the source right after) and from the copy executor's main-thread continuation for picker
-    // media. Returns the new message id.
+    // deletes the source right after). Returns the new message id.
     private static long finish_outgoing_file_after_copy(final Context c, final long friendnum,
             final outgoing_file_wrapped ofw, final boolean update_message_view,
             final boolean startTransferImmediately)
+    {
+        final long new_msg_id = insert_outgoing_file_rows(c, friendnum, ofw, update_message_view, false).id;
+        finish_outgoing_file_enqueue(new_msg_id, update_message_view, startTransferImmediately);
+        return new_msg_id;
+    }
+
+    /**
+     * The Filetransfer and Message rows of an outgoing file copied into the outgoing folder; the message's id
+     * is -1 when its row could not be written.
+     * KHANDAQ (0.2.56): preparing, for a copy that is still being written (prepare_outgoing_file).
+     */
+    private static Message insert_outgoing_file_rows(final Context c, final long friendnum,
+                                                     final outgoing_file_wrapped ofw,
+                                                     final boolean update_message_view, final boolean preparing)
     {
         Filetransfer f = new Filetransfer();
         f.tox_public_key_string = tox_friend_get_public_key__wrapper(friendnum);
@@ -2867,8 +2943,13 @@ public class MessageListActivity extends AppCompatActivity
         m.ft_accepted = false;
         m.ft_outgoing_started = false;
         m.ft_outgoing_queued = false;
+        m.ft_outgoing_preparing = preparing;
         m.filename_fullpath = new java.io.File(ofw.filepath_wrapped + "/" + ofw.filename_wrapped).getAbsolutePath();
-        m.sent_timestamp = System.currentTimeMillis();
+        // KHANDAQ (0.2.56): the files of one Send are written one right after the other now, not after their
+        // copies; each gets a later sent time than the one before, which keeps their order in the chat and in
+        // the transfer queue.
+        m.sent_timestamp = preparing ? OutgoingFilePreparation.ACTIVE.sentTimestamp(System.currentTimeMillis())
+                                     : System.currentTimeMillis();
         m.text = HelperFiletransfer.buildOutgoingFileMessageText(c, ofw.filename_wrapped, ofw.file_size_wrapped);
         m.storage_frame_work = false;
         m.sent_push = 0;
@@ -2880,9 +2961,195 @@ public class MessageListActivity extends AppCompatActivity
 
         f.message_id = new_msg_id;
         update_filetransfer_db_full(f);
+        return m;
+    }
 
-        finish_outgoing_file_enqueue(new_msg_id, update_message_view, startTransferImmediately);
-        return new_msg_id;
+    /**
+     * KHANDAQ (0.2.56): a picked file whose copy for sending is made in the background. The owner sent a large
+     * video from the gallery: for a long time nothing showed, then the message came, because its entry was
+     * made only after the copy. Now the entry stands from Send on: its rows are written at once, flagged
+     * ft_outgoing_preparing and naming the copy's reserved place (empty until the copy is complete), and the
+     * copy runs on OUTGOING_COPY_EXEC with a bar and a Cancel of its own (AirFileEntry). Once the copy is
+     * complete the flag goes and the transfer is queued (end_prepared_outgoing_file); no transfer starts from
+     * a row that has it (OutgoingFilePreparation.isReadyToOffer). MUST run on the main thread. Returns the new
+     * message id, or -1 when nothing was made.
+     */
+    private static long prepare_outgoing_file(final Context c, final long friendnum, final String filepath,
+                                              final String filename, final long file_size,
+                                              final boolean update_message_view,
+                                              final boolean startTransferImmediately)
+    {
+        final File copy;
+        try
+        {
+            copy = HelperFiletransfer.claim_outgoing_copy(SD_CARD_FILES_OUTGOING_WRAPPER_DIR,
+                                                           HelperFiletransfer.outgoing_copy_prefix(filepath),
+                                                           filename);
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "prepare_outgoing_file:claim:EE:" + e.getMessage());
+            return -1L;
+        }
+        if (copy == null)
+        {
+            HelperGeneric.logI(TAG, "prepare_outgoing_file:no place for the copy");
+            return -1L;
+        }
+
+        final outgoing_file_wrapped ofw = new outgoing_file_wrapped();
+        ofw.filepath_wrapped = copy.getParentFile().getAbsolutePath();
+        // The name as made safe for the copy (outgoing_copy_file_name): the copy lies under it and goes out with it.
+        ofw.filename_wrapped = copy.getName();
+        ofw.file_size_wrapped = file_size;
+        final Message m = insert_outgoing_file_rows(c, friendnum, ofw, update_message_view, true);
+        if (m.id <= 0L)
+        {
+            HelperGeneric.logI(TAG, "prepare_outgoing_file:no row");
+            HelperFiletransfer.delete_filetransfers_from_id(m.filetransfer_id);
+            HelperFiletransfer.delete_outgoing_copy(copy.getAbsolutePath());
+            return -1L;
+        }
+
+        final OutgoingFilePreparation.Job job = OutgoingFilePreparation.ACTIVE.begin(m.id, file_size);
+        final Context app = c.getApplicationContext();
+        OUTGOING_COPY_EXEC.execute(
+                () -> copy_prepared_outgoing_file(app, job, filepath, filename, copy, update_message_view,
+                                                  startTransferImmediately));
+        return m.id;
+    }
+
+    /** KHANDAQ (0.2.56): the copy of a prepared outgoing file, on OUTGOING_COPY_EXEC; its end always goes to the main thread. */
+    private static void copy_prepared_outgoing_file(final Context app, final OutgoingFilePreparation.Job job,
+                                                    final String filepath, final String filename, final File copy,
+                                                    final boolean update_message_view,
+                                                    final boolean startTransferImmediately)
+    {
+        OutgoingFilePreparation.Result result =
+                new OutgoingFilePreparation.Result(OutgoingFilePreparation.Outcome.FAILED, 0L);
+        try
+        {
+            if (job.isCancelled())
+            {
+                result = new OutgoingFilePreparation.Result(OutgoingFilePreparation.Outcome.CANCELLED, 0L);
+            }
+            else
+            {
+                try (java.io.InputStream in = HelperFiletransfer.open_outgoing_copy_source(filepath, filename))
+                {
+                    if (in != null)
+                    {
+                        final OutgoingFilePreparation.ProgressThrottle throttle =
+                                new OutgoingFilePreparation.ProgressThrottle();
+                        result = OutgoingFilePreparation.copy(
+                                in, OutgoingFilePreparation.partFileFor(copy, job.messageId), copy,
+                                FT_OUTGOING_FILESIZE_FRIEND_MAX_TOTAL, job, bytes -> {
+                                    if (throttle.due(android.os.SystemClock.uptimeMillis()))
+                                    {
+                                        OUTGOING_FILE_MAIN.post(() -> redraw_prepared_outgoing_file(job.messageId));
+                                    }
+                                });
+                    }
+                }
+            }
+        }
+        catch (Throwable t)
+        {
+            // Opening the picked file failed, or closing it after the copy: the result says which.
+            HelperGeneric.logI(TAG, "copy_prepared_outgoing_file:EE:" + t.getMessage());
+        }
+        HelperGeneric.logI(TAG, "copy_prepared_outgoing_file:mid=" + job.messageId + " " + result.outcome + " bytes="
+                                + result.bytes);
+        final OutgoingFilePreparation.Result end = result;
+        OUTGOING_FILE_MAIN.post(() -> end_prepared_outgoing_file(app, job, copy, end, update_message_view,
+                                                                 startTransferImmediately));
+    }
+
+    /**
+     * KHANDAQ (0.2.56): the end of a prepared outgoing file's copy, on the main thread. A complete copy whose
+     * entry still waits for it is queued for the transfer. Any other end (Cancel, a failed copy, the entry
+     * deleted meanwhile) removes what there is of the copy and the entry; a failed one says so.
+     */
+    private static void end_prepared_outgoing_file(final Context app, final OutgoingFilePreparation.Job job,
+                                                   final File copy, final OutgoingFilePreparation.Result result,
+                                                   final boolean update_message_view,
+                                                   final boolean startTransferImmediately)
+    {
+        OutgoingFilePreparation.ACTIVE.end(job.messageId);
+        Message m = null;
+        try
+        {
+            final List<Message> rows = orma.selectFromMessage().idEq(job.messageId).toList();
+            m = ((rows == null) || rows.isEmpty()) ? null : rows.get(0);
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "end_prepared_outgoing_file:read:EE:" + e.getMessage());
+        }
+        final boolean wanted = (m != null) && m.ft_outgoing_preparing && !job.isCancelled();
+        if (wanted && (result.outcome == OutgoingFilePreparation.Outcome.DONE)
+            && queue_prepared_outgoing_file(m, job, result.bytes))
+        {
+            finish_outgoing_file_enqueue(m.id, update_message_view, startTransferImmediately);
+            return;
+        }
+
+        HelperFiletransfer.delete_unfinished_outgoing_copy(copy.getAbsolutePath(), job.messageId);
+        if (m != null)
+        {
+            HelperFiletransfer.drop_outgoing_file_rows(m);
+        }
+        if (wanted)
+        {
+            AirComposerNotice.say(app.getString(R.string.air_file_prepare_failed), true);
+        }
+    }
+
+    /**
+     * KHANDAQ (0.2.56): the copy is complete: the flag goes, and with it ft_outgoing_queued is set, so the
+     * service loop, which picks up file rows by their sent time, takes it as queued from now on. The entry is
+     * drawn again with the file. False when the row could not be written.
+     */
+    private static boolean queue_prepared_outgoing_file(final Message m, final OutgoingFilePreparation.Job job,
+                                                        final long bytes)
+    {
+        try
+        {
+            if (bytes != job.expectedBytes)
+            {
+                // The provider's size at Send was not what it gave: toxcore is offered what was copied.
+                orma.updateFiletransfer().idEq(m.filetransfer_id).filesize(bytes).execute();
+            }
+            orma.updateMessage().idEq(m.id).ft_outgoing_preparing(false).ft_outgoing_queued(true).execute();
+            job.markQueued();
+            update_single_message_from_messge_id(m.id, true);
+            return true;
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "queue_prepared_outgoing_file:EE:" + e.getMessage());
+            return false;
+        }
+    }
+
+    /** KHANDAQ (0.2.56): the entry of a running copy is drawn again: its bar follows the bytes copied. */
+    private static void redraw_prepared_outgoing_file(final long messageId)
+    {
+        final MessageListFragment fragment = MainActivity.message_list_fragment;
+        if ((fragment != null) && (fragment.adapter != null))
+        {
+            fragment.adapter.redraw_progress_only(messageId);
+        }
+    }
+
+    /**
+     * KHANDAQ (0.2.56): runs {@code then} on the main thread once every copy queued so far has ended, with the
+     * transfer of each complete one queued. The copies run one after the other and post their end to the
+     * main looper; this goes after them on both, and so after their ends.
+     */
+    static void after_outgoing_file_preparations(final Runnable then)
+    {
+        OUTGOING_COPY_EXEC.execute(() -> OUTGOING_FILE_MAIN.post(then));
     }
 
     static long add_outgoing_file(Context c, long friendnum, String filepath, String filename, Uri uri, long file_size_manual, boolean real_file_path, boolean update_message_view, boolean use_file_size_manual)
@@ -3017,45 +3284,17 @@ public class MessageListActivity extends AppCompatActivity
         {
             HelperGeneric.logI(TAG, "add_outgoing_file:documentFile:0001");
 
-            // KHANDAQ (ANR): for content-picker media (uri != null) — which can be a ~200MB video — do the
-            // VFS copy on a background thread, then build the rows + kick the transfer back on the main
-            // thread. The message row is inserted only AFTER the copy finishes, so the tox resend loop
-            // (which promotes queued file rows older than ~1.5s) can never pick up a half-written file,
-            // and the native tox_file_send stays on the main thread (no new tox-iterate race).
+            // KHANDAQ (ANR): for content-picker media (uri != null) — which can be a ~200MB video — the
+            // VFS copy runs on a background thread and the native tox_file_send stays on the main thread
+            // (no new tox-iterate race).
+            // KHANDAQ (0.2.56): the entry stands from Send on and shows the copy (prepare_outgoing_file); no
+            // transfer starts before the copy is complete, by the row's flag, not by its age.
             // Real-file sources (uri == null, e.g. voice notes) stay SYNCHRONOUS: the caller deletes the
             // source file right after this returns, so the copy must read it before we return.
             if (uri != null)
             {
-                final Context fnl_c = c;
-                final long fnl_friendnum = friendnum;
-                final String fnl_filepath = filepath;
-                final String fnl_filename = filename;
-                final long fnl_file_size = file_size;
-                final boolean fnl_update = update_message_view;
-                final boolean fnl_start = startTransferImmediately;
-                OUTGOING_COPY_EXEC.execute(() ->
-                {
-                    final outgoing_file_wrapped ofw =
-                            copy_outgoing_file_to_sdcard_dir(fnl_filepath, fnl_filename, fnl_file_size);
-                    final Runnable cont = () ->
-                    {
-                        if (ofw == null)
-                        {
-                            HelperGeneric.logI(TAG, "add_outgoing_file:ERR:0002 (async copy failed)");
-                            return;
-                        }
-                        finish_outgoing_file_after_copy(fnl_c, fnl_friendnum, ofw, fnl_update, fnl_start);
-                    };
-                    if (main_handler_s != null)
-                    {
-                        main_handler_s.post(cont);
-                    }
-                    else
-                    {
-                        cont.run();
-                    }
-                });
-                return OUTGOING_FILE_ACCEPTED_ASYNC;
+                return prepare_outgoing_file(c, friendnum, filepath, filename, file_size, update_message_view,
+                                             startTransferImmediately);
             }
 
             outgoing_file_wrapped ofw = copy_outgoing_file_to_sdcard_dir(filepath, filename, file_size);

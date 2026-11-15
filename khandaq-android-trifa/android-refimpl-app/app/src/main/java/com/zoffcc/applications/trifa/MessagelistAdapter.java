@@ -531,6 +531,7 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                 a.TOX_MESSAGE_TYPE != b.TOX_MESSAGE_TYPE || a.TRIFA_MESSAGE_TYPE != b.TRIFA_MESSAGE_TYPE ||
                 a.state != b.state || a.ft_accepted != b.ft_accepted ||
                 a.ft_outgoing_started != b.ft_outgoing_started || a.filedb_id != b.filedb_id ||
+                a.ft_outgoing_preparing != b.ft_outgoing_preparing ||
                 a.filetransfer_id != b.filetransfer_id || a.sent_timestamp != b.sent_timestamp ||
                 a.rcvd_timestamp != b.rcvd_timestamp || a.read != b.read || a.edited != b.edited ||
                 a.msg_at_relay != b.msg_at_relay || a.sent_push != b.sent_push ||
@@ -768,6 +769,20 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
         this.notifyItemRangeChanged(0, getItemCount(), PAYLOAD_SELECTION);
     }
 
+    /** KHANDAQ (0.2.56): the byte counters of one row drawn again, nothing else (a copy for sending that runs). */
+    synchronized public void redraw_progress_only(final long messageId)
+    {
+        for (int pos = 0; pos < this.messagelistitems.size(); pos++)
+        {
+            final Message m = this.messagelistitems.get(pos);
+            if ((m != null) && (m.id == messageId))
+            {
+                this.notifyItemChanged(pos, PAYLOAD_TRANSFER_PROGRESS);
+                return;
+            }
+        }
+    }
+
     synchronized public boolean update_item(final Message new_item)
     {
         // Log.i(TAG, "update_item:" + new_item);
@@ -808,6 +823,8 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                             && old_item.state == new_item.state
                             && old_item.filedb_id == new_item.filedb_id
                             && old_item.filetransfer_id == new_item.filetransfer_id
+                            // KHANDAQ (0.2.56): a copy that became complete brings its preview: a full bind.
+                            && old_item.ft_outgoing_preparing == new_item.ft_outgoing_preparing
                             && ((old_item.filename_fullpath == null) == (new_item.filename_fullpath == null))
                             // KHANDAQ: a reaction change must force a FULL rebind (chip row + selection
                             // state), otherwise a reaction on a media/voice row only shows up after

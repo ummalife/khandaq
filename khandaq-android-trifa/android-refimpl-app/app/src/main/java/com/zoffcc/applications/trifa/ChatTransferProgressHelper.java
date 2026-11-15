@@ -241,58 +241,32 @@ final class ChatTransferProgressHelper
                 || isGroupVideoMessage(context, message)
                 || isGroupAudioMessage(context, message);
 
-        if (outgoing && HelperGroup.is_ngc_outgoing_send_complete(message.group_identifier, message.msg_id_hash))
+        if (outgoing)
         {
-            return completeSnapshot(true);
-        }
-
-        // KHANDAQ (audit2 #5): a user cancel now outlives the process, so it also needs a UI state that
-        // outlives it. FAILED is the phase that shows the retry button, and the retry button is the only
-        // affordance that lifts the cancel again (HelperGroup.retry_group_file_send). Without this the
-        // cancelled row would sit at "pending" forever after a restart with no way back.
-        // KHANDAQ (audit3 #3): ..._cached() is the memory-only variant — this runs while binding a row
-        // on the main thread, and the authoritative lookup does SQL under a lock that a chunk/tox thread
-        // also takes. On a cold cache it answers "not cancelled" for this frame and re-posts the row
-        // once the background lookup finds the tombstone. The sending paths keep the blocking variant,
-        // so nothing here decides whether bytes go out.
-        if (outgoing && HelperGroup.is_ngc_send_cancelled_by_user_cached(message.group_identifier, message.msg_id_hash))
-        {
-            return new Snapshot(Phase.FAILED, done, total, Math.max(pct, 0), speed, true, media);
-        }
-
-        if (NgcGroupFileTransfer.shouldUseChunkedTransfer(total) && outgoing)
-        {
-            if (HelperGroup.is_ngc_file_transfer_failed(message.group_identifier, message.msg_id_hash)
-                    || HelperGroup.is_ngc_transfer_stalled(message.group_identifier, message.msg_id_hash))
+            // KHANDAQ (0.2.56): our file shows what its send says (NgcGroupFileTransfer), never a guess. It showed
+            // "not sent" after 30 s without progress (is_ngc_transfer_stalled) while it still waited or went at the
+            // pace, "connecting" while the group was connected with nobody else in it, a small file "sent" when it
+            // had gone to nobody, and every chunked file of an earlier run as still waiting.
+            // KHANDAQ (audit2 #5, audit3 #3): the user's cancel outlives the process, so it is read here, from the
+            // memory-only cache: this runs while binding a row on the main thread. FAILED is the phase that shows the
+            // retry button, the only affordance that lifts the cancel again (HelperGroup.retry_group_file_send).
+            final Phase phase = outgoingGroupPhase(message.group_identifier, message.msg_id_hash);
+            switch (phase)
             {
-                return new Snapshot(Phase.FAILED, done, total, Math.max(pct, 0), speed, true, media);
+                case COMPLETE:
+                    return completeSnapshot(true);
+                case FAILED:
+                    return new Snapshot(Phase.FAILED, done, total, Math.max(pct, 0), speed, true, media);
+                case PENDING:
+                    return new Snapshot(Phase.PENDING, 0L, total, 0, 0f, true, media);
+                default:
+                    if (pct >= 0 && pct < 100)
+                    {
+                        return new Snapshot(Phase.TRANSFERRING, done, total, pct, speed, true, media);
+                    }
+                    final int derivedPct = (total > 0L && done > 0L) ? (int) Math.min(100L, (100L * done) / total) : 0;
+                    return new Snapshot(Phase.TRANSFERRING, Math.max(0L, done), total, derivedPct, speed, true, media);
             }
-
-            final long groupNum = HelperGroup.tox_group_by_groupid__wrapper(message.group_identifier);
-            final int groupConn = groupNum >= 0 ? MainActivity.tox_group_is_connected(groupNum) : -1;
-            if (groupConn != TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
-            {
-                return new Snapshot(Phase.PENDING, 0L, total, 0, 0f, true, media);
-            }
-
-            if (!HelperGroup.is_ngc_transfer_started(message.group_identifier, message.msg_id_hash))
-            {
-                HelperGroup.schedule_auto_retry_group_file_send(message);
-                return new Snapshot(Phase.PENDING, 0L, total, 0, 0f, true, media);
-            }
-
-            if (pct >= 0 && pct < 100)
-            {
-                return new Snapshot(Phase.TRANSFERRING, done, total, pct, speed, true, media);
-            }
-            if (done > 0L)
-            {
-                final int derivedPct = total > 0L
-                        ? (int) Math.min(100L, (100L * done) / total)
-                        : 0;
-                return new Snapshot(Phase.TRANSFERRING, done, total, derivedPct, speed, true, media);
-            }
-            return new Snapshot(Phase.TRANSFERRING, 0L, total, 0, 0f, true, media);
         }
 
         if (isGroupMessageMediaReady(message, null))
@@ -354,34 +328,59 @@ final class ChatTransferProgressHelper
             return new Snapshot(Phase.TRANSFERRING, 0L, total, 0, 0f, false, media);
         }
 
-        if (outgoing && total > 0)
-        {
-            final long groupNum = HelperGroup.tox_group_by_groupid__wrapper(message.group_identifier);
-            final int groupConn = groupNum >= 0 ? MainActivity.tox_group_is_connected(groupNum) : -1;
-            if (groupConn != TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
-            {
-                return new Snapshot(Phase.PENDING, 0L, total, 0, 0f, true, media);
-            }
-            if (!HelperGroup.is_ngc_transfer_started(message.group_identifier, message.msg_id_hash))
-            {
-                HelperGroup.schedule_auto_retry_group_file_send(message);
-                return new Snapshot(Phase.PENDING, 0L, total, 0, 0f, true, media);
-            }
-            if (pct >= 0 && pct < 100)
-            {
-                return new Snapshot(Phase.TRANSFERRING, done, total, pct, speed, true, media);
-            }
-            if (done > 0L)
-            {
-                final int derivedPct = total > 0L
-                        ? (int) Math.min(100L, (100L * done) / total)
-                        : 0;
-                return new Snapshot(Phase.TRANSFERRING, done, total, derivedPct, speed, true, media);
-            }
-            return new Snapshot(Phase.TRANSFERRING, 0L, total, 0, 0f, true, media);
-        }
-
         return completeSnapshot(outgoing);
+    }
+
+    /**
+     * KHANDAQ (0.2.56): the phase of one of our group files now, as its row and the chat list show it. Memory only,
+     * never blocks: the row binds on the main thread.
+     */
+    static Phase outgoingGroupPhase(final String groupId, final String msgIdHash)
+    {
+        return outgoingGroupPhase(HelperGroup.is_ngc_outgoing_send_complete(groupId, msgIdHash),
+                                  HelperGroup.is_ngc_send_cancelled_by_user_cached(groupId, msgIdHash),
+                                  HelperGroup.is_ngc_file_transfer_failed(groupId, msgIdHash),
+                                  NgcGroupFileTransfer.isOutgoingWaiting(groupId, msgIdHash),
+                                  NgcGroupFileTransfer.isOutgoingGoing(groupId, msgIdHash),
+                                  NgcGroupFileTransfer.isOutgoingPending(groupId, msgIdHash));
+    }
+
+    /**
+     * KHANDAQ (0.2.56): the phase of one of our group files, from what its send says of it (NgcGroupFileTransfer).
+     *
+     * @param complete      it went whole in this run
+     * @param userCancelled the user cancelled it (the persisted tombstone)
+     * @param failed        its send failed for a reason of this device (no file, too large, no such group)
+     * @param waiting       it waits for a member to send it to
+     * @param going         its send is queued or running
+     * @param pending       its send began and did not end, in this run or an earlier one
+     */
+    static Phase outgoingGroupPhase(final boolean complete, final boolean userCancelled, final boolean failed,
+                                    final boolean waiting, final boolean going, final boolean pending)
+    {
+        if (complete)
+        {
+            return Phase.COMPLETE;
+        }
+        if (userCancelled || failed)
+        {
+            return Phase.FAILED;
+        }
+        if (waiting)
+        {
+            return Phase.PENDING;
+        }
+        if (going)
+        {
+            return Phase.TRANSFERRING;
+        }
+        if (pending)
+        {
+            // Ours to send, its turn not come yet: an earlier run's file before the service's tick brings it.
+            return Phase.PENDING;
+        }
+        // Nothing of it is left to send: it went, in this run or an earlier one.
+        return Phase.COMPLETE;
     }
 
     static void applyDirect(final Context context, final View itemRoot, final Message message, final boolean outgoing)

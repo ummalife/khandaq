@@ -219,31 +219,56 @@ public final class MediaSendPreviewHelper
             return;
         }
 
-        dispatchAttachments(context, uris, target, friendnum, groupId, activityPeer);
+        // KHANDAQ (0.2.56): the files picked here are one batch: the caption follows them (below).
+        final OutgoingFilePreparation.Batch batch = OutgoingFilePreparation.ACTIVE.openBatch();
+        try
+        {
+            dispatchAttachments(context, uris, target, friendnum, groupId, activityPeer);
+        }
+        finally
+        {
+            OutgoingFilePreparation.ACTIVE.closeBatch(batch);
+        }
 
         if (captionText == null)
         {
             return;
         }
 
-        // KHANDAQ (#127): the file send is dispatched ASYNC (add_attachment -> posted dispatchOutgoing ->
-        // add_outgoing_file -> tox_file_send), but the caption text would otherwise be sent SYNCHRONOUSLY
-        // right here — so the caption packet hits the wire BEFORE the file is even initiated. The receiver
-        // stamps each message on arrival, so it then renders the caption ABOVE the photo (desync). Defer the
-        // caption so the file's initiation (a fast control packet — only the chunk transfer is slow) goes out
-        // first; Tox preserves per-friend order, so the receiver gets file-then-caption and renders photo,
-        // then caption. Imperceptible (~1s). (1:1 only — groups take the transfer-completion path above.)
-        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() ->
+        // KHANDAQ (#127): the caption must not hit the wire before the file is initiated: the receiver stamps
+        // each message on arrival and renders the caption ABOVE the photo. Tox keeps per-friend order, so
+        // the file's offer (a fast control packet) going first is enough. (1:1 only — groups take the
+        // transfer-completion path above.)
+        // KHANDAQ (0.2.56): the caption went 1.2 s after Send, but a large video is copied for many seconds
+        // before its transfer is queued, so it still went first. It now goes after the copies of its files
+        // have ended and their transfers are queued (MessageListActivity.after_outgoing_file_preparations),
+        // and not when none of them was. The text is composed now, with the reply it answers; when it goes
+        // the field may hold a new text, which stays.
+        final String pk = friendCaptionPubkey(context, friendnum, activityPeer);
+        if (pk == null)
+        {
+            return;
+        }
+        final String body = HelperGeneric.normalize_chat_input_text(captionText);
+        final String fullText = ChatReplyPreviewController.composeOutgoingText(body);
+        MessageListActivity.after_outgoing_file_preparations(() ->
         {
             try
             {
-                sendFriendCaption(context, friendnum, activityPeer, captionText);
+                if (batch.captionGoes())
+                {
+                    MessageListActivity.send_caption_text(pk, body, fullText);
+                }
+                else
+                {
+                    Log.i(TAG, "sendConfirmedMedia:caption:no file of it was queued");
+                }
             }
             catch (Exception e)
             {
                 Log.i(TAG, "sendConfirmedMedia:caption:EE:" + e.getMessage());
             }
-        }, 1200L);
+        });
     }
 
     /** Send picked URIs through the legacy attachment path (async friendnum wait, proven stable). */
@@ -331,27 +356,20 @@ public final class MediaSendPreviewHelper
         intent.setClipData(clip);
     }
 
-    private static void sendFriendCaption(final Context context, final long friendnum,
-                                          final boolean activityPeer, final String caption)
+    /** The chat a caption of media sent from the preview goes to, by the same rules as its files; null for none. */
+    private static String friendCaptionPubkey(final Context context, final long friendnum,
+                                              final boolean activityPeer)
     {
+        String pk = null;
         if (activityPeer && MainActivity.message_list_activity != null)
         {
-            final String pk = MainActivity.message_list_activity.get_friend_pubkey();
-            if (pk != null && !pk.isEmpty())
-            {
-                MainActivity.message_list_activity.send_text_message(pk, caption);
-            }
-            return;
+            pk = MainActivity.message_list_activity.get_friend_pubkey();
         }
-
-        if (friendnum >= 0 && context instanceof MessageListActivity)
+        else if (friendnum >= 0 && context instanceof MessageListActivity)
         {
-            final String pk = HelperFriend.tox_friend_get_public_key__wrapper(friendnum);
-            if (pk != null && !pk.isEmpty())
-            {
-                ((MessageListActivity) context).send_text_message(pk, caption);
-            }
+            pk = HelperFriend.tox_friend_get_public_key__wrapper(friendnum);
         }
+        return (pk == null || pk.isEmpty()) ? null : pk;
     }
 
     // package-private: OutgoingAttachmentQueue delivers group captions after the transfer finishes.

@@ -774,6 +774,13 @@ final class AirRepository
         {
             return null;
         }
+        if (message.private_message == 0 && message.TRIFA_MESSAGE_TYPE == TRIFA_MSG_FILE.value)
+        {
+            // KHANDAQ (0.2.56): our group file never gets a message id (it is not a toxcore message), so every one
+            // of them counted as in transit, for good. The list says what the file's row says.
+            return AirModel.Delivery.ofGroupFile(
+                    ChatTransferProgressHelper.outgoingGroupPhase(message.group_identifier, message.msg_id_hash));
+        }
         return mapStatus(MessageStatusHelper.resolveGroupOutgoing(message));
     }
 

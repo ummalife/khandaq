@@ -28,4 +28,7 @@
     <string name="air_file_decline_title">Отклонить файл?</string>
     <string name="air_file_decline_message">Файл не загрузится на этот телефон. Отправитель увидит, что он не дошёл.</string>
     <string name="air_file_waits_group">Уйдёт, когда группа будет в сети</string>
+    <!-- 0.2.56: our file from Send on, while its copy for sending is made, and a copy that failed -->
+    <string name="air_file_preparing">Готовим файл</string>
+    <string name="air_file_prepare_failed">Файл не отправился. Попробуйте ещё раз</string>
 </resources>

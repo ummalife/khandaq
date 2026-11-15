@@ -28,4 +28,7 @@
     <string name="air_file_decline_title">رفض الملف؟</string>
     <string name="air_file_decline_message">لن يُنزَّل الملف على هذا الهاتف، وسيرى المرسل أنه لم يصل.</string>
     <string name="air_file_waits_group">سيُرسل عندما تكون المجموعة متصلة</string>
+    <!-- 0.2.56: our file from Send on, while its copy for sending is made, and a copy that failed -->
+    <string name="air_file_preparing">جارٍ تجهيز الملف</string>
+    <string name="air_file_prepare_failed">لم يُرسل الملف. حاول مرة أخرى</string>
 </resources>

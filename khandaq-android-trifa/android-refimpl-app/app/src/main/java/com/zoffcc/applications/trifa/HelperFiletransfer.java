@@ -1140,6 +1140,14 @@ public class HelperFiletransfer
     {
         try
         {
+            // KHANDAQ (0.2.56): only a complete copy is offered; the copy queues its file once it is complete.
+            if (!OutgoingFilePreparation.isReadyToOffer(m.ft_outgoing_preparing,
+                                                        OutgoingFilePreparation.ACTIVE.isRunning(m.id)))
+            {
+                Log.i(TAG, "start_outgoing_ft:copy not complete mid=" + m.id);
+                return;
+            }
+
             if (!FileTransferConcurrencyGate.canStartOutgoingTransfer())
             {
                 set_message_queueing_from_id(m.id, true);
@@ -1528,6 +1536,7 @@ public class HelperFiletransfer
                     TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
                     ft_outgoing_queuedEq(true).
                     ft_outgoing_startedEq(false).
+                    ft_outgoing_preparingEq(false).
                     stateEq(TOX_FILE_CONTROL_PAUSE.value).
                     orderBySent_timestampAsc().
                     toList();
@@ -1606,6 +1615,13 @@ public class HelperFiletransfer
             Message m = (Message) orma.selectFromMessage().idEq(message_id).get(0);
 
             if (m.ft_outgoing_started)
+            {
+                return;
+            }
+
+            // KHANDAQ (0.2.56): a copy still being written is neither offered nor queued; it queues itself.
+            if (!OutgoingFilePreparation.isReadyToOffer(m.ft_outgoing_preparing,
+                                                        OutgoingFilePreparation.ACTIVE.isRunning(m.id)))
             {
                 return;
             }
@@ -1724,9 +1740,7 @@ public class HelperFiletransfer
     {
         outgoing_file_wrapped ret = new outgoing_file_wrapped();
 
-        String new_fake_filename_prefix = bytesToHex(TrifaSetPatternActivity.
-                sha256(TrifaSetPatternActivity.StringToBytes2(filepath))).
-                substring(1, 5).toLowerCase();
+        String new_fake_filename_prefix = outgoing_copy_prefix(filepath);
 
         // KHANDAQ (QA live, F4): each copy gets a folder of its own under the outgoing folder and keeps the
         // picked name in it. The copy used to lie in the outgoing folder itself as "<4 hex>_<name>" (a random
@@ -1751,16 +1765,7 @@ public class HelperFiletransfer
 
             // now write that contents of the virtual file to the actual file on SD card ----------------
             // Log.i(TAG, "copy_outgoing_file_to_sdcard_dir:filepath=" + filepath);
-            InputStream in = null;
-            try
-            {
-                 in = context_s.getContentResolver().openInputStream(Uri.parse(filepath));
-            }
-            catch(Exception e)
-            {
-                File fin_regular_file = new File(filepath + "/" +  filename);
-                in = new java.io.FileInputStream(fin_regular_file);
-            }
+            InputStream in = open_outgoing_copy_source(filepath, filename);
             // KHANDAQ (audit #21): openInputStream can return null for some providers.
             if (in == null)
             {
@@ -1814,6 +1819,31 @@ public class HelperFiletransfer
                 delete_outgoing_copy(file.getAbsolutePath());
             }
             return null;
+        }
+    }
+
+    /** The folder name the copies of a picked file start from (claim_outgoing_copy): four hex of its path's hash. */
+    static String outgoing_copy_prefix(final String filepath)
+    {
+        return bytesToHex(TrifaSetPatternActivity.
+                sha256(TrifaSetPatternActivity.StringToBytes2(filepath))).
+                substring(1, 5).toLowerCase();
+    }
+
+    /**
+     * The bytes of a file picked to send: through the content resolver for its address, else the file
+     * [filepath]/[filename]. Null when the provider gives none (audit #21).
+     */
+    static InputStream open_outgoing_copy_source(final String filepath, final String filename)
+            throws java.io.IOException
+    {
+        try
+        {
+            return context_s.getContentResolver().openInputStream(Uri.parse(filepath));
+        }
+        catch (Exception e)
+        {
+            return new java.io.FileInputStream(new File(filepath + "/" + filename));
         }
     }
 
@@ -2059,6 +2089,122 @@ public class HelperFiletransfer
         {
             Log.i(TAG, "remove_outgoing_copy_dir:EE:" + e.getMessage());
         }
+    }
+
+    /**
+     * KHANDAQ (0.2.56): removes a copy for sending that was not completed: its part file
+     * (OutgoingFilePreparation.partFileFor), its reserved place, then its folder once that is empty.
+     * Anything outside the outgoing folder is left alone.
+     */
+    static void delete_unfinished_outgoing_copy(final String fullpath, final long messageId)
+    {
+        delete_unfinished_outgoing_copy(fullpath, messageId, SD_CARD_FILES_OUTGOING_WRAPPER_DIR);
+    }
+
+    /** As above, with the outgoing folder given. */
+    static void delete_unfinished_outgoing_copy(final String fullpath, final long messageId,
+                                                final String outgoingDir)
+    {
+        if (fullpath == null)
+        {
+            return;
+        }
+        delete_outgoing_copy(OutgoingFilePreparation.partFileFor(new File(fullpath), messageId).getAbsolutePath(),
+                             outgoingDir);
+        delete_outgoing_copy(fullpath, outgoingDir);
+    }
+
+    /**
+     * KHANDAQ (0.2.56): an outgoing file is deleted while its copy for sending may still be written. A copy
+     * that runs is told to stop and removes its part file itself; the part of one cut short by the end of
+     * the app goes here. The reserved place is the caller's to remove.
+     */
+    static void stop_outgoing_copy(final Message m)
+    {
+        if ((m == null) || OutgoingFilePreparation.ACTIVE.cancel(m.id) || !m.ft_outgoing_preparing
+            || (m.filename_fullpath == null))
+        {
+            return;
+        }
+        delete_outgoing_copy(OutgoingFilePreparation.partFileFor(new File(m.filename_fullpath), m.id).getAbsolutePath());
+    }
+
+    /**
+     * KHANDAQ (0.2.56): Cancel on an outgoing file whose copy for sending is still being written; it has no
+     * transfer yet. The copy stops and the entry goes with its rows. A running copy removes its part file
+     * itself, and its end the rest (MessageListActivity.end_prepared_outgoing_file); for one cut short
+     * before, all of it goes here. On the main thread.
+     */
+    static void cancel_outgoing_file_preparation(final Message m)
+    {
+        if (!OutgoingFilePreparation.ACTIVE.cancel(m.id))
+        {
+            delete_unfinished_outgoing_copy(m.filename_fullpath, m.id);
+        }
+        drop_outgoing_file_rows(m);
+    }
+
+    /** KHANDAQ (0.2.56): an outgoing file's entry and its transfer row go, and its entry leaves the chat. On the main thread. */
+    static void drop_outgoing_file_rows(final Message m)
+    {
+        try
+        {
+            if (m.filetransfer_id > 0L)
+            {
+                delete_filetransfers_from_id(m.filetransfer_id);
+            }
+            orma.deleteFromMessage().idEq(m.id).execute();
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "drop_outgoing_file_rows:EE:" + e.getMessage());
+        }
+        AirRepository.requestRefresh();
+        final MessageListFragment fragment = MainActivity.message_list_fragment;
+        if ((fragment != null) && (fragment.adapter != null))
+        {
+            fragment.adapter.remove_item(m);
+        }
+    }
+
+    /**
+     * KHANDAQ (0.2.56): at start, the outgoing files whose copy for sending was still being written when the
+     * app stopped. The picked file's address is not stored, so the copy cannot go on: the half copy and the
+     * entry go. Posted to the main thread, where copies begin and end, so that one running now stays.
+     */
+    static void discard_unfinished_outgoing_copies()
+    {
+        final Handler handler = MainActivity.main_handler_s != null
+                ? MainActivity.main_handler_s
+                : new Handler(Looper.getMainLooper());
+        handler.post(() -> {
+            try
+            {
+                final List<Message> unfinished = orma.selectFromMessage().
+                        directionEq(1).
+                        TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
+                        ft_outgoing_preparingEq(true).
+                        toList();
+                if (unfinished == null)
+                {
+                    return;
+                }
+                for (final Message m : unfinished)
+                {
+                    if (OutgoingFilePreparation.ACTIVE.isRunning(m.id))
+                    {
+                        continue;
+                    }
+                    Log.i(TAG, "discard_unfinished_outgoing_copies:mid=" + m.id);
+                    delete_unfinished_outgoing_copy(m.filename_fullpath, m.id);
+                    drop_outgoing_file_rows(m);
+                }
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "discard_unfinished_outgoing_copies:EE:" + e.getMessage());
+            }
+        });
     }
 
     static String check_if_incoming_file_was_exported(final Message m)
@@ -3512,6 +3658,27 @@ public class HelperFiletransfer
         if (message == null || message.filetransfer_id <= 0)
         {
             return;
+        }
+        // KHANDAQ (0.2.56): a file whose copy for sending is still being written has no transfer to cancel. The
+        // entry may have been drawn before its copy was complete, so it is read again: a copy completed in
+        // between is a transfer by now and is cancelled as one.
+        if (message.ft_outgoing_preparing || OutgoingFilePreparation.ACTIVE.isRunning(message.id))
+        {
+            Message current = null;
+            try
+            {
+                final List<Message> rows = orma.selectFromMessage().idEq(message.id).toList();
+                current = ((rows == null) || rows.isEmpty()) ? null : rows.get(0);
+            }
+            catch (Exception ignored)
+            {
+            }
+            if ((current == null) || current.ft_outgoing_preparing
+                || OutgoingFilePreparation.ACTIVE.isRunning(message.id))
+            {
+                cancel_outgoing_file_preparation(current != null ? current : message);
+                return;
+            }
         }
         try
         {

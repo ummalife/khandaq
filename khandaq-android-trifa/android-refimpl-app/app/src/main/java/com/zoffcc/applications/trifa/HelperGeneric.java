@@ -3330,6 +3330,12 @@ public class HelperGeneric
         cache_ft_fos.remove(file_name_with_path);
     }
 
+    /** KHANDAQ (0.2.56): this process has the write cache of the file open (it opened, and so emptied, the file). */
+    static boolean has_vfs_write_cache(final String file_name_with_path)
+    {
+        return VFS_CUSTOM_WRITE_CACHE && file_name_with_path != null && cache_ft_fos.containsKey(file_name_with_path);
+    }
+
     /** Flush (but keep open) the buffered write cache for one VFS file so written bytes hit disk. */
     static void flush_vfs_write_cache(final String file_name_with_path)
     {

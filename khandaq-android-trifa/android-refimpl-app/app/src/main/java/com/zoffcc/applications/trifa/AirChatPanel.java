@@ -1914,6 +1914,16 @@ final class AirChatPanel implements AirDossier.Listener, AirContactMarks.Listene
      */
     static long queueUnsentText(final String friendPublicKey, final String text, final long sentTimestamp)
     {
+        return queueUnsentText(friendPublicKey, text, sentTimestamp, true);
+    }
+
+    /**
+     * As above. KHANDAQ (0.2.56): showInList false for a text of a chat that may not be the one on screen (a
+     * caption that goes once its files are queued): its row then joins no list now, and its own chat reads it.
+     */
+    static long queueUnsentText(final String friendPublicKey, final String text, final long sentTimestamp,
+                                final boolean showInList)
+    {
         if (TrifaToxService.orma == null || TextUtils.isEmpty(friendPublicKey) || TextUtils.isEmpty(text))
         {
             return -1L;
@@ -1935,7 +1945,7 @@ final class AirChatPanel implements AirDossier.Listener, AirContactMarks.Listene
         m.msg_id_hash = "";
         m.raw_msgv2_bytes = "";
         m.message_id = -1L;
-        final long rowId = HelperMessage.insert_into_message_db(m, true);
+        final long rowId = HelperMessage.insert_into_message_db(m, showInList);
         m.id = rowId;
         return rowId;
     }

@@ -1234,6 +1234,7 @@ private extension ActiveSessionCoordinator {
                             submanagerObjects: toxManager.objects,
                             submanagerFriends: toxManager.friends,
                             submanagerChats: toxManager.chats,
+                            submanagerUser: toxManager.user,
                             delegate: self)
                 }
                 else {
@@ -1243,6 +1244,7 @@ private extension ActiveSessionCoordinator {
                             submanagerChats: toxManager.chats,
                             submanagerObjects: toxManager.objects,
                             submanagerFiles: toxManager.files,
+                            submanagerUser: toxManager.user,
                             delegate: self,
                             showKeyboardOnAppear: iPad.keyboardObserver.keyboardVisible)
                 }

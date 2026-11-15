@@ -57,6 +57,7 @@ class ChatPrivateController: PortraitChatController {
     fileprivate weak var submanagerChats: OCTSubmanagerChats!
     fileprivate weak var submanagerObjects: OCTSubmanagerObjects!
     fileprivate weak var submanagerFiles: OCTSubmanagerFiles!
+    fileprivate weak var submanagerUser: OCTSubmanagerUser!
 
     fileprivate let messages: Results<OCTMessageAbstract>
     fileprivate var messagesToken: RLMNotificationToken?
@@ -190,13 +191,14 @@ class ChatPrivateController: PortraitChatController {
     fileprivate let showKeyboardOnAppear: Bool
     fileprivate var disableNextInputViewAnimation = false
 
-    init(theme: Theme, chat: OCTChat, submanagerChats: OCTSubmanagerChats, submanagerObjects: OCTSubmanagerObjects, submanagerFiles: OCTSubmanagerFiles, delegate: ChatPrivateControllerDelegate, showKeyboardOnAppear: Bool = false) {
+    init(theme: Theme, chat: OCTChat, submanagerChats: OCTSubmanagerChats, submanagerObjects: OCTSubmanagerObjects, submanagerFiles: OCTSubmanagerFiles, submanagerUser: OCTSubmanagerUser, delegate: ChatPrivateControllerDelegate, showKeyboardOnAppear: Bool = false) {
         self.theme = theme
         self.chat = chat
         self.friend = chat.friends.lastObject() as? OCTFriend
         self.submanagerChats = submanagerChats
         self.submanagerObjects = submanagerObjects
         self.submanagerFiles = submanagerFiles
+        self.submanagerUser = submanagerUser
         self.delegate = delegate
         self.showKeyboardOnAppear = showKeyboardOnAppear
 
@@ -1486,7 +1488,9 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
             return
         }
         let message = messageEntry(atDisplayIndex: indexPath.row).message
-        replyController.startReply(to: message, submanagerObjects: submanagerObjects, theme: theme)
+        // KHANDAQ (0.2.56): your friend knows you by your profile name and your key.
+        let own = ChatReplyController.OwnAuthor(name: submanagerUser?.userName(), publicKey: submanagerUser?.publicKey)
+        replyController.startReply(to: message, submanagerObjects: submanagerObjects, own: own, theme: theme)
         // The reply header travels in the same message, so it counts against the length limit.
         updateComposeLimit()
         _ = chatInputView.becomeFirstResponder()

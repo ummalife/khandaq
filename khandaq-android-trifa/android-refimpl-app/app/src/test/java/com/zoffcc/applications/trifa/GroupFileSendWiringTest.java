@@ -285,6 +285,38 @@ public class GroupFileSendWiringTest
         assertEquals(1, count(image, "NgcGroupFileTransfer.outgoingSent(g)"));
     }
 
+    @Test
+    public void a_group_number_is_the_files_group_only_while_it_has_the_files_id()
+    {
+        // The id of the group at the number (tox_group_by_groupnum__wrapper), in whatever case it comes.
+        assertTrue(NgcGroupFileTransfer.isGroupOfFile("5a1b2c3d4e5f", "5A1B2C3D4E5F"));
+        // The number names another group (it took the number of a group left), or none.
+        assertFalse(NgcGroupFileTransfer.isGroupOfFile("5a1b2c3d4e5f", "5a1b2c3d4e60"));
+        assertFalse(NgcGroupFileTransfer.isGroupOfFile("5a1b2c3d4e5f", null));
+        assertFalse(NgcGroupFileTransfer.isGroupOfFile(null, "5a1b2c3d4e5f"));
+    }
+
+    @Test
+    public void a_paced_send_stops_when_its_group_number_names_another_group() throws Exception
+    {
+        // A group left in the middle of a send frees its number, and toxcore gives it to the next group joined or
+        // created: the send went on with the number, and that group's members got the file (its BEGIN names no group).
+        // The send calls toxcore, so this reads the source.
+        final String paced = body(code("NgcGroupFileTransfer.java"), "private static final class PacedSend");
+        final String sendLoop = body(paced, "private int send(final byte[] pkt, final boolean isBegin)");
+        final String pass = block(sendLoop, sendLoop.indexOf('{', sendLoop.indexOf("while (true)")));
+        final int check = pass.indexOf(
+                "if (!isGroupOfFile(g.group_identifier, HelperGroup.tox_group_by_groupnum__wrapper(groupNum)))");
+        assertTrue(check > 0);
+        assertTrue(check < pass.indexOf("targets.refreshOnlinePeers(groupNum)"));
+        assertTrue(check < pass.indexOf("tox_group_send_custom_private_packet("));
+        assertTrue(block(pass, pass.indexOf('{', check)).contains("return SEND_NO_MEMBER;"));
+        // Nobody took the packet: the own send waits for a member, and its group is found by its id again.
+        assertTrue(body(code("NgcGroupFileTransfer.java"), "private static void endUnsent(").contains("waitForMember(g,"));
+        assertTrue(body(code("NgcGroupFileTransfer.java"), "static void resumeWaitingSends()")
+                           .contains("tox_group_by_groupid__wrapper(groupId)"));
+    }
+
     private static String body(final String text, final String head)
     {
         final int at = text.indexOf(head);

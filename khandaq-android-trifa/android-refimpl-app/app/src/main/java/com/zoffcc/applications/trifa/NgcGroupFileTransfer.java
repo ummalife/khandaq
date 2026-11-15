@@ -2648,6 +2648,16 @@ public final class NgcGroupFileTransfer
     }
 
     /**
+     * KHANDAQ (0.2.56): the group at a number (its id, or null when the number names no group) is still the file's
+     * group. toxcore gives the lowest free number to the next group joined or created, so a number names another group
+     * once its group is left.
+     */
+    static boolean isGroupOfFile(final String fileGroupId, final String groupIdAtNumber)
+    {
+        return fileGroupId != null && groupIdAtNumber != null && fileGroupId.equalsIgnoreCase(groupIdAtNumber);
+    }
+
+    /**
      * KHANDAQ (0.2.56): the packets of one file to its members, at the pace. A member that comes while the file goes
      * gets the BEGIN before its next chunk: a receiver keeps chunks only for a file whose BEGIN it has (others are
      * dropped after a minute), and with the BEGIN it asks for the chunks it missed. A member that leaves and comes
@@ -2683,7 +2693,8 @@ public final class NgcGroupFileTransfer
 
         /**
          * SEND_OK once the packet went to at least one member; SEND_NO_MEMBER when the group had nobody to send to
-         * for NO_MEMBER_GRACE_MS, or every member refused it for REFUSED_LIMIT_MS; SEND_STOPPED on a cancel.
+         * for NO_MEMBER_GRACE_MS, or every member refused it for REFUSED_LIMIT_MS, or its number is no longer the
+         * file's group; SEND_STOPPED on a cancel.
          * Refusals are toxcore's send array, full until the member acknowledges what it has: they are waited out.
          */
         private int send(final byte[] pkt, final boolean isBegin)
@@ -2696,6 +2707,16 @@ public final class NgcGroupFileTransfer
                 if (isStopped(g))
                 {
                     return SEND_STOPPED;
+                }
+                // KHANDAQ (0.2.56): groupNum is the number the file's group had when the send began. A group left
+                // meanwhile frees it, toxcore gives it to the next group joined or created, and the members of that
+                // group would get the BEGIN and the chunks: the BEGIN names no group. The file waits for its own group
+                // instead, found again by its id.
+                if (!isGroupOfFile(g.group_identifier, HelperGroup.tox_group_by_groupnum__wrapper(groupNum)))
+                {
+                    HelperGeneric.logI(TAG, "send:group number " + groupNum + " is no longer the file's group msg="
+                            + g.msg_id_hash.substring(0, 8));
+                    return SEND_NO_MEMBER;
                 }
                 targets.refreshOnlinePeers(groupNum);
                 if (!targets.hasPrivatePeer())

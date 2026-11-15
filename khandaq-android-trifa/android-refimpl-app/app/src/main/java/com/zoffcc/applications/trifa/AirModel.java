@@ -1259,6 +1259,15 @@ final class AirModel
         return Filter.SWIPE_ORDER.get(index);
     }
 
+    /**
+     * KHANDAQ (0.2.56, QA 15.11): whether a finger that has moved dx, dy since it came down swipes sideways, at the
+     * filters: past the touch slop, and clearly more across than down.
+     */
+    static boolean isSidewaysSwipe(final float dx, final float dy, final float touchSlop)
+    {
+        return Math.abs(dx) >= touchSlop && Math.abs(dx) > Math.abs(dy) * 1.5f;
+    }
+
     /** "Away" words for a row: which of the reach strings applies and the number it carries. */
     static final class AwayWords
     {

@@ -65,9 +65,13 @@ public class NgcHistoryServeLedgerTest
         return serve(peer, rows, nowMs, awake(nowMs));
     }
 
+    /** The serve the last call of {@link #serve} made. */
+    private static NgcHistoryServeLedger.Serve lastServe;
+
     private static int serve(final String peer, final List<Row> rows, final long nowMs, final long nowUptimeMs)
     {
         final NgcHistoryServeLedger.Serve s = NgcHistoryServeLedger.beginServe(GROUP, peer, nowMs);
+        lastServe = s;
         int sent = 0;
         for (final Row r : rows)
         {
@@ -418,6 +422,125 @@ public class NgcHistoryServeLedgerTest
         joined(PEER_B, T0 + 180_000L + NgcHistoryServeLedger.LONG_ABSENCE_MS);
         assertEquals("away long enough to have reinstalled", 1,
                      serve(PEER_B, rows, T0 + 180_000L + NgcHistoryServeLedger.LONG_ABSENCE_MS));
+    }
+
+    /**
+     * A member that kept its key and lost its rows (a restored profile, a database reset) is back within the
+     * absence that would make it a stranger, and asks for history. The serve after an ask is full once the last full
+     * serve is five minutes old; asks within those five minutes are served the ledger's way.
+     */
+    @Test
+    public void aServeTheMemberAskedForIsFullFiveMinutesAfterTheLastFullOne()
+    {
+        final Row held = row(SELF);
+        final List<Row> rows = new ArrayList<>();
+        rows.add(held);
+        NgcHistoryServeLedger.markHeld(GROUP, PEER_B, held.id);
+        assertEquals("first serve: full", 1, serve(PEER_B, rows, T0));
+
+        final long interval = NgcHistoryServeLedger.REQUESTED_FULL_SERVE_INTERVAL_MS;
+        exited(PEER_B, T0 + 60_000L);
+        joined(PEER_B, T0 + 120_000L);
+        NgcHistoryServeLedger.onHistoryRequested(GROUP, PEER_B, T0 + 124_000L);
+        assertEquals("asked two minutes after a full serve", 0, serve(PEER_B, rows, T0 + 124_000L));
+        NgcHistoryServeLedger.onHistoryRequested(GROUP, PEER_B, T0 + interval - 1);
+        assertEquals("asked just inside five minutes", 0, serve(PEER_B, rows, T0 + interval - 1));
+
+        NgcHistoryServeLedger.onHistoryRequested(GROUP, PEER_B, T0 + interval);
+        assertEquals("asked five minutes after the last full serve", 1, serve(PEER_B, rows, T0 + interval));
+        NgcHistoryServeLedger.onHistoryRequested(GROUP, PEER_B, T0 + interval + 20_000L);
+        assertEquals("asked again 20 s later", 0, serve(PEER_B, rows, T0 + interval + 20_000L));
+
+        assertEquals("not asked: full only after 30 minutes, as before", 0,
+                     serve(PEER_B, rows, T0 + 3 * interval));
+    }
+
+    /**
+     * The member asks a few seconds after it sees us, when its join has just made us serve it: the request cooldown
+     * drops the serve of the ask. The ask still counts, and the resync 46 s after the join is full.
+     */
+    @Test
+    public void anAskTheRequestCooldownDroppedMakesTheNextServeFull()
+    {
+        final Row held = row(SELF);
+        final List<Row> rows = new ArrayList<>();
+        rows.add(held);
+        NgcHistoryServeLedger.markHeld(GROUP, PEER_B, held.id);
+        assertTrue(NgcHistoryRequestPolicy.allowRequest(GROUP, PEER_B, T0));
+        assertEquals("first serve: full", 1, serve(PEER_B, rows, T0));
+
+        final long back = T0 + 6 * 60_000L;
+        exited(PEER_B, back - 60_000L);
+        joined(PEER_B, back);
+        assertTrue(NgcHistoryRequestPolicy.allowRequest(GROUP, PEER_B, back));
+        assertEquals("the serve of the join", 0, serve(PEER_B, rows, back));
+
+        NgcHistoryServeLedger.onHistoryRequested(GROUP, PEER_B, back + 4_000L);
+        assertFalse("the serve of the ask", NgcHistoryRequestPolicy.allowRequest(GROUP, PEER_B, back + 4_000L));
+
+        assertTrue(NgcHistoryRequestPolicy.allowRequest(GROUP, PEER_B, back + 46_000L));
+        assertEquals("the resync after the join", 1, serve(PEER_B, rows, back + 46_000L));
+    }
+
+    /**
+     * The QA churn with the asks in it: the Android member is back every 63 s and asks 4 s after each join. Every
+     * join, ask and resync serves it, through the request cooldown. A full serve comes at most every five minutes,
+     * and between two of them only the rows the member never showed it holds go again, up to the cap.
+     */
+    @Test
+    public void aMemberThatAsksAtEveryJoinGetsAFullServeAtMostEveryFiveMinutes()
+    {
+        final List<Row> rows = new ArrayList<>();
+        for (int i = 0; i < 12; i++)
+        {
+            rows.add(row(SELF));
+        }
+        for (int i = 0; i < 4; i++)
+        {
+            rows.add(row(PEER_GONE));
+        }
+        for (final Row r : rowsBy(rows, SELF))
+        {
+            NgcHistoryServeLedger.markHeld(GROUP, PEER_B, r.id);
+        }
+
+        final List<Long> fullAt = new ArrayList<>();
+        int sent = 0;
+        for (int t = 0; t < 25 * 60; t++)
+        {
+            final long now = T0 + t * 1000L;
+            final int sinceJoin = t % 63;
+            if (sinceJoin == 58)
+            {
+                exited(PEER_B, now);
+            }
+            if (sinceJoin == 0)
+            {
+                joined(PEER_B, now);
+            }
+            if (sinceJoin == 4)
+            {
+                NgcHistoryServeLedger.onHistoryRequested(GROUP, PEER_B, now);
+            }
+            final boolean serves = sinceJoin == 0 || sinceJoin == 4 || sinceJoin == 46;
+            if (serves && NgcHistoryRequestPolicy.allowRequest(GROUP, PEER_B, now))
+            {
+                sent += serve(PEER_B, rows, now);
+                if (lastServe.full)
+                {
+                    fullAt.add(now);
+                }
+            }
+        }
+
+        assertTrue("the asks bring full serves: " + fullAt, fullAt.size() >= 4);
+        for (int i = 1; i < fullAt.size(); i++)
+        {
+            assertTrue("five minutes between full serves: " + fullAt,
+                       fullAt.get(i) - fullAt.get(i - 1) >= 5L * 60_000L);
+        }
+        assertEquals("each full serve, then the four unproven rows up to the cap",
+                     fullAt.size() * (rows.size() + 4 * (NgcHistoryServeLedger.MAX_SENDS_PER_FULL_INTERVAL - 1)), sent);
     }
 
     @Test

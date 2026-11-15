@@ -31,9 +31,10 @@ import java.util.Set;
  *       so a peer whose link carries nothing is not fed the same rows at every rejoin.</li>
  * </ul>
  * The first serve to a peer in a run of the app, the first one {@link #FULL_SERVE_INTERVAL_MS} after
- * the last full serve, and the first one after the peer was away for {@link #LONG_ABSENCE_MS} are full:
- * every row except the peer's own, as before. They cover a peer that lost its database and a signed
- * copy the peer could not use the first time.
+ * the last full serve, the first one after the peer was away for {@link #LONG_ABSENCE_MS}, and the first
+ * one after the peer asked for history {@link #REQUESTED_FULL_SERVE_INTERVAL_MS} after the last full
+ * serve are full: every row except the peer's own, as before. They cover a peer that lost its database
+ * and a signed copy the peer could not use the first time.
  *
  * <p>Nothing changes on the wire: iOS and the desktop get the same packets, only fewer of them.
  *
@@ -46,6 +47,14 @@ final class NgcHistoryServeLedger
 {
     /** A full serve at least this often per peer. Well inside the 130-minute history window. */
     static final long FULL_SERVE_INTERVAL_MS = 30L * 60L * 1000L;
+    /**
+     * The serve after the peer asked for history is full when the last full serve to it is this old. A member
+     * that kept its key and lost its rows (a restored profile, a database reset) and is back within
+     * {@link #LONG_ABSENCE_MS} is still known here, and was served only the rows it never confirmed until the
+     * next full serve, by when the oldest had left the history window. Its ask is the only sign. Asks within
+     * this time are served as any serve: a member asks at every join, and the churn must stay quiet.
+     */
+    static final long REQUESTED_FULL_SERVE_INTERVAL_MS = 5L * 60L * 1000L;
     /**
      * A row queued this long before the peer's exit or join may have been lost with its connection. On the
      * monotonic clock (SystemClock.uptimeMillis(), CLOCK_MONOTONIC), the one toxcore times a peer out by: it
@@ -85,6 +94,8 @@ final class NgcHistoryServeLedger
         final Set<String> held = new HashSet<>();
         long lastFullServeMs = NEVER;
         long lastExitMs = NEVER;
+        /** The peer asked for history {@link #REQUESTED_FULL_SERVE_INTERVAL_MS} after its last full serve. */
+        boolean fullServeRequested;
 
         int entries()
         {
@@ -155,16 +166,39 @@ final class NgcHistoryServeLedger
             return new Serve(null, peerPubkey, true);
         }
         final PeerState st = stateFor(k);
-        final boolean full = st.lastFullServeMs == NEVER || nowMs < st.lastFullServeMs
-                             || (nowMs - st.lastFullServeMs) >= FULL_SERVE_INTERVAL_MS;
+        final boolean full = st.fullServeRequested || isFullServeDue(st, nowMs, FULL_SERVE_INTERVAL_MS);
         if (full)
         {
             final int before = st.entries();
             st.lastFullServeMs = nowMs;
+            st.fullServeRequested = false;
             st.sends.clear();
             afterChange(k, st, before);
         }
         return new Serve(k, peerPubkey, full);
+    }
+
+    /**
+     * The peer asked for history: its next serve is full, unless its last full serve is less than
+     * {@link #REQUESTED_FULL_SERVE_INTERVAL_MS} old. The next serve, not only the one this ask makes: a member
+     * asks 1-7 s after it sees us join, on Android and on iOS, when its join has just made us serve it, and
+     * NgcHistoryRequestPolicy's cooldown drops the serve of the ask.
+     */
+    static synchronized void onHistoryRequested(final String groupIdentifier, final String peerPubkey, final long nowMs)
+    {
+        final String k = key(groupIdentifier, peerPubkey);
+        final PeerState st = k == null ? null : STATES.get(k);
+        // A peer the ledger does not know gets a full serve anyway.
+        if (st != null && isFullServeDue(st, nowMs, REQUESTED_FULL_SERVE_INTERVAL_MS))
+        {
+            st.fullServeRequested = true;
+        }
+    }
+
+    /** The last full serve is intervalMs old, or there was none, or it is "in the future": the clock was set back. */
+    private static boolean isFullServeDue(final PeerState st, final long nowMs, final long intervalMs)
+    {
+        return st.lastFullServeMs == NEVER || nowMs < st.lastFullServeMs || (nowMs - st.lastFullServeMs) >= intervalMs;
     }
 
     /**

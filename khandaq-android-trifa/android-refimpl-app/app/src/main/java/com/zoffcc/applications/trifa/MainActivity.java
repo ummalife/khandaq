@@ -10006,6 +10006,11 @@ public class MainActivity extends AppCompatActivity
                 int privacy_state = tox_group_get_privacy_state(group_number);
                 if (privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
                 {
+                    // KHANDAQ (0.2.56): the member asked; its next serve is full unless it had one a few minutes
+                    // ago (NgcHistoryServeLedger). Noted before the serve, which the request cooldown may drop.
+                    NgcHistoryServeLedger.onHistoryRequested(
+                            tox_group_by_groupnum__wrapper(group_number),
+                            tox_group_peer_get_public_key__wrapper(group_number, peer_id), System.currentTimeMillis());
                     sync_group_message_history(group_number, peer_id);
                 }
                 else

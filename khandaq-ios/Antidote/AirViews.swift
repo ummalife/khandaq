@@ -937,6 +937,147 @@ final class AirIconButton: UIControl {
     }
 }
 
+/// KHANDAQ (0.2.56, owner request): kq-play, the round button of a voice note, as in Telegram and as
+/// AirPlayButton on the desktop: an ink disc with a play triangle, or two bars while the note plays. Its
+/// words (Listen, Pause) are not drawn: they are its accessibility label. The disc is 36 points in a 44
+/// point target and stands at the leading edge of it, level with the words of the entry above; the target
+/// reaches past the disc toward the wave. Media controls keep their direction in a right-to-left layout,
+/// so the glyph is never mirrored.
+final class AirPlayButton: UIControl {
+    /// Two bars while the note plays, the triangle otherwise.
+    var isPlaying = false {
+        didSet {
+            if isPlaying != oldValue {
+                setNeedsDisplay()
+            }
+        }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isAccessibilityElement = true
+        accessibilityTraits = UIAccessibilityTraitButton
+        backgroundColor = .clear
+        isOpaque = false
+        contentMode = .redraw
+        snp.makeConstraints {
+            $0.size.equalTo(KQSize.targetIos)
+        }
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var isHighlighted: Bool {
+        didSet {
+            setNeedsDisplay()
+        }
+    }
+
+    /// Disabled (a note that is not on this device): a sunken disc with a grey mark, and VoiceOver says so.
+    override var isEnabled: Bool {
+        didSet {
+            accessibilityTraits = isEnabled ? UIAccessibilityTraitButton : UIAccessibilityTraitButton | UIAccessibilityTraitNotEnabled
+            setNeedsDisplay()
+        }
+    }
+
+    /// The disc stands at the leading edge, so a new direction draws it again: the bounds keep their size,
+    /// and nothing else would.
+    override var semanticContentAttribute: UISemanticContentAttribute {
+        didSet {
+            setNeedsDisplay()
+        }
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        setNeedsDisplay()
+    }
+
+    override func draw(_ rect: CGRect) {
+        let disc = AirPlayGlyph.disc(in: bounds, isRightToLeft: effectiveUserInterfaceLayoutDirection == .rightToLeft)
+        AirPlayGlyph.discColor(enabled: isEnabled, pressed: isHighlighted).setFill()
+        UIBezierPath(ovalIn: disc).fill()
+
+        let mark = AirPlayGlyph.markColor(enabled: isEnabled)
+        mark.setFill()
+        if isPlaying {
+            for bar in AirPlayGlyph.pauseBars(in: disc) {
+                UIBezierPath(roundedRect: bar, cornerRadius: bar.width / 2).fill()
+            }
+            return
+        }
+        let corners = AirPlayGlyph.playTriangle(in: disc)
+        let triangle = UIBezierPath()
+        triangle.move(to: corners[0])
+        corners.dropFirst().forEach { triangle.addLine(to: $0) }
+        triangle.close()
+        // The stroke rounds the corners.
+        triangle.lineWidth = AirPlayGlyph.triangleStroke(in: disc)
+        triangle.lineJoinStyle = .round
+        triangle.lineCapStyle = .round
+        mark.setStroke()
+        triangle.fill()
+        triangle.stroke()
+    }
+}
+
+/// The geometry and colours of AirPlayButton apart from drawing, so they can be tested: the numbers of
+/// AirPlayButton on the desktop (airwidgets.cpp), drawn for the 36 point disc and scaled with it.
+enum AirPlayGlyph {
+    /// Where the disc stands in the button: 36 points or as large as the button allows, halfway up, at
+    /// the leading edge (the right one in a right-to-left layout).
+    static func disc(in bounds: CGRect, isRightToLeft: Bool) -> CGRect {
+        let side = min(KQSize.control, bounds.width, bounds.height)
+        let x = isRightToLeft ? bounds.maxX - side : bounds.minX
+        return CGRect(x: x, y: bounds.midY - side / 2, width: side, height: side)
+    }
+
+    /// The corners of the play triangle, 11 by 13 at 36 points, pointing to the right in every layout. It
+    /// stands 1.5 past the centre: its weight sits in its left half, so a triangle centred by its box looks
+    /// off to the left.
+    static func playTriangle(in disc: CGRect) -> [CGPoint] {
+        let unit = disc.width / KQSize.control
+        let width = 11 * unit
+        let height = 13 * unit
+        let left = disc.midX - width / 2 + 1.5 * unit
+        return [CGPoint(x: left, y: disc.midY - height / 2),
+                CGPoint(x: left + width, y: disc.midY),
+                CGPoint(x: left, y: disc.midY + height / 2)]
+    }
+
+    /// The stroke that rounds the corners of the triangle: 2 at 36 points.
+    static func triangleStroke(in disc: CGRect) -> CGFloat {
+        return 2 * disc.width / KQSize.control
+    }
+
+    /// The two bars of pause, 3.5 by 12 at 36 points and 4 apart about the centre; their ends are round.
+    static func pauseBars(in disc: CGRect) -> [CGRect] {
+        let unit = disc.width / KQSize.control
+        let width = 3.5 * unit
+        let height = 12 * unit
+        let gap = 4 * unit
+        let top = disc.midY - height / 2
+        return [CGRect(x: disc.midX - gap / 2 - width, y: top, width: width, height: height),
+                CGRect(x: disc.midX + gap / 2, y: top, width: width, height: height)]
+    }
+
+    /// The disc: ink, the pressed ink under the finger, sunken for a note that cannot play.
+    static func discColor(enabled: Bool, pressed: Bool) -> UIColor {
+        guard enabled else {
+            return KQColor.sunken
+        }
+        return pressed ? KQColor.inkPressed : KQColor.ink
+    }
+
+    /// The triangle or the bars: on-ink, or the third ink on the sunken disc.
+    static func markColor(enabled: Bool) -> UIColor {
+        return enabled ? KQColor.onInk : KQColor.ink3
+    }
+}
+
 // MARK: - Command line
 
 /// "Find a chat or paste an ID": one field for search and for adding a person.

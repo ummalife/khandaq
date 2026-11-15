@@ -8,7 +8,7 @@ import SnapKit
 /// A file, a photo or a video, or a voice note as an entry of the transcript (redesign stage 3, E8):
 /// the time column and the author as for a text (AirEntryFrame), then the attachment. A photo or a
 /// video shows its preview with the caption under it; a file shows its name and size, and while it
-/// moves the bar, what is left and the actions (AirFileRowView); a voice note shows "Listen", its wave
+/// moves the bar, what is left and the actions (AirFileRowView); a voice note shows its play button, its wave
 /// and its length. Our own entries carry the status mark at the far end. ChatIncomingFileCell and
 /// ChatOutgoingFileCell only say which way the file goes.
 class ChatGenericFileCell: ChatMovableDateCell {

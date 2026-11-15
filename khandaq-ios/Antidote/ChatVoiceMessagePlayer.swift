@@ -101,6 +101,10 @@ final class ChatVoiceMessagePlayer: NSObject, AVAudioPlayerDelegate {
 
         audioPlayer.delegate = self
         audioPlayer.prepareToPlay()
+        // UI tests play the notes of the demo world without a sound: the walks run on a Mac someone uses.
+        if ProcessInfo.processInfo.arguments.contains("UI_TESTING") {
+            audioPlayer.volume = 0
+        }
 
         // KHANDAQ (Android parity): resume from the remembered spot (unless it is right at the end)
         knownDurations[messageId] = audioPlayer.duration

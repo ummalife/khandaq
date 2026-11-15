@@ -160,6 +160,11 @@ bool isVoiceNote(const QString& fileName)
     return fileName.size() > suffix.size() && fileName.endsWith(suffix, Qt::CaseInsensitive);
 }
 
+QString voiceNoteFolder(const QString& appDataDir)
+{
+    return QDir(appDataDir).filePath(QStringLiteral("voice"));
+}
+
 QString freeFilePath(const QString& folder, const QString& fileName,
                      const std::function<bool(const QString&)>& taken)
 {

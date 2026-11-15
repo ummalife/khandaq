@@ -90,6 +90,7 @@
 #include "src/model/chatroom/groupchatroom.h"
 #include "src/model/friend.h"
 #include "src/model/group.h"
+#include "src/model/air/airmedia.h"
 #include "src/model/air/airmessagemarks.h"
 #include "src/model/air/airpreferences.h"
 #include "src/model/air/airseenreceipts.h"
@@ -1407,7 +1408,17 @@ void Widget::dispatchFile(ToxFile file)
                                   static_cast<qint64>(settings.getMaxAutoAcceptSize()),
                                   static_cast<qint64>(file.progress.getFileSize()));
         if (!autoAcceptDir.isEmpty()) {
-            acceptFileTransfer(file, autoAcceptDir);
+            // KHANDAQ (0.2.57): files come by themselves by default now. A voice note keeps its
+            // own place, the folder of the app where Listen takes it too, not the downloads.
+            if (!Air::isVoiceNote(file.fileName)) {
+                acceptFileTransfer(file, autoAcceptDir);
+            } else {
+                const QString voiceFolder =
+                    Air::voiceNoteFolder(settings.getPaths().getAppDataDirPath());
+                if (QDir().mkpath(voiceFolder)) {
+                    acceptFileTransfer(file, voiceFolder);
+                }
+            }
         }
     }
 

@@ -550,10 +550,9 @@ void FileTransferWidget::acceptVoiceNote(bool play)
     // KHANDAQ (QA live 2026-11-14): a voice note is listened to, not kept as a file. It had to be
     // accepted and saved somewhere before Listen would play it. Accept and Listen now take it into
     // the app's own folder without asking where. It still comes only when one of them is pressed.
-    const QDir appData(settings.getPaths().getAppDataDirPath());
-    const QString folder = appData.filePath(QStringLiteral("voice"));
+    const QString folder = Air::voiceNoteFolder(settings.getPaths().getAppDataDirPath());
     QString path;
-    if (appData.mkpath(QStringLiteral("voice"))) {
+    if (QDir().mkpath(folder)) {
         path = Air::freeFilePath(folder, fileInfo.fileName,
                                  [](const QString& candidate) { return QFileInfo::exists(candidate); });
     }

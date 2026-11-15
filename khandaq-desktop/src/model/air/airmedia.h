@@ -55,6 +55,12 @@ constexpr qint64 fileLimitShownBytes = 200LL * 1000 * 1000;
 bool isVoiceNote(const QString& fileName);
 
 /**
+ * The folder voice notes go to, in the data folder of the app (appDataDir): they are listened to,
+ * not kept as files, so they come there without the question where to save them.
+ */
+QString voiceNoteFolder(const QString& appDataDir);
+
+/**
  * Where a received file goes when nobody is asked where: in folder under its own name, or, while a
  * file of that name is there (taken), with " (1)", " (2)" ... after the part before its first dot,
  * as the files accepted by themselves are named (Widget::acceptFileTransfer). The name came through

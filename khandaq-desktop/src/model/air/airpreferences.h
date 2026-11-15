@@ -41,17 +41,22 @@ enum class AttachmentMode
 
 /** Bytes in a megabyte: sizes count in thousands, as on the phones. */
 constexpr qint64 bytesPerMegabyte = 1000 * 1000;
-/** The size Small starts from when no limit was set before: a photo or a voice note fits. */
-constexpr qint64 smallAttachmentDefault = 10 * bytesPerMegabyte;
+/**
+ * The size Small starts from when no limit was set before, and the limit of a new installation:
+ * 200 MB, the most the phones fetch by themselves (0.2.57).
+ */
+constexpr qint64 smallAttachmentDefault = 200 * bytesPerMegabyte;
 /** The largest limit the field takes, in megabytes. */
 constexpr int smallAttachmentMaxMegabytes = 4000;
 /**
- * Whether a new installation saves the files contacts send by itself: no, every file waits for
- * Accept in the chat (the owner's choice of 2026-11-13). Saving by itself put
- * whatever a contact sent into the downloads folder before anyone had looked at it. Settings reads
- * this only when it holds no choice yet, so a profile that already chose keeps its choice.
+ * Whether a new installation saves the files contacts send by itself: yes, up to
+ * smallAttachmentDefault (Small, 200 MB); a bigger one waits for Accept in the chat. The owner
+ * chose "every file waits for Accept" on 2026-11-13 and reversed it on 2026-11-16: files download
+ * by themselves by default on every platform, and the person can switch it off in the settings.
+ * Settings reads this only when it holds no choice yet, so a profile that already chose keeps its
+ * choice, apart from the one raise of attachmentRuleAtUpdate.
  */
-constexpr bool autoSaveDefault = false;
+constexpr bool autoSaveDefault = true;
 
 /** The settings behind a choice: whether files are saved by themselves, and up to what size. */
 struct AttachmentRule
@@ -68,6 +73,14 @@ AttachmentMode attachmentMode(bool autoSave, qint64 maxSize);
  * smallAttachmentDefault without one.
  */
 AttachmentRule attachmentRule(AttachmentMode mode, qint64 previousMaxSize);
+
+/**
+ * The rule an installation that ran before gets once, at its first start of 0.2.57 (the owner's
+ * decision of 2026-11-16: turn it on once for those who have the app already): files download by
+ * themselves up to smallAttachmentDefault at least. Always stays Always and a larger limit stays.
+ * Settings marks the installation then, so whatever the person chooses afterwards is kept.
+ */
+AttachmentRule attachmentRuleAtUpdate(bool autoSave, qint64 maxSize);
 
 /**
  * Where a file a contact sends is saved by itself, or an empty string when it waits for Accept.

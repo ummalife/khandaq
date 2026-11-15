@@ -9436,6 +9436,12 @@ public class MainActivity extends AppCompatActivity
             HelperGroup.sync_group_message_history_to_all_peers(group_number);
             HelperGroup.schedule_group_message_resync(group_number);
         }
+        // KHANDAQ (0.2.56): messages written while nobody else was in the group wait on this device
+        // (HelperGroup.send_group_text_message_resilient); this member can take them, in a private group too,
+        // where no history sync brings them later. Not at once: see GROUP_PEER_JOIN_FLUSH_DELAY_MS. This is
+        // toxcore's thread, and the flush does not run on it.
+        HelperGroup.schedule_pending_group_message_flush(temp_group_identifier,
+                                                         HelperGroup.GROUP_PEER_JOIN_FLUSH_DELAY_MS);
         // update_savedata_file_wrapper_throttled();
         update_savedata_file_wrapper();
     }

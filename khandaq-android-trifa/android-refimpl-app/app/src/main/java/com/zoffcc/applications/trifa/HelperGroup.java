@@ -1189,7 +1189,10 @@ public class HelperGroup
         return context_s.getString(R.string.group_send_failed);
     }
 
-    /** Return from send_group_text_message_resilient: queue in DB, flush when group connects. */
+    /**
+     * Return from send_group_text_message_resilient: queue in DB, flush once the group is connected and someone else
+     * is in it (is_group_text_send_ready).
+     */
     public static final long GROUP_SEND_QUEUE_WHEN_UNCONNECTED = -98L;
     public static final String PENDING_GROUP_MESSAGE_ID_TOX = "00000000";
 
@@ -1555,6 +1558,23 @@ public class HelperGroup
         log_group_peer_mesh_diagnostics(group_num, group_identifier, "send_attempt=" + attempt);
     }
 
+    /**
+     * KHANDAQ (0.2.56): whether a group text sent now reaches anybody: the group is connected and toxcore has
+     * confirmed someone besides us. {@code peer_count} is tox_group_peer_count, which counts us too and is negative
+     * when the query failed.
+     *
+     * <p>Connected alone is not enough. toxcore marks a group connected on the first sync response, before any other
+     * peer is confirmed, and does not set it back to connecting when every peer has timed out; a group just created
+     * is connected with only its founder. tox_group_send_message sends to the confirmed peers only and returns a
+     * message id all the same, so the message showed as sent and reached no one, and in a private group no history
+     * sync brought it later.
+     */
+    static boolean is_group_text_send_ready(final int connection_status, final long peer_count)
+    {
+        return connection_status == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value
+               && peer_count > 1L;
+    }
+
     static long send_group_text_message_resilient(@NonNull final String group_identifier, final long group_number,
                                                 @NonNull final String message)
     {
@@ -1592,6 +1612,20 @@ public class HelperGroup
                     break;
                 }
                 continue;
+            }
+
+            final long peers = tox_group_peer_count(group_num);
+            if (!is_group_text_send_ready(conn, peers))
+            {
+                // KHANDAQ (0.2.56): connected, but nobody else is in the group; sent now, the message would go to no
+                // one. It waits on this device until a member joins (the peer join callback flushes it). No reconnect:
+                // the group is connected, and a reconnect would start its discovery over; and no retries, which wait
+                // for a connection the group already has.
+                nudge_public_group_dht(group_num, group_identifier);
+                TrifaToxService.wakeup_tox_thread();
+                HelperGeneric.logI(TAG, "send_group_text_message_resilient:alone gn=" + group_num + " id="
+                        + group_identifier_short(group_identifier, false) + " peers=" + peers + " -> waits");
+                return GROUP_SEND_QUEUE_WHEN_UNCONNECTED;
             }
 
             final long message_id = tox_group_send_message(group_num, 0, message);
@@ -8714,11 +8748,47 @@ public class HelperGroup
 
     /**
      * KHANDAQ (0.2.56): one flush of a group's waiting messages at a time. The flush runs from the watchdog's tick
-     * and the connected callback (toxcore's thread), the thread a queued send starts, the post-join discovery and
-     * Retry; two at once read the same PENDING rows and both sent them, so the members got a waiting message
-     * twice. A flush asked for while one runs is taken by that one as one more pass, and the caller does not wait.
+     * and the connected callback (toxcore's thread), the thread a queued send starts, the post-join discovery, a
+     * member's join and Retry; two at once read the same PENDING rows and both sent them, so the members got a
+     * waiting message twice. A flush asked for while one runs is taken by that one as one more pass, and the caller
+     * does not wait.
      */
     private static final CoalescingGate pending_group_flush_gate = new CoalescingGate();
+
+    /**
+     * KHANDAQ (0.2.56): how long after a member joins the group's waiting messages go to it. toxcore reports the join
+     * once it has the member's info; the member has ours a moment later, and drops a broadcast from a peer it has no
+     * info for.
+     */
+    static final long GROUP_PEER_JOIN_FLUSH_DELAY_MS = 2_000L;
+
+    private static final java.util.concurrent.ScheduledExecutorService pending_group_flush_delay_exec =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                final Thread t = new Thread(r, "grp-pending-flush-delay");
+                t.setDaemon(true);
+                return t;
+            });
+
+    /**
+     * {@link #schedule_pending_group_message_flush(String)}, {@code delay_ms} from now. The caller does not wait:
+     * the delay runs on a timer thread of its own, and the flush then goes through the gate like any other.
+     */
+    static void schedule_pending_group_message_flush(@Nullable final String group_identifier, final long delay_ms)
+    {
+        if (TextUtils.isEmpty(group_identifier))
+        {
+            return;
+        }
+        try
+        {
+            pending_group_flush_delay_exec.schedule(() -> schedule_pending_group_message_flush(group_identifier),
+                                                    delay_ms, java.util.concurrent.TimeUnit.MILLISECONDS);
+        }
+        catch (Throwable e)
+        {
+            Log.w(TAG, "schedule_pending_group_message_flush:delay:EE:" + e.getMessage());
+        }
+    }
 
     static void schedule_pending_group_message_flush(@NonNull final String group_identifier)
     {
@@ -11198,6 +11268,14 @@ public class HelperGroup
                             // Cost: a device that holds a message only second-hand no longer heals other
                             // peers with it, so history reaches a joiner one hop at a time (see attestation).
                             if (gm.was_synced)
+                            {
+                                continue;
+                            }
+                            // KHANDAQ (0.2.56): our message that still waits to go out has no tox id yet, only
+                            // the PENDING placeholder. Served now (a member's join asks for history), the member
+                            // got it under the placeholder, then again under its real id from the flush that
+                            // follows the join, and kept both. Once sent, the send's own resync serves it.
+                            if (gm.direction == 1 && PENDING_GROUP_MESSAGE_ID_TOX.equals(gm.message_id_tox))
                             {
                                 continue;
                             }

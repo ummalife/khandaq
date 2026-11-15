@@ -300,7 +300,7 @@ public class GroupMessageListHolder_text_outgoing_read extends RecyclerView.View
             entry.privateNote = context.getString(R.string.air_group_private_to_format, privateRecipientName(m));
         }
         final boolean leaving = MessageStatusHelper.resolveGroupOutgoing(m) == MessageStatusHelper.OutgoingStatus.SENDING;
-        entry.status = AirTranscript.groupStatus(m, !leaving || groupConnected(m.group_identifier));
+        entry.status = AirTranscript.groupStatus(m, !leaving || groupTakesMessageNow(m.group_identifier));
         AirTranscript.bindGroupText(itemView, position, m, parsedGroup, locationBound, is_selected, entry);
     }
 
@@ -326,13 +326,18 @@ public class GroupMessageListHolder_text_outgoing_read extends RecyclerView.View
         return context.getString(R.string.air_group_author_unknown);
     }
 
-    private static boolean groupConnected(final String groupId)
+    /**
+     * Whether our waiting message leaves now (a clock) or waits for the group (the transit mark). KHANDAQ (0.2.56): a
+     * group connected with nobody else in it keeps the message until a member joins
+     * (HelperGroup.is_group_text_send_ready), so it is waiting, not on its way.
+     */
+    private static boolean groupTakesMessageNow(final String groupId)
     {
         try
         {
             final long groupNum = HelperGroup.tox_group_by_groupid__wrapper(groupId);
-            return (groupNum >= 0) && (MainActivity.tox_group_is_connected(groupNum)
-                                       == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value);
+            return (groupNum >= 0) && HelperGroup.is_group_text_send_ready(MainActivity.tox_group_is_connected(groupNum),
+                                                                           MainActivity.tox_group_peer_count(groupNum));
         }
         catch (Throwable ignored)
         {

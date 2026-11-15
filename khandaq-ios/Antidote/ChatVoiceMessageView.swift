@@ -5,9 +5,9 @@
 import UIKit
 import SnapKit
 
-/// A voice note in the transcript (redesign stage 3, E8): "Listen", the wave that fills as it plays,
-/// and the length in tabular figures, so the line keeps its width while the seconds run. A tap or a
-/// drag on the wave moves to that point.
+/// A voice note in the transcript (redesign stage 3, E8): the round play button (0.2.56, as in Telegram),
+/// the wave that fills as it plays, and the length in tabular figures, so the line keeps its width while
+/// the seconds run. A tap or a drag on the wave moves to that point.
 final class ChatVoiceMessageView: UIView {
     var onPlayTapped: (() -> Void)?
     // KHANDAQ (Android parity): scrub, a drag or a tap on the wave seeks; reports the share 0 to 1.
@@ -15,10 +15,9 @@ final class ChatVoiceMessageView: UIView {
     /// Said instead of "0:00" while the length is not known, as for a note that is not here yet: its size.
     var unknownLengthText: String?
 
-    private let playButton = AirButton(style: .normal, title: String(localized: "air_voice_listen"))
+    private let playButton = AirPlayButton()
     private let waveformView = VoiceWaveformView()
     private let durationLabel = UILabel()
-    private var playWidthConstraint: Constraint!
     private var fontCategory = UIApplication.shared.preferredContentSizeCategory
     private var isPlaying = false
 
@@ -41,7 +40,9 @@ final class ChatVoiceMessageView: UIView {
 
     func update(isPlaying: Bool, progress: Float, currentTime: TimeInterval, duration: TimeInterval, enabled: Bool) {
         self.isPlaying = isPlaying
-        playButton.setTitle(String(localized: isPlaying ? "air_voice_pause" : "air_voice_listen"))
+        playButton.isPlaying = isPlaying
+        // The words are not drawn: they are what VoiceOver says for the button.
+        playButton.accessibilityLabel = String(localized: isPlaying ? "air_voice_pause" : "air_voice_listen")
         waveformView.progress = progress
         // At rest the length of the note; while it plays the time played so far.
         if isPlaying {
@@ -76,7 +77,6 @@ final class ChatVoiceMessageView: UIView {
         if category != fontCategory {
             fontCategory = category
             durationLabel.font = KQFont.tabular(KQFont.font(.caption))
-            playWidthConstraint.update(offset: playButtonWidth())
         }
         durationLabel.textColor = KQColor.ink3
         waveformView.setNeedsDisplay()
@@ -88,6 +88,7 @@ final class ChatVoiceMessageView: UIView {
 
     private func createViews() {
         playButton.accessibilityIdentifier = "air.voice.play"
+        playButton.accessibilityLabel = String(localized: "air_voice_listen")
         playButton.addTarget(self, action: #selector(playButtonTapped), for: .touchUpInside)
         addSubview(playButton)
 
@@ -125,24 +126,15 @@ final class ChatVoiceMessageView: UIView {
         onSeek?(fraction)
     }
 
-    /// "Listen" and "Pause" take the same width, so the wave does not move when the words change.
-    private func playButtonWidth() -> CGFloat {
-        let font = KQFont.font(.label)
-        let widest = ["air_voice_listen", "air_voice_pause"]
-            .map { (String(localized: $0) as NSString).size(withAttributes: [NSAttributedStringKey.font: font]).width }
-            .max() ?? 0
-        return ceil(widest) + 2 * KQSpace.x16
-    }
-
     private func installConstraints() {
         playButton.snp.makeConstraints {
             $0.leading.top.equalToSuperview()
             // Gives way while a stack hides the note, instead of fighting its zero height.
             $0.bottom.equalToSuperview().priority(999)
-            playWidthConstraint = $0.width.equalTo(playButtonWidth()).constraint
         }
         waveformView.snp.makeConstraints {
-            $0.leading.equalTo(playButton.snp.trailing).offset(KQSpace.x10)
+            // The target reaches past the disc; the wave keeps its distance from the disc itself.
+            $0.leading.equalTo(playButton.snp.trailing).offset(KQSpace.x10 - (KQSize.targetIos - KQSize.control))
             $0.trailing.equalTo(durationLabel.snp.leading).offset(-KQSpace.x10)
             $0.centerY.equalTo(playButton)
             $0.height.equalTo(KQSize.controlSmall)

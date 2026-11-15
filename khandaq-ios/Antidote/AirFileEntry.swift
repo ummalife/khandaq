@@ -7,7 +7,7 @@ import UIKit
 
 // Files, photos and voice notes as entries of the transcript (E8). An attachment weighs no more than a
 // line of text, a photo excepted: a file is its name and size, and while it moves a bar with how much
-// is left and the action it waits for; a voice note is "Listen", its wave and its length in tabular
+// is left and the action it waits for; a voice note is its play button, its wave and its length in tabular
 // figures. The cells are ChatIncomingFileCell and ChatOutgoingFileCell.
 
 /// What can be done with a file entry now. An action shows only when the conversation gave the entry

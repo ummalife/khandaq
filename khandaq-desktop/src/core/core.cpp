@@ -1211,6 +1211,14 @@ Core::SendResult Core::sendGroupMessageWithType(int groupId, const QString& mess
     wireId = 0;
     const uint32_t groupNumber = static_cast<uint32_t>(groupId);
 
+    // 0.2.56: a group we leave (QA live F11) takes nothing more from us, nor is it connected
+    // again. Its row is gone by then, but for the instance of a group joined by its ID that an
+    // invite replaces: the row goes to the new one, and the text waits for it.
+    if (ignoresGroup(groupNumber)) {
+        qDebug() << "Group" << groupId << "is being left: it takes no text";
+        return SendResult::NotReady;
+    }
+
     // Only revive a genuinely disconnected group; a full reconnect on every
     // outgoing message would drop all peer connections each time we type.
     reconnectGroupIfDisconnected(groupNumber);
@@ -1226,11 +1234,16 @@ Core::SendResult Core::sendGroupMessageWithType(int groupId, const QString& mess
     }
 
     // 0.2.56: toxcore takes a text while it has confirmed nobody else, and says it went. Such a
-    // text waits on this device instead, until the group takes it (GroupMessageDispatcher).
+    // text waits on this device instead, until the group takes it (GroupMessageDispatcher). The
+    // members who said they are leaving count for nobody, as in the list (getGroupPeerList):
+    // toxcore keeps each until its exit arrives, a minute later when that exit is lost.
     Tox_Err_Group_Is_Connected connectionError;
     const int32_t connection = tox_group_is_connected(tox.get(), groupNumber, &connectionError);
     Tox_Err_Group_Peer_Query peerError;
-    const uint32_t peerCount = tox_group_peer_count(tox.get(), groupNumber, &peerError);
+    uint32_t peerCount = tox_group_peer_count(tox.get(), groupNumber, &peerError);
+    if (peerError == TOX_ERR_GROUP_PEER_QUERY_OK && groupLeaveNotices.hidesAny(groupId)) {
+        peerCount = static_cast<uint32_t>(getGroupPeerList(groupId).size());
+    }
     if (connectionError != TOX_ERR_GROUP_IS_CONNECTED_OK || peerError != TOX_ERR_GROUP_PEER_QUERY_OK
         || !Air::groupTakesText(connection, peerCount)) {
         qDebug() << "Group" << groupId << "takes no text now: connection" << connection << "peers"

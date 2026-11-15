@@ -66,9 +66,13 @@ private slots:
     void msgv3_receipt_is_not_a_message();
     void group_file_waits_for_a_member_in_the_core_loop();
     void group_file_goes_to_a_member_in_the_core_loop();
+    void a_group_being_left_takes_no_text();
     void an_invite_from_a_friend_online_replaces_a_group_joined_by_its_id();
 
 private:
+    /** Alice makes a group, and Bob joins it by her invite: both count the two of them then. */
+    void makeGroupWithBob(const QString& name, int& aliceGroup, uint32_t& bobGroup);
+
     /* Test Variables */
     Core::ToxCoreErrors* err = nullptr;
     MockSettings settings;
@@ -367,24 +371,18 @@ void TestCore::group_file_waits_for_a_member_in_the_core_loop()
     QCOMPARE(failed.count(), 0);
 }
 
-void TestCore::group_file_goes_to_a_member_in_the_core_loop()
+void TestCore::makeGroupWithBob(const QString& name, int& aliceGroup, uint32_t& bobGroup)
 {
-    // 0.2.56: with Bob in the group, the loop of the node sends the BEGIN and then every chunk of a
-    // file of more than one packet (Core::sendGroupFileChunks), at their pace: the call that sends
-    // it only queues it. What Bob gets is not checked here: the ids of the files a node saw are
-    // kept for the whole process (ngcSeenFileMsgIds in core.cpp), so Bob, in the process of Alice,
-    // takes her file for one he has.
     const QVector<uint32_t> aliceFriends = alice->getFriendList();
     QCOMPARE(aliceFriends.size(), 1);
-    const uint32_t bobOnAlice = aliceFriends.first();
-    const int group =
-        alice->createGroup(QStringLiteral("Files for Bob"), TOX_GROUP_PRIVACY_STATE_PRIVATE);
-    QVERIFY(group >= 0);
+    aliceGroup = alice->createGroup(name, TOX_GROUP_PRIVACY_STATE_PRIVATE);
+    QVERIFY(aliceGroup >= 0);
 
-    // The loop of Bob's node tells of the invitation; the context takes the connection with it.
-    QObject context;
+    // The loop of Bob's node tells of the invitation. The context goes before what the
+    // connection writes to, and the connection with it.
     QMutex inviteLock;
     QList<GroupInvite> invites;
+    QObject context;
     connect(bob.get(), &Core::groupInviteReceived, &context,
             [&](const GroupInvite& invite) {
                 const QMutexLocker locker{&inviteLock};
@@ -395,13 +393,28 @@ void TestCore::group_file_goes_to_a_member_in_the_core_loop()
         const QMutexLocker locker{&inviteLock};
         return invites;
     };
-    QVERIFY(alice->groupInviteFriend(bobOnAlice, group));
+    QVERIFY(alice->groupInviteFriend(aliceFriends.first(), aliceGroup));
     QTRY_COMPARE_WITH_TIMEOUT(received().size(), 1, bootstrap_timeout);
-    const uint32_t bobsGroup = bob->joinGroupchat(received().first());
-    QVERIFY(bobsGroup != std::numeric_limits<uint32_t>::max());
-    QTRY_VERIFY_WITH_TIMEOUT(alice->getGroupNumberPeers(group) == 2
-                                 && bob->getGroupNumberPeers(static_cast<int>(bobsGroup)) == 2,
+    bobGroup = bob->joinGroupchat(received().first());
+    QVERIFY(bobGroup != std::numeric_limits<uint32_t>::max());
+    QTRY_VERIFY_WITH_TIMEOUT(alice->getGroupNumberPeers(aliceGroup) == 2
+                                 && bob->getGroupNumberPeers(static_cast<int>(bobGroup)) == 2,
                              bootstrap_timeout);
+}
+
+void TestCore::group_file_goes_to_a_member_in_the_core_loop()
+{
+    // 0.2.56: with Bob in the group, the loop of the node sends the BEGIN and then every chunk of a
+    // file of more than one packet (Core::sendGroupFileChunks), at their pace: the call that sends
+    // it only queues it. What Bob gets is not checked here: the ids of the files a node saw are
+    // kept for the whole process (ngcSeenFileMsgIds in core.cpp), so Bob, in the process of Alice,
+    // takes her file for one he has.
+    int group = -1;
+    uint32_t bobsGroup = std::numeric_limits<uint32_t>::max();
+    makeGroupWithBob(QStringLiteral("Files for Bob"), group, bobsGroup);
+    if (QTest::currentTestFailed()) {
+        return;
+    }
 
     const qint64 size = 7 * static_cast<qint64>(NGC_CHUNK_PAYLOAD_MAX) + 1234;
     QTemporaryDir dir;
@@ -433,6 +446,39 @@ void TestCore::group_file_goes_to_a_member_in_the_core_loop()
     QVERIFY(progress.last().at(1).toLongLong() < size);
     QCOMPARE(waiting.count(), 0);
     QCOMPARE(failed.count(), 0);
+}
+
+void TestCore::a_group_being_left_takes_no_text()
+{
+    // 0.2.56: Bob leaves a group of the two of them. toxcore keeps the group a while on both
+    // sides: Bob's until his notice had its time (Air::PendingGroupLeaves::delayMs), and Bob in
+    // Alice's until his exit arrives. Neither side takes a text meanwhile, though toxcore still
+    // counts the two: it would reach nobody.
+    int group = -1;
+    uint32_t bobsGroup = std::numeric_limits<uint32_t>::max();
+    makeGroupWithBob(QStringLiteral("Leaving"), group, bobsGroup);
+    if (QTest::currentTestFailed()) {
+        return;
+    }
+    const auto toxPeers = [](Core& core, uint32_t number) {
+        QMutexLocker locker{&core.getCoreLoopLock()};
+        return tox_group_peer_count(core.getTox(), number, nullptr);
+    };
+
+    bob->removeGroup(static_cast<int>(bobsGroup));
+    QCOMPARE(toxPeers(*bob, bobsGroup), uint32_t{2});
+    uint32_t wireId = 1;
+    QCOMPARE(bob->sendGroupMessage(static_cast<int>(bobsGroup), QStringLiteral("Bye"), wireId),
+             Core::SendResult::NotReady);
+    QCOMPARE(wireId, uint32_t{0});
+
+    // Bob is gone for Alice once his notice arrives, while her toxcore still has him.
+    QTRY_COMPARE_WITH_TIMEOUT(alice->getGroupNumberPeers(group), uint32_t{1},
+                              connected_message_wait);
+    QCOMPARE(toxPeers(*alice, static_cast<uint32_t>(group)), uint32_t{2});
+    QCOMPARE(alice->sendGroupMessage(group, QStringLiteral("Anyone?"), wireId),
+             Core::SendResult::NotReady);
+    QCOMPARE(wireId, uint32_t{0});
 }
 
 void TestCore::an_invite_from_a_friend_online_replaces_a_group_joined_by_its_id()
@@ -470,12 +516,12 @@ void TestCore::an_invite_from_a_friend_online_replaces_a_group_joined_by_its_id(
     QTRY_VERIFY_WITH_TIMEOUT(bobOnline(), bootstrap_timeout);
 
     // The loop of the node tells of the deferred accept: what it says is kept under a lock, which
-    // the test never holds while it takes the core's. The context goes with the test, and the
-    // connections with it.
-    QObject context;
+    // the test never holds while it takes the core's. The context goes with the test, before what
+    // the connections write to, and the connections with it.
     QMutex seenLock;
     QVector<uint32_t> joined;
     QList<QByteArray> failed;
+    QObject context;
     connect(alice.get(), &Core::groupJoined, &context,
             [&](int number, const GroupId& groupId) {
                 const QMutexLocker locker{&seenLock};

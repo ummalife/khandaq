@@ -489,7 +489,13 @@ final class AirAdapter extends ListAdapter<AirModel.Row, RecyclerView.ViewHolder
                         break;
                     case DELIVERED:
                         icon = R.drawable.kq_ic_check_double;
-                        tint = R.color.kq_ink;
+                        // KHANDAQ (0.2.57): muted like the time beside it in a row of one person, where seen
+                        // is teal; a group has no seen and keeps its mark as it was.
+                        tint = next.kind == AirModel.EntryKind.GROUP ? R.color.kq_ink : R.color.kq_ink_3;
+                        break;
+                    case SEEN:
+                        icon = R.drawable.kq_ic_check_double;
+                        tint = R.color.khandaq_teal;
                         break;
                     case SENT:
                     default:

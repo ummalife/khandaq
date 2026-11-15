@@ -515,11 +515,30 @@ final class AirChatPanel implements AirDossier.Listener, AirContactMarks.Listene
         describeSendButton();
         // What a viewer or a picker in front could not do, said here now that this conversation is back.
         AirComposerNotice.deliverOnReturn(this::sayAtComposer);
+        // KHANDAQ (0.2.57): from now on what this conversation shows counts as seen (HelperMessageSeen).
+        if (!saved)
+        {
+            HelperMessageSeen.onChatShown(activity, publicKey);
+        }
+    }
+
+    /**
+     * KHANDAQ (0.2.57): the window has the focus again. A conversation resumed behind the keyguard is seen
+     * only once the keyguard has gone, which no lifecycle call of its own tells.
+     */
+    void onWindowFocused()
+    {
+        if (resumed && !saved)
+        {
+            HelperMessageSeen.onChatShown(activity, publicKey);
+        }
     }
 
     void onPause()
     {
         resumed = false;
+        // KHANDAQ (0.2.57): nothing that arrives from now on counts as seen.
+        HelperMessageSeen.onChatHidden(publicKey);
         if (AirRepository.chatWatcher == watcher)
         {
             AirRepository.chatWatcher = null;

@@ -66,6 +66,7 @@
     <string name="air_delivery_transit">in transit</string>
     <string name="air_delivery_sent">sent</string>
     <string name="air_delivery_delivered">delivered</string>
+    <string name="air_delivery_seen">seen</string>
     <string name="air_transit_format">%1$d in transit</string>
     <string name="air_unread_a11y">unread: %1$d</string>
     <string name="air_hint_request_sent">request sent</string>

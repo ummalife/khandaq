@@ -275,7 +275,19 @@ final class AirModel
     {
         TRANSIT,
         SENT,
-        DELIVERED;
+        DELIVERED,
+        /** KHANDAQ (0.2.57): the person had the conversation open with it; 1:1 only (HelperMessageSeen). */
+        SEEN;
+
+        /**
+         * KHANDAQ (0.2.57): the state once the person's seen watermark covers the message, by the
+         * conversation's rule ({@link AirConversationModel.EntryStatus#seenIf}): sent or delivered turn seen,
+         * one in transit stays in transit.
+         */
+        Delivery seenIf(final boolean covered)
+        {
+            return covered && (this == SENT || this == DELIVERED) ? SEEN : this;
+        }
 
         /**
          * Our own last text to one person, by the conversation's rule
@@ -325,6 +337,8 @@ final class AirModel
         {
             switch (status)
             {
+                case SEEN:
+                    return SEEN;
                 case DELIVERED:
                     return DELIVERED;
                 case SENT:

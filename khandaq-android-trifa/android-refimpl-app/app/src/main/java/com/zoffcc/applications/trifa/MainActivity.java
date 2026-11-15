@@ -3537,17 +3537,18 @@ public class MainActivity extends AppCompatActivity
     // 170/176/181-183, so without this toxcore silently DROPS these packets on the recipient and
     // delete-for-both / edit / reactions never apply on an Android peer (iOS registered them, which
     // is why Android->iOS worked but iOS/Android->Android did not). The JNI registrar already exists.
+    // KHANDAQ (0.2.57): and seen (189, HelperMessageSeen), which 0.2.56 and older leave to toxcore to drop.
     private void register_khandaq_lossless_pktids()
     {
         try
         {
             int last_res = -1000;
-            for (int pktid = 184; pktid <= 188; pktid++)
+            for (int pktid = 184; pktid <= HelperMessageSeen.PKT_MSG_SEEN; pktid++)
             {
                 last_res = tox_callback_friend_lossless_packet_per_pktid(pktid);
             }
             // plain android Log on purpose: this runs very early, before the app logger is up
-            android.util.Log.i("trifa.KQREG", "registered lossless pktids 184-188, last_res=" + last_res);
+            android.util.Log.i("trifa.KQREG", "registered lossless pktids 184-189, last_res=" + last_res);
         }
         catch (Throwable e)
         {
@@ -6590,6 +6591,8 @@ public class MainActivity extends AppCompatActivity
                     // KHANDAQ (#192): deliver reaction changes made while this friend was offline
                     // (packet is rebuilt from the CURRENT own-reaction state — toggles collapse)
                     HelperMessageReaction.flushPendingReactionsForFriend(friend_number);
+                    // KHANDAQ (0.2.57): the seen anchor that waits for this friend, of this run or an earlier one
+                    HelperMessageSeen.onFriendOnline(friend_number);
                 }
             }
 
@@ -7114,6 +7117,11 @@ public class MainActivity extends AppCompatActivity
             {
                 // KHANDAQ (#192): app-level message reaction (add/remove)
                 HelperMessageReaction.handleIncomingFriendReaction(friend_number, data, (int) length);
+            }
+            else if (data[0] == (byte) HelperMessageSeen.PKT_MSG_SEEN)
+            {
+                // KHANDAQ (0.2.57): the person has seen our 1:1 items up to the anchored one
+                HelperMessageSeen.handleIncomingFriendSeen(friend_number, data, (int) length);
             }
             else if (data[0] == (byte) CONTROL_PROXY_MESSAGE_TYPE_PUSH_URL_FOR_FRIEND.value)
             {

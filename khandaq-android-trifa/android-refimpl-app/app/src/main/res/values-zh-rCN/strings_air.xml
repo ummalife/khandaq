@@ -66,6 +66,7 @@
     <string name="air_delivery_transit">传送中</string>
     <string name="air_delivery_sent">已发送</string>
     <string name="air_delivery_delivered">已送达</string>
+    <string name="air_delivery_seen">已读</string>
     <string name="air_transit_format">%1$d 条传送中</string>
     <string name="air_unread_a11y">未读：%1$d</string>
     <string name="air_hint_request_sent">请求已发送</string>

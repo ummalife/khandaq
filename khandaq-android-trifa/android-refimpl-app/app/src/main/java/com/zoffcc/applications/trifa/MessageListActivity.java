@@ -1154,6 +1154,17 @@ public class MessageListActivity extends AppCompatActivity
     }
 
     @Override
+    public void onWindowFocusChanged(final boolean hasFocus)
+    {
+        super.onWindowFocusChanged(hasFocus);
+        // KHANDAQ (0.2.57): resumed behind the keyguard, the conversation is seen once its window has the focus.
+        if (hasFocus && airPanel != null)
+        {
+            airPanel.onWindowFocused();
+        }
+    }
+
+    @Override
     protected void onStop()
     {
         super.onStop();

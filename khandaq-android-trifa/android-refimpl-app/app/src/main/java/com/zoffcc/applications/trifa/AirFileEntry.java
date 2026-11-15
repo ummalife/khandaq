@@ -321,8 +321,12 @@ final class AirFileEntry
                 offerCopy(itemRoot, e);
                 break;
         }
+        // KHANDAQ (0.2.57): one person's conversation, with muted marks; a file that arrived turns seen once
+        // their watermark covers it (HelperMessageSeen).
+        e.direct = true;
         e.status = (!outgoing || FavoritesChatHelper.isFavoritesChat(m.tox_friendpubkey))
-                   ? AirConversationModel.EntryStatus.NONE : directStatus(e.state, online);
+                   ? AirConversationModel.EntryStatus.NONE
+                   : directStatus(e.state, online).seenIf(HelperMessageSeen.coveredBySeen(m));
         render(context, new Views(itemRoot), e);
     }
 
@@ -811,7 +815,7 @@ final class AirFileEntry
             else
             {
                 v.mark.animate().cancel();
-                AirTranscript.setMarkIcon(v.mark, e.status);
+                AirTranscript.setMarkIcon(v.mark, e.status, e.direct);
                 v.mark.setAlpha(AirTranscript.markAlpha(e.status));
                 v.mark.setVisibility(View.VISIBLE);
             }
@@ -1173,6 +1177,8 @@ final class AirFileEntry
     {
         State state = State.DONE;
         boolean outgoing;
+        /** KHANDAQ (0.2.57): in a conversation with one person, whose marks are muted until seen. */
+        boolean direct;
         boolean voice;
         boolean video;
         /** A photo or a video: shown in the box. */

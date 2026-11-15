@@ -728,7 +728,8 @@ final class AirRepository
     /**
      * Null for an incoming message, a call note or a cancelled file: those carry no mark. A text follows
      * the conversation's rule ({@link AirModel.Delivery#ofDirectText}): in transit while the person is
-     * away, sent or leaving while they are online.
+     * away, sent or leaving while they are online. KHANDAQ (0.2.57): seen once the person's watermark
+     * covers it, as in the conversation: a text sent or delivered, a file once it arrived.
      */
     static AirModel.Delivery directDelivery(final Message message, final boolean personOnline)
     {
@@ -742,16 +743,19 @@ final class AirRepository
             // running is one check, finished is two; a cancelled transfer has no mark.
             if (message.state == TOX_FILE_CONTROL_CANCEL.value)
             {
-                return message.filedb_id == -1 ? null : AirModel.Delivery.DELIVERED;
+                return message.filedb_id == -1 ? null : AirModel.Delivery.DELIVERED.seenIf(
+                        HelperMessageSeen.coveredBySeen(message));
             }
             if (isFileInTransit(message))
             {
                 return AirModel.Delivery.TRANSIT;
             }
+            // Still running: the conversation shows it leaving (AirFileEntry), so it is not seen yet here either.
             return AirModel.Delivery.SENT;
         }
         return AirModel.Delivery.ofDirectText(message.read, MessageDeliveryRetryHelper.isDirectFailed(message),
-                                              message.message_id, personOnline);
+                                              message.message_id, personOnline)
+                                .seenIf(HelperMessageSeen.coveredBySeen(message));
     }
 
     /**

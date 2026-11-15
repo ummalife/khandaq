@@ -66,6 +66,7 @@
     <string name="air_delivery_transit">في الطريق</string>
     <string name="air_delivery_sent">أُرسلت</string>
     <string name="air_delivery_delivered">وصلت</string>
+    <string name="air_delivery_seen">قُرئت</string>
     <string name="air_transit_format">في الطريق: %1$d</string>
     <string name="air_unread_a11y">غير مقروءة: %1$d</string>
     <string name="air_hint_request_sent">أُرسل الطلب</string>

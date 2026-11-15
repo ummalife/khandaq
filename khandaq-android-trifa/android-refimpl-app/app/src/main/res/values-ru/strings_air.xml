@@ -66,6 +66,7 @@
     <string name="air_delivery_transit">в пути</string>
     <string name="air_delivery_sent">отправлено</string>
     <string name="air_delivery_delivered">доставлено</string>
+    <string name="air_delivery_seen">прочитано</string>
     <string name="air_transit_format">%1$d в пути</string>
     <string name="air_unread_a11y">непрочитанных: %1$d</string>
     <string name="air_hint_request_sent">запрос отправлен</string>

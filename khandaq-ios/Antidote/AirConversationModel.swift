@@ -269,6 +269,9 @@ enum AirComposeLimit {
     /// of it: nil while there is plenty of room, the room left once only a tenth of a message remains,
     /// and how many messages the text will go as once it no longer fits one.
     static func counterText(for text: String, head: String = "", maxBytes: Int = bytes) -> String? {
+        // KHANDAQ (review 0.2.56): counted, and split, as native UTF-8 (see `parts(of:)`).
+        var text = text
+        text.makeContiguousUTF8()
         let count = head.utf8.count + text.utf8.count
         guard count > maxBytes else {
             let left = maxBytes - count
@@ -284,6 +287,11 @@ enum AirComposeLimit {
     /// reply) rides whole on the first part; when not even the first character fits beside it, it goes
     /// alone. A head as long as a message is split with the text, as text.
     static func parts(of text: String, head: String = "", maxBytes: Int = bytes) -> [String] {
+        // KHANDAQ (review 0.2.56): split as native UTF-8. The text of the field is an NSString, whose
+        // length in UTF-8 is counted anew from its start each time: the split counted what was left of
+        // the text once a part, and the counter took half a second at every key for a megabyte.
+        var text = text
+        text.makeContiguousUTF8()
         // A scalar takes up to four bytes: a part has room for one at least.
         let maxBytes = max(maxBytes, 4)
         let headBytes = head.utf8.count

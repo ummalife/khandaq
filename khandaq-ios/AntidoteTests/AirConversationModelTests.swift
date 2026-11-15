@@ -191,6 +191,23 @@ class AirConversationModelTests: XCTestCase {
                        "Уйдёт 21 сообщением")
     }
 
+    /// The field hands its text over as an NSString, whose length in UTF-8 is counted anew from its start
+    /// each time: the split counted what was left of a long text once a part, half a second at every key
+    /// for a megabyte (review 0.2.56). It says what it says of the text as Swift keeps it, at once.
+    func testTheCounterOfMegabytesFromTheFieldIsCheapAndSaysTheSame() throws {
+        let text = Array(repeating: "салам alaikum", count: 2 * 1_048_576 / 20).joined(separator: " ")
+        let fromField = try XCTUnwrap(NSMutableString(string: text).copy() as? NSString) as String
+        XCTAssertNil(fromField.utf8.withContiguousStorageIfAvailable { $0.count }, "not a text as a field hands it over")
+
+        let start = CFAbsoluteTimeGetCurrent()
+        let counter = AirComposeLimit.counterText(for: fromField)
+        let elapsed = CFAbsoluteTimeGetCurrent() - start
+
+        XCTAssertEqual(counter, AirComposeLimit.counterText(for: text))
+        XCTAssertEqual(AirComposeLimit.parts(of: fromField), AirComposeLimit.parts(of: text))
+        XCTAssertLessThan(elapsed, 0.5, "the counter of two megabytes from the field took \(elapsed) s")
+    }
+
     // MARK: - Long texts
 
     /// Cyrillic takes two bytes a letter, and a text without a space is cut after the last whole letter

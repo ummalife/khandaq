@@ -5,6 +5,9 @@
 import Foundation
 
 class OCTSubmanagerBootstrapMock: NSObject, OCTSubmanagerBootstrap {
+    /// How many urgent re-bootstraps were asked for (tests).
+    private(set) var rebootstrapCount = 0
+
     func addNode(withIpv4Host ipv4Host: String?, ipv6Host: String?, udpPort: OCTToxPort, tcpPorts: [NSNumber], publicKey: String) {
         // nop
     }
@@ -18,7 +21,7 @@ class OCTSubmanagerBootstrapMock: NSObject, OCTSubmanagerBootstrap {
     }
 
     func rebootstrapOnNetworkChange() {
-        // nop
+        rebootstrapCount += 1
     }
 
     func performKhandaqBootstrapBurst() {

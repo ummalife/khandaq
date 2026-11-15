@@ -245,9 +245,10 @@ struct AirComposeHint: Equatable {
     }
 }
 
-/// The length counter under the field. Tox carries at most 1372 bytes in one message and toxcore
-/// keeps 38 of them for the message id and time of msgV3, so objcTox cuts a longer text to 1334 bytes
-/// without a word; the counter shows the room left before that, once only a tenth of it remains.
+/// The length of a text message. Tox carries at most 1372 bytes in one message and toxcore keeps 38 of
+/// them for the message id and time of msgV3, so one message holds 1334 bytes of text. A longer text
+/// goes as several messages, in order (`parts(of:)`): the counter under the field shows the room left
+/// once only a tenth of it remains, then how many messages the text will go as.
 enum AirComposeLimit {
     static let bytes = 1334
 
@@ -264,43 +265,112 @@ enum AirComposeLimit {
         return String(localized: "air_compose_bytes_over", -remaining)
     }
 
-    /// A text that does not fit one message, in parts that do, in order: a text shared from another app
-    /// has no counter, and objcTox would cut it short. A part ends at a line break or a space when one
-    /// lies in its second half, otherwise at the last whole character that fits.
-    static func parts(of text: String, maxBytes: Int = bytes) -> [String] {
+    /// What the counter under the field says about `text` with `head` (the header of a reply) in front
+    /// of it: nil while there is plenty of room, the room left once only a tenth of a message remains,
+    /// and how many messages the text will go as once it no longer fits one.
+    static func counterText(for text: String, head: String = "", maxBytes: Int = bytes) -> String? {
+        // KHANDAQ (review 0.2.56): counted, and split, as native UTF-8 (see `parts(of:)`).
+        var text = text
+        text.makeContiguousUTF8()
+        let count = head.utf8.count + text.utf8.count
+        guard count > maxBytes else {
+            let left = maxBytes - count
+            return Double(left) < Double(maxBytes) * 0.1 ? counterText(remaining: left) : nil
+        }
+        return String(localized: "air_compose_parts_format", parts(of: text, head: head, maxBytes: maxBytes).count)
+    }
+
+    /// A text that does not fit one message, in parts that do, in order. A part ends at a line break or
+    /// a space when one lies in its second half, otherwise after the last whole character that fits;
+    /// only a single character longer than a message (a letter under hundreds of marks) is cut, between
+    /// two of its Unicode scalars, so no part is ever longer than `maxBytes`. `head` (the header of a
+    /// reply) rides whole on the first part; when not even the first character fits beside it, it goes
+    /// alone. A head as long as a message is split with the text, as text.
+    static func parts(of text: String, head: String = "", maxBytes: Int = bytes) -> [String] {
+        // KHANDAQ (review 0.2.56): split as native UTF-8. The text of the field is an NSString, whose
+        // length in UTF-8 is counted anew from its start each time: the split counted what was left of
+        // the text once a part, and the counter took half a second at every key for a megabyte.
+        var text = text
+        text.makeContiguousUTF8()
+        // A scalar takes up to four bytes: a part has room for one at least.
+        let maxBytes = max(maxBytes, 4)
+        let headBytes = head.utf8.count
+        guard headBytes > 0, headBytes < maxBytes else {
+            return split(Substring(head + text), firstRoom: maxBytes, room: maxBytes).filter { !$0.isEmpty }
+        }
+        var parts = split(Substring(text), firstRoom: maxBytes - headBytes, room: maxBytes)
+        parts[0] = head + parts[0]
+        return parts.filter { !$0.isEmpty }
+    }
+
+    /// `parts(of:head:maxBytes:)` of a text the composer has put together: `composed` is `body` with the
+    /// header of a reply in front of it, or `body` itself.
+    static func parts(ofComposed composed: String, body: String, maxBytes: Int = bytes) -> [String] {
+        let head = String(composed.dropLast(body.count))
+        guard !body.isEmpty, head + body == composed else {
+            return parts(of: composed, maxBytes: maxBytes)
+        }
+        return parts(of: body, head: head, maxBytes: maxBytes)
+    }
+
+    /// `text` in parts of at most `room` bytes, the first of at most `firstRoom`, each trimmed. The first
+    /// is empty when not even one character fits in `firstRoom`; empty parts are the caller's to drop.
+    private static func split(_ text: Substring, firstRoom: Int, room: Int) -> [String] {
         var parts = [String]()
-        var rest = Substring(text)
-        while rest.utf8.count > maxBytes {
-            var end = rest.startIndex
-            var used = 0
-            for index in rest.indices {
-                let size = rest[index].utf8.count
-                if used + size > maxBytes {
-                    break
+        var rest = text
+        var limit = firstRoom
+        while rest.utf8.count > limit {
+            let piece: Substring
+            if let end = endOfWholeCharacters(in: rest, fitting: limit) {
+                let fitting = rest[..<end]
+                let secondHalf = fitting[fitting.index(fitting.startIndex, offsetBy: fitting.count / 2)...]
+                let cut = secondHalf.lastIndex(where: { $0.isNewline })
+                    ?? secondHalf.lastIndex(where: { $0.isWhitespace })
+                    ?? end
+                piece = rest[..<cut]
+                rest = rest[cut...].drop { $0.isWhitespace }
+            }
+            else if limit < room {
+                // Not one character fits beside the head: the head goes alone, the text after it.
+                piece = ""
+            }
+            else {
+                // One character longer than a message: it is cut between two of its scalars. A String
+                // index inside a character would round down to its start, so the cut is made on the
+                // scalars themselves.
+                let scalars = rest.unicodeScalars
+                var end = scalars.startIndex
+                var used = 0
+                for index in scalars.indices {
+                    used += UTF8.width(scalars[index])
+                    if used > limit {
+                        break
+                    }
+                    end = scalars.index(after: index)
                 }
-                used += size
-                end = rest.index(after: index)
+                piece = Substring(scalars[..<end])
+                rest = Substring(scalars[end...])
             }
-            if end == rest.startIndex {
-                // One character wider than a message: it goes alone.
-                end = rest.index(after: end)
-            }
-            let head = rest[..<end]
-            let secondHalf = head[head.index(head.startIndex, offsetBy: head.count / 2)...]
-            let cut = secondHalf.lastIndex(where: { $0.isNewline })
-                ?? secondHalf.lastIndex(where: { $0.isWhitespace })
-                ?? end
-            let part = rest[..<cut].trimmingCharacters(in: .whitespacesAndNewlines)
-            if !part.isEmpty {
-                parts.append(part)
-            }
-            rest = rest[cut...].drop { $0.isWhitespace }
+            parts.append(piece.trimmingCharacters(in: .whitespacesAndNewlines))
+            limit = room
         }
-        let last = rest.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !last.isEmpty {
-            parts.append(last)
-        }
+        parts.append(rest.trimmingCharacters(in: .whitespacesAndNewlines))
         return parts
+    }
+
+    /// The end of the longest run of whole characters at the start of `text` that fits in `limit` bytes;
+    /// nil when not even the first one does.
+    private static func endOfWholeCharacters(in text: Substring, fitting limit: Int) -> Substring.Index? {
+        var end: Substring.Index?
+        var used = 0
+        for index in text.indices {
+            used += text[index].utf8.count
+            if used > limit {
+                break
+            }
+            end = text.index(after: index)
+        }
+        return end
     }
 }
 

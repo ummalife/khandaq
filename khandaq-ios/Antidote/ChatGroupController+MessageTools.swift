@@ -102,8 +102,17 @@ extension ChatGroupController {
         guard groupComposeRight == .write else {
             return
         }
-        replyController.startReply(to: message, submanagerObjects: submanagerObjects, theme: theme)
+        replyController.startReply(to: message, submanagerObjects: submanagerObjects, own: ownReplyAuthor, theme: theme)
         _ = chatInputView.becomeFirstResponder()
+    }
+
+    /// KHANDAQ (0.2.56): the group knows you by the name you have in it, else by your profile name. The
+    /// members list is not asked: it names you "You" or "Peer N" while toxcore has no name for you.
+    var ownReplyAuthor: ChatReplyController.OwnAuthor {
+        let groupName = ((try? submanagerGroups.groupSelfPeerName(for: chat)) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return ChatReplyController.OwnAuthor(name: groupName.isEmpty ? submanagerUser?.userName() : groupName,
+                                             publicKey: nil)
     }
 
     func attachReplyQuoteHandler(to model: ChatBaseTextCellModel, messages: Results<OCTMessageAbstract>) {

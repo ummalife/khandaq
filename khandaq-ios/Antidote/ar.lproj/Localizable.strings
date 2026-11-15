@@ -541,6 +541,7 @@
 "group_msg_sender_unverified" = "مُعاد من السجل، لم يتم التحقق من المرسل";
 "alert_ok" = "موافق";
 "video_send_preparing" = "جاري تحضير الفيديو...";
+"media_pick_loading" = "جاري جلب الملفات من المكتبة...";
 "video_send_preparation_failed" = "تعذر تحضير الفيديو للإرسال.";
 "video_send_too_large" = "حجم الفيديو كبير جدا (الحد الأقصى 500 ميغابايت).";
 "video_send_busy" = "لا يزال هناك فيديو آخر قيد التحضير. يرجى الانتظار.";
@@ -848,9 +849,10 @@
 "air_compose_hint_live_format" = "ستُرسل فورًا: %@ متصل";
 "air_compose_hint_saved" = "ستبقى الملاحظة على هذا الجهاز فقط";
 "air_compose_hint_wait_format" = "ستنتظر في الطريق: %@ غير متصل. ستُرسل تلقائيًا";
+"air_compose_parts_format" = "ستُرسل في %d رسائل";
 "air_compose_placeholder" = "رسالة";
 "air_compose_send" = "إرسال";
-"air_compose_send_blocked" = "الرسالة أطول من الحد المسموح. اختصرها لإرسالها";
+"air_compose_send_blocked" = "لا يمكن إرسالها الآن: السطر تحت الحقل يوضح السبب";
 "air_compose_voice" = "رسالة صوتية";
 "air_day_a11y_format" = "متصل %@";
 "air_day_a11y_none" = "لا توجد علامات";
@@ -1102,7 +1104,7 @@
 "air_new_group_name_note" = "سيراه كل من تدعوهم. يمكن لاحقًا تغيير الموضوع، أما الاسم فلا.";
 "air_new_group_privacy" = "من يمكنه الانضمام";
 "air_group_privacy_invite_only" = "بالدعوة فقط";
-"air_group_privacy_invite_only_note" = "لا ينضم إلا من يدعوه أحد الأعضاء.";
+"air_group_privacy_invite_only_note" = "لا ينضم إلا من يدعوه أحد الأعضاء. لا يمكن الانضمام بمفتاح المجموعة.";
 "air_group_privacy_open" = "مفتوحة لكل من لديه مفتاح المجموعة";
 "air_group_privacy_open_note" = "يمكن لأي شخص لديه مفتاح المجموعة الانضمام دون دعوة.";
 "air_new_group_invite_note" = "تُرسل الدعوات فورًا، لذا لا يمكن هنا دعوة إلا المتصلين. ادعُ الآخرين لاحقًا من ملف المجموعة.";

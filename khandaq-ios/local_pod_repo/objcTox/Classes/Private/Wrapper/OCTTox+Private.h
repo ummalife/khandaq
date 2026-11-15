@@ -100,6 +100,19 @@ tox_group_private_message_cb groupPrivateMessageCallback;
 + (NSString *)binToHexString:(uint8_t *)bin length:(NSUInteger)length;
 + (uint8_t *)hexStringToBin:(NSString *)string;
 
+/**
+ * How many UTF-8 bytes of `message` to send when only `maxLength` fit: all of them when they fit,
+ * otherwise up to the end of the last whole character (grapheme cluster) that fits. Only a single
+ * character longer than `maxLength` is cut, between two of its Unicode scalars.
+ */
++ (NSUInteger)utf8LengthOfMessage:(NSString *)message fittingLength:(NSUInteger)maxLength;
+
+/**
+ * The status of a group as OCTToxDelegate and -groupConnectionStatusForGroupNumber: give it (1 connected,
+ * 0 connecting, -1 disconnected) for the GC_Conn_State the group connection callback passes.
+ */
++ (int32_t)groupConnectionStatusFromCConnectionState:(int32_t)state;
+
 - (BOOL)sendLosslessPacketWithFriendNumber:(OCTToxFriendNumber)friendNumber
                                       bytes:(NSData *)bytes
                                       error:(NSError **)error;

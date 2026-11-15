@@ -731,7 +731,7 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
         [self removeMessagesWithSubmessages:messages];
 
         RLMResults *remaining = [OCTMessageAbstract objectsInRealm:self.realm where:@"chatUniqueIdentifier == %@", chat.uniqueIdentifier];
-        remaining = [remaining sortedResultsUsingKeyPath:@"dateInterval" ascending:YES];
+        remaining = [remaining sortedResultsUsingDescriptors:[self lastMessageSortDescriptors]];
         chat.lastMessage = remaining.lastObject;
 
         [self.realm commitWriteTransaction];
@@ -955,7 +955,7 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
 
         for (NSString *chatUniqueIdentifier in changedChats) {
             RLMResults *messages = [OCTMessageAbstract objectsInRealm:self.realm where:@"chatUniqueIdentifier == %@", chatUniqueIdentifier];
-            messages = [messages sortedResultsUsingKeyPath:@"dateInterval" ascending:YES];
+            messages = [messages sortedResultsUsingDescriptors:[self lastMessageSortDescriptors]];
 
             OCTChat *chat = [OCTChat objectInRealm:self.realm forPrimaryKey:chatUniqueIdentifier];
             chat.lastMessage = messages.lastObject;
@@ -1507,13 +1507,18 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         // asking us for history handed out other people's 1:1 threads to the whole group. System lines
         // (join/leave/create) are local UI artifacts every client writes for itself; re-broadcasting
         // them made them look like chat messages from us. Both are excluded at the source.
+        // KHANDAQ (0.2.56): so is a row still waiting in the outbox (groupPendingSend). It has not gone: it
+        // goes live once somebody is there, and its id, 0 until then, is what every receiver tells copies
+        // apart by. The first member to join a group got each text its founder wrote alone twice, the
+        // synced copy at the time it was written and the live one when it came, so out of order too.
         NSPredicate *predicate = [NSPredicate predicateWithFormat:
                                   @"chatUniqueIdentifier == %@ AND dateInterval > %f AND "
-                                  @"groupPrivateMessage == NO AND groupSystemMessage == NO AND "
+                                  @"groupPrivateMessage == NO AND groupSystemMessage == NO AND groupPendingSend == NO AND "
                                   @"(messageText != nil OR (messageFile != nil AND messageFile.fileType == %d AND messageFile.fileSize <= %llu))",
                                   chat.uniqueIdentifier, since, (int)OCTMessageFileTypeReady, kMaxSyncFileBytes];
         RLMResults *results = [OCTMessageAbstract objectsInRealm:self.realm withPredicate:predicate];
-        RLMResults *sorted = [results sortedResultsUsingKeyPath:@"dateInterval" ascending:YES];
+        // KHANDAQ (0.2.56): in the order the chat shows them, ties included (+chatOrderSortDescriptorsAscending:).
+        RLMResults *sorted = [results sortedResultsUsingDescriptors:[OCTMessageAbstract chatOrderSortDescriptorsAscending:YES]];
 
         for (OCTMessageAbstract *message in sorted) {
             if (message.messageFile && message.messageFile.groupMsgIdHashHex.length == 0) {
@@ -1548,13 +1553,15 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         // to groupMessagesForHistorySyncInChat above, private and system rows excluded. A private DM
         // (text AND its attached file payload) must never leave this device towards the group; the
         // builder in OCTNgcGroupHistSync refuses one too, so neither layer alone can leak it.
+        // KHANDAQ (0.2.56): and no row still waiting in the outbox, see above.
         NSPredicate *predicate = [NSPredicate predicateWithFormat:
                                   @"chatUniqueIdentifier == %@ AND dateInterval > %f AND "
-                                  @"groupPrivateMessage == NO AND groupSystemMessage == NO AND "
+                                  @"groupPrivateMessage == NO AND groupSystemMessage == NO AND groupPendingSend == NO AND "
                                   @"(messageText != nil OR (messageFile != nil AND messageFile.fileType == %d AND messageFile.fileSize <= %llu))",
                                   chat.uniqueIdentifier, since, (int)OCTMessageFileTypeReady, kMaxSyncFileBytes];
         RLMResults *results = [OCTMessageAbstract objectsInRealm:self.realm withPredicate:predicate];
-        RLMResults *sorted = [results sortedResultsUsingKeyPath:@"dateInterval" ascending:YES];
+        // KHANDAQ (0.2.56): in the order the chat shows them, ties included (+chatOrderSortDescriptorsAscending:).
+        RLMResults *sorted = [results sortedResultsUsingDescriptors:[OCTMessageAbstract chatOrderSortDescriptorsAscending:YES]];
 
         for (OCTMessageAbstract *message in sorted) {
             if (message.messageFile && message.messageFile.groupMsgIdHashHex.length == 0) {
@@ -1671,6 +1678,45 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     return results.count > 0;
 }
 
+/**
+ * KHANDAQ (0.2.56): where a row synced into a chat sorts. Its time comes in whole seconds, so the rows a member
+ * wrote within one second, the parts of a long text, tied and showed in no given order. It sorts a millisecond
+ * after the rows of its chat already stored within that second, which keeps the order they came in: the order
+ * the member that synced them holds them in. sortTimestamp orders the timeline and nothing else; the time shown,
+ * the unread count and the dedup keep dateInterval and groupSyncDedupTimestamp.
+ */
+- (NSTimeInterval)sortTimestampOfSyncedRowAt:(NSTimeInterval)dateInterval inChat:(OCTChat *)chat
+{
+    const NSTimeInterval second = floor(dateInterval);
+    __block NSTimeInterval latest = 0.0;
+
+    dispatch_sync(self.queue, ^{
+        // The bounds go as NSNumbers: NSPredicate keeps a %f as a float, whose steps are 128 s at today's times.
+        RLMResults *sameSecond = [OCTMessageAbstract objectsInRealm:self.realm
+                                                              where:@"chatUniqueIdentifier == %@ AND sortTimestamp >= %@ AND sortTimestamp < %@",
+                                  chat.uniqueIdentifier, @(second), @(second + 1.0)];
+        latest = [[sameSecond maxOfProperty:@"sortTimestamp"] doubleValue];
+    });
+
+    if (latest < dateInterval) {
+        return dateInterval;
+    }
+
+    return MIN(latest + 0.001, second + 0.999);
+}
+
+/**
+ * KHANDAQ (0.2.56): which message is a chat's last once some are removed: the one that came last, as when a
+ * message is added, and of the ones that came within one second (the synced rows) the last in the chat's order.
+ */
+- (NSArray<RLMSortDescriptor *> *)lastMessageSortDescriptors
+{
+    return @[
+        [RLMSortDescriptor sortDescriptorWithKeyPath:@"dateInterval" ascending:YES],
+        [RLMSortDescriptor sortDescriptorWithKeyPath:@"sortTimestamp" ascending:YES],
+    ];
+}
+
 - (OCTMessageAbstract *)addGroupSyncedMessageWithText:(NSString *)text
                                                  type:(OCTToxMessageType)type
                                                  chat:(OCTChat *)chat
@@ -1703,7 +1749,8 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     NSTimeInterval nowTimestamp = [[NSDate date] timeIntervalSince1970];
     NSTimeInterval originalTimestamp = dateInterval > 0 ? dateInterval : nowTimestamp;
     messageAbstract.dateInterval = MIN(originalTimestamp, nowTimestamp);
-    messageAbstract.sortTimestamp = messageAbstract.dateInterval; // KHANDAQ (#H5): group sync = clamped original
+    // KHANDAQ (#H5): group sync = clamped original. KHANDAQ (0.2.56): after the rows of its second that came first.
+    messageAbstract.sortTimestamp = [self sortTimestampOfSyncedRowAt:messageAbstract.dateInterval inChat:chat];
     messageAbstract.groupSyncDedupTimestamp = originalTimestamp;
     messageAbstract.senderUniqueIdentifier = nil;
     messageAbstract.groupSenderPeerId = peerId;
@@ -1771,7 +1818,8 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     NSTimeInterval nowTimestamp = [[NSDate date] timeIntervalSince1970];
     NSTimeInterval originalTimestamp = dateInterval > 0 ? dateInterval : nowTimestamp;
     messageAbstract.dateInterval = MIN(originalTimestamp, nowTimestamp);
-    messageAbstract.sortTimestamp = messageAbstract.dateInterval; // KHANDAQ (#H5): group sync = clamped original
+    // KHANDAQ (#H5): group sync = clamped original. KHANDAQ (0.2.56): after the rows of its second that came first.
+    messageAbstract.sortTimestamp = [self sortTimestampOfSyncedRowAt:messageAbstract.dateInterval inChat:chat];
     messageAbstract.groupSyncDedupTimestamp = originalTimestamp;
     messageAbstract.senderUniqueIdentifier = nil;
     messageAbstract.groupSenderPeerId = peerId;

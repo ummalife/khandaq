@@ -1234,6 +1234,7 @@ private extension ActiveSessionCoordinator {
                             submanagerObjects: toxManager.objects,
                             submanagerFriends: toxManager.friends,
                             submanagerChats: toxManager.chats,
+                            submanagerUser: toxManager.user,
                             delegate: self)
                 }
                 else {
@@ -1243,6 +1244,7 @@ private extension ActiveSessionCoordinator {
                             submanagerChats: toxManager.chats,
                             submanagerObjects: toxManager.objects,
                             submanagerFiles: toxManager.files,
+                            submanagerUser: toxManager.user,
                             delegate: self,
                             showKeyboardOnAppear: iPad.keyboardObserver.keyboardVisible)
                 }
@@ -1547,32 +1549,32 @@ private extension ActiveSessionCoordinator {
 
     /// A text to a person, as its composer sends one, in the parts that each fit a message: with the
     /// wake-up signal ten seconds after the last part, and a part toxcore refuses kept in the chat with
-    /// "Retry", as the composer keeps one.
+    /// "Retry", as the composer keeps one. Only the first part wakes a person who is offline.
     private func sendSharedText(_ parts: [String], toPerson chat: OCTChat) {
         // Read while the chat is surely valid: the refusal may come after the contact is gone.
         let chatId: String = chat.uniqueIdentifier
-        for (index, part) in parts.enumerated() {
-            let isLast = index == parts.count - 1
-            toxManager.chats.sendMessage(to: chat, text: part, type: .normal, successBlock: { [weak self] _ in
-                guard isLast else {
+        toxManager.chats.sendMessageParts(to: chat, parts: parts, type: .normal, successBlock: { [weak self] _, index in
+            guard index == parts.count - 1 else {
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                // The contact (and with it the chat) may have been removed in the meantime.
+                guard let self = self, !chat.isInvalidated else {
                     return
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
-                    // The contact (and with it the chat) may have been removed in the meantime.
-                    guard let self = self, !chat.isInvalidated else {
-                        return
-                    }
-                    self.toxManager.chats.sendMessagePush(to: chat)
+                self.toxManager.chats.sendMessagePush(to: chat)
+            }
+        }, failureBlock: { error, index in
+            DispatchQueue.main.async {
+                guard parts.indices.contains(index) else {
+                    return
                 }
-            }, failureBlock: { error in
-                DispatchQueue.main.async {
-                    let hasPerson = !chat.isInvalidated && chat.friends.firstObject() is OCTFriend
-                    if !AirFailedSends.shared.keepRefusedShare(part, toChat: chatId, hasPerson: hasPerson) {
-                        handleErrorWithType(.sendMessageToFriend, error: error as NSError?)
-                    }
+                let hasPerson = !chat.isInvalidated && chat.friends.firstObject() is OCTFriend
+                if !AirFailedSends.shared.keepRefusedShare(parts[index], toChat: chatId, hasPerson: hasPerson) {
+                    handleErrorWithType(.sendMessageToFriend, error: error as NSError?)
                 }
-            })
-        }
+            }
+        })
     }
 
     /// A shared file kept in Saved Messages: moved out of the inbox into the folder of Saved files.

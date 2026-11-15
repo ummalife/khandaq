@@ -172,6 +172,145 @@ class AirConversationModelTests: XCTestCase {
         XCTAssertEqual(AirComposeLimit.counterText(remaining: -6), "на 6 байт больше предела")
     }
 
+    /// Past the room of one message the counter says how many messages the text goes as: the field no
+    /// longer stops at 1000 characters, a long text goes in parts.
+    func testCounterSaysHowManyMessagesALongTextGoesAs() {
+        XCTAssertNil(AirComposeLimit.counterText(for: String(repeating: "a", count: 1200)))
+        XCTAssertEqual(AirComposeLimit.counterText(for: String(repeating: "a", count: 1201)), "133 bytes left")
+        XCTAssertEqual(AirComposeLimit.counterText(for: String(repeating: "a", count: 1335)), "Goes as 2 messages")
+        // The header of a reply counts too.
+        XCTAssertEqual(AirComposeLimit.counterText(for: String(repeating: "a", count: 1330), head: "HEAD\n"), "Goes as 2 messages")
+        // A group message has room for 1372 bytes.
+        XCTAssertNil(AirComposeLimit.counterText(for: String(repeating: "a", count: 1234), maxBytes: AirGroupComposeLimit.bytes))
+        XCTAssertEqual(AirComposeLimit.counterText(for: String(repeating: "a", count: 1373), maxBytes: AirGroupComposeLimit.bytes),
+                       "Goes as 2 messages")
+
+        use("ru")
+        XCTAssertEqual(AirComposeLimit.counterText(for: String(repeating: "ж", count: 668)), "Уйдёт 2 сообщениями")
+        XCTAssertEqual(AirComposeLimit.counterText(for: String(repeating: "a", count: AirComposeLimit.bytes * 20 + 1)),
+                       "Уйдёт 21 сообщением")
+    }
+
+    /// The field hands its text over as an NSString, whose length in UTF-8 is counted anew from its start
+    /// each time: the split counted what was left of a long text once a part, half a second at every key
+    /// for a megabyte (review 0.2.56). It says what it says of the text as Swift keeps it, at once.
+    func testTheCounterOfMegabytesFromTheFieldIsCheapAndSaysTheSame() throws {
+        let text = Array(repeating: "салам alaikum", count: 2 * 1_048_576 / 20).joined(separator: " ")
+        let fromField = try XCTUnwrap(NSMutableString(string: text).copy() as? NSString) as String
+        XCTAssertNil(fromField.utf8.withContiguousStorageIfAvailable { $0.count }, "not a text as a field hands it over")
+
+        let start = CFAbsoluteTimeGetCurrent()
+        let counter = AirComposeLimit.counterText(for: fromField)
+        let elapsed = CFAbsoluteTimeGetCurrent() - start
+
+        XCTAssertEqual(counter, AirComposeLimit.counterText(for: text))
+        XCTAssertEqual(AirComposeLimit.parts(of: fromField), AirComposeLimit.parts(of: text))
+        XCTAssertLessThan(elapsed, 0.5, "the counter of two megabytes from the field took \(elapsed) s")
+    }
+
+    // MARK: - Long texts
+
+    /// Cyrillic takes two bytes a letter, and a text without a space is cut after the last whole letter
+    /// that fits: no part is longer than a message, and none ends inside a letter.
+    func testALongTextGoesInPartsOfWholeLetters() {
+        let cyrillic = String(repeating: "ж", count: 1500)
+        let parts = AirComposeLimit.parts(of: cyrillic)
+        XCTAssertEqual(parts.map { $0.count }, [667, 667, 166])
+        XCTAssertEqual(parts.joined(), cyrillic)
+
+        let ascii = String(repeating: "a", count: 3000)
+        XCTAssertEqual(AirComposeLimit.parts(of: ascii).map { $0.utf8.count }, [1334, 1334, 332])
+
+        // A two-byte letter that would end a byte past the room goes whole into the next message.
+        let edge = String(repeating: "a", count: 1333) + "ж"
+        XCTAssertEqual(AirComposeLimit.parts(of: edge), [String(repeating: "a", count: 1333), "ж"])
+    }
+
+    func testAnEmojiIsNeverCutInTwo() {
+        // A thumb with a skin tone: two scalars of four bytes, one character. 166 of them fit a message.
+        let thumb = "\u{1F44D}\u{1F3FD}"
+        let thumbs = String(repeating: thumb, count: 400)
+        let thumbParts = AirComposeLimit.parts(of: thumbs)
+        XCTAssertEqual(thumbParts.map { $0.utf8.count }, [1328, 1328, 544])
+        XCTAssertTrue(thumbParts.allSatisfy { part in part.allSatisfy { String($0) == thumb } })
+        XCTAssertEqual(thumbParts.joined(), thumbs)
+
+        // A family: four people joined by three zero-width joiners, one character of 25 bytes.
+        let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"
+        XCTAssertEqual(family.count, 1)
+        XCTAssertEqual(family.utf8.count, 25)
+        let families = String(repeating: family, count: 120)
+        let familyParts = AirComposeLimit.parts(of: families)
+        XCTAssertEqual(familyParts.map { $0.utf8.count }, [1325, 1325, 350])
+        XCTAssertTrue(familyParts.allSatisfy { part in part.allSatisfy { String($0) == family } })
+        XCTAssertEqual(familyParts.joined(), families)
+    }
+
+    func testAPartEndsAtALineBreakOrASpaceInItsSecondHalf() {
+        // Words: a part ends after the last whole word that fits.
+        let words = Array(repeating: "salam", count: 400).joined(separator: " ")
+        let wordParts = AirComposeLimit.parts(of: words)
+        XCTAssertEqual(wordParts.map { $0.utf8.count }, [1331, 1067])
+        XCTAssertEqual(wordParts.joined(separator: " "), words)
+
+        // A line break in the second half wins over a later space.
+        let lines = String(repeating: "a", count: 900) + "\n" + String(repeating: "b ", count: 400)
+        let lineParts = AirComposeLimit.parts(of: lines)
+        XCTAssertEqual(lineParts.count, 2)
+        XCTAssertEqual(lineParts.first, String(repeating: "a", count: 900))
+
+        // One in the first half would leave a short part: the part takes all of its room instead.
+        let early = String(repeating: "a", count: 100) + "\n" + String(repeating: "c", count: 1500)
+        XCTAssertEqual(AirComposeLimit.parts(of: early).map { $0.utf8.count }, [1334, 267])
+    }
+
+    func testATextOfExactlyOneMessageGoesAsOne() {
+        let full = String(repeating: "a", count: AirComposeLimit.bytes)
+        XCTAssertEqual(AirComposeLimit.parts(of: full), [full])
+        XCTAssertEqual(AirComposeLimit.parts(of: full + "b"), [full, "b"])
+
+        let group = String(repeating: "a", count: AirGroupComposeLimit.bytes)
+        XCTAssertEqual(AirComposeLimit.parts(of: group, maxBytes: AirGroupComposeLimit.bytes), [group])
+        XCTAssertEqual(AirComposeLimit.parts(of: group + "b", maxBytes: AirGroupComposeLimit.bytes), [group, "b"])
+        XCTAssertEqual(AirComposeLimit.parts(of: group).count, 2, "a private message has less room than a group one")
+    }
+
+    /// The header of a reply rides whole on the first part, so the first part still reads as the reply
+    /// and the rest of the text follows as plain messages.
+    func testTheHeaderOfAReplyRidesOnTheFirstPart() {
+        var meta = MessageReplyHelper.ReplyMeta()
+        meta.localMessageId = 42
+        meta.senderPubkeyTail = "ab12"
+        meta.sortTimestampMs = 1_800_000_000_000
+        meta.senderName = "Amina"
+        meta.previewText = "See you at the station"
+        let body = String(repeating: "ж", count: 1000)
+        let parts = AirComposeLimit.parts(ofComposed: MessageReplyHelper.encode(meta, bodyText: body), body: body)
+
+        XCTAssertEqual(parts.count, 2)
+        XCTAssertTrue(parts.allSatisfy { $0.utf8.count <= AirComposeLimit.bytes })
+        let first = MessageReplyHelper.parse(parts[0])
+        XCTAssertEqual(first.reply?.localMessageId, 42)
+        XCTAssertEqual(first.reply?.previewText, "See you at the station")
+        XCTAssertEqual(first.bodyText + parts[1], body)
+        XCTAssertNil(MessageReplyHelper.parse(parts[1]).reply, "only the first part is the reply")
+
+        // Not one character fits beside a header this long: the header goes alone, the text after it.
+        let head = String(repeating: "h", count: 1329) + "\n"
+        let thumbs = String(repeating: "\u{1F44D}\u{1F3FD}", count: 2)
+        XCTAssertEqual(AirComposeLimit.parts(of: thumbs, head: head), [head, thumbs])
+    }
+
+    /// Only a character longer than a whole message (a letter under a thousand marks) is cut, between two
+    /// of its scalars: no part is ever longer than a message.
+    func testOnlyACharacterLongerThanAMessageIsCut() {
+        let monster = "a" + String(repeating: "\u{0301}", count: 1000)
+        XCTAssertEqual(monster.count, 1)
+        let parts = AirComposeLimit.parts(of: monster)
+        XCTAssertEqual(parts.map { $0.utf8.count }, [1333, 668])
+        XCTAssertEqual(parts.joined(), monster)
+    }
+
     func testTrayHeadCountsTheMessages() {
         XCTAssertEqual(String(localized: "air_tray_head_format", 1), "In transit: 1 message")
         XCTAssertEqual(String(localized: "air_tray_head_format", 3), "In transit: 3 messages")
@@ -179,6 +318,54 @@ class AirConversationModelTests: XCTestCase {
         XCTAssertEqual(String(localized: "air_tray_head_format", 3), "В пути: 3 сообщения")
         XCTAssertEqual(String(localized: "air_tray_head_format", 5), "В пути: 5 сообщений")
         XCTAssertEqual(String(localized: "air_transit_format", 3), "3 в пути")
+    }
+
+    // MARK: - Replies to your own message
+
+    /// A reply to your own message (QA-Live 15.11): its header named you "You", and every client shows the
+    /// name a header carries, so the friend read the quote as their own words. The header names you as the
+    /// friend knows you: your name and your key. Only the bar above your field still says "You".
+    func testAReplyToYourOwnMessageNamesYouAsYourFriendKnowsYou() throws {
+        let key = "7f3a91c05d2e8b4416a9c3e07d5f2b8164e0a3c9d7b25f1e8a4c6d0b3f9e2a71"
+        let meta = try XCTUnwrap(ChatReplyController.replyMeta(for: try ownMessage("Bring the blue folder"),
+                                                               own: ChatReplyController.OwnAuthor(name: " Lucy QA ", publicKey: key),
+                                                               friend: { _ in nil }))
+
+        let read = try XCTUnwrap(MessageReplyHelper.parse(MessageReplyHelper.encode(meta, bodyText: "Done")).reply,
+                                 "the friend reads no reply")
+        XCTAssertEqual(read.senderName, "Lucy QA", "the friend is not told who wrote the quoted message")
+        XCTAssertEqual(read.senderPubkeyTail, "3F9E2A71", "the friend is not told your key")
+        XCTAssertEqual(read.previewText, "Bring the blue folder")
+        XCTAssertEqual(meta.localSenderName, "You", "the bar above the field does not say You")
+
+        use("ru")
+        let russian = try XCTUnwrap(ChatReplyController.replyMeta(for: try ownMessage("Bring the blue folder"),
+                                                                  own: ChatReplyController.OwnAuthor(name: "Lucy QA", publicKey: key),
+                                                                  friend: { _ in nil }))
+        let readInRussian = try XCTUnwrap(MessageReplyHelper.parse(MessageReplyHelper.encode(russian, bodyText: "Done")).reply)
+        XCTAssertEqual(readInRussian.senderName, "Lucy QA", "the header names you by a word of your own language")
+        XCTAssertEqual(russian.localSenderName, String(localized: "chat_reply_self_name"))
+    }
+
+    /// In a group the header names you by the name you have there, with no key: iOS names nobody in a group
+    /// reply by key, so a receiver matches the quote by its time, as for every member.
+    func testAReplyToYourOwnMessageInAGroupCarriesTheNameYouHaveThere() throws {
+        let meta = try XCTUnwrap(ChatReplyController.replyMeta(for: try ownMessage("Who brings the projector?"),
+                                                               own: ChatReplyController.OwnAuthor(name: "Lucy at fix-ios-1", publicKey: nil),
+                                                               friend: { _ in nil }))
+
+        let read = try XCTUnwrap(MessageReplyHelper.parse(MessageReplyHelper.encode(meta, bodyText: "I do")).reply)
+        XCTAssertEqual(read.senderName, "Lucy at fix-ios-1")
+        XCTAssertEqual(read.senderPubkeyTail, "")
+    }
+
+    /// A reply chosen and left unsent is kept per chat. One kept by the build before, without the bar's
+    /// name, still comes back.
+    func testAReplyKeptByTheBuildBeforeStillComesBack() throws {
+        let kept = #"{"localMessageId":42,"senderPubkeyTail":"AB12","sortTimestampMs":1800000000000,"senderName":"Amina","previewText":"See you","legacyQuote":false}"#
+        let meta = try JSONDecoder().decode(MessageReplyHelper.ReplyMeta.self, from: Data(kept.utf8))
+        XCTAssertEqual(meta.senderName, "Amina")
+        XCTAssertNil(meta.localSenderName)
     }
 
     // MARK: - Key
@@ -328,6 +515,24 @@ private extension AirConversationModelTests {
     func use(_ language: String) {
         AppLanguage.set(language)
         XCTAssertEqual(AppLanguage.current, language)
+    }
+
+    /// A text of yours as objcTox keeps it: no sender. Made from the app's classes, looked up by name:
+    /// objcTox is linked into this bundle as well, and the two copies do not mix (OwnCaptionOrderTests).
+    func ownMessage(_ text: String) throws -> OCTMessageAbstract {
+        let messageText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        messageText.text = text
+        let message = try appClass("OCTMessageAbstract", as: OCTMessageAbstract.Type.self).init()
+        message.dateInterval = 1_800_000_000.25
+        message.sortTimestamp = message.dateInterval
+        message.messageText = messageText
+        XCTAssertTrue(message.isOutgoing())
+        return message
+    }
+
+    func appClass<T>(_ name: String, as type: T.Type) throws -> T {
+        let cls = try XCTUnwrap(NSClassFromString(name), "no class \(name)")
+        return unsafeBitCast(cls, to: type)
     }
 
     func date(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int) -> Date {

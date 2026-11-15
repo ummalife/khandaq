@@ -4,6 +4,7 @@
 
 import AVFoundation
 import MobileCoreServices
+import PhotosUI
 import UIKit
 
 enum VideoSendError: LocalizedError {
@@ -11,6 +12,8 @@ enum VideoSendError: LocalizedError {
     case preparationFailed
     case busy
     case durationTooLong
+    /// Cancel on the banner: nothing to say, the person asked for it.
+    case cancelled
 
     var errorDescription: String? {
         switch self {
@@ -22,7 +25,13 @@ enum VideoSendError: LocalizedError {
             return String(localized: "video_send_busy")
         case .durationTooLong:
             return String(localized: "video_send_too_long")
+        case .cancelled:
+            return nil
         }
+    }
+
+    static func isCancellation(_ error: Error) -> Bool {
+        return (error as? VideoSendError) == .cancelled
     }
 }
 
@@ -41,14 +50,33 @@ final class VideoSendPreprocessor {
     static let maxDurationSeconds: Double = 600
 
     private let processingQueue = DispatchQueue(label: "khandaq.video.preprocess", qos: .userInitiated)
+    // processingQueue only.
     private var isProcessing = false
+    /// KHANDAQ (large media): Cancel on the banner for the preparation under way. Its export chain stops
+    /// at the next step instead of going on with the next preset, and it ends as cancelled instead of
+    /// handing a file over to be sent. The preparation stays the one in progress until then.
+    private var isCancelled = false
     private var activeExportSession: AVAssetExportSession?
+    /// KHANDAQ (review 0.2.56): the number of the preparation under way (processingQueue only), and the
+    /// last number given out (under `preparationNumbers`). A chat cancels only its own preparation: one
+    /// that cancelled whatever was under way stopped the video of another chat.
+    private var activePreparation = 0
+    private let preparationNumbers = NSLock()
+    private var lastPreparation = 0
 
     private init() {}
 
+    /// Prepares the video and returns the number of this preparation for `cancelPreparation`. One video
+    /// is prepared at a time: another one asked for meanwhile ends as `busy`.
+    @discardableResult
     func prepareVideo(at sourceURL: URL,
                       progress: @escaping (Float) -> Void,
-                      completion: @escaping (Result<URL, Error>) -> Void) {
+                      completion: @escaping (Result<URL, Error>) -> Void) -> Int {
+        preparationNumbers.lock()
+        lastPreparation += 1
+        let number = lastPreparation
+        preparationNumbers.unlock()
+
         processingQueue.async { [weak self] in
             guard let self = self else {
                 DispatchQueue.main.async {
@@ -65,23 +93,39 @@ final class VideoSendPreprocessor {
             }
 
             self.isProcessing = true
+            self.isCancelled = false
+            self.activePreparation = number
             autoreleasepool {
                 self.prepareVideoOnBackground(at: sourceURL, progress: progress) { result in
-                    self.isProcessing = false
-                    self.activeExportSession = nil
-                    DispatchQueue.main.async {
-                        completion(result)
+                    // An export ends on a queue of AVFoundation's; the state is kept on ours.
+                    self.processingQueue.async {
+                        let cancelled = self.isCancelled
+                        self.isProcessing = false
+                        self.isCancelled = false
+                        self.activePreparation = 0
+                        self.activeExportSession = nil
+                        if cancelled, case .success(let preparedURL) = result {
+                            try? FileManager.default.removeItem(at: preparedURL)
+                        }
+                        DispatchQueue.main.async {
+                            completion(cancelled ? .failure(VideoSendError.cancelled) : result)
+                        }
                     }
                 }
             }
         }
+        return number
     }
 
-    func cancelActivePreparation() {
+    /// Stops the preparation with this number while it is under way: its completion then reports
+    /// `VideoSendError.cancelled`. Another preparation, or one that has ended, is left alone.
+    func cancelPreparation(_ number: Int) {
         processingQueue.async { [weak self] in
-            self?.activeExportSession?.cancelExport()
-            self?.activeExportSession = nil
-            self?.isProcessing = false
+            guard let self = self, self.isProcessing, self.activePreparation == number else {
+                return
+            }
+            self.isCancelled = true
+            self.activeExportSession?.cancelExport()
         }
     }
 
@@ -197,46 +241,73 @@ final class VideoSendPreprocessor {
         progressTimer.resume()
 
         export.exportAsynchronously { [weak self] in
-            progressTimer.cancel()
-            self?.activeExportSession = nil
-
-            if export.status == .completed {
-                if let outputBytes = self?.fileByteCount(at: outputURL),
-                   outputBytes > Self.maxOutputBytes,
-                   !remainingPresets.isEmpty {
-                    try? FileManager.default.removeItem(at: outputURL)
-                    self?.tryExport(asset: asset,
-                                    presets: remainingPresets,
-                                    sourceURL: sourceURL,
-                                    progress: progress,
-                                    completion: completion)
-                    return
-                }
-
-                if sourceURL.path.hasPrefix(NSTemporaryDirectory()) {
-                    try? FileManager.default.removeItem(at: sourceURL)
-                }
-                completion(.success(outputURL))
-                return
+            // The handler runs on a queue of AVFoundation's: the rest goes on ours, where Cancel is kept.
+            self?.processingQueue.async {
+                progressTimer.cancel()
+                self?.exportFinished(export,
+                                     outputURL: outputURL,
+                                     asset: asset,
+                                     remainingPresets: remainingPresets,
+                                     sourceURL: sourceURL,
+                                     progress: progress,
+                                     completion: completion)
             }
+        }
+    }
 
+    /// The end of one export, on processingQueue: the file, or the next preset to try. After Cancel
+    /// nothing more is tried.
+    private func exportFinished(_ export: AVAssetExportSession,
+                                outputURL: URL,
+                                asset: AVURLAsset,
+                                remainingPresets: [String],
+                                sourceURL: URL,
+                                progress: @escaping (Float) -> Void,
+                                completion: @escaping (Result<URL, Error>) -> Void) {
+        activeExportSession = nil
+
+        if isCancelled {
             try? FileManager.default.removeItem(at: outputURL)
+            completion(.failure(VideoSendError.cancelled))
+            return
+        }
 
-            if !remainingPresets.isEmpty {
-                self?.tryExport(asset: asset,
-                                presets: remainingPresets,
-                                sourceURL: sourceURL,
-                                progress: progress,
-                                completion: completion)
+        if export.status == .completed {
+            if let outputBytes = fileByteCount(at: outputURL),
+               outputBytes > Self.maxOutputBytes,
+               !remainingPresets.isEmpty {
+                try? FileManager.default.removeItem(at: outputURL)
+                tryExport(asset: asset,
+                          presets: remainingPresets,
+                          sourceURL: sourceURL,
+                          progress: progress,
+                          completion: completion)
                 return
             }
 
-            if let inputBytes = self?.fileByteCount(at: sourceURL),
-               inputBytes <= Self.skipCompressBelowBytes {
-                self?.stageFile(at: sourceURL, deleteSourceIfTemporary: true, completion: completion)
-            } else {
-                completion(.failure(VideoSendError.preparationFailed))
+            if sourceURL.path.hasPrefix(NSTemporaryDirectory()) {
+                try? FileManager.default.removeItem(at: sourceURL)
             }
+            completion(.success(outputURL))
+            return
+        }
+
+        try? FileManager.default.removeItem(at: outputURL)
+
+        if !remainingPresets.isEmpty {
+            tryExport(asset: asset,
+                      presets: remainingPresets,
+                      sourceURL: sourceURL,
+                      progress: progress,
+                      completion: completion)
+            return
+        }
+
+        if let inputBytes = fileByteCount(at: sourceURL),
+           inputBytes <= Self.skipCompressBelowBytes {
+            stageFile(at: sourceURL, deleteSourceIfTemporary: true, completion: completion)
+        } else {
+            completion(.failure(VideoSendError.preparationFailed))
         }
     }
 
@@ -329,14 +400,27 @@ final class VideoSendProgressOverlay {
     private var progressView: UIProgressView?
     private var label: UILabel?
     private var cancelHandler: (() -> Void)?
+    /// KHANDAQ (large media): which banner is up (main queue), so that the end of an older job does not
+    /// take down the banner of a newer one.
+    private var shownBanner = 0
+    private let bannerNumbers = NSLock()
+    private var lastBanner = 0
 
     private init() {}
 
+    /// Puts the banner up in place of any other and returns its number for `update` and `hide`.
+    @discardableResult
     func show(on viewController: UIViewController,
               message: String,
-              onCancel: (() -> Void)? = nil) {
+              onCancel: (() -> Void)? = nil) -> Int {
+        bannerNumbers.lock()
+        lastBanner += 1
+        let number = lastBanner
+        bannerNumbers.unlock()
         DispatchQueue.main.async {
-            self.hide()
+            // KHANDAQ (large media): taken down here and now. hide() goes through the main queue, so
+            // called from here it ran after the new banner was up and took that one down at once.
+            self.removeBanner()
 
             let host = TouchPassthroughView(frame: viewController.view.bounds)
             host.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -396,24 +480,40 @@ final class VideoSendProgressOverlay {
             self.progressView = progress
             self.label = messageLabel
             self.cancelHandler = onCancel
+            self.shownBanner = number
         }
+        return number
     }
 
-    func update(progress: Float) {
+    /// The progress of the banner shown; with a number, only while that banner is the one shown.
+    func update(progress: Float, banner: Int? = nil) {
         DispatchQueue.main.async {
+            guard banner == nil || banner == self.shownBanner else {
+                return
+            }
             self.progressView?.setProgress(progress, animated: true)
         }
     }
 
-    func hide() {
+    /// Takes the banner down; with a number, only while that banner is the one shown.
+    func hide(banner: Int? = nil) {
         DispatchQueue.main.async {
-            self.passthroughHost?.removeFromSuperview()
-            self.passthroughHost = nil
-            self.bannerView = nil
-            self.progressView = nil
-            self.label = nil
-            self.cancelHandler = nil
+            guard banner == nil || banner == self.shownBanner else {
+                return
+            }
+            self.removeBanner()
         }
+    }
+
+    /// Main queue only.
+    private func removeBanner() {
+        passthroughHost?.removeFromSuperview()
+        passthroughHost = nil
+        bannerView = nil
+        progressView = nil
+        label = nil
+        cancelHandler = nil
+        shownBanner = 0
     }
 
     @objc private func cancelTapped() {
@@ -426,6 +526,120 @@ private final class TouchPassthroughView: UIView {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hit = super.hitTest(point, with: event)
         return hit === self ? nil : hit
+    }
+}
+
+/// KHANDAQ (large media): what the photo picker hands over, loaded for the send preview. A big video,
+/// or one still in iCloud, can take a long while to arrive: once that is more than a moment, the banner
+/// says so, with the progress and Cancel. Each item keeps the place it was chosen in. A video is copied
+/// into app storage inside its provider's completion, as the picker's temporary file is gone once that
+/// returns.
+@available(iOS 14.0, *)
+enum PickedMediaLoader {
+    struct Loaded {
+        /// In the order of the picker's results; an item that could not be loaded is left out.
+        let items: [MediaSendPreviewItem]
+        /// Why the copy of a chosen video failed (too large, no room), for the first one that did.
+        let stagingError: Error?
+    }
+
+    /// How long loading goes on before the banner comes up: a photo on the phone is there before that.
+    static let bannerDelay: TimeInterval = 0.3
+
+    /// `completion` runs on the main queue once every item has answered, unless the person cancelled
+    /// from the banner: the videos copied by then are removed and nothing is reported. `bannerHost` nil
+    /// loads without the banner (another one is up, for a video being prepared).
+    static func load(_ results: [PHPickerResult],
+                     movieTypes: [String],
+                     bannerHost: UIViewController?,
+                     message: String,
+                     completion: @escaping (Loaded) -> Void) {
+        let count = results.count
+        var slots = [MediaSendPreviewItem?](repeating: nil, count: count)
+        var stagingError: Error?
+        let lock = NSLock()
+        let group = DispatchGroup()
+        let progress = Progress(totalUnitCount: Int64(max(count, 1)))
+
+        func store(_ item: MediaSendPreviewItem?, at index: Int, error: Error? = nil) {
+            lock.lock()
+            slots[index] = item
+            if stagingError == nil {
+                stagingError = error
+            }
+            lock.unlock()
+        }
+
+        for (index, result) in results.enumerated() {
+            let provider = result.itemProvider
+            if let movieType = movieTypes.first(where: { provider.hasItemConformingToTypeIdentifier($0) }) {
+                group.enter()
+                let loading = provider.loadFileRepresentation(forTypeIdentifier: movieType) { url, _ in
+                    defer { group.leave() }
+                    guard let url = url else {
+                        return
+                    }
+                    do {
+                        let staged = try VideoSendPreprocessor.shared.stagePickerVideo(at: url)
+                        store(.video(staged, fileName: provider.suggestedName), at: index)
+                    }
+                    catch {
+                        store(nil, at: index, error: error)
+                    }
+                }
+                progress.addChild(loading, withPendingUnitCount: 1)
+            }
+            else if provider.canLoadObject(ofClass: UIImage.self) {
+                group.enter()
+                let loading = provider.loadObject(ofClass: UIImage.self) { object, _ in
+                    defer { group.leave() }
+                    if let image = object as? UIImage {
+                        store(.image(image, fileName: nil), at: index)
+                    }
+                }
+                progress.addChild(loading, withPendingUnitCount: 1)
+            }
+            else {
+                progress.completedUnitCount += 1
+            }
+        }
+
+        // The rest on the main queue.
+        var finished = false
+        var cancelled = false
+        var banner: Int?
+        var ticker: Timer?
+        if let host = bannerHost {
+            DispatchQueue.main.asyncAfter(deadline: .now() + bannerDelay) {
+                guard !finished, !cancelled else {
+                    return
+                }
+                banner = VideoSendProgressOverlay.shared.show(on: host, message: message, onCancel: {
+                    cancelled = true
+                    progress.cancel()
+                    VideoSendProgressOverlay.shared.hide()
+                })
+                ticker = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
+                    VideoSendProgressOverlay.shared.update(progress: Float(progress.fractionCompleted), banner: banner)
+                }
+            }
+        }
+
+        group.notify(queue: .main) {
+            finished = true
+            ticker?.invalidate()
+            if let banner = banner {
+                VideoSendProgressOverlay.shared.hide(banner: banner)
+            }
+            let items = slots.compactMap { $0 }
+            guard !cancelled else {
+                for case .video(let url, _) in items {
+                    try? FileManager.default.removeItem(at: url)
+                }
+                return
+            }
+            completion(Loaded(items: items, stagingError: stagingError))
+        }
     }
 }
 

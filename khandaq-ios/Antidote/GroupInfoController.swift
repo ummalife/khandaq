@@ -29,6 +29,7 @@ final class GroupInfoController: AirScrollController {
     private var voiceRows: [AirChoiceRow] = []
     private let joinFailure = AirKit.note("")
     private let writeFailure = AirKit.note("")
+    private var privacyToken: RLMNotificationToken?
 
     init(chat: OCTChat, submanagerGroups: OCTSubmanagerGroups) {
         self.chat = chat
@@ -42,6 +43,10 @@ final class GroupInfoController: AirScrollController {
         fatalError("init(coder:) has not been implemented")
     }
 
+    deinit {
+        privacyToken?.invalidate()
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.accessibilityIdentifier = "air.group.settings"
@@ -49,6 +54,27 @@ final class GroupInfoController: AirScrollController {
             failure.textColor = KQColor.danger
             failure.isHidden = true
         }
+        observePrivacy()
+    }
+
+    /// Who can join changes in the profile when the founder changes it (here or in the dossier) and when
+    /// the group's state arrives from its members (toxcore's privacy callback): the screen follows it
+    /// while it is open. A write of the same value notifies too, so nothing is rebuilt then.
+    private func observePrivacy() {
+        guard !chat.isInvalidated, chat.realm != nil else {
+            return
+        }
+        privacyToken = chat.addNotificationBlock({ [weak self] deleted, _, _ in
+            guard let self = self, !deleted, self.isViewLoaded, !self.chat.isInvalidated else {
+                return
+            }
+            var error: NSError?
+            guard AirGroupPrivacy(state: self.submanagerGroups.groupPrivacyState(for: self.chat, error: &error)) != self.privacy else {
+                return
+            }
+            self.reload()
+            self.build()
+        }, keyPaths: ["groupPrivacyState"])
     }
 
     override func viewWillAppear(_ animated: Bool) {

@@ -46,6 +46,14 @@
     return (self.senderUniqueIdentifier == nil);
 }
 
++ (NSArray<RLMSortDescriptor *> *)chatOrderSortDescriptorsAscending:(BOOL)ascending
+{
+    return @[
+        [RLMSortDescriptor sortDescriptorWithKeyPath:@"sortTimestamp" ascending:ascending],
+        [RLMSortDescriptor sortDescriptorWithKeyPath:@"dateInterval" ascending:ascending],
+    ];
+}
+
 - (NSString *)description
 {
     NSString *string = nil;

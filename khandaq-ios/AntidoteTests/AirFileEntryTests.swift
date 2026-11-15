@@ -237,3 +237,231 @@ class ChatFileEntryActivationTests: CellSnapshotTest {
         XCTAssertEqual(opened, 1, "the photo did not open")
     }
 }
+
+/**
+ The banner of a video being prepared (large media): it stays up until its job ends, with the progress,
+ and the end of an older job leaves the banner of a newer one alone. It used to take itself down the
+ moment it came up, so a long preparation looked like nothing was happening.
+ */
+class VideoSendBannerTests: XCTestCase {
+    func testTheBannerStaysUpUntilItsOwnJobEnds() {
+        let host = UIViewController()
+        host.loadViewIfNeeded()
+        let overlay = VideoSendProgressOverlay.shared
+        defer {
+            overlay.hide()
+            drainMainQueue()
+        }
+
+        let first = overlay.show(on: host, message: "Preparing video...")
+        // Twice: a hide() queued from inside show() would run after a single drain.
+        drainMainQueue()
+        drainMainQueue()
+        XCTAssertEqual(progressViews(in: host.view).count, 1, "the banner took itself down")
+
+        let second = overlay.show(on: host, message: "Preparing video...")
+        drainMainQueue()
+        drainMainQueue()
+        XCTAssertNotEqual(first, second)
+        XCTAssertEqual(progressViews(in: host.view).count, 1, "one banner in place of the other")
+
+        overlay.update(progress: 0.5, banner: second)
+        overlay.update(progress: 0.9, banner: first)
+        drainMainQueue()
+        XCTAssertEqual(progressViews(in: host.view).first?.progress ?? 0, 0.5, accuracy: 0.001)
+
+        overlay.hide(banner: first)
+        drainMainQueue()
+        XCTAssertEqual(progressViews(in: host.view).count, 1, "the end of the older job took the newer banner down")
+
+        overlay.hide(banner: second)
+        drainMainQueue()
+        XCTAssertTrue(progressViews(in: host.view).isEmpty)
+    }
+
+    /// Cancel on the banner ends the preparation without an alert: the person asked for it.
+    func testACancelledPreparationSaysNothing() {
+        XCTAssertTrue(VideoSendError.isCancellation(VideoSendError.cancelled))
+        XCTAssertNil(VideoSendError.cancelled.errorDescription)
+        XCTAssertFalse(VideoSendError.isCancellation(VideoSendError.preparationFailed))
+        XCTAssertFalse(VideoSendError.isCancellation(NSError(domain: NSCocoaErrorDomain, code: NSUserCancelledError)))
+    }
+
+    private func drainMainQueue() {
+        let drained = expectation(description: "the main queue ran what was queued before")
+        DispatchQueue.main.async {
+            drained.fulfill()
+        }
+        wait(for: [drained], timeout: 2)
+    }
+
+    private func progressViews(in view: UIView) -> [UIProgressView] {
+        return view.subviews.compactMap { $0 as? UIProgressView } + view.subviews.flatMap { progressViews(in: $0) }
+    }
+}
+
+/**
+ A video belongs to the chat that prepares it (review 0.2.56). The preprocessor and the banner serve every
+ chat, and a 1:1 chat screen that went away stopped whatever video was being prepared and took whatever
+ banner was up down, another chat's too: that video ended as cancelled, and its chat took every later
+ video for one still in progress. A text held its screen for the ten seconds until its wake-up signal,
+ so the screen went away that late, while another chat could be preparing its video.
+ */
+class VideoSendOwnershipTests: XCTestCase {
+    private var directories: [URL] = []
+    /// What the input manager holds weakly: its submanagers and its screen.
+    private var kept: [AnyObject] = []
+
+    override func tearDown() {
+        VideoSendProgressOverlay.shared.hide()
+        drainMainQueue()
+        directories.forEach { try? FileManager.default.removeItem(at: $0) }
+        directories = []
+        kept = []
+        super.tearDown()
+    }
+
+    func testAChatScreenThatGoesAwayLeavesTheBannerOfAnotherChatUp() throws {
+        var screen: ChatInputViewManager? = try chatScreen()
+        weak var goneScreen: ChatInputViewManager?
+        goneScreen = screen
+        let host = UIViewController()
+        host.loadViewIfNeeded()
+        VideoSendProgressOverlay.shared.show(on: host, message: "Preparing video...")
+        drainMainQueue()
+        drainMainQueue()
+        XCTAssertEqual(progressViews(in: host.view).count, 1)
+
+        screen = nil
+        XCTAssertNil(goneScreen)
+        drainMainQueue()
+        drainMainQueue()
+        XCTAssertEqual(progressViews(in: host.view).count, 1, "a chat screen that went away took the banner of another down")
+    }
+
+    func testAChatScreenThatGoesAwayLetsAnotherChatPrepareItsVideo() throws {
+        var screen: ChatInputViewManager? = try chatScreen()
+        weak var goneScreen: ChatInputViewManager?
+        goneScreen = screen
+        let source = try clip()
+        let ended = expectation(description: "the preparation ended")
+        var outcome: Result<URL, Error>?
+        VideoSendPreprocessor.shared.prepareVideo(at: source, progress: { _ in }) { result in
+            outcome = result
+            ended.fulfill()
+        }
+        screen = nil
+        XCTAssertNil(goneScreen)
+        wait(for: [ended], timeout: 20)
+
+        guard case .success(let prepared)? = outcome else {
+            return XCTFail("a chat screen that went away stopped the video of another: \(String(describing: outcome))")
+        }
+        try? FileManager.default.removeItem(at: prepared)
+    }
+
+    func testAPreparationIsCancelledByItsOwnNumberOnly() throws {
+        let preprocessor = VideoSendPreprocessor.shared
+        let firstSource = try clip()
+        let secondSource = try clip()
+
+        let first = expectation(description: "the first preparation ended")
+        var firstOutcome: Result<URL, Error>?
+        let number = preprocessor.prepareVideo(at: firstSource, progress: { _ in }) { result in
+            firstOutcome = result
+            first.fulfill()
+        }
+        preprocessor.cancelPreparation(number + 1)
+        wait(for: [first], timeout: 20)
+        guard case .success(let prepared)? = firstOutcome else {
+            return XCTFail("the cancel of another preparation stopped this one: \(String(describing: firstOutcome))")
+        }
+        try? FileManager.default.removeItem(at: prepared)
+
+        let second = expectation(description: "the second preparation ended")
+        var secondOutcome: Result<URL, Error>?
+        let own = preprocessor.prepareVideo(at: secondSource, progress: { _ in }) { result in
+            secondOutcome = result
+            second.fulfill()
+        }
+        preprocessor.cancelPreparation(own)
+        wait(for: [second], timeout: 20)
+        XCTAssertNotEqual(own, number)
+        guard case .failure(let error)? = secondOutcome else {
+            return XCTFail("a cancelled preparation handed a file over: \(String(describing: secondOutcome))")
+        }
+        XCTAssertTrue(VideoSendError.isCancellation(error), "\(error)")
+    }
+
+    func testATextThatWentDoesNotHoldItsChatScreen() throws {
+        var screen: ChatInputViewManager? = try chatScreen()
+        weak var goneScreen: ChatInputViewManager?
+        goneScreen = screen
+        let sent = expectation(description: "the text went")
+        screen?.resend("Assalamu alaikum") { taken in
+            XCTAssertTrue(taken)
+            sent.fulfill()
+        }
+        wait(for: [sent], timeout: 2)
+
+        screen = nil
+        XCTAssertNil(goneScreen, "the wake-up signal ten seconds after the text holds the chat screen until then")
+    }
+
+    // MARK: - Helpers
+
+    /// The input manager of a 1:1 chat screen, over the mocks of the UI tests and a profile of its own.
+    private func chatScreen() throws -> ChatInputViewManager {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("video-send-owner-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
+        directories.append(directory)
+        let realmManagerClass = try appClass("OCTRealmManager", as: OCTRealmManager.Type.self)
+        let realmManager = try XCTUnwrap(realmManagerClass.init(databaseFileURL: directory.appendingPathComponent("profile.realm"),
+                                                                encryptionKey: nil))
+        let chat = try appClass("OCTChat", as: OCTChat.Type.self).init()
+        realmManager.add(chat)
+        let realm: RLMRealm = realmManager.realm
+
+        let path = try XCTUnwrap(Bundle.main.path(forResource: "default-theme", ofType: "yaml"))
+        let theme = try Theme(yamlString: String(contentsOfFile: path, encoding: .utf8))
+        let input = ChatInputView(theme: theme)
+        let chats = OCTSubmanagerChatsMock(realm: realm)
+        let files = OCTSubmanagerFilesMock()
+        let objects = OCTSubmanagerObjectsMock(realm: realm)
+        let presenter = UIViewController()
+        presenter.loadViewIfNeeded()
+        kept += [realmManager, input, chats, files, objects, presenter]
+        return ChatInputViewManager(inputView: input,
+                                    theme: theme,
+                                    chat: chat,
+                                    submanagerChats: chats,
+                                    submanagerFiles: files,
+                                    submanagerObjects: objects,
+                                    presentingViewController: presenter)
+    }
+
+    /// A file the preprocessor has nothing to transcode in: it hands it over as it is.
+    private func clip() throws -> URL {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("mov")
+        try Data(repeating: 0x5A, count: 64 * 1024).write(to: url)
+        return url
+    }
+
+    private func appClass<T>(_ name: String, as type: T.Type) throws -> T {
+        let cls: AnyClass = try XCTUnwrap(NSClassFromString(name), "no class \(name)")
+        return unsafeBitCast(cls, to: type)
+    }
+
+    private func drainMainQueue() {
+        let drained = expectation(description: "the main queue ran what was queued before")
+        DispatchQueue.main.async {
+            drained.fulfill()
+        }
+        wait(for: [drained], timeout: 2)
+    }
+
+    private func progressViews(in view: UIView) -> [UIProgressView] {
+        return view.subviews.compactMap { $0 as? UIProgressView } + view.subviews.flatMap { progressViews(in: $0) }
+    }
+}

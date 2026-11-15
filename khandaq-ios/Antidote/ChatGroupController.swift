@@ -32,6 +32,7 @@ class ChatGroupController: PortraitChatController {
     weak var submanagerGroups: OCTSubmanagerGroups!
     weak var submanagerObjects: OCTSubmanagerObjects!
     fileprivate weak var submanagerFriends: OCTSubmanagerFriends!
+    weak var submanagerUser: OCTSubmanagerUser!
     weak var submanagerChats: OCTSubmanagerChats!
 
     var messages: Results<OCTMessageAbstract>
@@ -111,6 +112,7 @@ class ChatGroupController: PortraitChatController {
          submanagerObjects: OCTSubmanagerObjects,
          submanagerFriends: OCTSubmanagerFriends,
          submanagerChats: OCTSubmanagerChats,
+         submanagerUser: OCTSubmanagerUser,
          delegate: ChatGroupControllerDelegate) {
 
         self.theme = theme
@@ -119,6 +121,7 @@ class ChatGroupController: PortraitChatController {
         self.submanagerObjects = submanagerObjects
         self.submanagerFriends = submanagerFriends
         self.submanagerChats = submanagerChats
+        self.submanagerUser = submanagerUser
         self.delegate = delegate
 
         self.showsSystemMessages = UserDefaultsManager().groupShowSystemMessages
@@ -1890,7 +1893,9 @@ private extension ChatGroupController {
         // KHANDAQ (#H5): sort by sortTimestamp (group live == arrival, sync == clamped original) for a
         // stable order that matches displayed times. (Group LIVE cross-device order still depends on
         // per-device arrival — no sender wire ts on the NGC live path — but 1:1 + sync are now stable.)
-        return submanagerObjects.messages(predicate: predicate).sortedResultsUsingProperty("sortTimestamp", ascending: false)
+        // KHANDAQ (0.2.56): then by arrival: synced rows carry whole seconds.
+        return submanagerObjects.messages(predicate: predicate)
+            .sortedResultsUsingDescriptors(OCTMessageAbstract.chatOrderSortDescriptors(ascending: false))
     }
 }
 

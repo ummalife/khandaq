@@ -15,7 +15,6 @@ private struct Constants {
     static let MIN_MYHEIGHT: CGFloat = 45
     static let MAX_MYHEIGHT: CGFloat = 90
     static let MARGIN_MYHEIGHT: CGFloat = 5
-    static let MAX_TEXT_INPUT_CHARS = 1000
 }
 
 protocol ChatInputViewDelegate: class {
@@ -126,7 +125,8 @@ class ChatInputView: UIView {
     private(set) var hintView: AirComposeHintView?
     /// Called after every change of the text, typed or set.
     var onTextChanged: ((String) -> Void)?
-    /// True while the text is longer than a message can be: the send button stays disabled.
+    /// True while nothing can be sent from here now (the person is away): the send button stays
+    /// disabled, and the line under the field says why. A long text never blocks it: it goes in parts.
     var sendBlocked = false {
         didSet {
             if sendBlocked != oldValue {
@@ -397,29 +397,9 @@ extension ChatInputView: UITextViewDelegate {
         updateTextviewHeight(textView)
     }
 
-    func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-        let currentText = textView.text ?? ""
-        let nsCurrent = currentText as NSString
-
-        guard NSMaxRange(range) <= nsCurrent.length else {
-            return true
-        }
-
-        let nsUpdated = nsCurrent.replacingCharacters(in: range, with: text) as NSString
-        if nsUpdated.length <= Constants.MAX_TEXT_INPUT_CHARS {
-            return true
-        }
-
-        // KHANDAQ (paste fix): an over-limit paste used to be dropped ENTIRELY (return false), which reads
-        // as "paste doesn't work" for long clipboard content. Instead clamp — keep as much as fits up to the
-        // limit, place the caret at the end, and drive the normal change handler (height + send-button).
-        // Length math is UTF-16 (NSString) to match the incoming NSRange.
-        let clamped = nsUpdated.substring(to: Constants.MAX_TEXT_INPUT_CHARS)
-        textView.text = clamped
-        textView.selectedRange = NSRange(location: (clamped as NSString).length, length: 0)
-        textViewDidChange(textView)
-        return false
-    }
+    // KHANDAQ (long texts): the field takes a text of any length. It used to cut a typed or pasted text
+    // to 1000 characters without a word; a text longer than one message now goes as several, and the
+    // counter under the field says how many.
 }
 
 private extension ChatInputView {

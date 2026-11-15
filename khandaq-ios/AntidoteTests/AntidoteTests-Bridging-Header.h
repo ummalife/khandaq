@@ -49,6 +49,9 @@
 // QA live F11 (deferred leave): the profile's key-value rows, which keep the chat ids of the pending leaves.
 - (NSString *)ngcValueForKey:(NSString *)key;
 - (BOOL)setNgcValue:(NSString *)value forKey:(NSString *)key;
+// Who can join a group (new groups public by default): the Realm the dossier watches, written as the privacy
+// callback of toxcore writes it.
+@property (strong, nonatomic, readonly) RLMRealm *realm;
 @end
 
 // Redesign stage 3, item 10: the receive paths of the KQ packets (1:1 186, 187, 188 and group 0x41,

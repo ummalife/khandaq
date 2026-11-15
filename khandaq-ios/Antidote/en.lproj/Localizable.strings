@@ -430,6 +430,7 @@
 "error_internal_message" = "Internal error";
 /* Video send */
 "video_send_preparing" = "Preparing video...";
+"media_pick_loading" = "Getting the files from the library...";
 "video_send_preparation_failed" = "Could not prepare video for sending.";
 "video_send_too_large" = "Video is too large (max 500 MB).";
 "video_send_busy" = "Another video is still being prepared. Please wait.";
@@ -859,9 +860,10 @@
 "air_compose_hint_live_format" = "Goes right away: %@ is online";
 "air_compose_hint_saved" = "The note stays only on this device";
 "air_compose_hint_wait_format" = "Waits in transit: %@ is offline. It will go on its own";
+"air_compose_parts_format" = "Goes as %d messages";
 "air_compose_placeholder" = "Message";
 "air_compose_send" = "Send";
-"air_compose_send_blocked" = "The message is over the limit. Shorten it to send it";
+"air_compose_send_blocked" = "It cannot be sent right now: the line under the field says why";
 "air_compose_voice" = "Voice message";
 "air_day_a11y_format" = "online %@";
 "air_day_a11y_none" = "no marks";
@@ -1113,7 +1115,7 @@
 "air_new_group_name_note" = "Everyone you invite sees it. Later the topic can change, the name cannot.";
 "air_new_group_privacy" = "Who can join";
 "air_group_privacy_invite_only" = "By invitation only";
-"air_group_privacy_invite_only_note" = "Only people invited by a member can join.";
+"air_group_privacy_invite_only_note" = "Only people invited by a member can join. The group key does not let anyone in.";
 "air_group_privacy_open" = "Open to anyone with the group key";
 "air_group_privacy_open_note" = "Anyone who has the group key can join, no invitation needed.";
 "air_new_group_invite_note" = "Invitations go at once, so only contacts online can be invited here. Invite the others later from the group dossier.";

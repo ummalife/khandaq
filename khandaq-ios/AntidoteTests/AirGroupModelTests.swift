@@ -15,6 +15,8 @@ class AirGroupModelTests: XCTestCase {
     private var savedLanguage: Any?
     private var savedAppleLanguages: Any?
     private let now: TimeInterval = 1_800_000_000
+    /// The profiles of the dossier tests, removed after each test.
+    private var directories: [URL] = []
 
     override func setUp() {
         super.setUp()
@@ -27,6 +29,8 @@ class AirGroupModelTests: XCTestCase {
         UserDefaults.standard.set(savedLanguage, forKey: AppLanguage.storageKey)
         UserDefaults.standard.set(savedAppleLanguages, forKey: "AppleLanguages")
         AppLanguage.applyAtLaunch()
+        directories.forEach { try? FileManager.default.removeItem(at: $0) }
+        directories = []
         super.tearDown()
     }
 
@@ -362,6 +366,104 @@ class AirGroupModelTests: XCTestCase {
         XCTAssertEqual(AirGroupPrivacy.openById.consequence, "Anyone who has the group key can join, no invitation needed.")
     }
 
+    /// A group by invitation only cannot be joined by its key, and its answer says so.
+    func testInvitationOnlySaysTheKeyLetsNobodyIn() {
+        XCTAssertEqual(AirGroupPrivacy.inviteOnly.consequence,
+                       "Only people invited by a member can join. The group key does not let anyone in.")
+        use("ru")
+        XCTAssertEqual(AirGroupPrivacy.inviteOnly.consequence,
+                       "Войти можно только по приглашению кого-то из участников. По ключу группы войти нельзя.")
+    }
+
+    /// A new group is open to anyone with its key unless its founder closes it on the sheet.
+    func testANewGroupOpensByItsKeyUnlessItsFounderClosesIt() throws {
+        var created: [Bool] = []
+        let sheet = AirNewGroupController(candidates: [])
+        sheet.onCreate = { _, inviteOnly, _ in
+            created.append(inviteOnly)
+        }
+        sheet.loadViewIfNeeded()
+
+        let rows = subviews(of: sheet.view).compactMap { $0 as? AirChoiceRow }
+        XCTAssertEqual(rows.map { $0.accessibilityIdentifier ?? "" }, ["air.newGroup.privacy.open", "air.newGroup.privacy.inviteOnly"],
+                       "the open answer comes first")
+        let open = try XCTUnwrap(rows.first)
+        let closed = try XCTUnwrap(rows.last)
+        XCTAssertTrue(open.isSelected)
+        XCTAssertFalse(closed.isSelected)
+
+        let name = try XCTUnwrap(subviews(of: sheet.view).first { $0.accessibilityIdentifier == "air.newGroup.name" } as? UITextView)
+        name.text = "Book club"
+        name.delegate?.textViewDidChange?(name)
+        let create = try XCTUnwrap(subviews(of: sheet.view).first { $0.accessibilityIdentifier == "air.newGroup.create" } as? UIControl)
+        create.sendActions(for: .touchUpInside)
+
+        closed.sendActions(for: .touchUpInside)
+        XCTAssertTrue(closed.isSelected)
+        XCTAssertFalse(open.isSelected)
+        create.sendActions(for: .touchUpInside)
+        XCTAssertEqual(created, [false, true])
+    }
+
+    /// The dossier of a group by invitation only neither shows nor hands out its key: it says how members
+    /// join, with Invite, and its founder can open the group to anyone with the key from there.
+    func testTheDossierOfAGroupByInvitationOnlyKeepsItsKey() throws {
+        let world = try dossierWorld(privacy: .private, role: .founder)
+        world.dossier.loadViewIfNeeded()
+        XCTAssertNotNil(view(in: world.dossier, "air.group.dossier.inviteOnly"))
+        XCTAssertNotNil(view(in: world.dossier, "air.group.dossier.invite"))
+        for gone in ["air.group.dossier.key", "air.group.dossier.copy", "air.group.dossier.qr"] {
+            XCTAssertNil(view(in: world.dossier, gone), "\(gone) in a group by invitation only")
+        }
+        XCTAssertFalse(showsKey(world.dossier), "the key is on the screen")
+
+        let open = try XCTUnwrap(view(in: world.dossier, "air.group.dossier.openByKey") as? UISwitch)
+        XCTAssertFalse(open.isOn)
+        open.isOn = true
+        open.sendActions(for: .valueChanged)
+
+        XCTAssertEqual(world.chat.groupPrivacyState, Int32(OCTToxGroupPrivacyState.public.rawValue))
+        for shown in ["air.group.dossier.key", "air.group.dossier.copy", "air.group.dossier.qr", "air.group.dossier.invite"] {
+            XCTAssertNotNil(view(in: world.dossier, shown), "\(shown) once the group is open")
+        }
+        XCTAssertNil(view(in: world.dossier, "air.group.dossier.inviteOnly"))
+        XCTAssertNil(view(in: world.dossier, "air.group.dossier.openByKey"))
+        XCTAssertTrue(showsKey(world.dossier))
+    }
+
+    func testOnlyTheFounderCanOpenAGroupByInvitationOnly() throws {
+        for role in [OCTToxGroupRole.moderator, .user, .observer] {
+            let world = try dossierWorld(privacy: .private, role: role)
+            world.dossier.loadViewIfNeeded()
+            XCTAssertNotNil(view(in: world.dossier, "air.group.dossier.inviteOnly"))
+            XCTAssertNil(view(in: world.dossier, "air.group.dossier.openByKey"), "a switch for role \(role.rawValue)")
+        }
+    }
+
+    /// Who can join may change while the dossier is open: in the group settings, on another device of the
+    /// founder, or when the group's state first arrives from its members. objcTox stores it, and the
+    /// dossier follows the store.
+    func testTheDossierFollowsWhoCanJoinAsTheProfileStoresIt() throws {
+        let world = try dossierWorld(privacy: .public, role: .user)
+        world.dossier.loadViewIfNeeded()
+        XCTAssertNotNil(view(in: world.dossier, "air.group.dossier.key"))
+        XCTAssertNil(view(in: world.dossier, "air.group.dossier.inviteOnly"))
+
+        // As objcTox stores it from the privacy callback of toxcore.
+        let realm: RLMRealm = world.realmManager.realm
+        realm.beginWriteTransaction()
+        world.chat.groupPrivacyState = Int32(OCTToxGroupPrivacyState.private.rawValue)
+        try realm.commitWriteTransaction()
+
+        let closed = expectation(description: "the dossier took the key away")
+        pollUntil({ self.view(in: world.dossier, "air.group.dossier.inviteOnly") != nil }) {
+            closed.fulfill()
+        }
+        wait(for: [closed], timeout: 5)
+        XCTAssertNil(view(in: world.dossier, "air.group.dossier.key"))
+        XCTAssertFalse(showsKey(world.dossier))
+    }
+
     func testNameIsOneLineAndFitsInFortyEightBytes() {
         XCTAssertEqual(AirGroupName.clean("  Book\nclub \r\n2026 "), "Book club 2026")
         XCTAssertNil(AirGroupName.overflow(String(repeating: "a", count: 48)))
@@ -581,4 +683,76 @@ private extension AirGroupModelTests {
     func mention(_ key: String, _ handle: String) -> GroupMentionHelper.MentionEntry {
         return GroupMentionHelper.MentionEntry(pubkey: key, handle: handle)
     }
+
+    /// A group in a profile of the test's own, joined with `role`, and its dossier (not loaded yet). The
+    /// profile and its rows are made from the app's copies of the objcTox and Realm classes, which the
+    /// screens use: this bundle has copies of its own, which do not mix with them (OwnCaptionOrderTests).
+    func dossierWorld(privacy: OCTToxGroupPrivacyState, role: OCTToxGroupRole) throws -> DossierWorld {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("air-group-dossier-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
+        directories.append(directory)
+        let realmManagerClass = try appClass("OCTRealmManager", as: OCTRealmManager.Type.self)
+        let realmManager = try XCTUnwrap(realmManagerClass.init(databaseFileURL: directory.appendingPathComponent("profile.realm"),
+                                                                encryptionKey: nil))
+        let chat = try appClass("OCTChat", as: OCTChat.Type.self).init()
+        chat.isGroup = true
+        chat.groupNumber = DossierWorld.groupNumber
+        chat.groupName = "Book club"
+        chat.groupPeerCount = 1
+        chat.groupChatIdHex = DossierWorld.key
+        chat.groupPrivacyState = Int32(privacy.rawValue)
+        realmManager.add(chat)
+        let realm: RLMRealm = realmManager.realm
+
+        let groups = OCTSubmanagerGroupsMock()
+        groups.realm = realm
+        groups.selfRoles[DossierWorld.groupNumber] = role
+        let dossier = AirGroupDossierController(theme: ThemeAppearance.resolvedTheme(),
+                                                chat: chat,
+                                                submanagerGroups: groups,
+                                                submanagerObjects: OCTSubmanagerObjectsMock(realm: realm),
+                                                submanagerChats: OCTSubmanagerChatsMock(realm: realm),
+                                                submanagerFiles: OCTSubmanagerFilesMock(),
+                                                submanagerFriends: OCTSubmanagerFriendsMock())
+        return DossierWorld(realmManager: realmManager, chat: chat, dossier: dossier)
+    }
+
+    func appClass<T>(_ name: String, as type: T.Type) throws -> T {
+        let cls: AnyClass = try XCTUnwrap(NSClassFromString(name), "no class \(name)")
+        return unsafeBitCast(cls, to: type)
+    }
+
+    func view(in controller: UIViewController, _ identifier: String) -> UIView? {
+        return subviews(of: controller.view).first { $0.accessibilityIdentifier == identifier }
+    }
+
+    /// Whether any text on the screen, read or spoken, holds the group key.
+    func showsKey(_ controller: UIViewController) -> Bool {
+        let start = AirKeyFormat.groups(DossierWorld.key).prefix(2).joined(separator: " ")
+        return subviews(of: controller.view).contains { view in
+            let texts = [(view as? UILabel)?.text, view.accessibilityLabel, view.accessibilityValue]
+            return texts.contains { $0?.contains(start) == true || $0?.uppercased().contains(DossierWorld.key.uppercased()) == true }
+        }
+    }
+
+    func pollUntil(_ condition: @escaping () -> Bool, then done: @escaping () -> Void) {
+        if condition() {
+            done()
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.pollUntil(condition, then: done)
+        }
+    }
+}
+
+/// The profile of a dossier test, its group and the dossier.
+private struct DossierWorld {
+    static let groupNumber: Int32 = 41
+    static let key = "7f3a91c05d2e8b4416a9c3e07d5f2b8164e0a3c9d7b25f1e8a4c6d0b3f9e2a71"
+
+    let realmManager: OCTRealmManager
+    let chat: OCTChat
+    let dossier: AirGroupDossierController
 }

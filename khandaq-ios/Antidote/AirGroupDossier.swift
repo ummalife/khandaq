@@ -6,9 +6,10 @@ import SnapKit
 import UIKit
 
 /// The group dossier (E14): who gets a message now with their roles, your role and what it allows, the
-/// group key with Copy, Invite and the QR code, notifications, the history, the group settings and
-/// "Leave the group". The founder and the moderators change roles and remove members from a member's
-/// sheet; every change is confirmed, and a role change can be taken back from the toast.
+/// group key with Copy, Invite and the QR code (or, in a group by invitation only, how members join,
+/// with Invite), notifications, the history, the group settings and "Leave the group". The founder and
+/// the moderators change roles and remove members from a member's sheet; every change is confirmed, and
+/// a role change can be taken back from the toast.
 final class AirGroupDossierController: AirScrollController {
     var onOpenFriend: ((OCTFriend) -> Void)?
 
@@ -29,6 +30,10 @@ final class AirGroupDossierController: AirScrollController {
     private let muteSwitch = UISwitch()
     private let muteNote = AirKit.note("")
     private var memberRows: [AirGroupMemberRow] = []
+    /// Who can join as the key section was last built for, and the watch on the stored privacy that
+    /// rebuilds it once that changes.
+    private var shownPrivacy: AirGroupPrivacy?
+    private var privacyToken: RLMNotificationToken?
 
     init(theme: Theme,
          chat: OCTChat,
@@ -55,6 +60,7 @@ final class AirGroupDossierController: AirScrollController {
 
     deinit {
         observers.forEach { NotificationCenter.default.removeObserver($0) }
+        privacyToken?.invalidate()
     }
 
     override func viewDidLoad() {
@@ -82,6 +88,7 @@ final class AirGroupDossierController: AirScrollController {
             self?.reloadMembers(animated: false)
         })
         build()
+        observePrivacy()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -92,6 +99,7 @@ final class AirGroupDossierController: AirScrollController {
         }
         submanagerGroups.refreshPeers(for: chat)
         reloadMembers(animated: false)
+        privacyMayHaveChanged()
     }
 
     // MARK: Building
@@ -107,6 +115,11 @@ final class AirGroupDossierController: AirScrollController {
 
     private var chatIdHex: String {
         return ((try? submanagerGroups.chatIdHex(for: chat)) ?? chat.groupChatIdHex ?? "").uppercased()
+    }
+
+    private var privacy: AirGroupPrivacy {
+        var error: NSError?
+        return AirGroupPrivacy(state: submanagerGroups.groupPrivacyState(for: chat, error: &error))
     }
 
     private var composeRight: AirGroupComposeRight {
@@ -155,28 +168,47 @@ final class AirGroupDossierController: AirScrollController {
         memberViews.append(membersHolder)
         addSection(heading, views: memberViews)
 
-        // The key.
+        // The key. It is shown, copied and put in a QR code only while anyone with it can join: a group
+        // by invitation only cannot be joined by its key, so instead it says how members join, with
+        // Invite, and its founder can open it to anyone with the key from here.
         let key = chatIdHex
+        let privacy = self.privacy
+        shownPrivacy = privacy
         if !key.isEmpty {
-            let keyLabel = AirKit.label(.mono, color: KQColor.ink, lines: 0)
-            keyLabel.text = AirKeyFormat.lines(key)
-            keyLabel.accessibilityLabel = String(localized: "air_group_key")
-            keyLabel.accessibilityValue = AirKeyFormat.groups(key).joined(separator: " ")
-            keyLabel.accessibilityIdentifier = "air.group.dossier.key"
-            var privacyError: NSError?
-            let privacy = AirGroupPrivacy(state: submanagerGroups.groupPrivacyState(for: chat, error: &privacyError))
-            let copy = AirButton(style: .normal, title: String(localized: "air_group_copy_key"), icon: "copy")
-            copy.accessibilityIdentifier = "air.group.dossier.copy"
-            copy.addTarget(self, action: #selector(copyKey), for: .touchUpInside)
             let invite = AirButton(style: .normal, title: String(localized: "air_group_invite"), icon: "user-plus")
             invite.accessibilityIdentifier = "air.group.dossier.invite"
             invite.addTarget(self, action: #selector(inviteTapped), for: .touchUpInside)
-            let qr = AirButton(style: .normal, title: String(localized: "air_dossier_qr"), icon: "scan")
-            qr.accessibilityIdentifier = "air.group.dossier.qr"
-            qr.addTarget(self, action: #selector(qrTapped), for: .touchUpInside)
-            let buttons = AirKit.buttonRow([copy, invite], traits: traitCollection)
-            addSection(String(localized: "air_group_key"),
-                       views: [keyLabel, AirKit.note(privacy.consequence), buttons, AirKit.leading(qr)])
+            if privacy == .inviteOnly {
+                let line = AirKit.body(privacy.consequence)
+                line.accessibilityIdentifier = "air.group.dossier.inviteOnly"
+                var rows: [UIView] = []
+                if role == .founder {
+                    let open = AirGroupPrivacy.openById
+                    rows.append(AirSettingRow.toggle(title: open.title,
+                                                     detail: open.consequence,
+                                                     isOn: false,
+                                                     identifier: "air.group.dossier.openByKey") { [weak self] on in
+                        self?.openByKeyChanged(on)
+                    })
+                }
+                addSection(String(localized: "air_group_settings_join"), views: [line, AirKit.leading(invite)], rows: rows)
+            }
+            else {
+                let keyLabel = AirKit.label(.mono, color: KQColor.ink, lines: 0)
+                keyLabel.text = AirKeyFormat.lines(key)
+                keyLabel.accessibilityLabel = String(localized: "air_group_key")
+                keyLabel.accessibilityValue = AirKeyFormat.groups(key).joined(separator: " ")
+                keyLabel.accessibilityIdentifier = "air.group.dossier.key"
+                let copy = AirButton(style: .normal, title: String(localized: "air_group_copy_key"), icon: "copy")
+                copy.accessibilityIdentifier = "air.group.dossier.copy"
+                copy.addTarget(self, action: #selector(copyKey), for: .touchUpInside)
+                let qr = AirButton(style: .normal, title: String(localized: "air_dossier_qr"), icon: "scan")
+                qr.accessibilityIdentifier = "air.group.dossier.qr"
+                qr.addTarget(self, action: #selector(qrTapped), for: .touchUpInside)
+                let buttons = AirKit.buttonRow([copy, invite], traits: traitCollection)
+                addSection(String(localized: "air_group_key"),
+                           views: [keyLabel, AirKit.note(privacy.consequence), buttons, AirKit.leading(qr)])
+            }
         }
 
         // Notifications.
@@ -502,13 +534,19 @@ final class AirGroupDossierController: AirScrollController {
     }
 
     @objc private func copyKey() {
+        // The founder may have closed the group a moment ago: its key is not handed out then.
+        guard privacy == .openById else {
+            privacyMayHaveChanged()
+            return
+        }
         UIPasteboard.general.string = chatIdHex
         toast(String(localized: "air_group_key_copied"))
     }
 
     @objc private func qrTapped() {
         let key = chatIdHex
-        guard !key.isEmpty else {
+        guard !key.isEmpty, privacy == .openById else {
+            privacyMayHaveChanged()
             return
         }
         let controller = QRViewerController(theme: theme,
@@ -516,6 +554,47 @@ final class AirGroupDossierController: AirScrollController {
                                             heading: String(localized: "air_group_qr_heading_format", groupName),
                                             subtitle: String(localized: "air_group_qr_subtitle"))
         navigationController?.pushViewController(controller, animated: true)
+    }
+
+    /// The founder's switch in a group by invitation only: on, anyone with the group key can join, and
+    /// the key section shows the key with Copy and the QR code. A refusal puts the switch back.
+    private func openByKeyChanged(_ on: Bool) {
+        guard on, !chat.isInvalidated else {
+            return
+        }
+        do {
+            try submanagerGroups.setGroupPrivacyState(.public, for: chat)
+            build()
+            toast(String(localized: "air_group_settings_saved"))
+        }
+        catch let error as NSError {
+            build()
+            handleErrorWithType(.setGroupPrivacy, error: error)
+        }
+    }
+
+    /// Watches who can join as the profile keeps it: objcTox writes it there when the founder changes it,
+    /// here or in the group settings, and when the group's state arrives from its members (toxcore's
+    /// privacy callback). Only a managed chat can be watched.
+    private func observePrivacy() {
+        guard privacyToken == nil, !chat.isInvalidated, chat.realm != nil else {
+            return
+        }
+        privacyToken = chat.addNotificationBlock({ [weak self] deleted, _, _ in
+            guard !deleted else {
+                return
+            }
+            self?.privacyMayHaveChanged()
+        }, keyPaths: ["groupPrivacyState"])
+    }
+
+    /// Rebuilds the screen once who can join is not what the key section shows. A write of the same
+    /// value notifies too, so nothing is rebuilt then.
+    private func privacyMayHaveChanged() {
+        guard isViewLoaded, !chat.isInvalidated, let shown = shownPrivacy, shown != privacy else {
+            return
+        }
+        build()
     }
 
     @objc private func inviteTapped() {

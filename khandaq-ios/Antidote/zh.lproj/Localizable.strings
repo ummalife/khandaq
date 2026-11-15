@@ -541,6 +541,7 @@
 "group_msg_sender_unverified" = "来自历史转发，发送者未验证";
 "alert_ok" = "确定";
 "video_send_preparing" = "正在准备视频...";
+"media_pick_loading" = "正在从图库获取文件...";
 "video_send_preparation_failed" = "无法准备要发送的视频。";
 "video_send_too_large" = "视频太大（最大 500 MB）。";
 "video_send_busy" = "还有一个视频正在准备中，请稍候。";
@@ -848,9 +849,10 @@
 "air_compose_hint_live_format" = "会立即发出：%@ 在线";
 "air_compose_hint_saved" = "笔记只保存在此设备上";
 "air_compose_hint_wait_format" = "将在传送中等待：%@ 不在线，之后会自动发出";
+"air_compose_parts_format" = "将分 %d 条消息发出";
 "air_compose_placeholder" = "消息";
 "air_compose_send" = "发送";
-"air_compose_send_blocked" = "消息超出长度上限，请缩短后再发送";
+"air_compose_send_blocked" = "现在无法发送：输入框下方的说明给出了原因";
 "air_compose_voice" = "语音消息";
 "air_day_a11y_format" = "在线时段：%@";
 "air_day_a11y_none" = "没有记录";
@@ -1102,7 +1104,7 @@
 "air_new_group_name_note" = "所有受邀者都会看到。之后可以修改主题，但不能修改名称。";
 "air_new_group_privacy" = "谁可以加入";
 "air_group_privacy_invite_only" = "仅限邀请";
-"air_group_privacy_invite_only_note" = "只有成员邀请的人才能加入。";
+"air_group_privacy_invite_only_note" = "只有成员邀请的人才能加入。凭群组密钥无法加入。";
 "air_group_privacy_open" = "持有群组密钥即可加入";
 "air_group_privacy_open_note" = "任何持有群组密钥的人都可以加入，无需邀请。";
 "air_new_group_invite_note" = "邀请会立即发送，因此这里只能邀请在线的联系人。其他人可稍后在群组资料中邀请。";

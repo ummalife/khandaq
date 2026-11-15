@@ -823,7 +823,9 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
             size_t length_orig_corrected = length;
             if (length > TOX_MSGV3_MAX_MESSAGE_LENGTH)
             {
-                length_orig_corrected = TOX_MSGV3_MAX_MESSAGE_LENGTH;
+                // KHANDAQ (long texts): never in the middle of a character. A cut at the byte left half
+                // a letter or an emoji, which is not UTF-8, and the receiver could not read the text.
+                length_orig_corrected = [OCTTox utf8LengthOfMessage:message fittingLength:TOX_MSGV3_MAX_MESSAGE_LENGTH];
             }
 
             cMessage2_alloc = (char *)calloc(1, (size_t)(length_orig_corrected +
@@ -3777,6 +3779,60 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
     return ret;
 }
 
++ (NSUInteger)utf8LengthOfMessage:(NSString *)message fittingLength:(NSUInteger)maxLength
+{
+    NSData *utf8 = [message dataUsingEncoding:NSUTF8StringEncoding];
+
+    if (utf8.length <= maxLength) {
+        return utf8.length;
+    }
+
+    __block NSUInteger fitting = 0;
+    [message enumerateSubstringsInRange:NSMakeRange(0, message.length)
+                                options:NSStringEnumerationByComposedCharacterSequences
+                             usingBlock:^(NSString *character, NSRange range, NSRange enclosingRange, BOOL *stop) {
+        NSUInteger size = [character lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+
+        if (fitting + size > maxLength) {
+            *stop = YES;
+            return;
+        }
+
+        fitting += size;
+    }];
+
+    if (fitting == 0) {
+        // One character longer than the room: it is cut between two of its scalars, before a lead byte.
+        const uint8_t *bytes = utf8.bytes;
+        fitting = maxLength;
+
+        while (fitting > 0 && (bytes[fitting] & 0xC0) == 0x80) {
+            fitting--;
+        }
+    }
+
+    return fitting;
+}
+
+// GC_Conn_State of toxcore's group_common.h, which is not a public header: what the group connection
+// callback passes as its status.
+enum {
+    kOCTGroupConnStateConnecting = 2,
+    kOCTGroupConnStateConnected = 3,
+};
+
++ (int32_t)groupConnectionStatusFromCConnectionState:(int32_t)state
+{
+    switch (state) {
+        case kOCTGroupConnStateConnected:
+            return 1;
+        case kOCTGroupConnStateConnecting:
+            return 0;
+        default:
+            return -1;
+    }
+}
+
 @end
 
 #pragma mark -  Callbacks
@@ -4435,12 +4491,17 @@ void groupConnectionStatusCallback(
     void *userData)
 {
     OCTTox *tox = (__bridge OCTTox *)(userData);
+    // KHANDAQ (group connection): toxcore passes its own connection state here (1 disconnected,
+    // 2 connecting, 3 connected), not the 1 / 0 / -1 of tox_group_is_connected that the delegate and
+    // every poll speak. Every state read as connected, so a group still connecting, or disconnected,
+    // had its waiting messages sent into it as if it were connected.
+    int32_t connectionStatus = [OCTTox groupConnectionStatusFromCConnectionState:status];
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        OCTLogCInfo(@"groupConnectionStatusCallback group=%u status=%d", tox, groupNumber, status);
+        OCTLogCInfo(@"groupConnectionStatusCallback group=%u state=%d status=%d", tox, groupNumber, status, connectionStatus);
 
         if ([tox.delegate respondsToSelector:@selector(tox:groupConnectionStatusChanged:groupNumber:)]) {
-            [tox.delegate tox:tox groupConnectionStatusChanged:status groupNumber:groupNumber];
+            [tox.delegate tox:tox groupConnectionStatusChanged:connectionStatus groupNumber:groupNumber];
         }
     });
 }

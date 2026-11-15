@@ -61,8 +61,9 @@ final class ChatAttachmentsController: UIViewController {
         // has its local copy, which is why the preview data source accepts it too.
         let predicate = NSPredicate(format: "chatUniqueIdentifier == %@ AND messageFile != nil",
                                     chat.uniqueIdentifier)
+        // KHANDAQ (0.2.56): in the conversation's order (OCTMessageAbstract.chatOrderSortDescriptors).
         messages = submanagerObjects.messages(predicate: predicate)
-                .sortedResultsUsingProperty("sortTimestamp", ascending: false)
+                .sortedResultsUsingDescriptors(OCTMessageAbstract.chatOrderSortDescriptors(ascending: false))
     }
 
     required convenience init?(coder aDecoder: NSCoder) {

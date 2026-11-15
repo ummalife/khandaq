@@ -57,6 +57,7 @@ class ChatPrivateController: PortraitChatController {
     fileprivate weak var submanagerChats: OCTSubmanagerChats!
     fileprivate weak var submanagerObjects: OCTSubmanagerObjects!
     fileprivate weak var submanagerFiles: OCTSubmanagerFiles!
+    fileprivate weak var submanagerUser: OCTSubmanagerUser!
 
     fileprivate let messages: Results<OCTMessageAbstract>
     fileprivate var messagesToken: RLMNotificationToken?
@@ -190,13 +191,14 @@ class ChatPrivateController: PortraitChatController {
     fileprivate let showKeyboardOnAppear: Bool
     fileprivate var disableNextInputViewAnimation = false
 
-    init(theme: Theme, chat: OCTChat, submanagerChats: OCTSubmanagerChats, submanagerObjects: OCTSubmanagerObjects, submanagerFiles: OCTSubmanagerFiles, delegate: ChatPrivateControllerDelegate, showKeyboardOnAppear: Bool = false) {
+    init(theme: Theme, chat: OCTChat, submanagerChats: OCTSubmanagerChats, submanagerObjects: OCTSubmanagerObjects, submanagerFiles: OCTSubmanagerFiles, submanagerUser: OCTSubmanagerUser, delegate: ChatPrivateControllerDelegate, showKeyboardOnAppear: Bool = false) {
         self.theme = theme
         self.chat = chat
         self.friend = chat.friends.lastObject() as? OCTFriend
         self.submanagerChats = submanagerChats
         self.submanagerObjects = submanagerObjects
         self.submanagerFiles = submanagerFiles
+        self.submanagerUser = submanagerUser
         self.delegate = delegate
         self.showKeyboardOnAppear = showKeyboardOnAppear
 
@@ -204,7 +206,9 @@ class ChatPrivateController: PortraitChatController {
         // KHANDAQ (#H5): sort by sortTimestamp (sender send-time, clamped), NOT dateInterval (local
         // arrival). A late/offline-flushed message then lands in its true chronological slot — matching
         // its displayed time — and the order is identical across devices.
-        self.messages = submanagerObjects.messages(predicate: predicate).sortedResultsUsingProperty("sortTimestamp", ascending: false)
+        // KHANDAQ (0.2.56): then by arrival: the parts of a long text share their whole-second send time.
+        self.messages = submanagerObjects.messages(predicate: predicate)
+            .sortedResultsUsingDescriptors(OCTMessageAbstract.chatOrderSortDescriptors(ascending: false))
         self.visibleMessages = Constants.MessagesPortionSize
 
         self.timeFormatter = DateFormatter(type: .time)
@@ -1484,7 +1488,9 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
             return
         }
         let message = messageEntry(atDisplayIndex: indexPath.row).message
-        replyController.startReply(to: message, submanagerObjects: submanagerObjects, theme: theme)
+        // KHANDAQ (0.2.56): your friend knows you by your profile name and your key.
+        let own = ChatReplyController.OwnAuthor(name: submanagerUser?.userName(), publicKey: submanagerUser?.publicKey)
+        replyController.startReply(to: message, submanagerObjects: submanagerObjects, own: own, theme: theme)
         // The reply header travels in the same message, so it counts against the length limit.
         updateComposeLimit()
         _ = chatInputView.becomeFirstResponder()
@@ -3753,7 +3759,8 @@ extension ChatPrivateController {
         hintView.setHint(ownNode ?? hint, animated: animated)
     }
 
-    /// The length counter once a tenth of the room is left; over the limit the send button waits.
+    /// The length counter once a tenth of the room is left, then how many messages a longer text goes
+    /// as. Nothing waits for its length: ChatInputViewManager sends a long text in parts.
     fileprivate func updateComposeLimit() {
         guard let hintView = chatInputView?.hintView else {
             return
@@ -3764,11 +3771,10 @@ extension ChatPrivateController {
             chatInputView.sendBlocked = false
             return
         }
-        // The reply header travels in the same message.
-        let bytes = MessageReplyHelper.encode(replyController.pendingMeta, bodyText: text).utf8.count
-        let remaining = AirComposeLimit.remaining(forBytes: bytes)
-        hintView.setCounter(remaining: remaining)
-        chatInputView.sendBlocked = (remaining ?? 0) < 0
+        // The reply header travels in the first message.
+        let head = MessageReplyHelper.encode(replyController.pendingMeta, bodyText: "")
+        hintView.setCounter(text: AirComposeLimit.counterText(for: text, head: head))
+        chatInputView.sendBlocked = false
     }
 
     // MARK: Search

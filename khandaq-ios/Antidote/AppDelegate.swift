@@ -309,11 +309,29 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     os_log("AppDelegate:didReceiveRemoteNotification:start")
+    // KHANDAQ (push wake): reconnect first. After a long sleep the old connections are dead, and
+    // toxcore notices only through timeouts far longer than this handler has, so waiting alone rarely
+    // got the message. The wait below then gives it the rest of the budget to arrive. In the foreground
+    // the reconnect watchdogs already look after the connection.
+    if application.applicationState != .active,
+       !ToxOptionsRestartScheduler.isRestartInProgress,
+       let runcoord = coordinator?.activeCoordinator as? RunningCoordinator,
+       let toxManager = runcoord.activeSessionCoordinator?.toxManager {
+        AppDelegate.reconnectForWake(toxManager.bootstrap)
+    }
     // HINT: we have 30 seconds here. use 25 of those 30 seconds to be on the safe side
     DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in
         completionHandler(UIBackgroundFetchResult.newData)
         os_log("AppDelegate:didReceiveRemoteNotification:start")
     }
+  }
+
+  /// KHANDAQ (push wake): the urgent re-bootstrap a background fetch and the return from the background
+  /// use (debounced in objcTox), logged as a wake.
+  static func reconnectForWake(_ bootstrap: OCTSubmanagerBootstrap) {
+    NetworkDiagnosticsLog.log("push_wake", detail: "rebootstrap")
+    ConnectionQualityMonitor.shared.onBootstrapStarted()
+    bootstrap.rebootstrapOnNetworkChange()
   }
 
   // APNs failed to register the device for push notifications
@@ -325,7 +343,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
   func application(_ application: UIApplication,
                    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-    log("APNs token retrieved: \(deviceToken)")
+    log(PushTokenLog.apnsTokenReceived(deviceToken))
     os_log("AppDelegate:didRegisterForRemoteNotificationsWithDeviceToken")
   }
 }
@@ -410,7 +428,7 @@ private extension AppDelegate {
 
 extension AppDelegate: MessagingDelegate {
   func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-    log("Firebase registration token: \(String(describing: fcmToken))")
+    log(PushTokenLog.fcmTokenReceived(fcmToken))
 
     let dataDict: [String: String] = ["token": fcmToken ?? ""]
     NotificationCenter.default.post(

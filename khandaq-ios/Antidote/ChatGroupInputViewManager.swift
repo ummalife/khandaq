@@ -9,13 +9,22 @@ import Photos
 import PhotosUI
 import UIKit
 
+/// KHANDAQ (large media): photos are prepared for a group (scaled, encoded as JPEG) here, one after
+/// another, off the main queue.
+fileprivate let groupImageEncodeQueue = DispatchQueue(label: "khandaq.group.image.encode", qos: .userInitiated)
+
 class ChatGroupInputViewManager: NSObject {
     fileprivate var chat: OCTChat!
     fileprivate weak var inputView: ChatInputView?
     fileprivate weak var submanagerGroups: OCTSubmanagerGroups!
     fileprivate weak var submanagerObjects: OCTSubmanagerObjects!
     fileprivate weak var presentingViewController: UIViewController!
-    fileprivate var isVideoSendInProgress = false
+    /// KHANDAQ (review 0.2.56): the video this group prepares, by its banner and its preparation. The
+    /// preprocessor and the banner serve every chat: this one stops and takes down only its own.
+    fileprivate var videoSend: (banner: Int, preparation: Int)?
+    fileprivate var isVideoSendInProgress: Bool {
+        return videoSend != nil
+    }
     fileprivate let voiceRecorder = GroupVoiceMessageRecorder()
     fileprivate var voiceHold = VoiceHoldGate()
 
@@ -134,13 +143,33 @@ extension ChatGroupInputViewManager: ChatInputViewDelegate {
 
         let outgoing = outgoingTextComposer?(text) ?? text
 
-        submanagerGroups.sendMessage(to: chat, text: outgoing, type: .normal, successBlock: { _ in
+        // KHANDAQ (long texts): toxcore refuses a group message longer than 1372 bytes, so a longer text
+        // goes as several, in order.
+        sendParts(AirComposeLimit.parts(ofComposed: outgoing, body: text, maxBytes: AirGroupComposeLimit.bytes),
+                  from: 0,
+                  clearing: view)
+    }
+
+    /// Sends `parts` from `index` on, one after another. The field is cleared once the first is taken;
+    /// a part refused after that puts what was not sent back into it.
+    private func sendParts(_ parts: [String], from index: Int, clearing view: ChatInputView) {
+        guard parts.indices.contains(index) else {
+            return
+        }
+        submanagerGroups.sendMessage(to: chat, text: parts[index], type: .normal, successBlock: { _ in
             DispatchQueue.main.async {
-                view.text = ""
-                self.saveEnteredText()
+                if index == 0 {
+                    view.text = ""
+                    self.saveEnteredText()
+                }
+                self.sendParts(parts, from: index + 1, clearing: view)
             }
         }, failureBlock: { error in
             DispatchQueue.main.async {
+                if index > 0 {
+                    view.text = parts[index...].joined(separator: "\n")
+                    self.saveEnteredText()
+                }
                 // E21: without an error the words still say what failed.
                 handleErrorWithType(.sendMessageToFriend, error: error as NSError?)
             }
@@ -204,52 +233,21 @@ extension ChatGroupInputViewManager: PHPickerViewControllerDelegate {
             return
         }
 
-        let provider = result.itemProvider
-        let movieType = movieTypeIdentifiers().first(where: { provider.hasItemConformingToTypeIdentifier($0) })
-
-        if let movieType = movieType {
-            provider.loadFileRepresentation(forTypeIdentifier: movieType) { [weak self] url, _ in
-                guard let self = self, let url = url else {
-                    return
-                }
-
-                // KHANDAQ: the picker's temporary URL is only valid until THIS completion returns.
-                // Copy it into app storage synchronously here — doing the copy on another queue (as
-                // before) raced the system deleting the temp file, so the video silently never sent
-                // (photos go through loadObject(UIImage), which keeps data in memory, so they worked).
-                let stagedResult: Result<URL, Error>
-                do {
-                    stagedResult = .success(try VideoSendPreprocessor.shared.stagePickerVideo(at: url))
-                }
-                catch {
-                    stagedResult = .failure(error)
-                }
-
-                let originalName = provider.suggestedName
-                DispatchQueue.main.async {
-                    switch stagedResult {
-                    case .success(let staged):
-                        self.presentMediaPreview(items: [.video(staged, fileName: originalName)])
-                    case .failure(let error):
-                        self.showVideoSendError(error, retryURL: nil)
-                    }
-                }
-            }
-            return
-        }
-
-        guard provider.canLoadObject(ofClass: UIImage.self) else {
-            return
-        }
-
-        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
-            guard let self = self,
-                  let image = object as? UIImage else {
+        // KHANDAQ (large media): the banner while it loads, unless a video is being prepared and its
+        // banner is up. The picker's temporary URL is only valid until the provider's completion
+        // returns, so the loader copies a video into app storage inside it (PickedMediaLoader).
+        PickedMediaLoader.load([result],
+                               movieTypes: movieTypeIdentifiers(),
+                               bannerHost: isVideoSendInProgress ? nil : presentingViewController,
+                               message: String(localized: "media_pick_loading")) { [weak self] loaded in
+            guard let self = self else {
                 return
             }
-
-            DispatchQueue.main.async {
-                self.presentMediaPreview(items: [.image(image, fileName: nil)])
+            if !loaded.items.isEmpty {
+                self.presentMediaPreview(items: loaded.items)
+            }
+            else if let error = loaded.stagingError {
+                self.showVideoSendError(error, retryURL: nil)
             }
         }
     }
@@ -292,11 +290,22 @@ extension ChatGroupInputViewManager: MediaSendPreviewControllerDelegate {
     }
 
     // Sends the caption text right after the media and flags it so it renders merged into the bubble.
+    // A caption longer than one message goes as several: the first is the caption, the rest follow it.
     func sendCaptionMessage(_ text: String) {
         let outgoing = outgoingTextComposer?(text) ?? text
-        submanagerGroups.sendMessage(to: chat, text: outgoing, type: .normal, successBlock: { [weak self] message in
-            if let message = message {
+        sendCaptionParts(AirComposeLimit.parts(ofComposed: outgoing, body: text, maxBytes: AirGroupComposeLimit.bytes), from: 0)
+    }
+
+    private func sendCaptionParts(_ parts: [String], from index: Int) {
+        guard parts.indices.contains(index) else {
+            return
+        }
+        submanagerGroups.sendMessage(to: chat, text: parts[index], type: .normal, successBlock: { [weak self] message in
+            if index == 0, let message = message {
                 self?.submanagerObjects.markMessage(asCaption: message)
+            }
+            DispatchQueue.main.async {
+                self?.sendCaptionParts(parts, from: index + 1)
             }
         }, failureBlock: { error in
             DispatchQueue.main.async {
@@ -314,6 +323,10 @@ private extension ChatGroupInputViewManager {
             var configuration = PHPickerConfiguration()
             configuration.filter = .any(of: [.images, .videos])
             configuration.selectionLimit = 1
+            // KHANDAQ (large media): the file as it is in the library, as in a chat with a person: the
+            // app transcodes a large video itself (VideoSendPreprocessor) and prepares every photo for
+            // the group (GroupImagePreparer), so a transcode by the system first is only a long wait.
+            configuration.preferredAssetRepresentationMode = .current
 
             let picker = PHPickerViewController(configuration: configuration)
             picker.delegate = self
@@ -349,15 +362,27 @@ private extension ChatGroupInputViewManager {
     }
 
     func sendImageData(_ image: UIImage, caption: String = "") {
-        guard let data = GroupImagePreparer.jpegDataForGroupUpload(from: image) else {
-            UIAlertController.showErrorWithMessage(String(localized: "group_file_send_failed"), retryBlock: nil)
-            return
-        }
+        // KHANDAQ (large media): scaling and encoding a full-size photo takes a noticeable moment; it
+        // runs off the main queue, and the file goes out from the main queue as before.
+        groupImageEncodeQueue.async {
+            let data = autoreleasepool {
+                GroupImagePreparer.jpegDataForGroupUpload(from: image)
+            }
+            DispatchQueue.main.async {
+                guard self.submanagerGroups != nil, !self.chat.isInvalidated else {
+                    return
+                }
+                guard let data = data else {
+                    UIAlertController.showErrorWithMessage(String(localized: "group_file_send_failed"), retryBlock: nil)
+                    return
+                }
 
-        // KHANDAQ (#47): unique per-send name. A fixed "photo.jpg" collided across sends (the temp
-        // write path, and any name-keyed bookkeeping), which let a later photo appear in an earlier
-        // photo's message. Videos already use a unique name and never swapped — mirror that.
-        sendFileData(data, fileName: "photo_\(UUID().uuidString.prefix(8)).jpg", caption: caption)
+                // KHANDAQ (#47): unique per-send name. A fixed "photo.jpg" collided across sends (the temp
+                // write path, and any name-keyed bookkeeping), which let a later photo appear in an earlier
+                // photo's message. Videos already use a unique name and never swapped — mirror that.
+                self.sendFileData(data, fileName: "photo_\(UUID().uuidString.prefix(8)).jpg", caption: caption)
+            }
+        }
     }
 
     func sendMovie(imagePickerInfo: [String: Any]) {
@@ -399,34 +424,44 @@ private extension ChatGroupInputViewManager {
         }
     }
 
-    func enqueueVideoSend(from sourceURL: URL, caption: String = "", completion: (() -> Void)? = nil) {
+    /// `completion` runs on the main queue once the video went, failed or was cancelled (true).
+    func enqueueVideoSend(from sourceURL: URL, caption: String = "", completion: ((_ cancelled: Bool) -> Void)? = nil) {
         guard !isVideoSendInProgress else {
             showVideoSendError(VideoSendError.busy, retryURL: sourceURL)
-            completion?()
+            completion?(false)
             return
         }
 
-        isVideoSendInProgress = true
-        VideoSendProgressOverlay.shared.show(on: presentingViewController,
-                                             message: String(localized: "video_send_preparing"),
-                                             onCancel: { [weak self] in
-            VideoSendPreprocessor.shared.cancelActivePreparation()
-            VideoSendProgressOverlay.shared.hide()
-            self?.isVideoSendInProgress = false
+        // Read only after show() returned, by Cancel, the progress and the end of the job: by then it
+        // holds the banner's number.
+        var banner = 0
+        banner = VideoSendProgressOverlay.shared.show(on: presentingViewController,
+                                                      message: String(localized: "video_send_preparing"),
+                                                      onCancel: { [weak self] in
+            self?.cancelVideoSend(banner: banner)
         })
 
-        VideoSendPreprocessor.shared.prepareVideo(at: sourceURL, progress: { progress in
-            VideoSendProgressOverlay.shared.update(progress: progress)
+        let preparation = VideoSendPreprocessor.shared.prepareVideo(at: sourceURL, progress: { progress in
+            VideoSendProgressOverlay.shared.update(progress: progress, banner: banner)
         }, completion: { [weak self] result in
             DispatchQueue.main.async {
-                VideoSendProgressOverlay.shared.hide()
+                VideoSendProgressOverlay.shared.hide(banner: banner)
+                // Over, unless Cancel let another video of this group start already.
+                if self?.videoSend?.banner == banner {
+                    self?.videoSend = nil
+                }
 
-                guard let self = self else {
-                    completion?()
+                // KHANDAQ (large media): a cancelled preparation has nothing to send, and a cancelled
+                // video ends its sequence.
+                if case .failure(let error) = result, VideoSendError.isCancellation(error) {
+                    completion?(true)
                     return
                 }
 
-                self.isVideoSendInProgress = false
+                guard let self = self else {
+                    completion?(false)
+                    return
+                }
 
                 switch result {
                 case .success(let preparedURL):
@@ -435,9 +470,21 @@ private extension ChatGroupInputViewManager {
                     self.showVideoSendError(error, retryURL: sourceURL)
                 }
 
-                completion?()
+                completion?(false)
             }
         })
+        videoSend = (banner: banner, preparation: preparation)
+    }
+
+    /// Stops the video this group prepares and takes its banner down, so that another one can start at
+    /// once; with `banner`, only while that banner's video is the one in progress.
+    func cancelVideoSend(banner: Int? = nil) {
+        guard let videoSend = videoSend, banner == nil || banner == videoSend.banner else {
+            return
+        }
+        self.videoSend = nil
+        VideoSendPreprocessor.shared.cancelPreparation(videoSend.preparation)
+        VideoSendProgressOverlay.shared.hide(banner: videoSend.banner)
     }
 
     func sendPreparedVideo(at url: URL, caption: String = "") {

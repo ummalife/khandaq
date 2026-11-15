@@ -52,6 +52,7 @@ private slots:
     void everyoneOnlineNobodyOnlineAloneAndNotConnected();
     void countsNeverContradictEachOther();
     void aTextGoesOnlyOnceTheGroupConfirmedSomeoneElse();
+    void aMemberIsReachableDirectlyOrThroughARelayOfTheGroups();
     void observersAndTheVoiceStateDecideWhoWrites();
     void founderAndModeratorsChangeRolesWithinTheirRights();
     void everyChangeIsAskedInOneSentenceAndToldOnceDone();
@@ -368,6 +369,29 @@ void TestAirGroup::aTextGoesOnlyOnceTheGroupConfirmedSomeoneElse()
     QVERIFY(!Air::groupTakesText(0, std::numeric_limits<quint32>::max()));
     QVERIFY(!Air::groupTakesText(0, 1));
     QVERIFY(!Air::groupTakesText(-1, 2));
+}
+
+/**
+ * 0.2.56: the page counts a member online only while toxcore has a path to them: direct (UDP), or
+ * through a relay of the groups. toxcore says TCP for every other member it lists, as for two
+ * members who never reached each other: the page said "2 online" and "all 2 get it at once" to one
+ * of them while neither got the other's texts.
+ */
+void TestAirGroup::aMemberIsReachableDirectlyOrThroughARelayOfTheGroups()
+{
+    // TOX_CONNECTION_NONE, TOX_CONNECTION_TCP and TOX_CONNECTION_UDP.
+    constexpr int none = 0;
+    constexpr int tcp = 1;
+    constexpr int udp = 2;
+    QVERIFY(Air::groupPeerReachable(udp, 0));
+    QVERIFY(Air::groupPeerReachable(udp, 3));
+    QVERIFY(Air::groupPeerReachable(tcp, 1));
+    QVERIFY(!Air::groupPeerReachable(tcp, 0));
+    QVERIFY(!Air::groupPeerReachable(none, 3));
+
+    // What the head and the line under the field say then: one of the two others online.
+    const Air::GroupReach reach = Air::GroupReach::make(3, 3, 1, true);
+    QCOMPARE(Air::GroupHint::make(reach).kind, Air::GroupHint::Kind::Some);
 }
 
 void TestAirGroup::observersAndTheVoiceStateDecideWhoWrites()

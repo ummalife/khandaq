@@ -614,6 +614,7 @@ void Core::countRelays()
     QByteArray report(NetworkDiagnostics::relayReportSize, '\0');
     tox_get_all_tcp_relays(tox.get(), report.data());
     const int relays = NetworkDiagnostics::relayCount(report);
+    lastGroupRelays = NetworkDiagnostics::groupRelayCount(report);
     if (relays != lastRelays) {
         lastRelays = relays;
         emit relaysChanged(relays);
@@ -2105,7 +2106,9 @@ bool Core::isGroupPeerOnline(int groupId, int peerId) const
     const Tox_Connection connection =
         tox_group_peer_get_connection_status(tox.get(), static_cast<uint32_t>(groupId),
                                              static_cast<uint32_t>(peerId), &error);
-    return error == TOX_ERR_GROUP_PEER_QUERY_OK && connection != TOX_CONNECTION_NONE;
+    // toxcore says TCP for any member it has no direct path to (Air::groupPeerReachable).
+    return error == TOX_ERR_GROUP_PEER_QUERY_OK
+           && Air::groupPeerReachable(static_cast<int>(connection), lastGroupRelays);
 }
 
 int Core::getGroupConnection(int groupId) const

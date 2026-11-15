@@ -114,7 +114,7 @@ public:
     uint32_t getGroupSelfPeerId(int groupId) const;
     Tox_Group_Role getGroupSelfRole(int groupId) const;
     Tox_Group_Role getGroupPeerRole(int groupId, int peerId) const;
-    /** Whether toxcore has a connection to the peer now. */
+    /** Whether the peer is reachable now: a direct path, or a relay of the groups (E13). */
     bool isGroupPeerOnline(int groupId, int peerId) const;
     /**
      * tox_group_is_connected of this fork: 1 once the group is synced, 0 while it connects (a
@@ -513,6 +513,8 @@ private:
     /** When the relays were last counted, and how many there were (-1 before the first count). */
     QElapsedTimer relaysCounted;
     int lastRelays = -1;
+    /** Of those, the relays the groups use (NetworkDiagnostics::groupRelayCount). */
+    int lastGroupRelays = 0;
     /** Since the bootstrap nodes were last asked, or since the node went offline; invalid before. */
     QElapsedTimer bootstrapClock;
     class QNetworkConfigurationManager* networkManager = nullptr;

@@ -135,6 +135,16 @@ struct GroupReach
  */
 bool groupTakesText(int connection, quint32 peerCount);
 
+/**
+ * Whether a member of a group is reachable now, for the counts of the group's page: peerConnection
+ * is tox_group_peer_get_connection_status (a TOX_CONNECTION value), groupRelays the TCP relays the
+ * groups are connected to (NetworkDiagnostics::groupRelayCount). toxcore says UDP while direct
+ * packets came from the member in the last 16 s (its pings come every 12), and TCP for every
+ * member it has no direct path to, with or without a relay to reach them through: without one, it
+ * has no path to them at all, and what it sends them waits until they time out.
+ */
+bool groupPeerReachable(int peerConnection, int groupRelays);
+
 /** The line under the field of a group: who gets a message sent now. */
 struct GroupHint
 {

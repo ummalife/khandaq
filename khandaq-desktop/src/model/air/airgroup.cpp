@@ -177,6 +177,14 @@ bool groupTakesText(int connection, quint32 peerCount)
     return connection >= 0 && peerCount > 1 && peerCount != std::numeric_limits<quint32>::max();
 }
 
+bool groupPeerReachable(int peerConnection, int groupRelays)
+{
+    // TOX_CONNECTION_TCP and TOX_CONNECTION_UDP.
+    constexpr int tcp = 1;
+    constexpr int udp = 2;
+    return peerConnection == udp || (peerConnection == tcp && groupRelays > 0);
+}
+
 GroupHint GroupHint::make(const GroupReach& reach, NetworkState self)
 {
     // No amber dot: nothing waits in transit, Send waits instead (sendWaits).

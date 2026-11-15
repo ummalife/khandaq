@@ -33,6 +33,7 @@ class TestNetworkDiagnostics : public QObject
 
 private slots:
     void relaysAreCountedOncePerAddress();
+    void groupRelaysAreTheOnesUnderTheGroups();
     void paddedPortsAndIpv6AddressesCount();
     void reportEndsAtItsFirstZeroByte();
     void otherLinesAreNotRelays();
@@ -78,6 +79,32 @@ void TestNetworkDiagnostics::relaysAreCountedOncePerAddress()
                             "END:=================\n";
     QCOMPARE(NetworkDiagnostics::relayCount(report(none)), 0);
     QCOMPARE(NetworkDiagnostics::relayCount(QByteArray()), 0);
+}
+
+void TestNetworkDiagnostics::groupRelaysAreTheOnesUnderTheGroups()
+{
+    // The friends reach two relays, the groups one of them.
+    const QByteArray text = "FRS:=================\n"
+                            "port=33445 ip=127.0.0.1\n"
+                            "port=33445 ip=198.51.100.20\n"
+                            "FRS:NUM:2\n"
+                            "GRP:=================\n"
+                            "port=33445 ip=127.0.0.1\n"
+                            "port=33445 ip=127.0.0.1\n"
+                            "GRP:NUM:2\n"
+                            "END:=================\n";
+    QCOMPARE(NetworkDiagnostics::groupRelayCount(report(text)), 1);
+
+    // UDP works: the friends keep a relay, the groups have none to fall back on.
+    const QByteArray none = "FRS:=================\n"
+                            "port=33445 ip=198.51.100.20\n"
+                            "FRS:NUM:1\n"
+                            "GRP:=================\n"
+                            "GRP:NUM:0\n"
+                            "END:=================\n";
+    QCOMPARE(NetworkDiagnostics::groupRelayCount(report(none)), 0);
+    QCOMPARE(NetworkDiagnostics::relayCount(report(none)), 1);
+    QCOMPARE(NetworkDiagnostics::groupRelayCount(QByteArray()), 0);
 }
 
 void TestNetworkDiagnostics::paddedPortsAndIpv6AddressesCount()

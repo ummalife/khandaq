@@ -30,7 +30,7 @@
 #include <limits>
 
 // 0.2.56: toxcore takes a group text while it has confirmed nobody else in the group, and says it
-// went. Core hands it over only while the group is connected and has someone else in it
+// went. Core hands it over only while the group is not disconnected and has someone else in it
 // (Air::groupTakesText); otherwise the text waits (GroupMessageDispatcher). The cores here are
 // never started: their groups never find a member.
 class TestCoreGroupText : public QObject
@@ -39,7 +39,7 @@ class TestCoreGroupText : public QObject
 private slots:
     void initTestCase();
     void aGroupJustMadeIsConnectedButTakesNoText();
-    void aGroupStillConnectingTakesNoText();
+    void aGroupConnectingWithNobodyTakesNoText();
     void aTextTooLongFailsWhetherTheGroupTakesTextsOrNot();
     void aGroupThatIsNotThereTakesNoText();
 
@@ -86,9 +86,10 @@ void TestCoreGroupText::aGroupJustMadeIsConnectedButTakesNoText()
     QCOMPARE(failed.count(), 0);
 }
 
-void TestCoreGroupText::aGroupStillConnectingTakesNoText()
+void TestCoreGroupText::aGroupConnectingWithNobodyTakesNoText()
 {
-    // The founder's group back from the save connects again; until then it takes no text.
+    // The founder's group back from the save connects again; until a member reaches it, it takes
+    // no text.
     ToxCorePtr founder = makeCore();
     QVERIFY(founder);
     const int founded =
@@ -107,6 +108,7 @@ void TestCoreGroupText::aGroupStillConnectingTakesNoText()
     QCOMPARE(error, TOX_ERR_GROUP_STATE_QUERIES_OK);
     const int group = static_cast<int>(loaded);
     QCOMPARE(core->getGroupConnection(group), 0);
+    QCOMPARE(core->getGroupNumberPeers(group), uint32_t{1});
 
     uint32_t wireId = 1;
     QCOMPARE(core->sendGroupMessage(group, QStringLiteral("Hello"), wireId), SendResult::NotReady);

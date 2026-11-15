@@ -125,10 +125,13 @@ struct GroupReach
  * Whether a text sent to the group now reaches someone, as toxcore has it at the moment of sending:
  * connection is tox_group_is_connected of this fork (-1 disconnected, 0 connecting, 1 connected),
  * peerCount is tox_group_peer_count, which counts you too and is UINT32_MAX when it fails.
- * Connected alone is not enough: toxcore calls a group connected at its first sync response, before
- * it confirmed anyone, and keeps it so after every member timed out; a group just made is connected
- * with its founder alone. tox_group_send_message sends to the confirmed members only, and succeeds
- * with none. The rule of Android and iOS too (0.2.56).
+ * tox_group_send_message sends to the members toxcore confirmed, and succeeds with none: what
+ * counts is someone confirmed besides you. Connected alone is not enough: toxcore calls a group
+ * connected at its first sync response, before it confirmed anyone, and keeps it so after every
+ * member timed out; a group just made is connected with its founder alone. Connecting is enough
+ * with members: a founder's group back from the save stays connecting while they reach it, for it
+ * asks nobody for a sync, and the group's page counts it connected then (GroupChatForm). The rule
+ * of iOS (0.2.56).
  */
 bool groupTakesText(int connection, quint32 peerCount);
 

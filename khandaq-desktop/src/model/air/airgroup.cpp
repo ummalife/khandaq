@@ -174,7 +174,7 @@ bool GroupReach::operator==(const GroupReach& other) const
 
 bool groupTakesText(int connection, quint32 peerCount)
 {
-    return connection == 1 && peerCount > 1 && peerCount != std::numeric_limits<quint32>::max();
+    return connection >= 0 && peerCount > 1 && peerCount != std::numeric_limits<quint32>::max();
 }
 
 GroupHint GroupHint::make(const GroupReach& reach, NetworkState self)

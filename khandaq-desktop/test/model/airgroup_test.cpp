@@ -352,18 +352,20 @@ void TestAirGroup::countsNeverContradictEachOther()
 
 /**
  * 0.2.56: toxcore's connection (-1 disconnected, 0 connecting, 1 connected) and its peer count,
- * which counts you too: a text goes to a connected group that confirmed someone else, never to one
- * connected with you alone (a group just made, or every member timed out), nor when the count
- * failed (UINT32_MAX).
+ * which counts you too: a text goes to a group that is not disconnected and confirmed someone else,
+ * one still connecting too (a founder's group back from the save, which its members reach), never
+ * to one with you alone (a group just made, or every member timed out), nor when the count failed
+ * (UINT32_MAX).
  */
 void TestAirGroup::aTextGoesOnlyOnceTheGroupConfirmedSomeoneElse()
 {
     QVERIFY(Air::groupTakesText(1, 2));
     QVERIFY(Air::groupTakesText(1, 50));
+    QVERIFY(Air::groupTakesText(0, 2));
     QVERIFY(!Air::groupTakesText(1, 1));
     QVERIFY(!Air::groupTakesText(1, 0));
     QVERIFY(!Air::groupTakesText(1, std::numeric_limits<quint32>::max()));
-    QVERIFY(!Air::groupTakesText(0, 2));
+    QVERIFY(!Air::groupTakesText(0, std::numeric_limits<quint32>::max()));
     QVERIFY(!Air::groupTakesText(0, 1));
     QVERIFY(!Air::groupTakesText(-1, 2));
 }

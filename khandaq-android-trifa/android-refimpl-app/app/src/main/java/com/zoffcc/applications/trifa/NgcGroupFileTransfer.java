@@ -59,6 +59,8 @@ public final class NgcGroupFileTransfer
     static final int FILE_BEGIN_HEADER = 6 + 1 + 1 + 32 + 4 + 255 + 8 + 4 + 4;
     static final int FILE_CHUNK_HEADER = 6 + 1 + 1 + 32 + 4 + 4;
     static final int FILE_REQUEST_HEADER = 6 + 1 + 1 + 32 + 4;
+    /** KHANDAQ (0.2.56): the most chunks one iPhone request lists (iOS kOCTNgcNackMaxIndicesPerPacket). */
+    static final int FILE_REQUEST_MAX_LISTED_CHUNKS = 256;
     static final int CHUNK_PAYLOAD_MAX = TOX_MAX_NGC_FILE_AND_HEADER_SIZE - FILE_CHUNK_HEADER;
 
     private static final int MAX_ORPHAN_CHUNKS = 512;
@@ -2314,7 +2316,7 @@ public final class NgcGroupFileTransfer
      * @param totalChunks    total chunk count (only meaningful when {@code missingBitmap != null})
      * @param missingBitmap  bit {@code i} set ⇒ chunk {@code i} still missing; {@code null} ⇒ legacy full request
      */
-    private static byte[] buildFileRequestPacket(final byte[] msgId, final int totalChunks, final byte[] missingBitmap)
+    static byte[] buildFileRequestPacket(final byte[] msgId, final int totalChunks, final byte[] missingBitmap)
     {
         final int bmLen = (missingBitmap != null) ? missingBitmap.length : 0;
         final ByteBuffer buf = ByteBuffer.allocate(FILE_REQUEST_HEADER + bmLen).order(ByteOrder.BIG_ENDIAN);
@@ -2355,8 +2357,12 @@ public final class NgcGroupFileTransfer
         return bm;
     }
 
-    /** Parses an extended FILE_REQUEST bitmap into per-chunk wanted[] (true ⇒ send); null ⇒ legacy full request. */
-    private static boolean[] parseWantedChunks(final byte[] data, final int length, final long fileSize)
+    /**
+     * Parses a FILE_REQUEST into per-chunk wanted[] (true ⇒ send); null ⇒ legacy full request. After the msg id comes
+     * Android's layout, the file's chunk count (u32) and a bitmap of the missing chunks, or iOS's, a list of them
+     * (parseListedChunks).
+     */
+    static boolean[] parseWantedChunks(final byte[] data, final int length, final long fileSize)
     {
         if (length <= FILE_REQUEST_HEADER)
         {
@@ -2364,8 +2370,13 @@ public final class NgcGroupFileTransfer
         }
         try
         {
-            final int total = readU32Be(data, 40);
             final int expectedTotal = (int) ((fileSize + CHUNK_PAYLOAD_MAX - 1) / CHUNK_PAYLOAD_MAX);
+            final boolean[] listed = parseListedChunks(data, length, expectedTotal);
+            if (listed != null)
+            {
+                return listed;
+            }
+            final int total = readU32Be(data, 40);
             if (total < 1 || total != expectedTotal)
             {
                 return null;
@@ -2388,6 +2399,34 @@ public final class NgcGroupFileTransfer
         {
             return null;
         }
+    }
+
+    /**
+     * KHANDAQ (0.2.56): the request of an iPhone (OCTNgcGroupFileTransfer sendNackForAssembly) lists the chunks it
+     * misses: after the msg id a count n (u32, 1 to FILE_REQUEST_MAX_LISTED_CHUNKS), then n chunk indices (u32 each,
+     * big-endian), and the packet ends there. Android read the count as the file's chunk count, found it was not, and
+     * took the request for a full one: dropped while one of our files went, else the whole file again from its first
+     * chunk at the pace. The iPhone ignores the chunks it has, counts that as silence, and gives the file up after a
+     * minute of it. Indices beyond the file are left out. Android's own request never has this length: its bitmap of
+     * n chunks is (n + 7) / 8 bytes, not 4 n. Null when the packet is not of this layout.
+     */
+    private static boolean[] parseListedChunks(final byte[] data, final int length, final int expectedTotal)
+    {
+        final int n = readU32Be(data, 40);
+        if (n < 1 || n > FILE_REQUEST_MAX_LISTED_CHUNKS || length != FILE_REQUEST_HEADER + 4 * n)
+        {
+            return null;
+        }
+        final boolean[] wanted = new boolean[Math.max(0, expectedTotal)];
+        for (int k = 0; k < n; k++)
+        {
+            final long idx = readU32Be(data, FILE_REQUEST_HEADER + 4 * k) & 0xffffffffL;
+            if (idx < wanted.length)
+            {
+                wanted[(int) idx] = true;
+            }
+        }
+        return wanted;
     }
 
     /**

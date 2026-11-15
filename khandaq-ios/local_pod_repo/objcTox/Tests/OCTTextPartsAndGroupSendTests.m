@@ -39,8 +39,8 @@
  *
  * toxcore's group connection callback passes its own connection state (1 disconnected, 2 connecting,
  * 3 connected), which was taken for the 1 / 0 / -1 of the poll: every state read as connected. And a
- * group still connecting with nobody confirmed reports a message sent that reaches nobody, so such a
- * message now waits until somebody can get it.
+ * group with nobody confirmed, still connecting or connected, reports a message sent that reaches
+ * nobody, so such a message now waits until somebody can get it.
  */
 @interface OCTTextPartsAndGroupSendTests : XCTestCase
 
@@ -220,6 +220,17 @@
     NSDictionary *sent = [self sendToGroupWithStatus:1 peers:3];
     XCTAssertEqualObjects(sent[@"sends"], @1);
     XCTAssertEqualObjects(sent[@"pending"], @0);
+}
+
+- (void)testAConnectedGroupWithNobodyElseKeepsTheMessage
+{
+    // A group connects before any peer is confirmed, and stays connected once its peers timed out:
+    // toxcore reports a message sent that reaches nobody.
+    NSDictionary *sent = [self sendToGroupWithStatus:1 peers:1];
+    XCTAssertEqualObjects(sent[@"sends"], @0, @"sent into a group nobody else is in");
+    XCTAssertEqualObjects(sent[@"pending"], @1);
+    XCTAssertEqualObjects(sent[@"stored"], @0);
+    XCTAssertEqualObjects(sent[@"reconnects"], @0, @"a connected group must not be reconnected");
 }
 
 - (void)testADisconnectedGroupIsReconnectedAndKeepsTheMessage

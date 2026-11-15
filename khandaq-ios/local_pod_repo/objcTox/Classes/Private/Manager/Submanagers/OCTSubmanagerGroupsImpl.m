@@ -66,18 +66,17 @@ static const NSTimeInterval kOCTGroupPendingFlushAfterJoinSec = 3.0;
 /**
  * KHANDAQ (group connection): whether a message sent to the group now reaches somebody, for the status
  * -[OCTTox groupConnectionStatusForGroupNumber:error:] gave. toxcore sends a group message to its
- * confirmed peers only, yet refuses one only while the group is disconnected: still connecting with
- * nobody confirmed, it reports the message sent. A group can also stay connecting with peers confirmed
- * (it connects on a sync response, which comes for the handshakes it started), and a message sent then
- * does reach them. The peer count counts this client too. Call on the tox queue.
+ * confirmed peers only, yet refuses one only while the group is disconnected: with nobody confirmed it
+ * reports the message sent. That is so while the group is still connecting, and also once it is
+ * connected: a group connects on the first sync response, before any peer is confirmed, a new group is
+ * connected with its founder alone, and a group whose peers all timed out stays connected. A group can
+ * also stay connecting with peers confirmed (it connects on a sync response, which comes for the
+ * handshakes it started), and a message sent then does reach them. So it is the peers that decide; the
+ * peer count counts this client too. Call on the tox queue.
  */
 static BOOL OCTGroupIsReadyToSend(OCTTox *tox, OCTToxGroupNumber groupNumber, int32_t connectionStatus)
 {
-    if (connectionStatus == 1) {
-        return YES;
-    }
-
-    return connectionStatus == 0 && [tox groupPeerCountForGroupNumber:groupNumber error:nil] > 1;
+    return connectionStatus >= 0 && [tox groupPeerCountForGroupNumber:groupNumber error:nil] > 1;
 }
 
 NSString *const kOCTSubmanagerGroupsErrorDomain = @"OCTSubmanagerGroupsErrorDomain";
@@ -1080,10 +1079,11 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
         BOOL firstAttempt = (attempt == 0);
 
         // KHANDAQ (group connection): toxcore refuses a group message only while the group is
-        // disconnected. Still connecting, as after every reconnect, it "sends" the message to the
-        // peers it has confirmed, none yet, and reports success: the message showed as sent and reached
-        // nobody. Until a message reaches somebody it waits in the pending queue, which is sent once it
-        // does (a peer joins, the group connects, the group maintenance).
+        // disconnected. Still connecting, as after every reconnect, or connected with every peer timed
+        // out, it "sends" the message to the peers it has confirmed, none, and reports success: the
+        // message showed as sent and reached nobody. Until a message reaches somebody it waits in the
+        // pending queue, which is sent once it does (a peer joins, the group connects, the group
+        // maintenance).
         [self performSyncOnToxQueue:^(OCTTox *tox) {
             int32_t connectionStatus = [tox groupConnectionStatusForGroupNumber:groupNumber error:nil];
             ready = OCTGroupIsReadyToSend(tox, groupNumber, connectionStatus);
@@ -1236,13 +1236,14 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                                         groupMsgIdHashHex:msgIdHex
                                                      groupTransferProgress:0.0f];
 
-    // KHANDAQ: don't push media into a group that is still CONNECTING (it would sit at 0% then
-    // "Upload Failed"). Gate ONLY on the group being connected — the chunk send broadcasts via the
-    // group mesh (tox_group_send_custom_packet), which does NOT require a peer with a direct online
-    // status; requiring an "online peer" here wrongly blocked media when peers were reachable but
-    // their per-peer status read None. If still connecting, queue as pending and let
-    // flushPendingGroupFileMessage retry on reconnect.
-    if ([[self.dataSource managerGetTox] groupConnectionStatusForGroupNumber:groupNumber error:nil] <= 0) {
+    // KHANDAQ: don't push media into a group nobody in it can get it from (it would sit at 0% then
+    // "Upload Failed", or show as sent and reach nobody). Gate on the group as a text is gated
+    // (OCTGroupIsReadyToSend: a peer confirmed) — the chunk send broadcasts via the group mesh
+    // (tox_group_send_custom_packet), which does NOT require a peer with a direct online status;
+    // requiring an "online peer" here wrongly blocked media when peers were reachable but their
+    // per-peer status read None. If not ready, queue as pending and let flushPendingGroupFileMessage
+    // send it once somebody can get it.
+    if (! [self isGroupReadyToSendForChat:chat]) {
         [realmManager updateObject:message withBlock:^(OCTMessageAbstract *abstract) {
             abstract.groupPendingSend = YES;
         }];
@@ -1286,6 +1287,12 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 
                                OCTRealmManager *realm = [self.dataSource managerGetRealmManager];
 
+                               if (chat.isInvalidated || message.isInvalidated) {
+                                   // The chat, and its messages, were removed while the file was sent:
+                                   // nothing is left to mark, to queue it in or to tell about it.
+                                   return;
+                               }
+
                                if (success) {
                                    [realm updateObject:message.messageFile withBlock:^(OCTMessageFile *file) {
                                        file.fileType = OCTMessageFileTypeReady;
@@ -1305,10 +1312,20 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                    return;
                                }
 
-                               // KHANDAQ: re-queue (not fail) when the group isn't connected — the
-                               // pending queue retries on reconnect. (Connected sends that still fail
-                               // fall through to the genuine-failure path below.)
-                               if (! [self isGroupConnectedForChat:chat]) {
+                               // Called off by the person: it is not queued again, however the group is.
+                               if (sendError.code == OCTNgcGroupFileTransferErrorCancelled ||
+                                   message.messageFile.fileType == OCTMessageFileTypeCanceled) {
+                                   if (failureBlock) {
+                                       failureBlock(sendError);
+                                   }
+                                   return;
+                               }
+
+                               // KHANDAQ: re-queue (not fail) when nobody in the group can get the file
+                               // now — the pending queue sends it once somebody can. (Sends to a group
+                               // with a peer confirmed that still fail fall through to the
+                               // genuine-failure path below.)
+                               if (! [self isGroupReadyToSendForChat:chat]) {
                                    [realm updateObject:message withBlock:^(OCTMessageAbstract *abstract) {
                                        abstract.groupPendingSend = YES;
                                    }];
@@ -1320,14 +1337,6 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 
                                    if (successBlock) {
                                        successBlock(message);
-                                   }
-                                   return;
-                               }
-
-                               if (sendError.code == OCTNgcGroupFileTransferErrorCancelled ||
-                                   message.messageFile.fileType == OCTMessageFileTypeCanceled) {
-                                   if (failureBlock) {
-                                       failureBlock(sendError);
                                    }
                                    return;
                                }
@@ -1702,6 +1711,11 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     return peerCount >= limit;
 }
 
+/**
+ * What the screen shows: the group is reachable on the network. It does not say that a message sent
+ * now reaches anybody (a group with nobody else in it counts): sending asks
+ * -isGroupReadyToSendForChat: instead.
+ */
 - (BOOL)isGroupConnectedForChat:(OCTChat *)chat
 {
     NSParameterAssert(chat);
@@ -5454,8 +5468,9 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
 /**
  * KHANDAQ (group connection): whether a message sent to the group now reaches anybody. See
- * OCTGroupIsReadyToSend. -isGroupConnectedForChat: also counts a group still connecting with nobody
- * confirmed, which is right for what the screen shows but not for sending.
+ * OCTGroupIsReadyToSend. Every decision to send or to keep a message for later asks this.
+ * -isGroupConnectedForChat: also counts a group with nobody else in it, connected or still
+ * connecting, which is right for what the screen shows but not for sending.
  */
 - (BOOL)isGroupReadyToSendForChat:(OCTChat *)chat
 {
@@ -5627,7 +5642,13 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                    return;
                                }
 
-                               if (! [self isGroupConnectedForChat:chat]) {
+                               if (chat.isInvalidated || pendingMessage.isInvalidated) {
+                                   // The chat, and its messages, were removed while the file was sent.
+                                   return;
+                               }
+
+                               // Nobody in the group can get it now: it stays queued for the next flush.
+                               if (! [self isGroupReadyToSendForChat:chat]) {
                                    return;
                                }
 

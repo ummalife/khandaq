@@ -66,7 +66,8 @@ final class NgcHistoryServeLedger
     {
     }
 
-    private static final class PeerState
+    /** Package-private, so the ledger builds it without a synthetic accessor (lint SyntheticAccessor). */
+    static final class PeerState
     {
         /** Rows queued to this peer that are still expected to arrive: message id -> when. */
         final Map<String, Long> queuedAtMs = new HashMap<>();

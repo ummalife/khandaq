@@ -78,7 +78,7 @@ public class NgcHistoryServeLedgerTest
             if (NgcHistoryServeLedger.shouldSend(s, r.id, r.author, r.confirmedBy))
             {
                 sent++;
-                NgcHistoryServeLedger.markQueued(s, r.id, nowUptimeMs);
+                NgcHistoryServeLedger.markQueued(s, r.id, nowUptimeMs, true);
             }
         }
         return sent;
@@ -407,6 +407,38 @@ public class NgcHistoryServeLedgerTest
         assertEquals("and again with the next full serve", 1, serve(PEER_B, rows, nextFull));
     }
 
+    /**
+     * Our row went, its signed copy did not: the row is not taken for queued, and the next serve sends it again, the
+     * signed copy with it. A row that has no signed copy (not ours) is queued with its unsigned one, as before. The
+     * sends of our row count against the cap, in case its signed copy never goes.
+     */
+    @Test
+    public void ourRowWhoseSignedCopyDidNotGoIsSentAgainUpToTheCap()
+    {
+        final Row ours = row(SELF);
+        final Row theirs = row(PEER_IOS);
+        int oursSent = 0;
+        int theirsSent = 0;
+        for (int i = 0; i < 2 * NgcHistoryServeLedger.MAX_SENDS_PER_FULL_INTERVAL; i++)
+        {
+            final long now = T0 + i * 20_000L;
+            final NgcHistoryServeLedger.Serve s = NgcHistoryServeLedger.beginServe(GROUP, PEER_B, now);
+            if (NgcHistoryServeLedger.shouldSend(s, ours.id, ours.author))
+            {
+                oursSent++;
+                NgcHistoryServeLedger.markQueued(s, ours.id, awake(now), false);
+            }
+            if (NgcHistoryServeLedger.shouldSend(s, theirs.id, theirs.author))
+            {
+                theirsSent++;
+                NgcHistoryServeLedger.markQueued(s, theirs.id, awake(now), true);
+            }
+        }
+        assertEquals("queued, and the member is still there", 1, theirsSent);
+        assertEquals("sent again while its signed copy does not go, up to the cap",
+                     NgcHistoryServeLedger.MAX_SENDS_PER_FULL_INTERVAL, oursSent);
+    }
+
     @Test
     public void everyThirtyMinutesAServeIsFullAgain()
     {
@@ -575,7 +607,7 @@ public class NgcHistoryServeLedgerTest
         assertTrue(NgcHistoryServeLedger.shouldSend(s, "1234567", SELF));
         assertTrue(NgcHistoryServeLedger.shouldSend(s, "1234567g", SELF));
         assertTrue(NgcHistoryServeLedger.shouldSend(s, HelperGroup.PENDING_GROUP_MESSAGE_ID_TOX, SELF));
-        NgcHistoryServeLedger.markQueued(s, null, awake(T0 + 20_000L));
+        NgcHistoryServeLedger.markQueued(s, null, awake(T0 + 20_000L), true);
         NgcHistoryServeLedger.markHeld(GROUP, PEER_B, "zz");
         NgcHistoryServeLedger.markHeld(GROUP, null, rows.get(0).id);
         NgcHistoryServeLedger.markHeld(null, PEER_B, rows.get(0).id);
@@ -583,7 +615,7 @@ public class NgcHistoryServeLedgerTest
         final NgcHistoryServeLedger.Serve unnamed = NgcHistoryServeLedger.beginServe(GROUP, null, T0);
         assertTrue(unnamed.full);
         assertTrue(NgcHistoryServeLedger.shouldSend(unnamed, rows.get(0).id, SELF));
-        NgcHistoryServeLedger.markQueued(unnamed, rows.get(0).id, awake(T0));
+        NgcHistoryServeLedger.markQueued(unnamed, rows.get(0).id, awake(T0), true);
         NgcHistoryServeLedger.onPeerExited(GROUP, null, T0, awake(T0));
         NgcHistoryServeLedger.onPeerJoined(null, PEER_B, T0, awake(T0));
     }

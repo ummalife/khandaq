@@ -248,8 +248,12 @@ final class NgcHistoryServeLedger
      * The row went into toxcore's queue for this peer.
      *
      * @param nowUptimeMs SystemClock.uptimeMillis(), the clock of {@link #DELIVERY_GRACE_MS}
+     * @param complete    false when the signed copy of our row did not go with it: the row is not taken for
+     *                    queued, so the next serve sends it again, and the send counts against
+     *                    {@link #MAX_SENDS_PER_FULL_INTERVAL}, in case the signed copy never goes
      */
-    static synchronized void markQueued(final Serve serve, final String messageIdTox, final long nowUptimeMs)
+    static synchronized void markQueued(final Serve serve, final String messageIdTox, final long nowUptimeMs,
+                                        final boolean complete)
     {
         final String id = messageId(messageIdTox);
         final PeerState st = serve.key == null ? null : STATES.get(serve.key);
@@ -258,7 +262,10 @@ final class NgcHistoryServeLedger
             return;
         }
         final int before = st.entries();
-        st.queuedAtUptimeMs.put(id, nowUptimeMs);
+        if (complete)
+        {
+            st.queuedAtUptimeMs.put(id, nowUptimeMs);
+        }
         final Integer sends = st.sends.get(id);
         st.sends.put(id, sends == null ? 1 : sends + 1);
         afterChange(serve.key, st, before);

@@ -11394,12 +11394,17 @@ public class HelperGroup
                                     {
                                         continue;
                                     }
-                                    NgcSignedHistory.sendSignedTextTo(group_identifier, peer_pubkey, gm);
+                                    // KHANDAQ (0.2.56): a row whose signed copy did not go is sent again by the next
+                                    // serve (NgcHistoryServeLedger); a row without one (not ours) is queued as before.
+                                    final boolean signed_copy_not_sent =
+                                            NgcSignedHistory.sendSignedTextTo(group_identifier, peer_pubkey, gm)
+                                            == NgcSignedHistory.SIGNED_COPY_NOT_SENT;
                                     if (send_ngch_syncmsg(group_identifier, peer_pubkey, gm))
                                     {
                                         // The monotonic clock: toxcore's peer timeout stops in deep sleep too.
                                         NgcHistoryServeLedger.markQueued(ledger_serve, gm.message_id_tox,
-                                                                         SystemClock.uptimeMillis());
+                                                                         SystemClock.uptimeMillis(),
+                                                                         !signed_copy_not_sent);
                                     }
                                 }
                             }

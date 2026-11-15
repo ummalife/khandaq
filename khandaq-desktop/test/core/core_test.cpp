@@ -65,6 +65,7 @@ private slots:
     void change_nospam();
     void msgv3_receipt_is_not_a_message();
     void group_file_waits_for_a_member_in_the_core_loop();
+    void group_file_goes_to_a_member_in_the_core_loop();
     void an_invite_from_a_friend_online_replaces_a_group_joined_by_its_id();
 
 private:
@@ -363,6 +364,74 @@ void TestCore::group_file_waits_for_a_member_in_the_core_loop()
     QCOMPARE(waiting.count(), 1);
     QCOMPARE(progress.count(), 0);
     QCOMPARE(sent.count(), 0);
+    QCOMPARE(failed.count(), 0);
+}
+
+void TestCore::group_file_goes_to_a_member_in_the_core_loop()
+{
+    // 0.2.56: with Bob in the group, the loop of the node sends the BEGIN and then every chunk of a
+    // file of more than one packet (Core::sendGroupFileChunks), at their pace: the call that sends
+    // it only queues it. What Bob gets is not checked here: the ids of the files a node saw are
+    // kept for the whole process (ngcSeenFileMsgIds in core.cpp), so Bob, in the process of Alice,
+    // takes her file for one he has.
+    const QVector<uint32_t> aliceFriends = alice->getFriendList();
+    QCOMPARE(aliceFriends.size(), 1);
+    const uint32_t bobOnAlice = aliceFriends.first();
+    const int group =
+        alice->createGroup(QStringLiteral("Files for Bob"), TOX_GROUP_PRIVACY_STATE_PRIVATE);
+    QVERIFY(group >= 0);
+
+    // The loop of Bob's node tells of the invitation; the context takes the connection with it.
+    QObject context;
+    QMutex inviteLock;
+    QList<GroupInvite> invites;
+    connect(bob.get(), &Core::groupInviteReceived, &context,
+            [&](const GroupInvite& invite) {
+                const QMutexLocker locker{&inviteLock};
+                invites.append(invite);
+            },
+            Qt::DirectConnection);
+    const auto received = [&] {
+        const QMutexLocker locker{&inviteLock};
+        return invites;
+    };
+    QVERIFY(alice->groupInviteFriend(bobOnAlice, group));
+    QTRY_COMPARE_WITH_TIMEOUT(received().size(), 1, bootstrap_timeout);
+    const uint32_t bobsGroup = bob->joinGroupchat(received().first());
+    QVERIFY(bobsGroup != std::numeric_limits<uint32_t>::max());
+    QTRY_VERIFY_WITH_TIMEOUT(alice->getGroupNumberPeers(group) == 2
+                                 && bob->getGroupNumberPeers(static_cast<int>(bobsGroup)) == 2,
+                             bootstrap_timeout);
+
+    const qint64 size = 7 * static_cast<qint64>(NGC_CHUNK_PAYLOAD_MAX) + 1234;
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("photos.zip"));
+    {
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write(QByteArray(static_cast<int>(size), 'x')), size);
+    }
+
+    QSignalSpy started(alice.get(), &Core::groupFileSendStarted);
+    QSignalSpy waiting(alice.get(), &Core::groupFileSendWaiting);
+    QSignalSpy progress(alice.get(), &Core::groupFileSendProgress);
+    QSignalSpy sent(alice.get(), &Core::groupFileSent);
+    QSignalSpy failed(alice.get(), &Core::groupFileSendFailed);
+    QVERIFY(alice->sendGroupFileFromPath(group, QStringLiteral("photos.zip"), path));
+    QCOMPARE(started.count(), 1);
+    const QByteArray fileId = started.at(0).at(4).toByteArray();
+    QCOMPARE(sent.count(), 0);
+
+    // Its last chunk went to toxcore from the loop, the bar moved on the way, and nothing waited.
+    QTRY_COMPARE_WITH_TIMEOUT(sent.count(), 1, connected_message_wait);
+    QCOMPARE(sent.at(0).at(0).toInt(), group);
+    QCOMPARE(sent.at(0).at(3).toLongLong(), size);
+    QCOMPARE(sent.at(0).at(4).toByteArray(), fileId);
+    QVERIFY(progress.count() >= 1);
+    QCOMPARE(progress.at(0).at(0).toByteArray(), fileId);
+    QVERIFY(progress.last().at(1).toLongLong() < size);
+    QCOMPARE(waiting.count(), 0);
     QCOMPARE(failed.count(), 0);
 }
 

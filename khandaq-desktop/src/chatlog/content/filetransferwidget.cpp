@@ -46,6 +46,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QStyle>
+#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrentRun>
@@ -571,22 +572,50 @@ void FileTransferWidget::acceptVoiceNote(bool play)
 
 void FileTransferWidget::acceptAsked()
 {
+    askWhereToSave(settings.getGlobalAutoAcceptDir() + QLatin1Char('/') + fileInfo.fileName);
+}
+
+void FileTransferWidget::askWhereToSave(const QString& suggested)
+{
     // Asked over the window, which it belongs to, rather than as a window of its own.
-    const QString path = QFileDialog::getSaveFileName(window(), AirStrings::text(Text::FileSaveTitle),
-                                                      settings.getGlobalAutoAcceptDir()
-                                                          + QLatin1Char('/') + fileInfo.fileName);
+    // KHANDAQ (0.2.57): the window that shows the transcript. To Qt this entry is a window of its
+    // own, and a dialog given it as its parent went into the transcript's scene with it.
+    const QString path =
+        QFileDialog::getSaveFileName(AirWindow::of(this), AirStrings::text(Text::FileSaveTitle),
+                                     suggested);
     if (path.isEmpty()) {
         return;
     }
     // Whether the place can be written to; the file dialog asked before replacing a file there.
     QFile probe(path);
-    const bool writable = probe.open(QIODevice::WriteOnly);
-    probe.remove();
-    if (!writable) {
-        AirDialog::notice(this, AirStrings::text(Text::FileAcceptFailedTitle),
-                          AirStrings::text(Text::FileNotWritable));
+    if (!probe.open(QIODevice::WriteOnly)) {
+        // KHANDAQ (0.2.57): the reason goes to the log. On macOS "Operation not permitted" is the
+        // privacy protection of the folder, "Permission denied" the rights on the folder itself.
+        // A file already there that could not be opened is no longer removed with the probe.
+        qWarning() << "The chosen folder cannot be written to:" << QFileInfo(path).absolutePath()
+                   << probe.errorString();
+        AirDialog* const notice =
+            AirDialog::notice(this, AirStrings::text(Text::FileAcceptFailedTitle),
+                              AirStrings::text(Text::FileNotWritable));
+        if (notice) {
+            // KHANDAQ (0.2.57): the notice says to choose another folder, so OK asks again, in the
+            // folder chosen last. Esc, a click beside the notice or Cancel in the question end it.
+            connect(notice, &AirDialog::finished, this, [this, path](bool confirmed) {
+                if (!confirmed) {
+                    return;
+                }
+                // Once the notice has gone, and only while the file still waits for an answer.
+                QTimer::singleShot(0, this, [this, path] {
+                    if (fileInfo.status == ToxFile::INITIALIZING
+                        && fileInfo.direction == ToxFile::RECEIVING) {
+                        askWhereToSave(path);
+                    }
+                });
+            });
+        }
         return;
     }
+    probe.remove();
     coreFile.acceptFileRecvRequest(fileInfo.friendId, fileInfo.fileNum, path);
 }
 

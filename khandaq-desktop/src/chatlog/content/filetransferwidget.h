@@ -92,6 +92,11 @@ private:
     void accept();
     /** Asks where to save the file, then accepts it there. */
     void acceptAsked();
+    /**
+     * Asks where to save the file, starting at suggested, and accepts it there. A place that cannot
+     * be written to is said in a notice, whose OK asks again from there.
+     */
+    void askWhereToSave(const QString& suggested);
     /** Accepts a voice note into the app's folder of voice notes; play: it plays once it is here. */
     void acceptVoiceNote(bool play);
     void sendAgain();

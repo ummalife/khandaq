@@ -1,0 +1,166 @@
+{
+  "version": "0.2.56",
+  "date": "2026-11-15",
+  "title": "Long texts go whole, groups hold what nobody can get yet, and a reply is a swipe",
+  "summary": "On iPhone, a file that comes in a group no longer closes the app. A text of any length now goes whole, as several messages in order. A message or a file written while nobody else is in a group waits and goes when someone comes, instead of showing as sent and reaching nobody. New groups are open to anyone with the group key. A message is answered by swiping it to the left, as in Telegram, and a voice note plays from a round Play button. Big files show a bar while they are prepared, and Android wakes your contacts' phones by default. The fixes are in Khandaq for the computer 0.2.56, Android 0.2.56 and iPhone build 142999.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "critical",
+      "title": "iPhone no longer closes when a file comes in a group",
+      "description": "Any file another member sent to a group, a small photo as much as a video, closed Khandaq on iPhone as it arrived: the app read its database from the wrong thread. The file now comes in as it should.",
+      "platforms": [
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "A long text goes whole, as several messages",
+      "description": "A text longer than one message was refused, cut at the limit or, on iPhone, stopped at 1000 characters while you typed or pasted it. It now goes as several messages, cut at a line break or a space, in order, and the counter under the field says how many. There is no upper limit. Texts in groups, captions, shared texts and forwards go the same way.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "A message written while nobody else is in the group waits for someone",
+      "description": "A group sends a message only to the members it has already reached. Right after a group was made or opened, and while everybody else was away, a message was shown as sent and reached nobody. Such a message now waits with the in-transit mark and goes, in the order written, once another member is there; it also waits through a restart of the app. A file sent to such a group waits too: on the phones until someone comes, on the computer for two minutes, then it says Not sent.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "New groups are open to anyone with the group key",
+      "description": "A new group was by invitation only, yet its card still offered the group key, and joining with that key waited forever. A new group is now open to anyone with its key; By invitation only is one tap away, and such a group shows no key or QR code. The founder can change this later. Groups you already have keep their setting. On Android, a group joined by its key now connects: the app read the group's connection state wrongly.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Back works on Android 16",
+      "description": "On Android 16 the Back button and the swipe from the edge closed Settings, the profile, the member list and even the call screen in one step. Back now steps back one screen at a time again: an open panel or a search closes first.",
+      "platforms": [
+        "android"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Android wakes your contacts' phones by default",
+      "description": "Wake-ups let a sleeping phone know that a message or a call is waiting. They were off on Android since version 0.2.7 and could not be turned on, so no Android phone published the address it can be woken at. They are on now, also after the update. A long text wakes a contact once, not once per part. On iPhone, a wake-up now reconnects at once instead of only waiting.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "The first contact of a profile that starts with a group gets its messages",
+      "description": "On Android, a profile that had a group but no contact yet lost track of its first contact until the next start: that contact's messages and files did not show in the chat, and files to them did not go.",
+      "platforms": [
+        "android"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Swipe a message to the left to reply",
+      "description": "A message is answered by swiping it to the left, as in Telegram (to the right in Arabic). A reply badge grows as the message slides, and a light tick says when letting go will reply.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "A voice note plays from a round Play button",
+      "description": "The word Listen gave way to a round Play button, as in Telegram; it turns into Pause while the note plays. Screen readers still say Listen and Pause.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Big files show a bar while they are prepared",
+      "description": "A big file from the gallery showed nothing until it had been copied for sending. It now appears in the chat at once, with Preparing the file, a bar and Cancel. On iPhone, the video banner no longer disappears by itself, and picked media keep their order. On the computer, a big file goes into a group at a pace, with a bar, and the window no longer freezes while it goes.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "A group file that goes on downloading after a restart comes out whole",
+      "description": "On Android, a group file whose download went on after the app restarted came out with zeros in place of everything that had arrived before the restart, and was offered as finished. A resumed download now keeps what it has. A download left half-done by an earlier version starts again from the beginning.",
+      "platforms": [
+        "android"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Groups on the computer: a group key in the search, a group that stays",
+      "description": "A group key pasted into the search offers the group, or opens it if you are already in it. A group joined by its ID no longer disappears when the app is closed before the group has synced, and an invitation that cannot be accepted is said, instead of leaving an empty row.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Group messages arrive once and in order",
+      "description": "On iPhone, the first member to join a group got the messages its founder had written alone twice, and the parts of a long text from Android could show in the wrong order. Each message now comes once, and parts keep their order. Android stamps the parts of a long text a second apart, so older iPhones show them in order too.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Files in groups on the computer: received stays received, authors in full",
+      "description": "After a restart, every file a member had sent to a group showed as one of yours that did not go. It now stays received, with Open and Show in folder. Over each run of messages in a group the author's whole name is shown, as on the phones, instead of only the first word. The member count says online only for members a message can actually reach.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "A reply to your own message carries your name",
+      "description": "Replying to your own message showed the others the word You as the author of the quote. It now shows your name, as they know you.",
+      "platforms": [
+        "ios"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "Paste takes the text, not a picture of it",
+      "description": "A text copied from Excel or Word was pasted as a picture. The text now wins over a picture that comes with it, and typing after a very long paste no longer slows down.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ]
+    }
+  ]
+}

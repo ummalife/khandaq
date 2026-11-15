@@ -299,8 +299,8 @@ signals:
     /**
      * 0.2.56: an invite into a group that toxcore still held (one we leave, or one joined by its ID
      * that never synced) is accepted once toxcore let go of that instance, and joinGroupchat
-     * returned that instance's number; toxcore refused the invite then. No instance of the group
-     * is left: whatever showed the old one is stale.
+     * returned that instance's number; toxcore refused the invite then. A group we leave is gone;
+     * one joined by its ID is joined by its ID again, and groupJoined gives its new number.
      */
     void groupInviteAcceptFailed(const QByteArray& chatId);
     /** A role in the group changed, someone was removed, or the voice or privacy state changed. */
@@ -387,7 +387,7 @@ private:
     void leaveGroupAfterNotice(int groupId);
     void leaveRecordedGroup(const Air::PendingGroupLeaves::Leave& leave, const char* event);
     uint32_t replaceLeavingGroup(const QByteArray& chatId, std::function<void()> join);
-    void acceptDeferredGroupInvite(const GroupInvite& inviteInfo);
+    void acceptDeferredGroupInvite(const GroupInvite& inviteInfo, bool joinedById);
     void iterateTox();
     bool ignoresGroup(uint32_t groupNumber) const;
     struct OutgoingGroupFile;

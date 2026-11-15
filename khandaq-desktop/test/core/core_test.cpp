@@ -26,6 +26,7 @@
 #include "src/persistence/settings.h"
 #include "mock/mockcoresettings.h"
 #include "src/core/khandaqlimits.h"
+#include "src/model/groupinvite.h"
 
 #include <QTemporaryDir>
 #include <QtTest/QtTest>
@@ -64,6 +65,7 @@ private slots:
     void change_nospam();
     void msgv3_receipt_is_not_a_message();
     void group_file_waits_for_a_member_in_the_core_loop();
+    void an_invite_from_a_friend_online_replaces_a_group_joined_by_its_id();
 
 private:
     /* Test Variables */
@@ -362,6 +364,93 @@ void TestCore::group_file_waits_for_a_member_in_the_core_loop()
     QCOMPARE(progress.count(), 0);
     QCOMPARE(sent.count(), 0);
     QCOMPARE(failed.count(), 0);
+}
+
+void TestCore::an_invite_from_a_friend_online_replaces_a_group_joined_by_its_id()
+{
+    // 0.2.56: a group joined by its ID that never synced goes for an invitation into it from a
+    // friend who is online, and toxcore takes the invitation once it let go of the group. When
+    // toxcore refuses it then all the same (here one cut short), the group is joined by its ID
+    // again: its row takes the new instance. Nobody hosts the group: it never syncs.
+    QByteArray chatId;
+    {
+        MockBootstrapListGenerator nobodysNodes;
+        const ToxCorePtr founder = Core::makeToxCore({}, settings, nobodysNodes, err);
+        QVERIFY(founder);
+        const int founded =
+            founder->createGroup(QStringLiteral("Elsewhere"), TOX_GROUP_PRIVACY_STATE_PUBLIC);
+        QVERIFY(founded >= 0);
+        chatId = founder->getGroupPersistentId(static_cast<uint32_t>(founded)).getByteArray();
+    }
+    const QVector<uint32_t> aliceFriends = alice->getFriendList();
+    QCOMPARE(aliceFriends.size(), 1);
+    const uint32_t bobOnAlice = aliceFriends.first();
+    const auto numberOnAlice = [this, &chatId] {
+        QMutexLocker locker{&alice->getCoreLoopLock()};
+        Tox_Err_Group_State_Queries error;
+        const uint32_t number = tox_group_by_chat_id(
+            alice->getTox(), reinterpret_cast<const uint8_t*>(chatId.constData()), &error);
+        return error == TOX_ERR_GROUP_STATE_QUERIES_OK ? number
+                                                       : std::numeric_limits<uint32_t>::max();
+    };
+    const auto bobOnline = [this, bobOnAlice] {
+        QMutexLocker locker{&alice->getCoreLoopLock()};
+        return tox_friend_get_connection_status(alice->getTox(), bobOnAlice, nullptr)
+               != TOX_CONNECTION_NONE;
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(bobOnline(), bootstrap_timeout);
+
+    // The loop of the node tells of the deferred accept: what it says is kept under a lock, which
+    // the test never holds while it takes the core's. The context goes with the test, and the
+    // connections with it.
+    QObject context;
+    QMutex seenLock;
+    QVector<uint32_t> joined;
+    QList<QByteArray> failed;
+    connect(alice.get(), &Core::groupJoined, &context,
+            [&](int number, const GroupId& groupId) {
+                const QMutexLocker locker{&seenLock};
+                if (groupId.getByteArray() == chatId) {
+                    joined.append(static_cast<uint32_t>(number));
+                }
+            },
+            Qt::DirectConnection);
+    connect(alice.get(), &Core::groupInviteAcceptFailed, &context,
+            [&](const QByteArray& failedId) {
+                const QMutexLocker locker{&seenLock};
+                failed.append(failedId);
+            },
+            Qt::DirectConnection);
+    const auto joins = [&] {
+        const QMutexLocker locker{&seenLock};
+        return joined;
+    };
+    const auto failures = [&] {
+        const QMutexLocker locker{&seenLock};
+        return failed;
+    };
+
+    const uint32_t stuck = alice->joinGroupByChatId(chatId);
+    QVERIFY(stuck != std::numeric_limits<uint32_t>::max());
+    const QString kept = alice->getUnsyncedGroupJoins();
+    QCOMPARE(joins(), QVector<uint32_t>{stuck});
+
+    const GroupInvite cutShort(bobOnAlice, chatId + QByteArray(8, '\0'), QStringLiteral("Else"));
+    QCOMPARE(alice->joinGroupchat(cutShort), stuck);
+    QTRY_COMPARE_WITH_TIMEOUT(joins().size(), 2, connected_message_wait);
+    QCOMPARE(failures(), QList<QByteArray>{chatId});
+    const uint32_t rejoined = joins().at(1);
+    QCOMPARE(numberOnAlice(), rejoined);
+    QCOMPARE(alice->getUnsyncedGroupJoins(), kept);
+
+    // A whole invitation: the group joined again goes for it, and toxcore takes it.
+    const GroupInvite invite(bobOnAlice, chatId + QByteArray(32, '\0'), QStringLiteral("Else"));
+    QCOMPARE(alice->joinGroupchat(invite), rejoined);
+    QTRY_COMPARE_WITH_TIMEOUT(joins().size(), 3, connected_message_wait);
+    QCOMPARE(failures().size(), 1);
+    QCOMPARE(numberOnAlice(), joins().at(2));
+
+    alice->removeGroup(static_cast<int>(numberOnAlice()));
 }
 
 QTEST_GUILESS_MAIN(TestCore)

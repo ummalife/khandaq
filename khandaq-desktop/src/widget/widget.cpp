@@ -2540,12 +2540,8 @@ void Widget::onGroupInviteAcceptFailed(const QByteArray& chatId)
         return;
     }
     const GroupId groupId(chatId);
-    // The instance toxcore let go of for the invitation, a group joined by its ID that never
-    // synced, still shows: its number may come to another group. Only the row goes: the next
-    // start joins that group by its ID again.
-    if (Group* const stale = groupList->findGroup(groupId)) {
-        discardGroup(stale, true);
-    }
+    // A group joined by its ID that went for the invitation keeps its row: the core joins it by
+    // its ID again, and groupJoined binds the row to the new instance (createGroup).
     if (groupToOpenWhenJoined == groupId) {
         groupToOpenWhenJoined = GroupId();
     }

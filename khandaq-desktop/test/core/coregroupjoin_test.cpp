@@ -34,13 +34,18 @@
 #include <limits>
 
 namespace {
-bool hasGroup(const Core& core, const QByteArray& chatId)
+/** The number of the instance toxcore holds of the group, synced or not, or UINT32_MAX. */
+uint32_t numberOf(const Core& core, const QByteArray& chatId)
 {
     Tox_Err_Group_State_Queries error;
     const uint32_t number = tox_group_by_chat_id(
         core.getTox(), reinterpret_cast<const uint8_t*>(chatId.constData()), &error);
-    return error == TOX_ERR_GROUP_STATE_QUERIES_OK
-           && number != std::numeric_limits<uint32_t>::max();
+    return error == TOX_ERR_GROUP_STATE_QUERIES_OK ? number : std::numeric_limits<uint32_t>::max();
+}
+
+bool hasGroup(const Core& core, const QByteArray& chatId)
+{
+    return numberOf(core, chatId) != std::numeric_limits<uint32_t>::max();
 }
 
 QByteArray chatIdOf(const Core& core, int group)
@@ -63,10 +68,9 @@ private slots:
     void aKeptJoinThatToxcoreLoadedIsForgotten();
     void aGroupLeftBeforeItSyncsIsForgotten();
     void theGroupsLoadWithTheOnesJoinedAgain();
-    void anInvitationReplacesAGroupThatNeverSynced();
+    void anInvitationFromAnInviterAwayKeepsAGroupThatNeverSynced();
     void anInvitationIntoAGroupWeLeaveThatToxcoreRefusesIsSaid();
     void aGroupBegunForAnInvitationFromAnInviterAwayIsLeft();
-    void anInvitationFromAnInviterAwayLeavesNoGroupForTheOneItReplaced();
     void anInvitationIntoAGroupThatSyncedOpensIt();
 
 private:
@@ -242,7 +246,14 @@ void TestCoreGroupJoin::theGroupsLoadWithTheOnesJoinedAgain()
     QVERIFY(!titles.contains(QString()));
 }
 
-void TestCoreGroupJoin::anInvitationReplacesAGroupThatNeverSynced()
+/**
+ * An invitation kept with the profile from before the join would replace the group (toxcore would
+ * take it beside the group it has), but toxcore refuses an invitation while its inviter is away or
+ * is no friend: the group would go for nothing, its row with it. It stays, and the invitation is
+ * refused at once, its card kept for another try. The replacement, by an inviter who is online,
+ * is in test_core.
+ */
+void TestCoreGroupJoin::anInvitationFromAnInviterAwayKeepsAGroupThatNeverSynced()
 {
     const QByteArray chatId = foundGroup();
     QCOMPARE(chatId.size(), TOX_GROUP_CHAT_ID_SIZE);
@@ -255,20 +266,16 @@ void TestCoreGroupJoin::anInvitationReplacesAGroupThatNeverSynced()
     connect(core.get(), &Core::groupJoined, this, [&joined](int number) { joined.append(number); });
     QSignalSpy failed(core.get(), &Core::groupInviteAcceptFailed);
 
-    // An invitation kept with the profile from before the join: toxcore would take it beside the
-    // group it has. The group goes first; here no friend sent the invitation, and toxcore refuses
-    // it then.
+    // From nobody among the friends, then from a friend, who is away: these cores are not started.
     const GroupInvite invite(0, chatId + QByteArray(32, '\0'), QStringLiteral("Join"));
-    QCOMPARE(core->joinGroupchat(invite), stuck);
-    QVERIFY(hasGroup(*core, chatId));
-    QCOMPARE(failed.count(), 0);
+    QCOMPARE(core->joinGroupchat(invite), std::numeric_limits<uint32_t>::max());
+    core->acceptFriendRequest(makeCore()->getSelfPublicKey());
+    QCOMPARE(core->joinGroupchat(invite), std::numeric_limits<uint32_t>::max());
+
     core->leavePendingGroupsNow();
-    QVERIFY(!hasGroup(*core, chatId));
+    QCOMPARE(numberOf(*core, chatId), stuck);
+    QCOMPARE(failed.count(), 0);
     QVERIFY(joined.isEmpty());
-    // The accept returned the number of the group it replaced: the refusal is said after all.
-    QCOMPARE(failed.count(), 1);
-    QCOMPARE(failed.at(0).at(0).toByteArray(), chatId);
-    // Until the group syncs, the next start joins it by its ID again.
     QCOMPARE(core->getUnsyncedGroupJoins(), kept);
 }
 
@@ -307,30 +314,6 @@ void TestCoreGroupJoin::aGroupBegunForAnInvitationFromAnInviterAwayIsLeft()
     core->leavePendingGroupsNow();
     QVERIFY(!hasGroup(*core, chatId));
     QCOMPARE(static_cast<int>(tox_group_get_number_groups(core->getTox())), 0);
-}
-
-void TestCoreGroupJoin::anInvitationFromAnInviterAwayLeavesNoGroupForTheOneItReplaced()
-{
-    const QByteArray chatId = foundGroup();
-    QCOMPARE(chatId.size(), TOX_GROUP_CHAT_ID_SIZE);
-    ToxCorePtr core = makeCore();
-    QVERIFY(core);
-    core->acceptFriendRequest(makeCore()->getSelfPublicKey());
-    const uint32_t stuck = core->joinGroupByChatId(chatId);
-    QVERIFY(stuck != std::numeric_limits<uint32_t>::max());
-    const QString kept = core->getUnsyncedGroupJoins();
-    QSignalSpy failed(core.get(), &Core::groupInviteAcceptFailed);
-
-    const GroupInvite invite(0, chatId + QByteArray(32, '\0'), QStringLiteral("Join"));
-    QCOMPARE(core->joinGroupchat(invite), stuck);
-    // The group goes; the invitation is refused then, and what toxcore began for it is left.
-    core->leavePendingGroupsNow();
-    QCOMPARE(failed.count(), 1);
-    QCOMPARE(failed.at(0).at(0).toByteArray(), chatId);
-    core->leavePendingGroupsNow();
-    QVERIFY(!hasGroup(*core, chatId));
-    QCOMPARE(static_cast<int>(tox_group_get_number_groups(core->getTox())), 0);
-    QCOMPARE(core->getUnsyncedGroupJoins(), kept);
 }
 
 void TestCoreGroupJoin::anInvitationIntoAGroupThatSyncedOpensIt()

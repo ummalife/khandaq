@@ -2199,7 +2199,8 @@ bool Core::sendGroupPrivateMessage(int groupId, int peerId, const QString& messa
  * @return Conference number on success, UINT32_MAX on failure. An invite into a group we are
  * leaving, or one joined by its ID that never synced, is accepted once toxcore let go of that
  * instance: the number is that instance's then, the group shows when it is joined (groupJoined),
- * and groupInviteAcceptFailed says when it is not.
+ * and groupInviteAcceptFailed says when it is not. One joined by its ID stays while the inviter
+ * is away: the invite is refused at once then.
  */
 uint32_t Core::joinGroupchat(const GroupInvite& inviteInfo)
 {
@@ -2217,7 +2218,7 @@ uint32_t Core::joinGroupchat(const GroupInvite& inviteInfo)
     if (invite.size() >= TOX_GROUP_CHAT_ID_SIZE) {
         const QByteArray chatId = invite.left(TOX_GROUP_CHAT_ID_SIZE);
         const uint32_t leavingNum = replaceLeavingGroup(
-            chatId, [this, inviteInfo] { acceptDeferredGroupInvite(inviteInfo); });
+            chatId, [this, inviteInfo] { acceptDeferredGroupInvite(inviteInfo, false); });
         if (leavingNum != std::numeric_limits<uint32_t>::max()) {
             return leavingNum;
         }
@@ -2236,13 +2237,21 @@ uint32_t Core::joinGroupchat(const GroupInvite& inviteInfo)
                 return joinGroupByChatId(chatId);
             }
             // It never synced, so nothing of it is lost: it is left without a notice, and the
-            // invite accepted once toxcore let go of it, as for a group we are leaving.
+            // invite accepted once toxcore let go of it, as for a group we are leaving. Not while
+            // the inviter is away or no longer a friend: toxcore refuses the invite then
+            // (FAIL_SEND, the friend not found), and the group would go for nothing.
+            Tox_Err_Friend_Query friendError;
+            if (tox_friend_get_connection_status(tox.get(), friendId, &friendError)
+                == TOX_CONNECTION_NONE) {
+                qDebug() << "Group" << existingNum << "is kept: the inviter of its invite is away";
+                return std::numeric_limits<uint32_t>::max();
+            }
             Tox_Err_Group_Leave leaveError;
             if (tox_group_leave(tox.get(), existingNum, nullptr, 0, &leaveError)) {
                 qDebug() << "Group" << existingNum << "that never synced is replaced by an invite";
                 exitingGroups.insert(static_cast<int>(existingNum), QByteArray());
                 joinsAfterGroupLeaves.push_back(
-                    [this, inviteInfo] { acceptDeferredGroupInvite(inviteInfo); });
+                    [this, inviteInfo] { acceptDeferredGroupInvite(inviteInfo, true); });
                 return existingNum;
             }
         } else {
@@ -2296,17 +2305,27 @@ uint32_t Core::joinGroupchat(const GroupInvite& inviteInfo)
  * @brief 0.2.56: the accept of an invite that waited for toxcore to let go of another instance of
  * its group (joinGroupchat), which returned that instance's number: when toxcore refuses the invite
  * now, groupInviteAcceptFailed says so, as the return of an accept refused at once does. A group
- * joined by its ID that was left for it is joined again at the next start, as it was before the
- * invite (rejoinStoredGroups). Called with coreLoopLock held, after the tox_iterate that deleted
- * the other instance (iterateTox).
+ * joined by its ID that was left for it (joinedById) is joined by its ID again, and so its row
+ * takes the new instance (groupJoined). Called with coreLoopLock held, after the tox_iterate that
+ * deleted the other instance (iterateTox).
  */
-void Core::acceptDeferredGroupInvite(const GroupInvite& inviteInfo)
+void Core::acceptDeferredGroupInvite(const GroupInvite& inviteInfo, bool joinedById)
 {
     if (joinGroupchat(inviteInfo) != std::numeric_limits<uint32_t>::max()) {
         return;
     }
     qWarning() << "A group invite accepted after another instance of its group went failed";
-    emit groupInviteAcceptFailed(inviteInfo.getInvite().left(TOX_GROUP_CHAT_ID_SIZE));
+    const QByteArray chatId = inviteInfo.getInvite().left(TOX_GROUP_CHAT_ID_SIZE);
+    if (joinedById) {
+        // After the next tox_iterate: the group the refused accept began, which joinGroupchat
+        // left, holds the chat id until then, and toxcore joins no chat id it holds.
+        joinsAfterGroupLeaves.push_back([this, chatId] {
+            if (joinGroupByChatId(chatId) == std::numeric_limits<uint32_t>::max()) {
+                qWarning() << "A group left for a refused invite could not be joined again";
+            }
+        });
+    }
+    emit groupInviteAcceptFailed(chatId);
 }
 
 uint32_t Core::joinGroupByChatId(const QByteArray& chatId)

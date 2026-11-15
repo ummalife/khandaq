@@ -431,6 +431,14 @@ void TestAirMessageMarks::seen189OfAnotherShapeIsDropped()
     QVERIFY(rejected(good.left(40)));
     QVERIFY(rejected(good + bytes({0})));
     QVERIFY(rejected(QByteArray()));
+    // The file vector as v1 of the SPEC misprinted it, with an id of 28 bytes: 37 bytes in all. It
+    // still takes the way of a receipt, never toxext's, and is dropped there.
+    const QByteArray misprinted =
+        QByteArray::fromHex("BD4B510102") + QByteArray(28, '\xFF') + QByteArray(4, '\0');
+    QCOMPARE(misprinted.size(), 37);
+    QVERIFY(rejected(misprinted));
+    QVERIFY(isSeenPacket(reinterpret_cast<const uint8_t*>(misprinted.constData()),
+                         static_cast<size_t>(misprinted.size())));
     // Id and magic.
     for (const int at : {0, 1, 2}) {
         QByteArray other = good;

@@ -1340,7 +1340,12 @@ public final class NgcGroupFileTransfer
 
     // ---- Persistent received-chunk bitmap (resume partial downloads across app restarts) ----
 
-    private static final int RXMAP_MAGIC = 0x52584d31; // "RXM1"
+    /**
+     * KHANDAQ (0.2.56): "RXM2". A map of an earlier version ("RXM1") may mark chunks its file no longer has: the write
+     * cache emptied the file on the first write after a restart, and the map kept the chunks of the run before (see
+     * writeChunk). Such a map is not read (rxMapChunks), so its download starts again from an empty file.
+     */
+    private static final int RXMAP_MAGIC = 0x52584d32; // "RXM2"
     private static final int RXMAP_HEADER = 4 + 4 + 8;  // magic + totalChunks + totalSize
 
     private static String rxMapPath(final String outPath)
@@ -1358,24 +1363,64 @@ public final class NgcGroupFileTransfer
         {
             // Flush the data buffer FIRST so the bitmap only ever marks chunks that are durably on disk.
             HelperGeneric.flush_vfs_write_cache(asm.outPath);
-            final int n = asm.totalChunks;
-            final byte[] out = new byte[RXMAP_HEADER + (n + 7) / 8];
-            final ByteBuffer bb = ByteBuffer.wrap(out).order(ByteOrder.BIG_ENDIAN);
-            bb.putInt(RXMAP_MAGIC);
-            bb.putInt(n);
-            bb.putLong(asm.totalSize);
-            for (int i = 0; i < n; i++)
-            {
-                if (asm.received[i])
-                {
-                    out[RXMAP_HEADER + (i >> 3)] |= (byte) (1 << (i & 7));
-                }
-            }
-            writeRxMapFile(rxMapPath(asm.outPath), out);
+            writeRxMapFile(rxMapPath(asm.outPath), rxMapBytes(asm.received, asm.totalSize));
         }
         catch (Exception ignored)
         {
         }
+    }
+
+    /** KHANDAQ (0.2.56): a .rxmap: RXMAP_MAGIC, the chunk count, the file size, then a bitmap of the chunks on disk. */
+    static byte[] rxMapBytes(final boolean[] received, final long totalSize)
+    {
+        final int n = received.length;
+        final byte[] out = new byte[RXMAP_HEADER + (n + 7) / 8];
+        final ByteBuffer bb = ByteBuffer.wrap(out).order(ByteOrder.BIG_ENDIAN);
+        bb.putInt(RXMAP_MAGIC);
+        bb.putInt(n);
+        bb.putLong(totalSize);
+        for (int i = 0; i < n; i++)
+        {
+            if (received[i])
+            {
+                out[RXMAP_HEADER + (i >> 3)] |= (byte) (1 << (i & 7));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * KHANDAQ (0.2.56): the chunks a .rxmap marks as on disk, or null when it is not a map of this file as this version
+     * writes it: another magic (an earlier version's), another chunk count or size (another file at the same path), or
+     * cut short.
+     */
+    static boolean[] rxMapChunks(final byte[] data, final int totalChunks, final long totalSize)
+    {
+        if (data == null || data.length < RXMAP_HEADER || totalChunks < 1)
+        {
+            return null;
+        }
+        final ByteBuffer bb = ByteBuffer.wrap(data).order(ByteOrder.BIG_ENDIAN);
+        if (bb.getInt() != RXMAP_MAGIC)
+        {
+            return null;
+        }
+        final int n = bb.getInt();
+        final long sz = bb.getLong();
+        if (n != totalChunks || sz != totalSize)
+        {
+            return null; // stale map for a different file at the same path
+        }
+        if (data.length < RXMAP_HEADER + (n + 7) / 8)
+        {
+            return null;
+        }
+        final boolean[] onDisk = new boolean[n];
+        for (int i = 0; i < n; i++)
+        {
+            onDisk[i] = (data[RXMAP_HEADER + (i >> 3)] & (1 << (i & 7))) != 0;
+        }
+        return onDisk;
     }
 
     private static void loadReceivedBitmap(final IncomingAssembly asm)
@@ -1386,37 +1431,26 @@ public final class NgcGroupFileTransfer
         }
         try
         {
-            final byte[] data = readRxMapFile(rxMapPath(asm.outPath));
-            if (data == null || data.length < RXMAP_HEADER)
+            final boolean[] onDisk = rxMapChunks(readRxMapFile(rxMapPath(asm.outPath)), asm.totalChunks,
+                                                 asm.totalSize);
+            if (onDisk == null)
             {
-                return;
-            }
-            final ByteBuffer bb = ByteBuffer.wrap(data).order(ByteOrder.BIG_ENDIAN);
-            if (bb.getInt() != RXMAP_MAGIC)
-            {
-                return;
-            }
-            final int n = bb.getInt();
-            final long sz = bb.getLong();
-            if (n != asm.totalChunks || sz != asm.totalSize)
-            {
-                return; // stale map for a different file at the same path
-            }
-            if (data.length < RXMAP_HEADER + (n + 7) / 8)
-            {
+                // KHANDAQ (0.2.56): nothing is kept of the file, and resumedFromDisk stays false: its first chunk opens
+                // the write cache, which empties the file (writeChunk). It starts from an empty file, as a fresh one.
                 return;
             }
             int count = 0;
             long bytes = 0;
-            for (int i = 0; i < n; i++)
+            for (int i = 0; i < onDisk.length; i++)
             {
-                if ((data[RXMAP_HEADER + (i >> 3)] & (1 << (i & 7))) != 0)
+                if (onDisk[i])
                 {
                     asm.received[i] = true;
                     count++;
                     bytes += Math.min((long) asm.chunkPayload, asm.totalSize - (long) i * asm.chunkPayload);
                 }
             }
+            final int n = onDisk.length;
             asm.receivedCount = count;
             asm.bytesReceived = bytes;
             asm.resumedFromDisk = count > 0;

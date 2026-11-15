@@ -335,6 +335,32 @@ public class GroupFileSendWiringTest
         assertTrue(ngc.contains("Executors.newFixedThreadPool(MAX_PARALLEL_USER_SENDS,"));
     }
 
+    @Test
+    public void a_download_whose_map_is_not_read_starts_from_an_empty_file() throws Exception
+    {
+        // A map of an earlier version may mark chunks its file no longer has (NgcRxMapTest): it is not read, and the
+        // download keeps nothing of its file.
+        final String ngc = code("NgcGroupFileTransfer.java");
+        final String load = body(ngc, "private static void loadReceivedBitmap(");
+        final int read = load.indexOf("rxMapChunks(readRxMapFile(rxMapPath(asm.outPath)), asm.totalChunks,");
+        assertTrue(read > 0);
+        final int none = load.indexOf("if (onDisk == null)", read);
+        assertTrue(none > read);
+        assertEquals("return;", block(load, load.indexOf('{', none)).trim());
+        assertTrue(none < load.indexOf("asm.received[i] = true;"));
+        assertTrue(none < load.indexOf("asm.resumedFromDisk = count > 0"));
+        assertTrue(body(ngc, "private static void persistReceivedBitmap(")
+                           .contains("writeRxMapFile(rxMapPath(asm.outPath), rxMapBytes(asm.received, asm.totalSize))"));
+        // Not resumed, its first chunk goes through the write cache, which opens the file with a FileOutputStream
+        // (not to append): IOCipher empties the file (O_TRUNC), as for a fresh download.
+        assertFalse(NgcGroupFileTransfer.bypassesWriteCache(false, false));
+        final String cached = body(code("HelperGeneric.java"),
+                                   "static void write_chunk_to_VFS_file__with_custom_write_cache(");
+        assertTrue(cached.contains("fos = new BufferedOutputStreamCustom(file_name_with_path);"));
+        final String stream = body(code("BufferedOutputStreamCustom.java"), "public BufferedOutputStreamCustom(String path)");
+        assertTrue(stream.contains("super(path);"));
+    }
+
     private static String body(final String text, final String head)
     {
         final int at = text.indexOf(head);

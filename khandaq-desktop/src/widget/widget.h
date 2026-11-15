@@ -52,6 +52,10 @@ namespace Ui {
 class MainWindow;
 }
 
+namespace Air {
+struct CommandOffer;
+}
+
 class AddFriendForm;
 class AirBand;
 class AirCommandIdRow;
@@ -230,6 +234,8 @@ public slots:
     void onGroupJoined(int groupNum, const GroupId& groupId);
     void onGroupInviteReceived(const GroupInvite& inviteInfo);
     void onGroupInviteAccepted(const GroupInvite& inviteInfo);
+    void onGroupInviteAcceptFailed(const QByteArray& chatId);
+    void onGroupRejoinFailed(const QByteArray& chatId, uint32_t groupNumber);
     void onGroupJoinFailed(const QString& reason);
     void onGroupJoinSucceeded();
     void onGroupJoinByIdPrompt();
@@ -240,6 +246,12 @@ public slots:
                              const QByteArray& fileId);
     void onGroupFileSent(int groupnumber, const QString& fileName, const QString& localPath,
                          qint64 fileSize, const QByteArray& fileId);
+    /** 0.2.56: a file we send into a group in chunks shows its progress while they go. */
+    void onGroupFileSendStarted(int groupnumber, const QString& fileName, const QString& localPath,
+                                qint64 fileSize, const QByteArray& fileId);
+    void onGroupFileSendProgress(const QByteArray& fileId, qint64 bytesSent);
+    void onGroupFileSendWaiting(const QByteArray& fileId, bool waiting);
+    void onGroupFileSendFailed(const QByteArray& fileId);
     /** An edit, a deletion or a reaction a friend sent (stage 3, item 10). */
     void onFriendMessageEffect(uint32_t friendnumber, const QByteArray& packet);
     /** An edit, a deletion or a reaction a member sent to a group (stage 3, item 10). */
@@ -345,14 +357,19 @@ private:
      * question. */
     void removeConfirmedFriend(const ToxPk& friendPk);
     void removeGroup(Group* g, bool fake = false);
-    /** Takes the group out of the list and, unless fake, out of toxcore, without asking. */
-    void discardGroup(Group* g, bool fake);
+    /**
+     * Takes the group out of the list and, unless fake, out of toxcore, without asking. fake: only
+     * this window lets go of it (the app closes, or toxcore holds it no more), and its texts that
+     * wait stay pending. historyRemoved: its history went just before.
+     */
+    void discardGroup(Group* g, bool fake, bool historyRemoved = false);
     /** Leave the group, confirmed in its dossier: the group and its history leave this device. */
     void leaveGroup(const GroupId& groupId);
     void onGroupPrivateMessageReceived(int groupnumber, const ToxPk& peerPk, const QString& message,
                                        bool isAction);
     QDir groupDownloadDir(const Group* g) const;
     void dispatchGroupFileToChatLog(const GroupId& groupId, const ToxPk& sender, ToxFile file);
+    void updateGroupFileInChatLog(const GroupId& groupId, const ToxPk& sender, const ToxFile& file);
     void saveWindowGeometry();
     void saveSplitterGeometry();
     void cycleChats(bool forward);
@@ -403,6 +420,10 @@ private:
     /** The conversation column with nothing open: where to look and what to paste. */
     void showNoChat();
     void showCommandIdStart(const QString& hex);
+    /** What the command line offers for text, as the rows over the list show it. */
+    Air::CommandOffer commandOffer(const QString& text) const;
+    /** The group with this key: opened when it is in the list, otherwise joined from New group. */
+    void openGroupByKey(const QString& groupKey);
     void onRequestSent(const ToxPk& friendPk, const QString& message);
     /** The person New contact waits on came online: they accepted the request. */
     void followNewContact();
@@ -411,6 +432,11 @@ private:
     /** Decline on a card: it leaves at once, and a toast can bring it back for five seconds. */
     void declineAirRequest(const QString& requestId);
     void joinAirInvite(const QString& inviteId);
+    /**
+     * Accepts the invitation, whose card (@a inviteId; none when empty) goes once its group is
+     * joined. False when toxcore refused it now.
+     */
+    bool acceptGroupInvite(const GroupInvite& inviteInfo, const QString& inviteId);
     void showAirEntryMenu(const QString& entryId, const QPoint& globalPos);
     void showAirBackgroundMenu(const QPoint& globalPos);
     void showStatusMenu(const QPoint& globalPos);
@@ -503,8 +529,23 @@ private:
     QMap<GroupId, std::shared_ptr<IChatLog>> groupChatLogs;
     QMap<GroupId, std::shared_ptr<GroupChatroom>> groupChatrooms;
     QMap<GroupId, QSharedPointer<GroupChatForm>> groupChatForms;
+    /** 0.2.56: a file we send into a group while its chunks go (Core::groupFileSendStarted). */
+    struct GroupFileSend
+    {
+        GroupId groupId;
+        ToxFile file;
+    };
+    /** By the id of the file in its packets. */
+    QHash<QByteArray, GroupFileSend> groupFileSends;
     /** The group the user joined that opens once it comes into the list (openJoinedGroup). */
     GroupId groupToOpenWhenJoined;
+    /**
+     * 0.2.56: the invitations the user accepts, by their group, with the id of their card (none for
+     * one accepted by itself): the card goes once the group is joined (onGroupJoined), as toxcore
+     * may accept an invitation only after it let go of another instance of its group, and refuse it
+     * then (onGroupInviteAcceptFailed).
+     */
+    QMap<GroupId, QString> invitesJoining;
     Core* core = nullptr;
 
 
@@ -560,6 +601,8 @@ private:
     AirNewGroup* newGroup = nullptr;
     /** "New contact with this ID" over the list while the command line holds the start of one. */
     AirCommandIdRow* commandIdRow = nullptr;
+    /** Under it, the group for a whole group key: Join it, or Open it once it is in the list. */
+    AirCommandIdRow* commandGroupRow = nullptr;
     /** Out of the content column while a conversation is open, so the window deletes it. */
     QPointer<AirNoChat> noChatView;
 

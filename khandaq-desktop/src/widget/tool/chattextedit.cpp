@@ -28,9 +28,11 @@
 #include <QFileInfo>
 #include <QImage>
 #include <QKeyEvent>
+#include <QMetaMethod>
 #include <QMimeData>
 #include <QResizeEvent>
 #include <QSyntaxHighlighter>
+#include <QTextBlock>
 #include <QTextDocument>
 #include <QUrl>
 #include <QtGlobal>
@@ -109,14 +111,37 @@ QStringList existingLocalFilePaths(const QStringList& candidates)
     return paths;
 }
 
-QStringList localFilePathsFromMimeData(const QMimeData* mimeData)
+/**
+ * The files a text names, one per line, or none: a text is files only when every line of it
+ * names one. A text with a path among its lines is text, and the first line that names no file
+ * ends the search, so a long text costs no look at the disk for each of its lines.
+ */
+QStringList localFilePathsFromText(QString text)
+{
+    text.replace(QLatin1Char('\r'), QLatin1Char('\n'));
+    QStringList paths;
+    for (const QString& line : text.split(QLatin1Char('\n'), QString::SkipEmptyParts)) {
+        if (line.trimmed().isEmpty()) {
+            continue;
+        }
+        const QStringList found = existingLocalFilePaths({line});
+        if (found.isEmpty()) {
+            return {};
+        }
+        paths.append(found);
+    }
+    return paths;
+}
+
+/** The files a paste brings: its local file URLs, or else the files its text names (text). */
+QStringList localFilePathsFromMimeData(const QMimeData* mimeData, const QString& text)
 {
     if (!mimeData) {
         return {};
     }
 
-    QStringList candidates;
     if (mimeData->hasUrls()) {
+        QStringList candidates;
         for (const QUrl& url : mimeData->urls()) {
             if (url.isLocalFile()) {
                 candidates.append(url.toLocalFile());
@@ -124,17 +149,57 @@ QStringList localFilePathsFromMimeData(const QMimeData* mimeData)
                 candidates.append(url.toString());
             }
         }
-    }
-
-    if (mimeData->hasText()) {
-        QString text = mimeData->text();
-        text.replace(QLatin1Char('\r'), QLatin1Char('\n'));
-        for (const QString& line : text.split(QLatin1Char('\n'), QString::SkipEmptyParts)) {
-            candidates.append(line);
+        const QStringList paths = existingLocalFilePaths(candidates);
+        if (!paths.isEmpty()) {
+            return paths;
         }
     }
 
-    return existingLocalFilePaths(candidates);
+    return localFilePathsFromText(text);
+}
+
+/**
+ * Whether a text with no spaces around it is one web, file or data address and nothing more:
+ * what a browser's Copy image may put as the text of the picture.
+ */
+bool isOnlyAnAddress(const QString& text)
+{
+    for (const QChar c : text) {
+        if (c.isSpace()) {
+            return false;
+        }
+    }
+    static const QStringList schemes{QStringLiteral("http"), QStringLiteral("https"),
+                                     QStringLiteral("file"), QStringLiteral("data")};
+    const QUrl url(text);
+    return url.isValid() && schemes.contains(url.scheme(), Qt::CaseInsensitive);
+}
+
+/**
+ * Whether the HTML of a paste shows pictures and no text: the img a browser's Copy image puts
+ * beside the picture. A spreadsheet or an editor that puts a picture of the cells or the lines
+ * beside their text has that text in its HTML too, a cell holding only a link among them.
+ */
+bool showsOnlyPictures(const QString& html)
+{
+    if (html.isEmpty()) {
+        return false;
+    }
+    // Parsed only: nothing is laid out, so no picture it names is loaded.
+    QTextDocument document;
+    document.setHtml(html);
+    bool picture = false;
+    for (QTextBlock block = document.begin(); block.isValid(); block = block.next()) {
+        for (QTextBlock::iterator it = block.begin(); !it.atEnd(); ++it) {
+            const QTextFragment fragment = it.fragment();
+            if (fragment.charFormat().isImageFormat()) {
+                picture = true;
+            } else if (!fragment.text().trimmed().isEmpty()) {
+                return false;
+            }
+        }
+    }
+    return picture;
 }
 
 // kq-compose textarea: as high as "Send" for one line, growing up to the compose maximum, with
@@ -246,7 +311,12 @@ void ChatTextEdit::resizeEvent(QResizeEvent* event)
 void ChatTextEdit::updateHeightForContent()
 {
     QTextDocument* const doc = document();
-    doc->setTextWidth(viewport()->width());
+    // KHANDAQ (0.2.56): setting the width lays the whole text out again, even the same width, and
+    // this runs at every keystroke: a long pasted text froze the window at each letter.
+    const qreal width = viewport()->width();
+    if (doc->textWidth() != width) {
+        doc->setTextWidth(width);
+    }
 
     const int contentHeight = static_cast<int>(doc->size().height());
     const int targetHeight =
@@ -265,34 +335,63 @@ void ChatTextEdit::sendKeyEvent(QKeyEvent* event)
     emit keyPressEvent(event);
 }
 
+ChatTextEdit::PasteKind ChatTextEdit::pasteKind(bool hasLocalFiles, const QString& text,
+                                                bool hasImage, const QString& html)
+{
+    if (hasLocalFiles) {
+        return PasteKind::Files;
+    }
+    // KHANDAQ (0.2.56): the text before a picture. Excel, Word and other programs put a picture
+    // of what was copied beside its text, and the field took the picture: in a group, where no
+    // picture is taken, nothing came at all. A browser's Copy image puts no text, or an address
+    // beside the picture and HTML that shows only the picture: that is the picture. The address
+    // is not matched with the src of the img, as a browser may put the address of the picture it
+    // chose from srcset or of a link around it.
+    const QString trimmed = text.trimmed();
+    if (!trimmed.isEmpty()
+        && !(hasImage && isOnlyAnAddress(trimmed) && showsOnlyPictures(html))) {
+        return PasteKind::Text;
+    }
+    return hasImage ? PasteKind::Image : PasteKind::Text;
+}
+
 bool ChatTextEdit::tryHandlePaste(const QMimeData* mimeData)
 {
     if (!mimeData) {
         return false;
     }
 
-    if (mimeData->hasImage()) {
-        const QImage image = qvariant_cast<QImage>(mimeData->imageData());
-        if (!image.isNull()) {
-            emit pasteImage(QPixmap::fromImage(image));
-            return true;
-        }
-
-        const QClipboard* const clipboard = QApplication::clipboard();
-        if (clipboard) {
-            const QPixmap pixmap = clipboard->pixmap();
-            if (!pixmap.isNull()) {
-                emit pasteImage(pixmap);
-                return true;
-            }
-        }
+    const QString text = mimeData->hasText() ? mimeData->text() : QString();
+    const QStringList paths = localFilePathsFromMimeData(mimeData, text);
+    // KHANDAQ (0.2.56): a picture counts only where it is taken, the chat with a person; in a
+    // group the text beside it is pasted instead of nothing.
+    const QMetaMethod imageSignal = QMetaMethod::fromSignal(&ChatTextEdit::pasteImage);
+    const bool takesImage = mimeData->hasImage() && isSignalConnected(imageSignal);
+    const QString html = takesImage && mimeData->hasHtml() ? mimeData->html() : QString();
+    switch (pasteKind(!paths.isEmpty(), text, takesImage, html)) {
+    case PasteKind::Files:
+        emit pasteFiles(paths);
+        return true;
+    case PasteKind::Text:
+        // QTextEdit inserts it as plain text.
+        return false;
+    case PasteKind::Image:
+        break;
     }
 
-    const QStringList paths = localFilePathsFromMimeData(mimeData);
-    if (!paths.isEmpty()) {
-        emit pasteFiles(paths);
+    const QImage image = qvariant_cast<QImage>(mimeData->imageData());
+    if (!image.isNull()) {
+        emit pasteImage(QPixmap::fromImage(image));
         return true;
     }
 
+    const QClipboard* const clipboard = QApplication::clipboard();
+    if (clipboard) {
+        const QPixmap pixmap = clipboard->pixmap();
+        if (!pixmap.isNull()) {
+            emit pasteImage(pixmap);
+            return true;
+        }
+    }
     return false;
 }

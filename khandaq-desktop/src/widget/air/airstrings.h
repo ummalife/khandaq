@@ -266,6 +266,10 @@ enum class Text
     CmdIdOwn,
     CmdIdBad,
     CmdIdContact,
+    CmdJoinGroup,
+    CmdJoinGroupNote,
+    CmdOpenGroup,
+    CmdGroupListed,
     NoChatOpen,
     // Requests and group invitations (E12).
     InviteTag,
@@ -321,12 +325,14 @@ enum class Text
     GroupKeyCopied,
     GroupQrHeading,
     GroupQrSubtitle,
+    GroupKeyHidden,
     GroupMutedNote,
     GroupUnmutedNote,
     GroupLeave,
     GroupLeaveNote,
     GroupLeaveTitle,
     GroupLeaveMessage,
+    GroupLeavePrivateMessage,
     GroupLeaveVerb,
     GroupWritePrivately,
     GroupMakeModerator,
@@ -346,6 +352,9 @@ enum class Text
     GroupNowObserver,
     GroupRemoved,
     GroupChangeFailed,
+    GroupOpenTitle,
+    GroupOpenMessage,
+    GroupOpenVerb,
     GroupInviteTitle,
     InviteOnlineNote,
     InviteChooseFirst,
@@ -408,6 +417,7 @@ enum class Text
     FilePaused,
     FilePausedThere,
     FileWaitsAccept,
+    FileWaitsMembers,
     FileDownloadStopped,
     FileNotSent,
     FileNameAndSize,
@@ -765,6 +775,7 @@ enum class Text
     ErrorJoinGroupTitle,
     ErrorRoleTitle,
     ErrorKickTitle,
+    ErrorPrivacyTitle,
     ErrorInviteTitle,
     ErrorInviteSomeTitle,
     InviteRetry,
@@ -911,7 +922,10 @@ QString groupAskText(Air::ComposeRight right);
  * group, private messages included; otherwise nobody may be known to ask yet.
  */
 QString groupAskUnavailableText(Air::ComposeRight right, bool nobodyToAsk);
-/** The length counter of a group field: the bytes left, or over the limit. */
+/**
+ * The length counter of a private message to a member, which is one message: the bytes left, or
+ * over the limit. The field of the group itself counts with composeCounterText.
+ */
 QString groupCounterText(int left);
 /** The second line of a member row: the role, then online or offline. */
 QString groupMemberStatusText(const Air::GroupMember& member);

@@ -113,6 +113,7 @@ private slots:
     void aRefusedRequestIsSaidInThePanel();
     void aRefusedRequestAfterClosingIsSaidOverTheWindow();
     void theCommandRowSaysWhatIsMissing();
+    void theCommandRowOffersTheGroupOfAKey();
     void theCommandLineHandsTheStartOfAnIdOn();
     void eachOpeningStartsAfresh();
     void theEmptyColumnShowsTheWholeSentence();
@@ -379,9 +380,32 @@ void TestAirNewContact::theCommandRowSaysWhatIsMissing()
     QCOMPARE(row.accessibleDescription(), AirStrings::text(Text::CmdIdLeft, 64));
 }
 
+/** For a whole group key the row offers the group: Join it, or Open it by name once listed. */
+void TestAirNewContact::theCommandRowOffersTheGroupOfAKey()
+{
+    const QString groupKey = goodAddress.left(64);
+    AirCommandIdRow row;
+    row.setGroup(groupKey, false);
+    QCOMPARE(row.groupKey(), groupKey);
+    QVERIFY(row.idStart().isEmpty());
+    QCOMPARE(row.accessibleName(), AirStrings::text(Text::CmdJoinGroup));
+    QCOMPARE(row.accessibleDescription(), AirStrings::text(Text::CmdJoinGroupNote));
+
+    row.setGroup(groupKey, true, QStringLiteral("Study circle"));
+    QCOMPARE(row.accessibleName(),
+             AirStrings::text(Text::CmdOpenGroup).arg(QStringLiteral("Study circle")));
+    QCOMPARE(row.accessibleDescription(), AirStrings::text(Text::CmdGroupListed));
+
+    // Back to New contact: the group is gone from the row.
+    row.setIdStart(groupKey, Air::IdVerdict{});
+    QVERIFY(row.groupKey().isNull());
+    QCOMPARE(row.accessibleName(), AirStrings::text(Text::CmdNewContact));
+}
+
 /**
  * The start of an ID in the command line is announced for the row over the list, and Enter takes it
- * to New contact; a whole ID goes there at once. Words stay a search.
+ * to New contact; a whole ID goes there at once. The link of a group goes to the group. Words stay
+ * a search.
  */
 void TestAirNewContact::theCommandLineHandsTheStartOfAnIdOn()
 {
@@ -410,6 +434,26 @@ void TestAirNewContact::theCommandLineHandsTheStartOfAnIdOn()
     QCOMPARE(addresses.count(), 2);
     QCOMPARE(addresses.at(1).at(0).toString(), badAddress);
     QVERIFY(line->text().isEmpty());
+
+    // A group's link is no start of an ID: Enter takes its key to the group.
+    QSignalSpy groups(&band, &AirBand::groupKeyEntered);
+    const QString groupKey = goodAddress.left(64);
+    line->setText(QStringLiteral("khandaq:group:") + groupKey.toLower());
+    QVERIFY(starts.last().at(0).toString().isEmpty());
+    QTest::keyClick(line, Qt::Key_Return);
+    QCOMPARE(groups.count(), 1);
+    QCOMPARE(groups.at(0).at(0).toString(), groupKey);
+    QVERIFY(line->text().isEmpty());
+    QCOMPARE(addresses.count(), 2);
+    QCOMPARE(activations.count(), 1);
+
+    // A bare key of 64 characters is the start of an ID as before: the rows offer the group.
+    line->setText(groupKey);
+    QCOMPARE(starts.last().at(0).toString(), groupKey);
+    QTest::keyClick(line, Qt::Key_Return);
+    QCOMPARE(addresses.count(), 3);
+    QCOMPARE(addresses.at(2).at(0).toString(), groupKey);
+    QCOMPARE(groups.count(), 1);
 }
 
 /**

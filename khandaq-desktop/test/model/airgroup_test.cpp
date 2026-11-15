@@ -25,6 +25,7 @@
 #include <QTranslator>
 #include <QtTest/QtTest>
 
+#include <limits>
 #include <memory>
 
 /**
@@ -50,6 +51,8 @@ private slots:
     void headerAndHintCountTheMembersAndTheOnesOnline();
     void everyoneOnlineNobodyOnlineAloneAndNotConnected();
     void countsNeverContradictEachOther();
+    void aTextGoesOnlyOnceTheGroupConfirmedSomeoneElse();
+    void aMemberIsReachableDirectlyOrThroughARelayOfTheGroups();
     void observersAndTheVoiceStateDecideWhoWrites();
     void founderAndModeratorsChangeRolesWithinTheirRights();
     void everyChangeIsAskedInOneSentenceAndToldOnceDone();
@@ -348,6 +351,49 @@ void TestAirGroup::countsNeverContradictEachOther()
     QCOMPARE(Air::GroupReach::make(4, 4, -2, true).online, 0);
 }
 
+/**
+ * 0.2.56: toxcore's connection (-1 disconnected, 0 connecting, 1 connected) and its peer count,
+ * which counts you too: a text goes to a group that is not disconnected and confirmed someone else,
+ * one still connecting too (a founder's group back from the save, which its members reach), never
+ * to one with you alone (a group just made, or every member timed out), nor when the count failed
+ * (UINT32_MAX).
+ */
+void TestAirGroup::aTextGoesOnlyOnceTheGroupConfirmedSomeoneElse()
+{
+    QVERIFY(Air::groupTakesText(1, 2));
+    QVERIFY(Air::groupTakesText(1, 50));
+    QVERIFY(Air::groupTakesText(0, 2));
+    QVERIFY(!Air::groupTakesText(1, 1));
+    QVERIFY(!Air::groupTakesText(1, 0));
+    QVERIFY(!Air::groupTakesText(1, std::numeric_limits<quint32>::max()));
+    QVERIFY(!Air::groupTakesText(0, std::numeric_limits<quint32>::max()));
+    QVERIFY(!Air::groupTakesText(0, 1));
+    QVERIFY(!Air::groupTakesText(-1, 2));
+}
+
+/**
+ * 0.2.56: the page counts a member online only while toxcore has a path to them: direct (UDP), or
+ * through a relay of the groups. toxcore says TCP for every other member it lists, as for two
+ * members who never reached each other: the page said "2 online" and "all 2 get it at once" to one
+ * of them while neither got the other's texts.
+ */
+void TestAirGroup::aMemberIsReachableDirectlyOrThroughARelayOfTheGroups()
+{
+    // TOX_CONNECTION_NONE, TOX_CONNECTION_TCP and TOX_CONNECTION_UDP.
+    constexpr int none = 0;
+    constexpr int tcp = 1;
+    constexpr int udp = 2;
+    QVERIFY(Air::groupPeerReachable(udp, 0));
+    QVERIFY(Air::groupPeerReachable(udp, 3));
+    QVERIFY(Air::groupPeerReachable(tcp, 1));
+    QVERIFY(!Air::groupPeerReachable(tcp, 0));
+    QVERIFY(!Air::groupPeerReachable(none, 3));
+
+    // What the head and the line under the field say then: one of the two others online.
+    const Air::GroupReach reach = Air::GroupReach::make(3, 3, 1, true);
+    QCOMPARE(Air::GroupHint::make(reach).kind, Air::GroupHint::Kind::Some);
+}
+
 void TestAirGroup::observersAndTheVoiceStateDecideWhoWrites()
 {
     using Air::ComposeRight;
@@ -513,9 +559,16 @@ void TestAirGroup::privacyIsSaidWithItsConsequence()
              QStringLiteral("By invitation only"));
     QCOMPARE(AirStrings::groupPrivacyNote(Air::GroupPrivacy::Open),
              QStringLiteral("Anyone who has the group key can join, no invitation needed."));
+    // A group by invitation only cannot be joined with its key, and says so.
+    QCOMPARE(AirStrings::groupPrivacyNote(Air::GroupPrivacy::InviteOnly),
+             QStringLiteral("Only people invited by a member can join. "
+                            "The group key alone does not let anyone in."));
     use(QStringLiteral("ru"));
     QCOMPARE(AirStrings::groupPrivacyText(Air::GroupPrivacy::InviteOnly),
              QStringLiteral("Только по приглашению"));
+    QCOMPARE(AirStrings::groupPrivacyNote(Air::GroupPrivacy::InviteOnly),
+             QStringLiteral("Войти можно только по приглашению кого-то из участников. "
+                            "Одного ключа группы для этого мало."));
 }
 
 void TestAirGroup::nameIsOneLineAndFitsInFortyEightBytes()

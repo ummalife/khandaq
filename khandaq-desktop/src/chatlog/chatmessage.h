@@ -63,11 +63,14 @@ public:
     /** Who wrote an entry of the transcript, and the state of our own messages. */
     struct AirLook
     {
-        /** "You" for our own messages, the first word of the author's name otherwise. */
+        /**
+         * "You" for our own messages; the author's name otherwise, its first word in a chat with a
+         * person and all of it in a group (Air::authorName).
+         */
         QString who;
         /** The author's tone; -1 signs the entry in ink-2, as our own messages are signed. */
         int tone = -1;
-        /** Our own messages to a person carry a state mark; others have none. */
+        /** Our own messages to a person and our texts in a group carry a state mark. */
         bool hasMark = false;
         Air::EntryStatus status = Air::EntryStatus::None;
         /** Who wrote it, as a screen reader says it: "You" or the whole name; empty in notes. */

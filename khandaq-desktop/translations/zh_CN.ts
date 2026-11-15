@@ -1393,6 +1393,26 @@
         <translation>已在联系人中</translation>
     </message>
     <message>
+        <source>Join the group with this key</source>
+        <comment>command line: row over the matches when it holds a whole group key</comment>
+        <translation>用此密钥加入群组</translation>
+    </message>
+    <message>
+        <source>if the group is open to anyone with its key</source>
+        <comment>command line: note of the Join row</comment>
+        <translation>如果群组对持有密钥的人开放</translation>
+    </message>
+    <message>
+        <source>Open %1</source>
+        <comment>command line: row over the matches when it holds the key of a group in the list; %1 is the group</comment>
+        <translation>打开 %1</translation>
+    </message>
+    <message>
+        <source>already in your groups</source>
+        <comment>command line: note of the row of a group in the list</comment>
+        <translation>已在你的群组中</translation>
+    </message>
+    <message>
         <source>Choose a conversation in the list. To add someone, paste their ID into the line at the top.</source>
         <comment>the conversation column while no conversation is open</comment>
         <translation>请在列表中选择一个对话。要添加联系人，请将其 ID 粘贴到顶部的输入行。</translation>
@@ -1628,6 +1648,11 @@
         <translation>扫描即可按密钥找到群组</translation>
     </message>
     <message>
+        <source>Members join by invitation, so the key is not shown.</source>
+        <comment>group dossier of a group by invitation only, in place of the group key</comment>
+        <translation>成员通过邀请加入，因此不显示密钥。</translation>
+    </message>
+    <message>
         <source>No notifications for new messages of this group; the unread count stays in the list.</source>
         <comment>group dossier, under Mute</comment>
         <translation>不会通知此群组的新消息，未读数仍显示在列表中。</translation>
@@ -1656,6 +1681,11 @@
         <source>The members see that you left. To come back you need an invitation or the group key.</source>
         <comment>question before leaving a group</comment>
         <translation>成员会看到你已退出。要回来，需要邀请或群组密钥。</translation>
+    </message>
+    <message>
+        <source>The members see that you left. To come back you need a new invitation.</source>
+        <comment>question before leaving a group by invitation only</comment>
+        <translation>成员会看到你已退出。要回来，需要新的邀请。</translation>
     </message>
     <message>
         <source>Leave</source>
@@ -1813,9 +1843,9 @@
         <translation>仅限邀请</translation>
     </message>
     <message>
-        <source>Only people invited by a member can join.</source>
+        <source>Only people invited by a member can join. The group key alone does not let anyone in.</source>
         <comment>who can join a group: consequence</comment>
-        <translation>只有成员邀请的人才能加入。</translation>
+        <translation>只有成员邀请的人才能加入。仅凭群组密钥无法加入。</translation>
     </message>
     <message>
         <source>Open to anyone with the group key</source>
@@ -1868,9 +1898,9 @@
         <translation>加入群组</translation>
     </message>
     <message>
-        <source>Joining works when the group is open to anyone with its key, or when a contact of yours who is in it is online.</source>
+        <source>A group open to anyone with its key can be joined here. A group by invitation only needs an invitation from one of its members.</source>
         <comment>join by key: under the field</comment>
-        <translation>如果群组对持有密钥的人开放，或你的某个联系人在群组中且在线，就可以加入。</translation>
+        <translation>在这里可以加入对持有密钥者开放的群组。仅限邀请的群组需要其成员的邀请。</translation>
     </message>
     <message>
         <source>A group key has 64 characters: 0 to 9 and A to F.</source>
@@ -2070,6 +2100,11 @@
         <source>Waits for %1 to accept it</source>
         <comment>file entry of ours: %1 is the person who has to accept it</comment>
         <translation>等待 %1 接收</translation>
+    </message>
+    <message>
+        <source>Waits for someone in the group to come online</source>
+        <comment>file entry of ours in a group where nobody else is online now: it goes when someone is</comment>
+        <translation>等待群组中有人上线</translation>
     </message>
     <message>
         <source>The download stopped</source>
@@ -3437,6 +3472,21 @@
         <translation>群组未接受此更改。连接后请重试。</translation>
     </message>
     <message>
+        <source>Open the group to anyone with its key?</source>
+        <comment>question before the founder opens a group by invitation only</comment>
+        <translation>要向所有持有密钥的人开放群组吗？</translation>
+    </message>
+    <message>
+        <source>Anyone who has the group key can then join without an invitation, and every member can see and share the key.</source>
+        <comment>question before opening a group to anyone with its key</comment>
+        <translation>之后任何持有群组密钥的人都无需邀请即可加入，所有成员都能看到并分享密钥。</translation>
+    </message>
+    <message>
+        <source>Open the group</source>
+        <comment>the verb of the question of opening a group to anyone with its key</comment>
+        <translation>开放群组</translation>
+    </message>
+    <message>
         <source>%1 wrote to you privately</source>
         <comment>band of a private message in a group: %1 is the member</comment>
         <translation>%1 给你发来私信</translation>
@@ -3514,6 +3564,11 @@
         <source>Couldn&apos;t remove the member</source>
         <comment>title of the error when the group refused to remove a member</comment>
         <translation>无法移除成员</translation>
+    </message>
+    <message>
+        <source>Couldn&apos;t change who can join</source>
+        <comment>title of the error when the group refused a change of who can join</comment>
+        <translation>无法更改谁可以加入</translation>
     </message>
     <message>
         <source>Couldn&apos;t invite to the group</source>

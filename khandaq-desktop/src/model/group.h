@@ -72,6 +72,11 @@ signals:
     void userLeft(const ToxPk& user, const QString& name);
     void numPeersChanged(int numPeers);
     void peerNameChanged(const ToxPk& peer, const QString& oldName, const QString& newName);
+    /**
+     * The peer list was read again, changed or not: a member joined or left, the group connected,
+     * or the core looks again, as it does every half minute.
+     */
+    void peerListRefreshed();
 
 private:
     ICoreGroupQuery& groupQuery;

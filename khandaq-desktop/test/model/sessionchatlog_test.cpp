@@ -101,6 +101,7 @@ private slots:
     void aGroupReactionNamesWhoseMessageItIs();
     void aFileIsFoundByItsToxFileId();
     void aMessageWithoutAnIdIsNeverAnchored();
+    void aMessageThatWaitedIsFoundByTheIdItWentWith();
 
 private:
     MockCoreIdHandler idHandler;
@@ -393,6 +394,38 @@ void TestSessionChatLog::aMessageWithoutAnIdIsNeverAnchored()
     deletion.anchorId.clear();
     QCOMPARE(chatLog->applyEffect(maryam, deletion, self).change, Change::None);
     QVERIFY(chatLog->isShown(ChatLogIdx(0)));
+}
+
+/**
+ * @brief 0.2.56: a text of ours that waited in a group is shown without an id, and gets the one
+ * toxcore gave it once it went: the members' reactions point at that one.
+ */
+void TestSessionChatLog::aMessageThatWaitedIsFoundByTheIdItWentWith()
+{
+    using Change = SessionChatLog::EffectResult::Change;
+    const ToxPk groupSelf = keyOf(0x55);
+    const ToxPk maryam = keyOf(0x11);
+    const Message waited = createMessage("Ждал");
+    /* ChatLogIdx(0) */ chatLog->onMessageSent(DispatchedMessageId(7), waited);
+
+    Air::MessageEffect reaction = effectOn(Air::MessageEffect::Kind::Reaction, "0000000a");
+    reaction.emoji = QStringLiteral("👍");
+    reaction.add = true;
+    reaction.author = groupSelf.getByteArray();
+    QCOMPARE(chatLog->applyEffect(maryam, reaction, groupSelf).change, Change::None);
+
+    QVERIFY(!chatLog->onMessageWireIdAssigned(DispatchedMessageId(8),
+                                              QByteArray::fromHex("0000000a")));
+    const Message* const went =
+        chatLog->onMessageWireIdAssigned(DispatchedMessageId(7), QByteArray::fromHex("0000000a"));
+    QVERIFY(went);
+    QCOMPARE(went->wireId, QByteArray::fromHex("0000000a"));
+    // The history keeps it under the time it was written (ChatHistory::keepWireId).
+    QCOMPARE(went->timestamp, waited.timestamp);
+
+    const SessionChatLog::EffectResult reacted = chatLog->applyEffect(maryam, reaction, groupSelf);
+    QCOMPARE(reacted.change, Change::Reacted);
+    QCOMPARE(reacted.idx, ChatLogIdx(0));
 }
 
 QTEST_GUILESS_MAIN(TestSessionChatLog)

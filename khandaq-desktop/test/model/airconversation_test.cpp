@@ -48,6 +48,7 @@ private slots:
     void everyStatusHasItsIconAndWords();
     void aRunGoesOnForTheSameAuthorWithinFiveMinutesOfTheSameDay();
     void shortNameIsTheFirstWord();
+    void aGroupNamesTheAuthorInFull();
     void dayMarksSayTodayAndYesterdayThenTheDate();
     void linkFollowsTheReach();
     void presenceLineNamesTheLinkAndWhenThePersonCameOnline();
@@ -138,6 +139,13 @@ void TestAirConversation::statusFollowsTheMessageAndThePerson()
     QCOMPARE(Air::directTextStatus(false, false, false, true, false), EntryStatus::Transit);
     QCOMPARE(Air::directTextStatus(true, false, true, true, true), EntryStatus::None);
 
+    // 0.2.56: our text in a group is in transit while it waits on this device, and carries no mark
+    // once it went: nobody confirms it.
+    QCOMPARE(Air::groupTextStatus(true, false), EntryStatus::Transit);
+    QCOMPARE(Air::groupTextStatus(false, false), EntryStatus::None);
+    QCOMPARE(Air::groupTextStatus(false, true), EntryStatus::Failed);
+    QCOMPARE(Air::groupTextStatus(true, true), EntryStatus::Failed);
+
     // The list row says the same as the conversation.
     QCOMPARE(Air::rowDelivery(EntryStatus::Transit), Air::Delivery::Transit);
     QCOMPARE(Air::rowDelivery(EntryStatus::Sending), Air::Delivery::Transit);
@@ -186,6 +194,18 @@ void TestAirConversation::shortNameIsTheFirstWord()
     QCOMPARE(Air::shortName(QStringLiteral("  Yusuf Karimov ")), QStringLiteral("Yusuf"));
     QCOMPARE(Air::shortName(QStringLiteral("Amina")), QStringLiteral("Amina"));
     QCOMPARE(Air::shortName(QString()), QString());
+}
+
+/**
+ * @brief 0.2.56: in a group the author is named in full over each run, as the other apps do:
+ * "QA Desk A" and "QA Desk B" were both "QA" there. A person is still named by the first word.
+ */
+void TestAirConversation::aGroupNamesTheAuthorInFull()
+{
+    QCOMPARE(Air::authorName(QStringLiteral(" QA Desk A "), false), QStringLiteral("QA Desk A"));
+    QCOMPARE(Air::authorName(QStringLiteral("مريم عبد الله"), false), QStringLiteral("مريم عبد الله"));
+    QCOMPARE(Air::authorName(QStringLiteral("Yusuf Karimov"), true), QStringLiteral("Yusuf"));
+    QCOMPARE(Air::authorName(QString(), false), QString());
 }
 
 void TestAirConversation::dayMarksSayTodayAndYesterdayThenTheDate()

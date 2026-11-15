@@ -40,7 +40,10 @@ class QVBoxLayout;
 struct AirGroupInfo
 {
     QString name;
-    /** The group's key, its chat id: 64 hexadecimal characters in upper case. */
+    /**
+     * The group's key, its chat id: 64 hexadecimal characters in upper case. The dossier shows,
+     * copies and shares it only while the group is open to anyone with it.
+     */
     QString groupKey;
     int tone = 0;
     Air::GroupReach reach;
@@ -64,6 +67,8 @@ struct AirGroupInfo
  * a message now (or the members, while you may not write), by role and online first, with a search
  * from 20 members; the group key with Copy, Invite and QR and who can join; notifications; Leave
  * the group with its consequence. A member's row opens what may be done to them, each asked once.
+ * A group by invitation only shows no key, only that members join by invitation, and Invite; the
+ * founder alone has the switch that opens it to anyone with the key (asked once) or closes it.
  */
 class AirGroupDossier : public AirFoldPanel
 {
@@ -90,6 +95,8 @@ signals:
     void memberMuteRequested(const Air::GroupMember& member, bool muted);
     void memberHideRequested(const Air::GroupMember& member, bool hidden);
     void inviteRequested(const QVector<Air::InviteCandidate>& chosen);
+    /** The founder chose who can join; the switch shows the change once setInfo brings it. */
+    void privacyChangeRequested(Air::GroupPrivacy privacy);
 
 protected:
     void arrange(int width) override;
@@ -126,8 +133,11 @@ private:
 
     QLabel* keyTitle = nullptr;
     QLabel* keyText = nullptr;
+    QLabel* keyHidden = nullptr;
     QLabel* privacyTitle = nullptr;
     QLabel* privacyText = nullptr;
+    QLabel* privacySwitchLabel = nullptr;
+    AirSwitch* privacySwitch = nullptr;
     QLabel* privacyNote = nullptr;
     AirButton* copyButton = nullptr;
     AirButton* inviteButton = nullptr;

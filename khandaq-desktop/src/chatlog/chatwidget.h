@@ -49,7 +49,10 @@ public:
     /** What the log is a conversation with. */
     enum class Kind
     {
-        /** A group: authors in their tones, no state marks. */
+        /**
+         * A group: authors in their tones. A group confirms nothing, so our texts carry a mark
+         * only while they wait on this device and once they failed.
+         */
         Group,
         /**
          * One person: our messages carry state marks, and while the person is offline the
@@ -259,6 +262,7 @@ private:
     QMargins margins = QMargins(0, 12, 0, 12);
     qreal lineSpacing = 2.0;
     bool personChat = false;
+    bool groupChat = false;
     bool notesChat = false;
     bool personOnline = true;
     QString personName;

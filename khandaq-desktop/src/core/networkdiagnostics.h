@@ -31,4 +31,9 @@ public:
      * and of groups to the same relay are one node. The report reads up to its first zero byte.
      */
     static int relayCount(const QByteArray& report);
+    /**
+     * The relays of the groups in such a report, each once: those every group reaches its members
+     * through when it has no direct path to them.
+     */
+    static int groupRelayCount(const QByteArray& report);
 };

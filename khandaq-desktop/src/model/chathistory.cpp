@@ -99,6 +99,8 @@ ChatHistory::ChatHistory(Chat& chat_, History* history_, const ICoreIdHandler& c
             &ChatHistory::onMessageReceived);
     connect(&messageDispatcher, &IMessageDispatcher::messageBroken, this,
             &ChatHistory::onMessageBroken);
+    connect(&messageDispatcher, &IMessageDispatcher::messageWireIdAssigned, this,
+            &ChatHistory::onMessageWireIdAssigned);
 
     // Defer messageSent callback until we finish firing off all our unsent messages.
     // If it was connected all our unsent messages would be re-added ot history again
@@ -247,7 +249,7 @@ void ChatHistory::onFileUpdated(const ToxPk& sender, const ToxFile& file)
             // with a different order when loading from history
             history->addNewFileMessage(chat.getPersistentId(), file.resumeFileId, file.fileName,
                                        file.filePath, file.progress.getFileSize(), sender,
-                                       QDateTime::currentDateTime(), username);
+                                       QDateTime::currentDateTime(), username, file.direction);
             break;
         }
         case ToxFile::CANCELED:
@@ -361,6 +363,16 @@ void ChatHistory::onMessageBroken(DispatchedMessageId id, BrokenMessageReason re
 
     if (queued) {
         emit queueChanged();
+    }
+}
+
+void ChatHistory::onMessageWireIdAssigned(DispatchedMessageId id, const QByteArray& wireId)
+{
+    // A message that waited went: the reactions to it find it by the id it went with, now and
+    // after the next start. One the log has not loaded keeps none.
+    const Message* const message = sessionChatLog.onMessageWireIdAssigned(id, wireId);
+    if (message && canUseHistory()) {
+        keepWireId(coreIdHandler.getSelfPublicKey(), *message);
     }
 }
 

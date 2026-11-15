@@ -84,7 +84,8 @@ void GroupWidget::contextMenuEvent(QContextMenuEvent* event)
     showContextMenu(event->globalPos());
 }
 
-void GroupWidget::showContextMenu(const QPoint& globalPos, const QList<QAction*>& leadingActions)
+void GroupWidget::showContextMenu(const QPoint& globalPos, const QList<QAction*>& leadingActions,
+                                  bool offersGroupId)
 {
     if (!active) {
         setBackgroundRole(QPalette::Highlight);
@@ -111,7 +112,7 @@ void GroupWidget::showContextMenu(const QPoint& globalPos, const QList<QAction*>
 
     menu.addSeparator();
 
-    QAction* copyGroupId = menu.addAction(tr("Copy Group ID"));
+    QAction* copyGroupId = offersGroupId ? menu.addAction(tr("Copy Group ID")) : nullptr;
     QAction* setTitle = menu.addAction(tr("Set title..."));
     QAction* quitGroup = menu.addAction(tr("Quit group", "Menu to quit a groupchat"));
 

@@ -18,6 +18,7 @@
 */
 
 #include "src/model/air/airgroup.h"
+#include "src/widget/air/airchatparts.h"
 #include "src/widget/air/aircomposer.h"
 #include "src/widget/air/airgroupdossier.h"
 #include "src/widget/air/airgroupviews.h"
@@ -31,6 +32,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QLabel>
+#include <QRegularExpression>
 #include <QSignalSpy>
 #include <QTextEdit>
 #include <QtTest/QtTest>
@@ -147,26 +149,33 @@ class TestAirGroupViews : public QObject
 {
     Q_OBJECT
 private slots:
-    void newGroupStartsByInvitationOnlyAndWaitsForAName();
+    void newGroupStartsOpenToAnyoneWithTheKeyAndWaitsForAName();
     void newGroupCreatesWithTheChoiceAndTheContactsOnline();
     void joiningTakesAWholeKeyAndKnowsTheGroupsInTheList();
     void inviteListKeepsTheChoiceByKeyWhileTheContactIsOnline();
     void readOnlyBarTakesThePlaceOfTheField();
     void dossierSaysTheRoleAndListsTheMembers();
+    void aGroupByInvitationOnlySharesNoKeyAndItsFounderOpensIt();
     void privateThreadTellsAnObserverWhyItCannotAnswer();
     void getNowBandShowsWhoFitsAndCountsTheRest();
 };
 
-/** Every opening starts with By invitation only chosen, and Create says why it waits. */
-void TestAirGroupViews::newGroupStartsByInvitationOnlyAndWaitsForAName()
+/**
+ * Every opening starts with Open to anyone with the group key chosen (0.2.56), and Create says why
+ * it waits. By invitation only stays to be chosen, and says that the key lets nobody in.
+ */
+void TestAirGroupViews::newGroupStartsOpenToAnyoneWithTheKeyAndWaitsForAName()
 {
     Window window;
     window.panel->openCreate();
     QVERIFY(window.panel->isOpen());
     auto* const inviteOnly = part<QAbstractButton>(window.panel.get(), "newGroupInviteOnly");
     auto* const open = part<QAbstractButton>(window.panel.get(), "newGroupOpen");
-    QVERIFY(inviteOnly->isChecked());
-    QVERIFY(!open->isChecked());
+    QVERIFY(open->isChecked());
+    QVERIFY(!inviteOnly->isChecked());
+    QVERIFY(inviteOnly->isEnabled());
+    QCOMPARE(inviteOnly->accessibleDescription(),
+             AirStrings::groupPrivacyNote(Air::GroupPrivacy::InviteOnly));
     auto* const create = part<AirButton>(window.panel.get(), "newGroupCreate");
     auto* const why = part<QLabel>(window.panel.get(), "newGroupWhy");
     QVERIFY(!create->isEnabled());
@@ -194,14 +203,15 @@ void TestAirGroupViews::newGroupStartsByInvitationOnlyAndWaitsForAName()
     QCOMPARE(requests, 0);
 
     // The other choice, then closed and opened again: the panel is fresh.
-    open->click();
-    QVERIFY(open->isChecked());
-    QVERIFY(!inviteOnly->isChecked());
+    inviteOnly->click();
+    QVERIFY(inviteOnly->isChecked());
+    QVERIFY(!open->isChecked());
     window.panel->close();
     QVERIFY(!window.panel->isOpen());
     window.panel->openCreate();
     QCOMPARE(name->text(), QString());
-    QVERIFY(inviteOnly->isChecked());
+    QVERIFY(open->isChecked());
+    QVERIFY(!inviteOnly->isChecked());
     QVERIFY(!create->isEnabled());
 }
 
@@ -230,7 +240,7 @@ void TestAirGroupViews::newGroupCreatesWithTheChoiceAndTheContactsOnline()
     QCOMPARE(create->text(), AirStrings::text(Text::NewGroupCreateInvite, 1));
 
     QString createdName;
-    Air::GroupPrivacy createdPrivacy = Air::GroupPrivacy::InviteOnly;
+    Air::GroupPrivacy createdPrivacy = Air::GroupPrivacy::Open;
     QVector<Air::InviteCandidate> invited;
     int requests = 0;
     QObject::connect(window.panel.get(), &AirNewGroup::createRequested, window.panel.get(),
@@ -241,7 +251,7 @@ void TestAirGroupViews::newGroupCreatesWithTheChoiceAndTheContactsOnline()
                          createdPrivacy = privacy;
                          invited = chosen;
                      });
-    part<QAbstractButton>(window.panel.get(), "newGroupOpen")->click();
+    part<QAbstractButton>(window.panel.get(), "newGroupInviteOnly")->click();
     auto* const name = part<AirTextField>(window.panel.get(), "newGroupName");
     name->edit()->setFocus();
     QTest::keyClicks(name->edit(), QStringLiteral("  Book  club "));
@@ -249,7 +259,7 @@ void TestAirGroupViews::newGroupCreatesWithTheChoiceAndTheContactsOnline()
     create->click();
     QCOMPARE(requests, 1);
     QCOMPARE(createdName, QStringLiteral("Book club"));
-    QCOMPARE(createdPrivacy, Air::GroupPrivacy::Open);
+    QCOMPARE(createdPrivacy, Air::GroupPrivacy::InviteOnly);
     QCOMPARE(invited.size(), 1);
     QCOMPARE(invited.first().name, QStringLiteral("Mariam Hasanova"));
 
@@ -449,6 +459,7 @@ void TestAirGroupViews::dossierSaysTheRoleAndListsTheMembers()
     info.name = QStringLiteral("Study circle");
     info.groupKey = groupKey;
     info.selfRole = Air::GroupRole::Founder;
+    info.privacy = Air::GroupPrivacy::Open;
     info.members =
         Air::sortedRoster({member(1, QStringLiteral("Amina"), Air::GroupRole::Founder, true, true),
                            member(2, QStringLiteral("Mariam"), Air::GroupRole::Moderator, true),
@@ -463,7 +474,7 @@ void TestAirGroupViews::dossierSaysTheRoleAndListsTheMembers()
              AirStrings::groupRoleExplanation(Air::GroupRole::Founder));
     QCOMPARE(part<QLabel>(dossier, "groupKey")->text(), Air::keyLines(groupKey));
     QCOMPARE(part<QLabel>(dossier, "groupPrivacy")->text(),
-             AirStrings::groupPrivacyText(Air::GroupPrivacy::InviteOnly));
+             AirStrings::groupPrivacyText(Air::GroupPrivacy::Open));
     QVERIFY(showsText(dossier, AirStrings::text(Text::GroupWhoGetsNow)));
     QVERIFY(showsText(dossier, AirStrings::text(Text::GroupWhoGetsNowNote).arg(2).arg(3)));
 
@@ -500,6 +511,120 @@ void TestAirGroupViews::dossierSaysTheRoleAndListsTheMembers()
     part<AirButton>(dialog, "dialogConfirm")->click();
     QCOMPARE(leaves.count(), 1);
     QVERIFY(!dossier->isOpen());
+}
+
+/**
+ * A group by invitation only is joined by invitation, never with its key: its dossier shows, copies
+ * and shares no key, says so in one line and keeps Invite. Its founder alone has the switch that
+ * opens it to anyone with the key, asked once, and that closes it again; the switch shows what
+ * toxcore holds, not the click.
+ */
+void TestAirGroupViews::aGroupByInvitationOnlySharesNoKeyAndItsFounderOpensIt()
+{
+    QWidget host;
+    host.resize(1100, 800);
+    auto* const dossier = new AirGroupDossier(&host);
+    host.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&host));
+    const auto openDialog = [&host]() -> AirDialog* {
+        for (AirDialog* const dialog : host.findChildren<AirDialog*>()) {
+            if (dialog->isVisible()) {
+                return dialog;
+            }
+        }
+        return nullptr;
+    };
+    AirGroupInfo info;
+    info.name = QStringLiteral("Study circle");
+    info.groupKey = groupKey;
+    info.privacy = Air::GroupPrivacy::InviteOnly;
+    info.selfRole = Air::GroupRole::Member;
+    info.members = Air::sortedRoster(
+        {member(1, QStringLiteral("Amina"), Air::GroupRole::Founder, true),
+         member(2, QStringLiteral("Mariam"), Air::GroupRole::Member, true, true)});
+    info.reach = Air::GroupReach::make(2, 2, 1, true);
+    dossier->setInfo(info);
+    dossier->open();
+
+    // A member: no key in any form, the line in its place, Invite, and the words.
+    auto* const key = part<QLabel>(dossier, "groupKey");
+    QVERIFY(!key->isVisibleTo(dossier));
+    QVERIFY(key->text().isEmpty());
+    QVERIFY(key->accessibleDescription().isEmpty());
+    QVERIFY(!part<QWidget>(dossier, "groupCopyKey")->isVisibleTo(dossier));
+    for (const AirButton* const button : dossier->findChildren<AirButton*>()) {
+        QVERIFY2(!button->isVisibleTo(dossier)
+                     || button->text() != AirStrings::text(Text::DossierQr),
+                 "a QR button shows");
+    }
+    const QRegularExpression space(QStringLiteral("\\s"));
+    for (const QLabel* const label : dossier->findChildren<QLabel*>()) {
+        QVERIFY2(!QString(label->text()).remove(space).contains(groupKey),
+                 qPrintable(label->objectName()));
+    }
+    QVERIFY(showsText(dossier, AirStrings::text(Text::GroupKeyHidden)));
+    QVERIFY(part<QWidget>(dossier, "groupInvite")->isVisibleTo(dossier));
+    QVERIFY(part<QWidget>(dossier, "groupPrivacy")->isVisibleTo(dossier));
+    QVERIFY(showsText(dossier, AirStrings::groupPrivacyNote(Air::GroupPrivacy::InviteOnly)));
+    auto* const privacySwitch = part<AirSwitch>(dossier, "groupPrivacySwitch");
+    QVERIFY(!privacySwitch->isVisibleTo(dossier));
+
+    // Leaving says that only a new invitation brings you back.
+    part<AirButton>(dossier, "groupLeave")->click();
+    AirDialog* dialog = openDialog();
+    QVERIFY(dialog);
+    QVERIFY(showsText(dialog, AirStrings::text(Text::GroupLeavePrivateMessage)));
+    part<AirButton>(dialog, "dialogCancel")->click();
+    QVERIFY(!openDialog());
+
+    // The founder: the switch in place of the words, off.
+    info.selfRole = Air::GroupRole::Founder;
+    info.members = Air::sortedRoster(
+        {member(1, QStringLiteral("Amina"), Air::GroupRole::Founder, true, true),
+         member(2, QStringLiteral("Mariam"), Air::GroupRole::Member, true)});
+    dossier->setInfo(info);
+    QVERIFY(privacySwitch->isVisibleTo(dossier));
+    QVERIFY(!privacySwitch->isChecked());
+    QCOMPARE(privacySwitch->accessibleName(), AirStrings::text(Text::PrivacyOpen));
+    QVERIFY(!part<QWidget>(dossier, "groupPrivacy")->isVisibleTo(dossier));
+    QVERIFY(!key->isVisibleTo(dossier));
+
+    // Opening is asked once; until the group takes it, the switch stays off.
+    QVector<Air::GroupPrivacy> changes;
+    QObject::connect(dossier, &AirGroupDossier::privacyChangeRequested, dossier,
+                     [&changes](Air::GroupPrivacy privacy) { changes.append(privacy); });
+    privacySwitch->click();
+    QVERIFY(!privacySwitch->isChecked());
+    QCOMPARE(changes.size(), 0);
+    dialog = openDialog();
+    QVERIFY(dialog);
+    QVERIFY(showsText(dialog, AirStrings::text(Text::GroupOpenMessage)));
+    part<AirButton>(dialog, "dialogCancel")->click();
+    QCOMPARE(changes.size(), 0);
+    privacySwitch->click();
+    dialog = openDialog();
+    QVERIFY(dialog);
+    part<AirButton>(dialog, "dialogConfirm")->click();
+    QCOMPARE(changes.size(), 1);
+    QCOMPARE(changes.takeFirst(), Air::GroupPrivacy::Open);
+    QVERIFY(!privacySwitch->isChecked());
+
+    // toxcore took it: the key with Copy and QR, and the switch on.
+    info.privacy = Air::GroupPrivacy::Open;
+    dossier->setInfo(info);
+    QVERIFY(privacySwitch->isChecked());
+    QVERIFY(key->isVisibleTo(dossier));
+    QCOMPARE(key->text(), Air::keyLines(groupKey));
+    QVERIFY(part<QWidget>(dossier, "groupCopyKey")->isVisibleTo(dossier));
+    QVERIFY(!part<QWidget>(dossier, "groupKeyHidden")->isVisibleTo(dossier));
+    QVERIFY(showsText(dossier, AirStrings::groupPrivacyNote(Air::GroupPrivacy::Open)));
+
+    // Closing it again goes without a question, and waits for toxcore as well.
+    privacySwitch->click();
+    QVERIFY(!openDialog());
+    QCOMPARE(changes.size(), 1);
+    QCOMPARE(changes.takeFirst(), Air::GroupPrivacy::InviteOnly);
+    QVERIFY(privacySwitch->isChecked());
 }
 
 /**

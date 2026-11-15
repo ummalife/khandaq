@@ -1453,6 +1453,26 @@
         <translation>موجود في جهات الاتصال</translation>
     </message>
     <message>
+        <source>Join the group with this key</source>
+        <comment>command line: row over the matches when it holds a whole group key</comment>
+        <translation>الانضمام إلى المجموعة بهذا المفتاح</translation>
+    </message>
+    <message>
+        <source>if the group is open to anyone with its key</source>
+        <comment>command line: note of the Join row</comment>
+        <translation>إذا كانت المجموعة مفتوحة لكل من لديه مفتاحها</translation>
+    </message>
+    <message>
+        <source>Open %1</source>
+        <comment>command line: row over the matches when it holds the key of a group in the list; %1 is the group</comment>
+        <translation>فتح %1</translation>
+    </message>
+    <message>
+        <source>already in your groups</source>
+        <comment>command line: note of the row of a group in the list</comment>
+        <translation>موجودة في مجموعاتك</translation>
+    </message>
+    <message>
         <source>Choose a conversation in the list. To add someone, paste their ID into the line at the top.</source>
         <comment>the conversation column while no conversation is open</comment>
         <translation>اختر محادثة من القائمة. لإضافة شخص، الصق معرّفه في السطر في الأعلى.</translation>
@@ -1688,6 +1708,11 @@
         <translation>امسح الرمز للعثور على المجموعة بمفتاحها</translation>
     </message>
     <message>
+        <source>Members join by invitation, so the key is not shown.</source>
+        <comment>group dossier of a group by invitation only, in place of the group key</comment>
+        <translation>ينضم الأعضاء بالدعوة، لذلك لا يظهر المفتاح.</translation>
+    </message>
+    <message>
         <source>No notifications for new messages of this group; the unread count stays in the list.</source>
         <comment>group dossier, under Mute</comment>
         <translation>لن تصل إشعارات برسائل هذه المجموعة الجديدة، ويبقى عدد غير المقروء ظاهرًا في القائمة.</translation>
@@ -1716,6 +1741,11 @@
         <source>The members see that you left. To come back you need an invitation or the group key.</source>
         <comment>question before leaving a group</comment>
         <translation>سيرى الأعضاء أنك غادرت. للعودة تحتاج إلى دعوة أو إلى مفتاح المجموعة.</translation>
+    </message>
+    <message>
+        <source>The members see that you left. To come back you need a new invitation.</source>
+        <comment>question before leaving a group by invitation only</comment>
+        <translation>سيرى الأعضاء أنك غادرت. للعودة تحتاج إلى دعوة جديدة.</translation>
     </message>
     <message>
         <source>Leave</source>
@@ -1873,9 +1903,9 @@
         <translation>بالدعوة فقط</translation>
     </message>
     <message>
-        <source>Only people invited by a member can join.</source>
+        <source>Only people invited by a member can join. The group key alone does not let anyone in.</source>
         <comment>who can join a group: consequence</comment>
-        <translation>لا ينضم إلا من يدعوه أحد الأعضاء.</translation>
+        <translation>لا ينضم إلا من يدعوه أحد الأعضاء. ولا يكفي مفتاح المجموعة وحده للانضمام.</translation>
     </message>
     <message>
         <source>Open to anyone with the group key</source>
@@ -1928,9 +1958,9 @@
         <translation>الانضمام إلى مجموعة</translation>
     </message>
     <message>
-        <source>Joining works when the group is open to anyone with its key, or when a contact of yours who is in it is online.</source>
+        <source>A group open to anyone with its key can be joined here. A group by invitation only needs an invitation from one of its members.</source>
         <comment>join by key: under the field</comment>
-        <translation>يتم الانضمام إذا كانت المجموعة مفتوحة لكل من لديه مفتاحها، أو إذا كانت إحدى جهات اتصالك فيها متصلة.</translation>
+        <translation>يمكن هنا الانضمام إلى مجموعة مفتوحة لكل من لديه مفتاحها. أما المجموعة بالدعوة فقط فتحتاج إلى دعوة من أحد أعضائها.</translation>
     </message>
     <message>
         <source>A group key has 64 characters: 0 to 9 and A to F.</source>
@@ -2165,6 +2195,11 @@
         <source>Waits for %1 to accept it</source>
         <comment>file entry of ours: %1 is the person who has to accept it</comment>
         <translation>بانتظار أن يقبله %1</translation>
+    </message>
+    <message>
+        <source>Waits for someone in the group to come online</source>
+        <comment>file entry of ours in a group where nobody else is online now: it goes when someone is</comment>
+        <translation>بانتظار أن يتصل أحد من المجموعة</translation>
     </message>
     <message>
         <source>The download stopped</source>
@@ -3532,6 +3567,21 @@
         <translation>لم تقبل المجموعة التغيير. حاول مرة أخرى عند الاتصال.</translation>
     </message>
     <message>
+        <source>Open the group to anyone with its key?</source>
+        <comment>question before the founder opens a group by invitation only</comment>
+        <translation>هل تفتح المجموعة لكل من لديه مفتاحها؟</translation>
+    </message>
+    <message>
+        <source>Anyone who has the group key can then join without an invitation, and every member can see and share the key.</source>
+        <comment>question before opening a group to anyone with its key</comment>
+        <translation>عندها يستطيع أي شخص لديه مفتاح المجموعة الانضمام دون دعوة، ويستطيع كل الأعضاء رؤية المفتاح ومشاركته.</translation>
+    </message>
+    <message>
+        <source>Open the group</source>
+        <comment>the verb of the question of opening a group to anyone with its key</comment>
+        <translation>فتح المجموعة</translation>
+    </message>
+    <message>
         <source>%1 wrote to you privately</source>
         <comment>band of a private message in a group: %1 is the member</comment>
         <translation>%1: رسالة خاصة</translation>
@@ -3619,6 +3669,11 @@
         <source>Couldn&apos;t remove the member</source>
         <comment>title of the error when the group refused to remove a member</comment>
         <translation>تعذّرت إزالة العضو</translation>
+    </message>
+    <message>
+        <source>Couldn&apos;t change who can join</source>
+        <comment>title of the error when the group refused a change of who can join</comment>
+        <translation>تعذّر تغيير من يمكنه الانضمام</translation>
     </message>
     <message>
         <source>Couldn&apos;t invite to the group</source>

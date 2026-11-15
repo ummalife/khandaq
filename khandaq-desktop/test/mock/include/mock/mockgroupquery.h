@@ -22,7 +22,7 @@
 #include "src/core/icoregroupquery.h"
 
 /**
- * Mock 1 peer at group number 0
+ * Mock 1 peer at group number 0, and as many others as set (one by default)
  */
 class MockGroupQuery : public ICoreGroupQuery
 {
@@ -47,7 +47,7 @@ public:
             return 1;
         }
 
-        return 2;
+        return 1 + others;
     }
 
     QVector<uint32_t> getGroupPeerList(int groupId) const override
@@ -56,7 +56,11 @@ public:
         if (emptyGroup) {
             return {0};
         }
-        return {0, 1};
+        QVector<uint32_t> peers;
+        for (uint32_t peer = 0; peer <= others; ++peer) {
+            peers.append(peer);
+        }
+        return peers;
     }
 
     QString getGroupPeerName(int groupId, int peerId) const override
@@ -78,7 +82,11 @@ public:
         if (emptyGroup) {
             return QStringList({QString("me")});
         }
-        return QStringList({QString("me"), QString("other")});
+        QStringList names({QString("me"), QString("other")});
+        for (uint32_t peer = 2; peer <= others; ++peer) {
+            names.append(QString("other%1").arg(peer));
+        }
+        return names;
     }
 
     bool getGroupAvEnabled(int groupId) const override
@@ -97,6 +105,13 @@ public:
         emptyGroup = false;
     }
 
+    /** How many others a functional group has: peers 1 to count. */
+    void setOthers(uint32_t count)
+    {
+        others = count;
+    }
+
 private:
     bool emptyGroup = false;
+    uint32_t others = 1;
 };

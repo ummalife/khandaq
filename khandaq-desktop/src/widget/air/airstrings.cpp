@@ -282,6 +282,10 @@ const Source sources[] = {
     {Text::CmdIdOwn, QT_TRANSLATE_NOOP3("Air", "this is your ID", "command line: note of the New contact row")},
     {Text::CmdIdBad, QT_TRANSLATE_NOOP3("Air", "the check does not match", "command line: note of the New contact row")},
     {Text::CmdIdContact, QT_TRANSLATE_NOOP3("Air", "already in contacts", "command line: note of the New contact row")},
+    {Text::CmdJoinGroup, QT_TRANSLATE_NOOP3("Air", "Join the group with this key", "command line: row over the matches when it holds a whole group key")},
+    {Text::CmdJoinGroupNote, QT_TRANSLATE_NOOP3("Air", "if the group is open to anyone with its key", "command line: note of the Join row")},
+    {Text::CmdOpenGroup, QT_TRANSLATE_NOOP3("Air", "Open %1", "command line: row over the matches when it holds the key of a group in the list; %1 is the group")},
+    {Text::CmdGroupListed, QT_TRANSLATE_NOOP3("Air", "already in your groups", "command line: note of the row of a group in the list")},
     {Text::NoChatOpen, QT_TRANSLATE_NOOP3("Air", "Choose a conversation in the list. To add someone, paste their ID into the line at the top.", "the conversation column while no conversation is open")},
     {Text::InviteTag, QT_TRANSLATE_NOOP3("Air", "Group invitation", "label of a group invitation card")},
     {Text::InviteFrom, QT_TRANSLATE_NOOP3("Air", "%1 invites you.", "group invitation card: %1 is the contact who invites")},
@@ -335,12 +339,14 @@ const Source sources[] = {
     {Text::GroupKeyCopied, QT_TRANSLATE_NOOP3("Air", "Group key copied", "toast after copying the group key")},
     {Text::GroupQrHeading, QT_TRANSLATE_NOOP3("Air", "Group %1", "title of the QR code of a group key")},
     {Text::GroupQrSubtitle, QT_TRANSLATE_NOOP3("Air", "Scan to find the group by its key", "under the QR code of a group key")},
+    {Text::GroupKeyHidden, QT_TRANSLATE_NOOP3("Air", "Members join by invitation, so the key is not shown.", "group dossier of a group by invitation only, in place of the group key")},
     {Text::GroupMutedNote, QT_TRANSLATE_NOOP3("Air", "No notifications for new messages of this group; the unread count stays in the list.", "group dossier, under Mute")},
     {Text::GroupUnmutedNote, QT_TRANSLATE_NOOP3("Air", "New messages of this group come with a notification.", "group dossier, under Mute")},
     {Text::GroupLeave, QT_TRANSLATE_NOOP3("Air", "Leave the group", "group dossier button")},
     {Text::GroupLeaveNote, QT_TRANSLATE_NOOP3("Air", "Its messages stop coming, and the history leaves this device.", "group dossier, under Leave the group")},
     {Text::GroupLeaveTitle, QT_TRANSLATE_NOOP3("Air", "Leave %1?", "question before leaving: %1 is the group")},
     {Text::GroupLeaveMessage, QT_TRANSLATE_NOOP3("Air", "The members see that you left. To come back you need an invitation or the group key.", "question before leaving a group")},
+    {Text::GroupLeavePrivateMessage, QT_TRANSLATE_NOOP3("Air", "The members see that you left. To come back you need a new invitation.", "question before leaving a group by invitation only")},
     {Text::GroupLeaveVerb, QT_TRANSLATE_NOOP3("Air", "Leave", "button that leaves the group")},
     {Text::GroupWritePrivately, QT_TRANSLATE_NOOP3("Air", "Write privately", "member menu and the field of private messages")},
     {Text::GroupMakeModerator, QT_TRANSLATE_NOOP3("Air", "Make moderator", "member menu")},
@@ -360,6 +366,9 @@ const Source sources[] = {
     {Text::GroupNowObserver, QT_TRANSLATE_NOOP3("Air", "%1 is an observer now", "toast after the change: %1 is the member")},
     {Text::GroupRemoved, QT_TRANSLATE_NOOP3("Air", "%1 is no longer in the group", "toast after removing: %1 is the member")},
     {Text::GroupChangeFailed, QT_TRANSLATE_NOOP3("Air", "The group did not take the change. Try again once it is connected.", "error dialog: toxcore refused a role change or a removal")},
+    {Text::GroupOpenTitle, QT_TRANSLATE_NOOP3("Air", "Open the group to anyone with its key?", "question before the founder opens a group by invitation only")},
+    {Text::GroupOpenMessage, QT_TRANSLATE_NOOP3("Air", "Anyone who has the group key can then join without an invitation, and every member can see and share the key.", "question before opening a group to anyone with its key")},
+    {Text::GroupOpenVerb, QT_TRANSLATE_NOOP3("Air", "Open the group", "the verb of the question of opening a group to anyone with its key")},
     {Text::GroupInviteTitle, QT_TRANSLATE_NOOP3("Air", "Invite to the group", "title of the invitation list")},
     {Text::InviteOnlineNote, QT_TRANSLATE_NOOP3("Air", "An invitation goes over your connection with the contact, so only contacts online now can be invited.", "invitation list")},
     {Text::InviteChooseFirst, QT_TRANSLATE_NOOP3("Air", "Choose whom to invite", "invitation list: why the button waits")},
@@ -373,7 +382,7 @@ const Source sources[] = {
     {Text::NewGroupNameNote, QT_TRANSLATE_NOOP3("Air", "Everyone you invite sees it. Later the topic can change, the name cannot.", "New group: under the name")},
     {Text::NewGroupPrivacy, QT_TRANSLATE_NOOP3("Air", "Who can join", "New group and group dossier section")},
     {Text::PrivacyInviteOnly, QT_TRANSLATE_NOOP3("Air", "By invitation only", "who can join a group")},
-    {Text::PrivacyInviteOnlyNote, QT_TRANSLATE_NOOP3("Air", "Only people invited by a member can join.", "who can join a group: consequence")},
+    {Text::PrivacyInviteOnlyNote, QT_TRANSLATE_NOOP3("Air", "Only people invited by a member can join. The group key alone does not let anyone in.", "who can join a group: consequence")},
     {Text::PrivacyOpen, QT_TRANSLATE_NOOP3("Air", "Open to anyone with the group key", "who can join a group")},
     {Text::PrivacyOpenNote, QT_TRANSLATE_NOOP3("Air", "Anyone who has the group key can join, no invitation needed.", "who can join a group: consequence")},
     {Text::NewGroupInviteNote, QT_TRANSLATE_NOOP3("Air", "Invitations go at once, so only contacts online can be invited here. Invite the others later from the group dossier.", "New group: over the contacts to invite")},
@@ -384,7 +393,7 @@ const Source sources[] = {
     {Text::NewGroupJoinLink, QT_TRANSLATE_NOOP3("Air", "Join a group by its key", "New group: the quiet link to joining by key")},
     {Text::NewGroupCreateLink, QT_TRANSLATE_NOOP3("Air", "Create a new group", "join by key: the quiet link back to New group")},
     {Text::JoinTitle, QT_TRANSLATE_NOOP3("Air", "Join a group", "title of the panel while it joins by key")},
-    {Text::JoinKeyNote, QT_TRANSLATE_NOOP3("Air", "Joining works when the group is open to anyone with its key, or when a contact of yours who is in it is online.", "join by key: under the field")},
+    {Text::JoinKeyNote, QT_TRANSLATE_NOOP3("Air", "A group open to anyone with its key can be joined here. A group by invitation only needs an invitation from one of its members.", "join by key: under the field")},
     {Text::JoinKeyBad, QT_TRANSLATE_NOOP3("Air", "A group key has 64 characters: 0 to 9 and A to F.", "join by key: why Join waits")},
     {Text::JoinAlready, QT_TRANSLATE_NOOP3("Air", "You are in this group already.", "join by key: the key is of a group in the list")},
     {Text::JoinOpen, QT_TRANSLATE_NOOP3("Air", "Open the group", "join by key: opens the group that is in the list already")},
@@ -421,6 +430,7 @@ const Source sources[] = {
     {Text::FilePaused, QT_TRANSLATE_NOOP3("Air", "Paused", "file entry: we paused the transfer")},
     {Text::FilePausedThere, QT_TRANSLATE_NOOP3("Air", "Paused on the other side", "file entry: the other person paused the transfer, only they can go on")},
     {Text::FileWaitsAccept, QT_TRANSLATE_NOOP3("Air", "Waits for %1 to accept it", "file entry of ours: %1 is the person who has to accept it")},
+    {Text::FileWaitsMembers, QT_TRANSLATE_NOOP3("Air", "Waits for someone in the group to come online", "file entry of ours in a group where nobody else is online now: it goes when someone is")},
     {Text::FileDownloadStopped, QT_TRANSLATE_NOOP3("Air", "The download stopped", "file entry of theirs that broke or was cancelled")},
     {Text::FileNotSent, QT_TRANSLATE_NOOP3("Air", "Not sent", "file entry of ours that broke or was cancelled")},
     {Text::FileNameAndSize, QT_TRANSLATE_NOOP3("Air", "%1, %2", "what a screen reader says for a file: %1 the name, %2 the size or the length")},
@@ -778,6 +788,7 @@ const Source sources[] = {
     {Text::ErrorJoinGroupTitle, QT_TRANSLATE_NOOP3("Air", "Couldn't join the group", "title of the error when Tox refused to join a group")},
     {Text::ErrorRoleTitle, QT_TRANSLATE_NOOP3("Air", "Couldn't change the role", "title of the error when the group refused a change of role")},
     {Text::ErrorKickTitle, QT_TRANSLATE_NOOP3("Air", "Couldn't remove the member", "title of the error when the group refused to remove a member")},
+    {Text::ErrorPrivacyTitle, QT_TRANSLATE_NOOP3("Air", "Couldn't change who can join", "title of the error when the group refused a change of who can join")},
     {Text::ErrorInviteTitle, QT_TRANSLATE_NOOP3("Air", "Couldn't invite to the group", "title of the error when no invitation went")},
     {Text::ErrorInviteSomeTitle, QT_TRANSLATE_NOOP3("Air", "Not everyone was invited", "title of the error when some invitations went and some did not")},
     {Text::InviteRetry, QT_TRANSLATE_NOOP3("Air", "Try again once the group is connected and they are online.", "what to do when invitations did not go")},
@@ -1603,6 +1614,8 @@ QString fileNoteText(const Air::FileEntryState& state, const QString& person, co
         return text(Text::FilePausedThere);
     case Air::FileNote::WaitsAccept:
         return text(Text::FileWaitsAccept).arg(person);
+    case Air::FileNote::WaitsMembers:
+        return text(Text::FileWaitsMembers);
     case Air::FileNote::DownloadStopped:
         return text(Text::FileDownloadStopped);
     case Air::FileNote::NotSent:

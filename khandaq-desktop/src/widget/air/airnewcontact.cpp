@@ -700,6 +700,7 @@ void AirCommandIdRow::setIdStart(const QString& hex_, const Air::IdVerdict& verd
 {
     hex = hex_;
     verdict = verdict_;
+    group.clear();
     retranslate();
 }
 
@@ -708,11 +709,41 @@ QString AirCommandIdRow::idStart() const
     return hex;
 }
 
+void AirCommandIdRow::setGroup(const QString& key, bool listed, const QString& name)
+{
+    group = key;
+    groupListed = listed;
+    groupName = name;
+    hex.clear();
+    verdict = Air::IdVerdict{};
+    retranslate();
+}
+
+QString AirCommandIdRow::groupKey() const
+{
+    return group;
+}
+
+QString AirCommandIdRow::note() const
+{
+    if (group.isEmpty()) {
+        return noteFor(verdict, hex.size());
+    }
+    return AirStrings::text(groupListed ? Text::CmdGroupListed : Text::CmdJoinGroupNote);
+}
+
 void AirCommandIdRow::retranslate()
 {
-    setText(AirStrings::text(Text::CmdNewContact));
+    if (group.isEmpty()) {
+        setText(AirStrings::text(Text::CmdNewContact));
+    } else if (!groupListed) {
+        setText(AirStrings::text(Text::CmdJoinGroup));
+    } else {
+        setText(groupName.isEmpty() ? AirStrings::text(Text::JoinOpen)
+                                    : AirStrings::text(Text::CmdOpenGroup).arg(groupName));
+    }
     setAccessibleName(text());
-    setAccessibleDescription(noteFor(verdict, hex.size()));
+    setAccessibleDescription(note());
     update();
 }
 
@@ -754,7 +785,7 @@ void AirCommandIdRow::paintEvent(QPaintEvent*)
         return QStyle::visualRect(layoutDirection(), rect(), logical);
     };
 
-    // The dashed tile of a contact still to come, with the add-person icon in it.
+    // The dashed tile of a contact still to come, with the add-person icon in it, or of a group.
     const int tileSize = Size::tileDesk;
     const QRect tile = visual(QRect(Space::s16, (height() - tileSize) / 2, tileSize, tileSize));
     QPen dashed(air().color(Color::LineStrong), Stroke::hairline);
@@ -766,10 +797,11 @@ void AirCommandIdRow::paintEvent(QPaintEvent*)
     const int glyph = Size::iconSmall;
     painter.drawPixmap(QPointF(tile.left() + (tile.width() - glyph) / 2.0,
                                tile.top() + (tile.height() - glyph) / 2.0),
-                       air().icon(QStringLiteral("user-plus"), air().color(Color::Ink3), glyph,
-                                  devicePixelRatioF()));
+                       air().icon(group.isEmpty() ? QStringLiteral("user-plus")
+                                                  : QStringLiteral("users"),
+                                  air().color(Color::Ink3), glyph, devicePixelRatioF()));
 
-    // "New contact with this ID" over what is missing or wrong so far.
+    // "New contact with this ID" over what is missing or wrong so far, or the group's words.
     const int textLeft = Space::s16 + tileSize + Space::s12;
     const int textWidth = std::max(0, width() - textLeft - Space::s16);
     const int bodyHeight = air().lineHeight(TextRole::Body);
@@ -788,8 +820,7 @@ void AirCommandIdRow::paintEvent(QPaintEvent*)
     painter.setPen(air().color(Color::Ink3));
     painter.drawText(visual(QRect(textLeft, top + bodyHeight + Space::s2, textWidth, captionHeight)),
                      align,
-                     QFontMetrics(caption).elidedText(noteFor(verdict, hex.size()), Qt::ElideRight,
-                                                      textWidth));
+                     QFontMetrics(caption).elidedText(note(), Qt::ElideRight, textWidth));
 }
 
 // ---- AirNewContact ----

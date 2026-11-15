@@ -559,6 +559,23 @@ void SessionChatLog::onMessageComplete(DispatchedMessageId id)
     emit itemUpdated(messageIt->first);
 }
 
+const Message* SessionChatLog::onMessageWireIdAssigned(DispatchedMessageId id,
+                                                       const QByteArray& wireId)
+{
+    const auto chatLogIdxIt = outgoingMessages.find(id);
+    if (chatLogIdxIt == outgoingMessages.end()) {
+        return nullptr;
+    }
+    const auto messageIt = items.find(*chatLogIdxIt);
+    if (messageIt == items.end()
+        || messageIt->second.getContentType() != ChatLogItem::ContentType::message) {
+        return nullptr;
+    }
+    Message& message = messageIt->second.getContentAsMessage().message;
+    message.wireId = wireId;
+    return &message;
+}
+
 void SessionChatLog::onMessageBroken(DispatchedMessageId id, BrokenMessageReason reason)
 {
     std::ignore = reason;

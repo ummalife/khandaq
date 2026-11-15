@@ -486,6 +486,29 @@ bool toxIdCheckMatches(const QString& hex);
  */
 QString commandIdCandidate(const QString& raw);
 
+/**
+ * What the command line offers over the list for what it holds (E3): New contact for the start of
+ * an ID, and the group for a whole group key, to join, or to open once it is in the list. A key of
+ * 64 characters is a group key and the start of a Tox ID alike, so both are offered, New contact
+ * first; the key of a group in the list is that group alone, and the key of a contact, of a
+ * request or your own is never a group to join. "khandaq:group:" in front, as in the QR code of a
+ * group, makes it a group key alone.
+ */
+struct CommandOffer
+{
+    /** The hex for New contact (commandIdCandidate), or a null string. */
+    QString contactId;
+    /** The whole group key in upper case, or a null string. */
+    QString groupKey;
+    /** The group with groupKey is in the list: it opens instead of joining. */
+    bool groupListed = false;
+
+    using KeyTest = std::function<bool(const QString& key)>;
+
+    /** The tests get keys in upper case. */
+    static CommandOffer of(const QString& raw, const KeyTest& isGroup, const KeyTest& isContact);
+};
+
 /** The verdict under the ID field of New contact, decided in the order of the kinds. */
 struct IdVerdict
 {

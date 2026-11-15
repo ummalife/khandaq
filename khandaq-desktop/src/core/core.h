@@ -32,6 +32,7 @@
 
 #include "util/strongtype.h"
 #include "util/compatiblerecursivemutex.h"
+#include "src/model/air/airgroupfilequeue.h"
 #include "src/model/air/airgroupleave.h"
 #include "src/model/status.h"
 #include <tox/tox.h>
@@ -50,6 +51,7 @@
 class CoreAV;
 class CoreFile;
 class CoreExt;
+class QFile;
 class QNetworkConfigurationManager;
 class IAudioControl;
 class ICoreSettings;
@@ -112,7 +114,7 @@ public:
     uint32_t getGroupSelfPeerId(int groupId) const;
     Tox_Group_Role getGroupSelfRole(int groupId) const;
     Tox_Group_Role getGroupPeerRole(int groupId, int peerId) const;
-    /** Whether toxcore has a connection to the peer now. */
+    /** Whether the peer is reachable now: a direct path, or a relay of the groups (E13). */
     bool isGroupPeerOnline(int groupId, int peerId) const;
     /**
      * tox_group_is_connected of this fork: 1 once the group is synced, 0 while it connects (a
@@ -142,10 +144,26 @@ public:
     /** QA live F11: what the profile keeps of our leaves that are not done and saved yet. */
     QString getPendingGroupLeaves() const;
     /**
+     * 0.2.56: the groups joined by their ID that had not synced when the profile last kept them
+     * (getUnsyncedGroupJoins). toxcore saves a group only once it synced, so they are joined again
+     * now; those it loaded synced meanwhile and are forgotten. Called after leaveStoredGroups,
+     * before start(), so that the groups load with them.
+     */
+    void rejoinStoredGroups(const QString& stored);
+    /** 0.2.56: what the profile keeps of the groups joined by their ID that did not sync yet. */
+    QString getUnsyncedGroupJoins() const;
+    /**
      * QA live F11: every leave that waits for its notice is done now, and toxcore lets go of the
      * groups: the profile closes. Returns once that is done on the thread of the node.
      */
     void leavePendingGroupsNow();
+    /**
+     * A file packet a member of the group sent to all (isPrivate false) or to us alone (true), as
+     * toxcore's custom packet callbacks hand it over on the thread of the node. Public so that the
+     * tests can hand packets over without a network.
+     */
+    void handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const uint8_t* data,
+                                     size_t length, bool isPrivate);
 
     QString getUsername() const override;
     Status::Status getStatus() const;
@@ -171,6 +189,11 @@ public slots:
     bool setGroupPeerRole(int groupId, int peerId, Tox_Group_Role role);
     /** The founder or a moderator removes a member from the group; false when toxcore refused it. */
     bool kickGroupPeer(int groupId, int peerId);
+    /**
+     * The founder sets who can join; false when toxcore refused it. toxcore calls no privacy
+     * callback for this change of our own: the caller shows it.
+     */
+    bool setGroupPrivacyState(int groupId, Tox_Group_Privacy_State privacyState);
     /** A message only that peer of the group gets; false when toxcore refused it. */
     bool sendGroupPrivateMessage(int groupId, int peerId, const QString& message);
 
@@ -182,11 +205,18 @@ public slots:
     void setStatusMessage(const QString& message);
 
     bool sendMessage(uint32_t friendId, const QString& message, ReceiptNum& receipt) override;
-    uint32_t sendGroupMessage(int groupId, const QString& message) override;
-    uint32_t sendGroupAction(int groupId, const QString& message) override;
+    SendResult sendGroupMessage(int groupId, const QString& message, uint32_t& wireId) override;
+    SendResult sendGroupAction(int groupId, const QString& message, uint32_t& wireId) override;
     void sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t messageId) override;
     bool sendGroupFile(int groupId, const QString& fileName, const QString& localPath,
                        const QByteArray& fileData);
+    /**
+     * A file of more than one packet goes as its BEGIN and then its chunks, which the loop of the
+     * node sends at their pace (sendGroupFileChunks): groupFileSendStarted, then
+     * groupFileSendProgress, then groupFileSent or groupFileSendFailed. False when the file cannot
+     * be read, or the group would refuse its packets now (it is not connected, or we only observe
+     * there): nothing is sent then.
+     */
     bool sendGroupFileFromPath(int groupId, const QString& fileName, const QString& localPath);
     void changeGroupTitle(int groupId, const QString& title);
     bool sendAction(uint32_t friendId, const QString& action, ReceiptNum& receipt) override;
@@ -230,6 +260,8 @@ signals:
     void saveRequest();
     /** QA live F11: what the profile keeps of our leaves changed (getPendingGroupLeaves). */
     void pendingGroupLeavesChanged(const QString& stored);
+    /** 0.2.56: what the profile keeps of our unsynced joins changed (getUnsyncedGroupJoins). */
+    void unsyncedGroupJoinsChanged(const QString& stored);
 
     /**
      * @deprecated prefer signals using ToxPk
@@ -264,6 +296,19 @@ signals:
     void groupPeerAudioPlaying(int groupnumber, ToxPk peerPk);
     void groupSentFailed(int groupId);
     void groupJoined(int groupnumber, GroupId groupId);
+    /**
+     * 0.2.56: an invite into a group that toxcore still held (one we leave, or one joined by its ID
+     * that never synced) is accepted once toxcore let go of that instance, and joinGroupchat
+     * returned that instance's number; toxcore refused the invite then. A group we leave is gone;
+     * one joined by its ID is joined by its ID again, and groupJoined gives its new number.
+     */
+    void groupInviteAcceptFailed(const QByteArray& chatId);
+    /**
+     * 0.2.56: that group joined by its ID could not be joined again either: toxcore holds no
+     * instance of it now, and may give groupNumber, the one it had, to another group. The profile
+     * keeps its chat id, and the next start joins it by its ID again (rejoinStoredGroups).
+     */
+    void groupRejoinFailed(const QByteArray& chatId, uint32_t groupNumber);
     /** A role in the group changed, someone was removed, or the voice or privacy state changed. */
     void groupModerationChanged(int groupnumber);
     /** A peer of the group wrote to us alone. */
@@ -279,6 +324,21 @@ signals:
     void groupFileReceived(int groupnumber, ToxPk sender, const QString& fileName,
                            const QByteArray& fileData, const QDateTime& timestamp, bool wasSynced,
                            const QByteArray& fileId);
+    /** A file of more than one packet that we send into the group: its chunks go from now on. */
+    void groupFileSendStarted(int groupnumber, const QString& fileName, const QString& localPath,
+                              qint64 fileSize, const QByteArray& fileId);
+    /** How many bytes of the file have gone so far, a few times a second. */
+    void groupFileSendProgress(const QByteArray& fileId, qint64 bytesSent);
+    /**
+     * The group of the file has nobody to send it to (waiting), and nothing of it goes; or has
+     * again, and the file goes from its start. After Air::GroupFileQueue::aloneLimitMs of
+     * waiting it fails. Not waiting is said too of a file that starts again for the members that
+     * came (Air::GroupFileQueue::restartMs).
+     */
+    void groupFileSendWaiting(const QByteArray& fileId, bool waiting);
+    /** The file stopped before its last chunk: the group is gone, or refused it, or the file. */
+    void groupFileSendFailed(const QByteArray& fileId);
+    /** Every packet of the file went to toxcore. */
     void groupFileSent(int groupnumber, const QString& fileName, const QString& localPath,
                        qint64 fileSize, const QByteArray& fileId);
     void actionSentResult(uint32_t friendId, const QString& action, int success);
@@ -334,16 +394,24 @@ private:
     void leaveGroupAfterNotice(int groupId);
     void leaveRecordedGroup(const Air::PendingGroupLeaves::Leave& leave, const char* event);
     uint32_t replaceLeavingGroup(const QByteArray& chatId, std::function<void()> join);
+    void acceptDeferredGroupInvite(const GroupInvite& inviteInfo, uint32_t joinedByIdNum);
     void iterateTox();
     bool ignoresGroup(uint32_t groupNumber) const;
-    void handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const uint8_t* data,
-                                     size_t length, bool isPrivate);
+    struct OutgoingGroupFile;
+    bool sendsGroupFileTo(const OutgoingGroupFile& send) const;
+    bool sendGroupFileBegin(OutgoingGroupFile& send, const QByteArray& fileId);
+    bool sendGroupFileChunk(OutgoingGroupFile& send, const QByteArray& fileId, int chunk);
+    void sendGroupFileChunks();
+    void tellGroupFilesWaiting();
+    int groupFileMembers(int groupId) const;
+    void failGroupFileSend(const QByteArray& fileId, const char* reason);
 
     static void onLosslessPacket(Tox* tox, uint32_t friendId,
                                    const uint8_t* data, size_t length, void* core);
     static void onReadReceiptCallback(Tox* tox, uint32_t friendId, uint32_t receipt, void* core);
 
-    uint32_t sendGroupMessageWithType(int groupId, const QString& message, Tox_Message_Type type);
+    SendResult sendGroupMessageWithType(int groupId, const QString& message,
+                                        Tox_Message_Type type, uint32_t& wireId);
     bool sendMessageWithType(uint32_t friendId, const QString& message, Tox_Message_Type type, ReceiptNum& receipt);
     bool checkConnection();
     /** Counts the relays the node holds a connection to, at most every few seconds. */
@@ -360,6 +428,7 @@ private:
     void kickstartGroupConnection(uint32_t groupNum) const;
     void maintainGroups();
     void requestGroupInviteFromFriends(const QByteArray& chatId);
+    void forgetUnsyncedGroupJoin(const QByteArray& chatId);
     void resendPendingGroupInviteRequests(uint32_t friendId);
     void handleGroupInviteRequestPacket(uint32_t friendId, const uint8_t* data, size_t length);
     bool autoAcceptRequestedGroupInvite(const GroupInvite& inviteInfo);
@@ -409,6 +478,32 @@ private:
     // QA live F11: the joins of groups we were leaving, which wait for toxcore to delete the old
     // instance: it refuses to join a chat id it still has. Under coreLoopLock.
     std::vector<std::function<void()>> joinsAfterGroupLeaves;
+    // 0.2.56: the chat ids of the groups joined by their ID that did not sync yet: toxcore saves
+    // a group only once it has its shared state (gc_group_is_valid), so the profile keeps them
+    // until then. Under coreLoopLock.
+    QList<QByteArray> unsyncedGroupJoins;
+    // 0.2.56: a file we send into a group whose chunks have yet to go (Air::GroupFileQueue).
+    struct OutgoingGroupFile
+    {
+        int group = -1;
+        // The group's chat id when the file was chosen: a group we leave meanwhile can give its
+        // number to another one.
+        QByteArray chatId;
+        QString fileName;
+        QString localPath;
+        qint64 size = 0;
+        // Open from its BEGIN to its last chunk.
+        std::shared_ptr<QFile> file;
+        // When its progress was last told (monotonicMs).
+        qint64 toldMs = 0;
+        // Whether it was last told to wait for a member of its group (groupFileSendWaiting).
+        bool waiting = false;
+    };
+    // 0.2.56: the files we send into groups, by file id; their order and their pace. Under
+    // coreLoopLock: sendGroupFileFromPath adds them, process() sends their packets.
+    QHash<QByteArray, OutgoingGroupFile> outgoingGroupFiles;
+    Air::GroupFileQueue groupFileQueue;
+    Air::UploadPace groupFilePace;
 
     std::unique_ptr<QThread> coreThread;
     const IBootstrapListGenerator& bootstrapListGenerator;
@@ -418,6 +513,8 @@ private:
     /** When the relays were last counted, and how many there were (-1 before the first count). */
     QElapsedTimer relaysCounted;
     int lastRelays = -1;
+    /** Of those, the relays the groups use (NetworkDiagnostics::groupRelayCount). */
+    int lastGroupRelays = 0;
     /** Since the bootstrap nodes were last asked, or since the node went offline; invalid before. */
     QElapsedTimer bootstrapClock;
     class QNetworkConfigurationManager* networkManager = nullptr;

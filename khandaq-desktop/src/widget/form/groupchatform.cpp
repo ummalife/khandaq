@@ -207,6 +207,7 @@ GroupChatForm::GroupChatForm(Core& core_, Group* chatGroup, IChatLog& chatLog_,
                                          .arg(member.name));
             });
     connect(dossier, &AirGroupDossier::inviteRequested, this, &GroupChatForm::inviteContacts);
+    connect(dossier, &AirGroupDossier::privacyChangeRequested, this, &GroupChatForm::setPrivacy);
     connect(privateThread, &AirPrivateThread::sendRequested, this, &GroupChatForm::sendPrivate);
     connect(composer, &AirComposer::readOnlyActionRequested, this, &GroupChatForm::askToWrite);
 
@@ -425,22 +426,21 @@ void GroupChatForm::refreshMembers()
 
 void GroupChatForm::refreshCounter()
 {
-    // The room left once a tenth of a group message remains; over the limit Send waits, since
-    // toxcore refuses a longer group message instead of cutting it.
+    // The room left once a tenth of a group message remains; past the limit the text goes in
+    // parts, as to one person: GroupMessageDispatcher cuts it at toxcore's group limit.
     const int bytes = outgoingText().toUtf8().size();
     const Air::ComposeRoom room = Air::composeRoom(bytes, Air::groupMessageLimitBytes);
     composer->setCounter(room.shown && right == Air::ComposeRight::Write
-                             ? AirStrings::groupCounterText(room.left)
+                             ? AirStrings::composeCounterText(room.left)
                              : QString());
-    // Send also waits while nobody would get the message: see Air::GroupHint::sendWaits.
-    composer->setSendBlocked(bytes > Air::groupMessageLimitBytes
-                             || Air::GroupHint::make(reach, selfNetwork).sendWaits());
+    // Send waits while nobody would get the message: see Air::GroupHint::sendWaits.
+    composer->setSendBlocked(Air::GroupHint::make(reach, selfNetwork).sendWaits());
 }
 
 bool GroupChatForm::canSendNow() const
 {
-    return right == Air::ComposeRight::Write && !Air::GroupHint::make(reach, selfNetwork).sendWaits()
-           && outgoingText().toUtf8().size() <= Air::groupMessageLimitBytes;
+    return right == Air::ComposeRight::Write
+           && !Air::GroupHint::make(reach, selfNetwork).sendWaits();
 }
 
 void GroupChatForm::showEvent(QShowEvent* event)
@@ -551,6 +551,20 @@ void GroupChatForm::undoRole(const Air::GroupMember& member, Air::GroupRole role
     refreshMembers();
     if (!done) {
         AirDialog::notice(this, AirStrings::text(AirText::ErrorRoleTitle),
+                          AirStrings::text(AirText::GroupChangeFailed));
+    }
+}
+
+void GroupChatForm::setPrivacy(Air::GroupPrivacy privacy)
+{
+    const Tox_Group_Privacy_State state = privacy == Air::GroupPrivacy::Open
+                                              ? TOX_GROUP_PRIVACY_STATE_PUBLIC
+                                              : TOX_GROUP_PRIVACY_STATE_PRIVATE;
+    const bool done = core.setGroupPrivacyState(static_cast<int>(group->getId()), state);
+    // toxcore calls back the other members, not us: the dossier asks it again here.
+    refreshMembers();
+    if (!done) {
+        AirDialog::notice(this, AirStrings::text(AirText::ErrorPrivacyTitle),
                           AirStrings::text(AirText::GroupChangeFailed));
     }
 }

@@ -209,7 +209,7 @@ AirNewGroup::~AirNewGroup()
 
 void AirNewGroup::openCreate(const QString& inviteKey)
 {
-    // Every opening starts afresh, with By invitation only chosen.
+    // Every opening starts afresh, with Open to anyone with the group key chosen.
     if (!isOpen() || page != Page::Create) {
         resetCreate();
     }
@@ -270,7 +270,10 @@ void AirNewGroup::showPage(Page page_)
 void AirNewGroup::resetCreate()
 {
     nameField->setText(QString());
-    inviteOnlyRow->setChecked(true);
+    // KHANDAQ (0.2.56): open to anyone with its key unless the founder chooses otherwise. The key
+    // of a group by invitation only lets nobody in, and those given it waited for a group that
+    // never came.
+    openRow->setChecked(true);
     inviteList->clearChoice();
     if (lookup.candidates) {
         inviteList->setCandidates(lookup.candidates());

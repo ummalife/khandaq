@@ -905,12 +905,18 @@ void Widget::onCoreChanged(Core& core_)
     connect(core, &Core::groupMessageEffect, this, &Widget::onGroupMessageEffect);
     connect(core, &Core::groupFileReceived, this, &Widget::onGroupFileReceived);
     connect(core, &Core::groupFileSent, this, &Widget::onGroupFileSent);
+    connect(core, &Core::groupFileSendStarted, this, &Widget::onGroupFileSendStarted);
+    connect(core, &Core::groupFileSendProgress, this, &Widget::onGroupFileSendProgress);
+    connect(core, &Core::groupFileSendWaiting, this, &Widget::onGroupFileSendWaiting);
+    connect(core, &Core::groupFileSendFailed, this, &Widget::onGroupFileSendFailed);
     connect(core, &Core::groupPeerlistChanged, this, &Widget::onGroupPeerlistChanged);
     connect(core, &Core::groupPeerNameChanged, this, &Widget::onGroupPeerNameChanged);
     connect(core, &Core::groupTitleChanged, this, &Widget::onGroupTitleChanged);
     connect(core, &Core::groupPeerAudioPlaying, this, &Widget::onGroupPeerAudioPlaying);
     connect(core, &Core::emptyGroupCreated, this, &Widget::onEmptyGroupCreated);
     connect(core, &Core::groupJoined, this, &Widget::onGroupJoined);
+    connect(core, &Core::groupInviteAcceptFailed, this, &Widget::onGroupInviteAcceptFailed);
+    connect(core, &Core::groupRejoinFailed, this, &Widget::onGroupRejoinFailed);
     connect(core, &Core::groupPrivateMessageReceived, this, &Widget::onGroupPrivateMessageReceived);
     connect(core, &Core::friendTypingChanged, this, &Widget::onFriendTypingChanged);
     connect(core, &Core::groupSentFailed, this, &Widget::onGroupSendFailed);
@@ -2501,12 +2507,68 @@ void Widget::onGroupInviteReceived(const GroupInvite& inviteInfo)
 
 void Widget::onGroupInviteAccepted(const GroupInvite& inviteInfo)
 {
-    const uint32_t groupId = core->joinGroupchat(inviteInfo);
-    if (groupId == std::numeric_limits<uint32_t>::max()) {
+    if (!acceptGroupInvite(inviteInfo, QString())) {
         qWarning() << "onGroupInviteAccepted: Unable to accept group invite";
         AirDialog::notice(this, AirStrings::text(AirStrings::Text::ErrorJoinGroupTitle),
                           AirStrings::text(AirStrings::Text::TryAgain));
     }
+}
+
+bool Widget::acceptGroupInvite(const GroupInvite& inviteInfo, const QString& inviteId)
+{
+    // toxcore's invitation starts with the chat id.
+    const QByteArray& invite = inviteInfo.getInvite();
+    if (invite.size() < GroupId::size) {
+        return core->joinGroupchat(inviteInfo) != std::numeric_limits<uint32_t>::max();
+    }
+    const GroupId groupId(invite.left(GroupId::size));
+    if (invitesJoining.contains(groupId)) {
+        // Its group is being joined already; a second accept would replace what the first joins.
+        return true;
+    }
+    // Before the accept: the group joined at once is said within it (onGroupJoined).
+    invitesJoining.insert(groupId, inviteId);
+    if (core->joinGroupchat(inviteInfo) != std::numeric_limits<uint32_t>::max()) {
+        return true;
+    }
+    invitesJoining.remove(groupId);
+    return false;
+}
+
+void Widget::onGroupInviteAcceptFailed(const QByteArray& chatId)
+{
+    if (chatId.size() != GroupId::size) {
+        return;
+    }
+    const GroupId groupId(chatId);
+    // A group joined by its ID that went for the invitation keeps its row: the core joins it by
+    // its ID again, and groupJoined binds the row to the new instance (createGroup).
+    if (groupToOpenWhenJoined == groupId) {
+        groupToOpenWhenJoined = GroupId();
+    }
+    if (invitesJoining.remove(groupId) == 0) {
+        // Not one the user accepted: one asked of friends is joined without a word.
+        return;
+    }
+    // As for an invitation refused at once: its card, if it has one, stays for another try.
+    AirDialog::notice(this, AirStrings::text(AirStrings::Text::ErrorJoinGroupTitle),
+                      AirStrings::text(AirStrings::Text::TryAgain));
+}
+
+void Widget::onGroupRejoinFailed(const QByteArray& chatId, uint32_t groupNumber)
+{
+    if (chatId.size() != GroupId::size) {
+        return;
+    }
+    Group* const g = groupList->findGroup(GroupId(chatId));
+    // Bound to another instance meanwhile (createGroup), the row keeps it.
+    if (!g || g->getId() != groupNumber) {
+        return;
+    }
+    // toxcore holds no instance of the group, and may give its number to another one: the row
+    // goes, with nothing to leave (fake), and the texts that wait stay pending. The next start
+    // joins the group by its ID again, and they go then.
+    discardGroup(g, true);
 }
 
 void Widget::onGroupJoinFailed(const QString& reason)
@@ -2531,11 +2593,15 @@ void Widget::onGroupMessageReceived(int groupnumber, int peernumber, const QStri
                                     bool isAction, uint32_t messageId)
 {
     const GroupId& groupId = groupList->id2Key(groupnumber);
-    assert(groupList->findGroup(groupId));
+    // A message queued before the group went has nobody to tell (discardGroup).
+    const auto dispatcher = groupMessageDispatchers.value(groupId);
+    if (!dispatcher) {
+        return;
+    }
 
     ToxPk author = core->getGroupPeerPk(groupnumber, peernumber);
 
-    groupMessageDispatchers[groupId]->onMessageReceived(author, isAction, message, messageId);
+    dispatcher->onMessageReceived(author, isAction, message, messageId);
 }
 
 void Widget::onFriendMessageEffect(uint32_t friendnumber, const QByteArray& packet)
@@ -2664,6 +2730,13 @@ QString sanitizeGroupFileName(const QString& fileName)
     return name;
 }
 
+// The number of a file we send into a group, as ToxFile wants one.
+uint32_t nextSentGroupFileNumber()
+{
+    static uint32_t groupFileNum = 800000;
+    return ++groupFileNum;
+}
+
 QString uniqueFilePath(const QDir& dir, const QString& fileName)
 {
     QString candidate = dir.filePath(fileName);
@@ -2704,18 +2777,22 @@ QDir Widget::groupDownloadDir(const Group* g) const
 void Widget::dispatchGroupFileToChatLog(const GroupId& groupId, const ToxPk& sender,
                                         ToxFile file)
 {
+    // INITIALIZING creates the history record, FINISHED marks it complete and
+    // makes the widget render the final state (preview + open buttons).
+    file.status = ToxFile::INITIALIZING;
+    updateGroupFileInChatLog(groupId, sender, file);
+    file.status = ToxFile::FINISHED;
+    updateGroupFileInChatLog(groupId, sender, file);
+}
+
+void Widget::updateGroupFileInChatLog(const GroupId& groupId, const ToxPk& sender,
+                                      const ToxFile& file)
+{
     auto chatLogIt = groupChatLogs.find(groupId);
     if (chatLogIt == groupChatLogs.end()) {
         return;
     }
-    auto chatHistory = std::static_pointer_cast<ChatHistory>(chatLogIt.value());
-
-    // INITIALIZING creates the history record, FINISHED marks it complete and
-    // makes the widget render the final state (preview + open buttons).
-    file.status = ToxFile::INITIALIZING;
-    chatHistory->onFileUpdated(sender, file);
-    file.status = ToxFile::FINISHED;
-    chatHistory->onFileUpdated(sender, file);
+    std::static_pointer_cast<ChatHistory>(chatLogIt.value())->onFileUpdated(sender, file);
 }
 
 void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QString& fileName,
@@ -2800,18 +2877,95 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
 void Widget::onGroupFileSent(int groupnumber, const QString& fileName, const QString& localPath,
                              qint64 fileSize, const QByteArray& fileId)
 {
+    // A file whose chunks went: its entry is there since the first of them.
+    const auto sending = groupFileSends.find(fileId);
+    if (sending != groupFileSends.end()) {
+        const GroupId sentTo = sending->groupId;
+        ToxFile file = sending->file;
+        groupFileSends.erase(sending);
+        file.progress.addSample(file.progress.getFileSize(), QTime::currentTime());
+        file.status = ToxFile::FINISHED;
+        updateGroupFileInChatLog(sentTo, core->getSelfPublicKey(), file);
+        return;
+    }
+
     const GroupId& groupId = groupList->id2Key(groupnumber);
     if (!groupList->findGroup(groupId)) {
         return;
     }
 
-    static uint32_t groupFileNum = 800000;
-    ToxFile file(++groupFileNum, static_cast<uint32_t>(groupnumber), sanitizeGroupFileName(fileName),
-                 localPath, static_cast<uint64_t>(fileSize), ToxFile::SENDING);
+    ToxFile file(nextSentGroupFileNumber(), static_cast<uint32_t>(groupnumber),
+                 sanitizeGroupFileName(fileName), localPath, static_cast<uint64_t>(fileSize),
+                 ToxFile::SENDING);
     file.progress.addSample(file.progress.getFileSize(), QTime::currentTime());
     file.resumeFileId = fileId;
 
     dispatchGroupFileToChatLog(groupId, core->getSelfPublicKey(), file);
+}
+
+void Widget::onGroupFileSendStarted(int groupnumber, const QString& fileName,
+                                    const QString& localPath, qint64 fileSize,
+                                    const QByteArray& fileId)
+{
+    const GroupId& groupId = groupList->id2Key(groupnumber);
+    if (!groupList->findGroup(groupId)) {
+        return;
+    }
+
+    ToxFile file(nextSentGroupFileNumber(), static_cast<uint32_t>(groupnumber),
+                 sanitizeGroupFileName(fileName), localPath, static_cast<uint64_t>(fileSize),
+                 ToxFile::SENDING);
+    file.resumeFileId = fileId;
+    // INITIALIZING creates the history record; TRANSMITTING shows the bar, which the chunks move.
+    file.status = ToxFile::INITIALIZING;
+    updateGroupFileInChatLog(groupId, core->getSelfPublicKey(), file);
+    file.status = ToxFile::TRANSMITTING;
+    file.progress.addSample(0, QTime::currentTime());
+    updateGroupFileInChatLog(groupId, core->getSelfPublicKey(), file);
+    groupFileSends.insert(fileId, GroupFileSend{groupId, file});
+}
+
+void Widget::onGroupFileSendProgress(const QByteArray& fileId, qint64 bytesSent)
+{
+    const auto sending = groupFileSends.find(fileId);
+    if (sending == groupFileSends.end()) {
+        return;
+    }
+    sending->file.progress.addSample(static_cast<uint64_t>(bytesSent), QTime::currentTime());
+    updateGroupFileInChatLog(sending->groupId, core->getSelfPublicKey(), sending->file);
+}
+
+void Widget::onGroupFileSendWaiting(const QByteArray& fileId, bool waiting)
+{
+    const auto sending = groupFileSends.find(fileId);
+    if (sending == groupFileSends.end()) {
+        return;
+    }
+    ToxFile& file = sending->file;
+    if (waiting) {
+        // Nobody in the group to send it to: the entry says it waits for someone.
+        file.status = ToxFile::PAUSED;
+    } else {
+        // It goes again from its start (Air::GroupFileQueue::setMembers), and the bar with it.
+        file.status = ToxFile::TRANSMITTING;
+        file.progress = ToxFileProgress(file.progress.getFileSize());
+        file.progress.addSample(0, QTime::currentTime());
+    }
+    updateGroupFileInChatLog(sending->groupId, core->getSelfPublicKey(), file);
+}
+
+void Widget::onGroupFileSendFailed(const QByteArray& fileId)
+{
+    const auto sending = groupFileSends.find(fileId);
+    if (sending == groupFileSends.end()) {
+        return;
+    }
+    const GroupId sentTo = sending->groupId;
+    ToxFile file = sending->file;
+    groupFileSends.erase(sending);
+    // The history keeps it as not sent; the entry says so.
+    file.status = ToxFile::BROKEN;
+    updateGroupFileInChatLog(sentTo, core->getSelfPublicKey(), file);
 }
 
 void Widget::onGroupPeerNameChanged(uint32_t groupnumber, const ToxPk& peerPk, const QString& newName)
@@ -2857,15 +3011,19 @@ void Widget::titleChangedByUser(const QString& title)
 void Widget::onGroupPeerAudioPlaying(int groupnumber, ToxPk peerPk)
 {
     const GroupId& groupId = groupList->id2Key(groupnumber);
-    assert(groupList->findGroup(groupId));
+    // Audio queued before the group went has nobody to show it (discardGroup).
+    const QSharedPointer<GroupChatForm> form = groupChatForms.value(groupId);
+    if (!form) {
+        return;
+    }
 
-    auto form = groupChatForms[groupId].data();
     form->peerAudioPlaying(peerPk);
 }
 
 void Widget::removeGroup(Group* g, bool fake)
 {
     assert(g);
+    bool historyRemoved = false;
     if (!fake) {
         RemoveChatDialog ask(this, *g);
         ask.exec();
@@ -2876,9 +3034,10 @@ void Widget::removeGroup(Group* g, bool fake)
 
         if (ask.removeHistory()) {
             profile.getHistory()->removeChatHistory(g->getPersistentId());
+            historyRemoved = true;
         }
     }
-    discardGroup(g, fake);
+    discardGroup(g, fake, historyRemoved);
 }
 
 void Widget::leaveGroup(const GroupId& groupId)
@@ -2891,10 +3050,10 @@ void Widget::leaveGroup(const GroupId& groupId)
     if (History* const history = profile.getHistory()) {
         history->removeChatHistory(groupId);
     }
-    discardGroup(g, false);
+    discardGroup(g, false, true);
 }
 
-void Widget::discardGroup(Group* g, bool fake)
+void Widget::discardGroup(Group* g, bool fake, bool historyRemoved)
 {
     assert(g);
     // A copy: the group, and the id it holds, are deleted on the way.
@@ -2904,6 +3063,13 @@ void Widget::discardGroup(Group* g, bool fake)
     if (groupWidgetIt == groupWidgets.end()) {
         qWarning() << "Tried to remove group" << groupnumber << "but GroupWidget doesn't exist";
         return;
+    }
+    // 0.2.56: the texts that wait for the group go no more, nor at the end of a grace that runs.
+    // A group left or deleted takes them along: they fail, so that no later start or join of it
+    // sends them. Not once its history went with their rows: the mark refers to its row
+    // (broken_messages), and one that fails keeps the database inside its transaction.
+    if (const auto dispatcher = groupMessageDispatchers.value(groupId)) {
+        dispatcher->dropWaiting(!fake && !historyRemoved);
     }
     auto widget = groupWidgetIt.value();
     widget->setAsInactiveChatroom();
@@ -2935,6 +3101,13 @@ void Widget::discardGroup(Group* g, bool fake)
     }
     groupChatForms.erase(groupChatFormIt);
     groupAlertConnections.remove(groupId);
+    // The chat log holds the dispatcher, and both the group. The callbacks of the texts it put in
+    // the history run on the database thread and use it: the ones still queued run first.
+    if (History* const history = profile.getHistory()) {
+        history->sync();
+    }
+    groupChatLogs.remove(groupId);
+    groupMessageDispatchers.remove(groupId);
 
     delete g;
     if (contentLayout && contentLayout->mainHead->layout()->isEmpty()) {
@@ -3075,6 +3248,15 @@ void Widget::onEmptyGroupCreated(uint32_t groupnumber, const GroupId& groupId, c
 void Widget::onGroupJoined(int groupNum, const GroupId& groupId)
 {
     createGroup(groupNum, groupId);
+    // An invitation into it that the user accepted is done (acceptGroupInvite): its card goes.
+    const auto joining = invitesJoining.find(groupId);
+    if (joining != invitesJoining.end()) {
+        const QString inviteId = joining.value();
+        invitesJoining.erase(joining);
+        if (airLocal && !inviteId.isEmpty()) {
+            airLocal->removeInvite(inviteId);
+        }
+    }
     if (!groupToOpenWhenJoined.isEmpty() && groupId == groupToOpenWhenJoined) {
         groupToOpenWhenJoined = GroupId();
         openAirEntry(AirSource::groupEntryId(groupId));
@@ -3248,10 +3430,13 @@ void Widget::setStatusBusy()
 void Widget::onGroupSendFailed(uint32_t groupnumber)
 {
     const auto& groupId = groupList->id2Key(groupnumber);
-    assert(groupList->findGroup(groupId));
+    // A failure queued before the group went has nowhere to show (discardGroup).
+    const QSharedPointer<GroupChatForm> form = groupChatForms.value(groupId);
+    if (!form) {
+        return;
+    }
 
     const auto curTime = QDateTime::currentDateTime();
-    auto form = groupChatForms[groupId].data();
     form->addSystemInfoMessage(curTime, SystemMessageType::messageSendFailed, {});
 }
 
@@ -3710,16 +3895,27 @@ void Widget::setupAir()
         }
     });
 
-    // The start of an ID in the command line (E3): a row over the list offers New contact.
+    // The start of an ID in the command line (E3): a row over the list offers New contact, and a
+    // whole group key one more that joins the group, or opens it once it is in the list.
     commandIdRow = new AirCommandIdRow(ui->statusPanel);
     commandIdRow->hide();
     ui->statusLayout->insertWidget(ui->statusLayout->indexOf(airList), commandIdRow);
+    commandGroupRow = new AirCommandIdRow(ui->statusPanel);
+    commandGroupRow->setObjectName(QStringLiteral("commandGroup"));
+    commandGroupRow->hide();
+    ui->statusLayout->insertWidget(ui->statusLayout->indexOf(airList), commandGroupRow);
     connect(airBand, &AirBand::idStartChanged, this, &Widget::showCommandIdStart);
     connect(commandIdRow, &AirCommandIdRow::clicked, this, [this] {
         const QString idStart = commandIdRow->idStart();
         airBand->commandLine()->clear();
         openNewContact(idStart);
     });
+    connect(commandGroupRow, &AirCommandIdRow::clicked, this, [this] {
+        const QString groupKey = commandGroupRow->groupKey();
+        airBand->commandLine()->clear();
+        openGroupByKey(groupKey);
+    });
+    connect(airBand, &AirBand::groupKeyEntered, this, &Widget::openGroupByKey);
 
     // Saved Messages: kept in the profile database whether the history is on or off.
     History* const history = profile.getHistory();
@@ -3734,7 +3930,17 @@ void Widget::setupAir()
     airSource->watchNotes(*notesLog);
 
     connect(airController, &AirController::chatRequested, this, &Widget::openAirEntry);
-    connect(airController, &AirController::newContactRequested, this, &Widget::openNewContact);
+    connect(airController, &AirController::newContactRequested, this,
+            [this](const QString& address) {
+                // Enter takes what the rows over the list offer: the key of a group in the list
+                // opens that group, as its row alone says.
+                const Air::CommandOffer offer = commandOffer(address);
+                if (offer.groupListed) {
+                    openGroupByKey(offer.groupKey);
+                    return;
+                }
+                openNewContact(address);
+            });
     connect(airController, &AirController::favoriteToggled, this,
             [this](const QString& entryId, bool favorite) {
                 settings.setFavoriteChat(entryId, favorite);
@@ -3993,15 +4199,58 @@ void Widget::showNoChat()
 
 void Widget::showCommandIdStart(const QString& hex)
 {
-    if (!commandIdRow || !newContact) {
+    if (!commandIdRow || !commandGroupRow || !newContact) {
         return;
     }
-    if (hex.isEmpty()) {
+    // hex is the start of an ID only: the line itself also tells a group's link and its key.
+    const Air::CommandOffer offer = hex.isEmpty() ? commandOffer(airBand->commandLine()->text())
+                                                  : commandOffer(hex);
+    if (offer.contactId.isEmpty()) {
         commandIdRow->hide();
+    } else {
+        commandIdRow->setIdStart(offer.contactId, newContact->commandVerdict(offer.contactId));
+        commandIdRow->show();
+    }
+    if (offer.groupKey.isEmpty()) {
+        commandGroupRow->hide();
         return;
     }
-    commandIdRow->setIdStart(hex, newContact->commandVerdict(hex));
-    commandIdRow->show();
+    const Group* const group =
+        groupList->findGroup(GroupId(QByteArray::fromHex(offer.groupKey.toLatin1())));
+    commandGroupRow->setGroup(offer.groupKey, offer.groupListed,
+                              group ? group->getDisplayedName() : QString());
+    commandGroupRow->show();
+}
+
+Air::CommandOffer Widget::commandOffer(const QString& text) const
+{
+    const auto isGroup = [this](const QString& key) {
+        return groupList->findGroup(GroupId(QByteArray::fromHex(key.toLatin1()))) != nullptr;
+    };
+    // A key that is a contact's, a request's or your own is no group to join.
+    const auto isContact = [this](const QString& key) {
+        if (friendList->findFriend(ToxPk(key)) || core->getSelfPublicKey().toString() == key) {
+            return true;
+        }
+        const QVector<Air::Request> requests = airSource->requests();
+        return std::any_of(requests.cbegin(), requests.cend(), [&key](const Air::Request& request) {
+            return request.publicKey == key;
+        });
+    };
+    return Air::CommandOffer::of(text, isGroup, isContact);
+}
+
+void Widget::openGroupByKey(const QString& groupKey)
+{
+    const GroupId groupId(QByteArray::fromHex(groupKey.toLatin1()));
+    if (groupList->findGroup(groupId)) {
+        if (newGroup) {
+            newGroup->close();
+        }
+        openAirEntry(AirSource::groupEntryId(groupId));
+        return;
+    }
+    openJoinGroup(groupKey);
 }
 
 void Widget::onRequestSent(const ToxPk& friendPk, const QString& message)
@@ -4090,17 +4339,17 @@ void Widget::joinAirInvite(const QString& inviteId)
         airController->lightRequest(Air::Request::invitationId(inviteId));
         return;
     }
-    const uint32_t groupNumber =
-        core->joinGroupchat(GroupInvite(inviter->getId(), invite.data, invite.groupName));
-    if (groupNumber == std::numeric_limits<uint32_t>::max()) {
+    if (!acceptGroupInvite(GroupInvite(inviter->getId(), invite.data, invite.groupName),
+                           inviteId)) {
         AirDialog::notice(this, AirStrings::text(Text::ErrorJoinGroupTitle),
                           AirStrings::text(Text::TryAgain));
         return;
     }
-    airLocal->removeInvite(inviteId);
     // It opens, as a joined conversation does. toxcore's invitation starts with the chat id.
     if (invite.data.size() >= GroupId::size) {
         openJoinedGroup(GroupId(invite.data.left(GroupId::size)));
+    } else {
+        airLocal->removeInvite(inviteId);
     }
 }
 
@@ -4140,7 +4389,11 @@ void Widget::showAirEntryMenu(const QString& entryId, const QPoint& globalPos)
     if (auto* friendWidget = qobject_cast<FriendWidget*>(widget)) {
         friendWidget->showContextMenu(globalPos, {&favoriteAction});
     } else if (auto* groupWidget = qobject_cast<GroupWidget*>(widget)) {
-        groupWidget->showContextMenu(globalPos, {&favoriteAction});
+        // A group by invitation only shares no key, as its dossier shows none.
+        const int groupNumber = static_cast<int>(groupWidget->getGroup()->getId());
+        const bool sharesKey =
+            core->getGroupPrivacyState(groupNumber) != TOX_GROUP_PRIVACY_STATE_PRIVATE;
+        groupWidget->showContextMenu(globalPos, {&favoriteAction}, sharesKey);
     }
 }
 

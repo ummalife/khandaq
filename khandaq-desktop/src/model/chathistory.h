@@ -94,6 +94,7 @@ private slots:
     void onMessageSent(DispatchedMessageId id, const Message& message);
     void onMessageComplete(DispatchedMessageId id);
     void onMessageBroken(DispatchedMessageId id, BrokenMessageReason reason);
+    void onMessageWireIdAssigned(DispatchedMessageId id, const QByteArray& wireId);
 
 private:
     void ensureIdxInSessionChatLog(ChatLogIdx idx) const;

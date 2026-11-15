@@ -324,6 +324,7 @@ private slots:
     void theRulerCountsEachPart();
     void theIdFieldKeepsItsGroupsAndTheCaret();
     void theCommandLineReadsTheStartOfAnId();
+    void theCommandLineOffersTheGroupOfAWholeKey();
     void requestKeyShowsTheFirstTwelveDigitsInFours();
     void oneCardPerPersonWhateverCaseTheKeyArrivesIn();
     void previewsShowTheBodyWithoutReplyAndMentionMarkup();
@@ -940,6 +941,68 @@ void TestAirModel::theCommandLineReadsTheStartOfAnId()
     // Twelve hex letters without a digit are a word, not the start of an ID.
     QVERIFY(commandIdCandidate(QStringLiteral("DEADBEEFCAFE")).isNull());
     QVERIFY(commandIdCandidate(QStringLiteral("56A1 ADE4 B65G")).isNull());
+}
+
+/**
+ * A whole key of 64 characters is a group key and the start of a Tox ID alike: both are offered,
+ * New contact first. The key of a group in the list opens that group alone, a contact's key is
+ * never a group to join, and the link of a group's QR code is its key alone.
+ */
+void TestAirModel::theCommandLineOffersTheGroupOfAWholeKey()
+{
+    const QString groupKey =
+        QStringLiteral("8F2A41C07D3B9E6152A4F0C8B7D3E9A1C2F4B6D8E0A1C3E5F7B9D1F3A5C7E9B1");
+    const QString contactKey = goodAddress.left(toxKeyHexLength);
+    QStringList groups;
+    QStringList contacts;
+    const auto offer = [&groups, &contacts](const QString& raw) {
+        return CommandOffer::of(
+            raw, [&groups](const QString& key) { return groups.contains(key); },
+            [&contacts](const QString& key) { return contacts.contains(key); });
+    };
+
+    // Unknown: both, in any shape the start of an ID takes.
+    CommandOffer both = offer(groupKey);
+    QCOMPARE(both.contactId, groupKey);
+    QCOMPARE(both.groupKey, groupKey);
+    QVERIFY(!both.groupListed);
+    both = offer(QStringLiteral(" tox:") + groupedHex(groupKey.toLower()) + QLatin1Char('\n'));
+    QCOMPARE(both.contactId, groupKey);
+    QCOMPARE(both.groupKey, groupKey);
+
+    // In the list: the group alone, to open.
+    groups << groupKey;
+    const CommandOffer listed = offer(groupKey);
+    QVERIFY(listed.contactId.isNull());
+    QCOMPARE(listed.groupKey, groupKey);
+    QVERIFY(listed.groupListed);
+
+    // A contact's key is not read as a group.
+    contacts << contactKey;
+    const CommandOffer contact = offer(contactKey);
+    QCOMPARE(contact.contactId, contactKey);
+    QVERIFY(contact.groupKey.isNull());
+
+    // The link of a group's QR code: the group alone, listed or not.
+    const CommandOffer link = offer(QStringLiteral("khandaq:group:") + groupKey.toLower());
+    QVERIFY(link.contactId.isNull());
+    QCOMPARE(link.groupKey, groupKey);
+    QVERIFY(link.groupListed);
+    groups.clear();
+    QVERIFY(!offer(QStringLiteral("KHANDAQ:GROUP:") + groupKey).groupListed);
+    QVERIFY(offer(QStringLiteral("khandaq:group:") + groupKey.left(63)).groupKey.isNull());
+    QVERIFY(offer(QStringLiteral("khandaq:group:") + groupKey.left(63)).contactId.isNull());
+
+    // Any other length is the start of a Tox ID, a whole one included, and words stay a search.
+    for (const QString& start : {goodAddress.left(12), goodAddress.left(63),
+                                 goodAddress.left(65), goodAddress}) {
+        const CommandOffer id = offer(start);
+        QCOMPARE(id.contactId, start);
+        QVERIFY(id.groupKey.isNull());
+    }
+    const CommandOffer words = offer(QStringLiteral("Book club"));
+    QVERIFY(words.contactId.isNull());
+    QVERIFY(words.groupKey.isNull());
 }
 
 void TestAirModel::requestKeyShowsTheFirstTwelveDigitsInFours()

@@ -229,6 +229,21 @@ bool History::isValid()
 }
 
 /**
+ * @brief Waits until every query still queued has run, with the callback it carries.
+ *
+ * A chat log (ChatHistory) hands such callbacks to addNewMessage; they run on the database thread
+ * and use the chat log. Call this before a chat log goes while the history stays.
+ */
+void History::sync()
+{
+    if (!isValid()) {
+        return;
+    }
+
+    db->sync();
+}
+
+/**
  * @brief Checks if a chat has history
  * @param chatId
  * @return True if it does, false otherwise.
@@ -441,7 +456,8 @@ RawDatabase::Query History::generateFileFinished(RowId id, bool success, const Q
 
 void History::addNewFileMessage(const ChatId& chatId, const QByteArray& fileId,
                                 const QString& fileName, const QString& filePath, int64_t size,
-                                const ToxPk& sender, const QDateTime& time, QString const& dispName)
+                                const ToxPk& sender, const QDateTime& time, QString const& dispName,
+                                ToxFile::FileDirection direction)
 {
     if (historyAccessBlocked()) {
         return;
@@ -459,13 +475,6 @@ void History::addNewFileMessage(const ChatId& chatId, const QByteArray& fileId,
     // We can call the generateNewMessageQueries() fn to insert a message with an empty
     // message in it, and get the id with the callbck. Once we have the id we can ammend
     // the data to have our newly inserted file_id as well
-
-    ToxFile::FileDirection direction;
-    if (sender == chatId) {
-        direction = ToxFile::RECEIVING;
-    } else {
-        direction = ToxFile::SENDING;
-    }
 
     std::weak_ptr<History> weakThis = shared_from_this();
     FileDbInsertionData insertionData;
@@ -523,14 +532,15 @@ void History::setFileFinished(const QByteArray& fileId, bool success, const QStr
     // A file its sender deleted keeps its place erased (eraseFileEntry).
     const QString shownPath = erasedFiles.contains(fileId) ? QString() : filePath;
     if (fileInfo.fileId.get() == -1) {
+        // Its row is not in yet, as for a group file that arrives whole: onFileInserted ends it.
         fileInfo.finished = true;
         fileInfo.success = success;
         fileInfo.filePath = shownPath;
         fileInfo.fileHash = fileHash;
-    } else {
-        db->execLater(generateFileFinished(fileInfo.fileId, success, shownPath, fileHash));
+        return;
     }
 
+    db->execLater(generateFileFinished(fileInfo.fileId, success, shownPath, fileHash));
     fileInfos.remove(fileId);
 }
 
@@ -762,7 +772,8 @@ QList<History::HistMessage> History::getUndeliveredMessagesForChat(const ChatId&
             "WHERE history.chat_id = ");
     QVector<QByteArray> boundParams;
     addChatIdSubQuery(queryString, boundParams, chatId);
-    queryString += QStringLiteral(" AND history.message_type = 'T';");
+    // In the order they were written: they are sent again in it.
+    queryString += QStringLiteral(" AND history.message_type = 'T' ORDER BY history.id;");
     db->execNow({queryString, boundParams, rowCallback});
 
     return ret;

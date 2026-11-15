@@ -31,6 +31,7 @@
 #include "src/core/toxoptions.h"
 #include "src/core/toxstring.h"
 #include "src/core/khandaqlimits.h"
+#include "src/model/air/airgroup.h"
 #include "src/model/air/airgroupleave.h"
 #include "src/model/air/airmessagemarks.h"
 #include "src/model/groupinvite.h"
@@ -105,6 +106,11 @@ qint64 monotonicMs()
                std::chrono::steady_clock::now().time_since_epoch())
         .count();
 }
+
+// 0.2.56: while files go into groups, the loop turns this often, as for the files of a friend
+// (CoreFile::corefileIterationInterval), and their progress is told this often.
+constexpr unsigned groupFileTurnMs = 10;
+constexpr qint64 groupFileProgressMs = 250;
 
 // The chat id of the group with this number; empty when toxcore has no group with it.
 QByteArray groupChatId(const Tox* tox, uint32_t groupNumber)
@@ -417,6 +423,8 @@ void Core::process()
         leaveRecordedGroup(leave, "due");
     }
     iterateTox();
+    // 0.2.56: once toxcore has read the acknowledgements of those before.
+    sendGroupFileChunks();
     ext->process();
     maintainGroups();
 
@@ -440,6 +448,14 @@ void Core::process()
 
     unsigned sleeptime =
         qMin(tox_iteration_interval(tox.get()), getCoreFile()->corefileIterationInterval());
+    // Not while every group with a file waits for a member: nothing of them can go. While the
+    // pace holds the next packet back, the loop sleeps until it may go, or as toxcore asks.
+    Air::GroupFileQueue::Packet nextGroupFilePacket;
+    const qint64 nowMs = monotonicMs();
+    if (groupFileQueue.next(&nextGroupFilePacket, nowMs)) {
+        const qint64 turnMs = qMax<qint64>(groupFileTurnMs, groupFilePace.msUntilReady(nowMs));
+        sleeptime = static_cast<unsigned>(qMin<qint64>(sleeptime, turnMs));
+    }
     toxTimer->start(sleeptime);
 }
 
@@ -598,6 +614,7 @@ void Core::countRelays()
     QByteArray report(NetworkDiagnostics::relayReportSize, '\0');
     tox_get_all_tcp_relays(tox.get(), report.data());
     const int relays = NetworkDiagnostics::relayCount(report);
+    lastGroupRelays = NetworkDiagnostics::groupRelayCount(report);
     if (relays != lastRelays) {
         lastRelays = relays;
         emit relaysChanged(relays);
@@ -844,13 +861,18 @@ void Core::onGroupPeerExit(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Grou
 
 void Core::onGroupSelfJoin(Tox* tox, uint32_t groupId, void* vCore)
 {
-    std::ignore = tox;
     const auto core = static_cast<Core*>(vCore);
     if (core->ignoresGroup(groupId)) {
         return;
     }
     qDebug() << QString("Group %1 self joined").arg(groupId);
     emit core->saveRequest();
+    // 0.2.56: a group joined by its ID is in that save once it has its shared state, whose name is
+    // never empty; the next start loads it. A member that had none to give leaves it for then.
+    Tox_Err_Group_State_Queries nameError;
+    if (tox_group_get_name_size(tox, groupId, &nameError) > 0) {
+        core->forgetUnsyncedGroupJoin(groupChatId(tox, groupId));
+    }
     // Do NOT kickstart here: we just successfully joined; a reconnect would
     // tear the fresh connection down again and loop join/rejoin forever.
     emit core->groupPeerlistChanged(groupId);
@@ -1183,13 +1205,24 @@ void Core::sendTyping(uint32_t friendId, bool typing)
     }
 }
 
-uint32_t Core::sendGroupMessageWithType(int groupId, const QString& message, Tox_Message_Type type)
+Core::SendResult Core::sendGroupMessageWithType(int groupId, const QString& message,
+                                                Tox_Message_Type type, uint32_t& wireId)
 {
     QMutexLocker ml{&coreLoopLock};
+    wireId = 0;
+    const uint32_t groupNumber = static_cast<uint32_t>(groupId);
+
+    // 0.2.56: a group we leave (QA live F11) takes nothing more from us, nor is it connected
+    // again. Its row is gone by then, but for the instance of a group joined by its ID that an
+    // invite replaces: the row goes to the new one, and the text waits for it.
+    if (ignoresGroup(groupNumber)) {
+        qDebug() << "Group" << groupId << "is being left: it takes no text";
+        return SendResult::NotReady;
+    }
 
     // Only revive a genuinely disconnected group; a full reconnect on every
     // outgoing message would drop all peer connections each time we type.
-    reconnectGroupIfDisconnected(static_cast<uint32_t>(groupId));
+    reconnectGroupIfDisconnected(groupNumber);
 
     // A group message has its own limit, TOX_GROUP_MAX_MESSAGE_LENGTH, larger than the one of a
     // friend message; toxcore refuses a longer one.
@@ -1198,7 +1231,25 @@ uint32_t Core::sendGroupMessageWithType(int groupId, const QString& message, Tox
     if (size > maxSize) {
         qCritical() << "Core::sendGroupMessageWithType called with message of size:" << size
                     << "when max is:" << maxSize << ". Ignoring.";
-        return 0;
+        return SendResult::Failed;
+    }
+
+    // 0.2.56: toxcore takes a text while it has confirmed nobody else, and says it went. Such a
+    // text waits on this device instead, until the group takes it (GroupMessageDispatcher). The
+    // members who said they are leaving count for nobody, as in the list (getGroupPeerList):
+    // toxcore keeps each until its exit arrives, a minute later when that exit is lost.
+    Tox_Err_Group_Is_Connected connectionError;
+    const int32_t connection = tox_group_is_connected(tox.get(), groupNumber, &connectionError);
+    Tox_Err_Group_Peer_Query peerError;
+    uint32_t peerCount = tox_group_peer_count(tox.get(), groupNumber, &peerError);
+    if (peerError == TOX_ERR_GROUP_PEER_QUERY_OK && groupLeaveNotices.hidesAny(groupId)) {
+        peerCount = static_cast<uint32_t>(getGroupPeerList(groupId).size());
+    }
+    if (connectionError != TOX_ERR_GROUP_IS_CONNECTED_OK || peerError != TOX_ERR_GROUP_PEER_QUERY_OK
+        || !Air::groupTakesText(connection, peerCount)) {
+        qDebug() << "Group" << groupId << "takes no text now: connection" << connection << "peers"
+                 << peerCount;
+        return SendResult::NotReady;
     }
 
     ToxString cMsg(message);
@@ -1207,24 +1258,30 @@ uint32_t Core::sendGroupMessageWithType(int groupId, const QString& message, Tox
     uint32_t messageId = 0;
     tox_group_send_message(tox.get(), groupId, type, cMsg.data(), cMsg.size(), &messageId, &error);
     if (!PARSE_ERR(error)) {
+        // Neither says anything about the text itself: it may go later.
+        if (error == TOX_ERR_GROUP_SEND_MESSAGE_DISCONNECTED
+            || error == TOX_ERR_GROUP_SEND_MESSAGE_FAIL_SEND) {
+            return SendResult::NotReady;
+        }
         emit groupSentFailed(groupId);
-        return 0;
+        return SendResult::Failed;
     }
-    return messageId;
+    wireId = messageId;
+    return SendResult::Sent;
 }
 
-uint32_t Core::sendGroupMessage(int groupId, const QString& message)
+Core::SendResult Core::sendGroupMessage(int groupId, const QString& message, uint32_t& wireId)
 {
     QMutexLocker ml{&coreLoopLock};
 
-    return sendGroupMessageWithType(groupId, message, TOX_MESSAGE_TYPE_NORMAL);
+    return sendGroupMessageWithType(groupId, message, TOX_MESSAGE_TYPE_NORMAL, wireId);
 }
 
-uint32_t Core::sendGroupAction(int groupId, const QString& message)
+Core::SendResult Core::sendGroupAction(int groupId, const QString& message, uint32_t& wireId)
 {
     QMutexLocker ml{&coreLoopLock};
 
-    return sendGroupMessageWithType(groupId, message, TOX_MESSAGE_TYPE_ACTION);
+    return sendGroupMessageWithType(groupId, message, TOX_MESSAGE_TYPE_ACTION, wireId);
 }
 
 void Core::changeGroupTitle(int groupId, const QString& title)
@@ -1307,6 +1364,8 @@ void Core::leaveGroupAfterNotice(int groupId)
     // A join by ID asked our friends for an invite: a late one must not join the group again, as
     // on iOS (OCTSubmanagerGroupsImpl).
     forgetFriendAssistedJoin(groupChatId(tox.get(), groupNumber));
+    // 0.2.56: nor does the next start join it again.
+    forgetUnsyncedGroupJoin(groupChatId(tox.get(), groupNumber));
     if (sendGroupLeaveNotice(groupId)) {
         // Our own peer counts as one.
         Tox_Err_Group_Peer_Query peerError;
@@ -1438,6 +1497,61 @@ void Core::leaveStoredGroups(const QString& stored)
     const QString kept = getPendingGroupLeaves();
     if (kept != stored) {
         emit pendingGroupLeavesChanged(kept);
+    }
+}
+
+void Core::rejoinStoredGroups(const QString& stored)
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    QString selfName = getUsername();
+    if (selfName.isEmpty()) {
+        selfName = tr("User");
+    }
+    ToxString cSelfName(selfName);
+    for (const QByteArray& chatId : Air::PendingGroupLeaves::parseStore(stored)) {
+        const uint8_t* const id = reinterpret_cast<const uint8_t*>(chatId.constData());
+        Tox_Err_Group_State_Queries stateError;
+        const uint32_t loaded = tox_group_by_chat_id(tox.get(), id, &stateError);
+        if (stateError == TOX_ERR_GROUP_STATE_QUERIES_OK
+            && loaded != std::numeric_limits<uint32_t>::max()) {
+            qDebug() << "Group" << loaded << "joined by its ID had synced before the app closed";
+            continue;
+        }
+        Tox_Err_Group_Join error;
+        const uint32_t groupNumber = tox_group_join(tox.get(), id, cSelfName.data(),
+                                                    cSelfName.size(), nullptr, 0, &error);
+        qDebug() << "Group joined by its ID again at start:" << groupNumber
+                 << "error:" << static_cast<int>(error);
+        if (error != TOX_ERR_GROUP_JOIN_OK || groupNumber == std::numeric_limits<uint32_t>::max()) {
+            continue;
+        }
+        unsyncedGroupJoins.append(chatId);
+        // Friends come online later: their invite is asked for then as well.
+        requestGroupInviteFromFriends(chatId);
+    }
+    const QString kept = getUnsyncedGroupJoins();
+    if (kept != stored) {
+        emit unsyncedGroupJoinsChanged(kept);
+    }
+}
+
+QString Core::getUnsyncedGroupJoins() const
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    // The same lines as the leaves: the chat ids in hex.
+    return Air::PendingGroupLeaves::store(unsyncedGroupJoins);
+}
+
+/**
+ * @brief 0.2.56: a group joined by its ID that synced, or that we leave: the profile keeps its
+ * chat id no more. Called with coreLoopLock held.
+ */
+void Core::forgetUnsyncedGroupJoin(const QByteArray& chatId)
+{
+    if (!chatId.isEmpty() && unsyncedGroupJoins.removeAll(chatId) > 0) {
+        emit unsyncedGroupJoinsChanged(getUnsyncedGroupJoins());
     }
 }
 
@@ -1684,12 +1798,27 @@ void Core::loadGroups()
     QMutexLocker ml{&coreLoopLock};
 
     const uint32_t groupCount = tox_group_get_number_groups(tox.get());
-    if (groupCount == 0) {
+    if (groupCount == 0 && unsyncedGroupJoins.isEmpty()) {
         return;
     }
 
     std::vector<uint32_t> groupNumbers(groupCount);
-    tox_group_get_grouplist(tox.get(), groupNumbers.data());
+    if (groupCount > 0) {
+        tox_group_get_grouplist(tox.get(), groupNumbers.data());
+    }
+    // 0.2.56: toxcore lists only the groups it saves; one joined by its ID shows before it synced
+    // as well (rejoinStoredGroups).
+    for (const QByteArray& chatId : unsyncedGroupJoins) {
+        Tox_Err_Group_State_Queries stateError;
+        const uint32_t groupNumber = tox_group_by_chat_id(
+            tox.get(), reinterpret_cast<const uint8_t*>(chatId.constData()), &stateError);
+        if (stateError == TOX_ERR_GROUP_STATE_QUERIES_OK
+            && groupNumber != std::numeric_limits<uint32_t>::max()
+            && std::find(groupNumbers.begin(), groupNumbers.end(), groupNumber)
+                   == groupNumbers.end()) {
+            groupNumbers.push_back(groupNumber);
+        }
+    }
 
     for (uint32_t groupNumber : groupNumbers) {
         // QA live F11: a group whose leave the profile kept was left by leaveStoredGroups, and
@@ -1977,7 +2106,9 @@ bool Core::isGroupPeerOnline(int groupId, int peerId) const
     const Tox_Connection connection =
         tox_group_peer_get_connection_status(tox.get(), static_cast<uint32_t>(groupId),
                                              static_cast<uint32_t>(peerId), &error);
-    return error == TOX_ERR_GROUP_PEER_QUERY_OK && connection != TOX_CONNECTION_NONE;
+    // toxcore says TCP for any member it has no direct path to (Air::groupPeerReachable).
+    return error == TOX_ERR_GROUP_PEER_QUERY_OK
+           && Air::groupPeerReachable(static_cast<int>(connection), lastGroupRelays);
 }
 
 int Core::getGroupConnection(int groupId) const
@@ -2045,6 +2176,22 @@ bool Core::kickGroupPeer(int groupId, int peerId)
     return true;
 }
 
+bool Core::setGroupPrivacyState(int groupId, Tox_Group_Privacy_State privacyState)
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    Tox_Err_Group_Founder_Set_Privacy_State error;
+    tox_group_founder_set_privacy_state(tox.get(), static_cast<uint32_t>(groupId), privacyState,
+                                        &error);
+    if (error != TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE_OK) {
+        qWarning() << "Group" << groupId << "could not set the privacy state" << privacyState << ":"
+                   << error;
+        return false;
+    }
+    emit saveRequest();
+    return true;
+}
+
 bool Core::sendGroupPrivateMessage(int groupId, int peerId, const QString& message)
 {
     QMutexLocker ml{&coreLoopLock};
@@ -2068,7 +2215,11 @@ bool Core::sendGroupPrivateMessage(int groupId, int peerId, const QString& messa
  * @brief Accept a groupchat invite.
  * @param inviteInfo Object which contains info about group invitation
  *
- * @return Conference number on success, UINT32_MAX on failure.
+ * @return Conference number on success, UINT32_MAX on failure. An invite into a group we are
+ * leaving, or one joined by its ID that never synced, is accepted once toxcore let go of that
+ * instance: the number is that instance's then, the group shows when it is joined (groupJoined),
+ * and groupInviteAcceptFailed says when it is not. One joined by its ID stays while the inviter
+ * is away: the invite is refused at once then.
  */
 uint32_t Core::joinGroupchat(const GroupInvite& inviteInfo)
 {
@@ -2078,15 +2229,54 @@ uint32_t Core::joinGroupchat(const GroupInvite& inviteInfo)
     const QByteArray invite = inviteInfo.getInvite();
     const uint8_t* const inviteData = reinterpret_cast<const uint8_t*>(invite.constData());
     const size_t inviteLength = static_cast<size_t>(invite.length());
+    // The chat id of the group when toxcore holds no instance of it: the accept begins one.
+    QByteArray newChatId;
 
     // QA live F11: an invite into a group we are leaving is accepted once toxcore let go of it.
     // The invite starts with the chat id.
     if (invite.size() >= TOX_GROUP_CHAT_ID_SIZE) {
-        const uint32_t leavingNum =
-            replaceLeavingGroup(invite.left(TOX_GROUP_CHAT_ID_SIZE),
-                                [this, inviteInfo] { joinGroupchat(inviteInfo); });
+        const QByteArray chatId = invite.left(TOX_GROUP_CHAT_ID_SIZE);
+        const uint32_t leavingNum = replaceLeavingGroup(chatId, [this, inviteInfo] {
+            acceptDeferredGroupInvite(inviteInfo, std::numeric_limits<uint32_t>::max());
+        });
         if (leavingNum != std::numeric_limits<uint32_t>::max()) {
             return leavingNum;
+        }
+        // 0.2.56: toxcore takes an invite into a group it has already (gc_accept_invite does not
+        // look, unlike a join by its ID), and would then hold the group twice. It hands over no
+        // invite into such a group, but an invitation kept with the profile can be joined after
+        // the group was joined by its ID.
+        Tox_Err_Group_State_Queries stateError;
+        const uint32_t existingNum = tox_group_by_chat_id(
+            tox.get(), reinterpret_cast<const uint8_t*>(chatId.constData()), &stateError);
+        if (stateError == TOX_ERR_GROUP_STATE_QUERIES_OK
+            && existingNum != std::numeric_limits<uint32_t>::max()) {
+            Tox_Err_Group_State_Queries nameError;
+            if (tox_group_get_name_size(tox.get(), existingNum, &nameError) > 0) {
+                // It synced, and holds our place in the group: it opens, as a join by its ID does.
+                return joinGroupByChatId(chatId);
+            }
+            // It never synced, so nothing of it is lost: it is left without a notice, and the
+            // invite accepted once toxcore let go of it, as for a group we are leaving. Not while
+            // the inviter is away or no longer a friend: toxcore refuses the invite then
+            // (FAIL_SEND, the friend not found), and the group would go for nothing.
+            Tox_Err_Friend_Query friendError;
+            if (tox_friend_get_connection_status(tox.get(), friendId, &friendError)
+                == TOX_CONNECTION_NONE) {
+                qDebug() << "Group" << existingNum << "is kept: the inviter of its invite is away";
+                return std::numeric_limits<uint32_t>::max();
+            }
+            Tox_Err_Group_Leave leaveError;
+            if (tox_group_leave(tox.get(), existingNum, nullptr, 0, &leaveError)) {
+                qDebug() << "Group" << existingNum << "that never synced is replaced by an invite";
+                exitingGroups.insert(static_cast<int>(existingNum), QByteArray());
+                joinsAfterGroupLeaves.push_back([this, inviteInfo, existingNum] {
+                    acceptDeferredGroupInvite(inviteInfo, existingNum);
+                });
+                return existingNum;
+            }
+        } else {
+            newChatId = chatId;
         }
     }
 
@@ -2101,6 +2291,21 @@ uint32_t Core::joinGroupchat(const GroupInvite& inviteInfo)
     const uint32_t groupNum = tox_group_invite_accept(tox.get(), friendId, inviteData, inviteLength,
                                                       cSelfName.data(), cSelfName.size(), nullptr, 0, &error);
     if (!PARSE_ERR(error) || groupNum == std::numeric_limits<uint32_t>::max()) {
+        // 0.2.56: toxcore keeps the group it began when it could not tell the inviter, who is away
+        // (gc_accept_invite): none of the group ever learns of it, and a join by its ID would take
+        // it for the group. It is left; toxcore lets go of it at its next turn.
+        if (!newChatId.isEmpty()) {
+            Tox_Err_Group_State_Queries keptError;
+            const uint32_t keptNum = tox_group_by_chat_id(
+                tox.get(), reinterpret_cast<const uint8_t*>(newChatId.constData()), &keptError);
+            Tox_Err_Group_Leave leaveError;
+            if (keptError == TOX_ERR_GROUP_STATE_QUERIES_OK
+                && keptNum != std::numeric_limits<uint32_t>::max()
+                && tox_group_leave(tox.get(), keptNum, nullptr, 0, &leaveError)) {
+                qDebug() << "Group" << keptNum << "begun for a refused invite is left";
+                exitingGroups.insert(static_cast<int>(keptNum), QByteArray());
+            }
+        }
         return std::numeric_limits<uint32_t>::max();
     }
 
@@ -2115,6 +2320,35 @@ uint32_t Core::joinGroupchat(const GroupInvite& inviteInfo)
         emit groupTitleChanged(static_cast<int>(groupNum), QString(), inviteGroupName);
     }
     return groupNum;
+}
+
+/**
+ * @brief 0.2.56: the accept of an invite that waited for toxcore to let go of another instance of
+ * its group (joinGroupchat), which returned that instance's number: when toxcore refuses the invite
+ * now, groupInviteAcceptFailed says so, as the return of an accept refused at once does. A group
+ * joined by its ID that was left for it, numbered joinedByIdNum (UINT32_MAX for a group we leave),
+ * is joined by its ID again, and so its row takes the new instance (groupJoined), or lets go of
+ * that number (groupRejoinFailed). Called with coreLoopLock held, after the tox_iterate that
+ * deleted the other instance (iterateTox).
+ */
+void Core::acceptDeferredGroupInvite(const GroupInvite& inviteInfo, uint32_t joinedByIdNum)
+{
+    if (joinGroupchat(inviteInfo) != std::numeric_limits<uint32_t>::max()) {
+        return;
+    }
+    qWarning() << "A group invite accepted after another instance of its group went failed";
+    const QByteArray chatId = inviteInfo.getInvite().left(TOX_GROUP_CHAT_ID_SIZE);
+    if (joinedByIdNum != std::numeric_limits<uint32_t>::max()) {
+        // After the next tox_iterate: the group the refused accept began, which joinGroupchat
+        // left, holds the chat id until then, and toxcore joins no chat id it holds.
+        joinsAfterGroupLeaves.push_back([this, chatId, joinedByIdNum] {
+            if (joinGroupByChatId(chatId) == std::numeric_limits<uint32_t>::max()) {
+                qWarning() << "A group left for a refused invite could not be joined again";
+                emit groupRejoinFailed(chatId, joinedByIdNum);
+            }
+        });
+    }
+    emit groupInviteAcceptFailed(chatId);
 }
 
 uint32_t Core::joinGroupByChatId(const QByteArray& chatId)
@@ -2168,6 +2402,12 @@ uint32_t Core::joinGroupByChatId(const QByteArray& chatId)
     // Fresh tox_group_join already starts the DHT announce lookup; in parallel
     // ask friends that may be group members to invite us in instantly.
     requestGroupInviteFromFriends(chatId);
+    // 0.2.56: toxcore does not save the group before it synced; until then the profile keeps its
+    // chat id, and the next start joins it again (rejoinStoredGroups).
+    if (!unsyncedGroupJoins.contains(chatId)) {
+        unsyncedGroupJoins.append(chatId);
+        emit unsyncedGroupJoinsChanged(getUnsyncedGroupJoins());
+    }
     emit saveRequest();
     emit groupJoined(groupNum, getGroupPersistentId(groupNum));
     return groupNum;
@@ -2263,6 +2503,9 @@ uint32_t chatIdHash32(const uint8_t* chatId)
 //   pkt 0x11 (live file, broadcast):  msg_id(32) create_ts(4) filename(255) data[1..36701]
 //   pkt 0x12 (chunked begin):         same header + total_size(8) chunk_size(4) total_chunks(4)
 //   pkt 0x13 (chunked data):            msg_id(32) chunk_index(4) chunk_size(4) data[...]
+//     0x12 and 0x13 come either way: this client and iOS broadcast them, Android sends each
+//     member a private copy (NgcGroupFileTransfer.sendChunkWithRetry).
+//   pkt 0x14 (a receiver asks for chunks again): not answered, see handleNgcFileTransferPacket.
 //   pkt 0x03 (history-sync file, private): msg_id(32) orig_sender_pk(32) ts(4)
 //                                          peer_name(25) filename(255) data[1..36701]
 // KHANDAQ (audit F-6): this client is a history-sync CONSUMER only — it never emits 0x01 (request),
@@ -2588,6 +2831,14 @@ void Core::sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t m
  * @brief Parse an incoming NGC custom packet; handle TRIfA-style file transfers.
  * Live files (pkt 0x11) arrive as broadcast custom packets, history-sync files
  * (pkt 0x03) as private custom packets from a peer that resyncs history to us.
+ * A chunked file (pkts 0x12 and 0x13) is taken either way: Android sends it to each member as
+ * private packets only, so dropping those lost every large file from Android. Copies of one file
+ * meet in one assembly, keyed by its msg id: a repeated BEGIN keeps what came, a chunk already
+ * held is ignored, and a file that already arrived opens no assembly again.
+ * pkt 0x14 (Android and iOS ask the sender for missing chunks) is not answered: this client keeps
+ * nothing of a file once its last chunk went, the two senders of 0x14 lay it out differently
+ * (Android: chunk count and a bitmap of the missing ones; iOS: a list of indices, including the
+ * chunks still to come), and serving it would be a resend path of its own, under the same pace.
  */
 void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const uint8_t* data,
                                        size_t length, bool isPrivate)
@@ -2621,11 +2872,16 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         return;
     }
 
-    if (pktId == NGC_PKT_FILE_BEGIN && !isPrivate) {
+    if (pktId == NGC_PKT_FILE_BEGIN) {
         if (length < NGC_FILE_BEGIN_SIZE) {
             return;
         }
         const QByteArray msgId(reinterpret_cast<const char*>(data + 8), 32);
+        // The file already arrived: a copy of its BEGIN that comes late, by the other way or with a
+        // resend, would only hold a scratch file of its size until the sweep below.
+        if (ngcSeenFileMsgIds.contains(msgId)) {
+            return;
+        }
         const QString key = ngcAssemblyKey(groupId, msgId);
         // KHANDAQ (audit F-5): bind the assembly to the peer that opened it. Assemblies are keyed only
         // by (group, msgId) and the BEGIN is broadcast to the whole group, so without this any other
@@ -2785,7 +3041,7 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         return;
     }
 
-    if (pktId == NGC_PKT_FILE_CHUNK && !isPrivate) {
+    if (pktId == NGC_PKT_FILE_CHUNK) {
         if (length < NGC_FILE_CHUNK_HEADER_SIZE + 1) {
             return;
         }
@@ -3044,62 +3300,216 @@ bool Core::sendGroupFileFromPath(int groupId, const QString& fileName, const QSt
         in.close();
         return sendGroupFile(groupId, wireName, localPath, payload);
     }
+    in.close();
 
-    const uint32_t totalChunks =
-        static_cast<uint32_t>((static_cast<uint64_t>(fileSize) + NGC_CHUNK_PAYLOAD_MAX - 1)
-                              / NGC_CHUNK_PAYLOAD_MAX);
+    // 0.2.56: the chunks go from the loop of the node, at their pace (sendGroupFileChunks); the
+    // window's thread only queues the file. Air::GroupFileQueue says why.
+    OutgoingGroupFile send;
+    send.group = groupId;
+    send.chatId = groupChatId(tox.get(), static_cast<uint32_t>(groupId));
+    send.fileName = wireName;
+    send.localPath = localPath;
+    send.size = fileSize;
+    if (send.chatId.isEmpty()) {
+        return false;
+    }
+    // A group that would refuse the packets of the file now is said at once, as before: one that
+    // is not connected, or where we only observe. The BEGIN goes from the loop, in its turn and
+    // once the files going leave room for its chunks (Air::GroupFileQueue).
+    if (getGroupConnection(groupId) < 0 || getGroupSelfRole(groupId) == TOX_GROUP_ROLE_OBSERVER) {
+        qWarning() << "sendGroupFileFromPath: the group takes no packets now";
+        return false;
+    }
+    groupFileQueue.add(groupId, msgId, fileSize);
+    groupFileQueue.setMembers(groupId, groupFileMembers(groupId), monotonicMs());
+    outgoingGroupFiles.insert(msgId, send);
+    ngcFileMsgIdSeen(msgId);
+    emit groupFileSendStarted(groupId, wireName, localPath, fileSize, msgId);
+    return true;
+}
 
+/**
+ * @brief Whether the group of the file is still the one it was chosen for: not left, and its
+ * number not given to another group meanwhile. Called with coreLoopLock held.
+ */
+bool Core::sendsGroupFileTo(const OutgoingGroupFile& send) const
+{
+    const uint32_t groupNumber = static_cast<uint32_t>(send.group);
+    return !ignoresGroup(groupNumber) && groupChatId(tox.get(), groupNumber) == send.chatId;
+}
+
+/**
+ * @brief The BEGIN of a file that goes in chunks, which opens the file for them. False when the
+ * file cannot be read as it was chosen, or the group refuses the packet. Called with coreLoopLock
+ * held.
+ */
+bool Core::sendGroupFileBegin(OutgoingGroupFile& send, const QByteArray& fileId)
+{
+    if (!sendsGroupFileTo(send)) {
+        return false;
+    }
+    std::shared_ptr<QFile> file = std::make_shared<QFile>(send.localPath);
+    if (!file->open(QIODevice::ReadOnly) || file->size() != send.size) {
+        qWarning() << "sendGroupFileBegin: cannot read" << send.localPath << "as it was chosen";
+        return false;
+    }
+
+    const int totalChunks = Air::GroupFileQueue::chunkCount(send.size);
     QByteArray beginPkt(static_cast<int>(NGC_FILE_BEGIN_SIZE), 0);
     uint8_t* bp = reinterpret_cast<uint8_t*>(beginPkt.data());
     ngcPutMagic(bp);
     bp[7] = NGC_PKT_FILE_BEGIN;
-    memcpy(bp + 8, msgId.constData(), 32);
-    ngcPutFilename(bp + 44, wireName);
-    ngcPutU64Be(bp + 299, static_cast<uint64_t>(fileSize));
+    memcpy(bp + 8, fileId.constData(), 32);
+    ngcPutFilename(bp + 44, send.fileName);
+    ngcPutU64Be(bp + 299, static_cast<uint64_t>(send.size));
     ngcPutU32Be(bp + 307, static_cast<uint32_t>(NGC_CHUNK_PAYLOAD_MAX));
-    ngcPutU32Be(bp + 311, totalChunks);
+    ngcPutU32Be(bp + 311, static_cast<uint32_t>(totalChunks));
 
     Tox_Err_Group_Send_Custom_Packet error;
-    tox_group_send_custom_packet(tox.get(), static_cast<uint32_t>(groupId), true,
+    tox_group_send_custom_packet(tox.get(), static_cast<uint32_t>(send.group), true,
                                  reinterpret_cast<const uint8_t*>(beginPkt.constData()),
                                  static_cast<size_t>(beginPkt.size()), &error);
     if (error != TOX_ERR_GROUP_SEND_CUSTOM_PACKET_OK) {
-        in.close();
+        qWarning() << "sendGroupFileBegin: the group refused the BEGIN, error"
+                   << static_cast<int>(error);
+        return false;
+    }
+    send.file = file;
+    return true;
+}
+
+/**
+ * @brief One chunk of a file whose BEGIN went. False when the file cannot be read any more, or
+ * the group is gone or refuses the packet. Called with coreLoopLock held.
+ */
+bool Core::sendGroupFileChunk(OutgoingGroupFile& send, const QByteArray& fileId, int chunk)
+{
+    if (!send.file || !sendsGroupFileTo(send)) {
+        return false;
+    }
+    const qint64 bytes = Air::GroupFileQueue::chunkBytes(send.size, chunk);
+    if (bytes <= 0) {
+        return false;
+    }
+    QByteArray chunkPkt(static_cast<int>(NGC_FILE_CHUNK_HEADER_SIZE + bytes), 0);
+    uint8_t* cp = reinterpret_cast<uint8_t*>(chunkPkt.data());
+    ngcPutMagic(cp);
+    cp[7] = NGC_PKT_FILE_CHUNK;
+    memcpy(cp + 8, fileId.constData(), 32);
+    ngcPutU32Be(cp + 40, static_cast<uint32_t>(chunk));
+    ngcPutU32Be(cp + 44, static_cast<uint32_t>(bytes));
+    char* const payload = chunkPkt.data() + NGC_FILE_CHUNK_HEADER_SIZE;
+    if (!send.file->seek(Air::GroupFileQueue::chunkOffset(chunk))
+        || send.file->read(payload, bytes) != bytes) {
+        qWarning() << "sendGroupFileChunk: cannot read chunk" << chunk << "of" << send.localPath;
         return false;
     }
 
-    std::array<char, NGC_CHUNK_PAYLOAD_MAX> buf{};
-    for (uint32_t idx = 0; idx < totalChunks; ++idx) {
-        const qint64 toRead = qMin(static_cast<qint64>(NGC_CHUNK_PAYLOAD_MAX),
-                                   fileSize - static_cast<qint64>(idx) * static_cast<qint64>(NGC_CHUNK_PAYLOAD_MAX));
-        const qint64 read = in.read(buf.data(), toRead);
-        if (read != toRead) {
-            in.close();
-            return false;
+    Tox_Err_Group_Send_Custom_Packet error;
+    tox_group_send_custom_packet(tox.get(), static_cast<uint32_t>(send.group), true,
+                                 reinterpret_cast<const uint8_t*>(chunkPkt.constData()),
+                                 static_cast<size_t>(chunkPkt.size()), &error);
+    if (error != TOX_ERR_GROUP_SEND_CUSTOM_PACKET_OK) {
+        qWarning() << "sendGroupFileChunk: the group refused chunk" << chunk << ", error"
+                   << static_cast<int>(error);
+        return false;
+    }
+    return true;
+}
+
+/**
+ * @brief 0.2.56: the packets of the files we send into groups that their pace lets go now, in
+ * the order of Air::GroupFileQueue. Called by process(), with coreLoopLock held, right after the
+ * tox_iterate that read the acknowledgements of the packets before.
+ */
+void Core::sendGroupFileChunks()
+{
+    const qint64 nowMs = monotonicMs();
+    for (const int group : groupFileQueue.groups()) {
+        groupFileQueue.setMembers(group, groupFileMembers(group), nowMs);
+    }
+    // Members came that the files going no longer fit the pace with: those that began last start
+    // again from their BEGIN, and their entries with them.
+    for (const QByteArray& fileId : groupFileQueue.fitGoingFiles()) {
+        emit groupFileSendWaiting(fileId, false);
+    }
+    for (const QByteArray& fileId : groupFileQueue.waitedTooLong(nowMs)) {
+        failGroupFileSend(fileId, "wait for a member");
+    }
+    tellGroupFilesWaiting();
+    Air::GroupFileQueue::Packet packet;
+    while (groupFileQueue.next(&packet, nowMs) && groupFilePace.ready(nowMs)) {
+        const auto it = outgoingGroupFiles.find(packet.fileId);
+        if (it == outgoingGroupFiles.end()) {
+            groupFileQueue.remove(packet.fileId);
+            continue;
         }
+        OutgoingGroupFile& send = it.value();
+        const bool begin = packet.chunk < 0;
+        if (begin ? !sendGroupFileBegin(send, packet.fileId)
+                  : !sendGroupFileChunk(send, packet.fileId, packet.chunk)) {
+            failGroupFileSend(packet.fileId, begin ? "BEGIN" : "chunk");
+            continue;
+        }
+        groupFilePace.spend(groupFileQueue.cost(packet));
 
-        QByteArray chunkPkt(static_cast<int>(NGC_FILE_CHUNK_HEADER_SIZE + read), 0);
-        uint8_t* cp = reinterpret_cast<uint8_t*>(chunkPkt.data());
-        ngcPutMagic(cp);
-        cp[7] = NGC_PKT_FILE_CHUNK;
-        memcpy(cp + 8, msgId.constData(), 32);
-        ngcPutU32Be(cp + 40, idx);
-        ngcPutU32Be(cp + 44, static_cast<uint32_t>(read));
-        memcpy(cp + NGC_FILE_CHUNK_HEADER_SIZE, buf.data(), static_cast<size_t>(read));
-
-        tox_group_send_custom_packet(tox.get(), static_cast<uint32_t>(groupId), true,
-                                     reinterpret_cast<const uint8_t*>(chunkPkt.constData()),
-                                     static_cast<size_t>(chunkPkt.size()), &error);
-        if (error != TOX_ERR_GROUP_SEND_CUSTOM_PACKET_OK) {
-            in.close();
-            return false;
+        if (groupFileQueue.sent(packet, nowMs)) {
+            const OutgoingGroupFile done = send;
+            outgoingGroupFiles.erase(it);
+            emit groupFileSent(done.group, done.fileName, done.localPath, done.size,
+                               packet.fileId);
+        } else if (nowMs - send.toldMs >= groupFileProgressMs) {
+            send.toldMs = nowMs;
+            emit groupFileSendProgress(packet.fileId, groupFileQueue.bytesSent(packet.fileId));
         }
     }
-    in.close();
+}
 
-    ngcFileMsgIdSeen(msgId);
-    emit groupFileSent(groupId, wireName, localPath, fileSize, msgId);
-    return true;
+/**
+ * @brief Says which files wait for a member of their group to send to (Air::GroupFileQueue::waits)
+ * where that changed. Called with coreLoopLock held.
+ */
+void Core::tellGroupFilesWaiting()
+{
+    for (auto it = outgoingGroupFiles.begin(); it != outgoingGroupFiles.end(); ++it) {
+        const bool waits = groupFileQueue.waits(it.value().group);
+        if (it.value().waiting != waits) {
+            it.value().waiting = waits;
+            emit groupFileSendWaiting(it.key(), waits);
+        }
+    }
+}
+
+/**
+ * @brief How many members a packet into the group goes to: toxcore sends it to every peer it
+ * confirmed but us, and our own peer counts as one. One when toxcore cannot say, or the group is
+ * not connected: the packet itself finds out, and the file stops at once as before. Called with
+ * coreLoopLock held.
+ */
+int Core::groupFileMembers(int groupId) const
+{
+    Tox_Err_Group_Is_Connected connectionError;
+    if (tox_group_is_connected(tox.get(), static_cast<uint32_t>(groupId), &connectionError) < 0) {
+        return 1;
+    }
+    Tox_Err_Group_Peer_Query error;
+    const uint32_t peers = tox_group_peer_count(tox.get(), static_cast<uint32_t>(groupId), &error);
+    if (error != TOX_ERR_GROUP_PEER_QUERY_OK || peers == 0) {
+        return 1;
+    }
+    return static_cast<int>(peers) - 1;
+}
+
+/**
+ * @brief The file stops before its last chunk, and the conversation says it was not sent.
+ * Called with coreLoopLock held.
+ */
+void Core::failGroupFileSend(const QByteArray& fileId, const char* reason)
+{
+    qWarning() << "A file sent into a group stopped at its" << reason;
+    groupFileQueue.remove(fileId);
+    outgoingGroupFiles.remove(fileId);
+    emit groupFileSendFailed(fileId);
 }
 
 /**

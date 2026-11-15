@@ -346,6 +346,16 @@ bool Profile::initCore(const QByteArray& toxsave, Settings& s, bool isNewProfile
         settings.savePersonal();
     });
     core->leaveStoredGroups(settings.getPendingGroupLeaves());
+    // 0.2.56: toxcore saves a group joined by its ID only once it synced; until then the profile
+    // keeps its chat id, and it is joined again now, before the groups load.
+    connect(core.get(), &Core::unsyncedGroupJoinsChanged, this, [this](const QString& stored) {
+        if (isRemoved) {
+            return;
+        }
+        settings.setUnsyncedGroupJoins(stored);
+        settings.savePersonal();
+    });
+    core->rejoinStoredGroups(settings.getUnsyncedGroupJoins());
     // react to avatar changes
     connect(core.get(), &Core::friendAvatarRemoved, this, &Profile::removeAvatar);
     connect(core.get(), &Core::friendAvatarChanged, this, &Profile::setFriendAvatar);
@@ -500,8 +510,13 @@ Profile::~Profile()
     // groups, so that the save below holds none of them; only after it the profile stops keeping
     // their chat ids.
     core->leavePendingGroupsNow();
+    // 0.2.56: our joins by ID that did not sync are read before the save, as the loop of the node
+    // still turns. A group that syncs in between is then in both, and the next start keeps the one
+    // in the save (Core::rejoinStoredGroups); read after the save, it was in neither, and lost.
+    const QString unsyncedGroupJoins = core->getUnsyncedGroupJoins();
     onSaveToxSave();
     settings.setPendingGroupLeaves(core->getPendingGroupLeaves());
+    settings.setUnsyncedGroupJoins(unsyncedGroupJoins);
     settings.savePersonal();
     settings.sync();
     settings.unloadPersonal(*this);

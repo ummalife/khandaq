@@ -121,6 +121,30 @@ struct GroupReach
     bool operator==(const GroupReach& other) const;
 };
 
+/**
+ * Whether a text sent to the group now reaches someone, as toxcore has it at the moment of sending:
+ * connection is tox_group_is_connected of this fork (-1 disconnected, 0 connecting, 1 connected),
+ * peerCount is tox_group_peer_count, which counts you too and is UINT32_MAX when it fails.
+ * tox_group_send_message sends to the members toxcore confirmed, and succeeds with none: what
+ * counts is someone confirmed besides you. Connected alone is not enough: toxcore calls a group
+ * connected at its first sync response, before it confirmed anyone, and keeps it so after every
+ * member timed out; a group just made is connected with its founder alone. Connecting is enough
+ * with members: a founder's group back from the save stays connecting while they reach it, for it
+ * asks nobody for a sync, and the group's page counts it connected then (GroupChatForm). The rule
+ * of iOS (0.2.56).
+ */
+bool groupTakesText(int connection, quint32 peerCount);
+
+/**
+ * Whether a member of a group is reachable now, for the counts of the group's page: peerConnection
+ * is tox_group_peer_get_connection_status (a TOX_CONNECTION value), groupRelays the TCP relays the
+ * groups are connected to (NetworkDiagnostics::groupRelayCount). toxcore says UDP while direct
+ * packets came from the member in the last 16 s (its pings come every 12), and TCP for every
+ * member it has no direct path to, with or without a relay to reach them through: without one, it
+ * has no path to them at all, and what it sends them waits until they time out.
+ */
+bool groupPeerReachable(int peerConnection, int groupRelays);
+
 /** The line under the field of a group: who gets a message sent now. */
 struct GroupHint
 {
@@ -155,9 +179,10 @@ struct GroupHint
     static GroupHint make(const GroupReach& reach, NetworkState self = NetworkState::Direct);
     /**
      * Whether Send waits, for want of anyone to get the message: no connection, nobody else in the
-     * group, or nobody else online. NGC keeps no history, and this client neither keeps group
-     * messages for later nor serves them to members who come online, so a message sent then would
-     * reach nobody (the phones differ here: they keep and sync group history).
+     * group, or nobody else online. NGC keeps no history, and this client serves none to members
+     * who come online, so a message sent then would reach nobody (the phones differ here: they keep
+     * and sync group history). One that gets to toxcore all the same, as the last member leaves,
+     * waits on this device until the group takes it (groupTakesText, GroupMessageDispatcher).
      */
     bool sendWaits() const;
     bool operator==(const GroupHint& other) const;
@@ -191,8 +216,9 @@ bool actionRole(MemberAction action, GroupRole* role);
 
 /**
  * NGC carries at most 1372 bytes in one group message (TOX_GROUP_MAX_MESSAGE_LENGTH) and toxcore
- * refuses a longer one instead of cutting it: the field counts down its last tenth (composeRoom)
- * and Send waits over the limit.
+ * refuses a longer one instead of cutting it. The field of the group counts down its last tenth
+ * (composeRoom) and a longer text goes in parts, cut at this limit (GroupMessageDispatcher); a
+ * private message to a member is one message, so its Send waits over the limit.
  */
 constexpr int groupMessageLimitBytes = 1372;
 

@@ -90,4 +90,12 @@ signals:
     void messageComplete(DispatchedMessageId id);
 
     void messageBroken(DispatchedMessageId id, BrokenMessageReason reason);
+
+    /**
+     * @brief Emitted when a message that waited goes, with the id its chat gave it then, right
+     * before it completes: what the others' edits, deletions and reactions of it point at
+     * @param id Id of the message (messageSent, which had no wireId for it)
+     * @param wireId The id, as Message::wireId holds it
+     */
+    void messageWireIdAssigned(DispatchedMessageId id, const QByteArray& wireId);
 };

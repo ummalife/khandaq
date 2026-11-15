@@ -100,6 +100,12 @@ public:
                                   const ChatLogMessage& message);
     void insertFileAtIdx(ChatLogIdx idx, const ToxPk& sender, QString senderName, const ChatLogFile& file);
     void insertSystemMessageAtIdx(ChatLogIdx idx, SystemMessage message);
+    /**
+     * Gives a message of ours that waited the id its group gave it once it went
+     * (IMessageDispatcher::messageWireIdAssigned).
+     * @return The message, or nullptr when the log does not hold it
+     */
+    const Message* onMessageWireIdAssigned(DispatchedMessageId id, const QByteArray& wireId);
 
 public slots:
     void onMessageReceived(const ToxPk& sender, const Message& message);

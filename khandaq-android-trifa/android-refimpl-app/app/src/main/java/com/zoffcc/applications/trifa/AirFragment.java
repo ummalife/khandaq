@@ -1339,6 +1339,10 @@ public class AirFragment extends Fragment
     /**
      * A sideways swipe on the list moves to the neighbouring filter, as on iOS. Never while
      * searching, never past either end, and only when the gesture is clearly horizontal.
+     * KHANDAQ (0.2.56, QA 15.11): it also opened the chat it started on. The listener only watched, so the row under
+     * the finger had the whole gesture, and a row as wide as the list keeps its tap through a sideways move. Once a
+     * move is clearly sideways the listener now takes the gesture: the row gets a cancel (no tap, no long press) and
+     * the rest of the gesture comes to onTouchEvent. Taps, long presses and vertical scrolling never get that far.
      */
     private final class FilterSwipe implements RecyclerView.OnItemTouchListener
     {
@@ -1348,6 +1352,8 @@ public class AirFragment extends Fragment
         private VelocityTracker tracker;
         private float downX;
         private float downY;
+        // KHANDAQ (0.2.56, QA 15.11): this gesture is a filter swipe, taken from the list and its row
+        private boolean claimed;
 
         FilterSwipe(final Context context)
         {
@@ -1359,9 +1365,17 @@ public class AirFragment extends Fragment
         @Override
         public boolean onInterceptTouchEvent(@NonNull final RecyclerView view, @NonNull final MotionEvent event)
         {
+            track(view, event);
+            // Taps, long presses and scrolling stay with the list; a sideways swipe is taken from it.
+            return claimed;
+        }
+
+        private void track(final RecyclerView view, final MotionEvent event)
+        {
             switch (event.getActionMasked())
             {
                 case MotionEvent.ACTION_DOWN:
+                    claimed = false;
                     downX = event.getX();
                     downY = event.getY();
                     if (tracker != null)
@@ -1376,9 +1390,16 @@ public class AirFragment extends Fragment
                     {
                         tracker.addMovement(event);
                     }
+                    // a list already scrolling keeps the gesture
+                    if (!claimed && !searching && view.getScrollState() != RecyclerView.SCROLL_STATE_DRAGGING
+                        && AirModel.isSidewaysSwipe(event.getX() - downX, event.getY() - downY, touchSlop))
+                    {
+                        claimed = true;
+                    }
                     break;
                 case MotionEvent.ACTION_UP:
-                    if (tracker != null)
+                    // a gesture the list kept may have been a tap on a row: never a filter change as well
+                    if (tracker != null && claimed)
                     {
                         tracker.addMovement(event);
                         tracker.computeCurrentVelocity(1000);
@@ -1392,18 +1413,16 @@ public class AirFragment extends Fragment
                 default:
                     break;
             }
-            // Never take the gesture: taps, long presses and scrolling stay with the list.
-            return false;
         }
 
         private void finish(final float dx, final float dy, final float vx)
         {
-            if (searching || Math.abs(dx) < touchSlop)
+            if (searching || !AirModel.isSidewaysSwipe(dx, dy, touchSlop))
             {
                 return;
             }
             final boolean far = Math.abs(dx) >= minDistance || Math.abs(vx) >= minVelocity;
-            if (!far || Math.abs(dx) <= Math.abs(dy) * 1.5f)
+            if (!far)
             {
                 return;
             }
@@ -1428,6 +1447,8 @@ public class AirFragment extends Fragment
         @Override
         public void onTouchEvent(@NonNull final RecyclerView view, @NonNull final MotionEvent event)
         {
+            // the rest of a gesture taken in onInterceptTouchEvent
+            track(view, event);
         }
 
         @Override

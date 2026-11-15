@@ -286,23 +286,24 @@ public class GroupMessageListFragment extends Fragment
 
         // KHANDAQ (#209): swipe-to-reply on every group row type.
         final GroupMessagelistAdapter swipe_adapter = adapter;
-        new androidx.recyclerview.widget.ItemTouchHelper(new ReplySwipeCallback(getActivity(),
+        ReplySwipeCallback.attach(getActivity(), listingsView,
                 new ReplySwipeCallback.Trigger()
                 {
                     @Override
-                    public boolean isSwipeable(int position)
+                    public Object messageKeyAt(int position)
                     {
                         com.zoffcc.applications.sorm.GroupMessage m = swipe_adapter.getMessageAtPosition(position);
                         if (m == null)
                         {
-                            return false;
+                            return null;
                         }
                         // KHANDAQ (#T3): swipe-to-reply now goes through the RecyclerView-level ItemTouchHelper
                         // for EVERY row type, including incoming text. The old per-ViewHolder daimajia swipe on
                         // incoming-text rows was unreliable on first entry into a group (worked only after
                         // reopening the chat); the daimajia listener on those rows is disabled to avoid a double
                         // gesture. One consistent mechanism = reliable from the first open.
-                        return true;
+                        // KHANDAQ (0.2.56, QA 15.11): by its key a swipe keeps to the message while others arrive.
+                        return ReplySwipeCallback.messageKey(m.id, m);
                     }
 
                     @Override
@@ -314,7 +315,7 @@ public class GroupMessageListFragment extends Fragment
                             ChatReplyPreviewController.startReplyToGroupMessage(getActivity(), m);
                         }
                     }
-                })).attachToRecyclerView(listingsView);
+                });
 
 
         // a = new MessagelistArrayAdapter(context, data_values);

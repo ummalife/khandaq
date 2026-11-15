@@ -326,7 +326,8 @@ signals:
     /**
      * The group of the file has nobody to send it to (waiting), and nothing of it goes; or has
      * again, and the file goes from its start. After Air::GroupFileQueue::aloneLimitMs of
-     * waiting it fails.
+     * waiting it fails. Not waiting is said too of a file that starts again for the members that
+     * came (Air::GroupFileQueue::restartMs).
      */
     void groupFileSendWaiting(const QByteArray& fileId, bool waiting);
     /** The file stopped before its last chunk: the group is gone, or refused it, or the file. */

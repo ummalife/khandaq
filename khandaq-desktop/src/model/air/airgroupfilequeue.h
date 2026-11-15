@@ -94,6 +94,16 @@ public:
      */
     static constexpr qint64 urgentMs = 25 * 1000;
     static constexpr qint64 windowMs = 15 * 1000;
+    /**
+     * Members that come once files began make their chunks dearer than the window counted them,
+     * and six files that began at thirty members each go round in more than a minute at a hundred
+     * and fifty. While the chunks of the files that go cost the pace at most restartMs together,
+     * a file still waits at most urgentMs and the chunks of the others, 55 seconds, and they go
+     * on: members come and go, and a file that starts again sends again all that it sent. Past
+     * it, the files that began last start again from their BEGIN (fitGoingFiles), which waits
+     * for room as a new file does. One file always goes.
+     */
+    static constexpr qint64 restartMs = 2 * windowMs;
 
     /**
      * How many members a packet into the group goes to now (one until it is said), at nowMs (a
@@ -103,6 +113,11 @@ public:
      * none of it. A receiver that stayed keeps what it has, as its sender's BEGIN never wipes it.
      */
     void setMembers(int group, int members, qint64 nowMs);
+    /**
+     * After the members were said (setMembers): the files that began last start again from their
+     * BEGIN while the chunks of the files that go cost the pace more than restartMs. Returns them.
+     */
+    QList<QByteArray> fitGoingFiles();
     /** Whether the group has nobody to send to (setMembers). */
     bool waits(int group) const;
     /** The files of the groups that have had nobody to send to for aloneLimitMs. */
@@ -140,6 +155,8 @@ private:
         int next = -1;
         /** When its last packet went. */
         qint64 lastMs = 0;
+        /** The order in which its BEGIN went among those of all files: the last began last. */
+        qint64 begun = 0;
     };
 
     int indexOf(const QByteArray& fileId) const;
@@ -162,6 +179,8 @@ private:
     QHash<int, int> members;
     /** Since when each of those groups that waits has had nobody to send to. */
     QHash<int, qint64> aloneSince;
+    /** How many BEGINs went (File::begun). */
+    qint64 begins = 0;
 };
 
 // The pace of those packets. toxcore tells nothing of how full a member's send array is: a packet

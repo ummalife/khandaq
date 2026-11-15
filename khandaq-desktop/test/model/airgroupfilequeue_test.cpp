@@ -90,6 +90,8 @@ private slots:
     void aFileThatWaitedForRoomBeginsLevelWithTheOthers();
     void aFileThatCostsMoreThanTheWindowGoesAlone();
     void theChunksOfAFileComeWithinTheMinuteOfAReceiver();
+    void theFilesThatBeganLastStartAgainWhenMembersCome();
+    void theChunksStayWithinTheMinuteAsMembersCome();
     void aFileThatFailsLetsTheNextOneGo();
     void aPacketThatIsNotTheNextOneChangesNothing();
     void theBytesSentGrowWithTheChunks();
@@ -421,6 +423,105 @@ void TestAirGroupFileQueue::theChunksOfAFileComeWithinTheMinuteOfAReceiver()
         QVERIFY2(done.value(fileId) <= 5 * 60 * 1000,
                  qPrintable(QString::number(done.value(fileId))));
     }
+}
+
+/**
+ * 0.2.56: members that come once files began make their chunks dearer than the window counted
+ * them. While the files still fit restartMs they go on; past it the files that began last start
+ * again from their BEGIN, and wait for room as a new file does. One file always goes.
+ */
+void TestAirGroupFileQueue::theFilesThatBeganLastStartAgainWhenMembersCome()
+{
+    const qint64 room = UploadPace::bytesPerSecond * GroupFileQueue::windowMs / 1000;
+    const qint64 limit = UploadPace::bytesPerSecond * GroupFileQueue::restartMs / 1000;
+    QVERIFY(6 * chunkTo(30) <= room);
+    QVERIFY(5 * chunkTo(30) + chunkTo(150) <= limit);
+    QVERIFY(2 * chunkTo(150) <= limit);
+    QVERIFY(3 * chunkTo(150) > limit);
+
+    GroupFileQueue queue;
+    QList<QByteArray> ids;
+    for (int group = 1; group <= 6; ++group) {
+        ids.append(QByteArray(32, static_cast<char>('a' + group - 1)));
+        queue.add(group, ids.last(), 10 * payload);
+        queue.setMembers(group, 30, 0);
+    }
+    QCOMPARE(drain(queue, 7), (QStringList{"1:a:begin", "2:b:begin", "3:c:begin", "4:d:begin",
+                                           "5:e:begin", "6:f:begin", "1:a:0"}));
+    QVERIFY(queue.fitGoingFiles().isEmpty());
+
+    // One group of a hundred and fifty among them: they still fit.
+    queue.setMembers(1, 150, 0);
+    QVERIFY(queue.fitGoingFiles().isEmpty());
+
+    // All six: the four that began last start again, the last first.
+    for (int group = 2; group <= 6; ++group) {
+        queue.setMembers(group, 150, 0);
+    }
+    QCOMPARE(queue.fitGoingFiles(), (QList<QByteArray>{ids[5], ids[4], ids[3], ids[2]}));
+    QVERIFY(queue.fitGoingFiles().isEmpty());
+    QCOMPARE(queue.bytesSent(ids[0]), payload);
+    QCOMPARE(queue.bytesSent(ids[5]), qint64{0});
+    // The two go on alone; the others begin again from their BEGIN once there is room, at this
+    // size one at a time.
+    QStringList going;
+    for (int chunk = 0; chunk < 10; ++chunk) {
+        going << QStringLiteral("2:b:%1").arg(chunk);
+        if (chunk < 9) {
+            going << QStringLiteral("1:a:%1").arg(chunk + 1);
+        }
+    }
+    going << QStringLiteral("3:c:begin") << QStringLiteral("3:c:0") << QStringLiteral("3:c:1");
+    QCOMPARE(drain(queue, going.size()), going);
+
+    // A single file goes, whatever it costs.
+    GroupFileQueue alone;
+    alone.add(1, fileA, 2 * payload);
+    alone.setMembers(1, 2, 0);
+    QCOMPARE(drain(alone, 1), QStringList{"1:a:begin"});
+    alone.setMembers(1, 1000, 0);
+    QVERIFY(alone.fitGoingFiles().isEmpty());
+    QCOMPARE(step(alone, 0), QStringLiteral("1:a:0"));
+}
+
+/**
+ * Six groups of thirty begin a file each, and a minute later each has a hundred and fifty
+ * members online. At the pace, a chunk to each of them takes more than a minute: without the
+ * restart a receiver of each would drop the file.
+ */
+void TestAirGroupFileQueue::theChunksStayWithinTheMinuteAsMembersCome()
+{
+    GroupFileQueue queue;
+    UploadPace pace;
+    for (int group = 0; group < 6; ++group) {
+        queue.add(group, QByteArray(32, static_cast<char>('A' + group)), 20 * payload);
+    }
+    QHash<QByteArray, qint64> last;
+    QSet<QByteArray> restarted;
+    qint64 longest = 0;
+    for (qint64 nowMs = 0; !queue.isEmpty() && nowMs < 60 * 60 * 1000; nowMs += 10) {
+        // What the loop of the node does at each turn (Core::sendGroupFileChunks).
+        for (int group = 0; group < 6; ++group) {
+            queue.setMembers(group, nowMs < 60 * 1000 ? 30 : 150, nowMs);
+        }
+        for (const QByteArray& fileId : queue.fitGoingFiles()) {
+            restarted.insert(fileId);
+        }
+        GroupFileQueue::Packet packet;
+        while (queue.next(&packet, nowMs) && pace.ready(nowMs)) {
+            pace.spend(queue.cost(packet));
+            if (packet.chunk >= 0) {
+                longest = qMax(longest, nowMs - last.value(packet.fileId));
+            }
+            last.insert(packet.fileId, nowMs);
+            queue.sent(packet, nowMs);
+        }
+    }
+    QVERIFY(queue.isEmpty());
+    QCOMPARE(restarted.size(), 4);
+    // A chunk follows the packet of its file before it within urgentMs and restartMs.
+    QVERIFY2(longest <= GroupFileQueue::urgentMs + GroupFileQueue::restartMs,
+             qPrintable(QString::number(longest)));
 }
 
 void TestAirGroupFileQueue::aFileThatFailsLetsTheNextOneGo()

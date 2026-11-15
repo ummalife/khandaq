@@ -3405,6 +3405,11 @@ void Core::sendGroupFileChunks()
     for (const int group : groupFileQueue.groups()) {
         groupFileQueue.setMembers(group, groupFileMembers(group), nowMs);
     }
+    // Members came that the files going no longer fit the pace with: those that began last start
+    // again from their BEGIN, and their entries with them.
+    for (const QByteArray& fileId : groupFileQueue.fitGoingFiles()) {
+        emit groupFileSendWaiting(fileId, false);
+    }
     for (const QByteArray& fileId : groupFileQueue.waitedTooLong(nowMs)) {
         failGroupFileSend(fileId, "wait for a member");
     }

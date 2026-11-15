@@ -27,6 +27,7 @@ namespace Air {
 constexpr qint64 GroupFileQueue::aloneLimitMs;
 constexpr qint64 GroupFileQueue::urgentMs;
 constexpr qint64 GroupFileQueue::windowMs;
+constexpr qint64 GroupFileQueue::restartMs;
 constexpr qint64 UploadPace::bytesPerSecond;
 constexpr qint64 UploadPace::burstMs;
 constexpr qint64 UploadPace::burstBytes;
@@ -96,6 +97,34 @@ void GroupFileQueue::setMembers(int group, int members_, qint64 nowMs)
     }
     // Level with the groups that went on meanwhile, not ahead of them by what they sent.
     costs[group] = qMax(costs.value(group), leastCost(group));
+}
+
+QList<QByteArray> GroupFileQueue::fitGoingFiles()
+{
+    const qint64 limit = UploadPace::bytesPerSecond * restartMs / 1000;
+    QList<QByteArray> restarted;
+    for (;;) {
+        qint64 going = 0;
+        int last = -1;
+        int count = 0;
+        for (const int group : turns) {
+            if (!goes(group)) {
+                continue;
+            }
+            const int index = firstOf(group);
+            going += chunkCost(group);
+            ++count;
+            if (last < 0 || files.at(index).begun > files.at(last).begun) {
+                last = index;
+            }
+        }
+        if (going <= limit || count <= 1) {
+            return restarted;
+        }
+        // As for a group whose member is back (setMembers): it goes again from its BEGIN.
+        files[last].next = -1;
+        restarted.append(files.at(last).fileId);
+    }
 }
 
 bool GroupFileQueue::waits(int group) const
@@ -188,6 +217,7 @@ bool GroupFileQueue::sent(const Packet& packet, qint64 nowMs)
         // A file begins level with the files that go, not behind them by the time it waited for
         // room among them (next) or for a member (setMembers): it would take that time from them.
         costs[packet.group] = qMax(costs.value(packet.group), leastGoingCost(packet.group));
+        file.begun = ++begins;
     }
     costs[packet.group] += cost(packet);
     file.lastMs = nowMs;

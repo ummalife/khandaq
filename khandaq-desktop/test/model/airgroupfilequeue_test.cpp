@@ -98,6 +98,7 @@ private slots:
     void thePaceStartsWithABurstAndThenKeepsItsRate();
     void aLongPauseGivesNoMoreThanTheBurst();
     void aCostlyPacketIsPaidForByTheWaitAfterIt();
+    void thePaceSaysWhenTheNextPacketMayGo();
     void aPacketCostsItsBytesForEachMember();
 };
 
@@ -633,6 +634,36 @@ void TestAirGroupFileQueue::aCostlyPacketIsPaidForByTheWaitAfterIt()
     const qint64 waitMs = (cost - UploadPace::burstBytes) * 1000 / UploadPace::bytesPerSecond;
     QVERIFY(!pace.ready(waitMs - 10));
     QVERIFY(pace.ready(waitMs + 10));
+}
+
+/**
+ * 0.2.56: the loop of the node (Core::process) sleeps until the pace lets the next packet go,
+ * instead of turning every groupFileTurnMs to find it may not.
+ */
+void TestAirGroupFileQueue::thePaceSaysWhenTheNextPacketMayGo()
+{
+    UploadPace pace;
+    QCOMPARE(pace.msUntilReady(1000), qint64{0});
+    QVERIFY(pace.ready(1000));
+    QCOMPARE(pace.msUntilReady(1000), qint64{0});
+
+    // No credit left at all: the next millisecond brings some.
+    pace.spend(UploadPace::burstBytes);
+    QCOMPARE(pace.msUntilReady(1000), qint64{1});
+
+    // A chunk to a group of 100 on top: some seven seconds of the rate.
+    pace.spend(UploadPace::cost(chunkPacket, 100));
+    const qint64 waitMs = pace.msUntilReady(1000);
+    const qint64 paidMs = UploadPace::cost(chunkPacket, 100) * 1000 / UploadPace::bytesPerSecond;
+    QVERIFY2(waitMs >= paidMs && waitMs <= paidMs + 1, qPrintable(QString::number(waitMs)));
+    // ready() says yes then, and not a millisecond sooner.
+    UploadPace sooner = pace;
+    QVERIFY(!sooner.ready(1000 + waitMs - 1));
+    UploadPace then = pace;
+    QVERIFY(then.ready(1000 + waitMs));
+    // Less of the wait is left later on, and none once it is over.
+    QCOMPARE(pace.msUntilReady(1000 + waitMs / 2), waitMs - waitMs / 2);
+    QCOMPARE(pace.msUntilReady(1000 + waitMs + 50), qint64{0});
 }
 
 void TestAirGroupFileQueue::aPacketCostsItsBytesForEachMember()

@@ -210,6 +210,8 @@ public:
     bool ready(qint64 nowMs);
     /** A packet went that cost this much (cost()). */
     void spend(qint64 bytes);
+    /** How long after nowMs ready() first says a packet may go: 0 when it may at nowMs. */
+    qint64 msUntilReady(qint64 nowMs) const;
 
 private:
     qint64 credit = 0;

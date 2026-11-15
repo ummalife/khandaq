@@ -448,10 +448,13 @@ void Core::process()
 
     unsigned sleeptime =
         qMin(tox_iteration_interval(tox.get()), getCoreFile()->corefileIterationInterval());
-    // Not while every group with a file waits for a member: nothing of them can go.
+    // Not while every group with a file waits for a member: nothing of them can go. While the
+    // pace holds the next packet back, the loop sleeps until it may go, or as toxcore asks.
     Air::GroupFileQueue::Packet nextGroupFilePacket;
-    if (groupFileQueue.next(&nextGroupFilePacket, monotonicMs())) {
-        sleeptime = qMin(sleeptime, groupFileTurnMs);
+    const qint64 nowMs = monotonicMs();
+    if (groupFileQueue.next(&nextGroupFilePacket, nowMs)) {
+        const qint64 turnMs = qMax<qint64>(groupFileTurnMs, groupFilePace.msUntilReady(nowMs));
+        sleeptime = static_cast<unsigned>(qMin<qint64>(sleeptime, turnMs));
     }
     toxTimer->start(sleeptime);
 }

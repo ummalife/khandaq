@@ -364,4 +364,15 @@ void UploadPace::spend(qint64 bytes)
     credit -= bytes;
 }
 
+qint64 UploadPace::msUntilReady(qint64 nowMs) const
+{
+    if (lastMs < 0 || credit > 0) {
+        return 0;
+    }
+    // The shortest pause whose share of the rate, rounded down as ready() rounds it, makes the
+    // credit positive.
+    const qint64 pauseMs = ((1 - credit) * 1000 + bytesPerSecond - 1) / bytesPerSecond;
+    return qMax(qint64{0}, lastMs + pauseMs - nowMs);
+}
+
 } // namespace Air

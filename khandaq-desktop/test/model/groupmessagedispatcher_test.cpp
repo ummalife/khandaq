@@ -30,6 +30,7 @@
 #include "mock/mockcoreidhandler.h"
 #include "mock/mockgroupquery.h"
 
+#include <QElapsedTimer>
 #include <QObject>
 #include <QtTest/QtTest>
 
@@ -165,6 +166,8 @@ private slots:
     void aTextRightAfterTheFirstMemberCameWaitsForTheGrace();
     void whatWaitsGoesNoMoreOnceTheGroupGoes();
     void whatWaitsFailsWhenTheGroupIsLeft();
+    void aMemberWhoJoinsInTheGraceHasItInFull();
+    void aStreamOfJoinsDoesNotHoldWhatWaitsForGood();
 
     void onMessageSent(DispatchedMessageId id, Message message)
     {
@@ -668,6 +671,61 @@ void TestGroupMessageDispatcher::whatWaitsFailsWhenTheGroupIsLeft()
     QTest::qWait(testGraceMs * 4);
     QVERIFY(messageSender->sentTexts.empty());
     QCOMPARE(messageSender->numSentActions, size_t{0});
+}
+
+/**
+ * @brief 0.2.56: a member who joins in the grace of another has it in full too: what waits reaches
+ * them a grace after they joined, not as the grace of the first one ends.
+ */
+void TestGroupMessageDispatcher::aMemberWhoJoinsInTheGraceHasItInFull()
+{
+    // Long enough for the second member to join in it on a busy machine.
+    constexpr int graceMs = 300;
+    GroupMessageDispatcher dispatcher(*g, *messageProcessor, *coreIdHandler, *messageSender,
+                                      *groupSettings, graceMs);
+    QElapsedTimer sinceSecond;
+    sinceSecond.start();
+    qint64 wentAfterSecondMs = -1;
+    connect(&dispatcher, &GroupMessageDispatcher::messageComplete, this,
+            [&sinceSecond, &wentAfterSecondMs] { wentAfterSecondMs = sinceSecond.elapsed(); });
+    groupQuery->setAsEmptyGroup();
+    g->regeneratePeerList();
+    messageSender->ready = false;
+    dispatcher.sendMessage(false, "Hello");
+
+    memberJoins(*groupQuery, *g, *messageSender);
+    QTest::qWait(graceMs / 3);
+    QVERIFY(messageSender->sentTexts.empty());
+    groupQuery->setOthers(2);
+    g->regeneratePeerList();
+    sinceSecond.start();
+
+    QTRY_COMPARE_WITH_TIMEOUT(messageSender->sentTexts, texts({"Hello"}), waitMs);
+    // A coarse QTimer may fire up to 5 % early.
+    QVERIFY2(wentAfterSecondMs >= graceMs * 9 / 10, qPrintable(QString::number(wentAfterSecondMs)));
+}
+
+/**
+ * @brief Members who keep joining put what waits off a few graces at most (joinGraceLimit).
+ */
+void TestGroupMessageDispatcher::aStreamOfJoinsDoesNotHoldWhatWaitsForGood()
+{
+    groupQuery->setAsEmptyGroup();
+    g->regeneratePeerList();
+    messageSender->ready = false;
+    groupMessageDispatcher->sendMessage(false, "Hello");
+    memberJoins(*groupQuery, *g, *messageSender);
+
+    QElapsedTimer since;
+    since.start();
+    for (uint32_t others = 2; messageSender->sentTexts.empty() && since.elapsed() < waitMs;
+         ++others) {
+        QTest::qWait(testGraceMs / 2);
+        groupQuery->setOthers(others);
+        g->regeneratePeerList();
+    }
+    QCOMPARE(messageSender->sentTexts, texts({"Hello"}));
+    QVERIFY(outgoingMessages.empty());
 }
 
 // Cannot be guiless due to a settings instance in GroupMessageDispatcher

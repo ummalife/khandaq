@@ -24,6 +24,7 @@
 #include <QtCore>
 
 constexpr int GroupMessageDispatcher::joinGraceMs;
+constexpr int GroupMessageDispatcher::joinGraceLimit;
 
 GroupMessageDispatcher::GroupMessageDispatcher(Group& g_, MessageProcessor processor_,
                                                ICoreIdHandler& idHandler_,
@@ -40,14 +41,24 @@ GroupMessageDispatcher::GroupMessageDispatcher(Group& g_, MessageProcessor proce
     graceTimer.setInterval(graceMs);
     connect(&graceTimer, &QTimer::timeout, this, &GroupMessageDispatcher::sendWaiting);
     // A member who joins, the group that connects: what waits may go now. The texts give the
-    // member the grace first; members who join meanwhile do not put them off again. The first
-    // member who comes into a group we were alone in has it from the texts written then too.
+    // member the grace first, and each member who joins in it has it in full too, up to
+    // joinGraceLimit graces in all. The first member who comes into a group we were alone in has
+    // it from the texts written then too.
     someoneElse = group.getPeersCount() > 1;
+    // Group::regeneratePeerList tells of the members who joined before it tells of the list.
+    connect(&group, &Group::userJoined, this, [this] {
+        // One who joins later than this would put the grace off past joinGraceLimit graces.
+        const int putOffForMs = graceTimer.interval() * (joinGraceLimit - 1);
+        if (graceTimer.isActive() && graceBegan.elapsed() < putOffForMs) {
+            graceTimer.start();
+        }
+    });
     connect(&group, &Group::peerListRefreshed, this, [this] {
         const bool came = !someoneElse && group.getPeersCount() > 1;
         someoneElse = group.getPeersCount() > 1;
         if ((came || !waiting.empty()) && !graceTimer.isActive()) {
             graceTimer.start();
+            graceBegan.start();
         }
     });
 }

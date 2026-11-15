@@ -21,6 +21,7 @@
 #include "filetransferwidget.h"
 
 #include "src/core/corefile.h"
+#include "src/model/air/airpreferences.h"
 #include "src/persistence/settings.h"
 #include "src/widget/air/airmediaparts.h"
 #include "src/widget/air/airoverlay.h"
@@ -45,6 +46,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QStandardPaths>
 #include <QStyle>
 #include <QTimer>
 #include <QUrl>
@@ -572,7 +574,13 @@ void FileTransferWidget::acceptVoiceNote(bool play)
 
 void FileTransferWidget::acceptAsked()
 {
-    askWhereToSave(settings.getGlobalAutoAcceptDir() + QLatin1Char('/') + fileInfo.fileName);
+    // KHANDAQ (0.2.57): a folder of the settings that is empty or gone no longer opens the question
+    // at the root of the disk, where macOS lets nothing be written.
+    const QString folder = Air::saveQuestionFolder(
+        settings.getGlobalAutoAcceptDir(),
+        QStandardPaths::writableLocation(QStandardPaths::DownloadLocation), QDir::homePath(),
+        [](const QString& candidate) { return QFileInfo(candidate).isDir(); });
+    askWhereToSave(QDir(folder).filePath(fileInfo.fileName));
 }
 
 void FileTransferWidget::askWhereToSave(const QString& suggested)

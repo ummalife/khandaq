@@ -121,6 +121,13 @@ bool startsRun(const RunKey& entry, const RunKey* previous);
 /** The first word of a name: the author label and the hints say "Amina", not "Amina Safina". */
 QString shortName(const QString& name);
 
+/**
+ * The author over a run of another's entries: in a chat with a person the first word of the name
+ * (shortName), as the hints say it; elsewhere, in a group, all of it, which tells apart members
+ * whose names begin alike.
+ */
+QString authorName(const QString& name, bool personChat);
+
 /** The day mark above the first entry of a day. */
 enum class DayMarkKind
 {

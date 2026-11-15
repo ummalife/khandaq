@@ -1637,7 +1637,7 @@ ChatMessage::AirLook ChatWidget::lookOf(const ChatLogItem& item) const
         // Notes are all yours: a screen reader says no author over them either.
         look.spokenWho = notesChat ? QString() : look.who;
     } else {
-        look.who = Air::shortName(item.getDisplayName());
+        look.who = Air::authorName(item.getDisplayName(), personChat);
         look.tone = Air::toneIndex(item.getSender().toString());
         look.spokenWho = item.getDisplayName();
     }

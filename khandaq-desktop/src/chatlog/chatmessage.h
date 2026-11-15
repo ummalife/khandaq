@@ -63,7 +63,10 @@ public:
     /** Who wrote an entry of the transcript, and the state of our own messages. */
     struct AirLook
     {
-        /** "You" for our own messages, the first word of the author's name otherwise. */
+        /**
+         * "You" for our own messages; the author's name otherwise, its first word in a chat with a
+         * person and all of it in a group (Air::authorName).
+         */
         QString who;
         /** The author's tone; -1 signs the entry in ink-2, as our own messages are signed. */
         int tone = -1;

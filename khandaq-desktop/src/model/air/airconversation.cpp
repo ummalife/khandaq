@@ -167,6 +167,11 @@ QString shortName(const QString& name)
     return trimmed.left(end);
 }
 
+QString authorName(const QString& name, bool personChat)
+{
+    return personChat ? shortName(name) : name.trimmed();
+}
+
 DayMarkKind dayMarkKind(const QDate& date, const QDate& today)
 {
     if (date == today) {

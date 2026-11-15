@@ -155,12 +155,6 @@
         <item quantity="many">на %1$d байт больше предела: так не сохранится</item>
         <item quantity="other">на %1$d байта больше предела: так не сохранится</item>
     </plurals>
-    <plurals name="air_compose_bytes_over_group">
-        <item quantity="one">на %1$d байт больше предела: сократите, чтобы отправить</item>
-        <item quantity="few">на %1$d байта больше предела: сократите, чтобы отправить</item>
-        <item quantity="many">на %1$d байт больше предела: сократите, чтобы отправить</item>
-        <item quantity="other">на %1$d байта больше предела: сократите, чтобы отправить</item>
-    </plurals>
     <string name="air_compose_send">Отправить</string>
     <string name="air_compose_voice">Голосовое сообщение: удерживайте, чтобы записать</string>
     <string name="air_compose_attach">Прикрепить файл</string>

@@ -137,9 +137,6 @@
     <plurals name="air_compose_bytes_over_edit">
         <item quantity="other">超出上限 %1$d 字节：无法保存</item>
     </plurals>
-    <plurals name="air_compose_bytes_over_group">
-        <item quantity="other">超出上限 %1$d 字节：缩短后才能发送</item>
-    </plurals>
     <string name="air_compose_send">发送</string>
     <string name="air_compose_voice">语音消息：按住录音</string>
     <string name="air_compose_attach">附加文件</string>

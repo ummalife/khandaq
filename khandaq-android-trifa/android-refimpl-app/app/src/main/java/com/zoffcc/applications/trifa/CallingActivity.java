@@ -23,7 +23,6 @@ import org.khandaq.messenger.BuildConfig;
 import org.khandaq.messenger.R;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.pm.PackageManager;
@@ -73,6 +72,7 @@ import com.mikepenz.iconics.IconicsDrawable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -491,6 +491,15 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         }
 
         super.onCreate(savedInstanceState);
+        // Back does not close the call screen. KHANDAQ (0.2.56): through the dispatcher, as Android 16 no
+        // longer calls onBackPressed for an app that targets it.
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true)
+        {
+            @Override
+            public void handleOnBackPressed()
+            {
+            }
+        });
 
         // KHANDAQ (redesign, stage 3b): rebuilt by the system (a theme change) after the call ended, for
         // instance under the microphone explanation: there is no call to show, so the screen goes.
@@ -2414,13 +2423,6 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         {
             a.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
         }
-    }
-
-    @SuppressLint("MissingSuperCall")
-    @Override
-    public void onBackPressed()
-    {
-        // dont let the user use the back button to close the activity
     }
 
     @Override

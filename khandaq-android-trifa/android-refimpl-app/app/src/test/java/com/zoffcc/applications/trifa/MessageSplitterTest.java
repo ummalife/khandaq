@@ -219,6 +219,37 @@ public class MessageSplitterTest
                      MessageSplitter.split(repeat("h", 1400) + " tail", 1400, LIMIT));
     }
 
+    /**
+     * KHANDAQ (0.2.56): a waiting text one message cannot carry went, once its friend was online but could
+     * not take chunks right then, as one message cut at the limit. It now goes in parts, and its reply
+     * header stays in the first one as when the text was new.
+     */
+    @Test
+    public void a_waiting_text_goes_in_parts_with_its_reply_header_in_the_first()
+    {
+        final String header = "[KQ|7|ABCDEF12|1731370000000|Khandaq Demo]\nHello\n[KQ/end]\n";
+        final String body = repeat("ответ ", 400).trim();
+        final List<String> parts = MessageSplitter.splitWaitingText(header + body);
+        assertEquals(MessageSplitter.split(header + body, header.length(), LIMIT), parts);
+        assertTrue(parts.size() >= 4);
+        assertTrue(parts.get(0).startsWith(header));
+        assertEquals("Hello", MessageReplyHelper.parse(parts.get(0)).reply.previewText);
+        final List<String> bodies = new ArrayList<>(parts);
+        bodies.set(0, parts.get(0).substring(header.length()));
+        assertEquals(body, String.join(" ", bodies));
+        for (final String part : parts)
+        {
+            assertFits(part);
+        }
+
+        // Plain text is cut as a new one is, and a text that fits stays one message, as it is.
+        final String plain = repeat("x", 3000);
+        assertEquals(MessageSplitter.split(plain, 0, LIMIT), MessageSplitter.splitWaitingText(plain));
+        assertEquals(Collections.singletonList(header + "short"), MessageSplitter.splitWaitingText(header + "short"));
+        assertTrue(MessageSplitter.splitWaitingText("").isEmpty());
+        assertTrue(MessageSplitter.splitWaitingText(null).isEmpty());
+    }
+
     @Test
     public void the_parts_leave_in_order_and_each_finds_its_own_wake_push()
     {
@@ -227,6 +258,43 @@ public class MessageSplitterTest
         // update_message_in_db_sent_push_set takes the earliest row from sent time minus this.
         assertTrue(MessageSplitter.PART_GAP_MS > TRIFAGlobals.PUSH_URL_TRIGGER_GET_MESSAGE_FOR_delta_ms_prev);
         assertEquals(1000L + 9 * MessageSplitter.PART_GAP_MS, MessageSplitter.partSentTimestamp(1000L, 9));
+    }
+
+    /**
+     * KHANDAQ (0.2.56): a part goes stamped with the whole seconds of its sent time, and the iPhone sorts by them.
+     * Parts a tenth of a second apart shared a stamp, up to ten of them, and showed in any order there.
+     */
+    @Test
+    public void each_part_is_stamped_a_second_after_the_one_before()
+    {
+        for (long first = 1_731_600_000_000L; first < 1_731_600_002_000L; first += 7L)
+        {
+            for (int i = 1; i < 60; i++)
+            {
+                assertEquals("first=" + first + " part " + i, MessageSplitter.partSentTimestamp(first, i - 1) / 1000L + 1L,
+                             MessageSplitter.partSentTimestamp(first, i) / 1000L);
+            }
+        }
+    }
+
+    @Test
+    public void only_the_last_part_of_a_text_wakes_a_friend_who_is_offline()
+    {
+        // A text of its own wakes as it always did.
+        assertTrue(MessageSplitter.partWakes(0, 1));
+        assertFalse(MessageSplitter.partWakes(0, 2));
+        assertTrue(MessageSplitter.partWakes(1, 2));
+        // 150 parts once asked the relay 300 times at once; it takes 120 a minute from one address.
+        int wakes = 0;
+        for (int i = 0; i < 150; i++)
+        {
+            if (MessageSplitter.partWakes(i, 150))
+            {
+                wakes++;
+                assertEquals(149, i);
+            }
+        }
+        assertEquals(1, wakes);
     }
 
     /**

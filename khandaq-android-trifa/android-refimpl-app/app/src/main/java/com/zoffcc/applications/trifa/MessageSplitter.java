@@ -28,8 +28,11 @@ final class MessageSplitter
      * window that reaches PUSH_URL_TRIGGER_GET_MESSAGE_FOR_delta_ms_prev back and takes the earliest row
      * (update_message_in_db_sent_push_set). Parts a millisecond apart would all count their pushes on
      * the first part, and resend_push_for_v3_messages would wake the friend for the others every 5 s.
+     * KHANDAQ (0.2.56): a second, not a tenth of one. Each send and resend stamps a part for msgV3 with the
+     * whole seconds of its sent time, and the iPhone sorts by them: up to ten parts had one stamp and showed
+     * in any order there (DirectTextStamps).
      */
-    static final long PART_GAP_MS = TRIFAGlobals.PUSH_URL_TRIGGER_GET_MESSAGE_FOR_delta_ms_prev + 1L;
+    static final long PART_GAP_MS = 1000L;
 
     private MessageSplitter()
     {
@@ -39,6 +42,21 @@ final class MessageSplitter
     static long partSentTimestamp(final long firstSentMs, final int index)
     {
         return firstSentMs + index * PART_GAP_MS;
+    }
+
+    /**
+     * KHANDAQ (0.2.56): whether part index of a text of count parts wakes a friend who is offline. Only the
+     * last one does. Each part used to ask the relay twice when it was sent (the send wrapper, then the
+     * activity), and again at every step of resend_push_for_v3_messages. The relay takes
+     * PUSH_RATE_LIMIT_PER_MIN wakes a minute from one address (120 unless set), so a text of about 60 parts
+     * got 429s, and PushBackoffPolicy then held back every wake to that friend, a call's too, for a minute
+     * and longer. The last part leaves last, so its wakes go on until the whole text has arrived; the other
+     * parts start with their wakes spent (TrifaToxService.PUSH_WAKE_MAX_ATTEMPTS). Rows that wait in the
+     * queue take one wake a round for all of a friend's rows (resend_unsent_text_messages).
+     */
+    static boolean partWakes(final int index, final int count)
+    {
+        return index >= count - 1;
     }
 
     /** The parts text goes as, in order: one when it fits, none when it is empty. */
@@ -51,6 +69,19 @@ final class MessageSplitter
             parts.add(text.substring(range[0], range[1]));
         }
         return parts;
+    }
+
+    /**
+     * KHANDAQ (0.2.56): the parts a waiting direct text goes as when one message cannot carry it and chunks
+     * cannot either (TrifaToxService.resend_unsent_text_messages): the reply header that opens it stays in
+     * the first part, as when the text was new. One part, the text itself, when it fits.
+     */
+    static List<String> splitWaitingText(final String text)
+    {
+        final String body = text == null ? null : MessageReplyHelper.parse(text).bodyText;
+        final int headChars = body != null && !body.isEmpty() && text.endsWith(body)
+                              ? text.length() - body.length() : 0;
+        return split(text, headChars, ToxVars.TOX_MSGV3_MAX_MESSAGE_LENGTH);
     }
 
     /** Where each part of {@link #split} lies in text, as {start, end}. */

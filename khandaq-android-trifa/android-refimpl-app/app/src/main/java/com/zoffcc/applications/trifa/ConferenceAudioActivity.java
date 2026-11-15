@@ -255,6 +255,9 @@ public class ConferenceAudioActivity extends AppCompatActivity
                         return true;
                     }
                 }).build();
+        // KHANDAQ (0.2.56): Back that leaves no longer releases the wake lock itself; onPause does, on
+        // every way out.
+        DrawerBackHelper.attach(this, conference_message_drawer);
 
 
         ml_maintext = (TextView) findViewById(R.id.ml_maintext);
@@ -918,20 +921,6 @@ public class ConferenceAudioActivity extends AppCompatActivity
     String get_current_conf_id()
     {
         return conf_id;
-    }
-
-    @Override
-    public void onBackPressed()
-    {
-        if (conference_message_drawer.isDrawerOpen())
-        {
-            conference_message_drawer.closeDrawer();
-        }
-        else
-        {
-            release_all_locks();
-            super.onBackPressed();
-        }
     }
 
     static void set_audio_play_volume()

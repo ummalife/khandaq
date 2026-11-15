@@ -617,17 +617,11 @@ final class AirGroupPanel
 
     // ---- the length of a message ----
 
-    /** How many bytes Send would send now: the reply header travels in the same message. */
-    private int composedBytes(final String body)
-    {
-        if (ChatReplyPreviewController.isEditActive())
-        {
-            return utf8Length(body);
-        }
-        return utf8Length(MessageReplyHelper.encode(ChatReplyPreviewController.peekPending(), body));
-    }
-
-    /** The counter once a tenth of the room is left; over the limit Send waits instead of cutting. */
+    /**
+     * The counter once a tenth of the room is left. KHANDAQ (0.2.56): past the limit a new text goes as
+     * several messages (AirGroupModel.textParts), so the counter says how many; Send waited there. The
+     * reply header travels in the first one. A correction is still refused past its limit.
+     */
     void updateCounter()
     {
         String text = null;
@@ -636,16 +630,19 @@ final class AirGroupPanel
         if (!body.isEmpty())
         {
             final boolean edit = ChatReplyPreviewController.isEditActive();
+            final String outgoing = edit ? body
+                                         : MessageReplyHelper.encode(ChatReplyPreviewController.peekPending(), body);
             final Integer remaining = edit ? AirConversationModel.composeRemaining(utf8Length(body),
                                                                                    HelperMessageEdit.MAX_EDIT_TEXT_BYTES)
-                                           : AirGroupModel.composeRemaining(composedBytes(body));
+                                           : AirGroupModel.composeRemaining(utf8Length(outgoing));
             if (remaining != null)
             {
                 final int left = remaining;
-                over = left < 0;
+                over = edit && left < 0;
                 text = left >= 0 ? quantity(R.plurals.air_compose_bytes_left, left)
-                                 : quantity(edit ? R.plurals.air_compose_bytes_over_edit
-                                                 : R.plurals.air_compose_bytes_over_group, -left);
+                                 : edit ? quantity(R.plurals.air_compose_bytes_over_edit, -left)
+                                        : quantity(R.plurals.air_compose_parts,
+                                                   AirGroupModel.textParts(outgoing, body).size());
             }
         }
         if (text == null)
@@ -659,31 +656,9 @@ final class AirGroupPanel
             counter.setVisibility(View.VISIBLE);
         }
         giveCounterTheLine(over);
-        // Send waits over the limit: the button stays, dimmed, and says why when tapped.
+        // A correction waits over its limit: the button stays, dimmed, and Send says why when tapped.
         micSend.setAlpha(over ? 0.4f : 1f);
         updateHintRow();
-    }
-
-    /**
-     * The bytes by which {@code message}, as it would go, is over the group limit; 0 when it fits. Send
-     * calls it with the text, the mentions and the reply header put together.
-     */
-    static int bytesOver(final String message)
-    {
-        return Math.max(0, utf8Length(message) - AirGroupModel.COMPOSE_LIMIT_BYTES);
-    }
-
-    /** Send was tapped over the limit: the counter says it, and TalkBack hears it. */
-    void sayOverLimit(final int bytes)
-    {
-        final String text = quantity(R.plurals.air_compose_bytes_over_group, bytes);
-        setText(counter, text);
-        counter.setTextColor(AirUi.color(activity, R.color.kq_danger));
-        counter.setVisibility(View.VISIBLE);
-        giveCounterTheLine(true);
-        updateHintRow();
-        // The counter under the field already says it in the danger colour; an error is not a toast (E21).
-        counter.announceForAccessibility(text);
     }
 
     /**

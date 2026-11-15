@@ -33,7 +33,7 @@ final class AirGroupModel
     /**
      * NGC carries at most 1372 bytes in one group message (TOX_GROUP_MAX_MESSAGE_LENGTH) and toxcore
      * refuses a longer one instead of cutting it, so the counter shows the room left once a tenth of it
-     * remains and Send waits over the limit.
+     * remains, and a longer text goes as several messages (textParts).
      */
     static final int COMPOSE_LIMIT_BYTES = 1372;
 
@@ -642,5 +642,32 @@ final class AirGroupModel
     static Integer composeRemaining(final int byteCount)
     {
         return AirConversationModel.composeRemaining(byteCount, COMPOSE_LIMIT_BYTES);
+    }
+
+    /**
+     * KHANDAQ (0.2.56): where the parts of a group text lie in wire, as {start, end}, in the order they go.
+     * Send refused a text over COMPOSE_LIMIT_BYTES, so a long text or a paste could not go at all; now it
+     * goes as several messages, cut as a long direct message is (MessageSplitter: at a line break, else at
+     * a space, else after a whole character). What opens wire before body, the reply header and the
+     * mention block, stays in the first part.
+     */
+    static List<int[]> textParts(final String wire, final String body)
+    {
+        return MessageSplitter.ranges(wire, headChars(wire, body), COMPOSE_LIMIT_BYTES);
+    }
+
+    /**
+     * Whether what opens wire before body leaves the first part room for some of the text. A mention block
+     * that does not would be cut through and show as markup, so Send leaves it out then: the handles in
+     * the text still name the members.
+     */
+    static boolean headFits(final String wire, final String body)
+    {
+        return AirUtf8Limit.utf8Length(wire, 0, headChars(wire, body)) < COMPOSE_LIMIT_BYTES;
+    }
+
+    private static int headChars(final String wire, final String body)
+    {
+        return wire != null && body != null && wire.endsWith(body) ? wire.length() - body.length() : 0;
     }
 }

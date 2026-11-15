@@ -3675,8 +3675,10 @@ public class HelperGeneric
      *
      *    boolean msg_v2: true if msgv2 was used, false otherwise
      *
+     * KHANDAQ (0.2.56): may_wake says whether a friend who is offline gets a wake push for this message.
+     * Only the last part of a long text asks for one (MessageSplitter.partWakes).
      */
-    public static MainActivity.send_message_result tox_friend_send_message_wrapper(final String friend_pubkey, int a_TOX_MESSAGE_TYPE, @NonNull String message, long timestamp_unixtime_seconds)
+    public static MainActivity.send_message_result tox_friend_send_message_wrapper(final String friend_pubkey, int a_TOX_MESSAGE_TYPE, @NonNull String message, long timestamp_unixtime_seconds, final boolean may_wake)
     {
         // Log.d(TAG, "tox_friend_send_message_wrapper:" + friend_pubkey);
         long friendnum_to_use = tox_friend_by_public_key__wrapper(friend_pubkey);
@@ -3744,7 +3746,7 @@ public class HelperGeneric
             }
             else
             {
-                need_call_push_url = true;
+                need_call_push_url = may_wake;
             }
         }
 
@@ -3768,13 +3770,22 @@ public class HelperGeneric
             return result;
         }
 
-        // KHANDAQ (#14): not chunked → a single Tox message must fit the protocol limit, so trim as a
-        // safety net (the chunked path above already sent the full text to an online friend). Short
-        // messages are unchanged; this only prevents an over-length message from being rejected.
-        message = trim_to_utf8_length_bytes(message, ToxVars.TOX_MSGV3_MAX_MESSAGE_LENGTH);
-        if (message == null)
+        // KHANDAQ (#14): not chunked → a single Tox message must fit the protocol limit.
+        // KHANDAQ (0.2.56): a longer text is not sent, rather than cut to the limit as it was here, which lost
+        // its end without a word (a waiting long text that went out before the friend's keepalive said it
+        // takes chunks). It waits as if the friend were offline (-3), and resend_unsent_text_messages sends
+        // it in parts (split_waiting_texts_that_cannot_go_whole). New texts arrive here already in parts.
+        if (MessageChunker.needsChunks(message))
         {
-            message = "";
+            HelperGeneric.logI(TAG, "tox_friend_send_message_wrapper:too_long_for_one_message bytes="
+                                    + message.getBytes(StandardCharsets.UTF_8).length);
+            final MainActivity.send_message_result result = new MainActivity.send_message_result();
+            result.msg_v2 = false;
+            result.msg_hash_hex = "";
+            result.msg_hash_v3_hex = "";
+            result.raw_message_buf_hex = "";
+            result.msg_num = -3L;
+            return result;
         }
 
         if (live_conn == TOX_CONNECTION_NONE.value && relay_pubkey == null)
@@ -3885,6 +3896,13 @@ public class HelperGeneric
                 return result;
             }
         }
+    }
+
+    /** A message of its own: a friend who is offline gets a wake push for it. */
+    public static MainActivity.send_message_result tox_friend_send_message_wrapper(final String friend_pubkey, int a_TOX_MESSAGE_TYPE, @NonNull String message, long timestamp_unixtime_seconds)
+    {
+        return tox_friend_send_message_wrapper(friend_pubkey, a_TOX_MESSAGE_TYPE, message, timestamp_unixtime_seconds,
+                                               true);
     }
 
     static void set_new_random_nospam_value()

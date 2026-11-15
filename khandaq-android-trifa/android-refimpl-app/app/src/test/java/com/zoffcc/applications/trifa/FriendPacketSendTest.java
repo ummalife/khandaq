@@ -2,6 +2,7 @@ package com.zoffcc.applications.trifa;
 
 import org.junit.Test;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -87,6 +88,25 @@ public class FriendPacketSendTest
         assertTrue(MessageChunker.needsChunks(repeat("a", ToxVars.TOX_MSGV3_MAX_MESSAGE_LENGTH + 1)));
         // bytes, not characters: U+0436 (Cyrillic zhe) is two bytes in UTF-8
         assertTrue(MessageChunker.needsChunks(repeat("ж", ToxVars.TOX_MSGV3_MAX_MESSAGE_LENGTH / 2 + 1)));
+    }
+
+    /**
+     * KHANDAQ (0.2.56): sendChunked refuses a payload (hash, time and text) over 1 MiB, so a text over that
+     * must go in parts even to a friend who reassembles chunks; it was chunked, failed and waited forever.
+     */
+    @Test
+    public void chunksCarryATextUpToOneMebibyteWithItsHashAndTime()
+    {
+        final int room = 1024 * 1024 - MessageChunker.TEXT_PAYLOAD_PREFIX_BYTES;
+        assertTrue(MessageChunker.canCarry(""));
+        assertTrue(MessageChunker.canCarry(repeat("a", room)));
+        assertFalse(MessageChunker.canCarry(repeat("a", room + 1)));
+        assertTrue(MessageChunker.canCarry(repeat("ж", room / 2)));
+        assertFalse(MessageChunker.canCarry(repeat("ж", room / 2 + 1)));
+        assertFalse(MessageChunker.canCarry(null));
+        // The payload is what sendChunked measures.
+        assertEquals(1024 * 1024, MessageChunker.encodeTextPayload(new byte[ToxVars.TOX_HASH_LENGTH], 0L,
+                                                                   repeat("a", room)).length);
     }
 
     private static String repeat(final String s, final int times)

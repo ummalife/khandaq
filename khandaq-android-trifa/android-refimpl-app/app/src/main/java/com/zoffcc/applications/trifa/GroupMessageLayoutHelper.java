@@ -85,6 +85,11 @@ public final class GroupMessageLayoutHelper
         });
     }
 
+    /**
+     * Where message goes in messages, which are in sortMessagesForChatDisplay order. KHANDAQ (0.2.56): rows
+     * of the same millisecond go by row id, as a reload sorts them. Each row is added from a thread of its
+     * own, so the parts of a long text that came in one tox_iterate could be shown out of order.
+     */
     public static int sortedInsertIndex(final java.util.List<GroupMessage> messages, final GroupMessage message)
     {
         if (messages == null || messages.isEmpty())
@@ -94,7 +99,8 @@ public final class GroupMessageLayoutHelper
         final long ts = effectiveSortTimestampMs(message);
         for (int i = messages.size() - 1; i >= 0; i--)
         {
-            if (effectiveSortTimestampMs(messages.get(i)) <= ts)
+            final long existing = effectiveSortTimestampMs(messages.get(i));
+            if (existing < ts || (existing == ts && messages.get(i).id <= message.id))
             {
                 return i + 1;
             }

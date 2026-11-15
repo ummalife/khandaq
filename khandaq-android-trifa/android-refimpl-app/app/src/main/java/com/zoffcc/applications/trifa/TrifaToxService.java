@@ -2738,8 +2738,26 @@ public class TrifaToxService extends Service
                 return;
             }
 
+            if (split_waiting_texts_that_cannot_go_whole(unsent))
+            {
+                unsent = orma.selectFromMessage().
+                        directionEq(1).
+                        TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_TYPE_TEXT.value).
+                        message_idEq(-1).
+                        readEq(false).
+                        orderBySent_timestampAsc().
+                        toList();
+                if ((unsent == null) || (unsent.isEmpty()))
+                {
+                    return;
+                }
+            }
+
             int sent_this_round = 0;
             final int max_per_round = 10;
+            // KHANDAQ (0.2.56): the friends woken in this round. The relay counts every wake (120 a minute
+            // from one address), and the parts of a long text that waits here would each ask at once.
+            final java.util.Set<String> woken_this_round = new java.util.HashSet<>();
             Iterator<com.zoffcc.applications.sorm.Message> ii = unsent.iterator();
 
             while (ii.hasNext())
@@ -2750,9 +2768,13 @@ public class TrifaToxService extends Service
                 {
                     // KHANDAQ (redesign, stage 2): messages now queue while our own node is offline too.
                     // The one push per message waits until we are online, or it is spent on a dead link.
+                    // KHANDAQ (0.2.56): one wake a round wakes the friend for every row that waits for them.
                     if ((m_unsent.sent_push < 1) && HelperFriend.is_self_tox_connected_to_dht())
                     {
-                        friend_call_push_url(m_unsent.tox_friendpubkey, m_unsent.sent_timestamp);
+                        if (woken_this_round.add(m_unsent.tox_friendpubkey))
+                        {
+                            friend_call_push_url(m_unsent.tox_friendpubkey, m_unsent.sent_timestamp);
+                        }
                         orma.updateMessage().idEq(m_unsent.id).sent_push(1).execute();
                     }
                     continue;
@@ -2840,6 +2862,83 @@ public class TrifaToxService extends Service
         {
             HelperGeneric.logI(TAG, "resend_unsent_text_messages:EE:" + e.getMessage());
         }
+    }
+
+    /**
+     * KHANDAQ (0.2.56): a waiting text that one message cannot carry left, once its friend was online, as
+     * one message cut at TOX_MSGV3_MAX_MESSAGE_LENGTH whenever chunks could not carry it right then (the
+     * friend's app does not put them together, its keepalive has not said so yet since it came online, or
+     * the text is over what chunks carry): the end was lost without a word. Such a row now becomes the
+     * parts it goes as, each a waiting row of its own in order, as a long text to such a friend is split
+     * when it is new (MessageSplitter, QA live F13). A friend who is offline may still take it whole later.
+     * The new rows are written before the row is cut, and taken back when one cannot be written, so no part
+     * is lost or sent twice. Returns whether a row was split.
+     */
+    static boolean split_waiting_texts_that_cannot_go_whole(final List<com.zoffcc.applications.sorm.Message> unsent)
+    {
+        boolean split = false;
+        for (final com.zoffcc.applications.sorm.Message candidate : unsent)
+        {
+            if (!MessageChunker.needsChunks(candidate.text))
+            {
+                continue;
+            }
+            final long friendnum = tox_friend_by_public_key__wrapper(candidate.tox_friendpubkey);
+            if ((friendnum < 0) || (is_friend_online_real(friendnum) == 0)
+                || (MessageChunker.canReassemble(friendnum) && MessageChunker.canCarry(candidate.text)))
+            {
+                continue;
+            }
+            synchronized (AirChatPanel.UNSENT_LOCK)
+            {
+                final List<com.zoffcc.applications.sorm.Message> fresh = orma.selectFromMessage().
+                        idEq(candidate.id).
+                        message_idEq(-1).
+                        readEq(false).
+                        toList();
+                if ((fresh == null) || fresh.isEmpty())
+                {
+                    continue;
+                }
+                final com.zoffcc.applications.sorm.Message m = fresh.get(0);
+                final List<String> parts = MessageSplitter.splitWaitingText(m.text);
+                if (parts.size() < 2)
+                {
+                    continue;
+                }
+                final List<Long> added = new ArrayList<>(parts.size() - 1);
+                for (int i = 1; i < parts.size(); i++)
+                {
+                    final long row_id = AirChatPanel.queueUnsentText(m.tox_friendpubkey, parts.get(i),
+                                                                     MessageSplitter.partSentTimestamp(
+                                                                             m.sent_timestamp, i));
+                    if (row_id <= 0)
+                    {
+                        break;
+                    }
+                    added.add(row_id);
+                }
+                if (added.size() != parts.size() - 1)
+                {
+                    for (final long row_id : added)
+                    {
+                        orma.deleteFromMessage().idEq(row_id).execute();
+                    }
+                    HelperGeneric.logI(TAG, "split_waiting_texts:keep_whole id=" + m.id + " parts=" + parts.size());
+                    continue;
+                }
+                orma.updateMessage().idEq(m.id).text(parts.get(0)).execute();
+                m.text = parts.get(0);
+                // KHANDAQ (0.2.56): the parts are a second apart (MessageSplitter.PART_GAP_MS), and may run ahead of
+                // the clock: a text written next goes after the last one (DirectTextStamps).
+                DirectTextStamps.OUTGOING.sentAt(m.tox_friendpubkey,
+                                                 MessageSplitter.partSentTimestamp(m.sent_timestamp, parts.size() - 1));
+                HelperMessage.update_single_message(m, true);
+                HelperGeneric.logI(TAG, "split_waiting_texts:id=" + m.id + " parts=" + parts.size());
+                split = true;
+            }
+        }
+        return split;
     }
 
     private static volatile long last_wakeup_ms = 0L;

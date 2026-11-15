@@ -8,6 +8,7 @@ import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 
 import org.khandaq.messenger.R;
@@ -36,6 +37,24 @@ public class OnboardingActivity extends AppCompatActivity
     };
 
     private int index = 0;
+    /**
+     * KHANDAQ (0.2.56): Back on a later slide shows the one before; on only past the first slide, as
+     * Android 16 no longer calls onBackPressed for an app that targets it.
+     */
+    private final OnBackPressedCallback slideBackCallback = new OnBackPressedCallback(false)
+    {
+        @Override
+        public void handleOnBackPressed()
+        {
+            if (index > 0)
+            {
+                showSlide(index - 1);
+                return;
+            }
+            setEnabled(false);
+            getOnBackPressedDispatcher().onBackPressed();
+        }
+    };
 
     private ImageView illustration;
     private TextView title;
@@ -48,6 +67,7 @@ public class OnboardingActivity extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
+        getOnBackPressedDispatcher().addCallback(this, slideBackCallback);
         setContentView(R.layout.activity_onboarding);
 
         illustration = findViewById(R.id.onboarding_illustration);
@@ -117,6 +137,7 @@ public class OnboardingActivity extends AppCompatActivity
         boolean last = index == ILLUSTRATIONS.length - 1;
         btnPrimary.setText(last ? R.string.onboarding_create_account : R.string.onboarding_next);
         btnSecondary.setVisibility(last ? View.VISIBLE : View.GONE);
+        slideBackCallback.setEnabled(index > 0);
     }
 
     private void goToSetup(boolean startImport)
@@ -126,19 +147,6 @@ public class OnboardingActivity extends AppCompatActivity
                 : new Intent(this, CreateProfileActivity.class);
         startActivity(intent);
         finish();
-    }
-
-    @Override
-    public void onBackPressed()
-    {
-        if (index > 0)
-        {
-            showSlide(index - 1);
-        }
-        else
-        {
-            super.onBackPressed();
-        }
     }
 
     private final class SwipeListener extends GestureDetector.SimpleOnGestureListener

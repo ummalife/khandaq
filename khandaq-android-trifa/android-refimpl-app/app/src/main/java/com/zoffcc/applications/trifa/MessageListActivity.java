@@ -2224,7 +2224,10 @@ public class MessageListActivity extends AppCompatActivity
             {
                 return;
             }
-            final long first_sent_timestamp = System.currentTimeMillis();
+            // KHANDAQ (0.2.56): the parts a second apart, after the text sent to the person before; they go with
+            // the whole seconds of these times, which the iPhone sorts by (DirectTextStamps).
+            final long first_sent_timestamp = DirectTextStamps.OUTGOING.firstSentTimestamp(friend_pubkey, parts.size(),
+                                                                                         System.currentTimeMillis());
             for (int i = 0; i < parts.size(); i++)
             {
                 final String queued = fullText.substring(parts.get(i)[0], parts.get(i)[1]);
@@ -2258,8 +2261,9 @@ public class MessageListActivity extends AppCompatActivity
         final boolean friendOnline = (chunkFriendNum >= 0) &&
                 (MainActivity.tox_friend_get_connection_status(chunkFriendNum)
                         != ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value);
+        // KHANDAQ (0.2.56): a text over what chunks carry (MessageChunker.canCarry) goes in parts too.
         final List<int[]> parts = (MessageChunker.shouldChunk(fullText) && friendOnline
-                                   && MessageChunker.canReassemble(chunkFriendNum))
+                                   && MessageChunker.canReassemble(chunkFriendNum) && MessageChunker.canCarry(fullText))
                 ? java.util.Collections.singletonList(new int[]{0, fullText.length()})
                 : MessageSplitter.ranges(fullText, replyHeadChars, TOX_MSGV3_MAX_MESSAGE_LENGTH);
         if (parts.isEmpty())
@@ -2272,11 +2276,19 @@ public class MessageListActivity extends AppCompatActivity
         // stored as unsent and waits in the tray; the service loop sends it when the link is back.
         wakeup_tox_thread();
 
-        final long first_sent_timestamp = System.currentTimeMillis();
+        // KHANDAQ (0.2.56): each part a second after the one before, and the text after the last text sent to the
+        // person: a part goes stamped with the whole seconds of its sent time, now and when it goes again, and the
+        // iPhone sorts by them. Parts a tenth of a second apart shared a stamp and showed in any order there
+        // (DirectTextStamps).
+        final long first_sent_timestamp = DirectTextStamps.OUTGOING.firstSentTimestamp(friend_pubkey, parts.size(),
+                                                                                     System.currentTimeMillis());
         boolean refusal_said = false;
         for (int i = 0; i < parts.size(); i++)
         {
             final String msg = fullText.substring(parts.get(i)[0], parts.get(i)[1]);
+            // KHANDAQ (0.2.56): a friend who is offline is woken once for the text, by its last part; the
+            // other parts start with their wakes spent (MessageSplitter.partWakes).
+            final boolean wakes = MessageSplitter.partWakes(i, parts.size());
 
             Message m = new Message();
             m.tox_friendpubkey = friend_pubkey;
@@ -2290,13 +2302,13 @@ public class MessageListActivity extends AppCompatActivity
             m.text = msg;
             m.msg_version = 0;
             m.resend_count = 0; // we have tried to resend this message "0" times
-            m.sent_push = 0;
+            m.sent_push = wakes ? 0 : TrifaToxService.PUSH_WAKE_MAX_ATTEMPTS;
             m.msg_idv3_hash = "";
             m.msg_id_hash = "";
             m.raw_msgv2_bytes = "";
 
             MainActivity.send_message_result result = tox_friend_send_message_wrapper(friend_pubkey, 0, msg,
-                                                                                      (m.sent_timestamp / 1000));
+                                                                                      (m.sent_timestamp / 1000), wakes);
 
             if (result == null)
             {
@@ -2359,7 +2371,7 @@ public class MessageListActivity extends AppCompatActivity
             long row_id = insert_into_message_db(m, true);
             m.id = row_id;
 
-            if (!HelperFriend.is_dm_message_send_success(res))
+            if (wakes && !HelperFriend.is_dm_message_send_success(res))
             {
                 friend_call_push_url(friend_pubkey, m.sent_timestamp);
             }

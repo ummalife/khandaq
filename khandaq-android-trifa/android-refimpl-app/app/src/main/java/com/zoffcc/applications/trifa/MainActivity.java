@@ -115,6 +115,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Semaphore;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -647,6 +648,25 @@ public class MainActivity extends AppCompatActivity
     // fragments: they still receive every toxcore change, and each change tells Air to refresh.
     private AirFragment airFragment = null;
     private int currentMainTab = R.id.main_screen_air;
+    /**
+     * KHANDAQ (0.2.56): Back on the main screen. Android 16 does not call onBackPressed for an app that
+     * targets it, so Back goes through the dispatcher; this is on only while there is something to step
+     * back from, and Back on bare Air stays the system's (with its predictive animation).
+     */
+    private final OnBackPressedCallback mainBackCallback = new OnBackPressedCallback(false)
+    {
+        @Override
+        public void handleOnBackPressed()
+        {
+            if (!handleMainBack())
+            {
+                // Nothing to step back from after all: Back goes on as if this were off.
+                setEnabled(false);
+                getOnBackPressedDispatcher().onBackPressed();
+            }
+            updateMainBackCallback();
+        }
+    };
     /** KHANDAQ (redesign, E18): start on Settings, after the language was changed there. */
     static final String EXTRA_OPEN_SETTINGS = "org.khandaq.messenger.OPEN_SETTINGS";
     /** KHANDAQ (redesign, E11): Air with the Requests filter, from New contact's "Open Requests". */
@@ -673,6 +693,7 @@ public class MainActivity extends AppCompatActivity
     {
         HelperGeneric.logI(TAG, "M:STARTUP:super onCreate");
         super.onCreate(savedInstanceState);
+        getOnBackPressedDispatcher().addCallback(this, mainBackCallback);
         HelperGeneric.logI(TAG, "M:STARTUP:onCreate");
         HelperGeneric.logI(TAG, "onCreate");
 
@@ -3734,6 +3755,8 @@ public class MainActivity extends AppCompatActivity
         main_activity_resumed_ts = System.currentTimeMillis();
         super.onResume();
         refreshFriendListFragmentReferences();
+        // A filter Air restored with its state did not pass through applyFilter.
+        updateMainBackCallback();
         ProfileTabConnectionIndicator.updateAsync();
         MainHeaderBrandingHelper.update(this);
         // Read before Air resumes and takes it: Add the first person puts the command line in focus.
@@ -4436,26 +4459,29 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-    @Override
-    public void onBackPressed()
+    /** True when Back was used here (see mainBackCallback). */
+    private boolean handleMainBack()
     {
         if (currentMainTab == R.id.bottom_nav_settings && settingsFragment != null && settingsFragment.handleBackPress())
         {
-            return;
+            return true;
         }
         // KHANDAQ (redesign, Air): Back from settings or the profile returns to Air; on Air it first
         // ends a search or a filter, the way Cancel does.
         if (airFragment != null && currentMainTab != R.id.main_screen_air)
         {
             switchMainTab(R.id.main_screen_air);
-            return;
+            return true;
         }
-        if (airFragment != null && airFragment.isVisible() && airFragment.handleBackPress())
-        {
-            return;
-        }
+        return airFragment != null && airFragment.isVisible() && airFragment.handleBackPress();
+    }
 
-        super.onBackPressed();
+    /** On whenever handleMainBack has something to do; called when the tab or Air's search or filter changes. */
+    void updateMainBackCallback()
+    {
+        mainBackCallback.setEnabled((currentMainTab == R.id.bottom_nav_settings && settingsFragment != null)
+                                    || (airFragment != null && (currentMainTab != R.id.main_screen_air
+                                                                || airFragment.hasBackToHandle())));
     }
 
     // -- this is for incoming video --
@@ -10501,6 +10527,7 @@ public class MainActivity extends AppCompatActivity
         // state-saved activity — show/hide of tabs has no back stack, so state loss is safe.
         transaction.commitAllowingStateLoss();
         updateMainToolbarForTab(tabId);
+        updateMainBackCallback();
     }
 
     private void updateMainToolbarForTab(final int tabId)

@@ -261,6 +261,14 @@ extension KQColor {
 final class AirStatusMarkView: UIView {
     private let imageView = UIImageView()
     private(set) var status: AirEntryStatus = .none
+    /// KHANDAQ (0.2.57): the mark of an entry in a 1:1 conversation with a friend, whose read receipts can
+    /// turn it teal: sent and delivered are muted there. False, the marks of 0.2.56, for a group, a group
+    /// member's private chat and the Saved chat.
+    var takesReadReceipts = false {
+        didSet {
+            imageView.tintColor = AirStatusMarkView.color(for: status, takesReadReceipts: takesReadReceipts)
+        }
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -287,7 +295,7 @@ final class AirStatusMarkView: UIView {
         let update = {
             self.imageView.image = status.iconName.flatMap { AirIcon.image($0) }
             self.imageView.alpha = status == .sending ? 0.45 : 1
-            self.imageView.tintColor = AirStatusMarkView.color(for: status)
+            self.imageView.tintColor = AirStatusMarkView.color(for: status, takesReadReceipts: self.takesReadReceipts)
         }
         if animated && changed && window != nil {
             UIView.transition(with: imageView,
@@ -302,14 +310,17 @@ final class AirStatusMarkView: UIView {
         isHidden = status == .none
     }
 
-    static func color(for status: AirEntryStatus) -> UIColor {
+    static func color(for status: AirEntryStatus, takesReadReceipts: Bool) -> UIColor {
         switch status {
             case .transit:
                 return KQColor.transit
-            // KHANDAQ (0.2.57): sent and delivered take the muted ink of the time beside the mark, so the
-            // teal of seen is the one that stands out.
-            case .sending, .none, .sent, .delivered:
+            case .sending, .none:
                 return KQColor.ink3
+            // KHANDAQ (0.2.57): in a 1:1 conversation sent and delivered take the muted ink of the time
+            // beside the mark, so the teal of seen is the one that stands out. A group and the Saved chat
+            // have no seen and keep the ink of 0.2.56 (SPEC: groups are unchanged).
+            case .sent, .delivered:
+                return takesReadReceipts ? KQColor.ink3 : KQColor.ink
             case .seen:
                 return KQColor.seen
             case .failed:

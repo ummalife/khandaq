@@ -203,6 +203,7 @@ class ChatGenericFileCell: ChatMovableDateCell {
         }
         entry.configure(fileModel, firstLine: firstLine)
         let status = entryStatus()
+        entry.mark.takesReadReceipts = (fileModel as? ChatOutgoingFileCellModel)?.takesReadReceipts ?? false
         entry.mark.set(status, animated: false)
         entry.mark.isHidden = isIncoming || status == .none
 

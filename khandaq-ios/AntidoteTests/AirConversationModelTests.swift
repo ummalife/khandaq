@@ -78,14 +78,39 @@ class AirConversationModelTests: XCTestCase {
 
     func testSeenIsTwoTealChecksAndSentAndDeliveredTakeTheInkOfTheTime() {
         XCTAssertEqual(AirEntryStatus.seen.iconName, "check-double")
-        XCTAssertTrue(AirStatusMarkView.color(for: .sent) === KQColor.ink3)
-        XCTAssertTrue(AirStatusMarkView.color(for: .delivered) === KQColor.ink3)
-        XCTAssertTrue(AirStatusMarkView.color(for: .seen) === KQColor.seen)
-        XCTAssertTrue(AirStatusMarkView.color(for: .transit) === KQColor.transit)
-        XCTAssertTrue(AirStatusMarkView.color(for: .failed) === KQColor.danger)
+        // In a 1:1 conversation with a friend, the one that takes read receipts.
+        XCTAssertTrue(AirStatusMarkView.color(for: .sent, takesReadReceipts: true) === KQColor.ink3)
+        XCTAssertTrue(AirStatusMarkView.color(for: .delivered, takesReadReceipts: true) === KQColor.ink3)
+        XCTAssertTrue(AirStatusMarkView.color(for: .seen, takesReadReceipts: true) === KQColor.seen)
+        XCTAssertTrue(AirStatusMarkView.color(for: .transit, takesReadReceipts: true) === KQColor.transit)
+        XCTAssertTrue(AirStatusMarkView.color(for: .failed, takesReadReceipts: true) === KQColor.danger)
         // Android's khandaq_teal, light and dark, so the three clients show seen alike.
         XCTAssertEqual(rgb(KQColor.seen, .light), 0x029B7D)
         XCTAssertEqual(rgb(KQColor.seen, .dark), 0x10B98F)
+    }
+
+    func testAGroupAndTheSavedChatKeepTheInkOfTheirMarks() {
+        // SPEC: groups are unchanged. The group controllers and the Saved chat leave takesReadReceipts
+        // false, and sent and delivered keep the ink of 0.2.56 there, light and dark.
+        XCTAssertFalse(AirEntryTextCellModel().takesReadReceipts)
+        XCTAssertFalse(ChatOutgoingFileCellModel().takesReadReceipts)
+        XCTAssertTrue(AirStatusMarkView.color(for: .sent, takesReadReceipts: false) === KQColor.ink)
+        XCTAssertTrue(AirStatusMarkView.color(for: .delivered, takesReadReceipts: false) === KQColor.ink)
+        XCTAssertEqual(rgb(KQColor.ink, .light), 0x0F1218)
+        XCTAssertEqual(rgb(KQColor.ink, .dark), 0xE7EAEF)
+        XCTAssertTrue(AirStatusMarkView.color(for: .sending, takesReadReceipts: false) === KQColor.ink3)
+        XCTAssertTrue(AirStatusMarkView.color(for: .transit, takesReadReceipts: false) === KQColor.transit)
+        XCTAssertTrue(AirStatusMarkView.color(for: .failed, takesReadReceipts: false) === KQColor.danger)
+
+        // The mark as drawn: delivered in ink for a group, muted for the same entry of a 1:1 chat.
+        let mark = AirStatusMarkView()
+        mark.set(.delivered, animated: false)
+        XCTAssertTrue(tint(of: mark) === KQColor.ink)
+        mark.takesReadReceipts = true
+        XCTAssertTrue(tint(of: mark) === KQColor.ink3)
+        mark.takesReadReceipts = false
+        mark.set(.sent, animated: false)
+        XCTAssertTrue(tint(of: mark) === KQColor.ink)
     }
 
     func testSeenIsSaidInEveryLanguageThatSaysDelivered() {
@@ -566,6 +591,11 @@ private extension AirConversationModelTests {
     func use(_ language: String) {
         AppLanguage.set(language)
         XCTAssertEqual(AppLanguage.current, language)
+    }
+
+    /// The colour a status mark draws its icon in.
+    func tint(of mark: AirStatusMarkView) -> UIColor? {
+        return mark.subviews.compactMap { $0 as? UIImageView }.first?.tintColor
     }
 
     /// The 0xRRGGBB of a colour in a theme.

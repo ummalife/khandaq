@@ -141,6 +141,24 @@ class AirListModelTests: XCTestCase {
         XCTAssertTrue(cell.accessibilityLabel?.contains("прочитано") == true, cell.accessibilityLabel ?? "")
     }
 
+    func testAGroupRowAndTheSavedRowKeepTheInkOfDelivered() {
+        // SPEC: groups are unchanged, and the Saved chat has no seen either: their delivered checks keep the
+        // ink of 0.2.56. A 1:1 row mutes them, as its conversation does.
+        XCTAssertTrue(AirRowCell.deliveredTint(for: .group) === KQColor.ink)
+        XCTAssertTrue(AirRowCell.deliveredTint(for: .saved) === KQColor.ink)
+        XCTAssertTrue(AirRowCell.deliveredTint(for: .direct) === KQColor.ink3)
+
+        // The row as drawn: the checks are the one icon that comes with the mark, in the tint of the kind.
+        let cell = AirRowCell(style: .default, reuseIdentifier: AirRowCell.reuseIdentifier)
+        for (kind, tint) in [(AirEntry.Kind.group, KQColor.ink), (.saved, KQColor.ink), (.direct, KQColor.ink3)] {
+            cell.configure(with: person(lastDelivery: nil, kind: kind), photo: nil)
+            let without = imageViews(in: cell.contentView).filter { !$0.isHidden && $0.tintColor === tint }.count
+            cell.configure(with: person(lastDelivery: .delivered, kind: kind), photo: nil)
+            let with = imageViews(in: cell.contentView).filter { !$0.isHidden && $0.tintColor === tint }.count
+            XCTAssertEqual(with, without + 1, "\(kind)")
+        }
+    }
+
     func testFavoritesFilterKeepsStarredRowsAndSavedMessages() {
         let entries = [entry("star", reach: .direct, favorite: true), entry("plain", reach: .direct), saved()]
 
@@ -691,9 +709,18 @@ private extension AirListModelTests {
         XCTAssertEqual(AppLanguage.current, language)
     }
 
-    /// A person whose last message is ours, with this mark.
-    func person(lastDelivery: AirDelivery) -> AirEntry {
-        return AirEntry(id: "p1", kind: .direct, title: "Bilal", reach: .direct, preview: "Salam", previewStyle: .message,
+    /// A person (or a group, or the Saved chat) whose last message is ours, with this mark.
+    func person(lastDelivery: AirDelivery?, kind: AirEntry.Kind = .direct) -> AirEntry {
+        let reach: AirReach
+        switch kind {
+            case .group:
+                reach = .group(online: 2)
+            case .saved:
+                reach = .local
+            case .direct, .contact:
+                reach = .direct
+        }
+        return AirEntry(id: "p1", kind: kind, title: "Bilal", reach: reach, preview: "Salam", previewStyle: .message,
                         lastDelivery: lastDelivery, timeText: "10:57", activity: 1, transitCount: 0, unreadCount: 0,
                         isFavorite: false, avatarData: nil, tone: 0)
     }

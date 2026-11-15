@@ -203,6 +203,9 @@ final class AirEntryTextCellModel: ChatBaseTextCellModel {
     var status: AirEntryStatus = .none
     /// What the mark showed the last time this entry was drawn, so a change cross-fades.
     var previousStatus: AirEntryStatus?
+    /// KHANDAQ (0.2.57): an entry of a 1:1 conversation with a friend (AirStatusMarkView.takesReadReceipts).
+    /// The group controllers and the Saved chat leave it false and keep the marks of 0.2.56.
+    var takesReadReceipts = false
 }
 
 final class AirEntryTextCell: ChatBaseTextCell {
@@ -356,6 +359,7 @@ final class AirEntryTextCell: ChatBaseTextCell {
         }
 
         let shown = entry.previousStatus ?? entry.status
+        mark.takesReadReceipts = entry.takesReadReceipts
         mark.set(shown, animated: false)
         mark.isHidden = !entry.isOutgoing || entry.status == .none
         pendingStatus = shown != entry.status ? entry.status : nil

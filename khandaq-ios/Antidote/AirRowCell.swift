@@ -163,8 +163,7 @@ final class AirRowCell: UITableViewCell {
                 deliveryIcon.isHidden = false
             case .delivered?:
                 deliveryIcon.image = AirIcon.image("check-double")
-                // KHANDAQ (0.2.57): muted as sent is, as in the conversation: the teal of seen stands out.
-                deliveryIcon.tintColor = KQColor.ink3
+                deliveryIcon.tintColor = AirRowCell.deliveredTint(for: entry.kind)
                 deliveryIcon.isHidden = false
             case .seen?:
                 deliveryIcon.image = AirIcon.image("check-double")
@@ -199,6 +198,13 @@ final class AirRowCell: UITableViewCell {
             case .contact:
                 return "air.row.contact"
         }
+    }
+
+    /// KHANDAQ (0.2.57): the two checks of our delivered last message. Muted in a 1:1 chat, as in its
+    /// conversation, so the teal of seen stands out; a group and the Saved chat have no seen and keep the
+    /// ink of 0.2.56 (SPEC: groups are unchanged).
+    static func deliveredTint(for kind: AirEntry.Kind) -> UIColor {
+        return kind == .direct ? KQColor.ink3 : KQColor.ink
     }
 
     static func tileStyle(for entry: AirEntry) -> AirTileView.Style {

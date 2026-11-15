@@ -949,6 +949,8 @@ extension ChatPrivateController: UITableViewDataSource {
                 }
 
                 outgoingModel.isOutgoing = true
+                // KHANDAQ (0.2.57): muted sent and delivered, teal once seen; the Saved chat keeps its marks.
+                outgoingModel.takesReadReceipts = !chat.isSavedMessages
                 outgoingModel.status = AirEntryStatus.ofOutgoingText(isSaved: chat.isSavedMessages,
                                                                      isDelivered: messageText.isDelivered,
                                                                      messageId: messageText.messageId,
@@ -2688,6 +2690,7 @@ private extension ChatPrivateController {
             outgoingModel.delivered = (message.messageFile?.isDelivered ?? false)
                 || (message.messageFile?.fileType == .ready)
             outgoingModel.seen = hasFriendSeen(message)
+            outgoingModel.takesReadReceipts = !chat.isSavedMessages
         }
         if isVoice {
             model.fileName = VoiceMessageHelper.displayFileName(for: message.messageFile?.fileName)

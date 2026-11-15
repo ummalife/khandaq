@@ -42,6 +42,21 @@ class AirEntryTextCellSnapshotTest: CellSnapshotTest {
         model.edited = true
         verify(model)
     }
+
+    /// KHANDAQ (0.2.57): a group keeps the marks of 0.2.56 (SPEC: groups are unchanged). The entries of
+    /// testOutgoingSent and testOutgoingDelivered as the group controllers make them match, pixel for
+    /// pixel, the images those two tests had in 0.2.56.
+    func testOutgoingSentInAGroup() {
+        let model = entry("I will bring tea.", time: "9:45", status: .sent)
+        model.takesReadReceipts = false
+        verify(model)
+    }
+
+    func testOutgoingDeliveredInAGroup() {
+        let model = entry("Done.", time: "9:46", status: .delivered)
+        model.takesReadReceipts = false
+        verify(model)
+    }
 }
 
 private extension AirEntryTextCellSnapshotTest {
@@ -51,6 +66,8 @@ private extension AirEntryTextCellSnapshotTest {
         model.timeText = time
         model.status = status
         model.isOutgoing = status != .none
+        // The conversation with one person, whose read receipts mute sent and delivered (0.2.57).
+        model.takesReadReceipts = true
         return model
     }
 

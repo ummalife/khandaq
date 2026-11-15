@@ -5,6 +5,8 @@
 #import "OCTObject.h"
 #import "OCTToxConstants.h"
 
+@class OCTMessageAbstract;
+
 /**
  * Class that represents friend (or just simply contact).
  *
@@ -104,6 +106,33 @@
  * Friend's capabilities. A 64 bit unsigned integer.
  */
 @property (nonnull) NSString *capabilities2;
+
+/**
+ * KHANDAQ (0.2.57): the seen watermark of the 1:1 chat with this friend: the sent time, by this device's
+ * clock, of the newest of our messages and files the friend has reported seen (read receipt, "KQ" packet
+ * 189). 0 while they have reported nothing. It only moves forward and goes with the friend when the
+ * contact is removed.
+ */
+@property NSTimeInterval seenWatermark;
+
+/**
+ * KHANDAQ (0.2.57): when the newest message or file from this friend that this device has reported seen
+ * arrived here (its dateInterval), so it is reported once. 0 while nothing has been reported.
+ */
+@property NSTimeInterval seenReportedDateInterval;
+
+/**
+ * KHANDAQ (0.2.57): the read receipt that waits for this friend, the whole 41-byte packet: they were
+ * offline or the send failed. nil while none waits.
+ */
+@property (nullable) NSData *seenPendingPacket;
+
+/**
+ * KHANDAQ (0.2.57): whether this friend has seen our outgoing `message` of their 1:1 chat: it was sent no
+ * later than the seen watermark. The caller shows it seen only once it has left this device (sent or
+ * delivered), never while it waits or after it failed.
+ */
+- (BOOL)hasSeenOutgoingMessage:(nonnull OCTMessageAbstract *)message;
 
 @end
 

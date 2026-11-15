@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #import "OCTFriend.h"
+#import "OCTMessageAbstract.h"
 
 @interface OCTFriend ()
 
@@ -31,6 +32,15 @@
     }
 
     return [NSDate dateWithTimeIntervalSince1970:self.lastSeenOnlineInterval];
+}
+
+- (BOOL)hasSeenOutgoingMessage:(OCTMessageAbstract *)message
+{
+    if (self.seenWatermark <= 0 || ! [message isOutgoing]) {
+        return NO;
+    }
+
+    return [message outgoingSentDateInterval] <= self.seenWatermark;
 }
 
 - (NSString *)description

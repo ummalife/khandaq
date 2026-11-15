@@ -270,6 +270,7 @@
 		B2BOOTNET000002 /* OCTSubmanagerBootstrapNetworkChangeTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2BOOTNET000001 /* OCTSubmanagerBootstrapNetworkChangeTests.m */; };
 		B2TXTPART0000002 /* OCTTextPartsAndGroupSendTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2TXTPART0000001 /* OCTTextPartsAndGroupSendTests.m */; };
 		B2GRPRLM0000002 /* OCTGroupRealmTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2GRPRLM0000001 /* OCTGroupRealmTests.m */; };
+		B2SEENTST000002 /* OCTSeenReceiptTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2SEENTST000001 /* OCTSeenReceiptTests.m */; };
 		E1A2B3C4D5E6789012340004 /* OCTSubmanagerGroupsImpl.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */; };
 		E1A2B3C4D5E6789012340005 /* OCTSubmanagerGroupsImpl.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */; };
 		E1A2B3C4D5E6789012340006 /* OCTSubmanagerGroupsImpl.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */; };
@@ -343,9 +344,13 @@
 		B2FA0002B20000000000000 /* OCTPushUrlValidator.m in Sources */ = {isa = PBXBuildFile; fileRef = B2FA0002REF0000000000 /* OCTPushUrlValidator.m */; };
 		B2FA0002B30000000000000 /* OCTPushUrlValidator.m in Sources */ = {isa = PBXBuildFile; fileRef = B2FA0002REF0000000000 /* OCTPushUrlValidator.m */; };
 		B2NGCFIX009B00000000000 /* OCTNgcKeyValue.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX009REF00000000 /* OCTNgcKeyValue.m */; };
+		B2SEEN001B0000000000000 /* OCTSeenReceipt.m in Sources */ = {isa = PBXBuildFile; fileRef = B2SEEN001REF00000000000 /* OCTSeenReceipt.m */; };
 		B2NGCFIX009B10000000000 /* OCTNgcKeyValue.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX009REF00000000 /* OCTNgcKeyValue.m */; };
+		B2SEEN001B1000000000000 /* OCTSeenReceipt.m in Sources */ = {isa = PBXBuildFile; fileRef = B2SEEN001REF00000000000 /* OCTSeenReceipt.m */; };
 		B2NGCFIX009B20000000000 /* OCTNgcKeyValue.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX009REF00000000 /* OCTNgcKeyValue.m */; };
+		B2SEEN001B2000000000000 /* OCTSeenReceipt.m in Sources */ = {isa = PBXBuildFile; fileRef = B2SEEN001REF00000000000 /* OCTSeenReceipt.m */; };
 		B2NGCFIX009B30000000000 /* OCTNgcKeyValue.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX009REF00000000 /* OCTNgcKeyValue.m */; };
+		B2SEEN001B3000000000000 /* OCTSeenReceipt.m in Sources */ = {isa = PBXBuildFile; fileRef = B2SEEN001REF00000000000 /* OCTSeenReceipt.m */; };
 		B2NGCFIX010B00000000000 /* OCTGroupPendingLeaves.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX010REF00000000 /* OCTGroupPendingLeaves.m */; };
 		B2NGCFIX010B10000000000 /* OCTGroupPendingLeaves.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX010REF00000000 /* OCTGroupPendingLeaves.m */; };
 		B2NGCFIX010B20000000000 /* OCTGroupPendingLeaves.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX010REF00000000 /* OCTGroupPendingLeaves.m */; };
@@ -558,6 +563,7 @@
 		B2BOOTNET000001 /* OCTSubmanagerBootstrapNetworkChangeTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTSubmanagerBootstrapNetworkChangeTests.m; sourceTree = "<group>"; };
 		B2TXTPART0000001 /* OCTTextPartsAndGroupSendTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTTextPartsAndGroupSendTests.m; sourceTree = "<group>"; };
 		B2GRPRLM0000001 /* OCTGroupRealmTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTGroupRealmTests.m; sourceTree = "<group>"; };
+		B2SEENTST000001 /* OCTSeenReceiptTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTSeenReceiptTests.m; sourceTree = "<group>"; };
 		B6D6D28CCB11A29144A37A53 /* libPods-iOSDemo.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-iOSDemo.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2F358725E9EF3F392D73A1ABBDD3DAB /* OCTSubmanagerUserImpl.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTSubmanagerUserImpl.m; sourceTree = "<group>"; };
 		CE5DBC12869590BEAD637C9DF06567EF /* OCTManagerConstants.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTManagerConstants.m; sourceTree = "<group>"; };
@@ -611,6 +617,7 @@
 		B2FA0001REF0000000000 /* OCTNgcHistoryDowngradePolicy.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcHistoryDowngradePolicy.m; path = Classes/Private/Manager/Groups/OCTNgcHistoryDowngradePolicy.m; sourceTree = SOURCE_ROOT; };
 		B2FA0002REF0000000000 /* OCTPushUrlValidator.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTPushUrlValidator.m; path = Classes/Private/Manager/Submanagers/OCTPushUrlValidator.m; sourceTree = SOURCE_ROOT; };
 		B2NGCFIX009REF00000000 /* OCTNgcKeyValue.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcKeyValue.m; path = Classes/Private/Manager/Objects/OCTNgcKeyValue.m; sourceTree = SOURCE_ROOT; };
+		B2SEEN001REF00000000000 /* OCTSeenReceipt.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTSeenReceipt.m; path = Classes/Private/Wrapper/OCTSeenReceipt.m; sourceTree = SOURCE_ROOT; };
 		B2NGCFIX010REF00000000 /* OCTGroupPendingLeaves.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTGroupPendingLeaves.m; path = Classes/Private/Manager/Groups/OCTGroupPendingLeaves.m; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -1039,6 +1046,7 @@
 				B2BOOTNET000001 /* OCTSubmanagerBootstrapNetworkChangeTests.m */,
 				B2TXTPART0000001 /* OCTTextPartsAndGroupSendTests.m */,
 				B2GRPRLM0000001 /* OCTGroupRealmTests.m */,
+				B2SEENTST000001 /* OCTSeenReceiptTests.m */,
 				11D6512E1B89238F00C3DD23 /* OCTVideoEngineTests.m */,
 				F5BC99BC1C2A171D00425CE3 /* YUVPlanes */,
 			);
@@ -1395,6 +1403,7 @@
 				B2FA0001B00000000000000 /* OCTNgcHistoryDowngradePolicy.m in Sources */,
 				B2FA0002B00000000000000 /* OCTPushUrlValidator.m in Sources */,
 				B2NGCFIX009B00000000000 /* OCTNgcKeyValue.m in Sources */,
+				B2SEEN001B0000000000000 /* OCTSeenReceipt.m in Sources */,
 				B2NGCFIX010B00000000000 /* OCTGroupPendingLeaves.m in Sources */,
 				9CB44BE61B84D9E1007FA7B6 /* OCTChat.m in Sources */,
 				11B0A0121DC64D75000C1721 /* OCTGroupPeer.m in Sources */,
@@ -1475,6 +1484,7 @@
 				B2FA0001B10000000000000 /* OCTNgcHistoryDowngradePolicy.m in Sources */,
 				B2FA0002B10000000000000 /* OCTPushUrlValidator.m in Sources */,
 				B2NGCFIX009B10000000000 /* OCTNgcKeyValue.m in Sources */,
+				B2SEEN001B1000000000000 /* OCTSeenReceipt.m in Sources */,
 				B2NGCFIX010B10000000000 /* OCTGroupPendingLeaves.m in Sources */,
 				F5BF42781C2D1F75008283E0 /* OCTAudioQueue.m in Sources */,
 				11D6510B1B8922AF00C3DD23 /* OCTToxAVConstants.m in Sources */,
@@ -1487,6 +1497,7 @@
 				B2BOOTNET000002 /* OCTSubmanagerBootstrapNetworkChangeTests.m in Sources */,
 				B2TXTPART0000002 /* OCTTextPartsAndGroupSendTests.m in Sources */,
 				B2GRPRLM0000002 /* OCTGroupRealmTests.m in Sources */,
+				B2SEENTST000002 /* OCTSeenReceiptTests.m in Sources */,
 				11D650E71B89227300C3DD23 /* OCTMessageCall.m in Sources */,
 				11BB6EAF1CC3930A00A531A8 /* OCTFileTools.m in Sources */,
 				9CB44C131B84DBA3007FA7B6 /* OCTRealmManager.m in Sources */,
@@ -1549,6 +1560,7 @@
 				B2FA0001B20000000000000 /* OCTNgcHistoryDowngradePolicy.m in Sources */,
 				B2FA0002B20000000000000 /* OCTPushUrlValidator.m in Sources */,
 				B2NGCFIX009B20000000000 /* OCTNgcKeyValue.m in Sources */,
+				B2SEEN001B2000000000000 /* OCTSeenReceipt.m in Sources */,
 				B2NGCFIX010B20000000000 /* OCTGroupPendingLeaves.m in Sources */,
 				11AF89031C98C25A00AD1D9F /* OCTFileBaseOperation.m in Sources */,
 				1183BC6B1C9EBBE5000CD310 /* OCTFileUploadOperation.m in Sources */,
@@ -1628,6 +1640,7 @@
 				B2FA0001B30000000000000 /* OCTNgcHistoryDowngradePolicy.m in Sources */,
 				B2FA0002B30000000000000 /* OCTPushUrlValidator.m in Sources */,
 				B2NGCFIX009B30000000000 /* OCTNgcKeyValue.m in Sources */,
+				B2SEEN001B3000000000000 /* OCTSeenReceipt.m in Sources */,
 				B2NGCFIX010B30000000000 /* OCTGroupPendingLeaves.m in Sources */,
 				F5BF42791C2D1F7D008283E0 /* OCTAudioQueue.m in Sources */,
 				11D6510D1B8922AF00C3DD23 /* OCTToxAVConstants.m in Sources */,

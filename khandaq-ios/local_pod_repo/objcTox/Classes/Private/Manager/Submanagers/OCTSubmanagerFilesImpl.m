@@ -478,6 +478,10 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
         messageFile.fileType = OCTMessageFileTypeWaitingConfirmation;
         messageFile.fileSize = fileSize;
     }];
+    // KHANDAQ (0.2.57): the new transfer has a new Tox file id, and the friend knows the file by it alone.
+    // A file sent while they were offline left here without one, so their read receipt, reaction or delete
+    // for it named a file this side could not find.
+    [self stampFileIdHexOnMessage:message fileNumber:fileNumber friendNumber:friend.friendNumber];
 
     NSDictionary *userInfo = [self fileOperationUserInfoWithMessage:message];
     OCTFilePathInput *input = [[OCTFilePathInput alloc] initWithFilePath:filePath];

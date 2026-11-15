@@ -5,6 +5,7 @@
 #import "OCTTox+Private.h"
 #import "OCTToxOptions+Private.h"
 #import "OCTLogging.h"
+#import "OCTSeenReceipt.h"
 
 void (*_tox_self_get_public_key)(const Tox *tox, uint8_t *public_key);
 
@@ -4323,6 +4324,27 @@ void friendLosslessPacketCallback(
             }
             else if ([tox.delegate respondsToSelector:@selector(tox:friendMessageReactionWithMsgv3Hash:emoji:add:friendNumber:)]) {
                 [tox.delegate tox:tox friendMessageReactionWithMsgv3Hash:hashHex emoji:emoji add:add friendNumber:friendNumber];
+            }
+        });
+
+        return;
+    }
+
+    if (pktType == kOCTSeenReceiptPacketId) {
+        // KHANDAQ (0.2.57): a read receipt ("KQ" packet 189, exactly 41 bytes, see OCTSeenReceipt). Anything
+        // else under this id is dropped with a debug line only, as the Android and desktop clients drop it.
+        OCTSeenReceipt *receipt = [OCTSeenReceipt receiptWithBytes:data length:length];
+        if (receipt == nil) {
+            OCTLogCDebug(@"dropping a malformed seen packet of %zu bytes from friend %u", tox, length, friendNumber);
+            return;
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if ([tox.delegate respondsToSelector:@selector(tox:friendSeenWithAnchorType:anchorHex:seenTime:friendNumber:)]) {
+                [tox.delegate tox:tox friendSeenWithAnchorType:receipt.anchorType
+                                                     anchorHex:receipt.anchorHex
+                                                      seenTime:receipt.seenTime
+                                                  friendNumber:friendNumber];
             }
         });
 

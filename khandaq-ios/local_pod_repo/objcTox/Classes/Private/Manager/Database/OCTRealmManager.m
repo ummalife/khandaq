@@ -24,7 +24,7 @@
 // KHANDAQ (#82): 36 adds OCTMessageFile.groupPeerName + groupSenderPubkey (nullable strings).
 // KHANDAQ (#192): 37 adds OCTMessageAbstract.reactionsJSON (nullable string) + reactionsPending
 // (BOOL, defaults NO). All additive auto-migrations (existing rows get nil/0); no enumerate block.
-static const uint64_t kCurrentSchemeVersion = 42; // 42: +OCTMessageText.groupSenderPubkey (nullable string, additive — the author a signature is checked against, mirroring OCTMessageFile.groupSenderPubkey from 36); 41: +OCTNgcKeyValue table (audit#2 finding 1 — new CLASS, no existing row touched); 40: +OCTMessageAbstract.sortTimestamp (#H5 stable cross-device chat order) w/ backfill; 39: +edited/editedTimestamp/editPending (#208); 38: +OCTMessageFile.fileIdHex
+static const uint64_t kCurrentSchemeVersion = 43; // 43: +OCTFriend.seenWatermark/seenReportedDateInterval/seenPendingPacket (0.2.57 read receipts; additive, 0 and nil on existing friends, nothing to rewrite); 42: +OCTMessageText.groupSenderPubkey (nullable string, additive — the author a signature is checked against, mirroring OCTMessageFile.groupSenderPubkey from 36); 41: +OCTNgcKeyValue table (audit#2 finding 1 — new CLASS, no existing row touched); 40: +OCTMessageAbstract.sortTimestamp (#H5 stable cross-device chat order) w/ backfill; 39: +edited/editedTimestamp/editPending (#208); 38: +OCTMessageFile.fileIdHex
 static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrimaryKey";
 
 @interface OCTRealmManager ()
@@ -2224,6 +2224,12 @@ static NSString *OCTGroupFileBaseName(NSString *fileName)
                // additive: Realm creates an empty table and no existing object is read, rewritten
                // or enumerated, so there is deliberately nothing to do here. Left explicit rather
                // than absent so the next reader can see the version was considered, not skipped.
+
+               // KHANDAQ (0.2.57): 43 adds three columns to OCTFriend for read receipts: seenWatermark and
+               // seenReportedDateInterval (0 on every existing friend: nothing seen, nothing reported
+               // yet) and seenPendingPacket (nil: nothing waits). Realm adds a column with its zero value
+               // to every existing row by itself, and zero is the right start, so nothing is read or
+               // rewritten here either (OCTSeenReceiptTests opens a schema-42 profile to prove it).
     };
 }
 

@@ -46,6 +46,11 @@
     return (self.senderUniqueIdentifier == nil);
 }
 
+- (NSTimeInterval)outgoingSentDateInterval
+{
+    return (self.sortTimestamp > 0) ? self.sortTimestamp : self.dateInterval;
+}
+
 + (NSArray<RLMSortDescriptor *> *)chatOrderSortDescriptorsAscending:(BOOL)ascending
 {
     return @[

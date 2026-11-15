@@ -138,6 +138,18 @@
 - (BOOL)setIsTyping:(BOOL)isTyping inChat:(OCTChat *)chat error:(NSError **)error;
 
 /**
+ * KHANDAQ (0.2.57): tells the friend of a 1:1 chat that the newest message or file they sent has been seen
+ * (read receipt, "KQ" lossless packet 189). Call it only while the conversation is on screen with the app
+ * in the foreground and unlocked, never from a list preview, a notification or the background.
+ *
+ * Does nothing for a group, the Saved chat, or when the newest of their messages and files that has an id
+ * has been reported already. At most one receipt a second leaves for a friend, the later one replacing the
+ * one that waits; while the friend is offline, or the send fails, it waits in the profile and leaves when
+ * they connect.
+ */
+- (void)reportSeenInChat:(OCTChat *)chat;
+
+/**
  * Retry stale undelivered direct messages (watchdog tick, ~5s cadence).
  */
 - (void)tickDeliveryWatchdog;

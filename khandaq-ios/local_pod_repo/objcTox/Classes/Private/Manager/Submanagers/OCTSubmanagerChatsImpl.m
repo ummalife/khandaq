@@ -15,9 +15,11 @@
 #import "OCTFriend.h"
 #import "OCTLogging.h"
 #import "OCTSendMessageOperation.h"
+#import "OCTSeenReceipt.h"
 #import "OCTTox+Private.h"
 #import "OCTToxOptions+Private.h"
 #import <CommonCrypto/CommonHMAC.h>
+#import <QuartzCore/QuartzCore.h>
 #import <Security/Security.h>
 #if __has_include(<Firebase/Firebase.h>)
 #import <Firebase/Firebase.h>
@@ -165,11 +167,23 @@ static NSURLSession *khandaqPinnedPushSession(void)
 // parts), and a clock set back by more than this starts the stamps from it again.
 static const NSTimeInterval kOCTTextStampMaxLeadSec = 3600.0;
 
+// KHANDAQ (0.2.57): a read receipt leaves for a friend at most once a second; a later one replaces the one
+// that waits (SPEC: coalesce).
+static const NSTimeInterval kOCTSeenMinSendInterval = 1.0;
+// KHANDAQ (0.2.57): a reported arrival time further ahead of the clock than this was stamped by a clock
+// that has since been set back. It is let go, or nothing that came after it would be reported again until
+// the clock caught up with it.
+static const NSTimeInterval kOCTSeenReportedMaxLeadSec = 300.0;
+
 @interface OCTSubmanagerChatsImpl ()
 
 @property (strong, nonatomic, readonly) NSOperationQueue *sendMessageQueue;
 // KHANDAQ (review 0.2.56): the msgV3 stamp of the last text sent to each chat (chat id -> seconds).
 @property (strong, nonatomic, readonly) NSMutableDictionary<NSString *, NSNumber *> *lastTextStamps;
+// KHANDAQ (0.2.57): when a read receipt last left for each friend (public key -> CACurrentMediaTime()).
+@property (strong, nonatomic, readonly) NSMutableDictionary<NSString *, NSNumber *> *seenLastSendTimes;
+// KHANDAQ (0.2.57): the friends whose waiting read receipt leaves once their second is over (public keys).
+@property (strong, nonatomic, readonly) NSMutableSet<NSString *> *seenSendsScheduled;
 
 @end
 
@@ -187,6 +201,8 @@ static const NSTimeInterval kOCTTextStampMaxLeadSec = 3600.0;
     _sendMessageQueue = [NSOperationQueue new];
     _sendMessageQueue.maxConcurrentOperationCount = 1;
     _lastTextStamps = [NSMutableDictionary new];
+    _seenLastSendTimes = [NSMutableDictionary new];
+    _seenSendsScheduled = [NSMutableSet new];
 
     return self;
 }
@@ -842,6 +858,61 @@ static void triggerPush(NSString *used_pushToken,
     return [tox setUserIsTyping:isTyping forFriendNumber:friend.friendNumber error:error];
 }
 
+- (void)reportSeenInChat:(OCTChat *)chat
+{
+    if (chat == nil || chat.isInvalidated || chat.isGroup || chat.isSavedMessages) {
+        return;
+    }
+
+    OCTFriend *friend = [chat.friends firstObject];
+    if (friend == nil || friend.isInvalidated || friend.publicKey.length == 0) {
+        return;
+    }
+
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    NSTimeInterval reported = friend.seenReportedDateInterval;
+    if (reported > now + kOCTSeenReportedMaxLeadSec) {
+        reported = 0;
+    }
+
+    // The newest message or file from the friend that has an id, by when it came to this device: the
+    // newest the person has had in front of them. The chat sorts by the sender's clock, and a file, which
+    // carries no time, by when it came; the newest in that order can be older than a text that came after
+    // it, and a receipt for it would leave that text unseen at the sender.
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND senderUniqueIdentifier == %@ AND dateInterval > %@",
+                              chat.uniqueIdentifier, friend.uniqueIdentifier, @(reported)];
+    RLMResults *results = [[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate]
+                           sortedResultsUsingKeyPath:@"dateInterval" ascending:NO];
+
+    for (OCTMessageAbstract *message in results) {
+        NSData *packet = nil;
+        if (message.messageText.msgv3HashHex.length > 0) {
+            packet = [OCTSeenReceipt packetWithAnchorType:OCTSeenAnchorTypeText
+                                                anchorHex:message.messageText.msgv3HashHex
+                                                 seenTime:(uint32_t)MAX(now, 0.0)];
+        }
+        else if (message.messageFile.fileIdHex.length > 0) {
+            packet = [OCTSeenReceipt packetWithAnchorType:OCTSeenAnchorTypeFile
+                                                anchorHex:message.messageFile.fileIdHex
+                                                 seenTime:(uint32_t)MAX(now, 0.0)];
+        }
+        if (packet == nil) {
+            // No id to name it by (a call, a text from a client without msgV3): the one before it.
+            continue;
+        }
+
+        NSTimeInterval arrived = message.dateInterval;
+        [realmManager updateObject:friend withBlock:^(OCTFriend *theFriend) {
+            theFriend.seenReportedDateInterval = arrived;
+            theFriend.seenPendingPacket = packet;
+        }];
+        [self sendPendingSeenToFriend:friend];
+        return;
+    }
+}
+
 #pragma mark -  NSNotification
 
 - (void)friendConnectionStatusChangeNotification:(NSNotification *)notification
@@ -862,6 +933,8 @@ static void triggerPush(NSString *used_pushToken,
         [self flushPendingReactionsForFriend:friend];
         // KHANDAQ (#208): deliver edits made while this friend was offline
         [self flushPendingEditsForFriend:friend];
+        // KHANDAQ (0.2.57): the read receipt that waited for this friend
+        [self sendPendingSeenToFriend:friend];
     }
 }
 
@@ -884,11 +957,75 @@ static void triggerPush(NSString *used_pushToken,
             [self flushPendingReactionsForFriend:friend];
             // KHANDAQ (#208): retry pending edit deliveries too
             [self flushPendingEditsForFriend:friend];
+            // KHANDAQ (0.2.57): and a read receipt that still waits (after a start, once they are connected)
+            [self sendPendingSeenToFriend:friend];
         }
     }
 }
 
 #pragma mark -  Private
+
+/**
+ * KHANDAQ (0.2.57): sends the read receipt that waits for the friend, unless one left for them less than a
+ * second ago: then it leaves when that second is over, as the newest one waiting then. It keeps waiting
+ * while the friend is offline or the send fails, and is let go once it has left.
+ */
+- (void)sendPendingSeenToFriend:(OCTFriend *)friend
+{
+    if (friend.isInvalidated || friend.seenPendingPacket.length == 0 || friend.publicKey.length == 0) {
+        return;
+    }
+
+    NSString *publicKey = friend.publicKey;
+    NSTimeInterval now = CACurrentMediaTime();
+    NSNumber *lastSend = self.seenLastSendTimes[publicKey];
+    if (lastSend != nil && now - lastSend.doubleValue < kOCTSeenMinSendInterval) {
+        [self scheduleSeenSendToFriendWithPublicKey:publicKey after:kOCTSeenMinSendInterval - (now - lastSend.doubleValue)];
+        return;
+    }
+
+    OCTTox *tox = [self.dataSource managerGetTox];
+    OCTToxFriendNumber friendNumber = [tox friendNumberWithPublicKey:publicKey error:nil];
+    if (friendNumber == kOCTToxFriendNumberFailure) {
+        return;
+    }
+
+    NSData *packet = friend.seenPendingPacket;
+    NSError *error = nil;
+    if (! [tox sendLosslessPacketWithFriendNumber:friendNumber bytes:packet error:&error]) {
+        OCTLogDebug(@"seen: the receipt for %@ waits, the send failed: %@", publicKey, error);
+        return;
+    }
+
+    self.seenLastSendTimes[publicKey] = @(now);
+    [[self.dataSource managerGetRealmManager] updateObject:friend withBlock:^(OCTFriend *theFriend) {
+        if ([theFriend.seenPendingPacket isEqualToData:packet]) {
+            theFriend.seenPendingPacket = nil;
+        }
+    }];
+}
+
+- (void)scheduleSeenSendToFriendWithPublicKey:(NSString *)publicKey after:(NSTimeInterval)delay
+{
+    if ([self.seenSendsScheduled containsObject:publicKey]) {
+        return;
+    }
+    [self.seenSendsScheduled addObject:publicKey];
+
+    __weak OCTSubmanagerChatsImpl *weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(MAX(delay, 0.01) * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        __strong OCTSubmanagerChatsImpl *strongSelf = weakSelf;
+        if (! strongSelf) {
+            return;
+        }
+        [strongSelf.seenSendsScheduled removeObject:publicKey];
+
+        OCTFriend *friend = [[strongSelf.dataSource managerGetRealmManager] friendWithPublicKey:publicKey];
+        if (friend) {
+            [strongSelf sendPendingSeenToFriend:friend];
+        }
+    });
+}
 
 - (void)resendUndeliveredMessagesToFriend:(OCTFriend *)friend
 {
@@ -1653,6 +1790,66 @@ serialize:
         m.messageText.text = newText;
         m.edited = YES;
         m.editedTimestamp = (NSTimeInterval)editTs;
+    }];
+}
+
+// KHANDAQ (0.2.57): the friend has seen everything we sent them up to the anchored message or file (read
+// receipt, packet 189). The watermark moves to when we sent that one, never back, and only for an id of our
+// OWN in the 1:1 chat with them: a receipt for anything else is dropped.
+- (void)tox:(OCTTox *)tox friendSeenWithAnchorType:(uint8_t)anchorType
+                                         anchorHex:(NSString *)anchorHex
+                                          seenTime:(uint32_t)seenTime
+                                      friendNumber:(OCTToxFriendNumber)friendNumber
+{
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+
+    NSString *publicKey = [[self.dataSource managerGetTox] publicKeyFromFriendNumber:friendNumber error:nil];
+    OCTFriend *friend = (publicKey.length > 0) ? [realmManager friendWithPublicKey:publicKey] : nil;
+    if (! friend || anchorHex.length != 64) {
+        OCTLogDebug(@"seen: dropping a receipt from friend number %u, not a friend here", friendNumber);
+        return;
+    }
+
+    // The chat as it is: a receipt never makes one.
+    OCTChat *chat = [[realmManager objectsWithClass:[OCTChat class]
+                                          predicate:[NSPredicate predicateWithFormat:@"ANY friends == %@", friend]] firstObject];
+    if (! chat || chat.isGroup) {
+        OCTLogDebug(@"seen: dropping a receipt from %@, there is no chat with them", publicKey);
+        return;
+    }
+
+    NSPredicate *predicate = nil;
+    if (anchorType == OCTSeenAnchorTypeText) {
+        predicate = [NSPredicate predicateWithFormat:
+                     @"chatUniqueIdentifier == %@ AND senderUniqueIdentifier == nil AND messageText.msgv3HashHex == %@",
+                     chat.uniqueIdentifier, anchorHex];
+    }
+    else if (anchorType == OCTSeenAnchorTypeFile) {
+        predicate = [NSPredicate predicateWithFormat:
+                     @"chatUniqueIdentifier == %@ AND senderUniqueIdentifier == nil AND messageFile.fileIdHex ==[c] %@",
+                     chat.uniqueIdentifier, anchorHex];
+    }
+    else {
+        return;
+    }
+
+    RLMResults *results = [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
+    if (results.count == 0) {
+        OCTLogDebug(@"seen: dropping a receipt from %@, none of our messages has the id %@", publicKey, anchorHex);
+        return;
+    }
+
+    // A resend can leave two rows with one id (see friendHighLevelACK): the later one counts.
+    NSTimeInterval sentTime = 0;
+    for (OCTMessageAbstract *message in results) {
+        sentTime = MAX(sentTime, [message outgoingSentDateInterval]);
+    }
+    if (sentTime <= friend.seenWatermark) {
+        return;
+    }
+
+    [realmManager updateObject:friend withBlock:^(OCTFriend *theFriend) {
+        theFriend.seenWatermark = sentTime;
     }];
 }
 

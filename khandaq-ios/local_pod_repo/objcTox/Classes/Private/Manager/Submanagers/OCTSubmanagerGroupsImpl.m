@@ -1316,10 +1316,12 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                }
 
                                if (success) {
+                                   // KHANDAQ (0.2.56): every packet of the file went, which tells nothing of
+                                   // who got it: it is sent (one mark), as on Android. It is delivered only
+                                   // when a member confirms it has it (groupSyncConfirmations).
                                    [realm updateObject:message.messageFile withBlock:^(OCTMessageFile *file) {
                                        file.fileType = OCTMessageFileTypeReady;
                                        file.groupTransferProgress = 1.0f;
-                                       file.isDelivered = YES;
                                    }];
                                    [realm updateObject:message withBlock:^(OCTMessageAbstract *abstract) {
                                        abstract.groupPendingSend = NO;
@@ -4350,10 +4352,21 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                 return NO;
             }
 
-            return [[self.dataSource managerGetTox] groupSendCustomPacket:packet
-                                                            groupNumber:groupNumber
-                                                               lossless:YES
-                                                                  error:error];
+            // KHANDAQ (0.2.56): on the tox queue, as every other call into toxcore: the transfer sends from
+            // queues of its own, and toxcore is not thread-safe (a send ran next to tox_iterate).
+            __block BOOL sent = NO;
+            __block NSError *sendError = nil;
+            [self performSyncOnToxQueue:^(OCTTox *tox) {
+                NSError *toxError = nil;
+                sent = [tox groupSendCustomPacket:packet groupNumber:groupNumber lossless:YES error:&toxError];
+                sendError = toxError;
+            }];
+
+            if (! sent && error) {
+                *error = sendError;
+            }
+
+            return sent;
         }
         incomingFilesDirectory:^NSString *(uint32_t groupNumber) {
             __strong typeof(weakSelf) self = weakSelf;
@@ -4423,6 +4436,45 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                         msgIdHex:msgIdHex
                                                         progress:progress];
         }];
+
+    // KHANDAQ (0.2.56): the chunks a member asks for again go to that member alone, and the packets of a file
+    // cost the upload pace once for every member they go to (OCTNgcGroupFileTransfer).
+    self.fileTransfer.sendPrivatePacketBlock = ^BOOL(uint32_t groupNumber, uint32_t peerId, NSData *packet, NSError **error) {
+        __strong typeof(weakSelf) self = weakSelf;
+
+        if (! self || [self.pendingGroupLeaves containsGroupNumber:groupNumber]) {
+            return NO;
+        }
+
+        __block BOOL sent = NO;
+        __block NSError *sendError = nil;
+        [self performSyncOnToxQueue:^(OCTTox *tox) {
+            NSError *toxError = nil;
+            sent = [tox groupSendCustomPrivatePacket:packet groupNumber:groupNumber peerId:peerId lossless:YES error:&toxError];
+            sendError = toxError;
+        }];
+
+        if (! sent && error) {
+            *error = sendError;
+        }
+
+        return sent;
+    };
+    self.fileTransfer.memberCountBlock = ^NSUInteger(uint32_t groupNumber) {
+        __strong typeof(weakSelf) self = weakSelf;
+
+        if (! self || [self.pendingGroupLeaves containsGroupNumber:groupNumber]) {
+            return 0;
+        }
+
+        // The peers toxcore confirmed, this client among them: a packet into the group goes to the others.
+        __block uint32_t peers = 0;
+        [self performSyncOnToxQueue:^(OCTTox *tox) {
+            peers = [tox groupPeerCountForGroupNumber:groupNumber error:nil];
+        }];
+
+        return peers > 1 ? (NSUInteger)(peers - 1) : 0;
+    };
 }
 
 - (void)setupLiveAudioIfNeeded
@@ -5722,10 +5774,10 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                OCTRealmManager *realm = [self.dataSource managerGetRealmManager];
 
                                if (success) {
+                                   // KHANDAQ (0.2.56): sent, not delivered: see -sendFileAtPath:toChat:...
                                    [realm updateObject:messageFile withBlock:^(OCTMessageFile *file) {
                                        file.fileType = OCTMessageFileTypeReady;
                                        file.groupTransferProgress = 1.0f;
-                                       file.isDelivered = YES;
                                    }];
                                    [realm updateObject:pendingMessage withBlock:^(OCTMessageAbstract *abstract) {
                                        abstract.groupPendingSend = NO;

@@ -30,8 +30,29 @@ static const int kOCTNgcNackMaxIndicesPerPacket = 256;
 static const NSTimeInterval kOCTNgcResendCooldown = 2.0;
 // Bound on the cooldown map itself, so it cannot become the leak.
 static const NSUInteger kOCTNgcMaxTrackedResendRequesters = 512;
-// Resend jobs allowed to sit on the (serial) send queue, which also carries incoming parsing.
+// Resend jobs allowed to wait on the resend queue.
 static const NSInteger kOCTNgcMaxPendingResendJobs = 4;
+
+// KHANDAQ (0.2.56): the pace of the packets of the files this client sends into groups, the desktop's
+// (Air::UploadPace in airgroupfilequeue.h). toxcore tells nothing of how full a member's send array is: a
+// packet to the whole group is taken even when some member's array (GCC_BUFFER_SIZE, 8192 entries, a chunk
+// takes 28 of them) has no room for it, and it is then lost for that member. iOS sent all the chunks of a
+// file at once, so past about 290 chunks (some 11 MB) the rest was lost and the file never arrived. The rate
+// counts what this device uploads, a packet once for every member it goes to: the desktop measured it, two of
+// its nodes on one Mac got a file of 14 MB whole at this rate, and at 1 and 2 MiB/s the array filled.
+static const double kOCTNgcUploadBytesPerSecond = 512.0 * 1024.0;
+static const NSTimeInterval kOCTNgcUploadBurst = 0.25;
+// KHANDAQ (0.2.56): how long a file waits for somebody in its group to send to before it is not sent, the
+// desktop's aloneLimitMs. A member that drops off stays a peer for toxcore for about a minute.
+static const NSTimeInterval kOCTNgcAloneLimit = 120.0;
+static const NSTimeInterval kOCTNgcAlonePoll = 0.5;
+// KHANDAQ (0.2.56): a chunk asked for again goes to the member that asked, as a private packet, which
+// toxcore refuses while that member's send array is full. It is tried again a little later, for this long
+// at most: Android's CHUNK_SEND_STALL_MS, and its back-off of 10 ms and 2 ms more a try, 120 ms at most.
+static const NSTimeInterval kOCTNgcPrivateSendStall = 20.0;
+// KHANDAQ (0.2.56): a request for the whole file (Android sends one while it has nothing of the file) is
+// served once in this long, whoever sends it: Android's RESEND_SERVICE_THROTTLE_MS.
+static const NSTimeInterval kOCTNgcWholeResendThrottle = 4.0;
 
 static const size_t kOCTNgcMaxFileSize = 36701;
 static const size_t kOCTNgcMaxPacketSize = 37000;
@@ -106,9 +127,79 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 @property (nonatomic, assign) uint64_t fileSize;
 @property (nonatomic, assign) int totalChunks;
 @property (nonatomic, assign) uint32_t groupNumber;
+// KHANDAQ (0.2.56): the name its BEGIN carries, which goes again before the chunks asked for.
+@property (nonatomic, copy) NSString *fileName;
+// KHANDAQ (0.2.56): how many of its chunks went so far. A chunk asked for before it went is not sent again
+// (an iOS receiver asks for the chunks still to come too): it comes in its turn.
+@property (atomic, assign) int chunksSent;
 @end
 
 @implementation OCTNgcSentChunkedFile
+@end
+
+/**
+ * KHANDAQ (0.2.56): the upload pace (kOCTNgcUploadBytesPerSecond), shared by the files this client sends
+ * and the chunks it sends again. A packet may go whenever the credit is positive, however much it costs:
+ * a costly one is paid for by the wait after it, and after a pause at most a burst goes at once.
+ */
+@interface OCTNgcUploadPace : NSObject
+@property (atomic, assign) double bytesPerSecond;
+@property (atomic, assign) double burstBytes;
+/** Waits on the calling thread until a packet may go, and spends what it costs. */
+- (void)waitToSpend:(double)cost;
+@end
+
+@implementation OCTNgcUploadPace
+{
+    double _credit;
+    NSTimeInterval _lastTime;
+}
+
+- (instancetype)init
+{
+    self = [super init];
+
+    if (! self) {
+        return nil;
+    }
+
+    _bytesPerSecond = kOCTNgcUploadBytesPerSecond;
+    _burstBytes = kOCTNgcUploadBytesPerSecond * kOCTNgcUploadBurst;
+    _lastTime = -1.0;
+
+    return self;
+}
+
+- (void)waitToSpend:(double)cost
+{
+    while (YES) {
+        NSTimeInterval wait = 0.0;
+
+        @synchronized (self) {
+            const NSTimeInterval now = [NSProcessInfo processInfo].systemUptime;
+            const double rate = self.bytesPerSecond;
+
+            if (_lastTime < 0.0) {
+                _credit = self.burstBytes;
+            }
+            else if (now > _lastTime) {
+                _credit = MIN(self.burstBytes, _credit + (now - _lastTime) * rate);
+            }
+
+            _lastTime = MAX(_lastTime, now);
+
+            if (_credit > 0.0) {
+                _credit -= cost;
+                return;
+            }
+
+            wait = (1.0 - _credit) / rate;
+        }
+
+        [NSThread sleepForTimeInterval:wait];
+    }
+}
+
 @end
 
 @interface OCTNgcOrphanChunk : NSObject
@@ -135,6 +226,16 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 @property (nonatomic, strong) NSMutableSet<NSString *> *cancelledMsgIdHexes;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, OCTNgcSentChunkedFile *> *sentChunkedFiles;
 @property (nonatomic, strong) dispatch_queue_t sendQueue;
+// KHANDAQ (0.2.56): the files this client sends go from a queue of their own, at the upload pace, and the
+// chunks other members ask for again from another, at the same pace. A paced file of 25 MB takes most of a
+// minute for each member, and on sendQueue it would have held up every file coming in meanwhile.
+@property (nonatomic, strong) dispatch_queue_t uploadQueue;
+@property (nonatomic, strong) dispatch_queue_t resendQueue;
+@property (nonatomic, strong) OCTNgcUploadPace *pace;
+// KHANDAQ (0.2.56): kOCTNgcAloneLimit, which the tests shorten.
+@property (atomic, assign) NSTimeInterval aloneLimit;
+// KHANDAQ (0.2.56): when a request for a whole file was last served (kOCTNgcWholeResendThrottle).
+@property (nonatomic, assign) NSTimeInterval lastWholeResendServedAt;
 /**
  * KHANDAQ (audit 2026-08-20): "msgIdHex|peerId" -> when we last honoured a resend request for it.
  *
@@ -149,9 +250,12 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
  * group+msgId, RESEND_SERVICE_THROTTLE_MS = 4000 overall, and it parses the request into a
  * boolean[] so duplicates cost nothing). Desktop has no resend path at all. iOS was the one client
  * that would serve this unbounded, which is what makes it an oversight rather than a trade-off.
+ *
+ * KHANDAQ (0.2.56): the chunks asked for now go to the member that asked (sendPrivatePacketBlock), at the
+ * upload pace; they go to the whole group only where no private path is set.
  */
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *lastResendServedAt;
-/** Resend jobs sitting on sendQueue. Bounded: the queue also carries incoming parsing. */
+/** Resend jobs waiting on resendQueue. Bounded: a flood of requests must not queue up resends for long. */
 @property (nonatomic, assign) NSInteger pendingResendJobs;
 @end
 
@@ -184,6 +288,10 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     _sentChunkedFiles = [NSMutableDictionary new];
     _lastResendServedAt = [NSMutableDictionary new];
     _sendQueue = dispatch_queue_create("ngc-group-file-send", DISPATCH_QUEUE_SERIAL);
+    _uploadQueue = dispatch_queue_create("ngc-group-file-upload", DISPATCH_QUEUE_SERIAL);
+    _resendQueue = dispatch_queue_create("ngc-group-file-resend", DISPATCH_QUEUE_SERIAL);
+    _pace = [OCTNgcUploadPace new];
+    _aloneLimit = kOCTNgcAloneLimit;
 
     return self;
 }
@@ -234,14 +342,21 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return;
     }
 
-    dispatch_async(self.sendQueue, ^{
+    // KHANDAQ (0.2.56): read by the upload and resend queues, so it is locked rather than kept on one queue.
+    @synchronized (self.cancelledMsgIdHexes) {
         [self.cancelledMsgIdHexes addObject:msgIdHex.lowercaseString];
-    });
+    }
 }
 
 - (BOOL)isSendCancelledForMsgIdHex:(NSString *)msgIdHex
 {
-    return msgIdHex.length > 0 && [self.cancelledMsgIdHexes containsObject:msgIdHex.lowercaseString];
+    if (msgIdHex.length == 0) {
+        return NO;
+    }
+
+    @synchronized (self.cancelledMsgIdHexes) {
+        return [self.cancelledMsgIdHexes containsObject:msgIdHex.lowercaseString];
+    }
 }
 
 - (void)handleIncomingPacketWithGroupNumber:(uint32_t)groupNumber
@@ -319,7 +434,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     NSParameterAssert(filePath);
     NSParameterAssert(msgIdHex);
 
-    dispatch_async(self.sendQueue, ^{
+    dispatch_async(self.uploadQueue, ^{
         NSError *error = nil;
         BOOL success = [self sendFileAtPathOnWorker:filePath
                                         groupNumber:groupNumber
@@ -425,7 +540,15 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     [self appendFilename:fileName toData:packet];
     [packet appendData:fileData];
 
-    return [self sendPacket:packet groupNumber:groupNumber error:error];
+    NSString *msgIdHex = [OCTTox binToHexString:(uint8_t *)msgId.bytes length:msgId.length];
+    NSUInteger members = [self waitForMembersInGroupNumber:groupNumber msgIdHex:msgIdHex waited:NULL];
+
+    if (members == 0) {
+        [self fillAloneError:error msgIdHex:msgIdHex];
+        return NO;
+    }
+
+    return [self sendPacedPacket:packet groupNumber:groupNumber members:members error:error];
 }
 
 - (BOOL)sendChunkedFileAtPath:(NSString *)filePath
@@ -437,7 +560,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
                         error:(NSError **)error
 {
     int totalChunks = (int)((fileSize + kOCTNgcChunkPayloadMax - 1) / kOCTNgcChunkPayloadMax);
-    NSString *msgIdHex = [OCTTox binToHexString:msgId.bytes length:msgId.length];
+    NSString *msgIdHex = [OCTTox binToHexString:(uint8_t *)msgId.bytes length:msgId.length];
 
     // KHANDAQ (#15): remember this send so we can re-serve chunks a receiver NACKs for.
     OCTNgcSentChunkedFile *sentContext = [OCTNgcSentChunkedFile new];
@@ -446,6 +569,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     sentContext.fileSize = fileSize;
     sentContext.totalChunks = totalChunks;
     sentContext.groupNumber = groupNumber;
+    sentContext.fileName = fileName;
     @synchronized (self.sentChunkedFiles) {
         self.sentChunkedFiles[msgIdHex.lowercaseString] = sentContext;
         while (self.sentChunkedFiles.count > 24) {
@@ -453,20 +577,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         }
     }
 
-    NSMutableData *beginPacket = [NSMutableData dataWithCapacity:kOCTNgcFileBeginHeader];
-    [self appendMagicToData:beginPacket];
-    [beginPacket appendBytes:&(uint8_t){kOCTNgcPktFileBegin} length:1];
-    [self appendMsgId:msgId toData:beginPacket];
-    [self appendCreateTimestampToData:beginPacket];
-    [self appendFilename:fileName toData:beginPacket];
-    [self appendU64BE:fileSize toData:beginPacket];
-    [self appendU32BE:(uint32_t)kOCTNgcChunkPayloadMax toData:beginPacket];
-    [self appendU32BE:(uint32_t)totalChunks toData:beginPacket];
-
-    if (! [self sendPacket:beginPacket groupNumber:groupNumber error:error]) {
-        return NO;
-    }
-
+    NSData *beginPacket = [self beginPacketForSentFile:sentContext];
     NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:filePath];
 
     if (! handle) {
@@ -474,39 +585,61 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return NO;
     }
 
-    for (int chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+    // KHANDAQ (0.2.56): the BEGIN, then the chunks in order, each once the upload pace lets it go (see
+    // kOCTNgcUploadBytesPerSecond); -1 stands for the BEGIN.
+    int next = -1;
+
+    while (next < totalChunks) {
         if ([self isSendCancelledForMsgIdHex:msgIdHex]) {
             [handle closeFile];
             [self fillError:error code:OCTNgcGroupFileTransferErrorCancelled reason:@"Transfer cancelled"];
             return NO;
         }
 
-        uint64_t offset = (uint64_t)chunkIndex * kOCTNgcChunkPayloadMax;
-        NSUInteger toRead = (NSUInteger)MIN(kOCTNgcChunkPayloadMax, fileSize - offset);
-        [handle seekToFileOffset:offset];
-        NSData *payload = [handle readDataOfLength:toRead];
+        BOOL waited = NO;
+        NSUInteger members = [self waitForMembersInGroupNumber:groupNumber msgIdHex:msgIdHex waited:&waited];
 
-        if (payload.length != toRead) {
+        if (members == 0) {
             [handle closeFile];
-            [self fillError:error code:OCTNgcGroupFileTransferErrorMissingFile reason:@"Unexpected EOF"];
+            [self fillAloneError:error msgIdHex:msgIdHex];
             return NO;
         }
 
-        NSMutableData *chunkPacket = [NSMutableData dataWithCapacity:kOCTNgcFileChunkHeader + payload.length];
-        [self appendMagicToData:chunkPacket];
-        [chunkPacket appendBytes:&(uint8_t){kOCTNgcPktFileChunk} length:1];
-        [self appendMsgId:msgId toData:chunkPacket];
-        [self appendU32BE:(uint32_t)chunkIndex toData:chunkPacket];
-        [self appendU32BE:(uint32_t)payload.length toData:chunkPacket];
-        [chunkPacket appendData:payload];
+        if (waited && next > -1) {
+            // KHANDAQ (0.2.56): the group had nobody to send to. What went before was lost with the members
+            // that left, a member that comes now had none of it, and a receiver drops a file it gets no
+            // packet of for a minute: the file goes again from its BEGIN, as the desktop sends it then. A
+            // receiver that kept its part keeps it, as a BEGIN of a file it holds does not wipe it.
+            OCTLogInfo(@"NGC group file %@ goes again from its BEGIN: the group had nobody to send to", msgIdHex);
+            next = -1;
+        }
 
-        if (! [self sendPacket:chunkPacket groupNumber:groupNumber error:error]) {
+        NSData *packet = beginPacket;
+
+        if (next >= 0) {
+            packet = [self chunkPacketForSentFile:sentContext chunkIndex:next handle:handle];
+
+            if (! packet) {
+                [handle closeFile];
+                [self fillError:error code:OCTNgcGroupFileTransferErrorMissingFile reason:@"Unexpected EOF"];
+                return NO;
+            }
+        }
+
+        if (! [self sendPacedPacket:packet groupNumber:groupNumber members:members error:error]) {
             [handle closeFile];
             return NO;
         }
+
+        if (next < 0) {
+            next++;
+            continue;
+        }
+
+        sentContext.chunksSent = MAX(sentContext.chunksSent, next + 1);
 
         if (progressBlock || self.transferProgressBlock) {
-            float chunkProgress = (float)(chunkIndex + 1) / (float)totalChunks;
+            float chunkProgress = (float)(next + 1) / (float)totalChunks;
 
             if (progressBlock) {
                 dispatch_async(dispatch_get_main_queue(), ^{
@@ -521,13 +654,54 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
             }
         }
 
-        if ((chunkIndex & 7) == 7) {
-            usleep(2000);
-        }
+        next++;
     }
 
     [handle closeFile];
     return YES;
+}
+
+- (NSData *)beginPacketForSentFile:(OCTNgcSentChunkedFile *)sentFile
+{
+    NSMutableData *beginPacket = [NSMutableData dataWithCapacity:kOCTNgcFileBeginHeader];
+    [self appendMagicToData:beginPacket];
+    [beginPacket appendBytes:&(uint8_t){kOCTNgcPktFileBegin} length:1];
+    [self appendMsgId:sentFile.msgId toData:beginPacket];
+    [self appendCreateTimestampToData:beginPacket];
+    [self appendFilename:sentFile.fileName toData:beginPacket];
+    [self appendU64BE:sentFile.fileSize toData:beginPacket];
+    [self appendU32BE:(uint32_t)kOCTNgcChunkPayloadMax toData:beginPacket];
+    [self appendU32BE:(uint32_t)sentFile.totalChunks toData:beginPacket];
+    return beginPacket;
+}
+
+// nil when the file no longer holds the chunk.
+- (NSData *)chunkPacketForSentFile:(OCTNgcSentChunkedFile *)sentFile
+                                 chunkIndex:(int)chunkIndex
+                                     handle:(NSFileHandle *)handle
+{
+    uint64_t offset = (uint64_t)chunkIndex * (uint64_t)kOCTNgcChunkPayloadMax;
+
+    if (chunkIndex < 0 || offset >= sentFile.fileSize) {
+        return nil;
+    }
+
+    NSUInteger toRead = (NSUInteger)MIN((uint64_t)kOCTNgcChunkPayloadMax, sentFile.fileSize - offset);
+    [handle seekToFileOffset:offset];
+    NSData *payload = [handle readDataOfLength:toRead];
+
+    if (payload.length != toRead) {
+        return nil;
+    }
+
+    NSMutableData *chunkPacket = [NSMutableData dataWithCapacity:kOCTNgcFileChunkHeader + payload.length];
+    [self appendMagicToData:chunkPacket];
+    [chunkPacket appendBytes:&(uint8_t){kOCTNgcPktFileChunk} length:1];
+    [self appendMsgId:sentFile.msgId toData:chunkPacket];
+    [self appendU32BE:(uint32_t)chunkIndex toData:chunkPacket];
+    [self appendU32BE:(uint32_t)payload.length toData:chunkPacket];
+    [chunkPacket appendData:payload];
+    return chunkPacket;
 }
 
 - (BOOL)sendPacket:(NSData *)packet groupNumber:(uint32_t)groupNumber error:(NSError **)error
@@ -540,6 +714,67 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     }
 
     return YES;
+}
+
+// KHANDAQ (0.2.56): a packet to the whole group once the upload pace lets it go. It costs the pace its bytes
+// once for every member it goes to.
+- (BOOL)sendPacedPacket:(NSData *)packet groupNumber:(uint32_t)groupNumber members:(NSUInteger)members error:(NSError **)error
+{
+    [self.pace waitToSpend:(double)packet.length * (double)MAX(members, (NSUInteger)1)];
+    return [self sendPacket:packet groupNumber:groupNumber error:error];
+}
+
+- (NSUInteger)memberCountForGroupNumber:(uint32_t)groupNumber
+{
+    OCTNgcGroupFileTransferMemberCountBlock memberCountBlock = self.memberCountBlock;
+    return memberCountBlock ? memberCountBlock(groupNumber) : 1;
+}
+
+// KHANDAQ (0.2.56): how many members a packet into the group goes to, once there is one: toxcore takes a
+// packet for nobody and says it went, and a file that reached nobody was shown sent. Waits for one for
+// aloneLimit at most; 0 when none came, or when the send was called off meanwhile. *waited says whether the
+// group had nobody when it was asked.
+- (NSUInteger)waitForMembersInGroupNumber:(uint32_t)groupNumber msgIdHex:(NSString *)msgIdHex waited:(BOOL *)waited
+{
+    NSTimeInterval aloneSince = 0.0;
+
+    if (waited) {
+        *waited = NO;
+    }
+
+    while (YES) {
+        NSUInteger members = [self memberCountForGroupNumber:groupNumber];
+
+        if (members > 0) {
+            return members;
+        }
+
+        if (waited) {
+            *waited = YES;
+        }
+
+        const NSTimeInterval now = [NSProcessInfo processInfo].systemUptime;
+
+        if (aloneSince == 0.0) {
+            aloneSince = now;
+        }
+
+        if ((now - aloneSince) >= self.aloneLimit || [self isSendCancelledForMsgIdHex:msgIdHex]) {
+            return 0;
+        }
+
+        [NSThread sleepForTimeInterval:MIN(kOCTNgcAlonePoll, self.aloneLimit)];
+    }
+}
+
+- (void)fillAloneError:(NSError **)error msgIdHex:(NSString *)msgIdHex
+{
+    if ([self isSendCancelledForMsgIdHex:msgIdHex]) {
+        [self fillError:error code:OCTNgcGroupFileTransferErrorCancelled reason:@"Transfer cancelled"];
+        return;
+    }
+
+    [self fillError:error code:OCTNgcGroupFileTransferErrorSendFailed reason:@"Nobody in the group to send the file to"];
 }
 
 #pragma mark - Receive
@@ -1078,27 +1313,42 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     }
 
     NSData *msgId = [data subdataWithRange:NSMakeRange(8, 32)];
-    NSString *msgIdHex = [[OCTTox binToHexString:msgId.bytes length:msgId.length] lowercaseString];
-    uint32_t count = [self readU32BEFromData:data offset:40];
-
-    if (count == 0 || count > kOCTNgcNackMaxIndicesPerPacket || data.length < 44 + (NSUInteger)count * 4) {
-        return;
-    }
+    NSString *msgIdHex = [[OCTTox binToHexString:(uint8_t *)msgId.bytes length:msgId.length] lowercaseString];
 
     OCTNgcSentChunkedFile *context = nil;
     @synchronized (self.sentChunkedFiles) {
         context = self.sentChunkedFiles[msgIdHex];
     }
 
-    if (! context) {
+    // KHANDAQ (0.2.56): and only to the group the file went to. The chunks now go to the peer number that
+    // asked, and the same number names somebody else in another group.
+    if (! context || context.groupNumber != groupNumber) {
         return;  // not the original sender of this file (or it has been forgotten)
+    }
+
+    BOOL wholeFile = NO;
+    NSIndexSet *asked = [self chunksAskedForInRequest:data totalChunks:context.totalChunks wholeFile:&wholeFile];
+
+    if (asked.count == 0) {
+        return;
+    }
+
+    const NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+
+    // KHANDAQ (0.2.56): a request for the whole file is served once in kOCTNgcWholeResendThrottle, whoever
+    // asks, as Android serves one: it costs the whole file again.
+    if (wholeFile) {
+        @synchronized (self.lastResendServedAt) {
+            if (self.lastWholeResendServedAt > 0.0 && (now - self.lastWholeResendServedAt) < kOCTNgcWholeResendThrottle) {
+                return;
+            }
+        }
     }
 
     // KHANDAQ (audit 2026-08-20): who is asking, and how often. Both were unchecked; see
     // `lastResendServedAt`. peerId is what makes the cooldown per-requester rather than global, so
     // one peer spamming cannot deny an honest peer its retransmission.
     NSString *cooldownKey = [NSString stringWithFormat:@"%@|%u", msgIdHex, peerId];
-    const NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
     @synchronized (self.lastResendServedAt) {
         NSNumber *last = self.lastResendServedAt[cooldownKey];
         if (last != nil && (now - last.doubleValue) < kOCTNgcResendCooldown) {
@@ -1112,30 +1362,24 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
             [self.lastResendServedAt removeAllObjects];
             self.lastResendServedAt[cooldownKey] = @(now);
         }
-    }
 
-    // Duplicates are free to send and expensive to serve: 256 copies of index 0 used to mean 256
-    // full chunk broadcasts. An index set collapses them, and keeps the result ordered, which is
-    // also what the receiver's assembler prefers.
-    NSMutableIndexSet *wanted = [NSMutableIndexSet indexSet];
-    for (uint32_t i = 0; i < count; i++) {
-        uint32_t idx = [self readU32BEFromData:data offset:(44 + i * 4)];
-        if (idx < (uint32_t)context.totalChunks) {
-            [wanted addIndex:(NSUInteger)idx];
+        if (wholeFile) {
+            self.lastWholeResendServedAt = now;
         }
     }
+
+    // KHANDAQ (0.2.56): only the chunks that went. An iOS receiver lists the chunks still to come with the
+    // missing ones, and those come in their turn.
+    const int chunksSent = context.chunksSent;
+    NSMutableIndexSet *wanted = [asked mutableCopy];
+    [wanted removeIndexesInRange:NSMakeRange((NSUInteger)MAX(chunksSent, 0), NSNotFound - (NSUInteger)MAX(chunksSent, 0))];
+
     if (wanted.count == 0) {
         return;
     }
 
-    NSMutableArray<NSNumber *> *indices = [NSMutableArray arrayWithCapacity:wanted.count];
-    [wanted enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-        [indices addObject:@(idx)];
-    }];
-
-    // sendQueue is serial and also carries incoming SINGLE/BEGIN/CHUNK parsing, so an unbounded
-    // backlog of resend jobs does not merely delay the resends — it starves reception, and it keeps
-    // doing so after the flood stops. Refuse rather than queue.
+    // An unbounded backlog of resend jobs would keep serving a flood long after it stopped. Refuse rather
+    // than queue.
     @synchronized (self) {
         if (self.pendingResendJobs >= kOCTNgcMaxPendingResendJobs) {
             return;
@@ -1143,8 +1387,8 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         self.pendingResendJobs++;
     }
 
-    dispatch_async(self.sendQueue, ^{
-        [self resendChunks:indices forContext:context];
+    dispatch_async(self.resendQueue, ^{
+        [self resendChunks:wanted toPeerId:peerId forContext:context];
         @synchronized (self) {
             if (self.pendingResendJobs > 0) {
                 self.pendingResendJobs--;
@@ -1153,13 +1397,72 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     });
 }
 
-- (void)resendChunks:(NSArray<NSNumber *> *)indices forContext:(OCTNgcSentChunkedFile *)context
+/**
+ * KHANDAQ (0.2.56): the chunks a 0x14 request asks for, in either layout; nil for one that fits neither.
+ *   iOS:     u32 count (1...256), then count u32 indices.
+ *   Android: u32 total chunks of the file, then a bitmap of (total + 7) / 8 bytes, bit i (least significant
+ *            first) set for a chunk still missing (NgcGroupFileTransfer.buildFileRequestPacket). With total 0
+ *            and no bitmap it asks for the whole file (*wholeFile).
+ * iOS read only its own layout, so it answered no request from Android, and a file Android lost chunks of
+ * never arrived. The lengths tell the two apart: four bytes an index against one bit a chunk, so a request
+ * of the iOS layout is exactly 4 * count bytes long and one of Android's never is. Duplicates and indices
+ * past the file cost nothing.
+ */
+- (NSIndexSet *)chunksAskedForInRequest:(NSData *)data totalChunks:(int)totalChunks wholeFile:(BOOL *)wholeFile
+{
+    *wholeFile = NO;
+
+    if (data.length < 44 || totalChunks < 1) {
+        return nil;
+    }
+
+    const NSUInteger bodyLength = data.length - 44;
+    const uint32_t first = [self readU32BEFromData:data offset:40];
+    NSMutableIndexSet *asked = [NSMutableIndexSet indexSet];
+
+    if (first >= 1 && first <= (uint32_t)kOCTNgcNackMaxIndicesPerPacket && bodyLength == (NSUInteger)first * 4) {
+        for (uint32_t i = 0; i < first; i++) {
+            uint32_t index = [self readU32BEFromData:data offset:(44 + i * 4)];
+
+            if (index < (uint32_t)totalChunks) {
+                [asked addIndex:(NSUInteger)index];
+            }
+        }
+
+        return asked;
+    }
+
+    if (first == 0 && bodyLength == 0) {
+        *wholeFile = YES;
+        [asked addIndexesInRange:NSMakeRange(0, (NSUInteger)totalChunks)];
+        return asked;
+    }
+
+    if (first == (uint32_t)totalChunks && bodyLength >= ((NSUInteger)first + 7) / 8) {
+        const uint8_t *bitmap = (const uint8_t *)data.bytes + 44;
+
+        for (uint32_t i = 0; i < first; i++) {
+            if (bitmap[i >> 3] & (1u << (i & 7))) {
+                [asked addIndex:(NSUInteger)i];
+            }
+        }
+
+        return asked;
+    }
+
+    return nil;
+}
+
+// KHANDAQ (0.2.56): the chunks go to the member that asked for them, at the upload pace, its BEGIN first, as
+// Android sends them: a receiver whose minute ran out dropped the file and opens it again from the BEGIN,
+// one that still has it keeps what it has. They went to the whole group, at once, so a receiver that lost
+// chunks to a full send array lost the copies too.
+- (void)resendChunks:(NSIndexSet *)indices toPeerId:(uint32_t)peerId forContext:(OCTNgcSentChunkedFile *)context
 {
     // KHANDAQ (audit 2026-08-20): a cancelled send must stay cancelled. A peer asking for chunks of
     // a transfer the user has stopped would otherwise resurrect it — the same rule Android enforces
-    // before servicing a resend. This runs on sendQueue, which is the queue that mutates the set,
-    // so reading it here needs no extra synchronisation.
-    NSString *msgIdHex = [[OCTTox binToHexString:context.msgId.bytes length:context.msgId.length] lowercaseString];
+    // before servicing a resend.
+    NSString *msgIdHex = [[OCTTox binToHexString:(uint8_t *)context.msgId.bytes length:context.msgId.length] lowercaseString];
     if ([self isSendCancelledForMsgIdHex:msgIdHex]) {
         return;
     }
@@ -1169,34 +1472,70 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return;
     }
 
-    for (NSNumber *indexNum in indices) {
-        int chunkIndex = indexNum.intValue;
-        uint64_t offset = (uint64_t)chunkIndex * (uint64_t)kOCTNgcChunkPayloadMax;
-        if (offset >= context.fileSize) {
-            continue;
-        }
-
-        NSUInteger toRead = (NSUInteger)MIN((uint64_t)kOCTNgcChunkPayloadMax, context.fileSize - offset);
-        [handle seekToFileOffset:offset];
-        NSData *payload = [handle readDataOfLength:toRead];
-
-        if (payload.length != toRead) {
-            continue;
-        }
-
-        NSMutableData *chunkPacket = [NSMutableData dataWithCapacity:kOCTNgcFileChunkHeader + payload.length];
-        [self appendMagicToData:chunkPacket];
-        [chunkPacket appendBytes:&(uint8_t){kOCTNgcPktFileChunk} length:1];
-        [self appendMsgId:context.msgId toData:chunkPacket];
-        [self appendU32BE:(uint32_t)chunkIndex toData:chunkPacket];
-        [self appendU32BE:(uint32_t)payload.length toData:chunkPacket];
-        [chunkPacket appendData:payload];
-        [self sendPacket:chunkPacket groupNumber:context.groupNumber error:nil];
-
-        usleep(1500);
+    if (! [self sendResendPacket:[self beginPacketForSentFile:context] toPeerId:peerId context:context msgIdHex:msgIdHex]) {
+        [handle closeFile];
+        return;
     }
 
+    __block NSUInteger sent = 0;
+    [indices enumerateIndexesUsingBlock:^(NSUInteger index, BOOL *stop) {
+        NSData *chunkPacket = [self chunkPacketForSentFile:context chunkIndex:(int)index handle:handle];
+
+        if (! chunkPacket) {
+            return;
+        }
+
+        if ([self isSendCancelledForMsgIdHex:msgIdHex] ||
+            ! [self sendResendPacket:chunkPacket toPeerId:peerId context:context msgIdHex:msgIdHex]) {
+            *stop = YES;
+            return;
+        }
+
+        sent++;
+    }];
+
     [handle closeFile];
+    OCTLogInfo(@"NGC group file %@: %lu of %lu chunks sent again to peer %u",
+               msgIdHex, (unsigned long)sent, (unsigned long)indices.count, peerId);
+}
+
+// KHANDAQ (0.2.56): one packet to the member that asked for it, at the upload pace (it goes to one member).
+// toxcore refuses a private packet while that member's send array is full, so it is tried again a little
+// later, for kOCTNgcPrivateSendStall at most. NO when it cannot go: the member left, or its array stayed full.
+- (BOOL)sendResendPacket:(NSData *)packet
+                toPeerId:(uint32_t)peerId
+                 context:(OCTNgcSentChunkedFile *)context
+                msgIdHex:(NSString *)msgIdHex
+{
+    OCTNgcGroupFileTransferSendPrivatePacketBlock sendPrivatePacketBlock = self.sendPrivatePacketBlock;
+
+    if (! sendPrivatePacketBlock) {
+        NSUInteger members = [self memberCountForGroupNumber:context.groupNumber];
+        return [self sendPacedPacket:packet groupNumber:context.groupNumber members:members error:nil];
+    }
+
+    [self.pace waitToSpend:(double)packet.length];
+
+    const NSTimeInterval deadline = [NSProcessInfo processInfo].systemUptime + kOCTNgcPrivateSendStall;
+
+    for (int attempt = 0; ; attempt++) {
+        NSError *error = nil;
+
+        if (sendPrivatePacketBlock(context.groupNumber, peerId, packet, &error)) {
+            return YES;
+        }
+
+        BOOL arrayFull = [error.domain isEqualToString:kOCTToxErrorDomain] &&
+                         error.code == OCTToxErrorGroupSendCustomPacketUnknown;
+
+        if (! arrayFull || [NSProcessInfo processInfo].systemUptime >= deadline ||
+            [self isSendCancelledForMsgIdHex:msgIdHex]) {
+            OCTLogInfo(@"NGC group file %@: peer %u takes no more chunks (%@)", msgIdHex, peerId, error);
+            return NO;
+        }
+
+        [NSThread sleepForTimeInterval:MIN(0.120, 0.010 + 0.002 * attempt)];
+    }
 }
 
 - (void)queueOrphanChunkWithAssemblyKey:(NSString *)assemblyKey

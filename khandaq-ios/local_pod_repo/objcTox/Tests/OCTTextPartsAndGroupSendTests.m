@@ -475,12 +475,61 @@
     void (^completion)(BOOL, NSError *) = completions.firstObject;
     completion(YES, nil);
     XCTAssertEqual(held.messageFile.fileType, OCTMessageFileTypeReady);
-    XCTAssertTrue(held.messageFile.isDelivered);
+    // KHANDAQ (0.2.56): sent, one mark: nobody said yet that they got it.
+    XCTAssertFalse(held.messageFile.isDelivered, @"a file nobody confirmed was shown delivered");
     XCTAssertFalse(held.groupPendingSend);
 
     [submanager flushPendingGroupMessagesForChat:rig[@"chat"]];
     XCTAssertEqual(completions.count, 1u, @"a file that went was sent again");
 
+    [rig[@"partial"] stopMocking];
+}
+
+// KHANDAQ (0.2.56): a file sent to a group showed two marks once its packets were out, also when nobody got
+// it: a big one from iOS never arrived and was shown delivered. It is sent, as on Android, until a member
+// confirms it has it.
+- (void)testAGroupFileWhosePacketsWentIsSentButNotDelivered
+{
+    NSDictionary *rig = [self rigWithQueue:@[]];
+    id realmManager = rig[@"mocks"][2];
+    OCTMessageAbstract *stored = [self queuedFileWithTransferId:@"b1"];
+    stored.groupPendingSend = NO;
+    [[[[realmManager stub] ignoringNonObjectArgs] andDo:^(NSInvocation *invocation) {
+        __unsafe_unretained id result = stored;
+        [invocation setReturnValue:&result];
+    }] addGroupMessageWithFileName:[OCMArg any]
+                          fileSize:0
+                          filePath:[OCMArg any]
+                          fileType:0
+                              chat:[OCMArg any]
+                            peerId:0
+                           fileUTI:[OCMArg any]
+                 groupMsgIdHashHex:[OCMArg any]
+             groupTransferProgress:0];
+
+    NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:[[NSUUID UUID].UUIDString stringByAppendingString:@".jpg"]];
+    XCTAssertTrue([[@"generated photo" dataUsingEncoding:NSUTF8StringEncoding] writeToFile:path atomically:YES]);
+
+    __block OCTMessageAbstract *answer = nil;
+    [rig[@"submanager"] sendFileAtPath:path toChat:rig[@"chat"] moveToUploads:NO successBlock:^(OCTMessageAbstract *message) {
+        answer = message;
+    } failureBlock:^(NSError *error) {
+        XCTFail(@"the file was refused: %@", error);
+    }];
+
+    NSMutableArray *completions = rig[@"completions"];
+    XCTAssertEqual(completions.count, 1u, @"the file did not go to the transfer");
+    void (^completion)(BOOL, NSError *) = completions.firstObject;
+    if (completion) {
+        completion(YES, nil);
+    }
+
+    XCTAssertEqual(answer, stored);
+    XCTAssertEqual(stored.messageFile.fileType, OCTMessageFileTypeReady);
+    XCTAssertEqual(stored.messageFile.groupTransferProgress, 1.0f);
+    XCTAssertFalse(stored.messageFile.isDelivered, @"a file nobody confirmed was shown delivered");
+
+    [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
     [rig[@"partial"] stopMocking];
 }
 

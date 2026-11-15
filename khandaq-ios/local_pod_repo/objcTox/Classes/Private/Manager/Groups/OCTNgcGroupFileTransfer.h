@@ -41,7 +41,31 @@ typedef void (^OCTNgcGroupFileTransferProgressBlock)(uint32_t groupNumber,
                                                      NSString *msgIdHex,
                                                      float progress);
 
+// KHANDAQ (0.2.56): a lossless packet to ONE peer of the group. NO with the error toxcore gave; a packet
+// toxcore cannot take now, because the peer's send array is full, comes back with the OCTTox error
+// OCTToxErrorGroupSendCustomPacketUnknown (TOX_ERR_GROUP_SEND_CUSTOM_PRIVATE_PACKET_FAIL_SEND).
+typedef BOOL (^OCTNgcGroupFileTransferSendPrivatePacketBlock)(uint32_t groupNumber,
+                                                              uint32_t peerId,
+                                                              NSData *packet,
+                                                              NSError **error);
+
+// KHANDAQ (0.2.56): how many members a packet into the group goes to now: the peers toxcore confirmed, this
+// client not counted. 0 when there is nobody to send to.
+typedef NSUInteger (^OCTNgcGroupFileTransferMemberCountBlock)(uint32_t groupNumber);
+
 @interface OCTNgcGroupFileTransfer : NSObject
+
+/**
+ * KHANDAQ (0.2.56): the chunks another member asks for again go to that member alone, through this block.
+ * Unset, they go to the whole group as before.
+ */
+@property (nonatomic, copy, nullable) OCTNgcGroupFileTransferSendPrivatePacketBlock sendPrivatePacketBlock;
+
+/**
+ * KHANDAQ (0.2.56): what the packets of a file cost the upload pace, and whether anybody is there to get
+ * them. Unset, every group counts one member. Called on the queues the transfer sends from.
+ */
+@property (nonatomic, copy, nullable) OCTNgcGroupFileTransferMemberCountBlock memberCountBlock;
 
 - (instancetype)initWithSendPacketBlock:(OCTNgcGroupFileTransferSendPacketBlock)sendPacketBlock
                 incomingFilesDirectory:(NSString *(^)(uint32_t groupNumber))incomingFilesDirectoryBlock

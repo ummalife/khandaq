@@ -138,6 +138,11 @@ bool AirStyle::reducedMotion() const
     return reduced;
 }
 
+QColor AirStyle::seenColor() const
+{
+    return dark ? QColor(0x10, 0xb9, 0x8f) : QColor(0x02, 0x9b, 0x7d);
+}
+
 QColor AirStyle::color(AirTokens::Color role) const
 {
     const int index = static_cast<int>(role);

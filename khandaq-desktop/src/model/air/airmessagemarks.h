@@ -85,6 +85,48 @@ bool isGroupMarkPacket(const uint8_t* data, size_t length);
 /** The id toxcore gave a group message as the packets of the group carry it: 4 bytes, big-endian. */
 QByteArray groupWireId(quint32 messageId);
 
+/**
+ * KHANDAQ (0.2.57): a read receipt between two people, the friend's lossless packet 189 of
+ * version 1, byte for byte as Android and iOS build it (read receipts, protocol v1): exactly 41
+ * bytes, 189, 'K', 'Q', the version, the anchor type (1 a text by its msgV3 id, 2 a file by its Tox
+ * file id), the 32-byte id, then the time the reader saw it, by their clock, in seconds since
+ * 1970, big-endian. It says "I have seen every message and file you sent me, up to and including
+ * this one". The time only informs.
+ */
+struct SeenReceipt
+{
+    MessageEffect::Anchor anchor = MessageEffect::Anchor::Text;
+    QByteArray anchorId;
+    quint32 time = 0;
+};
+
+/** The packet of a receipt; empty when the id is not 32 bytes. */
+QByteArray seenPacket(const SeenReceipt& receipt);
+/**
+ * Reads a packet 189. False, and nothing read, for any other length, id, magic, version or anchor
+ * type.
+ */
+bool readSeenPacket(const QByteArray& packet, SeenReceipt* receipt);
+/** Whether a friend's lossless packet has the id of a read receipt, whatever its shape. */
+bool isSeenPacket(const uint8_t* data, size_t length);
+
+/**
+ * KHANDAQ (0.2.57): a message between two people that a read receipt can name, a text by its msgV3
+ * id or a file by its Tox file id, with the time it has in the conversation, by our clock, in
+ * milliseconds since 1970.
+ */
+struct SeenAnchor
+{
+    MessageEffect::Anchor anchor = MessageEffect::Anchor::Text;
+    QByteArray id;
+    qint64 timeMs = 0;
+
+    bool isEmpty() const
+    {
+        return id.isEmpty();
+    }
+};
+
 /** One emoji on a message and who chose it. */
 struct Reaction
 {

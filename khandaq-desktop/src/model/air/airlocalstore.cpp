@@ -58,6 +58,14 @@ const QString emojiField = QStringLiteral("emoji");
 const QString actorsField = QStringLiteral("actors");
 const QString wiresField = QStringLiteral("wires");
 const QString idField = QStringLiteral("id");
+// KHANDAQ (0.2.57): read receipts. Optional fields of a contact: a store without them reads as
+// before, and a desktop of 0.2.56 skips them.
+const QString seenUpToField = QStringLiteral("seenUpTo");
+const QString readField = QStringLiteral("read");
+const QString anchorField = QStringLiteral("anchor");
+const QString pendingField = QStringLiteral("pending");
+constexpr int anchorText = 1;
+constexpr int anchorFile = 2;
 
 /** An entry key: the hash of a conversation's key, "/", the hash of the entry. */
 bool isEntryKey(const QString& key)
@@ -123,7 +131,8 @@ bool LocalStore::WaitingInvite::operator==(const WaitingInvite& other) const
 
 bool LocalStore::Contact::isEmpty() const
 {
-    return hours.isEmpty() && !muted && verifiedAt < 0 && askedAt < 0;
+    return hours.isEmpty() && !muted && verifiedAt < 0 && askedAt < 0 && seenUpTo < 0
+           && readAnchor.isEmpty();
 }
 
 QString LocalStore::hashedKey(const QString& publicKey)
@@ -162,6 +171,17 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
         contact.muted = fields.value(mutedField).toBool();
         contact.verifiedAt = static_cast<qint64>(fields.value(verifiedField).toDouble(-1));
         contact.askedAt = static_cast<qint64>(fields.value(askedField).toDouble(-1));
+        contact.seenUpTo = static_cast<qint64>(fields.value(seenUpToField).toDouble(-1));
+        const QJsonObject read = fields.value(readField).toObject();
+        const int anchor = read.value(anchorField).toInt();
+        const QByteArray readId = QByteArray::fromHex(read.value(idField).toString().toLatin1());
+        if ((anchor == anchorText || anchor == anchorFile) && !readId.isEmpty()) {
+            contact.readAnchor.anchor =
+                anchor == anchorFile ? MessageEffect::Anchor::File : MessageEffect::Anchor::Text;
+            contact.readAnchor.id = readId;
+            contact.readAnchor.timeMs = static_cast<qint64>(read.value(dateField).toDouble());
+            contact.readPending = read.value(pendingField).toBool();
+        }
         if (!contact.isEmpty()) {
             contacts.insert(it.key(), contact);
         }
@@ -238,6 +258,19 @@ QByteArray LocalStore::save() const
         }
         if (it.value().askedAt >= 0) {
             fields.insert(askedField, static_cast<double>(it.value().askedAt));
+        }
+        if (it.value().seenUpTo >= 0) {
+            fields.insert(seenUpToField, static_cast<double>(it.value().seenUpTo));
+        }
+        const SeenAnchor& anchor = it.value().readAnchor;
+        if (!anchor.isEmpty()) {
+            QJsonObject read;
+            read.insert(anchorField,
+                        anchor.anchor == MessageEffect::Anchor::File ? anchorFile : anchorText);
+            read.insert(idField, QString::fromLatin1(anchor.id.toHex()));
+            read.insert(dateField, static_cast<double>(anchor.timeMs));
+            read.insert(pendingField, it.value().readPending);
+            fields.insert(readField, read);
         }
         stored.insert(it.key(), fields);
     }
@@ -431,6 +464,63 @@ bool LocalStore::forget(const QString& publicKey)
     changed = dropPrefix(entries, entryOrder, conversation) || changed;
     changed = dropPrefix(wires, wireOrder, conversation) || changed;
     return removeRequest(publicKey) || changed;
+}
+
+qint64 LocalStore::seenUpTo(const QString& publicKey) const
+{
+    return contacts.value(hashedKey(publicKey)).seenUpTo;
+}
+
+bool LocalStore::raiseSeenUpTo(const QString& publicKey, qint64 timeMs)
+{
+    const QString key = hashedKey(publicKey);
+    Contact contact = contacts.value(key);
+    if (timeMs < 0 || timeMs <= contact.seenUpTo) {
+        return false;
+    }
+    contact.seenUpTo = timeMs;
+    store(key, contact);
+    return true;
+}
+
+SeenAnchor LocalStore::readAnchor(const QString& publicKey) const
+{
+    return contacts.value(hashedKey(publicKey)).readAnchor;
+}
+
+bool LocalStore::isReadPending(const QString& publicKey) const
+{
+    return contacts.value(hashedKey(publicKey)).readPending;
+}
+
+bool LocalStore::noteRead(const QString& publicKey, const SeenAnchor& anchor)
+{
+    const QString key = hashedKey(publicKey);
+    Contact contact = contacts.value(key);
+    const SeenAnchor& last = contact.readAnchor;
+    // Newer: another message, at a later time or at the same millisecond.
+    const bool newer = !anchor.isEmpty()
+                       && (last.isEmpty() || (anchor.id != last.id && anchor.timeMs >= last.timeMs));
+    if (!newer) {
+        return false;
+    }
+    contact.readAnchor = anchor;
+    contact.readPending = true;
+    store(key, contact);
+    return true;
+}
+
+bool LocalStore::noteReadSent(const QString& publicKey, const SeenAnchor& anchor)
+{
+    const QString key = hashedKey(publicKey);
+    Contact contact = contacts.value(key);
+    if (!contact.readPending || contact.readAnchor.id != anchor.id
+        || contact.readAnchor.anchor != anchor.anchor) {
+        return false;
+    }
+    contact.readPending = false;
+    store(key, contact);
+    return true;
 }
 
 bool LocalStore::pruneHours(const QDateTime& now)

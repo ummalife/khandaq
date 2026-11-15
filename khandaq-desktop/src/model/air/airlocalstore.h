@@ -214,6 +214,32 @@ public:
     /** The history was erased: no entry is left for marks or ids to belong to. */
     bool forgetEntries();
 
+    /**
+     * KHANDAQ (0.2.57): read receipts between two people (protocol v1), kept per contact until the
+     * contact is removed (forget).
+     *
+     * The time, by our clock, of the newest of our messages the contact has seen (their read
+     * receipts), in milliseconds since 1970; -1 before the first receipt. Every message of ours
+     * up to that time counts as seen.
+     */
+    qint64 seenUpTo(const QString& publicKey) const;
+    /** Moves seenUpTo to timeMs; false, and nothing changed, for a time not after it: never back. */
+    bool raiseSeenUpTo(const QString& publicKey, qint64 timeMs);
+    /**
+     * The newest of the contact's messages we have seen and told them about, or still owe them
+     * telling (isReadPending); empty before the first.
+     */
+    SeenAnchor readAnchor(const QString& publicKey) const;
+    /** Whether the receipt for readAnchor has yet to go: the contact was offline, say. */
+    bool isReadPending(const QString& publicKey) const;
+    /**
+     * Takes anchor as the newest message seen, its receipt still to go; false, and nothing changed,
+     * for an empty anchor or one not newer than readAnchor.
+     */
+    bool noteRead(const QString& publicKey, const SeenAnchor& anchor);
+    /** The receipt for anchor went; false when that is not the pending readAnchor. */
+    bool noteReadSent(const QString& publicKey, const SeenAnchor& anchor);
+
 private:
     struct Contact
     {
@@ -223,6 +249,10 @@ private:
         qint64 verifiedAt = -1;
         /** When their request came, in milliseconds since 1970, or -1 (askedAt). */
         qint64 askedAt = -1;
+        /** KHANDAQ (0.2.57): seenUpTo, readAnchor and isReadPending. */
+        qint64 seenUpTo = -1;
+        SeenAnchor readAnchor;
+        bool readPending = false;
 
         bool isEmpty() const;
     };

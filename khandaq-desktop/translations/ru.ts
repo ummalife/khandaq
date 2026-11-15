@@ -495,6 +495,11 @@
         <translation>доставлено</translation>
     </message>
     <message>
+        <source>seen</source>
+        <comment>state of our last message: the person has read it</comment>
+        <translation>прочитано</translation>
+    </message>
+    <message>
         <source>not sent</source>
         <comment>state of our last message: it broke</comment>
         <translation>не отправлено</translation>

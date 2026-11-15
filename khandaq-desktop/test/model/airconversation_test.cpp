@@ -46,6 +46,7 @@ private slots:
 
     void statusFollowsTheMessageAndThePerson();
     void everyStatusHasItsIconAndWords();
+    void seenComesOnlyToWhatLeftThisDevice();
     void aRunGoesOnForTheSameAuthorWithinFiveMinutesOfTheSameDay();
     void shortNameIsTheFirstWord();
     void aGroupNamesTheAuthorInFull();
@@ -71,6 +72,7 @@ private slots:
     void invitationsWaitUntilAnsweredAndGoWithTheirContact();
     void entryMarksKeepTheNewestAndGoWithTheirConversation();
     void groupIdsKeepTheNewestAndGoWithTheirConversation();
+    void readReceiptsStayUntilTheContactGoes();
     void everyPluralTextAgreesWithItsNumberInEveryLanguage();
     void sizesCountInThousandsAsThePhonesDo();
     void aSizeThatRoundsUpTakesTheNextUnit();
@@ -167,6 +169,42 @@ void TestAirConversation::everyStatusHasItsIconAndWords()
     QCOMPARE(AirStrings::statusText(EntryStatus::Failed), QStringLiteral("not sent"));
     QCOMPARE(AirStrings::statusText(EntryStatus::Transit), QStringLiteral("in transit"));
     QVERIFY(AirStrings::statusText(EntryStatus::None).isEmpty());
+}
+
+void TestAirConversation::seenComesOnlyToWhatLeftThisDevice()
+{
+    using Air::Delivery;
+    using Air::EntryStatus;
+    // KHANDAQ (0.2.57): read receipts, protocol v1. Seen implies delivered: a sent message the
+    // person has seen shows seen, its receipt of delivery lost or not.
+    QCOMPARE(Air::seenStatus(EntryStatus::Sent, true), EntryStatus::Seen);
+    QCOMPARE(Air::seenStatus(EntryStatus::Delivered, true), EntryStatus::Seen);
+    QCOMPARE(Air::seenStatus(EntryStatus::Sent, false), EntryStatus::Sent);
+    QCOMPARE(Air::seenStatus(EntryStatus::Delivered, false), EntryStatus::Delivered);
+    // What waits here, or broke, is never seen; neither is what has no mark (theirs, notes, ours
+    // in a group).
+    QCOMPARE(Air::seenStatus(EntryStatus::Transit, true), EntryStatus::Transit);
+    QCOMPARE(Air::seenStatus(EntryStatus::Sending, true), EntryStatus::Sending);
+    QCOMPARE(Air::seenStatus(EntryStatus::Failed, true), EntryStatus::Failed);
+    QCOMPARE(Air::seenStatus(EntryStatus::None, true), EntryStatus::None);
+    QCOMPARE(Air::seenStatus(Air::groupTextStatus(false, false), true), EntryStatus::None);
+
+    QCOMPARE(Air::statusIconName(EntryStatus::Seen), QStringLiteral("check-double"));
+    QCOMPARE(Air::rowDelivery(EntryStatus::Seen), Delivery::Seen);
+    QCOMPARE(AirStrings::statusText(EntryStatus::Seen), QStringLiteral("seen"));
+    QCOMPARE(AirStrings::deliveryText(Delivery::Seen), QStringLiteral("seen"));
+
+    // The list row by the same rule.
+    QCOMPARE(Air::seenDelivery(Delivery::Sent, true), Delivery::Seen);
+    QCOMPARE(Air::seenDelivery(Delivery::Delivered, true), Delivery::Seen);
+    QCOMPARE(Air::seenDelivery(Delivery::Delivered, false), Delivery::Delivered);
+    QCOMPARE(Air::seenDelivery(Delivery::Transit, true), Delivery::Transit);
+    QCOMPARE(Air::seenDelivery(Delivery::Failed, true), Delivery::Failed);
+    QCOMPARE(Air::seenDelivery(Delivery::None, true), Delivery::None);
+
+    use(QStringLiteral("ru"));
+    QCOMPARE(AirStrings::statusText(EntryStatus::Seen), QStringLiteral("прочитано"));
+    QCOMPARE(AirStrings::deliveryText(Delivery::Seen), QStringLiteral("прочитано"));
 }
 
 void TestAirConversation::aRunGoesOnForTheSameAuthorWithinFiveMinutesOfTheSameDay()
@@ -834,6 +872,80 @@ void TestAirConversation::groupIdsKeepTheNewestAndGoWithTheirConversation()
     // A group left takes its ids along.
     QVERIFY(many.forgetGroup(group));
     QVERIFY(many.wireId(Air::textEntryKey(group, yusufKey, 1)).isEmpty());
+}
+
+void TestAirConversation::readReceiptsStayUntilTheContactGoes()
+{
+    const QString key =
+        QStringLiteral("7F3A91C05D2E8B4416A9C3E07D5F2B8164E0A3C9D7B25F1E8A4C6D0B3F9E2A71");
+    const QDateTime now = QDateTime::currentDateTime();
+    Air::LocalStore store;
+    store.load(QByteArray(), now);
+
+    // The watermark of what the person has seen of ours only moves forward.
+    QCOMPARE(store.seenUpTo(key), qint64{-1});
+    QVERIFY(store.raiseSeenUpTo(key, 1700000001000));
+    QVERIFY(!store.raiseSeenUpTo(key, 1700000000500));
+    QVERIFY(!store.raiseSeenUpTo(key, 1700000001000));
+    QVERIFY(!store.raiseSeenUpTo(key, -1));
+    QVERIFY(store.raiseSeenUpTo(key, 1700000002000));
+    QCOMPARE(store.seenUpTo(key), qint64{1700000002000});
+
+    // What we have seen of theirs, and whether the receipt has yet to go.
+    Air::SeenAnchor first;
+    first.anchor = Air::MessageEffect::Anchor::Text;
+    first.id = QByteArray(32, '\x11');
+    first.timeMs = 1700000005000;
+    Air::SeenAnchor older = first;
+    older.id = QByteArray(32, '\x10');
+    older.timeMs = 1700000004000;
+    Air::SeenAnchor file = first;
+    file.anchor = Air::MessageEffect::Anchor::File;
+    file.id = QByteArray(32, '\x22');
+
+    QVERIFY(store.readAnchor(key).isEmpty());
+    QVERIFY(!store.isReadPending(key));
+    QVERIFY(!store.noteRead(key, Air::SeenAnchor()));
+    QVERIFY(store.noteRead(key, first));
+    QVERIFY(store.isReadPending(key));
+    QVERIFY(!store.noteRead(key, first));
+    QVERIFY(!store.noteRead(key, older));
+    QVERIFY(!store.noteReadSent(key, older));
+    QVERIFY(store.isReadPending(key));
+    QVERIFY(store.noteReadSent(key, first));
+    QVERIFY(!store.isReadPending(key));
+    QVERIFY(!store.noteReadSent(key, first));
+    // A file that came in the same millisecond is newer news.
+    QVERIFY(store.noteRead(key, file));
+    QVERIFY(store.isReadPending(key));
+
+    const QByteArray saved = store.save();
+    QVERIFY2(!saved.contains(key.toUtf8()), "the stored form never names a contact");
+    Air::LocalStore again;
+    again.load(saved, now);
+    QCOMPARE(again.seenUpTo(key), qint64{1700000002000});
+    QVERIFY(again.isReadPending(key));
+    QCOMPARE(again.readAnchor(key).anchor, Air::MessageEffect::Anchor::File);
+    QCOMPARE(again.readAnchor(key).id, QByteArray(32, '\x22'));
+    QCOMPARE(again.readAnchor(key).timeMs, qint64{1700000005000});
+
+    // A contact stored by 0.2.56 has none of it, and keeps what it had.
+    const QByteArray stored056 =
+        QStringLiteral("{\"version\":1,\"contacts\":{\"%1\":{\"muted\":true}}}")
+            .arg(Air::LocalStore::hashedKey(key))
+            .toUtf8();
+    Air::LocalStore old;
+    old.load(stored056, now);
+    QVERIFY(old.isMuted(key));
+    QCOMPARE(old.seenUpTo(key), qint64{-1});
+    QVERIFY(old.readAnchor(key).isEmpty());
+    QVERIFY(!old.isReadPending(key));
+
+    // Removing the contact takes it all along.
+    QVERIFY(again.forget(key));
+    QCOMPARE(again.seenUpTo(key), qint64{-1});
+    QVERIFY(again.readAnchor(key).isEmpty());
+    QVERIFY(!again.isReadPending(key));
 }
 
 void TestAirConversation::everyPluralTextAgreesWithItsNumberInEveryLanguage()

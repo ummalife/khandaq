@@ -141,6 +141,8 @@ enum class Delivery
     Transit,
     Sent,
     Delivered,
+    /** KHANDAQ (0.2.57): the person saw it, by their read receipt. */
+    Seen,
     /** Desktop only: the message broke and will not be sent (a broken message in the chat log). */
     Failed,
 };
@@ -150,6 +152,12 @@ enum class Delivery
  * while the person is away, a clock while it is leaving, then sent and delivered.
  */
 Delivery outgoingTextDelivery(bool isDelivered, bool handedOver, bool personOnline);
+
+/**
+ * KHANDAQ (0.2.57): the mark of our last text or file to a person who has seen it, by the rule of
+ * the conversation (Air::seenStatus): sent or delivered turns seen, any other mark stays.
+ */
+Delivery seenDelivery(Delivery delivery, bool seen);
 
 enum class EntryKind
 {

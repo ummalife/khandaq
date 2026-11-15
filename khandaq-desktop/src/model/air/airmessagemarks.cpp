@@ -41,6 +41,9 @@ constexpr int timeLength = 4;
 constexpr int friendBase = kqHeader + anchorLength + timeLength;
 // 188: the header, the anchor type, the anchor, the time, the action and the emoji length.
 constexpr int friendReactionBase = kqHeader + 1 + anchorLength + timeLength + 2;
+// 189 (0.2.57): the header, the anchor type, the anchor and the time, and nothing after them.
+constexpr uint8_t friendSeenId = 189;
+constexpr int friendSeenLength = kqHeader + 1 + anchorLength + timeLength;
 
 // In a group: the NGC magic, the version and the packet id.
 const uint8_t ngcMagic[] = {0x66, 0x77, 0x88, 0x11, 0x34, 0x35};
@@ -289,6 +292,51 @@ QByteArray groupWireId(quint32 messageId)
     bytes[2] = static_cast<char>((messageId >> 8) & 0xFF);
     bytes[3] = static_cast<char>(messageId & 0xFF);
     return bytes;
+}
+
+QByteArray seenPacket(const SeenReceipt& receipt)
+{
+    if (receipt.anchorId.size() != anchorLength) {
+        return QByteArray();
+    }
+    QByteArray packet;
+    packet.reserve(friendSeenLength);
+    packet.append(static_cast<char>(friendSeenId));
+    packet.append('K');
+    packet.append('Q');
+    packet.append(static_cast<char>(kqVersion));
+    packet.append(
+        static_cast<char>(receipt.anchor == MessageEffect::Anchor::Text ? anchorText : anchorFile));
+    packet.append(receipt.anchorId);
+    // The same four big-endian bytes as a group's message id.
+    packet.append(groupWireId(receipt.time));
+    return packet;
+}
+
+bool readSeenPacket(const QByteArray& packet, SeenReceipt* receipt)
+{
+    if (packet.size() != friendSeenLength) {
+        return false;
+    }
+    const uint8_t* const bytes = bytesOf(packet);
+    if (bytes[0] != friendSeenId || bytes[1] != 'K' || bytes[2] != 'Q' || bytes[3] != kqVersion) {
+        return false;
+    }
+    const uint8_t type = bytes[kqHeader];
+    if (type != anchorText && type != anchorFile) {
+        return false;
+    }
+    SeenReceipt read;
+    read.anchor = type == anchorText ? MessageEffect::Anchor::Text : MessageEffect::Anchor::File;
+    read.anchorId = packet.mid(kqHeader + 1, anchorLength);
+    read.time = bigEndian(bytes + kqHeader + 1 + anchorLength);
+    *receipt = read;
+    return true;
+}
+
+bool isSeenPacket(const uint8_t* data, size_t length)
+{
+    return length > 0 && data[0] == friendSeenId;
 }
 
 bool Reaction::operator==(const Reaction& other) const

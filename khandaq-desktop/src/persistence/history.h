@@ -33,6 +33,7 @@
 #include "src/core/extension.h"
 #include "src/core/toxfile.h"
 #include "src/core/toxpk.h"
+#include "src/model/air/airmessagemarks.h"
 #include "src/model/brokenmessagereason.h"
 #include "src/model/systemmessage.h"
 #include "src/persistence/db/rawdatabase.h"
@@ -183,6 +184,7 @@ public:
             , state{other.state}
             , extensionSet{other.extensionSet}
             , content{other.content}
+            , msgV3Id{other.msgV3Id}
         {}
 
         HistMessage& operator=(const HistMessage& other)
@@ -195,6 +197,7 @@ public:
             state = other.state;
             extensionSet = other.extensionSet;
             content = other.content;
+            msgV3Id = other.msgV3Id;
             return *this;
         }
 
@@ -206,6 +209,8 @@ public:
         MessageState state;
         ExtensionSet extensionSet;
         HistMessageContent content;
+        /** KHANDAQ (0.2.57): the msgV3 id of a text between two people; empty for any other. */
+        QByteArray msgV3Id;
     };
 
     struct DateIdx
@@ -225,12 +230,14 @@ public:
 
     void eraseHistory();
     void removeChatHistory(const ChatId& chatId);
+    /** msgV3Id: KHANDAQ (0.2.57) the id of a text between two people (Message::wireId), or empty. */
     void addNewMessage(const ChatId& chatId, const QString& message, const ToxPk& sender,
                        const QDateTime& time, bool isDelivered, ExtensionSet extensions,
-                       QString dispName, const std::function<void(RowId)>& insertIdCallback = {});
+                       QString dispName, const std::function<void(RowId)>& insertIdCallback = {},
+                       const QByteArray& msgV3Id = QByteArray());
     void addNewOutgoingMessage(const ChatId& chatId, const QString& message, const ToxPk& sender,
-                               const QDateTime& time, ExtensionSet extensions,
-                               const QString& dispName, qint64 outboxId);
+                               const QDateTime& time, ExtensionSet extensions, const QString& dispName,
+                               qint64 outboxId, const QByteArray& msgV3Id = QByteArray());
     Outbox* getOutbox();
     SavedNotes* getSavedNotes();
 
@@ -271,6 +278,20 @@ public:
      * conversation leaves a file without either out. A transfer that ends later keeps them erased.
      */
     void eraseFileEntry(const ChatId& chatId, const QByteArray& fileId);
+
+    /**
+     * KHANDAQ (0.2.57): read receipts. The time, by our clock, of the newest of our own messages
+     * in the chat that a read receipt names: a text by its msgV3 id, a file we sent by its Tox file
+     * id. -1 when the chat keeps none.
+     */
+    qint64 ownItemTime(const ChatId& chatId, const ToxPk& self, const Air::SeenAnchor& anchor);
+    /**
+     * The newest message of the other person in the chat that a read receipt can name: a text
+     * with a msgV3 id, or a file they sent; neither one deleted by them. Empty when there is none.
+     */
+    Air::SeenAnchor newestIncomingAnchor(const ChatId& chatId, const ToxPk& self);
+    /** Whether author's text with this msgV3 id is in the chat already: one that came again. */
+    bool hasText(const ChatId& chatId, const ToxPk& author, const QByteArray& msgV3Id);
 
 signals:
     void fileInserted(RowId dbId, QByteArray fileId);

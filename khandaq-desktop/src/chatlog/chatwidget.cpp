@@ -1653,9 +1653,15 @@ ChatMessage::AirLook ChatWidget::lookOf(const ChatLogItem& item) const
 
 Air::EntryStatus ChatWidget::statusOf(const ChatLogItem& item) const
 {
+    // KHANDAQ (0.2.57): a read receipt of the person marks every one of our messages and files up
+    // to the time of the one it names (Air::seenStatus).
+    const auto seen = [this](const QDateTime& time) {
+        return personChat && seenUpToMs >= 0 && time.toMSecsSinceEpoch() <= seenUpToMs;
+    };
     if (item.getContentType() == ChatLogItem::ContentType::fileTransfer) {
         // Two checks once the person has all of it, a clock while it waits or moves.
-        return Air::fileStatus(item.getContentAsFile().file.status, personOnline);
+        const ChatLogFile& file = item.getContentAsFile();
+        return Air::seenStatus(Air::fileStatus(file.file.status, personOnline), seen(file.timestamp));
     }
     if (item.getContentType() != ChatLogItem::ContentType::message) {
         return Air::EntryStatus::None;
@@ -1667,8 +1673,9 @@ Air::EntryStatus ChatWidget::statusOf(const ChatLogItem& item) const
     }
     // toxcore takes a message as soon as the person is online, so a pending one has left this
     // computer then: there is no "sending" state on the desktop.
-    return Air::directTextStatus(false, state == MessageState::complete,
-                                 state == MessageState::broken, true, personOnline);
+    return Air::seenStatus(Air::directTextStatus(false, state == MessageState::complete,
+                                                 state == MessageState::broken, true, personOnline),
+                           seen(item.getContentAsMessage().message.timestamp));
 }
 
 bool ChatWidget::isCollapsedAt(ChatLogIdx idx) const
@@ -1788,6 +1795,15 @@ void ChatWidget::setPersonOnline(bool online)
     personOnline = online;
     refreshEntries();
     refreshFileEntries();
+}
+
+void ChatWidget::setSeenUpTo(qint64 timeMs)
+{
+    if (seenUpToMs == timeMs) {
+        return;
+    }
+    seenUpToMs = timeMs;
+    refreshEntries();
 }
 
 void ChatWidget::setPersonName(const QString& name)

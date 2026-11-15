@@ -64,6 +64,8 @@ private slots:
     void change_status();
     void change_nospam();
     void msgv3_receipt_is_not_a_message();
+    void msgv3_text_comes_with_its_words_and_id();
+    void read_receipt_reaches_the_friend_as_it_went();
     void group_file_waits_for_a_member_in_the_core_loop();
     void group_file_goes_to_a_member_in_the_core_loop();
     void a_group_being_left_takes_no_text();
@@ -321,7 +323,7 @@ void TestCore::msgv3_receipt_is_not_a_message()
 
     const QString after{QStringLiteral("after the receipt")};
     ReceiptNum receipt;
-    QVERIFY(alice->sendMessage(bobOnAlice, after, receipt));
+    QVERIFY(alice->sendMessage(bobOnAlice, after, QByteArray(), 0, receipt));
 
     QTRY_VERIFY_WITH_TIMEOUT(!bobMessages.isEmpty(), connected_message_wait);
     QCOMPARE(bobMessages.count(), 1);
@@ -332,6 +334,74 @@ void TestCore::msgv3_receipt_is_not_a_message()
     // also aborts on an attempt to send one.
     QSKIP("this toxcore has no msgV3 receipts");
 #endif
+}
+
+void TestCore::msgv3_text_comes_with_its_words_and_id()
+{
+    // KHANDAQ (0.2.57): a text goes as msgV3, its id and time after the words; the friend reads the
+    // words without the trailer, and the id. Bob confirms it with a msgV3 receipt of his own
+    // ("_" and the id, Core::sendHighLevelAck), which Alice must not show as a message: Bob's next
+    // text travels after it on the same connection. Toxcore's own receipt of that msgV3 receipt
+    // stops in Bob's core: no message of his has its number.
+#ifdef TOX_MSGV3_MSGID_LENGTH
+    const uint32_t bobOnAlice = alice->getFriendList().first();
+    const uint32_t aliceOnBob = bob->getFriendList().first();
+    QSignalSpy bobMessages(bob.get(), &Core::friendMessageReceived);
+    QSignalSpy aliceMessages(alice.get(), &Core::friendMessageReceived);
+    QSignalSpy bobReceipts(bob.get(), &Core::receiptRecieved);
+
+    QByteArray id(32, '\0');
+    for (int i = 0; i < id.size(); ++i) {
+        id[i] = static_cast<char>(0xA0 + i);
+    }
+    const QString words{QStringLiteral("Ассаламу алейкум 🙂")};
+    ReceiptNum receipt;
+    QVERIFY(alice->sendMessage(bobOnAlice, words, id, 1700000000, receipt));
+    QTRY_VERIFY_WITH_TIMEOUT(!bobMessages.isEmpty(), connected_message_wait);
+    QCOMPARE(bobMessages.count(), 1);
+    QCOMPARE(bobMessages[0][1].toString(), words);
+    QCOMPARE(bobMessages[0][2].toBool(), false);
+    QCOMPARE(bobMessages[0][3].toByteArray(), id);
+
+    // A text without an id arrives without one.
+    const QString reply{QStringLiteral("plain reply")};
+    QVERIFY(bob->sendMessage(aliceOnBob, reply, QByteArray(), 0, receipt));
+    QTRY_VERIFY_WITH_TIMEOUT(!aliceMessages.isEmpty(), connected_message_wait);
+    QCOMPARE(aliceMessages.count(), 1);
+    QCOMPARE(aliceMessages[0][1].toString(), reply);
+    QVERIFY(aliceMessages[0][3].toByteArray().isEmpty());
+
+    // The receipt of the msgV3 receipt comes before that of the reply, which went after it.
+    QTRY_VERIFY_WITH_TIMEOUT(!bobReceipts.isEmpty(), connected_message_wait);
+    QCOMPARE(bobReceipts.count(), 1);
+    QCOMPARE(bobReceipts[0][1].value<ReceiptNum>(), receipt);
+#else
+    QSKIP("this toxcore has no msgV3");
+#endif
+}
+
+void TestCore::read_receipt_reaches_the_friend_as_it_went()
+{
+    // KHANDAQ (0.2.57): the lossless packet 189 reaches the friend byte for byte, before toxext
+    // could take it; one of another shape too, for the receiver to drop.
+    const uint32_t bobOnAlice = alice->getFriendList().first();
+    const uint32_t aliceOnBob = bob->getFriendList().first();
+    QSignalSpy bobSeen(bob.get(), &Core::friendSeenReceived);
+
+    QByteArray packet = QByteArray::fromHex("BD4B510101");
+    packet.append(QByteArray(32, '\x42'));
+    packet.append(QByteArray::fromHex("6553F100"));
+    QCOMPARE(packet.size(), 41);
+    QVERIFY(alice->sendSeenReceipt(bobOnAlice, packet));
+    QVERIFY(alice->sendSeenReceipt(bobOnAlice, packet.left(40)));
+
+    QTRY_COMPARE_WITH_TIMEOUT(bobSeen.count(), 2, connected_message_wait);
+    QCOMPARE(bobSeen[0][0].value<uint32_t>(), aliceOnBob);
+    QCOMPARE(bobSeen[0][1].toByteArray(), packet);
+    QCOMPARE(bobSeen[1][1].toByteArray(), packet.left(40));
+
+    // Nobody to send to: refused, not thrown.
+    QVERIFY(!alice->sendSeenReceipt(bobOnAlice + 100, packet));
 }
 
 void TestCore::group_file_waits_for_a_member_in_the_core_loop()

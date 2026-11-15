@@ -274,6 +274,45 @@ void AirLocal::forgetEntries()
     }
 }
 
+qint64 AirLocal::seenUpTo(const ToxPk& publicKey) const
+{
+    return store.seenUpTo(publicKey.toString());
+}
+
+void AirLocal::raiseSeenUpTo(const ToxPk& publicKey, qint64 timeMs)
+{
+    if (store.raiseSeenUpTo(publicKey.toString(), timeMs)) {
+        saveLater.start();
+        emit seenChanged(publicKey);
+    }
+}
+
+Air::SeenAnchor AirLocal::readAnchor(const ToxPk& publicKey) const
+{
+    return store.readAnchor(publicKey.toString());
+}
+
+bool AirLocal::isReadPending(const ToxPk& publicKey) const
+{
+    return store.isReadPending(publicKey.toString());
+}
+
+bool AirLocal::noteRead(const ToxPk& publicKey, const Air::SeenAnchor& anchor)
+{
+    if (!store.noteRead(publicKey.toString(), anchor)) {
+        return false;
+    }
+    saveLater.start();
+    return true;
+}
+
+void AirLocal::noteReadSent(const ToxPk& publicKey, const Air::SeenAnchor& anchor)
+{
+    if (store.noteReadSent(publicKey.toString(), anchor)) {
+        saveLater.start();
+    }
+}
+
 #ifdef KHANDAQ_SCREENSHOT_HOOK
 void AirLocal::markOnlineForShots(const ToxPk& publicKey, const QDateTime& at)
 {

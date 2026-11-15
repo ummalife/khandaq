@@ -289,6 +289,12 @@ Air::Entry AirSource::friendEntry(Friend& frnd, const IChatLog* log, qint64 nowS
         entry.lastDelivery = conversation.lastPending
                                  ? Air::outgoingTextDelivery(false, true, entry.reach.isLive())
                                  : conversation.delivery;
+        // KHANDAQ (0.2.57): seen once the person's read receipts reach it, as in the conversation.
+        const qint64 seenUpTo = local ? local->seenUpTo(publicKey) : -1;
+        entry.lastDelivery =
+            Air::seenDelivery(entry.lastDelivery,
+                              seenUpTo >= 0 && !conversation.lastFileMoving
+                                  && conversation.lastTime.toMSecsSinceEpoch() <= seenUpTo);
         entry.timeText = timeText(conversation.lastTime);
         if (entry.preview.isEmpty() && pending) {
             entry.preview = AirStrings::text(Text::HintRequestSent);
@@ -416,6 +422,7 @@ AirSource::Conversation AirSource::read(const IChatLog& log, bool group) const
                 result.lastTime = file.timestamp;
                 result.preview = AirStrings::text(Text::FileMessage).arg(flat(file.file.fileName));
                 result.delivery = outgoing ? fileDelivery(file.file.status) : Air::Delivery::None;
+                result.lastFileMoving = result.delivery == Air::Delivery::Sent;
             }
             break;
         }
@@ -434,6 +441,7 @@ void AirSource::setLocal(AirLocal* local_)
     local = local_;
     if (local) {
         connect(local, &AirLocal::requestsChanged, this, &AirSource::changed);
+        connect(local, &AirLocal::seenChanged, this, &AirSource::changed);
     }
     emit changed();
 }

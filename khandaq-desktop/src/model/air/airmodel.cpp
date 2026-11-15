@@ -265,6 +265,12 @@ Delivery outgoingTextDelivery(bool isDelivered, bool handedOver, bool personOnli
     return personOnline && handedOver ? Delivery::Sent : Delivery::Transit;
 }
 
+Delivery seenDelivery(Delivery delivery, bool seen)
+{
+    return seen && (delivery == Delivery::Sent || delivery == Delivery::Delivered) ? Delivery::Seen
+                                                                                   : delivery;
+}
+
 bool Reach::operator==(const Reach& other) const
 {
     return kind == other.kind && secondsAgo == other.secondsAgo && online == other.online;

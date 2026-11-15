@@ -92,6 +92,7 @@ ChatHistory::ChatHistory(Chat& chat_, History* history_, const ICoreIdHandler& c
     , dispatcher(messageDispatcher)
     , outbox(qobject_cast<Friend*>(&chat_) && history_ ? history_->getOutbox() : nullptr)
     , entryStore(entryStore_)
+    , friendChat(qobject_cast<Friend*>(&chat_) != nullptr)
 {
     connect(&messageDispatcher, &IMessageDispatcher::messageComplete, this,
             &ChatHistory::onMessageComplete);
@@ -291,7 +292,8 @@ void ChatHistory::onMessageReceived(const ToxPk& sender, const Message& message)
             content = ChatForm::ACTION_PREFIX + content;
         }
 
-        history->addNewMessage(chatId, content, sender, message.timestamp, true, message.extensionSet, displayName);
+        history->addNewMessage(chatId, content, sender, message.timestamp, true,
+                               message.extensionSet, displayName, {}, msgV3IdOf(message));
         keepWireId(sender, message);
     }
 
@@ -318,8 +320,8 @@ void ChatHistory::onMessageSent(DispatchedMessageId id, const Message& message)
 
         auto onInsertion = [this, id](RowId historyId) { handleDispatchedMessage(id, historyId); };
 
-        history->addNewMessage(chatId, content, selfPk, message.timestamp, false, message.extensionSet, username,
-                               onInsertion);
+        history->addNewMessage(chatId, content, selfPk, message.timestamp, false,
+                               message.extensionSet, username, onInsertion, msgV3IdOf(message));
         keepWireId(selfPk, message);
     }
 
@@ -448,12 +450,110 @@ QString ChatHistory::chatKey() const
 
 void ChatHistory::keepWireId(const ToxPk& author, const Message& message)
 {
-    if (!entryStore || message.wireId.isEmpty()) {
+    // Between two people the history keeps the msgV3 id itself (msgV3IdOf).
+    if (!entryStore || message.wireId.isEmpty() || friendChat) {
         return;
     }
     entryStore->setWireId(Air::textEntryKey(chatKey(), author.toString(),
                                             message.timestamp.toMSecsSinceEpoch()),
                           message.wireId);
+}
+
+QByteArray ChatHistory::msgV3IdOf(const Message& message) const
+{
+    return friendChat ? message.wireId : QByteArray();
+}
+
+qint64 ChatHistory::ownItemTime(const Air::SeenAnchor& anchor) const
+{
+    if (!friendChat || anchor.isEmpty()) {
+        return -1;
+    }
+    // The log first, as the conversation shows it: it took a file a moment after its history row
+    // (onFileUpdated). An older message, or one of an earlier launch, is in the history alone.
+    const ToxPk selfPk = coreIdHandler.getSelfPublicKey();
+    const qint64 shown = loggedItemTime(selfPk, anchor);
+    if (shown >= 0 || !canUseHistory()) {
+        return shown;
+    }
+    return history->ownItemTime(chat.getPersistentId(), selfPk, anchor);
+}
+
+qint64 ChatHistory::loggedItemTime(const ToxPk& selfPk, const Air::SeenAnchor& anchor) const
+{
+    const bool isFile = anchor.anchor == Air::MessageEffect::Anchor::File;
+    for (auto idx = sessionChatLog.getNextIdx(); idx > sessionChatLog.getFirstIdx();) {
+        idx = idx - 1;
+        const ChatLogItem& item = sessionChatLog.at(idx);
+        if (isFile && item.getContentType() == ChatLogItem::ContentType::fileTransfer) {
+            const ChatLogFile& file = item.getContentAsFile();
+            if (file.file.direction == ToxFile::SENDING && file.file.resumeFileId == anchor.id) {
+                return file.timestamp.toMSecsSinceEpoch();
+            }
+        } else if (!isFile && item.getContentType() == ChatLogItem::ContentType::message
+                   && item.getSender() == selfPk
+                   && item.getContentAsMessage().message.wireId == anchor.id) {
+            return item.getContentAsMessage().message.timestamp.toMSecsSinceEpoch();
+        }
+    }
+    return -1;
+}
+
+Air::SeenAnchor ChatHistory::newestIncomingAnchor() const
+{
+    if (!friendChat) {
+        return {};
+    }
+    const ToxPk selfPk = coreIdHandler.getSelfPublicKey();
+    if (canUseHistory()) {
+        return history->newestIncomingAnchor(chat.getPersistentId(), selfPk);
+    }
+
+    // Without the history, this launch's messages are all there is.
+    for (auto idx = sessionChatLog.getNextIdx(); idx > sessionChatLog.getFirstIdx();) {
+        idx = idx - 1;
+        if (!sessionChatLog.isShown(idx)) {
+            continue;
+        }
+        const ChatLogItem& item = sessionChatLog.at(idx);
+        Air::SeenAnchor anchor;
+        if (item.getContentType() == ChatLogItem::ContentType::fileTransfer) {
+            const ChatLogFile& file = item.getContentAsFile();
+            if (file.file.direction == ToxFile::RECEIVING) {
+                anchor.anchor = Air::MessageEffect::Anchor::File;
+                anchor.id = file.file.resumeFileId;
+                anchor.timeMs = file.timestamp.toMSecsSinceEpoch();
+            }
+        } else if (item.getContentType() == ChatLogItem::ContentType::message
+                   && item.getSender() != selfPk) {
+            const Message& message = item.getContentAsMessage().message;
+            anchor.id = message.wireId;
+            anchor.timeMs = message.timestamp.toMSecsSinceEpoch();
+        }
+        if (!anchor.isEmpty()) {
+            return anchor;
+        }
+    }
+    return {};
+}
+
+bool ChatHistory::hasIncomingText(const ToxPk& sender, const QByteArray& msgV3Id) const
+{
+    if (!friendChat || msgV3Id.isEmpty()) {
+        return false;
+    }
+    if (canUseHistory()) {
+        return history->hasText(chat.getPersistentId(), sender, msgV3Id);
+    }
+    for (auto idx = sessionChatLog.getNextIdx(); idx > sessionChatLog.getFirstIdx();) {
+        idx = idx - 1;
+        const ChatLogItem& item = sessionChatLog.at(idx);
+        if (item.getSender() == sender && item.getContentType() == ChatLogItem::ContentType::message
+            && item.getContentAsMessage().message.wireId == msgV3Id) {
+            return true;
+        }
+    }
+    return false;
 }
 
 QVector<ChatHistory::QueuedMessage> ChatHistory::queuedMessages() const
@@ -520,14 +620,15 @@ void ChatHistory::queueSentMessage(DispatchedMessageId id, const Message& messag
         history->addNewOutgoingMessage(chat.getPersistentId(), content,
                                        coreIdHandler.getSelfPublicKey(), message.timestamp,
                                        message.extensionSet, coreIdHandler.getUsername(),
-                                       entry.message.outboxId);
+                                       entry.message.outboxId, message.wireId);
     } else {
-        entry.message.outboxId =
-            outbox->add(chat.getPersistentId(), content, message.timestamp, message.extensionSet);
+        entry.message.outboxId = outbox->add(chat.getPersistentId(), content, message.timestamp,
+                                             message.extensionSet, message.wireId);
     }
     entry.message.text = message.content;
     entry.message.isAction = message.isAction;
     entry.message.timestamp = message.timestamp;
+    entry.message.msgV3Id = message.wireId;
     entry.dispatched = true;
     entry.dispatchId = id;
     entry.hasIdx = true;
@@ -581,15 +682,20 @@ void ChatHistory::dispatchQueue(IMessageDispatcher& messageDispatcher)
         entry.message.isAction = handleActionPrefix(entry.message.text);
         entry.message.timestamp = stored.timestamp;
         entry.message.failed = stored.failed;
+        entry.message.msgV3Id = stored.msgV3Id;
         entry.historyId = stored.historyId;
 
         if (!stored.failed) {
             // As in dispatchUnsentMessages: one stored message is one dispatched message, and in
-            // the odd case it splits further, the last part stands for it.
-            entry.dispatchId =
-                stored.extensionSet.none()
-                    ? messageDispatcher.sendMessage(entry.message.isAction, entry.message.text).second
-                    : messageDispatcher.sendExtendedMessage(entry.message.text, stored.extensionSet).second;
+            // the odd case it splits further, the last part stands for it. KHANDAQ (0.2.57): it
+            // goes as the same message, with the msgV3 id and the time it went with before.
+            const Message kept{entry.message.isAction,
+                               entry.message.text,
+                               stored.timestamp,
+                               stored.extensionSet,
+                               {},
+                               stored.msgV3Id};
+            entry.dispatchId = messageDispatcher.resendMessage(kept).second;
             entry.dispatched = true;
 
             if (withHistory && stored.historyId.get() >= 0) {
@@ -597,12 +703,7 @@ void ChatHistory::dispatchQueue(IMessageDispatcher& messageDispatcher)
             } else {
                 entry.hasIdx = true;
                 entry.idx = sessionChatLog.getNextIdx().get();
-                sessionChatLog.onMessageSent(entry.dispatchId, Message{entry.message.isAction,
-                                                                       entry.message.text,
-                                                                       stored.timestamp,
-                                                                       stored.extensionSet,
-                                                                       {},
-                                                                       {}});
+                sessionChatLog.onMessageSent(entry.dispatchId, kept);
             }
         }
         queue.append(entry);
@@ -681,7 +782,10 @@ void ChatHistory::loadHistoryIntoSessionChatLog(ChatLogIdx start) const
             // The marks of the entry and the id a group gave it live in the entry store (item 10).
             const QString entryKey = Air::textEntryKey(chatKey(), message.sender.toString(),
                                                        message.timestamp.toMSecsSinceEpoch());
-            const QByteArray wireId = entryStore ? entryStore->wireId(entryKey) : QByteArray();
+            // KHANDAQ (0.2.57): between two people the history keeps the msgV3 id itself.
+            const QByteArray wireId = friendChat   ? message.msgV3Id
+                                      : entryStore ? entryStore->wireId(entryKey)
+                                                   : QByteArray();
             const Air::EntryMarks marks =
                 entryStore ? entryStore->entryMarks(entryKey) : Air::EntryMarks();
             auto processedMessage =

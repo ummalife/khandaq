@@ -507,6 +507,11 @@
         <translation>وصلت</translation>
     </message>
     <message>
+        <source>seen</source>
+        <comment>state of our last message: the person has read it</comment>
+        <translation>قُرئت</translation>
+    </message>
+    <message>
         <source>not sent</source>
         <comment>state of our last message: it broke</comment>
         <translation>لم تُرسل</translation>

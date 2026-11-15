@@ -21,6 +21,7 @@
 
 #include "receiptnum.h"
 
+#include <QByteArray>
 #include <QString>
 #include <cstdint>
 
@@ -33,6 +34,13 @@ public:
     ICoreFriendMessageSender& operator=(const ICoreFriendMessageSender&) = default;
     ICoreFriendMessageSender(ICoreFriendMessageSender&&) = default;
     ICoreFriendMessageSender& operator=(ICoreFriendMessageSender&&) = default;
-    virtual bool sendAction(uint32_t friendId, const QString& action, ReceiptNum& receipt) = 0;
-    virtual bool sendMessage(uint32_t friendId, const QString& message, ReceiptNum& receipt) = 0;
+    /**
+     * KHANDAQ (0.2.57): msgV3Id is the 32-byte id the text goes with (src/core/msgv3.h), the same
+     * on every send of it, and msgV3Time the time it was sent at, in seconds since 1970. With an
+     * empty id it goes as a plain text, as every text did before.
+     */
+    virtual bool sendAction(uint32_t friendId, const QString& action, const QByteArray& msgV3Id,
+                            quint32 msgV3Time, ReceiptNum& receipt) = 0;
+    virtual bool sendMessage(uint32_t friendId, const QString& message, const QByteArray& msgV3Id,
+                             quint32 msgV3Time, ReceiptNum& receipt) = 0;
 };

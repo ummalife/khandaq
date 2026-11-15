@@ -45,6 +45,8 @@ public:
         QDateTime timestamp;
         /** The delivery gave up on it: it waits for "Retry" instead of the person. */
         bool failed = false;
+        /** KHANDAQ (0.2.57): the msgV3 id it went with, which "Retry" sends it with again. */
+        QByteArray msgV3Id;
     };
 
     /**
@@ -79,6 +81,19 @@ public:
     SessionChatLog::EffectResult applyEffect(const ToxPk& sender, const Air::MessageEffect& effect,
                                              const ToxPk& selfKey);
 
+    /**
+     * KHANDAQ (0.2.57): read receipts between two people. The time, by our clock, of our own
+     * message that a read receipt names; -1 when this conversation has none.
+     */
+    qint64 ownItemTime(const Air::SeenAnchor& anchor) const;
+    /**
+     * The newest message of the person that a read receipt can name
+     * (History::newestIncomingAnchor); empty when there is none.
+     */
+    Air::SeenAnchor newestIncomingAnchor() const;
+    /** Whether the person's text with this msgV3 id is here already: it came again. */
+    bool hasIncomingText(const ToxPk& sender, const QByteArray& msgV3Id) const;
+
 signals:
     /** A message joined the queue, left it, or failed. */
     void queueChanged();
@@ -109,6 +124,10 @@ private:
     QString chatKey() const;
     /** Keeps the id a group gave a message of ours or of a member, when the history keeps it. */
     void keepWireId(const ToxPk& author, const Message& message);
+    /** KHANDAQ (0.2.57): the msgV3 id the history keeps for a message: one between two people. */
+    QByteArray msgV3IdOf(const Message& message) const;
+    /** The time of our message a read receipt names, among those the log holds; -1 for none. */
+    qint64 loggedItemTime(const ToxPk& selfPk, const Air::SeenAnchor& anchor) const;
 
     struct QueueEntry
     {
@@ -156,4 +175,6 @@ private:
     QSet<int64_t> cancelledHistoryRows;
     mutable QSet<size_t> cancelledIdx;
     Air::EntryMarksStore* entryStore = nullptr;
+    /** A conversation between two people, not a group. */
+    bool friendChat = false;
 };

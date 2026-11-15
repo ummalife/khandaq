@@ -29,7 +29,7 @@
 #include <QTranslator>
 
 namespace {
-constexpr int SCHEMA_VERSION = 12;
+constexpr int SCHEMA_VERSION = 13;
 
 /**
  * @brief The tables of schema 12.
@@ -59,6 +59,27 @@ QVector<RawDatabase::Query> outboxAndNotesSchema()
     queries += RawDatabase::Query(QStringLiteral("CREATE TABLE notes (id INTEGER PRIMARY KEY, "
                                                  "timestamp INTEGER NOT NULL, "
                                                  "message BLOB NOT NULL);"));
+    return queries;
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): what schema 13 adds to schema 12, for a new database and an upgrade
+ * alike, so that both keep the same SQL.
+ *
+ * msgv3_id is the 32-byte msgV3 id of a text between two people (src/core/msgv3.h): of every text
+ * in the history, ours and theirs, and of every message waiting in the queue, which may have no
+ * history row. It stays NULL for a group text, and for every text from before. The index finds a
+ * text by its id: the one a read receipt names, or one that came again.
+ */
+QVector<RawDatabase::Query> msgV3Schema()
+{
+    QVector<RawDatabase::Query> queries;
+    queries +=
+        RawDatabase::Query(QStringLiteral("ALTER TABLE text_messages ADD COLUMN msgv3_id BLOB;"));
+    queries += RawDatabase::Query(QStringLiteral("ALTER TABLE outbox ADD COLUMN msgv3_id BLOB;"));
+    queries += RawDatabase::Query(
+        QStringLiteral("CREATE INDEX text_messages_msgv3_idx ON text_messages (msgv3_id) "
+                       "WHERE msgv3_id IS NOT NULL;"));
     return queries;
 }
 
@@ -285,7 +306,8 @@ bool DbUpgrader::dbSchemaUpgrade(std::shared_ptr<RawDatabase>& db, IMessageBoxMa
                                                  dbSchema4to5,           dbSchema5to6,
                                                  dbSchema6to7,           dbSchema7to8,
                                                  dbSchema8to9,           dbSchema9to10,
-                                                 DbTo11::dbSchema10to11, dbSchema11to12};
+                                                 DbTo11::dbSchema10to11, dbSchema11to12,
+                                                 dbSchema12to13};
 
     assert(databaseSchemaVersion < static_cast<int>(upgradeFns.size()));
     assert(upgradeFns.size() == SCHEMA_VERSION);
@@ -371,6 +393,7 @@ bool DbUpgrader::createCurrentSchema(RawDatabase& db)
     queries += RawDatabase::Query(
         "CREATE INDEX chat_id_idx on history (chat_id);");
     queries += outboxAndNotesSchema();
+    queries += msgV3Schema();
     queries += RawDatabase::Query(QStringLiteral("PRAGMA user_version = %1;").arg(SCHEMA_VERSION));
     return db.execNow(queries);
 }
@@ -671,6 +694,16 @@ bool DbUpgrader::dbSchema11to12(RawDatabase& db)
                        "JOIN chats ON chats.id = history.chat_id "
                        "ORDER BY history.id;"));
     upgradeQueries += RawDatabase::Query(QStringLiteral("PRAGMA user_version = 12;"));
+    return db.execNow(upgradeQueries);
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): adds the msgV3 ids (msgV3Schema). The texts already there keep none.
+ */
+bool DbUpgrader::dbSchema12to13(RawDatabase& db)
+{
+    QVector<RawDatabase::Query> upgradeQueries = msgV3Schema();
+    upgradeQueries += RawDatabase::Query(QStringLiteral("PRAGMA user_version = 13;"));
     return db.execNow(upgradeQueries);
 }
 

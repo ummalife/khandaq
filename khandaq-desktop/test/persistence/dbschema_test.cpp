@@ -139,6 +139,7 @@ private slots:
     void test9to10();
     // test10to11 handled in dbTo11_test
     void test11to12();
+    void test12to13();
     // test suite
 
 private:
@@ -164,7 +165,7 @@ void TestDbSchema::testCreation()
     QVector<RawDatabase::Query> queries;
     auto db = std::shared_ptr<RawDatabase>{new RawDatabase{testDatabaseFile->fileName(), {}, {}}};
     QVERIFY(DbUpgrader::createCurrentSchema(*db));
-    DbUtility::verifyDb(db, DbUtility::schema12);
+    DbUtility::verifyDb(db, DbUtility::schema13);
 }
 
 void TestDbSchema::testIsNewDb()
@@ -486,6 +487,75 @@ void TestDbSchema::test11to12()
         version = row[0].toInt();
     })));
     QCOMPARE(version, 12);
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): a database of 0.2.56 gets the msgV3 ids. What it holds stays as it was,
+ * without ids: a text and a message waiting in the queue. A text written after keeps its id.
+ */
+void TestDbSchema::test12to13()
+{
+    auto db = std::shared_ptr<RawDatabase>{new RawDatabase{testDatabaseFile->fileName(), {}, {}}};
+    createSchemaAtVersion(db, DbUtility::schema12);
+
+    const QByteArray chat(32, 'c');
+    QVector<RawDatabase::Query> setup;
+    setup += RawDatabase::Query("INSERT INTO chats (id, uuid) VALUES (1, ?);", {chat});
+    setup += RawDatabase::Query("INSERT INTO authors (id, public_key) VALUES (1, ?);",
+                                {QByteArray(32, 'a')});
+    setup += RawDatabase::Query("INSERT INTO aliases (id, owner, display_name) VALUES (1, 1, ?);",
+                                {QByteArray("Amina")});
+    setup += RawDatabase::Query(
+        "INSERT INTO history (id, message_type, timestamp, chat_id) VALUES (1, 'T', 1000, 1);");
+    setup += RawDatabase::Query("INSERT INTO text_messages (id, message_type, sender_alias, "
+                                "message) VALUES (1, 'T', 1, ?);",
+                                {QByteArray("from 0.2.56")});
+    setup += RawDatabase::Query("INSERT INTO outbox (id, chat_uuid, timestamp, message, "
+                                "required_extensions, history_id, state) "
+                                "VALUES (1, ?, 1000, ?, 0, 1, 0);",
+                                {chat, QByteArray("from 0.2.56")});
+    QVERIFY(db->execNow(setup));
+
+    QVERIFY(DbUpgrader::dbSchema12to13(*db));
+    verifyDb(db, DbUtility::schema13);
+    // verifyDb finds every entry of the database among those of the schema; the count says that
+    // none of the schema is missing either.
+    size_t entries = 0;
+    QVERIFY(db->execNow(
+        RawDatabase::Query("SELECT COUNT(*) FROM sqlite_master WHERE sql IS NOT NULL;",
+                           [&](const QVector<QVariant>& row) { entries = row[0].toULongLong(); })));
+    QCOMPARE(entries, DbUtility::schema13.size());
+
+    QVector<QVector<QVariant>> rows;
+    QVERIFY(db->execNow(RawDatabase::Query(
+        "SELECT text_messages.message, text_messages.msgv3_id, outbox.message, outbox.msgv3_id "
+        "FROM text_messages JOIN outbox ON outbox.history_id = text_messages.id;",
+        [&](const QVector<QVariant>& row) { rows << row; })));
+    QCOMPARE(rows.size(), 1);
+    QCOMPARE(rows[0][0].toByteArray(), QByteArray("from 0.2.56"));
+    QVERIFY(rows[0][1].isNull());
+    QCOMPARE(rows[0][2].toByteArray(), QByteArray("from 0.2.56"));
+    QVERIFY(rows[0][3].isNull());
+
+    const QByteArray msgV3Id(32, 'i');
+    QVector<RawDatabase::Query> later;
+    later += RawDatabase::Query(
+        "INSERT INTO history (id, message_type, timestamp, chat_id) VALUES (2, 'T', 2000, 1);");
+    later += RawDatabase::Query("INSERT INTO text_messages (id, message_type, sender_alias, "
+                                "message, msgv3_id) VALUES (2, 'T', 1, ?, ?);",
+                                {QByteArray("from 0.2.57"), msgV3Id});
+    QVERIFY(db->execNow(later));
+    qint64 found = -1;
+    QVERIFY(db->execNow(
+        RawDatabase::Query("SELECT id FROM text_messages WHERE msgv3_id = ?;", {msgV3Id},
+                           [&](const QVector<QVariant>& row) { found = row[0].toLongLong(); })));
+    QCOMPARE(found, qint64{2});
+
+    int version = 0;
+    QVERIFY(db->execNow(RawDatabase::Query("PRAGMA user_version;", [&](const QVector<QVariant>& row) {
+        version = row[0].toInt();
+    })));
+    QCOMPARE(version, 13);
 }
 
 QTEST_GUILESS_MAIN(TestDbSchema)

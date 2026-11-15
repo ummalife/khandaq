@@ -92,6 +92,7 @@
 #include "src/model/group.h"
 #include "src/model/air/airmessagemarks.h"
 #include "src/model/air/airpreferences.h"
+#include "src/model/air/airseenreceipts.h"
 #include "src/model/groupinvite.h"
 #include "src/model/notes.h"
 #include "src/model/sessionchatlog.h"
@@ -696,6 +697,17 @@ bool Widget::eventFilter(QObject* obj, QEvent* event)
             refreshLeastSize();
         }
         break;
+    case QEvent::Show:
+        // KHANDAQ (0.2.57): a conversation between two people came into view, in this window or
+        // in another (read receipts). It counts once its window has settled.
+        for (auto it = chatForms.cbegin(); it != chatForms.cend(); ++it) {
+            if (it.value() == obj) {
+                const ToxPk shownPk = it.key();
+                QTimer::singleShot(0, this, [this, shownPk] { reportSeen(shownPk); });
+                break;
+            }
+        }
+        break;
     default:
         break;
     }
@@ -902,6 +914,7 @@ void Widget::onCoreChanged(Core& core_)
     connect(core, &Core::groupInviteReceived, this, &Widget::onGroupInviteReceived);
     connect(core, &Core::groupMessageReceived, this, &Widget::onGroupMessageReceived);
     connect(core, &Core::friendMessageEffect, this, &Widget::onFriendMessageEffect);
+    connect(core, &Core::friendSeenReceived, this, &Widget::onFriendSeenReceived);
     connect(core, &Core::groupMessageEffect, this, &Widget::onGroupMessageEffect);
     connect(core, &Core::groupFileReceived, this, &Widget::onGroupFileReceived);
     connect(core, &Core::groupFileSent, this, &Widget::onGroupFileSent);
@@ -1400,6 +1413,10 @@ void Widget::dispatchFile(ToxFile file)
 
     const auto senderPk = (file.direction == ToxFile::SENDING) ? core->getSelfPublicKey() : pk;
     friendChatLogs[pk]->onFileUpdated(senderPk, file);
+    // KHANDAQ (0.2.57): a file that comes while the person reads the chat is seen at once.
+    if (file.status == ToxFile::INITIALIZING && file.direction == ToxFile::RECEIVING) {
+        reportSeen(pk);
+    }
 
     filesForm->onFileUpdated(file);
 }
@@ -1466,6 +1483,8 @@ void Widget::addFriend(uint32_t friendId, const ToxPk& friendPk)
         settings, style, *messageBoxManager, *contentDialogManager, *friendList,
         *groupList);
     connect(friendForm, &ChatForm::updateFriendActivity, this, &Widget::updateFriendActivity);
+    // KHANDAQ (0.2.57): the form coming into view may start the reading (eventFilter).
+    friendForm->installEventFilter(this);
 
     friendMessageDispatchers[friendPk] = friendMessageDispatcher;
     friendChatLogs[friendPk] = chatHistory;
@@ -1504,6 +1523,16 @@ void Widget::addFriend(uint32_t friendId, const ToxPk& friendPk)
                 notifyReceivedCallback);
 
     friendAlertConnections.insert(friendPk, notifyReceivedConnection);
+    // KHANDAQ (0.2.57): a message that comes while the person reads the chat is seen at once
+    // (after ChatHistory took it, which it hooked up first), and the read receipt owed them goes
+    // when they come online.
+    connect(friendMessageDispatcher.get(), &IMessageDispatcher::messageReceived, this,
+            [this, friendPk] { reportSeen(friendPk); });
+    connect(newfriend, &Friend::onlineOfflineChanged, this, [this](const ToxPk& onlinePk, bool online) {
+        if (online && seenReceipts) {
+            seenReceipts->friendOnline(onlinePk);
+        }
+    });
     connect(newfriend, &Friend::aliasChanged, this, &Widget::onFriendAliasChanged);
     connect(newfriend, &Friend::displayedNameChanged, this, &Widget::onFriendDisplayedNameChanged);
     connect(newfriend, &Friend::statusChanged, this, &Widget::onFriendStatusChanged);
@@ -1730,7 +1759,8 @@ void Widget::openDialog(GenericChatroomWidget* widget, bool newWindow)
     }
 }
 
-void Widget::onFriendMessageReceived(uint32_t friendnumber, const QString& message, bool isAction)
+void Widget::onFriendMessageReceived(uint32_t friendnumber, const QString& message, bool isAction,
+                                     const QByteArray& msgV3Id)
 {
     const auto& friendId = friendList->id2Key(friendnumber);
     Friend* f = friendList->findFriend(friendId);
@@ -1739,9 +1769,18 @@ void Widget::onFriendMessageReceived(uint32_t friendnumber, const QString& messa
     }
 
     const auto dispatcher = friendMessageDispatchers.value(f->getPublicKey());
-    if (dispatcher) {
-        dispatcher->onMessageReceived(isAction, message);
+    if (!dispatcher) {
+        return;
     }
+    // KHANDAQ (0.2.57): a phone sends a msgV3 text again until our receipt of it comes
+    // (Core::onFriendMessage), so one whose receipt was lost on the way comes twice. The core
+    // confirmed it again; the conversation shows it once.
+    const auto chatLog = friendChatLogs.value(f->getPublicKey());
+    if (chatLog && chatLog->hasIncomingText(f->getPublicKey(), msgV3Id)) {
+        qDebug() << "Widget: a msgV3 text came again from friend" << friendnumber;
+        return;
+    }
+    dispatcher->onMessageReceived(isAction, message, msgV3Id);
 }
 
 void Widget::onReceiptReceived(int friendId, ReceiptNum receipt)
@@ -2148,6 +2187,48 @@ bool Widget::systemNotificationShows() const
 #endif
 }
 
+bool Widget::isFriendChatInFront(const ToxPk& friendPk) const
+{
+    const ChatForm* const form = chatForms.value(friendPk);
+    if (form == nullptr || friendList->findFriend(friendPk) == nullptr) {
+        return false;
+    }
+    // Where the chat is shown, as newFriendMessageAlert tells whether it is active.
+    const bool inDialog = contentDialogManager->getFriendDialog(friendPk) != nullptr;
+    const bool active = inDialog ? contentDialogManager->isChatActive(friendPk)
+                                 : friendWidgets.value(friendPk) == activeChatroomWidget;
+    const QWidget* const front = form->window();
+    const QWindow* const handle = front->windowHandle();
+
+    Air::ReadingFacts facts;
+    facts.appActive = QGuiApplication::applicationState() == Qt::ApplicationActive;
+    facts.windowShown = front->isVisible();
+    facts.windowMinimized = front->isMinimized();
+    facts.windowActive = front->isActiveWindow();
+    facts.windowExposed = handle != nullptr && handle->isExposed();
+    facts.chatShown = active && form->isVisible();
+    return Air::isReadingNow(facts);
+}
+
+void Widget::reportSeen(const ToxPk& friendPk)
+{
+    if (seenReceipts == nullptr || !isFriendChatInFront(friendPk)) {
+        return;
+    }
+    const std::shared_ptr<ChatHistory> chatLog = friendChatLogs.value(friendPk);
+    if (chatLog) {
+        seenReceipts->seen(friendPk, chatLog->newestIncomingAnchor());
+    }
+}
+
+void Widget::reportSeenInFront()
+{
+    const QList<ToxPk> keys = chatForms.keys();
+    for (const ToxPk& key : keys) {
+        reportSeen(key);
+    }
+}
+
 void Widget::onFriendRequestReceived(const ToxPk& friendPk, const QString& message)
 {
     // A request from a blocked key is dropped as it lands, the way Decline drops one: no card, no
@@ -2316,7 +2397,10 @@ void Widget::onDialogShown(GenericChatroomWidget* widget)
 
 void Widget::onFriendDialogShown(const Friend* f)
 {
-    onDialogShown(friendWidgets[f->getPublicKey()]);
+    const ToxPk friendPk = f->getPublicKey();
+    onDialogShown(friendWidgets[friendPk]);
+    // KHANDAQ (0.2.57): the window of the chat became the active one (read receipts).
+    QTimer::singleShot(0, this, [this, friendPk] { reportSeen(friendPk); });
 }
 
 void Widget::onGroupDialogShown(Group* g)
@@ -2623,7 +2707,8 @@ void Widget::onFriendMessageEffect(uint32_t friendnumber, const QByteArray& pack
     const SessionChatLog::EffectResult result =
         chatLog->applyEffect(friendPk, effect, core->getSelfPublicKey());
     if (result.change == Change::None) {
-        // A text between two people is known by its msgV3 hash, which this client has none of.
+        // A text between two people is known by its msgV3 hash: one kept before 0.2.57 has none,
+        // and only the entries loaded are searched.
         qDebug() << "An edit, deletion or reaction from a friend points at nothing shown here";
         return;
     }
@@ -2635,6 +2720,34 @@ void Widget::onFriendMessageEffect(uint32_t friendnumber, const QByteArray& pack
         && file.direction == ToxFile::RECEIVING && live) {
         core->getCoreFile()->cancelFileRecv(friendnumber, file.fileNum);
     }
+}
+
+void Widget::onFriendSeenReceived(uint32_t friendnumber, const QByteArray& packet)
+{
+    Air::SeenReceipt receipt;
+    if (!Air::readSeenPacket(packet, &receipt)) {
+        // Another length, magic, version or kind of anchor: dropped, never shown.
+        qDebug() << "Dropped a read receipt of" << packet.size() << "bytes from friend" << friendnumber;
+        return;
+    }
+    const ToxPk friendPk = friendList->id2Key(friendnumber);
+    const std::shared_ptr<ChatHistory> chatLog = friendChatLogs.value(friendPk);
+    if (!chatLog || airLocal == nullptr || friendList->findFriend(friendPk) == nullptr) {
+        return;
+    }
+    Air::SeenAnchor anchor;
+    anchor.anchor = receipt.anchor;
+    anchor.id = receipt.anchorId;
+    const qint64 sentMs = chatLog->ownItemTime(anchor);
+    if (sentMs < 0) {
+        qDebug() << "A read receipt from friend" << friendnumber
+                 << "points at no message of ours in the chat";
+        return;
+    }
+    // What we sent up to that message, and the message itself, shows seen.
+    airLocal->raiseSeenUpTo(friendPk, sentMs);
+    qDebug() << "A read receipt from friend" << friendnumber << "marks what we sent up to" << sentMs
+             << "as seen";
 }
 
 void Widget::onGroupMessageEffect(int groupnumber, const ToxPk& sender, const QByteArray& packet)
@@ -3301,6 +3414,8 @@ bool Widget::event(QEvent* e)
         if (notificationGenerator) {
             notificationGenerator->onNotificationActivated();
         }
+        // KHANDAQ (0.2.57): and the chat in front, once the window is the active one.
+        QTimer::singleShot(0, this, &Widget::reportSeenInFront);
 
         focusChatInput();
 
@@ -3840,6 +3955,23 @@ void Widget::setupAir()
     airLocal = new AirLocal(settings, this);
     // Requests and invitations wait in the local store until they are answered (E12).
     airSource->setLocal(airLocal);
+    // KHANDAQ (0.2.57): the read receipts we send; those still owed stay in the local store.
+    seenReceipts = new Air::SeenReceipts(
+        *airLocal,
+        [this](const ToxPk& toPk, const QByteArray& packet) {
+            const Friend* const f = friendList->findFriend(toPk);
+            return f != nullptr && core->sendSeenReceipt(f->getId(), packet);
+        },
+        [this](const ToxPk& toPk) {
+            const Friend* const f = friendList->findFriend(toPk);
+            return f != nullptr && Status::isOnline(f->getStatus());
+        },
+        Air::SeenReceipts::defaultGapMs, this);
+    connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
+        if (state == Qt::ApplicationActive) {
+            QTimer::singleShot(0, this, &Widget::reportSeenInFront);
+        }
+    });
 
     // New contact (E11): a panel that drops over the list column, under the band.
     AirNewContact::Lookup lookup;

@@ -25,6 +25,7 @@
 #include "src/core/coreext.h"
 #include "src/core/dhtserver.h"
 #include "src/core/icoresettings.h"
+#include "src/core/msgv3.h"
 #include "src/core/toxlogger.h"
 #include "src/core/networkdiagnostics.h"
 #include "src/core/reconnectbackoff.h"
@@ -693,16 +694,28 @@ void Core::onFriendMessage(Tox* tox, uint32_t friendId, Tox_Message_Type type, c
     // scripts/build-linux.sh), and it hands this callback a third type as well:
     // TOX_MESSAGE_TYPE_HIGH_LEVEL_ACK, the receipt for a msgV3 message, whose text is a bare "_".
     // Everything but an action was taken for a normal message, so a receipt from the iPhone showed
-    // up as a message "_" from it after every message the desktop sent. The desktop sends no msgV3
-    // and reads no such receipt: only a normal message and an action are messages, any other type is
-    // dropped. The third type is not named here, so this still builds against an upstream tox.h,
-    // which has neither the type nor its packet.
+    // up as a message "_" from it after every message the desktop sent. Only a normal message and
+    // an action are messages, any other type is dropped. The third type is not named here, so this
+    // still builds against an upstream tox.h, which has neither the type nor its packet. The
+    // desktop does not read these receipts: its texts count as delivered by toxcore's own receipt
+    // (onReadReceiptCallback), as before.
     if (type != TOX_MESSAGE_TYPE_NORMAL && type != TOX_MESSAGE_TYPE_ACTION) {
         return;
     }
-    bool isAction = (type == TOX_MESSAGE_TYPE_ACTION);
-    QString msg = ToxString(cMessage, cMessageSize).getQString();
-    emit static_cast<Core*>(core)->friendMessageReceived(friendId, msg, isAction);
+    // KHANDAQ (0.2.57): a text from a phone, or from a desktop of 0.2.57, carries the msgV3 trailer:
+    // its words, two zero bytes, its 32-byte id and the time it was sent (src/core/msgv3.h). The
+    // words alone are the message; the id is what a read receipt, an edit, a deletion or a reaction
+    // of it points at. Whoever sends msgV3 waits for the receipt of the third type naming that id:
+    // Android sends such a text again every 30 seconds until one comes (resend_v3_messages), and
+    // shows it delivered only then. So every text with an id gets one, a text that came again too.
+    Core* const corePtr = static_cast<Core*>(core);
+    QByteArray msgV3Id;
+    const QByteArray text = MsgV3::textOf(cMessage, cMessageSize, &msgV3Id, nullptr);
+    if (!msgV3Id.isEmpty()) {
+        corePtr->sendHighLevelAck(friendId, msgV3Id);
+    }
+    const bool isAction = (type == TOX_MESSAGE_TYPE_ACTION);
+    emit corePtr->friendMessageReceived(friendId, ToxString(text).getQString(), isAction, msgV3Id);
 }
 
 void Core::onFriendNameChange(Tox* tox, uint32_t friendId, const uint8_t* cName, size_t cNameSize, void* core)
@@ -781,6 +794,7 @@ void Core::onConnectionStatusChanged(Tox* tox, uint32_t friendId, Tox_Connection
     // Ignore Online because it will be emited from onUserStatusChanged
     bool isOffline = friendStatus == Status::Status::Offline;
     if (isOffline) {
+        core->highLevelAcks.remove(friendId);
         emit core->friendStatusChanged(friendId, friendStatus);
         core->checkLastOnline(friendId);
     }
@@ -1072,14 +1086,31 @@ void Core::onLosslessPacket(Tox* tox, uint32_t friendId,
                                                             static_cast<int>(length)));
         return;
     }
+    // KHANDAQ (0.2.57): read receipts. A packet 189 of any shape stops here, so that none reaches
+    // toxext, which a desktop of 0.2.56 handed it to and which drops it there.
+    if (Air::isSeenPacket(data, length)) {
+        emit core->friendSeenReceived(friendId, QByteArray(reinterpret_cast<const char*>(data),
+                                                           static_cast<int>(length)));
+        return;
+    }
     core->ext->onLosslessPacket(friendId, data, length);
 }
 
-void Core::onReadReceiptCallback(Tox* tox, uint32_t friendId, uint32_t receipt, void* core)
+void Core::onReadReceiptCallback(Tox* tox, uint32_t friendId, uint32_t receipt, void* vCore)
 {
     std::ignore = tox;
+    Core* const core = static_cast<Core*>(vCore);
+    // KHANDAQ (0.2.57): toxcore confirms our msgV3 receipts like any message, but none of them is a
+    // message the dispatcher sent: it would keep such a number until the friend comes online again.
+    const auto acks = core->highLevelAcks.find(friendId);
+    if (acks != core->highLevelAcks.end() && acks->remove(receipt)) {
+        if (acks->isEmpty()) {
+            core->highLevelAcks.erase(acks);
+        }
+        return;
+    }
     qDebug() << "Core: friend_read_receipt friendId" << friendId << "messageId" << receipt;
-    emit static_cast<Core*>(core)->receiptRecieved(friendId, ReceiptNum{receipt});
+    emit core->receiptRecieved(friendId, ReceiptNum{receipt});
 }
 
 void Core::acceptFriendRequest(const ToxPk& friendPk)
@@ -1161,9 +1192,10 @@ void Core::requestFriendship(const ToxId& friendId, const QString& message)
 }
 
 bool Core::sendMessageWithType(uint32_t friendId, const QString& message, Tox_Message_Type type,
-                               ReceiptNum& receipt)
+                               const QByteArray& msgV3Id, quint32 msgV3Time, ReceiptNum& receipt)
 {
-    int size = message.toUtf8().size();
+    QByteArray bytes = message.toUtf8();
+    const int size = bytes.size();
     auto maxSize = static_cast<int>(getMaxMessageSize());
     if (size > maxSize) {
         assert(false);
@@ -1172,26 +1204,88 @@ bool Core::sendMessageWithType(uint32_t friendId, const QString& message, Tox_Me
         return false;
     }
 
-    ToxString cMessage(message);
+#ifdef TOX_MSGV3_MSGID_LENGTH
+    // KHANDAQ (0.2.57): a text goes with the msgV3 trailer, as the phones send theirs, so that
+    // their read receipts, edits, deletions and reactions can point at it. A desktop of 0.2.56
+    // reads a text up to its first zero byte (ToxString), so it shows the words alone. The longest
+    // text (getMaxMessageSize) still fits with its trailer.
+    static_assert(MsgV3::guardLength == TOX_MSGV3_GUARD, "the msgV3 guard of the fork");
+    static_assert(MsgV3::idLength == TOX_MSGV3_MSGID_LENGTH, "the msgV3 id of the fork");
+    static_assert(MsgV3::timeLength == TOX_MSGV3_TIMESTAMP_LENGTH, "the msgV3 time of the fork");
+    bytes = MsgV3::withTrailer(bytes, msgV3Id, msgV3Time);
+#else
+    // An upstream toxcore cannot send the receipt of the third type a msgV3 text asks for
+    // (sendHighLevelAck): a phone that got msgV3 from us would wait for receipts that never come.
+    // So the texts go plain, as before.
+    std::ignore = msgV3Id;
+    std::ignore = msgV3Time;
+#endif
+
     Tox_Err_Friend_Send_Message error;
-    receipt = ReceiptNum{tox_friend_send_message(tox.get(), friendId, type, cMessage.data(),
-                                                 cMessage.size(), &error)};
+    receipt = ReceiptNum{tox_friend_send_message(tox.get(), friendId, type,
+                                                 reinterpret_cast<const uint8_t*>(bytes.constData()),
+                                                 static_cast<size_t>(bytes.size()), &error)};
     if (PARSE_ERR(error)) {
         return true;
     }
     return false;
 }
 
-bool Core::sendMessage(uint32_t friendId, const QString& message, ReceiptNum& receipt)
+bool Core::sendMessage(uint32_t friendId, const QString& message, const QByteArray& msgV3Id,
+                       quint32 msgV3Time, ReceiptNum& receipt)
 {
     QMutexLocker ml(&coreLoopLock);
-    return sendMessageWithType(friendId, message, TOX_MESSAGE_TYPE_NORMAL, receipt);
+    return sendMessageWithType(friendId, message, TOX_MESSAGE_TYPE_NORMAL, msgV3Id, msgV3Time, receipt);
 }
 
-bool Core::sendAction(uint32_t friendId, const QString& action, ReceiptNum& receipt)
+bool Core::sendAction(uint32_t friendId, const QString& action, const QByteArray& msgV3Id,
+                      quint32 msgV3Time, ReceiptNum& receipt)
 {
     QMutexLocker ml(&coreLoopLock);
-    return sendMessageWithType(friendId, action, TOX_MESSAGE_TYPE_ACTION, receipt);
+    return sendMessageWithType(friendId, action, TOX_MESSAGE_TYPE_ACTION, msgV3Id, msgV3Time, receipt);
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): confirms a msgV3 text the way the phones do (HelperMessage
+ * send_msgv3_high_level_ack): a message of the third type, "_" with the trailer that names the id
+ * of the text, at the time of the confirmation. Only the fork of toxcore sends this type; an
+ * upstream one would refuse it.
+ */
+void Core::sendHighLevelAck(uint32_t friendId, const QByteArray& msgV3Id)
+{
+#ifdef TOX_MSGV3_MSGID_LENGTH
+    QMutexLocker ml{&coreLoopLock};
+    const QByteArray ack =
+        MsgV3::withTrailer(QByteArrayLiteral("_"), msgV3Id,
+                           static_cast<quint32>(QDateTime::currentSecsSinceEpoch()));
+    Tox_Err_Friend_Send_Message error;
+    const uint32_t ackNumber =
+        tox_friend_send_message(tox.get(), friendId, TOX_MESSAGE_TYPE_HIGH_LEVEL_ACK,
+                                reinterpret_cast<const uint8_t*>(ack.constData()),
+                                static_cast<size_t>(ack.size()), &error);
+    if (error != TOX_ERR_FRIEND_SEND_MESSAGE_OK) {
+        qDebug() << "Core: the msgV3 receipt did not go to friend" << friendId << "error" << error;
+        return;
+    }
+    highLevelAcks[friendId].insert(ackNumber);
+#else
+    std::ignore = friendId;
+    std::ignore = msgV3Id;
+#endif
+}
+
+bool Core::sendSeenReceipt(uint32_t friendId, const QByteArray& packet)
+{
+    QMutexLocker ml{&coreLoopLock};
+    Tox_Err_Friend_Custom_Packet error;
+    const bool sent =
+        tox_friend_send_lossless_packet(tox.get(), friendId,
+                                        reinterpret_cast<const uint8_t*>(packet.constData()),
+                                        static_cast<size_t>(packet.size()), &error);
+    if (!sent) {
+        qDebug() << "Core: the read receipt did not go to friend" << friendId << "error" << error;
+    }
+    return sent;
 }
 
 void Core::sendTyping(uint32_t friendId, bool typing)
@@ -1307,6 +1401,8 @@ void Core::removeFriend(uint32_t friendId)
         emit failedToRemoveFriend(friendId);
         return;
     }
+    // KHANDAQ (0.2.57): a friend added later can get the same number.
+    highLevelAcks.remove(friendId);
 
     emit saveRequest();
     emit friendRemoved(friendId);

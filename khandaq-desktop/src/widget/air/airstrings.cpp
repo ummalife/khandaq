@@ -97,6 +97,7 @@ const Source sources[] = {
     {Text::DeliveryTransit, QT_TRANSLATE_NOOP3("Air", "in transit", "state of our last message")},
     {Text::DeliverySent, QT_TRANSLATE_NOOP3("Air", "sent", "state of our last message")},
     {Text::DeliveryDelivered, QT_TRANSLATE_NOOP3("Air", "delivered", "state of our last message")},
+    {Text::DeliverySeen, QT_TRANSLATE_NOOP3("Air", "seen", "state of our last message: the person has read it")},
     {Text::DeliveryFailed, QT_TRANSLATE_NOOP3("Air", "not sent", "state of our last message: it broke")},
     {Text::TransitFlag, QT_TRANSLATE_NOOP3("Air", "%1 in transit", "row flag: %1 messages on their way")},
     {Text::UnreadCount, QT_TRANSLATE_NOOP3("Air", "unread: %1", "accessible text of the unread badge")},
@@ -1072,6 +1073,8 @@ QString deliveryText(Air::Delivery delivery)
         return text(Text::DeliverySent);
     case Air::Delivery::Delivered:
         return text(Text::DeliveryDelivered);
+    case Air::Delivery::Seen:
+        return text(Text::DeliverySeen);
     case Air::Delivery::Failed:
         return text(Text::DeliveryFailed);
     case Air::Delivery::None:
@@ -1129,6 +1132,8 @@ QString statusText(Air::EntryStatus status)
         return text(Text::DeliverySent);
     case Air::EntryStatus::Delivered:
         return text(Text::DeliveryDelivered);
+    case Air::EntryStatus::Seen:
+        return text(Text::DeliverySeen);
     case Air::EntryStatus::Failed:
         return text(Text::DeliveryFailed);
     case Air::EntryStatus::None:

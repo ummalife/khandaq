@@ -137,6 +137,11 @@ private:
         Air::Delivery delivery = Air::Delivery::None;
         /** The last item is our own message still waiting for its receipt. */
         bool lastPending = false;
+        /**
+         * KHANDAQ (0.2.57): the last item is a file of ours still on its way, which the
+         * conversation shows with a clock: never seen.
+         */
+        bool lastFileMoving = false;
         /** Our own messages still waiting for their receipt. */
         int undelivered = 0;
     };

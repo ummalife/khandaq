@@ -487,6 +487,11 @@
         <translation>已送达</translation>
     </message>
     <message>
+        <source>seen</source>
+        <comment>state of our last message: the person has read it</comment>
+        <translation>已读</translation>
+    </message>
+    <message>
         <source>not sent</source>
         <comment>state of our last message: it broke</comment>
         <translation>未发送</translation>

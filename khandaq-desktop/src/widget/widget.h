@@ -54,6 +54,7 @@ class MainWindow;
 
 namespace Air {
 struct CommandOffer;
+class SeenReceipts;
 }
 
 class AddFriendForm;
@@ -223,7 +224,8 @@ public slots:
     void onFriendDisplayedNameChanged(const QString& displayed);
     void onFriendUsernameChanged(int friendId, const QString& username);
     void onFriendAliasChanged(const ToxPk& friendId, const QString& alias);
-    void onFriendMessageReceived(uint32_t friendnumber, const QString& message, bool isAction);
+    void onFriendMessageReceived(uint32_t friendnumber, const QString& message, bool isAction,
+                                 const QByteArray& msgV3Id);
     void onReceiptReceived(int friendId, ReceiptNum receipt);
     void onExtendedMessageSupport(uint32_t friendNumber, bool supported);
     void onFriendExtMessageReceived(uint32_t friendNumber, const QString& message);
@@ -254,6 +256,8 @@ public slots:
     void onGroupFileSendFailed(const QByteArray& fileId);
     /** An edit, a deletion or a reaction a friend sent (stage 3, item 10). */
     void onFriendMessageEffect(uint32_t friendnumber, const QByteArray& packet);
+    /** KHANDAQ (0.2.57): a read receipt a friend sent, lossless packet 189. */
+    void onFriendSeenReceived(uint32_t friendnumber, const QByteArray& packet);
     /** An edit, a deletion or a reaction a member sent to a group (stage 3, item 10). */
     void onGroupMessageEffect(int groupnumber, const ToxPk& sender, const QByteArray& packet);
     void onGroupPeerlistChanged(uint32_t groupnumber);
@@ -342,6 +346,15 @@ private:
     void showInviteBand(QWidget* front, const Friend& inviter, const QString& groupName);
     /** Whether a system notification shows for news now; the window is not alerted when it does. */
     bool systemNotificationShows() const;
+    /**
+     * KHANDAQ (0.2.57): whether the person reads the chat with friendPk right now: it is shown in a
+     * window that is active, visible and not minimized, with the app in front (read receipts).
+     */
+    bool isFriendChatInFront(const ToxPk& friendPk) const;
+    /** Tells friendPk what we have seen of theirs, when their chat is in front. */
+    void reportSeen(const ToxPk& friendPk);
+    /** reportSeen for every chat between two people that is in front now. */
+    void reportSeenInFront();
     /** Settings, made the first time they are opened and kept for the session. */
     AirSettingsPage& settingsScreen();
     void setActiveToolMenuButton(ActiveToolMenuButton newActiveButton);
@@ -597,6 +610,8 @@ private:
     AirSource* airSource = nullptr;
     AirController* airController = nullptr;
     AirLocal* airLocal = nullptr;
+    /** KHANDAQ (0.2.57): the read receipts we send (reportSeen). */
+    Air::SeenReceipts* seenReceipts = nullptr;
     AirNewContact* newContact = nullptr;
     AirNewGroup* newGroup = nullptr;
     /** "New contact with this ID" over the list while the command line holds the start of one. */

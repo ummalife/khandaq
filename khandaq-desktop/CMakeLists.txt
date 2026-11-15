@@ -269,6 +269,8 @@ set(${PROJECT_NAME}_SOURCES
   src/core/icoregroupquery.h
   src/core/icoreidhandler.cpp
   src/core/icoreidhandler.h
+  src/core/msgv3.cpp
+  src/core/msgv3.h
   src/core/toxcall.cpp
   src/core/toxcall.h
   src/core/toxencrypt.cpp
@@ -316,6 +318,8 @@ set(${PROJECT_NAME}_SOURCES
   src/model/air/airnetwork.h
   src/model/air/airpreferences.cpp
   src/model/air/airpreferences.h
+  src/model/air/airseenreceipts.cpp
+  src/model/air/airseenreceipts.h
   src/model/air/airstart.cpp
   src/model/air/airstart.h
   src/model/air/airvoicedecoder.cpp

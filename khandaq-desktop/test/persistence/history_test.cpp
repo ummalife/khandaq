@@ -99,6 +99,9 @@ private slots:
     void aGroupFileFromAMemberIsStoredAsReceived();
     void aGroupFileWeSendIsStoredAsSent();
     void aFileThatEndsBeforeItsRowIsInKeepsItsEnd();
+    void textsBetweenTwoPeopleKeepTheirMsgV3Ids();
+    void aReadReceiptFindsOnlyOurOwnMessage();
+    void theNewestMessageOfThePersonIsWhatWeSaw();
 
 private:
     /** The one file of the group, as a later start reads it. */
@@ -205,6 +208,125 @@ void TestHistory::aFileThatEndsBeforeItsRowIsInKeepsItsEnd()
     QTRY_COMPARE(storedFile().status, ToxFile::FINISHED);
     QCOMPARE(storedFile().filePath, filePath);
     QCOMPARE(storedFile().direction, ToxFile::RECEIVING);
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): a text between two people keeps the msgV3 id it went or came with
+ * (schema 13); one without, from 0.2.56 or an old client, keeps none.
+ */
+void TestHistory::textsBetweenTwoPeopleKeepTheirMsgV3Ids()
+{
+    const QByteArray theirs(32, '\x01');
+    const QByteArray ours(32, '\x02');
+    const QDateTime start = QDateTime::fromMSecsSinceEpoch(1700000000000);
+    history->addNewMessage(maryam, QStringLiteral("Salam"), maryam, start, true, ExtensionSet(),
+                           QStringLiteral("Maryam"), {}, theirs);
+    history->addNewMessage(maryam, QStringLiteral("plain"), maryam, start.addSecs(1), true,
+                           ExtensionSet(), QStringLiteral("Maryam"));
+    history->addNewMessage(maryam, QStringLiteral("Wa alaykum"), self, start.addSecs(2), true,
+                           ExtensionSet(), QStringLiteral("Me"), {}, ours);
+
+    const auto messages = history->getMessagesForChat(maryam, 0, 3);
+    QCOMPARE(messages.size(), 3);
+    QCOMPARE(messages[0].msgV3Id, theirs);
+    QVERIFY(messages[1].msgV3Id.isEmpty());
+    QCOMPARE(messages[2].msgV3Id, ours);
+
+    // A text that comes again is known by its author and id, in that chat only.
+    QVERIFY(history->hasText(maryam, maryam, theirs));
+    QVERIFY(!history->hasText(maryam, self, theirs));
+    QVERIFY(!history->hasText(maryam, maryam, ours));
+    QVERIFY(!history->hasText(maryam, maryam, QByteArray()));
+    QVERIFY(!history->hasText(ToxPk(QByteArray(ToxPk::size, 'o')), maryam, theirs));
+}
+
+/**
+ * @brief A read receipt names one of our texts by its id or one of our files by its file id: the
+ * time it has in the conversation. One of theirs, or of another chat, names nothing.
+ */
+void TestHistory::aReadReceiptFindsOnlyOurOwnMessage()
+{
+    const QByteArray theirs(32, '\x01');
+    const QByteArray ours(32, '\x02');
+    const QDateTime start = QDateTime::fromMSecsSinceEpoch(1700000000123);
+    history->addNewMessage(maryam, QStringLiteral("Salam"), maryam, start, true, ExtensionSet(),
+                           QStringLiteral("Maryam"), {}, theirs);
+    history->addNewMessage(maryam, QStringLiteral("Wa alaykum"), self, start.addSecs(2), true,
+                           ExtensionSet(), QStringLiteral("Me"), {}, ours);
+    const QByteArray ourFile = QByteArray(32, 'F');
+    history->addNewFileMessage(maryam, ourFile, QStringLiteral("plan.pdf"), filePath, 10, self,
+                               start.addSecs(3), QStringLiteral("Me"), ToxFile::SENDING);
+    history->addNewFileMessage(maryam, fileId, QStringLiteral("photo.jpg"), filePath, 10, maryam,
+                               start.addSecs(4), QStringLiteral("Maryam"), ToxFile::RECEIVING);
+    letRowsIn();
+
+    Air::SeenAnchor anchor;
+    anchor.anchor = Air::MessageEffect::Anchor::Text;
+    anchor.id = ours;
+    QCOMPARE(history->ownItemTime(maryam, self, anchor), start.addSecs(2).toMSecsSinceEpoch());
+    anchor.id = theirs;
+    QCOMPARE(history->ownItemTime(maryam, self, anchor), qint64{-1});
+    anchor.id = QByteArray(32, '\x7F');
+    QCOMPARE(history->ownItemTime(maryam, self, anchor), qint64{-1});
+    anchor.id = ours;
+    QCOMPARE(history->ownItemTime(ToxPk(QByteArray(ToxPk::size, 'o')), self, anchor), qint64{-1});
+
+    anchor.anchor = Air::MessageEffect::Anchor::File;
+    anchor.id = ourFile;
+    QCOMPARE(history->ownItemTime(maryam, self, anchor), start.addSecs(3).toMSecsSinceEpoch());
+    anchor.id = fileId;
+    QCOMPARE(history->ownItemTime(maryam, self, anchor), qint64{-1});
+    // A text id is no file id.
+    anchor.id = ours;
+    QCOMPARE(history->ownItemTime(maryam, self, anchor), qint64{-1});
+}
+
+/**
+ * @brief What a read receipt we send names: the newest text of the person that has a msgV3 id, or
+ * the newest file they sent, whichever came last; never ours, and never one they deleted.
+ */
+void TestHistory::theNewestMessageOfThePersonIsWhatWeSaw()
+{
+    QVERIFY(history->newestIncomingAnchor(maryam, self).isEmpty());
+
+    const QByteArray first(32, '\x01');
+    const QByteArray later(32, '\x03');
+    const QDateTime start = QDateTime::fromMSecsSinceEpoch(1700000000000);
+    history->addNewMessage(maryam, QStringLiteral("Salam"), maryam, start, true, ExtensionSet(),
+                           QStringLiteral("Maryam"), {}, first);
+    // From an old client: no id, so no receipt can name it.
+    history->addNewMessage(maryam, QStringLiteral("plain"), maryam, start.addSecs(1), true,
+                           ExtensionSet(), QStringLiteral("Maryam"));
+    history->addNewMessage(maryam, QStringLiteral("ours"), self, start.addSecs(2), true,
+                           ExtensionSet(), QStringLiteral("Me"), {}, QByteArray(32, '\x02'));
+
+    Air::SeenAnchor anchor = history->newestIncomingAnchor(maryam, self);
+    QCOMPARE(anchor.anchor, Air::MessageEffect::Anchor::Text);
+    QCOMPARE(anchor.id, first);
+    QCOMPARE(anchor.timeMs, start.toMSecsSinceEpoch());
+
+    history->addNewFileMessage(maryam, fileId, QStringLiteral("photo.jpg"), filePath, 10, maryam,
+                               start.addSecs(3), QStringLiteral("Maryam"), ToxFile::RECEIVING);
+    history->addNewFileMessage(maryam, QByteArray(32, 'F'), QStringLiteral("plan.pdf"), filePath,
+                               10, self, start.addSecs(4), QStringLiteral("Me"), ToxFile::SENDING);
+    letRowsIn();
+    anchor = history->newestIncomingAnchor(maryam, self);
+    QCOMPARE(anchor.anchor, Air::MessageEffect::Anchor::File);
+    QCOMPARE(anchor.id, fileId);
+    QCOMPARE(anchor.timeMs, start.addSecs(3).toMSecsSinceEpoch());
+
+    history->addNewMessage(maryam, QStringLiteral("later"), maryam, start.addSecs(5), true,
+                           ExtensionSet(), QStringLiteral("Maryam"), {}, later);
+    QCOMPARE(history->newestIncomingAnchor(maryam, self).id, later);
+
+    // Deleted by her: the one before it again.
+    history->setMessageText(maryam, maryam, start.addSecs(5), QStringLiteral("later"), QString());
+    QCOMPARE(history->newestIncomingAnchor(maryam, self).id, fileId);
+    history->eraseFileEntry(maryam, fileId);
+    QCOMPARE(history->newestIncomingAnchor(maryam, self).id, first);
+
+    // Another chat has none of it.
+    QVERIFY(history->newestIncomingAnchor(ToxPk(QByteArray(ToxPk::size, 'o')), self).isEmpty());
 }
 
 int main(int argc, char* argv[])

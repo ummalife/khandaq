@@ -80,6 +80,7 @@ enum class Text
     DeliveryTransit,
     DeliverySent,
     DeliveryDelivered,
+    DeliverySeen,
     DeliveryFailed,
     TransitFlag,
     UnreadCount,

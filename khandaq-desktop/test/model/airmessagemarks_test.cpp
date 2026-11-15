@@ -116,6 +116,8 @@ private slots:
     void groupReaction0x43PadsTheMessageIdAndNamesTheAuthor();
     void aGroupPacketOfAnotherShapeIsDropped();
     void theRoutingTakesOnlyTheseSixPackets();
+    void seen189MatchesTheSharedVectors();
+    void seen189OfAnotherShapeIsDropped();
     void groupIdsAreFourBytesBigEndian();
     void onePersonHasOneReaction();
     void reactionsAreCapped();
@@ -361,6 +363,92 @@ void TestAirMessageMarks::theRoutingTakesOnlyTheseSixPackets()
     QByteArray otherVersion = groupHead(0x41);
     otherVersion[6] = 2;
     QVERIFY(!routedAsGroupMark(otherVersion));
+}
+
+void TestAirMessageMarks::seen189MatchesTheSharedVectors()
+{
+    // KHANDAQ (0.2.57): the test vectors of the read receipts protocol, which Android and iOS
+    // build and read byte for byte too.
+    QByteArray countingId;
+    for (int i = 0; i < 32; ++i) {
+        countingId.append(static_cast<char>(i));
+    }
+    const QByteArray textVector = QByteArray::fromHex(
+        "BD4B510101000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F6553F100");
+    const QByteArray fileVector = QByteArray::fromHex(
+        "BD4B510102FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000");
+    QCOMPARE(textVector.size(), 41);
+    QCOMPARE(fileVector.size(), 41);
+
+    SeenReceipt text;
+    text.anchor = MessageEffect::Anchor::Text;
+    text.anchorId = countingId;
+    text.time = 0x6553F100;
+    QCOMPARE(seenPacket(text), textVector);
+
+    SeenReceipt file;
+    file.anchor = MessageEffect::Anchor::File;
+    file.anchorId = QByteArray(32, '\xFF');
+    file.time = 0;
+    QCOMPARE(seenPacket(file), fileVector);
+
+    SeenReceipt read;
+    QVERIFY(readSeenPacket(textVector, &read));
+    QCOMPARE(read.anchor, MessageEffect::Anchor::Text);
+    QCOMPARE(read.anchorId, countingId);
+    QCOMPARE(read.time, quint32{0x6553F100});
+    QVERIFY(readSeenPacket(fileVector, &read));
+    QCOMPARE(read.anchor, MessageEffect::Anchor::File);
+    QCOMPARE(read.anchorId, QByteArray(32, '\xFF'));
+    QCOMPARE(read.time, quint32{0});
+
+    // An id of another size makes no packet.
+    text.anchorId = countingId.left(31);
+    QVERIFY(seenPacket(text).isEmpty());
+
+    // The receipt goes its own way, not as an edit, deletion or reaction.
+    const auto data = reinterpret_cast<const uint8_t*>(textVector.constData());
+    QVERIFY(isSeenPacket(data, static_cast<size_t>(textVector.size())));
+    QVERIFY(!routedAsFriendMark(textVector));
+    QVERIFY(!isSeenPacket(data, 0));
+}
+
+void TestAirMessageMarks::seen189OfAnotherShapeIsDropped()
+{
+    const QByteArray good = QByteArray::fromHex(
+        "BD4B510101000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F6553F100");
+    SeenReceipt read;
+    read.anchorId = QByteArrayLiteral("untouched");
+    QVERIFY(readSeenPacket(good, &read));
+
+    const auto rejected = [](const QByteArray& packet) {
+        SeenReceipt receipt;
+        receipt.anchorId = QByteArrayLiteral("untouched");
+        const bool ok = readSeenPacket(packet, &receipt);
+        return !ok && receipt.anchorId == QByteArrayLiteral("untouched");
+    };
+    // Length: one byte short, one byte more, nothing.
+    QVERIFY(rejected(good.left(40)));
+    QVERIFY(rejected(good + bytes({0})));
+    QVERIFY(rejected(QByteArray()));
+    // Id and magic.
+    for (const int at : {0, 1, 2}) {
+        QByteArray other = good;
+        other[at] = static_cast<char>(other.at(at) ^ 0x01);
+        QVERIFY(rejected(other));
+    }
+    // Version.
+    for (const int version : {0, 2, 255}) {
+        QByteArray other = good;
+        other[3] = static_cast<char>(version);
+        QVERIFY(rejected(other));
+    }
+    // Anchor type.
+    for (const int type : {0, 3, 255}) {
+        QByteArray other = good;
+        other[4] = static_cast<char>(type);
+        QVERIFY(rejected(other));
+    }
 }
 
 void TestAirMessageMarks::groupIdsAreFourBytesBigEndian()

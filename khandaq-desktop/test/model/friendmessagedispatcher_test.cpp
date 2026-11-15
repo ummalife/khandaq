@@ -95,20 +95,34 @@ std::unique_ptr<ICoreExtPacket> MockCoreExtPacketAllocator::getPacket(uint32_t f
 class MockFriendMessageSender : public ICoreFriendMessageSender
 {
 public:
-    bool sendAction(uint32_t friendId, const QString& action, ReceiptNum& receipt) override;
+    bool sendAction(uint32_t friendId, const QString& action, const QByteArray& msgV3Id,
+                    quint32 msgV3Time, ReceiptNum& receipt) override;
 
-    bool sendMessage(uint32_t friendId, const QString& message, ReceiptNum& receipt) override;
+    bool sendMessage(uint32_t friendId, const QString& message, const QByteArray& msgV3Id,
+                     quint32 msgV3Time, ReceiptNum& receipt) override;
+
+    /** KHANDAQ (0.2.57): what one send of a text gave the core. */
+    struct Sent
+    {
+        QString text;
+        QByteArray msgV3Id;
+        quint32 msgV3Time;
+    };
 
     bool canSend = true;
     ReceiptNum receiptNum{0};
     size_t numSentActions = 0;
     size_t numSentMessages = 0;
+    /** Every attempt, whether toxcore took it or not. */
+    QVector<Sent> attempts;
 };
 
-bool MockFriendMessageSender::sendAction(uint32_t friendId, const QString& action, ReceiptNum& receipt)
+bool MockFriendMessageSender::sendAction(uint32_t friendId, const QString& action,
+                                         const QByteArray& msgV3Id, quint32 msgV3Time,
+                                         ReceiptNum& receipt)
 {
     std::ignore = friendId;
-    std::ignore = action;
+    attempts.append(Sent{action, msgV3Id, msgV3Time});
     if (canSend) {
         numSentActions++;
         receipt = receiptNum;
@@ -117,10 +131,12 @@ bool MockFriendMessageSender::sendAction(uint32_t friendId, const QString& actio
     return canSend;
 }
 
-bool MockFriendMessageSender::sendMessage(uint32_t friendId, const QString& message, ReceiptNum& receipt)
+bool MockFriendMessageSender::sendMessage(uint32_t friendId, const QString& message,
+                                          const QByteArray& msgV3Id, quint32 msgV3Time,
+                                          ReceiptNum& receipt)
 {
     std::ignore = friendId;
-    std::ignore = message;
+    attempts.append(Sent{message, msgV3Id, msgV3Time});
     if (canSend) {
         numSentMessages++;
         receipt = receiptNum;
@@ -152,6 +168,11 @@ private slots:
     void testReconnectKeepsOneRetryChain();
     void testReceiptTimeoutWhileOffline();
     void testCancelledMessagesAreNotSentAgain();
+    void testTextsGoWithMsgV3IdsOfTheirOwn();
+    void testPartsOfALongTextGoASecondApart();
+    void testEverySendOfATextKeepsItsIdAndTime();
+    void testResentMessageKeepsItsIdAndTime();
+    void testIncomingTextKeepsItsId();
 
     void onMessageSent(DispatchedMessageId id, Message message)
     {
@@ -570,6 +591,128 @@ void TestFriendMessageDispatcher::testCancelledMessagesAreNotSentAgain()
     QVERIFY(outgoingMessages.find(sentBefore) != outgoingMessages.end());
     QVERIFY(outgoingMessages.find(waiting) != outgoingMessages.end());
     QCOMPARE(numBrokenSignals, size_t(0));
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): every text goes as a msgV3 text, with a random id of 32 bytes and the
+ * time it went, in a later second than the text before; the message the chat log keeps carries both
+ */
+void TestFriendMessageDispatcher::testTextsGoWithMsgV3IdsOfTheirOwn()
+{
+    const auto first = friendMessageDispatcher->sendMessage(false, "first").first;
+    const auto second = friendMessageDispatcher->sendMessage(true, "second").first;
+
+    QCOMPARE(messageSender->attempts.size(), 2);
+    const auto& sentFirst = messageSender->attempts[0];
+    const auto& sentSecond = messageSender->attempts[1];
+    QCOMPARE(sentFirst.msgV3Id.size(), 32);
+    QCOMPARE(sentSecond.msgV3Id.size(), 32);
+    QVERIFY(sentFirst.msgV3Id != sentSecond.msgV3Id);
+    QVERIFY(sentSecond.msgV3Time > sentFirst.msgV3Time);
+
+    const Message& loggedFirst = outgoingMessages.at(first);
+    QCOMPARE(loggedFirst.wireId, sentFirst.msgV3Id);
+    QCOMPARE(static_cast<quint32>(loggedFirst.timestamp.toSecsSinceEpoch()), sentFirst.msgV3Time);
+    QCOMPARE(outgoingMessages.at(second).wireId, sentSecond.msgV3Id);
+}
+
+/**
+ * @brief The parts of a long text go as texts of their own, each with its own id and a second
+ * after the one before, so that a read receipt for one part never covers the next
+ */
+void TestFriendMessageDispatcher::testPartsOfALongTextGoASecondApart()
+{
+    const QString longText(static_cast<int>(tox_max_message_length()) * 2 + 10, QChar('a'));
+    const auto ids = friendMessageDispatcher->sendMessage(false, longText);
+    QCOMPARE(static_cast<int>(ids.second.get() - ids.first.get()), 2);
+
+    QCOMPARE(messageSender->attempts.size(), 3);
+    QSet<QByteArray> distinct;
+    for (int i = 0; i < messageSender->attempts.size(); ++i) {
+        const auto& part = messageSender->attempts[i];
+        QCOMPARE(part.msgV3Id.size(), 32);
+        distinct.insert(part.msgV3Id);
+        if (i > 0) {
+            QCOMPARE(part.msgV3Time, messageSender->attempts[i - 1].msgV3Time + 1);
+        }
+    }
+    QCOMPARE(distinct.size(), 3);
+
+    // The text after it goes in a later second than its last part.
+    friendMessageDispatcher->sendMessage(false, "after");
+    QVERIFY(messageSender->attempts.last().msgV3Time > messageSender->attempts[2].msgV3Time);
+}
+
+/**
+ * @brief A text sent again, after a reconnect or a receipt that did not come, goes with the id and
+ * the time it went with the first time, so the friend keeps one copy of it
+ */
+void TestFriendMessageDispatcher::testEverySendOfATextKeepsItsIdAndTime()
+{
+    recreateDispatcher(fastRetryPolicy(30));
+
+    f->setStatus(Status::Status::Offline);
+    friendMessageDispatcher->sendMessage(false, "queued");
+    QVERIFY(messageSender->attempts.isEmpty());
+
+    f->setStatus(Status::Status::Online);
+    f->onNegotiationComplete();
+    QCOMPARE(messageSender->attempts.size(), 1);
+    const auto first = messageSender->attempts[0];
+    QCOMPARE(first.msgV3Id.size(), 32);
+
+    f->setStatus(Status::Status::Offline);
+    f->setStatus(Status::Status::Online);
+    f->onNegotiationComplete();
+    QTRY_VERIFY_WITH_TIMEOUT(messageSender->attempts.size() >= 3, 5000);
+    for (const auto& attempt : messageSender->attempts) {
+        QCOMPARE(attempt.text, QStringLiteral("queued"));
+        QCOMPARE(attempt.msgV3Id, first.msgV3Id);
+        QCOMPARE(attempt.msgV3Time, first.msgV3Time);
+    }
+}
+
+/**
+ * @brief A message kept in the queue from an earlier launch, or retried by hand, goes again as the
+ * same message; one queued before 0.2.57 has no id and goes as a plain text
+ */
+void TestFriendMessageDispatcher::testResentMessageKeepsItsIdAndTime()
+{
+    const QByteArray keptId(32, '\x5A');
+    const QDateTime keptTime = QDateTime::fromMSecsSinceEpoch(1700000000000);
+    const auto kept = friendMessageDispatcher->resendMessage(
+        Message{false, "kept", keptTime, ExtensionSet(), {}, keptId});
+    QCOMPARE(messageSender->attempts.size(), 1);
+    QCOMPARE(messageSender->attempts[0].msgV3Id, keptId);
+    QCOMPARE(messageSender->attempts[0].msgV3Time, quint32{1700000000});
+    QCOMPARE(outgoingMessages.at(kept.first).wireId, keptId);
+    QCOMPARE(outgoingMessages.at(kept.first).timestamp, keptTime);
+
+    // Retry of a broken one: the same id, a fresh time.
+    const qint64 before = QDateTime::currentSecsSinceEpoch();
+    friendMessageDispatcher->resendMessage(
+        Message{false, "retried", QDateTime(), ExtensionSet(), {}, keptId});
+    QCOMPARE(messageSender->attempts[1].msgV3Id, keptId);
+    QVERIFY(static_cast<qint64>(messageSender->attempts[1].msgV3Time) >= before);
+
+    friendMessageDispatcher->resendMessage(
+        Message{false, "legacy", keptTime, ExtensionSet(), {}, QByteArray()});
+    QVERIFY(messageSender->attempts[2].msgV3Id.isEmpty());
+    QCOMPARE(messageSender->attempts[2].text, QStringLiteral("legacy"));
+}
+
+/**
+ * @brief The id an incoming text came with stays with the message, for the read receipts and the
+ * edits, deletions and reactions that point at it
+ */
+void TestFriendMessageDispatcher::testIncomingTextKeepsItsId()
+{
+    const QByteArray id(32, '\x33');
+    friendMessageDispatcher->onMessageReceived(false, "with id", id);
+    friendMessageDispatcher->onMessageReceived(false, "plain");
+    QCOMPARE(receivedMessages.size(), size_t(2));
+    QCOMPARE(receivedMessages[0].wireId, id);
+    QVERIFY(receivedMessages[1].wireId.isEmpty());
 }
 
 QTEST_GUILESS_MAIN(TestFriendMessageDispatcher)

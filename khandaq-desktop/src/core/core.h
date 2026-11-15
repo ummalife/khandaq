@@ -41,6 +41,7 @@
 #include <QHash>
 #include <QMutex>
 #include <QObject>
+#include <QSet>
 #include <QThread>
 #include <QTimer>
 
@@ -204,7 +205,8 @@ public slots:
     void setUsername(const QString& username);
     void setStatusMessage(const QString& message);
 
-    bool sendMessage(uint32_t friendId, const QString& message, ReceiptNum& receipt) override;
+    bool sendMessage(uint32_t friendId, const QString& message, const QByteArray& msgV3Id,
+                     quint32 msgV3Time, ReceiptNum& receipt) override;
     SendResult sendGroupMessage(int groupId, const QString& message, uint32_t& wireId) override;
     SendResult sendGroupAction(int groupId, const QString& message, uint32_t& wireId) override;
     void sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t messageId) override;
@@ -219,8 +221,14 @@ public slots:
      */
     bool sendGroupFileFromPath(int groupId, const QString& fileName, const QString& localPath);
     void changeGroupTitle(int groupId, const QString& title);
-    bool sendAction(uint32_t friendId, const QString& action, ReceiptNum& receipt) override;
+    bool sendAction(uint32_t friendId, const QString& action, const QByteArray& msgV3Id,
+                    quint32 msgV3Time, ReceiptNum& receipt) override;
     void sendTyping(uint32_t friendId, bool typing);
+    /**
+     * KHANDAQ (0.2.57): sends a friend a read receipt, the lossless packet 189 as Air::seenPacket
+     * builds it. False when toxcore refused it, the friend being offline, say.
+     */
+    bool sendSeenReceipt(uint32_t friendId, const QByteArray& packet);
 
     void setNospam(uint32_t nospam);
 
@@ -269,7 +277,12 @@ signals:
 
     void fileAvatarOfferReceived(uint32_t friendId, uint32_t fileId, const QByteArray& avatarHash, uint64_t filesize);
 
-    void friendMessageReceived(uint32_t friendId, const QString& message, bool isAction);
+    /**
+     * msgV3Id: KHANDAQ (0.2.57) the 32-byte id of a text that came with the msgV3 trailer, which
+     * read receipts, edits, deletions and reactions point at; empty for a plain text.
+     */
+    void friendMessageReceived(uint32_t friendId, const QString& message, bool isAction,
+                               const QByteArray& msgV3Id);
     void friendAdded(uint32_t friendId, const ToxPk& friendPk);
 
     void friendStatusChanged(uint32_t friendId, Status::Status status);
@@ -287,6 +300,8 @@ signals:
                               bool isAction, uint32_t messageId);
     /** An edit, a deletion or a reaction a friend sent: lossless packet 186, 187 or 188, as it came. */
     void friendMessageEffect(uint32_t friendId, const QByteArray& packet);
+    /** KHANDAQ (0.2.57): a read receipt a friend sent, lossless packet 189, as it came. */
+    void friendSeenReceived(uint32_t friendId, const QByteArray& packet);
     /** An edit, a deletion or a reaction a member sent to the group: 0x41, 0x42 or 0x43, as it came. */
     void groupMessageEffect(int groupnumber, const ToxPk& sender, const QByteArray& packet);
     void groupNamelistChanged(int groupnumber, int peernumber, uint8_t change);
@@ -408,11 +423,13 @@ private:
 
     static void onLosslessPacket(Tox* tox, uint32_t friendId,
                                    const uint8_t* data, size_t length, void* core);
-    static void onReadReceiptCallback(Tox* tox, uint32_t friendId, uint32_t receipt, void* core);
+    static void onReadReceiptCallback(Tox* tox, uint32_t friendId, uint32_t receipt, void* vCore);
 
     SendResult sendGroupMessageWithType(int groupId, const QString& message,
                                         Tox_Message_Type type, uint32_t& wireId);
-    bool sendMessageWithType(uint32_t friendId, const QString& message, Tox_Message_Type type, ReceiptNum& receipt);
+    bool sendMessageWithType(uint32_t friendId, const QString& message, Tox_Message_Type type,
+                             const QByteArray& msgV3Id, quint32 msgV3Time, ReceiptNum& receipt);
+    void sendHighLevelAck(uint32_t friendId, const QByteArray& msgV3Id);
     bool checkConnection();
     /** Counts the relays the node holds a connection to, at most every few seconds. */
     void countRelays();
@@ -478,6 +495,11 @@ private:
     // QA live F11: the joins of groups we were leaving, which wait for toxcore to delete the old
     // instance: it refuses to join a chat id it still has. Under coreLoopLock.
     std::vector<std::function<void()>> joinsAfterGroupLeaves;
+    // KHANDAQ (0.2.57): the toxcore numbers of our msgV3 receipts (sendHighLevelAck) whose own
+    // toxcore receipt is yet to come, by friend. None is a message of ours, so their receipts stop
+    // in onReadReceiptCallback and never reach the message dispatcher. Dropped when the friend goes
+    // offline or is removed, as toxcore drops the receipts it waits for then. Under coreLoopLock.
+    QHash<uint32_t, QSet<uint32_t>> highLevelAcks;
     // 0.2.56: the chat ids of the groups joined by their ID that did not sync yet: toxcore saves
     // a group only once it has its shared state (gc_group_is_valid), so the profile keeps them
     // until then. Under coreLoopLock.

@@ -58,8 +58,11 @@ struct Message
     ExtensionSet extensionSet;
     std::vector<MessageMetadata> metadata;
     /**
-     * The id toxcore gave a group message, 4 bytes big-endian, which the edits, deletions and
-     * reactions of the group point at (stage 3, item 10); empty for any other message. Not stored.
+     * What the edits, deletions and reactions of the message point at (stage 3, item 10). In a
+     * group: the id toxcore gave it, 4 bytes big-endian, which the history does not keep (the entry
+     * store does). KHANDAQ (0.2.57) between two people: the 32-byte msgV3 id of a text
+     * (src/core/msgv3.h), which read receipts point at too; the history keeps it. Empty for any
+     * other message, and for a text that came, or was queued, without one.
      */
     QByteArray wireId;
 };

@@ -101,6 +101,23 @@ static const uint32_t kUploadTestsGroupNumber = 6;
     XCTAssertEqualObjects([self namesOfPackets:rig[@"broadcasts"]], expected);
 }
 
+- (void)testAFileThatWentAgainFromItsBeginTwiceGoesOnAfterTheNextGap
+{
+    // Chunk 1 finds nobody three times; somebody is back each time after one look (QA-Live 15.11: on a link
+    // slower than the pace toxcore drops the member about every minute).
+    NSMutableDictionary *rig = [self rigWithMembers:@[@1, @1, @0, @1, @1, @0, @1, @1, @0, @1]];
+    NSString *path = [self fileOfChunks:4 named:@"again.bin"];
+
+    NSDictionary *result = [self sendFileAtPath:path withRig:rig];
+
+    XCTAssertEqualObjects(result[@"success"], @YES, @"%@", result[@"error"]);
+    NSArray *expected = @[@"BEGIN", @"chunk 0",
+                          @"BEGIN", @"chunk 0",
+                          @"BEGIN", @"chunk 0",
+                          @"BEGIN", @"chunk 1", @"chunk 2", @"chunk 3"];
+    XCTAssertEqualObjects([self namesOfPackets:rig[@"broadcasts"]], expected, @"the file started over at every gap");
+}
+
 #pragma mark - Chunks asked for again
 
 - (void)testTheChunksAndroidAsksForGoToItAloneTheirBeginFirst

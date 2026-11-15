@@ -46,6 +46,12 @@ static const NSTimeInterval kOCTNgcUploadBurst = 0.25;
 // desktop's aloneLimitMs. A member that drops off stays a peer for toxcore for about a minute.
 static const NSTimeInterval kOCTNgcAloneLimit = 120.0;
 static const NSTimeInterval kOCTNgcAlonePoll = 0.5;
+// KHANDAQ (0.2.56): how many times a file goes again from its BEGIN after the group had nobody to send to.
+// On a link slower than the pace such a gap comes back about every minute: toxcore drops a member whose
+// oldest packet stays unacknowledged for 58 s (GC_CONFIRMED_PEER_TIMEOUT), and a file that started over at
+// every gap would never end (QA-Live 15.11, an iOS simulator and an Android emulator). After these, a gap
+// sends the BEGIN again and the file goes on from where it was; a member that lacks chunks asks for them.
+static const NSUInteger kOCTNgcMaxRestartsFromBegin = 2;
 // KHANDAQ (0.2.56): a chunk asked for again goes to the member that asked, as a private packet, which
 // toxcore refuses while that member's send array is full. It is tried again a little later, for this long
 // at most: Android's CHUNK_SEND_STALL_MS, and its back-off of 10 ms and 2 ms more a try, 120 ms at most.
@@ -588,6 +594,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     // KHANDAQ (0.2.56): the BEGIN, then the chunks in order, each once the upload pace lets it go (see
     // kOCTNgcUploadBytesPerSecond); -1 stands for the BEGIN.
     int next = -1;
+    NSUInteger restartsFromBegin = 0;
 
     while (next < totalChunks) {
         if ([self isSendCancelledForMsgIdHex:msgIdHex]) {
@@ -605,13 +612,25 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
             return NO;
         }
 
-        if (waited && next > -1) {
+        if (waited && next > -1 && restartsFromBegin < kOCTNgcMaxRestartsFromBegin) {
             // KHANDAQ (0.2.56): the group had nobody to send to. What went before was lost with the members
             // that left, a member that comes now had none of it, and a receiver drops a file it gets no
             // packet of for a minute: the file goes again from its BEGIN, as the desktop sends it then. A
             // receiver that kept its part keeps it, as a BEGIN of a file it holds does not wipe it.
             OCTLogInfo(@"NGC group file %@ goes again from its BEGIN: the group had nobody to send to", msgIdHex);
+            restartsFromBegin++;
             next = -1;
+        }
+        else if (waited && next > -1) {
+            // KHANDAQ (0.2.56): it went again from its BEGIN kOCTNgcMaxRestartsFromBegin times already. The
+            // BEGIN goes again, so that a member that comes now knows the chunks, and the file goes on.
+            OCTLogInfo(@"NGC group file %@ goes on from chunk %d: it went again from its BEGIN %lu times",
+                       msgIdHex, next, (unsigned long)restartsFromBegin);
+
+            if (! [self sendPacedPacket:beginPacket groupNumber:groupNumber members:members error:error]) {
+                [handle closeFile];
+                return NO;
+            }
         }
 
         NSData *packet = beginPacket;

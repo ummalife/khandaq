@@ -33,4 +33,32 @@ class MessageForwarderTest: XCTestCase {
         XCTAssertEqual(MessageForwarder.forwardFileName(for: file(named: nil), diskPath: "/downloads/safe.m4a"),
                        "safe.m4a")
     }
+
+    // MARK: A forwarded text
+
+    private let header = MessageReplyHelper.forwardMark + "Forwarded from Amina"
+
+    func testAForwardThatFitsGoesAsOneMessageAsBefore() {
+        let parts = MessageForwarder.forwardTextParts(header: header, body: "Assalamu alaikum", maxBytes: AirComposeLimit.bytes)
+        XCTAssertEqual(parts, [header + "\nAssalamu alaikum"])
+    }
+
+    /// A part of a long text is as long as a message already: with the header it no longer fit, and went
+    /// cut short to a person or refused by a group.
+    func testTheForwardOfAPartOfALongTextGoesInPartsThatEachFit() {
+        for maxBytes in [AirComposeLimit.bytes, AirGroupComposeLimit.bytes] {
+            // Ten bytes a word and a space between: as long as a message, nearly.
+            let words = Array(repeating: "слово", count: (maxBytes + 1) / 11)
+            let body = words.joined(separator: " ")
+            XCTAssertGreaterThan(body.utf8.count, maxBytes - 20)
+            XCTAssertLessThanOrEqual(body.utf8.count, maxBytes)
+
+            let parts = MessageForwarder.forwardTextParts(header: header, body: body, maxBytes: maxBytes)
+            XCTAssertEqual(parts.count, 2, "\(maxBytes)")
+            XCTAssertTrue(parts.allSatisfy { $0.utf8.count <= maxBytes }, "a part does not fit one message")
+            XCTAssertTrue(parts[0].hasPrefix(header + "\n"), "the header no longer leads the forward")
+            let sentWords = parts.joined(separator: " ").dropFirst(header.count + 1).split(separator: " ").map(String.init)
+            XCTAssertEqual(sentWords, words, "words were lost or reordered")
+        }
+    }
 }

@@ -625,12 +625,16 @@ enum MessageForwarder {
             // String(localized:) formats by itself; formatting its result again sent "(null)" for the name.
             let header = MessageReplyHelper.forwardMark + String(localized: "chat_forwarded_from_format",
                                                                  forwardSourceName(for: message, manager: manager) as NSString)
-            let text = header + "\n" + body
+            let maxBytes = chat.isGroup ? AirGroupComposeLimit.bytes : AirComposeLimit.bytes
+            let parts = forwardTextParts(header: header, body: body, maxBytes: maxBytes)
             if chat.isGroup {
-                manager.groups.sendMessage(to: chat, text: text, type: .normal, successBlock: { _ in }, failureBlock: { _ in })
+                // One after another, in order, as a shared text goes to a group.
+                for part in parts {
+                    manager.groups.sendMessage(to: chat, text: part, type: .normal, successBlock: { _ in }, failureBlock: { _ in })
+                }
             }
             else {
-                manager.chats.sendMessage(to: chat, text: text, type: .normal, successBlock: nil, failureBlock: nil)
+                manager.chats.sendMessageParts(to: chat, parts: parts, type: .normal, successBlock: nil, failureBlock: nil)
             }
             return
         }
@@ -654,6 +658,18 @@ enum MessageForwarder {
         else {
             manager.files.sendFile(atPath: tempURL.path, moveToUploads: true, to: chat) { _ in }
         }
+    }
+
+    /// The messages a forwarded text goes as: the header line, then the body, in parts that each fit one
+    /// message of `maxBytes`, the header riding on the first. KHANDAQ (review 0.2.56): it went as one, and
+    /// the forward of a part of a long text, with the header added, no longer fit: a group refused it, a
+    /// chat with a person cut its end off.
+    static func forwardTextParts(header: String, body: String, maxBytes: Int) -> [String] {
+        let text = header + "\n" + body
+        guard text.utf8.count > maxBytes else {
+            return [text]
+        }
+        return AirComposeLimit.parts(of: body, head: header + "\n", maxBytes: maxBytes)
     }
 
     /// The name a forwarded file goes out under: the one it was sent or received with, not the on-disk

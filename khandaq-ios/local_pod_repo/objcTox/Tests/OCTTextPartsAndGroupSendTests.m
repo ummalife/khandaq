@@ -608,6 +608,33 @@
     [rig[@"partial"] stopMocking];
 }
 
+- (void)testATextLongerThanAGroupMessageIsRefusedEvenWhenItWouldWait
+{
+    NSDictionary *rig = [self rigWithQueue:@[]];
+    NSMutableDictionary *group = rig[@"group"];
+    group[@"status"] = @0;
+    group[@"peers"] = @1;
+    NSString *fits = [@"" stringByPaddingToLength:kOCTToxGroupMaxMessageLength withString:@"a" startingAtIndex:0];
+    NSString *tooLong = [fits stringByAppendingString:@"a"];
+
+    __block NSError *refusal = nil;
+    [rig[@"submanager"] sendMessageToChat:rig[@"chat"] text:tooLong type:OCTToxMessageTypeNormal successBlock:^(OCTMessageAbstract *message) {
+        XCTFail(@"a text toxcore can never take was kept to wait: %@", message);
+    } failureBlock:^(NSError *error) {
+        refusal = error;
+    }];
+    XCTAssertEqualObjects(refusal.domain, kOCTToxErrorDomain);
+    XCTAssertEqual(refusal.code, OCTToxErrorGroupSendMessageTooLong);
+    XCTAssertEqual([rig[@"queue"] count], 0u);
+
+    // One that fits still waits for somebody to get it.
+    OCTMessageAbstract *waiting = [self sendText:fits withRig:rig];
+    XCTAssertTrue(waiting.groupPendingSend);
+    XCTAssertEqualObjects(rig[@"sent"], @[]);
+
+    [rig[@"partial"] stopMocking];
+}
+
 - (OCTMessageAbstract *)sendText:(NSString *)text withRig:(NSDictionary *)rig
 {
     __block OCTMessageAbstract *answer = nil;

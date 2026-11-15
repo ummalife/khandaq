@@ -1042,6 +1042,18 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     NSParameterAssert(text);
     NSAssert(chat.isGroup, @"Chat must be a group chat.");
 
+    // KHANDAQ (review 0.2.56): toxcore takes kOCTToxGroupMaxMessageLength bytes at most. A longer text was
+    // refused only when the group could take it at once; otherwise it was queued, refused at every flush and
+    // never sent. It is refused here, whatever the group. (The composer and a forward split long texts.)
+    if ([text lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > kOCTToxGroupMaxMessageLength) {
+        if (failureBlock) {
+            failureBlock([OCTTox createErrorWithCode:OCTToxErrorGroupSendMessageTooLong
+                                         description:@"Cannot send group message"
+                                       failureReason:@"Message is too long"]);
+        }
+        return;
+    }
+
     OCTTox *tox = [self.dataSource managerGetTox];
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
     NSString *peerName = [self defaultGroupPeerName];

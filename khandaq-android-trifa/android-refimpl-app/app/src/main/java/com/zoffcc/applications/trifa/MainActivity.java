@@ -9428,6 +9428,9 @@ public class MainActivity extends AppCompatActivity
         HelperGroup.notify_group_peer_joined(group_number, peer_id);
         update_group_in_friendlist(temp_group_identifier);
         update_group_in_groupmessagelist(temp_group_identifier, true);
+        // KHANDAQ (0.2.56): history queued to this member just before it came back may be lost; it is
+        // served again (NgcHistoryServeLedger). Before the serves below.
+        NgcHistoryServeLedger.onPeerJoined(temp_group_identifier, group_peer_pubkey, System.currentTimeMillis());
         int privacy_state = tox_group_get_privacy_state(group_number);
         if (privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
         {
@@ -9460,6 +9463,8 @@ public class MainActivity extends AppCompatActivity
         // one remembered while it was there. Asked by peer id, toxcore gave none, and a member who left was kept.
         final String exit_peer_pubkey = HelperGroup.take_exiting_group_peer_pubkey(group_number, temp_group_identifier,
                                                                                   peer_id);
+        // KHANDAQ (0.2.56): toxcore drops what was still queued to this peer (NgcHistoryServeLedger).
+        NgcHistoryServeLedger.onPeerExited(temp_group_identifier, exit_peer_pubkey, System.currentTimeMillis());
         // KHANDAQ (QA live, F11): toxcore sends the same QUIT when a member leaves and when its app closes. The
         // member that leaves sends a leave notice first; without one, the exit is an app that closed.
         final boolean said_it_was_leaving = HelperGroup.take_group_leave_notice(temp_group_identifier,

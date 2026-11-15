@@ -11051,6 +11051,8 @@ public class HelperGroup
 
             final String message_id_tox = HelperGeneric.bytesToHex(data, 8, 4).toLowerCase(Locale.ENGLISH);
             final String acker_pubkey = tox_group_peer_get_public_key__wrapper(group_number, peer_id);
+            // KHANDAQ (0.2.56): a peer that confirmed our row is not served it again (NgcHistoryServeLedger).
+            NgcHistoryServeLedger.markHeld(group_identifier, acker_pubkey, message_id_tox);
             bump_outgoing_group_delivery_confirmation(group_identifier, message_id_tox, acker_pubkey);
             HelperGeneric.logI(TAG, "group_delivery_ack:recv gn=" + group_number + " peer=" + peer_id + " msg_id=" + message_id_tox);
         }
@@ -11250,6 +11252,12 @@ public class HelperGroup
 
                     // HelperGeneric.logI(TAG, "sync_group_message_history:i1:" + i1);
 
+                    // KHANDAQ (0.2.56): rows this peer is known to hold are left out (NgcHistoryServeLedger).
+                    // Every serve used to re-send the whole window, and the churn of one member served every
+                    // member again: 200-370 packets a minute for an hour after a 64-part text in QA.
+                    final NgcHistoryServeLedger.Serve ledger_serve =
+                            NgcHistoryServeLedger.beginServe(group_identifier, peer_pubkey, System.currentTimeMillis());
+
                     while (i1.hasNext())
                     {
                         try
@@ -11292,6 +11300,10 @@ public class HelperGroup
                                     {
                                         continue;
                                     }
+                                    if (!NgcHistoryServeLedger.shouldSend(ledger_serve, null, gm.tox_group_peer_pubkey))
+                                    {
+                                        continue;
+                                    }
                                     send_ngch_syncfile(group_identifier, peer_pubkey, gm);
                                 }
                                 else
@@ -11313,8 +11325,22 @@ public class HelperGroup
                                     // already, and with the old order it arrived a few milliseconds
                                     // AFTER — measured on device — which would have made the receiver
                                     // reject every legitimately signed message in the group.
+                                    final String[] confirmed_by = gm.direction == 1
+                                            ? new String[]{gm.tox_group_peer_pubkey_syncer_01,
+                                                           gm.tox_group_peer_pubkey_syncer_02,
+                                                           gm.tox_group_peer_pubkey_syncer_03}
+                                            : null;
+                                    if (!NgcHistoryServeLedger.shouldSend(ledger_serve, gm.message_id_tox,
+                                                                          gm.tox_group_peer_pubkey, confirmed_by))
+                                    {
+                                        continue;
+                                    }
                                     NgcSignedHistory.sendSignedTextTo(group_identifier, peer_pubkey, gm);
-                                    send_ngch_syncmsg(group_identifier, peer_pubkey, gm);
+                                    if (send_ngch_syncmsg(group_identifier, peer_pubkey, gm))
+                                    {
+                                        NgcHistoryServeLedger.markQueued(ledger_serve, gm.message_id_tox,
+                                                                         System.currentTimeMillis());
+                                    }
                                 }
                             }
                             else
@@ -11328,6 +11354,11 @@ public class HelperGroup
                         }
                     }
 
+                    HelperGeneric.logI(TAG, "sync_group_message_history:serve gid="
+                            + group_identifier_short(group_identifier, false) + " peer="
+                            + (peer_pubkey == null ? "null" : peer_pubkey.substring(0, Math.min(8, peer_pubkey.length())))
+                            + " " + ledger_serve.summary());
+
                     // HelperGeneric.logI(TAG, "sync_group_message_history:END");
                 }
                 catch(Exception e)
@@ -11339,7 +11370,8 @@ public class HelperGroup
         ngc_history_serve_exec.execute(serve_history);
     }
 
-    private static void send_ngch_syncmsg(final String group_identifier, final String peer_pubkey, final GroupMessage m)
+    /** @return true when the record went into toxcore's queue for the peer */
+    private static boolean send_ngch_syncmsg(final String group_identifier, final String peer_pubkey, final GroupMessage m)
     {
         try
         {
@@ -11355,7 +11387,7 @@ public class HelperGroup
             if (data_length < (header_length + 1) || (data_length > 40000))
             {
                 HelperGeneric.logI(TAG, "send_ngch_syncmsg: some error in calculating data length");
-                return;
+                return false;
             }
 
             ByteBuffer data_buf = ByteBuffer.allocateDirect(data_length);
@@ -11452,11 +11484,13 @@ public class HelperGroup
             int result = tox_group_send_custom_private_packet(group_num, peer_num, 1, data, data_length);
             HelperGeneric.logI(TAG, "send_ngch_syncmsg:result=" + result + " gn=" + group_num + " peer_num=" + peer_num
                     + " gid=" + group_identifier_short(group_identifier, false));
+            return is_ngc_custom_packet_send_ok(result);
         }
         catch(Exception e)
         {
             e.printStackTrace();
             HelperGeneric.logI(TAG, "send_ngch_syncmsg:EE:" + e.getMessage());
+            return false;
         }
     }
 
@@ -11719,6 +11753,10 @@ public class HelperGroup
             hash_bytes.put(data, 8 + 4, 32);
             final String original_sender_peerpubkey = HelperGeneric.bytesToHex(hash_bytes.array(),hash_bytes.arrayOffset(),hash_bytes.limit()).toUpperCase();
             // HelperGeneric.logI(TAG, "handle_incoming_sync_group_message:peerpubkey hex=" + original_sender_peerpubkey);
+
+            // KHANDAQ (0.2.56): the peer that serves a row holds it, our own rows included, so our serves
+            // leave it out for that peer. Recorded before anything below drops the record.
+            NgcHistoryServeLedger.markHeld(group_identifier, syncer_pubkey, HelperGeneric.bytesToHex(data, 8, 4));
 
             // check for muted or kicked peers
             if (is_group_muted_or_kicked_peer(group_identifier, original_sender_peerpubkey))

@@ -58,6 +58,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
@@ -557,7 +558,8 @@ public class MainActivity extends AppCompatActivity
     static boolean PREF__allow_file_sharing_to_trifa_via_intent = true;
     static boolean PREF__compact_friendlist = false;
     static boolean PREF__compact_chatlist = true;
-    static boolean PREF__use_push_service = false;
+    // KHANDAQ (0.2.56): on by default, see PushServicePreference.
+    static boolean PREF__use_push_service = PushServicePreference.DEFAULT;
     static String[] PREF__toxirc_muted_peers = {};
     static boolean PREF__hide_setup_push_tip = true;
     static boolean PREF__show_friendnumber_on_friendlist = false;
@@ -896,6 +898,8 @@ public class MainActivity extends AppCompatActivity
         final SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
 
         FavoritesChatHelper.ensureInitialized(this);
+        // KHANDAQ (0.2.56): the database is open now; store the FCM token that came before it was.
+        HelperRelay.apply_notification_token_waiting_for_db();
 
         if (PREF__window_security)
         {
@@ -1407,12 +1411,12 @@ public class MainActivity extends AppCompatActivity
 
         try
         {
-            PREF__use_push_service = settings.getBoolean("use_push_service", false);
+            PREF__use_push_service = PushServicePreference.load(settings);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__use_push_service = false;
+            PREF__use_push_service = PushServicePreference.DEFAULT;
         }
 
         try
@@ -4315,12 +4319,12 @@ public class MainActivity extends AppCompatActivity
 
         try
         {
-            PREF__use_push_service = settings.getBoolean("use_push_service", false);
+            PREF__use_push_service = PushServicePreference.load(settings);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__use_push_service = false;
+            PREF__use_push_service = PushServicePreference.DEFAULT;
         }
 
         try
@@ -4424,9 +4428,14 @@ public class MainActivity extends AppCompatActivity
         // just in case, update own activity pointer!
         main_activity_s = this;
 
+        // KHANDAQ (0.2.56): the app is open, so the notification of a wake has done its work.
+        WakePush.cancelWaiting(this);
+
         // Pending FCM token from legacy NEED_ACK row (auto-apply, no dialog)
         try
         {
+            // KHANDAQ (0.2.56): and one that came before the database was open (kept again while it is not).
+            HelperRelay.apply_notification_token_waiting_for_db();
             if (get_g_opts(NOTIFICATION_TOKEN_DB_KEY_NEED_ACK) != null)
             {
                 HelperRelay.apply_notification_token_auto(get_g_opts(NOTIFICATION_TOKEN_DB_KEY_NEED_ACK));
@@ -9228,6 +9237,9 @@ public class MainActivity extends AppCompatActivity
               "group_privacy_state_cb:group_number=" + group_number + " privacy_state=" + a_TOX_GROUP_PRIVACY_STATE);
         final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
         update_group_in_db_privacy_state(group_identifier, a_TOX_GROUP_PRIVACY_STATE);
+        // KHANDAQ (0.2.56): the dossier shows or hides the key, and the settings say who can join, at once.
+        AirGroupDossierActivity.privacyChanged(group_identifier);
+        GroupInfoActivity.privacyChanged(group_identifier);
         update_group_in_friendlist(group_identifier);
         update_group_in_groupmessagelist(group_identifier);
         add_system_message_to_group_chat(group_identifier, "privacy state changed to: " +
@@ -9450,6 +9462,10 @@ public class MainActivity extends AppCompatActivity
         HelperGroup.notify_group_peer_joined(group_number, peer_id);
         update_group_in_friendlist(temp_group_identifier);
         update_group_in_groupmessagelist(temp_group_identifier, true);
+        // KHANDAQ (0.2.56): history queued to this member just before it came back may be lost; it is
+        // served again (NgcHistoryServeLedger). Before the serves below.
+        NgcHistoryServeLedger.onPeerJoined(temp_group_identifier, group_peer_pubkey, System.currentTimeMillis(),
+                                           SystemClock.uptimeMillis());
         int privacy_state = tox_group_get_privacy_state(group_number);
         if (privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
         {
@@ -9458,6 +9474,12 @@ public class MainActivity extends AppCompatActivity
             HelperGroup.sync_group_message_history_to_all_peers(group_number);
             HelperGroup.schedule_group_message_resync(group_number);
         }
+        // KHANDAQ (0.2.56): messages written while nobody else was in the group wait on this device
+        // (HelperGroup.send_group_text_message_resilient); this member can take them, in a private group too,
+        // where no history sync brings them later. Not at once: see GROUP_PEER_JOIN_FLUSH_DELAY_MS. This is
+        // toxcore's thread, and the flush does not run on it.
+        HelperGroup.schedule_pending_group_message_flush(temp_group_identifier,
+                                                         HelperGroup.GROUP_PEER_JOIN_FLUSH_DELAY_MS);
         // update_savedata_file_wrapper_throttled();
         update_savedata_file_wrapper();
     }
@@ -9476,6 +9498,9 @@ public class MainActivity extends AppCompatActivity
         // one remembered while it was there. Asked by peer id, toxcore gave none, and a member who left was kept.
         final String exit_peer_pubkey = HelperGroup.take_exiting_group_peer_pubkey(group_number, temp_group_identifier,
                                                                                   peer_id);
+        // KHANDAQ (0.2.56): toxcore drops what was still queued to this peer (NgcHistoryServeLedger).
+        NgcHistoryServeLedger.onPeerExited(temp_group_identifier, exit_peer_pubkey, System.currentTimeMillis(),
+                                           SystemClock.uptimeMillis());
         // KHANDAQ (QA live, F11): toxcore sends the same QUIT when a member leaves and when its app closes. The
         // member that leaves sends a leave notice first; without one, the exit is an app that closed.
         final boolean said_it_was_leaving = HelperGroup.take_group_leave_notice(temp_group_identifier,
@@ -9633,19 +9658,21 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-    static void android_tox_callback_group_connection_status_cb_method(long group_number, int a_TOX_GROUP_CONNECTION_STATUS)
+    static void android_tox_callback_group_connection_status_cb_method(long group_number, int a_gc_conn_state)
     {
         if (HelperGroup.is_group_leave_pending(group_number))
         {
             return;
         }
-        HelperGeneric.logI(TAG, "group_connection_status_cb:group_number=" + group_number + " status=" + a_TOX_GROUP_CONNECTION_STATUS
-                + " id=" + tox_group_by_groupnum__wrapper(group_number));
+        // KHANDAQ (0.2.56): toxcore hands this callback its raw GC_Conn_State, not the value
+        // tox_group_is_connected() returns; see TOX_GROUP_CONNECTION_STATUS.from_gc_conn_state.
+        final int conn = TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.from_gc_conn_state(a_gc_conn_state);
+        HelperGeneric.logI(TAG, "group_connection_status_cb:group_number=" + group_number + " gc_state=" + a_gc_conn_state
+                + " conn=" + conn + " id=" + tox_group_by_groupnum__wrapper(group_number));
 
         final String conn_group_identifier = tox_group_by_groupnum__wrapper(group_number);
 
-        if (a_TOX_GROUP_CONNECTION_STATUS ==
-            TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
+        if (conn == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
         {
             HelperGroup.sync_group_peers_from_tox_to_db(group_number);
             update_group_in_groupmessagelist(conn_group_identifier, true);
@@ -10012,6 +10039,11 @@ public class MainActivity extends AppCompatActivity
                 int privacy_state = tox_group_get_privacy_state(group_number);
                 if (privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
                 {
+                    // KHANDAQ (0.2.56): the member asked; its next serve is full unless it had one a few minutes
+                    // ago (NgcHistoryServeLedger). Noted before the serve, which the request cooldown may drop.
+                    NgcHistoryServeLedger.onHistoryRequested(
+                            tox_group_by_groupnum__wrapper(group_number),
+                            tox_group_peer_get_public_key__wrapper(group_number, peer_id), System.currentTimeMillis());
                     sync_group_message_history(group_number, peer_id);
                 }
                 else

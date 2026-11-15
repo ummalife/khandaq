@@ -652,6 +652,7 @@
     <string name="notification_channel_toxservice_desc">保持Khandaq在线连接，不会发出提醒。</string>
     <string name="notification_channel_fcm_wake">推送唤醒</string>
     <string name="notification_channel_fcm_wake_desc">收到消息时唤醒Khandaq</string>
+    <string name="notification_fcm_wake_waiting">有联系人正在尝试联系你。打开应用即可连接。</string>
     <string name="notification_channel_message_sound">新消息</string>
     <string name="notification_channel_message_sound_vibrate">新消息（声音和振动）</string>
     <string name="notification_channel_message_vibrate">新消息（振动）</string>

@@ -371,7 +371,7 @@
     <string name="air_new_group_name_note">Его увидят все приглашённые. Потом можно будет менять тему, но не название.</string>
     <string name="air_new_group_privacy">Кто может войти</string>
     <string name="air_group_privacy_invite_only">Только по приглашению</string>
-    <string name="air_group_privacy_invite_only_note">Войти можно только по приглашению кого-то из участников.</string>
+    <string name="air_group_privacy_invite_only_note">Войти можно только по приглашению кого-то из участников. По ключу группы не войти.</string>
     <string name="air_group_privacy_open">Открыта по ключу группы</string>
     <string name="air_group_privacy_open_note">Войти может любой, у кого есть ключ группы, без приглашения.</string>
     <string name="air_group_invite">Пригласить</string>

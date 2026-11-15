@@ -142,44 +142,53 @@ final class NgcSignedHistory
         return out;
     }
 
+    /** {@link #sendSignedTextTo}: the signed copy was handed to toxcore. */
+    static final int SIGNED_COPY_SENT = 1;
+    /** {@link #sendSignedTextTo}: the row has no signed copy: not ours, or it cannot be signed. */
+    static final int SIGNED_COPY_NONE = 0;
+    /** {@link #sendSignedTextTo}: the signed copy was built, and toxcore did not take it. */
+    static final int SIGNED_COPY_NOT_SENT = -1;
+
     /**
      * Sends the signed copy of one of our messages to one peer, in addition to the unsigned packet
      * the caller already sent.
      *
-     * @return true when a packet was handed to toxcore.
+     * @return {@link #SIGNED_COPY_SENT}, {@link #SIGNED_COPY_NONE} when there is no signed copy to send,
+     *         or {@link #SIGNED_COPY_NOT_SENT} when there is one and it did not go. KHANDAQ (0.2.56): the
+     *         history serve tells the last two apart (NgcHistoryServeLedger).
      */
-    static boolean sendSignedTextTo(final String groupIdentifier, final String peerPubkey,
-                                    final GroupMessage m)
+    static int sendSignedTextTo(final String groupIdentifier, final String peerPubkey,
+                                final GroupMessage m)
     {
         try
         {
             final String selfToxPub = NgcHskStore.toxPubFromToxId(MainActivity.get_my_toxid());
             if (selfToxPub == null)
             {
-                return false;
+                return SIGNED_COPY_NONE;
             }
             final byte[] packet = buildSignedText(groupIdentifier, m, selfToxPub);
             if (packet == null)
             {
-                return false;
+                return SIGNED_COPY_NONE;
             }
 
             final long groupNum = HelperGroup.tox_group_by_groupid__wrapper(groupIdentifier);
             final long peerNum = HelperGroup.get_group_peernum_from_peer_pubkey(groupIdentifier, peerPubkey);
             if (groupNum < 0 || peerNum < 0)
             {
-                return false;
+                return SIGNED_COPY_NOT_SENT;
             }
 
             final int res = MainActivity.tox_group_send_custom_private_packet(
                     groupNum, peerNum, 1, packet, packet.length);
             HelperGeneric.logI(TAG, "sendSignedTextTo:res=" + res + " bytes=" + packet.length);
-            return HelperGroup.is_ngc_custom_packet_send_ok(res);
+            return HelperGroup.is_ngc_custom_packet_send_ok(res) ? SIGNED_COPY_SENT : SIGNED_COPY_NOT_SENT;
         }
         catch (Exception e)
         {
             HelperGeneric.logI(TAG, "sendSignedTextTo:EE:" + e.getMessage());
-            return false;
+            return SIGNED_COPY_NOT_SENT;
         }
     }
 

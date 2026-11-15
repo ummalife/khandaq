@@ -395,7 +395,7 @@
     <string name="air_new_group_name_note">سيراه كل من تدعوهم. يمكن لاحقًا تغيير الموضوع، أما الاسم فلا.</string>
     <string name="air_new_group_privacy">من يمكنه الانضمام</string>
     <string name="air_group_privacy_invite_only">بالدعوة فقط</string>
-    <string name="air_group_privacy_invite_only_note">لا ينضم إلا من يدعوه أحد الأعضاء.</string>
+    <string name="air_group_privacy_invite_only_note">لا ينضم إلا من يدعوه أحد الأعضاء. مفتاح المجموعة وحده لا يكفي للانضمام.</string>
     <string name="air_group_privacy_open">مفتوحة لكل من لديه مفتاح المجموعة</string>
     <string name="air_group_privacy_open_note">يمكن لأي شخص لديه مفتاح المجموعة الانضمام دون دعوة.</string>
     <string name="air_group_invite">دعوة</string>

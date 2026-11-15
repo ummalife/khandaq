@@ -618,6 +618,7 @@
     <string name="notification_channel_toxservice_desc">تبقي Khandaq متصلا. بدون تنبيهات.</string>
     <string name="notification_channel_fcm_wake">إيقاظ عبر الإشعارات</string>
     <string name="notification_channel_fcm_wake_desc">يوقظ Khandaq عند وصول رسالة</string>
+    <string name="notification_fcm_wake_waiting">أحد جهات اتصالك يحاول التواصل معك. افتح التطبيق للاتصال.</string>
     <string name="notification_channel_message_sound">رسالة جديدة</string>
     <string name="notification_channel_message_sound_vibrate">رسالة جديدة (صوت واهتزاز)</string>
     <string name="notification_channel_message_vibrate">رسالة جديدة (اهتزاز)</string>

@@ -236,9 +236,7 @@ public class FriendSelectSingleActivity extends ListActivity
                 {
                     // Log.i(TAG, "g___:" + g);
                     // The row says "Group" under the name in the app's language (FriendSelectSingleAdapter).
-                    final String group_name = (g.name != null && g.name.length() > 0) ? g.name
-                            : (g.group_identifier == null ? "" : g.group_identifier.substring(0, Math.min(8, g.group_identifier.length())));
-                    friends_list.add(new FriendSelectSingle(group_name, g.group_identifier, 2));
+                    friends_list.add(new FriendSelectSingle(group_row_name(g), g.group_identifier, 2));
                 }
             }
             catch(Exception e)
@@ -302,5 +300,28 @@ public class FriendSelectSingleActivity extends ListActivity
         }
 
         Log.i(TAG, "onCreate:010");
+    }
+
+    /**
+     * KHANDAQ (0.2.56): a group is offered under the name the chat list shows (AirRepository.groupEntry), toxcore's
+     * first. The stored name alone left a group joined by its ID under the start of its ID.
+     */
+    private static String group_row_name(final GroupDB g)
+    {
+        String effective_title = null;
+        if (g.group_identifier != null)
+        {
+            try
+            {
+                effective_title = HelperGroup.get_effective_group_title(
+                        HelperGroup.tox_group_by_groupid__wrapper(g.group_identifier), g.group_identifier);
+            }
+            catch (Throwable e)
+            {
+                // The native group may be gone while the row is still in the database: the stored name then.
+                Log.i(TAG, "group_row_name:EE:" + e.getMessage());
+            }
+        }
+        return HelperGroup.group_list_title(effective_title, g.name, g.group_identifier);
     }
 }

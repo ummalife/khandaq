@@ -236,7 +236,8 @@ public class FriendListFragment extends Fragment
 
         if (filterTab == CHAT_FILTER_GROUPS)
         {
-            mainActivity.show_create_private_group(null);
+            // KHANDAQ (0.2.56): a new group is open by default; invitation only stays a choice on that screen.
+            mainActivity.open_create_public_group();
         }
     }
 

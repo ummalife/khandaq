@@ -30,6 +30,7 @@ import android.media.MediaExtractor;
 import android.media.MediaFormat;
 import android.media.MediaMuxer;
 import android.net.Uri;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -1189,7 +1190,10 @@ public class HelperGroup
         return context_s.getString(R.string.group_send_failed);
     }
 
-    /** Return from send_group_text_message_resilient: queue in DB, flush when group connects. */
+    /**
+     * Return from send_group_text_message_resilient: queue in DB, flush once the group is connected and someone else
+     * is in it (is_group_text_send_ready).
+     */
     public static final long GROUP_SEND_QUEUE_WHEN_UNCONNECTED = -98L;
     public static final String PENDING_GROUP_MESSAGE_ID_TOX = "00000000";
 
@@ -1555,6 +1559,23 @@ public class HelperGroup
         log_group_peer_mesh_diagnostics(group_num, group_identifier, "send_attempt=" + attempt);
     }
 
+    /**
+     * KHANDAQ (0.2.56): whether a group text sent now reaches anybody: the group is connected and toxcore has
+     * confirmed someone besides us. {@code peer_count} is tox_group_peer_count, which counts us too and is negative
+     * when the query failed.
+     *
+     * <p>Connected alone is not enough. toxcore marks a group connected on the first sync response, before any other
+     * peer is confirmed, and does not set it back to connecting when every peer has timed out; a group just created
+     * is connected with only its founder. tox_group_send_message sends to the confirmed peers only and returns a
+     * message id all the same, so the message showed as sent and reached no one, and in a private group no history
+     * sync brought it later.
+     */
+    static boolean is_group_text_send_ready(final int connection_status, final long peer_count)
+    {
+        return connection_status == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value
+               && peer_count > 1L;
+    }
+
     static long send_group_text_message_resilient(@NonNull final String group_identifier, final long group_number,
                                                 @NonNull final String message)
     {
@@ -1592,6 +1613,20 @@ public class HelperGroup
                     break;
                 }
                 continue;
+            }
+
+            final long peers = tox_group_peer_count(group_num);
+            if (!is_group_text_send_ready(conn, peers))
+            {
+                // KHANDAQ (0.2.56): connected, but nobody else is in the group; sent now, the message would go to no
+                // one. It waits on this device until a member joins (the peer join callback flushes it). No reconnect:
+                // the group is connected, and a reconnect would start its discovery over; and no retries, which wait
+                // for a connection the group already has.
+                nudge_public_group_dht(group_num, group_identifier);
+                TrifaToxService.wakeup_tox_thread();
+                HelperGeneric.logI(TAG, "send_group_text_message_resilient:alone gn=" + group_num + " id="
+                        + group_identifier_short(group_identifier, false) + " peers=" + peers + " -> waits");
+                return GROUP_SEND_QUEUE_WHEN_UNCONNECTED;
             }
 
             final long message_id = tox_group_send_message(group_num, 0, message);
@@ -3504,6 +3539,62 @@ public class HelperGroup
         }
 
         return get_group_display_name(group_identifier, "");
+    }
+
+    /**
+     * KHANDAQ (0.2.56): the name a group is listed under: the title toxcore has for it (get_effective_group_title),
+     * else the stored name, else the start of its ID. As the chat list and the group's dialogs name it.
+     */
+    static String group_list_title(@Nullable final String effective_title, @Nullable final String stored_name,
+                                   @Nullable final String group_identifier)
+    {
+        if (effective_title != null && !effective_title.trim().isEmpty())
+        {
+            return effective_title;
+        }
+        if (stored_name != null && !stored_name.trim().isEmpty())
+        {
+            return stored_name;
+        }
+        return group_identifier == null ? "" : group_identifier.substring(0, Math.min(8, group_identifier.length()));
+    }
+
+    /**
+     * KHANDAQ (0.2.56): stores the group's title as toxcore has it at the join, by the rule the start of the app
+     * applies (TrifaToxService, where the groups are loaded): its topic, else its name, and nothing while toxcore
+     * has neither, so a name the group has (the invitation's, MainActivity.join_invite) is not replaced by an
+     * empty one.
+     *
+     * <p>A group joined by its ID is stored before toxcore knows its name, and toxcore does not report the topic it
+     * gets with the join (handle_gc_topic calls back only once connected), so the stored name stayed empty until
+     * the app started again. The chat list asks toxcore and showed the name; the lists that read the stored one
+     * (sharing into a chat, the search) showed the start of the ID.
+     */
+    static void store_group_title_from_tox(final long group_num, final String group_identifier)
+    {
+        if (group_num < 0 || TextUtils.isEmpty(group_identifier))
+        {
+            return;
+        }
+        try
+        {
+            final String topic = tox_group_get_topic(group_num);
+            if (is_valid_group_title_string(topic))
+            {
+                update_group_in_db_name(group_identifier, topic);
+                update_group_in_db_topic(group_identifier, topic);
+                return;
+            }
+            final String name = tox_group_get_name(group_num);
+            if (is_valid_group_title_string(name))
+            {
+                update_group_in_db_name(group_identifier, name);
+            }
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "store_group_title_from_tox:EE:" + e.getMessage());
+        }
     }
 
     static boolean save_group_title_if_changed(final String group_identifier, final String raw_title)
@@ -8452,6 +8543,8 @@ public class HelperGroup
         apply_group_self_display_name(group_num);
         TrifaToxService.wakeup_tox_thread();
         sync_group_peers_from_tox_to_db(group_num);
+        // KHANDAQ (0.2.56): toxcore has the group's name and topic now; a group joined by its ID has none stored.
+        store_group_title_from_tox(group_num, group_identifier);
         update_group_in_friendlist(group_identifier);
 
         final int conn = tox_group_is_connected(group_num);
@@ -8711,7 +8804,49 @@ public class HelperGroup
         t.start();
     }
 
-    private static final ConcurrentHashMap<String, Boolean> group_pending_flush_running = new ConcurrentHashMap<>();
+    /**
+     * KHANDAQ (0.2.56): one flush of a group's waiting messages at a time. The flush runs from the watchdog's tick
+     * and the connected callback (toxcore's thread), the thread a queued send starts, the post-join discovery, a
+     * member's join and Retry; two at once read the same PENDING rows and both sent them, so the members got a
+     * waiting message twice. A flush asked for while one runs is taken by that one as one more pass, and the caller
+     * does not wait.
+     */
+    private static final CoalescingGate pending_group_flush_gate = new CoalescingGate();
+
+    /**
+     * KHANDAQ (0.2.56): how long after a member joins the group's waiting messages go to it. toxcore reports the join
+     * once it has the member's info; the member has ours a moment later, and drops a broadcast from a peer it has no
+     * info for.
+     */
+    static final long GROUP_PEER_JOIN_FLUSH_DELAY_MS = 2_000L;
+
+    private static final java.util.concurrent.ScheduledExecutorService pending_group_flush_delay_exec =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                final Thread t = new Thread(r, "grp-pending-flush-delay");
+                t.setDaemon(true);
+                return t;
+            });
+
+    /**
+     * {@link #schedule_pending_group_message_flush(String)}, {@code delay_ms} from now. The caller does not wait:
+     * the delay runs on a timer thread of its own, and the flush then goes through the gate like any other.
+     */
+    static void schedule_pending_group_message_flush(@Nullable final String group_identifier, final long delay_ms)
+    {
+        if (TextUtils.isEmpty(group_identifier))
+        {
+            return;
+        }
+        try
+        {
+            pending_group_flush_delay_exec.schedule(() -> schedule_pending_group_message_flush(group_identifier),
+                                                    delay_ms, java.util.concurrent.TimeUnit.MILLISECONDS);
+        }
+        catch (Throwable e)
+        {
+            Log.w(TAG, "schedule_pending_group_message_flush:delay:EE:" + e.getMessage());
+        }
+    }
 
     static void schedule_pending_group_message_flush(@NonNull final String group_identifier)
     {
@@ -8720,26 +8855,38 @@ public class HelperGroup
             return;
         }
         final String key = group_identifier.toLowerCase(Locale.ENGLISH);
-        if (group_pending_flush_running.putIfAbsent(key, Boolean.TRUE) != null)
+        if (!pending_group_flush_gate.request(key))
         {
+            // The flush running for this group makes one more pass, which takes the message just queued.
             return;
         }
-        final Thread t = new Thread(() ->
-        {
-            try
-            {
-                flush_pending_group_messages(group_identifier);
-            }
-            finally
-            {
-                group_pending_flush_running.remove(key);
-            }
-        }, "grp-pending-flush-" + group_identifier_short(group_identifier, false));
+        final Thread t = new Thread(
+                () -> pending_group_flush_gate.runPasses(key, () -> flush_pending_group_messages_pass(group_identifier)),
+                "grp-pending-flush-" + group_identifier_short(group_identifier, false));
         t.setDaemon(true);
-        t.start();
+        try
+        {
+            t.start();
+        }
+        catch (Throwable e)
+        {
+            pending_group_flush_gate.abandon(key);
+            Log.w(TAG, "schedule_pending_group_message_flush:EE:" + e.getMessage());
+        }
     }
 
     static void flush_pending_group_messages(@NonNull final String group_identifier)
+    {
+        if (TextUtils.isEmpty(group_identifier))
+        {
+            return;
+        }
+        pending_group_flush_gate.run(group_identifier.toLowerCase(Locale.ENGLISH),
+                                     () -> flush_pending_group_messages_pass(group_identifier));
+    }
+
+    /** One pass over the group's waiting messages, oldest first; only through pending_group_flush_gate. */
+    private static void flush_pending_group_messages_pass(@NonNull final String group_identifier)
     {
         if (!is_tox_started || orma == null || TextUtils.isEmpty(group_identifier))
         {
@@ -10962,6 +11109,8 @@ public class HelperGroup
 
             final String message_id_tox = HelperGeneric.bytesToHex(data, 8, 4).toLowerCase(Locale.ENGLISH);
             final String acker_pubkey = tox_group_peer_get_public_key__wrapper(group_number, peer_id);
+            // KHANDAQ (0.2.56): a peer that confirmed our row is not served it again (NgcHistoryServeLedger).
+            NgcHistoryServeLedger.markHeld(group_identifier, acker_pubkey, message_id_tox);
             bump_outgoing_group_delivery_confirmation(group_identifier, message_id_tox, acker_pubkey);
             HelperGeneric.logI(TAG, "group_delivery_ack:recv gn=" + group_number + " peer=" + peer_id + " msg_id=" + message_id_tox);
         }
@@ -11161,6 +11310,12 @@ public class HelperGroup
 
                     // HelperGeneric.logI(TAG, "sync_group_message_history:i1:" + i1);
 
+                    // KHANDAQ (0.2.56): rows this peer is known to hold are left out (NgcHistoryServeLedger).
+                    // Every serve used to re-send the whole window, and the churn of one member served every
+                    // member again: 200-370 packets a minute for an hour after a 64-part text in QA.
+                    final NgcHistoryServeLedger.Serve ledger_serve =
+                            NgcHistoryServeLedger.beginServe(group_identifier, peer_pubkey, System.currentTimeMillis());
+
                     while (i1.hasNext())
                     {
                         try
@@ -11182,6 +11337,14 @@ public class HelperGroup
                             {
                                 continue;
                             }
+                            // KHANDAQ (0.2.56): our message that still waits to go out has no tox id yet, only
+                            // the PENDING placeholder. Served now (a member's join asks for history), the member
+                            // got it under the placeholder, then again under its real id from the flush that
+                            // follows the join, and kept both. Once sent, the send's own resync serves it.
+                            if (gm.direction == 1 && PENDING_GROUP_MESSAGE_ID_TOX.equals(gm.message_id_tox))
+                            {
+                                continue;
+                            }
                             if (!gm.tox_group_peer_pubkey.equalsIgnoreCase("-1"))
                             {
                                 //HelperGeneric.logI(TAG, "sync_group_message_history:sync:sent_ts="
@@ -11192,6 +11355,10 @@ public class HelperGroup
                                 {
                                     final long syncFileSize = gm.filesize > 0L ? gm.filesize : 0L;
                                     if (NgcGroupFileTransfer.shouldUseChunkedTransfer(syncFileSize))
+                                    {
+                                        continue;
+                                    }
+                                    if (!NgcHistoryServeLedger.shouldSend(ledger_serve, null, gm.tox_group_peer_pubkey))
                                     {
                                         continue;
                                     }
@@ -11216,8 +11383,28 @@ public class HelperGroup
                                     // already, and with the old order it arrived a few milliseconds
                                     // AFTER — measured on device — which would have made the receiver
                                     // reject every legitimately signed message in the group.
-                                    NgcSignedHistory.sendSignedTextTo(group_identifier, peer_pubkey, gm);
-                                    send_ngch_syncmsg(group_identifier, peer_pubkey, gm);
+                                    final String[] confirmed_by = gm.direction == 1
+                                            ? new String[]{gm.tox_group_peer_pubkey_syncer_01,
+                                                           gm.tox_group_peer_pubkey_syncer_02,
+                                                           gm.tox_group_peer_pubkey_syncer_03}
+                                            : null;
+                                    if (!NgcHistoryServeLedger.shouldSend(ledger_serve, gm.message_id_tox,
+                                                                          gm.tox_group_peer_pubkey, confirmed_by))
+                                    {
+                                        continue;
+                                    }
+                                    // KHANDAQ (0.2.56): a row whose signed copy did not go is sent again by the next
+                                    // serve (NgcHistoryServeLedger); a row without one (not ours) is queued as before.
+                                    final boolean signed_copy_not_sent =
+                                            NgcSignedHistory.sendSignedTextTo(group_identifier, peer_pubkey, gm)
+                                            == NgcSignedHistory.SIGNED_COPY_NOT_SENT;
+                                    if (send_ngch_syncmsg(group_identifier, peer_pubkey, gm))
+                                    {
+                                        // The monotonic clock: toxcore's peer timeout stops in deep sleep too.
+                                        NgcHistoryServeLedger.markQueued(ledger_serve, gm.message_id_tox,
+                                                                         SystemClock.uptimeMillis(),
+                                                                         !signed_copy_not_sent);
+                                    }
                                 }
                             }
                             else
@@ -11231,6 +11418,11 @@ public class HelperGroup
                         }
                     }
 
+                    HelperGeneric.logI(TAG, "sync_group_message_history:serve gid="
+                            + group_identifier_short(group_identifier, false) + " peer="
+                            + (peer_pubkey == null ? "null" : peer_pubkey.substring(0, Math.min(8, peer_pubkey.length())))
+                            + " " + ledger_serve.summary());
+
                     // HelperGeneric.logI(TAG, "sync_group_message_history:END");
                 }
                 catch(Exception e)
@@ -11242,7 +11434,8 @@ public class HelperGroup
         ngc_history_serve_exec.execute(serve_history);
     }
 
-    private static void send_ngch_syncmsg(final String group_identifier, final String peer_pubkey, final GroupMessage m)
+    /** @return true when the record went into toxcore's queue for the peer */
+    private static boolean send_ngch_syncmsg(final String group_identifier, final String peer_pubkey, final GroupMessage m)
     {
         try
         {
@@ -11258,7 +11451,7 @@ public class HelperGroup
             if (data_length < (header_length + 1) || (data_length > 40000))
             {
                 HelperGeneric.logI(TAG, "send_ngch_syncmsg: some error in calculating data length");
-                return;
+                return false;
             }
 
             ByteBuffer data_buf = ByteBuffer.allocateDirect(data_length);
@@ -11355,11 +11548,13 @@ public class HelperGroup
             int result = tox_group_send_custom_private_packet(group_num, peer_num, 1, data, data_length);
             HelperGeneric.logI(TAG, "send_ngch_syncmsg:result=" + result + " gn=" + group_num + " peer_num=" + peer_num
                     + " gid=" + group_identifier_short(group_identifier, false));
+            return is_ngc_custom_packet_send_ok(result);
         }
         catch(Exception e)
         {
             e.printStackTrace();
             HelperGeneric.logI(TAG, "send_ngch_syncmsg:EE:" + e.getMessage());
+            return false;
         }
     }
 
@@ -11622,6 +11817,10 @@ public class HelperGroup
             hash_bytes.put(data, 8 + 4, 32);
             final String original_sender_peerpubkey = HelperGeneric.bytesToHex(hash_bytes.array(),hash_bytes.arrayOffset(),hash_bytes.limit()).toUpperCase();
             // HelperGeneric.logI(TAG, "handle_incoming_sync_group_message:peerpubkey hex=" + original_sender_peerpubkey);
+
+            // KHANDAQ (0.2.56): the peer that serves a row holds it, our own rows included, so our serves
+            // leave it out for that peer. Recorded before anything below drops the record.
+            NgcHistoryServeLedger.markHeld(group_identifier, syncer_pubkey, HelperGeneric.bytesToHex(data, 8, 4));
 
             // check for muted or kicked peers
             if (is_group_muted_or_kicked_peer(group_identifier, original_sender_peerpubkey))

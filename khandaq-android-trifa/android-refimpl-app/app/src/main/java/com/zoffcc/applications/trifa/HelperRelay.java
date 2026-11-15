@@ -27,6 +27,7 @@ import com.zoffcc.applications.sorm.GroupDB;
 import com.zoffcc.applications.sorm.RelayListDB;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.zoffcc.applications.trifa.HelperFiletransfer.check_auto_accept_incoming_filetransfer;
 import static com.zoffcc.applications.trifa.HelperFriend.is_friend_online_real;
@@ -370,6 +371,14 @@ public class HelperRelay
         }
     }
 
+    /**
+     * KHANDAQ (0.2.56): a token that came before the database was open. FCM hands the token over from
+     * MainApplication.onCreate, while MainActivity is still opening the database on its own thread (or waits on
+     * the sign-in page), and a token dropped there was not asked for again: such an install never stored it and
+     * never published its push address to anyone.
+     */
+    private static final AtomicReference<String> token_waiting_for_db = new AtomicReference<>();
+
     /** Apply FCM/push token silently — no user dialog (Khandaq 0.2 embedded FCM). */
     public static void apply_notification_token_auto(final String token)
     {
@@ -381,6 +390,7 @@ public class HelperRelay
         }
         if (orma == null)
         {
+            token_waiting_for_db.set(normalized);
             return;
         }
 
@@ -408,6 +418,23 @@ public class HelperRelay
         {
             Log.w(TAG, "apply_notification_token_auto: " + e.getMessage());
         }
+    }
+
+    /** KHANDAQ (0.2.56): applies the token that came before the database was open, once it is open. */
+    static void apply_notification_token_waiting_for_db()
+    {
+        final String waiting = token_waiting_for_db.getAndSet(null);
+        if (waiting != null)
+        {
+            // Kept again by apply_notification_token_auto while the database is still not open.
+            apply_notification_token_auto(waiting);
+        }
+    }
+
+    /** The token kept until the database is open, or null (for tests). */
+    static String notification_token_waiting_for_db()
+    {
+        return token_waiting_for_db.get();
     }
 
     static String push_token_to_push_url(final String push_token)

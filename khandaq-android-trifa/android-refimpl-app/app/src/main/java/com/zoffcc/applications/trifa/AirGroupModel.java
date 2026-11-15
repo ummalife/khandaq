@@ -600,6 +600,51 @@ final class AirGroupModel
         return kept;
     }
 
+    // ---- who can join ----
+
+    /** toxcore's privacy states (ToxVars.TOX_GROUP_PRIVACY_STATE): announced, so the key lets anyone in. */
+    static final int PRIVACY_PUBLIC = 0;
+    /** Never announced: only an invitation from a member lets someone in. */
+    static final int PRIVACY_PRIVATE = 1;
+    /** Neither toxcore nor the profile says. */
+    static final int PRIVACY_UNKNOWN = -1;
+
+    static boolean isKnownPrivacy(final int privacy)
+    {
+        return privacy == PRIVACY_PUBLIC || privacy == PRIVACY_PRIVATE;
+    }
+
+    /**
+     * KHANDAQ (0.2.56): who can join a group, as the dossier and the group settings say it. toxcore's answer
+     * once the group is connected. Before that it is not the group's: toxcore starts a group joined by its key
+     * (or joined again after it dropped out of toxcore) as public and keeps it so until a member sends the
+     * group's state, which for a group open by invitation only may never come. The stored state, which the
+     * privacy callback and the founder's own change keep, comes first then; toxcore's answer is left for a
+     * group with nothing stored.
+     *
+     * @param fromTox   tox_group_get_privacy_state, negative when toxcore did not answer
+     * @param connected whether toxcore reports the group connected (TOX_GROUP_CONNECTION_STATUS_CONNECTED)
+     * @param stored    GroupDB.privacy_state, negative when there is no row
+     */
+    static int privacyToShow(final int fromTox, final boolean connected, final int stored)
+    {
+        if (isKnownPrivacy(fromTox) && (connected || !isKnownPrivacy(stored)))
+        {
+            return fromTox;
+        }
+        return isKnownPrivacy(stored) ? stored : PRIVACY_UNKNOWN;
+    }
+
+    /**
+     * KHANDAQ (0.2.56): whether the dossier shows the group key, Copy and the QR code. Only for a group known to
+     * be open: toxcore never announces a group open by invitation only, so its key lets nobody in. Testers
+     * handed out the key of such a group and nobody could join it from any device.
+     */
+    static boolean showsKey(final int privacy)
+    {
+        return privacy == PRIVACY_PUBLIC;
+    }
+
     // ---- new group ----
 
     /** One line: a pasted line break or a run of spaces becomes one space, and the ends are trimmed. */

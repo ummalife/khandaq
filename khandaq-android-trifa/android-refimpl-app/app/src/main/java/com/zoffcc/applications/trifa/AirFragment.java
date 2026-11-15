@@ -1729,7 +1729,8 @@ public class AirFragment extends Fragment
         final BottomSheetDialog sheet = new BottomSheetDialog(context, R.style.ThemeOverlay_KQ_Air_Sheet);
         final View content = LayoutInflater.from(sheet.getContext()).inflate(R.layout.air_create_sheet, null, false);
         bindSheetAction(sheet, content, R.id.air_create_contact, () -> activity.open_add_friend(null));
-        bindSheetAction(sheet, content, R.id.air_create_group, () -> activity.show_create_private_group(null));
+        // KHANDAQ (0.2.56): a new group opens as one anyone with its key can join; invitation only is a choice.
+        bindSheetAction(sheet, content, R.id.air_create_group, () -> activity.open_create_public_group());
         sheet.setContentView(content);
         final android.view.Window window = sheet.getWindow();
         if (window != null)

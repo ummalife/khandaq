@@ -10,7 +10,9 @@
 #import "OCTChat.h"
 #import "OCTMessageAbstract.h"
 #import "OCTMessageFile.h"
+#import "OCTMessageText.h"
 #import "OCTNgcGroupFileTransfer.h"
+#import "OCTNgcGroupHistSync.h"
 #import "OCTSubmanagerGroupsImpl.h"
 #import "OCTSubmanagerDataSource.h"
 #import "OCTFileStorageProtocol.h"
@@ -33,6 +35,7 @@ static const uint32_t kGroupRealmTestsGroupNumber = 4;
 static const uint32_t kGroupRealmTestsPeerId = 2;
 static NSString *const kGroupRealmTestsChatIdHex = @"3C5E9A0B7D214F6A8B0C1D2E3F405162738495A6B7C8D9E0F1021324354657A8";
 static NSString *const kGroupRealmTestsPeerKeyHex = @"9F8E7D6C5B4A39281706F5E4D3C2B1A0918273645546372819A0B1C2D3E4F506";
+static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D6E7F809";
 
 /**
  * KHANDAQ (0.2.56): group behaviour against a real Realm, opened on the main thread as the app opens it, so
@@ -163,7 +166,115 @@ static NSString *const kGroupRealmTestsPeerKeyHex = @"9F8E7D6C5B4A39281706F5E4D3
     XCTAssertEqual(mocks.count, 3u);
 }
 
+#pragma mark - The history sync
+
+// KHANDAQ (0.2.56): a text written while nobody else was in the group waits in the outbox, with no id yet, and
+// the history sync served it as well. The first member to join got it twice: the synced copy, at the time it
+// was written and with id 0, and the live copy when the outbox sent it, so the two were out of order too, and
+// no receiver could tell them for one message.
+- (void)testATextWaitingInTheOutboxIsLeftOutOfTheHistorySyncUntilItWent
+{
+    OCTChat *chat = [self groupChat];
+    OCTRealmManager *realmManager = self.realmManager;
+    [realmManager addGroupMessageWithText:@"sent while a member was there"
+                                     type:OCTToxMessageTypeNormal
+                                     chat:chat
+                                   peerId:0
+                                 peerName:nil
+                                messageId:71];
+    OCTMessageAbstract *waiting = [realmManager addGroupPendingMessageWithText:@"written alone"
+                                                                          type:OCTToxMessageTypeNormal
+                                                                          chat:chat];
+    OCTNgcGroupHistSync *histSync = [self historySyncForChat:chat];
+
+    XCTAssertEqualObjects([self textsTheHistorySyncServesInChat:chat], @[@"sent while a member was there"],
+                          @"the history sync served a text that has not gone yet");
+    XCTAssertNil([histSync buildSyncPacketForMessage:waiting groupNumber:kGroupRealmTestsGroupNumber],
+                 @"a text that has not gone yet was made a history packet");
+
+    // It goes live, with the id toxcore gave it, and from then on the history sync serves it with that id.
+    [realmManager markGroupPendingMessageSent:waiting messageId:72];
+
+    XCTAssertEqualObjects([self textsTheHistorySyncServesInChat:chat], (@[@"sent while a member was there", @"written alone"]));
+    NSData *packet = [histSync buildSyncPacketForMessage:waiting groupNumber:kGroupRealmTestsGroupNumber];
+    XCTAssertGreaterThan(packet.length, 12u);
+    if (packet.length > 12) {
+        const uint8_t *bytes = packet.bytes;
+        uint32_t messageId = ((uint32_t)bytes[8] << 24) | ((uint32_t)bytes[9] << 16) | ((uint32_t)bytes[10] << 8) | bytes[11];
+        XCTAssertEqual(messageId, 72u, @"the text was served without the id it went with");
+    }
+}
+
 #pragma mark - Rig
+
+/** The texts of both history sync queries, which must agree, in the order they are served. */
+- (NSArray<NSString *> *)textsTheHistorySyncServesInChat:(OCTChat *)chat
+{
+    NSMutableArray<NSString *> *texts = [NSMutableArray new];
+
+    for (OCTMessageAbstract *message in [self.realmManager groupMessagesForHistorySyncInChat:chat]) {
+        [texts addObject:message.messageText.text ?: @"(file)"];
+    }
+
+    NSMutableArray<NSString *> *packetTexts = [NSMutableArray new];
+    [self.realmManager groupHistorySyncPacketsForGroupNumber:kGroupRealmTestsGroupNumber
+                                           packetFromMessage:^NSData *(OCTMessageAbstract *message) {
+        [packetTexts addObject:message.messageText.text ?: @"(file)"];
+        return [NSData dataWithBytes:"p" length:1];
+    }];
+    XCTAssertEqualObjects(packetTexts, texts, @"the two history sync queries disagree");
+
+    return texts;
+}
+
+/** A history sync whose blocks answer for this client alone in the group of the chat. */
+- (OCTNgcGroupHistSync *)historySyncForChat:(OCTChat *)chat
+{
+    return [[OCTNgcGroupHistSync alloc] initWithSendPrivatePacketBlock:^BOOL (uint32_t groupNumber, uint32_t peerId, NSData *packet, NSError **error) {
+        return YES;
+    } peerPublicKeyBlock:^NSString *(uint32_t groupNumber, uint32_t peerId) {
+        return kGroupRealmTestsPeerKeyHex;
+    } peerNameForPeerIdBlock:^NSString *(uint32_t groupNumber, uint32_t peerId) {
+        return @"member";
+    } defaultPeerNameBlock:^NSString *{
+        return @"me";
+    } selfPublicKeyBlock:^NSString *(uint32_t groupNumber) {
+        return kGroupRealmTestsSelfKeyHex;
+    } peerIdForPublicKeyBlock:^uint32_t (uint32_t groupNumber, NSString *publicKeyHex) {
+        return 0;
+    } isPublicGroupBlock:^BOOL (uint32_t groupNumber) {
+        return YES;
+    } selfPeerIdBlock:^uint32_t (uint32_t groupNumber) {
+        return 1;
+    } peerIdsBlock:^NSArray<NSNumber *> *(uint32_t groupNumber) {
+        return @[];
+    } chatForGroupBlock:^OCTChat *(uint32_t groupNumber, BOOL createIfNeeded) {
+        return chat;
+    } messagesToSyncBlock:^NSArray<OCTMessageAbstract *> *(OCTChat *theChat) {
+        return @[];
+    } messageExistsBlock:^BOOL (OCTChat *theChat, uint32_t messageId, uint32_t peerId, NSString *senderPubkeyHex,
+                                NSString *peerName, NSString *text, NSTimeInterval dateInterval) {
+        return NO;
+    } fileExistsBlock:^BOOL (OCTChat *theChat, NSString *msgIdHashHex) {
+        return NO;
+    } insertSyncedMessageBlock:^OCTMessageAbstract *(OCTChat *theChat, NSString *text, OCTToxMessageType type, uint32_t peerId,
+                                                     NSString *peerName, NSString *senderPubkeyHex, uint32_t messageId,
+                                                     NSTimeInterval dateInterval) {
+        return nil;
+    } insertSyncedFileBlock:^OCTMessageAbstract *(OCTChat *theChat, NSString *fileName, NSString *filePath, uint64_t fileSize,
+                                                  NSString *fileUTI, uint32_t peerId, NSString *peerName,
+                                                  NSString *senderPubkeyHex, NSString *msgIdHashHex, NSTimeInterval dateInterval) {
+        return nil;
+    } incomingFilesDirectoryBlock:^NSString *(uint32_t groupNumber) {
+        return @"";
+    } fileUTIBlock:^NSString *(NSString *fileName) {
+        return nil;
+    } isBlockedPeerBlock:^BOOL (uint32_t groupNumber, uint32_t peerId) {
+        return NO;
+    } deliveryReceiptBlock:^(OCTChat *theChat, uint32_t messageId, uint32_t peerId) {
+    } fileSyncConfirmationBlock:^(OCTChat *theChat, NSString *msgIdHashHex, uint32_t syncerPeerId) {
+    }];
+}
 
 - (OCTChat *)groupChat
 {

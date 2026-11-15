@@ -1507,9 +1507,13 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         // asking us for history handed out other people's 1:1 threads to the whole group. System lines
         // (join/leave/create) are local UI artifacts every client writes for itself; re-broadcasting
         // them made them look like chat messages from us. Both are excluded at the source.
+        // KHANDAQ (0.2.56): so is a row still waiting in the outbox (groupPendingSend). It has not gone: it
+        // goes live once somebody is there, and its id, 0 until then, is what every receiver tells copies
+        // apart by. The first member to join a group got each text its founder wrote alone twice, the
+        // synced copy at the time it was written and the live one when it came, so out of order too.
         NSPredicate *predicate = [NSPredicate predicateWithFormat:
                                   @"chatUniqueIdentifier == %@ AND dateInterval > %f AND "
-                                  @"groupPrivateMessage == NO AND groupSystemMessage == NO AND "
+                                  @"groupPrivateMessage == NO AND groupSystemMessage == NO AND groupPendingSend == NO AND "
                                   @"(messageText != nil OR (messageFile != nil AND messageFile.fileType == %d AND messageFile.fileSize <= %llu))",
                                   chat.uniqueIdentifier, since, (int)OCTMessageFileTypeReady, kMaxSyncFileBytes];
         RLMResults *results = [OCTMessageAbstract objectsInRealm:self.realm withPredicate:predicate];
@@ -1548,9 +1552,10 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         // to groupMessagesForHistorySyncInChat above, private and system rows excluded. A private DM
         // (text AND its attached file payload) must never leave this device towards the group; the
         // builder in OCTNgcGroupHistSync refuses one too, so neither layer alone can leak it.
+        // KHANDAQ (0.2.56): and no row still waiting in the outbox, see above.
         NSPredicate *predicate = [NSPredicate predicateWithFormat:
                                   @"chatUniqueIdentifier == %@ AND dateInterval > %f AND "
-                                  @"groupPrivateMessage == NO AND groupSystemMessage == NO AND "
+                                  @"groupPrivateMessage == NO AND groupSystemMessage == NO AND groupPendingSend == NO AND "
                                   @"(messageText != nil OR (messageFile != nil AND messageFile.fileType == %d AND messageFile.fileSize <= %llu))",
                                   chat.uniqueIdentifier, since, (int)OCTMessageFileTypeReady, kMaxSyncFileBytes];
         RLMResults *results = [OCTMessageAbstract objectsInRealm:self.realm withPredicate:predicate];

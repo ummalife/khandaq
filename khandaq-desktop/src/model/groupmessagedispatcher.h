@@ -62,6 +62,13 @@ public:
                             ExtensionSet extensions) override;
     void onMessageReceived(ToxPk const& sender, bool isAction, QString const& content,
                            uint32_t wireId = 0);
+    /**
+     * The group leaves this window (Widget::discardGroup): the texts that wait go no more, and a
+     * grace that runs sends nothing. broken: they fail as well, for a group left or deleted whose
+     * history stays, so that no later start or join of the group sends them. Otherwise they stay
+     * pending in the history, which the next start sends, or go with that history.
+     */
+    void dropWaiting(bool broken);
 
 private:
     struct WaitingText

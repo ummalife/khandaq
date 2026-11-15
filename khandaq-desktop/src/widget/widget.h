@@ -356,8 +356,12 @@ private:
      * question. */
     void removeConfirmedFriend(const ToxPk& friendPk);
     void removeGroup(Group* g, bool fake = false);
-    /** Takes the group out of the list and, unless fake, out of toxcore, without asking. */
-    void discardGroup(Group* g, bool fake);
+    /**
+     * Takes the group out of the list and, unless fake, out of toxcore, without asking. fake: only
+     * this window lets go of it (the app closes), and its texts that wait stay pending.
+     * historyRemoved: its history went just before.
+     */
+    void discardGroup(Group* g, bool fake, bool historyRemoved = false);
     /** Leave the group, confirmed in its dossier: the group and its history leave this device. */
     void leaveGroup(const GroupId& groupId);
     void onGroupPrivateMessageReceived(int groupnumber, const ToxPk& peerPk, const QString& message,

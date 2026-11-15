@@ -162,6 +162,8 @@ private slots:
     void aNewTextGoesBehindTheOnesThatWait();
     void aTextThatCannotGoDoesNotHoldTheOthers();
     void theWaitingPartsOfALongTextGoInOrder();
+    void whatWaitsGoesNoMoreOnceTheGroupGoes();
+    void whatWaitsFailsWhenTheGroupIsLeft();
 
     void onMessageSent(DispatchedMessageId id, Message message)
     {
@@ -600,6 +602,49 @@ void TestGroupMessageDispatcher::theWaitingPartsOfALongTextGoInOrder()
         joined += part;
     }
     QCOMPARE(joined, text);
+}
+
+/**
+ * @brief 0.2.56: the group goes from the window while its texts wait, in the grace of a member who
+ * joined (Widget::discardGroup, as the app closes): nothing of them goes after, neither at the end
+ * of the grace nor with a later text, and none fails: they stay pending for the next start.
+ */
+void TestGroupMessageDispatcher::whatWaitsGoesNoMoreOnceTheGroupGoes()
+{
+    groupQuery->setAsEmptyGroup();
+    g->regeneratePeerList();
+    messageSender->ready = false;
+    groupMessageDispatcher->sendMessage(false, "First");
+    groupMessageDispatcher->sendMessage(false, "Second");
+    memberJoins(*groupQuery, *g, *messageSender);
+
+    groupMessageDispatcher->dropWaiting(false);
+    QTest::qWait(testGraceMs * 4);
+    QVERIFY(messageSender->sentTexts.empty());
+    QVERIFY(brokenMessages.empty());
+    QCOMPARE(outgoingMessages.size(), size_t{2});
+
+    groupMessageDispatcher->sendMessage(false, "Third");
+    QCOMPARE(messageSender->sentTexts, texts({"Third"}));
+}
+
+/**
+ * @brief A group left or deleted while its texts wait takes them along: each fails, and the history
+ * keeps none of them pending for a later start or join of the group to send.
+ */
+void TestGroupMessageDispatcher::whatWaitsFailsWhenTheGroupIsLeft()
+{
+    messageSender->ready = false;
+    const auto first = groupMessageDispatcher->sendMessage(false, "First");
+    const auto second = groupMessageDispatcher->sendMessage(true, "Second");
+    QCOMPARE(outgoingMessages.size(), size_t{2});
+
+    groupMessageDispatcher->dropWaiting(true);
+    QCOMPARE(brokenMessages, (std::vector<DispatchedMessageId>{first.first, second.first}));
+    memberJoins(*groupQuery, *g, *messageSender);
+    QTest::qWait(testGraceMs * 4);
+    QVERIFY(messageSender->sentTexts.empty());
+    QCOMPARE(messageSender->numSentActions, size_t{0});
 }
 
 // Cannot be guiless due to a settings instance in GroupMessageDispatcher

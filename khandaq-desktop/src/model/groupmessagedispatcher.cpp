@@ -128,6 +128,20 @@ void GroupMessageDispatcher::sendWaiting()
     }
 }
 
+void GroupMessageDispatcher::dropWaiting(bool broken)
+{
+    graceTimer.stop();
+    // Out of the queue before anyone hears of it.
+    std::deque<WaitingText> dropped;
+    dropped.swap(waiting);
+    if (!broken) {
+        return;
+    }
+    for (const WaitingText& text : dropped) {
+        emit messageBroken(text.id, BrokenMessageReason::unknown);
+    }
+}
+
 std::pair<DispatchedMessageId, DispatchedMessageId>
 GroupMessageDispatcher::sendExtendedMessage(const QString& content, ExtensionSet extensions)
 {

@@ -2576,11 +2576,15 @@ void Widget::onGroupMessageReceived(int groupnumber, int peernumber, const QStri
                                     bool isAction, uint32_t messageId)
 {
     const GroupId& groupId = groupList->id2Key(groupnumber);
-    assert(groupList->findGroup(groupId));
+    // A message queued before the group went has nobody to tell (discardGroup).
+    const auto dispatcher = groupMessageDispatchers.value(groupId);
+    if (!dispatcher) {
+        return;
+    }
 
     ToxPk author = core->getGroupPeerPk(groupnumber, peernumber);
 
-    groupMessageDispatchers[groupId]->onMessageReceived(author, isAction, message, messageId);
+    dispatcher->onMessageReceived(author, isAction, message, messageId);
 }
 
 void Widget::onFriendMessageEffect(uint32_t friendnumber, const QByteArray& packet)
@@ -2999,6 +3003,7 @@ void Widget::onGroupPeerAudioPlaying(int groupnumber, ToxPk peerPk)
 void Widget::removeGroup(Group* g, bool fake)
 {
     assert(g);
+    bool historyRemoved = false;
     if (!fake) {
         RemoveChatDialog ask(this, *g);
         ask.exec();
@@ -3009,9 +3014,10 @@ void Widget::removeGroup(Group* g, bool fake)
 
         if (ask.removeHistory()) {
             profile.getHistory()->removeChatHistory(g->getPersistentId());
+            historyRemoved = true;
         }
     }
-    discardGroup(g, fake);
+    discardGroup(g, fake, historyRemoved);
 }
 
 void Widget::leaveGroup(const GroupId& groupId)
@@ -3024,10 +3030,10 @@ void Widget::leaveGroup(const GroupId& groupId)
     if (History* const history = profile.getHistory()) {
         history->removeChatHistory(groupId);
     }
-    discardGroup(g, false);
+    discardGroup(g, false, true);
 }
 
-void Widget::discardGroup(Group* g, bool fake)
+void Widget::discardGroup(Group* g, bool fake, bool historyRemoved)
 {
     assert(g);
     // A copy: the group, and the id it holds, are deleted on the way.
@@ -3037,6 +3043,13 @@ void Widget::discardGroup(Group* g, bool fake)
     if (groupWidgetIt == groupWidgets.end()) {
         qWarning() << "Tried to remove group" << groupnumber << "but GroupWidget doesn't exist";
         return;
+    }
+    // 0.2.56: the texts that wait for the group go no more, nor at the end of a grace that runs.
+    // A group left or deleted takes them along: they fail, so that no later start or join of it
+    // sends them. Not once its history went with their rows: the mark refers to its row
+    // (broken_messages), and one that fails keeps the database inside its transaction.
+    if (const auto dispatcher = groupMessageDispatchers.value(groupId)) {
+        dispatcher->dropWaiting(!fake && !historyRemoved);
     }
     auto widget = groupWidgetIt.value();
     widget->setAsInactiveChatroom();
@@ -3068,6 +3081,9 @@ void Widget::discardGroup(Group* g, bool fake)
     }
     groupChatForms.erase(groupChatFormIt);
     groupAlertConnections.remove(groupId);
+    // The chat log holds the dispatcher, and both the group.
+    groupChatLogs.remove(groupId);
+    groupMessageDispatchers.remove(groupId);
 
     delete g;
     if (contentLayout && contentLayout->mainHead->layout()->isEmpty()) {
@@ -3390,10 +3406,13 @@ void Widget::setStatusBusy()
 void Widget::onGroupSendFailed(uint32_t groupnumber)
 {
     const auto& groupId = groupList->id2Key(groupnumber);
-    assert(groupList->findGroup(groupId));
+    // A failure queued before the group went has nowhere to show (discardGroup).
+    const QSharedPointer<GroupChatForm> form = groupChatForms.value(groupId);
+    if (!form) {
+        return;
+    }
 
     const auto curTime = QDateTime::currentDateTime();
-    auto form = groupChatForms[groupId].data();
     form->addSystemInfoMessage(curTime, SystemMessageType::messageSendFailed, {});
 }
 

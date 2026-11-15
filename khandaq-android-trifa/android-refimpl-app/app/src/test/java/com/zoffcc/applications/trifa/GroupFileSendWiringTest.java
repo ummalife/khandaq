@@ -317,6 +317,24 @@ public class GroupFileSendWiringTest
                            .contains("tox_group_by_groupid__wrapper(groupId)"));
     }
 
+    @Test
+    public void a_small_file_does_not_wait_behind_the_chunked_sends() throws Exception
+    {
+        // A chunked send holds a thread of SEND_EXECUTOR for the whole of its paced send, and small files went on the
+        // same three threads: a photo waited behind three big files, its row saying "sending".
+        final String ngc = code("NgcGroupFileTransfer.java");
+        assertTrue(ngc.contains(
+                "private static final ExecutorService SMALL_SEND_EXECUTOR = Executors.newSingleThreadExecutor("));
+        final String small = body(ngc, "static void sendGroupFileSmall(");
+        assertTrue(small.contains("SMALL_SEND_EXECUTOR.execute("));
+        assertFalse(small.replace("SMALL_SEND_EXECUTOR", "").contains("SEND_EXECUTOR"));
+        assertEquals(1, count(ngc, "SMALL_SEND_EXECUTOR.execute("));
+        // The chunked sends keep their pool, the resends for a member their thread.
+        final String enqueue = body(ngc, "private static void enqueueChunkedSend(");
+        assertTrue(enqueue.contains("final ExecutorService exec = isUserSend ? SEND_EXECUTOR : RESEND_EXECUTOR;"));
+        assertTrue(ngc.contains("Executors.newFixedThreadPool(MAX_PARALLEL_USER_SENDS,"));
+    }
+
     private static String body(final String text, final String head)
     {
         final int at = text.indexOf(head);

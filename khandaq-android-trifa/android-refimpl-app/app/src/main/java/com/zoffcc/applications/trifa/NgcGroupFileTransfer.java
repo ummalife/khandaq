@@ -242,9 +242,21 @@ public final class NgcGroupFileTransfer
     /** How many user-initiated files upload in parallel (they share one tox connection but interleave chunks). */
     private static final int MAX_PARALLEL_USER_SENDS = 3;
 
-    /** User-initiated sends — small pool so multiple files upload concurrently instead of one-at-a-time. */
+    /** User-initiated chunked sends — small pool so multiple files upload concurrently instead of one-at-a-time. */
     private static final ExecutorService SEND_EXECUTOR = Executors.newFixedThreadPool(MAX_PARALLEL_USER_SENDS, r -> {
         final Thread t = new Thread(r, "ngc-group-file-send");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /**
+     * KHANDAQ (0.2.56): our files of one packet (sendGroupFileSmall), on a thread of their own. They went on
+     * SEND_EXECUTOR, and a chunked send holds a thread of it for the whole of its paced send (half an hour for 100 MB
+     * to eight members): a photo waited behind three big files, its row saying "sending" all that time. Its one packet
+     * still waits for the pace, which it shares with the chunked sends, but not for a whole file.
+     */
+    private static final ExecutorService SMALL_SEND_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        final Thread t = new Thread(r, "ngc-group-file-send-small");
         t.setDaemon(true);
         return t;
     });
@@ -540,7 +552,7 @@ public final class NgcGroupFileTransfer
         WAITS.remove(g.group_identifier, g.msg_id_hash);
         try
         {
-            SEND_EXECUTOR.execute(() ->
+            SMALL_SEND_EXECUTOR.execute(() ->
             {
                 try
                 {

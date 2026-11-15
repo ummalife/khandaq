@@ -59,8 +59,8 @@ static NSString *const kOCTGroupPendingLeavesStoreKey = @"kqpendingleaves";
 // KHANDAQ (#25): opening a group chat forces an immediate reconnect of a stalled group instead of
 // waiting up to 90s for the maintenance tick. Rate-limited so rapid open/close can't hammer.
 static const NSTimeInterval kOCTGroupForegroundReconnectMinIntervalSec = 5.0;
-// KHANDAQ (group connection): a group message sent once a peer joins is sent again this long after,
-// in case the group connects only with the sync response that follows the join.
+// KHANDAQ (group connection): what waits for a group is sent this long after a peer joins, once the
+// peer has confirmed us too and the sync response that follows the join has come.
 static const NSTimeInterval kOCTGroupPendingFlushAfterJoinSec = 3.0;
 
 /**
@@ -2685,8 +2685,9 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         // KHANDAQ (group connection): a peer confirmed is the moment a waiting message first reaches
         // somebody. toxcore marks the group connected when a sync response comes, and reports that
         // outside the pass that calls the connection callback, so the callback seldom comes: send what
-        // waits now, and once more a moment later for the sync response after the join.
-        [self flushPendingGroupMessagesForChat:chat];
+        // waits a moment after the join. Not at once (review 0.2.56): we confirm the peer before it has
+        // confirmed us (its peer info comes after its confirmation of us does), and until it has,
+        // toxcore on its side drops what we broadcast.
         [self schedulePendingGroupMessagesFlushForChatUniqueIdentifier:chat.uniqueIdentifier];
 
         if (selfPeerId == 0 || peerId != selfPeerId) {

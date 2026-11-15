@@ -134,6 +134,19 @@ void followIntoView();
 
 } // namespace AirFocus
 
+/** The window a widget is shown in, for what is asked or told over it. */
+namespace AirWindow {
+
+/**
+ * The window that shows widget. For Qt a widget embedded in a QGraphicsProxyWidget, such as a file
+ * entry of a transcript, is a window of its own, so its window() is that entry; here it is the
+ * window of the view that shows the scene, through scenes inside scenes. Null without a widget and
+ * for a widget in a scene that no view shows. For any other widget it is widget->window().
+ */
+QWidget* of(const QWidget* widget);
+
+} // namespace AirWindow
+
 /**
  * Takes what a panel covers out of the Tab chain while the panel is open, and gives each widget its
  * focus policy back when it folds away: Tab never lands on a control the person cannot see.

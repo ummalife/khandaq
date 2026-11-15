@@ -160,7 +160,9 @@ const char toastProperty[] = "airToast";
 AirDialog* AirDialog::confirm(QWidget* anchor, const QString& title, const QString& message,
                               const QString& verb, Verb kind, std::function<void()> onConfirm)
 {
-    QWidget* const window = anchor ? anchor->window() : nullptr;
+    // KHANDAQ (0.2.57): the window that shows the anchor, also for an entry of a transcript, which
+    // is a window of its own to Qt (AirWindow::of); the same goes for the toast and the band.
+    QWidget* const window = AirWindow::of(anchor);
     if (!window) {
         return nullptr;
     }
@@ -183,7 +185,7 @@ AirDialog* AirDialog::confirm(QWidget* anchor, const QString& title, const QStri
 AirDialog* AirDialog::notice(QWidget* anchor, const QString& title, const QString& message,
                              const QString& details)
 {
-    QWidget* const window = anchor ? anchor->window() : nullptr;
+    QWidget* const window = AirWindow::of(anchor);
     if (!window) {
         return nullptr;
     }
@@ -481,7 +483,7 @@ bool AirDialog::focusNextPrevChild(bool next)
 AirToast* AirToast::post(QWidget* anchor, const QString& text, const QString& action,
                          std::function<void()> onAction, std::function<void()> onExpire)
 {
-    QWidget* const window = anchor ? anchor->window() : nullptr;
+    QWidget* const window = AirWindow::of(anchor);
     if (!window) {
         if (onExpire) {
             onExpire();
@@ -507,7 +509,7 @@ AirToast* AirToast::post(QWidget* anchor, const QString& text, const QString& ac
 
 void AirToast::dismiss(QWidget* anchor)
 {
-    QWidget* const window = anchor ? anchor->window() : nullptr;
+    QWidget* const window = AirWindow::of(anchor);
     if (!window) {
         return;
     }
@@ -782,7 +784,7 @@ constexpr int AirBanner::stayMs;
 
 AirBanner* AirBanner::post(QWidget* anchor, const Content& content, std::function<void()> onOpen)
 {
-    QWidget* const window = anchor ? anchor->window() : nullptr;
+    QWidget* const window = AirWindow::of(anchor);
     if (!window || !window->isVisible()) {
         return nullptr;
     }
@@ -825,7 +827,7 @@ void AirBanner::dismiss(QWidget* anchor)
 
 AirBanner* AirBanner::current(QWidget* anchor)
 {
-    QWidget* const window = anchor ? anchor->window() : nullptr;
+    QWidget* const window = AirWindow::of(anchor);
     if (!window) {
         return nullptr;
     }

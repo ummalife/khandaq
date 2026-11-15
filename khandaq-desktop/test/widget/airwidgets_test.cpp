@@ -20,6 +20,10 @@
 #include "src/widget/air/airwidgets.h"
 
 #include <QApplication>
+#include <QDialog>
+#include <QGraphicsProxyWidget>
+#include <QGraphicsScene>
+#include <QGraphicsView>
 #include <QMenu>
 #include <QScreen>
 #include <QScrollArea>
@@ -68,6 +72,31 @@ QStringList tabOrder(QWidget* first)
     return names;
 }
 
+/**
+ * A window with a transcript in it, as the chat window has: a view whose scene holds an entry
+ * through a proxy, and a button inside the entry.
+ */
+struct Transcript
+{
+    QWidget window;
+    QGraphicsView* view = nullptr;
+    QGraphicsScene scene;
+    QWidget* entry = nullptr;
+    QWidget* button = nullptr;
+
+    Transcript()
+    {
+        window.resize(800, 600);
+        view = new QGraphicsView(&window);
+        view->setGeometry(200, 0, 600, 600);
+        view->setScene(&scene);
+        entry = new QWidget;
+        entry->resize(320, 96);
+        button = new QWidget(entry);
+        scene.addWidget(entry);
+    }
+};
+
 } // namespace
 
 class TestAirWidgets : public QObject
@@ -80,6 +109,12 @@ private slots:
     void rowsMadeLaterStandWhereTheirListStands();
     void rowsMadeAfreshStayUnderTheChevron();
     void aControlComesIntoViewInEitherDirection();
+    void anEntryOfATranscriptIsShownInTheWindowOfItsView();
+    void aWidgetOutsideAnySceneKeepsItsWindow();
+    void aSceneInsideASceneLeadsToTheOuterWindow();
+    void aSceneThatNoViewShowsHasNoWindow();
+    void theViewOnScreenGivesTheWindow();
+    void aDialogOverTheWindowStaysOutOfTheScene();
 };
 
 void TestAirWidgets::initTestCase()
@@ -223,6 +258,85 @@ void TestAirWidgets::aControlComesIntoViewInEitherDirection()
                                     .arg(inView.y())));
         }
     }
+}
+
+/**
+ * To Qt an entry of a transcript is a window of its own; what is asked or told over it belongs to
+ * the window its view stands in, from the entry and from anything inside it.
+ */
+void TestAirWidgets::anEntryOfATranscriptIsShownInTheWindowOfItsView()
+{
+    Transcript transcript;
+    transcript.window.show();
+    QCOMPARE(transcript.entry->window(), transcript.entry);
+    QCOMPARE(transcript.button->window(), transcript.entry);
+    QCOMPARE(AirWindow::of(transcript.entry), &transcript.window);
+    QCOMPARE(AirWindow::of(transcript.button), &transcript.window);
+    QCOMPARE(AirWindow::of(transcript.view), &transcript.window);
+}
+
+void TestAirWidgets::aWidgetOutsideAnySceneKeepsItsWindow()
+{
+    QWidget window;
+    auto* const field = new QWidget(&window);
+    QCOMPARE(AirWindow::of(field), &window);
+    QCOMPARE(AirWindow::of(&window), &window);
+    QWidget alone;
+    QCOMPARE(AirWindow::of(&alone), &alone);
+    QVERIFY(AirWindow::of(nullptr) == nullptr);
+}
+
+void TestAirWidgets::aSceneInsideASceneLeadsToTheOuterWindow()
+{
+    Transcript transcript;
+    // A view that is itself an entry of the transcript, with an entry of its own.
+    auto* const innerView = new QGraphicsView;
+    auto* const innerScene = new QGraphicsScene(innerView);
+    innerView->setScene(innerScene);
+    auto* const innerEntry = new QWidget;
+    innerScene->addWidget(innerEntry);
+    transcript.scene.addWidget(innerView);
+    transcript.window.show();
+    QCOMPARE(innerView->window(), innerView);
+    QCOMPARE(AirWindow::of(innerEntry), &transcript.window);
+}
+
+void TestAirWidgets::aSceneThatNoViewShowsHasNoWindow()
+{
+    QGraphicsScene scene;
+    auto* const entry = new QWidget;
+    scene.addWidget(entry);
+    QVERIFY(AirWindow::of(entry) == nullptr);
+}
+
+void TestAirWidgets::theViewOnScreenGivesTheWindow()
+{
+    Transcript transcript;
+    // The scene shown in two windows; only the second is on screen.
+    QWidget other;
+    auto* const otherView = new QGraphicsView(&other);
+    otherView->setScene(&transcript.scene);
+    QCOMPARE(transcript.scene.views().first(), transcript.view);
+    other.show();
+    QCOMPARE(AirWindow::of(transcript.entry), &other);
+    // With none on screen, the first view's window.
+    other.hide();
+    QCOMPARE(AirWindow::of(transcript.entry), &transcript.window);
+}
+
+/**
+ * Qt takes a dialog whose parent is an entry into the scene with it: the save dialog of a received
+ * file went into the transcript. Given the window of the view, it stays a window of the screen.
+ */
+void TestAirWidgets::aDialogOverTheWindowStaysOutOfTheScene()
+{
+    Transcript transcript;
+    transcript.window.show();
+    QDialog inTheScene(transcript.entry);
+    QVERIFY(inTheScene.graphicsProxyWidget() != nullptr);
+    QDialog overTheWindow(AirWindow::of(transcript.entry));
+    QVERIFY(overTheWindow.graphicsProxyWidget() == nullptr);
+    QCOMPARE(overTheWindow.parentWidget(), &transcript.window);
 }
 
 QTEST_MAIN(TestAirWidgets)

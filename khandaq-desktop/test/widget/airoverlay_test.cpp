@@ -24,6 +24,8 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QGraphicsScene>
+#include <QGraphicsView>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QPointer>
@@ -90,6 +92,30 @@ struct BandWindow
         composer->setObjectName(QStringLiteral("airComposer"));
         composer->setGeometry(480, 760, 960, 120);
         window.show();
+    }
+};
+
+/**
+ * The chat window with a transcript: a view over the conversation column, whose scene holds a file
+ * entry through a proxy, as ChatLineContentProxy embeds it.
+ */
+struct TranscriptWindow
+{
+    QWidget window;
+    QGraphicsScene scene;
+    QWidget* entry = nullptr;
+
+    TranscriptWindow()
+    {
+        window.resize(1440, 900);
+        auto* const view = new QGraphicsView(&window);
+        view->setGeometry(480, 92, 960, 668);
+        view->setScene(&scene);
+        entry = new QWidget;
+        entry->resize(320, 96);
+        scene.addWidget(entry);
+        window.show();
+        QApplication::setActiveWindow(&window);
     }
 };
 
@@ -192,6 +218,8 @@ private slots:
     void theBandShowsTwoLinesAtMost();
     void theBandLeavesInOnePiece();
     void aToastLeavesInOnePiece();
+    void aNoticeFromAnEntryOfATranscriptCoversTheWindow();
+    void aToastFromAnEntryOfATranscriptStandsInTheWindow();
 };
 
 void TestAirOverlay::aShortToastKeepsItsWordsOnOneLine()
@@ -558,6 +586,46 @@ void TestAirOverlay::aToastLeavesInOnePiece()
     host.window.repaint();
     QTRY_VERIFY(toast.isNull());
     QVERIFY2(ear.painterWarning().isEmpty(), qPrintable(ear.painterWarning()));
+}
+
+/**
+ * A received file that cannot be saved says so from its entry in the transcript. The notice was a
+ * child of the entry, which Qt takes for a window of its own: cut to the entry, OK out of sight,
+ * and the entry took no clicks any more. It covers the chat window, and OK closes it.
+ */
+void TestAirOverlay::aNoticeFromAnEntryOfATranscriptCoversTheWindow()
+{
+    TranscriptWindow host;
+    QCOMPARE(host.entry->window(), host.entry);
+    AirDialog* const dialog =
+        AirDialog::notice(host.entry, QStringLiteral("Couldn't accept the file"),
+                          QStringLiteral("This folder cannot be written to. Choose another one."));
+    QVERIFY(dialog);
+    QCOMPARE(dialog->parentWidget(), &host.window);
+    QVERIFY(host.entry->findChildren<AirDialog*>().isEmpty());
+    QTest::qWait(AirTokens::Motion::layout + 200);
+    QCOMPARE(dialog->geometry(), host.window.rect());
+    AirButton* const ok = buttonOf(dialog, "dialogConfirm");
+    QVERIFY(ok->isVisible());
+    QVERIFY(ok->hasFocus());
+    QVERIFY(host.window.rect().contains(QRect(ok->mapTo(&host.window, QPoint(0, 0)), ok->size())));
+
+    QSignalSpy finished(dialog, &AirDialog::finished);
+    QTest::mouseClick(ok, Qt::LeftButton, Qt::NoModifier, ok->rect().center());
+    QCOMPARE(finished.count(), 1);
+    QCOMPARE(finished.takeFirst().at(0).toBool(), true);
+    QVERIFY(dialog->isHidden());
+}
+
+void TestAirOverlay::aToastFromAnEntryOfATranscriptStandsInTheWindow()
+{
+    TranscriptWindow host;
+    QPointer<AirToast> toast(AirToast::post(host.entry, QStringLiteral("Файл сохранён")));
+    QVERIFY(toast);
+    QCOMPARE(toast->parentWidget(), &host.window);
+    // The entry finds the toast of its window, as any widget of the window does.
+    AirToast::dismiss(host.entry);
+    QTRY_VERIFY(toast.isNull());
 }
 
 int main(int argc, char* argv[])

@@ -35,6 +35,9 @@
 #if defined(Q_OS_UNIX)
 #include "src/platform/posixsignalnotifier.h"
 #endif
+#if defined(Q_OS_MACOS)
+#include "src/platform/appnap.h"
+#endif
 
 #include <QApplication>
 #include <QFontDatabase>
@@ -357,6 +360,12 @@ int AppManager::run()
     if (!Settings::verifyProxySettings(parser)) {
         return -1;
     }
+
+#if defined(Q_OS_MACOS)
+    // KHANDAQ (0.2.57): this instance runs (no other one took the event): from here on the window
+    // may be hidden or covered for hours while Tox has to keep answering the network.
+    AppNap::disable();
+#endif
 
     // TODO(kriby): Consider moving application initializing variables into a globalSettings object
     //  note: Because Settings is shouldering global settings as well as model specific ones it

@@ -188,6 +188,32 @@ private:
     bool hovered = false;
 };
 
+/**
+ * kq-play: the round button of a voice note, as in the phone apps and Telegram: an ink disc with a
+ * play triangle, or two bars while the note plays. Its words (Listen, Pause) are not drawn: set
+ * them with setText, they are its accessible name, and as its tooltip.
+ */
+class AirPlayButton : public QAbstractButton
+{
+    Q_OBJECT
+public:
+    explicit AirPlayButton(QWidget* parent = nullptr);
+
+    void setPlaying(bool playing);
+    bool isPlaying() const;
+
+    QSize sizeHint() const override;
+
+protected:
+    void paintEvent(QPaintEvent* event) override;
+    void enterEvent(QEvent* event) override;
+    void leaveEvent(QEvent* event) override;
+
+private:
+    bool playing = false;
+    bool hovered = false;
+};
+
 /** kq-btn: a text button. Ink for the one main action, plain otherwise. */
 class AirButton : public QAbstractButton
 {

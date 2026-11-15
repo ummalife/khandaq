@@ -448,6 +448,103 @@ void AirIconButton::paintEvent(QPaintEvent*)
     }
 }
 
+// ---- AirPlayButton ----
+
+AirPlayButton::AirPlayButton(QWidget* parent)
+    : QAbstractButton(parent)
+{
+    setCursor(Qt::PointingHandCursor);
+    setFocusPolicy(Qt::TabFocus);
+    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    keepRepainted(this);
+}
+
+void AirPlayButton::setPlaying(bool playing_)
+{
+    if (playing != playing_) {
+        playing = playing_;
+        update();
+    }
+}
+
+bool AirPlayButton::isPlaying() const
+{
+    return playing;
+}
+
+QSize AirPlayButton::sizeHint() const
+{
+    return QSize(Size::control, Size::control);
+}
+
+void AirPlayButton::enterEvent(QEvent* event)
+{
+    hovered = true;
+    update();
+    QAbstractButton::enterEvent(event);
+}
+
+void AirPlayButton::leaveEvent(QEvent* event)
+{
+    hovered = false;
+    update();
+    QAbstractButton::leaveEvent(event);
+}
+
+void AirPlayButton::paintEvent(QPaintEvent*)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    const QRectF box = rect();
+    const qreal side = std::min(box.width(), box.height());
+    const QRectF disc(box.center().x() - side / 2.0, box.center().y() - side / 2.0, side, side);
+
+    const bool enabled = isEnabled();
+    const QColor fill = !enabled ? air().color(Color::Sunken)
+                        : isDown() ? air().color(Color::InkPressed)
+                        : hovered  ? air().color(Color::InkHover)
+                                   : air().color(Color::Ink);
+    const QColor mark = enabled ? air().color(Color::OnInk) : air().color(Color::Ink3);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(fill);
+    painter.drawEllipse(disc);
+
+    // The glyph is drawn for the 36 px disc and scaled with it. Media controls keep their direction
+    // in a right-to-left interface, so neither glyph is mirrored.
+    const QPointF centre = disc.center();
+    const qreal unit = side / Size::control;
+    painter.setBrush(mark);
+    if (playing) {
+        // Two bars with round ends.
+        const qreal width = 3.5 * unit;
+        const qreal height = 12.0 * unit;
+        const qreal gap = 4.0 * unit;
+        const qreal top = centre.y() - height / 2.0;
+        const qreal radius = width / 2.0;
+        painter.drawRoundedRect(QRectF(centre.x() - gap / 2.0 - width, top, width, height), radius,
+                                radius);
+        painter.drawRoundedRect(QRectF(centre.x() + gap / 2.0, top, width, height), radius, radius);
+    } else {
+        // A triangle pointing forward, moved a little past the centre: its weight sits in its
+        // left half, so a triangle centred by its box looks off to the left. The stroke rounds
+        // its corners.
+        const qreal width = 11.0 * unit;
+        const qreal height = 13.0 * unit;
+        const qreal left = centre.x() - width / 2.0 + 1.5 * unit;
+        QPainterPath triangle;
+        triangle.moveTo(left, centre.y() - height / 2.0);
+        triangle.lineTo(left + width, centre.y());
+        triangle.lineTo(left, centre.y() + height / 2.0);
+        triangle.closeSubpath();
+        painter.setPen(QPen(mark, 2.0 * unit, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter.drawPath(triangle);
+    }
+
+    if (showsKeyboardFocus(this)) {
+        AirPaint::focusRing(painter, disc, Radius::round);
+    }
+}
+
 // ---- AirButton ----
 
 AirButton::AirButton(Kind kind_, QWidget* parent)

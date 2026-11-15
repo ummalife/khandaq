@@ -29,6 +29,7 @@
 #include <memory>
 
 class AirButton;
+class AirPlayButton;
 class IAudioControl;
 class IAudioSink;
 class QLabel;
@@ -193,7 +194,7 @@ private:
     void refresh(const QString& changedPath);
     void showFailure(const QString& failedPath);
 
-    AirButton* button = nullptr;
+    AirPlayButton* button = nullptr;
     AirVoiceWave* wave = nullptr;
     QLabel* time = nullptr;
     QString path;

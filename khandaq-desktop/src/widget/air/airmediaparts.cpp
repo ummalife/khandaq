@@ -495,7 +495,8 @@ AirVoiceNote::AirVoiceNote(QWidget* parent)
     : QWidget(parent)
 {
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    button = new AirButton(AirButton::Kind::Plain, this);
+    // QA live: a play button as in the phone apps and Telegram, not the word Listen.
+    button = new AirPlayButton(this);
     button->setObjectName(QStringLiteral("voiceListen"));
     wave = new AirVoiceWave(this);
     time = new QLabel(this);
@@ -509,7 +510,7 @@ AirVoiceNote::AirVoiceNote(QWidget* parent)
     layout->addWidget(wave, 1);
     layout->addWidget(time);
 
-    connect(button, &AirButton::clicked, this, [this] {
+    connect(button, &AirPlayButton::clicked, this, [this] {
         if (here) {
             AirVoicePlayer::instance().toggle(path);
         } else if (fetchable) {
@@ -561,13 +562,6 @@ void AirVoiceNote::restyle()
 
 void AirVoiceNote::retranslate()
 {
-    // Listen and Pause take the same width, so the wave does not move when the words change.
-    const QString listen = AirStrings::text(Text::VoiceListen);
-    const QString pause = AirStrings::text(Text::VoicePause);
-    button->setText(pause);
-    const int pauseWidth = button->sizeHint().width();
-    button->setText(listen);
-    button->setFixedWidth(qMax(pauseWidth, button->sizeHint().width()));
     refresh();
 }
 
@@ -582,7 +576,11 @@ void AirVoiceNote::refresh()
 {
     const AirVoicePlayer& player = AirVoicePlayer::instance();
     const bool playing = here && player.isPlaying(path);
-    button->setText(AirStrings::text(playing ? Text::VoicePause : Text::VoiceListen));
+    const QString action = AirStrings::text(playing ? Text::VoicePause : Text::VoiceListen);
+    button->setPlaying(playing);
+    // Not drawn: the words are what a screen reader says for the button, and its tooltip.
+    button->setText(action);
+    button->setToolTip(action);
     button->setEnabled(here || fetchable);
     wave->setEnabled(here);
 

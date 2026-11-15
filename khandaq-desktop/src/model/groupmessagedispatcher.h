@@ -37,9 +37,10 @@ class IGroupSettings;
 /**
  * Sends the texts of a group. One the group does not take now (Air::groupTakesText) is shown and
  * waits on this device, and the ones after it wait behind it: they go in order once the group
- * takes them, a while after the peer list changes (joinGraceMs) or with the next text sent. One
- * that cannot go as it is fails and lets the others go. A message that waits is pending in the
- * history, whose next start sends it again (ChatHistory::dispatchUnsentMessages).
+ * takes them, a while after the peer list changes (joinGraceMs) or with the next text sent. The
+ * texts written in the grace of the first member who comes into a group we were alone in wait for
+ * it too. One that cannot go as it is fails and lets the others go. A message that waits is
+ * pending in the history, whose next start sends it again (ChatHistory::dispatchUnsentMessages).
  */
 class GroupMessageDispatcher : public IMessageDispatcher
 {
@@ -90,4 +91,6 @@ private:
     DispatchedMessageId nextMessageId{0};
     std::deque<WaitingText> waiting;
     QTimer graceTimer;
+    /** Whether the peer list last had someone else in it: the first one to come has the grace. */
+    bool someoneElse = false;
 };

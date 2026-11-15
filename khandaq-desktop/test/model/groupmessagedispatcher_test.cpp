@@ -162,6 +162,7 @@ private slots:
     void aNewTextGoesBehindTheOnesThatWait();
     void aTextThatCannotGoDoesNotHoldTheOthers();
     void theWaitingPartsOfALongTextGoInOrder();
+    void aTextRightAfterTheFirstMemberCameWaitsForTheGrace();
     void whatWaitsGoesNoMoreOnceTheGroupGoes();
     void whatWaitsFailsWhenTheGroupIsLeft();
 
@@ -602,6 +603,28 @@ void TestGroupMessageDispatcher::theWaitingPartsOfALongTextGoInOrder()
         joined += part;
     }
     QCOMPARE(joined, text);
+}
+
+/**
+ * @brief The first member who comes into a group we were alone in has the grace from the texts
+ * written then too, though none waited; once the group has someone else, a text goes at once.
+ */
+void TestGroupMessageDispatcher::aTextRightAfterTheFirstMemberCameWaitsForTheGrace()
+{
+    groupQuery->setAsEmptyGroup();
+    g->regeneratePeerList();
+    memberJoins(*groupQuery, *g, *messageSender);
+
+    groupMessageDispatcher->sendMessage(false, "Hi");
+    QVERIFY(messageSender->sentTexts.empty());
+    QCOMPARE(outgoingMessages.size(), size_t{1});
+    QTRY_COMPARE_WITH_TIMEOUT(messageSender->sentTexts, texts({"Hi"}), waitMs);
+    QVERIFY(outgoingMessages.empty());
+
+    // The peer list read again with the member still in it: no grace.
+    g->regeneratePeerList();
+    groupMessageDispatcher->sendMessage(false, "Again");
+    QCOMPARE(messageSender->sentTexts, texts({"Hi", "Again"}));
 }
 
 /**

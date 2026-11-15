@@ -40,9 +40,13 @@ GroupMessageDispatcher::GroupMessageDispatcher(Group& g_, MessageProcessor proce
     graceTimer.setInterval(graceMs);
     connect(&graceTimer, &QTimer::timeout, this, &GroupMessageDispatcher::sendWaiting);
     // A member who joins, the group that connects: what waits may go now. The texts give the
-    // member the grace first; members who join meanwhile do not put them off again.
+    // member the grace first; members who join meanwhile do not put them off again. The first
+    // member who comes into a group we were alone in has it from the texts written then too.
+    someoneElse = group.getPeersCount() > 1;
     connect(&group, &Group::peerListRefreshed, this, [this] {
-        if (!waiting.empty() && !graceTimer.isActive()) {
+        const bool came = !someoneElse && group.getPeersCount() > 1;
+        someoneElse = group.getPeersCount() > 1;
+        if ((came || !waiting.empty()) && !graceTimer.isActive()) {
             graceTimer.start();
         }
     });
@@ -65,8 +69,9 @@ GroupMessageDispatcher::sendMessage(bool isAction, QString const& content)
         auto messageId = nextMessageId++;
         lastMessageId = messageId;
         // Behind a text that waits, the next one waits too: they go in the order written, as
-        // the parts of a long text do.
-        const SendResult result = waiting.empty() ? send(message) : SendResult::NotReady;
+        // the parts of a long text do. So does one written in the grace of a member who came.
+        const SendResult result =
+            waiting.empty() && !graceTimer.isActive() ? send(message) : SendResult::NotReady;
 
         // A group has no receipts: a text is complete once toxcore took it.
         //

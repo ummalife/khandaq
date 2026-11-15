@@ -828,6 +828,7 @@
 "air_delivery_transit" = "in transit";
 "air_delivery_sent" = "sent";
 "air_delivery_delivered" = "delivered";
+"air_delivery_seen" = "seen";
 "air_transit_format" = "%d in transit";
 "air_unread_a11y" = "unread: %d";
 "air_hint_request_sent" = "request sent";

@@ -6,4 +6,6 @@ import Foundation
 
 class ChatOutgoingFileCellModel: ChatGenericFileCellModel {
     var delivered: Bool = false
+    /// KHANDAQ (0.2.57): the person's read receipt reached past this file (1:1 only; groups have no seen).
+    var seen: Bool = false
 }

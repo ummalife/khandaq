@@ -160,6 +160,10 @@ class ChatPrivateController: PortraitChatController {
     /// Messages that rise into the log when their row appears, with the delay of each.
     fileprivate var arrivingIds: [String: TimeInterval] = [:]
     fileprivate var wasFriendOnline: Bool?
+    /// KHANDAQ (0.2.57): the person's seen watermark the marks were last drawn with.
+    fileprivate var shownSeenWatermark: TimeInterval?
+    /// KHANDAQ (0.2.57): the conversation is on screen, from viewDidAppear to viewWillDisappear.
+    fileprivate var isConversationOnScreen = false
     fileprivate var airObservers: [NSObjectProtocol] = []
 
     fileprivate struct DisplayMapKey: Equatable {
@@ -224,6 +228,12 @@ class ChatPrivateController: PortraitChatController {
                 self,
                 selector: #selector(ChatPrivateController.applicationDidBecomeActive),
                 name: NSNotification.Name.UIApplicationDidBecomeActive,
+                object: nil)
+        // KHANDAQ (0.2.57): the PIN lock screen went away from over the conversation: it is seen now.
+        NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(ChatPrivateController.lockScreenDidHide),
+                name: .khandaqLockScreenDidHide,
                 object: nil)
 
         NotificationCenter.default.addObserver(
@@ -472,6 +482,7 @@ class ChatPrivateController: PortraitChatController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        isConversationOnScreen = false
 
         // KHANDAQ: mark read on EXIT too — viewWillAppear alone misses messages that arrived while the
         // chat was open, leaving the unread badge stuck after the user has actually read everything.
@@ -499,6 +510,9 @@ class ChatPrivateController: PortraitChatController {
         scrollToGlobalSearchTargetIfNeeded()
         scrollToFirstUnreadIfNeeded()
         refreshPinnedBanner()   // KHANDAQ (#G5): restore the pinned-message banner if any.
+
+        isConversationOnScreen = true
+        reportSeenIfVisible()
     }
 
     /// KHANDAQ (Figma): on open, jump to the first unread incoming message (its cell carries the
@@ -827,6 +841,11 @@ extension ChatPrivateController {
 extension ChatPrivateController {
     @objc func applicationDidBecomeActive() {
         updateLastReadDate()
+        reportSeenIfVisible()
+    }
+
+    @objc func lockScreenDidHide() {
+        reportSeenIfVisible()
     }
 
     @objc func willShowMenuNotification(_ notification: Notification) {
@@ -934,6 +953,7 @@ extension ChatPrivateController: UITableViewDataSource {
                                                                      isDelivered: messageText.isDelivered,
                                                                      messageId: messageText.messageId,
                                                                      personOnline: isFriendOnline)
+                    .applyingSeen(hasFriendSeen(message))
                 if let id = message.uniqueIdentifier {
                     outgoingModel.previousStatus = statusMemory[id]
                     statusMemory[id] = outgoingModel.status
@@ -2143,7 +2163,10 @@ private extension ChatPrivateController {
                     if let readCount = self.tableReadMessageCount, readCount != self.messages.count {
                         tableView.reloadData()
                     }
+                    self.reportSeenAfterThisChange()
                 case .update(_, let deletions, let insertions, let modifications):
+                    // KHANDAQ (0.2.57): what came in while the person looks at the conversation is seen.
+                    self.reportSeenAfterThisChange()
                     // KHANDAQ (redesign stage 2): the rows of the log change with the messages; the
                     // tray takes what waits for the person, a new message rises into the log.
                     self.displayGeneration += 1
@@ -2664,6 +2687,7 @@ private extension ChatPrivateController {
         if let outgoingModel = model as? ChatOutgoingFileCellModel {
             outgoingModel.delivered = (message.messageFile?.isDelivered ?? false)
                 || (message.messageFile?.fileType == .ready)
+            outgoingModel.seen = hasFriendSeen(message)
         }
         if isVoice {
             model.fileName = VoiceMessageHelper.displayFileName(for: message.messageFile?.fileName)
@@ -3169,6 +3193,39 @@ extension ChatPrivateController {
         return currentReach(for: friend).isLive
     }
 
+    /// KHANDAQ (0.2.57): whether the person's read receipt reached past our `message`.
+    fileprivate func hasFriendSeen(_ message: OCTMessageAbstract) -> Bool {
+        guard !chat.isSavedMessages, let friend = friend, !friend.isInvalidated else {
+            return false
+        }
+        return friend.hasSeenOutgoingMessage(message)
+    }
+
+    /// KHANDAQ (0.2.57): tells the person that what they sent is seen, while the conversation is on screen
+    /// in the foreground and no lock is over it (AirSeenGate). objcTox sends a receipt only for something
+    /// newer than the last one, at most once a second, and keeps it while the person is offline.
+    fileprivate func reportSeenIfVisible() {
+        let window = isViewLoaded ? view.window : nil
+        let sceneActive = window?.windowScene.map { $0.activationState == .foregroundActive } ?? false
+        guard AirSeenGate.allowsReport(onScreen: isConversationOnScreen && window != nil,
+                                       appActive: UIApplication.shared.applicationState == .active,
+                                       sceneActive: sceneActive,
+                                       lockScreenShown: PinAuthorizationCoordinator.isLockScreenShown,
+                                       isSaved: chat.isSavedMessages) else {
+            return
+        }
+        submanagerChats.reportSeen(in: chat)
+    }
+
+    /// KHANDAQ (0.2.57): reportSeenIfVisible once the Realm change being handled is through. The report
+    /// writes to the profile, and a write begun inside a notification callback moves the Realm to its
+    /// newest version while the callback still applies the changes it was handed to the table.
+    fileprivate func reportSeenAfterThisChange() {
+        DispatchQueue.main.async { [weak self] in
+            self?.reportSeenIfVisible()
+        }
+    }
+
     // MARK: Building
 
     fileprivate func createAirConversationViews() {
@@ -3387,10 +3444,17 @@ extension ChatPrivateController {
         let online = isFriendOnline
         let onlineChanged = wasFriendOnline != nil && wasFriendOnline != online
         wasFriendOnline = online
+        // KHANDAQ (0.2.57): their read receipt moved: the marks of what they have seen turn teal.
+        let seenWatermark = friend.map { $0.isInvalidated ? 0 : $0.seenWatermark } ?? 0
+        let seenChanged = shownSeenWatermark != nil && shownSeenWatermark != seenWatermark
+        shownSeenWatermark = seenWatermark
         refreshComposeState(animated: true)
         let trayChanged = refreshTray(animated: true)
-        if (trayChanged || onlineChanged) && !isTrayDeparting {
+        if (trayChanged || onlineChanged || seenChanged) && !isTrayDeparting {
             tableView?.reloadData()
+        }
+        else if seenChanged {
+            needsLogReload = true
         }
         refreshDossierIfNeeded()
     }

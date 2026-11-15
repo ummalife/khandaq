@@ -462,8 +462,10 @@ private extension ChatGenericFileCell {
         guard !isIncoming else {
             return .none
         }
-        let delivered = (fileModel as? ChatOutgoingFileCellModel)?.delivered ?? false
+        let outgoingModel = fileModel as? ChatOutgoingFileCellModel
+        let delivered = outgoingModel?.delivered ?? false
         return AirFileEntryText.status(state: state, delivered: delivered, personOnline: personOnline)
+            .applyingSeen(outgoingModel?.seen ?? false)
     }
 
     func perform(_ action: AirFileAction) {

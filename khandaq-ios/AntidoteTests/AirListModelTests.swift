@@ -114,6 +114,33 @@ class AirListModelTests: XCTestCase {
         XCTAssertEqual(AirDelivery.ofOutgoingText(isDelivered: true, messageId: 7, personOnline: true), .delivered)
     }
 
+    func testRowMarkOfALastTextTurnsSeenAsInTheConversation() {
+        XCTAssertEqual(AirDelivery.ofOutgoingText(isDelivered: true, messageId: 7, personOnline: true, seen: true), .seen)
+        XCTAssertEqual(AirDelivery.ofOutgoingText(isDelivered: false, messageId: 7, personOnline: true, seen: true), .seen)
+        // What waits for the person or is leaving is never seen.
+        XCTAssertEqual(AirDelivery.ofOutgoingText(isDelivered: false, messageId: 7, personOnline: false, seen: true), .transit)
+        XCTAssertEqual(AirDelivery.ofOutgoingText(isDelivered: false, messageId: -1, personOnline: true, seen: true), .transit)
+        XCTAssertEqual(AirDelivery.ofOutgoingText(isDelivered: true, messageId: 7, personOnline: true, seen: false), .delivered)
+    }
+
+    func testARowSaysSeenAndShowsItInTeal() {
+        use("en")
+        let cell = AirRowCell(style: .default, reuseIdentifier: AirRowCell.reuseIdentifier)
+        cell.configure(with: person(lastDelivery: .seen), photo: nil)
+        XCTAssertTrue(cell.accessibilityLabel?.contains("seen") == true, cell.accessibilityLabel ?? "")
+        XCTAssertTrue(imageViews(in: cell.contentView).contains { !$0.isHidden && $0.tintColor === KQColor.seen })
+
+        // Delivered, not seen: the muted ink of the time beside it.
+        cell.configure(with: person(lastDelivery: .delivered), photo: nil)
+        XCTAssertTrue(cell.accessibilityLabel?.contains("delivered") == true, cell.accessibilityLabel ?? "")
+        XCTAssertFalse(imageViews(in: cell.contentView).contains { $0.tintColor === KQColor.seen })
+        XCTAssertTrue(imageViews(in: cell.contentView).contains { !$0.isHidden && $0.tintColor === KQColor.ink3 })
+
+        use("ru")
+        cell.configure(with: person(lastDelivery: .seen), photo: nil)
+        XCTAssertTrue(cell.accessibilityLabel?.contains("прочитано") == true, cell.accessibilityLabel ?? "")
+    }
+
     func testFavoritesFilterKeepsStarredRowsAndSavedMessages() {
         let entries = [entry("star", reach: .direct, favorite: true), entry("plain", reach: .direct), saved()]
 
@@ -662,6 +689,24 @@ private extension AirListModelTests {
     func use(_ language: String) {
         AppLanguage.set(language)
         XCTAssertEqual(AppLanguage.current, language)
+    }
+
+    /// A person whose last message is ours, with this mark.
+    func person(lastDelivery: AirDelivery) -> AirEntry {
+        return AirEntry(id: "p1", kind: .direct, title: "Bilal", reach: .direct, preview: "Salam", previewStyle: .message,
+                        lastDelivery: lastDelivery, timeText: "10:57", activity: 1, transitCount: 0, unreadCount: 0,
+                        isFavorite: false, avatarData: nil, tone: 0)
+    }
+
+    func imageViews(in root: UIView) -> [UIImageView] {
+        var found: [UIImageView] = []
+        if let imageView = root as? UIImageView {
+            found.append(imageView)
+        }
+        for subview in root.subviews {
+            found += imageViews(in: subview)
+        }
+        return found
     }
 
     func airStrings(_ language: String) -> [String: String] {

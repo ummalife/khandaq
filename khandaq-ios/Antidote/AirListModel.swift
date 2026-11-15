@@ -156,11 +156,17 @@ enum AirDelivery: Equatable {
     case transit
     case sent
     case delivered
+    /// KHANDAQ (0.2.57): the person has seen it (two teal checks), as the conversation shows it.
+    case seen
 
     /// Our own last text to one person, by the conversation's rule (AirEntryStatus.ofOutgoingText):
-    /// in transit while the person is away, a clock while it is leaving, then sent and delivered.
-    static func ofOutgoingText(isDelivered: Bool, messageId: Int32, personOnline: Bool) -> AirDelivery {
-        switch AirEntryStatus.ofOutgoingText(isSaved: false, isDelivered: isDelivered, messageId: messageId, personOnline: personOnline) {
+    /// in transit while the person is away, a clock while it is leaving, then sent and delivered, and
+    /// seen once the person's read receipt reached past it (AirEntryStatus.applyingSeen).
+    static func ofOutgoingText(isDelivered: Bool, messageId: Int32, personOnline: Bool, seen: Bool = false) -> AirDelivery {
+        let status = AirEntryStatus.ofOutgoingText(isSaved: false, isDelivered: isDelivered, messageId: messageId, personOnline: personOnline)
+        switch status.applyingSeen(seen) {
+            case .seen:
+                return .seen
             case .delivered:
                 return .delivered
             case .sent:

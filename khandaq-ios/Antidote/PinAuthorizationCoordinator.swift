@@ -25,8 +25,22 @@ protocol PinAuthorizationCoordinatorDelegate: class {
     func pinAuthorizationCoordinatorDidLogout(_ coordinator: PinAuthorizationCoordinator)
 }
 
+extension Notification.Name {
+    /// KHANDAQ (0.2.57): the PIN lock screen went away, and what it covered is in front of the person again.
+    static let khandaqLockScreenDidHide = Notification.Name("KhandaqLockScreenDidHide")
+}
+
 class PinAuthorizationCoordinator: NSObject {
     weak var delegate: PinAuthorizationCoordinatorDelegate?
+
+    /// KHANDAQ (0.2.57): the lock windows of the coordinators alive (one per running profile). A read
+    /// receipt leaves only for a conversation the person can see, never from behind this screen.
+    private static let lockWindows = NSHashTable<UIWindow>.weakObjects()
+
+    /// KHANDAQ (0.2.57): whether the PIN lock screen covers the app right now.
+    static var isLockScreenShown: Bool {
+        return lockWindows.allObjects.contains { !$0.isHidden }
+    }
 
     fileprivate enum State {
         case unlocked
@@ -68,6 +82,7 @@ class PinAuthorizationCoordinator: NSObject {
 
         // Showing window on top of all other windows.
         window.windowLevel = CGFloat(2000 + 1000)
+        PinAuthorizationCoordinator.lockWindows.add(window)
         // KHANDAQ (Figma): the flat lock screen shows the login-logo wordmark (light/dark asset
         // variants) — this window must carry the app theme's interface style, not the system one.
         ThemeChrome.applyWindowStyle(window, theme: theme)
@@ -222,6 +237,7 @@ private extension PinAuthorizationCoordinator {
         stopLockoutTimer()
         state = .unlocked
         window.isHidden = true
+        NotificationCenter.default.post(name: .khandaqLockScreenDidHide, object: self)
     }
 
     func challengeUserToAuthorize(_ lockTime: CFTimeInterval) {

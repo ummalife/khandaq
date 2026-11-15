@@ -247,8 +247,17 @@ final class AirDayAxisView: UIView {
 
 // MARK: - Status mark
 
+extension KQColor {
+    /// KHANDAQ (0.2.57): two checks in this colour say the person has seen the message. The owner chose
+    /// read receipts in the brand teal (15.11), the one colour of a mark outside the Air palette, so it is
+    /// not in the generated tokens: #029B7D in light and #10B98F in dark, Android's khandaq_teal (values and
+    /// values-night) and the teal of AvatarManager, so the clients show the same seen.
+    static let seen = dynamic(light: 0x029B7DFF, dark: 0x10B98FFF)
+}
+
 /// The mark after one of our own messages: an amber clock in the tray, a faint clock while it leaves,
-/// one check when sent, two when delivered, a red alert when refused. A change cross-fades.
+/// one check when sent, two when delivered, two in teal once seen, a red alert when refused. A change
+/// cross-fades.
 final class AirStatusMarkView: UIView {
     private let imageView = UIImageView()
     private(set) var status: AirEntryStatus = .none
@@ -297,10 +306,12 @@ final class AirStatusMarkView: UIView {
         switch status {
             case .transit:
                 return KQColor.transit
-            case .sending, .none:
+            // KHANDAQ (0.2.57): sent and delivered take the muted ink of the time beside the mark, so the
+            // teal of seen is the one that stands out.
+            case .sending, .none, .sent, .delivered:
                 return KQColor.ink3
-            case .sent, .delivered:
-                return KQColor.ink
+            case .seen:
+                return KQColor.seen
             case .failed:
                 return KQColor.danger
         }

@@ -817,6 +817,7 @@
 "air_delivery_transit" = "في الطريق";
 "air_delivery_sent" = "أُرسلت";
 "air_delivery_delivered" = "وصلت";
+"air_delivery_seen" = "قُرئت";
 "air_transit_format" = "في الطريق: %d";
 "air_unread_a11y" = "غير مقروءة: %d";
 "air_hint_request_sent" = "أُرسل الطلب";

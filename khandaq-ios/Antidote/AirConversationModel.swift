@@ -21,6 +21,9 @@ enum AirEntryStatus: Equatable {
     case sent
     /// The person's device confirmed it (two checks).
     case delivered
+    /// KHANDAQ (0.2.57): the person had the conversation open with it (two checks in brand teal): their
+    /// read receipt reached past it.
+    case seen
     /// The network refused it; "Retry" sends the same text again (red).
     case failed
 
@@ -40,6 +43,21 @@ enum AirEntryStatus: Equatable {
         return messageId == -1 ? .sending : .sent
     }
 
+    /// KHANDAQ (0.2.57): the mark once the person has seen the message: only one that has left this
+    /// device, sent or delivered, turns seen. One that waits, is leaving or failed keeps its mark, and so
+    /// does every mark while `seen` is false (an old client sends no read receipts).
+    func applyingSeen(_ seen: Bool) -> AirEntryStatus {
+        guard seen else {
+            return self
+        }
+        switch self {
+            case .sent, .delivered:
+                return .seen
+            default:
+                return self
+        }
+    }
+
     /// The icon from the design-system sprite, nil for no mark.
     var iconName: String? {
         switch self {
@@ -49,7 +67,7 @@ enum AirEntryStatus: Equatable {
                 return "clock"
             case .sent:
                 return "check"
-            case .delivered:
+            case .delivered, .seen:
                 return "check-double"
             case .failed:
                 return "alert"
@@ -69,9 +87,22 @@ enum AirEntryStatus: Equatable {
                 return String(localized: "air_delivery_sent")
             case .delivered:
                 return String(localized: "air_delivery_delivered")
+            case .seen:
+                return String(localized: "air_delivery_seen")
             case .failed:
                 return String(localized: "air_delivery_failed")
         }
+    }
+}
+
+/// KHANDAQ (0.2.57): when a read receipt may leave for the person of a conversation: while it is on
+/// screen, with the app and its scene active and the app's own PIN lock not over it. Active is the
+/// foreground with the device unlocked: iOS resigns the app before the lock screen comes up. Never for
+/// the Saved chat. A list preview, a notification or the background never ask; a group has a controller
+/// of its own that never asks.
+enum AirSeenGate {
+    static func allowsReport(onScreen: Bool, appActive: Bool, sceneActive: Bool, lockScreenShown: Bool, isSaved: Bool) -> Bool {
+        return onScreen && appActive && sceneActive && !lockScreenShown && !isSaved
     }
 }
 

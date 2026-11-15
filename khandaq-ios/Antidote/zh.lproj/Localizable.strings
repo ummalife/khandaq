@@ -817,6 +817,7 @@
 "air_delivery_transit" = "传送中";
 "air_delivery_sent" = "已发送";
 "air_delivery_delivered" = "已送达";
+"air_delivery_seen" = "已读";
 "air_transit_format" = "%d 条传送中";
 "air_unread_a11y" = "未读：%d";
 "air_hint_request_sent" = "请求已发送";

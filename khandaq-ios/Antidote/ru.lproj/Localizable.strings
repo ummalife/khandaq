@@ -830,6 +830,7 @@
 "air_delivery_transit" = "в пути";
 "air_delivery_sent" = "отправлено";
 "air_delivery_delivered" = "доставлено";
+"air_delivery_seen" = "прочитано";
 "air_transit_format" = "%d в пути";
 "air_unread_a11y" = "непрочитанных: %d";
 "air_hint_request_sent" = "запрос отправлен";

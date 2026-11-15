@@ -163,7 +163,12 @@ final class AirRowCell: UITableViewCell {
                 deliveryIcon.isHidden = false
             case .delivered?:
                 deliveryIcon.image = AirIcon.image("check-double")
-                deliveryIcon.tintColor = KQColor.ink
+                // KHANDAQ (0.2.57): muted as sent is, as in the conversation: the teal of seen stands out.
+                deliveryIcon.tintColor = KQColor.ink3
+                deliveryIcon.isHidden = false
+            case .seen?:
+                deliveryIcon.image = AirIcon.image("check-double")
+                deliveryIcon.tintColor = KQColor.seen
                 deliveryIcon.isHidden = false
             case nil:
                 deliveryIcon.image = nil
@@ -250,6 +255,8 @@ final class AirRowCell: UITableViewCell {
                 parts.append(String(localized: "air_delivery_sent"))
             case .delivered?:
                 parts.append(String(localized: "air_delivery_delivered"))
+            case .seen?:
+                parts.append(String(localized: "air_delivery_seen"))
             case nil:
                 break
         }

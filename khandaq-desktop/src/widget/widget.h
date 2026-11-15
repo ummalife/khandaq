@@ -235,6 +235,7 @@ public slots:
     void onGroupInviteReceived(const GroupInvite& inviteInfo);
     void onGroupInviteAccepted(const GroupInvite& inviteInfo);
     void onGroupInviteAcceptFailed(const QByteArray& chatId);
+    void onGroupRejoinFailed(const QByteArray& chatId, uint32_t groupNumber);
     void onGroupJoinFailed(const QString& reason);
     void onGroupJoinSucceeded();
     void onGroupJoinByIdPrompt();
@@ -358,8 +359,8 @@ private:
     void removeGroup(Group* g, bool fake = false);
     /**
      * Takes the group out of the list and, unless fake, out of toxcore, without asking. fake: only
-     * this window lets go of it (the app closes), and its texts that wait stay pending.
-     * historyRemoved: its history went just before.
+     * this window lets go of it (the app closes, or toxcore holds it no more), and its texts that
+     * wait stay pending. historyRemoved: its history went just before.
      */
     void discardGroup(Group* g, bool fake, bool historyRemoved = false);
     /** Leave the group, confirmed in its dossier: the group and its history leave this device. */

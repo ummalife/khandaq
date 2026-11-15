@@ -303,6 +303,12 @@ signals:
      * one joined by its ID is joined by its ID again, and groupJoined gives its new number.
      */
     void groupInviteAcceptFailed(const QByteArray& chatId);
+    /**
+     * 0.2.56: that group joined by its ID could not be joined again either: toxcore holds no
+     * instance of it now, and may give groupNumber, the one it had, to another group. The profile
+     * keeps its chat id, and the next start joins it by its ID again (rejoinStoredGroups).
+     */
+    void groupRejoinFailed(const QByteArray& chatId, uint32_t groupNumber);
     /** A role in the group changed, someone was removed, or the voice or privacy state changed. */
     void groupModerationChanged(int groupnumber);
     /** A peer of the group wrote to us alone. */
@@ -388,7 +394,7 @@ private:
     void leaveGroupAfterNotice(int groupId);
     void leaveRecordedGroup(const Air::PendingGroupLeaves::Leave& leave, const char* event);
     uint32_t replaceLeavingGroup(const QByteArray& chatId, std::function<void()> join);
-    void acceptDeferredGroupInvite(const GroupInvite& inviteInfo, bool joinedById);
+    void acceptDeferredGroupInvite(const GroupInvite& inviteInfo, uint32_t joinedByIdNum);
     void iterateTox();
     bool ignoresGroup(uint32_t groupNumber) const;
     struct OutgoingGroupFile;

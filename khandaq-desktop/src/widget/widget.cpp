@@ -916,6 +916,7 @@ void Widget::onCoreChanged(Core& core_)
     connect(core, &Core::emptyGroupCreated, this, &Widget::onEmptyGroupCreated);
     connect(core, &Core::groupJoined, this, &Widget::onGroupJoined);
     connect(core, &Core::groupInviteAcceptFailed, this, &Widget::onGroupInviteAcceptFailed);
+    connect(core, &Core::groupRejoinFailed, this, &Widget::onGroupRejoinFailed);
     connect(core, &Core::groupPrivateMessageReceived, this, &Widget::onGroupPrivateMessageReceived);
     connect(core, &Core::friendTypingChanged, this, &Widget::onFriendTypingChanged);
     connect(core, &Core::groupSentFailed, this, &Widget::onGroupSendFailed);
@@ -2552,6 +2553,22 @@ void Widget::onGroupInviteAcceptFailed(const QByteArray& chatId)
     // As for an invitation refused at once: its card, if it has one, stays for another try.
     AirDialog::notice(this, AirStrings::text(AirStrings::Text::ErrorJoinGroupTitle),
                       AirStrings::text(AirStrings::Text::TryAgain));
+}
+
+void Widget::onGroupRejoinFailed(const QByteArray& chatId, uint32_t groupNumber)
+{
+    if (chatId.size() != GroupId::size) {
+        return;
+    }
+    Group* const g = groupList->findGroup(GroupId(chatId));
+    // Bound to another instance meanwhile (createGroup), the row keeps it.
+    if (!g || g->getId() != groupNumber) {
+        return;
+    }
+    // toxcore holds no instance of the group, and may give its number to another one: the row
+    // goes, with nothing to leave (fake), and the texts that wait stay pending. The next start
+    // joins the group by its ID again, and they go then.
+    discardGroup(g, true);
 }
 
 void Widget::onGroupJoinFailed(const QString& reason)

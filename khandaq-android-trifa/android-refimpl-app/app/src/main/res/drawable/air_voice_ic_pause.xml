@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (0.2.56, QA live 2026-11-14): the two bars of a voice note that plays, as AirPlayButton on the
+     desktop: 3.5 by 12 with round ends, 4 apart, drawn for the 36dp disc. Not mirrored, as the triangle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="@dimen/kq_size_control"
+    android:height="@dimen/kq_size_control"
+    android:autoMirrored="false"
+    android:viewportWidth="36"
+    android:viewportHeight="36">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M14.25,13.75V22.25M21.75,13.75V22.25"
+        android:strokeWidth="3.5"
+        android:strokeColor="@color/kq_on_ink"
+        android:strokeLineCap="round" />
+</vector>

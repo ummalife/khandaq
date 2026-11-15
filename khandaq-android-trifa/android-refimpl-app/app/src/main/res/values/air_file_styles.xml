@@ -19,18 +19,19 @@
         <item name="android:visibility">gone</item>
     </style>
 
-    <!-- The voice note's Listen and Pause: the ink button of the design, in the label size. -->
+    <!-- The voice note's Listen and Pause (0.2.56, QA live): a round play button, as in Telegram and
+         AirPlayButton on the desktop; the words are its content description. A 48dp target with the 36dp
+         disc at its start: the padding leaves the glyph a 36dp box over the disc. -->
     <style name="Widget.KQ.Air.VoiceButton" parent="">
-        <item name="android:layout_width">wrap_content</item>
-        <item name="android:layout_height">@dimen/kq_size_control</item>
-        <item name="android:minWidth">@dimen/kq_size_target_android</item>
-        <item name="android:gravity">center</item>
-        <item name="android:paddingStart">@dimen/kq_space_16</item>
-        <item name="android:paddingEnd">@dimen/kq_space_16</item>
-        <item name="android:maxLines">1</item>
-        <item name="android:textAppearance">@style/TextAppearance.KQ.Label</item>
-        <item name="android:textColor">@color/kq_ink</item>
-        <item name="android:background">@drawable/air_bg_button</item>
+        <item name="android:layout_width">@dimen/kq_size_target_android</item>
+        <item name="android:layout_height">@dimen/kq_size_target_android</item>
+        <item name="android:paddingStart">0dp</item>
+        <item name="android:paddingTop">@dimen/kq_space_6</item>
+        <item name="android:paddingEnd">@dimen/kq_space_12</item>
+        <item name="android:paddingBottom">@dimen/kq_space_6</item>
+        <item name="android:scaleType">center</item>
+        <item name="android:tint">@color/air_button_ink_text</item>
+        <item name="android:background">@drawable/air_voice_bg_play</item>
         <item name="android:clickable">true</item>
         <item name="android:focusable">true</item>
     </style>

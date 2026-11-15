@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (0.2.56, QA live 2026-11-14): the play triangle of a voice note, as AirPlayButton on the desktop:
+     drawn for the 36dp disc (11 by 13, moved 1.5 past the centre, since a triangle centred by its box looks
+     off to the left), filled and stroked so its corners are round. Media controls keep their direction in a
+     right-to-left interface, so it is not mirrored. The button tints it on-ink, or ink-3 when it waits. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="@dimen/kq_size_control"
+    android:height="@dimen/kq_size_control"
+    android:autoMirrored="false"
+    android:viewportWidth="36"
+    android:viewportHeight="36">
+    <path
+        android:fillColor="@color/kq_on_ink"
+        android:pathData="M14,11.5L25,18L14,24.5Z"
+        android:strokeWidth="2"
+        android:strokeColor="@color/kq_on_ink"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

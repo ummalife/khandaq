@@ -484,8 +484,9 @@ Transfers stay Tox file transfers, and a voice note keeps the `.file.m4a` name t
   and KB, MB with one decimal, GB with two; an amount that rounds up to 1000 takes the next unit.
 - **Photos and videos** show inline in a box that takes its size before the image loads, so the row
   sizes itself once; a caption sent with the photo stands under it in the same entry.
-- **A voice note** is a player: Listen and Pause, the wave, and the length in tabular figures (the time
-  played while it plays). One not fetched yet shows its size and waits for Accept like any file.
+- **A voice note** is a player: a round Play button, Pause while it plays, as in Telegram (the screen
+  reader says Listen and Pause), the wave, and the length in tabular figures (the time played while it
+  plays). One not fetched yet shows its size and waits for Accept like any file.
 - **A group says its limit before a file is chosen:** the attach sheet reads "A group takes files up
   to 200 MB", the limit its refusal already used.
 - **In transit:** a file of ours that waits for a person who is offline lies in the tray with the

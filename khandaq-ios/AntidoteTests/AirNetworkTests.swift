@@ -10,7 +10,9 @@ import XCTest
  reconnect every 15 seconds while the node is offline on a phone with a network, the Network screen
  says what each state means, the hint under the field speaks for our node, the line under the name is
  a target of its own, and the band's window belongs to the app's scene and shows only with a band. An
- invitation to a group is a notification of its own kind.
+ invitation to a group is a notification of its own kind. The band of no network (0.2.57) keeps its
+ times: nothing for a drop under 3 s, then No network, Connecting, Back online and gone, and Connecting
+ gives up after 30 s.
  */
 class AirNetworkTests: XCTestCase {
     private final class Node {
@@ -280,5 +282,220 @@ class AirNetworkTests: XCTestCase {
         let bootstrap = OCTSubmanagerBootstrapMock()
         AppDelegate.reconnectForWake(bootstrap)
         XCTAssertEqual(bootstrap.rebootstrapCount, 1, "the wake did not ask for an urgent reconnect")
+    }
+
+    // MARK: - The band of no network (0.2.57)
+
+    /// The time of a test: work runs when the test moves the clock past it, in the order it falls due.
+    private final class Clock: AirNoticeScheduling {
+        private var now: TimeInterval = 0
+        private var pending: [(at: TimeInterval, id: Int, work: () -> Void)] = []
+        private var lastId = 0
+
+        func schedule(after delay: TimeInterval, _ work: @escaping () -> Void) -> AirNoticeTimer {
+            lastId += 1
+            let id = lastId
+            pending.append((at: now + delay, id: id, work: work))
+            return AirNoticeTimer { [weak self] in
+                self?.pending.removeAll { $0.id == id }
+            }
+        }
+
+        func advance(_ seconds: TimeInterval) {
+            let end = now + seconds
+            while let next = pending.filter({ $0.at <= end + 1e-9 }).min(by: { ($0.at, $0.id) < ($1.at, $1.id) }) {
+                pending.removeAll { $0.id == next.id }
+                now = next.at
+                next.work()
+            }
+            now = end
+        }
+    }
+
+    private final class Phases {
+        var seen: [AirNetworkNoticePhase] = []
+    }
+
+    private func makeNotice(_ clock: Clock, _ phases: Phases) -> AirNetworkNotice {
+        return AirNetworkNotice(scheduler: clock) { _, current in
+            phases.seen.append(current)
+        }
+    }
+
+    func testANetworkGoneForLessThanThreeSecondsShowsNothing() {
+        let clock = Clock()
+        let phases = Phases()
+        let notice = makeNotice(clock, phases)
+        notice.nodeChanged(online: true)
+
+        // A handover from Wi-Fi to mobile data.
+        notice.networkChanged(available: false)
+        clock.advance(2.9)
+        notice.networkChanged(available: true)
+        clock.advance(60)
+        XCTAssertEqual(notice.phase, .hidden)
+
+        // Drops that add up to more than 3 s show nothing either: it takes 3 s in a row.
+        for _ in 0..<5 {
+            notice.networkChanged(available: false)
+            clock.advance(2)
+            notice.networkChanged(available: true)
+            clock.advance(0.5)
+        }
+        XCTAssertEqual(phases.seen, [])
+    }
+
+    func testThreeSecondsWithoutANetworkShowTheBandForAsLongAsThereIsNone() {
+        let clock = Clock()
+        let phases = Phases()
+        let notice = makeNotice(clock, phases)
+        notice.nodeChanged(online: true)
+
+        notice.networkChanged(available: false)
+        clock.advance(2.99)
+        XCTAssertEqual(notice.phase, .hidden)
+        clock.advance(0.01)
+        XCTAssertEqual(notice.phase, .offline)
+
+        // Our node gives up in the meantime; the band keeps saying there is no network.
+        notice.nodeChanged(online: false)
+        clock.advance(600)
+        XCTAssertEqual(notice.phase, .offline)
+        XCTAssertEqual(phases.seen, [.offline])
+    }
+
+    func testTheNetworkBackSaysConnectingThenBackOnlineThenTheBandGoes() {
+        let clock = Clock()
+        let phases = Phases()
+        let notice = makeNotice(clock, phases)
+        notice.nodeChanged(online: true)
+        notice.networkChanged(available: false)
+        clock.advance(3)
+        notice.nodeChanged(online: false)
+
+        notice.networkChanged(available: true)
+        XCTAssertEqual(notice.phase, .connecting)
+        clock.advance(12)
+        XCTAssertEqual(notice.phase, .connecting)
+
+        notice.nodeChanged(online: true)
+        XCTAssertEqual(notice.phase, .backOnline)
+        clock.advance(1.49)
+        XCTAssertEqual(notice.phase, .backOnline)
+        clock.advance(0.01)
+        XCTAssertEqual(notice.phase, .hidden)
+        XCTAssertEqual(phases.seen, [.offline, .connecting, .backOnline, .hidden])
+    }
+
+    func testANodeThatStayedOnlineIsBackOnlineAtOnce() {
+        let clock = Clock()
+        let phases = Phases()
+        let notice = makeNotice(clock, phases)
+        notice.nodeChanged(online: true)
+        notice.networkChanged(available: false)
+        clock.advance(5)
+
+        notice.networkChanged(available: true)
+        XCTAssertEqual(notice.phase, .backOnline)
+        clock.advance(1.5)
+        XCTAssertEqual(phases.seen, [.offline, .backOnline, .hidden])
+    }
+
+    func testConnectingGivesUpThirtySecondsAfterTheNetworkCameBack() {
+        let clock = Clock()
+        let phases = Phases()
+        let notice = makeNotice(clock, phases)
+        notice.networkChanged(available: false)
+        // The 30 s count from the network's return, not from the loss.
+        clock.advance(40)
+
+        notice.networkChanged(available: true)
+        clock.advance(29.9)
+        XCTAssertEqual(notice.phase, .connecting)
+        clock.advance(0.1)
+        XCTAssertEqual(notice.phase, .hidden)
+
+        // The line under the name says the rest; our node online later brings no band.
+        notice.nodeChanged(online: true)
+        clock.advance(10)
+        XCTAssertEqual(phases.seen, [.offline, .connecting, .hidden])
+    }
+
+    func testOurNodeConnectingWithANetworkIsNotThisNotice() {
+        let clock = Clock()
+        let phases = Phases()
+        let notice = makeNotice(clock, phases)
+        notice.networkChanged(available: true)
+        notice.nodeChanged(online: false)
+        clock.advance(60)
+        notice.nodeChanged(online: true)
+        notice.nodeChanged(online: false)
+        clock.advance(60)
+        XCTAssertEqual(notice.phase, .hidden)
+        XCTAssertEqual(phases.seen, [])
+    }
+
+    func testTheNetworkGoneAgainWhileTheBandIsUpSaysNoNetworkAfterThreeSeconds() {
+        let clock = Clock()
+        let phases = Phases()
+        let notice = makeNotice(clock, phases)
+        notice.networkChanged(available: false)
+        clock.advance(3)
+        notice.networkChanged(available: true)
+        XCTAssertEqual(notice.phase, .connecting)
+
+        // A short drop while it connects changes nothing.
+        notice.networkChanged(available: false)
+        clock.advance(2.9)
+        XCTAssertEqual(notice.phase, .connecting)
+        clock.advance(0.1)
+        XCTAssertEqual(notice.phase, .offline)
+
+        // Gone again while it says Back online: the band leaves on time and comes back at 3 s.
+        notice.nodeChanged(online: true)
+        notice.networkChanged(available: true)
+        XCTAssertEqual(notice.phase, .backOnline)
+        notice.networkChanged(available: false)
+        clock.advance(1.5)
+        XCTAssertEqual(notice.phase, .hidden)
+        clock.advance(1.5)
+        XCTAssertEqual(notice.phase, .offline)
+        XCTAssertEqual(phases.seen, [.offline, .connecting, .offline, .backOnline, .hidden, .offline])
+    }
+
+    func testAScreenReaderHearsTheTitleOnceEachTimeTheBandComes() {
+        let clock = Clock()
+        let notice = makeNotice(clock, Phases())
+        XCTAssertFalse(notice.takeAnnouncement(), "nothing to say while the band is gone")
+
+        notice.networkChanged(available: false)
+        clock.advance(3)
+        XCTAssertTrue(notice.takeAnnouncement())
+        XCTAssertFalse(notice.takeAnnouncement(), "a second screen with the band heard it again")
+
+        notice.networkChanged(available: true)
+        XCTAssertEqual(notice.phase, .connecting)
+        XCTAssertFalse(notice.takeAnnouncement(), "the band did not come again, its words changed")
+        clock.advance(30)
+
+        notice.networkChanged(available: false)
+        clock.advance(3)
+        XCTAssertTrue(notice.takeAnnouncement())
+    }
+
+    func testTheBandSaysEachPhaseAndGoesWhenHidden() {
+        let band = AirNetworkBandView()
+        XCTAssertTrue(band.isHidden)
+        band.show(.offline, animated: false)
+        XCTAssertFalse(band.isHidden)
+        // A screen reader hears the line too, also where a large text size leaves it off the band.
+        XCTAssertEqual(band.accessibilityLabel,
+                       String(localized: "air_net_band_offline") + ". " + String(localized: "air_net_band_offline_line"))
+        band.show(.connecting, animated: false)
+        XCTAssertEqual(band.accessibilityLabel, String(localized: "air_net_band_connecting"))
+        band.show(.backOnline, animated: false)
+        XCTAssertEqual(band.accessibilityLabel, String(localized: "air_net_band_back"))
+        band.show(.hidden, animated: false)
+        XCTAssertTrue(band.isHidden)
     }
 }

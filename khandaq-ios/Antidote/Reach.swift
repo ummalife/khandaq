@@ -124,10 +124,28 @@ final class ToxNetworkReachabilityMonitor {
     private var lastFlags: SCNetworkReachabilityFlags?
     private var debounceWorkItem: DispatchWorkItem?
     private var onNetworkChange: (() -> Void)?
+    /// KHANDAQ (0.2.57): every change of whether there is a usable network, both ways and at once, for the
+    /// band of no network (AirNetworkNotice keeps its own 3-s rule).
+    private var onReachabilityChange: ((Bool) -> Void)?
+    private var lastUsable: Bool?
+    #if DEBUG
+    /// QA only (khandaq://qa/net_notice): the monitor says there is no network, whatever the system says.
+    /// A simulator shares the network of the Mac, which must never be cut.
+    private var qaFeedsNoNetwork = false
+    #endif
 
     /// Current reachability (best-effort). Defaults to true when it can't be determined, so we never
     /// show a false "offline" indicator.
     var isReachable: Bool {
+        #if DEBUG
+        if qaFeedsNoNetwork {
+            return false
+        }
+        #endif
+        return systemReachable
+    }
+
+    private var systemReachable: Bool {
         guard let ref = reachability else {
             return true
         }
@@ -138,9 +156,12 @@ final class ToxNetworkReachabilityMonitor {
         return flags.contains(.reachable) && !flags.contains(.connectionRequired)
     }
 
-    func start(onNetworkChange: @escaping () -> Void) {
+    /// `onReachabilityChange` hears the state the monitor starts in and then every change of it, on the
+    /// main queue; `onNetworkChange` hears a usable network that changed, after 0.5 s of quiet.
+    func start(onReachabilityChange: ((Bool) -> Void)? = nil, onNetworkChange: @escaping () -> Void) {
         stop()
         self.onNetworkChange = onNetworkChange
+        self.onReachabilityChange = onReachabilityChange
 
         var zeroAddress = sockaddr_in()
         zeroAddress.sin_len = UInt8(MemoryLayout.size(ofValue: zeroAddress))
@@ -173,6 +194,8 @@ final class ToxNetworkReachabilityMonitor {
         }, &context)
 
         SCNetworkReachabilityScheduleWithRunLoop(ref, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
+        // The callback comes with changes only.
+        reportUsable(isReachable)
     }
 
     func stop() {
@@ -185,7 +208,23 @@ final class ToxNetworkReachabilityMonitor {
         reachability = nil
         lastFlags = nil
         onNetworkChange = nil
+        onReachabilityChange = nil
+        lastUsable = nil
     }
+
+    #if DEBUG
+    /// QA only: feeds the monitor "no network", or gives the system's own state back. A network that comes
+    /// back this way reaches the session as a real one does.
+    func qaFeed(noNetwork: Bool) {
+        qaFeedsNoNetwork = noNetwork
+        let usable = isReachable
+        let returned = usable && lastUsable == false
+        reportUsable(usable)
+        if returned {
+            scheduleNetworkChange()
+        }
+    }
+    #endif
 
     private func handleFlags(_ flags: SCNetworkReachabilityFlags) {
         if let lastFlags = lastFlags, lastFlags == flags {
@@ -193,12 +232,30 @@ final class ToxNetworkReachabilityMonitor {
         }
         lastFlags = flags
 
+        #if DEBUG
+        if qaFeedsNoNetwork {
+            return
+        }
+        #endif
         let connectionRequired = flags.contains(.connectionRequired)
         let isReachable = flags.contains(.reachable)
+        reportUsable(isReachable && !connectionRequired)
         guard isReachable && !connectionRequired else {
             return
         }
 
+        scheduleNetworkChange()
+    }
+
+    private func reportUsable(_ usable: Bool) {
+        guard usable != lastUsable else {
+            return
+        }
+        lastUsable = usable
+        onReachabilityChange?(usable)
+    }
+
+    private func scheduleNetworkChange() {
         debounceWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in
             self?.onNetworkChange?()

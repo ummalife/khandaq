@@ -34,6 +34,10 @@ class ChatListController: UIViewController {
     fileprivate weak var submanagerUser: OCTSubmanagerUser!
 
     fileprivate let header = AirHeaderView()
+    /// KHANDAQ (0.2.57): under the header, the band of no network (AirNetworkNotice), in a stack of its own
+    /// so the list takes its room back while it is gone.
+    fileprivate let networkBand = AirNetworkBandView()
+    fileprivate let networkStack = UIStackView()
 
     /// Your tile in the "you" block, where "You" grows from (AirYouTransition).
     var youTile: UIView {
@@ -107,13 +111,25 @@ class ChatListController: UIViewController {
 
         view.addSubview(tableView)
         view.addSubview(header)
+        networkStack.axis = .vertical
+        networkStack.addArrangedSubview(networkBand)
+        view.addSubview(networkStack)
+        networkBand.layoutHost = { [weak self] in
+            self?.view.layoutIfNeeded()
+        }
 
         header.snp.makeConstraints {
             $0.top.equalTo(view.safeAreaLayoutGuide)
             $0.leading.trailing.equalToSuperview()
         }
-        tableView.snp.makeConstraints {
+        networkStack.snp.makeConstraints {
             $0.top.equalTo(header.snp.bottom)
+            $0.leading.trailing.equalToSuperview()
+            // No height of its own while the band is gone; weaker than any content.
+            $0.height.equalTo(0).priority(UILayoutPriority.defaultLow.rawValue - 1)
+        }
+        tableView.snp.makeConstraints {
+            $0.top.equalTo(networkStack.snp.bottom)
             $0.leading.trailing.bottom.equalToSuperview()
         }
 
@@ -125,6 +141,10 @@ class ChatListController: UIViewController {
                                                selector: #selector(keyboardWillChangeFrame(_:)),
                                                name: NSNotification.Name.UIKeyboardWillChangeFrame,
                                                object: nil)
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(networkNoticeDidChange),
+                                               name: AirNetworkNotice.didChange,
+                                               object: nil)
     }
 
     override func viewDidLoad() {
@@ -135,6 +155,7 @@ class ChatListController: UIViewController {
         navigationItem.backButtonDisplayMode = .minimal
         refreshSelf()
         header.selfView.setNetwork(network, animated: false)
+        networkBand.follow(AirNetworkNotice.shared, animated: false)
         header.setFilter(dataSource.filter)
         header.setCounts(dataSource.snapshot.counts, animated: false)
         updateEmptyState()
@@ -545,6 +566,10 @@ private extension ChatListController {
                         String(localized: "air_empty_no_favorites_body"),
                         String(localized: "air_empty_show_all"))
         }
+    }
+
+    @objc func networkNoticeDidChange() {
+        networkBand.follow(AirNetworkNotice.shared, animated: true)
     }
 
     @objc func keyboardWillChangeFrame(_ notification: Notification) {

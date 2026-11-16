@@ -805,6 +805,11 @@
 "air_net_relay" = "online, via a relay";
 "air_net_connecting" = "connecting";
 "air_net_offline" = "no network: messages wait";
+/* KHANDAQ (0.2.57): the band of no network under the header of the chat list and of a conversation. */
+"air_net_band_offline" = "No network";
+"air_net_band_offline_line" = "Messages and files will wait and go on their own once you're back online.";
+"air_net_band_connecting" = "Connecting";
+"air_net_band_back" = "Back online";
 "air_filter_all" = "All";
 "air_filter_requests" = "Requests";
 "air_filter_transit" = "In transit";

@@ -807,6 +807,11 @@
 "air_net_relay" = "в сети, через ретранслятор";
 "air_net_connecting" = "подключаемся";
 "air_net_offline" = "нет сети: сообщения ждут";
+/* KHANDAQ (0.2.57): the band of no network under the header of the chat list and of a conversation. */
+"air_net_band_offline" = "Нет сети";
+"air_net_band_offline_line" = "Сообщения и файлы подождут и уйдут сами, когда связь вернётся.";
+"air_net_band_connecting" = "Подключаемся";
+"air_net_band_back" = "Снова в сети";
 "air_filter_all" = "Все";
 "air_filter_requests" = "Запросы";
 "air_filter_transit" = "В пути";

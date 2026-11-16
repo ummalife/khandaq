@@ -117,6 +117,8 @@ class ChatPrivateController: PortraitChatController {
     // the end of this file. Under the header: the presence band and the pinned strip; between the log
     // and the field: the refused messages and the "On its way" tray; over everything: the dossier.
     fileprivate var topStack: UIStackView!
+    /// KHANDAQ (0.2.57): above the presence band, the band of no network (AirNetworkNotice).
+    fileprivate var networkBand: AirNetworkBandView!
     fileprivate var presenceBand: AirPresenceBandView?
     fileprivate var pinnedStrip: AirPinnedStripView!
     fileprivate var bottomStack: UIStackView!
@@ -3248,7 +3250,11 @@ extension ChatPrivateController {
         pinnedStrip.addTarget(self, action: #selector(ChatPrivateController.pinnedBannerTapped), for: .touchUpInside)
         pinnedStrip.closeButton.addTarget(self, action: #selector(ChatPrivateController.pinnedBannerClosePressed), for: .touchUpInside)
 
-        var topViews: [UIView] = []
+        networkBand = AirNetworkBandView()
+        networkBand.layoutHost = { [weak self] in
+            self?.view.layoutIfNeeded()
+        }
+        var topViews: [UIView] = [networkBand]
         if friend != nil {
             let band = AirPresenceBandView()
             band.addTarget(self, action: #selector(ChatPrivateController.presenceBandTapped), for: .touchUpInside)
@@ -3300,6 +3306,9 @@ extension ChatPrivateController {
             // Our own node went off or came back (E4): the hint under the field says which.
             self?.refreshComposeState(animated: true)
         })
+        airObservers.append(center.addObserver(forName: AirNetworkNotice.didChange, object: nil, queue: .main) { [weak self] _ in
+            self?.networkBand.follow(AirNetworkNotice.shared, animated: true)
+        })
         airObservers.append(center.addObserver(forName: .UIContentSizeCategoryDidChange, object: nil, queue: .main) { [weak self] _ in
             // The time column and the fonts of the entries follow the text size; the refused messages
             // are laid out again so "Retry" stays at the text column.
@@ -3309,6 +3318,7 @@ extension ChatPrivateController {
         })
 
         wasFriendOnline = isFriendOnline
+        networkBand.follow(AirNetworkNotice.shared, animated: false)
         refreshTray(animated: false)
         refreshFailedSends(animated: false)
         refreshComposeState(animated: false)

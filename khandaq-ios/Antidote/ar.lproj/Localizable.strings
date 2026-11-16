@@ -794,6 +794,11 @@
 "air_net_relay" = "متصل، عبر خادم وسيط";
 "air_net_connecting" = "جارٍ الاتصال";
 "air_net_offline" = "لا شبكة: الرسائل بالانتظار";
+/* KHANDAQ (0.2.57): the band of no network under the header of the chat list and of a conversation. */
+"air_net_band_offline" = "لا شبكة";
+"air_net_band_offline_line" = "ستنتظر الرسائل والملفات وتُرسَل تلقائيًا عند عودة الاتصال.";
+"air_net_band_connecting" = "جارٍ الاتصال";
+"air_net_band_back" = "عاد الاتصال";
 "air_filter_all" = "الكل";
 "air_filter_requests" = "الطلبات";
 "air_filter_transit" = "في الطريق";

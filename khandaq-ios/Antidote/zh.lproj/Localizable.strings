@@ -794,6 +794,11 @@
 "air_net_relay" = "在线，经中继服务器";
 "air_net_connecting" = "连接中";
 "air_net_offline" = "无网络：消息将等待发送";
+/* KHANDAQ (0.2.57): the band of no network under the header of the chat list and of a conversation. */
+"air_net_band_offline" = "无网络";
+"air_net_band_offline_line" = "消息和文件会等待，恢复联网后自动发出。";
+"air_net_band_connecting" = "连接中";
+"air_net_band_back" = "已恢复联网";
 "air_filter_all" = "全部";
 "air_filter_requests" = "请求";
 "air_filter_transit" = "传送中";

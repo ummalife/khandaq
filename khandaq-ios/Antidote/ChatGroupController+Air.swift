@@ -25,6 +25,11 @@ extension ChatGroupController {
         // The name is a bar item next to the back button; the centre of the bar stays empty.
         navigationItem.titleView = UIView()
 
+        networkBand = AirNetworkBandView()
+        networkBand.layoutHost = { [weak self] in
+            self?.view.layoutIfNeeded()
+        }
+
         groupBand = AirGroupBandView()
         groupBand.onOpen = { [weak self] in
             self?.infoButtonPressed()
@@ -35,7 +40,7 @@ extension ChatGroupController {
         pinnedStrip.addTarget(self, action: #selector(ChatGroupController.pinnedBannerTapped), for: .touchUpInside)
         pinnedStrip.closeButton.addTarget(self, action: #selector(ChatGroupController.pinnedBannerClosePressed), for: .touchUpInside)
 
-        groupTopStack = UIStackView(arrangedSubviews: [groupBand, pinnedStrip])
+        groupTopStack = UIStackView(arrangedSubviews: [networkBand, groupBand, pinnedStrip])
         groupTopStack.axis = .vertical
         view.addSubview(groupTopStack)
 
@@ -93,7 +98,11 @@ extension ChatGroupController {
             // Our own node went off or came back (E4): the hint under the field says which.
             self?.refreshGroupAir(animated: true)
         })
+        groupAirObservers.append(center.addObserver(forName: AirNetworkNotice.didChange, object: nil, queue: .main) { [weak self] _ in
+            self?.networkBand.follow(AirNetworkNotice.shared, animated: true)
+        })
         installGroupTitleItem()
+        networkBand.follow(AirNetworkNotice.shared, animated: false)
         refreshGroupAir(animated: false)
     }
 

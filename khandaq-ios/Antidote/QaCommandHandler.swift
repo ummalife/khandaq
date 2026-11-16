@@ -276,6 +276,19 @@ enum QaCommandHandler {
             }
             sendFriendFile(publicKey: toxId, name: name, toxManager: toxManager)
 
+        case "net_notice":
+            // Shell QA (the band of no network, 0.2.57): network=0 feeds the reachability monitor "no
+            // network" and network=1 gives it the system's own state back; node=hold keeps our node offline
+            // for the band, so "Connecting" stays, and node=live shows it our node again. With neither it
+            // only says the phase.
+            if let network = param("network") {
+                coordinator.qaFeedNetwork(noNetwork: network == "0")
+            }
+            if let node = param("node") {
+                AirNetworkNotice.shared.qaHoldsNodeOffline = node == "hold"
+            }
+            logDone(action, detail: "phase=\(AirNetworkNotice.shared.phase)")
+
         case "log_theme":
             logDone(action, detail: "dark=\(ThemeAppearance.isDarkMode ? 1 : 0)")
 

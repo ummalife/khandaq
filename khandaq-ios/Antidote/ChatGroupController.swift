@@ -89,6 +89,8 @@ class ChatGroupController: PortraitChatController {
     // KHANDAQ (redesign stage 3, E13): the header with the group's name, the band under it with who gets
     // a message now, the pinned strip, and the bar that takes the field's place when you may only read.
     var groupTitleView: ChatPrivateTitleView!
+    /// KHANDAQ (0.2.57): above the group's band, the band of no network (AirNetworkNotice).
+    var networkBand: AirNetworkBandView!
     var groupBand: AirGroupBandView!
     var pinnedStrip: AirPinnedStripView!
     var groupTopStack: UIStackView!

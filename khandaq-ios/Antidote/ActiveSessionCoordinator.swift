@@ -309,10 +309,21 @@ class ActiveSessionCoordinator: NSObject {
     fileprivate func startNetworkMonitoringAndPushBinding() {
         KhandaqPushManager.shared.bind(toxManager: toxManager)
 
-        networkReachabilityMonitor.start { [weak self] in
+        // KHANDAQ (0.2.57): the band of no network hears the system's network both ways (SPEC-network part 2).
+        networkReachabilityMonitor.start(onReachabilityChange: { usable in
+            AirNetworkNotice.shared.networkChanged(available: usable)
+        }) { [weak self] in
             self?.handleNetworkPathChange()
         }
     }
+
+    #if DEBUG
+    /// QA only (khandaq://qa/net_notice): feeds the reachability monitor "no network", or gives it the
+    /// system's own state back, so the band of no network shows on a simulator.
+    func qaFeedNetwork(noNetwork: Bool) {
+        networkReachabilityMonitor.qaFeed(noNetwork: noNetwork)
+    }
+    #endif
 
     @objc func networkRebootstrapCompleted() {
         let connected = toxManager.user.connectionStatus != .none
@@ -1396,6 +1407,8 @@ private extension ActiveSessionCoordinator {
                                     networkReachable: networkReachabilityMonitor.isReachable)
         // Conversations and the Network screen follow it on every device (E4).
         AirSelfNetwork.update(state)
+        // KHANDAQ (0.2.57): "Connecting" on the band of no network lasts until our node is online.
+        AirNetworkNotice.shared.nodeChanged(online: toxManager.user.connectionStatus != .none)
         guard case .iPhone = InterfaceIdiom.current(), let iPhone = iPhone else {
             return
         }

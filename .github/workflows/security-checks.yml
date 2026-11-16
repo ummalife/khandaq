@@ -400,6 +400,11 @@ jobs:
       # asserts from the builds users run. One packet from a contact already in a call.
       - name: The audio path must check the payload length before trusting it
         run: python3 scripts/check-audio-length-gate.py
+      # KHANDAQ (0.2.57): a group's onion friend walked the DHT toward a random key, so a join by chat
+      # id met the members only by chance and never found a lone founder. Every copy of toxcore (and
+      # the Android build) must look a group up by its chat id, or the change works on no platform.
+      - name: Every toxcore copy must look a group up by its chat id
+        run: python3 scripts/check-group-search-key.py
       # KHANDAQ (2026-08-23, CodeQL triage): a group file's name arrives unfiltered off the wire, and
       # it was stored as-is on the row. send_ngch_syncfile joins that name with the directory, reads the
       # file and sends the bytes to a peer — so ../ in a filename read a file outside the group and

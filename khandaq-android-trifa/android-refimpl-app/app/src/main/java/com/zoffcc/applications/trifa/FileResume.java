@@ -187,6 +187,22 @@ final class FileResume
         return -1L;
     }
 
+    /**
+     * The path of a file of theirs under way as the start's cleanup of the temp dir compares it (SPEC 1.5): its
+     * row joins the dir and the name with extra slashes ("/tempdir/files//KEY//name"), the listing does not.
+     * Repeated slashes count as one, and a slash at the end as none.
+     */
+    static String tempFileKey(final String path)
+    {
+        if (path == null)
+        {
+            return null;
+        }
+        final String collapsed = path.replaceAll("/{2,}", "/");
+        return (collapsed.length() > 1 && collapsed.endsWith("/")) ? collapsed.substring(0, collapsed.length() - 1)
+                                                                    : collapsed;
+    }
+
     // ---- the sender ----
 
     /** A kill of an outgoing transfer that only means the receiver lost it (see LOST_TRANSFER_WINDOW_MS). */

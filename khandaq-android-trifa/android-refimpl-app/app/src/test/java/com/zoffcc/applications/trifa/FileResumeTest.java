@@ -7,7 +7,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Random;
+import java.util.Set;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -189,13 +192,13 @@ public class FileResumeTest
         // The routes that offer a file again keep the anchor: the cut, a restart, the receiver's loss and Retry
         // put the message back in the queue, and the queue goes through start_outgoing_ft.
         for (final String route : new String[]{"private static void requeue_cut_off_outgoing(",
-                                               "static void set_all_filetransfers_inactive()",
+                                               "static synchronized void set_all_filetransfers_inactive()",
                                                "static void retry_outgoing_filetransfer(",
                                                "private static boolean outgoing_kill_means_lost_transfer("})
         {
             assertFalse(route, method(helper, route).contains("ft_id_anchor_hex"));
         }
-        assertTrue(bare(method(helper, "static void set_all_filetransfers_inactive()")).contains(
+        assertTrue(bare(method(helper, "static synchronized void set_all_filetransfers_inactive()")).contains(
                 "requeue_cut_off_outgoing(f,m.id,\"start\");"));
         assertTrue(bare(method(helper, "static void on_friend_connection_lost(")).contains(
                 "requeue_cut_off_outgoing(f,mid,\"friendoffline\");"));
@@ -219,6 +222,86 @@ public class FileResumeTest
         // Not known.
         assertFalse(FileResume.killMeansLostTransfer(since + 3_000L, 0L, since - MINUTE, false));
         assertFalse(FileResume.killMeansLostTransfer(since + 3_000L, since, 0L, false));
+    }
+
+    // ---- the bytes so far across a restart of the receiver (SPEC 1.5) ----
+
+    @Test
+    public void the_path_of_a_row_and_of_a_listing_name_the_same_temp_file()
+    {
+        // A row joins "/tempdir/files/" + "/" + key + "/" and "/" + name; a listing gives the plain path.
+        assertEquals("/tempdir/files/KEY/qa.bin", FileResume.tempFileKey("/tempdir/files//KEY//qa.bin"));
+        assertEquals("/tempdir/files/KEY/qa.bin", FileResume.tempFileKey("/tempdir/files/KEY/qa.bin"));
+        assertEquals("/tempdir/files/KEY", FileResume.tempFileKey("/tempdir/files/KEY/"));
+        assertEquals("/", FileResume.tempFileKey("/"));
+        assertNotEquals(FileResume.tempFileKey("/tempdir/files/KEY/qa.bin"),
+                        FileResume.tempFileKey("/tempdir/files/KEY/qa.bin2"));
+        assertNull(FileResume.tempFileKey(null));
+    }
+
+    @Test
+    public void the_cleanup_at_start_leaves_the_bytes_of_a_file_under_way_and_takes_the_rest() throws IOException
+    {
+        final File temp = Files.createTempDirectory("khandaq-tempdir").toFile();
+        try
+        {
+            final File friend = new File(temp, "KEY");
+            final File other = new File(temp, "OTHER");
+            assertTrue(friend.mkdir());
+            assertTrue(other.mkdir());
+            final byte[] partial = new byte[70_000];
+            new Random(15).nextBytes(partial);
+            final File underWay = new File(friend, "qa057.bin");
+            Files.write(underWay.toPath(), partial);
+            Files.write(new File(friend, "cancelled.bin").toPath(), partial);
+            Files.write(new File(other, "old.bin").toPath(), partial);
+            Files.write(new File(temp, "loose.tmp").toPath(), partial);
+
+            // As the row of the transfer the start keeps names it (path_name + "/" + file_name).
+            final String rowPath = temp.getAbsolutePath() + "/" + "/KEY/" + "/" + "qa057.bin";
+            final Set<String> kept = new HashSet<>(Collections.singletonList(FileResume.tempFileKey(rowPath)));
+            assertTrue(HelperGeneric.vfs_deleteFilesAndFilesSubDirectories_real(temp.getAbsolutePath() + "/", kept));
+
+            assertArrayEquals(partial, Files.readAllBytes(underWay.toPath()));
+            assertFalse(new File(friend, "cancelled.bin").exists());
+            assertFalse(other.exists());
+            assertFalse(new File(temp, "loose.tmp").exists());
+
+            // Nothing under way: the dir is emptied as before.
+            assertFalse(HelperGeneric.vfs_deleteFilesAndFilesSubDirectories_real(temp.getAbsolutePath() + "/",
+                                                                                 Collections.<String>emptySet()));
+            assertFalse(friend.exists());
+        }
+        finally
+        {
+            HelperGeneric.vfs_deleteFilesAndFilesSubDirectories_real(temp.getAbsolutePath() + "/");
+            assertTrue(temp.delete());
+        }
+    }
+
+    @Test
+    public void the_cleanup_at_start_asks_for_the_files_the_start_keeps()
+    {
+        final String cleanup = bare(method(read(JAVA + "HelperGeneric.java"), "public static void cleanup_temp_dirs()"));
+        assertTrue(cleanup.contains("finalSet<String>kept=HelperFiletransfer.incoming_files_kept_after_restart();"));
+        assertTrue(cleanup.contains("vfs_deleteFilesAndFilesSubDirectories_vfs(VFS_PREFIX+VFS_TMP_FILE_DIR+\"/\",kept);"));
+        assertTrue(cleanup.contains("vfs_deleteFilesAndFilesSubDirectories_real(VFS_PREFIX+VFS_TMP_FILE_DIR+\"/\",kept);"));
+        // The rows that could not be read leave the dir: the bytes are worth more than a tidy dir.
+        assertTrue(cleanup.indexOf("if(kept==null)") < cleanup.indexOf("vfs_deleteFilesAndFilesSubDirectories_vfs("));
+
+        // The same rows, by the same rule, as the start keeps (set_all_filetransfers_inactive). Both methods are
+        // synchronized (the method lookups below are by their full signatures): that one cancels every row for a
+        // moment, and the cleanup reads on its own thread.
+        final String helper = read(JAVA + "HelperFiletransfer.java");
+        final String keptFiles = bare(method(helper,
+                                             "static synchronized Set<String> incoming_files_kept_after_restart()"));
+        assertTrue(keptFiles.contains("for(Filetransferf:transfers_left_from_last_run())"));
+        assertTrue(keptFiles.contains("(f.direction==TRIFA_FT_DIRECTION_INCOMING.value)"));
+        assertTrue(keptFiles.contains("resumable_after_restart(f,message_of_filetransfer(f))"));
+        assertTrue(keptFiles.contains("kept.add(FileResume.tempFileKey(f.path_name+\"/\"+f.file_name));"));
+        final String start = bare(method(helper, "static synchronized void set_all_filetransfers_inactive()"));
+        assertTrue(start.contains("finalList<Filetransfer>rows=transfers_left_from_last_run();"));
+        assertTrue(start.contains("if(resumable_after_restart(f,m))"));
     }
 
     // ---- the sender reads at the requested position (SPEC Tests) ----

@@ -63,6 +63,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Random;
@@ -847,7 +848,7 @@ public class HelperFiletransfer
         }
     }
 
-    static void set_all_filetransfers_inactive()
+    static synchronized void set_all_filetransfers_inactive()
     {
         try
         {
@@ -855,10 +856,7 @@ public class HelperFiletransfer
             // in the last run are not cancelled for it any more. Ours go back to the queue and are offered again
             // with the same file id; theirs keep their bytes in the encrypted store and wait for the sender's next
             // offer, which goes on from those bytes.
-            // The rows toxcore had a transfer for, and the files that waited for the connection (no number).
-            final List<Filetransfer> rows = new ArrayList<>();
-            rows.addAll(orma.selectFromFiletransfer().file_numberNotEq(-1).toList());
-            rows.addAll(orma.selectFromFiletransfer().file_numberEq(-1).stateNotEq(TOX_FILE_CONTROL_CANCEL.value).toList());
+            final List<Filetransfer> rows = transfers_left_from_last_run();
             final List<Filetransfer> kept = new ArrayList<>();
             final List<Message> kept_messages = new ArrayList<>();
             for (Filetransfer f : rows)
@@ -908,6 +906,45 @@ public class HelperFiletransfer
         {
             e.printStackTrace();
             Log.i(TAG, "set_all_filetransfers_inactive:EE:" + e.getMessage());
+        }
+    }
+
+    /** The rows toxcore had a transfer for in the last run, and the files that waited for the connection (no number). */
+    private static List<Filetransfer> transfers_left_from_last_run()
+    {
+        final List<Filetransfer> rows = new ArrayList<>();
+        rows.addAll(orma.selectFromFiletransfer().file_numberNotEq(-1).toList());
+        rows.addAll(orma.selectFromFiletransfer().file_numberEq(-1).stateNotEq(TOX_FILE_CONTROL_CANCEL.value).toList());
+        return rows;
+    }
+
+    /**
+     * KHANDAQ (0.2.57, SPEC-network 1.5): the files of theirs under way that go on after this start, the ones
+     * set_all_filetransfers_inactive keeps, as FileResume.tempFileKey gives their paths. Their bytes are in the
+     * temp dir, and the start's cleanup of it (HelperGeneric.cleanup_temp_dirs) leaves them: the sender's next
+     * offer goes on from them. The same rows either side of set_all_filetransfers_inactive, which only cancels
+     * the others; both are synchronized, since that one cancels every row for a moment before it gives the kept
+     * ones their state back, and the cleanup runs on its own thread. Null when the rows could not be read.
+     */
+    static synchronized Set<String> incoming_files_kept_after_restart()
+    {
+        try
+        {
+            final Set<String> kept = new HashSet<>();
+            for (Filetransfer f : transfers_left_from_last_run())
+            {
+                if ((f.direction == TRIFA_FT_DIRECTION_INCOMING.value) && (f.path_name != null)
+                    && (f.file_name != null) && resumable_after_restart(f, message_of_filetransfer(f)))
+                {
+                    kept.add(FileResume.tempFileKey(f.path_name + "/" + f.file_name));
+                }
+            }
+            return kept;
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "incoming_files_kept_after_restart:EE:" + e.getMessage());
+            return null;
         }
     }
 

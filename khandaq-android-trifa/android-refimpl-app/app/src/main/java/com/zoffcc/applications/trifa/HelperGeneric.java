@@ -101,10 +101,12 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Random;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import androidx.annotation.NonNull;
@@ -437,17 +439,30 @@ public class HelperGeneric
 
                 try
                 {
-                    if (MainActivity.VFS_ENCRYPT)
+                    // KHANDAQ (0.2.57, SPEC-network 1.5): a file of theirs under way keeps its bytes in the temp
+                    // dir across a restart (set_all_filetransfers_inactive keeps its transfer), and the sender's
+                    // next offer goes on from them; the rest of the dir goes. When those files could not be
+                    // read, the dir stays as it is until the next start.
+                    final Set<String> kept = HelperFiletransfer.incoming_files_kept_after_restart();
+                    if (kept == null)
+                    {
+                        Log.w(TAG, "cleanup_temp_dirs:temp dir left, the files under way could not be read");
+                    }
+                    else if (MainActivity.VFS_ENCRYPT)
                     {
                         Log.i(TAG, "cleanup_temp_dirs:001");
-                        vfs_deleteFilesAndFilesSubDirectories_vfs(VFS_PREFIX + VFS_TMP_FILE_DIR + "/");
+                        vfs_deleteFilesAndFilesSubDirectories_vfs(VFS_PREFIX + VFS_TMP_FILE_DIR + "/", kept);
                         Log.i(TAG, "cleanup_temp_dirs:002");
                     }
                     else
                     {
                         Log.i(TAG, "cleanup_temp_dirs:003");
-                        vfs_deleteFilesAndFilesSubDirectories_real(VFS_PREFIX + VFS_TMP_FILE_DIR + "/");
+                        vfs_deleteFilesAndFilesSubDirectories_real(VFS_PREFIX + VFS_TMP_FILE_DIR + "/", kept);
                         Log.i(TAG, "cleanup_temp_dirs:004");
+                    }
+                    if ((kept != null) && !kept.isEmpty())
+                    {
+                        NetworkDiagnosticsLog.log("file_resume", "cleanup_temp_dirs:kept=" + kept.size());
                     }
                 }
                 catch (Exception e)
@@ -476,27 +491,53 @@ public class HelperGeneric
 
     public static void vfs_deleteFilesAndFilesSubDirectories_real(String directoryName)
     {
+        vfs_deleteFilesAndFilesSubDirectories_real(directoryName, Collections.<String>emptySet());
+    }
+
+    /**
+     * Empties the directory but for the files in kept (paths as FileResume.tempFileKey gives them) and the
+     * directories that hold them. True when it kept a file.
+     */
+    static boolean vfs_deleteFilesAndFilesSubDirectories_real(String directoryName, Set<String> kept)
+    {
         File directory1 = new File(directoryName);
         File[] fList1 = directory1.listFiles();
+        boolean kept_one = false;
 
         for (File file : fList1)
         {
             if (file.isFile())
             {
-                // Log.i(TAG, "VFS:REAL:rm:" + file);
-                file.delete();
+                if (kept.contains(FileResume.tempFileKey(file.getAbsolutePath())))
+                {
+                    kept_one = true;
+                }
+                else
+                {
+                    // Log.i(TAG, "VFS:REAL:rm:" + file);
+                    file.delete();
+                }
             }
             else if (file.isDirectory())
             {
                 // Log.i(TAG, "VFS:REAL:rm:D:" + file);
-                vfs_deleteFilesAndFilesSubDirectories_real(file.getAbsolutePath());
-                file.delete();
+                if (vfs_deleteFilesAndFilesSubDirectories_real(file.getAbsolutePath(), kept))
+                {
+                    kept_one = true;
+                }
+                else
+                {
+                    file.delete();
+                }
             }
         }
+        return kept_one;
     }
 
-    public static void vfs_deleteFilesAndFilesSubDirectories_vfs(String directoryName)
+    /** As vfs_deleteFilesAndFilesSubDirectories_real, in the encrypted store. True when it kept a file. */
+    static boolean vfs_deleteFilesAndFilesSubDirectories_vfs(String directoryName, Set<String> kept)
     {
+        boolean kept_one = false;
         if (MainActivity.VFS_ENCRYPT)
         {
             Log.i(TAG, "cleanup_temp_dirs:00a");
@@ -507,19 +548,33 @@ public class HelperGeneric
             {
                 if (file.isFile())
                 {
-                    // Log.i(TAG, "VFS:VFS:rm:" + file);
-                    file.delete();
+                    if (kept.contains(FileResume.tempFileKey(file.getAbsolutePath())))
+                    {
+                        kept_one = true;
+                    }
+                    else
+                    {
+                        // Log.i(TAG, "VFS:VFS:rm:" + file);
+                        file.delete();
+                    }
                 }
                 else if (file.isDirectory())
                 {
                     // Log.i(TAG, "VFS:VFS:rm:D:" + file);
-                    vfs_deleteFilesAndFilesSubDirectories_vfs(file.getAbsolutePath());
-                    file.delete();
+                    if (vfs_deleteFilesAndFilesSubDirectories_vfs(file.getAbsolutePath(), kept))
+                    {
+                        kept_one = true;
+                    }
+                    else
+                    {
+                        file.delete();
+                    }
                 }
             }
 
             Log.i(TAG, "cleanup_temp_dirs:00b");
         }
+        return kept_one;
     }
 
     static void conference_message_add_from_sync(long conference_number, long peer_number2, String peer_pubkey, int a_TOX_MESSAGE_TYPE, String message, long length, long sent_timestamp_in_ms, String message_id)

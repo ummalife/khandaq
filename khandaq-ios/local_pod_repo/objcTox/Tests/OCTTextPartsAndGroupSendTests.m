@@ -1027,6 +1027,65 @@
     XCTAssertEqualObjects(dropped, @[[@"5:" stringByAppendingString:zeroId]]);
 }
 
+#pragma mark - The name of a group file
+
+// KHANDAQ (0.2.57, SPEC-community risk 3): the risk is a name whose UTF-16 length is taken for its count of bytes.
+// Not for a group file: its name goes as UTF-8 in a field of 255 bytes, ended by zeroes, and is read back by its
+// bytes, so a name in Cyrillic arrives whole.
+
+- (void)testAGroupFileCarriesANameInCyrillicWhole
+{
+    NSString *outbox = [self nameTestDirectory];
+    NSString *inbox = [self nameTestDirectory];
+    NSString *name = @"Отчёт.pdf";
+    NSString *path = [outbox stringByAppendingPathComponent:name];
+    XCTAssertTrue([[@"%PDF-1.4" dataUsingEncoding:NSUTF8StringEncoding] writeToFile:path atomically:YES]);
+
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *sender = [self stallTestTransferCollectingPackets:packets];
+    XCTestExpectation *sent = [self expectationWithDescription:@"the file went"];
+    [sender sendFileAtPath:path groupNumber:5 msgIdHex:[OCTNgcGroupFileTransfer generateMsgIdHex] progress:nil completion:^(BOOL success, NSError *error) {
+        XCTAssertTrue(success, @"%@", error);
+        [sent fulfill];
+    }];
+    [self waitForExpectations:@[sent] timeout:5.0];
+    XCTAssertEqual(packets.count, 1u);
+
+    // After the magic, the type, the msg id and the time: the 14 bytes of the 9 characters, then zeroes.
+    NSData *bytes = [name dataUsingEncoding:NSUTF8StringEncoding];
+    XCTAssertEqual(bytes.length, 14u);
+    NSData *field = [packets.firstObject subdataWithRange:NSMakeRange(44, 255)];
+    XCTAssertEqualObjects([field subdataWithRange:NSMakeRange(0, bytes.length)], bytes);
+    XCTAssertEqualObjects([field subdataWithRange:NSMakeRange(bytes.length, 255 - bytes.length)],
+                          [NSMutableData dataWithLength:255 - bytes.length]);
+
+    // Another member reads it back whole.
+    __block NSString *received;
+    XCTestExpectation *came = [self expectationWithDescription:@"the file came"];
+    OCTNgcGroupFileTransfer *receiver = [[OCTNgcGroupFileTransfer alloc] initWithSendPacketBlock:^BOOL (uint32_t groupNumber, NSData *packet, NSError **error) {
+        return YES;
+    } incomingFilesDirectory:^NSString *(uint32_t groupNumber) {
+        return inbox;
+    } incomingBeginBlock:nil incomingCompleteBlock:^(uint32_t groupNumber, uint32_t peerId, NSString *senderPublicKeyHex,
+                                                    NSString *fileName, NSString *filePath, uint64_t fileSize, NSString *msgIdHex) {
+        received = fileName;
+        [came fulfill];
+    } transferProgressBlock:nil];
+    [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:packets.firstObject];
+    [self waitForExpectations:@[came] timeout:5.0];
+    XCTAssertEqualObjects(received, name);
+
+    [[NSFileManager defaultManager] removeItemAtPath:outbox error:nil];
+    [[NSFileManager defaultManager] removeItemAtPath:inbox error:nil];
+}
+
+- (NSString *)nameTestDirectory
+{
+    NSString *directory = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSUUID UUID].UUIDString];
+    XCTAssertTrue([[NSFileManager defaultManager] createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil]);
+    return directory;
+}
+
 - (void)stallTestRunMainQueue
 {
     XCTestExpectation *drained = [self expectationWithDescription:@"the main queue ran what was sent to it"];

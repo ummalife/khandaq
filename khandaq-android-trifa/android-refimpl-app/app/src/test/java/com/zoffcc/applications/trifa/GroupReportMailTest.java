@@ -175,6 +175,35 @@ public class GroupReportMailTest
     }
 
     @Test
+    public void a_message_from_history_is_timed_when_it_was_written_not_when_the_sync_ran()
+    {
+        final long written = TIME;
+        final long synced = TIME + 90L * 60L * 1000L;
+        // Came live: when it came, as its bubble shows; a message of a group carries no time of its own.
+        assertEquals(synced, GroupReportMail.reportedTimeMs(synced, synced, false));
+        assertEquals(written, GroupReportMail.reportedTimeMs(0L, written, false));
+        assertEquals(written, GroupReportMail.reportedTimeMs(written, 0L, false));
+        // Came through history sync: by the time its record gave, as iOS and the desktop name it.
+        assertEquals(written, GroupReportMail.reportedTimeMs(written, synced, true));
+        assertEquals("Time: 2026-11-16T05:54:57Z",
+                     GroupReportMail.body("G", null, GroupReportMail.reportedTimeMs(written, synced, true), "hi")
+                                    .split("\r\n")[2]);
+        // A record from a clock ahead of ours: never later than it came here, as iOS clamps it.
+        assertEquals(written, GroupReportMail.reportedTimeMs(written + 4L * 60L * 1000L, written, true));
+        // Either one when the other is not known; neither known: no time, as the desktop has it.
+        assertEquals(synced, GroupReportMail.reportedTimeMs(0L, synced, true));
+        assertEquals(written, GroupReportMail.reportedTimeMs(written, 0L, true));
+        assertEquals(0L, GroupReportMail.reportedTimeMs(0L, 0L, true));
+        assertEquals("", GroupReportMail.isoUtc(GroupReportMail.reportedTimeMs(0L, 0L, false)));
+
+        // The Report of a message takes its time by that rule, from the row's own times and sync mark.
+        final String helper = bare(read(JAVA + "HelperMessageReport.java"));
+        assertTrue(helper.contains(
+                "finallongtime=GroupReportMail.reportedTimeMs(m.sent_timestamp,m.rcvd_timestamp,m.was_synced);"));
+        assertFalse(helper.contains("(m.rcvd_timestamp>0)?m.rcvd_timestamp:m.sent_timestamp"));
+    }
+
+    @Test
     public void the_author_is_the_key_stored_with_the_message_never_looked_up_from_a_member_number()
     {
         // toxcore gives the number of a member who left to the next one who joins: a lookup by number would

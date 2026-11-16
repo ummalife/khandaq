@@ -65,8 +65,9 @@ final class HelperMessageReport
         // The message as it reads: its text as Copy gives it, a file by the name its entry shows.
         final String text = (m.TRIFA_MESSAGE_TYPE == TRIFA_MSG_FILE.value) ? HelperFiletransfer.groupFileDisplayLabel(
                 context, m) : GroupMentionHelper.cleanForClipboard(m.text);
-        // The time its bubble shows.
-        final long time = (m.rcvd_timestamp > 0) ? m.rcvd_timestamp : m.sent_timestamp;
+        // When it was written: a live message when it came, as its bubble shows; one history sync brought by the time
+        // its record gave, as iOS and the desktop name it, not when the sync ran.
+        final long time = GroupReportMail.reportedTimeMs(m.sent_timestamp, m.rcvd_timestamp, m.was_synced);
 
         // The author is the key stored with the message when it came, never looked up again from a member's number.
         // A message that came through history sync carries the relaying peer's unsigned claim: unknown, unless a

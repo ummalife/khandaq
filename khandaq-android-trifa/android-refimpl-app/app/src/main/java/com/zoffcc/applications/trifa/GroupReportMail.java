@@ -106,6 +106,23 @@ final class GroupReportMail
         return (cameThroughHistory && !signatureVerified) ? null : storedKey;
     }
 
+    /**
+     * When the message was written, as the mail's Time line gives it, by the rule of iOS (OCTMessageAbstract.date). A
+     * message that came live is timed by when it came ({@code receivedMs}, as its bubble shows it): a message of a
+     * group carries no time of its own. One that came through history sync ({@code cameThroughHistory}) came when
+     * the sync ran, so it is timed by the time its record gave ({@code sentMs}), never later than it came, as a clock
+     * ahead of ours would have it. Either one when the other is not known (0). The desktop times a synced file by its
+     * record too, and a live entry by when it came.
+     */
+    static long reportedTimeMs(final long sentMs, final long receivedMs, final boolean cameThroughHistory)
+    {
+        if (cameThroughHistory && (sentMs > 0))
+        {
+            return (receivedMs > 0) ? Math.min(sentMs, receivedMs) : sentMs;
+        }
+        return (receivedMs > 0) ? receivedMs : sentMs;
+    }
+
     /** ISO 8601 in UTC, to the second: 2026-11-16T05:54:57Z; empty for a time not known (0), as the desktop has it. */
     static String isoUtc(final long timeMs)
     {

@@ -74,6 +74,65 @@ public class FileResumeTest
     }
 
     @Test
+    public void the_bind_of_an_offer_and_the_accepts_of_a_file_of_theirs_take_turns()
+    {
+        // One lock, the class's: the bind writes the row in two steps, and an accept or a tap in between read it as
+        // it was, or was written over.
+        final String helper = read(JAVA + "HelperFiletransfer.java");
+        for (final String signature : new String[]{
+                "static synchronized boolean resume_incoming_offer(final long friend_number",
+                "private static synchronized boolean accept_paused_incoming_filetransfer(Message message)",
+                "static synchronized void accept_incoming_filetransfer_by_person(final Message message)",
+                "static synchronized void retry_incoming_filetransfer(final Message message)"})
+        {
+            assertTrue(signature, helper.contains(signature));
+        }
+        // The two steps of the bind are inside it.
+        final String resume = bare(method(helper, "boolean resume_incoming_offer(final long friend_number"));
+        assertTrue(resume.contains("update_filetransfer_db_full(f);orma.updateFiletransfer().idEq(f.id).ft_accepted(false)"
+                                   + ".execute();"));
+        // Every seek before an accept goes through the accept that is synchronized.
+        final String seek = "seek_then_resume_incoming(friendNum,f,!f.ft_accepted);";
+        final String all = bare(helper);
+        assertEquals(all.indexOf(seek), all.lastIndexOf(seek));
+        assertTrue(bare(method(helper, "private static synchronized boolean accept_paused_incoming_filetransfer("))
+                           .contains(seek));
+        assertEquals("one route to the seek", 2, all.split("seek_then_resume_incoming\\(", -1).length - 1);
+    }
+
+    @Test
+    public void an_id_of_zeros_is_no_id()
+    {
+        // What a buffer toxcore did not fill reads as: two such files are not one, and nothing is offered with it.
+        final char[] zeros = new char[FileResume.FILE_ID_BYTES * 2];
+        Arrays.fill(zeros, '0');
+        final String none = new String(zeros);
+        assertNull(FileResume.reusableFileId(none));
+        assertNull(FileResume.fileIdBytes(none));
+        assertFalse(FileResume.sameFile(none, SIZE, none, SIZE));
+        // One digit that is not zero is an id.
+        final String one = none.substring(0, 63) + "1";
+        assertEquals(one, FileResume.reusableFileId(one));
+        assertEquals(1, FileResume.fileIdBytes(one)[FileResume.FILE_ID_BYTES - 1]);
+        assertEquals("A" + none.substring(1), FileResume.reusableFileId("a" + none.substring(1)));
+        // Not an id: a wrong length, or not hex.
+        assertNull(FileResume.reusableFileId(ID.substring(1)));
+        assertNull(FileResume.reusableFileId(ID.substring(0, 63) + "G"));
+
+        // An FTV2 offer whose id toxcore cannot give has none, as a DATA one: a new entry, no anchor.
+        final String recv = bare(method(read(JAVA + "MainActivity.java"),
+                                        "static void android_tox_callback_file_recv_cb_method("));
+        final String checked = "finalStringfile_id_buffer_hex=tox_file_get_file_id(friend_number,file_number,"
+                               + "file_id_buffer)==0?HelperGeneric.bytesToHex(file_id_buffer.array(),"
+                               + "file_id_buffer.arrayOffset(),file_id_buffer.limit()).toUpperCase():null;";
+        final int dataBranch = recv.indexOf("else//DATAfileft");
+        final int ftv2 = recv.indexOf(checked);
+        assertTrue("FTV2", (ftv2 > recv.indexOf("TOX_FILE_KIND_FTV2")) && (ftv2 < dataBranch));
+        assertTrue("DATA", recv.indexOf(checked, dataBranch) > dataBranch);
+        assertTrue(recv.indexOf("HelperFiletransfer.resume_incoming_offer(", ftv2) > ftv2);
+    }
+
+    @Test
     public void no_bytes_here_comes_from_the_first_byte_into_the_same_entry()
     {
         assertEquals(FileResume.Step.FROM_START, FileResume.decide(true, false, 0L, SIZE).step);
@@ -99,6 +158,79 @@ public class FileResumeTest
         assertTrue(FileResume.acceptsByItself(false, false, true));
         assertFalse("waits for a tap", FileResume.acceptsByItself(false, false, false));
         assertFalse("the person said no", FileResume.acceptsByItself(true, true, true));
+    }
+
+    @Test
+    public void a_file_said_no_to_waits_when_offered_again_and_one_taken_then_cut_goes_on_by_itself()
+    {
+        for (final boolean switches : new boolean[]{false, true})
+        {
+            // Declined, then offered again: the bind writes it as not accepted, and the no it keeps is what the
+            // offer and the retries that run by themselves ask the rule with.
+            assertFalse("waits for a tap", FileResume.acceptsByItself(false, true, switches));
+            // Accepted by the person, then cut off: its next offer and the retries take it up by themselves.
+            assertTrue("goes on by itself", FileResume.acceptsByItself(true, false, switches));
+        }
+    }
+
+    @Test
+    public void the_no_of_the_person_outlives_the_bind_of_an_offer_until_the_persons_own_tap()
+    {
+        final String helper = read(JAVA + "HelperFiletransfer.java");
+        final String all = bare(helper);
+        // The no is the cancelled entry and row, or, once an offer of it was bound, the no kept at that bind.
+        assertTrue(bare(method(helper, "private static boolean incoming_refused_by_person(")).contains(
+                "returnincoming_cancelled_by_person(m,f)||incoming_refused_offered_again.contains(m.id);"));
+
+        // A declined file offered again: the bind keeps the no before it writes over the cancelled row, writes
+        // the entry as not accepted, and does not accept it.
+        final String resume = bare(method(helper, "boolean resume_incoming_offer(final long friend_number"));
+        assertTrue(resume.contains("finalbooleanrefused=incoming_refused_by_person(m,earlier);"));
+        final int refused = resume.indexOf("if(refused){");
+        final int kept = resume.indexOf("incoming_refused_offered_again.add(m.id);", refused);
+        assertTrue("kept by the bind", (refused > 0) && (kept > refused));
+        assertTrue("before the row is written", kept < resume.indexOf("update_filetransfer_db_full(f);"));
+        assertEquals("only there", all.indexOf("incoming_refused_offered_again.add("),
+                     all.lastIndexOf("incoming_refused_offered_again.add("));
+        assertTrue(resume.contains(
+                "finalbooleanaccepted_before=!refused&&(m.ft_accepted||((earlier!=null)&&earlier.ft_accepted));"));
+        assertTrue(resume.contains("FileResume.acceptsByItself(accepted_before,refused,"
+                                   + "auto_download_allows(current));"));
+
+        // The retries that run by themselves ask the same rule for a file not accepted, whatever the switches say;
+        // one accepted and cut off since goes on as before, without them.
+        final String retries = bare(method(helper, "static void resume_incoming_filetransfer_by_itself("));
+        final String waits = "if(!accepted){if(FileResume.acceptsByItself(false,incoming_refused_by_person(current,f),"
+                             + "auto_download_allows(current))){accept_paused_incoming_filetransfer(current);}return;}";
+        final String goesOn = "if(accept_paused_incoming_filetransfer(current)){return;}tox_file_control(";
+        assertTrue(retries.contains(waits));
+        assertTrue(retries.indexOf(goesOn) > retries.indexOf(waits));
+        // The automatic download of a new entry never sees an offer made before: that one returned by then.
+        final String recv = bare(method(read(JAVA + "MainActivity.java"),
+                                        "static void android_tox_callback_file_recv_cb_method("));
+        final String bound = "if(HelperFiletransfer.resume_incoming_offer(friend_number,file_number,a_TOX_FILE_KIND,"
+                             + "file_size,file_id_buffer_hex,filename)){return;}";
+        final String auto = "check_auto_accept_incoming_filetransfer(m);";
+        final int ftv2 = recv.indexOf("elseif(a_TOX_FILE_KIND==TOX_FILE_KIND_FTV2.value){");
+        final int data = recv.indexOf("else//DATAfileft", ftv2);
+        for (final int branch : new int[]{ftv2, data})
+        {
+            final int offer = recv.indexOf(bound, branch);
+            assertTrue("after its offer returned",
+                       (branch > 0) && (offer > branch) && (recv.indexOf(auto, branch) > offer));
+        }
+        assertTrue(recv.indexOf(auto, ftv2) < data);
+        assertEquals("FTV2 and DATA", 2, recv.split("check_auto_accept_incoming_filetransfer\\(", -1).length - 1);
+
+        // Only the person's own tap takes the no back, before it accepts or keeps the tap for the next offer.
+        final String accept = bare(method(helper, "static synchronized void accept_incoming_filetransfer_by_person("));
+        final int back = accept.indexOf("incoming_refused_offered_again.remove(message.id);");
+        assertTrue("Accept", (back > 0) && (back < accept.indexOf("if(f.file_number<0)")));
+        final String retry = bare(method(helper, "static synchronized void retry_incoming_filetransfer("));
+        final int again = retry.indexOf("incoming_refused_offered_again.remove(current.id);");
+        assertTrue("Retry", (again > 0) && (again < retry.indexOf("ft_accepted(true)"))
+                            && (again < retry.indexOf("accept_paused_incoming_filetransfer(current)")));
+        assertEquals("the two taps", 2, all.split("incoming_refused_offered_again\\.remove\\(", -1).length - 1);
     }
 
     @Test
@@ -251,6 +383,44 @@ public class FileResumeTest
         assertFalse(FileResume.killMeansLostTransfer(since + 3_000L, since, 0L, false));
     }
 
+    @Test
+    public void the_friend_comes_back_from_no_connection_only()
+    {
+        final int none = ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value;
+        final int tcp = ToxVars.TOX_CONNECTION.TOX_CONNECTION_TCP.value;
+        final int udp = ToxVars.TOX_CONNECTION.TOX_CONNECTION_UDP.value;
+        // From none: back, and the lost transfer rule and the wait of a file of theirs count from now.
+        assertTrue(FileResume.friendCameBack(none, tcp));
+        assertTrue(FileResume.friendCameBack(none, udp));
+        // A switch between TCP and UDP is the same connection: the time it began stays.
+        assertFalse(FileResume.friendCameBack(tcp, udp));
+        assertFalse(FileResume.friendCameBack(udp, tcp));
+        // Gone, or no change.
+        assertFalse(FileResume.friendCameBack(tcp, none));
+        assertFalse(FileResume.friendCameBack(udp, none));
+        assertFalse(FileResume.friendCameBack(none, none));
+
+        // The friend's own connection decides it, from its value before the change; the status that follows a
+        // relay only wakes the queue.
+        final String online = bare(method(read(JAVA + "MainActivity.java"),
+                                          "static void android_tox_callback_friend_connection_status_cb_method("));
+        final int decide = online.indexOf(
+                "finalbooleancame_back=FileResume.friendCameBack(f.TOX_CONNECTION_real,a_TOX_CONNECTION);");
+        final int assign = online.indexOf("f.TOX_CONNECTION_real=a_TOX_CONNECTION;");
+        assertTrue(decide > 0);
+        assertTrue("decided before the new value is set", assign > decide);
+        assertTrue(online.indexOf("HelperFiletransfer.on_friend_connection_available(f.tox_public_key_string,came_back);")
+                   > assign);
+        assertTrue(bare(method(read(JAVA + "HelperGeneric.java"),
+                               "public static void update_friend_connection_status_helper(")).contains(
+                "HelperFiletransfer.on_friend_connection_available(f.tox_public_key_string,false);"));
+        final String helper = read(JAVA + "HelperFiletransfer.java");
+        assertTrue(bare(method(helper, "static void on_friend_connection_available(")).contains(
+                "if(came_back){friend_online_since.put(pubkey,System.currentTimeMillis());}"));
+        assertEquals("one place sets it", helper.indexOf("friend_online_since.put("),
+                     helper.lastIndexOf("friend_online_since.put("));
+    }
+
     // ---- the bytes so far across a restart of the receiver (SPEC 1.5) ----
 
     @Test
@@ -264,6 +434,62 @@ public class FileResumeTest
         assertNotEquals(FileResume.tempFileKey("/tempdir/files/KEY/qa.bin"),
                         FileResume.tempFileKey("/tempdir/files/KEY/qa.bin2"));
         assertNull(FileResume.tempFileKey(null));
+    }
+
+    @Test
+    public void a_file_of_theirs_has_a_temp_folder_of_its_own()
+    {
+        final String temp = "/tempdir/files/";
+        // Two files of one friend with the same name, two rows: two temp files.
+        final String first = FileResume.incomingTempPathName(temp, "KEY", 41L) + "/" + "photo.jpg";
+        final String second = FileResume.incomingTempPathName(temp, "KEY", 42L) + "/" + "photo.jpg";
+        assertNotEquals(FileResume.tempFileKey(first), FileResume.tempFileKey(second));
+        // Inside its friend's folder, and as a listing of the dir names it (the start's cleanup compares them).
+        assertEquals("/tempdir/files/KEY/41/photo.jpg", FileResume.tempFileKey(first));
+        // The row names the same folder after a cut or a restart.
+        assertEquals(FileResume.incomingTempPathName(temp, "KEY", 41L), FileResume.incomingTempPathName(temp, "KEY", 41L));
+
+        // Every offer of a file of theirs gives its row that folder before the row is written in full: file_recv
+        // for FTV2 and DATA, and resume_incoming_offer for an entry whose row went.
+        final String main = read(JAVA + "MainActivity.java");
+        final String recv = bare(method(main, "static void android_tox_callback_file_recv_cb_method("));
+        final String own = "longft_id=HelperFiletransfer.insert_into_filetransfer_db(f);f.id=ft_id;"
+                           + "//KHANDAQ(0.2.57):itsbytessofargotoatempfolderofitsown,writtenwiththerowbelow."
+                           + "f.path_name=HelperFiletransfer.incoming_temp_path_name(f);";
+        final String full = "f.message_id=new_msg_id;HelperFiletransfer.update_filetransfer_db_full(f);";
+        final int ftv2 = recv.indexOf(own);
+        final int data = recv.indexOf(own, ftv2 + 1);
+        final int dataBranch = recv.indexOf("else//DATAfileft");
+        assertTrue("FTV2", (ftv2 > recv.indexOf("TOX_FILE_KIND_FTV2")) && (ftv2 < dataBranch));
+        assertTrue(recv.indexOf(full, ftv2) < dataBranch);
+        assertTrue("DATA", data > dataBranch);
+        assertTrue(recv.indexOf(full, data) > data);
+        assertEquals("FTV2 and DATA only; an avatar keeps its friend's folder", -1, recv.indexOf(own, data + 1));
+        final String helper = read(JAVA + "HelperFiletransfer.java");
+        final String resume = bare(method(helper, "boolean resume_incoming_offer(final long friend_number"));
+        final int resumeOwn = resume.indexOf("f.id=insert_into_filetransfer_db(f);if(f.id<=0){returnfalse;}");
+        final int resumeWritten = resume.indexOf("f.path_name=incoming_temp_path_name(f);"
+                                                 + "orma.updateFiletransfer().idEq(f.id).path_name(f.path_name).execute();");
+        assertTrue(resumeOwn > 0);
+        assertTrue(resumeWritten > resumeOwn);
+        // Written before a cancel deletes its bytes by the row (delete_filetransfer_tmpfile reads the row).
+        assertTrue(resume.indexOf("delete_filetransfer_tmpfile(f.id);") > resumeWritten);
+        assertTrue(resume.indexOf("update_filetransfer_db_full(f);") > resumeWritten);
+        // Its bytes are deleted where its row says.
+        assertTrue(bare(method(helper, "public static void delete_filetransfer_tmpfile(long filetransfer_id)")).contains(
+                "((ft.direction==TRIFA_FT_DIRECTION_INCOMING.value)&&(ft.path_name!=null))?ft.path_name:"));
+        // Its end never moves it over a finished file: it takes a free name.
+        final String chunk = bare(method(main, "static void android_tox_callback_file_recv_chunk_cb_method("));
+        final int name = chunk.indexOf("finalStringfinal_name=HelperFiletransfer.incoming_final_name(f);");
+        final int move = chunk.indexOf("HelperGeneric.move_tmp_file_to_real_file(f.path_name,f.file_name,VFS_PREFIX+"
+                                       + "VFS_FILE_DIR+\"/\"+f.tox_public_key_string+\"/\",final_name);");
+        assertTrue(name > 0);
+        assertTrue(move > name);
+        assertTrue(chunk.contains("file_.file_name=final_name;"));
+        assertTrue(chunk.contains("file_nameEq(final_name)"));
+        assertTrue(bare(method(helper, "static String incoming_final_name(final Filetransfer f)")).contains(
+                "if(!newinfo.guardianproject.iocipher.File(VFS_PREFIX+VFS_FILE_DIR+\"/\"+f.tox_public_key_string+\"/\"+name)"
+                + ".exists()){returnname;}"));
     }
 
     @Test
@@ -307,6 +533,42 @@ public class FileResumeTest
     }
 
     @Test
+    public void the_cleanup_at_start_keeps_the_folder_of_a_row_under_way_and_takes_the_others() throws IOException
+    {
+        final File temp = Files.createTempDirectory("khandaq-tempdir").toFile();
+        try
+        {
+            // Two files of one friend with the same name, each in its row's folder, and the empty folder a
+            // finished file left.
+            final String tempDir = temp.getAbsolutePath() + "/";
+            final File underWay = new File(FileResume.incomingTempPathName(tempDir, "KEY", 41L), "photo.jpg");
+            final File cancelled = new File(FileResume.incomingTempPathName(tempDir, "KEY", 42L), "photo.jpg");
+            final File finished = new File(FileResume.incomingTempPathName(tempDir, "KEY", 40L));
+            assertTrue(underWay.getParentFile().mkdirs());
+            assertTrue(cancelled.getParentFile().mkdirs());
+            assertTrue(finished.mkdirs());
+            final byte[] partial = new byte[70_000];
+            new Random(16).nextBytes(partial);
+            Files.write(underWay.toPath(), partial);
+            Files.write(cancelled.toPath(), partial);
+
+            // As incoming_files_kept_after_restart names the row the start keeps (path_name + "/" + file_name).
+            final String rowPath = FileResume.incomingTempPathName(tempDir, "KEY", 41L) + "/" + "photo.jpg";
+            final Set<String> kept = new HashSet<>(Collections.singletonList(FileResume.tempFileKey(rowPath)));
+            assertTrue(HelperGeneric.vfs_deleteFilesAndFilesSubDirectories_real(tempDir, kept));
+
+            assertArrayEquals(partial, Files.readAllBytes(underWay.toPath()));
+            assertFalse(cancelled.getParentFile().exists());
+            assertFalse(finished.exists());
+        }
+        finally
+        {
+            HelperGeneric.vfs_deleteFilesAndFilesSubDirectories_real(temp.getAbsolutePath() + "/");
+            assertTrue(temp.delete());
+        }
+    }
+
+    @Test
     public void the_cleanup_at_start_asks_for_the_files_the_start_keeps()
     {
         final String cleanup = bare(method(read(JAVA + "HelperGeneric.java"), "public static void cleanup_temp_dirs()"));
@@ -329,6 +591,33 @@ public class FileResumeTest
         final String start = bare(method(helper, "static synchronized void set_all_filetransfers_inactive()"));
         assertTrue(start.contains("finalList<Filetransfer>rows=transfers_left_from_last_run();"));
         assertTrue(start.contains("if(resumable_after_restart(f,m))"));
+    }
+
+    @Test
+    public void an_ftv2_offer_never_accepted_and_with_no_bytes_does_not_wait_after_a_restart()
+    {
+        // FTV2: the transfer stays at the sender's end, and toxcore there does not offer it again once answered.
+        assertFalse(FileResume.incomingKeptAfterRestart(true, false, 0L));
+        assertFalse(FileResume.incomingKeptAfterRestart(true, false, -1L));
+        // Accepted before, or bytes here: its sender takes the kill of our new toxcore for a lost transfer.
+        assertTrue(FileResume.incomingKeptAfterRestart(true, true, 0L));
+        assertTrue(FileResume.incomingKeptAfterRestart(true, false, 4096L));
+        assertTrue(FileResume.incomingKeptAfterRestart(true, true, 4096L));
+        // DATA: gone at the sender's end with the connection (break_files), and offered again.
+        assertTrue(FileResume.incomingKeptAfterRestart(false, false, 0L));
+        assertTrue(FileResume.incomingKeptAfterRestart(false, false, -1L));
+        assertTrue(FileResume.incomingKeptAfterRestart(false, true, 4096L));
+
+        // The start and its cleanup ask it for every file of theirs (resumable_after_restart); one it does not
+        // keep is cancelled, also when no transfer carried it any more. Ours are not asked.
+        final String helper = read(JAVA + "HelperFiletransfer.java");
+        assertTrue(bare(method(helper, "private static boolean resumable_after_restart(")).contains(
+                "returnunder_way_at_restart(f,m)&&((f.direction!=TRIFA_FT_DIRECTION_INCOMING.value)"
+                + "||FileResume.incomingKeptAfterRestart(f.kind==TOX_FILE_KIND_FTV2.value,m.ft_accepted||f.ft_accepted,"
+                + "get_vfs_file_length(f.path_name,f.file_name)));"));
+        assertTrue(bare(method(helper, "static synchronized void set_all_filetransfers_inactive()")).contains(
+                "elseif(((f.file_number!=-1)||under_way_at_restart(f,m))&&!((m!=null)&&incoming_cancelled_by_person(m,f)))"
+                + "{"));
     }
 
     // ---- the sender reads at the requested position (SPEC Tests) ----

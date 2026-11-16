@@ -36,21 +36,28 @@ final class FileResume
 
     // ---- the file id ----
 
-    /** The id an earlier offer gave this file, in upper case; null when there is none toxcore could take again. */
+    /**
+     * The id an earlier offer gave this file, in upper case; null when there is none toxcore could take again. An
+     * id of zeros is none: it is what a buffer toxcore did not fill reads as, the same for every such file, so two
+     * different files would read as one.
+     */
     static String reusableFileId(final String hex)
     {
         if (hex == null || hex.length() != FILE_ID_BYTES * 2)
         {
             return null;
         }
+        boolean zeros = true;
         for (int i = 0; i < hex.length(); i++)
         {
-            if (Character.digit(hex.charAt(i), 16) < 0)
+            final int digit = Character.digit(hex.charAt(i), 16);
+            if (digit < 0)
             {
                 return null;
             }
+            zeros = zeros && (digit == 0);
         }
-        return hex.toUpperCase(Locale.ROOT);
+        return zeros ? null : hex.toUpperCase(Locale.ROOT);
     }
 
     /** The 32 bytes of a file id, or null when the text is not one. */
@@ -197,6 +204,18 @@ final class FileResume
     }
 
     /**
+     * The temp folder of a file of theirs (SPEC 1.5): its transfer row's own, inside its friend's folder. Its name
+     * is free only among the finished files, so two files of one friend with the same name shared one temp file,
+     * and a resume goes on from the bytes it finds there; the row's number keeps them apart. The row keeps the
+     * folder across a cut and a restart, so a resume finds its own bytes. A row made before names its friend's
+     * folder and keeps it.
+     */
+    static String incomingTempPathName(final String tempDir, final String pubkey, final long rowId)
+    {
+        return tempDir + "/" + pubkey + "/" + rowId + "/";
+    }
+
+    /**
      * The path of a file of theirs under way as the start's cleanup of the temp dir compares it (SPEC 1.5): its
      * row joins the dir and the name with extra slashes ("/tempdir/files//KEY//name"), the listing does not.
      * Repeated slashes count as one, and a slash at the end as none.
@@ -210,6 +229,33 @@ final class FileResume
         final String collapsed = path.replaceAll("/{2,}", "/");
         return (collapsed.length() > 1 && collapsed.endsWith("/")) ? collapsed.substring(0, collapsed.length() - 1)
                                                                     : collapsed;
+    }
+
+    /**
+     * Whether a file of theirs under way when the app stopped waits for its sender's next offer after the start
+     * (SPEC 1.5), or is cancelled there as before 0.2.57. A DATA transfer goes at the sender's end with the
+     * connection (break_files), and its sender offers the file again. An FTV2 one stays there, and toxcore offers
+     * it again only while no answer came: an offer this end had received and never accepted, with no bytes here,
+     * would wait for good. One accepted before, or with bytes here, goes on: its sender takes the kill of our new
+     * toxcore for a lost transfer and offers it again (LOST_TRANSFER_WINDOW_MS).
+     */
+    static boolean incomingKeptAfterRestart(final boolean ftv2, final boolean acceptedBefore, final long partialBytes)
+    {
+        return !ftv2 || acceptedBefore || (partialBytes > 0);
+    }
+
+    // ---- the friend ----
+
+    /**
+     * Whether a change of a friend's connection (TOX_CONNECTION) is the friend coming back, the time the lost
+     * transfer rule and the wait of a file of theirs count from: from none to TCP or UDP. toxcore reports a switch
+     * between TCP and UDP as a change too, and it is the same connection going on: taken for a return, it made a
+     * no of the receiver right after it read as a lost transfer, and the declined file was offered again.
+     */
+    static boolean friendCameBack(final int connectionBefore, final int connectionNow)
+    {
+        return (connectionBefore == ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value)
+               && (connectionNow != ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value);
     }
 
     // ---- the sender ----

@@ -275,6 +275,41 @@ public class HelperFiletransfer
     }
 
     /**
+     * KHANDAQ (0.2.57, SPEC-network 1.5): the temp folder of a 1:1 file of theirs, its row's own
+     * (FileResume.incomingTempPathName). The row has its number once inserted; the offer sets the folder before
+     * the row is written in full, so nothing has written to it yet.
+     */
+    static String incoming_temp_path_name(final Filetransfer f)
+    {
+        return FileResume.incomingTempPathName(VFS_PREFIX + VFS_TMP_FILE_DIR, f.tox_public_key_string, f.id);
+    }
+
+    /**
+     * KHANDAQ (0.2.57): the name a 1:1 file of theirs takes in its friend's files folder at its end. Its name was
+     * free when it was offered (get_incoming_filetransfer_local_filename), but a file of the same name may have
+     * finished since, one under way at the same time or one that came while this one waited, and a finished file
+     * is never written over: this one takes another name then, as an offer does. A new avatar takes the place of
+     * the one before, as always. Null when no free name was found.
+     */
+    static String incoming_final_name(final Filetransfer f)
+    {
+        if ((f.kind != TOX_FILE_KIND_DATA.value) && (f.kind != TOX_FILE_KIND_FTV2.value))
+        {
+            return f.file_name;
+        }
+        for (int attempt = 0; attempt < 8; attempt++)
+        {
+            final String name = get_incoming_filetransfer_local_filename(f.file_name, f.tox_public_key_string);
+            if (!new info.guardianproject.iocipher.File(
+                    VFS_PREFIX + VFS_FILE_DIR + "/" + f.tox_public_key_string + "/" + name).exists())
+            {
+                return name;
+            }
+        }
+        return null;
+    }
+
+    /**
      * The name an incoming group file is STORED under, as opposed to the one shown to the user.
      *
      * KHANDAQ (security): a peer picks the filename in a group transfer and it arrives unfiltered —
@@ -417,17 +452,20 @@ public class HelperFiletransfer
         try
         {
             Filetransfer ft = (Filetransfer) orma.selectFromFiletransfer().idEq(filetransfer_id).get(0);
+            // KHANDAQ (0.2.57): a file of theirs has its bytes where its row says, in a temp folder of its own
+            // since 0.2.57 (incoming_temp_path_name); the others name their friend's folder, as before.
+            final String tmp_dir = ((ft.direction == TRIFA_FT_DIRECTION_INCOMING.value) && (ft.path_name != null))
+                                   ? ft.path_name : VFS_PREFIX + VFS_TMP_FILE_DIR + "/" + ft.tox_public_key_string + "/";
 
             if (MainActivity.VFS_ENCRYPT)
             {
                 info.guardianproject.iocipher.File f1 = new info.guardianproject.iocipher.File(
-                        VFS_PREFIX + VFS_TMP_FILE_DIR + "/" + ft.tox_public_key_string + "/" + ft.file_name);
+                        tmp_dir + "/" + ft.file_name);
                 f1.delete();
             }
             else
             {
-                java.io.File f1 = new java.io.File(
-                        VFS_PREFIX + VFS_TMP_FILE_DIR + "/" + ft.tox_public_key_string + "/" + ft.file_name);
+                java.io.File f1 = new java.io.File(tmp_dir + "/" + ft.file_name);
                 f1.delete();
             }
         }
@@ -867,10 +905,12 @@ public class HelperFiletransfer
                     kept.add(f);
                     kept_messages.add(m);
                 }
-                else if ((f.file_number != -1) && !((m != null) && incoming_cancelled_by_person(m, f)))
+                else if (((f.file_number != -1) || under_way_at_restart(f, m))
+                         && !((m != null) && incoming_cancelled_by_person(m, f)))
                 {
                     // A file of theirs the person cancelled keeps its cancelled row, without its bytes: a later
-                    // offer of it then waits for a tap (resume_incoming_offer).
+                    // offer of it then waits for a tap (resume_incoming_offer). One that does not wait for its
+                    // sender (resumable_after_restart) is cancelled also without a number of toxcore.
                     // Log.i(TAG, "set_all_filetransfers_inactive:cancel:id=" + f.tox_file_id_hex + " filename=" + f.file_name);
                     cancel_filetransfer_f((Filetransfer) f);
                 }
@@ -975,6 +1015,20 @@ public class HelperFiletransfer
 
     /** A 1:1 file under way that goes on after the app starts again (set_all_filetransfers_inactive). */
     private static boolean resumable_after_restart(final Filetransfer f, final Message m)
+    {
+        return under_way_at_restart(f, m) && ((f.direction != TRIFA_FT_DIRECTION_INCOMING.value)
+                                               || FileResume.incomingKeptAfterRestart(f.kind == TOX_FILE_KIND_FTV2.value,
+                                                                                      m.ft_accepted || f.ft_accepted,
+                                                                                      get_vfs_file_length(f.path_name,
+                                                                                                          f.file_name)));
+    }
+
+    /**
+     * A 1:1 file under way when the app stopped: its entry not finished or cancelled. A file of theirs among them
+     * that does not wait for its sender (FileResume.incomingKeptAfterRestart) is cancelled at the start, as
+     * before 0.2.57, also when no transfer carried it any more.
+     */
+    private static boolean under_way_at_restart(final Filetransfer f, final Message m)
     {
         return (m != null) && ((f.kind == TOX_FILE_KIND_DATA.value) || (f.kind == TOX_FILE_KIND_FTV2.value))
                && (f.filesize > 0) && (m.filedb_id == -1) && (m.state != TOX_FILE_CONTROL_CANCEL.value)
@@ -1567,22 +1621,34 @@ public class HelperFiletransfer
         }, OUTGOING_FT_RETRY_DELAY_MS);
     }
 
-    static void on_friend_connection_available(final String pubkey)
+    /**
+     * KHANDAQ (0.2.57): the friend has a connection (MainActivity, friend connection; HelperGeneric, the status
+     * that follows a relay). {@code came_back}: it came from none (FileResume.friendCameBack), and only then do the
+     * lost transfer rule and the wait of a file of theirs count from now. A switch between TCP and UDP and the
+     * status through a relay only wake the queue.
+     */
+    static void on_friend_connection_available(final String pubkey, final boolean came_back)
     {
         if ((pubkey == null) || pubkey.isEmpty())
         {
             return;
         }
-        friend_online_since.put(pubkey, System.currentTimeMillis());
+        if (came_back)
+        {
+            friend_online_since.put(pubkey, System.currentTimeMillis());
+        }
         FileTransferDebug.logPeerConnectionStatus(tox_friend_by_public_key__wrapper(pubkey));
         try_start_next_queued_outgoing_file(pubkey);
         TrifaToxService.wakeup_tox_thread();
-        // KHANDAQ (0.2.57, SPEC-network 1.7): a file of theirs the cut stopped and that its sender does not offer
-        // again reads as stopped once the wait is over; nothing else draws its entry again then.
-        final Handler handler = MainActivity.main_handler_s != null ? MainActivity.main_handler_s
-                                                                    : new Handler(Looper.getMainLooper());
-        handler.postDelayed(() -> redraw_incoming_files_waiting_for(pubkey),
-                            FileResume.INCOMING_WAIT_AFTER_ONLINE_MS + 1000L);
+        if (came_back)
+        {
+            // KHANDAQ (0.2.57, SPEC-network 1.7): a file of theirs the cut stopped and that its sender does not
+            // offer again reads as stopped once the wait is over; nothing else draws its entry again then.
+            final Handler handler = MainActivity.main_handler_s != null ? MainActivity.main_handler_s
+                                                                        : new Handler(Looper.getMainLooper());
+            handler.postDelayed(() -> redraw_incoming_files_waiting_for(pubkey),
+                                FileResume.INCOMING_WAIT_AFTER_ONLINE_MS + 1000L);
+        }
     }
 
     // ---- KHANDAQ (0.2.57, SPEC-network part 1): a 1:1 file goes on after a network change ----
@@ -1597,6 +1663,8 @@ public class HelperFiletransfer
     private static final Set<String> incoming_already_here = ConcurrentHashMap.newKeySet();
     /** When the person asked again for a file of theirs that no transfer carries (retry_incoming_filetransfer). */
     private static final ConcurrentHashMap<Long, Long> incoming_wait_restarted_at = new ConcurrentHashMap<>();
+    /** Files of theirs the person said no to, by message, offered again since: see incoming_refused_by_person. */
+    private static final Set<Long> incoming_refused_offered_again = ConcurrentHashMap.newKeySet();
 
     /** How long this friend has been online again, or -1 while offline or not known. */
     static long friend_online_for_ms(final String pubkey)
@@ -1818,9 +1886,15 @@ public class HelperFiletransfer
      * file id (in either case) and size, no new entry comes (SPEC-network 1.4): a whole file there takes the
      * last byte again, silently, so that both ends finish; a partial one binds this transfer and tells toxcore
      * where to go on before it accepts, or waits for a tap as the rule says. Returns false for a new entry.
+     * <p>
+     * KHANDAQ (0.2.57): synchronized, as the accepts of a file of theirs are (accept_paused_incoming_filetransfer,
+     * the person's Accept and Retry). The bind writes the row in two steps and gives the entry what it read as
+     * accepted before: an accept from another thread in between took the bound transfer for one accepted before,
+     * resumed it without the seek, and the file came again from its first byte; a tap in between was lost.
      */
-    static boolean resume_incoming_offer(final long friend_number, final long file_number, final int kind,
-                                         final long file_size, final String offered_id_hex, final String offered_name)
+    static synchronized boolean resume_incoming_offer(final long friend_number, final long file_number, final int kind,
+                                                      final long file_size, final String offered_id_hex,
+                                                      final String offered_name)
     {
         if (orma == null)
         {
@@ -1855,7 +1929,7 @@ public class HelperFiletransfer
                 return true;
             }
 
-            final boolean refused = incoming_cancelled_by_person(m, earlier);
+            final boolean refused = incoming_refused_by_person(m, earlier);
             final boolean accepted_before = !refused && (m.ft_accepted || ((earlier != null) && earlier.ft_accepted));
             Filetransfer f = earlier;
             if (f == null)
@@ -1874,6 +1948,9 @@ public class HelperFiletransfer
                 {
                     return false;
                 }
+                // A temp folder of its own, written at once: a cancel below deletes its bytes where the row says.
+                f.path_name = incoming_temp_path_name(f);
+                orma.updateFiletransfer().idEq(f.id).path_name(f.path_name).execute();
             }
             else if ((f.file_number >= 0) && (f.file_number != file_number) && (f.state != TOX_FILE_CONTROL_CANCEL.value))
             {
@@ -1887,6 +1964,9 @@ public class HelperFiletransfer
             if (refused)
             {
                 // The person cancelled it: its bytes do not stay (SPEC-network 1.5), and it waits for a tap.
+                // KHANDAQ (0.2.57): the no is kept before the bind below writes over the cancelled row that told
+                // so: the retries that run by themselves, and a next offer, would take it for one never refused.
+                incoming_refused_offered_again.add(m.id);
                 delete_filetransfer_tmpfile(f.id);
             }
             final long partial = refused ? -1L : get_vfs_file_length(f.path_name, f.file_name);
@@ -2038,6 +2118,17 @@ public class HelperFiletransfer
     {
         return (m.state == TOX_FILE_CONTROL_CANCEL.value) && (m.filedb_id == -1) && (f != null)
                && (f.state == TOX_FILE_CONTROL_CANCEL.value);
+    }
+
+    /**
+     * KHANDAQ (0.2.57): a file of theirs the person said no to, as FileResume.acceptsByItself is fed: its entry and
+     * row cancelled by the person, or, once its sender offered it again, the no kept at the bind of that offer,
+     * which leaves it waiting for a tap and writes over the cancelled row (resume_incoming_offer). That no lasts
+     * for this run of the app, until the person's own Accept or Retry takes it back.
+     */
+    private static boolean incoming_refused_by_person(final Message m, final Filetransfer f)
+    {
+        return incoming_cancelled_by_person(m, f) || incoming_refused_offered_again.contains(m.id);
     }
 
     /**
@@ -3897,7 +3988,13 @@ public class HelperFiletransfer
         }
     }
 
-    private static boolean accept_paused_incoming_filetransfer(Message message)
+    /**
+     * KHANDAQ (0.2.57): the accept of a paused file of theirs, on every route (the automatic download, the person's
+     * tap, the retries that run by themselves, a recognised offer). Synchronized with resume_incoming_offer: two
+     * at once both read the transfer as not accepted yet and both told toxcore to seek, and the second, refused
+     * after the accept, set its position back to 0.
+     */
+    private static synchronized boolean accept_paused_incoming_filetransfer(Message message)
     {
         final Filetransfer f = transfer_row(message.filetransfer_id);
         if ((f == null) || (f.state != TOX_FILE_CONTROL_PAUSE.value))
@@ -3952,9 +4049,10 @@ public class HelperFiletransfer
 
     /**
      * The Accept of a file of theirs (the waiting row's button). Also with no transfer carrying it now: the tap
-     * is kept, and the sender's next offer goes on by itself.
+     * is kept, and the sender's next offer goes on by itself. Synchronized with resume_incoming_offer, whose bind
+     * would write over the tap.
      */
-    static void accept_incoming_filetransfer_by_person(final Message message)
+    static synchronized void accept_incoming_filetransfer_by_person(final Message message)
     {
         if ((message == null) || (message.filetransfer_id <= 0))
         {
@@ -3965,6 +4063,8 @@ public class HelperFiletransfer
         {
             return;
         }
+        // KHANDAQ (0.2.57): the tap takes back a no kept through an offer since (incoming_refused_by_person).
+        incoming_refused_offered_again.remove(message.id);
         if (f.file_number < 0)
         {
             set_message_accepted_from_id(message.id);
@@ -4187,8 +4287,9 @@ public class HelperFiletransfer
 
     /**
      * KHANDAQ (0.2.57): the retries that run by themselves (the friend back, the row drawn, the app in front).
-     * They nudge a transfer that was accepted, as before, and accept one not accepted yet only when the
-     * automatic download allows it: they used to accept every file, so its switches did nothing. A file no
+     * They nudge a transfer that was accepted, as before, and accept one not accepted yet only as a recognised
+     * offer is (FileResume.acceptsByItself): when the automatic download allows it, and never one the person said
+     * no to, also once offered again. They used to accept every file, so its switches did nothing. A file no
      * transfer carries now waits for its sender's next offer (resume_incoming_offer).
      */
     static void resume_incoming_filetransfer_by_itself(final Message message)
@@ -4213,7 +4314,8 @@ public class HelperFiletransfer
             final boolean accepted = current.ft_accepted || f.ft_accepted;
             if (!accepted)
             {
-                if (auto_download_allows(current))
+                if (FileResume.acceptsByItself(false, incoming_refused_by_person(current, f),
+                                               auto_download_allows(current)))
                 {
                     accept_paused_incoming_filetransfer(current);
                 }
@@ -4367,7 +4469,12 @@ public class HelperFiletransfer
         return (filetransfer_id > 0) && (filedb_id == -1);
     }
 
-    static void retry_incoming_filetransfer(final Message message)
+    /**
+     * The Retry of a file of theirs. KHANDAQ (0.2.57): synchronized with resume_incoming_offer: the retry writes the
+     * row from what it read, and an offer bound in between lost its transfer again (no number), so nothing
+     * accepted it.
+     */
+    static synchronized void retry_incoming_filetransfer(final Message message)
     {
         if (message == null)
         {
@@ -4386,6 +4493,8 @@ public class HelperFiletransfer
                 Log.i(TAG, "retry_incoming_filetransfer:nothing_to_retry:" + current.id);
                 return;
             }
+            // KHANDAQ (0.2.57): as the Accept, the tap takes back a no kept through an offer since.
+            incoming_refused_offered_again.remove(current.id);
             final Filetransfer f = transfer_row(current.filetransfer_id);
             if ((f == null) || (f.file_number < 0) || (f.state == TOX_FILE_CONTROL_CANCEL.value)
                 || (current.state == TOX_FILE_CONTROL_CANCEL.value))

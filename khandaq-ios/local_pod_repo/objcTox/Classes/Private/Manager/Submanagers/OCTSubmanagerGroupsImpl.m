@@ -4454,6 +4454,39 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         }];
         return count > 1 ? (NSUInteger)(count - 1) : 0;
     };
+    // KHANDAQ (0.2.57): whether toxcore reaches a member only through a TCP relay, for the pace of the relays (as the
+    // desktop, cbeb1d1f): it says TCP for a member it has no direct path to. toxcore lists this device among the peers
+    // too, as TCP while it has no UDP of its own, so it is left out. On the tox queue, as the member count above.
+    self.fileTransfer.anyMemberRelayedBlock = ^BOOL (uint32_t groupNumber) {
+        __strong typeof(weakSelf) self = weakSelf;
+        __block BOOL relayed = NO;
+        [self performSyncOnToxQueue:^(OCTTox *tox) {
+            NSError *selfError = nil;
+            const uint32_t selfPeerId = [tox groupSelfPeerIdForGroupNumber:groupNumber error:&selfError];
+
+            for (NSDictionary *peer in [tox groupPeersForGroupNumber:groupNumber error:nil]) {
+                const uint32_t peerId = [peer[@"peerId"] unsignedIntValue];
+
+                if (selfError == nil && peerId == selfPeerId) {
+                    continue;
+                }
+
+                if ([tox groupPeerConnectionStatusForGroupNumber:groupNumber peerId:peerId error:nil] == OCTToxConnectionStatusTCP) {
+                    relayed = YES;
+                    break;
+                }
+            }
+        }];
+        return relayed;
+    };
+    self.fileTransfer.memberRelayedBlock = ^BOOL (uint32_t groupNumber, uint32_t peerId) {
+        __strong typeof(weakSelf) self = weakSelf;
+        __block BOOL relayed = NO;
+        [self performSyncOnToxQueue:^(OCTTox *tox) {
+            relayed = [tox groupPeerConnectionStatusForGroupNumber:groupNumber peerId:peerId error:nil] == OCTToxConnectionStatusTCP;
+        }];
+        return relayed;
+    };
     // KHANDAQ (0.2.57): a group file packet to one member alone, for a member that asks for the whole of a file this
     // device sent. On the tox queue, as the packets to the whole group above.
     self.fileTransfer.sendPrivatePacketBlock = ^BOOL (uint32_t groupNumber, uint32_t peerId, NSData *packet, NSError **error) {

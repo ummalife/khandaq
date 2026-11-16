@@ -88,6 +88,9 @@ static const uint64_t kPaceTestsRate = 512 * 1024;
 static const uint64_t kPaceTestsBurst = 512 * 1024 / 4;
 static const uint64_t kPaceTestsChunk = 37000;
 static const uint64_t kPaceTestsT0 = 1000000;
+// KHANDAQ (0.2.57): the pace of the relays (kOCTNgcRelayedUploadBytesPerSecond) and its burst, 250 ms of it.
+static const uint64_t kRelayTestsRate = 64 * 1024;
+static const uint64_t kRelayTestsBurst = 64 * 1024 / 4;
 
 /// The clock of a transfer under test, which the test moves on and the transfer's waits move as long as they last.
 @interface OCTGroupTestClock : NSObject
@@ -1938,6 +1941,125 @@ static const uint64_t kPaceTestsT0 = 1000000;
     [self waitForExpectations:@[sent] timeout:10.0];
     [[NSFileManager defaultManager] removeItemAtPath:inbox error:nil];
     [[NSFileManager defaultManager] removeItemAtPath:outbox error:nil];
+}
+
+#pragma mark - The pace of the relays
+
+// KHANDAQ (0.2.57): over a TCP relay, group file chunks were lost at 256 and 128 KiB/s a member and came whole at 64
+// and 32 (the desktop, cbeb1d1f): a relay passes a packet on only while its connection has room for it, and toxcore
+// sends the parts of a second's chunks again at once. A packet that goes to a member over a relay waits for a second
+// pace now, 64 KiB/s, which counts its bytes once however many members it goes to.
+
+/// Twelve chunks of a file to a group of two members, one of them over a relay when `relayed`: the times the packets
+/// went by the sender's clock, and the packets. Returns how many times the sender asked whether a member is relayed.
+- (NSUInteger)relayTestsSendTwelveChunksRelayed:(BOOL)relayed
+                                         sentAt:(NSMutableArray<NSNumber *> *)sentAt
+                                        packets:(NSMutableArray<NSData *> *)packets
+{
+    OCTNgcGroupFileTransfer *sender = [self paceTestsSenderRecording:sentAt packets:packets members:2 sleep:nil];
+    NSObject *lock = [NSObject new];
+    __block NSUInteger asked = 0;
+    sender.anyMemberRelayedBlock = ^BOOL (uint32_t groupNumber) {
+        XCTAssertFalse([NSThread isMainThread]);
+        XCTAssertEqual(groupNumber, 5u);
+        @synchronized (lock) {
+            asked++;
+        }
+        return relayed;
+    };
+
+    [self groupTestSendContent:[self groupTestContentOfLength:12 * kGroupTestChunkPayload]
+                         named:@"clip.mp4"
+                      msgIdHex:[OCTNgcGroupFileTransfer generateMsgIdHex]
+                            by:sender];
+
+    @synchronized (lock) {
+        return asked;
+    }
+}
+
+- (void)testTheChunksOfAGroupFileWithAMemberOverARelayGoAtThePaceOfTheRelays
+{
+    NSMutableArray<NSNumber *> *sentAt = [NSMutableArray new];
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    const NSUInteger asked = [self relayTestsSendTwelveChunksRelayed:YES sentAt:sentAt packets:packets];
+
+    XCTAssertEqual(packets.count, 13u);
+    XCTAssertEqual(asked, 13u, @"a packet did not ask whether a member is over a relay");
+    // The BEGIN and one chunk fit in the burst of the relays, 16 KiB; the rest go at 64 KiB/s, a chunk counted once
+    // though it goes to two members. Without a relay the BEGIN and two chunks go at once, then a chunk every 141 ms.
+    XCTAssertEqual(sentAt[1].unsignedLongLongValue, kPaceTestsT0);
+    XCTAssertGreaterThan(sentAt[2].unsignedLongLongValue, kPaceTestsT0);
+    const uint64_t bytesBeforeTheLast = packets[0].length + 11 * kPaceTestsChunk;
+    const uint64_t expected = (bytesBeforeTheLast - kRelayTestsBurst) * 1000 / kRelayTestsRate;
+    const uint64_t elapsed = sentAt.lastObject.unsignedLongLongValue - kPaceTestsT0;
+    XCTAssertGreaterThanOrEqual(elapsed, expected);
+    XCTAssertLessThanOrEqual(elapsed, expected + 50);
+    for (NSUInteger i = 3; i < sentAt.count; i++) {
+        const uint64_t gap = sentAt[i].unsignedLongLongValue - sentAt[i - 1].unsignedLongLongValue;
+        XCTAssertGreaterThanOrEqual(gap, kPaceTestsChunk * 1000 / kRelayTestsRate - 1, @"chunk %lu", (unsigned long)i);
+    }
+}
+
+- (void)testTheChunksOfAGroupFileWhoseMembersAllHaveADirectPathKeepThePaceOfTheGroup
+{
+    NSMutableArray<NSNumber *> *sentAt = [NSMutableArray new];
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    const NSUInteger asked = [self relayTestsSendTwelveChunksRelayed:NO sentAt:sentAt packets:packets];
+
+    XCTAssertEqual(packets.count, 13u);
+    XCTAssertEqual(asked, 13u);
+    // 512 KiB/s, a chunk counted for each of the two members, as testTheChunksOfAGroupFileGoAtThePaceForTheMembersOfTheGroup.
+    XCTAssertEqual(sentAt[2].unsignedLongLongValue, kPaceTestsT0);
+    const uint64_t costBeforeTheLast = 2 * (packets[0].length + 11 * kPaceTestsChunk);
+    const uint64_t expected = (costBeforeTheLast - kPaceTestsBurst) * 1000 / kPaceTestsRate;
+    const uint64_t elapsed = sentAt.lastObject.unsignedLongLongValue - kPaceTestsT0;
+    XCTAssertGreaterThanOrEqual(elapsed, expected);
+    XCTAssertLessThanOrEqual(elapsed, expected + 50);
+}
+
+// For a packet to one member alone only that member's path counts: a member with a direct path gets the whole file at
+// the pace of the group, however spent the pace of the relays is; a member over a relay, at the pace of the relays.
+- (void)testTheWholeFileToAMemberWithADirectPathIsNotHeldByThePaceOfTheRelays
+{
+    OCTGroupTestClock *clock = [OCTGroupTestClock new];
+    clock.nowMs = kPaceTestsT0;
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    NSMutableArray<NSArray *> *privatePackets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *sender = [self wholeFileTestSenderWithClock:clock members:2 packets:packets privatePackets:privatePackets];
+    sender.anyMemberRelayedBlock = ^BOOL (uint32_t groupNumber) {
+        return YES;
+    };
+    sender.memberRelayedBlock = ^BOOL (uint32_t groupNumber, uint32_t peerId) {
+        XCTAssertFalse([NSThread isMainThread]);
+        XCTAssertEqual(groupNumber, 5u);
+        return peerId == 8;
+    };
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    [self groupTestSendContent:[self groupTestContentOfLength:5 * kGroupTestChunkPayload] named:@"clip.mp4" msgIdHex:msgIdHex by:sender];
+    XCTAssertEqual(packets.count, 6u);
+    NSData *whole = [self groupTestRequestFor:msgIdHex count:0 then:[NSData data]];
+
+    // Member 7, with a direct path, asks for the whole file as the upload, at the pace of the relays, ends: that pace
+    // owes a chunk. All of the file goes to it in less time than one chunk takes at that pace.
+    const uint64_t askedAt = clock.nowMs;
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:whole];
+    [self groupTestDrainQueueOf:sender];
+    XCTAssertEqualObjects([self wholeFileTestContentsOf:privatePackets], (@[@"BEGIN", @0, @1, @2, @3, @4]));
+    XCTAssertLessThan([privatePackets.lastObject[2] unsignedLongLongValue] - askedAt, kPaceTestsChunk * 1000 / kRelayTestsRate,
+                      @"the whole file to a member with a direct path waited for the pace of the relays");
+
+    // Member 8, over a relay, asks a while later: the BEGIN and a chunk fit in the burst, the rest go at 64 KiB/s.
+    clock.nowMs += 5000;
+    [privatePackets removeAllObjects];
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:8 peerPublicKeyHex:nil data:whole];
+    [self groupTestDrainQueueOf:sender];
+    XCTAssertEqualObjects([self wholeFileTestContentsOf:privatePackets], (@[@"BEGIN", @0, @1, @2, @3, @4]));
+    for (NSUInteger i = 3; i < privatePackets.count; i++) {
+        const uint64_t gap = [privatePackets[i][2] unsignedLongLongValue] - [privatePackets[i - 1][2] unsignedLongLongValue];
+        XCTAssertGreaterThanOrEqual(gap, kPaceTestsChunk * 1000 / kRelayTestsRate - 1, @"packet %lu", (unsigned long)i);
+    }
+    XCTAssertEqual(packets.count, 6u, @"something went to the whole group");
 }
 
 #pragma mark - The whole file a member asks for

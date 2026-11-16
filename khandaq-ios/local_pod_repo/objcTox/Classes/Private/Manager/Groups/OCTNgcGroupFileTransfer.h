@@ -70,6 +70,17 @@ typedef void (^OCTNgcGroupFileTransferIncomingDroppedBlock)(uint32_t groupNumber
 /// before the first file goes; without it a packet costs as if it went to one member.
 @property (atomic, copy, nullable) NSUInteger (^memberCountBlock)(uint32_t groupNumber);
 
+/// KHANDAQ (0.2.57): whether a packet to the group goes to a member toxcore reaches only through a TCP relay (its
+/// connection status is TCP; this device, which toxcore lists too, left out). Such a packet waits for the pace of the
+/// relays too, which counts its bytes once. Called on the queues that send, never on the main one. Without it no packet
+/// waits for that pace.
+@property (atomic, copy, nullable) BOOL (^anyMemberRelayedBlock)(uint32_t groupNumber);
+
+/// KHANDAQ (0.2.57): whether toxcore reaches the member `peerId` of the group only through a TCP relay, for a packet to
+/// that member alone (sendPrivatePacketBlock). Called on the queues that send, never on the main one. Without it no
+/// such packet waits for the pace of the relays.
+@property (atomic, copy, nullable) BOOL (^memberRelayedBlock)(uint32_t groupNumber, uint32_t peerId);
+
 /// KHANDAQ (0.2.57): sends a packet of a group file to one member alone: the whole of a file this device sent, to a
 /// member that asks for all of it (an Android that has the file's message and no BEGIN of it asks so). Called on the
 /// queues that send, never on the main one. Set it before the first request comes; without it such a request is not

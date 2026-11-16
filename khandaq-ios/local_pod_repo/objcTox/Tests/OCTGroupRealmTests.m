@@ -550,6 +550,39 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
     return [@"" stringByPaddingToLength:64 withString:seed startingAtIndex:0];
 }
 
+#pragma mark - The pace of the relays
+
+// KHANDAQ (0.2.57): the submanager tells the file transfer which members are over a relay as toxcore says: TCP. toxcore
+// lists this device among the peers too, as TCP while it has no UDP of its own; that never makes a group relayed.
+- (void)testAMemberIsOverARelayWhenToxcoreSaysTCPAndThisDeviceIsLeftOut
+{
+    NSArray *mocks = [self groupFileMocksWithDownloads:[self.root stringByAppendingPathComponent:@"Downloads"]];
+    id tox = mocks[1];
+    OCMStub([tox performSyncBlockOnToxQueue:[OCMArg invokeBlock]]);
+    // Group 4: this device (peer 1) over TCP and a member with a direct path. Group 6: the same and a member over a relay.
+    for (NSNumber *group in @[@4, @6]) {
+        OCMStub([tox groupSelfPeerIdForGroupNumber:group.unsignedIntValue error:[OCMArg anyObjectRef]]).andReturn((uint32_t)1);
+        OCMStub([tox groupPeerConnectionStatusForGroupNumber:group.unsignedIntValue peerId:1 error:[OCMArg anyObjectRef]])
+            .andReturn(OCTToxConnectionStatusTCP);
+        OCMStub([tox groupPeerConnectionStatusForGroupNumber:group.unsignedIntValue peerId:2 error:[OCMArg anyObjectRef]])
+            .andReturn(OCTToxConnectionStatusUDP);
+    }
+    OCMStub([tox groupPeersForGroupNumber:4 error:[OCMArg anyObjectRef]]).andReturn((@[@{@"peerId": @1}, @{@"peerId": @2}]));
+    OCMStub([tox groupPeersForGroupNumber:6 error:[OCMArg anyObjectRef]])
+        .andReturn((@[@{@"peerId": @1}, @{@"peerId": @2}, @{@"peerId": @3}]));
+    OCMStub([tox groupPeerConnectionStatusForGroupNumber:6 peerId:3 error:[OCMArg anyObjectRef]]).andReturn(OCTToxConnectionStatusTCP);
+
+    OCTSubmanagerGroupsImpl *submanager = [self startedSubmanagerWithDataSource:mocks.firstObject];
+    OCTNgcGroupFileTransfer *transfer = [submanager valueForKey:@"fileTransfer"];
+
+    XCTAssertFalse(transfer.anyMemberRelayedBlock(4), @"this device made its group relayed");
+    XCTAssertTrue(transfer.anyMemberRelayedBlock(6));
+    XCTAssertFalse(transfer.memberRelayedBlock(6, 2));
+    XCTAssertTrue(transfer.memberRelayedBlock(6, 3));
+
+    XCTAssertEqual(mocks.count, 3u);
+}
+
 #pragma mark - The history sync
 
 // KHANDAQ (0.2.56): a text written while nobody else was in the group waits in the outbox, with no id yet, and

@@ -26,6 +26,12 @@ static const uint64_t kOCTNgcWholeFileRequestThrottleMs = 4000;
 // KHANDAQ (0.2.57): the pace of the group file packets this device sends (OCTNgcUploadPace): Android's NgcUploadPace
 // and the desktop's Air::UploadPace, with their numbers. About 4 Mbit/s, shared by the members a packet goes to.
 static const uint64_t kOCTNgcUploadBytesPerSecond = 512 * 1024;
+// KHANDAQ (0.2.57): and the pace of the packets that go to a member toxcore reaches only through a TCP relay: the
+// desktop's UploadPace::relayedBytesPerSecond (cbeb1d1f), a packet's bytes counted once however many such members it
+// goes to. toxcore sends every part of a chunk again about 3 s later, the parts of the same second at once, and a relay
+// passes a packet on only while its connection has room for it: over a relay those bursts are lost first. Measured live
+// by the desktop: chunks lost at 256 and 128 KiB/s a member over a relay, whole at 64 and 32; direct paths whole at 512.
+static const uint64_t kOCTNgcRelayedUploadBytesPerSecond = 64 * 1024;
 // After a pause, at most this much of the rate goes at once.
 static const uint64_t kOCTNgcUploadBurstMs = 250;
 // Longer pauses fill the credit all the same; the bound keeps the product in range.
@@ -281,6 +287,9 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 // from resendQueue, so a big file for one member never holds up the chunks the others ask for.
 @property (nonatomic, strong) dispatch_queue_t wholeFileQueue;
 @property (nonatomic, strong) OCTNgcUploadPace *uploadPace;
+// KHANDAQ (0.2.57): the pace of the relays (kOCTNgcRelayedUploadBytesPerSecond), which a packet to a member over a
+// relay waits for too. Its lock is taken inside the lock of uploadPace, never the other way round.
+@property (nonatomic, strong) OCTNgcUploadPace *relayPace;
 // The monotonic clock of the pace, in milliseconds, and how a paced send waits. Tests give their own.
 @property (atomic, copy) uint64_t (^nowMsBlock)(void);
 @property (atomic, copy) void (^sleepMsBlock)(uint64_t ms);
@@ -319,6 +328,8 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     _resendQueue = dispatch_queue_create("ngc-group-file-resend", DISPATCH_QUEUE_SERIAL);
     _wholeFileQueue = dispatch_queue_create("ngc-group-file-whole", DISPATCH_QUEUE_SERIAL);
     _uploadPace = [[OCTNgcUploadPace alloc] initWithBytesPerSecond:kOCTNgcUploadBytesPerSecond burstMs:kOCTNgcUploadBurstMs];
+    _relayPace = [[OCTNgcUploadPace alloc] initWithBytesPerSecond:kOCTNgcRelayedUploadBytesPerSecond
+                                                          burstMs:kOCTNgcUploadBurstMs];
     _nowMsBlock = ^uint64_t {
         return clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / NSEC_PER_MSEC;
     };
@@ -732,12 +743,17 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 }
 
 /**
- * KHANDAQ (0.2.57): a packet of the group file `msgIdHex` to its group, once the pace lets it go (OCTNgcUploadPace).
+ * KHANDAQ (0.2.57): a packet of the group file `msgIdHex` to its group, once the pace lets it go (OCTNgcUploadPace),
+ * and the pace of the relays too while a member of the group is over a relay (anyMemberRelayedBlock).
  * NO, with the error "cancelled", once that file is cancelled, while it waits too.
  */
 - (BOOL)sendPacedPacket:(NSData *)packet groupNumber:(uint32_t)groupNumber msgIdHex:(NSString *)msgIdHex error:(NSError **)error
 {
-    if (! [self awaitPaceForMsgIdHex:msgIdHex]) {
+    BOOL (^anyMemberRelayedBlock)(uint32_t) = self.anyMemberRelayedBlock;
+    const BOOL relayed = anyMemberRelayedBlock ? anyMemberRelayedBlock(groupNumber) : NO;
+    [self logRelayedPacket:packet relayed:relayed groupNumber:groupNumber toPeerId:nil msgIdHex:msgIdHex];
+
+    if (! [self awaitPaceForMsgIdHex:msgIdHex relayed:relayed]) {
         [self fillError:error code:OCTNgcGroupFileTransferErrorCancelled reason:@"Transfer cancelled"];
         return NO;
     }
@@ -748,20 +764,29 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
     NSUInteger (^memberCountBlock)(uint32_t) = self.memberCountBlock;
     const NSUInteger members = memberCountBlock ? memberCountBlock(groupNumber) : 1;
-    [self.uploadPace spend:[OCTNgcUploadPace costOfPacketBytes:packet.length members:members]];
+    [self spendPacedPacket:packet members:members relayed:relayed];
 
     return YES;
 }
 
 /**
  * KHANDAQ (0.2.57): as sendPacedPacket:groupNumber:msgIdHex:error:, to the member `peerId` alone (sendPrivatePacketBlock),
- * which the pace counts as one member. NO once the file is cancelled, or when the packet did not go.
+ * which the pace counts as one member. It waits for the pace of the relays only when that member is over a relay
+ * (memberRelayedBlock), whatever the other members are. NO once the file is cancelled, or when the packet did not go.
  */
 - (BOOL)sendPacedPacket:(NSData *)packet groupNumber:(uint32_t)groupNumber toPeerId:(uint32_t)peerId msgIdHex:(NSString *)msgIdHex
 {
     OCTNgcGroupFileTransferSendPrivatePacketBlock sendPrivatePacketBlock = self.sendPrivatePacketBlock;
 
-    if (! sendPrivatePacketBlock || ! [self awaitPaceForMsgIdHex:msgIdHex]) {
+    if (! sendPrivatePacketBlock) {
+        return NO;
+    }
+
+    BOOL (^memberRelayedBlock)(uint32_t, uint32_t) = self.memberRelayedBlock;
+    const BOOL relayed = memberRelayedBlock ? memberRelayedBlock(groupNumber, peerId) : NO;
+    [self logRelayedPacket:packet relayed:relayed groupNumber:groupNumber toPeerId:@(peerId) msgIdHex:msgIdHex];
+
+    if (! [self awaitPaceForMsgIdHex:msgIdHex relayed:relayed]) {
         return NO;
     }
 
@@ -771,12 +796,47 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return NO;
     }
 
-    [self.uploadPace spend:[OCTNgcUploadPace costOfPacketBytes:packet.length members:1]];
+    [self spendPacedPacket:packet members:1 relayed:relayed];
 
     return YES;
 }
 
-- (BOOL)awaitPaceForMsgIdHex:(NSString *)msgIdHex
+/// KHANDAQ (0.2.57): the packet went to `members` members, over a relay to at least one of them when `relayed`.
+- (void)spendPacedPacket:(NSData *)packet members:(NSUInteger)members relayed:(BOOL)relayed
+{
+    [self.uploadPace spend:[OCTNgcUploadPace costOfPacketBytes:packet.length members:members]];
+
+    if (relayed) {
+        [self.relayPace spend:packet.length];
+    }
+}
+
+/// KHANDAQ (0.2.57): a line for the first packet of a file (its BEGIN, or the file in one packet) that waits for the
+/// pace of the relays, so a log tells which pace a file went at.
+- (void)logRelayedPacket:(NSData *)packet
+                 relayed:(BOOL)relayed
+             groupNumber:(uint32_t)groupNumber
+                toPeerId:(nullable NSNumber *)peerId
+                msgIdHex:(NSString *)msgIdHex
+{
+    const uint8_t type = packet.length > 7 ? ((const uint8_t *)packet.bytes)[7] : 0;
+
+    if (! relayed || (type != kOCTNgcPktFileBegin && type != kOCTNgcPktFileSingle)) {
+        return;
+    }
+
+    if (peerId) {
+        OCTLogInfo(@"NGC group file %@ goes to peer %@ of group %u at the pace of the relays: it is over a relay",
+                   OCTNgcShortMsgId(msgIdHex), peerId, groupNumber);
+    }
+    else {
+        OCTLogInfo(@"NGC group file %@ goes to group %u at the pace of the relays: a member is over a relay",
+                   OCTNgcShortMsgId(msgIdHex), groupNumber);
+    }
+}
+
+/// Waits until the pace lets a packet go, and the pace of the relays too when `relayed`. NO once the file is cancelled.
+- (BOOL)awaitPaceForMsgIdHex:(NSString *)msgIdHex relayed:(BOOL)relayed
 {
     while (YES) {
         if ([self isSendCancelledForMsgIdHex:msgIdHex]) {
@@ -785,11 +845,18 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
         uint64_t waitMs = 0;
         @synchronized (self.uploadPace) {
-            const uint64_t now = self.nowMsBlock();
-            if ([self.uploadPace readyAtMs:now]) {
-                return YES;
+            @synchronized (self.relayPace) {
+                const uint64_t now = self.nowMsBlock();
+                const BOOL ready = [self.uploadPace readyAtMs:now];
+                const BOOL relayReady = ! relayed || [self.relayPace readyAtMs:now];
+
+                if (ready && relayReady) {
+                    return YES;
+                }
+
+                waitMs = MAX(ready ? 0 : [self.uploadPace msUntilReadyAtMs:now],
+                             relayReady ? 0 : [self.relayPace msUntilReadyAtMs:now]);
             }
-            waitMs = [self.uploadPace msUntilReadyAtMs:now];
         }
 
         self.sleepMsBlock(MAX((uint64_t)1, MIN(waitMs, kOCTNgcUploadLongestSleepMs)));

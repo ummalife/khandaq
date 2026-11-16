@@ -3934,11 +3934,12 @@ public class HelperFiletransfer
         {
             final long partial = get_vfs_file_length(f.path_name, f.file_name);
             final long seek_to = FileResume.seekBeforeAccept(f.current_position, partial, f.filesize);
-            final boolean sought = (seek_to > 0)
-                                   && (MainActivity.tox_file_seek(friend_number, f.file_number, seek_to) == 0);
+            final int seek_result = (seek_to > 0) ? MainActivity.tox_file_seek(friend_number, f.file_number, seek_to)
+                                                  : -1;
+            final boolean sought = (seek_to > 0) && FileResume.seekTaken(seek_result);
             NetworkDiagnosticsLog.log("file_resume", "seek_then_resume_incoming:ftid=" + f.id + " at="
                                                      + f.current_position + " partial=" + partial + " seek=" + seek_to
-                                                     + " ok=" + sought);
+                                                     + " ok=" + sought + " result=" + seek_result);
             if (!sought)
             {
                 // The bytes here no longer reach the point it was bound at, or toxcore did not take the seek: the

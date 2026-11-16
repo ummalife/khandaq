@@ -188,6 +188,15 @@ final class FileResume
     }
 
     /**
+     * Whether toxcore took a seek, from what MainActivity.tox_file_seek gives back: the JNI wrapper
+     * (jni-c-toxcore.c) returns the bool of tox_file_seek, 1, when it did, and a negative code for each error.
+     */
+    static boolean seekTaken(final int result)
+    {
+        return result >= 0;
+    }
+
+    /**
      * The path of a file of theirs under way as the start's cleanup of the temp dir compares it (SPEC 1.5): its
      * row joins the dir and the name with extra slashes ("/tempdir/files//KEY//name"), the listing does not.
      * Repeated slashes count as one, and a slash at the end as none.

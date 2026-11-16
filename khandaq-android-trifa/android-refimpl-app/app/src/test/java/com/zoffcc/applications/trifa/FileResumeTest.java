@@ -115,6 +115,33 @@ public class FileResumeTest
     }
 
     @Test
+    public void a_seek_toxcore_took_reads_as_taken()
+    {
+        // The JNI wrapper gives the bool of tox_file_seek (1) when toxcore took it, a negative code otherwise.
+        final String jni = read("../../jni-c-toxcore/jni-c-toxcore.c");
+        final int start = jni.indexOf("Java_com_zoffcc_applications_trifa_MainActivity_tox_1file_1seek(");
+        assertTrue(start >= 0);
+        final String seek = jni.substring(start, jni.indexOf("\n}\n", start));
+        assertTrue(seek.contains("return (jint)res;"));
+        final java.util.regex.Matcher codes = java.util.regex.Pattern.compile("return \\(jint\\)(-?\\d+);").matcher(seek);
+        int errors = 0;
+        while (codes.find())
+        {
+            assertTrue(codes.group(), Integer.parseInt(codes.group(1)) < 0);
+            assertFalse(codes.group(), FileResume.seekTaken(Integer.parseInt(codes.group(1))));
+            errors++;
+        }
+        assertEquals(7, errors);
+        assertTrue(FileResume.seekTaken(1));
+
+        // The accept asks the rule: a seek taken keeps the point the transfer goes on from.
+        final String accept = bare(method(read(JAVA + "HelperFiletransfer.java"),
+                                          "private static void seek_then_resume_incoming("));
+        assertTrue(accept.contains("finalbooleansought=(seek_to>0)&&FileResume.seekTaken(seek_result);"));
+        assertFalse(accept.contains("seek_to)==0"));
+    }
+
+    @Test
     public void the_size_of_an_entry_is_read_from_its_text()
     {
         assertEquals(SIZE, FileResume.sizeFromIncomingText("film.mp4\n" + SIZE + " bytes"));

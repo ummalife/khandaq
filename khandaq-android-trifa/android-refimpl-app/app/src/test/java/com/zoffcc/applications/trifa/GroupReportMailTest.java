@@ -410,6 +410,10 @@ public class GroupReportMailTest
         final String helper = read(JAVA + "HelperMessageReport.java");
         assertTrue(helper.contains("new Intent(Intent.ACTION_SENDTO, Uri.parse(link))"));
         assertTrue(helper.contains("GroupReportMail.mailto("));
+        // The link and the extras carry the same subject and body, both extras together (AOSP's composer empties the
+        // body of an intent with extras but no EXTRA_TEXT).
+        assertTrue(helper.contains("mail.putExtra(Intent.EXTRA_SUBJECT, GroupReportMail.subject(groupName));"));
+        assertTrue(helper.contains("mail.putExtra(Intent.EXTRA_TEXT, GroupReportMail.body(groupName, author, time, text));"));
         assertTrue(helper.contains("MainActivity.selected_group_messages.size() != 1"));
         // No mail app: the words the app has for that already, under the field.
         assertTrue(helper.contains("R.string.MainActivity_no_email_app_found"));

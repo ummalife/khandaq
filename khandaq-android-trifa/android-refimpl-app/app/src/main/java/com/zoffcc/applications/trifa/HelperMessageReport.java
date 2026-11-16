@@ -76,7 +76,11 @@ final class HelperMessageReport
                                                                 m.was_synced && NgcSignedHistory.isAuthorVerified(m));
         final String link = GroupReportMail.mailto(groupName, author, time, text);
         final Intent mail = new Intent(Intent.ACTION_SENDTO, Uri.parse(link));
-        // For the mail apps that read the extras rather than the link: the same subject and body.
+        // For the mail apps that read the extras rather than the link: the same subject and body. An app that reads
+        // both shows one in place of the other, never both: K-9 and Thunderbird take EXTRA_TEXT only while the link
+        // left the body empty, AOSP's composer (UnifiedEmail) sets the body from the link and then again from
+        // EXTRA_TEXT. Both extras go, or neither: that composer empties the body of an intent with extras but no
+        // EXTRA_TEXT.
         mail.putExtra(Intent.EXTRA_SUBJECT, GroupReportMail.subject(groupName));
         mail.putExtra(Intent.EXTRA_TEXT, GroupReportMail.body(groupName, author, time, text));
         // Who and where, never the words of the message.

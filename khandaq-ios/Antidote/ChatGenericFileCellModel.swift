@@ -16,6 +16,13 @@ class ChatGenericFileCellModel: ChatMovableDateCellModel {
         case done
     }
 
+    /// KHANDAQ (0.2.57): the state of a file that waits for an accept. One the lost connection cut
+    /// (`cutByConnection`) waits for the connection with its bar until it is offered again: ours, offered again
+    /// while the person is online (`offered`: it has a transfer again), waits for them to accept it.
+    static func waitingState(cutByConnection: Bool, outgoing: Bool, offered: Bool) -> State {
+        return (cutByConnection && !(outgoing && offered)) ? .waitingConnection : .waitingConfirmation
+    }
+
     var state: State = .waitingConfirmation
     var fileName: String?
     var fileSize: String?

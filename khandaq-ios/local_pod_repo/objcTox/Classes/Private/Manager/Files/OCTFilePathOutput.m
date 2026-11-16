@@ -7,11 +7,14 @@
 #import "OCTFileTools.h"
 
 static NSString *const kPartialFileExtension = @"part";
+// KHANDAQ (0.2.57): a partial file is hidden and named for its message, ".<message id>.part", never for the result:
+// "<name>.part" could be the name of a file of another message, received or sent, in the same folder.
+static NSString *const kPartialFilePrefix = @".";
 
 @interface OCTFilePathOutput ()
 
 @property (copy, nonatomic, readonly, nonnull) NSString *tempFilePath;
-/// The partial file outlives a cancel (initWithResultFilePath:).
+/// The partial file outlives a cancel (initWithResultFilePath:ownerIdentifier:).
 @property (assign, nonatomic, readonly) BOOL keepsPartialData;
 
 // Atomic: a cancel on the main thread lets go of it while a chunk is written on the transfer queue.
@@ -24,8 +27,21 @@ static NSString *const kPartialFileExtension = @"part";
 #pragma mark -  Class methods
 
 + (nonnull NSString *)partialFilePathForResultFilePath:(nonnull NSString *)resultFilePath
+                                       ownerIdentifier:(nonnull NSString *)ownerIdentifier
 {
-    return [resultFilePath stringByAppendingPathExtension:kPartialFileExtension];
+    NSString *name = [[kPartialFilePrefix stringByAppendingString:ownerIdentifier]
+                      stringByAppendingPathExtension:kPartialFileExtension];
+    return [[resultFilePath stringByDeletingLastPathComponent] stringByAppendingPathComponent:name];
+}
+
++ (nullable NSString *)ownerIdentifierOfPartialFileName:(nonnull NSString *)fileName
+{
+    if (! [fileName hasPrefix:kPartialFilePrefix] || ! [[fileName pathExtension] isEqualToString:kPartialFileExtension]) {
+        return nil;
+    }
+
+    NSString *owner = [[fileName stringByDeletingPathExtension] substringFromIndex:kPartialFilePrefix.length];
+    return (owner.length > 0) ? owner : nil;
 }
 
 #pragma mark -  Lifecycle
@@ -53,6 +69,7 @@ static NSString *const kPartialFileExtension = @"part";
 }
 
 - (nullable instancetype)initWithResultFilePath:(nonnull NSString *)resultFilePath
+                                ownerIdentifier:(nonnull NSString *)ownerIdentifier
 {
     self = [super init];
 
@@ -61,7 +78,7 @@ static NSString *const kPartialFileExtension = @"part";
     }
 
     _resultFilePath = [resultFilePath copy];
-    _tempFilePath = [[self class] partialFilePathForResultFilePath:resultFilePath];
+    _tempFilePath = [[self class] partialFilePathForResultFilePath:resultFilePath ownerIdentifier:ownerIdentifier];
     _keepsPartialData = YES;
 
     // Reserve the name, as the other init does, unless the placeholder of an earlier attempt is there.

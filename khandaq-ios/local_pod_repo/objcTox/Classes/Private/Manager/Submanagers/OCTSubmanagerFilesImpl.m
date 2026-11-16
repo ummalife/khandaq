@@ -43,9 +43,14 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
 @property (strong, nonatomic, readonly) NSObject *filesCleanupLock;
 @property (assign, nonatomic) BOOL filesCleanupInProgress;
 
-/// KHANDAQ (0.2.57): public key of a friend -> how many times their connection changed, so a grace that began
+/// KHANDAQ (0.2.57): public key of a friend -> how many times they went online or offline, so a grace that began
 /// while they were online ends nothing once they have gone away and come back since.
 @property (strong, nonatomic, readonly) NSMutableDictionary<NSString *, NSNumber *> *friendLinkGenerations;
+/// KHANDAQ (0.2.57): public key of a friend -> whether they were online at the last change of their connection.
+@property (strong, nonatomic, readonly) NSMutableDictionary<NSString *, NSNumber *> *friendLinkConnected;
+/// KHANDAQ (0.2.57): public key of a friend -> when an offer of theirs last came or a transfer of theirs to us last
+/// ended (system uptime). The grace counts from then (endReofferGraceForFriendWithPublicKey:generation:).
+@property (strong, nonatomic, readonly) NSMutableDictionary<NSString *, NSNumber *> *friendIncomingActivity;
 
 @end
 
@@ -66,6 +71,8 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
     _queue = [NSOperationQueue new];
     _filesCleanupLock = [NSObject new];
     _friendLinkGenerations = [NSMutableDictionary new];
+    _friendLinkConnected = [NSMutableDictionary new];
+    _friendIncomingActivity = [NSMutableDictionary new];
     _reofferGraceInterval = kReofferGraceInterval;
 
     return self;
@@ -146,7 +153,7 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
     NSFileManager *fileManager = [NSFileManager defaultManager];
 
     // KHANDAQ (0.2.57): 1:1 downloads keep their bytes next to the result now (OCTFilePathOutput
-    // initWithResultFilePath:), so a restart leaves them; this directory holds what older versions left.
+    // initWithResultFilePath:ownerIdentifier:), so a restart leaves them; this directory holds what older versions left.
     NSString *downloads = [self downloadsTempDirectory];
     OCTLogInfo(@"clearing downloads temp directory %@\ncontents %@",
                downloads,
@@ -413,7 +420,8 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
         [file internalSetFilePath:resultFilePath];
     }];
 
-    OCTFilePathOutput *output = [[OCTFilePathOutput alloc] initWithResultFilePath:resultFilePath];
+    OCTFilePathOutput *output = [[OCTFilePathOutput alloc] initWithResultFilePath:resultFilePath
+                                                                  ownerIdentifier:message.uniqueIdentifier];
 
     NSDictionary *userInfo = [self fileOperationUserInfoWithMessage:message];
 
@@ -477,12 +485,16 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
     if (incoming) {
         [self removePartialFileOfMessage:message];
     }
+    if (incoming && live) {
+        [self noteIncomingTransferActivityOfFriend:friend];
+    }
 
     [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
         file.fileType = OCTMessageFileTypeCanceled;
-        // KHANDAQ (0.2.57): theirs, cancelled while nothing was live, cannot tell them: their next offer of it
-        // is refused (dataFileReceiveForFileNumber).
-        file.pausedBy = (incoming && underWay && ! live) ? OCTMessageFilePausedByConnection : OCTMessageFilePausedByNone;
+        // KHANDAQ (0.2.57): theirs, cancelled while under way: their next offer of it is refused
+        // (dataFileReceiveForFileNumber), never taken by itself. With nothing live the cancel cannot tell them;
+        // with a transfer live it may not reach them (the connection goes first), and they offer it again.
+        file.pausedBy = (incoming && underWay) ? OCTMessageFilePausedByConnection : OCTMessageFilePausedByNone;
         file.transferredBytes = 0;
     }];
 
@@ -788,6 +800,7 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
 
             if (message.senderUniqueIdentifier) {
                 [self removePartialFileOfMessage:message];
+                [self noteIncomingTransferActivityOfFriend:[self friendForMessage:message]];
             }
 
             [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
@@ -867,16 +880,28 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
         return;
     }
 
+    // KHANDAQ (0.2.57): only going online or offline is a new connection. A change between UDP and TCP, or the
+    // same status again, keeps the grace that runs: a link that flipped between them more often than the grace
+    // began it anew each time, and their file that waited never ended.
+    BOOL linkChanged = YES;
     if (friend.publicKey.length > 0) {
-        NSUInteger generation = [self.friendLinkGenerations[friend.publicKey] unsignedIntegerValue];
-        self.friendLinkGenerations[friend.publicKey] = @(generation + 1);
+        NSNumber *wasConnected = self.friendLinkConnected[friend.publicKey];
+        linkChanged = (! wasConnected || wasConnected.boolValue != friend.isConnected);
+        self.friendLinkConnected[friend.publicKey] = @(friend.isConnected);
+
+        if (linkChanged) {
+            NSUInteger generation = [self.friendLinkGenerations[friend.publicKey] unsignedIntegerValue];
+            self.friendLinkGenerations[friend.publicKey] = @(generation + 1);
+        }
     }
 
     [self sendAvatarToFriend:friend];
 
     if (friend.isConnected) {
         [self resendPendingOutgoingFilesToFriend:friend];
-        [self beginReofferGraceForFriend:friend];
+        if (linkChanged) {
+            [self beginReofferGraceForFriend:friend];
+        }
     }
     else {
         [self requeueInFlightTransfersForDisconnectedFriend:friend];
@@ -927,7 +952,7 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
         OCTLogInfo(@"requeue-on-disconnect: %@ transfer fileNumber %d friend %@, under way %d, %lld bytes moved",
                    outgoing ? @"outgoing" : @"incoming", messageFile.internalFileNumber, friend, underWay, moved);
 
-        // A download keeps the bytes it wrote (OCTFilePathOutput initWithResultFilePath:).
+        // A download keeps the bytes it wrote (OCTFilePathOutput initWithResultFilePath:ownerIdentifier:).
         [operation cancel];
 
         [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
@@ -1073,12 +1098,12 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
 
                 exists = isBound(name);
 
-                // KHANDAQ (0.2.57): "<name>.part" holds the bytes of a download into "<name>" that waits for the
-                // connection (OCTFilePathOutput initWithResultFilePath:); it goes when its message goes.
-                NSString *partialOf = [name stringByDeletingPathExtension];
-                if (! exists && partialOf.length > 0 &&
-                    [[OCTFilePathOutput partialFilePathForResultFilePath:partialOf] isEqualToString:name]) {
-                    exists = isBound(partialOf);
+                // KHANDAQ (0.2.57): ".<message id>.part" holds the bytes of a download of that message that waits
+                // for the connection (OCTFilePathOutput initWithResultFilePath:ownerIdentifier:); it goes when its
+                // message goes.
+                NSString *owner = [OCTFilePathOutput ownerIdentifierOfPartialFileName:name];
+                if (! exists && owner.length > 0) {
+                    exists = [realmManager objectWithUniqueIdentifier:owner class:[OCTMessageAbstract class]] != nil;
                 }
             });
 
@@ -1231,6 +1256,9 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
 
     return ^(OCTFileBaseOperation *__nonnull operation) {
                __strong OCTSubmanagerFilesImpl *strongSelf = weakSelf;
+               if (! message.isInvalidated && message.senderUniqueIdentifier) {
+                   [strongSelf noteIncomingTransferActivityOfFriend:[strongSelf friendForMessage:message]];
+               }
                [strongSelf updateMessageFile:message withBlock:^(OCTMessageFile *file) {
 
             file.fileType = OCTMessageFileTypeReady;
@@ -1256,19 +1284,27 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
                    return;
                }
 
-               // KHANDAQ (0.2.57): it failed because the friend went away: it waits for the connection and goes
-               // on from where it stopped, as one the disconnect requeue reaches first does.
+               // KHANDAQ (0.2.57): it failed because the friend went away, or before the accept with the bytes kept
+               // left as they were (OCTFileDownloadOperation failedBeforeAccept): it waits for the connection and
+               // goes on from where it stopped, as one the disconnect requeue reaches first does. With the friend
+               // online, the grace ends it if they never offer it again.
                OCTFriend *friend = [strongSelf friendForMessage:message];
-               if (friend && ! [strongSelf isFriendConnected:friend]) {
+               if (message.senderUniqueIdentifier) {
+                   [strongSelf noteIncomingTransferActivityOfFriend:friend];
+               }
+               BOOL failedBeforeAccept = [operation isKindOfClass:[OCTFileDownloadOperation class]] &&
+                                         ((OCTFileDownloadOperation *)operation).failedBeforeAccept;
+               if (friend && (failedBeforeAccept || ! [strongSelf isFriendConnected:friend])) {
                    BOOL incoming = (message.senderUniqueIdentifier != nil);
                    OCTToxFileSize moved = incoming ? [strongSelf partialLengthOfMessage:message] : operation.bytesDone;
-                   OCTLogInfo(@"transfer failed with the friend away, waiting for the connection: %@", message);
+                   OCTLogInfo(@"transfer failed with the friend away or before the accept, waiting for the connection: %@", message);
                    [strongSelf updateMessageFile:message withBlock:^(OCTMessageFile *file) {
                        file.internalFileNumber = (int)kOCTToxFileNumberFailure;
                        file.fileType = OCTMessageFileTypeWaitingConfirmation;
                        file.pausedBy = OCTMessageFilePausedByConnection;
                        file.transferredBytes = moved;
                    }];
+                   [strongSelf beginReofferGraceForFriend:friend];
                    return;
                }
 
@@ -1360,6 +1396,7 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
     NSString *publicKey = [[self.dataSource managerGetTox] publicKeyFromFriendNumber:friendNumber error:nil];
     OCTFriend *friend = [realmManager friendWithPublicKey:publicKey];
     OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
+    [self noteIncomingTransferActivityOfFriend:friend];
 
     // KHANDAQ (0.2.57): the same file again, offered with the id it came with before (the sender goes on after
     // the connection went): it belongs to the message it already has here, never to a new one.
@@ -1595,8 +1632,15 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
     }
 
     NSUInteger generation = [self.friendLinkGenerations[publicKey] unsignedIntegerValue];
+    [self endReofferGraceForFriendWithPublicKey:publicKey generation:generation after:self.reofferGraceInterval];
+}
+
+- (void)endReofferGraceForFriendWithPublicKey:(NSString *)publicKey
+                                   generation:(NSUInteger)generation
+                                        after:(NSTimeInterval)delay
+{
     __weak OCTSubmanagerFilesImpl *weakSelf = self;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(self.reofferGraceInterval * NSEC_PER_SEC)),
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         [weakSelf endReofferGraceForFriendWithPublicKey:publicKey generation:generation];
     });
@@ -1615,11 +1659,44 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
         return;
     }
 
+    // KHANDAQ (0.2.57): a sender may offer what waits one file at a time (Android: one per friend, the next once
+    // the last has ended): the rest may still come while a file of theirs is under way here, or one ended a moment
+    // ago. The grace waits on, and counts from the last time a transfer of theirs was live. It used to end the files
+    // that waited behind the first one, with their bytes, while that one came.
+    NSTimeInterval quiet = 0;
+    if (! [self hasIncomingTransferUnderWayFromFriend:friend]) {
+        NSNumber *activity = self.friendIncomingActivity[publicKey];
+        quiet = activity ? [NSProcessInfo processInfo].systemUptime - activity.doubleValue : self.reofferGraceInterval;
+    }
+    if (quiet < self.reofferGraceInterval) {
+        [self endReofferGraceForFriendWithPublicKey:publicKey generation:generation after:self.reofferGraceInterval - quiet];
+        return;
+    }
+
     // Only their 1:1 files name them as the sender (group files have none), and no chat is made for the look.
     NSPredicate *predicate = [NSPredicate predicateWithFormat:
                               @"senderUniqueIdentifier == %@ AND messageFile.fileType == %d AND messageFile.internalFileNumber == %d",
                               friend.uniqueIdentifier, OCTMessageFileTypeWaitingConfirmation, (int)kOCTToxFileNumberFailure];
     [self endWaitingFilesMatching:predicate reason:@"not offered again while the friend was online"];
+}
+
+/// KHANDAQ (0.2.57): an offer of theirs waits for the accept here, or a file of theirs comes or is paused.
+- (BOOL)hasIncomingTransferUnderWayFromFriend:(OCTFriend *)friend
+{
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"senderUniqueIdentifier == %@ AND messageFile.internalFileNumber != %d AND messageFile.fileType IN %@",
+                              friend.uniqueIdentifier, (int)kOCTToxFileNumberFailure,
+                              @[@(OCTMessageFileTypeWaitingConfirmation), @(OCTMessageFileTypeLoading), @(OCTMessageFileTypePaused)]];
+    RLMResults *results = [[self.dataSource managerGetRealmManager] objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
+    return results.count > 0;
+}
+
+/// KHANDAQ (0.2.57): an offer of theirs came, or a transfer of theirs to us ended, now (friendIncomingActivity).
+- (void)noteIncomingTransferActivityOfFriend:(OCTFriend *)friend
+{
+    if (friend.publicKey.length > 0) {
+        self.friendIncomingActivity[friend.publicKey] = @([NSProcessInfo processInfo].systemUptime);
+    }
 }
 
 - (void)endWaitingFilesMatching:(NSPredicate *)predicate reason:(NSString *)reason
@@ -1715,7 +1792,10 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
 - (NSString *)partialFilePathOfMessage:(OCTMessageAbstract *)message
 {
     NSString *resultFilePath = [message.messageFile filePath];
-    return resultFilePath.length > 0 ? [OCTFilePathOutput partialFilePathForResultFilePath:resultFilePath] : nil;
+    if (resultFilePath.length == 0 || message.uniqueIdentifier.length == 0) {
+        return nil;
+    }
+    return [OCTFilePathOutput partialFilePathForResultFilePath:resultFilePath ownerIdentifier:message.uniqueIdentifier];
 }
 
 - (OCTToxFileSize)partialLengthOfMessage:(OCTMessageAbstract *)message

@@ -127,6 +127,24 @@ class GroupReportTests: XCTestCase {
         XCTAssertEqual(GroupReport.authorKey(of: ours), "")
     }
 
+    func testAPrivateMessageInTheGroupIsReportedWithTheMailOfTheGroup() throws {
+        let chat = try appClass("OCTChat", as: OCTChat.Type.self).init()
+        chat.isGroup = true
+        chat.groupName = "Khandaq Community"
+        let message = try entry(peerId: 9)
+        message.groupPrivateMessage = true
+        message.groupPrivatePeerPubkey = key
+        message.dateInterval = time.timeIntervalSince1970
+        let text = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        text.text = "Peace be upon you"
+        message.messageText = text
+
+        let report = GroupReport(chat: chat, message: message)
+
+        XCTAssertEqual(report.subject, "Report: Khandaq Community")
+        XCTAssertEqual(report.body, "Group: Khandaq Community\nAuthor: 7F3A91C0\nTime: 2026-11-16T12:34:56Z\nMessage:\nPeace be upon you")
+    }
+
     func testAGroupNameInAnotherAlphabetIsEncodedAsUTF8() throws {
         let report = GroupReport(groupName: "Сообщество", authorKey: key, time: time, text: "Ассаламу алейкум")
         let string = try XCTUnwrap(report.mailtoURL).absoluteString

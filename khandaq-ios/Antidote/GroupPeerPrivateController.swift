@@ -449,6 +449,25 @@ extension GroupPeerPrivateController: UITableViewDelegate {
         }
         return height
     }
+
+    // KHANDAQ (0.2.57, SPEC-community item 5): a private message the member wrote here is reported with the
+    // mail of a message in the group.
+    func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
+        guard indexPath.row < messages.count, !messages[indexPath.row].isOutgoing() else {
+            return nil
+        }
+        let message = messages[indexPath.row]
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+            let report = UIAction(title: String(localized: "chat_report_action"),
+                                  image: UIImage(systemName: "exclamationmark.bubble")) { _ in
+                guard let self = self, !message.isInvalidated else {
+                    return
+                }
+                GroupReport(chat: self.chat, message: message).present(from: self)
+            }
+            return UIMenu(title: "", children: [report])
+        }
+    }
 }
 
 private extension GroupPeerPrivateController {

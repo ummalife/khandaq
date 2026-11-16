@@ -2,7 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import MessageUI
 import UIKit
 import SnapKit
 
@@ -442,69 +441,11 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
 
     // MARK: Report
 
-    /// The mail about a message someone else wrote here: the mail composer with it written, or, without a
-    /// mail account on the phone, the same mail through a mailto: link. The person sends it themselves. When
-    /// no app takes the link either, the address is shown, so the person still knows where to write.
+    /// The mail about a message someone else wrote here (GroupReport.present).
     func report(_ message: OCTMessageAbstract) {
         guard !message.isInvalidated else {
             return
         }
-        let report = groupReport(for: message)
-        // Who and where, never the words of the message.
-        log("Report: a mail to support about a message of \(report.author) in a group")
-
-        if MFMailComposeViewController.canSendMail() {
-            let composer = MFMailComposeViewController()
-            composer.mailComposeDelegate = self
-            composer.setToRecipients([GroupReport.address])
-            composer.setSubject(report.subject)
-            composer.setMessageBody(report.body, isHTML: false)
-            present(composer, animated: true, completion: nil)
-            return
-        }
-        guard let url = report.mailtoURL else {
-            log("Report: the mail could not be written as a link")
-            showReportAddress()
-            return
-        }
-        UIApplication.shared.open(url, options: [:]) { [weak self] opened in
-            if !opened {
-                log("Report: no mail app took the mail")
-                self?.showReportAddress()
-            }
-        }
-    }
-
-    /// The address of support, under the title of the action: no new words to translate.
-    private func showReportAddress() {
-        let alert = UIAlertController(title: String(localized: "chat_report_action"),
-                                      message: GroupReport.address,
-                                      preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: String(localized: "alert_ok"), style: .cancel, handler: nil))
-        present(alert, animated: true, completion: nil)
-    }
-
-    func groupReport(for message: OCTMessageAbstract) -> GroupReport {
-        let stored = chat.groupName ?? ""
-        let text: String
-        if let file = message.messageFile {
-            // A file says what it is by its name; what is in it stays on this phone.
-            text = file.fileName ?? ""
-        }
-        else {
-            text = MessageReplyHelper.plainBody(for: message) ?? message.messageText?.text ?? ""
-        }
-        return GroupReport(groupName: stored.isEmpty ? ChatListContent.groupTitle(for: chat) : stored,
-                           authorKey: GroupReport.authorKey(of: message),
-                           time: message.date(),
-                           text: text)
-    }
-}
-
-extension ChatGroupController: MFMailComposeViewControllerDelegate {
-    func mailComposeController(_ controller: MFMailComposeViewController,
-                               didFinishWith result: MFMailComposeResult,
-                               error: Error?) {
-        controller.dismiss(animated: true, completion: nil)
+        GroupReport(chat: chat, message: message).present(from: self)
     }
 }

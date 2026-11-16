@@ -1663,6 +1663,8 @@ public class HelperFiletransfer
     private static final Set<String> incoming_already_here = ConcurrentHashMap.newKeySet();
     /** When the person asked again for a file of theirs that no transfer carries (retry_incoming_filetransfer). */
     private static final ConcurrentHashMap<Long, Long> incoming_wait_restarted_at = new ConcurrentHashMap<>();
+    /** Files of theirs the person said no to, by message, offered again since: see incoming_refused_by_person. */
+    private static final Set<Long> incoming_refused_offered_again = ConcurrentHashMap.newKeySet();
 
     /** How long this friend has been online again, or -1 while offline or not known. */
     static long friend_online_for_ms(final String pubkey)
@@ -1927,7 +1929,7 @@ public class HelperFiletransfer
                 return true;
             }
 
-            final boolean refused = incoming_cancelled_by_person(m, earlier);
+            final boolean refused = incoming_refused_by_person(m, earlier);
             final boolean accepted_before = !refused && (m.ft_accepted || ((earlier != null) && earlier.ft_accepted));
             Filetransfer f = earlier;
             if (f == null)
@@ -1962,6 +1964,9 @@ public class HelperFiletransfer
             if (refused)
             {
                 // The person cancelled it: its bytes do not stay (SPEC-network 1.5), and it waits for a tap.
+                // KHANDAQ (0.2.57): the no is kept before the bind below writes over the cancelled row that told
+                // so: the retries that run by themselves, and a next offer, would take it for one never refused.
+                incoming_refused_offered_again.add(m.id);
                 delete_filetransfer_tmpfile(f.id);
             }
             final long partial = refused ? -1L : get_vfs_file_length(f.path_name, f.file_name);
@@ -2113,6 +2118,17 @@ public class HelperFiletransfer
     {
         return (m.state == TOX_FILE_CONTROL_CANCEL.value) && (m.filedb_id == -1) && (f != null)
                && (f.state == TOX_FILE_CONTROL_CANCEL.value);
+    }
+
+    /**
+     * KHANDAQ (0.2.57): a file of theirs the person said no to, as FileResume.acceptsByItself is fed: its entry and
+     * row cancelled by the person, or, once its sender offered it again, the no kept at the bind of that offer,
+     * which leaves it waiting for a tap and writes over the cancelled row (resume_incoming_offer). That no lasts
+     * for this run of the app, until the person's own Accept or Retry takes it back.
+     */
+    private static boolean incoming_refused_by_person(final Message m, final Filetransfer f)
+    {
+        return incoming_cancelled_by_person(m, f) || incoming_refused_offered_again.contains(m.id);
     }
 
     /**
@@ -4047,6 +4063,8 @@ public class HelperFiletransfer
         {
             return;
         }
+        // KHANDAQ (0.2.57): the tap takes back a no kept through an offer since (incoming_refused_by_person).
+        incoming_refused_offered_again.remove(message.id);
         if (f.file_number < 0)
         {
             set_message_accepted_from_id(message.id);
@@ -4269,8 +4287,9 @@ public class HelperFiletransfer
 
     /**
      * KHANDAQ (0.2.57): the retries that run by themselves (the friend back, the row drawn, the app in front).
-     * They nudge a transfer that was accepted, as before, and accept one not accepted yet only when the
-     * automatic download allows it: they used to accept every file, so its switches did nothing. A file no
+     * They nudge a transfer that was accepted, as before, and accept one not accepted yet only as a recognised
+     * offer is (FileResume.acceptsByItself): when the automatic download allows it, and never one the person said
+     * no to, also once offered again. They used to accept every file, so its switches did nothing. A file no
      * transfer carries now waits for its sender's next offer (resume_incoming_offer).
      */
     static void resume_incoming_filetransfer_by_itself(final Message message)
@@ -4295,7 +4314,8 @@ public class HelperFiletransfer
             final boolean accepted = current.ft_accepted || f.ft_accepted;
             if (!accepted)
             {
-                if (auto_download_allows(current))
+                if (FileResume.acceptsByItself(false, incoming_refused_by_person(current, f),
+                                               auto_download_allows(current)))
                 {
                     accept_paused_incoming_filetransfer(current);
                 }
@@ -4473,6 +4493,8 @@ public class HelperFiletransfer
                 Log.i(TAG, "retry_incoming_filetransfer:nothing_to_retry:" + current.id);
                 return;
             }
+            // KHANDAQ (0.2.57): as the Accept, the tap takes back a no kept through an offer since.
+            incoming_refused_offered_again.remove(current.id);
             final Filetransfer f = transfer_row(current.filetransfer_id);
             if ((f == null) || (f.file_number < 0) || (f.state == TOX_FILE_CONTROL_CANCEL.value)
                 || (current.state == TOX_FILE_CONTROL_CANCEL.value))

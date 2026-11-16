@@ -166,7 +166,9 @@ public class AutoDownloadPreferenceTest
         // The automatic retries ask the rule; they used to accept every file.
         final String helper = read("src/main/java/com/zoffcc/applications/trifa/HelperFiletransfer.java");
         assertFalse(helper.contains("should_force_auto_accept_incoming"));
-        assertTrue(helper.contains("if (auto_download_allows(current))"));
+        assertTrue(helper.replaceAll("\\s+", "").contains("FileResume.acceptsByItself(false,"
+                                                          + "incoming_refused_by_person(current,f),"
+                                                          + "auto_download_allows(current))"));
     }
 
     @Test

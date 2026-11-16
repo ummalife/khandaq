@@ -161,6 +161,79 @@ public class FileResumeTest
     }
 
     @Test
+    public void a_file_said_no_to_waits_when_offered_again_and_one_taken_then_cut_goes_on_by_itself()
+    {
+        for (final boolean switches : new boolean[]{false, true})
+        {
+            // Declined, then offered again: the bind writes it as not accepted, and the no it keeps is what the
+            // offer and the retries that run by themselves ask the rule with.
+            assertFalse("waits for a tap", FileResume.acceptsByItself(false, true, switches));
+            // Accepted by the person, then cut off: its next offer and the retries take it up by themselves.
+            assertTrue("goes on by itself", FileResume.acceptsByItself(true, false, switches));
+        }
+    }
+
+    @Test
+    public void the_no_of_the_person_outlives_the_bind_of_an_offer_until_the_persons_own_tap()
+    {
+        final String helper = read(JAVA + "HelperFiletransfer.java");
+        final String all = bare(helper);
+        // The no is the cancelled entry and row, or, once an offer of it was bound, the no kept at that bind.
+        assertTrue(bare(method(helper, "private static boolean incoming_refused_by_person(")).contains(
+                "returnincoming_cancelled_by_person(m,f)||incoming_refused_offered_again.contains(m.id);"));
+
+        // A declined file offered again: the bind keeps the no before it writes over the cancelled row, writes
+        // the entry as not accepted, and does not accept it.
+        final String resume = bare(method(helper, "boolean resume_incoming_offer(final long friend_number"));
+        assertTrue(resume.contains("finalbooleanrefused=incoming_refused_by_person(m,earlier);"));
+        final int refused = resume.indexOf("if(refused){");
+        final int kept = resume.indexOf("incoming_refused_offered_again.add(m.id);", refused);
+        assertTrue("kept by the bind", (refused > 0) && (kept > refused));
+        assertTrue("before the row is written", kept < resume.indexOf("update_filetransfer_db_full(f);"));
+        assertEquals("only there", all.indexOf("incoming_refused_offered_again.add("),
+                     all.lastIndexOf("incoming_refused_offered_again.add("));
+        assertTrue(resume.contains(
+                "finalbooleanaccepted_before=!refused&&(m.ft_accepted||((earlier!=null)&&earlier.ft_accepted));"));
+        assertTrue(resume.contains("FileResume.acceptsByItself(accepted_before,refused,"
+                                   + "auto_download_allows(current));"));
+
+        // The retries that run by themselves ask the same rule for a file not accepted, whatever the switches say;
+        // one accepted and cut off since goes on as before, without them.
+        final String retries = bare(method(helper, "static void resume_incoming_filetransfer_by_itself("));
+        final String waits = "if(!accepted){if(FileResume.acceptsByItself(false,incoming_refused_by_person(current,f),"
+                             + "auto_download_allows(current))){accept_paused_incoming_filetransfer(current);}return;}";
+        final String goesOn = "if(accept_paused_incoming_filetransfer(current)){return;}tox_file_control(";
+        assertTrue(retries.contains(waits));
+        assertTrue(retries.indexOf(goesOn) > retries.indexOf(waits));
+        // The automatic download of a new entry never sees an offer made before: that one returned by then.
+        final String recv = bare(method(read(JAVA + "MainActivity.java"),
+                                        "static void android_tox_callback_file_recv_cb_method("));
+        final String bound = "if(HelperFiletransfer.resume_incoming_offer(friend_number,file_number,a_TOX_FILE_KIND,"
+                             + "file_size,file_id_buffer_hex,filename)){return;}";
+        final String auto = "check_auto_accept_incoming_filetransfer(m);";
+        final int ftv2 = recv.indexOf("elseif(a_TOX_FILE_KIND==TOX_FILE_KIND_FTV2.value){");
+        final int data = recv.indexOf("else//DATAfileft", ftv2);
+        for (final int branch : new int[]{ftv2, data})
+        {
+            final int offer = recv.indexOf(bound, branch);
+            assertTrue("after its offer returned",
+                       (branch > 0) && (offer > branch) && (recv.indexOf(auto, branch) > offer));
+        }
+        assertTrue(recv.indexOf(auto, ftv2) < data);
+        assertEquals("FTV2 and DATA", 2, recv.split("check_auto_accept_incoming_filetransfer\\(", -1).length - 1);
+
+        // Only the person's own tap takes the no back, before it accepts or keeps the tap for the next offer.
+        final String accept = bare(method(helper, "static synchronized void accept_incoming_filetransfer_by_person("));
+        final int back = accept.indexOf("incoming_refused_offered_again.remove(message.id);");
+        assertTrue("Accept", (back > 0) && (back < accept.indexOf("if(f.file_number<0)")));
+        final String retry = bare(method(helper, "static synchronized void retry_incoming_filetransfer("));
+        final int again = retry.indexOf("incoming_refused_offered_again.remove(current.id);");
+        assertTrue("Retry", (again > 0) && (again < retry.indexOf("ft_accepted(true)"))
+                            && (again < retry.indexOf("accept_paused_incoming_filetransfer(current)")));
+        assertEquals("the two taps", 2, all.split("incoming_refused_offered_again\\.remove\\(", -1).length - 1);
+    }
+
+    @Test
     public void the_seek_comes_right_before_the_accept_while_the_bytes_reach_it()
     {
         assertEquals(4096L, FileResume.seekBeforeAccept(4096L, 4096L, SIZE));

@@ -125,14 +125,16 @@ final class NgcHistoryDowngradePolicy
      * <p>Our own messages and files are in the database already; a record about them came from someone else, signed
      * by no one. Kept as an incoming row it would show as someone else's message; turned into an outgoing row it
      * would skip the Community hold, and its file would be saved or opened at once. Without our own key the record
-     * cannot be told apart from ours, so it is dropped too.
+     * cannot be told apart from ours, so it is dropped too. A key that is not one (64 hexadecimal characters) is not
+     * known either: the JNI read gives "-1" when toxcore has no key for us in the group (jni-c-toxcore.c,
+     * tox_group_self_get_public_key).
      *
-     * @param ownGroupKey      our public key in the group, either case, or null when not known.
+     * @param ownGroupKey      our public key in the group, either case; null, "-1" or anything else when not known.
      * @param claimedAuthorKey the author the record names, either case.
      */
     static boolean claimsOwnKey(final String ownGroupKey, final String claimedAuthorKey)
     {
-        return (ownGroupKey == null) || ownGroupKey.equalsIgnoreCase(claimedAuthorKey);
+        return !NgcHskStore.isToxPubHex(ownGroupKey) || ownGroupKey.equalsIgnoreCase(claimedAuthorKey);
     }
 
     /**

@@ -182,6 +182,32 @@ public class NgcHistoryDowngradePolicyTest
     }
 
     /**
+     * A failed read of our own key is no key: the JNI read gives "-1" when toxcore has none for us in the group, and
+     * anything but 64 hexadecimal characters is not a key either. A record is dropped then, as without a key.
+     */
+    @Test
+    public void aFailedReadOfOurOwnKeyIsNoKeyAndTheRecordIsDropped()
+    {
+        for (final String notAKey : new String[]{"-1", "", " ", OWN.substring(1), OWN + "0",
+                                                 "ZZ" + OWN.substring(2), OWN.substring(2) + "-1"})
+        {
+            assertTrue(notAKey, claimsOwnKey(notAKey, STRANGER));
+            assertTrue(notAKey, claimsOwnKey(notAKey, null));
+            assertTrue(notAKey, claimsOwnKey(notAKey, "-1"));
+        }
+        // A key read well still tells a stranger's record from ours.
+        assertFalse(claimsOwnKey(OWN.toLowerCase(Locale.ROOT), STRANGER));
+        assertTrue(claimsOwnKey(OWN.toLowerCase(Locale.ROOT), OWN));
+        // Why: the JNI read of our key gives "-1" when toxcore has none for us in the group.
+        final String jni = read("../../jni-c-toxcore/jni-c-toxcore.c");
+        final int start = jni.indexOf(
+                "Java_com_zoffcc_applications_trifa_MainActivity_tox_1group_1self_1get_1public_1key(");
+        assertTrue(start > 0);
+        final String body = jni.substring(start, jni.indexOf("\n}\n", start));
+        assertTrue(body.contains("result = (*env)->NewStringUTF(env, \"-1\");"));
+    }
+
+    /**
      * Every path that makes a row of a history record asks before the row exists: the group's own history, its
      * text and its files, and the relay's (ToxProxy), whose text goes through the same insert. A file from history
      * is always a row that came in, never one of ours that the Community hold would let through.

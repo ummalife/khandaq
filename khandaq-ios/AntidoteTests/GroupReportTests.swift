@@ -91,6 +91,42 @@ class GroupReportTests: XCTestCase {
         XCTAssertTrue(report.body.hasSuffix("Message:\n"))
     }
 
+    // MARK: Who wrote it
+
+    /// The author left and toxcore gave their number, 5, to the next member who came: the mail still names the
+    /// key the entry kept, never that of whoever has number 5 now.
+    func testTheAuthorIsTheKeyTheEntryKeptWhoeverHasItsNumberNow() throws {
+        let live = try entry(peerId: 5)
+        live.groupPrivatePeerPubkey = key
+        live.messageText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        XCTAssertEqual(GroupReport.authorKey(of: live), key, "a live text: the key toxcore gave with the packet")
+
+        let synced = try entry(peerId: 5)
+        synced.groupHistorySync = true
+        let syncedText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        syncedText.groupSenderPubkey = "A1B2C3D4" + String(repeating: "0", count: 56)
+        synced.messageText = syncedText
+        XCTAssertEqual(GroupReport(groupName: "G", authorKey: GroupReport.authorKey(of: synced), time: time, text: "").author,
+                       "A1B2C3D4", "a text from the group's history")
+
+        let file = try entry(peerId: 5)
+        let messageFile = try appClass("OCTMessageFile", as: OCTMessageFile.Type.self).init()
+        messageFile.groupSenderPubkey = "e5f60718" + String(repeating: "0", count: 56)
+        file.messageFile = messageFile
+        XCTAssertEqual(GroupReport(groupName: "G", authorKey: GroupReport.authorKey(of: file), time: time, text: "").author, "E5F60718")
+
+        let keptNone = try entry(peerId: 5)
+        keptNone.messageText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        XCTAssertEqual(GroupReport.authorKey(of: keptNone), "")
+        XCTAssertEqual(GroupReport(groupName: "G", authorKey: GroupReport.authorKey(of: keptNone), time: time, text: "").author, "unknown")
+
+        // Our own private message keeps the key of the member it went to, who is not its author.
+        let ours = try entry(peerId: 0)
+        ours.groupPrivateMessage = true
+        ours.groupPrivatePeerPubkey = key
+        XCTAssertEqual(GroupReport.authorKey(of: ours), "")
+    }
+
     func testAGroupNameInAnotherAlphabetIsEncodedAsUTF8() throws {
         let report = GroupReport(groupName: "Сообщество", authorKey: key, time: time, text: "Ассаламу алейкум")
         let string = try XCTUnwrap(report.mailtoURL).absoluteString
@@ -99,5 +135,19 @@ class GroupReportTests: XCTestCase {
         XCTAssertTrue(string.contains("subject=Report%3A%20%D0%A1"), string)
         let components = try XCTUnwrap(URLComponents(string: string))
         XCTAssertEqual(components.queryItems?.first(where: { $0.name == "subject" })?.value, "Report: Сообщество")
+    }
+
+    // MARK: Helpers
+
+    /// An entry of a group outside any Realm, made from the app's class: objcTox is in the app and in this bundle.
+    private func entry(peerId: Int32) throws -> OCTMessageAbstract {
+        let message = try appClass("OCTMessageAbstract", as: OCTMessageAbstract.Type.self).init()
+        message.groupSenderPeerId = peerId
+        return message
+    }
+
+    private func appClass<T>(_ name: String, as type: T.Type) throws -> T {
+        let cls: AnyClass = try XCTUnwrap(NSClassFromString(name), "no class \(name)")
+        return unsafeBitCast(cls, to: type)
     }
 }

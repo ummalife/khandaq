@@ -27,8 +27,25 @@ struct GroupReport: Equatable {
         return groupName.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
     }
 
-    /// The first 8 characters of the author's key, in upper case; "unknown" for an old entry that kept none
-    /// while its author is not in the group now.
+    /// The key the entry kept of its author when it came: a text from the group's history on its text, a file
+    /// on its file, a live text or a private message on the entry itself. Never the key of whoever has the
+    /// author's number now: toxcore gives a freed number to the next member who comes. Empty for an entry
+    /// that kept none.
+    static func authorKey(of message: OCTMessageAbstract) -> String {
+        if let key = message.messageText?.groupSenderPubkey, !key.isEmpty {
+            return key
+        }
+        if let key = message.messageFile?.groupSenderPubkey, !key.isEmpty {
+            return key
+        }
+        // On an incoming entry it is the other member's key: the author's.
+        if !message.isOutgoing(), let key = message.groupPrivatePeerPubkey, !key.isEmpty {
+            return key
+        }
+        return ""
+    }
+
+    /// The first 8 characters of the author's key, in upper case; "unknown" for an entry that kept none.
     var author: String {
         let key = authorKey.trimmingCharacters(in: .whitespacesAndNewlines)
         return key.isEmpty ? "unknown" : String(key.prefix(8)).uppercased()

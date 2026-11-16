@@ -495,30 +495,9 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
             text = MessageReplyHelper.plainBody(for: message) ?? message.messageText?.text ?? ""
         }
         return GroupReport(groupName: stored.isEmpty ? ChatListContent.groupTitle(for: chat) : stored,
-                           authorKey: reportAuthorKey(for: message),
+                           authorKey: GroupReport.authorKey(of: message),
                            time: message.date(),
                            text: text)
-    }
-
-    /// The key the entry kept of its author, else that of the member with its number now.
-    private func reportAuthorKey(for message: OCTMessageAbstract) -> String {
-        if let key = message.messageText?.groupSenderPubkey, !key.isEmpty {
-            return key
-        }
-        if let key = message.messageFile?.groupSenderPubkey, !key.isEmpty {
-            return key
-        }
-        guard message.groupSenderPeerId > 0, let peers = submanagerGroups.peers(for: chat) else {
-            return ""
-        }
-        for index in 0..<peers.count {
-            if let peer = peers.object(at: index) as? OCTGroupPeer, !peer.isInvalidated,
-               peer.peerId == message.groupSenderPeerId,
-               let key = peer.peerPublicKeyHex, !key.isEmpty {
-                return key
-            }
-        }
-        return ""
     }
 }
 

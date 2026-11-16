@@ -744,6 +744,31 @@ static NSData *OCTResumeTestsContent(void)
     XCTAssertEqualObjects(self.tox.events, (@[@"seek 65536 4", @"resume 65536"]));
 }
 
+// KHANDAQ (0.2.57): the files of groups live in the folder "group" (a folder of each group's incoming files, ours
+// sent to a group at its top). Seen live: the sweep at the start took that folder for a file no message holds and
+// removed it, with every photo, video and file of every group in it.
+- (void)testARestartKeepsTheFilesOfGroups
+{
+    NSString *files = [self.root stringByAppendingPathComponent:@"files"];
+    NSString *received = [files stringByAppendingPathComponent:@"group/3c5e9a0b7d214f6a/photo.jpg"];
+    NSString *sent = [files stringByAppendingPathComponent:@"group/clip.mp4"];
+    NSString *orphan = [files stringByAppendingPathComponent:@"orphan.bin"];
+
+    for (NSString *path in @[received, sent, orphan]) {
+        [[NSFileManager defaultManager] createDirectoryAtPath:[path stringByDeletingLastPathComponent]
+                                  withIntermediateDirectories:YES
+                                                   attributes:nil
+                                                        error:nil];
+        XCTAssertTrue([[NSData dataWithBytes:"x" length:1] writeToFile:path atomically:NO]);
+    }
+
+    [self restartFiles];
+
+    XCTAssertTrue([[NSFileManager defaultManager] fileExistsAtPath:received], @"a file a group sent us went at the start");
+    XCTAssertTrue([[NSFileManager defaultManager] fileExistsAtPath:sent], @"a file we sent to a group went at the start");
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:orphan], @"the sweep did not run");
+}
+
 - (void)testAFileTheFriendNeverOffersAgainEndsOnceTheyHaveBeenOnlineForTheGrace
 {
     [self setFriendConnected:NO notify:YES];

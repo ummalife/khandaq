@@ -1041,6 +1041,15 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
                 OCTLogWarn(@"cleanup: submanager was killed, quiting");
             }
 
+            // KHANDAQ (0.2.57): only files are swept. The files of groups live in the folder "group" here
+            // (groupFilesDirectoryForChat:, groupUploadsDirectory), a name no message holds, so every start of the
+            // app and every message deleted removed that folder whole: every photo, video and file of every group,
+            // sent and received, while their cards still said they were there. A folder stays, with all it holds.
+            BOOL isDirectory = NO;
+            if ([fileManager fileExistsAtPath:path isDirectory:&isDirectory] && isDirectory) {
+                continue;
+            }
+
             __block BOOL exists = NO;
 
             dispatch_sync(dispatch_get_main_queue(), ^{

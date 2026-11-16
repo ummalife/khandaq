@@ -72,8 +72,22 @@ static const NSTimeInterval kOCTNgcAssemblyStaleTimeout = 60.0;
 // Floor for sacrificing a PARTIALLY received assembly to admit a new one: never touch a transfer that
 // has moved recently — losing a file the user is already receiving is worse than missing the new one.
 static const NSTimeInterval kOCTNgcAssemblyIdleTimeout = 20.0;
+// KHANDAQ (0.2.57): an incoming file of several chunks is remembered complete this long, and this many of them at most
+// (the oldest go first). A BEGIN of one in that time is its sender's again, not a new file: Android sends the BEGIN
+// once more with each resend it serves, and a resend queued behind others can go after the file was complete here.
+// That BEGIN opened a new assembly, which took the whole file again and stored it under a name of its own (seen live:
+// "qa057-grp-3m 2.bin", which no message showed). The requests for a file end within minutes; half an hour leaves
+// room for a resend that waited behind others.
+static const uint64_t kOCTNgcCompletedAssemblyMemoryMs = 30 * 60 * 1000;
+static const NSUInteger kOCTNgcMaxCompletedAssemblies = 512;
 
 NSString *const kOCTNgcGroupFileTransferErrorDomain = @"OCTNgcGroupFileTransferErrorDomain";
+
+// The first 8 hex digits of a msg id, in lower case: how the logs of every client name a group file.
+static NSString *OCTNgcShortMsgId(NSString *msgIdHex)
+{
+    return [(msgIdHex.length > 8 ? [msgIdHex substringToIndex:8] : (msgIdHex ?: @"")) lowercaseString];
+}
 
 typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     OCTNgcGroupFileTransferErrorPrivateFileTooLarge = OCTNgcGroupFileTransferErrorFileTooLarge,
@@ -249,6 +263,10 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 @property (nonatomic, copy) OCTNgcGroupFileTransferIncomingFileBlock incomingCompleteBlock;
 @property (nonatomic, copy, nullable) OCTNgcGroupFileTransferProgressBlock transferProgressBlock;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, OCTNgcIncomingAssembly *> *assemblies;
+// KHANDAQ (0.2.57): the assembly keys of the incoming files complete lately, and when (nowMsBlock); see
+// kOCTNgcCompletedAssemblyMemoryMs. Guarded by the lock of `assemblies`: a key leaves that map for this one in one
+// step, so a BEGIN always finds its file in one of the two.
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *completedAssemblyKeys;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableArray<OCTNgcOrphanChunk *> *> *orphanChunks;
 @property (nonatomic, strong) NSMutableSet<NSString *> *cancelledMsgIdHexes;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, OCTNgcSentChunkedFile *> *sentChunkedFiles;
@@ -304,6 +322,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     _incomingCompleteBlock = [incomingCompleteBlock copy];
     _transferProgressBlock = [transferProgressBlock copy];
     _assemblies = [NSMutableDictionary new];
+    _completedAssemblyKeys = [NSMutableDictionary new];
     _orphanChunks = [NSMutableDictionary new];
     _cancelledMsgIdHexes = [NSMutableSet set];
     _sentChunkedFiles = [NSMutableDictionary new];
@@ -859,10 +878,23 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     NSString *msgIdHex = [OCTTox binToHexString:msgId.bytes length:msgId.length];
     NSString *assemblyKey = [self assemblyKeyForGroupNumber:groupNumber msgId:msgId];
 
+    // KHANDAQ (0.2.57): a BEGIN of a file that comes now, or came lately, is its sender's again (Android sends one with
+    // each resend it serves): the assembly stays as it is, and a file complete here is not taken a second time.
+    NSString *repeated = nil;
     @synchronized (self.assemblies) {
-        if (self.assemblies[assemblyKey]) {
-            return;
+        OCTNgcIncomingAssembly *coming = self.assemblies[assemblyKey];
+
+        if (coming) {
+            repeated = [NSString stringWithFormat:@"while it comes (%d of %d chunks)", coming.receivedCount, coming.totalChunks];
         }
+        else if ([self isAssemblyKeyCompletedLately:assemblyKey atMs:self.nowMsBlock()]) {
+            repeated = @"complete here already";
+        }
+    }
+
+    if (repeated) {
+        OCTLogInfo(@"NGC group file: BEGIN of %@ again from peer %u, %@: ignored", OCTNgcShortMsgId(msgIdHex), peerId, repeated);
+        return;
     }
 
     NSString *fileName = [self utf8FilenameFromData:data offset:44 length:255];
@@ -991,9 +1023,20 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     NSData *msgId = [data subdataWithRange:NSMakeRange(8, 32)];
     NSString *assemblyKey = [self assemblyKeyForGroupNumber:groupNumber msgId:msgId];
     OCTNgcIncomingAssembly *assembly = nil;
+    BOOL completedLately = NO;
 
     @synchronized (self.assemblies) {
         assembly = self.assemblies[assemblyKey];
+
+        if (! assembly) {
+            completedLately = [self isAssemblyKeyCompletedLately:assemblyKey atMs:self.nowMsBlock()];
+        }
+    }
+
+    // KHANDAQ (0.2.57): a chunk of a file complete here already goes with the BEGIN that came again: no BEGIN opens
+    // that file now, and kept as an orphan the chunk would only push out those of a file still to come.
+    if (completedLately) {
+        return;
     }
 
     if (! assembly) {
@@ -1099,6 +1142,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
         @synchronized (self.assemblies) {
             [self.assemblies removeObjectForKey:assemblyKey];
+            [self rememberCompletedAssemblyKey:assemblyKey atMs:self.nowMsBlock()];
         }
 
         @synchronized (self.orphanChunks) {
@@ -1178,6 +1222,59 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         dispatch_async(dispatch_get_main_queue(), ^{
             droppedBlock(groupNumber, senderPublicKeyHex, msgIdHex);
         });
+    }
+}
+
+// KHANDAQ (0.2.57): whether the file of `assemblyKey` was complete here within kOCTNgcCompletedAssemblyMemoryMs of
+// `nowMs`. With self.assemblies locked, as the next one.
+- (BOOL)isAssemblyKeyCompletedLately:(NSString *)assemblyKey atMs:(uint64_t)nowMs
+{
+    NSNumber *completedAt = self.completedAssemblyKeys[assemblyKey];
+
+    if (! completedAt) {
+        return NO;
+    }
+
+    const uint64_t at = completedAt.unsignedLongLongValue;
+
+    if (nowMs > at && nowMs - at > kOCTNgcCompletedAssemblyMemoryMs) {
+        [self.completedAssemblyKeys removeObjectForKey:assemblyKey];
+        return NO;
+    }
+
+    return YES;
+}
+
+// KHANDAQ (0.2.57): the file of `assemblyKey` is complete at `nowMs`. Beyond kOCTNgcMaxCompletedAssemblies the files
+// remembered past their time go, then the one complete first.
+- (void)rememberCompletedAssemblyKey:(NSString *)assemblyKey atMs:(uint64_t)nowMs
+{
+    self.completedAssemblyKeys[assemblyKey] = @(nowMs);
+
+    if (self.completedAssemblyKeys.count <= kOCTNgcMaxCompletedAssemblies) {
+        return;
+    }
+
+    NSMutableArray<NSString *> *expired = [NSMutableArray new];
+    NSString *oldestKey = nil;
+    uint64_t oldestAt = UINT64_MAX;
+
+    for (NSString *key in self.completedAssemblyKeys) {
+        const uint64_t at = self.completedAssemblyKeys[key].unsignedLongLongValue;
+
+        if (nowMs > at && nowMs - at > kOCTNgcCompletedAssemblyMemoryMs) {
+            [expired addObject:key];
+        }
+        else if (at < oldestAt) {
+            oldestKey = key;
+            oldestAt = at;
+        }
+    }
+
+    [self.completedAssemblyKeys removeObjectsForKeys:expired];
+
+    if (self.completedAssemblyKeys.count > kOCTNgcMaxCompletedAssemblies && oldestKey) {
+        [self.completedAssemblyKeys removeObjectForKey:oldestKey];
     }
 }
 

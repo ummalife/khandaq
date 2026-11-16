@@ -67,6 +67,7 @@ static uint32_t mocked_tox_file_send(Tox *tox, uint32_t friend_number, uint32_t 
 - (void)setNowMsBlock:(uint64_t (^)(void))block;
 - (void)setSleepMsBlock:(void (^)(uint64_t ms))block;
 - (void)nackTickForAssembly:(id)assembly assemblyKey:(NSString *)assemblyKey;
+- (void)rememberCompletedAssemblyKey:(NSString *)assemblyKey atMs:(uint64_t)nowMs;
 - (void)appendFilename:(NSString *)fileName toData:(NSMutableData *)data;
 - (NSString *)utf8FilenameFromData:(NSData *)data offset:(NSUInteger)offset length:(NSUInteger)maxLen;
 
@@ -1372,6 +1373,107 @@ static const uint64_t kPaceTestsT0 = 1000000;
     XCTAssertEqualObjects([self groupTestNamesIn:inbox], (@[@"clip 2.mp4", @"clip.mp4"]));
 
     [[NSFileManager defaultManager] removeItemAtPath:inbox error:nil];
+}
+
+// KHANDAQ (0.2.57): Android sends the BEGIN of a file once more with each resend it serves. While the file comes, its
+// assembly stays as it is.
+- (void)testABeginOfAGroupFileThatComesAgainLeavesItsAssemblyAsItIs
+{
+    NSString *inbox = [self nameTestDirectory];
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    NSData *content = [self groupTestContentOfLength:80000];
+    NSArray<NSData *> *packets = [self groupTestPacketsSendingContent:content named:@"clip.mp4" msgIdHex:msgIdHex];
+    NSMutableArray<NSString *> *completed = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *receiver = [self groupTestReceiverIn:inbox completed:completed];
+
+    [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:packets[0]];
+    [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:packets[1]];
+    [self groupTestDrainQueueOf:receiver];
+    id assembly = receiver.assemblies.allValues.firstObject;
+    XCTAssertNotNil(assembly);
+
+    [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:packets[0]];
+    [self groupTestDrainQueueOf:receiver];
+    XCTAssertEqual(receiver.assemblies.count, 1u);
+    XCTAssertEqual(receiver.assemblies.allValues.firstObject, assembly, @"the BEGIN opened the file anew");
+    XCTAssertEqual([[assembly valueForKey:@"receivedCount"] intValue], 1);
+
+    for (NSUInteger i = 2; i < packets.count; i++) {
+        [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:packets[i]];
+    }
+    [self groupTestDrainQueueOf:receiver];
+    [self stallTestRunMainQueue];
+
+    NSString *path = [inbox stringByAppendingPathComponent:@"clip.mp4"];
+    XCTAssertEqualObjects(completed, @[path]);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:path], content);
+    XCTAssertEqualObjects([self groupTestNamesIn:inbox], @[@"clip.mp4"]);
+
+    [[NSFileManager defaultManager] removeItemAtPath:inbox error:nil];
+}
+
+// ... and a resend queued behind others can go after the file was complete here. Its BEGIN opened a new assembly,
+// which took the whole file again under a name of its own (seen live: "qa057-grp-3m 2.bin", which no message showed).
+- (void)testABeginOfAGroupFileCompleteHereAlreadyOpensNothing
+{
+    NSString *inbox = [self nameTestDirectory];
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    NSData *content = [self groupTestContentOfLength:80000];
+    NSArray<NSData *> *packets = [self groupTestPacketsSendingContent:content named:@"clip.mp4" msgIdHex:msgIdHex];
+    NSMutableArray<NSString *> *completed = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *receiver = [self groupTestReceiverIn:inbox completed:completed];
+    __block uint64_t now = kPaceTestsT0;
+    [receiver setNowMsBlock:^uint64_t {
+        return now;
+    }];
+    NSString *path = [inbox stringByAppendingPathComponent:@"clip.mp4"];
+
+    for (NSData *packet in packets) {
+        [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:packet];
+    }
+    [self groupTestDrainQueueOf:receiver];
+    [self stallTestRunMainQueue];
+    XCTAssertEqualObjects(completed, @[path]);
+
+    // The sender's resend, ten minutes on: the BEGIN, then the chunks.
+    now += 10 * 60 * 1000;
+    for (NSData *packet in packets) {
+        [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:packet];
+    }
+    [self groupTestDrainQueueOf:receiver];
+    [self stallTestRunMainQueue];
+
+    XCTAssertEqualObjects(completed, @[path], @"the file came twice");
+    XCTAssertEqualObjects([self groupTestNamesIn:inbox], @[@"clip.mp4"]);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:path], content);
+    XCTAssertEqual(receiver.assemblies.count, 0u);
+    XCTAssertEqual([[receiver valueForKey:@"orphanChunks"] count], 0u, @"its chunks wait for a BEGIN");
+
+    // Half an hour after it was complete the file is forgotten, and its id opens a file again.
+    now += 20 * 60 * 1000 + 1;
+    [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:packets[0]];
+    [self groupTestDrainQueueOf:receiver];
+    XCTAssertEqual(receiver.assemblies.count, 1u);
+
+    receiver = nil;
+    [[NSFileManager defaultManager] removeItemAtPath:inbox error:nil];
+}
+
+- (void)testTheGroupFilesRememberedCompleteAreBounded
+{
+    OCTNgcGroupFileTransfer *transfer = [self stallTestTransferCollectingPackets:[NSMutableArray new]];
+    NSDictionary<NSString *, NSNumber *> *remembered = [transfer valueForKey:@"completedAssemblyKeys"];
+
+    @synchronized (transfer.assemblies) {
+        for (uint64_t i = 0; i < 600; i++) {
+            [transfer rememberCompletedAssemblyKey:[NSString stringWithFormat:@"5:%llu", i] atMs:kPaceTestsT0 + i];
+        }
+    }
+
+    XCTAssertEqual(remembered.count, 512u);
+    XCTAssertNil(remembered[@"5:87"], @"the files complete first go first");
+    XCTAssertNotNil(remembered[@"5:88"]);
+    XCTAssertNotNil(remembered[@"5:599"]);
 }
 
 #pragma mark - A request for missing chunks

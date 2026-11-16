@@ -577,6 +577,94 @@ public class HelperGeneric
         return kept_one;
     }
 
+    /**
+     * QA only (QaGroupBroadcastReceiver, debug builds): logs what the temp dir of the files under way holds, every
+     * folder and every file with its size, then the totals. A live check sees in which folder the bytes of a file of
+     * theirs are, and that nothing is left there once it finished. Friend keys in the paths are cut to 8 characters.
+     */
+    static void qa_log_temp_dir()
+    {
+        final String root = VFS_PREFIX + VFS_TMP_FILE_DIR + "/";
+        // files, folders, bytes
+        final long[] totals = new long[3];
+        try
+        {
+            if (MainActivity.VFS_ENCRYPT)
+            {
+                qa_log_temp_dir_vfs(new info.guardianproject.iocipher.File(root), root, totals);
+            }
+            else
+            {
+                qa_log_temp_dir_real(new File(root), root, totals);
+            }
+        }
+        catch (Exception e)
+        {
+            logI(TAG, "qa_temp_dir:EE:" + e.getMessage());
+        }
+        logI(TAG, "qa_temp_dir:total files=" + totals[0] + " folders=" + totals[1] + " bytes=" + totals[2]);
+    }
+
+    private static void qa_log_temp_dir_vfs(final info.guardianproject.iocipher.File directory, final String root,
+                                            final long[] totals)
+    {
+        final info.guardianproject.iocipher.File[] entries = directory.listFiles();
+        if (entries == null)
+        {
+            return;
+        }
+        for (final info.guardianproject.iocipher.File entry : entries)
+        {
+            if (entry.isDirectory())
+            {
+                totals[1]++;
+                logI(TAG, "qa_temp_dir:folder " + qa_temp_dir_path(entry.getAbsolutePath(), root));
+                qa_log_temp_dir_vfs(entry, root, totals);
+            }
+            else
+            {
+                totals[0]++;
+                totals[2] += entry.length();
+                logI(TAG, "qa_temp_dir:file " + qa_temp_dir_path(entry.getAbsolutePath(), root) + " bytes="
+                          + entry.length());
+            }
+        }
+    }
+
+    private static void qa_log_temp_dir_real(final File directory, final String root, final long[] totals)
+    {
+        final File[] entries = directory.listFiles();
+        if (entries == null)
+        {
+            return;
+        }
+        for (final File entry : entries)
+        {
+            if (entry.isDirectory())
+            {
+                totals[1]++;
+                logI(TAG, "qa_temp_dir:folder " + qa_temp_dir_path(entry.getAbsolutePath(), root));
+                qa_log_temp_dir_real(entry, root, totals);
+            }
+            else
+            {
+                totals[0]++;
+                totals[2] += entry.length();
+                logI(TAG, "qa_temp_dir:file " + qa_temp_dir_path(entry.getAbsolutePath(), root) + " bytes="
+                          + entry.length());
+            }
+        }
+    }
+
+    /** A path under the temp dir as the QA log shows it: from the dir on, a friend's key cut to 8 characters. */
+    static String qa_temp_dir_path(final String path, final String root)
+    {
+        final String normalized = FileResume.tempFileKey(path);
+        final String rootKey = FileResume.tempFileKey(root);
+        final String relative = normalized.startsWith(rootKey) ? normalized.substring(rootKey.length()) : normalized;
+        return relative.replaceAll("([0-9A-Fa-f]{8})[0-9A-Fa-f]{56}", "$1");
+    }
+
     static void conference_message_add_from_sync(long conference_number, long peer_number2, String peer_pubkey, int a_TOX_MESSAGE_TYPE, String message, long length, long sent_timestamp_in_ms, String message_id)
     {
         // Log.i(TAG, "conference_message_add_from_sync:cf_num=" + conference_number + " pnum=" + peer_number2 + " msg=" +

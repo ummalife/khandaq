@@ -33,6 +33,7 @@ public class QaGroupBroadcastReceiver extends BroadcastReceiver
     public static final String ACTION_SEND_FRIEND_MESSAGE = "org.khandaq.qa.SEND_FRIEND_MESSAGE";
     public static final String ACTION_VERIFY_FRIEND_MESSAGE = "org.khandaq.qa.VERIFY_FRIEND_MESSAGE";
     public static final String ACTION_FORGET_COMMUNITY_MARKS = "org.khandaq.qa.FORGET_COMMUNITY_MARKS";
+    public static final String ACTION_LIST_TEMP_FILES = "org.khandaq.qa.LIST_TEMP_FILES";
 
     public static final String EXTRA_NAME = "name";
     public static final String EXTRA_GROUP_ID = "group_id";
@@ -293,6 +294,13 @@ public class QaGroupBroadcastReceiver extends BroadcastReceiver
             {
                 // KHANDAQ (0.2.57, SPEC-community QA): a test profile as one that never had Khandaq Community marks.
                 CommunityAutoJoin.qaForgetMarks();
+                HelperGeneric.logI(TAG, "qa_group_broadcast:done action=" + action);
+                return;
+            }
+            case ACTION_LIST_TEMP_FILES:
+            {
+                // KHANDAQ (0.2.57, SPEC-network 1.5 QA): where the bytes of the files under way are, and what is left.
+                HelperGeneric.qa_log_temp_dir();
                 HelperGeneric.logI(TAG, "qa_group_broadcast:done action=" + action);
                 return;
             }

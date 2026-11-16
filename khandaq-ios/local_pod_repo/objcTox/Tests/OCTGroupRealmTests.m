@@ -293,8 +293,10 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
 
     OCTMessageAbstract *row = [self fileRowWithMsgId:msgId inChat:chat];
     XCTAssertEqual(row.messageFile.fileType, OCTMessageFileTypeLoading, @"the BEGIN made no loading row");
-    NSString *partialPath = [assembly valueForKey:@"outPath"];
+    NSString *partialPath = [assembly valueForKey:@"partialPath"];
+    NSString *outPath = [assembly valueForKey:@"outPath"];
     XCTAssertTrue([[NSFileManager defaultManager] fileExistsAtPath:partialPath]);
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:outPath], @"bytes sit under the name before the last one");
 
     // A round that sees the chunk, then the silent rounds in a row that drop the file.
     for (int round = 0; round < 26; round++) {
@@ -312,6 +314,7 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
     row = [self fileRowWithMsgId:msgId inChat:chat];
     XCTAssertEqual(row.messageFile.fileType, OCTMessageFileTypeCanceled, @"the card of a dropped file still says it is coming");
     XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:partialPath]);
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:outPath]);
 
     // Every mock lives until here: the submanager holds its data source weakly.
     NSArray *mocks = @[dataSource, tox, fileStorage];

@@ -419,6 +419,9 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
     {
         if (group_identifier != null)
         {
+            // KHANDAQ (0.2.57, SPEC-community item 3): a person who leaves Khandaq Community is never put back. Marked
+            // first: an auto-join under way sees it at its next step, or once it is done, and leaves again.
+            CommunityAutoJoin.noteGroupLeft(group_identifier);
             final long group_num = tox_group_by_groupid__wrapper(group_identifier);
             if (group_num >= 0)
             {
@@ -430,8 +433,6 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
             HelperGeneric.update_savedata_file_wrapper_async();
             set_group_group_we_left(group_identifier);
             set_group_inactive(group_identifier);
-            // KHANDAQ (0.2.57, SPEC-community item 3): a person who leaves Khandaq Community is never put back.
-            CommunityAutoJoin.noteGroupLeft(group_identifier);
             try
             {
                 if (group_message_list_activity != null
@@ -514,13 +515,14 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
     {
         if (f2.group_identifier != null)
         {
+            // KHANDAQ (0.2.57, SPEC-community item 3): deleting Khandaq Community leaves it for good, as Leave does;
+            // marked first, as Leave marks it.
+            CommunityAutoJoin.noteGroupLeft(f2.group_identifier);
             final long group_num = tox_group_by_groupid__wrapper(f2.group_identifier);
             HelperGroup.leave_group_with_notice(group_num, "bye");
             GroupInviteAcceptPolicy.forget(f2.group_identifier);
             // KHANDAQ (ANR): persisted off-thread; a leave that waits for its notice saves again when done (F11).
             HelperGeneric.update_savedata_file_wrapper_async();
-            // KHANDAQ (0.2.57, SPEC-community item 3): deleting Khandaq Community leaves it for good, as Leave does.
-            CommunityAutoJoin.noteGroupLeft(f2.group_identifier);
         }
 
         HelperGeneric.logI(TAG, "onMenuItemClick:info:33");

@@ -97,6 +97,9 @@ public class KhandaqCommunityTest
     {
         boolean takes;
         int calls;
+        int leftAgain;
+        /** What the person does while the join runs, if anything. */
+        Runnable meanwhile;
 
         Join(final boolean takes)
         {
@@ -107,7 +110,17 @@ public class KhandaqCommunityTest
         public boolean join()
         {
             calls++;
+            if (meanwhile != null)
+            {
+                meanwhile.run();
+            }
             return takes;
+        }
+
+        @Override
+        public void leaveAgain()
+        {
+            leftAgain++;
         }
     }
 
@@ -430,8 +443,8 @@ public class KhandaqCommunityTest
     public void the_join_is_the_join_by_chat_id_with_the_profile_name_and_no_password()
     {
         final String auto = read(JAVA + "CommunityAutoJoin.java");
-        assertTrue(bare(auto).contains(
-                "HelperGroup.join_public_group_by_id(KhandaqCommunity.CHAT_ID,null,false,null,()->sessionGoesOn(session))"));
+        assertTrue(bare(auto).contains("HelperGroup.join_public_group_by_id(KhandaqCommunity.CHAT_ID,null,false,null,"
+                                       + "()->sessionGoesOn(session)&&!store.left())"));
         // A stand-in identity (#244) joins nothing.
         assertTrue(bare(method(auto, JOIN_IF_DUE)).contains("MainActivity.identity_load_blocked"));
         // The mute is the group's own switch, the one its dossier turns.
@@ -458,7 +471,7 @@ public class KhandaqCommunityTest
         assertTrue(connected.contains("joinIfDue(session);"));
         assertTrue("a join of the last session does not hold up this one",
                    connected.contains("JOINING_SESSION.compareAndSet(session,NO_SESSION);"));
-        assertTrue(bare(method(auto, "private static boolean sessionGoesOn(final int session)")).contains(
+        assertTrue(bare(method(auto, "static boolean sessionGoesOn(final int session)")).contains(
                 "returnTrifaToxService.is_tox_started&&(TrifaToxService.tox_session_number.get()==session);"));
         assertTrue(bare(method(auto, JOIN_IF_DUE)).contains("!sessionGoesOn(session)"));
 
@@ -771,13 +784,54 @@ public class KhandaqCommunityTest
     }
 
     @Test
-    public void leaving_and_deleting_the_group_both_mark_the_leave()
+    public void leaving_and_deleting_the_group_both_mark_the_leave_before_anything_else()
     {
         final String list = read(JAVA + "GroupListHolder.java");
-        assertTrue(method(list, "static void leave_group(final String group_identifier)").contains(
-                "CommunityAutoJoin.noteGroupLeft(group_identifier);"));
-        assertTrue(method(list, "private static void delete_group_now(final GroupDB f2)").contains(
-                "CommunityAutoJoin.noteGroupLeft(f2.group_identifier);"));
+        final String leave = method(list, "static void leave_group(final String group_identifier)");
+        final int left = leave.indexOf("CommunityAutoJoin.noteGroupLeft(group_identifier);");
+        assertTrue(left > 0);
+        assertTrue(left < leave.indexOf("HelperGroup.leave_group_with_notice(group_num, \"left\");"));
+        assertTrue(left < leave.indexOf("set_group_group_we_left(group_identifier);"));
+        final String delete = method(list, "private static void delete_group_now(final GroupDB f2)");
+        final int deleted = delete.indexOf("CommunityAutoJoin.noteGroupLeft(f2.group_identifier);");
+        assertTrue(deleted > 0);
+        assertTrue(deleted < delete.indexOf("HelperGroup.leave_group_with_notice(group_num, \"bye\");"));
+        assertTrue(deleted < delete.indexOf("delete_group(f2.group_identifier);"));
+
+        // The auto-join's join stops at its next step on a leave, and leaves again as the person leaves.
+        final String joinIfDue = bare(method(read(JAVA + "CommunityAutoJoin.java"), JOIN_IF_DUE));
+        final int again = joinIfDue.indexOf("publicvoidleaveAgain()");
+        assertTrue(again > 0 && joinIfDue.indexOf("GroupListHolder.leave_group(KhandaqCommunity.CHAT_ID);", again) > again);
+    }
+
+    @Test
+    public void a_leave_made_while_the_join_ran_stays_and_the_group_the_join_gave_back_is_left_again()
+    {
+        final Map<String, String> settings = new HashMap<>();
+        final ProfileStore store = new ProfileStore(settings, TOX_ID);
+        final Join join = new Join(true);
+        // The person leaves it from its row while the join runs; the leave marks itself first.
+        join.meanwhile = () -> KhandaqCommunity.noteGroupLeft(store, KhandaqCommunity.CHAT_ID);
+        assertFalse(KhandaqCommunity.autoJoin(store, true, false, false, join));
+        assertEquals(1, join.leftAgain);
+        assertTrue(store.left());
+        assertTrue("nothing of the join stays", store.muted.isEmpty());
+        final Join later = new Join(true);
+        assertFalse(KhandaqCommunity.autoJoin(new ProfileStore(settings, TOX_ID), true, false, true, later));
+        assertEquals("never by itself again, after a restart too", 0, later.calls);
+
+        // A join the leave stopped on its way leaves again too: the row's own mark is put back.
+        final ProfileStore other = new ProfileStore(new HashMap<>(), TOX_ID);
+        final Join stopped = new Join(false);
+        stopped.meanwhile = () -> KhandaqCommunity.noteGroupLeft(other, KhandaqCommunity.CHAT_ID);
+        assertFalse(KhandaqCommunity.autoJoin(other, true, false, true, stopped));
+        assertEquals(1, stopped.leftAgain);
+        assertTrue(other.muted.isEmpty());
+
+        // Without a leave nothing is left again.
+        final Join plain = new Join(true);
+        assertTrue(KhandaqCommunity.autoJoin(new ProfileStore(new HashMap<>(), TOX_ID), true, false, true, plain));
+        assertEquals(0, plain.leftAgain);
     }
 
     @Test

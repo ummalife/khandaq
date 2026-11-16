@@ -60,10 +60,14 @@ final class KhandaqCommunity
         void mute(String chatId);
     }
 
-    /** The app's join by chat id: whether the group exists here now. */
+    /** The app's join by chat id, and the leave that takes back what it did. */
     interface Join
     {
+        /** Whether the group exists here now. */
         boolean join();
+
+        /** Leaves the group again as the person leaves it, with its row marked left, for a leave made meanwhile. */
+        void leaveAgain();
     }
 
     /** Tells the rows of a chat list apart, for pinRow. */
@@ -159,6 +163,10 @@ final class KhandaqCommunity
      * changes nothing. The join is not marked done here: toxcore keeps the group only once it has connected
      * (noteGroupKept), and until then every start that finds it gone joins again. A group the profile is in
      * already never comes here. True when it joined.
+     * <p>
+     * The join takes a while, and the person may leave the group meanwhile, from its row that was there before: the
+     * join then gave it back (its row, with the "we left" mark cleared), so it leaves again (leaveAgain), and
+     * nothing of it stays. The leave marks itself before anything else (GroupListHolder), so it is seen here.
      */
     static boolean autoJoin(final Store store, final boolean connected, final boolean alreadyInGroup,
                             final boolean newGroup, final Join join)
@@ -167,7 +175,13 @@ final class KhandaqCommunity
         {
             return false;
         }
-        if (!join.join())
+        final boolean joined = join.join();
+        if (store.left())
+        {
+            join.leaveAgain();
+            return false;
+        }
+        if (!joined)
         {
             return false;
         }

@@ -79,7 +79,7 @@ final class CommunityAutoJoin
      * Whether the tox session a join began in still runs. A profile import, or a logout and login, starts tox again in
      * this process, with another profile maybe: a join of the last session must not land in it, past its marks.
      */
-    private static boolean sessionGoesOn(final int session)
+    static boolean sessionGoesOn(final int session)
     {
         return TrifaToxService.is_tox_started && (TrifaToxService.tox_session_number.get() == session);
     }
@@ -116,16 +116,31 @@ final class CommunityAutoJoin
                                   != ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value;
         // A row without the group in toxcore: an earlier join that never connected, which toxcore did not save.
         final boolean newGroup = !hasRow();
-        final boolean joined = KhandaqCommunity.autoJoin(store, connected, groupNumber >= 0, newGroup, () -> {
-            // No toast and no words on screen: the person did not ask for this join.
-            final boolean here = HelperGroup.join_public_group_by_id(KhandaqCommunity.CHAT_ID, null, false, null,
-                                                                     () -> sessionGoesOn(session))
-                                 && inGroup();
-            if (!here)
+        final boolean joined = KhandaqCommunity.autoJoin(store, connected, groupNumber >= 0, newGroup,
+                                                         new KhandaqCommunity.Join()
+        {
+            @Override
+            public boolean join()
             {
-                NetworkDiagnosticsLog.log("community", "auto_join: not joined yet, the next connection tries again");
+                // No toast and no words on screen: the person did not ask for this join. It stops at its next step
+                // once its tox session ended, or once the person left the group (or deleted it) meanwhile.
+                final boolean here = HelperGroup.join_public_group_by_id(KhandaqCommunity.CHAT_ID, null, false, null,
+                                                                         () -> sessionGoesOn(session) && !store.left())
+                                     && inGroup();
+                if (!here && !store.left())
+                {
+                    NetworkDiagnosticsLog.log("community", "auto_join: not joined yet, the next connection tries again");
+                }
+                return here;
             }
-            return here;
+
+            @Override
+            public void leaveAgain()
+            {
+                // The leave the person made: toxcore leaves it, its row is marked left and inactive.
+                GroupListHolder.leave_group(KhandaqCommunity.CHAT_ID);
+                NetworkDiagnosticsLog.log("community", "auto_join: left while it joined, left again");
+            }
         });
         if (joined)
         {
@@ -259,7 +274,7 @@ final class CommunityAutoJoin
     }
 
     /** The profile is in the group: toxcore has it, from a join by hand or an earlier one. */
-    private static boolean inGroup()
+    static boolean inGroup()
     {
         return HelperGroup.tox_group_by_groupid__wrapper(KhandaqCommunity.CHAT_ID) >= 0;
     }

@@ -18,6 +18,26 @@
 #import "OCTMessageFile.h"
 #import "OCTMessageText.h"
 #import "OCTNgcGroupFileTransfer.h"
+#import "OCTToxOptions.h"
+
+// The name toxcore was given for a file offered to a friend, by mocked_tox_file_send.
+static NSData *offeredFileName;
+static size_t offeredFileNameLength;
+static uint32_t offeredFriendNumber;
+
+static uint32_t mocked_tox_file_send(Tox *tox, uint32_t friend_number, uint32_t kind, uint64_t file_size, const uint8_t *file_id,
+                                     const uint8_t *filename, size_t filename_length, Tox_Err_File_Send *error)
+{
+    offeredFriendNumber = friend_number;
+    offeredFileName = filename ? [NSData dataWithBytes:filename length:filename_length] : nil;
+    offeredFileNameLength = filename_length;
+
+    if (error) {
+        *error = TOX_ERR_FILE_SEND_OK;
+    }
+
+    return 3;
+}
 
 @interface OCTSubmanagerChatsImpl (TextPartsTests)
 
@@ -1077,6 +1097,115 @@
 
     [[NSFileManager defaultManager] removeItemAtPath:outbox error:nil];
     [[NSFileManager defaultManager] removeItemAtPath:inbox error:nil];
+}
+
+#pragma mark - The name of a file offered to a friend
+
+// KHANDAQ (0.2.57, SPEC-community risk 3): toxcore takes that name as UTF-8 bytes and their count, at most
+// TOX_MAX_FILENAME_LENGTH of them. The count was the UTF-16 length of the name, so a name in Cyrillic, Arabic or
+// Chinese reached the friend cut short: without its extension, or in the middle of a letter.
+
+- (void)testAFileIsOfferedToAFriendWithTheWholeUTF8OfItsName
+{
+    OCTTox *tox = [self quietTox];
+
+    XCTAssertEqualObjects([self nameOfferedBy:tox forFileName:@"report.pdf"], [@"report.pdf" dataUsingEncoding:NSUTF8StringEncoding]);
+
+    // 9 characters, 14 bytes.
+    XCTAssertEqualObjects([self nameOfferedBy:tox forFileName:@"Отчёт.pdf"], [@"Отчёт.pdf" dataUsingEncoding:NSUTF8StringEncoding]);
+    XCTAssertEqualObjects([self stringOfferedBy:tox forFileName:@"تقرير.pdf"], @"تقرير.pdf");
+    XCTAssertEqualObjects([self stringOfferedBy:tox forFileName:@"报告.pdf"], @"报告.pdf");
+}
+
+- (void)testALongNameOfferedToAFriendKeepsItsExtensionAndIsCutOnAWholeCharacter
+{
+    OCTTox *tox = [self quietTox];
+
+    // Two bytes a letter: 125 letters and ".pdf" make 254 bytes, one more would make 256.
+    NSString *letters = [@"" stringByPaddingToLength:200 withString:@"я" startingAtIndex:0];
+    XCTAssertEqualObjects([self stringOfferedBy:tox forFileName:[letters stringByAppendingString:@".pdf"]],
+                          [[letters substringToIndex:125] stringByAppendingString:@".pdf"]);
+
+    NSMutableString *emoji = [NSMutableString new];
+    NSMutableString *accents = [NSMutableString new];
+
+    for (int i = 0; i < 100; i++) {
+        [emoji appendString:@"\U0001F600"];
+        [accents appendString:@"e\u0301"];
+    }
+
+    // Four bytes and two UTF-16 units an emoji: 62 of them and ".jpg" make 252 bytes.
+    XCTAssertEqualObjects([self stringOfferedBy:tox forFileName:[emoji stringByAppendingString:@".jpg"]],
+                          [[emoji substringToIndex:124] stringByAppendingString:@".jpg"]);
+
+    // A letter is never parted from its accent: 83 of them, 3 bytes each, and ".txt" make 253 bytes.
+    XCTAssertEqualObjects([self stringOfferedBy:tox forFileName:[accents stringByAppendingString:@".txt"]],
+                          [[accents substringToIndex:166] stringByAppendingString:@".txt"]);
+
+    // 255 bytes go as they are; a longer name without an extension loses its end.
+    NSString *full = [@"" stringByPaddingToLength:255 withString:@"a" startingAtIndex:0];
+    XCTAssertEqualObjects([self stringOfferedBy:tox forFileName:full], full);
+    XCTAssertEqualObjects([self stringOfferedBy:tox forFileName:[full stringByAppendingString:@"bc"]], full);
+}
+
+- (void)testAnAvatarIsOfferedToAFriendWithoutAName
+{
+    OCTTox *tox = [self quietTox];
+    _tox_file_send = mocked_tox_file_send;
+    offeredFileName = [NSData data];
+    offeredFileNameLength = 99;
+
+    [tox fileSendWithFriendNumber:5 kind:OCTToxFileKindAvatar fileSize:0 fileId:nil fileName:nil error:nil];
+
+    _tox_file_send = tox_file_send;
+    XCTAssertNil(offeredFileName);
+    XCTAssertEqual(offeredFileNameLength, 0u);
+}
+
+/// A Tox that is never started, without UDP: nothing leaves it.
+- (OCTTox *)quietTox
+{
+    OCTToxOptions *options = [OCTToxOptions new];
+    options.udpEnabled = NO;
+    options.ipv6Enabled = NO;
+    options.localDiscoveryEnabled = NO;
+    options.holePunchingEnabled = NO;
+    options.tcpPort = 0;
+
+    NSError *error;
+    OCTTox *tox = [[OCTTox alloc] initWithOptions:options savedData:nil error:&error];
+    XCTAssertNotNil(tox, @"%@", error);
+    return tox;
+}
+
+- (NSData *)nameOfferedBy:(OCTTox *)tox forFileName:(NSString *)fileName
+{
+    _tox_file_send = mocked_tox_file_send;
+    offeredFileName = nil;
+    offeredFileNameLength = 0;
+    offeredFriendNumber = 0;
+
+    NSError *error;
+    OCTToxFileNumber fileNumber = [tox fileSendWithFriendNumber:5
+                                                           kind:OCTToxFileKindData
+                                                       fileSize:100
+                                                         fileId:nil
+                                                       fileName:fileName
+                                                          error:&error];
+
+    _tox_file_send = tox_file_send;
+    XCTAssertEqual(fileNumber, 3u);
+    XCTAssertNil(error);
+    XCTAssertEqual(offeredFriendNumber, 5u);
+    XCTAssertEqual(offeredFileName.length, offeredFileNameLength);
+    XCTAssertLessThanOrEqual(offeredFileNameLength, (size_t)TOX_MAX_FILENAME_LENGTH);
+    return offeredFileName;
+}
+
+- (NSString *)stringOfferedBy:(OCTTox *)tox forFileName:(NSString *)fileName
+{
+    NSData *name = [self nameOfferedBy:tox forFileName:fileName];
+    return name ? [[NSString alloc] initWithData:name encoding:NSUTF8StringEncoding] : nil;
 }
 
 - (NSString *)nameTestDirectory

@@ -262,7 +262,8 @@ void ChatHistory::onFileUpdated(const ToxPk& sender, const ToxFile& file)
             // with a different order when loading from history
             history->addNewFileMessage(chat.getPersistentId(), file.resumeFileId, file.fileName,
                                        file.filePath, file.progress.getFileSize(), sender,
-                                       QDateTime::currentDateTime(), username, file.direction);
+                                       QDateTime::currentDateTime(), username, file.direction,
+                                       file.stamp);
             break;
         }
         case ToxFile::PAUSED:
@@ -296,9 +297,13 @@ void ChatHistory::onFileUpdated(const ToxPk& sender, const ToxFile& file)
             underwayFiles.remove(file.resumeFileId);
             const bool isSuccess = file.status == ToxFile::FINISHED;
             // The hash is not known for a transfer that went on from the middle of the file.
-            history->setFileFinished(file.resumeFileId, isSuccess, file.filePath,
-                                     file.hashGenerator ? file.hashGenerator->result()
-                                                        : QByteArray());
+            QByteArray kept = file.hashGenerator ? file.hashGenerator->result() : QByteArray();
+            if (!isSuccess && friendChat && file.direction == ToxFile::SENDING) {
+                // KHANDAQ (0.2.57): a file of ours that stopped keeps what it was when it went
+                // instead, so Send again after a restart knows whether it is still that file.
+                kept = History::stampRecord(file.stamp);
+            }
+            history->setFileFinished(file.resumeFileId, isSuccess, file.filePath, kept);
             break;
         }
         default:

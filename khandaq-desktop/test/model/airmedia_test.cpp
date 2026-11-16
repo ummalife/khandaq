@@ -118,6 +118,7 @@ private slots:
     void anOfferOfAFileThePersonRefusedWaitsForTheirTap();
     void anOfferGoesOnOnlyInThePartItLeft();
     void aPartIsToldFromAnotherFileByItsStamp();
+    void aFileOfOursGoesAgainUnderItsIdOnlyWhileItIsTheSame();
     void theLengthOfANoteComesFromItsMovieHeader();
     void aBrokenHeaderHasNoLength();
     void lengthsReadAsClocks();
@@ -535,6 +536,40 @@ void TestAirMedia::aPartIsToldFromAnotherFileByItsStamp()
     QVERIFY(Air::isOwnPart(stamp, Air::fileStampAt(path)));
     QCOMPARE(Air::fileStampAt(dir.filePath(QStringLiteral("none.bin"))), ToxFile::Stamp());
     QCOMPARE(Air::fileStampAt(dir.path()), ToxFile::Stamp());
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): a file of ours goes again under its Tox file id only while it is the
+ * file that went: the length of the offer and the same last change, and made when it was where
+ * that is known.
+ */
+void TestAirMedia::aFileOfOursGoesAgainUnderItsIdOnlyWhileItIsTheSame()
+{
+    ToxFile::Stamp sent;
+    sent.bornMs = 1000;
+    sent.bytes = 400;
+    sent.modifiedMs = 2000;
+    QVERIFY(Air::isSameSource(sent, 400, sent));
+    QVERIFY(!Air::isSameSource(sent, 500, sent));
+    ToxFile::Stamp now = sent;
+    now.bytes = 401;
+    QVERIFY(!Air::isSameSource(sent, 400, now));
+    now = sent;
+    now.modifiedMs = 2001;
+    QVERIFY(!Air::isSameSource(sent, 400, now));
+    now = sent;
+    now.bornMs = 1001;
+    QVERIFY(!Air::isSameSource(sent, 400, now));
+    QVERIFY(!Air::isSameSource(sent, 400, ToxFile::Stamp()));
+
+    // Made when nobody could tell: its length and last change tell it.
+    ToxFile::Stamp unborn = sent;
+    unborn.bornMs = -1;
+    QVERIFY(Air::isSameSource(unborn, 400, sent));
+    // Its last change when it went is not known (a row of before): a new file.
+    ToxFile::Stamp unknown = sent;
+    unknown.modifiedMs = -1;
+    QVERIFY(!Air::isSameSource(unknown, 400, sent));
 }
 
 void TestAirMedia::theLengthOfANoteComesFromItsMovieHeader()

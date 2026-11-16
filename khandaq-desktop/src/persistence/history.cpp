@@ -65,17 +65,6 @@ void addChatIdSubQuery(QString& queryString, QVector<QByteArray>& boundParams, c
 const QByteArray stampMark{"KST1"};
 constexpr int stampRecordSize = 4 + 3 * 8;
 
-QByteArray stampRecord(const ToxFile::Stamp& stamp)
-{
-    QByteArray record = stampMark;
-    for (const qint64 value : {stamp.bornMs, stamp.bytes, stamp.modifiedMs}) {
-        char bytes[8];
-        qToBigEndian<qint64>(value, bytes);
-        record.append(bytes, sizeof(bytes));
-    }
-    return record;
-}
-
 ToxFile::Stamp stampOfRecord(const QByteArray& record)
 {
     ToxFile::Stamp stamp;
@@ -461,7 +450,8 @@ History::generateNewFileTransferQueries(const ChatId& chatId, const ToxPk& sende
     queryString += ", ?";
     boundParams += insertionData.filePath.toUtf8();
     queryString += ", ?";
-    boundParams += QByteArray();
+    boundParams += insertionData.stamp == ToxFile::Stamp() ? QByteArray()
+                                                           : stampRecord(insertionData.stamp);
     queryString += QStringLiteral(", %1, %2, %3);")
                         .arg(insertionData.size)
                         .arg(insertionData.direction)
@@ -495,10 +485,21 @@ RawDatabase::Query History::generateFileFinished(RowId id, bool success, const Q
     }
 }
 
+QByteArray History::stampRecord(const ToxFile::Stamp& stamp)
+{
+    QByteArray record = stampMark;
+    for (const qint64 value : {stamp.bornMs, stamp.bytes, stamp.modifiedMs}) {
+        char bytes[8];
+        qToBigEndian<qint64>(value, bytes);
+        record.append(bytes, sizeof(bytes));
+    }
+    return record;
+}
+
 void History::addNewFileMessage(const ChatId& chatId, const QByteArray& fileId,
                                 const QString& fileName, const QString& filePath, int64_t size,
                                 const ToxPk& sender, const QDateTime& time, QString const& dispName,
-                                ToxFile::FileDirection direction)
+                                ToxFile::FileDirection direction, const ToxFile::Stamp& stamp)
 {
     if (historyAccessBlocked()) {
         return;
@@ -524,6 +525,7 @@ void History::addNewFileMessage(const ChatId& chatId, const QByteArray& fileId,
     insertionData.filePath = filePath;
     insertionData.size = size;
     insertionData.direction = direction;
+    insertionData.stamp = stamp;
 
     auto queries = generateNewFileTransferQueries(chatId, sender, time, dispName, insertionData);
 

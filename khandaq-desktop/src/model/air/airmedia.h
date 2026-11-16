@@ -241,6 +241,14 @@ ToxFile::Stamp fileStampAt(const QString& path);
 bool isOwnPart(const ToxFile::Stamp& recorded, const ToxFile::Stamp& now);
 
 /**
+ * KHANDAQ (0.2.57): whether a file of ours is still the one that went (sent, its stamp when it was
+ * offered): the same length as the offer (size), the same last change, and made when it was where
+ * that is known. Only then does it go again under its Tox file id; without the last change that
+ * went, it does not.
+ */
+bool isSameSource(const ToxFile::Stamp& sent, qint64 size, const ToxFile::Stamp& now);
+
+/**
  * KHANDAQ (0.2.57): whether the downloads rule (autoAcceptFolder) may take an offer the window
  * answers with step: a new one, or one that waits in its entry as a new offer does. Never one the
  * person cancelled or declined: it comes only by their tap.

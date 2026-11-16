@@ -194,6 +194,16 @@ void CoreFile::sendFile(uint32_t friendId, QString filename, QString filePath,
     QMutexLocker locker{coreLoopLock};
 
     ToxString fileName(filename);
+    ToxFile file{0, friendId, fileName.getQString(), filePath, static_cast<uint64_t>(filesize),
+                 ToxFile::SENDING};
+    // KHANDAQ (0.2.57): a file that cannot be read is offered to nobody; what it is when it goes
+    // tells whether it can go again under its id (Air::isSameSource).
+    if (!file.open(false)) {
+        qWarning() << QString("sendFile: Can't open file, error: %1").arg(file.file->errorString());
+        emit fileSendFailed(friendId, fileName.getQString());
+        return;
+    }
+    file.stamp = Air::fileStampAt(filePath);
     Tox_Err_File_Send sendErr;
     const uint8_t* const sameId = toxFileId(fileId);
     uint32_t fileNum = tox_file_send(tox, friendId, TOX_FILE_KIND_DATA, filesize,
@@ -205,7 +215,7 @@ void CoreFile::sendFile(uint32_t friendId, QString filename, QString filePath,
     }
     qDebug() << QString("sendFile: Created file sender %1 with friend %2").arg(fileNum).arg(friendId);
 
-    ToxFile file{fileNum, friendId, fileName.getQString(), filePath, static_cast<uint64_t>(filesize), ToxFile::SENDING};
+    file.fileNum = fileNum;
     file.continued = sameId != nullptr;
     file.resumeFileId.resize(TOX_FILE_ID_LENGTH);
     Tox_Err_File_Get fileGetErr;
@@ -213,9 +223,6 @@ void CoreFile::sendFile(uint32_t friendId, QString filename, QString filePath,
                          &fileGetErr);
     if (!PARSE_ERR(fileGetErr)) {
         return;
-    }
-    if (!file.open(false)) {
-        qWarning() << QString("sendFile: Can't open file, error: %1").arg(file.file->errorString());
     }
 
     addFile(friendId, fileNum, file);
@@ -673,8 +680,10 @@ void CoreFile::onFileDataCallback(Tox* tox, uint32_t friendId, uint32_t fileId, 
             qWarning("onFileDataCallback: Failed to read from file");
             file->status = ToxFile::CANCELED;
             emit coreFile->fileTransferCancelled(*file);
-            Tox_Err_File_Send_Chunk err;
-            tox_file_send_chunk(tox, friendId, fileId, pos, nullptr, 0, &err);
+            // KHANDAQ (0.2.57): cancelled, so the receiver learns it; toxcore refuses a chunk of no
+            // bytes before the end, which left both sides waiting.
+            Tox_Err_File_Control err;
+            tox_file_control(tox, friendId, fileId, TOX_FILE_CONTROL_CANCEL, &err);
             PARSE_ERR(err);
             coreFile->removeFile(friendId, fileId);
             return;
@@ -938,6 +947,20 @@ void CoreFile::offerAgain(uint32_t friendId, qint64 backMs)
             continue;
         }
         ToxFile file = fileMap.value(key);
+        // Only the file that went goes again under its id, and only one that can be read: the
+        // receiver would go on with another, or wait for bytes that never come. Its card says it
+        // was not sent; Send again offers it anew.
+        if (!Air::isSameSource(file.stamp, static_cast<qint64>(file.progress.getFileSize()),
+                               Air::fileStampAt(file.filePath))
+            || !file.open(false)) {
+            qWarning() << "offerAgain: file" << friendId << ':' << (key & 0xffffffffu)
+                       << "changed or cannot be read, not offered again";
+            removeFile(friendId, file.fileNum);
+            file.connectionLost = false;
+            file.status = ToxFile::BROKEN;
+            emit fileTransferBrokenUnbroken(file, true);
+            continue;
+        }
         ToxString fileName(file.fileName);
         Tox_Err_File_Send sendErr;
         const uint32_t fileNum =
@@ -945,6 +968,7 @@ void CoreFile::offerAgain(uint32_t friendId, qint64 backMs)
                           toxFileId(file.resumeFileId), fileName.data(), fileName.size(), &sendErr);
         if (!PARSE_ERR(sendErr)) {
             // It waits for the next time they are back.
+            file.file->close();
             continue;
         }
         fileMap.remove(key);
@@ -955,9 +979,6 @@ void CoreFile::offerAgain(uint32_t friendId, qint64 backMs)
         file.pauseStatus.remoteResume();
         // It goes on from where the receiver asks (onFileDataCallback); its progress and hash stay
         // until then, and both go on if that is where it stopped.
-        if (!file.open(false)) {
-            qWarning() << "offerAgain: Can't open file, error:" << file.file->errorString();
-        }
         addFile(friendId, fileNum, file);
         qDebug() << "offerAgain: file" << friendId << ':' << fileNum
                  << "offered again with its own id";

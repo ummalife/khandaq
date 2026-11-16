@@ -363,6 +363,12 @@ bool isOwnPart(const ToxFile::Stamp& recorded, const ToxFile::Stamp& now)
     return recorded.bornMs >= 0 || cutKnown;
 }
 
+bool isSameSource(const ToxFile::Stamp& sent, qint64 size, const ToxFile::Stamp& now)
+{
+    return sent.modifiedMs >= 0 && now.bytes == size && now.modifiedMs == sent.modifiedMs
+           && (sent.bornMs < 0 || now.bornMs == sent.bornMs);
+}
+
 bool downloadsRuleApplies(FileResume::Step step)
 {
     return step == FileResume::Step::NewEntry || step == FileResume::Step::WaitInEntry;

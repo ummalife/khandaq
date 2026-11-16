@@ -128,6 +128,8 @@ struct FileDbInsertionData
     QString filePath;
     int64_t size;
     int direction;
+    /** KHANDAQ (0.2.57): of a file of ours, what it was when it went (ToxFile::Stamp). */
+    ToxFile::Stamp stamp;
 };
 Q_DECLARE_METATYPE(FileDbInsertionData)
 
@@ -248,7 +250,14 @@ public:
     void addNewFileMessage(const ChatId& chatId, const QByteArray& fileId,
                            const QString& fileName, const QString& filePath, int64_t size,
                            const ToxPk& sender, const QDateTime& time, QString const& dispName,
-                           ToxFile::FileDirection direction);
+                           ToxFile::FileDirection direction,
+                           const ToxFile::Stamp& stamp = ToxFile::Stamp());
+    /**
+     * KHANDAQ (0.2.57): what a row keeps of a stamp (ToxFile::Stamp) where an ended file keeps its
+     * hash, which nothing reads back: a file of ours that stopped keeps what it was when it went,
+     * for Send again after a restart.
+     */
+    static QByteArray stampRecord(const ToxFile::Stamp& stamp);
 
     void addNewSystemMessage(const ChatId& chatId, const SystemMessage& systemMessage);
 

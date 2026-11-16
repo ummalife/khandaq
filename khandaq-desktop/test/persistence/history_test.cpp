@@ -107,6 +107,7 @@ private slots:
     void aFileOfThePersonThatEndedCancelledIsRefusedAfterARestart();
     void anInterruptedFileKeepsWhatTellsItsPartAfterARestart();
     void aLaterFileOfAPersonThatGoesToThePathIsKnown();
+    void aFileOfOursKeepsWhatItWasWhenItWentAfterARestart();
 
 private:
     /** The one file of the chat, as a later start reads it. */
@@ -499,6 +500,29 @@ void TestHistory::aLaterFileOfAPersonThatGoesToThePathIsKnown()
     QVERIFY(!history->laterFileGoesTo(omar, laterId, filePath));
     QVERIFY(!history->laterFileGoesTo(maryam, fileId, QStringLiteral("/files/other.jpg")));
     QVERIFY(!history->laterFileGoesTo(maryam, laterId, filePath));
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): a file of ours keeps what it was when it went (ToxFile::Stamp) in its
+ * row, also once it stopped, so Send again after a restart knows whether it is still that file.
+ */
+void TestHistory::aFileOfOursKeepsWhatItWasWhenItWentAfterARestart()
+{
+    ToxFile::Stamp sent;
+    sent.bornMs = 1700000000123;
+    sent.bytes = 5000;
+    sent.modifiedMs = 1700000000456;
+    history->addNewFileMessage(maryam, fileId, QStringLiteral("notes.zip"), filePath, 5000, self,
+                               QDateTime::currentDateTime(), QStringLiteral("Me"),
+                               ToxFile::SENDING, sent);
+    letRowsIn();
+    QCOMPARE(storedFile(maryam).stamp, sent);
+
+    history->setFileFinished(fileId, false, filePath, History::stampRecord(sent));
+    restart();
+    QCOMPARE(storedFile(maryam).status, ToxFile::CANCELED);
+    QCOMPARE(storedFile(maryam).direction, ToxFile::SENDING);
+    QCOMPARE(storedFile(maryam).stamp, sent);
 }
 
 int main(int argc, char* argv[])

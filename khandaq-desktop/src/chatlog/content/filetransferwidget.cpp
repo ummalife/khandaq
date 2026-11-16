@@ -649,8 +649,11 @@ void FileTransferWidget::sendAgain()
     }
     resent = true;
     // KHANDAQ (0.2.57): the same file goes under the same Tox file id, so the person can go on
-    // with what they have of it, in its entry. A file changed since is another file.
-    const bool same = static_cast<uint64_t>(info.size()) == fileInfo.progress.getFileSize();
+    // with what they have of it, in its entry. A file changed since is another file: its length or
+    // its last change tells it, and one whose last change is not known goes as a new file.
+    const bool same =
+        Air::isSameSource(fileInfo.stamp, static_cast<qint64>(fileInfo.progress.getFileSize()),
+                          Air::fileStampAt(fileInfo.filePath));
     coreFile.sendFile(fileInfo.friendId, fileInfo.fileName, fileInfo.filePath, info.size(),
                       same ? fileInfo.resumeFileId : QByteArray());
     refresh();

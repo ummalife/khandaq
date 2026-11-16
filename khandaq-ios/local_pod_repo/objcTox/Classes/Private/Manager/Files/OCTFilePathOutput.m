@@ -6,15 +6,27 @@
 #import "OCTLogging.h"
 #import "OCTFileTools.h"
 
+static NSString *const kPartialFileExtension = @"part";
+
 @interface OCTFilePathOutput ()
 
 @property (copy, nonatomic, readonly, nonnull) NSString *tempFilePath;
+/// The partial file outlives a cancel (initWithResultFilePath:).
+@property (assign, nonatomic, readonly) BOOL keepsPartialData;
 
-@property (strong, nonatomic) NSFileHandle *handle;
+// Atomic: a cancel on the main thread lets go of it while a chunk is written on the transfer queue.
+@property (strong, atomic) NSFileHandle *handle;
 
 @end
 
 @implementation OCTFilePathOutput
+
+#pragma mark -  Class methods
+
++ (nonnull NSString *)partialFilePathForResultFilePath:(nonnull NSString *)resultFilePath
+{
+    return [resultFilePath stringByAppendingPathExtension:kPartialFileExtension];
+}
 
 #pragma mark -  Lifecycle
 
@@ -40,10 +52,42 @@
     return self;
 }
 
+- (nullable instancetype)initWithResultFilePath:(nonnull NSString *)resultFilePath
+{
+    self = [super init];
+
+    if (! self) {
+        return nil;
+    }
+
+    _resultFilePath = [resultFilePath copy];
+    _tempFilePath = [[self class] partialFilePathForResultFilePath:resultFilePath];
+    _keepsPartialData = YES;
+
+    // Reserve the name, as the other init does, unless the placeholder of an earlier attempt is there.
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    if (! [fileManager fileExistsAtPath:_resultFilePath]) {
+        [fileManager createDirectoryAtPath:[_resultFilePath stringByDeletingLastPathComponent]
+               withIntermediateDirectories:YES
+                                attributes:nil
+                                     error:nil];
+        [fileManager createFileAtPath:_resultFilePath contents:[NSData data] attributes:nil];
+    }
+
+    OCTLogInfo(@"partial path %@", _tempFilePath);
+    OCTLogInfo(@"result path %@", _resultFilePath);
+
+    return self;
+}
+
 #pragma mark -  OCTFileOutputProtocol
 
 - (BOOL)prepareToWrite
 {
+    if (self.keepsPartialData) {
+        return [self prepareToWriteFromOffset:0];
+    }
+
     // KHANDAQ (#48): the temp directory (NSTemporaryDirectory) is volatile and may have been purged
     // since this path was reserved — its absence makes createFileAtPath fail and surfaces to the user
     // as a generic "internal error" on (re)download. Recreate the parent directory first.
@@ -67,6 +111,46 @@
         return NO;
     }
 
+    return YES;
+}
+
+- (BOOL)prepareToWriteFromOffset:(OCTToxFileSize)offset
+{
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    [fileManager createDirectoryAtPath:[self.tempFilePath stringByDeletingLastPathComponent]
+           withIntermediateDirectories:YES
+                            attributes:nil
+                                 error:nil];
+
+    if (! [fileManager fileExistsAtPath:self.tempFilePath] &&
+        ! [fileManager createFileAtPath:self.tempFilePath contents:nil attributes:nil]) {
+        OCTLogWarn(@"OCTFilePathOutput cannot create partial file at %@", self.tempFilePath);
+        return NO;
+    }
+
+    // Truncating to a point past the end would pad the file with zeros, bytes the friend never sent.
+    OCTToxFileSize length = [[fileManager attributesOfItemAtPath:self.tempFilePath error:nil] fileSize];
+    if (length < offset) {
+        OCTLogWarn(@"OCTFilePathOutput holds %lld bytes, cannot go on from %lld", length, offset);
+        return NO;
+    }
+
+    NSFileHandle *handle = [NSFileHandle fileHandleForUpdatingAtPath:self.tempFilePath];
+    if (! handle) {
+        OCTLogWarn(@"OCTFilePathOutput cannot open handle for partial file at %@", self.tempFilePath);
+        return NO;
+    }
+
+    @try {
+        // Drops what lies past `offset` and leaves the file pointer there.
+        [handle truncateFileAtOffset:offset];
+    }
+    @catch (NSException *ex) {
+        OCTLogWarn(@"catched exception %@", ex);
+        return NO;
+    }
+
+    self.handle = handle;
     return YES;
 }
 
@@ -125,7 +209,18 @@
 
 - (void)cancel
 {
+    NSFileHandle *handle = self.handle;
     self.handle = nil;
+    @try {
+        [handle closeFile];
+    }
+    @catch (NSException *ex) {
+        OCTLogWarn(@"catched exception %@", ex);
+    }
+
+    if (self.keepsPartialData) {
+        return;
+    }
 
     [[NSFileManager defaultManager] removeItemAtPath:self.tempFilePath error:nil];
 }

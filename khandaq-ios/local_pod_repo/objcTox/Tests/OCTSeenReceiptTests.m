@@ -591,7 +591,8 @@ static NSString *const kSeenTestsFileVector = @"BD 4B 51 01 02 FF FF FF FF FF FF
     @autoreleasepool {
         OCTRealmManager *manager = [[OCTRealmManager alloc] initWithDatabaseFileURL:url encryptionKey:nil];
         migratedRealm = manager.realm;
-        XCTAssertEqual([RLMRealm schemaVersionAtURL:url encryptionKey:nil error:nil], 43u);
+        // Straight to the current schema: 44 came after the columns of 43 (OCTFileResumeTests).
+        XCTAssertEqual([RLMRealm schemaVersionAtURL:url encryptionKey:nil error:nil], 44u);
         XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:[url.path stringByAppendingPathExtension:@"corrupt"]]);
 
         OCTFriend *friend = [manager friendWithPublicKey:self.friendKey];
@@ -769,26 +770,34 @@ static NSString *const kSeenTestsFileVector = @"BD 4B 51 01 02 FF FF FF FF FF FF
 }
 
 /**
- * A profile as 0.2.56 (schema 42) wrote it: today's classes without the three columns of 43, at version 42,
- * holding the friend and one text from them. Returns the text's id.
+ * A profile as 0.2.56 (schema 42) wrote it: today's classes without the three columns of 43 and the one of 44,
+ * at version 42, holding the friend and one text from them. Returns the text's id.
  */
 - (NSString *)writeSchema42ProfileAtURL:(NSURL *)url
 {
     NSSet<NSString *> *columnsOf43 = [NSSet setWithArray:@[@"seenWatermark", @"seenReportedDateInterval", @"seenPendingPacket"]];
+    NSSet<NSString *> *columnsOf44 = [NSSet setWithArray:@[@"transferredBytes"]];
     NSString *messageId = [[NSUUID UUID] UUIDString];
 
     @autoreleasepool {
         NSMutableArray<RLMObjectSchema *> *objectSchemas = [NSMutableArray new];
         for (RLMObjectSchema *shared in [RLMSchema sharedSchema].objectSchema) {
             RLMObjectSchema *objectSchema = [shared copy];
+            NSSet<NSString *> *later = nil;
             if ([objectSchema.className isEqualToString:@"OCTFriend"]) {
+                later = columnsOf43;
+            }
+            else if ([objectSchema.className isEqualToString:@"OCTMessageFile"]) {
+                later = columnsOf44;
+            }
+            if (later) {
                 NSMutableArray<RLMProperty *> *properties = [NSMutableArray new];
                 for (RLMProperty *property in objectSchema.properties) {
-                    if (! [columnsOf43 containsObject:property.name]) {
+                    if (! [later containsObject:property.name]) {
                         [properties addObject:property];
                     }
                 }
-                XCTAssertEqual(properties.count + columnsOf43.count, objectSchema.properties.count);
+                XCTAssertEqual(properties.count + later.count, objectSchema.properties.count);
                 [objectSchema setProperties:properties];
             }
             [objectSchemas addObject:objectSchema];

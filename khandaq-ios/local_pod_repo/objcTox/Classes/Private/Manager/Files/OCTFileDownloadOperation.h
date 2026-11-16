@@ -17,6 +17,19 @@
 @property (strong, nonatomic, readonly, nonnull) id<OCTFileOutputProtocol> output;
 
 /**
+ * KHANDAQ (0.2.57): where the transfer goes on from, set before the operation is queued. The receiver seeks
+ * there before it accepts, so the sender sends from that byte on, and the output keeps what it holds up to it.
+ * 0 starts from the first byte.
+ */
+@property (assign, nonatomic) OCTToxFileSize resumePosition;
+
+/**
+ * KHANDAQ (0.2.57): YES cancels the transfer when the seek to resumePosition fails, instead of taking the file
+ * from its first byte. For a file that is complete here and wants only its last byte again.
+ */
+@property (assign, nonatomic) BOOL cancelsWhenSeekFails;
+
+/**
  * Create operation.
  *
  * @param fileOutput Output to use as a destination for file transfer.

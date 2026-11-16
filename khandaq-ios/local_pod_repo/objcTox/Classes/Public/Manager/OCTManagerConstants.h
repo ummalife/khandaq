@@ -63,6 +63,15 @@ typedef NS_ENUM(NSInteger, OCTMessageFilePausedBy) {
      * File transfer is paused by friend.
      */
     OCTMessageFilePausedByFriend = 1 << 1,
+
+    /**
+     * KHANDAQ (0.2.57): a 1:1 transfer that was under way (ours offered, theirs accepted) when the friend
+     * connection went. It waits, fileType WaitingConfirmation and no live file number, and goes on by itself
+     * from where it stopped once the friend is back: we offer the same file id again, or they do and this
+     * side seeks to the bytes it has before accepting. On a canceled incoming file it means the person
+     * cancelled it while nothing was live, so the next offer of it is refused.
+     */
+    OCTMessageFilePausedByConnection = 1 << 2,
 };
 
 typedef NS_ENUM(NSInteger, OCTMessageCallEvent) {

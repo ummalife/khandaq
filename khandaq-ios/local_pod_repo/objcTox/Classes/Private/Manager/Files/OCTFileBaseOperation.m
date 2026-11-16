@@ -140,6 +140,22 @@ static const CFTimeInterval kMinUpdateEtaInterval = 1.0;
     [self updateEtaIfNeeded:bytesDone];
 }
 
+- (void)beginAtBytes:(OCTToxFileSize)bytesDone
+{
+    self.bytesDone = bytesDone;
+    self.lastUpdateBytesDone = bytesDone;
+    self.lastUpdateEtaBytesDone = bytesDone;
+    self.progress = (self.fileSize > 0) ? (float)bytesDone / self.fileSize : 0;
+
+    if (self.progressBlock) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (self.progressBlock) {
+                self.progressBlock(self);
+            }
+        });
+    }
+}
+
 - (void)operationStarted
 {
     OCTLogInfo(@"start loading file with identifier %@", self.operationId);

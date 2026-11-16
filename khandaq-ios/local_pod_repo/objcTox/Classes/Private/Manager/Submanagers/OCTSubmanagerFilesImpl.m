@@ -7,6 +7,7 @@
 #import "OCTSubmanagerFilesProgressSubscriber.h"
 #import "OCTTox.h"
 #import "OCTToxConstants.h"
+#import "OCTFileBaseOperation+Private.h"
 #import "OCTFileDownloadOperation.h"
 #import "OCTFileUploadOperation.h"
 #import "OCTRealmManager.h"
@@ -33,6 +34,8 @@ static NSString *const kDownloadsTempDirectory = @"me.dvor.objcTox.downloads";
 static NSString *const kProgressSubscribersKey = @"kProgressSubscribersKey";
 static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
 
+static const NSTimeInterval kReofferGraceInterval = 120.0;
+
 @interface OCTSubmanagerFilesImpl ()
 
 @property (strong, nonatomic, readonly) NSOperationQueue *queue;
@@ -40,10 +43,15 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
 @property (strong, nonatomic, readonly) NSObject *filesCleanupLock;
 @property (assign, nonatomic) BOOL filesCleanupInProgress;
 
+/// KHANDAQ (0.2.57): public key of a friend -> how many times their connection changed, so a grace that began
+/// while they were online ends nothing once they have gone away and come back since.
+@property (strong, nonatomic, readonly) NSMutableDictionary<NSString *, NSNumber *> *friendLinkGenerations;
+
 @end
 
 @implementation OCTSubmanagerFilesImpl
 @synthesize dataSource = _dataSource;
+@synthesize reofferAutoAcceptPolicy = _reofferAutoAcceptPolicy;
 
 #pragma mark -  Lifecycle
 
@@ -57,6 +65,8 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
 
     _queue = [NSOperationQueue new];
     _filesCleanupLock = [NSObject new];
+    _friendLinkGenerations = [NSMutableDictionary new];
+    _reofferGraceInterval = kReofferGraceInterval;
 
     return self;
 }
@@ -81,13 +91,21 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
                                                          name:kOCTScheduleFileTransferCleanupNotification
                                                        object:nil];
 
-    OCTLogInfo(@"cancelling pending files...");
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+
+    NSSet<NSString *> *waiting = [self keepTransfersOfLastRunWaitingForTheConnection];
+
+    OCTLogInfo(@"cancelling pending files...");
 
     NSPredicate *predicate = [NSPredicate predicateWithFormat:@"fileType == %d OR fileType == %d OR fileType == %d",
                               OCTMessageFileTypeWaitingConfirmation, OCTMessageFileTypeLoading, OCTMessageFileTypePaused];
 
     [realmManager updateObjectsWithClass:[OCTMessageFile class] predicate:predicate updateBlock:^(OCTMessageFile *file) {
+        // KHANDAQ (0.2.57): a 1:1 transfer of the last run waits for the connection now (see above).
+        if ([waiting containsObject:file.uniqueIdentifier]) {
+            return;
+        }
+
         // KHANDAQ (#81): a fully-downloaded NGC group file can be persisted as Loading (a lingering
         // BEGIN bubble whose COMPLETE finalized a sibling row, or a progress row not yet flipped to
         // Ready). The blanket cancel below then turned an already-downloaded & played group video into
@@ -127,6 +145,8 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
 
     NSFileManager *fileManager = [NSFileManager defaultManager];
 
+    // KHANDAQ (0.2.57): 1:1 downloads keep their bytes next to the result now (OCTFilePathOutput
+    // initWithResultFilePath:), so a restart leaves them; this directory holds what older versions left.
     NSString *downloads = [self downloadsTempDirectory];
     OCTLogInfo(@"clearing downloads temp directory %@\ncontents %@",
                downloads,
@@ -270,11 +290,14 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
         return nil;
     }
 
-    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"chatUniqueIdentifier == %@ AND senderUniqueIdentifier == %@ AND messageFile.internalFileNumber == %u",
-                              chat.uniqueIdentifier, friend.uniqueIdentifier, fileNumber];
+    // KHANDAQ (0.2.57): only a transfer under way. toxcore gives the numbers out again, and a file that came
+    // long ago keeps the number it came with: a cancel of a new transfer marked that old file failed.
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"chatUniqueIdentifier == %@ AND senderUniqueIdentifier == %@ AND messageFile.internalFileNumber == %d AND messageFile.fileType IN %@",
+                              chat.uniqueIdentifier, friend.uniqueIdentifier, (int)fileNumber,
+                              @[@(OCTMessageFileTypeWaitingConfirmation), @(OCTMessageFileTypeLoading), @(OCTMessageFileTypePaused)]];
 
     RLMResults *results = [[self.dataSource managerGetRealmManager] objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
-    return [results firstObject];
+    return [[results sortedResultsUsingKeyPath:@"dateInterval" ascending:NO] firstObject];
 }
 
 - (BOOL)prepareIncomingFileForAccept:(OCTMessageAbstract *)message
@@ -310,11 +333,11 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
     }
 
     if (type == OCTMessageFileTypeCanceled) {
-        if (operation) {
-            [operation cancel];
-        }
-
+        // KHANDAQ (0.2.57): a canceled file has no transfer left: its number is toxcore's to give to another
+        // file of the friend, whose transfer the cancel and the accept here used to hit. It waits for the friend
+        // to offer it again (acceptFileTransfer).
         [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
+            file.internalFileNumber = (int)kOCTToxFileNumberFailure;
             file.fileType = OCTMessageFileTypeWaitingConfirmation;
             file.pausedBy = OCTMessageFilePausedByNone;
         }];
@@ -359,14 +382,40 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
         return;
     }
 
-    OCTFilePathOutput *output = [[OCTFilePathOutput alloc] initWithTempFolder:[self downloadsTempDirectory]
-                                                                 resultFolder:[self downloadsDirectory]
-                                                                     fileName:message.messageFile.fileName];
-
-    NSDictionary *userInfo = [self fileOperationUserInfoWithMessage:message];
-
     OCTFriend *friend = [[self.dataSource managerGetRealmManager] objectWithUniqueIdentifier:message.senderUniqueIdentifier
                                                                                        class:[OCTFriend class]];
+
+    // KHANDAQ (0.2.57): nothing live to accept (the connection went, or the app restarted, since the offer):
+    // the person wants the file, and it goes on by itself once the friend offers it again.
+    if (message.messageFile.internalFileNumber == (int)kOCTToxFileNumberFailure) {
+        OCTToxFileSize kept = [self partialLengthOfMessage:message];
+        OCTLogInfo(@"accepted with no live transfer, waiting for the friend to offer it again: %@", message);
+        [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
+            file.fileType = OCTMessageFileTypeWaitingConfirmation;
+            file.pausedBy = OCTMessageFilePausedByConnection;
+            file.transferredBytes = kept;
+        }];
+        [self beginReofferGraceForFriend:friend];
+        return;
+    }
+
+    // KHANDAQ (0.2.57): the bytes go next to the result and outlive an interruption; a file accepted before
+    // goes on into the same result from what it kept.
+    NSString *resultFilePath = [message.messageFile filePath];
+    if (resultFilePath.length == 0) {
+        resultFilePath = [OCTFileTools createNewFilePathInDirectory:[self downloadsDirectory]
+                                                           fileName:message.messageFile.fileName];
+    }
+    OCTToxFileSize resumePosition = [self resumePositionForMessage:message];
+
+    // Referenced by the message before the placeholder is made, so a cleanup in between cannot take them.
+    [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
+        [file internalSetFilePath:resultFilePath];
+    }];
+
+    OCTFilePathOutput *output = [[OCTFilePathOutput alloc] initWithResultFilePath:resultFilePath];
+
+    NSDictionary *userInfo = [self fileOperationUserInfoWithMessage:message];
 
     OCTFileDownloadOperation *operation = [[OCTFileDownloadOperation alloc]
                                            initWithTox:self.dataSource.managerGetTox
@@ -380,12 +429,17 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
                                             successBlock:[self fileSuccessBlockWithMessage:message]
                                             failureBlock:[self   fileFailureBlockWithMessage:message
                                                                             userFailureBlock:failureBlock]];
+    operation.resumePosition = resumePosition;
+    if (resumePosition > 0) {
+        OCTLogInfo(@"resuming the download from byte %lld of %lld: %@", resumePosition, message.messageFile.fileSize, message);
+    }
 
     [self.queue addOperation:operation];
 
     [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
         file.fileType = OCTMessageFileTypeLoading;
-        [file internalSetFilePath:output.resultFilePath];
+        file.pausedBy = OCTMessageFilePausedByNone;
+        file.transferredBytes = 0;
     }];
 }
 
@@ -400,18 +454,36 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
     }
 
     OCTFriend *friend = [self friendForMessage:message];
+    OCTMessageFileType type = message.messageFile.fileType;
+    BOOL underWay = (type == OCTMessageFileTypeWaitingConfirmation ||
+                     type == OCTMessageFileTypeLoading ||
+                     type == OCTMessageFileTypePaused);
+    BOOL live = underWay && message.messageFile.internalFileNumber != (int)kOCTToxFileNumberFailure;
+    BOOL incoming = (message.senderUniqueIdentifier != nil);
 
-    [self.dataSource.managerGetTox fileSendControlForFileNumber:message.messageFile.internalFileNumber
-                                                   friendNumber:friend.friendNumber
-                                                        control:OCTToxFileControlCancel
-                                                          error:nil];
+    // KHANDAQ (0.2.57): a file waiting for the connection has no transfer to cancel, and its number is not
+    // its own any more.
+    if (live) {
+        [self.dataSource.managerGetTox fileSendControlForFileNumber:message.messageFile.internalFileNumber
+                                                       friendNumber:friend.friendNumber
+                                                            control:OCTToxFileControlCancel
+                                                              error:nil];
 
-    OCTFileBaseOperation *operation = [self operationWithFileNumber:message.messageFile.internalFileNumber
-                                                       friendNumber:friend.friendNumber];
-    [operation cancel];
+        OCTFileBaseOperation *operation = [self operationWithFileNumber:message.messageFile.internalFileNumber
+                                                           friendNumber:friend.friendNumber];
+        [operation cancel];
+    }
+
+    if (incoming) {
+        [self removePartialFileOfMessage:message];
+    }
 
     [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
         file.fileType = OCTMessageFileTypeCanceled;
+        // KHANDAQ (0.2.57): theirs, cancelled while nothing was live, cannot tell them: their next offer of it
+        // is refused (dataFileReceiveForFileNumber).
+        file.pausedBy = (incoming && underWay && ! live) ? OCTMessageFilePausedByConnection : OCTMessageFilePausedByNone;
+        file.transferredBytes = 0;
     }];
 
     return YES;
@@ -441,6 +513,15 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
 
     if (! attributes) {
         OCTLogWarn(@"cannot read file %@", filePath);
+        // KHANDAQ (0.2.57): a queued file whose bytes are gone can never leave: it fails instead of being tried
+        // again on every tick of the delivery watchdog.
+        if (isPendingOffline) {
+            [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
+                file.fileType = OCTMessageFileTypeCanceled;
+                file.pausedBy = OCTMessageFilePausedByNone;
+                file.transferredBytes = 0;
+            }];
+        }
         if (failureBlock) {
             failureBlock([NSError sendFileErrorCannotReadFile]);
         }
@@ -451,16 +532,30 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
     OCTFriend *friend = [self friendForMessage:message];
     NSError *error;
 
+    // KHANDAQ (0.2.57): one Tox file id for the whole life of the file: every offer after the first passes the
+    // id the first one made (reconnect, restart, the delivery watchdog, "Send again"), so the friend's side
+    // knows the file and goes on from the bytes it has instead of taking it again as a new one.
+    NSData *fileId = [self fileIdFromHex:message.messageFile.fileIdHex];
+
     OCTToxFileNumber fileNumber = [[self.dataSource managerGetTox] fileSendWithFriendNumber:friend.friendNumber
                                                                                        kind:OCTToxFileKindData
                                                                                    fileSize:fileSize
-                                                                                     fileId:nil
+                                                                                     fileId:fileId
                                                                                    fileName:fileName
                                                                                       error:&error];
 
     if (fileNumber == kOCTToxFileNumberFailure) {
         if ((error.code == OCTToxErrorFileSendFriendNotConnected) &&
             [self.dataSource managerUseFauxOfflineMessaging]) {
+            // KHANDAQ (0.2.57): "Send again" while the friend is away queues the file, as a new one is queued.
+            if (isCanceled) {
+                [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
+                    file.internalFileNumber = (int)kOCTToxFileNumberFailure;
+                    file.fileType = OCTMessageFileTypeWaitingConfirmation;
+                    file.pausedBy = OCTMessageFilePausedByNone;
+                    file.transferredBytes = 0;
+                }];
+            }
             OCTChat *messageChat = [[self.dataSource managerGetRealmManager] getOrCreateChatWithFriend:friend];
             [[self.dataSource managerGetChats] triggerWakePushForChat:messageChat];
             return;
@@ -477,10 +572,16 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
         messageFile.internalFileNumber = fileNumber;
         messageFile.fileType = OCTMessageFileTypeWaitingConfirmation;
         messageFile.fileSize = fileSize;
+        // A file that waited for the connection keeps saying so, and its bar, until the friend takes it again
+        // (the Resume in fileReceiveControl).
+        if (! (messageFile.pausedBy & OCTMessageFilePausedByConnection)) {
+            messageFile.pausedBy = OCTMessageFilePausedByNone;
+            messageFile.transferredBytes = 0;
+        }
     }];
-    // KHANDAQ (0.2.57): the new transfer has a new Tox file id, and the friend knows the file by it alone.
-    // A file sent while they were offline left here without one, so their read receipt, reaction or delete
-    // for it named a file this side could not find.
+    // KHANDAQ (0.2.57): a file sent while they were offline leaves here without an id until this first offer
+    // makes one, and the friend knows the file by it alone: their read receipt, reaction or delete for it, and
+    // their side of a transfer that goes on after an interruption.
     [self stampFileIdHexOnMessage:message fileNumber:fileNumber friendNumber:friend.friendNumber];
 
     NSDictionary *userInfo = [self fileOperationUserInfoWithMessage:message];
@@ -666,8 +767,10 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
     switch (control) {
         case OCTToxFileControlResume: {
             [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
-                file.pausedBy &= ~OCTMessageFilePausedByFriend;
+                // KHANDAQ (0.2.57): the friend took the file again: it no longer waits for the connection.
+                file.pausedBy &= ~(OCTMessageFilePausedByFriend | OCTMessageFilePausedByConnection);
                 file.fileType = (file.pausedBy == OCTMessageFilePausedByNone) ? OCTMessageFileTypeLoading : OCTMessageFileTypePaused;
+                file.transferredBytes = 0;
             }];
             break;
         }
@@ -683,9 +786,14 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
                 [operation cancel];
             }
 
+            if (message.senderUniqueIdentifier) {
+                [self removePartialFileOfMessage:message];
+            }
+
             [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
                 file.fileType = OCTMessageFileTypeCanceled;
                 file.pausedBy = OCTMessageFilePausedByNone;
+                file.transferredBytes = 0;
             }];
             break;
         }
@@ -759,10 +867,16 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
         return;
     }
 
+    if (friend.publicKey.length > 0) {
+        NSUInteger generation = [self.friendLinkGenerations[friend.publicKey] unsignedIntegerValue];
+        self.friendLinkGenerations[friend.publicKey] = @(generation + 1);
+    }
+
     [self sendAvatarToFriend:friend];
 
     if (friend.isConnected) {
         [self resendPendingOutgoingFilesToFriend:friend];
+        [self beginReofferGraceForFriend:friend];
     }
     else {
         [self requeueInFlightTransfersForDisconnectedFriend:friend];
@@ -774,8 +888,11 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
 // fileNumber and spun in «Loading» forever while later messages flowed over the new connection.
 // On disconnect: cancel the orphaned operation, then move OUTGOING transfers back into the proven
 // faux-offline queue (internalFileNumber=-1 + WaitingConfirmation → auto-resent by the
-// friend-connected hook / delivery watchdog) and mark INCOMING ones canceled (the sender's side
-// re-initiates them the same way, arriving as a fresh transfer).
+// friend-connected hook / delivery watchdog).
+// KHANDAQ (0.2.57): INCOMING ones wait too instead of being canceled, and keep the bytes that came. A transfer
+// that was under way (ours offered, theirs accepted) is marked OCTMessageFilePausedByConnection with what had
+// moved, for its bar: ours goes again with the same file id, and theirs, offered again with its id, goes on
+// from the bytes kept here (dataFileReceiveForFileNumber).
 - (void)requeueInFlightTransfersForDisconnectedFriend:(OCTFriend *)friend
 {
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
@@ -789,23 +906,35 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
 
     RLMResults *results = [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
 
+    NSMutableArray<OCTMessageAbstract *> *messages = [NSMutableArray new];
     for (OCTMessageAbstract *message in results) {
-        BOOL outgoing = (message.senderUniqueIdentifier == nil);
-        OCTLogInfo(@"requeue-on-disconnect: %@ transfer fileNumber %d friend %@",
-                   outgoing ? @"outgoing" : @"incoming", message.messageFile.internalFileNumber, friend);
+        [messages addObject:message];
+    }
 
-        OCTFileBaseOperation *operation = [self operationWithFileNumber:message.messageFile.internalFileNumber
+    for (OCTMessageAbstract *message in messages) {
+        BOOL outgoing = (message.senderUniqueIdentifier == nil);
+        OCTMessageFile *messageFile = message.messageFile;
+        BOOL underWay = (messageFile.fileType != OCTMessageFileTypeWaitingConfirmation) ||
+                        (messageFile.pausedBy & OCTMessageFilePausedByConnection);
+
+        OCTFileBaseOperation *operation = [self operationWithFileNumber:messageFile.internalFileNumber
                                                            friendNumber:friend.friendNumber];
+        OCTToxFileSize moved = outgoing ? operation.bytesDone : [self partialLengthOfMessage:message];
+        if (moved <= 0) {
+            moved = messageFile.transferredBytes;
+        }
+
+        OCTLogInfo(@"requeue-on-disconnect: %@ transfer fileNumber %d friend %@, under way %d, %lld bytes moved",
+                   outgoing ? @"outgoing" : @"incoming", messageFile.internalFileNumber, friend, underWay, moved);
+
+        // A download keeps the bytes it wrote (OCTFilePathOutput initWithResultFilePath:).
         [operation cancel];
 
         [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
-            if (outgoing) {
-                file.internalFileNumber = (int)kOCTToxFileNumberFailure;
-                file.fileType = OCTMessageFileTypeWaitingConfirmation;
-            }
-            else {
-                file.fileType = OCTMessageFileTypeCanceled;
-            }
+            file.internalFileNumber = (int)kOCTToxFileNumberFailure;
+            file.fileType = OCTMessageFileTypeWaitingConfirmation;
+            file.pausedBy = underWay ? OCTMessageFilePausedByConnection : OCTMessageFilePausedByNone;
+            file.transferredBytes = underWay ? moved : 0;
         }];
     }
 }
@@ -925,14 +1054,23 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
                 // which all three formats share and which is immune to container-UUID drift; biasing
                 // toward "keep" here is correct (an orphan wastes space, a false delete loses data).
                 NSString *name = [path lastPathComponent];
-                NSPredicate *predicate = [NSPredicate predicateWithFormat:
-                                          @"internalFilePath ENDSWITH %@ OR internalFilePath == %@",
-                                          [@"/" stringByAppendingString:name], name];
-
                 OCTRealmManager *realmManager = strongSelf.dataSource.managerGetRealmManager;
-                RLMResults *results = [realmManager objectsWithClass:[OCTMessageFile class] predicate:predicate];
+                BOOL (^isBound)(NSString *) = ^BOOL (NSString *fileName) {
+                    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                                              @"internalFilePath ENDSWITH %@ OR internalFilePath == %@",
+                                              [@"/" stringByAppendingString:fileName], fileName];
+                    return [realmManager objectsWithClass:[OCTMessageFile class] predicate:predicate].count > 0;
+                };
 
-                exists = (results.count > 0);
+                exists = isBound(name);
+
+                // KHANDAQ (0.2.57): "<name>.part" holds the bytes of a download into "<name>" that waits for the
+                // connection (OCTFilePathOutput initWithResultFilePath:); it goes when its message goes.
+                NSString *partialOf = [name stringByDeletingPathExtension];
+                if (! exists && partialOf.length > 0 &&
+                    [[OCTFilePathOutput partialFilePathForResultFilePath:partialOf] isEqualToString:name]) {
+                    exists = isBound(partialOf);
+                }
             });
 
             if (exists) {
@@ -1087,6 +1225,8 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
                [strongSelf updateMessageFile:message withBlock:^(OCTMessageFile *file) {
 
             file.fileType = OCTMessageFileTypeReady;
+            file.pausedBy = OCTMessageFilePausedByNone;
+            file.transferredBytes = 0;
         }];
     };
 }
@@ -1098,8 +1238,39 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
 
     return ^(OCTFileBaseOperation *__nonnull operation, NSError *__nonnull error) {
                __strong OCTSubmanagerFilesImpl *strongSelf = weakSelf;
+
+               // KHANDAQ (0.2.57): an operation cancelled meanwhile, or one the message has left for a newer
+               // transfer, says nothing about the message any more (the disconnect requeue cancels its
+               // operation while a failure of it may be on its way here).
+               if (operation.isCancelled || message.isInvalidated || ! message.messageFile ||
+                   message.messageFile.internalFileNumber != (int)operation.fileNumber) {
+                   return;
+               }
+
+               // KHANDAQ (0.2.57): it failed because the friend went away: it waits for the connection and goes
+               // on from where it stopped, as one the disconnect requeue reaches first does.
+               OCTFriend *friend = [strongSelf friendForMessage:message];
+               if (friend && ! [strongSelf isFriendConnected:friend]) {
+                   BOOL incoming = (message.senderUniqueIdentifier != nil);
+                   OCTToxFileSize moved = incoming ? [strongSelf partialLengthOfMessage:message] : operation.bytesDone;
+                   OCTLogInfo(@"transfer failed with the friend away, waiting for the connection: %@", message);
+                   [strongSelf updateMessageFile:message withBlock:^(OCTMessageFile *file) {
+                       file.internalFileNumber = (int)kOCTToxFileNumberFailure;
+                       file.fileType = OCTMessageFileTypeWaitingConfirmation;
+                       file.pausedBy = OCTMessageFilePausedByConnection;
+                       file.transferredBytes = moved;
+                   }];
+                   return;
+               }
+
+               if (message.senderUniqueIdentifier) {
+                   [strongSelf removePartialFileOfMessage:message];
+               }
+
                [strongSelf updateMessageFile:message withBlock:^(OCTMessageFile *file) {
             file.fileType = OCTMessageFileTypeCanceled;
+            file.pausedBy = OCTMessageFilePausedByNone;
+            file.transferredBytes = 0;
 
             if (userFailureBlock) {
                 userFailureBlock(error);
@@ -1180,6 +1351,19 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
     NSString *publicKey = [[self.dataSource managerGetTox] publicKeyFromFriendNumber:friendNumber error:nil];
     OCTFriend *friend = [realmManager friendWithPublicKey:publicKey];
     OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
+
+    // KHANDAQ (0.2.57): the same file again, offered with the id it came with before (the sender goes on after
+    // the connection went): it belongs to the message it already has here, never to a new one.
+    NSString *fileIdHex = [self fileIdHexForFileNumber:fileNumber friendNumber:friendNumber];
+    OCTMessageAbstract *known = [self incomingMessageInChat:chat from:friend fileIdHex:fileIdHex fileSize:fileSize];
+    if (known) {
+        [self takeReofferOfMessage:known fileNumber:fileNumber friendNumber:friendNumber];
+        return;
+    }
+
+    // KHANDAQ (0.2.57): a client without resume offers an interrupted file again with a new id: it comes as a new
+    // message, as before, and the card that waited for it here ends interrupted instead of waiting on.
+    [self endWaitingFilesInChat:chat from:friend matchingName:fileName fileSize:fileSize];
 
     OCTMessageAbstract *incoming = [realmManager addMessageWithFileNumber:fileNumber
                                   fileType:OCTMessageFileTypeWaitingConfirmation
@@ -1263,6 +1447,322 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
     [self.queue addOperation:operation];
 }
 
+#pragma mark -  Transfers that go on after an interruption (KHANDAQ 0.2.57)
+
+/**
+ * An offer of a file a message here already has: theirs, the same Tox file id (any case of the hex) and the same
+ * size. The newest one when there are several.
+ */
+- (OCTMessageAbstract *)incomingMessageInChat:(OCTChat *)chat
+                                         from:(OCTFriend *)friend
+                                    fileIdHex:(NSString *)fileIdHex
+                                     fileSize:(OCTToxFileSize)fileSize
+{
+    if (! chat || ! friend || fileIdHex.length == 0) {
+        return nil;
+    }
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND senderUniqueIdentifier == %@ AND messageFile.fileIdHex ==[c] %@ AND messageFile.fileSize == %lld",
+                              chat.uniqueIdentifier, friend.uniqueIdentifier, fileIdHex, fileSize];
+    RLMResults *results = [[self.dataSource managerGetRealmManager] objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
+    return [[results sortedResultsUsingKeyPath:@"dateInterval" ascending:NO] firstObject];
+}
+
+/**
+ * The friend offers the file of `message` again on `fileNumber`.
+ * - Complete here (the connection went before they learnt it was done): its last byte once more, so both sides
+ *   finish, and the card, its notification and the file on disk stay as they are.
+ * - Cancelled here while nothing was live: refused now that they can hear it.
+ * - Otherwise the new transfer is the message's: it goes on from the bytes kept here, by itself when the person
+ *   had accepted it or the auto-download rule takes it now (reofferAutoAcceptPolicy), else on their tap.
+ */
+- (void)takeReofferOfMessage:(OCTMessageAbstract *)message
+                  fileNumber:(OCTToxFileNumber)fileNumber
+                friendNumber:(OCTToxFriendNumber)friendNumber
+{
+    OCTMessageFile *file = message.messageFile;
+
+    if (file.fileType == OCTMessageFileTypeReady) {
+        OCTLogInfo(@"re-offer of a file complete here, taking its last byte again: %@", message);
+        [self finishCompleteFileAgainWithFileNumber:fileNumber friendNumber:friendNumber fileSize:file.fileSize];
+        return;
+    }
+
+    if (file.fileType == OCTMessageFileTypeCanceled && (file.pausedBy & OCTMessageFilePausedByConnection)) {
+        OCTLogInfo(@"re-offer of a file cancelled while away, refusing it: %@", message);
+        [self.dataSource.managerGetTox fileSendControlForFileNumber:fileNumber
+                                                       friendNumber:friendNumber
+                                                            control:OCTToxFileControlCancel
+                                                              error:nil];
+        [self updateMessageFile:message withBlock:^(OCTMessageFile *theFile) {
+            theFile.pausedBy = OCTMessageFilePausedByNone;
+        }];
+        return;
+    }
+
+    BOOL accepted = (file.pausedBy & OCTMessageFilePausedByConnection) ||
+                    file.fileType == OCTMessageFileTypeLoading ||
+                    file.fileType == OCTMessageFileTypePaused;
+    BOOL wasCanceled = (file.fileType == OCTMessageFileTypeCanceled);
+
+    // A transfer it still had is gone: toxcore offers it anew only on a new connection.
+    if (file.internalFileNumber != (int)kOCTToxFileNumberFailure && ! wasCanceled) {
+        OCTFileBaseOperation *stale = [self operationWithFileNumber:file.internalFileNumber friendNumber:friendNumber];
+        [stale cancel];
+    }
+    if (wasCanceled) {
+        [self removePartialFileOfMessage:message];
+    }
+
+    OCTLogInfo(@"re-offer of a known file on number %u, accepted before %d: %@", fileNumber, accepted, message);
+    [self updateMessageFile:message withBlock:^(OCTMessageFile *theFile) {
+        theFile.internalFileNumber = fileNumber;
+        theFile.fileType = OCTMessageFileTypeWaitingConfirmation;
+        theFile.pausedBy = accepted ? OCTMessageFilePausedByConnection : OCTMessageFilePausedByNone;
+        if (! accepted) {
+            theFile.transferredBytes = 0;
+        }
+    }];
+
+    BOOL (^policy)(OCTMessageAbstract *) = self.reofferAutoAcceptPolicy;
+    if (accepted || (policy && policy(message))) {
+        [self acceptFileTransfer:message failureBlock:nil];
+    }
+}
+
+/**
+ * The last byte of a file that is complete here comes once more and is dropped: the sender's transfer ends as
+ * done, nothing changes here.
+ */
+- (void)finishCompleteFileAgainWithFileNumber:(OCTToxFileNumber)fileNumber
+                                 friendNumber:(OCTToxFriendNumber)friendNumber
+                                     fileSize:(OCTToxFileSize)fileSize
+{
+    OCTFileDownloadOperation *operation = [[OCTFileDownloadOperation alloc] initWithTox:self.dataSource.managerGetTox
+                                                                             fileOutput:[OCTFileDataOutput new]
+                                                                           friendNumber:friendNumber
+                                                                             fileNumber:fileNumber
+                                                                               fileSize:fileSize
+                                                                               userInfo:nil
+                                                                          progressBlock:nil
+                                                                         etaUpdateBlock:nil
+                                                                           successBlock:nil
+                                                                           failureBlock:nil];
+    operation.resumePosition = fileSize - 1;
+    operation.cancelsWhenSeekFails = YES;
+    [self.queue addOperation:operation];
+}
+
+/**
+ * A new offer from the friend with another id and the name and size of a file of theirs that waits here for the
+ * connection: a client without resume sent it again. The waiting card ends interrupted, and its bytes go.
+ */
+- (void)endWaitingFilesInChat:(OCTChat *)chat
+                         from:(OCTFriend *)friend
+                 matchingName:(NSString *)fileName
+                     fileSize:(OCTToxFileSize)fileSize
+{
+    if (! chat || ! friend) {
+        return;
+    }
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND senderUniqueIdentifier == %@ AND messageFile.fileType == %d AND messageFile.internalFileNumber == %d AND messageFile.fileSize == %lld AND messageFile.fileName == %@",
+                              chat.uniqueIdentifier, friend.uniqueIdentifier, OCTMessageFileTypeWaitingConfirmation,
+                              (int)kOCTToxFileNumberFailure, fileSize, fileName];
+    [self endWaitingFilesMatching:predicate reason:@"offered again with another id"];
+}
+
+/**
+ * Begins the time the friend has, while online, to offer again what of theirs waits here for the connection.
+ * Nothing happens while they are offline: the grace begins when they connect.
+ */
+- (void)beginReofferGraceForFriend:(OCTFriend *)friend
+{
+    NSString *publicKey = friend.publicKey;
+    if (publicKey.length == 0 || ! [self isFriendConnected:friend]) {
+        return;
+    }
+
+    NSUInteger generation = [self.friendLinkGenerations[publicKey] unsignedIntegerValue];
+    __weak OCTSubmanagerFilesImpl *weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(self.reofferGraceInterval * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [weakSelf endReofferGraceForFriendWithPublicKey:publicKey generation:generation];
+    });
+}
+
+- (void)endReofferGraceForFriendWithPublicKey:(NSString *)publicKey generation:(NSUInteger)generation
+{
+    // They went away and came back since: the grace of that connection decides.
+    if ([self.friendLinkGenerations[publicKey] unsignedIntegerValue] != generation) {
+        return;
+    }
+
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    OCTFriend *friend = [realmManager friendWithPublicKey:publicKey];
+    if (! friend || ! [self isFriendConnected:friend]) {
+        return;
+    }
+
+    // Only their 1:1 files name them as the sender (group files have none), and no chat is made for the look.
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"senderUniqueIdentifier == %@ AND messageFile.fileType == %d AND messageFile.internalFileNumber == %d",
+                              friend.uniqueIdentifier, OCTMessageFileTypeWaitingConfirmation, (int)kOCTToxFileNumberFailure];
+    [self endWaitingFilesMatching:predicate reason:@"not offered again while the friend was online"];
+}
+
+- (void)endWaitingFilesMatching:(NSPredicate *)predicate reason:(NSString *)reason
+{
+    RLMResults *results = [[self.dataSource managerGetRealmManager] objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
+    NSMutableArray<OCTMessageAbstract *> *messages = [NSMutableArray new];
+    for (OCTMessageAbstract *message in results) {
+        [messages addObject:message];
+    }
+
+    for (OCTMessageAbstract *message in messages) {
+        OCTLogInfo(@"ending a file that waited for the connection, %@: %@", reason, message);
+        [self removePartialFileOfMessage:message];
+        [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
+            file.fileType = OCTMessageFileTypeCanceled;
+            file.pausedBy = OCTMessageFilePausedByNone;
+            file.transferredBytes = 0;
+        }];
+    }
+}
+
+/**
+ * A 1:1 transfer of the last run waits for the connection, as one the connection dropped does: ours is offered
+ * again with its own file id once the friend is online, and theirs goes on from the bytes kept here when they
+ * offer it again. Group files and the Saved chat keep the rules of configure. Returns the ids of the files kept.
+ */
+- (NSSet<NSString *> *)keepTransfersOfLastRunWaitingForTheConnection
+{
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"messageFile.fileType IN %@",
+                              @[@(OCTMessageFileTypeWaitingConfirmation), @(OCTMessageFileTypeLoading), @(OCTMessageFileTypePaused)]];
+    RLMResults *results = [[self.dataSource managerGetRealmManager] objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
+
+    NSMutableArray<OCTMessageAbstract *> *messages = [NSMutableArray new];
+    for (OCTMessageAbstract *message in results) {
+        if ([self isOneToOneFileMessage:message]) {
+            [messages addObject:message];
+        }
+    }
+
+    NSMutableSet<NSString *> *kept = [NSMutableSet new];
+    for (OCTMessageAbstract *message in messages) {
+        OCTMessageFile *messageFile = message.messageFile;
+        BOOL incoming = (message.senderUniqueIdentifier != nil);
+        BOOL underWay = (messageFile.fileType != OCTMessageFileTypeWaitingConfirmation) ||
+                        (messageFile.pausedBy & OCTMessageFilePausedByConnection);
+        OCTToxFileSize moved = incoming ? [self partialLengthOfMessage:message] : messageFile.transferredBytes;
+
+        OCTLogInfo(@"keeping %@ file of the last run waiting for the connection, under way %d, %lld bytes moved: %@",
+                   incoming ? @"incoming" : @"outgoing", underWay, moved, message);
+        [kept addObject:messageFile.uniqueIdentifier];
+        [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
+            file.internalFileNumber = (int)kOCTToxFileNumberFailure;
+            file.fileType = OCTMessageFileTypeWaitingConfirmation;
+            file.pausedBy = underWay ? OCTMessageFilePausedByConnection : OCTMessageFilePausedByNone;
+            file.transferredBytes = underWay ? moved : 0;
+        }];
+    }
+
+    return kept;
+}
+
+- (BOOL)isOneToOneFileMessage:(OCTMessageAbstract *)message
+{
+    if (! message.messageFile || message.messageFile.groupMsgIdHashHex.length > 0) {
+        return NO;
+    }
+
+    OCTChat *chat = [[self.dataSource managerGetRealmManager] objectWithUniqueIdentifier:message.chatUniqueIdentifier
+                                                                                    class:[OCTChat class]];
+    return chat && ! chat.isGroup && ! chat.isSavedMessages && chat.friends.count > 0;
+}
+
+- (BOOL)isFriendConnected:(OCTFriend *)friend
+{
+    OCTToxConnectionStatus status = [self.dataSource.managerGetTox friendConnectionStatusWithFriendNumber:friend.friendNumber
+                                                                                                    error:nil];
+    return status != OCTToxConnectionStatusNone;
+}
+
+/// Where a download of `message` goes on from: the bytes kept of it. All of them (the last write landed, the move
+/// to the result did not) takes the last byte again, so the transfer ends as one; more than the file takes it anew.
+- (OCTToxFileSize)resumePositionForMessage:(OCTMessageAbstract *)message
+{
+    OCTToxFileSize kept = [self partialLengthOfMessage:message];
+    OCTToxFileSize size = message.messageFile.fileSize;
+
+    if (kept <= 0 || size <= 0 || kept > size) {
+        return 0;
+    }
+    return MIN(kept, size - 1);
+}
+
+- (NSString *)partialFilePathOfMessage:(OCTMessageAbstract *)message
+{
+    NSString *resultFilePath = [message.messageFile filePath];
+    return resultFilePath.length > 0 ? [OCTFilePathOutput partialFilePathForResultFilePath:resultFilePath] : nil;
+}
+
+- (OCTToxFileSize)partialLengthOfMessage:(OCTMessageAbstract *)message
+{
+    NSString *path = [self partialFilePathOfMessage:message];
+    if (! path) {
+        return 0;
+    }
+    return [[[NSFileManager defaultManager] attributesOfItemAtPath:path error:nil] fileSize];
+}
+
+- (void)removePartialFileOfMessage:(OCTMessageAbstract *)message
+{
+    NSString *path = [self partialFilePathOfMessage:message];
+    if (path) {
+        [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+    }
+}
+
+- (NSString *)fileIdHexForFileNumber:(OCTToxFileNumber)fileNumber friendNumber:(OCTToxFriendNumber)friendNumber
+{
+    NSData *fileId = [[self.dataSource managerGetTox] fileGetFileIdForFileNumber:fileNumber
+                                                                     friendNumber:friendNumber
+                                                                            error:nil];
+    if (fileId.length != kOCTToxFileIdLength) {
+        return nil;
+    }
+
+    const uint8_t *bytes = fileId.bytes;
+    NSMutableString *hex = [NSMutableString stringWithCapacity:fileId.length * 2];
+    for (NSUInteger i = 0; i < fileId.length; i++) {
+        [hex appendFormat:@"%02X", bytes[i]];
+    }
+    return hex;
+}
+
+/// The 32 bytes of a stored file id; nil for no id or one of another shape (the offer then makes a new one).
+- (NSData *)fileIdFromHex:(NSString *)hex
+{
+    if (hex.length != kOCTToxFileIdLength * 2) {
+        return nil;
+    }
+
+    NSMutableData *data = [NSMutableData dataWithCapacity:kOCTToxFileIdLength];
+    for (NSUInteger i = 0; i < hex.length; i += 2) {
+        unsigned int value = 0;
+        NSScanner *scanner = [NSScanner scannerWithString:[hex substringWithRange:NSMakeRange(i, 2)]];
+        if (! [scanner scanHexInt:&value] || ! scanner.isAtEnd) {
+            return nil;
+        }
+        uint8_t byte = (uint8_t)value;
+        [data appendBytes:&byte length:1];
+    }
+    return data;
+}
+
 - (OCTFriend *)friendForMessage:(OCTMessageAbstract *)message
 {
     OCTChat *chat = [[self.dataSource managerGetRealmManager] objectWithUniqueIdentifier:message.chatUniqueIdentifier
@@ -1280,16 +1780,9 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
     if (! message.messageFile || fileNumber == (OCTToxFileNumber)kOCTToxFileNumberFailure) {
         return;
     }
-    NSData *fid = [[self.dataSource managerGetTox] fileGetFileIdForFileNumber:fileNumber
-                                                                friendNumber:friendNumber
-                                                                       error:nil];
-    if (fid.length != 32) { // kOCTToxFileIdLength
+    NSString *hex = [self fileIdHexForFileNumber:fileNumber friendNumber:friendNumber];
+    if (! hex) {
         return;
-    }
-    const uint8_t *fb = fid.bytes;
-    NSMutableString *hex = [NSMutableString stringWithCapacity:64];
-    for (NSUInteger i = 0; i < fid.length; i++) {
-        [hex appendFormat:@"%02X", fb[i]];
     }
     [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
         file.fileIdHex = hex;

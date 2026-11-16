@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #import <Foundation/Foundation.h>
+#import "OCTToxConstants.h"
 
 @protocol OCTFileOutputProtocol <NSObject>
 
@@ -33,5 +34,15 @@
  * This method is called if all progress was canceled. Do needed cleanup.
  */
 - (void)cancel;
+
+@optional
+
+/**
+ * KHANDAQ (0.2.57): called instead of prepareToWrite when the transfer goes on from `offset`: the output keeps
+ * the bytes it holds up to it, drops what lies past it, and the next writeData: appends there.
+ *
+ * @return YES on success, NO when the output holds fewer bytes than `offset` or cannot be written.
+ */
+- (BOOL)prepareToWriteFromOffset:(OCTToxFileSize)offset;
 
 @end

@@ -28,6 +28,12 @@
 - (void)updateBytesDone:(OCTToxFileSize)bytesDone;
 
 /**
+ * KHANDAQ (0.2.57): call this from operationStarted when the transfer goes on from `bytesDone` rather than from
+ * the first byte. The progress starts there at once, and the speed counts only what moves from now on.
+ */
+- (void)beginAtBytes:(OCTToxFileSize)bytesDone;
+
+/**
  * Call this method in case if operation was finished.
  */
 - (void)finishWithSuccess;

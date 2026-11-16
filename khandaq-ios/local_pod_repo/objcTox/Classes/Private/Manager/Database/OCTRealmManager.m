@@ -24,7 +24,7 @@
 // KHANDAQ (#82): 36 adds OCTMessageFile.groupPeerName + groupSenderPubkey (nullable strings).
 // KHANDAQ (#192): 37 adds OCTMessageAbstract.reactionsJSON (nullable string) + reactionsPending
 // (BOOL, defaults NO). All additive auto-migrations (existing rows get nil/0); no enumerate block.
-static const uint64_t kCurrentSchemeVersion = 43; // 43: +OCTFriend.seenWatermark/seenReportedDateInterval/seenPendingPacket (0.2.57 read receipts; additive, 0 and nil on existing friends, nothing to rewrite); 42: +OCTMessageText.groupSenderPubkey (nullable string, additive — the author a signature is checked against, mirroring OCTMessageFile.groupSenderPubkey from 36); 41: +OCTNgcKeyValue table (audit#2 finding 1 — new CLASS, no existing row touched); 40: +OCTMessageAbstract.sortTimestamp (#H5 stable cross-device chat order) w/ backfill; 39: +edited/editedTimestamp/editPending (#208); 38: +OCTMessageFile.fileIdHex
+static const uint64_t kCurrentSchemeVersion = 44; // 44: +OCTMessageFile.transferredBytes (0.2.57 transfers that resume after the connection comes back; additive, 0 on existing files, nothing to rewrite); 43: +OCTFriend.seenWatermark/seenReportedDateInterval/seenPendingPacket (0.2.57 read receipts; additive, 0 and nil on existing friends, nothing to rewrite); 42: +OCTMessageText.groupSenderPubkey (nullable string, additive — the author a signature is checked against, mirroring OCTMessageFile.groupSenderPubkey from 36); 41: +OCTNgcKeyValue table (audit#2 finding 1 — new CLASS, no existing row touched); 40: +OCTMessageAbstract.sortTimestamp (#H5 stable cross-device chat order) w/ backfill; 39: +edited/editedTimestamp/editPending (#208); 38: +OCTMessageFile.fileIdHex
 static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrimaryKey";
 
 @interface OCTRealmManager ()
@@ -2230,6 +2230,11 @@ static NSString *OCTGroupFileBaseName(NSString *fileName)
                // yet) and seenPendingPacket (nil: nothing waits). Realm adds a column with its zero value
                // to every existing row by itself, and zero is the right start, so nothing is read or
                // rewritten here either (OCTSeenReceiptTests opens a schema-42 profile to prove it).
+
+               // KHANDAQ (0.2.57): 44 adds OCTMessageFile.transferredBytes, the bytes a 1:1 transfer had moved
+               // when the friend connection went, shown on the card of a file waiting for the connection. 0 on
+               // every existing file is right (none of them waits that way yet), so nothing is read or
+               // rewritten here (OCTFileResumeTests opens a schema-43 profile to prove it).
     };
 }
 

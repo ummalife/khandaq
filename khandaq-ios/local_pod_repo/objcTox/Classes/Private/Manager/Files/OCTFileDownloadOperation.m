@@ -130,12 +130,49 @@ static const CFTimeInterval kDownloadStallTimeout = 90.0;
 {
     [super operationStarted];
 
-    if (! [self.output prepareToWrite]) {
+    // KHANDAQ (0.2.57): the seek must come before the Resume below, while toxcore still waits for the accept.
+    OCTToxFileSize position = 0;
+    if (self.resumePosition > 0) {
+        NSError *seekError;
+        if ([self.tox fileSeekForFileNumber:self.fileNumber
+                               friendNumber:self.friendNumber
+                                   position:self.resumePosition
+                                      error:&seekError]) {
+            position = self.resumePosition;
+        }
+        else if (self.cancelsWhenSeekFails) {
+            OCTLogWarn(@"cannot seek to %lld, cancelling: %@", self.resumePosition, seekError);
+            [self.tox fileSendControlForFileNumber:self.fileNumber
+                                      friendNumber:self.friendNumber
+                                           control:OCTToxFileControlCancel
+                                             error:nil];
+            [self finishWithError:[NSError acceptFileErrorInternalError]];
+            return;
+        }
+        else {
+            OCTLogWarn(@"cannot seek to %lld, the file comes from its first byte: %@", self.resumePosition, seekError);
+        }
+    }
+
+    BOOL prepared = (position > 0 && [self.output respondsToSelector:@selector(prepareToWriteFromOffset:)])
+        ? [self.output prepareToWriteFromOffset:position]
+        : [self.output prepareToWrite];
+
+    if (! prepared) {
         // KHANDAQ (#48): MUST return — without it, execution fell through to the Resume control below
         // and called finishWithError a SECOND time (finishWithError has no already-finished guard),
         // double-firing the failure block.
+        // KHANDAQ (0.2.57): and tell the sender, whose offer would otherwise wait for an accept that never comes.
+        [self.tox fileSendControlForFileNumber:self.fileNumber
+                                  friendNumber:self.friendNumber
+                                       control:OCTToxFileControlCancel
+                                         error:nil];
         [self finishWithError:[NSError acceptFileErrorCannotWriteToFile]];
         return;
+    }
+
+    if (position > 0) {
+        [self beginAtBytes:position];
     }
 
     NSError *error;

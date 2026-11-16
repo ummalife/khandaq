@@ -17,6 +17,8 @@ class OCTSubmanagerFilesMock: NSObject, OCTSubmanagerFiles {
     private var subscriptions: [Subscription] = []
     private var progressTimer: Timer?
 
+    var reofferAutoAcceptPolicy: ((OCTMessageAbstract) -> Bool)?
+
     deinit {
         progressTimer?.invalidate()
     }

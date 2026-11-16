@@ -8201,10 +8201,13 @@ public class MainActivity extends AppCompatActivity
             // --- notification ---
 
             ByteBuffer file_id_buffer = ByteBuffer.allocateDirect(TOX_FILE_ID_LENGTH);
-            tox_file_get_file_id(friend_number, file_number, file_id_buffer);
-            final String file_id_buffer_hex = HelperGeneric.bytesToHex(file_id_buffer.array(),
-                                                                       file_id_buffer.arrayOffset(),
-                                                                       file_id_buffer.limit()).toUpperCase();
+            // KHANDAQ (0.2.57): left unset when toxcore cannot give the id, as in the DATA branch below: the buffer
+            // it did not fill reads as an id of zeros, and every such file would read as the same one.
+            final String file_id_buffer_hex =
+                    tox_file_get_file_id(friend_number, file_number, file_id_buffer) == 0
+                    ? HelperGeneric.bytesToHex(file_id_buffer.array(), file_id_buffer.arrayOffset(),
+                                               file_id_buffer.limit()).toUpperCase()
+                    : null;
             HelperGeneric.logI(TAG, "TOX_FILE_ID_LENGTH=" + TOX_FILE_ID_LENGTH + " file_id_buffer_hex=" + file_id_buffer_hex);
 
             // KHANDAQ (0.2.57, SPEC-network 1.4): a file this friend offered before goes on in its entry.

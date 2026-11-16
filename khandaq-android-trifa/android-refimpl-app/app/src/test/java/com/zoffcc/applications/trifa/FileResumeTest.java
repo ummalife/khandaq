@@ -74,6 +74,38 @@ public class FileResumeTest
     }
 
     @Test
+    public void an_id_of_zeros_is_no_id()
+    {
+        // What a buffer toxcore did not fill reads as: two such files are not one, and nothing is offered with it.
+        final char[] zeros = new char[FileResume.FILE_ID_BYTES * 2];
+        Arrays.fill(zeros, '0');
+        final String none = new String(zeros);
+        assertNull(FileResume.reusableFileId(none));
+        assertNull(FileResume.fileIdBytes(none));
+        assertFalse(FileResume.sameFile(none, SIZE, none, SIZE));
+        // One digit that is not zero is an id.
+        final String one = none.substring(0, 63) + "1";
+        assertEquals(one, FileResume.reusableFileId(one));
+        assertEquals(1, FileResume.fileIdBytes(one)[FileResume.FILE_ID_BYTES - 1]);
+        assertEquals("A" + none.substring(1), FileResume.reusableFileId("a" + none.substring(1)));
+        // Not an id: a wrong length, or not hex.
+        assertNull(FileResume.reusableFileId(ID.substring(1)));
+        assertNull(FileResume.reusableFileId(ID.substring(0, 63) + "G"));
+
+        // An FTV2 offer whose id toxcore cannot give has none, as a DATA one: a new entry, no anchor.
+        final String recv = bare(method(read(JAVA + "MainActivity.java"),
+                                        "static void android_tox_callback_file_recv_cb_method("));
+        final String checked = "finalStringfile_id_buffer_hex=tox_file_get_file_id(friend_number,file_number,"
+                               + "file_id_buffer)==0?HelperGeneric.bytesToHex(file_id_buffer.array(),"
+                               + "file_id_buffer.arrayOffset(),file_id_buffer.limit()).toUpperCase():null;";
+        final int dataBranch = recv.indexOf("else//DATAfileft");
+        final int ftv2 = recv.indexOf(checked);
+        assertTrue("FTV2", (ftv2 > recv.indexOf("TOX_FILE_KIND_FTV2")) && (ftv2 < dataBranch));
+        assertTrue("DATA", recv.indexOf(checked, dataBranch) > dataBranch);
+        assertTrue(recv.indexOf("HelperFiletransfer.resume_incoming_offer(", ftv2) > ftv2);
+    }
+
+    @Test
     public void no_bytes_here_comes_from_the_first_byte_into_the_same_entry()
     {
         assertEquals(FileResume.Step.FROM_START, FileResume.decide(true, false, 0L, SIZE).step);

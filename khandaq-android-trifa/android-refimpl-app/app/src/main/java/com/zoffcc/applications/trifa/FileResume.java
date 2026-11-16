@@ -36,21 +36,28 @@ final class FileResume
 
     // ---- the file id ----
 
-    /** The id an earlier offer gave this file, in upper case; null when there is none toxcore could take again. */
+    /**
+     * The id an earlier offer gave this file, in upper case; null when there is none toxcore could take again. An
+     * id of zeros is none: it is what a buffer toxcore did not fill reads as, the same for every such file, so two
+     * different files would read as one.
+     */
     static String reusableFileId(final String hex)
     {
         if (hex == null || hex.length() != FILE_ID_BYTES * 2)
         {
             return null;
         }
+        boolean zeros = true;
         for (int i = 0; i < hex.length(); i++)
         {
-            if (Character.digit(hex.charAt(i), 16) < 0)
+            final int digit = Character.digit(hex.charAt(i), 16);
+            if (digit < 0)
             {
                 return null;
             }
+            zeros = zeros && (digit == 0);
         }
-        return hex.toUpperCase(Locale.ROOT);
+        return zeros ? null : hex.toUpperCase(Locale.ROOT);
     }
 
     /** The 32 bytes of a file id, or null when the text is not one. */

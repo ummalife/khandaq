@@ -899,7 +899,10 @@ public class HelperFiletransfer
                             execute();
                 }
             }
-            Log.i(TAG, "set_all_filetransfers_inactive:kept=" + kept.size());
+            if (!kept.isEmpty())
+            {
+                NetworkDiagnosticsLog.log("file_resume", "set_all_filetransfers_inactive:kept=" + kept.size());
+            }
         }
         catch (Exception e)
         {
@@ -1198,8 +1201,12 @@ public class HelperFiletransfer
             final String file_id_buffer_hex = HelperGeneric.bytesToHex(file_id_buffer.array(),
                                                                        file_id_buffer.arrayOffset(),
                                                                        file_id_buffer.limit()).toUpperCase();
-            Log.i(TAG, "TOX_FILE_ID_LENGTH=" + TOX_FILE_ID_LENGTH + " file_id_buffer_hex=" + file_id_buffer_hex
-                       + " again=" + (earlier_id != null));
+            Log.i(TAG, "TOX_FILE_ID_LENGTH=" + TOX_FILE_ID_LENGTH + " file_id_buffer_hex=" + file_id_buffer_hex);
+            if (earlier_id != null)
+            {
+                NetworkDiagnosticsLog.log("file_resume", "start_outgoing_ft:offered again mid=" + m.id
+                                                         + " ftid=" + ft.id + " id=" + file_id_buffer_hex);
+            }
             ft.tox_file_id_hex = file_id_buffer_hex;
             if (!file_id_buffer_hex.equals(m.ft_id_anchor_hex))
             {
@@ -1607,8 +1614,9 @@ public class HelperFiletransfer
                     {
                         orma.updateFiletransfer().idEq(f.id).file_number(-1).execute();
                     }
-                    Log.i(TAG, "on_friend_connection_lost:incoming waits ftid=" + f.id + " kind=" + f.kind
-                               + " pos=" + f.current_position + "/" + f.filesize);
+                    NetworkDiagnosticsLog.log("file_resume", "on_friend_connection_lost:incoming waits ftid=" + f.id
+                                                             + " kind=" + f.kind + " pos=" + f.current_position + "/"
+                                                             + f.filesize);
                 }
                 else if (f.kind == TOX_FILE_KIND_DATA.value)
                 {
@@ -1622,7 +1630,7 @@ public class HelperFiletransfer
         }
         catch (Exception e)
         {
-            Log.i(TAG, "on_friend_connection_lost:EE:" + e.getMessage());
+            Log.w(TAG, "on_friend_connection_lost:EE:" + e.getMessage());
         }
     }
 
@@ -1645,8 +1653,8 @@ public class HelperFiletransfer
                     ft_outgoing_queued(true).
                     execute();
         }
-        Log.i(TAG, "requeue_cut_off_outgoing:" + why + " ftid=" + f.id + " mid=" + mid + " pos=" + f.current_position
-                   + "/" + f.filesize);
+        NetworkDiagnosticsLog.log("file_resume", "requeue_cut_off_outgoing:" + why + " ftid=" + f.id + " mid=" + mid
+                                                 + " pos=" + f.current_position + "/" + f.filesize);
     }
 
     private static long message_id_of_filetransfer(final Filetransfer f)
@@ -1707,7 +1715,7 @@ public class HelperFiletransfer
         }
         catch (Exception e)
         {
-            Log.i(TAG, "unbind_other_filetransfers:EE:" + e.getMessage());
+            Log.w(TAG, "unbind_other_filetransfers:EE:" + e.getMessage());
         }
     }
 
@@ -1756,7 +1764,8 @@ public class HelperFiletransfer
         }
         m.filetransfer_id = f.id;
         orma.updateMessage().idEq(m.id).filetransfer_id(f.id).execute();
-        Log.i(TAG, "outgoing_filetransfer_for_offer:made again mid=" + m.id + " ftid=" + f.id);
+        NetworkDiagnosticsLog.log("file_resume", "outgoing_filetransfer_for_offer:made again mid=" + m.id
+                                                 + " ftid=" + f.id);
         return f;
     }
 
@@ -1804,8 +1813,8 @@ public class HelperFiletransfer
                 incoming_already_here.add(already_here_key(pubkey, file_number));
                 final int seek = (d.seekTo >= 0) ? MainActivity.tox_file_seek(friend_number, file_number, d.seekTo) : 0;
                 final int accept = tox_file_control(friend_number, file_number, TOX_FILE_CONTROL_RESUME.value);
-                Log.i(TAG, "resume_incoming_offer:already here mid=" + m.id + " " + d + " seek=" + seek + " accept="
-                           + accept);
+                NetworkDiagnosticsLog.log("file_resume", "resume_incoming_offer:already here mid=" + m.id + " " + d
+                                                         + " seek=" + seek + " accept=" + accept);
                 return true;
             }
 
@@ -1869,9 +1878,10 @@ public class HelperFiletransfer
             final Message current = (Message) orma.selectFromMessage().idEq(m.id).get(0);
             final boolean by_itself = FileResume.acceptsByItself(accepted_before, refused,
                                                                  auto_download_allows(current));
-            Log.i(TAG, "resume_incoming_offer:mid=" + m.id + " ftid=" + f.id + " " + d + " partial=" + partial + "/"
-                       + file_size + " kind=" + kind + " accepted_before=" + accepted_before + " refused=" + refused
-                       + " by_itself=" + by_itself);
+            NetworkDiagnosticsLog.log("file_resume", "resume_incoming_offer:mid=" + m.id + " ftid=" + f.id + " " + d
+                                                     + " partial=" + partial + "/" + file_size + " kind=" + kind
+                                                     + " accepted_before=" + accepted_before + " refused=" + refused
+                                                     + " by_itself=" + by_itself);
             if (by_itself)
             {
                 accept_paused_incoming_filetransfer(current);
@@ -1881,7 +1891,7 @@ public class HelperFiletransfer
         }
         catch (Exception e)
         {
-            Log.i(TAG, "resume_incoming_offer:EE:" + e.getMessage());
+            Log.w(TAG, "resume_incoming_offer:EE:" + e.getMessage());
             return false;
         }
     }
@@ -2049,7 +2059,7 @@ public class HelperFiletransfer
         }
         catch (Exception e)
         {
-            Log.i(TAG, "redraw_incoming_files_waiting_for:EE:" + e.getMessage());
+            Log.w(TAG, "redraw_incoming_files_waiting_for:EE:" + e.getMessage());
         }
     }
 
@@ -3889,8 +3899,9 @@ public class HelperFiletransfer
             final long seek_to = FileResume.seekBeforeAccept(f.current_position, partial, f.filesize);
             final boolean sought = (seek_to > 0)
                                    && (MainActivity.tox_file_seek(friend_number, f.file_number, seek_to) == 0);
-            Log.i(TAG, "seek_then_resume_incoming:ftid=" + f.id + " at=" + f.current_position + " partial=" + partial
-                       + " seek=" + seek_to + " ok=" + sought);
+            NetworkDiagnosticsLog.log("file_resume", "seek_then_resume_incoming:ftid=" + f.id + " at="
+                                                     + f.current_position + " partial=" + partial + " seek=" + seek_to
+                                                     + " ok=" + sought);
             if (!sought)
             {
                 // The bytes here no longer reach the point it was bound at, or toxcore did not take the seek: the
@@ -4185,7 +4196,7 @@ public class HelperFiletransfer
         }
         catch (Exception e)
         {
-            Log.i(TAG, "resume_incoming_filetransfer_by_itself:EE:" + e.getMessage());
+            Log.w(TAG, "resume_incoming_filetransfer_by_itself:EE:" + e.getMessage());
         }
     }
 

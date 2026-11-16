@@ -276,6 +276,18 @@ enum QaCommandHandler {
             }
             sendFriendFile(publicKey: toxId, name: name, toxManager: toxManager)
 
+        case "send_group_file":
+            // Shell QA (0.2.57, a group file the network cuts): the file in "$CONTAINER/Documents/qa_send/<name>"
+            // goes to the group the way the group's attach sheet sends it.
+            guard let groupId = param("group_id"),
+                  let normalized = GroupJoinHelper.normalizedGroupChatIdHex(from: groupId),
+                  let chat = groupChat(for: normalized, toxManager: toxManager),
+                  let name = param("name"), !name.isEmpty, !name.contains("/") else {
+                logFail(action, reason: "missing_args_or_group")
+                return
+            }
+            sendGroupFile(chat: chat, name: name, toxManager: toxManager)
+
         case "net_notice":
             // Shell QA (the band of no network, 0.2.57): network=0 feeds the reachability monitor "no
             // network" and network=1 gives it the system's own state back; node=hold keeps our node offline
@@ -417,6 +429,23 @@ enum QaCommandHandler {
             logFail("send_file", reason: (error as NSError).localizedDescription)
         }
         logDone("send_file", detail: "name=\(name)")
+    }
+
+    private static func sendGroupFile(chat: OCTChat, name: String, toxManager: OCTManager) {
+        guard let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            logFail("send_group_file", reason: "no_documents")
+            return
+        }
+        let path = documents.appendingPathComponent("qa_send").appendingPathComponent(name).path
+        guard FileManager.default.fileExists(atPath: path) else {
+            logFail("send_group_file", reason: "file_not_found name=\(name)")
+            return
+        }
+        toxManager.groups.sendFile(atPath: path, to: chat, moveToUploads: true, successBlock: { _ in
+            logDone("send_group_file", detail: "name=\(name)")
+        }, failureBlock: { error in
+            logFail("send_group_file", reason: error?.localizedDescription ?? "send_failed")
+        })
     }
 
     private static func verifyFriendMessage(text: String, toxManager: OCTManager, action: String, attempt: Int) {

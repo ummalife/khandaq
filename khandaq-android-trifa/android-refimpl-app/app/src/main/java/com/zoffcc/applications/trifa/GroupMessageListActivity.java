@@ -5033,7 +5033,8 @@ public class GroupMessageListActivity extends AppCompatActivity
                                 byte[] data = new byte[data_length];
                                 data_buf.rewind();
                                 data_buf.get(data);
-                                if (data_length < MAX_GC_PACKET_CHUNK_SIZE)
+                                // KHANDAQ (gc IPv6 MTU): lossy only if toxcore sends it in one piece.
+                                if (HelperGroup.is_ngc_media_packet_lossy(data_length))
                                 {
                                     int result = tox_group_send_custom_packet(tox_group_by_groupid__wrapper(group_id),
                                                                               0, data, data_length);
@@ -5209,7 +5210,8 @@ public class GroupMessageListActivity extends AppCompatActivity
                                                 byte[] data = new byte[data_length];
                                                 data_buf.rewind();
                                                 data_buf.get(data);
-                                                if (data_length < MAX_GC_PACKET_CHUNK_SIZE)
+                                                // KHANDAQ (gc IPv6 MTU): lossy only if toxcore sends it in one piece.
+                                                if (HelperGroup.is_ngc_media_packet_lossy(data_length))
                                                 {
                                                     int result = tox_group_send_custom_packet(
                                                             tox_group_by_groupid__wrapper(group_id), 0, data,

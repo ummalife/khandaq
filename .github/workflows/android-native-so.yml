@@ -80,6 +80,14 @@ jobs:
           search_sites=$(grep -c apply_khandaq_group_search_key.py /root/work/circle_scripts/deps.sh)
           echo "wired at $search_sites site(s)"
           [ "$search_sites" -eq 4 ]
+          echo "=== confirm the FTV2 stale accept patch is wired into deps.sh (4 ABIs) ==="
+          ftv2_sites=$(grep -c apply_khandaq_ftv2_stale_accept.py /root/work/circle_scripts/deps.sh)
+          echo "wired at $ftv2_sites site(s)"
+          [ "$ftv2_sites" -eq 4 ]
+          echo "=== confirm the gc IPv6 MTU patch is wired into deps.sh (4 ABIs) ==="
+          mtu_sites=$(grep -c apply_khandaq_gc_ipv6_mtu.py /root/work/circle_scripts/deps.sh)
+          echo "wired at $mtu_sites site(s)"
+          [ "$mtu_sites" -eq 4 ]
 
       - name: build native deps + patched toxcore + libjni-c-toxcore.so (deps.sh)
         id: build
@@ -108,7 +116,7 @@ jobs:
           path: |
             /root/work/artefacts/android/libs/**/libjni-c-toxcore.so
 
-      - name: fail the job unless arm64 .so was produced AND the patched trees carry the audit-F2 guard, the join-by-ID patch and the group search key
+      - name: fail the job unless arm64 .so was produced AND the patched trees carry the audit-F2 guard, the join-by-ID patch, the group search key, the FTV2 stale accept fix and the gc IPv6 MTU fix
         if: always()
         run: |
           rc=0
@@ -147,6 +155,20 @@ jobs:
               echo "ERROR: group search key MISSING in $tree/toxcore/onion_client.c -- a join by chat id would not find the founder"
               rc=1
             fi
+            if grep -q 'KHANDAQ (FTV2 stale accept)' "$tree/toxcore/Messenger.c"; then
+              echo "FTV2 stale accept fix present in $tree/toxcore/Messenger.c"
+            else
+              echo "ERROR: FTV2 stale accept fix MISSING in $tree/toxcore/Messenger.c -- an FTV2 offer waiting for the person would start the sender"
+              rc=1
+            fi
+            for g in toxcore/group_common.h toxcore/group_chats.c toxcore/group_connection.c; do
+              if grep -q 'KHANDAQ (gc IPv6 MTU)' "$tree/$g"; then
+                echo "gc IPv6 MTU fix present in $tree/$g"
+              else
+                echo "ERROR: gc IPv6 MTU fix MISSING in $tree/$g -- a full group chunk would go out as a 1502 byte IPv6 packet and be lost"
+                rc=1
+              fi
+            done
           done
           echo "checked $trees patched toxcore tree(s)"
           if [ "$trees" -eq 0 ]; then

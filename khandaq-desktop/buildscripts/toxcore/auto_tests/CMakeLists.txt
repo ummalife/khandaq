@@ -36,8 +36,12 @@ auto_test(forwarding)
 auto_test(friend_connection)
 auto_test(friend_request)
 auto_test(friend_request_spam)
+# KHANDAQ (FTV2 stale accept): toxcore leaves an FTV2 offer alone until the receiver accepts it.
+auto_test(ftv2_stale_accept)
 auto_test(group_general)
 auto_test(group_invite)
+# KHANDAQ (gc IPv6 MTU): every group packet we send fits the IPv6 minimum MTU; older chunks are still accepted.
+auto_test(group_ipv6_mtu)
 auto_test(group_message)
 auto_test(group_moderation)
 auto_test(group_save)

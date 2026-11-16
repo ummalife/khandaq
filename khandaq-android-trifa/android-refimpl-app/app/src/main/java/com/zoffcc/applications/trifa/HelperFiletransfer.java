@@ -275,6 +275,41 @@ public class HelperFiletransfer
     }
 
     /**
+     * KHANDAQ (0.2.57, SPEC-network 1.5): the temp folder of a 1:1 file of theirs, its row's own
+     * (FileResume.incomingTempPathName). The row has its number once inserted; the offer sets the folder before
+     * the row is written in full, so nothing has written to it yet.
+     */
+    static String incoming_temp_path_name(final Filetransfer f)
+    {
+        return FileResume.incomingTempPathName(VFS_PREFIX + VFS_TMP_FILE_DIR, f.tox_public_key_string, f.id);
+    }
+
+    /**
+     * KHANDAQ (0.2.57): the name a 1:1 file of theirs takes in its friend's files folder at its end. Its name was
+     * free when it was offered (get_incoming_filetransfer_local_filename), but a file of the same name may have
+     * finished since, one under way at the same time or one that came while this one waited, and a finished file
+     * is never written over: this one takes another name then, as an offer does. A new avatar takes the place of
+     * the one before, as always. Null when no free name was found.
+     */
+    static String incoming_final_name(final Filetransfer f)
+    {
+        if ((f.kind != TOX_FILE_KIND_DATA.value) && (f.kind != TOX_FILE_KIND_FTV2.value))
+        {
+            return f.file_name;
+        }
+        for (int attempt = 0; attempt < 8; attempt++)
+        {
+            final String name = get_incoming_filetransfer_local_filename(f.file_name, f.tox_public_key_string);
+            if (!new info.guardianproject.iocipher.File(
+                    VFS_PREFIX + VFS_FILE_DIR + "/" + f.tox_public_key_string + "/" + name).exists())
+            {
+                return name;
+            }
+        }
+        return null;
+    }
+
+    /**
      * The name an incoming group file is STORED under, as opposed to the one shown to the user.
      *
      * KHANDAQ (security): a peer picks the filename in a group transfer and it arrives unfiltered —
@@ -417,17 +452,20 @@ public class HelperFiletransfer
         try
         {
             Filetransfer ft = (Filetransfer) orma.selectFromFiletransfer().idEq(filetransfer_id).get(0);
+            // KHANDAQ (0.2.57): a file of theirs has its bytes where its row says, in a temp folder of its own
+            // since 0.2.57 (incoming_temp_path_name); the others name their friend's folder, as before.
+            final String tmp_dir = ((ft.direction == TRIFA_FT_DIRECTION_INCOMING.value) && (ft.path_name != null))
+                                   ? ft.path_name : VFS_PREFIX + VFS_TMP_FILE_DIR + "/" + ft.tox_public_key_string + "/";
 
             if (MainActivity.VFS_ENCRYPT)
             {
                 info.guardianproject.iocipher.File f1 = new info.guardianproject.iocipher.File(
-                        VFS_PREFIX + VFS_TMP_FILE_DIR + "/" + ft.tox_public_key_string + "/" + ft.file_name);
+                        tmp_dir + "/" + ft.file_name);
                 f1.delete();
             }
             else
             {
-                java.io.File f1 = new java.io.File(
-                        VFS_PREFIX + VFS_TMP_FILE_DIR + "/" + ft.tox_public_key_string + "/" + ft.file_name);
+                java.io.File f1 = new java.io.File(tmp_dir + "/" + ft.file_name);
                 f1.delete();
             }
         }
@@ -1886,6 +1924,9 @@ public class HelperFiletransfer
                 {
                     return false;
                 }
+                // A temp folder of its own, written at once: a cancel below deletes its bytes where the row says.
+                f.path_name = incoming_temp_path_name(f);
+                orma.updateFiletransfer().idEq(f.id).path_name(f.path_name).execute();
             }
             else if ((f.file_number >= 0) && (f.file_number != file_number) && (f.state != TOX_FILE_CONTROL_CANCEL.value))
             {

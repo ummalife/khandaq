@@ -197,6 +197,18 @@ final class FileResume
     }
 
     /**
+     * The temp folder of a file of theirs (SPEC 1.5): its transfer row's own, inside its friend's folder. Its name
+     * is free only among the finished files, so two files of one friend with the same name shared one temp file,
+     * and a resume goes on from the bytes it finds there; the row's number keeps them apart. The row keeps the
+     * folder across a cut and a restart, so a resume finds its own bytes. A row made before names its friend's
+     * folder and keeps it.
+     */
+    static String incomingTempPathName(final String tempDir, final String pubkey, final long rowId)
+    {
+        return tempDir + "/" + pubkey + "/" + rowId + "/";
+    }
+
+    /**
      * The path of a file of theirs under way as the start's cleanup of the temp dir compares it (SPEC 1.5): its
      * row joins the dir and the name with extra slashes ("/tempdir/files//KEY//name"), the listing does not.
      * Repeated slashes count as one, and a slash at the end as none.

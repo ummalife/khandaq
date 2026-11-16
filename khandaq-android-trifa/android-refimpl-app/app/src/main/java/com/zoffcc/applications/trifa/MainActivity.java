@@ -8230,6 +8230,8 @@ public class MainActivity extends AppCompatActivity
             f.tox_file_id_hex = file_id_buffer_hex;
             long ft_id = HelperFiletransfer.insert_into_filetransfer_db(f);
             f.id = ft_id;
+            // KHANDAQ (0.2.57): its bytes so far go to a temp folder of its own, written with the row below.
+            f.path_name = HelperFiletransfer.incoming_temp_path_name(f);
             // add FT message to UI
             Message m = new Message();
 
@@ -8386,6 +8388,8 @@ public class MainActivity extends AppCompatActivity
             f.message_id = -1;
             long ft_id = HelperFiletransfer.insert_into_filetransfer_db(f);
             f.id = ft_id;
+            // KHANDAQ (0.2.57): its bytes so far go to a temp folder of its own, written with the row below.
+            f.path_name = HelperFiletransfer.incoming_temp_path_name(f);
             // add FT message to UI
             Message m = new Message();
 
@@ -8562,12 +8566,20 @@ public class MainActivity extends AppCompatActivity
                     return;
                 }
 
+                // KHANDAQ (0.2.57): never over a finished file of the same name (HelperFiletransfer.incoming_final_name).
+                final String final_name = HelperFiletransfer.incoming_final_name(f);
+                if (final_name == null)
+                {
+                    fail_incoming_filetransfer(f, friend_number, file_number, "no_free_name");
+                    return;
+                }
+
                 // HelperGeneric.logI(TAG, "file_recv_chunk:file fully received");
                 HelperGeneric.move_tmp_file_to_real_file(f.path_name, f.file_name,
                                                          VFS_PREFIX + VFS_FILE_DIR + "/" + f.tox_public_key_string +
-                                                         "/", f.file_name);
+                                                         "/", final_name);
                 if (HelperFiletransfer.get_vfs_file_length(VFS_PREFIX + VFS_FILE_DIR + "/" + f.tox_public_key_string + "/",
-                                                           f.file_name) < f.filesize)
+                                                           final_name) < f.filesize)
                 {
                     fail_incoming_filetransfer(f, friend_number, file_number, "incomplete_after_move");
                     return;
@@ -8583,12 +8595,12 @@ public class MainActivity extends AppCompatActivity
                     file_.direction = f.direction;
                     file_.tox_public_key_string = f.tox_public_key_string;
                     file_.path_name = VFS_PREFIX + VFS_FILE_DIR + "/" + f.tox_public_key_string + "/";
-                    file_.file_name = f.file_name;
+                    file_.file_name = final_name;
                     file_.filesize = f.filesize;
                     long row_id = orma.insertIntoFileDB(file_);
                     // HelperGeneric.logI(TAG, "file_recv_chunk:FileDB:row_id=" + row_id);
                     filedb_id = orma.selectFromFileDB().tox_public_key_stringEq(
-                            f.tox_public_key_string).file_nameEq(f.file_name).orderByIdDesc().get(0).id;
+                            f.tox_public_key_string).file_nameEq(final_name).orderByIdDesc().get(0).id;
                     // HelperGeneric.logI(TAG, "file_recv_chunk:FileDB:filedb_id=" + filedb_id);
                 }
 
@@ -8620,7 +8632,7 @@ public class MainActivity extends AppCompatActivity
                                                                                                             "/" +
                                                                                                             f.tox_public_key_string +
                                                                                                             "/" +
-                                                                                                            f.file_name);
+                                                                                                            final_name);
                     HelperMessage.set_message_state_from_friendnum_and_filenum(friend_number, file_number,
                                                                                TOX_FILE_CONTROL_CANCEL.value);
                     HelperMessage.set_message_filedb_from_friendnum_and_filenum(friend_number, file_number, filedb_id);

@@ -305,6 +305,62 @@ public class FileResumeTest
     }
 
     @Test
+    public void a_file_of_theirs_has_a_temp_folder_of_its_own()
+    {
+        final String temp = "/tempdir/files/";
+        // Two files of one friend with the same name, two rows: two temp files.
+        final String first = FileResume.incomingTempPathName(temp, "KEY", 41L) + "/" + "photo.jpg";
+        final String second = FileResume.incomingTempPathName(temp, "KEY", 42L) + "/" + "photo.jpg";
+        assertNotEquals(FileResume.tempFileKey(first), FileResume.tempFileKey(second));
+        // Inside its friend's folder, and as a listing of the dir names it (the start's cleanup compares them).
+        assertEquals("/tempdir/files/KEY/41/photo.jpg", FileResume.tempFileKey(first));
+        // The row names the same folder after a cut or a restart.
+        assertEquals(FileResume.incomingTempPathName(temp, "KEY", 41L), FileResume.incomingTempPathName(temp, "KEY", 41L));
+
+        // Every offer of a file of theirs gives its row that folder before the row is written in full: file_recv
+        // for FTV2 and DATA, and resume_incoming_offer for an entry whose row went.
+        final String main = read(JAVA + "MainActivity.java");
+        final String recv = bare(method(main, "static void android_tox_callback_file_recv_cb_method("));
+        final String own = "longft_id=HelperFiletransfer.insert_into_filetransfer_db(f);f.id=ft_id;"
+                           + "//KHANDAQ(0.2.57):itsbytessofargotoatempfolderofitsown,writtenwiththerowbelow."
+                           + "f.path_name=HelperFiletransfer.incoming_temp_path_name(f);";
+        final String full = "f.message_id=new_msg_id;HelperFiletransfer.update_filetransfer_db_full(f);";
+        final int ftv2 = recv.indexOf(own);
+        final int data = recv.indexOf(own, ftv2 + 1);
+        final int dataBranch = recv.indexOf("else//DATAfileft");
+        assertTrue("FTV2", (ftv2 > recv.indexOf("TOX_FILE_KIND_FTV2")) && (ftv2 < dataBranch));
+        assertTrue(recv.indexOf(full, ftv2) < dataBranch);
+        assertTrue("DATA", data > dataBranch);
+        assertTrue(recv.indexOf(full, data) > data);
+        assertEquals("FTV2 and DATA only; an avatar keeps its friend's folder", -1, recv.indexOf(own, data + 1));
+        final String helper = read(JAVA + "HelperFiletransfer.java");
+        final String resume = bare(method(helper, "boolean resume_incoming_offer(final long friend_number"));
+        final int resumeOwn = resume.indexOf("f.id=insert_into_filetransfer_db(f);if(f.id<=0){returnfalse;}");
+        final int resumeWritten = resume.indexOf("f.path_name=incoming_temp_path_name(f);"
+                                                 + "orma.updateFiletransfer().idEq(f.id).path_name(f.path_name).execute();");
+        assertTrue(resumeOwn > 0);
+        assertTrue(resumeWritten > resumeOwn);
+        // Written before a cancel deletes its bytes by the row (delete_filetransfer_tmpfile reads the row).
+        assertTrue(resume.indexOf("delete_filetransfer_tmpfile(f.id);") > resumeWritten);
+        assertTrue(resume.indexOf("update_filetransfer_db_full(f);") > resumeWritten);
+        // Its bytes are deleted where its row says.
+        assertTrue(bare(method(helper, "public static void delete_filetransfer_tmpfile(long filetransfer_id)")).contains(
+                "((ft.direction==TRIFA_FT_DIRECTION_INCOMING.value)&&(ft.path_name!=null))?ft.path_name:"));
+        // Its end never moves it over a finished file: it takes a free name.
+        final String chunk = bare(method(main, "static void android_tox_callback_file_recv_chunk_cb_method("));
+        final int name = chunk.indexOf("finalStringfinal_name=HelperFiletransfer.incoming_final_name(f);");
+        final int move = chunk.indexOf("HelperGeneric.move_tmp_file_to_real_file(f.path_name,f.file_name,VFS_PREFIX+"
+                                       + "VFS_FILE_DIR+\"/\"+f.tox_public_key_string+\"/\",final_name);");
+        assertTrue(name > 0);
+        assertTrue(move > name);
+        assertTrue(chunk.contains("file_.file_name=final_name;"));
+        assertTrue(chunk.contains("file_nameEq(final_name)"));
+        assertTrue(bare(method(helper, "static String incoming_final_name(final Filetransfer f)")).contains(
+                "if(!newinfo.guardianproject.iocipher.File(VFS_PREFIX+VFS_FILE_DIR+\"/\"+f.tox_public_key_string+\"/\"+name)"
+                + ".exists()){returnname;}"));
+    }
+
+    @Test
     public void the_cleanup_at_start_leaves_the_bytes_of_a_file_under_way_and_takes_the_rest() throws IOException
     {
         final File temp = Files.createTempDirectory("khandaq-tempdir").toFile();
@@ -336,6 +392,42 @@ public class FileResumeTest
             assertFalse(HelperGeneric.vfs_deleteFilesAndFilesSubDirectories_real(temp.getAbsolutePath() + "/",
                                                                                  Collections.<String>emptySet()));
             assertFalse(friend.exists());
+        }
+        finally
+        {
+            HelperGeneric.vfs_deleteFilesAndFilesSubDirectories_real(temp.getAbsolutePath() + "/");
+            assertTrue(temp.delete());
+        }
+    }
+
+    @Test
+    public void the_cleanup_at_start_keeps_the_folder_of_a_row_under_way_and_takes_the_others() throws IOException
+    {
+        final File temp = Files.createTempDirectory("khandaq-tempdir").toFile();
+        try
+        {
+            // Two files of one friend with the same name, each in its row's folder, and the empty folder a
+            // finished file left.
+            final String tempDir = temp.getAbsolutePath() + "/";
+            final File underWay = new File(FileResume.incomingTempPathName(tempDir, "KEY", 41L), "photo.jpg");
+            final File cancelled = new File(FileResume.incomingTempPathName(tempDir, "KEY", 42L), "photo.jpg");
+            final File finished = new File(FileResume.incomingTempPathName(tempDir, "KEY", 40L));
+            assertTrue(underWay.getParentFile().mkdirs());
+            assertTrue(cancelled.getParentFile().mkdirs());
+            assertTrue(finished.mkdirs());
+            final byte[] partial = new byte[70_000];
+            new Random(16).nextBytes(partial);
+            Files.write(underWay.toPath(), partial);
+            Files.write(cancelled.toPath(), partial);
+
+            // As incoming_files_kept_after_restart names the row the start keeps (path_name + "/" + file_name).
+            final String rowPath = FileResume.incomingTempPathName(tempDir, "KEY", 41L) + "/" + "photo.jpg";
+            final Set<String> kept = new HashSet<>(Collections.singletonList(FileResume.tempFileKey(rowPath)));
+            assertTrue(HelperGeneric.vfs_deleteFilesAndFilesSubDirectories_real(tempDir, kept));
+
+            assertArrayEquals(partial, Files.readAllBytes(underWay.toPath()));
+            assertFalse(cancelled.getParentFile().exists());
+            assertFalse(finished.exists());
         }
         finally
         {

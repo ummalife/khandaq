@@ -7,6 +7,8 @@
 
 @interface OCTFilePathOutput : NSObject <OCTFileOutputProtocol>
 
+/// Where the file is once complete. A download made with initWithResultFilePath:ownerIdentifier: may end under
+/// another name in the same folder, when a file came to have this one meanwhile: read it after finishWriting.
 @property (copy, nonatomic, readonly, nonnull) NSString *resultFilePath;
 
 - (nullable instancetype)initWithTempFolder:(nonnull NSString *)tempFolder
@@ -37,6 +39,12 @@
  * ownerIdentifier: gives it; nil for a name of another shape.
  */
 + (nullable NSString *)ownerIdentifierOfPartialFileName:(nonnull NSString *)fileName;
+
+/**
+ * KHANDAQ (0.2.57): whether the file at `path` is an empty one, as the placeholder that reserved the name of a
+ * download until 0.2.57 was. No file that came is empty: a file of size 0 is refused.
+ */
++ (BOOL)isPlaceholderAtPath:(nonnull NSString *)path;
 
 - (nullable instancetype)init NS_UNAVAILABLE;
 + (nullable instancetype)new NS_UNAVAILABLE;

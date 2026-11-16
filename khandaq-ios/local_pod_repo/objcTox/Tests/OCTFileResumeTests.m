@@ -1033,6 +1033,106 @@ static NSData *OCTResumeTestsContent(void)
     XCTAssertEqualObjects([NSData dataWithContentsOfFile:foreignPath], foreign, @"a cancel took the file of another message");
 }
 
+// KHANDAQ (0.2.57): an empty file reserved the name of a download from the accept on, and stayed under the real name
+// after a cancel (seen: files/y-d2i.bin, 0 bytes). The bytes are in the hidden file alone until the last one is in.
+- (void)testNothingIsUnderTheNameOfTheirFileBeforeItsLastByteNorAfterACancel
+{
+    [self offerTheirFile:kResumeTestsTheirFile fileId:OCTResumeTestsId(0x10) size:kResumeTestsFileSize name:@"doc.bin"];
+    OCTMessageAbstract *message = [self newestIncomingMessage];
+    [self.files acceptFileTransfer:message failureBlock:nil];
+    XCTAssertTrue([self waitForEvent:@"resume 65536"]);
+    NSString *path = message.messageFile.filePath;
+    XCTAssertEqualObjects([path lastPathComponent], @"doc.bin");
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:path], @"something under the name at the accept");
+
+    [self.files tox:self.tox fileReceiveChunk:[OCTResumeTestsContent() subdataWithRange:NSMakeRange(0, 4)]
+         fileNumber:kResumeTestsTheirFile
+       friendNumber:kResumeTestsFriendNumber
+           position:0];
+    XCTAssertTrue([self waitUntil:^BOOL {
+        return [[[NSFileManager defaultManager] attributesOfItemAtPath:[self partialPathOf:message] error:nil] fileSize] == 4;
+    }]);
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:path], @"something under the name while it came");
+
+    XCTAssertTrue([self.files cancelFileTransfer:message error:nil]);
+
+    XCTAssertEqualObjects([self filesOnDisk], @[], @"a cancel left something");
+    XCTAssertEqualObjects(message.messageFile.filePath, path);
+}
+
+- (void)testTheEmptyFileAnEarlierVersionLeftUnderTheNameGoesWithACancel
+{
+    OCTMessageAbstract *message = [self addIncomingFileWithIdHex:OCTResumeTestsHex(OCTResumeTestsId(0x10))
+                                                            type:OCTMessageFileTypeWaitingConfirmation
+                                                        pausedBy:OCTMessageFilePausedByConnection
+                                                       keptBytes:4];
+    XCTAssertTrue([[NSData data] writeToFile:message.messageFile.filePath atomically:NO]);
+
+    XCTAssertTrue([self.files cancelFileTransfer:message error:nil]);
+
+    XCTAssertEqualObjects([self filesOnDisk], @[]);
+}
+
+- (void)testTheEmptyFileAnEarlierVersionLeftUnderTheNameGivesWayToTheFile
+{
+    NSData *fileId = OCTResumeTestsId(0x10);
+    OCTMessageAbstract *message = [self addIncomingFileWithIdHex:OCTResumeTestsHex(fileId)
+                                                            type:OCTMessageFileTypeWaitingConfirmation
+                                                        pausedBy:OCTMessageFilePausedByConnection
+                                                       keptBytes:4];
+    NSString *path = message.messageFile.filePath;
+    XCTAssertTrue([[NSData data] writeToFile:path atomically:NO]);
+
+    [self offerTheirFile:kResumeTestsTheirFile fileId:fileId size:kResumeTestsFileSize name:@"doc.bin"];
+    XCTAssertTrue([self waitForEvent:@"resume 65536"]);
+    [self receiveTheRestOfTheirFile:kResumeTestsTheirFile from:4];
+
+    XCTAssertTrue([self waitUntil:^BOOL { return message.messageFile.fileType == OCTMessageFileTypeReady; }]);
+    XCTAssertEqualObjects(message.messageFile.filePath, path);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:path], OCTResumeTestsContent());
+    XCTAssertEqualObjects([self filesOnDisk], @[@"doc.bin"]);
+}
+
+// The name is held by the message alone while the file comes: a file that came to have it meanwhile stays, and this
+// one ends under a name of its own.
+- (void)testAFileThatCameToHaveTheNameMeanwhileStaysAndTheDownloadEndsUnderAnother
+{
+    [self offerTheirFile:kResumeTestsTheirFile fileId:OCTResumeTestsId(0x10) size:kResumeTestsFileSize name:@"doc.bin"];
+    OCTMessageAbstract *message = [self newestIncomingMessage];
+    [self.files acceptFileTransfer:message failureBlock:nil];
+    XCTAssertTrue([self waitForEvent:@"resume 65536"]);
+    XCTAssertEqualObjects([message.messageFile.filePath lastPathComponent], @"doc.bin");
+
+    NSData *other = [@"someone else" dataUsingEncoding:NSASCIIStringEncoding];
+    NSString *otherPath = [[self.root stringByAppendingPathComponent:@"files"] stringByAppendingPathComponent:@"doc.bin"];
+    XCTAssertTrue([other writeToFile:otherPath atomically:NO]);
+    [self receiveTheRestOfTheirFile:kResumeTestsTheirFile from:0];
+
+    XCTAssertTrue([self waitUntil:^BOOL { return message.messageFile.fileType == OCTMessageFileTypeReady; }]);
+    XCTAssertEqualObjects([message.messageFile.filePath lastPathComponent], @"doc 2.bin");
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:message.messageFile.filePath], OCTResumeTestsContent());
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:otherPath], other, @"the other file was taken");
+    XCTAssertEqualObjects([self filesOnDisk], (@[@"doc 2.bin", @"doc.bin"]));
+}
+
+// A name another message still gives is not free because nothing is on disk under it: that message's file may be
+// coming, or gone, and a new file there would show under it.
+- (void)testADownloadTakesNoNameAnotherMessageStillGives
+{
+    OCTMessageAbstract *coming = [self addIncomingFileWithIdHex:OCTResumeTestsHex(OCTResumeTestsId(0x10))
+                                                           type:OCTMessageFileTypeWaitingConfirmation
+                                                       pausedBy:OCTMessageFilePausedByConnection
+                                                      keptBytes:4];
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:coming.messageFile.filePath]);
+
+    [self offerTheirFile:kResumeTestsTheirNextFile fileId:OCTResumeTestsId(0x20) size:kResumeTestsFileSize name:@"DOC.bin"];
+    OCTMessageAbstract *message = [self newestIncomingMessage];
+    XCTAssertNotEqualObjects(message.uniqueIdentifier, coming.uniqueIdentifier);
+    [self.files acceptFileTransfer:message failureBlock:nil];
+
+    XCTAssertEqualObjects([message.messageFile.filePath lastPathComponent], @"DOC 2.bin", @"in any case of its letters");
+}
+
 - (void)testAFileTheFriendNeverOffersAgainEndsOnceTheyHaveBeenOnlineForTheGrace
 {
     [self setFriendConnected:NO notify:YES];
@@ -1382,7 +1482,7 @@ static NSData *OCTResumeTestsContent(void)
 
 /**
  * A file of theirs. `keptBytes` < 0: complete, at its path. 0: accepted, nothing kept. n > 0: the first n bytes in
- * its partial file, and the placeholder at its path, as an interrupted download leaves them.
+ * its partial file, as an interrupted download leaves them. Nothing is at its path before it is complete.
  */
 - (OCTMessageAbstract *)addIncomingFileWithIdHex:(NSString *)fileIdHex
                                             type:(OCTMessageFileType)type
@@ -1415,12 +1515,9 @@ static NSData *OCTResumeTestsContent(void)
     if (keptBytes < 0) {
         [content writeToFile:path atomically:NO];
     }
-    else {
-        [[NSData data] writeToFile:path atomically:NO];
-        if (keptBytes > 0) {
-            NSString *partial = [OCTFilePathOutput partialFilePathForResultFilePath:path ownerIdentifier:message.uniqueIdentifier];
-            [[content subdataWithRange:NSMakeRange(0, (NSUInteger)keptBytes)] writeToFile:partial atomically:NO];
-        }
+    else if (keptBytes > 0) {
+        NSString *partial = [OCTFilePathOutput partialFilePathForResultFilePath:path ownerIdentifier:message.uniqueIdentifier];
+        [[content subdataWithRange:NSMakeRange(0, (NSUInteger)keptBytes)] writeToFile:partial atomically:NO];
     }
 
     message.chatUniqueIdentifier = self.chat.uniqueIdentifier;

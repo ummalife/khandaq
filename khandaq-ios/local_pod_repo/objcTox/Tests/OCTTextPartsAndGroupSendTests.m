@@ -4,6 +4,7 @@
 
 #import <XCTest/XCTest.h>
 #import <OCMock/OCMock.h>
+#import <Security/Security.h>
 
 #import "OCTSubmanagerChatsImpl.h"
 #import "OCTSubmanagerGroupsImpl.h"
@@ -1212,11 +1213,144 @@ static uint32_t mocked_tox_file_send(Tox *tox, uint32_t friend_number, uint32_t 
 
     id assembly = [self stallTestAssemblyWithChunks:4];
     [assembly setValue:@"/files/group/abc/clip.mp4" forKey:@"outPath"];
+    [assembly setValue:@"/files/group/abc/.00ff.part" forKey:@"partialPath"];
     transfer.assemblies[@"coming"] = assembly;
-    XCTAssertEqualObjects([transfer incomingFilePathsInProgress], [NSSet setWithObject:@"/files/group/abc/clip.mp4"]);
+    XCTAssertEqualObjects([transfer incomingFilePathsInProgress],
+                          ([NSSet setWithObjects:@"/files/group/abc/clip.mp4", @"/files/group/abc/.00ff.part", nil]));
 
     [transfer.assemblies removeObjectForKey:@"coming"];
     XCTAssertEqualObjects([transfer incomingFilePathsInProgress], [NSSet set]);
+}
+
+// KHANDAQ (0.2.57): a group file of several chunks was made under its name at its BEGIN, as long as the whole file:
+// zeros under the real name while it came (seen: 3 MiB of zeros as group/<chat>/g-a.bin while the file waited), and
+// a start of the app took one that had stopped for complete, as its size was right. The chunks go to a hidden file,
+// which takes the name with the last one.
+- (void)testAGroupFileComesInAHiddenFileAndTakesItsNameWithItsLastChunk
+{
+    NSString *inbox = [self nameTestDirectory];
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    NSData *content = [self groupTestContentOfLength:80000];
+    NSArray<NSData *> *packets = [self groupTestPacketsSendingContent:content named:@"clip.mp4" msgIdHex:msgIdHex];
+    XCTAssertEqual(packets.count, 4u, @"a BEGIN and three chunks");
+    NSMutableArray<NSString *> *completed = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *receiver = [self groupTestReceiverIn:inbox completed:completed];
+    NSString *partialName = [NSString stringWithFormat:@".%@.part", msgIdHex.lowercaseString];
+    NSString *path = [inbox stringByAppendingPathComponent:@"clip.mp4"];
+
+    for (NSUInteger i = 0; i < 3; i++) {
+        [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:packets[i]];
+    }
+    [self groupTestDrainQueueOf:receiver];
+
+    XCTAssertEqualObjects([self groupTestNamesIn:inbox], @[partialName], @"something under the name while it came");
+    XCTAssertEqualObjects([receiver incomingFilePathsInProgress],
+                          ([NSSet setWithObjects:path, [inbox stringByAppendingPathComponent:partialName], nil]));
+
+    [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:packets[3]];
+    [self groupTestDrainQueueOf:receiver];
+    [self stallTestRunMainQueue];
+
+    XCTAssertEqualObjects(completed, @[path]);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:path], content);
+    XCTAssertEqualObjects([self groupTestNamesIn:inbox], @[@"clip.mp4"]);
+    XCTAssertEqualObjects([receiver incomingFilePathsInProgress], [NSSet set]);
+
+    [[NSFileManager defaultManager] removeItemAtPath:inbox error:nil];
+}
+
+- (void)testAGroupFileThatStopsComingLeavesNothing
+{
+    NSString *inbox = [self nameTestDirectory];
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    NSArray<NSData *> *packets = [self groupTestPacketsSendingContent:[self groupTestContentOfLength:80000]
+                                                                named:@"clip.mp4"
+                                                             msgIdHex:msgIdHex];
+    OCTNgcGroupFileTransfer *receiver = [self groupTestReceiverIn:inbox completed:[NSMutableArray new]];
+
+    [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:packets[0]];
+    [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:packets[1]];
+    [self groupTestDrainQueueOf:receiver];
+    XCTAssertEqual([self groupTestNamesIn:inbox].count, 1u);
+
+    NSString *key = receiver.assemblies.allKeys.firstObject;
+    id assembly = receiver.assemblies[key];
+    XCTAssertNotNil(assembly);
+    dispatch_sync([receiver valueForKey:@"sendQueue"], ^{
+        for (int round = 0; round < 27; round++) {
+            [receiver nackTickForAssembly:assembly assemblyKey:key];
+        }
+    });
+
+    XCTAssertNil(receiver.assemblies[key]);
+    XCTAssertEqualObjects([self groupTestNamesIn:inbox], @[], @"a file that stopped left its bytes");
+
+    [[NSFileManager defaultManager] removeItemAtPath:inbox error:nil];
+}
+
+// A file that came to have the name while this one came stays, and this one ends under a name of its own.
+- (void)testAGroupFileWhoseNameAnotherFileTookMeanwhileEndsUnderAnother
+{
+    NSString *inbox = [self nameTestDirectory];
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    NSData *content = [self groupTestContentOfLength:80000];
+    NSArray<NSData *> *packets = [self groupTestPacketsSendingContent:content named:@"clip.mp4" msgIdHex:msgIdHex];
+    NSMutableArray<NSString *> *completed = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *receiver = [self groupTestReceiverIn:inbox completed:completed];
+
+    [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:packets[0]];
+    [self groupTestDrainQueueOf:receiver];
+    NSData *other = [@"someone else" dataUsingEncoding:NSASCIIStringEncoding];
+    NSString *otherPath = [inbox stringByAppendingPathComponent:@"clip.mp4"];
+    XCTAssertTrue([other writeToFile:otherPath atomically:YES]);
+
+    for (NSUInteger i = 1; i < packets.count; i++) {
+        [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:packets[i]];
+    }
+    [self groupTestDrainQueueOf:receiver];
+    [self stallTestRunMainQueue];
+
+    NSString *path = [inbox stringByAppendingPathComponent:@"clip 2.mp4"];
+    XCTAssertEqualObjects(completed, @[path]);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:path], content);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:otherPath], other, @"the other file was taken");
+    XCTAssertEqualObjects([self groupTestNamesIn:inbox], (@[@"clip 2.mp4", @"clip.mp4"]));
+
+    [[NSFileManager defaultManager] removeItemAtPath:inbox error:nil];
+}
+
+// Two files of one name coming at once: the second is not given the name of the first, which is not on disk yet.
+- (void)testTwoGroupFilesOfOneNameComingAtOnceTakeTwoNames
+{
+    NSString *inbox = [self nameTestDirectory];
+    NSString *firstId = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    NSString *secondId = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    NSData *firstContent = [self groupTestContentOfLength:80000];
+    NSData *secondContent = [self groupTestContentOfLength:75000];
+    NSArray<NSData *> *first = [self groupTestPacketsSendingContent:firstContent named:@"clip.mp4" msgIdHex:firstId];
+    NSArray<NSData *> *second = [self groupTestPacketsSendingContent:secondContent named:@"clip.mp4" msgIdHex:secondId];
+    NSMutableArray<NSString *> *completed = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *receiver = [self groupTestReceiverIn:inbox completed:completed];
+
+    [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:first[0]];
+    [receiver handleIncomingPacketWithGroupNumber:5 peerId:3 peerPublicKeyHex:nil data:second[0]];
+    for (NSUInteger i = 1; i < second.count; i++) {
+        [receiver handleIncomingPacketWithGroupNumber:5 peerId:3 peerPublicKeyHex:nil data:second[i]];
+    }
+    for (NSUInteger i = 1; i < first.count; i++) {
+        [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:first[i]];
+    }
+    [self groupTestDrainQueueOf:receiver];
+    [self stallTestRunMainQueue];
+
+    NSString *firstPath = [inbox stringByAppendingPathComponent:@"clip.mp4"];
+    NSString *secondPath = [inbox stringByAppendingPathComponent:@"clip 2.mp4"];
+    XCTAssertEqualObjects(completed, (@[secondPath, firstPath]));
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:firstPath], firstContent);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:secondPath], secondContent);
+    XCTAssertEqualObjects([self groupTestNamesIn:inbox], (@[@"clip 2.mp4", @"clip.mp4"]));
+
+    [[NSFileManager defaultManager] removeItemAtPath:inbox error:nil];
 }
 
 #pragma mark - The name of a file offered to a friend
@@ -1342,6 +1476,58 @@ static uint32_t mocked_tox_file_send(Tox *tox, uint32_t friend_number, uint32_t 
         [drained fulfill];
     });
     [self waitForExpectations:@[drained] timeout:5.0];
+}
+
+- (NSData *)groupTestContentOfLength:(NSUInteger)length
+{
+    NSMutableData *content = [NSMutableData dataWithLength:length];
+    XCTAssertEqual(SecRandomCopyBytes(kSecRandomDefault, length, content.mutableBytes), errSecSuccess);
+    return content;
+}
+
+/// The packets a member sends `content` as, a file named `name`.
+- (NSArray<NSData *> *)groupTestPacketsSendingContent:(NSData *)content named:(NSString *)name msgIdHex:(NSString *)msgIdHex
+{
+    NSString *outbox = [self nameTestDirectory];
+    NSString *path = [outbox stringByAppendingPathComponent:name];
+    XCTAssertTrue([content writeToFile:path atomically:YES]);
+
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *sender = [self stallTestTransferCollectingPackets:packets];
+    XCTestExpectation *sent = [self expectationWithDescription:@"the file went"];
+    [sender sendFileAtPath:path groupNumber:5 msgIdHex:msgIdHex progress:nil completion:^(BOOL success, NSError *error) {
+        XCTAssertTrue(success, @"%@", error);
+        [sent fulfill];
+    }];
+    [self waitForExpectations:@[sent] timeout:5.0];
+
+    [[NSFileManager defaultManager] removeItemAtPath:outbox error:nil];
+    return [packets copy];
+}
+
+/// A member that stores what comes in `inbox`, and adds the path of each file complete to `completed`.
+- (OCTNgcGroupFileTransfer *)groupTestReceiverIn:(NSString *)inbox completed:(NSMutableArray<NSString *> *)completed
+{
+    return [[OCTNgcGroupFileTransfer alloc] initWithSendPacketBlock:^BOOL (uint32_t groupNumber, NSData *packet, NSError **error) {
+        return YES;
+    } incomingFilesDirectory:^NSString *(uint32_t groupNumber) {
+        return inbox;
+    } incomingBeginBlock:nil incomingCompleteBlock:^(uint32_t groupNumber, uint32_t peerId, NSString *senderPublicKeyHex,
+                                                    NSString *fileName, NSString *filePath, uint64_t fileSize, NSString *msgIdHex) {
+        [completed addObject:filePath];
+    } transferProgressBlock:nil];
+}
+
+/// What came is handled on the transfer's queue.
+- (void)groupTestDrainQueueOf:(OCTNgcGroupFileTransfer *)transfer
+{
+    dispatch_sync([transfer valueForKey:@"sendQueue"], ^{});
+}
+
+- (NSArray<NSString *> *)groupTestNamesIn:(NSString *)folder
+{
+    NSArray<NSString *> *names = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:folder error:nil];
+    return [names sortedArrayUsingSelector:@selector(compare:)];
 }
 
 - (OCTNgcGroupFileTransfer *)stallTestTransferCollectingPackets:(NSMutableArray<NSData *> *)packets

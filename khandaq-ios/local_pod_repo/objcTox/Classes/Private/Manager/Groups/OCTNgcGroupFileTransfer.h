@@ -90,9 +90,16 @@ typedef void (^OCTNgcGroupFileTransferIncomingDroppedBlock)(uint32_t groupNumber
 
 - (void)cancelSendForMsgIdHex:(NSString *)msgIdHex;
 
-/// KHANDAQ (0.2.57): the paths of the incoming files being written now, one per chunked file under way. From any
-/// thread.
+/// KHANDAQ (0.2.57): the paths of the incoming files being written now, two per chunked file under way: where it
+/// goes once complete, and its hidden file (partialPathForGroupFilePath:msgIdHex:). From any thread.
 - (NSSet<NSString *> *)incomingFilePathsInProgress;
+
+/**
+ * KHANDAQ (0.2.57): the hidden file the chunks of the group file `msgIdHex`, to go to `filePath`, are written to until
+ * the last one is in: ".<msgIdHex in lower case>.part" in the folder of `filePath`. Nothing is under the file's name
+ * before that.
+ */
++ (NSString *)partialPathForGroupFilePath:(NSString *)filePath msgIdHex:(NSString *)msgIdHex;
 
 @end
 

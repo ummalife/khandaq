@@ -18,6 +18,18 @@
     }];
 }
 
++ (nonnull NSString *)createNewFilePathInDirectory:(nonnull NSString *)directory
+                                          fileName:(nonnull NSString *)fileName
+                                       nameIsTaken:(nullable BOOL (^)(NSString *_Nonnull name))nameIsTaken
+{
+    NSParameterAssert(directory);
+    NSParameterAssert(fileName);
+
+    return [self newPathInDirectory:directory safeName:[self safeNameForFileName:fileName] isTaken:^BOOL (NSString *path) {
+        return [self fileExistsAtPath:path] || (nameIsTaken && nameIsTaken([path lastPathComponent]));
+    }];
+}
+
 + (nonnull NSString *)createNewGroupFilePathInDirectory:(nonnull NSString *)directory
                                                fileName:(nonnull NSString *)fileName
                                              namesInUse:(nullable NSSet<NSString *> *)namesInUse

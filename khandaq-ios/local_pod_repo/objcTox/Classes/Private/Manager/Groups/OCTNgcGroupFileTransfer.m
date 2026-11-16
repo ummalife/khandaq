@@ -74,7 +74,10 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 @interface OCTNgcIncomingAssembly : NSObject
 @property (nonatomic, copy) NSString *displayFilename;
 @property (nonatomic, copy) NSString *filename;
+// Where the file goes once complete. Nothing is there before: the chunks go to partialPath.
 @property (nonatomic, copy) NSString *outPath;
+// KHANDAQ (0.2.57): the hidden file the chunks are written to (partialPathForGroupFilePath:msgIdHex:).
+@property (nonatomic, copy) NSString *partialPath;
 @property (nonatomic, assign) uint64_t totalSize;
 @property (nonatomic, assign) int totalChunks;
 @property (nonatomic, assign) int chunkPayload;
@@ -204,8 +207,9 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     for (OCTNgcIncomingAssembly *assembly in pending) {
         [self stopNackTimerForAssembly:assembly];
 
-        if (assembly.outPath.length > 0) {
-            [[NSFileManager defaultManager] removeItemAtPath:assembly.outPath error:nil];
+        // KHANDAQ (0.2.57): the bytes of a file still coming are in its hidden file; nothing is under its name.
+        if (assembly.partialPath.length > 0) {
+            [[NSFileManager defaultManager] removeItemAtPath:assembly.partialPath error:nil];
         }
     }
 }
@@ -237,10 +241,38 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
             if (assembly.outPath.length > 0) {
                 [paths addObject:assembly.outPath];
             }
+            if (assembly.partialPath.length > 0) {
+                [paths addObject:assembly.partialPath];
+            }
         }
     }
 
     return paths;
+}
+
++ (NSString *)partialPathForGroupFilePath:(NSString *)filePath msgIdHex:(NSString *)msgIdHex
+{
+    NSString *name = [NSString stringWithFormat:@".%@.part", msgIdHex.lowercaseString];
+    return [[filePath stringByDeletingLastPathComponent] stringByAppendingPathComponent:name];
+}
+
+/**
+ * KHANDAQ (0.2.57): the names, in lower case, a file that comes now cannot take: those the messages of the group give
+ * their files (namesInUse), and those of the files still coming, which are not on disk before their last chunk.
+ */
+- (NSSet<NSString *> *)namesTakenWithNamesInUse:(NSSet<NSString *> *)namesInUse
+{
+    NSMutableSet<NSString *> *taken = namesInUse ? [namesInUse mutableCopy] : [NSMutableSet new];
+
+    @synchronized (self.assemblies) {
+        for (OCTNgcIncomingAssembly *assembly in self.assemblies.allValues) {
+            if (assembly.outPath.length > 0) {
+                [taken addObject:[[assembly.outPath lastPathComponent] lowercaseString]];
+            }
+        }
+    }
+
+    return taken;
 }
 
 - (void)cancelSendForMsgIdHex:(NSString *)msgIdHex
@@ -588,8 +620,11 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return;
     }
 
-    // KHANDAQ (0.2.57): never a hidden name, never the name of a file a message of the group still names.
-    NSString *localName = [OCTFileTools createNewGroupFilePathInDirectory:directory fileName:fileName namesInUse:namesInUse];
+    // KHANDAQ (0.2.57): never a hidden name, never the name of a file a message of the group still names, nor of one
+    // still coming.
+    NSString *localName = [OCTFileTools createNewGroupFilePathInDirectory:directory
+                                                                 fileName:fileName
+                                                               namesInUse:[self namesTakenWithNamesInUse:namesInUse]];
     NSData *payload = [data subdataWithRange:NSMakeRange(kOCTNgcSingleFileHeader, fileSize)];
 
     if (! [payload writeToFile:localName atomically:YES]) {
@@ -682,20 +717,26 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return;
     }
 
-    // KHANDAQ (0.2.57): never a hidden name, never the name of a file a message of the group still names.
-    NSString *localName = [OCTFileTools createNewGroupFilePathInDirectory:directory fileName:fileName namesInUse:namesInUse];
-    NSString *outPath = localName;
+    // KHANDAQ (0.2.57): never a hidden name, never the name of a file a message of the group still names, nor of one
+    // still coming.
+    NSString *outPath = [OCTFileTools createNewGroupFilePathInDirectory:directory
+                                                               fileName:fileName
+                                                             namesInUse:[self namesTakenWithNamesInUse:namesInUse]];
+    // KHANDAQ (0.2.57): the chunks go to a hidden file next to it, which takes the name once the last one is in. The
+    // file was made under its name, as long as the whole file: zeros where nothing had come yet, under the real name
+    // while it came (seen: 3 MiB of zeros as g-a.bin), and a start of the app took one that stopped for complete.
+    NSString *partialPath = [[self class] partialPathForGroupFilePath:outPath msgIdHex:msgIdHex];
 
-    if (! [[NSFileManager defaultManager] createFileAtPath:outPath contents:nil attributes:nil]) {
+    if (! [[NSFileManager defaultManager] createFileAtPath:partialPath contents:nil attributes:nil]) {
         return;
     }
 
-    NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:outPath];
+    NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:partialPath];
 
     if (! handle) {
         // KHANDAQ (audit A38): the empty file already exists — don't leave it behind in the group's
         // incoming directory when the assembly never starts.
-        [[NSFileManager defaultManager] removeItemAtPath:outPath error:nil];
+        [[NSFileManager defaultManager] removeItemAtPath:partialPath error:nil];
         return;
     }
 
@@ -709,6 +750,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     assembly.displayFilename = fileName;
     assembly.filename = [outPath lastPathComponent];
     assembly.outPath = outPath;
+    assembly.partialPath = partialPath;
     assembly.totalSize = totalSize;
     assembly.totalChunks = (int)totalChunks;
     assembly.chunkPayload = (int)chunkPayload;
@@ -835,7 +877,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return;
     }
 
-    NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:assembly.outPath];
+    NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:assembly.partialPath];
 
     if (! handle) {
         return;
@@ -864,6 +906,12 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     }
 
     if (assembly.receivedCount >= assembly.totalChunks) {
+        // KHANDAQ (0.2.57): the file takes its name now, and a file it ends under is never a partial one.
+        if (! [self moveCompleteAssemblyToItsName:assembly]) {
+            [self discardIncomingAssembly:assembly forKey:assemblyKey];
+            return;
+        }
+
         [self stopNackTimerForAssembly:assembly];
 
         @synchronized (self.assemblies) {
@@ -888,10 +936,36 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     }
 }
 
+/**
+ * KHANDAQ (0.2.57): the bytes of a complete file leave their hidden file for the file's name. A file that came to have
+ * that name meanwhile stays, and this one takes another name in the folder (outPath says which).
+ */
+- (BOOL)moveCompleteAssemblyToItsName:(OCTNgcIncomingAssembly *)assembly
+{
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+
+    if ([fileManager fileExistsAtPath:assembly.outPath]) {
+        NSString *taken = assembly.outPath;
+        assembly.outPath = [OCTFileTools createNewGroupFilePathInDirectory:[taken stringByDeletingLastPathComponent]
+                                                                  fileName:assembly.filename
+                                                                namesInUse:[self namesTakenWithNamesInUse:nil]];
+        assembly.filename = [assembly.outPath lastPathComponent];
+        OCTLogInfo(@"NGC group file: %@ is another file now, this one goes to %@", taken, assembly.outPath);
+    }
+
+    NSError *error = nil;
+    if (! [fileManager moveItemAtPath:assembly.partialPath toPath:assembly.outPath error:&error]) {
+        OCTLogWarn(@"NGC group file: cannot move %@ to %@: %@", assembly.partialPath, assembly.outPath, error);
+        return NO;
+    }
+
+    return YES;
+}
+
 // KHANDAQ (audit #13 / A38): the single teardown path for an incoming assembly that will never complete.
 // Stops the NACK timer (it retains the assembly, so leaving it running leaks both and keeps broadcasting
 // requests), drops the assembly and any orphan chunks queued under its key, and removes the partial file.
-// Never call it for a COMPLETED assembly: there outPath is the file handed to incomingCompleteBlock.
+// Never call it for a COMPLETED assembly: its file under outPath is the one handed to incomingCompleteBlock.
 - (void)discardIncomingAssembly:(OCTNgcIncomingAssembly *)assembly forKey:(NSString *)assemblyKey
 {
     [self stopNackTimerForAssembly:assembly];
@@ -906,8 +980,9 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         [self.orphanChunks removeObjectForKey:assemblyKey];
     }
 
-    if (assembly.outPath.length > 0) {
-        [[NSFileManager defaultManager] removeItemAtPath:assembly.outPath error:nil];
+    // KHANDAQ (0.2.57): its bytes are in the hidden file alone; nothing of it is under its name.
+    if (assembly.partialPath.length > 0) {
+        [[NSFileManager defaultManager] removeItemAtPath:assembly.partialPath error:nil];
     }
 
     // KHANDAQ (0.2.57): the file's card said it was coming, and nothing ended it until the next start of the

@@ -22,6 +22,7 @@
 #import "OCTFileDataInput.h"
 #import "OCTFileDataOutput.h"
 #import "OCTFileTools.h"
+#import "OCTNgcGroupFileTransfer.h"
 #import "OCTSettingsStorageObject.h"
 #import "NSError+OCTFile.h"
 
@@ -142,6 +143,16 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
             file.groupMsgIdHashHex.length == 0) {
             OCTLogInfo(@"keeping offline-queued file %@", file);
             return;
+        }
+
+        // KHANDAQ (0.2.57): a group file that stopped coming leaves its bytes in its hidden file, never under its name
+        // (OCTNgcGroupFileTransfer partialPathForGroupFilePath:msgIdHex:); nothing goes on with them.
+        if (file.groupMsgIdHashHex.length > 0) {
+            NSString *path = [file filePath];
+            if (path.length > 0) {
+                NSString *partial = [OCTNgcGroupFileTransfer partialPathForGroupFilePath:path msgIdHex:file.groupMsgIdHashHex];
+                [[NSFileManager defaultManager] removeItemAtPath:partial error:nil];
+            }
         }
 
         file.fileType = OCTMessageFileTypeCanceled;
@@ -410,12 +421,12 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
     // goes on into the same result from what it kept.
     NSString *resultFilePath = [message.messageFile filePath];
     if (resultFilePath.length == 0) {
-        resultFilePath = [OCTFileTools createNewFilePathInDirectory:[self downloadsDirectory]
-                                                           fileName:message.messageFile.fileName];
+        resultFilePath = [self newDownloadPathForFileNamed:message.messageFile.fileName];
     }
     OCTToxFileSize resumePosition = [self resumePositionForMessage:message];
 
-    // Referenced by the message before the placeholder is made, so a cleanup in between cannot take them.
+    // The message holds the name from now on (nothing is on disk under it before the last byte), and its partial
+    // file is its own, so a cleanup in between takes neither.
     [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
         [file internalSetFilePath:resultFilePath];
     }];
@@ -1260,7 +1271,19 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
                if (! message.isInvalidated && message.senderUniqueIdentifier) {
                    [strongSelf noteIncomingTransferActivityOfFriend:[strongSelf friendForMessage:message]];
                }
+               // KHANDAQ (0.2.57): a download ends under another name when a file came to have its own meanwhile
+               // (OCTFilePathOutput finishWriting).
+               NSString *finalPath = nil;
+               if ([operation isKindOfClass:[OCTFileDownloadOperation class]]) {
+                   id<OCTFileOutputProtocol> output = ((OCTFileDownloadOperation *)operation).output;
+                   if ([output isKindOfClass:[OCTFilePathOutput class]]) {
+                       finalPath = ((OCTFilePathOutput *)output).resultFilePath;
+                   }
+               }
                [strongSelf updateMessageFile:message withBlock:^(OCTMessageFile *file) {
+            if (finalPath.length > 0 && ! [finalPath isEqualToString:[file filePath]]) {
+                [file internalSetFilePath:finalPath];
+            }
 
             file.fileType = OCTMessageFileTypeReady;
             file.pausedBy = OCTMessageFilePausedByNone;
@@ -1815,6 +1838,36 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
     if (path) {
         [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
     }
+
+    // KHANDAQ (0.2.57): and the empty file an earlier version reserved its name with, left under the real name after
+    // a cancel. A file of theirs that is not complete has nothing else there.
+    NSString *resultFilePath = [message.messageFile filePath];
+    if (message.senderUniqueIdentifier && resultFilePath.length > 0 && message.messageFile.fileType != OCTMessageFileTypeReady &&
+        [OCTFilePathOutput isPlaceholderAtPath:resultFilePath]) {
+        [[NSFileManager defaultManager] removeItemAtPath:resultFilePath error:nil];
+    }
+}
+
+/**
+ * KHANDAQ (0.2.57): a free name for a download: free on disk, and free in the messages, as a download holds its name
+ * in its message alone until its last byte is in. Main thread, as the Realm.
+ */
+- (NSString *)newDownloadPathForFileNamed:(NSString *)fileName
+{
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    NSString *directory = [self downloadsDirectory];
+    NSString *folderName = [directory lastPathComponent];
+
+    return [OCTFileTools createNewFilePathInDirectory:directory
+                                             fileName:fileName ?: @""
+                                          nameIsTaken:^BOOL (NSString *name) {
+        // Stored relative to the container, with a tilde or whole: the folder and the name are what they share. The
+        // files of groups are in folders of their own below it.
+        NSString *suffix = [NSString stringWithFormat:@"/%@/%@", folderName, name];
+        NSPredicate *predicate = [NSPredicate predicateWithFormat:@"internalFilePath ENDSWITH[c] %@ OR internalFilePath ==[c] %@",
+                                  suffix, name];
+        return [realmManager objectsWithClass:[OCTMessageFile class] predicate:predicate].count > 0;
+    }];
 }
 
 - (NSString *)fileIdHexForFileNumber:(OCTToxFileNumber)fileNumber friendNumber:(OCTToxFriendNumber)friendNumber

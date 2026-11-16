@@ -13,6 +13,7 @@ static NSString *const kPartialFilePrefix = @".";
 
 @interface OCTFilePathOutput ()
 
+@property (copy, nonatomic, readwrite, nonnull) NSString *resultFilePath;
 @property (copy, nonatomic, readonly, nonnull) NSString *tempFilePath;
 /// The partial file outlives a cancel (initWithResultFilePath:ownerIdentifier:).
 @property (assign, nonatomic, readonly) BOOL keepsPartialData;
@@ -32,6 +33,12 @@ static NSString *const kPartialFilePrefix = @".";
     NSString *name = [[kPartialFilePrefix stringByAppendingString:ownerIdentifier]
                       stringByAppendingPathExtension:kPartialFileExtension];
     return [[resultFilePath stringByDeletingLastPathComponent] stringByAppendingPathComponent:name];
+}
+
++ (BOOL)isPlaceholderAtPath:(nonnull NSString *)path
+{
+    NSDictionary<NSFileAttributeKey, id> *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:nil];
+    return [attributes[NSFileType] isEqualToString:NSFileTypeRegular] && [attributes fileSize] == 0;
 }
 
 + (nullable NSString *)ownerIdentifierOfPartialFileName:(nonnull NSString *)fileName
@@ -81,15 +88,9 @@ static NSString *const kPartialFilePrefix = @".";
     _tempFilePath = [[self class] partialFilePathForResultFilePath:resultFilePath ownerIdentifier:ownerIdentifier];
     _keepsPartialData = YES;
 
-    // Reserve the name, as the other init does, unless the placeholder of an earlier attempt is there.
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    if (! [fileManager fileExistsAtPath:_resultFilePath]) {
-        [fileManager createDirectoryAtPath:[_resultFilePath stringByDeletingLastPathComponent]
-               withIntermediateDirectories:YES
-                                attributes:nil
-                                     error:nil];
-        [fileManager createFileAtPath:_resultFilePath contents:[NSData data] attributes:nil];
-    }
+    // KHANDAQ (0.2.57): nothing goes under the real name before the last byte is in. An empty file reserved it,
+    // and stayed there after a cancel. The message holds the name meanwhile (its path, set before this), and
+    // finishWriting takes another one if a file came to have it.
 
     OCTLogInfo(@"partial path %@", _tempFilePath);
     OCTLogInfo(@"result path %@", _resultFilePath);
@@ -205,13 +206,21 @@ static NSString *const kPartialFilePrefix = @".";
         [fileManager createDirectoryAtPath:resultDir withIntermediateDirectories:YES attributes:nil error:nil];
     }
 
-    // Remove the dummy placeholder ONLY if it's still there — when the result directory was missing it
-    // may never have been created, and a missing placeholder must NOT abort an otherwise-fine download.
+    // KHANDAQ (0.2.57): an empty file there is the placeholder an earlier version reserved the name with, and
+    // goes. Any other file is someone's: it stays, and this one takes a name of its own.
     if ([fileManager fileExistsAtPath:self.resultFilePath]) {
-        NSError *removeError = nil;
-        if (! [fileManager removeItemAtPath:self.resultFilePath error:&removeError]) {
-            OCTLogWarn(@"OCTFilePathOutput cannot remove placeholder at %@: %@", self.resultFilePath, removeError);
-            return NO;
+        if ([[self class] isPlaceholderAtPath:self.resultFilePath]) {
+            NSError *removeError = nil;
+            if (! [fileManager removeItemAtPath:self.resultFilePath error:&removeError]) {
+                OCTLogWarn(@"OCTFilePathOutput cannot remove placeholder at %@: %@", self.resultFilePath, removeError);
+                return NO;
+            }
+        }
+        else {
+            NSString *taken = self.resultFilePath;
+            self.resultFilePath = [OCTFileTools createNewFilePathInDirectory:[taken stringByDeletingLastPathComponent]
+                                                                    fileName:[taken lastPathComponent]];
+            OCTLogInfo(@"OCTFilePathOutput: %@ is another file now, the result goes to %@", taken, self.resultFilePath);
         }
     }
 

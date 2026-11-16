@@ -352,6 +352,9 @@ void CoreFile::acceptFileRecvRequest(uint32_t friendId, uint32_t fileId, QString
                    << file->file->errorString();
         return;
     }
+    // KHANDAQ (0.2.57): the file it goes to is made now; it is told from another by when.
+    file->stamp = ToxFile::Stamp();
+    file->stamp.bornMs = Air::fileStampAt(path).bornMs;
     Tox_Err_File_Control err;
     tox_file_control(tox, file->friendId, file->fileNum, TOX_FILE_CONTROL_RESUME, &err);
     if (!PARSE_ERR(err)) {
@@ -902,6 +905,12 @@ void CoreFile::keepForFriend(uint32_t friendId)
         }
         file.connectionLost = true;
         file.progress.resetSpeed();
+        if (file.direction == ToxFile::RECEIVING && !file.filePath.isEmpty()) {
+            // What its part is once closed: an offer of it later goes on only in that file.
+            const ToxFile::Stamp cut = Air::fileStampAt(file.filePath);
+            file.stamp.bytes = cut.bytes;
+            file.stamp.modifiedMs = cut.modifiedMs;
+        }
         file.fileNum = waitingNumberBase | (nextWaitingNumber++ & ~waitingNumberBase);
         const uint64_t waitingKey = getFriendKey(friendId, file.fileNum);
         fileMap.insert(waitingKey, file);
@@ -1006,11 +1015,22 @@ bool CoreFile::takeWaitingFile(const ToxFile& offer)
         here.size = static_cast<qint64>(file.progress.getFileSize());
         here.status = file.status;
         here.accepted = true;
-        const QFileInfo partial(file.filePath);
-        here.bytes = partial.isFile() ? partial.size() : 0;
+        // KHANDAQ (0.2.57): it goes on only in the part it left, as it left it, which no other
+        // transfer has; otherwise from the start under a free name beside it.
+        const uint64_t takenKey = getFriendKey(offer.friendId, offer.fileNum);
+        const auto inUse = [this, takenKey](const QString& path) {
+            return QFileInfo::exists(path) || otherFileAt(path, takenKey);
+        };
+        const ToxFile::Stamp partial = Air::fileStampAt(file.filePath);
+        here.bytes = qMax<qint64>(0, partial.bytes);
+        here.ownPart = Air::isOwnPart(file.stamp, partial) && !otherFileAt(file.filePath, takenKey);
         const Air::FileResume resume =
             Air::fileResume(offer.resumeFileId, static_cast<qint64>(offer.progress.getFileSize()),
                             here);
+        if (resume.newPath) {
+            const QFileInfo old(file.filePath);
+            taken->setFilePath(Air::freeFilePath(old.absolutePath(), old.fileName(), inUse));
+        }
         qDebug() << "takeWaitingFile: file" << offer.friendId << ':' << offer.fileNum
                  << "goes on from byte" << resume.offset;
         switch (startReceiving(*taken, static_cast<uint64_t>(resume.offset))) {
@@ -1055,6 +1075,10 @@ CoreFile::Receiving CoreFile::startReceiving(ToxFile& file, uint64_t offset)
                    << file.file->errorString();
         return failed;
     }
+    // From the start the file is made anew, past it it is its own part: either way what tells it
+    // is when it was made, and no cut of it holds any more.
+    file.stamp = ToxFile::Stamp();
+    file.stamp.bornMs = Air::fileStampAt(file.filePath).bornMs;
     // The hash goes on only with all that came before; from the start it is a new one.
     if (offset == 0) {
         file.hashGenerator = std::make_shared<QCryptographicHash>(QCryptographicHash::Sha256);
@@ -1091,6 +1115,16 @@ void CoreFile::stopReceiving(uint32_t friendId, uint32_t fileId)
     removeFile(friendId, fileId);
     file.status = ToxFile::BROKEN;
     emit fileTransferBrokenUnbroken(file, true);
+}
+
+bool CoreFile::otherFileAt(const QString& path, uint64_t key) const
+{
+    for (auto it = fileMap.cbegin(); it != fileMap.cend(); ++it) {
+        if (it.key() != key && !path.isEmpty() && it.value().filePath == path) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void CoreFile::endWaitingFile(uint64_t key)

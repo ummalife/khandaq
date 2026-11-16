@@ -80,6 +80,7 @@ private slots:
     void a_removed_friend_leaves_no_file_to_whoever_gets_their_number();
     void an_offer_that_cannot_go_on_where_asked_leaves_its_part_as_it_was();
     void a_file_the_person_refused_comes_again_only_by_their_tap();
+    void a_file_goes_on_only_in_the_part_it_left();
 
 private:
     /** Alice makes a group, and Bob joins it by her invite: both count the two of them then. */
@@ -898,6 +899,8 @@ void TestCore::an_offer_of_a_file_partly_here_goes_on_from_what_is_here()
     entry.status = ToxFile::BROKEN;
     entry.accepted = true;
     entry.bytes = QFileInfo(target).size();
+    // The part Bob's node made for it, as his window tells (Air::isOwnPart).
+    entry.ownPart = true;
     const Air::FileResume resume = Air::fileResume(
         offer.resumeFileId, static_cast<qint64>(offer.progress.getFileSize()), entry);
     QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
@@ -1158,6 +1161,63 @@ void TestCore::a_file_the_person_refused_comes_again_only_by_their_tap()
     QVERIFY(!bobLog.of(bobLog.accepted).first().refusedHere);
     QVERIFY(!bobLog.of(bobLog.finished).first().refusedHere);
     QVERIFY(readFile(target) == content);
+}
+
+/**
+ * KHANDAQ (0.2.57): a file cut by a lost link goes on only in the part it left. While it waits,
+ * another file comes to its path in place of that part; offered again, it goes on from the start
+ * under a free name beside it, and the file at its path stays as it is.
+ */
+void TestCore::a_file_goes_on_only_in_the_part_it_left()
+{
+    const uint32_t bobOnAlice = alice->getFriendList().first();
+    const uint32_t aliceOnBob = bob->getFriendList().first();
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QByteArray content = fileBytes(3 * 1024 * 1024 + 11, 2029);
+    const QString source = dir.filePath(QStringLiteral("lecture.mkv"));
+    const QString target = dir.filePath(QStringLiteral("lecture here.mkv"));
+    const QString beside = dir.filePath(QStringLiteral("lecture here (1).mkv"));
+    QVERIFY(writeFile(source, content));
+
+    NodeLog aliceLog(*alice);
+    NodeLog bobLog(*bob);
+    alice->getCoreFile()->sendFile(bobOnAlice, QStringLiteral("lecture.mkv"), source,
+                                   content.size());
+    QTRY_COMPARE_WITH_TIMEOUT(bobLog.of(bobLog.offered).size(), 1, connected_message_wait);
+    const ToxFile offer = bobLog.of(bobLog.offered).first();
+    bob->getCoreFile()->acceptFileRecvRequest(offer.friendId, offer.fileNum, target);
+    QTRY_VERIFY_WITH_TIMEOUT(bobLog.lastBytes() >= 128 * 1024, connected_message_wait);
+
+    // She goes: his file waits, and what it left is known.
+    alice->removeFriend(bobOnAlice);
+    QTRY_COMPARE_WITH_TIMEOUT(bobLog.of(bobLog.waiting).size(), 1, friend_timeout);
+    const ToxFile waiting = bobLog.of(bobLog.waiting).first();
+    QVERIFY(waiting.connectionLost);
+    QCOMPARE(waiting.stamp.bytes, QFileInfo(target).size());
+    QVERIFY(waiting.stamp.bytes > 0 && waiting.stamp.bytes < content.size());
+    QCOMPARE(waiting.stamp.modifiedMs, QFileInfo(target).lastModified().toMSecsSinceEpoch());
+
+    // Another file in place of the part.
+    const QByteArray other = fileBytes(200 * 1024 + 3, 2030);
+    QVERIFY(QFile::remove(target));
+    QVERIFY(writeFile(target, other));
+
+    alice->acceptFriendRequest(bob->getSelfPublicKey());
+    QTRY_VERIFY_WITH_TIMEOUT(linkedTo(*alice, bobOnAlice) && linkedTo(*bob, aliceOnBob),
+                             bootstrap_timeout);
+    alice->getCoreFile()->sendFile(bobOnAlice, QStringLiteral("lecture.mkv"), source,
+                                   content.size(), offer.resumeFileId);
+    QTRY_VERIFY_WITH_TIMEOUT(bobLog.of(bobLog.finished).size() == 1
+                                 && aliceLog.of(aliceLog.finished).size() == 1,
+                             bootstrap_timeout);
+
+    QCOMPARE(bobLog.of(bobLog.offered).size(), 1);
+    QCOMPARE(bobLog.of(bobLog.accepted).last().filePath, beside);
+    QVERIFY(bobLog.of(bobLog.accepted).last().continued);
+    QCOMPARE(bobLog.of(bobLog.finished).first().filePath, beside);
+    QVERIFY(readFile(beside) == content);
+    QVERIFY(readFile(target) == other);
 }
 
 QTEST_GUILESS_MAIN(TestCore)

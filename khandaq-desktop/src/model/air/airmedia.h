@@ -171,12 +171,17 @@ struct FileHere
     QByteArray id;
     qint64 size = 0;
     ToxFile::FileStatus status = ToxFile::INITIALIZING;
-    /** It was accepted, and what came of it is at its path. */
+    /** It was accepted, and what came of it went to its path. */
     bool accepted = false;
     /** The bytes at its path; 0 when there is nothing there. */
     qint64 bytes = 0;
     /** The person cancelled or declined it (ToxFile::refusedHere). */
     bool refused = false;
+    /**
+     * What is at its path is what came of it (isOwnPart), and no later file goes there: only then
+     * does it go on in that file.
+     */
+    bool ownPart = false;
 };
 
 /** What an offer does with the entry of the same file (fileResume). */
@@ -204,16 +209,36 @@ struct FileResume
     Step step = Step::NewEntry;
     /** Where it goes on from, in bytes: what toxcore seeks to before the accept. */
     qint64 offset = 0;
+    /**
+     * For GoOn: what is at its path may not be what came of it, so it goes on from the start under
+     * a free name beside it (freeFilePath), and that file stays as it is.
+     */
+    bool newPath = false;
 };
 
 /**
  * KHANDAQ (0.2.57): the standard resume of toxcore. The sender offers the file again with the same
  * id, kind, size and name; this side seeks to what it has before it accepts. Another id or another
  * size is another file. What is here goes on from its length; a file that is whole goes on from
- * its last byte, which comes once more; one longer than its size starts again. One the person
- * cancelled or declined waits for them.
+ * its last byte, which comes once more. What is at its path goes on only when it is what came of
+ * it (FileHere::ownPart); otherwise, or when it is longer than its size, it starts again under a
+ * new name. One the person cancelled or declined waits for them.
  */
 FileResume fileResume(const QByteArray& offerId, qint64 offerSize, const FileHere& here);
+
+/**
+ * KHANDAQ (0.2.57): the stamp of the file at path now (ToxFile::Stamp): its birth time, its length
+ * and its last change; -1 for what the system does not tell, all of it when there is no file.
+ */
+ToxFile::Stamp fileStampAt(const QString& path);
+
+/**
+ * KHANDAQ (0.2.57): whether the file at a path is the part a file of the person left there, from
+ * the stamp recorded of it (recorded) and that of the path now (now, fileStampAt): the same file,
+ * made when that one was, and, where its cut is known, as it was then. With nothing to tell it by,
+ * it is not.
+ */
+bool isOwnPart(const ToxFile::Stamp& recorded, const ToxFile::Stamp& now);
 
 /**
  * KHANDAQ (0.2.57): whether the downloads rule (autoAcceptFolder) may take an offer the window

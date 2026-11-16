@@ -20,6 +20,9 @@
 #include "src/model/air/airmedia.h"
 
 #include <QBuffer>
+#include <QFile>
+#include <QFileInfo>
+#include <QTemporaryDir>
 #include <QtTest/QtTest>
 
 #include <limits>
@@ -113,6 +116,8 @@ private slots:
     void anOfferOfAnotherFileIsANewEntry();
     void anOfferOfAFileNeverAcceptedWaitsInItsEntry();
     void anOfferOfAFileThePersonRefusedWaitsForTheirTap();
+    void anOfferGoesOnOnlyInThePartItLeft();
+    void aPartIsToldFromAnotherFileByItsStamp();
     void theLengthOfANoteComesFromItsMovieHeader();
     void aBrokenHeaderHasNoLength();
     void lengthsReadAsClocks();
@@ -347,6 +352,7 @@ Air::FileHere fileHere(ToxFile::FileStatus status, bool accepted, qint64 bytes)
     here.status = status;
     here.accepted = accepted;
     here.bytes = bytes;
+    here.ownPart = accepted;
     return here;
 }
 } // namespace
@@ -362,10 +368,11 @@ void TestAirMedia::anOfferOfAFilePartlyHereGoesOnFromWhatIsHere()
     resume = Air::fileResume(id, 1000, fileHere(ToxFile::BROKEN, true, 0));
     QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
     QCOMPARE(resume.offset, qint64{0});
-    // More than its size is not this file: it starts again.
+    // More than its size is not this file: it starts again, beside it.
     resume = Air::fileResume(id, 1000, fileHere(ToxFile::BROKEN, true, 1200));
     QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
     QCOMPARE(resume.offset, qint64{0});
+    QVERIFY(resume.newPath);
     // All of it came but not its end: the last byte once more ends it as usual.
     resume = Air::fileResume(id, 1000, fileHere(ToxFile::BROKEN, true, 1000));
     QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
@@ -450,6 +457,84 @@ void TestAirMedia::anOfferOfAFileThePersonRefusedWaitsForTheirTap()
     QVERIFY(Air::downloadsRuleApplies(Air::FileResume::Step::WaitInEntry));
     QVERIFY(!Air::downloadsRuleApplies(Air::FileResume::Step::GoOn));
     QVERIFY(!Air::downloadsRuleApplies(Air::FileResume::Step::EndQuietly));
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): an accepted file goes on in its path only when what is there is the part
+ * it left; otherwise from the start under a new name, and that file is not touched.
+ */
+void TestAirMedia::anOfferGoesOnOnlyInThePartItLeft()
+{
+    const QByteArray id(32, '\x07');
+    Air::FileHere own = fileHere(ToxFile::BROKEN, true, 400);
+    Air::FileResume resume = Air::fileResume(id, 1000, own);
+    QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
+    QCOMPARE(resume.offset, qint64{400});
+    QVERIFY(!resume.newPath);
+
+    for (const qint64 bytes : {qint64{0}, qint64{400}, qint64{1000}}) {
+        Air::FileHere other = fileHere(ToxFile::BROKEN, true, bytes);
+        other.ownPart = false;
+        resume = Air::fileResume(id, 1000, other);
+        QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
+        QCOMPARE(resume.offset, qint64{0});
+        QVERIFY(resume.newPath);
+    }
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): the part a file left is the file made for it, as it was when the
+ * transfer was cut where that is known; with nothing to tell it by, a file at that path is not its
+ * part.
+ */
+void TestAirMedia::aPartIsToldFromAnotherFileByItsStamp()
+{
+    ToxFile::Stamp recorded;
+    recorded.bornMs = 1000;
+    recorded.bytes = 400;
+    recorded.modifiedMs = 2000;
+    ToxFile::Stamp now = recorded;
+    QVERIFY(Air::isOwnPart(recorded, now));
+    // Another file made there, or the same one written since the cut.
+    now.bornMs = 1001;
+    QVERIFY(!Air::isOwnPart(recorded, now));
+    now = recorded;
+    now.bytes = 401;
+    QVERIFY(!Air::isOwnPart(recorded, now));
+    now = recorded;
+    now.modifiedMs = 2001;
+    QVERIFY(!Air::isOwnPart(recorded, now));
+    // No file there.
+    QVERIFY(!Air::isOwnPart(recorded, ToxFile::Stamp()));
+
+    // Not cut (the app stopped in the middle of it): when it was made tells it.
+    ToxFile::Stamp made;
+    made.bornMs = 1000;
+    QVERIFY(Air::isOwnPart(made, now));
+    now.bornMs = -1;
+    QVERIFY(!Air::isOwnPart(made, now));
+    // Where the system tells no birth time, only a cut tells it.
+    ToxFile::Stamp unborn = recorded;
+    unborn.bornMs = -1;
+    now = unborn;
+    QVERIFY(Air::isOwnPart(unborn, now));
+    ToxFile::Stamp nothing;
+    QVERIFY(!Air::isOwnPart(nothing, now));
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("part.bin"));
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    QCOMPARE(file.write(QByteArray(400, '\x01')), qint64{400});
+    file.close();
+    const ToxFile::Stamp stamp = Air::fileStampAt(path);
+    QCOMPARE(stamp.bytes, qint64{400});
+    QCOMPARE(stamp.modifiedMs, QFileInfo(path).lastModified().toMSecsSinceEpoch());
+    QVERIFY(stamp.bornMs == -1 || stamp.bornMs > 0);
+    QVERIFY(Air::isOwnPart(stamp, Air::fileStampAt(path)));
+    QCOMPARE(Air::fileStampAt(dir.filePath(QStringLiteral("none.bin"))), ToxFile::Stamp());
+    QCOMPARE(Air::fileStampAt(dir.path()), ToxFile::Stamp());
 }
 
 void TestAirMedia::theLengthOfANoteComesFromItsMovieHeader()

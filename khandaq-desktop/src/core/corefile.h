@@ -148,6 +148,8 @@ private:
     void stopReceiving(uint32_t friendId, uint32_t fileId);
     /** Ends an incoming file that waited for its sender as stopped, keeping what came of it. */
     void endWaitingFile(uint64_t key);
+    /** KHANDAQ (0.2.57): whether a transfer other than the one under key has path as its file. */
+    bool otherFileAt(const QString& path, uint64_t key) const;
     static constexpr uint64_t getFriendKey(uint32_t friendId, uint32_t fileId)
     {
         return (static_cast<std::uint64_t>(friendId) << 32) + fileId;

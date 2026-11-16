@@ -245,8 +245,12 @@ Air::FileResume knownOffer(const ChatHistory* chatLog, const ToxFile& offer, Tox
     // stopped waits for it or for the downloads rule, as a new offer does.
     here.refused = shown->refusedHere;
     here.accepted = shown->status == ToxFile::BROKEN && !shown->filePath.isEmpty();
-    const QFileInfo partial(shown->filePath);
-    here.bytes = here.accepted && partial.isFile() ? partial.size() : 0;
+    // It goes on in its path only when that is still the part it left there, and no file that
+    // came later goes there too; otherwise from the start under a free name beside it.
+    const ToxFile::Stamp partial = Air::fileStampAt(shown->filePath);
+    here.bytes = here.accepted ? qMax<qint64>(0, partial.bytes) : 0;
+    here.ownPart = here.accepted && Air::isOwnPart(shown->stamp, partial)
+                   && !chatLog->laterFileGoesTo(*shown);
     return Air::fileResume(offer.resumeFileId, static_cast<qint64>(offer.progress.getFileSize()),
                            here);
 }
@@ -1452,11 +1456,18 @@ void Widget::dispatchFile(ToxFile file)
             coreFile->finishFileRecvQuietly(file.friendId, file.fileNum,
                                             static_cast<uint64_t>(resume.offset));
             return;
-        case Air::FileResume::Step::GoOn:
+        case Air::FileResume::Step::GoOn: {
             file.continued = true;
-            coreFile->resumeFileRecv(file.friendId, file.fileNum, shown.filePath,
+            QString path = shown.filePath;
+            if (resume.newPath) {
+                const QFileInfo old(shown.filePath);
+                const auto taken = [](const QString& name) { return QFileInfo::exists(name); };
+                path = Air::freeFilePath(old.absolutePath(), old.fileName(), taken);
+            }
+            coreFile->resumeFileRecv(file.friendId, file.fileNum, path,
                                      static_cast<uint64_t>(resume.offset));
             break;
+        }
         case Air::FileResume::Step::WaitInEntry:
             file.continued = true;
             break;

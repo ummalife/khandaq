@@ -105,6 +105,8 @@ private slots:
     void anAcceptedFileOfThePersonIsKeptAsInterrupted();
     void aFileThatGoesOnAfterARestartEndsInItsRow();
     void aFileOfThePersonThatEndedCancelledIsRefusedAfterARestart();
+    void anInterruptedFileKeepsWhatTellsItsPartAfterARestart();
+    void aLaterFileOfAPersonThatGoesToThePathIsKnown();
 
 private:
     /** The one file of the chat, as a later start reads it. */
@@ -436,6 +438,67 @@ void TestHistory::aFileOfThePersonThatEndedCancelledIsRefusedAfterARestart()
     QVERIFY(!storedFile(omar).refusedHere);
     QCOMPARE(storedFile(yusuf).status, ToxFile::CANCELED);
     QVERIFY(!storedFile(yusuf).refusedHere);
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): an interrupted file of the person keeps what tells the part it left
+ * (ToxFile::Stamp) for a later start, as it changes; once it ends, its hash takes that place and
+ * nothing of it is read as a stamp.
+ */
+void TestHistory::anInterruptedFileKeepsWhatTellsItsPartAfterARestart()
+{
+    history->addNewFileMessage(maryam, fileId, QStringLiteral("video.mp4"), QString(), 5000, maryam,
+                               QDateTime::currentDateTime(), QStringLiteral("Maryam"),
+                               ToxFile::RECEIVING);
+    ToxFile::Stamp made;
+    made.bornMs = 1700000000123;
+    history->setFileUnderway(maryam, fileId, filePath, made);
+    letRowsIn();
+    restart();
+    QCOMPARE(storedFile(maryam).status, ToxFile::BROKEN);
+    QCOMPARE(storedFile(maryam).stamp, made);
+
+    ToxFile::Stamp cut = made;
+    cut.bytes = 2500;
+    cut.modifiedMs = 1700000004567;
+    history->setFileUnderway(maryam, fileId, filePath, cut);
+    restart();
+    QCOMPARE(storedFile(maryam).stamp, cut);
+
+    history->reopenFileMessage(maryam, fileId, ToxFile::RECEIVING);
+    history->setFileFinished(fileId, true, filePath, QByteArray(32, '\x5c'));
+    restart();
+    QCOMPARE(storedFile(maryam).status, ToxFile::FINISHED);
+    QCOMPARE(storedFile(maryam).stamp, ToxFile::Stamp());
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): a file of a person that came after another goes to that one's path too:
+ * what is there may be the later one. One that came before, one of ours, or another path is none.
+ */
+void TestHistory::aLaterFileOfAPersonThatGoesToThePathIsKnown()
+{
+    history->addNewFileMessage(maryam, fileId, QStringLiteral("photo.jpg"), QString(), 5000, maryam,
+                               QDateTime::currentDateTime(), QStringLiteral("Maryam"),
+                               ToxFile::RECEIVING);
+    history->setFileUnderway(maryam, fileId, filePath);
+    const ToxPk omar{QByteArray(ToxPk::size, 'o')};
+    const QByteArray laterId{"fedcba9876543210fedcba9876543210"};
+    history->addNewFileMessage(omar, laterId, QStringLiteral("photo.jpg"), QString(), 7000, omar,
+                               QDateTime::currentDateTime(), QStringLiteral("Omar"),
+                               ToxFile::RECEIVING);
+    history->setFileUnderway(omar, laterId, filePath);
+    const ToxPk yusuf{QByteArray(ToxPk::size, 'y')};
+    history->addNewFileMessage(yusuf, QByteArray("00112233445566778899aabbccddeeff"),
+                               QStringLiteral("photo.jpg"), filePath, 9000, self,
+                               QDateTime::currentDateTime(), QStringLiteral("Me"),
+                               ToxFile::SENDING);
+    letRowsIn();
+
+    QVERIFY(history->laterFileGoesTo(maryam, fileId, filePath));
+    QVERIFY(!history->laterFileGoesTo(omar, laterId, filePath));
+    QVERIFY(!history->laterFileGoesTo(maryam, fileId, QStringLiteral("/files/other.jpg")));
+    QVERIFY(!history->laterFileGoesTo(maryam, laterId, filePath));
 }
 
 int main(int argc, char* argv[])

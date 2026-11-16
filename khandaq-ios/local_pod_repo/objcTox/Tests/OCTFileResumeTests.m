@@ -80,7 +80,12 @@ static NSData *OCTResumeTestsContent(void)
 
 @property (copy, atomic) NSString *friendKey;
 @property (assign, atomic) OCTToxConnectionStatus friendStatus;
+/// Seeks, or accepts, fail as they do once the transfer is gone.
 @property (assign, atomic) BOOL seekFails;
+@property (assign, atomic) BOOL resumeFails;
+/// So many seeks, and accepts, are refused first, as a full send queue to the friend refuses them.
+@property (assign, atomic) NSUInteger refusedSeeks;
+@property (assign, atomic) NSUInteger refusedResumes;
 /// Its send queue to the friend is full, as when the friend stops taking packets: every chunk is refused.
 @property (assign, atomic) BOOL sendQueueFull;
 @property (assign, atomic) NSUInteger refusedChunks;
@@ -208,7 +213,21 @@ static NSData *OCTResumeTestsContent(void)
                         error:(NSError **)error
 {
     [self record:[NSString stringWithFormat:@"seek %u %lld", fileNumber, position]];
-    return ! self.seekFails;
+
+    OCTToxErrorFileSeek code = OCTToxErrorFileSeekNotFound;
+    @synchronized(self) {
+        if (self.refusedSeeks > 0) {
+            self.refusedSeeks -= 1;
+            code = OCTToxErrorFileSeekSendq;
+        }
+        else if (! self.seekFails) {
+            return YES;
+        }
+    }
+    if (error) {
+        *error = [NSError errorWithDomain:kOCTToxErrorDomain code:code userInfo:nil];
+    }
+    return NO;
 }
 
 - (BOOL)fileSendControlForFileNumber:(OCTToxFileNumber)fileNumber
@@ -218,7 +237,25 @@ static NSData *OCTResumeTestsContent(void)
 {
     NSString *name = (control == OCTToxFileControlResume) ? @"resume" : (control == OCTToxFileControlPause) ? @"pause" : @"cancel";
     [self record:[NSString stringWithFormat:@"%@ %u", name, fileNumber]];
-    return YES;
+
+    if (control != OCTToxFileControlResume) {
+        return YES;
+    }
+
+    OCTToxErrorFileControl code = OCTToxErrorFileControlNotFound;
+    @synchronized(self) {
+        if (self.refusedResumes > 0) {
+            self.refusedResumes -= 1;
+            code = OCTToxErrorFileControlSendq;
+        }
+        else if (! self.resumeFails) {
+            return YES;
+        }
+    }
+    if (error) {
+        *error = [NSError errorWithDomain:kOCTToxErrorDomain code:code userInfo:nil];
+    }
+    return NO;
 }
 
 - (BOOL)fileSendChunkForFileNumber:(OCTToxFileNumber)fileNumber
@@ -708,6 +745,84 @@ static NSData *OCTResumeTestsContent(void)
     XCTAssertEqual(message.messageFile.pausedBy, OCTMessageFilePausedByConnection);
     XCTAssertEqual(message.messageFile.transferredBytes, 3);
     XCTAssertTrue([[NSFileManager defaultManager] fileExistsAtPath:[self partialPathOf:message]]);
+}
+
+// KHANDAQ (0.2.57): a seek that failed took the file from its first byte: the bytes kept were emptied before the
+// accept, which failed in turn when the friend had gone a moment after the offer.
+- (void)testASeekThatFailsLeavesTheBytesKeptForTheNextOffer
+{
+    NSData *fileId = OCTResumeTestsId(0x10);
+    OCTMessageAbstract *message = [self addIncomingFileWithIdHex:OCTResumeTestsHex(fileId)
+                                                            type:OCTMessageFileTypeWaitingConfirmation
+                                                        pausedBy:OCTMessageFilePausedByConnection
+                                                       keptBytes:4];
+    NSData *kept = [OCTResumeTestsContent() subdataWithRange:NSMakeRange(0, 4)];
+    self.tox.seekFails = YES;
+    [self offerTheirFile:kResumeTestsTheirFile fileId:fileId size:kResumeTestsFileSize name:@"doc.bin"];
+
+    XCTAssertTrue([self waitForEvent:@"seek 65536 4"]);
+    XCTAssertTrue([self waitUntil:^BOOL { return message.messageFile.internalFileNumber == (int)kOCTToxFileNumberFailure; }]);
+    XCTAssertEqual(message.messageFile.fileType, OCTMessageFileTypeWaitingConfirmation, @"never failed");
+    XCTAssertEqual(message.messageFile.pausedBy, OCTMessageFilePausedByConnection);
+    XCTAssertEqual(message.messageFile.transferredBytes, 4);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:[self partialPathOf:message]], kept);
+    XCTAssertEqualObjects(self.tox.events, (@[@"seek 65536 4"]), @"no accept, and nothing cancelled");
+
+    // The next offer goes on from them.
+    self.tox.seekFails = NO;
+    [self offerTheirFile:kResumeTestsTheirNextFile fileId:fileId size:kResumeTestsFileSize name:@"doc.bin"];
+    XCTAssertTrue([self waitForEvent:@"resume 131072"]);
+    XCTAssertEqualObjects(self.tox.events, (@[@"seek 65536 4", @"seek 131072 4", @"resume 131072"]));
+    [self receiveTheRestOfTheirFile:kResumeTestsTheirNextFile from:4];
+
+    XCTAssertTrue([self waitUntil:^BOOL { return message.messageFile.fileType == OCTMessageFileTypeReady; }]);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:message.messageFile.filePath], OCTResumeTestsContent());
+    XCTAssertEqual([self messageCount], 1u);
+}
+
+- (void)testASeekAndAnAcceptTheSendQueueRefusesAreTriedAgain
+{
+    NSData *fileId = OCTResumeTestsId(0x10);
+    OCTMessageAbstract *message = [self addIncomingFileWithIdHex:OCTResumeTestsHex(fileId)
+                                                            type:OCTMessageFileTypeWaitingConfirmation
+                                                        pausedBy:OCTMessageFilePausedByConnection
+                                                       keptBytes:4];
+    self.tox.refusedSeeks = 2;
+    self.tox.refusedResumes = 1;
+    [self offerTheirFile:kResumeTestsTheirFile fileId:fileId size:kResumeTestsFileSize name:@"doc.bin"];
+
+    NSArray<NSString *> *expected = @[@"seek 65536 4", @"seek 65536 4", @"seek 65536 4", @"resume 65536", @"resume 65536"];
+    XCTAssertTrue([self waitUntil:^BOOL { return [self.tox.events isEqualToArray:expected]; }], @"%@", self.tox.events);
+    XCTAssertEqual(message.messageFile.fileType, OCTMessageFileTypeLoading);
+    [self receiveTheRestOfTheirFile:kResumeTestsTheirFile from:4];
+
+    XCTAssertTrue([self waitUntil:^BOOL { return message.messageFile.fileType == OCTMessageFileTypeReady; }]);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:message.messageFile.filePath], OCTResumeTestsContent());
+    XCTAssertEqualObjects(self.tox.events, expected, @"nothing cancelled");
+}
+
+- (void)testAnAcceptThatFailsAfterTheSeekLeavesTheBytesKeptUntilTheGraceEnds
+{
+    self.files.reofferGraceInterval = 0.3;
+    NSData *fileId = OCTResumeTestsId(0x10);
+    OCTMessageAbstract *message = [self addIncomingFileWithIdHex:OCTResumeTestsHex(fileId)
+                                                            type:OCTMessageFileTypeWaitingConfirmation
+                                                        pausedBy:OCTMessageFilePausedByConnection
+                                                       keptBytes:4];
+    self.tox.resumeFails = YES;
+    [self offerTheirFile:kResumeTestsTheirFile fileId:fileId size:kResumeTestsFileSize name:@"doc.bin"];
+
+    XCTAssertTrue([self waitForEvent:@"resume 65536"]);
+    XCTAssertTrue([self waitUntil:^BOOL { return message.messageFile.internalFileNumber == (int)kOCTToxFileNumberFailure; }]);
+    XCTAssertEqual(message.messageFile.fileType, OCTMessageFileTypeWaitingConfirmation, @"never failed");
+    XCTAssertEqual(message.messageFile.pausedBy, OCTMessageFilePausedByConnection);
+    XCTAssertEqual(message.messageFile.transferredBytes, 4);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:[self partialPathOf:message]],
+                          [OCTResumeTestsContent() subdataWithRange:NSMakeRange(0, 4)]);
+
+    // The friend is online and never offers it again.
+    XCTAssertTrue([self waitUntil:^BOOL { return message.messageFile.fileType == OCTMessageFileTypeCanceled; }]);
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:[self partialPathOf:message]]);
 }
 
 - (void)testARestartKeepsTheBytesOfTheirFileAndGoesOnFromThem

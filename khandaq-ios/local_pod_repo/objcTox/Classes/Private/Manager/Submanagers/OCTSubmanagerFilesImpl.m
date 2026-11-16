@@ -1257,19 +1257,24 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
                    return;
                }
 
-               // KHANDAQ (0.2.57): it failed because the friend went away: it waits for the connection and goes
-               // on from where it stopped, as one the disconnect requeue reaches first does.
+               // KHANDAQ (0.2.57): it failed because the friend went away, or before the accept with the bytes kept
+               // left as they were (OCTFileDownloadOperation failedBeforeAccept): it waits for the connection and
+               // goes on from where it stopped, as one the disconnect requeue reaches first does. With the friend
+               // online, the grace ends it if they never offer it again.
                OCTFriend *friend = [strongSelf friendForMessage:message];
-               if (friend && ! [strongSelf isFriendConnected:friend]) {
+               BOOL failedBeforeAccept = [operation isKindOfClass:[OCTFileDownloadOperation class]] &&
+                                         ((OCTFileDownloadOperation *)operation).failedBeforeAccept;
+               if (friend && (failedBeforeAccept || ! [strongSelf isFriendConnected:friend])) {
                    BOOL incoming = (message.senderUniqueIdentifier != nil);
                    OCTToxFileSize moved = incoming ? [strongSelf partialLengthOfMessage:message] : operation.bytesDone;
-                   OCTLogInfo(@"transfer failed with the friend away, waiting for the connection: %@", message);
+                   OCTLogInfo(@"transfer failed with the friend away or before the accept, waiting for the connection: %@", message);
                    [strongSelf updateMessageFile:message withBlock:^(OCTMessageFile *file) {
                        file.internalFileNumber = (int)kOCTToxFileNumberFailure;
                        file.fileType = OCTMessageFileTypeWaitingConfirmation;
                        file.pausedBy = OCTMessageFilePausedByConnection;
                        file.transferredBytes = moved;
                    }];
+                   [strongSelf beginReofferGraceForFriend:friend];
                    return;
                }
 

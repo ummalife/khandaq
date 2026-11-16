@@ -3097,8 +3097,13 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         }
         const QByteArray msgId(reinterpret_cast<const char*>(data + 8), 32);
         // The file already arrived: a copy of its BEGIN that comes late, by the other way or with a
-        // resend, would only hold a scratch file of its size until the sweep below.
+        // resend, would only hold a scratch file of its size until the sweep below. 0.2.57: and
+        // make an entry of it again (groupFileArrivalStarted), which its chunks, if they came
+        // again too, would end as not come: the file is here already (ngcFileMsgIdSeen). Android
+        // leads every resend with the BEGIN, and iOS got such a file twice ("name 2.bin").
         if (ngcSeenFileMsgIds.contains(msgId)) {
+            qDebug() << "NGC chunked file: a BEGIN again for a file that came already, dropped:"
+                     << ngcParseFilename(data + 44, 255);
             return;
         }
         const QString key = ngcAssemblyKey(groupId, msgId);
@@ -3179,6 +3184,9 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
                         existing.value().lastActivityMs = nowMs;
                         existing.value().arrival.heard(monotonicMs(), false);
                     }
+                    qDebug() << "NGC chunked file: a BEGIN again for" << existing.value().fileName
+                             << "while it comes, which goes on with"
+                             << existing.value().receivedCount << "of" << totalChunks << "chunks";
                     return;
                 } else {
                     // Our own sender restated DIFFERENT parameters for this msgId. Keeping the old ones

@@ -134,6 +134,7 @@ private slots:
     void aRelayedFileThatNamesUsIsDroppedWithoutBurningItsId();
     void theFilesSeenGoWithTheCore();
     void aChunkedFileShowsFromItsBegin();
+    void aBeginThatComesAgainChangesNothing();
     void aFileWhoseSenderStaysAwayIsGivenUpUntilItComesAgain();
     void aRequestForAFileThatIsNotOursIsDropped();
 
@@ -482,6 +483,49 @@ void TestCoreGroupFile::aChunkedFileShowsFromItsBegin()
     QCOMPARE(received.count(), 1);
     QCOMPARE(received.at(0).at(6).toByteArray(), msgId);
     QCOMPARE(failed.count(), 0);
+}
+
+void TestCoreGroupFile::aBeginThatComesAgainChangesNothing()
+{
+    ToxCorePtr core = makeCore();
+    QVERIFY(core);
+    const int group = core->createGroup(QStringLiteral("Files"), TOX_GROUP_PRIVACY_STATE_PUBLIC);
+    QVERIFY(group >= 0);
+    Tox_Err_Group_Self_Query selfError;
+    const uint32_t peer =
+        tox_group_self_get_peer_id(core->getTox(), static_cast<uint32_t>(group), &selfError) + 1;
+    const QByteArray msgId(32, 'y');
+    const QByteArray file = fileBytes(3 * payload + 17);
+    const QByteArray begin = beginPacket(msgId, QStringLiteral("song.mp3"), file.size());
+    QSignalSpy started(core.get(), &Core::groupFileArrivalStarted);
+    QSignalSpy failed(core.get(), &Core::groupFileArrivalFailed);
+    QSignalSpy received(core.get(), &Core::groupFileReceived);
+
+    // 0.2.57: Android leads every resend with the BEGIN of the file. One that comes while the
+    // file does keeps what came of it: the chunk that came before it is not needed again.
+    hand(*core, group, peer, begin, false);
+    hand(*core, group, peer, chunkPacket(msgId, file, 0), false);
+    hand(*core, group, peer, begin, true);
+    QCOMPARE(started.count(), 1);
+    for (int chunk = 1; chunk < 4; ++chunk) {
+        hand(*core, group, peer, chunkPacket(msgId, file, chunk), true);
+    }
+    QCOMPARE(received.count(), 1);
+    QCOMPARE(received.at(0).at(3).toByteArray(), file);
+    QVERIFY(!QFile::exists(scratchPath(msgId)));
+
+    // One that comes once the file is here opens nothing: no entry, no scratch file, and the
+    // chunks of its resend make no second copy of the file and end no entry as not come.
+    hand(*core, group, peer, begin, true);
+    QVERIFY(!QFile::exists(scratchPath(msgId)));
+    for (int chunk = 0; chunk < 4; ++chunk) {
+        hand(*core, group, peer, chunkPacket(msgId, file, chunk), true);
+    }
+    hand(*core, group, peer, begin, false);
+    QCOMPARE(started.count(), 1);
+    QCOMPARE(received.count(), 1);
+    QCOMPARE(failed.count(), 0);
+    QVERIFY(!QFile::exists(scratchPath(msgId)));
 }
 
 void TestCoreGroupFile::aFileWhoseSenderStaysAwayIsGivenUpUntilItComesAgain()

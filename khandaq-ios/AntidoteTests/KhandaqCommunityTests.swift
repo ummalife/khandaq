@@ -192,7 +192,6 @@ class KhandaqCommunityTests: XCTestCase {
         store.attach(directory: directory)
         XCTAssertFalse(store.communityAutoJoinDone)
         XCTAssertFalse(store.communityLeft)
-        XCTAssertNotNil(store.communityHoldSince, "the files that came in 0.2.56 stay shown")
         store.setCommunityAutoJoinDone()
         store.setCommunityLeft()
         store.flush()
@@ -205,24 +204,28 @@ class KhandaqCommunityTests: XCTestCase {
         XCTAssertTrue(again.communityLeft)
     }
 
-    // MARK: Item 6, from when files wait
+    // MARK: Item 6, every file waits
 
-    func testFilesWaitFromTheFirstStartOf057AndThatMomentIsKept() throws {
+    /// Files of others wait whenever they came (KhandaqCommunity.fileHold), so the moment a build before the
+    /// release kept for it is let go, and the marks next to it still read.
+    func testTheMomentAnEarlierBuildKeptForWaitingFilesIsLetGo() throws {
         let directory = makeDirectory()
-        let first = AirLocalStore(sealing: PlainSealing())
-        XCTAssertNil(first.communityHoldSince, "no profile yet")
-        let before = Date().timeIntervalSince1970
-        first.attach(directory: directory)
-        let since = try XCTUnwrap(first.communityHoldSince)
-        XCTAssertGreaterThanOrEqual(since, before)
-        first.flush()
+        let url = directory.appendingPathComponent(AirLocalStore.fileName)
+        try Data("{\"version\":2,\"contacts\":{},\"community\":{\"autoJoinDone\":true,\"left\":false,\"holdSince\":1794832496}}".utf8).write(to: url)
 
-        // A later start keeps it: what waited still waits, what was shown is still shown.
-        let second = AirLocalStore(sealing: PlainSealing())
-        second.attach(directory: directory)
-        XCTAssertEqual(second.communityHoldSince, since)
-        second.detach()
-        XCTAssertNil(second.communityHoldSince)
+        let store = AirLocalStore(sealing: PlainSealing())
+        store.attach(directory: directory)
+        XCTAssertTrue(store.communityAutoJoinDone)
+        XCTAssertFalse(store.communityLeft)
+        store.flush()
+        XCTAssertTrue(String(decoding: try Data(contentsOf: url), as: UTF8.self).contains("holdSince"), "opening a profile writes nothing")
+
+        store.setCommunityLeft()
+        store.flush()
+        let json = String(decoding: try Data(contentsOf: url), as: UTF8.self)
+        XCTAssertFalse(json.contains("holdSince"), json)
+        XCTAssertTrue(json.contains("\"autoJoinDone\":true"), json)
+        XCTAssertTrue(json.contains("\"left\":true"), json)
     }
 
     // MARK: A failed join of its own says nothing

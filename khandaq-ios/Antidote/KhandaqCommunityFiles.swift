@@ -16,12 +16,12 @@ import Foundation
 /// their own instead (KhandaqCommunityFileKeeper): complete held files take at most `heldLimitBytes` in all,
 /// the oldest going first; the partial bytes of one that stopped, and the bytes no entry names any more
 /// (a message taken back by its author, a cleared history), go at once; leaving the group deletes them all;
-/// and while they wait they stay out of the phone's backup. Files from before 0.2.57 and taken files are
-/// never deleted here, as in every other group.
+/// and while they wait they stay out of the phone's backup. Taken files are never deleted here, as in every
+/// other group.
 extension KhandaqCommunity {
     /// What a file entry of the conversation is, for the person.
     enum FileHold: Equatable {
-        /// A file like any other: ours, of another group, from before 0.2.57, or taken.
+        /// A file like any other: ours, of another group, or taken.
         case none
         /// A file of someone else in the group that waits for Accept.
         case held
@@ -48,14 +48,13 @@ extension KhandaqCommunity {
 
     // MARK: The entry
 
-    /// `bytes` is asked only for a file of someone else in the group that came after `holdSince`.
+    /// `bytes` is asked only for a file of someone else in the group. Whenever it came: one shown in 0.2.56
+    /// waits too, until Accept.
     static func fileHold(isCommunity: Bool,
                          isOutgoing: Bool,
-                         date: TimeInterval,
-                         holdSince: TimeInterval?,
                          fileType: OCTMessageFileType,
                          bytes: () -> FileBytes) -> FileHold {
-        guard isCommunity, !isOutgoing, let holdSince = holdSince, date >= holdSince else {
+        guard isCommunity, !isOutgoing else {
             return .none
         }
         switch bytes() {
@@ -68,24 +67,18 @@ extension KhandaqCommunity {
         }
     }
 
-    static func fileHold(of message: OCTMessageAbstract,
-                         in chat: OCTChat?,
-                         holdSince: TimeInterval? = AirLocalStore.shared.communityHoldSince) -> FileHold {
+    static func fileHold(of message: OCTMessageAbstract, in chat: OCTChat?) -> FileHold {
         guard !message.isInvalidated, let file = message.messageFile, isCommunity(chat) else {
             return .none
         }
         return fileHold(isCommunity: true,
                         isOutgoing: message.isOutgoing(),
-                        date: message.dateInterval,
-                        holdSince: holdSince,
                         fileType: file.fileType,
                         bytes: { fileBytes(atPath: file.filePath()) })
     }
 
     /// The entries of `chat` whose files wait for Accept or are gone, for the screens that list files.
-    static func heldMessageIds(in chat: OCTChat,
-                               objects: OCTSubmanagerObjects,
-                               holdSince: TimeInterval? = AirLocalStore.shared.communityHoldSince) -> [String] {
+    static func heldMessageIds(in chat: OCTChat, objects: OCTSubmanagerObjects) -> [String] {
         guard isCommunity(chat) else {
             return []
         }
@@ -93,7 +86,7 @@ extension KhandaqCommunity {
                                                            chat.uniqueIdentifier))
         var ids: [String] = []
         for index in 0..<rows.count {
-            guard let message = rows.object(at: index), fileHold(of: message, in: chat, holdSince: holdSince) != .none else {
+            guard let message = rows.object(at: index), fileHold(of: message, in: chat) != .none else {
                 continue
             }
             ids.append(message.uniqueIdentifier)
@@ -175,7 +168,7 @@ extension KhandaqCommunity {
             case stopped
             /// Complete, and waits for Accept.
             case held
-            /// Never deleted here: ours, from before 0.2.57, or still under way.
+            /// Never deleted here: ours, or still under way.
             case kept
 
             static func < (lhs: Kind, rhs: Kind) -> Bool {
@@ -196,8 +189,8 @@ extension KhandaqCommunity {
         let excludedFromBackup: Bool
     }
 
-    static func entryKind(isOutgoing: Bool, date: TimeInterval, holdSince: TimeInterval, fileType: OCTMessageFileType) -> EntryFile.Kind {
-        guard !isOutgoing, date >= holdSince else {
+    static func entryKind(isOutgoing: Bool, fileType: OCTMessageFileType) -> EntryFile.Kind {
+        guard !isOutgoing else {
             return .kept
         }
         switch fileType {
@@ -225,7 +218,7 @@ extension KhandaqCommunity {
     }
 
     /// The entries of the group and the folder of their files, read on the main thread for the keeper.
-    static func folderEntries(of rows: Results<OCTMessageAbstract>, holdSince: TimeInterval) -> (folder: String?, entries: [String: EntryFile]) {
+    static func folderEntries(of rows: Results<OCTMessageAbstract>) -> (folder: String?, entries: [String: EntryFile]) {
         var entries: [String: EntryFile] = [:]
         var incoming: [String] = []
         for index in 0..<rows.count {
@@ -237,8 +230,7 @@ extension KhandaqCommunity {
             if !outgoing {
                 incoming.append(path)
             }
-            let entry = EntryFile(kind: entryKind(isOutgoing: outgoing, date: message.dateInterval, holdSince: holdSince, fileType: file.fileType),
-                                  date: message.dateInterval)
+            let entry = EntryFile(kind: entryKind(isOutgoing: outgoing, fileType: file.fileType), date: message.dateInterval)
             let name = (path as NSString).lastPathComponent
             // Two entries naming one file: the one that keeps it wins.
             if let other = entries[name], other.kind >= entry.kind {
@@ -249,19 +241,18 @@ extension KhandaqCommunity {
         return (communityFolder(fromPaths: incoming), entries)
     }
 
-    /// What to delete in the group's folder: the bytes of entries that stopped, those written since `holdSince`
-    /// that no entry has named for `orphanGraceSeconds`, then the oldest complete held files until the rest
-    /// fit in `limit`. Taken files, the files of kept entries and those from before 0.2.57 stay.
+    /// What to delete in the group's folder: the bytes of entries that stopped, those no entry has named for
+    /// `orphanGraceSeconds`, then the oldest complete held files until the rest fit in `limit`. Taken files and
+    /// the files of kept entries stay.
     static func filesToDelete(in folder: [FolderFile],
                               entries: [String: EntryFile],
                               now: TimeInterval,
-                              holdSince: TimeInterval,
                               limit: Int64 = heldLimitBytes) -> [String] {
         var drop: [String] = []
         var held: [(name: String, date: TimeInterval, bytes: Int64)] = []
         for file in folder where !file.taken {
             guard let entry = entries[file.name] else {
-                if file.modified >= holdSince && now - file.modified >= orphanGraceSeconds {
+                if now - file.modified >= orphanGraceSeconds {
                     drop.append(file.name)
                 }
                 continue
@@ -309,10 +300,9 @@ extension KhandaqCommunity {
     static func keepRoom(inFolder folder: String,
                          entries: [String: EntryFile],
                          now: TimeInterval,
-                         holdSince: TimeInterval,
                          limit: Int64 = heldLimitBytes) -> [String] {
         let files = folderFiles(atPath: folder)
-        let drop = filesToDelete(in: files, entries: entries, now: now, holdSince: holdSince, limit: limit)
+        let drop = filesToDelete(in: files, entries: entries, now: now, limit: limit)
         let freed = remove(drop, inFolder: folder, files: files)
         let dropped = Set(drop)
         for file in files where !file.taken && !file.excludedFromBackup && !dropped.contains(file.name) && entries[file.name]?.kind == .held {
@@ -324,12 +314,12 @@ extension KhandaqCommunity {
         return drop
     }
 
-    /// The person left the group: every file of it that came since `holdSince` and was not taken goes. Its
-    /// entries went with its chat, so nothing reaches those bytes any more. Returns the names it deleted.
+    /// The person left the group: every file of it that was not taken goes. Its entries went with its chat, so
+    /// nothing reaches those bytes any more. Returns the names it deleted.
     @discardableResult
-    static func dropWaitingFiles(inFolder folder: String, holdSince: TimeInterval) -> [String] {
+    static func dropWaitingFiles(inFolder folder: String) -> [String] {
         let files = folderFiles(atPath: folder)
-        let drop = files.filter { !$0.taken && $0.modified >= holdSince }.map { $0.name }
+        let drop = files.filter { !$0.taken }.map { $0.name }
         let freed = remove(drop, inFolder: folder, files: files)
         if !drop.isEmpty {
             log("Community: left; \(drop.count) waiting files deleted, \(freed) bytes")
@@ -366,7 +356,6 @@ extension KhandaqCommunity {
 /// file that waited.
 final class KhandaqCommunityFileKeeper {
     private let submanagerObjects: OCTSubmanagerObjects
-    private let holdSince: () -> TimeInterval?
     private let left: () -> Bool
     private let queue = DispatchQueue(label: "khandaq.community.files", qos: .utility)
 
@@ -379,10 +368,8 @@ final class KhandaqCommunityFileKeeper {
     private var passPending = false
 
     init(submanagerObjects: OCTSubmanagerObjects,
-         holdSince: @escaping () -> TimeInterval? = { AirLocalStore.shared.communityHoldSince },
          left: @escaping () -> Bool = { AirLocalStore.shared.communityLeft }) {
         self.submanagerObjects = submanagerObjects
-        self.holdSince = holdSince
         self.left = left
     }
 
@@ -435,10 +422,10 @@ final class KhandaqCommunityFileKeeper {
 
         guard let id = chatId else {
             // The group's chat went: when the person left it, what waited goes too.
-            if wasBound && left(), let folder = folder, let holdSince = holdSince() {
+            if wasBound && left(), let folder = folder {
                 self.folder = nil
                 queue.async {
-                    KhandaqCommunity.dropWaitingFiles(inFolder: folder, holdSince: holdSince)
+                    KhandaqCommunity.dropWaitingFiles(inFolder: folder)
                 }
             }
             return
@@ -474,11 +461,11 @@ final class KhandaqCommunityFileKeeper {
     }
 
     private func pass() {
-        guard let chatId = boundChatId, let holdSince = holdSince() else {
+        guard let chatId = boundChatId else {
             return
         }
         let rows = submanagerObjects.messages(predicate: NSPredicate(format: "chatUniqueIdentifier == %@ AND messageFile != nil", chatId))
-        let read = KhandaqCommunity.folderEntries(of: rows, holdSince: holdSince)
+        let read = KhandaqCommunity.folderEntries(of: rows)
         if let found = read.folder {
             folder = found
         }
@@ -488,7 +475,7 @@ final class KhandaqCommunityFileKeeper {
         let entries = read.entries
         let now = Date().timeIntervalSince1970
         queue.async {
-            KhandaqCommunity.keepRoom(inFolder: folder, entries: entries, now: now, holdSince: holdSince)
+            KhandaqCommunity.keepRoom(inFolder: folder, entries: entries, now: now)
         }
     }
 }

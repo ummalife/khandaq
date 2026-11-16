@@ -25,7 +25,7 @@ class KhandaqCommunityFilesTests: XCTestCase {
 
     // MARK: Which entries wait
 
-    func testOnlyAFileOfSomeoneElseInTheCommunitySinceTheUpdateWaits() {
+    func testEveryFileOfSomeoneElseInTheCommunityWaitsUntilAccept() {
         XCTAssertEqual(hold(), .held)
         XCTAssertEqual(hold(type: .loading), .held, "under way: Accept, and no bar")
         XCTAssertEqual(hold(type: .canceled), .dropped, "it stopped before it was whole")
@@ -34,8 +34,6 @@ class KhandaqCommunityFilesTests: XCTestCase {
 
         XCTAssertEqual(hold(community: false), .none, "every other group is as before")
         XCTAssertEqual(hold(outgoing: true), .none, "our own files")
-        XCTAssertEqual(hold(date: 999), .none, "shown as it came, before 0.2.57")
-        XCTAssertEqual(hold(holdSince: nil), .none, "no profile attached")
     }
 
     func testTheDiskIsAskedOnlyAboutAFileThatMayWait() {
@@ -44,12 +42,29 @@ class KhandaqCommunityFilesTests: XCTestCase {
             asked += 1
             return .waiting
         }
-        _ = KhandaqCommunity.fileHold(isCommunity: false, isOutgoing: false, date: 2_000, holdSince: 1_000, fileType: .ready, bytes: bytes)
-        _ = KhandaqCommunity.fileHold(isCommunity: true, isOutgoing: true, date: 2_000, holdSince: 1_000, fileType: .ready, bytes: bytes)
-        _ = KhandaqCommunity.fileHold(isCommunity: true, isOutgoing: false, date: 999, holdSince: 1_000, fileType: .ready, bytes: bytes)
+        _ = KhandaqCommunity.fileHold(isCommunity: false, isOutgoing: false, fileType: .ready, bytes: bytes)
+        _ = KhandaqCommunity.fileHold(isCommunity: true, isOutgoing: true, fileType: .ready, bytes: bytes)
         XCTAssertEqual(asked, 0)
-        _ = KhandaqCommunity.fileHold(isCommunity: true, isOutgoing: false, date: 2_000, holdSince: 1_000, fileType: .ready, bytes: bytes)
+        _ = KhandaqCommunity.fileHold(isCommunity: true, isOutgoing: false, fileType: .ready, bytes: bytes)
         XCTAssertEqual(asked, 1)
+    }
+
+    /// The group's history comes to a new member with its old dates: a file from before the join, or from
+    /// before 0.2.57, waits like one that came now.
+    func testAFileFromTheHistoryDatedBeforeTheJoinWaits() throws {
+        let world = try communityWorld()
+        let synced = try world.incoming("from-history.jpg", mebibytes: 1, date: 1)
+        let realm: RLMRealm = world.realmManager.realm
+        realm.beginWriteTransaction()
+        synced.groupHistorySync = true
+        synced.groupSenderPeerId = 0
+        try realm.commitWriteTransaction()
+
+        XCTAssertFalse(synced.isOutgoing())
+        XCTAssertEqual(KhandaqCommunity.fileHold(of: synced, in: world.chat), .held)
+        XCTAssertEqual(KhandaqCommunity.heldMessageIds(in: world.chat, objects: world.objects), [synced.uniqueIdentifier])
+        let read = KhandaqCommunity.folderEntries(of: world.objects.messages(predicate: NSPredicate(format: "chatUniqueIdentifier == %@", world.chat.uniqueIdentifier)))
+        XCTAssertEqual(read.entries["from-history.jpg"], Entry(kind: .held, date: 1), "it counts in the room of the files that wait")
     }
 
     func testAWaitingEntryShowsItsNameAndSizeWithAcceptAlone() {
@@ -116,7 +131,7 @@ class KhandaqCommunityFilesTests: XCTestCase {
         XCTAssertEqual(KhandaqCommunity.fileBytes(atPath: path), .waiting)
 
         // While it waits it stays out of the backup...
-        KhandaqCommunity.keepRoom(inFolder: folder.path, entries: ["photo.jpg": Entry(kind: .held, date: 1)], now: 2, holdSince: 0)
+        KhandaqCommunity.keepRoom(inFolder: folder.path, entries: ["photo.jpg": Entry(kind: .held, date: 1)], now: 2)
         XCTAssertEqual(try excludedFromBackup(path), true)
         XCTAssertEqual(KhandaqCommunity.fileBytes(atPath: path), .waiting)
 
@@ -130,34 +145,33 @@ class KhandaqCommunityFilesTests: XCTestCase {
     // MARK: The room
 
     func testWhatAnEntrySaysOfItsFile() {
-        XCTAssertEqual(KhandaqCommunity.entryKind(isOutgoing: false, date: 2, holdSince: 1, fileType: .ready), .held)
-        XCTAssertEqual(KhandaqCommunity.entryKind(isOutgoing: false, date: 2, holdSince: 1, fileType: .canceled), .stopped)
-        XCTAssertEqual(KhandaqCommunity.entryKind(isOutgoing: false, date: 2, holdSince: 1, fileType: .loading), .kept, "under way")
-        XCTAssertEqual(KhandaqCommunity.entryKind(isOutgoing: true, date: 2, holdSince: 1, fileType: .canceled), .kept, "ours")
-        XCTAssertEqual(KhandaqCommunity.entryKind(isOutgoing: false, date: 0, holdSince: 1, fileType: .canceled), .kept, "before 0.2.57")
+        XCTAssertEqual(KhandaqCommunity.entryKind(isOutgoing: false, fileType: .ready), .held)
+        XCTAssertEqual(KhandaqCommunity.entryKind(isOutgoing: false, fileType: .canceled), .stopped)
+        XCTAssertEqual(KhandaqCommunity.entryKind(isOutgoing: false, fileType: .loading), .kept, "under way")
+        XCTAssertEqual(KhandaqCommunity.entryKind(isOutgoing: true, fileType: .canceled), .kept, "ours")
+        XCTAssertEqual(KhandaqCommunity.entryKind(isOutgoing: true, fileType: .ready), .kept, "ours")
     }
 
     func testTheOldestCompleteWaitingFilesGoUntilTheRestFit() {
         let three = [file("b", 100), file("a", 100), file("c", 100)]
         let ages = ["a": Entry(kind: .held, date: 10), "b": Entry(kind: .held, date: 30), "c": Entry(kind: .held, date: 20)]
-        XCTAssertEqual(KhandaqCommunity.filesToDelete(in: three, entries: ages, now: 100, holdSince: 0), ["a"], "300 MiB: the oldest goes")
+        XCTAssertEqual(KhandaqCommunity.filesToDelete(in: three, entries: ages, now: 100), ["a"], "300 MiB: the oldest goes")
 
         let full = [file("a", 128), file("b", 128)]
         XCTAssertEqual(KhandaqCommunity.filesToDelete(in: full, entries: ["a": Entry(kind: .held, date: 1), "b": Entry(kind: .held, date: 2)],
-                                                      now: 100, holdSince: 0),
+                                                      now: 100),
                        [], "256 MiB fit")
 
         // The largest group file fits alone; the next one pushes it out.
         let large = [file("large", 200), file("next", 60)]
         XCTAssertEqual(KhandaqCommunity.filesToDelete(in: large, entries: ["large": Entry(kind: .held, date: 1), "next": Entry(kind: .held, date: 2)],
-                                                      now: 100, holdSince: 0),
+                                                      now: 100),
                        ["large"])
-        XCTAssertEqual(KhandaqCommunity.filesToDelete(in: [file("large", 200)], entries: ["large": Entry(kind: .held, date: 1)], now: 100, holdSince: 0), [])
+        XCTAssertEqual(KhandaqCommunity.filesToDelete(in: [file("large", 200)], entries: ["large": Entry(kind: .held, date: 1)], now: 100), [])
     }
 
-    func testTakenFilesKeptEntriesNewFilesNoEntryNamesYetAndFilesFrom056Stay() {
+    func testTakenFilesKeptEntriesAndNewFilesNoEntryNamesYetStay() {
         let now: TimeInterval = 10_000
-        let holdSince: TimeInterval = 1_000
         let folder = [
             file("taken", 300, modified: 2_000, taken: true),
             file("ours", 300, modified: 2_000),
@@ -165,15 +179,16 @@ class KhandaqCommunityFilesTests: XCTestCase {
             file("stopped", 1, modified: 2_000),
             file("old-stranger", 1, modified: now - KhandaqCommunity.orphanGraceSeconds),
             file("new-stranger", 1, modified: now - 5),
-            file("shown-in-056", 1, modified: holdSince - 1),
+            file("from-056-no-entry", 1, modified: 999),
         ]
         let entries = [
             "ours": Entry(kind: .kept, date: 1),
             "underway": Entry(kind: .kept, date: 2),
             "stopped": Entry(kind: .stopped, date: 3),
         ]
-        XCTAssertEqual(Set(KhandaqCommunity.filesToDelete(in: folder, entries: entries, now: now, holdSince: holdSince)),
-                       ["stopped", "old-stranger"])
+        // A file of 0.2.56 whose entry went (its history was cleared) waits for no one: it goes too.
+        XCTAssertEqual(Set(KhandaqCommunity.filesToDelete(in: folder, entries: entries, now: now)),
+                       ["stopped", "old-stranger", "from-056-no-entry"])
     }
 
     func testOnlyTheFolderNamedAfterTheGroupIsEverCleaned() {
@@ -199,7 +214,7 @@ class KhandaqCommunityFilesTests: XCTestCase {
             "stopped.bin": Entry(kind: .stopped, date: 4),
         ]
 
-        let deleted = KhandaqCommunity.keepRoom(inFolder: folder.path, entries: entries, now: Date().timeIntervalSince1970, holdSince: 0)
+        let deleted = KhandaqCommunity.keepRoom(inFolder: folder.path, entries: entries, now: Date().timeIntervalSince1970)
 
         XCTAssertEqual(Set(deleted), ["1-oldest.bin", "stopped.bin"])
         XCTAssertEqual(Set(names(in: folder)), ["2.bin", "3-newest.bin"])
@@ -208,16 +223,16 @@ class KhandaqCommunityFilesTests: XCTestCase {
 
     func testLeavingDeletesTheFilesThatWaited() throws {
         let folder = makeFolder()
-        let holdSince = Date().timeIntervalSince1970 - 60
         try sparse(folder, "waiting.bin", mebibytes: 1)
         try sparse(folder, "taken.bin", mebibytes: 1)
         try sparse(folder, "stopped.bin", mebibytes: 1)
-        let shown = try sparse(folder, "shown-in-056.bin", mebibytes: 1)
-        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: holdSince - 86_400)], ofItemAtPath: shown.path)
+        // One that came long ago, in 0.2.56, and was never taken, goes as well.
+        let old = try sparse(folder, "from-056.bin", mebibytes: 1)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -86_400 * 30)], ofItemAtPath: old.path)
         XCTAssertTrue(KhandaqCommunity.markTaken(atPath: folder.appendingPathComponent("taken.bin").path))
 
-        XCTAssertEqual(Set(KhandaqCommunity.dropWaitingFiles(inFolder: folder.path, holdSince: holdSince)), ["waiting.bin", "stopped.bin"])
-        XCTAssertEqual(names(in: folder), ["shown-in-056.bin", "taken.bin"])
+        XCTAssertEqual(Set(KhandaqCommunity.dropWaitingFiles(inFolder: folder.path)), ["waiting.bin", "stopped.bin", "from-056.bin"])
+        XCTAssertEqual(names(in: folder), ["taken.bin"])
     }
 
     // MARK: With the profile's Realm
@@ -229,20 +244,19 @@ class KhandaqCommunityFilesTests: XCTestCase {
         XCTAssertTrue(KhandaqCommunity.take(taken))
         let ours = try world.ours("ours.jpg", date: 12)
 
-        XCTAssertEqual(KhandaqCommunity.fileHold(of: waiting, in: world.chat, holdSince: 0), .held)
-        XCTAssertEqual(KhandaqCommunity.fileHold(of: taken, in: world.chat, holdSince: 0), .none)
-        XCTAssertEqual(KhandaqCommunity.fileHold(of: ours, in: world.chat, holdSince: 0), .none)
-        XCTAssertEqual(KhandaqCommunity.heldMessageIds(in: world.chat, objects: world.objects, holdSince: 0), [waiting.uniqueIdentifier])
+        XCTAssertEqual(KhandaqCommunity.fileHold(of: waiting, in: world.chat), .held)
+        XCTAssertEqual(KhandaqCommunity.fileHold(of: taken, in: world.chat), .none)
+        XCTAssertEqual(KhandaqCommunity.fileHold(of: ours, in: world.chat), .none)
+        XCTAssertEqual(KhandaqCommunity.heldMessageIds(in: world.chat, objects: world.objects), [waiting.uniqueIdentifier])
 
         let preview = FilePreviewControllerDataSource(chat: world.chat,
                                                       submanagerObjects: world.objects,
-                                                      excludingMessageIds: KhandaqCommunity.heldMessageIds(in: world.chat, objects: world.objects, holdSince: 0))
+                                                      excludingMessageIds: KhandaqCommunity.heldMessageIds(in: world.chat, objects: world.objects))
         XCTAssertNil(preview.indexOfMessage(waiting), "not in the gallery nor in QuickLook")
         XCTAssertNotNil(preview.indexOfMessage(taken))
         XCTAssertNotNil(preview.indexOfMessage(ours))
 
-        let read = KhandaqCommunity.folderEntries(of: world.objects.messages(predicate: NSPredicate(format: "chatUniqueIdentifier == %@", world.chat.uniqueIdentifier)),
-                                                  holdSince: 0)
+        let read = KhandaqCommunity.folderEntries(of: world.objects.messages(predicate: NSPredicate(format: "chatUniqueIdentifier == %@", world.chat.uniqueIdentifier)))
         XCTAssertEqual(read.folder.map { URL(fileURLWithPath: $0).standardizedFileURL.path },
                        world.folder.standardizedFileURL.path)
         XCTAssertEqual(read.entries["waiting.jpg"]?.kind, .held)
@@ -257,7 +271,7 @@ class KhandaqCommunityFilesTests: XCTestCase {
         let taken = try world.incoming("taken.bin", mebibytes: 100, date: 0.5)
         XCTAssertTrue(KhandaqCommunity.take(taken))
         var left = false
-        let keeper = KhandaqCommunityFileKeeper(submanagerObjects: world.objects, holdSince: { 0 }, left: { left })
+        let keeper = KhandaqCommunityFileKeeper(submanagerObjects: world.objects, left: { left })
         kept.append(keeper)
 
         keeper.start()
@@ -278,12 +292,9 @@ class KhandaqCommunityFilesTests: XCTestCase {
 
     private func hold(community: Bool = true,
                       outgoing: Bool = false,
-                      date: TimeInterval = 2_000,
-                      holdSince: TimeInterval? = 1_000,
                       type: OCTMessageFileType = .ready,
                       bytes: KhandaqCommunity.FileBytes = .waiting) -> KhandaqCommunity.FileHold {
-        return KhandaqCommunity.fileHold(isCommunity: community, isOutgoing: outgoing, date: date, holdSince: holdSince,
-                                         fileType: type, bytes: { bytes })
+        return KhandaqCommunity.fileHold(isCommunity: community, isOutgoing: outgoing, fileType: type, bytes: { bytes })
     }
 
     private func file(_ name: String, _ mebibytes: Int64, modified: TimeInterval = 0, taken: Bool = false) -> KhandaqCommunity.FolderFile {

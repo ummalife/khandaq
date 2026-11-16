@@ -769,6 +769,73 @@ static NSData *OCTResumeTestsContent(void)
     XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:orphan], @"the sweep did not run");
 }
 
+// KHANDAQ (0.2.57): the bytes of a download used to wait in "<name>.part", a name a file of another message can
+// have in the same folder (a browser names a download it has not finished so): a download into "doc.bin" emptied
+// the file "doc.bin.part" of another message, or went on from it, and moved it away as its own.
+- (void)testAFreshDownloadNeverEmptiesAFileOfAnotherMessageNamedLikeItsBytes
+{
+    NSData *foreign = [@"from a browser" dataUsingEncoding:NSASCIIStringEncoding];
+    NSString *foreignPath = [self writeFileOfAnotherMessageNamed:@"doc.bin.part" content:foreign];
+
+    [self offerTheirFile:kResumeTestsTheirFile fileId:OCTResumeTestsId(0x10) size:kResumeTestsFileSize name:@"doc.bin"];
+    OCTMessageAbstract *message = [self newestIncomingMessage];
+    [self.files acceptFileTransfer:message failureBlock:nil];
+    XCTAssertTrue([self waitForEvent:@"resume 65536"]);
+    [self receiveTheRestOfTheirFile:kResumeTestsTheirFile from:0];
+
+    XCTAssertTrue([self waitUntil:^BOOL { return message.messageFile.fileType == OCTMessageFileTypeReady; }]);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:message.messageFile.filePath], OCTResumeTestsContent());
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:foreignPath], foreign, @"the file of another message was taken");
+}
+
+- (void)testADownloadGoesOnFromItsOwnBytesNotFromAFileOfAnotherMessageNamedLikeThem
+{
+    NSData *fileId = OCTResumeTestsId(0x10);
+    OCTMessageAbstract *message = [self addIncomingFileWithIdHex:OCTResumeTestsHex(fileId)
+                                                            type:OCTMessageFileTypeWaitingConfirmation
+                                                        pausedBy:OCTMessageFilePausedByConnection
+                                                       keptBytes:4];
+    NSData *foreign = [@"from a browser" dataUsingEncoding:NSASCIIStringEncoding];
+    NSString *foreignPath = [self writeFileOfAnotherMessageNamed:@"doc.bin.part" content:foreign];
+
+    [self offerTheirFile:kResumeTestsTheirFile fileId:fileId size:kResumeTestsFileSize name:@"doc.bin"];
+
+    XCTAssertTrue([self waitForEvent:@"resume 65536"]);
+    XCTAssertEqualObjects(self.tox.events, (@[@"seek 65536 4", @"resume 65536"]), @"from its own 4 bytes");
+    [self receiveTheRestOfTheirFile:kResumeTestsTheirFile from:4];
+
+    XCTAssertTrue([self waitUntil:^BOOL { return message.messageFile.fileType == OCTMessageFileTypeReady; }]);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:message.messageFile.filePath], OCTResumeTestsContent());
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:foreignPath], foreign, @"the file of another message was taken");
+}
+
+- (void)testTheCleanupAndACancelTakeOnlyTheBytesOfTheirOwnMessage
+{
+    OCTMessageAbstract *message = [self addIncomingFileWithIdHex:OCTResumeTestsHex(OCTResumeTestsId(0x10))
+                                                            type:OCTMessageFileTypeWaitingConfirmation
+                                                        pausedBy:OCTMessageFilePausedByConnection
+                                                       keptBytes:4];
+    NSData *foreign = [@"from a browser" dataUsingEncoding:NSASCIIStringEncoding];
+    NSString *foreignPath = [self writeFileOfAnotherMessageNamed:@"doc.bin.part" content:foreign];
+    NSString *orphan = [OCTFilePathOutput partialFilePathForResultFilePath:message.messageFile.filePath
+                                                           ownerIdentifier:[[NSUUID UUID] UUIDString]];
+    XCTAssertTrue([[NSData dataWithBytes:"x" length:1] writeToFile:orphan atomically:NO]);
+
+    // The cleanup at the start keeps the bytes of a message, takes those whose message is gone, and keeps a file
+    // another message holds, whatever its name.
+    [self restartFiles];
+
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:[self partialPathOf:message]],
+                          [OCTResumeTestsContent() subdataWithRange:NSMakeRange(0, 4)]);
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:orphan], @"the bytes of no message stayed");
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:foreignPath], foreign);
+
+    XCTAssertTrue([self.files cancelFileTransfer:message error:nil]);
+
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:[self partialPathOf:message]]);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:foreignPath], foreign, @"a cancel took the file of another message");
+}
+
 - (void)testAFileTheFriendNeverOffersAgainEndsOnceTheyHaveBeenOnlineForTheGrace
 {
     [self setFriendConnected:NO notify:YES];
@@ -1030,11 +1097,21 @@ static NSData *OCTResumeTestsContent(void)
                                         pausedBy:(OCTMessageFilePausedBy)pausedBy
                                        keptBytes:(OCTToxFileSize)keptBytes
 {
-    NSString *path = [self.root stringByAppendingPathComponent:@"files/doc.bin"];
+    return [self addIncomingFileNamed:@"doc.bin" fileIdHex:fileIdHex type:type pausedBy:pausedBy keptBytes:keptBytes];
+}
+
+- (OCTMessageAbstract *)addIncomingFileNamed:(NSString *)name
+                                   fileIdHex:(NSString *)fileIdHex
+                                        type:(OCTMessageFileType)type
+                                    pausedBy:(OCTMessageFilePausedBy)pausedBy
+                                   keptBytes:(OCTToxFileSize)keptBytes
+{
+    NSString *path = [[self.root stringByAppendingPathComponent:@"files"] stringByAppendingPathComponent:name];
     NSData *content = OCTResumeTestsContent();
+    OCTMessageAbstract *message = [OCTMessageAbstract new];
 
     OCTMessageFile *file = [OCTMessageFile new];
-    file.fileName = @"doc.bin";
+    file.fileName = name;
     file.fileSize = kResumeTestsFileSize;
     file.fileType = type;
     file.pausedBy = pausedBy;
@@ -1049,12 +1126,11 @@ static NSData *OCTResumeTestsContent(void)
     else {
         [[NSData data] writeToFile:path atomically:NO];
         if (keptBytes > 0) {
-            [[content subdataWithRange:NSMakeRange(0, (NSUInteger)keptBytes)] writeToFile:[OCTFilePathOutput partialFilePathForResultFilePath:path]
-                                                                           atomically:NO];
+            NSString *partial = [OCTFilePathOutput partialFilePathForResultFilePath:path ownerIdentifier:message.uniqueIdentifier];
+            [[content subdataWithRange:NSMakeRange(0, (NSUInteger)keptBytes)] writeToFile:partial atomically:NO];
         }
     }
 
-    OCTMessageAbstract *message = [OCTMessageAbstract new];
     message.chatUniqueIdentifier = self.chat.uniqueIdentifier;
     message.senderUniqueIdentifier = self.friend.uniqueIdentifier;
     message.dateInterval = 100;
@@ -1120,7 +1196,31 @@ static NSData *OCTResumeTestsContent(void)
 
 - (NSString *)partialPathOf:(OCTMessageAbstract *)message
 {
-    return [OCTFilePathOutput partialFilePathForResultFilePath:[self.root stringByAppendingPathComponent:@"files/doc.bin"]];
+    return [OCTFilePathOutput partialFilePathForResultFilePath:message.messageFile.filePath
+                                               ownerIdentifier:message.uniqueIdentifier];
+}
+
+/// A file another message holds, complete, at `name` in the folder of the files.
+- (NSString *)writeFileOfAnotherMessageNamed:(NSString *)name content:(NSData *)content
+{
+    NSString *path = [[self.root stringByAppendingPathComponent:@"files"] stringByAppendingPathComponent:name];
+    XCTAssertTrue([content writeToFile:path atomically:NO]);
+
+    OCTMessageFile *file = [OCTMessageFile new];
+    file.fileName = name;
+    file.fileSize = (OCTToxFileSize)content.length;
+    file.fileType = OCTMessageFileTypeReady;
+    file.internalFileNumber = (int)kOCTToxFileNumberFailure;
+    [file internalSetFilePath:path];
+
+    OCTMessageAbstract *message = [OCTMessageAbstract new];
+    message.chatUniqueIdentifier = self.chat.uniqueIdentifier;
+    message.senderUniqueIdentifier = self.friend.uniqueIdentifier;
+    message.dateInterval = 50;
+    message.sortTimestamp = 50;
+    message.messageFile = file;
+    [self.realmManager addObject:message];
+    return path;
 }
 
 - (NSArray<NSString *> *)filesOnDisk

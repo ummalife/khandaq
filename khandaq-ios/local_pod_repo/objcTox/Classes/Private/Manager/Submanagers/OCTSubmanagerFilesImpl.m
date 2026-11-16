@@ -146,7 +146,7 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
     NSFileManager *fileManager = [NSFileManager defaultManager];
 
     // KHANDAQ (0.2.57): 1:1 downloads keep their bytes next to the result now (OCTFilePathOutput
-    // initWithResultFilePath:), so a restart leaves them; this directory holds what older versions left.
+    // initWithResultFilePath:ownerIdentifier:), so a restart leaves them; this directory holds what older versions left.
     NSString *downloads = [self downloadsTempDirectory];
     OCTLogInfo(@"clearing downloads temp directory %@\ncontents %@",
                downloads,
@@ -413,7 +413,8 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
         [file internalSetFilePath:resultFilePath];
     }];
 
-    OCTFilePathOutput *output = [[OCTFilePathOutput alloc] initWithResultFilePath:resultFilePath];
+    OCTFilePathOutput *output = [[OCTFilePathOutput alloc] initWithResultFilePath:resultFilePath
+                                                                  ownerIdentifier:message.uniqueIdentifier];
 
     NSDictionary *userInfo = [self fileOperationUserInfoWithMessage:message];
 
@@ -927,7 +928,7 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
         OCTLogInfo(@"requeue-on-disconnect: %@ transfer fileNumber %d friend %@, under way %d, %lld bytes moved",
                    outgoing ? @"outgoing" : @"incoming", messageFile.internalFileNumber, friend, underWay, moved);
 
-        // A download keeps the bytes it wrote (OCTFilePathOutput initWithResultFilePath:).
+        // A download keeps the bytes it wrote (OCTFilePathOutput initWithResultFilePath:ownerIdentifier:).
         [operation cancel];
 
         [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
@@ -1073,12 +1074,12 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
 
                 exists = isBound(name);
 
-                // KHANDAQ (0.2.57): "<name>.part" holds the bytes of a download into "<name>" that waits for the
-                // connection (OCTFilePathOutput initWithResultFilePath:); it goes when its message goes.
-                NSString *partialOf = [name stringByDeletingPathExtension];
-                if (! exists && partialOf.length > 0 &&
-                    [[OCTFilePathOutput partialFilePathForResultFilePath:partialOf] isEqualToString:name]) {
-                    exists = isBound(partialOf);
+                // KHANDAQ (0.2.57): ".<message id>.part" holds the bytes of a download of that message that waits
+                // for the connection (OCTFilePathOutput initWithResultFilePath:ownerIdentifier:); it goes when its
+                // message goes.
+                NSString *owner = [OCTFilePathOutput ownerIdentifierOfPartialFileName:name];
+                if (! exists && owner.length > 0) {
+                    exists = [realmManager objectWithUniqueIdentifier:owner class:[OCTMessageAbstract class]] != nil;
                 }
             });
 
@@ -1715,7 +1716,10 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
 - (NSString *)partialFilePathOfMessage:(OCTMessageAbstract *)message
 {
     NSString *resultFilePath = [message.messageFile filePath];
-    return resultFilePath.length > 0 ? [OCTFilePathOutput partialFilePathForResultFilePath:resultFilePath] : nil;
+    if (resultFilePath.length == 0 || message.uniqueIdentifier.length == 0) {
+        return nil;
+    }
+    return [OCTFilePathOutput partialFilePathForResultFilePath:resultFilePath ownerIdentifier:message.uniqueIdentifier];
 }
 
 - (OCTToxFileSize)partialLengthOfMessage:(OCTMessageAbstract *)message

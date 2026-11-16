@@ -1495,8 +1495,10 @@ final class AirNetworkBandView: UIView {
         content.snp.makeConstraints {
             $0.leading.trailing.bottom.equalToSuperview()
             // Gives way while the stack folds the band, so the words keep their height and leave under the
-            // header instead of being squeezed.
-            $0.top.equalToSuperview().priority(UILayoutPriority.required.rawValue - 1)
+            // header instead of being squeezed. Below the words' compression resistance (750): at 999 the
+            // words gave way first, and mid-slide the title stood over the line. Above the stacks' pull to
+            // no height (249), so the band open is as tall as its words.
+            $0.top.equalToSuperview().priority(UILayoutPriority.defaultHigh.rawValue - 1)
         }
         icon.snp.makeConstraints {
             $0.leading.equalTo(safeAreaLayoutGuide).offset(KQSpace.x16)
@@ -1517,6 +1519,19 @@ final class AirNetworkBandView: UIView {
 
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        // A stack lets go of the sides of a view it hides. Without these the band folded toward the width of
+        // its words as well as its height on the way out, and came in from a narrow frame with the words cut
+        // at the left. It keeps the stack's width; one step weaker than required, so it never fights the stack.
+        guard let stack = superview as? UIStackView, stack.axis == .vertical else {
+            return
+        }
+        snp.makeConstraints {
+            $0.leading.trailing.equalToSuperview().priority(UILayoutPriority.required.rawValue - 1)
+        }
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {

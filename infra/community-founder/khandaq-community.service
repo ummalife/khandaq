@@ -1,0 +1,57 @@
+[Unit]
+Description=Khandaq Community founder (holds the founder key of the official public group)
+Documentation=https://github.com/ummalife/khandaq/tree/master/infra/community-founder
+After=network-online.target
+Wants=network-online.target
+# StartLimit* are only honoured in [Unit]. In [Service] systemd ignores them silently, and a crash
+# loop then restarts forever.
+StartLimitIntervalSec=600
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=khandaq-community
+Group=khandaq-community
+# COMMUNITY_ARGS: deploy-community.sh writes "--expect-group <chat id>" here once the group exists,
+# so that a state directory that lost or swapped its group stops the bot (exit 3) instead of
+# founding a second "Khandaq Community" that no client knows.
+EnvironmentFile=-/etc/default/khandaq-community
+ExecStart=/opt/khandaq-community/bin/khandaq-community --data /var/lib/khandaq-community --nodes /opt/khandaq-community/assets/nodes.txt --port 33470 $COMMUNITY_ARGS
+Restart=on-failure
+RestartSec=10
+# Exit 3: the state directory is inconsistent. Restarting cannot fix that; an operator must look.
+RestartPreventExitStatus=3
+
+# The founder key lives here, and with it the chat id compiled into every client. It must survive
+# every redeploy and is never recreated.
+StateDirectory=khandaq-community
+StateDirectoryMode=0700
+UMask=0077
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+# toxcore gives every member connection two 8192-entry packet arrays (up to 640 KB once used), so
+# a full group at the highest /limit, 1000, needs several hundred MB.
+MemoryMax=768M
+CPUQuota=100%
+TasksMax=16
+
+[Install]
+WantedBy=multi-user.target

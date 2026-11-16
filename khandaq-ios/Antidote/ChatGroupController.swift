@@ -1409,6 +1409,9 @@ private extension ChatGroupController {
         guard let messageFile = message.messageFile else {
             return
         }
+        // KHANDAQ (0.2.57, SPEC-community item 6): a file of someone else in Khandaq Community that waits for
+        // Accept is not opened by any parser before the tap, the player that reads a voice's length included.
+        let hold = KhandaqCommunity.fileHold(of: message, in: chat)
 
         model.fileName = messageFile.fileName
         model.fileSizeBytes = messageFile.fileSize
@@ -1441,7 +1444,7 @@ private extension ChatGroupController {
 
         if isVoice {
             model.fileName = VoiceMessageHelper.displayFileName(for: messageFile.fileName)
-            if messageFile.fileType == .ready, let path = messageFile.filePath() {
+            if hold == .none, messageFile.fileType == .ready, let path = messageFile.filePath() {
                 model.voiceDuration = VoiceMessageHelper.audioDuration(at: path)
             }
         }
@@ -1516,7 +1519,7 @@ private extension ChatGroupController {
 
         // KHANDAQ (0.2.57, SPEC-community item 6): in Khandaq Community a file of someone else waits for
         // Accept: its name and size, nothing to see or play until the tap.
-        KhandaqCommunity.shapeEntry(model, hold: KhandaqCommunity.fileHold(of: message, in: chat)) { [weak self] in
+        KhandaqCommunity.shapeEntry(model, hold: hold) { [weak self] in
             self?.takeCommunityFile(message)
         }
     }

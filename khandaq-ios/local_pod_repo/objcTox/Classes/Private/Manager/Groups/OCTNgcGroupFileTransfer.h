@@ -41,7 +41,18 @@ typedef void (^OCTNgcGroupFileTransferProgressBlock)(uint32_t groupNumber,
                                                      NSString *msgIdHex,
                                                      float progress);
 
+// KHANDAQ (0.2.57): an incoming chunked file that will never complete was dropped, with its partial file: no
+// chunk came for a minute (the sender's network went, or ours and the group took longer to come back), or its
+// slot was needed for another file. senderPublicKeyHex is the opener's key, as in the begin block.
+typedef void (^OCTNgcGroupFileTransferIncomingDroppedBlock)(uint32_t groupNumber,
+                                                            NSString *_Nullable senderPublicKeyHex,
+                                                            NSString *msgIdHex);
+
 @interface OCTNgcGroupFileTransfer : NSObject
+
+/// KHANDAQ (0.2.57): hears every incoming file dropped before it was complete, on the main queue like the
+/// other blocks. Set it before the first packet comes.
+@property (atomic, copy, nullable) OCTNgcGroupFileTransferIncomingDroppedBlock incomingDroppedBlock;
 
 - (instancetype)initWithSendPacketBlock:(OCTNgcGroupFileTransferSendPacketBlock)sendPacketBlock
                 incomingFilesDirectory:(NSString *(^)(uint32_t groupNumber))incomingFilesDirectoryBlock

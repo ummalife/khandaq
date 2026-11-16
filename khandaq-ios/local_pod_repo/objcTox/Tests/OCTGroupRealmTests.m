@@ -32,6 +32,13 @@
 
 @end
 
+@interface OCTNgcGroupFileTransfer (GroupRealmTests)
+
+- (NSMutableDictionary<NSString *, id> *)assemblies;
+- (void)nackTickForAssembly:(id)assembly assemblyKey:(NSString *)assemblyKey;
+
+@end
+
 static const uint32_t kGroupRealmTestsGroupNumber = 4;
 static const uint32_t kGroupRealmTestsPeerId = 2;
 static NSString *const kGroupRealmTestsChatIdHex = @"3C5E9A0B7D214F6A8B0C1D2E3F405162738495A6B7C8D9E0F1021324354657A8";
@@ -165,6 +172,137 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
     // Every mock lives until here: the submanager holds its data source weakly.
     NSArray *mocks = @[dataSource, tox, fileStorage];
     XCTAssertEqual(mocks.count, 3u);
+}
+
+// KHANDAQ (0.2.57): seen live, a member's app away for 45 s in the middle of a 40 MB file. The group took two
+// minutes to come back; a minute after the return the transfer dropped the file and its partial bytes, and the
+// card said "41.9 MB left" until the next start of the app. It ends now as that start ends it.
+- (void)testAGroupFileDroppedBeforeItIsCompleteEndsItsRowStopped
+{
+    OCTChat *chat = [self groupChat];
+    NSString *downloads = [self.root stringByAppendingPathComponent:@"Downloads"];
+
+    id dataSource = OCMProtocolMock(@protocol(OCTSubmanagerDataSource));
+    id tox = OCMClassMock([OCTTox class]);
+    id fileStorage = OCMProtocolMock(@protocol(OCTFileStorageProtocol));
+    OCMStub([dataSource managerGetTox]).andReturn(tox);
+    OCMStub([dataSource managerGetRealmManager]).andReturn(self.realmManager);
+    OCMStub([dataSource managerGetFileStorage]).andReturn(fileStorage);
+    OCMStub([fileStorage pathForDownloadedFilesDirectory]).andReturn(downloads);
+
+    OCTSubmanagerGroupsImpl *submanager = [OCTSubmanagerGroupsImpl new];
+    submanager.dataSource = dataSource;
+    [submanager setupFileTransferIfNeeded];
+    OCTNgcGroupFileTransfer *transfer = [submanager valueForKey:@"fileTransfer"];
+    XCTAssertNotNil(transfer);
+
+    NSData *payload = [self generatedBytesOfLength:3000];
+    NSData *msgId = [self generatedBytesOfLength:32];
+    const uint32_t chunkPayload = 1000;
+
+    // The BEGIN and the first chunk come; the rest never does.
+    [transfer handleIncomingPacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                           peerId:kGroupRealmTestsPeerId
+                                 peerPublicKeyHex:kGroupRealmTestsPeerKeyHex
+                                             data:[self beginPacketWithMsgId:msgId fileName:@"clip.mp4" size:payload.length chunkPayload:chunkPayload]];
+    [transfer handleIncomingPacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                           peerId:kGroupRealmTestsPeerId
+                                 peerPublicKeyHex:kGroupRealmTestsPeerKeyHex
+                                             data:[self chunkPacketWithMsgId:msgId
+                                                                       index:0
+                                                                     payload:[payload subdataWithRange:NSMakeRange(0, chunkPayload)]]];
+
+    __block NSString *assemblyKey = nil;
+    __block id assembly = nil;
+    [self waitUntil:^BOOL {
+        NSMutableDictionary *assemblies = transfer.assemblies;
+        @synchronized (assemblies) {
+            assemblyKey = assemblies.allKeys.firstObject;
+            assembly = assemblyKey ? assemblies[assemblyKey] : nil;
+        }
+        return [[assembly valueForKey:@"receivedCount"] intValue] == 1 && [self fileRowWithMsgId:msgId inChat:chat] != nil;
+    }];
+
+    OCTMessageAbstract *row = [self fileRowWithMsgId:msgId inChat:chat];
+    XCTAssertEqual(row.messageFile.fileType, OCTMessageFileTypeLoading, @"the BEGIN made no loading row");
+    NSString *partialPath = [assembly valueForKey:@"outPath"];
+    XCTAssertTrue([[NSFileManager defaultManager] fileExistsAtPath:partialPath]);
+
+    // A round that sees the chunk, then the silent rounds in a row that drop the file.
+    for (int round = 0; round < 26; round++) {
+        [transfer nackTickForAssembly:assembly assemblyKey:assemblyKey];
+    }
+
+    @synchronized (transfer.assemblies) {
+        XCTAssertNil(transfer.assemblies[assemblyKey], @"the file was not dropped");
+    }
+
+    [self waitUntil:^BOOL {
+        return [self fileRowWithMsgId:msgId inChat:chat].messageFile.fileType == OCTMessageFileTypeCanceled;
+    }];
+
+    row = [self fileRowWithMsgId:msgId inChat:chat];
+    XCTAssertEqual(row.messageFile.fileType, OCTMessageFileTypeCanceled, @"the card of a dropped file still says it is coming");
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:partialPath]);
+
+    // Every mock lives until here: the submanager holds its data source weakly.
+    NSArray *mocks = @[dataSource, tox, fileStorage];
+    XCTAssertEqual(mocks.count, 3u);
+}
+
+// KHANDAQ (0.2.57): the msg-id hash is public in the group. A dropped file ends only the loading row of the peer
+// that opened it: never our own file under the same hash, never another member's row, never a file that came.
+- (void)testADroppedGroupFileEndsOnlyTheLoadingRowOfThePeerThatOpenedIt
+{
+    OCTChat *chat = [self groupChat];
+    OCTRealmManager *realmManager = self.realmManager;
+    NSString *otherKeyHex = [kGroupRealmTestsPeerKeyHex stringByReplacingOccurrencesOfString:@"9F8E" withString:@"0000"];
+
+    OCTMessageAbstract *theirs = [self fileRowNamed:@"theirs.mp4" type:OCTMessageFileTypeLoading peerId:kGroupRealmTestsPeerId
+                                               hash:@"a1" inChat:chat];
+    [realmManager updateObject:theirs.messageFile withBlock:^(OCTMessageFile *file) {
+        file.groupSenderPubkey = kGroupRealmTestsPeerKeyHex.lowercaseString;
+    }];
+    OCTMessageAbstract *ours = [self fileRowNamed:@"ours.mp4" type:OCTMessageFileTypeLoading peerId:0 hash:@"b2" inChat:chat];
+    OCTMessageAbstract *came = [self fileRowNamed:@"came.mp4" type:OCTMessageFileTypeReady peerId:kGroupRealmTestsPeerId
+                                             hash:@"c3" inChat:chat];
+
+    XCTAssertFalse([realmManager markGroupIncomingFileInterruptedInChat:chat msgIdHash:[self hashFrom:@"b2"] senderPubkey:nil]);
+    XCTAssertFalse([realmManager markGroupIncomingFileInterruptedInChat:chat msgIdHash:[self hashFrom:@"c3"] senderPubkey:nil]);
+    XCTAssertFalse([realmManager markGroupIncomingFileInterruptedInChat:chat msgIdHash:[self hashFrom:@"a1"] senderPubkey:otherKeyHex]);
+    XCTAssertEqual(theirs.messageFile.fileType, OCTMessageFileTypeLoading, @"another member's drop ended this file");
+
+    XCTAssertTrue([realmManager markGroupIncomingFileInterruptedInChat:chat
+                                                             msgIdHash:[self hashFrom:@"a1"].uppercaseString
+                                                          senderPubkey:kGroupRealmTestsPeerKeyHex]);
+    XCTAssertFalse([realmManager markGroupIncomingFileInterruptedInChat:chat msgIdHash:[self hashFrom:@"a1"] senderPubkey:nil],
+                   @"a file ended twice");
+
+    XCTAssertEqual(theirs.messageFile.fileType, OCTMessageFileTypeCanceled);
+    XCTAssertEqual(ours.messageFile.fileType, OCTMessageFileTypeLoading, @"our own file was ended by a drop");
+    XCTAssertEqual(came.messageFile.fileType, OCTMessageFileTypeReady, @"a file that came was ended by a drop");
+}
+
+- (OCTMessageAbstract *)fileRowNamed:(NSString *)fileName
+                                type:(OCTMessageFileType)fileType
+                              peerId:(uint32_t)peerId
+                                hash:(NSString *)hashSeed
+                              inChat:(OCTChat *)chat
+{
+    return [self.realmManager addGroupMessageWithFileName:fileName
+                                                 fileSize:3000
+                                                 filePath:[self.root stringByAppendingPathComponent:fileName]
+                                                 fileType:fileType
+                                                     chat:chat
+                                                   peerId:peerId
+                                                  fileUTI:nil
+                                        groupMsgIdHashHex:[self hashFrom:hashSeed]
+                                    groupTransferProgress:0.0f];
+}
+
+- (NSString *)hashFrom:(NSString *)seed
+{
+    return [@"" stringByPaddingToLength:64 withString:seed startingAtIndex:0];
 }
 
 #pragma mark - The history sync

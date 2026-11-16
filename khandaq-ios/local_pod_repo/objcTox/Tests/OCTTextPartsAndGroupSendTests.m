@@ -993,6 +993,49 @@
     XCTAssertEqual(packets.count, 24u);
 }
 
+// KHANDAQ (0.2.57): a file dropped that way is told, once, on the main queue, with its group and its id: nothing
+// else ended the card that said it was coming.
+- (void)testAGroupFileSilentForAMinuteInARowIsReportedDroppedOnce
+{
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *transfer = [self stallTestTransferCollectingPackets:packets];
+    NSMutableArray<NSString *> *dropped = [NSMutableArray new];
+    transfer.incomingDroppedBlock = ^(uint32_t groupNumber, NSString *senderPublicKeyHex, NSString *msgIdHex) {
+        XCTAssertTrue([NSThread isMainThread]);
+        XCTAssertNil(senderPublicKeyHex);
+        [dropped addObject:[NSString stringWithFormat:@"%u:%@", groupNumber, msgIdHex.lowercaseString]];
+    };
+    id assembly = [self stallTestAssemblyWithChunks:100];
+    transfer.assemblies[@"silent"] = assembly;
+
+    [self stallTestAssembly:assembly receiveChunk:0];
+
+    for (int round = 0; round < 25; round++) {
+        [transfer nackTickForAssembly:assembly assemblyKey:@"silent"];
+    }
+
+    [self stallTestRunMainQueue];
+    XCTAssertEqual(dropped.count, 0u, @"a file not yet given up was told dropped");
+
+    for (int round = 0; round < 3; round++) {
+        [transfer nackTickForAssembly:assembly assemblyKey:@"silent"];
+    }
+
+    [self stallTestRunMainQueue];
+    XCTAssertNil(transfer.assemblies[@"silent"]);
+    NSString *zeroId = [@"" stringByPaddingToLength:64 withString:@"0" startingAtIndex:0];
+    XCTAssertEqualObjects(dropped, @[[@"5:" stringByAppendingString:zeroId]]);
+}
+
+- (void)stallTestRunMainQueue
+{
+    XCTestExpectation *drained = [self expectationWithDescription:@"the main queue ran what was sent to it"];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [drained fulfill];
+    });
+    [self waitForExpectations:@[drained] timeout:5.0];
+}
+
 - (OCTNgcGroupFileTransfer *)stallTestTransferCollectingPackets:(NSMutableArray<NSData *> *)packets
 {
     return [[OCTNgcGroupFileTransfer alloc] initWithSendPacketBlock:^BOOL (uint32_t groupNumber, NSData *packet, NSError **error) {

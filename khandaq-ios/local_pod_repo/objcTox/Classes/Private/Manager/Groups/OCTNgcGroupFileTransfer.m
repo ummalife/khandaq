@@ -689,6 +689,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     assembly.totalChunks = (int)totalChunks;
     assembly.chunkPayload = (int)chunkPayload;
     assembly.msgId = [msgId mutableCopy];
+    assembly.groupNumber = groupNumber;
     // KHANDAQ (audit F-5): bind the assembly to the peer that opened it.
     assembly.originPeerId = peerId;
     assembly.originPublicKeyHex = peerPublicKeyHex;
@@ -712,7 +713,6 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         stillIncomplete = (self.assemblies[assemblyKey] == assembly) && (assembly.receivedCount < assembly.totalChunks);
     }
     if (stillIncomplete) {
-        assembly.groupNumber = groupNumber;
         [self startNackTimerForAssembly:assembly assemblyKey:assemblyKey];
     }
 
@@ -884,6 +884,18 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
     if (assembly.outPath.length > 0) {
         [[NSFileManager defaultManager] removeItemAtPath:assembly.outPath error:nil];
+    }
+
+    // KHANDAQ (0.2.57): the file's card said it was coming, and nothing ended it until the next start of the
+    // app: the sender does not send this file again, and a BEGIN of it would open a new assembly anyway.
+    OCTNgcGroupFileTransferIncomingDroppedBlock droppedBlock = self.incomingDroppedBlock;
+    if (droppedBlock && assembly.msgId.length > 0) {
+        uint32_t groupNumber = assembly.groupNumber;
+        NSString *senderPublicKeyHex = assembly.originPublicKeyHex;
+        NSString *msgIdHex = [OCTTox binToHexString:assembly.msgId.bytes length:assembly.msgId.length];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            droppedBlock(groupNumber, senderPublicKeyHex, msgIdHex);
+        });
     }
 }
 

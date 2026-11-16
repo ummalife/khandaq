@@ -4423,6 +4423,41 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                         msgIdHex:msgIdHex
                                                         progress:progress];
         }];
+    self.fileTransfer.incomingDroppedBlock = ^(uint32_t groupNumber, NSString *senderPublicKeyHex, NSString *msgIdHex) {
+        __strong typeof(weakSelf) self = weakSelf;
+
+        if (! self) {
+            return;
+        }
+
+        [self handleIncomingGroupFileDroppedWithGroupNumber:groupNumber
+                                         senderPublicKeyHex:senderPublicKeyHex
+                                                   msgIdHex:msgIdHex];
+    };
+}
+
+/**
+ * KHANDAQ (0.2.57, SPEC-network part 1, item 8): the transfer dropped an incoming file that stopped coming. Seen
+ * live: a member's app away for 45 s in the middle of a 40 MB file; the group took two minutes to come back, the
+ * file was dropped a minute after the return with its partial bytes, and its card said "41.9 MB left" until the
+ * next start of the app. It ends now as that start ends it: "The download stopped".
+ */
+- (void)handleIncomingGroupFileDroppedWithGroupNumber:(uint32_t)groupNumber
+                                   senderPublicKeyHex:(NSString *)senderPublicKeyHex
+                                             msgIdHex:(NSString *)msgIdHex
+{
+    OCTChat *chat = [self chatForGroupNumber:groupNumber createIfNeeded:NO];
+
+    if (! chat) {
+        return;
+    }
+
+    if ([[self.dataSource managerGetRealmManager] markGroupIncomingFileInterruptedInChat:chat
+                                                                               msgIdHash:msgIdHex
+                                                                            senderPubkey:senderPublicKeyHex]) {
+        OCTLogInfo(@"NGC group file dropped before it was complete, its card ends failed group=%u msgId=%@",
+                   groupNumber, msgIdHex);
+    }
 }
 
 - (void)setupLiveAudioIfNeeded

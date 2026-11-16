@@ -220,6 +220,15 @@
                                 fileSize:(uint64_t)fileSize;
 
 /**
+ * KHANDAQ (0.2.57): ends the loading row of an incoming group file that was dropped before it was complete, as
+ * the next start of the app ends it: canceled, "The download stopped". Looked up on this manager's own Realm, as
+ * the row a COMPLETE finishes is. NO when there is no such row: none, not loading, or our own file.
+ */
+- (BOOL)markGroupIncomingFileInterruptedInChat:(OCTChat *)chat
+                                     msgIdHash:(NSString *)msgIdHash
+                                  senderPubkey:(nullable NSString *)senderPubkey;
+
+/**
  * KHANDAQ (#170): content-level dedup for incoming NGC group files. YES when the chat already has a
  * READY file with the same size and same base file name (leading "NNN_" uniquifier prefixes ignored)
  * within the recent window — a re-broadcast / re-served copy of a file we already show.

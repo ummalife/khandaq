@@ -1991,6 +1991,42 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     return handled;
 }
 
+- (BOOL)markGroupIncomingFileInterruptedInChat:(OCTChat *)chat
+                                     msgIdHash:(NSString *)msgIdHash
+                                  senderPubkey:(NSString *)senderPubkey
+{
+    if (chat.uniqueIdentifier.length == 0 || msgIdHash.length == 0) {
+        return NO;
+    }
+
+    __block BOOL ended = NO;
+
+    dispatch_sync(self.queue, ^{
+        OCTMessageAbstract *existing =
+            [self groupFileRowOwnedBySenderPubkey:senderPubkey
+                                        inResults:[OCTMessageAbstract objectsInRealm:self.realm
+                                                                               where:@"chatUniqueIdentifier == %@ AND messageFile.groupMsgIdHashHex ==[c] %@ AND messageFile.fileType == %d",
+                                                   chat.uniqueIdentifier, msgIdHash, (int)OCTMessageFileTypeLoading]];
+
+        if (! existing || existing.isInvalidated || ! existing.messageFile) {
+            return;
+        }
+
+        // Our own file is never ended here: the same test of "ours" as for a BEGIN and a COMPLETE. Our row
+        // is loading for the whole upload, and its msg-id hash rides in the clear in every packet we send.
+        if (existing.groupSenderPeerId == 0 && ! existing.groupHistorySync) {
+            return;
+        }
+
+        [self.realm beginWriteTransaction];
+        existing.messageFile.fileType = OCTMessageFileTypeCanceled;
+        [self.realm commitWriteTransaction];
+        ended = YES;
+    });
+
+    return ended;
+}
+
 // KHANDAQ (#170): strip the "NNN_" uniquifier prefixes that OCTFileTools/receivers prepend when
 // storing a file under an already-taken name, so re-broadcast copies compare equal to the original.
 static NSString *OCTGroupFileBaseName(NSString *fileName)

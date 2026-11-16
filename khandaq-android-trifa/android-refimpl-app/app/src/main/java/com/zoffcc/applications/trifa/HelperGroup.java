@@ -6446,7 +6446,9 @@ public class HelperGroup
         byte[] data = new byte[(int)data_length];
         data_buf.rewind();
         data_buf.get(data);
-        if (!NgcGroupFileTransfer.awaitPace(g))
+        // KHANDAQ (0.2.57): the packet goes to every member: at the pace of the relays too when one is over a relay.
+        final boolean overRelay = NgcGroupFileTransfer.overRelay(groupNum, members);
+        if (!NgcGroupFileTransfer.awaitPace(g, overRelay))
         {
             return;
         }
@@ -6470,11 +6472,12 @@ public class HelperGroup
             AirComposerNotice.say(context_s.getString(R.string.group_file_send_failed), true);
             return;
         }
-        NgcGroupFileTransfer.spendPace(data_length, members.length);
+        NgcGroupFileTransfer.spendPace(data_length, members.length, overRelay);
 
         notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash, length_sum, length_sum);
         NgcGroupFileTransfer.outgoingSent(g);
-        HelperGeneric.logI(TAG, "send_group_image:done bytes=" + length_sum + " res=" + sendRes);
+        HelperGeneric.logI(TAG, "send_group_image:done bytes=" + length_sum + " res=" + sendRes
+                + (overRelay ? " over a relay" : ""));
     }
 
     /** tox_group_send_custom_packet's TOX_ERR_GROUP_SEND_CUSTOM_PACKET_DISCONNECTED (5), as the JNI returns it. */

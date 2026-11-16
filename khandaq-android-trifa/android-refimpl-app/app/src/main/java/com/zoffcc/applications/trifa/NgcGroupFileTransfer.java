@@ -119,6 +119,8 @@ public final class NgcGroupFileTransfer
 
     /** KHANDAQ (0.2.56): one pace for every group file packet this device sends (NgcUploadPace). */
     private static final NgcUploadPace PACE = new NgcUploadPace();
+    /** KHANDAQ (0.2.57): and one for those that go to a member over a relay (NgcUploadPace.overRelay). */
+    private static final NgcUploadPace RELAY_PACE = new NgcUploadPace(NgcUploadPace.RELAYED_BYTES_PER_SECOND);
     /** KHANDAQ (0.2.56): our group files that wait for a member to send them to (NgcOutgoingFileWaits). */
     private static final NgcOutgoingFileWaits WAITS = new NgcOutgoingFileWaits();
     /** KHANDAQ (0.2.56): how often each incoming file asked its sender for missing chunks (NgcFileNackBudget). */
@@ -2785,33 +2787,50 @@ public final class NgcGroupFileTransfer
 
     /**
      * KHANDAQ (0.2.56): waits until the pace lets a packet go (NgcUploadPace); false when the file was stopped
-     * meanwhile. The packet's cost is spent by the caller once it went ({@link #spendPace}).
+     * meanwhile. The packet's cost is spent by the caller once it went ({@link #spendPace}). 0.2.57: a packet that goes
+     * to a member over a relay ({@link #overRelay}) waits for the pace of the relays too.
      */
-    static boolean awaitPace(final GroupMessage g)
+    static boolean awaitPace(final GroupMessage g, final boolean overRelay)
     {
         while (true)
         {
             final long waitMs;
             synchronized (PACE)
             {
-                final long now = nowMs();
-                if (PACE.ready(now))
+                synchronized (RELAY_PACE)
                 {
-                    return true;
+                    waitMs = NgcUploadPace.msUntilReady(PACE, RELAY_PACE, overRelay, nowMs());
                 }
-                waitMs = PACE.msUntilReady(now);
             }
-            if (isStopped(g) || !sleepQuietly(Math.max(1L, Math.min(waitMs, 50L))))
+            if (waitMs <= 0L)
+            {
+                return true;
+            }
+            if (isStopped(g) || !sleepQuietly(Math.min(waitMs, 50L)))
             {
                 return false;
             }
         }
     }
 
-    /** KHANDAQ (0.2.56): a packet of this many bytes went to this many members (NgcUploadPace.cost). */
-    static void spendPace(final long packetBytes, final int members)
+    /**
+     * KHANDAQ (0.2.56): a packet of this many bytes went to this many members (NgcUploadPace.cost); 0.2.57: and over
+     * a relay, as {@link #awaitPace} was told.
+     */
+    static void spendPace(final long packetBytes, final int members, final boolean overRelay)
     {
-        PACE.spend(NgcUploadPace.cost(packetBytes, members));
+        NgcUploadPace.spend(PACE, RELAY_PACE, packetBytes, members, overRelay);
+    }
+
+    /**
+     * KHANDAQ (0.2.57): whether a packet to these members of the group goes to one that toxcore reaches only through a
+     * relay (NgcUploadPace.overRelay). A private packet asks about its member alone.
+     */
+    static boolean overRelay(final long groupNum, final long... peerIds)
+    {
+        final long selfPeerId = tox_group_self_get_peer_id(groupNum);
+        return NgcUploadPace.overRelay(peerIds, selfPeerId,
+                                       peerId -> tox_group_peer_get_connection_status(groupNum, peerId));
     }
 
     /**
@@ -2839,6 +2858,8 @@ public final class NgcGroupFileTransfer
         /** The members that took the BEGIN. */
         private final java.util.Set<Long> begun = new java.util.HashSet<>();
         private int refusals = 0;
+        /** KHANDAQ (0.2.57): the last packet went to a member over a relay (overRelay); logged when it changes. */
+        private boolean relayed = false;
 
         PacedSend(final long groupNum, final PeerSendTargets targets, final GroupMessage g, final byte[] beginPkt)
         {
@@ -2912,7 +2933,15 @@ public final class NgcGroupFileTransfer
                 {
                     return SEND_STOPPED;
                 }
-                if (!awaitPace(g))
+                // KHANDAQ (0.2.57): a packet that goes to a member over a relay goes at the pace of the relays too.
+                final boolean overRelay = overRelay(groupNum, targets.peerIds);
+                if (overRelay != relayed)
+                {
+                    relayed = overRelay;
+                    HelperGeneric.logI(TAG, "send:" + (overRelay ? "over a relay" : "direct") + " msg="
+                            + g.msg_id_hash.substring(0, 8) + " " + targets.describe());
+                }
+                if (!awaitPace(g, overRelay))
                 {
                     return SEND_STOPPED;
                 }
@@ -2931,7 +2960,7 @@ public final class NgcGroupFileTransfer
                 }
                 if (took > 0)
                 {
-                    spendPace(pkt.length, took);
+                    spendPace(pkt.length, took, overRelay);
                     return SEND_OK;
                 }
 
@@ -2979,7 +3008,9 @@ public final class NgcGroupFileTransfer
                 {
                     continue;
                 }
-                if (!awaitPace(g))
+                // KHANDAQ (0.2.57): a private packet: over a relay when its member is.
+                final boolean overRelay = overRelay(groupNum, peerId);
+                if (!awaitPace(g, overRelay))
                 {
                     return false;
                 }
@@ -2987,7 +3018,7 @@ public final class NgcGroupFileTransfer
                                                                      beginPkt.length);
                 if (HelperGroup.is_ngc_custom_packet_send_ok(res))
                 {
-                    spendPace(beginPkt.length, 1);
+                    spendPace(beginPkt.length, 1, overRelay);
                     begun.add(peerId);
                     HelperGeneric.logI(TAG, "send:begin to member that came peer=" + peerId);
                 }

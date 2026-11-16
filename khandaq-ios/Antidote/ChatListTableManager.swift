@@ -453,6 +453,48 @@ extension ChatListTableManager {
     }
 }
 
+extension ChatListTableManager {
+    /// The chat at `row` of a filter tab: `count` chats in their order, read through `chatAt`, of which
+    /// `matches` tells those in the tab. Saved Messages is always pinned to the top (within whatever filter tab
+    /// it qualifies for), and KHANDAQ (0.2.57, owner 2026-11-16) Khandaq Community right below it, or first
+    /// without it, the same way; the other chats keep their order. Past the end: Saved Messages, or nil.
+    static func chat(atRow row: Int, count: Int, chatAt: (Int) -> OCTChat, matches: (OCTChat) -> Bool) -> OCTChat? {
+        var saved: OCTChat?
+        var community: OCTChat?
+
+        for index in 0..<count {
+            let chat = chatAt(index)
+            guard matches(chat) else {
+                continue
+            }
+            if chat.isSavedMessages {
+                saved = chat
+            }
+            else if community == nil && KhandaqCommunity.isCommunity(chat) {
+                community = chat
+            }
+        }
+
+        let pinned = [saved, community].compactMap { $0 }
+        if row < pinned.count {
+            return pinned[row]
+        }
+
+        var visible = pinned.count
+        for index in 0..<count {
+            let chat = chatAt(index)
+            guard matches(chat), !chat.isSavedMessages, chat.uniqueIdentifier != community?.uniqueIdentifier else {
+                continue
+            }
+            if visible == row {
+                return chat
+            }
+            visible += 1
+        }
+        return saved
+    }
+}
+
 private extension ChatListTableManager {
     func addNotificationBlocks() {
         chatsToken = chats.addNotificationBlock { [weak self] change in
@@ -646,47 +688,10 @@ private extension ChatListTableManager {
     }
 
     func chatAtFilteredRow(_ row: Int) -> OCTChat {
-        // Saved Messages is always pinned to the top (within whatever filter tab it qualifies for).
-        var saved: OCTChat?
-        var visible = 0
-
-        for index in 0..<chats.count {
-            let chat = chats[index]
-            guard chatMatchesFilter(chat) else {
-                continue
-            }
-            if chat.isSavedMessages {
-                saved = chat
-            }
-        }
-
-        if saved != nil {
-            if row == 0 {
-                return saved!
-            }
-            for index in 0..<chats.count {
-                let chat = chats[index]
-                guard chatMatchesFilter(chat), !chat.isSavedMessages else {
-                    continue
-                }
-                visible += 1
-                if visible == row {
-                    return chat
-                }
-            }
-            return saved!
-        }
-
-        for index in 0..<chats.count {
-            let chat = chats[index]
-            if chatMatchesFilter(chat) {
-                if visible == row {
-                    return chat
-                }
-                visible += 1
-            }
-        }
-        return chats.firstObject
+        return ChatListTableManager.chat(atRow: row,
+                                         count: chats.count,
+                                         chatAt: { self.chats[$0] },
+                                         matches: { self.chatMatchesFilter($0) }) ?? chats.firstObject
     }
 
     func chatMatchesFilter(_ chat: OCTChat) -> Bool {

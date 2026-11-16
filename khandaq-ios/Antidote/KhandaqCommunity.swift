@@ -17,8 +17,8 @@ protocol KhandaqCommunityMarks: AnyObject {
 
 /// KHANDAQ (0.2.57): Khandaq Community, the official group of the app (SPEC-community, part B). Every profile
 /// joins it once by itself, muted, and never again once the person has left it. Wherever a group's name shows
-/// it is "Khandaq Community" (owner, 2026-11-16); otherwise it is a group like any other: the list, the
-/// dossier, the mute switch, leaving and moderation are those of every group.
+/// it is "Khandaq Community", and its row stands at the top of the chat list (owner, 2026-11-16); otherwise it
+/// is a group like any other: the dossier, the mute switch, leaving and moderation are those of every group.
 /// Its founder is our bot on khandaq.org, whose state keeps the chat id, so the id is compiled in. The join
 /// needs the toxcore that looks a group up by its chat id (e24bb519): without it the group stays in "joining".
 enum KhandaqCommunity {

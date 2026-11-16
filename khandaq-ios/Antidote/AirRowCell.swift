@@ -634,6 +634,8 @@ final class AirSectionHeaderView: UITableViewHeaderFooterView {
         switch kind {
             case .requests:
                 return "requests"
+            case .pinned:
+                return "pinned"
             case .live:
                 return "live"
             case .away:

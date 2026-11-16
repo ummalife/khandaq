@@ -178,7 +178,7 @@ class KhandaqCommunityTests: XCTestCase {
         XCTAssertEqual(objects.chats(predicate: NotificationCoordinator.unreadChatsPredicate).count, 3)
     }
 
-    // MARK: Its name (owner, 2026-11-16)
+    // MARK: Its name and its place in the list (owner, 2026-11-16)
 
     /// Its founder's topic was "Official Khandaq community · Be kind, no spam or ads · …", the list showed the
     /// topic, and a profile whose group gave no name stores the topic as the name. Wherever a group's name shows
@@ -220,6 +220,31 @@ class KhandaqCommunityTests: XCTestCase {
         XCTAssertEqual(GroupReport(chat: other, message: message).subject, "Report: Book club")
         let unnamed = try groupChat("unnamed", chatIdHex: String(repeating: "C", count: 64), name: nil, topic: nil)
         XCTAssertEqual(ChatListContent.groupTitle(for: unnamed), String(localized: "group_chat_default_title"))
+    }
+
+    /// The iPad list: Saved Messages is pinned to the top of every tab it is in, and Khandaq Community right
+    /// below it, or first without it, the same way, joined by itself or by hand; once left, its chat is gone and
+    /// so is its row.
+    func testOnTheIPadKhandaqCommunityComesRightAfterSavedMessages() throws {
+        let direct = try appClass("OCTChat", as: OCTChat.Type.self).init()
+        direct.uniqueIdentifier = "direct"
+        let saved = try appClass("OCTChat", as: OCTChat.Type.self).init()
+        saved.uniqueIdentifier = "saved"
+        saved.isSavedMessages = true
+        let community = try groupChat("community", chatIdHex: KhandaqCommunity.chatIdHex, name: "Khandaq Community", topic: nil)
+        let book = try groupChat("book", chatIdHex: String(repeating: "B", count: 64), name: "Book club", topic: nil)
+        // Newest activity first, as the list sorts them.
+        let chats = [direct, book, community, saved]
+        let everything: (OCTChat) -> Bool = { _ in true }
+
+        XCTAssertEqual(rows(chats, everything), ["saved", "community", "direct", "book"])
+        XCTAssertEqual(rows(chats.filter { !$0.isSavedMessages }, everything), ["community", "direct", "book"])
+        XCTAssertEqual(rows(chats, { $0.isGroup }), ["community", "book"], "the Groups tab")
+        XCTAssertEqual(rows(chats, { !$0.isGroup }), ["saved", "direct"], "the Direct tab")
+        XCTAssertEqual(rows(chats.filter { $0.uniqueIdentifier != "community" }, everything), ["saved", "direct", "book"], "left")
+        XCTAssertEqual(ChatListTableManager.chat(atRow: 4, count: chats.count, chatAt: { chats[$0] }, matches: everything)?.uniqueIdentifier,
+                       "saved", "past the end, as before")
+        XCTAssertNil(ChatListTableManager.chat(atRow: 1, count: 1, chatAt: { _ in book }, matches: everything))
     }
 
     // MARK: Item 3, left means never again, across a restart
@@ -386,6 +411,14 @@ class KhandaqCommunityTests: XCTestCase {
         chat.groupName = name
         chat.groupTopic = topic
         return chat
+    }
+
+    /// The ids of the iPad list's rows, top to bottom, for `chats` in their order and a tab that keeps `matches`.
+    private func rows(_ chats: [OCTChat], _ matches: (OCTChat) -> Bool) -> [String] {
+        let count = chats.filter(matches).count
+        return (0..<count).compactMap { row in
+            ChatListTableManager.chat(atRow: row, count: chats.count, chatAt: { chats[$0] }, matches: matches)?.uniqueIdentifier
+        }
     }
 
     private func appClass<T>(_ name: String, as type: T.Type) throws -> T {

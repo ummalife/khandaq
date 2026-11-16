@@ -394,10 +394,15 @@ struct AirEntry: Equatable {
     let avatarData: Data?
     /// AirTone index for the initials, from the friend's public key or the group's chat id.
     let tone: Int
+    /// KHANDAQ (0.2.57): Khandaq Community, which stands above the other conversations.
+    var isPinned = false
 
     var section: AirSectionKind {
         if kind == .saved {
             return .saved
+        }
+        if isPinned {
+            return .pinned
         }
         return reach.isLive ? .live : .away
     }
@@ -443,18 +448,22 @@ struct AirMessageHit: Equatable {
 
 enum AirSectionKind: Equatable {
     case requests
+    /// KHANDAQ (0.2.57, owner 2026-11-16): Khandaq Community, at the top of the conversations wherever it is
+    /// in the list (the filter or the query keeps it) and online or not, as Saved Messages is on the iPad.
+    case pinned
     case live
     case away
     case saved
     case messages
 
-    /// Request cards carry their own label; every other section has a heading with its count.
+    /// Request cards carry their own label, and the pinned row stands alone; every other section has a
+    /// heading with its count.
     var hasHeading: Bool {
-        return self != .requests
+        return self != .requests && self != .pinned
     }
 
     /// The order sections stand in, top to bottom.
-    static let order: [AirSectionKind] = [.requests, .live, .away, .saved, .messages]
+    static let order: [AirSectionKind] = [.requests, .pinned, .live, .away, .saved, .messages]
 }
 
 enum AirItem: Equatable {
@@ -560,7 +569,7 @@ enum AirListBuilder {
             sections.append(AirSnapshot.Section(kind: .requests, items: newestFirst.map { .request($0) }))
         }
 
-        for kind in [AirSectionKind.live, .away, .saved] {
+        for kind in [AirSectionKind.pinned, .live, .away, .saved] {
             let items = visible.filter { $0.section == kind }.sorted(by: rowOrder)
             if !items.isEmpty {
                 sections.append(AirSnapshot.Section(kind: kind, items: items.map { .entry($0) }))

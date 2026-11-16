@@ -536,7 +536,8 @@ private extension AirListDataSource {
                         unreadCount: ChatListContent.unreadCount(for: chat, submanagerGroups: submanagerGroups, submanagerObjects: submanagerObjects),
                         isFavorite: isFavorite,
                         avatarData: nil,
-                        tone: AirTone.index(for: chat.uniqueIdentifier))
+                        tone: AirTone.index(for: chat.uniqueIdentifier),
+                        isPinned: KhandaqCommunity.isCommunity(chat))
     }
 
     func savedEntry(for chat: OCTChat, isFavorite: Bool) -> AirEntry {
@@ -797,6 +798,9 @@ private extension AirListDataSource {
         switch kind {
             case .requests:
                 return String(localized: "air_request_tag")
+            case .pinned:
+                // No heading: the row says what it is.
+                return ""
             case .live:
                 return String(localized: "air_section_live")
             case .away:

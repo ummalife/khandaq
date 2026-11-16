@@ -141,6 +141,17 @@ QVector<HeldFiles::File> HeldFiles::hold(const File& file)
     return gone;
 }
 
+bool HeldFiles::find(uint32_t number, File& file) const
+{
+    for (const File& held : files) {
+        if (held.entry.fileNum == number) {
+            file = held;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool HeldFiles::take(uint32_t number, File& file)
 {
     for (int i = 0; i < files.size(); ++i) {

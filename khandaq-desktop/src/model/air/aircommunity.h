@@ -157,7 +157,12 @@ public:
      * itself. Its name plays no part: each file is its entry's, by number.
      */
     QVector<File> hold(const File& file);
-    /** Takes out the file of the entry with this number, for Accept; false when none is held. */
+    /**
+     * The file of the entry with this number, left where it is, for Accept to write; false when
+     * none is held.
+     */
+    bool find(uint32_t number, File& file) const;
+    /** Takes out the file of the entry with this number, once written; false when none is held. */
     bool take(uint32_t number, File& file);
     /** The group is gone: its files go with it, and a join again starts over (known). */
     void forgetGroup(const QByteArray& groupChatId);

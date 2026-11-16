@@ -3032,6 +3032,13 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     if (g == nullptr) {
         return;
     }
+    // KHANDAQ (0.2.57, review): a member whose messages are hidden on this device sends no file here
+    // either, as GroupMessageDispatcher drops their messages: no entry, no Accept, no unread count,
+    // nothing held in Khandaq Community to push the files of others out.
+    if (settings.getBlackList().contains(sender.toString())) {
+        qDebug() << "onGroupFileReceived: a file of a member whose messages are hidden; dropped";
+        return;
+    }
     static uint32_t groupFileNum = 700000;
 
     // KHANDAQ (0.2.57): in Khandaq Community the files of others wait for Accept, whatever the
@@ -3137,7 +3144,9 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
 void Widget::saveHeldGroupFile(const GroupId& groupId, const ToxFile& entry)
 {
     Air::Community::HeldFiles::File held;
-    if (!heldGroupFiles.take(entry.fileNum, held)) {
+    // KHANDAQ (0.2.57, review): only a file written leaves the hold (take, below): one that could
+    // not be written stays there for Accept again.
+    if (!heldGroupFiles.find(entry.fileNum, held)) {
         // It went to make room for newer files, and its entry says so already.
         return;
     }
@@ -3156,11 +3165,14 @@ void Widget::saveHeldGroupFile(const GroupId& groupId, const ToxFile& entry)
         if (opened) {
             out.remove();
         }
-        file.status = ToxFile::BROKEN;
-        updateGroupFileInChatLog(groupId, held.sender, file);
+        // The disk is full, the volume went, or every name is taken: the entry waits as it was,
+        // for Accept once there is room again.
+        AirDialog::notice(this, AirStrings::text(AirStrings::Text::FileAcceptFailedTitle),
+                          AirStrings::text(AirStrings::Text::TryAgain));
         return;
     }
     out.close();
+    heldGroupFiles.take(entry.fileNum, held);
     file.setFilePath(filePath);
     file.progress.addSample(file.progress.getFileSize(), QTime::currentTime());
     file.status = ToxFile::FINISHED;

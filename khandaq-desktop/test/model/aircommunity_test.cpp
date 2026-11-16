@@ -64,6 +64,7 @@ private slots:
     void aLongMessageIsCutAt500CharactersNeverInHalf();
     void filesOfOthersInTheCommunityWaitForATap();
     void heldFilesAreTakenByTheNumberOfTheirEntry();
+    void aFileStaysHeldUntilItIsWritten();
     void theOldestHeldFilesMakeRoomForNewOnes();
     void aGroupThatGoesTakesItsHeldFiles();
     void aFileIdComesOnceInARun();
@@ -482,6 +483,28 @@ void TestAirCommunity::heldFilesAreTakenByTheNumberOfTheirEntry()
     QVERIFY(!held.take(700002, file));
     QVERIFY(!held.take(123, file));
     QCOMPARE(held.count(), 1);
+}
+
+void TestAirCommunity::aFileStaysHeldUntilItIsWritten()
+{
+    // Accept writes a file found by its number, and takes it out only once it is written: one the
+    // disk did not take waits for Accept again, bytes and all.
+    Community::HeldFiles held;
+    held.hold(heldFile(700001, Community::chatId(), 3, QStringLiteral("a.jpg"), 'a'));
+    held.hold(heldFile(700002, Community::chatId(), 5, QStringLiteral("b.jpg"), 'b'));
+    Community::HeldFiles::File file;
+    QVERIFY(held.find(700002, file));
+    QCOMPARE(file.data, QByteArray(5, 'b'));
+    QCOMPARE(file.entry.fileName, QStringLiteral("b.jpg"));
+    QVERIFY(held.find(700002, file));
+    QCOMPARE(held.count(), 2);
+    QCOMPARE(held.bytes(), qint64{8});
+    QVERIFY(!held.find(123, file));
+    // Written: it goes, and the other stays.
+    QVERIFY(held.take(700002, file));
+    QVERIFY(!held.find(700002, file));
+    QVERIFY(held.find(700001, file));
+    QCOMPARE(file.data, QByteArray(3, 'a'));
 }
 
 void TestAirCommunity::theOldestHeldFilesMakeRoomForNewOnes()

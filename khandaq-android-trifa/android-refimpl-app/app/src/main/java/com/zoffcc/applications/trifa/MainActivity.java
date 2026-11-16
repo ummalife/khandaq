@@ -6458,6 +6458,9 @@ public class MainActivity extends AppCompatActivity
         if ((connection_status_prev == TOX_CONNECTION_NONE.value) && (a_TOX_CONNECTION != TOX_CONNECTION_NONE.value))
         {
             DeliveryRestoreCoordinator.onConnectionRestored();
+            // KHANDAQ (0.2.57, SPEC-community item 1): Khandaq Community, joined once by itself; after a start and
+            // after every reconnect, until a join took.
+            CommunityAutoJoin.onNodeConnected();
         }
 
         if (bootstrapping)
@@ -9664,6 +9667,9 @@ public class MainActivity extends AppCompatActivity
         set_group_active(group_identifier);
         add_system_message_to_group_chat(group_identifier, "You joined the group");
         update_savedata_file_wrapper();
+        // KHANDAQ (0.2.57, SPEC-community item 1): connected, the group is in the saved state now; Khandaq Community
+        // is the profile's for good then.
+        CommunityAutoJoin.onGroupConnected(group_identifier);
         update_group_in_friendlist(group_identifier);
         update_group_in_groupmessagelist(group_identifier);
         int peer_role = tox_group_self_get_role(group_number);

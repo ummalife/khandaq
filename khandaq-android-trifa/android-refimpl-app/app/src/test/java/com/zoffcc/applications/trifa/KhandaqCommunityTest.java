@@ -1,0 +1,501 @@
+package com.zoffcc.applications.trifa;
+
+import org.junit.Test;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * KHANDAQ (0.2.57, SPEC-community part B, item 8): Khandaq Community is joined once by itself, muted, and never
+ * again once the person left it. The rules (KhandaqCommunity) are held as the phone runs them, and the app's code
+ * is checked to ask them where it connects, joins, leaves and takes files.
+ */
+public class KhandaqCommunityTest
+{
+    private static final String JAVA = "src/main/java/com/zoffcc/applications/trifa/";
+    /** A Tox ID: the public key (64 hexadecimal characters), then the nospam and the checksum. */
+    private static final String TOX_ID = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" + "1122334455AA";
+    private static final String OTHER_TOX_ID =
+            "FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210" + "66778899BBCC";
+    private static final String OTHER_GROUP = "A1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8F90";
+    private static final String LEGACY_TRIFA_GROUP = "154b3973bd0e66304fd6179a8a54759073649e09e6e368f0334fc6ed666ab762";
+
+    /**
+     * The marks as the profile's settings keep them (get_g_opts and set_g_opts): the map outlives one start, so a
+     * store made again over it is the app after a restart.
+     */
+    private static final class ProfileStore implements KhandaqCommunity.Store
+    {
+        final Map<String, String> settings;
+        final String toxId;
+        final List<String> muted = new ArrayList<>();
+
+        ProfileStore(final Map<String, String> settings, final String toxId)
+        {
+            this.settings = settings;
+            this.toxId = toxId;
+        }
+
+        private String key(final String mark)
+        {
+            return KhandaqCommunity.markKey(mark, toxId);
+        }
+
+        @Override
+        public boolean autoJoinDone()
+        {
+            return "true".equals(settings.get(key(KhandaqCommunity.MARK_AUTO_JOIN_DONE)));
+        }
+
+        @Override
+        public boolean left()
+        {
+            return "true".equals(settings.get(key(KhandaqCommunity.MARK_LEFT)));
+        }
+
+        @Override
+        public void setAutoJoinDone()
+        {
+            settings.put(key(KhandaqCommunity.MARK_AUTO_JOIN_DONE), "true");
+        }
+
+        @Override
+        public void setLeft()
+        {
+            settings.put(key(KhandaqCommunity.MARK_LEFT), "true");
+        }
+
+        @Override
+        public void mute(final String chatId)
+        {
+            muted.add(chatId);
+        }
+    }
+
+    /** The app's join by chat id, counted; it took when {@code takes} says so. */
+    private static final class Join implements KhandaqCommunity.Join
+    {
+        boolean takes;
+        int calls;
+
+        Join(final boolean takes)
+        {
+            this.takes = takes;
+        }
+
+        @Override
+        public boolean join()
+        {
+            calls++;
+            return takes;
+        }
+    }
+
+    // ---- the decision (SPEC Tests: join or not) ----
+
+    @Test
+    public void it_joins_only_when_connected_never_joined_by_itself_never_left_and_not_in_it()
+    {
+        for (int bits = 0; bits < 16; bits++)
+        {
+            final boolean connected = (bits & 1) != 0;
+            final boolean autoJoinDone = (bits & 2) != 0;
+            final boolean left = (bits & 4) != 0;
+            final boolean alreadyInGroup = (bits & 8) != 0;
+            assertEquals("connected=" + connected + " done=" + autoJoinDone + " left=" + left + " in=" + alreadyInGroup,
+                         connected && !autoJoinDone && !left && !alreadyInGroup,
+                         KhandaqCommunity.shouldAutoJoin(connected, autoJoinDone, left, alreadyInGroup));
+        }
+    }
+
+    @Test
+    public void offline_or_already_in_it_nothing_is_tried()
+    {
+        final ProfileStore store = new ProfileStore(new HashMap<>(), TOX_ID);
+        final Join join = new Join(true);
+        assertFalse(KhandaqCommunity.autoJoin(store, false, false, true, join));
+        assertFalse(KhandaqCommunity.autoJoin(store, true, true, true, join));
+        assertEquals(0, join.calls);
+        assertFalse(store.autoJoinDone());
+        assertTrue(store.muted.isEmpty());
+    }
+
+    // ---- muted only on the auto-join (SPEC Tests) ----
+
+    @Test
+    public void a_join_that_made_the_group_mutes_it_and_the_profile_is_marked_once_the_group_connected()
+    {
+        final ProfileStore store = new ProfileStore(new HashMap<>(), TOX_ID);
+        final Join join = new Join(true);
+        assertTrue(KhandaqCommunity.autoJoin(store, true, false, true, join));
+        assertEquals(1, join.calls);
+        assertEquals(Collections.singletonList(KhandaqCommunity.CHAT_ID), store.muted);
+        // Toxcore saves the group only once it has connected: until then the join does not count.
+        assertFalse(store.autoJoinDone());
+        assertFalse(KhandaqCommunity.noteGroupKept(store, false));
+        assertFalse(store.autoJoinDone());
+
+        assertTrue(KhandaqCommunity.noteGroupKept(store, true));
+        assertTrue(store.autoJoinDone());
+        assertFalse(KhandaqCommunity.noteGroupKept(store, true));
+        assertFalse(store.left());
+        assertEquals(1, store.muted.size());
+    }
+
+    @Test
+    public void a_group_joined_by_hand_keeps_the_defaults_of_every_group()
+    {
+        // In it already (joined by hand by ID or by an invitation): no join, no mute, nothing marked.
+        final ProfileStore store = new ProfileStore(new HashMap<>(), TOX_ID);
+        final Join join = new Join(true);
+        assertFalse(KhandaqCommunity.autoJoin(store, true, true, false, join));
+        assertEquals(0, join.calls);
+        assertTrue(store.muted.isEmpty());
+        assertFalse(store.autoJoinDone());
+
+        // Joined by hand and lost before it connected (toxcore did not save it): joined again, its switch as it was.
+        assertTrue(KhandaqCommunity.autoJoin(store, true, false, false, join));
+        assertEquals(1, join.calls);
+        assertTrue(store.muted.isEmpty());
+
+        // Once it connected it is the profile's for good, as one the app joined.
+        assertTrue(KhandaqCommunity.noteGroupKept(store, true));
+        assertFalse(KhandaqCommunity.autoJoin(store, true, false, false, join));
+        assertEquals(1, join.calls);
+    }
+
+    @Test
+    public void a_join_that_failed_marks_nothing_and_the_next_connection_tries_again()
+    {
+        final ProfileStore store = new ProfileStore(new HashMap<>(), TOX_ID);
+        final Join join = new Join(false);
+        assertFalse(KhandaqCommunity.autoJoin(store, true, false, true, join));
+        assertTrue(store.muted.isEmpty());
+        assertFalse(store.autoJoinDone());
+
+        join.takes = true;
+        assertTrue(KhandaqCommunity.autoJoin(store, true, false, true, join));
+        assertEquals(2, join.calls);
+        assertEquals(Collections.singletonList(KhandaqCommunity.CHAT_ID), store.muted);
+    }
+
+    @Test
+    public void a_join_that_never_connected_is_made_again_at_the_next_start_and_keeps_its_switch()
+    {
+        // Live QA 2026-11-16: toxcore saves a group only once it has connected, so a restart before that loses it.
+        final Map<String, String> settings = new HashMap<>();
+        assertTrue(KhandaqCommunity.autoJoin(new ProfileStore(settings, TOX_ID), true, false, true, new Join(true)));
+
+        // Next start: the row is there, toxcore has no group. It is joined again; the switch stays as the person
+        // left it (muted by the first join, or turned on since).
+        final ProfileStore restarted = new ProfileStore(settings, TOX_ID);
+        final Join join = new Join(true);
+        assertTrue(KhandaqCommunity.autoJoin(restarted, true, false, false, join));
+        assertEquals(1, join.calls);
+        assertTrue(restarted.muted.isEmpty());
+        assertFalse(restarted.autoJoinDone());
+    }
+
+    @Test
+    public void once_it_connected_it_is_not_joined_by_itself_again_after_a_restart()
+    {
+        final Map<String, String> settings = new HashMap<>();
+        final ProfileStore store = new ProfileStore(settings, TOX_ID);
+        assertTrue(KhandaqCommunity.autoJoin(store, true, false, true, new Join(true)));
+        assertTrue(KhandaqCommunity.noteGroupKept(store, true));
+
+        // Next start: the group is gone (kicked); it is not joined by itself again.
+        final ProfileStore restarted = new ProfileStore(settings, TOX_ID);
+        final Join join = new Join(true);
+        assertFalse(KhandaqCommunity.autoJoin(restarted, true, false, false, join));
+        assertEquals(0, join.calls);
+        assertTrue(restarted.muted.isEmpty());
+    }
+
+    // ---- left: never again, across a restart (SPEC Tests) ----
+
+    @Test
+    public void leaving_is_final_across_a_restart()
+    {
+        final Map<String, String> settings = new HashMap<>();
+        final ProfileStore store = new ProfileStore(settings, TOX_ID);
+        assertTrue(KhandaqCommunity.autoJoin(store, true, false, true, new Join(true)));
+        // The person leaves it, by the id in the case the database keeps it in, before it ever connected.
+        assertTrue(KhandaqCommunity.noteGroupLeft(store, KhandaqCommunity.CHAT_ID.toLowerCase(Locale.ROOT)));
+        assertFalse(KhandaqCommunity.noteGroupLeft(store, KhandaqCommunity.CHAT_ID));
+
+        final ProfileStore restarted = new ProfileStore(settings, TOX_ID);
+        assertTrue(restarted.left());
+        final Join join = new Join(true);
+        assertFalse(KhandaqCommunity.autoJoin(restarted, true, false, false, join));
+        assertFalse(KhandaqCommunity.autoJoin(restarted, true, false, true, join));
+        assertEquals(0, join.calls);
+    }
+
+    @Test
+    public void a_leave_before_any_auto_join_is_final_too()
+    {
+        // Joined by hand, left by hand: the app never puts the person in by itself afterwards.
+        final Map<String, String> settings = new HashMap<>();
+        assertTrue(KhandaqCommunity.noteGroupLeft(new ProfileStore(settings, TOX_ID), KhandaqCommunity.CHAT_ID));
+        final ProfileStore restarted = new ProfileStore(settings, TOX_ID);
+        final Join join = new Join(true);
+        assertFalse(KhandaqCommunity.autoJoin(restarted, true, false, true, join));
+        assertEquals(0, join.calls);
+        assertFalse(restarted.autoJoinDone());
+    }
+
+    @Test
+    public void leaving_another_group_changes_nothing()
+    {
+        final Map<String, String> settings = new HashMap<>();
+        final ProfileStore store = new ProfileStore(settings, TOX_ID);
+        assertFalse(KhandaqCommunity.noteGroupLeft(store, OTHER_GROUP));
+        assertFalse(KhandaqCommunity.noteGroupLeft(store, LEGACY_TRIFA_GROUP));
+        assertFalse(KhandaqCommunity.noteGroupLeft(store, null));
+        assertTrue(settings.isEmpty());
+    }
+
+    // ---- the marks are the profile's ----
+
+    @Test
+    public void the_marks_are_kept_under_the_start_of_the_profiles_key_never_the_whole_key()
+    {
+        assertEquals("community.left:01234567", KhandaqCommunity.markKey(KhandaqCommunity.MARK_LEFT, TOX_ID));
+        assertEquals("community.autoJoinDone:01234567",
+                     KhandaqCommunity.markKey(KhandaqCommunity.MARK_AUTO_JOIN_DONE, TOX_ID.toUpperCase(Locale.ROOT)));
+        assertFalse(KhandaqCommunity.markKey(KhandaqCommunity.MARK_LEFT, TOX_ID).contains("89ABCDEF"));
+        // No Tox ID yet, or none that holds a public key: no key, and so no mark is read or written.
+        assertNull(KhandaqCommunity.markKey(KhandaqCommunity.MARK_LEFT, null));
+        assertNull(KhandaqCommunity.markKey(KhandaqCommunity.MARK_LEFT, ""));
+        assertNull(KhandaqCommunity.markKey(KhandaqCommunity.MARK_LEFT, TOX_ID.substring(0, 63)));
+        assertNull(KhandaqCommunity.markKey(KhandaqCommunity.MARK_LEFT, "G" + TOX_ID.substring(1)));
+    }
+
+    @Test
+    public void another_profile_imported_over_this_one_starts_without_its_marks()
+    {
+        final Map<String, String> settings = new HashMap<>();
+        final ProfileStore first = new ProfileStore(settings, TOX_ID);
+        assertTrue(KhandaqCommunity.autoJoin(first, true, false, true, new Join(true)));
+        assertTrue(KhandaqCommunity.noteGroupKept(first, true));
+        assertTrue(KhandaqCommunity.noteGroupLeft(first, KhandaqCommunity.CHAT_ID));
+
+        final ProfileStore imported = new ProfileStore(settings, OTHER_TOX_ID);
+        assertFalse(imported.autoJoinDone());
+        final Join join = new Join(true);
+        assertTrue(KhandaqCommunity.autoJoin(imported, true, false, true, join));
+        assertEquals(1, join.calls);
+
+        // The first profile, imported back, still has its leave.
+        assertFalse(KhandaqCommunity.autoJoin(new ProfileStore(settings, TOX_ID), true, false, true, new Join(true)));
+    }
+
+    // ---- the group ----
+
+    @Test
+    public void the_community_is_known_by_its_chat_id_in_either_case()
+    {
+        assertEquals(64, KhandaqCommunity.CHAT_ID.length());
+        assertEquals(KhandaqCommunity.CHAT_ID.toUpperCase(Locale.ROOT), KhandaqCommunity.CHAT_ID);
+        assertTrue(KhandaqCommunity.isCommunity(KhandaqCommunity.CHAT_ID));
+        assertTrue(KhandaqCommunity.isCommunity(KhandaqCommunity.CHAT_ID.toLowerCase(Locale.ROOT)));
+        assertTrue(KhandaqCommunity.isCommunity(" " + KhandaqCommunity.CHAT_ID + "\n"));
+        assertFalse(KhandaqCommunity.isCommunity(OTHER_GROUP));
+        assertFalse(KhandaqCommunity.isCommunity(null));
+        assertFalse(KhandaqCommunity.isCommunity(""));
+        // Never the old TRIfA group, which HelperGroup.is_removed_legacy_public_community_group keeps away.
+        assertFalse(KhandaqCommunity.isCommunity(LEGACY_TRIFA_GROUP));
+        assertTrue(read(JAVA + "HelperGroup.java").contains("\"" + LEGACY_TRIFA_GROUP + "\""));
+    }
+
+    @Test
+    public void muted_the_community_notifies_nothing_not_even_a_mention()
+    {
+        assertFalse(KhandaqCommunity.mentionBreaksMute(KhandaqCommunity.CHAT_ID, true));
+        assertFalse(KhandaqCommunity.mentionBreaksMute(KhandaqCommunity.CHAT_ID.toLowerCase(Locale.ROOT), true));
+        // Turned on by the person, it is a group like any other; and a mention breaks through every other mute.
+        assertTrue(KhandaqCommunity.mentionBreaksMute(KhandaqCommunity.CHAT_ID, false));
+        assertTrue(KhandaqCommunity.mentionBreaksMute(OTHER_GROUP, true));
+        assertTrue(KhandaqCommunity.mentionBreaksMute(OTHER_GROUP, false));
+
+        // The mention is the only thing that turns a notification back on after the group's mute, and it asks.
+        final String group = read(JAVA + "HelperGroup.java");
+        assertEquals(1, count(bare(group), "do_notification=true;}"));
+        assertTrue(bare(group).contains("if(GroupMentionHelper.isSelfMentioned(message_,group_id)"
+                                        + "&&KhandaqCommunity.mentionBreaksMute(group_id,group_temp.notification_silent))"
+                                        + "{do_notification=true;}"));
+        // Sounds and the launcher's badge come only with a notification: the app sets no badge count of its own.
+        final String notifications = read(JAVA + "HelperMsgNotification.java");
+        assertFalse(notifications.contains(".setNumber("));
+        assertFalse(notifications.contains("ShortcutBadger"));
+    }
+
+    @Test
+    public void files_of_others_from_history_sync_never_come_by_themselves_whatever_their_date()
+    {
+        // History sync carries a small file whole, with the date its sender claims (up to 200 minutes back). In
+        // the Community the gate says no for any date, so the synced file is refused before anything is written:
+        // it never shows in the chat. The gate itself takes no date.
+        final String group = read(JAVA + "HelperGroup.java");
+        final String synced = bare(method(group, "private static void group_file_add_from_sync("));
+        assertTrue(synced.contains("{booleando_notification=true;booleando_badge_update=true;"));
+        final int gate = synced.indexOf("if(!ngc_incoming_download_allowed(group_identifier,message_id_hash)){");
+        assertTrue(gate > 0);
+        // (bare() takes the spaces out of the log text too.)
+        assertTrue(synced.substring(gate).startsWith("if(!ngc_incoming_download_allowed(group_identifier,message_id_hash)){"
+                                                     + "HelperGeneric.logI(TAG,\"group_file_add_from_sync:attachment"
+                                                     + "downloadnotallowed->droppingsyncedfile\");return;}"));
+        final String beforeGate = synced.substring(0, gate);
+        assertFalse("nothing is stored before the gate", beforeGate.contains("insert_into_group_message_db"));
+        assertFalse("nothing is written before the gate", beforeGate.contains("save_"));
+        assertTrue(group.contains("static boolean ngc_incoming_download_allowed(final String groupId, final String msgIdHash)"));
+
+        // The live paths ask the same gate: a small file keeps its row and waits for a tap, a chunked one too.
+        final String small = bare(method(group, "static void handle_incoming_group_file("));
+        assertTrue(small.contains("if(ngc_incoming_download_allowed(group_id,m.msg_id_hash)){save_group_incoming_file("));
+        final String chunked = read(JAVA + "NgcGroupFileTransfer.java");
+        assertTrue(count(chunked, "HelperGroup.ngc_incoming_download_allowed(groupId, msgIdHex)") >= 2);
+    }
+
+    @Test
+    public void files_of_others_in_the_community_wait_for_a_tap_whatever_the_setting_says()
+    {
+        assertFalse(KhandaqCommunity.fileComesByItself(KhandaqCommunity.CHAT_ID, true));
+        assertFalse(KhandaqCommunity.fileComesByItself(KhandaqCommunity.CHAT_ID.toLowerCase(Locale.ROOT), true));
+        assertFalse(KhandaqCommunity.fileComesByItself(KhandaqCommunity.CHAT_ID, false));
+        // Every other group does as the setting says.
+        assertTrue(KhandaqCommunity.fileComesByItself(OTHER_GROUP, true));
+        assertFalse(KhandaqCommunity.fileComesByItself(OTHER_GROUP, false));
+    }
+
+    // ---- the app asks the rules ----
+
+    @Test
+    public void our_node_connecting_starts_the_join_after_a_start_and_every_reconnect()
+    {
+        final String callback = method(read(JAVA + "MainActivity.java"),
+                                       "static void android_tox_callback_self_connection_status_cb_method(");
+        final int wentOnline = callback.indexOf("DeliveryRestoreCoordinator.onConnectionRestored();");
+        final int join = callback.indexOf("CommunityAutoJoin.onNodeConnected();");
+        assertTrue(wentOnline > 0);
+        assertTrue("the join starts where the node comes online", join > wentOnline);
+        assertTrue(join < callback.indexOf('}', wentOnline));
+        assertTrue(bare(callback.substring(0, wentOnline)).endsWith(
+                "if((connection_status_prev==TOX_CONNECTION_NONE.value)&&(a_TOX_CONNECTION!=TOX_CONNECTION_NONE.value)){"));
+    }
+
+    @Test
+    public void the_join_counts_once_the_group_connected_and_a_join_toxcore_did_not_keep_is_made_again()
+    {
+        // The first sync of a group (toxcore's self join) is where it goes into the saved state.
+        final String selfJoin = method(read(JAVA + "MainActivity.java"),
+                                       "static void android_tox_callback_group_self_join_cb_method(long group_number)");
+        final int saved = selfJoin.indexOf("update_savedata_file_wrapper();");
+        final int kept = selfJoin.indexOf("CommunityAutoJoin.onGroupConnected(group_identifier);");
+        assertTrue(saved > 0);
+        assertTrue("the mark follows the save", kept > saved);
+
+        final String auto = read(JAVA + "CommunityAutoJoin.java");
+        final String joinIfDue = bare(method(auto, "private static void joinIfDue()"));
+        assertTrue(joinIfDue.contains(
+                "KhandaqCommunity.noteGroupKept(store,(groupNumber>=0)&&connectedNow(groupNumber))"));
+        assertTrue(joinIfDue.contains("finalbooleannewGroup=!hasRow();"));
+        assertTrue(joinIfDue.contains("KhandaqCommunity.autoJoin(store,connected,groupNumber>=0,newGroup,"));
+        assertTrue(bare(method(auto, "private static boolean connectedNow(final long groupNumber)")).contains(
+                "TOX_GROUP_CONNECTION_STATUS_CONNECTED.value"));
+    }
+
+    @Test
+    public void the_join_is_the_join_by_chat_id_with_the_profile_name_and_no_password()
+    {
+        final String auto = read(JAVA + "CommunityAutoJoin.java");
+        assertTrue(auto.contains("HelperGroup.join_public_group_by_id(KhandaqCommunity.CHAT_ID, null, false, null)"));
+        // A stand-in identity (#244) joins nothing.
+        assertTrue(bare(method(auto, "private static void joinIfDue()")).contains("MainActivity.identity_load_blocked"));
+        // The mute is the group's own switch, the one its dossier turns.
+        assertTrue(bare(auto).contains("notification_silent(true).execute();"));
+        final String join = method(read(JAVA + "HelperGroup.java"),
+                                   "static boolean join_public_group_by_id(final String group_id, @Nullable final String password, final boolean show_toast,\n");
+        assertTrue(bare(join).contains("get_group_peer_join_name(),password);"));
+    }
+
+    @Test
+    public void leaving_and_deleting_the_group_both_mark_the_leave()
+    {
+        final String list = read(JAVA + "GroupListHolder.java");
+        assertTrue(method(list, "static void leave_group(final String group_identifier)").contains(
+                "CommunityAutoJoin.noteGroupLeft(group_identifier);"));
+        assertTrue(method(list, "private static void delete_group_now(final GroupDB f2)").contains(
+                "CommunityAutoJoin.noteGroupLeft(f2.group_identifier);"));
+    }
+
+    @Test
+    public void every_group_file_path_asks_the_community_rule()
+    {
+        final String gate = method(read(JAVA + "HelperGroup.java"),
+                                   "static boolean ngc_incoming_download_allowed(final String groupId, final String msgIdHash)");
+        assertTrue(bare(gate).contains(
+                "KhandaqCommunity.fileComesByItself(groupId,HelperFiletransfer.attachment_auto_download_allowed())"
+                + "||is_ngc_manual_download_requested(groupId,msgIdHash);"));
+    }
+
+    private static String bare(final String source)
+    {
+        return source.replaceAll("\\s+", "");
+    }
+
+    private static int count(final String text, final String part)
+    {
+        int n = 0;
+        for (int at = text.indexOf(part); at >= 0; at = text.indexOf(part, at + part.length()))
+        {
+            n++;
+        }
+        return n;
+    }
+
+    /** The text of the method that starts with signature, up to its closing brace at class level. */
+    private static String method(final String source, final String signature)
+    {
+        final int start = source.indexOf(signature);
+        assertTrue(signature, start >= 0);
+        final int end = source.indexOf("\n    }\n", start);
+        assertTrue(signature, end > start);
+        return source.substring(start, end);
+    }
+
+    private static String read(final String name)
+    {
+        // Gradle runs unit tests from the module directory; an IDE may use the project root.
+        for (final String root : new String[]{"", "app/"})
+        {
+            final File f = new File(root + name);
+            if (f.isFile())
+            {
+                try
+                {
+                    return new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8).replace("\r\n", "\n");
+                }
+                catch (IOException e)
+                {
+                    throw new AssertionError(name, e);
+                }
+            }
+        }
+        throw new AssertionError(name + " not found from " + new File("").getAbsolutePath());
+    }
+}

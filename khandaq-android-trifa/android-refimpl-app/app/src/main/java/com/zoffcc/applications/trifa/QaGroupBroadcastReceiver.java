@@ -32,6 +32,7 @@ public class QaGroupBroadcastReceiver extends BroadcastReceiver
     public static final String ACTION_FORCE_ADD_FRIEND = "org.khandaq.qa.FORCE_ADD_FRIEND";
     public static final String ACTION_SEND_FRIEND_MESSAGE = "org.khandaq.qa.SEND_FRIEND_MESSAGE";
     public static final String ACTION_VERIFY_FRIEND_MESSAGE = "org.khandaq.qa.VERIFY_FRIEND_MESSAGE";
+    public static final String ACTION_FORGET_COMMUNITY_MARKS = "org.khandaq.qa.FORGET_COMMUNITY_MARKS";
 
     public static final String EXTRA_NAME = "name";
     public static final String EXTRA_GROUP_ID = "group_id";
@@ -286,6 +287,13 @@ public class QaGroupBroadcastReceiver extends BroadcastReceiver
                     Log.w(TAG, "qa_friend_verify:EE:" + e.getMessage());
                 }
                 HelperGeneric.logI(TAG, "qa_friend_verify:found=" + (count > 0) + " text=" + text);
+                return;
+            }
+            case ACTION_FORGET_COMMUNITY_MARKS:
+            {
+                // KHANDAQ (0.2.57, SPEC-community QA): a test profile as one that never had Khandaq Community marks.
+                CommunityAutoJoin.qaForgetMarks();
+                HelperGeneric.logI(TAG, "qa_group_broadcast:done action=" + action);
                 return;
             }
             default:

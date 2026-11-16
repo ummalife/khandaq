@@ -5763,7 +5763,10 @@ public class HelperGroup
             {
                 do_notification = false;
             }
-            if (GroupMentionHelper.isSelfMentioned(message_, group_id))
+            // KHANDAQ (0.2.57, SPEC-community): a mention breaks through the mute of a group, but not of Khandaq
+            // Community, where strangers write.
+            if (GroupMentionHelper.isSelfMentioned(message_, group_id)
+                && KhandaqCommunity.mentionBreaksMute(group_id, group_temp.notification_silent))
             {
                 do_notification = true;
             }
@@ -7330,11 +7333,14 @@ public class HelperGroup
     }
 
     // KHANDAQ (#120): the single chokepoint deciding whether we may pull/save an incoming group file
-    // right now. True when the global policy permits auto-download (Всегда, or Wi-Fi-only on Wi-Fi),
+    // right now. True when the global policy permits auto-download (Always, or Wi-Fi only on Wi-Fi),
     // OR the user explicitly tapped download for this specific file.
+    // KHANDAQ (0.2.57, SPEC-community item 6): in Khandaq Community, where strangers write, a file of another
+    // member comes only on that tap, whatever the policy says: the pushed bytes are dropped as on "Never", and
+    // nothing of it reaches the device's storage, the chat or the gallery before the tap fetches it again.
     static boolean ngc_incoming_download_allowed(final String groupId, final String msgIdHash)
     {
-        return HelperFiletransfer.attachment_auto_download_allowed()
+        return KhandaqCommunity.fileComesByItself(groupId, HelperFiletransfer.attachment_auto_download_allowed())
                 || is_ngc_manual_download_requested(groupId, msgIdHash);
     }
 

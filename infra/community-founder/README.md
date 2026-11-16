@@ -40,7 +40,7 @@ matches several members gets "give more digits". Commands are case-insensitive, 
 carries a command works, and anything else gets a one-line error. Every message is acknowledged
 (msgV3), and a resent message is acknowledged again but answered once.
 
-## The one change to toxcore
+## The one change to toxcore in the founder build
 
 `build.sh` compiles the toxcore the iOS client ships, as `infra/demo-contact` does, so that NGC
 moderation, the topic lock and msgV3 behave exactly as between the clients. It applies one patch to
@@ -52,6 +52,19 @@ peer that invited someone itself; members who join a founder that came back alon
 one. While it waits it sends no pings, so every member drops it after 58 s, and it gives joiners no
 topic. Both were seen with the probe before the patch, and are gone with it. The build stops if the
 patch no longer applies exactly, so a toxcore update in the pod gets it reviewed.
+
+## Clients need toxcore that looks a group up by its chat id
+
+Upstream toxcore walks the DHT toward a random key for every group (`m_create_group_connection`),
+so the founder and a joiner announced to, and searched, different nodes: a join by chat id never
+found the lone founder (300 s, no connection, on the public DHT). Since `e24bb519` every Khandaq copy
+of toxcore searches by the chat id instead (`onion_friend_search_key()` in `onion_client.c`; the
+desktop tree, the iOS pod and the Android `patches/apply_khandaq_group_search_key.py`, held by
+`scripts/check-group-search-key.py`). The founder builds from the pod copy, so it carries the change
+with no patch of its own; a fresh joiner then connects in 5 to 30 s.
+
+A client built without it (0.2.56 and older) cannot find the group by its chat id. The probe is
+built from the same tree, so a passing probe says nothing about such clients.
 
 ## Files
 

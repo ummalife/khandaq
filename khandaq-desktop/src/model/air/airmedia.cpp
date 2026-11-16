@@ -309,6 +309,10 @@ FileResume fileResume(const QByteArray& offerId, qint64 offerSize, const FileHer
         resume.offset = qMax<qint64>(0, offerSize - 1);
         return resume;
     }
+    if (here.refused) {
+        resume.step = FileResume::Step::AskAgain;
+        return resume;
+    }
     if (!here.accepted) {
         resume.step = FileResume::Step::WaitInEntry;
         return resume;
@@ -321,6 +325,11 @@ FileResume fileResume(const QByteArray& offerId, qint64 offerSize, const FileHer
         resume.offset = offerSize - 1;
     }
     return resume;
+}
+
+bool downloadsRuleApplies(FileResume::Step step)
+{
+    return step == FileResume::Step::NewEntry || step == FileResume::Step::WaitInEntry;
 }
 
 qint64 mp4DurationMs(QIODevice& device)

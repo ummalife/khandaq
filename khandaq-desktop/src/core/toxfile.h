@@ -89,4 +89,10 @@ struct ToxFile
      * file id): it goes on in that entry instead of making a new one.
      */
     bool continued = false;
+    /**
+     * KHANDAQ (0.2.57): the person cancelled or declined this file of theirs here, or the history
+     * keeps it as cancelled (it does not say who stopped it). An offer of it again waits in its
+     * entry for the person, never coming by itself, until they accept it.
+     */
+    bool refusedHere = false;
 };

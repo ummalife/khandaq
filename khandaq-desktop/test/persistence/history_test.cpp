@@ -104,6 +104,7 @@ private slots:
     void theNewestMessageOfThePersonIsWhatWeSaw();
     void anAcceptedFileOfThePersonIsKeptAsInterrupted();
     void aFileThatGoesOnAfterARestartEndsInItsRow();
+    void aFileOfThePersonThatEndedCancelledIsRefusedAfterARestart();
 
 private:
     /** The one file of the chat, as a later start reads it. */
@@ -401,6 +402,40 @@ void TestHistory::aFileThatGoesOnAfterARestartEndsInItsRow()
     QCOMPARE(storedFile(maryam).status, ToxFile::FINISHED);
     QCOMPARE(storedFile(maryam).filePath, filePath);
     QCOMPARE(history->getNumMessagesForChat(maryam), size_t{1});
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): a file of the person whose row ended cancelled counts as one they
+ * refused after a restart: the row does not say who stopped it, so an offer of it again waits for
+ * their tap (ToxFile::refusedHere). One that was interrupted, and one of ours, are none.
+ */
+void TestHistory::aFileOfThePersonThatEndedCancelledIsRefusedAfterARestart()
+{
+    history->addNewFileMessage(maryam, fileId, QStringLiteral("video.mp4"), QString(), 5000, maryam,
+                               QDateTime::currentDateTime(), QStringLiteral("Maryam"),
+                               ToxFile::RECEIVING);
+    const ToxPk omar{QByteArray(ToxPk::size, 'o')};
+    const QByteArray cutId{"fedcba9876543210fedcba9876543210"};
+    history->addNewFileMessage(omar, cutId, QStringLiteral("talk.mkv"), QString(), 5000, omar,
+                               QDateTime::currentDateTime(), QStringLiteral("Omar"),
+                               ToxFile::RECEIVING);
+    history->setFileUnderway(omar, cutId, filePath);
+    const ToxPk yusuf{QByteArray(ToxPk::size, 'y')};
+    const QByteArray oursId{"00112233445566778899aabbccddeeff"};
+    history->addNewFileMessage(yusuf, oursId, QStringLiteral("notes.zip"), filePath, 5000, self,
+                               QDateTime::currentDateTime(), QStringLiteral("Me"),
+                               ToxFile::SENDING);
+    letRowsIn();
+    history->setFileFinished(fileId, false, QString(), QByteArray());
+    history->setFileFinished(oursId, false, filePath, QByteArray());
+    restart();
+
+    QCOMPARE(storedFile(maryam).status, ToxFile::CANCELED);
+    QVERIFY(storedFile(maryam).refusedHere);
+    QCOMPARE(storedFile(omar).status, ToxFile::BROKEN);
+    QVERIFY(!storedFile(omar).refusedHere);
+    QCOMPARE(storedFile(yusuf).status, ToxFile::CANCELED);
+    QVERIFY(!storedFile(yusuf).refusedHere);
 }
 
 int main(int argc, char* argv[])

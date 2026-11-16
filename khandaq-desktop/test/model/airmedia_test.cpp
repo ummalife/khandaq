@@ -112,6 +112,7 @@ private slots:
     void anOfferOfAFileAllHereEndsQuietly();
     void anOfferOfAnotherFileIsANewEntry();
     void anOfferOfAFileNeverAcceptedWaitsInItsEntry();
+    void anOfferOfAFileThePersonRefusedWaitsForTheirTap();
     void theLengthOfANoteComesFromItsMovieHeader();
     void aBrokenHeaderHasNoLength();
     void lengthsReadAsClocks();
@@ -404,8 +405,8 @@ void TestAirMedia::anOfferOfAnotherFileIsANewEntry()
 }
 
 /**
- * @brief KHANDAQ (0.2.57): one never accepted, or cancelled, waits in its entry for Accept or for
- * the downloads rule, as a new offer does.
+ * @brief KHANDAQ (0.2.57): one never accepted, or cancelled by its sender, waits in its entry for
+ * Accept or for the downloads rule, as a new offer does.
  */
 void TestAirMedia::anOfferOfAFileNeverAcceptedWaitsInItsEntry()
 {
@@ -415,6 +416,40 @@ void TestAirMedia::anOfferOfAFileNeverAcceptedWaitsInItsEntry()
         QCOMPARE(resume.step, Air::FileResume::Step::WaitInEntry);
         QCOMPARE(resume.offset, qint64{0});
     }
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): one the person cancelled or declined waits in its entry for their tap,
+ * from the start, whatever came of it before; never by itself, nor by the downloads rule.
+ */
+void TestAirMedia::anOfferOfAFileThePersonRefusedWaitsForTheirTap()
+{
+    const QByteArray id(32, '\x07');
+    for (const ToxFile::FileStatus status : {ToxFile::CANCELED, ToxFile::BROKEN}) {
+        for (const bool accepted : {false, true}) {
+            Air::FileHere here = fileHere(status, accepted, accepted ? 400 : 0);
+            here.refused = true;
+            const Air::FileResume resume = Air::fileResume(id, 1000, here);
+            QCOMPARE(resume.step, Air::FileResume::Step::AskAgain);
+            QCOMPARE(resume.offset, qint64{0});
+        }
+    }
+    // Another file is a new offer all the same, and one all here still ends quietly.
+    Air::FileHere refused = fileHere(ToxFile::CANCELED, false, 0);
+    refused.refused = true;
+    QCOMPARE(Air::fileResume(QByteArray(32, '\x08'), 1000, refused).step,
+             Air::FileResume::Step::NewEntry);
+    QCOMPARE(Air::fileResume(id, 1001, refused).step, Air::FileResume::Step::NewEntry);
+    Air::FileHere whole = fileHere(ToxFile::FINISHED, true, 1000);
+    whole.refused = true;
+    QCOMPARE(Air::fileResume(id, 1000, whole).step, Air::FileResume::Step::EndQuietly);
+
+    // The downloads rule takes a new offer, or one that waits as a new offer does, and no other.
+    QVERIFY(!Air::downloadsRuleApplies(Air::FileResume::Step::AskAgain));
+    QVERIFY(Air::downloadsRuleApplies(Air::FileResume::Step::NewEntry));
+    QVERIFY(Air::downloadsRuleApplies(Air::FileResume::Step::WaitInEntry));
+    QVERIFY(!Air::downloadsRuleApplies(Air::FileResume::Step::GoOn));
+    QVERIFY(!Air::downloadsRuleApplies(Air::FileResume::Step::EndQuietly));
 }
 
 void TestAirMedia::theLengthOfANoteComesFromItsMovieHeader()

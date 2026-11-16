@@ -304,6 +304,9 @@ void CoreFile::cancelFileRecv(uint32_t friendId, uint32_t fileId)
         }
     }
     file->status = ToxFile::CANCELED;
+    // KHANDAQ (0.2.57): one that waits for its sender is cancelled here only; an offer of it
+    // again waits for the person, and declined it is cancelled on the sender's side too.
+    file->refusedHere = true;
     emit fileTransferCancelled(*file);
     removeFile(friendId, fileId);
 }
@@ -325,6 +328,7 @@ void CoreFile::rejectFileRecvRequest(uint32_t friendId, uint32_t fileId)
         }
     }
     file->status = ToxFile::CANCELED;
+    file->refusedHere = true;
     emit fileTransferCancelled(*file);
     removeFile(friendId, fileId);
 }
@@ -357,6 +361,8 @@ void CoreFile::acceptFileRecvRequest(uint32_t friendId, uint32_t fileId, QString
         return;
     }
     file->status = ToxFile::TRANSMITTING;
+    // KHANDAQ (0.2.57): the person takes it now.
+    file->refusedHere = false;
     emit fileTransferAccepted(*file);
 }
 
@@ -413,6 +419,19 @@ void CoreFile::finishFileRecvQuietly(uint32_t friendId, uint32_t fileId, uint64_
     qDebug() << "finishFileRecvQuietly: a file that is here already ends from byte" << offset;
     file->status = ToxFile::TRANSMITTING;
     quietFiles.insert(getFriendKey(friendId, fileId));
+}
+
+void CoreFile::markFileRecvRefused(uint32_t friendId, const QByteArray& resumeFileId)
+{
+    QMutexLocker locker{coreLoopLock};
+
+    for (auto it = fileMap.begin(); it != fileMap.end(); ++it) {
+        ToxFile& file = it.value();
+        if ((it.key() >> 32) == friendId && file.direction == ToxFile::RECEIVING
+            && file.status == ToxFile::INITIALIZING && file.resumeFileId == resumeFileId) {
+            file.refusedHere = true;
+        }
+    }
 }
 
 ToxFile* CoreFile::findFile(uint32_t friendId, uint32_t fileId)

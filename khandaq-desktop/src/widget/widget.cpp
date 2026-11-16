@@ -240,8 +240,10 @@ Air::FileResume knownOffer(const ChatHistory* chatLog, const ToxFile& offer, Tox
     here.id = shown->resumeFileId;
     here.size = static_cast<qint64>(shown->progress.getFileSize());
     here.status = shown->status;
-    // Only an interruption goes on by itself: one the person cancelled waits for them again, or
-    // for the downloads rule, as a new offer does.
+    // Only an interruption goes on by itself. One the person cancelled or declined waits for
+    // their tap, also once an offer of it again ended unanswered; one its sender or a failure
+    // stopped waits for it or for the downloads rule, as a new offer does.
+    here.refused = shown->refusedHere;
     here.accepted = shown->status == ToxFile::BROKEN && !shown->filePath.isEmpty();
     const QFileInfo partial(shown->filePath);
     here.bytes = here.accepted && partial.isFile() ? partial.size() : 0;
@@ -1438,7 +1440,8 @@ void Widget::dispatchFile(ToxFile file)
     // up here.
     Air::FileResume resume;
     if (offered && file.continued) {
-        resume.step = Air::FileResume::Step::WaitInEntry;
+        resume.step = file.refusedHere ? Air::FileResume::Step::AskAgain
+                                       : Air::FileResume::Step::WaitInEntry;
     } else if (offered) {
         ToxFile shown;
         resume = knownOffer(friendChatLogs.value(pk).get(), file, &shown);
@@ -1457,13 +1460,19 @@ void Widget::dispatchFile(ToxFile file)
         case Air::FileResume::Step::WaitInEntry:
             file.continued = true;
             break;
+        case Air::FileResume::Step::AskAgain:
+            file.continued = true;
+            file.refusedHere = true;
+            coreFile->markFileRecvRefused(file.friendId, file.resumeFileId);
+            break;
         case Air::FileResume::Step::NewEntry:
             onFileReceiveRequested(file);
             break;
         }
     }
 
-    if (offered && resume.step != Air::FileResume::Step::GoOn) {
+    // KHANDAQ (0.2.57): a file the person cancelled or declined comes only by their tap.
+    if (offered && Air::downloadsRuleApplies(resume.step)) {
         // Download attachments (Settings, Network): Never leaves every file waiting for Accept,
         // except where a folder was chosen for this contact; Small files takes them up to the limit.
         const QString autoAcceptDir =

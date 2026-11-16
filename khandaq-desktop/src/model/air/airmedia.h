@@ -175,6 +175,8 @@ struct FileHere
     bool accepted = false;
     /** The bytes at its path; 0 when there is nothing there. */
     qint64 bytes = 0;
+    /** The person cancelled or declined it (ToxFile::refusedHere). */
+    bool refused = false;
 };
 
 /** What an offer does with the entry of the same file (fileResume). */
@@ -193,6 +195,11 @@ struct FileResume
         GoOn,
         /** It waits in its entry for Accept, or for the downloads rule, from the start. */
         WaitInEntry,
+        /**
+         * The person cancelled or declined it: it waits in its entry for their tap, from the
+         * start, and never comes by itself. Declined again, its sender learns it.
+         */
+        AskAgain,
     };
     Step step = Step::NewEntry;
     /** Where it goes on from, in bytes: what toxcore seeks to before the accept. */
@@ -203,9 +210,17 @@ struct FileResume
  * KHANDAQ (0.2.57): the standard resume of toxcore. The sender offers the file again with the same
  * id, kind, size and name; this side seeks to what it has before it accepts. Another id or another
  * size is another file. What is here goes on from its length; a file that is whole goes on from
- * its last byte, which comes once more; one longer than its size starts again.
+ * its last byte, which comes once more; one longer than its size starts again. One the person
+ * cancelled or declined waits for them.
  */
 FileResume fileResume(const QByteArray& offerId, qint64 offerSize, const FileHere& here);
+
+/**
+ * KHANDAQ (0.2.57): whether the downloads rule (autoAcceptFolder) may take an offer the window
+ * answers with step: a new one, or one that waits in its entry as a new offer does. Never one the
+ * person cancelled or declined: it comes only by their tap.
+ */
+bool downloadsRuleApplies(FileResume::Step step);
 
 // ---- voice notes ----
 

@@ -688,6 +688,10 @@ QList<History::HistMessage> History::getMessagesForChat(const ChatId& chatId, si
             file.fileKind = fileKind;
             file.resumeFileId = resumeFileId;
             file.status = status;
+            // KHANDAQ (0.2.57): a row keeps no word of who stopped a file of theirs: one that ended
+            // cancelled counts as refused here, so an offer of it again waits for the person after
+            // a restart too (ToxFile::refusedHere). One its sender stopped waits all the same.
+            file.refusedHere = direction == ToxFile::RECEIVING && status == ToxFile::CANCELED;
 
             it = std::next(row.begin(), senderOffset);
             const auto senderKey = ToxPk{(*it++).toByteArray()};

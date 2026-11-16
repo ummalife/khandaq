@@ -75,6 +75,13 @@ public:
      * byte, so both sides end; nothing is written and nothing is signalled for it.
      */
     void finishFileRecvQuietly(uint32_t friendId, uint32_t fileId, uint64_t offset);
+    /**
+     * KHANDAQ (0.2.57): an offer of a file the person cancelled or declined before
+     * (Air::FileResume::Step::AskAgain) stays theirs to answer, also once its sender went offline
+     * and offers it again (ToxFile::refusedHere). By its Tox file id: it may wait for its sender
+     * under a number of its own already.
+     */
+    void markFileRecvRefused(uint32_t friendId, const QByteArray& resumeFileId);
 
     unsigned corefileIterationInterval();
     /**

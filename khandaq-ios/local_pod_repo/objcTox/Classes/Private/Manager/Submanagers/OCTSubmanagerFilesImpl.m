@@ -481,9 +481,10 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
 
     [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
         file.fileType = OCTMessageFileTypeCanceled;
-        // KHANDAQ (0.2.57): theirs, cancelled while nothing was live, cannot tell them: their next offer of it
-        // is refused (dataFileReceiveForFileNumber).
-        file.pausedBy = (incoming && underWay && ! live) ? OCTMessageFilePausedByConnection : OCTMessageFilePausedByNone;
+        // KHANDAQ (0.2.57): theirs, cancelled while under way: their next offer of it is refused
+        // (dataFileReceiveForFileNumber), never taken by itself. With nothing live the cancel cannot tell them;
+        // with a transfer live it may not reach them (the connection goes first), and they offer it again.
+        file.pausedBy = (incoming && underWay) ? OCTMessageFilePausedByConnection : OCTMessageFilePausedByNone;
         file.transferredBytes = 0;
     }];
 

@@ -683,6 +683,40 @@ static NSData *OCTResumeTestsContent(void)
     XCTAssertEqual(message.messageFile.pausedBy, OCTMessageFilePausedByNone, @"refused once");
 }
 
+// KHANDAQ (0.2.57): a cancel while the file came marked nothing: the cancel may never reach the friend (the
+// connection goes first), they offer the file again, and the auto-download rule took it by itself.
+- (void)testAFileThePersonCancelledWhileItCameIsRefusedWhenOfferedAgain
+{
+    NSData *fileId = OCTResumeTestsId(0x10);
+    OCTMessageAbstract *message = [self addIncomingFileWithIdHex:OCTResumeTestsHex(fileId)
+                                                            type:OCTMessageFileTypeWaitingConfirmation
+                                                        pausedBy:OCTMessageFilePausedByConnection
+                                                       keptBytes:4];
+    NSMutableArray<NSString *> *asked = [NSMutableArray new];
+    self.files.reofferAutoAcceptPolicy = ^BOOL (OCTMessageAbstract *theMessage) {
+        [asked addObject:theMessage.uniqueIdentifier];
+        return YES;
+    };
+    [self offerTheirFile:kResumeTestsTheirFile fileId:fileId size:kResumeTestsFileSize name:@"doc.bin"];
+    XCTAssertTrue([self waitForEvent:@"resume 65536"]);
+    XCTAssertEqual(message.messageFile.fileType, OCTMessageFileTypeLoading);
+
+    XCTAssertTrue([self.files cancelFileTransfer:message error:nil]);
+
+    XCTAssertEqualObjects(self.tox.events, (@[@"seek 65536 4", @"resume 65536", @"cancel 65536"]));
+    XCTAssertEqual(message.messageFile.fileType, OCTMessageFileTypeCanceled);
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:[self partialPathOf:message]]);
+
+    [self offerTheirFile:kResumeTestsTheirNextFile fileId:fileId size:kResumeTestsFileSize name:@"doc.bin"];
+    [self spinFor:0.3];
+
+    XCTAssertEqualObjects(self.tox.events, (@[@"seek 65536 4", @"resume 65536", @"cancel 65536", @"cancel 131072"]));
+    XCTAssertEqualObjects(asked, @[], @"never taken by itself");
+    XCTAssertEqual([self messageCount], 1u);
+    XCTAssertEqual(message.messageFile.fileType, OCTMessageFileTypeCanceled);
+    XCTAssertEqual(message.messageFile.pausedBy, OCTMessageFilePausedByNone, @"refused once");
+}
+
 #pragma mark - The receiver keeps the bytes
 
 - (void)testADisconnectLeavesTheirFileWaitingWithTheBytesThatCame

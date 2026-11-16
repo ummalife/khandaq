@@ -2703,14 +2703,15 @@ private extension ChatPrivateController {
 
         switch message.messageFile!.fileType {
             case .waitingConfirmation:
-                // KHANDAQ (0.2.57): a transfer the connection cut keeps its bar and goes on by itself.
+                // KHANDAQ (0.2.57): a transfer the connection cut keeps its bar and goes on by itself; ours, once
+                // offered again while the person is online, waits for their accept.
                 let file = message.messageFile!
-                if (file.pausedBy.rawValue & OCTMessageFilePausedBy.connection.rawValue) != 0 {
-                    model.state = .waitingConnection
+                model.state = ChatGenericFileCellModel.waitingState(
+                    cutByConnection: (file.pausedBy.rawValue & OCTMessageFilePausedBy.connection.rawValue) != 0,
+                    outgoing: message.isOutgoing(),
+                    offered: file.internalFileNumber != Int32(bitPattern: kOCTToxFileNumberFailure))
+                if model.state == .waitingConnection {
                     model.transferProgress = file.fileSize > 0 ? Float(Double(file.transferredBytes) / Double(file.fileSize)) : 0
-                }
-                else {
-                    model.state = .waitingConfirmation
                 }
                 if let messageId = message.uniqueIdentifier {
                     self.stopWatchingStall(of: messageId)

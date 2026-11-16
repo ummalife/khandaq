@@ -62,6 +62,10 @@ typedef NSString *(^OCTNgcGroupHistSyncFileUTIBlock)(NSString *fileName);
 
 @property (nonatomic, copy, nullable) NSArray<NSData *> *(^historySyncPacketsForGroupBlock)(uint32_t groupNumber);
 
+/// KHANDAQ (0.2.57): the names, in lower case, the messages of the group give their files in its folder, gone or
+/// not, for the name of a file the group's history brings (OCTFileTools createNewGroupFilePathInDirectory:...).
+@property (nonatomic, copy, nullable) NSSet<NSString *> *(^incomingFileNamesInUseBlock)(uint32_t groupNumber);
+
 /**
  * KHANDAQ (external audit #2, finding 1, step 4) — signed history, wired in as an OPTIONAL twin.
  *

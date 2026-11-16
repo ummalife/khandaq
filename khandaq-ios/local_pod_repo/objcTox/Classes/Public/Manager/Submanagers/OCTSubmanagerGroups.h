@@ -315,4 +315,16 @@ extern NSString *const kOCTNgcSignedHistoryVerdictStoredNotification;
  */
 - (void)editGroupMessage:(OCTMessageAbstract *)message inChat:(OCTChat *)chat newText:(NSString *)newText;
 
+/**
+ * KHANDAQ (0.2.57): the folder of the files that come in the group with this chat id, files/group/<chat id in lower
+ * case>, whether the group's chat is still here or not; nothing is created. Empty for an empty chat id.
+ */
+- (nonnull NSString *)groupFilesDirectoryForChatIdHex:(nonnull NSString *)chatIdHex;
+
+/**
+ * KHANDAQ (0.2.57): the paths of the files of groups being written now, a chunked file under way each. Nothing may
+ * delete them.
+ */
+- (nonnull NSSet<NSString *> *)incomingGroupFilePathsInProgress;
+
 @end

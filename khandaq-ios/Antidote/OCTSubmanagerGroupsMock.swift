@@ -508,6 +508,15 @@ class OCTSubmanagerGroupsMock: NSObject, OCTSubmanagerGroups {
         successBlock?(message)
     }
 
+    /// The demo world keeps no files of groups.
+    func groupFilesDirectory(forChatIdHex chatIdHex: String) -> String {
+        return ""
+    }
+
+    func incomingGroupFilePathsInProgress() -> Set<String> {
+        return []
+    }
+
     // MARK: - The demo world
 
     private func peer(_ peerId: UInt32, in chat: OCTChat?) -> OCTGroupPeer? {

@@ -18,6 +18,7 @@
 #import "OCTMessageFile.h"
 #import "OCTMessageText.h"
 #import "OCTNgcGroupFileTransfer.h"
+#import "OCTFileTools.h"
 #import "OCTToxOptions.h"
 
 // The name toxcore was given for a file offered to a friend, by mocked_tox_file_send.
@@ -1122,6 +1123,100 @@ static uint32_t mocked_tox_file_send(Tox *tox, uint32_t friend_number, uint32_t 
     NSMutableData *empty = [NSMutableData new];
     [transfer appendFilename:@"" toData:empty];
     XCTAssertEqualObjects(empty, [NSMutableData dataWithLength:255]);
+}
+
+#pragma mark - Where a group file is stored
+
+// KHANDAQ (0.2.57, SPEC-community item 6): a file that comes in a group is never stored hidden (the person would never
+// see it, nor the cleanup of Khandaq Community), and never under the name of a file a message of the group still
+// names: once those bytes had gone, to make room or with a transfer that stopped, the new file landed on the old
+// path and showed under the old message.
+
+- (void)testAGroupFileIsNeverStoredHiddenNorUnderTheNameOfAnotherMessage
+{
+    NSString *folder = [self nameTestDirectory];
+
+    XCTAssertEqualObjects([[OCTFileTools createNewGroupFilePathInDirectory:folder fileName:@".profile.jpg" namesInUse:nil] lastPathComponent],
+                          @"_profile.jpg");
+    XCTAssertEqualObjects([[OCTFileTools createNewGroupFilePathInDirectory:folder fileName:@"..." namesInUse:nil] lastPathComponent],
+                          @"unsafe_filename");
+    // A file of a friend keeps its name as it came.
+    XCTAssertEqualObjects([[OCTFileTools createNewFilePathInDirectory:folder fileName:@".profile.jpg"] lastPathComponent], @".profile.jpg");
+
+    // "photo.jpg" is gone from the disk, and its message still names it.
+    NSSet<NSString *> *inUse = [NSSet setWithObjects:@"photo.jpg", @"photo 2.jpg", nil];
+    XCTAssertEqualObjects([[OCTFileTools createNewGroupFilePathInDirectory:folder fileName:@"photo.jpg" namesInUse:inUse] lastPathComponent],
+                          @"photo 3.jpg");
+    XCTAssertEqualObjects([[OCTFileTools createNewGroupFilePathInDirectory:folder fileName:@"Photo.JPG" namesInUse:inUse] lastPathComponent],
+                          @"Photo 3.JPG", @"in any case of its letters");
+    // A name no message gives but a file on the disk has is taken as before.
+    XCTAssertTrue([[NSData data] writeToFile:[folder stringByAppendingPathComponent:@"photo 3.jpg"] atomically:YES]);
+    XCTAssertEqualObjects([[OCTFileTools createNewGroupFilePathInDirectory:folder fileName:@"photo.jpg" namesInUse:inUse] lastPathComponent],
+                          @"photo 4.jpg");
+    XCTAssertEqualObjects([[OCTFileTools createNewGroupFilePathInDirectory:folder fileName:@"other.jpg" namesInUse:inUse] lastPathComponent],
+                          @"other.jpg");
+
+    [[NSFileManager defaultManager] removeItemAtPath:folder error:nil];
+}
+
+- (void)testAGroupFileThatComesTakesNoNameAMessageOfTheGroupStillGives
+{
+    NSString *outbox = [self nameTestDirectory];
+    NSString *inbox = [self nameTestDirectory];
+    NSMutableArray<NSString *> *received = [NSMutableArray new];
+    __block NSUInteger asked = 0;
+    __block XCTestExpectation *came = nil;
+    OCTNgcGroupFileTransfer *receiver = [[OCTNgcGroupFileTransfer alloc] initWithSendPacketBlock:^BOOL (uint32_t groupNumber, NSData *packet, NSError **error) {
+        return YES;
+    } incomingFilesDirectory:^NSString *(uint32_t groupNumber) {
+        return inbox;
+    } incomingBeginBlock:nil incomingCompleteBlock:^(uint32_t groupNumber, uint32_t peerId, NSString *senderPublicKeyHex,
+                                                    NSString *fileName, NSString *filePath, uint64_t fileSize, NSString *msgIdHex) {
+        XCTAssertEqualObjects([filePath stringByDeletingLastPathComponent], inbox);
+        [received addObject:[filePath lastPathComponent]];
+        [came fulfill];
+    } transferProgressBlock:nil];
+    receiver.incomingFileNamesInUseBlock = ^NSSet<NSString *> *(uint32_t groupNumber) {
+        XCTAssertTrue([NSThread isMainThread]);
+        asked++;
+        return [NSSet setWithObject:@"report.pdf"];
+    };
+
+    for (NSString *name in @[@"report.pdf", @".hidden.txt"]) {
+        NSString *path = [outbox stringByAppendingPathComponent:name];
+        XCTAssertTrue([[@"%PDF-1.4" dataUsingEncoding:NSUTF8StringEncoding] writeToFile:path atomically:YES]);
+        NSMutableArray<NSData *> *packets = [NSMutableArray new];
+        OCTNgcGroupFileTransfer *sender = [self stallTestTransferCollectingPackets:packets];
+        XCTestExpectation *sent = [self expectationWithDescription:name];
+        [sender sendFileAtPath:path groupNumber:5 msgIdHex:[OCTNgcGroupFileTransfer generateMsgIdHex] progress:nil completion:^(BOOL success, NSError *error) {
+            [sent fulfill];
+        }];
+        [self waitForExpectations:@[sent] timeout:5.0];
+
+        came = [self expectationWithDescription:[@"came " stringByAppendingString:name]];
+        [receiver handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:packets.firstObject];
+        [self waitForExpectations:@[came] timeout:5.0];
+    }
+
+    XCTAssertEqualObjects(received, (@[@"report 2.pdf", @"_hidden.txt"]));
+    XCTAssertEqual(asked, 2u, @"once a file, on the main thread");
+
+    [[NSFileManager defaultManager] removeItemAtPath:outbox error:nil];
+    [[NSFileManager defaultManager] removeItemAtPath:inbox error:nil];
+}
+
+- (void)testThePathOfAGroupFileStillComingIsKnown
+{
+    OCTNgcGroupFileTransfer *transfer = [self stallTestTransferCollectingPackets:[NSMutableArray new]];
+    XCTAssertEqualObjects([transfer incomingFilePathsInProgress], [NSSet set]);
+
+    id assembly = [self stallTestAssemblyWithChunks:4];
+    [assembly setValue:@"/files/group/abc/clip.mp4" forKey:@"outPath"];
+    transfer.assemblies[@"coming"] = assembly;
+    XCTAssertEqualObjects([transfer incomingFilePathsInProgress], [NSSet setWithObject:@"/files/group/abc/clip.mp4"]);
+
+    [transfer.assemblies removeObjectForKey:@"coming"];
+    XCTAssertEqualObjects([transfer incomingFilePathsInProgress], [NSSet set]);
 }
 
 #pragma mark - The name of a file offered to a friend

@@ -174,6 +174,74 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
     XCTAssertEqual(mocks.count, 3u);
 }
 
+// KHANDAQ (0.2.57, SPEC-community item 6): Khandaq Community deletes the bytes of a file that waited, to make room,
+// and keeps its message, which then says the file went. A second file of the same name took the free path: the old
+// message showed the new file as its own, with Accept again, and the cleanup took the two for one file.
+- (void)testAGroupFileNeverTakesThePathOfAMessageWhoseFileWent
+{
+    OCTChat *chat = [self groupChat];
+    NSString *downloads = [self.root stringByAppendingPathComponent:@"Downloads"];
+
+    id dataSource = OCMProtocolMock(@protocol(OCTSubmanagerDataSource));
+    id tox = OCMClassMock([OCTTox class]);
+    id fileStorage = OCMProtocolMock(@protocol(OCTFileStorageProtocol));
+    OCMStub([dataSource managerGetTox]).andReturn(tox);
+    OCMStub([dataSource managerGetRealmManager]).andReturn(self.realmManager);
+    OCMStub([dataSource managerGetFileStorage]).andReturn(fileStorage);
+    OCMStub([fileStorage pathForDownloadedFilesDirectory]).andReturn(downloads);
+
+    OCTSubmanagerGroupsImpl *submanager = [OCTSubmanagerGroupsImpl new];
+    submanager.dataSource = dataSource;
+    [submanager setupFileTransferIfNeeded];
+    OCTNgcGroupFileTransfer *transfer = [submanager valueForKey:@"fileTransfer"];
+    NSString *folder = [downloads stringByAppendingPathComponent:[@"group/" stringByAppendingString:kGroupRealmTestsChatIdHex.lowercaseString]];
+    XCTAssertEqualObjects([submanager groupFilesDirectoryForChatIdHex:kGroupRealmTestsChatIdHex], folder,
+                          @"the folder is known from the chat id alone");
+
+    NSData *firstId = [self generatedBytesOfLength:32];
+    [transfer handleIncomingPacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                           peerId:kGroupRealmTestsPeerId
+                                 peerPublicKeyHex:kGroupRealmTestsPeerKeyHex
+                                             data:[self singlePacketWithMsgId:firstId fileName:@"photo.jpg" payload:[self generatedBytesOfLength:3000]]];
+    __block OCTMessageAbstract *first = nil;
+    [self waitUntil:^BOOL {
+        first = [self fileRowWithMsgId:firstId inChat:chat];
+        return first.messageFile.fileType == OCTMessageFileTypeReady;
+    }];
+    NSString *firstPath = first.messageFile.filePath;
+    XCTAssertEqualObjects(firstPath.lastPathComponent, @"photo.jpg");
+
+    // Its bytes go to make room; its message stays.
+    XCTAssertTrue([[NSFileManager defaultManager] removeItemAtPath:firstPath error:nil]);
+
+    NSData *secondId = [self generatedBytesOfLength:32];
+    NSData *second = [self generatedBytesOfLength:2000];
+    [transfer handleIncomingPacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                           peerId:kGroupRealmTestsPeerId
+                                 peerPublicKeyHex:kGroupRealmTestsPeerKeyHex
+                                             data:[self singlePacketWithMsgId:secondId fileName:@"photo.jpg" payload:second]];
+    NSData *hiddenId = [self generatedBytesOfLength:32];
+    [transfer handleIncomingPacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                           peerId:kGroupRealmTestsPeerId
+                                 peerPublicKeyHex:kGroupRealmTestsPeerKeyHex
+                                             data:[self singlePacketWithMsgId:hiddenId fileName:@".profile" payload:[self generatedBytesOfLength:100]]];
+    __block OCTMessageAbstract *next = nil;
+    __block OCTMessageAbstract *hidden = nil;
+    [self waitUntil:^BOOL {
+        next = [self fileRowWithMsgId:secondId inChat:chat];
+        hidden = [self fileRowWithMsgId:hiddenId inChat:chat];
+        return next.messageFile.fileType == OCTMessageFileTypeReady && hidden.messageFile.fileType == OCTMessageFileTypeReady;
+    }];
+
+    XCTAssertEqualObjects(next.messageFile.filePath.lastPathComponent, @"photo 2.jpg");
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:next.messageFile.filePath], second);
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:first.messageFile.filePath], @"the first message got bytes again");
+    XCTAssertEqualObjects(hidden.messageFile.filePath.lastPathComponent, @"_profile", @"a file of a group is never hidden");
+
+    NSArray *mocks = @[dataSource, tox, fileStorage];
+    XCTAssertEqual(mocks.count, 3u);
+}
+
 // KHANDAQ (0.2.57): seen live, a member's app away for 45 s in the middle of a 40 MB file. The group took two
 // minutes to come back; a minute after the return the transfer dropped the file and its partial bytes, and the
 // card said "41.9 MB left" until the next start of the app. It ends now as that start ends it.

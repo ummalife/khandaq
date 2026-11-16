@@ -54,6 +54,11 @@ typedef void (^OCTNgcGroupFileTransferIncomingDroppedBlock)(uint32_t groupNumber
 /// other blocks. Set it before the first packet comes.
 @property (atomic, copy, nullable) OCTNgcGroupFileTransferIncomingDroppedBlock incomingDroppedBlock;
 
+/// KHANDAQ (0.2.57): the names, in lower case, the messages of the group give their files in its folder, gone or
+/// not (OCTFileTools createNewGroupFilePathInDirectory:fileName:namesInUse:). Called on the main thread with the
+/// directory block, for a file that is about to be stored. Set it before the first packet comes.
+@property (atomic, copy, nullable) NSSet<NSString *> *(^incomingFileNamesInUseBlock)(uint32_t groupNumber);
+
 - (instancetype)initWithSendPacketBlock:(OCTNgcGroupFileTransferSendPacketBlock)sendPacketBlock
                 incomingFilesDirectory:(NSString *(^)(uint32_t groupNumber))incomingFilesDirectoryBlock
                    incomingBeginBlock:(nullable OCTNgcGroupFileTransferIncomingBeginBlock)incomingBeginBlock
@@ -84,6 +89,10 @@ typedef void (^OCTNgcGroupFileTransferIncomingDroppedBlock)(uint32_t groupNumber
 + (NSString *)generateMsgIdHex;
 
 - (void)cancelSendForMsgIdHex:(NSString *)msgIdHex;
+
+/// KHANDAQ (0.2.57): the paths of the incoming files being written now, one per chunked file under way. From any
+/// thread.
+- (NSSet<NSString *> *)incomingFilePathsInProgress;
 
 @end
 

@@ -4434,6 +4434,44 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                          senderPublicKeyHex:senderPublicKeyHex
                                                    msgIdHex:msgIdHex];
     };
+    self.fileTransfer.incomingFileNamesInUseBlock = ^NSSet<NSString *> *(uint32_t groupNumber) {
+        __strong typeof(weakSelf) self = weakSelf;
+
+        return self ? [self groupFileNamesInUseForGroupNumber:groupNumber] : [NSSet set];
+    };
+}
+
+/**
+ * KHANDAQ (0.2.57): the names, in lower case, the messages of the group give their files in its folder, the files
+ * gone or not. A file that comes is never given one of them (OCTFileTools createNewGroupFilePathInDirectory:...):
+ * a message whose file went (to make room in Khandaq Community, or a transfer that stopped) would show the new file
+ * as its own, and the cleanup that went by its name would delete or keep the wrong one. Main thread, as the Realm.
+ */
+- (NSSet<NSString *> *)groupFileNamesInUseForGroupNumber:(OCTToxGroupNumber)groupNumber
+{
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    OCTChat *chat = [realmManager chatWithGroupNumber:groupNumber];
+    NSString *folder = chat ? [[self groupFilesDirectoryForChat:chat createIfNeeded:NO] lastPathComponent] : nil;
+
+    if (folder.length == 0) {
+        return [NSSet set];
+    }
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"chatUniqueIdentifier == %@ AND messageFile != nil",
+                              chat.uniqueIdentifier];
+    NSMutableSet<NSString *> *names = [NSMutableSet new];
+
+    for (OCTMessageAbstract *message in [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate]) {
+        // Stored relative to the container, with a tilde or whole: the last two parts are the folder and the name.
+        NSString *stored = message.messageFile.internalFilePath;
+
+        if (stored.length > 0 &&
+            [[[stored stringByDeletingLastPathComponent] lastPathComponent] caseInsensitiveCompare:folder] == NSOrderedSame) {
+            [names addObject:[[stored lastPathComponent] lowercaseString]];
+        }
+    }
+
+    return names;
 }
 
 /**
@@ -4999,6 +5037,12 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     [self setupSignedHistoryIfNeeded];
     self.histSync.signedHistory = self.signedHistory;
 
+    self.histSync.incomingFileNamesInUseBlock = ^NSSet<NSString *> *(uint32_t groupNumber) {
+        __strong typeof(weakSelf) self = weakSelf;
+
+        return self ? [self groupFileNamesInUseForGroupNumber:groupNumber] : [NSSet set];
+    };
+
     self.histSync.historySyncPacketsForGroupBlock = ^NSArray<NSData *> *(uint32_t groupNumber) {
         __strong typeof(weakSelf) self = weakSelf;
 
@@ -5284,9 +5328,25 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                 msgIdHex:msgIdHex];
 }
 
+- (NSString *)groupFilesDirectoryForChatIdHex:(NSString *)chatIdHex
+{
+    if (chatIdHex.length == 0) {
+        return @"";
+    }
+
+    id<OCTFileStorageProtocol> fileStorage = [self.dataSource managerGetFileStorage];
+
+    return [[fileStorage pathForDownloadedFilesDirectory]
+        stringByAppendingPathComponent:[NSString stringWithFormat:@"group/%@", [chatIdHex lowercaseString]]];
+}
+
+- (NSSet<NSString *> *)incomingGroupFilePathsInProgress
+{
+    return [self.fileTransfer incomingFilePathsInProgress] ?: [NSSet set];
+}
+
 - (NSString *)groupFilesDirectoryForChat:(OCTChat *)chat createIfNeeded:(BOOL)createIfNeeded
 {
-    id<OCTFileStorageProtocol> fileStorage = [self.dataSource managerGetFileStorage];
     NSString *chatIdHex = chat.groupChatIdHex;
 
     if (chatIdHex.length == 0) {
@@ -5297,8 +5357,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         return @"";
     }
 
-    NSString *path = [[fileStorage pathForDownloadedFilesDirectory]
-        stringByAppendingPathComponent:[NSString stringWithFormat:@"group/%@", [chatIdHex lowercaseString]]];
+    NSString *path = [self groupFilesDirectoryForChatIdHex:chatIdHex];
 
     if (createIfNeeded) {
         NSFileManager *fileManager = [NSFileManager defaultManager];

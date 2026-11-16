@@ -936,7 +936,9 @@ static const NSUInteger kOCTNgcHistBudgetMaxBytesPerGroupPerSession = 8 * 1024 *
         return;
     }
 
-    NSString *filePath = [OCTFileTools createNewFilePathInDirectory:directory fileName:fileName];
+    // KHANDAQ (0.2.57): never a hidden name, never the name of a file a message of the group still names.
+    NSSet<NSString *> *namesInUse = self.incomingFileNamesInUseBlock ? self.incomingFileNamesInUseBlock(groupNumber) : nil;
+    NSString *filePath = [OCTFileTools createNewGroupFilePathInDirectory:directory fileName:fileName namesInUse:namesInUse];
 
     if (! [fileData writeToFile:filePath atomically:YES]) {
         return;

@@ -228,6 +228,21 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     return [OCTTox binToHexString:bytes length:sizeof(bytes)];
 }
 
+- (NSSet<NSString *> *)incomingFilePathsInProgress
+{
+    NSMutableSet<NSString *> *paths = [NSMutableSet new];
+
+    @synchronized (self.assemblies) {
+        for (OCTNgcIncomingAssembly *assembly in self.assemblies.allValues) {
+            if (assembly.outPath.length > 0) {
+                [paths addObject:assembly.outPath];
+            }
+        }
+    }
+
+    return paths;
+}
+
 - (void)cancelSendForMsgIdHex:(NSString *)msgIdHex
 {
     if (msgIdHex.length == 0) {
@@ -270,9 +285,12 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     // and threw "Realm accessed from incorrect thread" on EVERY incoming group file, a photo of a few
     // kilobytes as much as a video. Look it up here, before the hop: only a SINGLE or a BEGIN stores a file.
     NSString *directory = nil;
+    NSSet<NSString *> *namesInUse = nil;
 
     if (pkt == kOCTNgcPktFileSingle || pkt == kOCTNgcPktFileBegin) {
         directory = self.incomingFilesDirectoryBlock(groupNumber) ?: @"";
+        NSSet<NSString *> *(^namesInUseBlock)(uint32_t) = self.incomingFileNamesInUseBlock;
+        namesInUse = namesInUseBlock ? namesInUseBlock(groupNumber) : nil;
     }
 
     // KHANDAQ (audit): the Single/Chunk handlers do synchronous file I/O (writeToFile:) that would jank
@@ -286,14 +304,16 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
                                                    peerId:peerId
                                          peerPublicKeyHex:peerPublicKeyHex
                                                      data:data
-                                                directory:directory];
+                                                directory:directory
+                                               namesInUse:namesInUse];
                 break;
             case kOCTNgcPktFileBegin:
                 [self handleIncomingBeginWithGroupNumber:groupNumber
                                                   peerId:peerId
                                         peerPublicKeyHex:peerPublicKeyHex
                                                     data:data
-                                               directory:directory];
+                                               directory:directory
+                                              namesInUse:namesInUse];
                 break;
             case kOCTNgcPktFileChunk:
                 [self handleIncomingChunkWithGroupNumber:groupNumber
@@ -549,6 +569,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
                            peerPublicKeyHex:(NSString *)peerPublicKeyHex
                                        data:(NSData *)data
                                   directory:(NSString *)directory
+                                 namesInUse:(NSSet<NSString *> *)namesInUse
 {
     if (data.length <= kOCTNgcSingleFileHeader || data.length > kOCTNgcMaxPacketSize) {
         return;
@@ -567,7 +588,8 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return;
     }
 
-    NSString *localName = [OCTFileTools createNewFilePathInDirectory:directory fileName:fileName];
+    // KHANDAQ (0.2.57): never a hidden name, never the name of a file a message of the group still names.
+    NSString *localName = [OCTFileTools createNewGroupFilePathInDirectory:directory fileName:fileName namesInUse:namesInUse];
     NSData *payload = [data subdataWithRange:NSMakeRange(kOCTNgcSingleFileHeader, fileSize)];
 
     if (! [payload writeToFile:localName atomically:YES]) {
@@ -609,6 +631,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
                           peerPublicKeyHex:(NSString *)peerPublicKeyHex
                                       data:(NSData *)data
                                  directory:(NSString *)directory
+                                namesInUse:(NSSet<NSString *> *)namesInUse
 {
     if (data.length < kOCTNgcFileBeginHeader) {
         return;
@@ -659,7 +682,8 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return;
     }
 
-    NSString *localName = [OCTFileTools createNewFilePathInDirectory:directory fileName:fileName];
+    // KHANDAQ (0.2.57): never a hidden name, never the name of a file a message of the group still names.
+    NSString *localName = [OCTFileTools createNewGroupFilePathInDirectory:directory fileName:fileName namesInUse:namesInUse];
     NSString *outPath = localName;
 
     if (! [[NSFileManager defaultManager] createFileAtPath:outPath contents:nil attributes:nil]) {

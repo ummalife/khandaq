@@ -1567,22 +1567,34 @@ public class HelperFiletransfer
         }, OUTGOING_FT_RETRY_DELAY_MS);
     }
 
-    static void on_friend_connection_available(final String pubkey)
+    /**
+     * KHANDAQ (0.2.57): the friend has a connection (MainActivity, friend connection; HelperGeneric, the status
+     * that follows a relay). {@code came_back}: it came from none (FileResume.friendCameBack), and only then do the
+     * lost transfer rule and the wait of a file of theirs count from now. A switch between TCP and UDP and the
+     * status through a relay only wake the queue.
+     */
+    static void on_friend_connection_available(final String pubkey, final boolean came_back)
     {
         if ((pubkey == null) || pubkey.isEmpty())
         {
             return;
         }
-        friend_online_since.put(pubkey, System.currentTimeMillis());
+        if (came_back)
+        {
+            friend_online_since.put(pubkey, System.currentTimeMillis());
+        }
         FileTransferDebug.logPeerConnectionStatus(tox_friend_by_public_key__wrapper(pubkey));
         try_start_next_queued_outgoing_file(pubkey);
         TrifaToxService.wakeup_tox_thread();
-        // KHANDAQ (0.2.57, SPEC-network 1.7): a file of theirs the cut stopped and that its sender does not offer
-        // again reads as stopped once the wait is over; nothing else draws its entry again then.
-        final Handler handler = MainActivity.main_handler_s != null ? MainActivity.main_handler_s
-                                                                    : new Handler(Looper.getMainLooper());
-        handler.postDelayed(() -> redraw_incoming_files_waiting_for(pubkey),
-                            FileResume.INCOMING_WAIT_AFTER_ONLINE_MS + 1000L);
+        if (came_back)
+        {
+            // KHANDAQ (0.2.57, SPEC-network 1.7): a file of theirs the cut stopped and that its sender does not
+            // offer again reads as stopped once the wait is over; nothing else draws its entry again then.
+            final Handler handler = MainActivity.main_handler_s != null ? MainActivity.main_handler_s
+                                                                        : new Handler(Looper.getMainLooper());
+            handler.postDelayed(() -> redraw_incoming_files_waiting_for(pubkey),
+                                FileResume.INCOMING_WAIT_AFTER_ONLINE_MS + 1000L);
+        }
     }
 
     // ---- KHANDAQ (0.2.57, SPEC-network part 1): a 1:1 file goes on after a network change ----

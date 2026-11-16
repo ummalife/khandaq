@@ -251,6 +251,44 @@ public class FileResumeTest
         assertFalse(FileResume.killMeansLostTransfer(since + 3_000L, since, 0L, false));
     }
 
+    @Test
+    public void the_friend_comes_back_from_no_connection_only()
+    {
+        final int none = ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value;
+        final int tcp = ToxVars.TOX_CONNECTION.TOX_CONNECTION_TCP.value;
+        final int udp = ToxVars.TOX_CONNECTION.TOX_CONNECTION_UDP.value;
+        // From none: back, and the lost transfer rule and the wait of a file of theirs count from now.
+        assertTrue(FileResume.friendCameBack(none, tcp));
+        assertTrue(FileResume.friendCameBack(none, udp));
+        // A switch between TCP and UDP is the same connection: the time it began stays.
+        assertFalse(FileResume.friendCameBack(tcp, udp));
+        assertFalse(FileResume.friendCameBack(udp, tcp));
+        // Gone, or no change.
+        assertFalse(FileResume.friendCameBack(tcp, none));
+        assertFalse(FileResume.friendCameBack(udp, none));
+        assertFalse(FileResume.friendCameBack(none, none));
+
+        // The friend's own connection decides it, from its value before the change; the status that follows a
+        // relay only wakes the queue.
+        final String online = bare(method(read(JAVA + "MainActivity.java"),
+                                          "static void android_tox_callback_friend_connection_status_cb_method("));
+        final int decide = online.indexOf(
+                "finalbooleancame_back=FileResume.friendCameBack(f.TOX_CONNECTION_real,a_TOX_CONNECTION);");
+        final int assign = online.indexOf("f.TOX_CONNECTION_real=a_TOX_CONNECTION;");
+        assertTrue(decide > 0);
+        assertTrue("decided before the new value is set", assign > decide);
+        assertTrue(online.indexOf("HelperFiletransfer.on_friend_connection_available(f.tox_public_key_string,came_back);")
+                   > assign);
+        assertTrue(bare(method(read(JAVA + "HelperGeneric.java"),
+                               "public static void update_friend_connection_status_helper(")).contains(
+                "HelperFiletransfer.on_friend_connection_available(f.tox_public_key_string,false);"));
+        final String helper = read(JAVA + "HelperFiletransfer.java");
+        assertTrue(bare(method(helper, "static void on_friend_connection_available(")).contains(
+                "if(came_back){friend_online_since.put(pubkey,System.currentTimeMillis());}"));
+        assertEquals("one place sets it", helper.indexOf("friend_online_since.put("),
+                     helper.lastIndexOf("friend_online_since.put("));
+    }
+
     // ---- the bytes so far across a restart of the receiver (SPEC 1.5) ----
 
     @Test

@@ -6774,13 +6774,15 @@ public class MainActivity extends AppCompatActivity
                     }
                 }
 
+                // KHANDAQ (0.2.57): from none is the friend coming back; TCP <-> UDP is the same connection.
+                final boolean came_back = FileResume.friendCameBack(f.TOX_CONNECTION_real, a_TOX_CONNECTION);
                 f.TOX_CONNECTION_real = a_TOX_CONNECTION;
                 f.TOX_CONNECTION_on_off_real = HelperGeneric.get_toxconnection_wrapper(f.TOX_CONNECTION);
                 HelperFriend.update_friend_in_db_connection_status_real(f);
 
                 if (a_TOX_CONNECTION != TOX_CONNECTION_NONE.value)
                 {
-                    HelperFiletransfer.on_friend_connection_available(f.tox_public_key_string);
+                    HelperFiletransfer.on_friend_connection_available(f.tox_public_key_string, came_back);
                     // KHANDAQ: friend just came online — re-arm unacked outgoing messages so they are
                     // resent and re-acknowledged (re-syncs delivery status, clears stale "failed").
                     HelperMessage.rearm_unacked_direct_messages_on_reconnect(f.tox_public_key_string);

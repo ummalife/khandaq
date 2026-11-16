@@ -761,7 +761,9 @@ public class HelperGeneric
             }
 
             HelperFriend.add_all_friends_clear_wrapper(0);
-            HelperFiletransfer.on_friend_connection_available(f.tox_public_key_string);
+            // KHANDAQ (0.2.57): this status also follows a relay and TCP <-> UDP, so it only wakes the queue; the
+            // friend coming back is MainActivity's, from the friend's own connection.
+            HelperFiletransfer.on_friend_connection_available(f.tox_public_key_string, false);
         }
         else // went offline -------------------
         {

@@ -212,6 +212,20 @@ final class FileResume
                                                                     : collapsed;
     }
 
+    // ---- the friend ----
+
+    /**
+     * Whether a change of a friend's connection (TOX_CONNECTION) is the friend coming back, the time the lost
+     * transfer rule and the wait of a file of theirs count from: from none to TCP or UDP. toxcore reports a switch
+     * between TCP and UDP as a change too, and it is the same connection going on: taken for a return, it made a
+     * no of the receiver right after it read as a lost transfer, and the declined file was offered again.
+     */
+    static boolean friendCameBack(final int connectionBefore, final int connectionNow)
+    {
+        return (connectionBefore == ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value)
+               && (connectionNow != ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value);
+    }
+
     // ---- the sender ----
 
     /** A kill of an outgoing transfer that only means the receiver lost it (see LOST_TRANSFER_WINDOW_MS). */

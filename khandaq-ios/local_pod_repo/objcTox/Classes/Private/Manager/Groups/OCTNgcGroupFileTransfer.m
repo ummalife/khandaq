@@ -20,17 +20,6 @@ static const uint8_t kOCTNgcPktFileRequest = 0x14;
 // and the most requests one file sends.
 static const int kOCTNgcNackMaxRounds = 24;
 static const int kOCTNgcNackMaxIndicesPerPacket = 256;
-// KHANDAQ (audit 2026-08-20): how often ONE peer may have us re-broadcast chunks of ONE file.
-//
-// Deliberately BELOW the honest NACK period rather than equal to it. The receiver's stall timer in
-// this same file fires every 2.5s, so a cooldown of 2.5s would sit exactly on top of it and any
-// jitter in the wrong direction would drop a legitimate retransmission request, costing the honest
-// transfer a whole round. 2.0s always lets the real timer through and still bounds a flood to one
-// service per two seconds per (file, requester) — Android picks 2500 for the same job, but keys it
-// per group+msgId rather than per requester, so it does not have this edge to worry about.
-static const NSTimeInterval kOCTNgcResendCooldown = 2.0;
-// Bound on the cooldown map itself, so it cannot become the leak.
-static const NSUInteger kOCTNgcMaxTrackedResendRequesters = 512;
 // KHANDAQ (0.2.57): a member's request for the whole of a file is taken once in this time at most, counted from its
 // request taken before (Android's RESEND_SERVICE_THROTTLE_MS); and one such resend of a file goes at a time.
 static const uint64_t kOCTNgcWholeFileRequestThrottleMs = 4000;
@@ -295,22 +284,6 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 // The monotonic clock of the pace, in milliseconds, and how a paced send waits. Tests give their own.
 @property (atomic, copy) uint64_t (^nowMsBlock)(void);
 @property (atomic, copy) void (^sleepMsBlock)(uint64_t ms);
-/**
- * KHANDAQ (audit 2026-08-20): "msgIdHex|peerId" -> when we last honoured a resend request for it.
- *
- * Serving a 0x14 request re-broadcasts chunks TO THE WHOLE GROUP (the send block has no peer
- * parameter, so a unicast reply is not expressible), which makes this the cheapest amplifier in the
- * client: one 1068-byte request naming 256 chunk indices used to produce up to 256 * 37000 bytes of
- * broadcast, replicated by toxcore to every peer. Nothing checked who was asking — `peerId` was not
- * read at all — nothing removed duplicate indices, and nothing rate-limited the requests, so the
- * same index could be listed 256 times in one packet and the flood could repeat at line rate.
- *
- * Android has throttled this path since it was written (SELECTIVE_RESEND_COOLDOWN_MS = 2500 per
- * group+msgId, RESEND_SERVICE_THROTTLE_MS = 4000 overall, and it parses the request into a
- * boolean[] so duplicates cost nothing). Desktop has no resend path at all. iOS was the one client
- * that would serve this unbounded, which is what makes it an oversight rather than a trade-off.
- */
-@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *lastResendServedAt;
 @end
 
 @implementation OCTNgcGroupFileTransfer
@@ -341,7 +314,6 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     _orphanChunks = [NSMutableDictionary new];
     _cancelledMsgIdHexes = [NSMutableSet set];
     _sentChunkedFiles = [NSMutableDictionary new];
-    _lastResendServedAt = [NSMutableDictionary new];
     _sendQueue = dispatch_queue_create("ngc-group-file-send", DISPATCH_QUEUE_SERIAL);
     _uploadQueue = dispatch_queue_create("ngc-group-file-upload", DISPATCH_QUEUE_SERIAL);
     _resendQueue = dispatch_queue_create("ngc-group-file-resend", DISPATCH_QUEUE_SERIAL);
@@ -1538,7 +1510,6 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
     // KHANDAQ (0.2.57): the chunks the member the whole file goes to now asks for go with it, to it alone, lowest first.
     // The chunks the resend has not reached are in it already, and one it sent and the member still lacks goes again.
-    // The cooldown below never drops such a request: Android sends a long list in several packets at once.
     BOOL joinedWholeFile = NO;
     @synchronized (context) {
         if (context.wholeFileUnderWay && context.wholeFilePeerId == peerId) {
@@ -1551,29 +1522,16 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return;
     }
 
-    // KHANDAQ (audit 2026-08-20): who is asking, and how often. Both were unchecked; see
-    // `lastResendServedAt`. peerId is what makes the cooldown per-requester rather than global, so
-    // one peer spamming cannot deny an honest peer its retransmission.
-    NSString *cooldownKey = [NSString stringWithFormat:@"%@|%u", msgIdHex, peerId];
-    const NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
-    @synchronized (self.lastResendServedAt) {
-        NSNumber *last = self.lastResendServedAt[cooldownKey];
-        if (last != nil && (now - last.doubleValue) < kOCTNgcResendCooldown) {
-            return;
-        }
-        self.lastResendServedAt[cooldownKey] = @(now);
-
-        if (self.lastResendServedAt.count > kOCTNgcMaxTrackedResendRequesters) {
-            // Crude bound, same shape as the other caps in this file: a group can have many peers
-            // and many files, and this map must not become the leak.
-            [self.lastResendServedAt removeAllObjects];
-            self.lastResendServedAt[cooldownKey] = @(now);
-        }
-    }
-
     // KHANDAQ (0.2.57): the chunks go at the pace on resendQueue, never on sendQueue, which carries what comes in. A
     // request that comes while they go adds to them: each chunk asked for goes once more, however often it is asked
     // for, and the work a file can make is its count of chunks.
+    //
+    // No request is dropped for coming soon after another one. The audit of 2026-08-20 allowed one request per member
+    // and file in 2 s, when each request had its chunks broadcast again at once. That limit also dropped all packets but
+    // the first of a request for more than 256 chunks, which Android 0.2.57 sends together; Android dropped its own
+    // limit for that reason. The load stays bounded without it: the requests for a file merge into one set, one resend
+    // of a file runs at a time, on one queue for all files, and the pace caps what this device sends. One request could
+    // already name 256 chunks, more than the pace sends in 2 s.
     BOOL startResend = NO;
     @synchronized (context) {
         if (! context.pendingResends) {

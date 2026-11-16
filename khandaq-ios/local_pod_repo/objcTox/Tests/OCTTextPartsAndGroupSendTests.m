@@ -1600,6 +1600,34 @@ static const uint64_t kPaceTestsT0 = 1000000;
     XCTAssertEqual([self groupTestU32In:request at:52], 4u);
 }
 
+// KHANDAQ (0.2.57): a member that misses more chunks than one request lists (256) sends several at once: Android
+// 0.2.57 does (buildListedFileRequestPackets). A limit of one request in 2 s per member and file served the first
+// packet and dropped the others.
+- (void)testARequestInTwoPacketsAtOnceGetsAllTheChunksItLists
+{
+    OCTGroupTestClock *clock = [OCTGroupTestClock new];
+    clock.nowMs = kPaceTestsT0;
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *sender = [self wholeFileTestSenderWithClock:clock members:1 packets:packets privatePackets:[NSMutableArray new]];
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    [self groupTestSendContent:[self groupTestContentOfLength:260 * kGroupTestChunkPayload] named:@"clip.mp4" msgIdHex:msgIdHex by:sender];
+    XCTAssertEqual(packets.count, 261u, @"a BEGIN and 260 chunks");
+    [packets removeAllObjects];
+
+    NSMutableArray<NSNumber *> *all = [NSMutableArray new];
+    for (NSUInteger i = 0; i < 260; i++) {
+        [all addObject:@(i)];
+    }
+    NSData *first = [self wholeFileTestListRequestFor:msgIdHex chunks:[all subarrayWithRange:NSMakeRange(0, 256)]];
+    NSData *second = [self wholeFileTestListRequestFor:msgIdHex chunks:[all subarrayWithRange:NSMakeRange(256, 4)]];
+    XCTAssertEqual(first.length, 44u + 256u * 4u);
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:first];
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:second];
+    [self groupTestDrainQueueOf:sender];
+
+    XCTAssertEqualObjects([self groupTestChunkIndicesOf:packets], all);
+}
+
 #pragma mark - The pace of what this device sends to a group
 
 // KHANDAQ (0.2.57): iOS handed every chunk of a group file to toxcore at once (a pause of 2 ms every 8). toxcore keeps
@@ -1994,9 +2022,8 @@ static const uint64_t kPaceTestsT0 = 1000000;
     XCTAssertEqual(packets.count, 3u, @"only the upload went to the whole group");
 }
 
-// The chunks the member asks for while the whole file goes to it are not lost: not to the cooldown of its requests, nor
-// to the resend that runs. They go with the whole file, to it alone, lowest first. Another member's request goes to
-// the group as before.
+// The chunks the member asks for while the whole file goes to it are not lost to the resend that runs: they go with the
+// whole file, to it alone, lowest first. Another member's request goes to the group as before.
 - (void)testChunksTheMemberAsksForWhileTheWholeFileGoesToItGoWithIt
 {
     OCTGroupTestClock *clock = [OCTGroupTestClock new];

@@ -179,6 +179,27 @@ final class AirLocalStore {
         }
     }
 
+    /// KHANDAQ (0.2.57): Khandaq Community (SPEC-community, part B), outside the sealed part: the marks say
+    /// nothing about anybody, and a moment the keychain is locked must not lose them. They only become true.
+    private struct CommunityMarks: Codable {
+        var autoJoinDone = false
+        var left = false
+
+        init() {
+        }
+
+        /// Marks written by a later version with fields this one lacks, or the other way round, still open.
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            autoJoinDone = try container.decodeIfPresent(Bool.self, forKey: .autoJoinDone) ?? false
+            left = try container.decodeIfPresent(Bool.self, forKey: .left) ?? false
+        }
+
+        var isEmpty: Bool {
+            return !autoJoinDone && !left
+        }
+    }
+
     /// The file since the second stage of the redesign: version 1 was the bare contacts dictionary.
     private struct FileContents: Codable {
         var version: Int
@@ -187,9 +208,12 @@ final class AirLocalStore {
         var keyId: String?
         /// Base64 of the sealed Secrets.
         var sealed: String?
+        /// Absent in a file of 0.2.56 and older, whose profile then joins Khandaq Community once like a new one.
+        var community: CommunityMarks?
     }
 
     private var contacts: [String: Contact] = [:]
+    private var community = CommunityMarks()
     private var secrets = Secrets()
     private var keyId: String?
     /// A sealed part this run could not open (the keychain was locked or the key is gone): written
@@ -218,6 +242,7 @@ final class AirLocalStore {
         fileURL = url
         onlineSince = [:]
         contacts = [:]
+        community = CommunityMarks()
         secrets = Secrets()
         keyId = nil
         unreadableSealed = nil
@@ -234,6 +259,7 @@ final class AirLocalStore {
         }
         fileURL = nil
         contacts = [:]
+        community = CommunityMarks()
         secrets = Secrets()
         keyId = nil
         unreadableSealed = nil
@@ -500,6 +526,36 @@ final class AirLocalStore {
         return key.count == 64 && key.unicodeScalars.allSatisfy { CharacterSet(charactersIn: "0123456789ABCDEF").contains($0) }
     }
 
+    // MARK: Khandaq Community
+
+    /// The profile joined Khandaq Community by itself once (SPEC-community, item 1).
+    var communityAutoJoinDone: Bool {
+        return community.autoJoinDone
+    }
+
+    /// The person left Khandaq Community: it is never joined by itself again (item 3).
+    var communityLeft: Bool {
+        return community.left
+    }
+
+    func setCommunityAutoJoinDone() {
+        guard !community.autoJoinDone else {
+            return
+        }
+        community.autoJoinDone = true
+        save()
+    }
+
+    @discardableResult
+    func setCommunityLeft() -> Bool {
+        guard !community.left else {
+            return false
+        }
+        community.left = true
+        save()
+        return true
+    }
+
     // MARK: Private
 
     private func read(_ data: Data) {
@@ -510,6 +566,7 @@ final class AirLocalStore {
             return
         }
         contacts = file.contacts
+        community = file.community ?? CommunityMarks()
         keyId = file.keyId
         guard let sealed = file.sealed else {
             return
@@ -565,7 +622,8 @@ final class AirLocalStore {
         if keyId == nil && !secrets.isEmpty {
             keyId = UUID().uuidString
         }
-        var file = FileContents(version: 2, contacts: contacts, keyId: keyId, sealed: nil)
+        var file = FileContents(version: 2, contacts: contacts, keyId: keyId, sealed: nil,
+                                community: community.isEmpty ? nil : community)
         let secretsSnapshot = secrets
         let keep = unreadableSealed
         let sealing = self.sealing
@@ -598,6 +656,9 @@ final class AirLocalStore {
     private func notify() {
         NotificationCenter.default.post(name: .airLocalStoreDidChange, object: self)
     }
+}
+
+extension AirLocalStore: KhandaqCommunityMarks {
 }
 
 // MARK: - Accepting a request

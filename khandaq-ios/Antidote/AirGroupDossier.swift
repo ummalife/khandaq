@@ -672,6 +672,7 @@ final class AirGroupDossierController: AirScrollController {
         }
         do {
             try submanagerGroups.leaveGroup(withNumber: OCTToxGroupNumber(chat.groupNumber), partMessage: nil)
+            KhandaqCommunity.willLeave(chat)
             submanagerGroups.removeAllMessages(in: chat, removeChat: true, leaveGroup: false)
             navigationController?.popToRootViewController(animated: true)
         }

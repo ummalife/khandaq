@@ -208,6 +208,8 @@ enum ChatListContent {
     }
 
     private static func leaveAndRemove(_ chat: OCTChat, submanagerGroups: OCTSubmanagerGroups) {
+        // Read while the chat is still there: removing it below invalidates it.
+        KhandaqCommunity.willLeave(chat)
         if chat.groupNumber >= 0 {
             do {
                 try submanagerGroups.leaveGroup(withNumber: OCTToxGroupNumber(chat.groupNumber), partMessage: nil)

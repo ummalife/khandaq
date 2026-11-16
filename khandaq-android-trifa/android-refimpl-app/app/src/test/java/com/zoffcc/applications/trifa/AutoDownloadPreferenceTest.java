@@ -169,6 +169,29 @@ public class AutoDownloadPreferenceTest
         assertTrue(helper.contains("if (auto_download_allows(current))"));
     }
 
+    @Test
+    public void a_switch_turned_in_advanced_counts_at_once()
+    {
+        // Advanced is shown inside MainActivity, which reads the switches only in onCreate and onResume: the
+        // listener of the preferences keeps them current, as it does the text size.
+        final String app = read("src/main/java/com/zoffcc/applications/trifa/MainApplication.java");
+        final int listener = app.indexOf("sp_change_listener = (sharedPreferences, key) ->");
+        assertTrue(listener > 0);
+        final String[][] switches = {{"KEY_PICTURES", "PREF__auto_accept_image"},
+                                     {"KEY_VIDEOS", "PREF__auto_accept_video"},
+                                     {"KEY_ALL_FILES", "PREF__auto_accept_all_upto"}};
+        for (final String[] s : switches)
+        {
+            final int key = app.indexOf("AutoDownloadPreference." + s[0] + ".equals(key)", listener);
+            assertTrue(s[0], key > listener);
+            final int set = app.indexOf("MainActivity." + s[1] + " = autoDownloadSwitch(sharedPreferences, key);", key);
+            assertTrue(s[1], set > key);
+            assertTrue(s[1] + " right under its key", app.indexOf("else if", key + 1) > set
+                                                     || app.indexOf("else if", key + 1) < 0);
+        }
+        assertTrue(app.contains("return sharedPreferences.getBoolean(key, AutoDownloadPreference.DEFAULT);"));
+    }
+
     private static boolean on(final long size, final String mime)
     {
         return rule(ALWAYS, false, AutoDownloadPreference.DEFAULT, AutoDownloadPreference.DEFAULT,

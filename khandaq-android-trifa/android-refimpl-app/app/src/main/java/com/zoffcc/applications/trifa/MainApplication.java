@@ -594,7 +594,36 @@ public class MainApplication extends Application
             // so a chat opened right after the change still had the old size until the main screen came back.
             MainActivity.PREF__global_font_size = globalFontSize(sharedPreferences);
         }
+        else if (AutoDownloadPreference.KEY_PICTURES.equals(key))
+        {
+            // KHANDAQ (0.2.57, SPEC-network part 3): the file switches decide every 1:1 file now, and the same
+            // holds for them as for the text size: a switch turned in Advanced counted only once the main screen
+            // came back, so a file sent right after it still followed the old one.
+            MainActivity.PREF__auto_accept_image = autoDownloadSwitch(sharedPreferences, key);
+        }
+        else if (AutoDownloadPreference.KEY_VIDEOS.equals(key))
+        {
+            MainActivity.PREF__auto_accept_video = autoDownloadSwitch(sharedPreferences, key);
+        }
+        else if (AutoDownloadPreference.KEY_ALL_FILES.equals(key))
+        {
+            MainActivity.PREF__auto_accept_all_upto = autoDownloadSwitch(sharedPreferences, key);
+        }
     };
+
+    /** A file switch of Settings as MainActivity reads it (AutoDownloadPreference). */
+    private static boolean autoDownloadSwitch(final SharedPreferences sharedPreferences, final String key)
+    {
+        try
+        {
+            return sharedPreferences.getBoolean(key, AutoDownloadPreference.DEFAULT);
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "autoDownloadSwitch:EE:" + e.getMessage());
+            return AutoDownloadPreference.DEFAULT;
+        }
+    }
 
     /** The global_font_size preference as MainActivity reads it, kept inside the size table. */
     private static int globalFontSize(final SharedPreferences sharedPreferences)

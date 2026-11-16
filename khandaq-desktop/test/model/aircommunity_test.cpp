@@ -617,8 +617,9 @@ void TestAirCommunity::aFileIdComesOnceInARun()
     // ids): a file again under its id gets no entry, so none takes the place of the one that went.
     const Community::HeldFiles::File third = heldFile(3, Community::chatId(), 4);
     held.hold(third);
-    QCOMPARE(numbersOf(held.hold(heldFile(2, Community::chatId(), Community::HeldFiles::limitBytes))),
-             (QVector<uint32_t>{3}));
+    const Community::HeldFiles::File large =
+        heldFile(2, Community::chatId(), Community::HeldFiles::limitBytes);
+    QCOMPARE(numbersOf(held.hold(large)), (QVector<uint32_t>{3}));
     QVERIFY(held.known(Community::chatId(), id));
     QVERIFY(held.known(Community::chatId(), third.entry.resumeFileId));
     QVERIFY(!held.take(3, file));

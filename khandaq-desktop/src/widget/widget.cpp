@@ -3037,9 +3037,9 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     if (g == nullptr) {
         return;
     }
-    // KHANDAQ (0.2.57, review): a member whose messages are hidden on this device sends no file here
-    // either, as GroupMessageDispatcher drops their messages: no entry, no Accept, no unread count,
-    // nothing held in Khandaq Community to push the files of others out.
+    // KHANDAQ (0.2.57, review): a member whose messages are hidden on this device sends no file
+    // here either, as GroupMessageDispatcher drops their messages: no entry, no Accept, no unread
+    // count, nothing held in Khandaq Community to push the files of others out.
     if (settings.getBlackList().contains(sender.toString())) {
         qDebug() << "onGroupFileReceived: a file of a member whose messages are hidden; dropped";
         return;

@@ -384,8 +384,8 @@ void TestCoreGroupFile::aRelayedFileThatNamesUsIsDroppedWithoutBurningItsId()
     hand(*core, group, peer,
          syncPacket(msgId, core->getSelfPublicKey().getByteArray(), QStringLiteral("x.png"), bytes),
          true);
-    hand(*core, group, peer, syncPacket(msgId, QByteArray(32, '\0'), QStringLiteral("x.png"), bytes),
-         true);
+    hand(*core, group, peer,
+         syncPacket(msgId, QByteArray(32, '\0'), QStringLiteral("x.png"), bytes), true);
     QVERIFY(senders.isEmpty());
 
     // None of them burnt the id: the record of the member who wrote it comes, and only once.
@@ -405,11 +405,13 @@ void TestCoreGroupFile::theFilesSeenGoWithTheCore()
     for (int profile = 0; profile < 2; ++profile) {
         ToxCorePtr core = makeCore();
         QVERIFY(core);
-        const int group = core->createGroup(QStringLiteral("Files"), TOX_GROUP_PRIVACY_STATE_PUBLIC);
+        const int group =
+            core->createGroup(QStringLiteral("Files"), TOX_GROUP_PRIVACY_STATE_PUBLIC);
         QVERIFY(group >= 0);
         Tox_Err_Group_Self_Query selfError;
-        const uint32_t peer =
-            tox_group_self_get_peer_id(core->getTox(), static_cast<uint32_t>(group), &selfError) + 1;
+        const uint32_t self =
+            tox_group_self_get_peer_id(core->getTox(), static_cast<uint32_t>(group), &selfError);
+        const uint32_t peer = self + 1;
         QSignalSpy received(core.get(), &Core::groupFileReceived);
         // Each profile signed in, one after the other in one run of the app, gets the file: the
         // first one's msg ids are not the second one's.

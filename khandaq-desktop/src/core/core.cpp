@@ -3319,10 +3319,10 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
             return; // all-zero pk is no member; it would show up as a phantom sender in history
         }
         const ToxPk origSender(origSenderRaw);
-        // KHANDAQ (0.2.57, review): a record that names us is our own file echoed back, or a forgery:
-        // every member sees our key in the group, and a file "of ours" would skip the hold of Khandaq
-        // Community (Widget::onGroupFileReceived) and stand in the chat under our name. So our key in
-        // the group is dropped as our Tox key always was.
+        // KHANDAQ (0.2.57, review): a record that names us is our own file echoed back, or a
+        // forgery: every member sees our key in the group, and a file "of ours" would skip the hold
+        // of Khandaq Community (Widget::onGroupFileReceived) and stand in the chat under our name.
+        // So our key in the group is dropped as our Tox key always was.
         if (origSender == getSelfPublicKey()
             || origSender == getGroupSelfPublicKey(static_cast<int>(groupId))) {
             return;

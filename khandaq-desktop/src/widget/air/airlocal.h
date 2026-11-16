@@ -119,7 +119,7 @@ public:
     void noteGroupLeft(const QByteArray& groupChatId);
     /**
      * A group is here, however it came: when it is Khandaq Community it is never joined by itself
-     * again (Air::Community::noteGroupHere). True when that changed the store, which is written then.
+     * again (Air::Community::noteGroupHere). True, and the store written, when that changed it.
      */
     bool noteGroupHere(const QByteArray& groupChatId);
 

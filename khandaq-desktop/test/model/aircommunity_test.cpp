@@ -64,6 +64,8 @@ private slots:
     void heldFilesAreTakenByTheNumberOfTheirEntry();
     void theOldestHeldFilesMakeRoomForNewOnes();
     void aGroupThatGoesTakesItsHeldFiles();
+    void aFileIdComesOnceInARun();
+    void namesPlayNoPartInWhatAcceptWrites();
 };
 
 void TestAirCommunity::theChatIdIsTheGroupOfOurBot()
@@ -386,11 +388,14 @@ void TestAirCommunity::aLongMessageIsCutAt500CharactersNeverInHalf()
 }
 
 namespace {
-Community::HeldFiles::File heldFile(uint32_t number, const QByteArray& group, qint64 size)
+Community::HeldFiles::File heldFile(uint32_t number, const QByteArray& group, qint64 size,
+                                    const QString& name = QStringLiteral("photo.jpg"),
+                                    char fill = 'f')
 {
-    ToxFile entry(number, 0, QStringLiteral("photo.jpg"), QString(), static_cast<uint64_t>(size),
-                  ToxFile::RECEIVING);
-    return {group, ToxPk(QByteArray(32, '\x0c')), entry, QByteArray(static_cast<int>(size), 'f')};
+    ToxFile entry(number, 0, name, QString(), static_cast<uint64_t>(size), ToxFile::RECEIVING);
+    // The id in its packets: one per message.
+    entry.resumeFileId = QByteArray(28, '\0') + QByteArray::number(number).rightJustified(4, '0');
+    return {group, ToxPk(QByteArray(32, '\x0c')), entry, QByteArray(static_cast<int>(size), fill)};
 }
 
 QVector<uint32_t> numbersOf(const QVector<Community::HeldFiles::File>& files)
@@ -477,6 +482,55 @@ void TestAirCommunity::aGroupThatGoesTakesItsHeldFiles()
     Community::HeldFiles::File file;
     QVERIFY(!held.take(1, file));
     QVERIFY(held.take(2, file));
+}
+
+void TestAirCommunity::aFileIdComesOnceInARun()
+{
+    Community::HeldFiles held;
+    const Community::HeldFiles::File first = heldFile(1, Community::chatId(), 4);
+    const QByteArray id = first.entry.resumeFileId;
+    QVERIFY(!held.known(Community::chatId(), id));
+    held.hold(first);
+    QVERIFY(held.known(Community::chatId(), id));
+    // Held, written or gone to make room: the id stays known, so a file again under it, by history
+    // sync or from someone else, is dropped before it takes over the first entry.
+    Community::HeldFiles::File file;
+    QVERIFY(held.take(1, file));
+    QVERIFY(held.known(Community::chatId(), id));
+    held.hold(heldFile(2, Community::chatId(), Community::HeldFiles::limitBytes));
+    QVERIFY(held.known(Community::chatId(), id));
+    // Only in its group, and never for a file without an id.
+    QVERIFY(!held.known(otherGroup, id));
+    QVERIFY(!held.known(Community::chatId(), QByteArray()));
+    // Left, and joined again: its files come again from the start.
+    held.forgetGroup(Community::chatId());
+    QVERIFY(!held.known(Community::chatId(), id));
+    QCOMPARE(held.count(), 0);
+}
+
+void TestAirCommunity::namesPlayNoPartInWhatAcceptWrites()
+{
+    // Two files under one name, a name with a dot first, and one with nothing but dots: each
+    // entry gets its own bytes, and each counts toward the limit.
+    Community::HeldFiles held;
+    held.hold(heldFile(1, Community::chatId(), 10 * megabyte, QStringLiteral("a.jpg"), '1'));
+    held.hold(heldFile(2, Community::chatId(), 10 * megabyte, QStringLiteral("a.jpg"), '2'));
+    held.hold(heldFile(3, Community::chatId(), 10 * megabyte, QStringLiteral(".hidden"), '3'));
+    held.hold(heldFile(4, Community::chatId(), 10 * megabyte, QStringLiteral(".."), '4'));
+    QCOMPARE(held.count(), 4);
+    QCOMPARE(held.bytes(), 40 * megabyte);
+    for (const uint32_t number : {uint32_t{2}, uint32_t{1}, uint32_t{4}, uint32_t{3}}) {
+        Community::HeldFiles::File file;
+        QVERIFY(held.take(number, file));
+        QCOMPARE(file.entry.fileNum, number);
+        QCOMPARE(file.data, QByteArray(10 * megabyte, static_cast<char>('0' + number)));
+    }
+    // Dots in front take no way around the limit.
+    for (uint32_t number = 10; number < 40; ++number) {
+        held.hold(heldFile(number, Community::chatId(), 10 * megabyte, QStringLiteral(".x")));
+    }
+    QVERIFY(held.bytes() <= Community::HeldFiles::limitBytes);
+    QCOMPARE(held.count(), static_cast<int>(Community::HeldFiles::limitBytes / (10 * megabyte)));
 }
 
 QTEST_GUILESS_MAIN(TestAirCommunity)

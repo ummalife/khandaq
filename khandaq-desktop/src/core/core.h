@@ -295,8 +295,11 @@ signals:
 
     void emptyGroupCreated(int groupnumber, const GroupId groupId, const QString& title = QString());
     void groupInviteReceived(const GroupInvite& inviteInfo);
-    /** messageId: what the edits, deletions and reactions of the group point at (stage 3, item 10). */
-    void groupMessageReceived(int groupnumber, int peernumber, const QString& message,
+    /**
+     * messageId: what the edits, deletions and reactions of the group point at (stage 3, item 10).
+     * author: the member's key in the group, read as the message came (onGroupMessage).
+     */
+    void groupMessageReceived(int groupnumber, const ToxPk& author, const QString& message,
                               bool isAction, uint32_t messageId);
     /** An edit, a deletion or a reaction a friend sent: lossless packet 186, 187 or 188, as it came. */
     void friendMessageEffect(uint32_t friendId, const QByteArray& packet);

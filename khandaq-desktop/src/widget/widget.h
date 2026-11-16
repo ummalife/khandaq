@@ -242,7 +242,7 @@ public slots:
     void onGroupJoinFailed(const QString& reason);
     void onGroupJoinSucceeded();
     void onGroupJoinByIdPrompt();
-    void onGroupMessageReceived(int groupnumber, int peernumber, const QString& message,
+    void onGroupMessageReceived(int groupnumber, const ToxPk& author, const QString& message,
                                 bool isAction, uint32_t messageId);
     void onGroupFileReceived(int groupnumber, const ToxPk& sender, const QString& fileName,
                              const QByteArray& fileData, const QDateTime& timestamp, bool wasSynced,

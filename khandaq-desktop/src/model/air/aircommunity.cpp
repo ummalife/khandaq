@@ -110,8 +110,16 @@ bool savesFileAtOnce(const QByteArray& groupChatId, bool fromSelf)
     return fromSelf || !isCommunity(groupChatId);
 }
 
+bool HeldFiles::known(const QByteArray& groupChatId, const QByteArray& fileId) const
+{
+    return !fileId.isEmpty() && knownIds.value(groupChatId).contains(fileId);
+}
+
 QVector<HeldFiles::File> HeldFiles::hold(const File& file)
 {
+    if (!file.entry.resumeFileId.isEmpty()) {
+        knownIds[file.groupChatId].insert(file.entry.resumeFileId);
+    }
     const qint64 size = file.data.size();
     if (size > limitBytes) {
         return {file};
@@ -140,6 +148,7 @@ bool HeldFiles::take(uint32_t number, File& file)
 
 void HeldFiles::forgetGroup(const QByteArray& groupChatId)
 {
+    knownIds.remove(groupChatId);
     for (int i = files.size() - 1; i >= 0; --i) {
         if (files.at(i).groupChatId == groupChatId) {
             total -= files.at(i).data.size();

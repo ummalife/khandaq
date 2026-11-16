@@ -2789,7 +2789,7 @@ void Widget::onGroupJoinByIdPrompt()
     openJoinGroup();
 }
 
-void Widget::onGroupMessageReceived(int groupnumber, int peernumber, const QString& message,
+void Widget::onGroupMessageReceived(int groupnumber, const ToxPk& author, const QString& message,
                                     bool isAction, uint32_t messageId)
 {
     const GroupId& groupId = groupList->id2Key(groupnumber);
@@ -2798,8 +2798,6 @@ void Widget::onGroupMessageReceived(int groupnumber, int peernumber, const QStri
     if (!dispatcher) {
         return;
     }
-
-    ToxPk author = core->getGroupPeerPk(groupnumber, peernumber);
 
     dispatcher->onMessageReceived(author, isAction, message, messageId);
 }
@@ -3042,6 +3040,11 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     const bool fromSelf = sender == core->getSelfPublicKey()
                           || sender == core->getGroupSelfPublicKey(groupnumber);
     if (!Air::Community::savesFileAtOnce(groupId.getByteArray(), fromSelf)) {
+        if (heldGroupFiles.known(groupId.getByteArray(), fileId)) {
+            qDebug() << "onGroupFileReceived: a file of Khandaq Community came again under the id"
+                     << "of an earlier one; dropped";
+            return;
+        }
         ToxFile entry(++groupFileNum, static_cast<uint32_t>(groupnumber),
                       sanitizeGroupFileName(fileName), QString(),
                       static_cast<uint64_t>(fileData.size()), ToxFile::RECEIVING);
@@ -3141,10 +3144,14 @@ void Widget::saveHeldGroupFile(const GroupId& groupId, const ToxFile& entry)
     ToxFile file = held.entry;
     const QString filePath = uniqueFilePath(groupDownloadDir(g), file.fileName);
     QFile out(filePath);
-    if (!out.open(QIODevice::WriteOnly) || out.write(held.data) != held.data.size()) {
+    // NewOnly: a file already there, another entry's, is never written over.
+    const bool opened = out.open(QIODevice::WriteOnly | QIODevice::NewOnly);
+    if (!opened || out.write(held.data) != held.data.size()) {
         qWarning() << "saveHeldGroupFile: cannot write" << filePath << out.errorString();
         out.close();
-        out.remove();
+        if (opened) {
+            out.remove();
+        }
         file.status = ToxFile::BROKEN;
         updateGroupFileInChatLog(groupId, held.sender, file);
         return;

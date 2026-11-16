@@ -827,7 +827,13 @@ void Core::onGroupMessage(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Messa
     }
     bool isAction = type == TOX_MESSAGE_TYPE_ACTION;
     QString message = ToxString(cMessage, length).getQString();
-    emit core->groupMessageReceived(groupId, peerId, message, isAction, messageId);
+    // KHANDAQ (0.2.57): the author's key is read here, while the peer number is still theirs.
+    // toxcore gives a member's number to the next one who joins once they left, and the main
+    // window reads the signal later: a lookup there could name the newcomer, in the transcript and
+    // in a Report (as files keep the key their BEGIN came with, audit F-5).
+    const ToxPk author =
+        core->getGroupPeerPk(static_cast<int>(groupId), static_cast<int>(peerId));
+    emit core->groupMessageReceived(groupId, author, message, isAction, messageId);
 }
 
 void Core::onGroupPeerJoin(Tox* tox, uint32_t groupId, uint32_t peerId, void* vCore)

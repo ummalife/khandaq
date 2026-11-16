@@ -24,6 +24,8 @@
 
 #include <QByteArray>
 #include <QDateTime>
+#include <QHash>
+#include <QSet>
 #include <QString>
 #include <QUrl>
 #include <QVector>
@@ -126,13 +128,22 @@ public:
     };
 
     /**
-     * Holds a file, and returns those that went to make room for it, oldest first: their entries
-     * stop. A file bigger than limitBytes alone is not held and comes back itself.
+     * Whether a file with this id (ToxFile::resumeFileId, the id in its packets) came in this
+     * group while the app runs, held, written or gone. An id is one message: a file that comes
+     * again under it, by history sync or from another member, is dropped before it has an entry,
+     * or it would take over the entry and the history row of the first, and show its own bytes
+     * under that entry's Accept.
+     */
+    bool known(const QByteArray& groupChatId, const QByteArray& fileId) const;
+    /**
+     * Holds a file whose id is not known, and returns those that went to make room for it, oldest
+     * first: their entries stop. A file bigger than limitBytes alone is not held and comes back
+     * itself. Its name plays no part: each file is its entry's, by number.
      */
     QVector<File> hold(const File& file);
     /** Takes out the file of the entry with this number, for Accept; false when none is held. */
     bool take(uint32_t number, File& file);
-    /** The group is gone: its files go with it. */
+    /** The group is gone: its files go with it, and a join again starts over (known). */
     void forgetGroup(const QByteArray& groupChatId);
     qint64 bytes() const;
     int count() const;
@@ -141,6 +152,8 @@ private:
     /** The oldest first. */
     QVector<File> files;
     qint64 total = 0;
+    /** The ids of the files that came, by group. */
+    QHash<QByteArray, QSet<QByteArray>> knownIds;
 };
 
 } // namespace Community

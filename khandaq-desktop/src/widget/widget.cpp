@@ -963,6 +963,9 @@ void Widget::onCoreChanged(Core& core_)
     connect(core, &Core::groupFileSendProgress, this, &Widget::onGroupFileSendProgress);
     connect(core, &Core::groupFileSendWaiting, this, &Widget::onGroupFileSendWaiting);
     connect(core, &Core::groupFileSendFailed, this, &Widget::onGroupFileSendFailed);
+    connect(core, &Core::groupFileArrivalStarted, this, &Widget::onGroupFileArrivalStarted);
+    connect(core, &Core::groupFileArrivalProgress, this, &Widget::onGroupFileArrivalProgress);
+    connect(core, &Core::groupFileArrivalFailed, this, &Widget::onGroupFileArrivalFailed);
     connect(core, &Core::groupPeerlistChanged, this, &Widget::onGroupPeerlistChanged);
     connect(core, &Core::groupPeerNameChanged, this, &Widget::onGroupPeerNameChanged);
     connect(core, &Core::groupTitleChanged, this, &Widget::onGroupTitleChanged);
@@ -2969,6 +2972,13 @@ uint32_t nextSentGroupFileNumber()
     return ++groupFileNum;
 }
 
+// The number of a file that comes into a group, from its BEGIN or once it is here.
+uint32_t nextReceivedGroupFileNumber()
+{
+    static uint32_t groupFileNum = 700000;
+    return ++groupFileNum;
+}
+
 QString uniqueFilePath(const QDir& dir, const QString& fileName)
 {
     QString candidate = dir.filePath(fileName);
@@ -3033,8 +3043,15 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
 {
     std::ignore = timestamp;
     const GroupId& groupId = groupList->id2Key(groupnumber);
+    // 0.2.57: the entry its BEGIN made goes on as this file's; where no entry of the file is made
+    // below, it ends as not come (stopGroupFileArrival).
+    const auto arrival = groupFileArrivals.constFind(fileId);
+    const bool arrived = arrival != groupFileArrivals.constEnd() && arrival->groupId == groupId
+                         && arrival->sender == sender;
+    const uint32_t fileNum = arrived ? arrival->file.fileNum : nextReceivedGroupFileNumber();
     Group* g = groupList->findGroup(groupId);
     if (g == nullptr) {
+        stopGroupFileArrival(fileId);
         return;
     }
     // KHANDAQ (0.2.57, review): a member whose messages are hidden on this device sends no file
@@ -3042,9 +3059,9 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     // count, nothing held in Khandaq Community to push the files of others out.
     if (settings.getBlackList().contains(sender.toString())) {
         qDebug() << "onGroupFileReceived: a file of a member whose messages are hidden; dropped";
+        stopGroupFileArrival(fileId);
         return;
     }
-    static uint32_t groupFileNum = 700000;
     // KHANDAQ (0.2.57, review): once the entry of a relayed file is made, the local store marks
     // it, so a Report on it names nobody in a later launch too (GroupChatForm::prepareReport). A
     // file that makes no entry, as one dropped below, marks nothing: its id may be another's.
@@ -3064,9 +3081,14 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
         if (heldGroupFiles.known(groupId.getByteArray(), fileId)) {
             qDebug() << "onGroupFileReceived: a file of Khandaq Community came again under the id"
                      << "of an earlier one; dropped";
+            stopGroupFileArrival(fileId);
             return;
         }
-        ToxFile entry(++groupFileNum, static_cast<uint32_t>(groupnumber),
+        if (!arrived) {
+            stopGroupFileArrival(fileId);
+        }
+        groupFileArrivals.remove(fileId);
+        ToxFile entry(fileNum, static_cast<uint32_t>(groupnumber),
                       sanitizeGroupFileName(fileName), QString(),
                       static_cast<uint64_t>(fileData.size()), ToxFile::RECEIVING);
         entry.resumeFileId = fileId;
@@ -3108,6 +3130,7 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
             qWarning() << "onGroupFileReceived: group auto-save cap reached for" << g->getName()
                        << "- further files from this group will not be written this session";
         }
+        stopGroupFileArrival(fileId);
         return;
     }
 
@@ -3118,6 +3141,7 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     QFile out(filePath);
     if (!out.open(QIODevice::WriteOnly)) {
         qWarning() << "onGroupFileReceived: cannot write" << filePath;
+        stopGroupFileArrival(fileId);
         return;
     }
     out.write(fileData);
@@ -3125,7 +3149,11 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     // Booked after the write actually happened, so a failed open above costs nothing.
     savedForGroup += static_cast<quint64>(fileData.size());
 
-    ToxFile file(++groupFileNum, static_cast<uint32_t>(groupnumber), safeName, filePath,
+    if (!arrived) {
+        stopGroupFileArrival(fileId);
+    }
+    groupFileArrivals.remove(fileId);
+    ToxFile file(fileNum, static_cast<uint32_t>(groupnumber), safeName, filePath,
                  static_cast<uint64_t>(fileData.size()), ToxFile::RECEIVING);
     file.progress.addSample(file.progress.getFileSize(), QTime::currentTime());
     // The id of the file in its packets, which its sender's deletion and the reactions point at.
@@ -3299,6 +3327,85 @@ void Widget::onGroupFileSendFailed(const QByteArray& fileId)
     updateGroupFileInChatLog(sentTo, core->getSelfPublicKey(), file);
 }
 
+void Widget::onGroupFileArrivalStarted(int groupnumber, const ToxPk& sender,
+                                       const QString& fileName, qint64 fileSize,
+                                       const QByteArray& fileId)
+{
+    const GroupId& groupId = groupList->id2Key(groupnumber);
+    const auto known = groupFileArrivals.find(fileId);
+    if (known != groupFileArrivals.end()) {
+        if (known->groupId == groupId && (sender.isEmpty() || known->sender == sender)) {
+            // Its BEGIN again, from a sender that starts it over: the bar starts over with it.
+            ToxFile& file = known->file;
+            file.progress = ToxFileProgress(static_cast<uint64_t>(fileSize));
+            file.progress.addSample(0, QTime::currentTime());
+            updateGroupFileInChatLog(known->groupId, known->sender, file);
+            return;
+        }
+        // Another member declares it now: the entry of the first ends, and this one is new.
+        stopGroupFileArrival(fileId);
+        stoppedGroupFileArrivals.remove(fileId);
+    }
+    // No entry for a file whose sender toxcore cannot name yet, nor one of a member whose
+    // messages are hidden: onGroupFileReceived makes its entry, or drops it, once it is here.
+    if (fileId.isEmpty() || sender.isEmpty() || !groupList->findGroup(groupId)
+        || settings.getBlackList().contains(sender.toString())) {
+        return;
+    }
+    // A file of Khandaq Community held already keeps its entry with Accept, which this one would
+    // take the place of: the copy is dropped once it is here.
+    if (heldGroupFiles.known(groupId.getByteArray(), fileId)) {
+        return;
+    }
+    ToxFile file(nextReceivedGroupFileNumber(), static_cast<uint32_t>(groupnumber),
+                 sanitizeGroupFileName(fileName), QString(), static_cast<uint64_t>(fileSize),
+                 ToxFile::RECEIVING);
+    file.resumeFileId = fileId;
+    // One that stopped coming before has its entry of then back.
+    file.continued = stoppedGroupFileArrivals.remove(fileId);
+    // INITIALIZING creates the history record; TRANSMITTING shows the bar, which the chunks move.
+    file.status = ToxFile::INITIALIZING;
+    updateGroupFileInChatLog(groupId, sender, file);
+    file.continued = false;
+    file.status = ToxFile::TRANSMITTING;
+    file.progress.addSample(0, QTime::currentTime());
+    updateGroupFileInChatLog(groupId, sender, file);
+    groupFileArrivals.insert(fileId, GroupFileArrival{groupId, sender, file});
+}
+
+void Widget::onGroupFileArrivalProgress(const QByteArray& fileId, qint64 bytesReceived)
+{
+    const auto arrival = groupFileArrivals.find(fileId);
+    if (arrival == groupFileArrivals.end()) {
+        return;
+    }
+    arrival->file.progress.addSample(static_cast<uint64_t>(bytesReceived), QTime::currentTime());
+    updateGroupFileInChatLog(arrival->groupId, arrival->sender, arrival->file);
+}
+
+void Widget::onGroupFileArrivalFailed(const QByteArray& fileId)
+{
+    stopGroupFileArrival(fileId);
+}
+
+/**
+ * @brief 0.2.57: the entry of a file that came in part ends: the history keeps it as not come,
+ * and the entry says the download stopped. A file that comes again later has that entry back.
+ */
+void Widget::stopGroupFileArrival(const QByteArray& fileId)
+{
+    const auto arrival = groupFileArrivals.find(fileId);
+    if (arrival == groupFileArrivals.end()) {
+        return;
+    }
+    const GroupFileArrival stopped = arrival.value();
+    groupFileArrivals.erase(arrival);
+    ToxFile file = stopped.file;
+    file.status = ToxFile::BROKEN;
+    updateGroupFileInChatLog(stopped.groupId, stopped.sender, file);
+    stoppedGroupFileArrivals.insert(fileId);
+}
+
 void Widget::onGroupPeerNameChanged(uint32_t groupnumber, const ToxPk& peerPk, const QString& newName)
 {
     const GroupId& groupId = groupList->id2Key(groupnumber);
@@ -3424,8 +3531,11 @@ void Widget::discardGroup(Group* g, bool fake, bool historyRemoved)
             airLocal->noteGroupLeft(groupId.getByteArray());
         }
     }
-    // KHANDAQ (0.2.57): the files it held for a tap go with its conversation.
+    // KHANDAQ (0.2.57): the files it held for a tap go with its conversation, and those that came.
     heldGroupFiles.forgetGroup(groupId.getByteArray());
+    for (auto it = groupFileArrivals.begin(); it != groupFileArrivals.end();) {
+        it = it->groupId == groupId ? groupFileArrivals.erase(it) : std::next(it);
+    }
     chatListWidget->removeGroupWidget(widget); // deletes widget
 
     groupWidgets.remove(groupId);

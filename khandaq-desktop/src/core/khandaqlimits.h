@@ -13,9 +13,12 @@ constexpr std::uint8_t NGC_PKT_FILE = 0x11;
 constexpr std::uint8_t NGC_PKT_SYNC_FILE = 0x03;
 constexpr std::uint8_t NGC_PKT_FILE_BEGIN = 0x12;
 constexpr std::uint8_t NGC_PKT_FILE_CHUNK = 0x13;
+/** A receiver asks the sender for the chunks it misses (Air::FileRequest). */
+constexpr std::uint8_t NGC_PKT_FILE_REQUEST = 0x14;
 
 constexpr std::size_t NGC_FILE_HEADER_SIZE = 6 + 1 + 1 + 32 + 4 + 255;
 constexpr std::size_t NGC_FILE_BEGIN_SIZE = NGC_FILE_HEADER_SIZE + 8 + 4 + 4;
 constexpr std::size_t NGC_FILE_CHUNK_HEADER_SIZE = 6 + 1 + 1 + 32 + 4 + 4;
+constexpr std::size_t NGC_FILE_REQUEST_HEADER_SIZE = 6 + 1 + 1 + 32 + 4;
 constexpr std::size_t NGC_MAX_PACKET_SIZE = 37000;
 constexpr std::size_t NGC_CHUNK_PAYLOAD_MAX = NGC_MAX_PACKET_SIZE - NGC_FILE_CHUNK_HEADER_SIZE;

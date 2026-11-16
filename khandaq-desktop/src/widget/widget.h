@@ -255,6 +255,11 @@ public slots:
     void onGroupFileSendProgress(const QByteArray& fileId, qint64 bytesSent);
     void onGroupFileSendWaiting(const QByteArray& fileId, bool waiting);
     void onGroupFileSendFailed(const QByteArray& fileId);
+    /** 0.2.57: a file that comes into a group in chunks shows from its BEGIN, as under way. */
+    void onGroupFileArrivalStarted(int groupnumber, const ToxPk& sender, const QString& fileName,
+                                   qint64 fileSize, const QByteArray& fileId);
+    void onGroupFileArrivalProgress(const QByteArray& fileId, qint64 bytesReceived);
+    void onGroupFileArrivalFailed(const QByteArray& fileId);
     /** An edit, a deletion or a reaction a friend sent (stage 3, item 10). */
     void onFriendMessageEffect(uint32_t friendnumber, const QByteArray& packet);
     /** KHANDAQ (0.2.57): a read receipt a friend sent, lossless packet 189. */
@@ -560,6 +565,20 @@ private:
     };
     /** By the id of the file in its packets. */
     QHash<QByteArray, GroupFileSend> groupFileSends;
+    /**
+     * 0.2.57: a file that comes into a group while its chunks come (Core::groupFileArrivalStarted),
+     * by the id of the file in its packets. It ends in onGroupFileReceived or as not come.
+     */
+    struct GroupFileArrival
+    {
+        GroupId groupId;
+        ToxPk sender;
+        ToxFile file;
+    };
+    QHash<QByteArray, GroupFileArrival> groupFileArrivals;
+    /** 0.2.57: the files that stopped coming this run: one that comes again has its entry back. */
+    QSet<QByteArray> stoppedGroupFileArrivals;
+    void stopGroupFileArrival(const QByteArray& fileId);
     /** KHANDAQ (0.2.57): the files of Khandaq Community that wait for Accept. */
     Air::Community::HeldFiles heldGroupFiles;
     /** The group the user joined that opens once it comes into the list (openJoinedGroup). */

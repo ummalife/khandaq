@@ -95,6 +95,7 @@ private slots:
     void aFileThatFailsLetsTheNextOneGo();
     void aPacketThatIsNotTheNextOneChangesNothing();
     void theBytesSentGrowWithTheChunks();
+    void theChunksSentAreThoseSinceTheLastBegin();
     void thePaceStartsWithABurstAndThenKeepsItsRate();
     void aLongPauseGivesNoMoreThanTheBurst();
     void aCostlyPacketIsPaidForByTheWaitAfterIt();
@@ -578,6 +579,26 @@ void TestAirGroupFileQueue::theBytesSentGrowWithTheChunks()
     drain(queue, 1);
     QCOMPARE(queue.bytesSent(fileA), 2 * payload);
     QCOMPARE(queue.bytesSent(fileB), qint64{0});
+}
+
+void TestAirGroupFileQueue::theChunksSentAreThoseSinceTheLastBegin()
+{
+    GroupFileQueue queue;
+    queue.add(1, fileA, 3 * payload);
+    QCOMPARE(queue.chunksSent(fileA), 0);
+    drain(queue, 2);
+    QCOMPARE(queue.chunksSent(fileA), 1);
+    drain(queue, 1);
+    QCOMPARE(queue.chunksSent(fileA), 2);
+    // A member back after the group had nobody: the file goes again from its BEGIN, and a
+    // request for its chunks waits for them.
+    queue.setMembers(1, 0, 10);
+    queue.setMembers(1, 1, 20);
+    QCOMPARE(queue.chunksSent(fileA), 0);
+    QCOMPARE(queue.chunksSent(fileB), 0);
+    // A file that went whole is not the queue's any more.
+    drain(queue);
+    QCOMPARE(queue.chunksSent(fileA), 0);
 }
 
 void TestAirGroupFileQueue::thePaceStartsWithABurstAndThenKeepsItsRate()

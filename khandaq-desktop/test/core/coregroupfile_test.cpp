@@ -31,8 +31,18 @@
 
 #include <tox/tox.h>
 
+#include <chrono>
+
 namespace {
 constexpr qint64 payload = static_cast<qint64>(NGC_CHUNK_PAYLOAD_MAX);
+
+// The clock of Core::checkGroupFileArrivals.
+qint64 steadyNowMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
 
 // The packets of a chunked file as Android lays them out (NgcGroupFileTransfer.buildBeginPacket
 // and buildChunkPacket): magic, version and packet id, the msg id, then big-endian numbers.
@@ -123,6 +133,9 @@ private slots:
     void aChunkedFileThatComesBothWaysArrivesOnce();
     void aRelayedFileThatNamesUsIsDroppedWithoutBurningItsId();
     void theFilesSeenGoWithTheCore();
+    void aChunkedFileShowsFromItsBegin();
+    void aFileWhoseSenderStaysAwayIsGivenUpUntilItComesAgain();
+    void aRequestForAFileThatIsNotOursIsDropped();
 
 private:
     ToxCorePtr makeCore();
@@ -426,6 +439,134 @@ void TestCoreGroupFile::theFilesSeenGoWithTheCore()
         core.reset();
         QVERIFY(!QFile::exists(scratchPath(chunkedId)));
     }
+}
+
+void TestCoreGroupFile::aChunkedFileShowsFromItsBegin()
+{
+    ToxCorePtr core = makeCore();
+    QVERIFY(core);
+    const int group = core->createGroup(QStringLiteral("Files"), TOX_GROUP_PRIVACY_STATE_PUBLIC);
+    QVERIFY(group >= 0);
+    Tox_Err_Group_Self_Query selfError;
+    const uint32_t peer =
+        tox_group_self_get_peer_id(core->getTox(), static_cast<uint32_t>(group), &selfError) + 1;
+    const QByteArray msgId(32, 'v');
+    const QByteArray file = fileBytes(3 * payload);
+    const QByteArray begin = beginPacket(msgId, QStringLiteral("talk.m4a"), file.size());
+    QSignalSpy started(core.get(), &Core::groupFileArrivalStarted);
+    QSignalSpy progress(core.get(), &Core::groupFileArrivalProgress);
+    QSignalSpy failed(core.get(), &Core::groupFileArrivalFailed);
+    QSignalSpy received(core.get(), &Core::groupFileReceived);
+
+    // Its entry shows from its BEGIN, before any chunk: one whose chunks are all lost shows too.
+    hand(*core, group, peer, begin, false);
+    QCOMPARE(started.count(), 1);
+    const QList<QVariant> args = started.takeFirst();
+    QCOMPARE(args.at(0).toInt(), group);
+    QCOMPARE(args.at(2).toString(), QStringLiteral("talk.m4a"));
+    QCOMPARE(args.at(3).toLongLong(), static_cast<qint64>(file.size()));
+    QCOMPARE(args.at(4).toByteArray(), msgId);
+    // Its BEGIN again, as a resend leads with it, changes nothing.
+    hand(*core, group, peer, begin, true);
+    QCOMPARE(started.count(), 0);
+
+    // What came of it is told a few times a second.
+    QTest::qWait(300);
+    hand(*core, group, peer, chunkPacket(msgId, file, 0), false);
+    QCOMPARE(progress.count(), 1);
+    QCOMPARE(progress.at(0).at(0).toByteArray(), msgId);
+    QCOMPARE(progress.at(0).at(1).toLongLong(), payload);
+    hand(*core, group, peer, chunkPacket(msgId, file, 1), false);
+    QCOMPARE(progress.count(), 1);
+    hand(*core, group, peer, chunkPacket(msgId, file, 2), true);
+    QCOMPARE(received.count(), 1);
+    QCOMPARE(received.at(0).at(6).toByteArray(), msgId);
+    QCOMPARE(failed.count(), 0);
+}
+
+void TestCoreGroupFile::aFileWhoseSenderStaysAwayIsGivenUpUntilItComesAgain()
+{
+    ToxCorePtr core = makeCore();
+    QVERIFY(core);
+    const int group = core->createGroup(QStringLiteral("Files"), TOX_GROUP_PRIVACY_STATE_PUBLIC);
+    QVERIFY(group >= 0);
+    Tox_Err_Group_Self_Query selfError;
+    const uint32_t peer =
+        tox_group_self_get_peer_id(core->getTox(), static_cast<uint32_t>(group), &selfError) + 1;
+    const QByteArray msgId(32, 'w');
+    const QByteArray file = fileBytes(2 * payload + 9);
+    const QByteArray begin = beginPacket(msgId, QStringLiteral("scan.pdf"), file.size());
+    QSignalSpy started(core.get(), &Core::groupFileArrivalStarted);
+    QSignalSpy failed(core.get(), &Core::groupFileArrivalFailed);
+    QSignalSpy received(core.get(), &Core::groupFileReceived);
+    hand(*core, group, peer, begin, false);
+    hand(*core, group, peer, chunkPacket(msgId, file, 0), false);
+    QVERIFY(QFile::exists(scratchPath(msgId)));
+    const qint64 nowMs = steadyNowMs();
+
+    // Its sender is not in the group (it left, or toxcore dropped it): it is not asked, and the
+    // file waits for it a while, though nothing comes.
+    core->checkGroupFileArrivals(nowMs + 60 * 1000);
+    core->checkGroupFileArrivals(nowMs + 90 * 1000);
+    QCOMPARE(failed.count(), 0);
+    QVERIFY(QFile::exists(scratchPath(msgId)));
+
+    // Then it is given up, and what came of it goes.
+    core->checkGroupFileArrivals(nowMs + 2 * 60 * 1000 + 1000);
+    QCOMPARE(failed.count(), 1);
+    QCOMPARE(failed.at(0).at(0).toByteArray(), msgId);
+    QVERIFY(!QFile::exists(scratchPath(msgId)));
+    hand(*core, group, peer, chunkPacket(msgId, file, 1), false);
+    hand(*core, group, peer, chunkPacket(msgId, file, 2), false);
+    core->checkGroupFileArrivals(nowMs + 3 * 60 * 1000);
+    QCOMPARE(received.count(), 0);
+    QCOMPARE(failed.count(), 1);
+
+    // Its id is not burnt: sent again from its BEGIN, it comes.
+    hand(*core, group, peer, begin, true);
+    QCOMPARE(started.count(), 2);
+    for (int chunk = 0; chunk < 3; ++chunk) {
+        hand(*core, group, peer, chunkPacket(msgId, file, chunk), true);
+    }
+    QCOMPARE(received.count(), 1);
+    QCOMPARE(received.at(0).at(3).toByteArray(), file);
+    QCOMPARE(failed.count(), 1);
+}
+
+void TestCoreGroupFile::aRequestForAFileThatIsNotOursIsDropped()
+{
+    ToxCorePtr core = makeCore();
+    QVERIFY(core);
+    const int group = core->createGroup(QStringLiteral("Files"), TOX_GROUP_PRIVACY_STATE_PUBLIC);
+    QVERIFY(group >= 0);
+    Tox_Err_Group_Self_Query selfError;
+    const uint32_t peer =
+        tox_group_self_get_peer_id(core->getTox(), static_cast<uint32_t>(group), &selfError) + 1;
+    const QString path = writeFile(QStringLiteral("ours.bin"), 3 * payload);
+    QSignalSpy started(core.get(), &Core::groupFileSendStarted);
+    QSignalSpy failed(core.get(), &Core::groupFileSendFailed);
+    QVERIFY(core->sendGroupFileFromPath(group, QStringLiteral("ours.bin"), path));
+    QCOMPARE(started.count(), 1);
+    const QByteArray ours = started.at(0).at(4).toByteArray();
+
+    // In the list form of iOS, the bitmap of Android and Android's whole file; for a file of
+    // nobody here, one of ours from a member toxcore cannot name, and cut short.
+    QByteArray list = ngcPacket('\x14', QByteArray(32, 'x'), 44 + 8);
+    qToBigEndian(quint32{2}, list.data() + 40);
+    qToBigEndian(quint32{0}, list.data() + 44);
+    qToBigEndian(quint32{1}, list.data() + 48);
+    QByteArray bitmap = ngcPacket('\x14', ours, 45);
+    qToBigEndian(quint32{3}, bitmap.data() + 40);
+    bitmap[44] = '\x07';
+    for (const bool isPrivate : {true, false}) {
+        hand(*core, group, peer, list, isPrivate);
+        hand(*core, group, peer, bitmap, isPrivate);
+        hand(*core, group, peer, bitmap.left(44), isPrivate);
+        hand(*core, group, peer, bitmap.left(30), isPrivate);
+    }
+    // Nothing of our file changed: it waits for the loop as it did.
+    QCOMPARE(failed.count(), 0);
+    QCOMPARE(started.count(), 1);
 }
 
 QTEST_GUILESS_MAIN(TestCoreGroupFile)

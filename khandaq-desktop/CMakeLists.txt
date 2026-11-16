@@ -306,6 +306,8 @@ set(${PROJECT_NAME}_SOURCES
   src/model/air/airgroup.h
   src/model/air/airgroupfilequeue.cpp
   src/model/air/airgroupfilequeue.h
+  src/model/air/airgroupfilerepair.cpp
+  src/model/air/airgroupfilerepair.h
   src/model/air/airgroupleave.cpp
   src/model/air/airgroupleave.h
   src/model/air/airlocalstore.cpp

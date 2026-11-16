@@ -254,6 +254,12 @@ qint64 GroupFileQueue::bytesSent(const QByteArray& fileId) const
     return qMin(file.size, chunkOffset(qMax(0, file.next)));
 }
 
+int GroupFileQueue::chunksSent(const QByteArray& fileId) const
+{
+    const int index = indexOf(fileId);
+    return index < 0 ? 0 : qMax(0, files.at(index).next);
+}
+
 bool GroupFileQueue::contains(const QByteArray& fileId) const
 {
     return indexOf(fileId) >= 0;

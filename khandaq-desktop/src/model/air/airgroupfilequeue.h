@@ -141,6 +141,12 @@ public:
     void remove(const QByteArray& fileId);
     /** The bytes of the file whose chunks went. */
     qint64 bytesSent(const QByteArray& fileId) const;
+    /**
+     * 0.2.57: how many chunks of the file went, in order, since its BEGIN last went: the ones a
+     * member may ask for again (Air::FileRequest). 0 before its first chunk, and for a file the
+     * queue does not hold.
+     */
+    int chunksSent(const QByteArray& fileId) const;
     bool contains(const QByteArray& fileId) const;
     bool isEmpty() const;
 

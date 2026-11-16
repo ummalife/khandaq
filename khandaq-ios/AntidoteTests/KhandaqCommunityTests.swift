@@ -204,6 +204,31 @@ class KhandaqCommunityTests: XCTestCase {
         XCTAssertTrue(again.communityLeft)
     }
 
+    /// The marks are no secret: a moment the sealed part cannot be sealed again (the keychain refuses) keeps them
+    /// off the disk no more, and the sealed part stays as it was. Before, nothing was written: a leave was lost
+    /// with the next stop of the app, and the group joined again.
+    func testTheMarksAreWrittenWhenTheSealedPartCannotBeSealedAgain() throws {
+        let directory = makeDirectory()
+        let blocked = String(repeating: "A1", count: 32)
+        let first = AirLocalStore(sealing: PlainSealing())
+        first.attach(directory: directory)
+        first.block(publicKey: blocked)
+        first.flush()
+
+        let second = AirLocalStore(sealing: OpenOnlySealing())
+        second.attach(directory: directory)
+        XCTAssertTrue(second.isBlocked(publicKey: blocked))
+        second.setCommunityAutoJoinDone()
+        second.setCommunityLeft()
+        second.flush()
+
+        let third = AirLocalStore(sealing: PlainSealing())
+        third.attach(directory: directory)
+        XCTAssertTrue(third.communityAutoJoinDone)
+        XCTAssertTrue(third.communityLeft)
+        XCTAssertTrue(third.isBlocked(publicKey: blocked), "the sealed part is the one that was there")
+    }
+
     // MARK: Item 6, every file waits
 
     /// Files of others wait whenever they came (KhandaqCommunity.fileHold), so the moment a build before the
@@ -294,6 +319,17 @@ private final class FakeMarks: KhandaqCommunityMarks {
 private struct PlainSealing: AirSealing {
     func seal(_ data: Data, keyId: String) -> Data? {
         return data
+    }
+
+    func open(_ data: Data, keyId: String) -> AirUnsealed {
+        return .opened(data)
+    }
+}
+
+/// The sealed part opens, and sealing fails: the keychain refuses to read or to make the key at that moment.
+private struct OpenOnlySealing: AirSealing {
+    func seal(_ data: Data, keyId: String) -> Data? {
+        return nil
     }
 
     func open(_ data: Data, keyId: String) -> AirUnsealed {

@@ -633,14 +633,21 @@ final class AirLocalStore {
                 file.sealed = keep
             }
             else if !secretsSnapshot.isEmpty {
-                guard let keyId = file.keyId,
-                      let plain = try? JSONEncoder().encode(secretsSnapshot),
-                      let box = sealing.seal(plain, keyId: keyId) else {
-                    // Writing without the sealed part would lose it: the file keeps its last version.
-                    log("AirLocalStore: cannot seal, \(url.lastPathComponent) is not rewritten")
-                    return
+                if let keyId = file.keyId,
+                   let plain = try? JSONEncoder().encode(secretsSnapshot),
+                   let box = sealing.seal(plain, keyId: keyId) {
+                    file.sealed = box.base64EncodedString()
                 }
-                file.sealed = box.base64EncodedString()
+                else {
+                    // Writing without the sealed part would lose it: the file keeps the one it has, under its
+                    // key, and the rest is written, the marks of Khandaq Community among them (a join or a leave
+                    // not kept would be made again at the next start). What this run added to the sealed part
+                    // goes with the next write that seals.
+                    let onDisk = (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode(FileContents.self, from: $0) }
+                    file.keyId = onDisk?.keyId
+                    file.sealed = onDisk?.sealed
+                    log("AirLocalStore: cannot seal, \(url.lastPathComponent) keeps its sealed part as it was")
+                }
             }
             guard let data = try? JSONEncoder().encode(file) else {
                 return

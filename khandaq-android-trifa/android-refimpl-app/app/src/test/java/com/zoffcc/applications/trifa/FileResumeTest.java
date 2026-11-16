@@ -174,6 +174,35 @@ public class FileResumeTest
     }
 
     @Test
+    public void an_ftv2_offer_of_a_file_said_no_to_gets_the_no_again_and_a_data_one_waits()
+    {
+        // QA run 7: the receiving toxcore accepts a waiting FTV2 transfer by itself after about 50 s without data,
+        // and drops what the sender then sends; the sender sent the whole file into nothing every minute.
+        final int ftv2 = ToxVars.TOX_FILE_KIND.TOX_FILE_KIND_FTV2.value;
+        final int data = ToxVars.TOX_FILE_KIND.TOX_FILE_KIND_DATA.value;
+        assertTrue(FileResume.refusesAgain(true, ftv2));
+        assertFalse("waits for a tap", FileResume.refusesAgain(true, data));
+        assertFalse(FileResume.refusesAgain(false, ftv2));
+        assertFalse(FileResume.refusesAgain(false, data));
+
+        // The offer is killed, and the entry kept cancelled with no transfer bound, before the bind writes the row
+        // as waiting; the no is kept before that, as for a DATA offer.
+        final String resume = bare(method(read(JAVA + "HelperFiletransfer.java"),
+                                          "boolean resume_incoming_offer(final long friend_number"));
+        final int again = resume.indexOf("if(FileResume.refusesAgain(refused,kind)){");
+        final int kill = resume.indexOf("tox_file_control(friend_number,file_number,TOX_FILE_CONTROL_CANCEL.value);",
+                                        again);
+        final int row = resume.indexOf("orma.updateFiletransfer().idEq(f.id).file_number(-1)"
+                                       + ".state(TOX_FILE_CONTROL_CANCEL.value).execute();", kill);
+        final int entry = resume.indexOf("orma.updateMessage().idEq(m.id).filetransfer_id(f.id)"
+                                         + ".state(TOX_FILE_CONTROL_CANCEL.value).execute();", row);
+        final int done = resume.indexOf("returntrue;", entry);
+        assertTrue(again > resume.indexOf("incoming_refused_offered_again.add(m.id);"));
+        assertTrue((kill > again) && (row > kill) && (entry > row) && (done > entry));
+        assertTrue(done < resume.indexOf("update_filetransfer_db_full(f);"));
+    }
+
+    @Test
     public void the_no_of_the_person_outlives_the_bind_of_an_offer_until_the_persons_own_tap()
     {
         final String helper = read(JAVA + "HelperFiletransfer.java");

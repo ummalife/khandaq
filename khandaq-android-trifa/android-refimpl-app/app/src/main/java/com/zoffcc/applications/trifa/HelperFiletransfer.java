@@ -1969,6 +1969,18 @@ public class HelperFiletransfer
                 incoming_refused_offered_again.add(m.id);
                 delete_filetransfer_tmpfile(f.id);
             }
+            if (FileResume.refusesAgain(refused, kind))
+            {
+                // KHANDAQ (0.2.57, QA run 7): an FTV2 offer of it cannot wait for a tap; the no goes to the sender
+                // again, and the entry stays cancelled, as the person left it, with no transfer bound.
+                final int no = tox_file_control(friend_number, file_number, TOX_FILE_CONTROL_CANCEL.value);
+                orma.updateFiletransfer().idEq(f.id).file_number(-1).state(TOX_FILE_CONTROL_CANCEL.value).execute();
+                orma.updateMessage().idEq(m.id).filetransfer_id(f.id).state(TOX_FILE_CONTROL_CANCEL.value).execute();
+                NetworkDiagnosticsLog.log("file_resume", "resume_incoming_offer:refused again mid=" + m.id + " ftid="
+                                                         + f.id + " kind=" + kind + " cancel=" + no);
+                update_single_message_from_messge_id(m.id, true);
+                return true;
+            }
             final long partial = refused ? -1L : get_vfs_file_length(f.path_name, f.file_name);
             final FileResume.Decision d = FileResume.decide(true, false, partial, file_size);
             if ((d.step == FileResume.Step.FROM_START) && (partial > file_size))

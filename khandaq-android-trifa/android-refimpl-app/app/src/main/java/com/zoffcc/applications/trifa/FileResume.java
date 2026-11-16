@@ -172,12 +172,27 @@ final class FileResume
 
     /**
      * Whether a recognised offer is accepted at once (SPEC 1.4): when the entry was accepted before, or the
-     * automatic download allows it now. Never one the person declined or cancelled: that waits for a tap.
+     * automatic download allows it now. Never one the person declined or cancelled: that waits for a tap, or gets
+     * the no again (refusesAgain).
      */
     static boolean acceptsByItself(final boolean acceptedBefore, final boolean refusedByPerson,
                                    final boolean autoDownloadAllows)
     {
         return !refusedByPerson && (acceptedBefore || autoDownloadAllows);
+    }
+
+    /**
+     * Whether a recognised offer the person said no to gets that no again at once instead of waiting for a tap
+     * (acceptsByItself): an FTV2 one. The receiving toxcore accepts an FTV2 transfer by itself once it has had no
+     * data for STALE_CYCLES_ON_FTV2_RECEIVER iterations (Messenger.c, do_reqchunk_filecb; about 50 s here), one
+     * not accepted here as well, with a seek to the bytes it holds; it then drops every byte while the app has not
+     * accepted it. The sender sent the whole file into nothing, again each minute (QA run 7). A waiting DATA
+     * offer moves no bytes. The first no, given in a cut, reached the sender as a lost transfer
+     * (killMeansLostTransfer); this one reaches it as the no.
+     */
+    static boolean refusesAgain(final boolean refusedByPerson, final int kind)
+    {
+        return refusedByPerson && (kind == ToxVars.TOX_FILE_KIND.TOX_FILE_KIND_FTV2.value);
     }
 
     /**

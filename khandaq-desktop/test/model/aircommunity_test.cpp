@@ -424,6 +424,19 @@ void TestAirCommunity::aLongMessageIsCutAt500CharactersNeverInHalf()
     const QString cut = textOf(reportMailUrl(report));
     QCOMPARE(cut.size(), 1000);
     QVERIFY(cut.at(cut.size() - 1).isLowSurrogate());
+
+    // As a person counts, and iOS: a flag is two regional indicators and one character...
+    const QString turkey = QStringLiteral("\U0001F1F9\U0001F1F7");
+    report.text = QString(499, QLatin1Char('a')) + turkey + turkey;
+    QCOMPARE(textOf(reportMailUrl(report)), QString(499, QLatin1Char('a')) + turkey);
+    // ...a family joined of three emoji is one...
+    const QString family = QStringLiteral("\U0001F468\u200D\U0001F469\u200D\U0001F467");
+    report.text = QString(499, QLatin1Char('b')) + family + QStringLiteral("b");
+    QCOMPARE(textOf(reportMailUrl(report)), QString(499, QLatin1Char('b')) + family);
+    // ...and so is a letter with its accent, which stays on the last letter kept.
+    report.text = QString(500, QLatin1Char('e')) + QStringLiteral("\u0301x");
+    QCOMPARE(textOf(reportMailUrl(report)),
+             QString(499, QLatin1Char('e')) + QStringLiteral("e\u0301"));
 }
 
 namespace {

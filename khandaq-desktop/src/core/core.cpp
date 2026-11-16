@@ -127,6 +127,8 @@ QByteArray groupChatId(const Tox* tox, uint32_t groupNumber)
 
 // Defined with the friend-assisted join below.
 void forgetFriendAssistedJoin(const QByteArray& chatId);
+// Defined with the files of groups below.
+void ngcForgetFiles();
 
 } // namespace
 
@@ -156,6 +158,9 @@ Core::~Core()
     coreThread->exit(0);
     coreThread->wait();
 
+    // KHANDAQ (0.2.57, review): what this file keeps of group files was one for every profile of
+    // the process; it is this profile's, and goes with its core.
+    ngcForgetFiles();
     tox.reset();
 }
 
@@ -2700,6 +2705,21 @@ uint64_t ngcReadU64Be(const uint8_t* p)
 // dedupe incoming files by msg_id (live + sync copies of the same message)
 QSet<QByteArray> ngcSeenFileMsgIds;
 QList<QByteArray> ngcSeenFileMsgIdOrder;
+
+/**
+ * KHANDAQ (0.2.57, review): the msg ids seen and the files being assembled belong to the core of
+ * one profile (Core::~Core). Kept for the next profile signed in, the ids made it drop the files
+ * of groups the first profile had seen, and a scratch file outlived its assembly.
+ */
+void ngcForgetFiles()
+{
+    ngcSeenFileMsgIds.clear();
+    ngcSeenFileMsgIdOrder.clear();
+    for (const NgcIncomingAssembly& assembly : qAsConst(ngcIncomingAssemblies)) {
+        QFile::remove(assembly.outPath);
+    }
+    ngcIncomingAssemblies.clear();
+}
 
 bool ngcFileMsgIdSeen(const QByteArray& msgId)
 {

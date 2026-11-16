@@ -122,6 +122,7 @@ private slots:
     void aChunkedFileThatComesPrivatelyArrives();
     void aChunkedFileThatComesBothWaysArrivesOnce();
     void aRelayedFileThatNamesUsIsDroppedWithoutBurningItsId();
+    void theFilesSeenGoWithTheCore();
 
 private:
     ToxCorePtr makeCore();
@@ -392,6 +393,37 @@ void TestCoreGroupFile::aRelayedFileThatNamesUsIsDroppedWithoutBurningItsId()
     hand(*core, group, peer, syncPacket(msgId, member, QStringLiteral("photo.png"), bytes), true);
     QCOMPARE(senders, (QVector<ToxPk>{ToxPk(member)}));
     QCOMPARE(relayed, (QVector<bool>{true}));
+}
+
+void TestCoreGroupFile::theFilesSeenGoWithTheCore()
+{
+    const QByteArray msgId(32, 't');
+    const QByteArray member(32, '\x5b');
+    const QByteArray bytes = fileBytes(1500);
+    const QByteArray chunked = fileBytes(2 * payload + 10);
+    const QByteArray chunkedId(32, 'u');
+    for (int profile = 0; profile < 2; ++profile) {
+        ToxCorePtr core = makeCore();
+        QVERIFY(core);
+        const int group = core->createGroup(QStringLiteral("Files"), TOX_GROUP_PRIVACY_STATE_PUBLIC);
+        QVERIFY(group >= 0);
+        Tox_Err_Group_Self_Query selfError;
+        const uint32_t peer =
+            tox_group_self_get_peer_id(core->getTox(), static_cast<uint32_t>(group), &selfError) + 1;
+        QSignalSpy received(core.get(), &Core::groupFileReceived);
+        // Each profile signed in, one after the other in one run of the app, gets the file: the
+        // first one's msg ids are not the second one's.
+        hand(*core, group, peer, syncPacket(msgId, member, QStringLiteral("a.png"), bytes), true);
+        hand(*core, group, peer, syncPacket(msgId, member, QStringLiteral("a.png"), bytes), true);
+        QCOMPARE(received.count(), 1);
+        // A file half come when the core goes leaves no scratch file behind.
+        hand(*core, group, peer, beginPacket(chunkedId, QStringLiteral("clip.mp4"), chunked.size()),
+             true);
+        hand(*core, group, peer, chunkPacket(chunkedId, chunked, 0), true);
+        QVERIFY(QFile::exists(scratchPath(chunkedId)));
+        core.reset();
+        QVERIFY(!QFile::exists(scratchPath(chunkedId)));
+    }
 }
 
 QTEST_GUILESS_MAIN(TestCoreGroupFile)

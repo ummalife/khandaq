@@ -21,19 +21,28 @@
 
 #include "src/model/air/airlocalstore.h"
 
+#include <QTextBoundaryFinder>
+
 namespace Air {
 
 namespace {
-/** The first limit characters of text: a pair of surrogates is one character. */
+/**
+ * The first limit characters of text as a person counts them, and as iOS counts a String: a flag,
+ * an emoji joined of several, a letter with its marks is one character, never cut in half
+ * (QTextBoundaryFinder::Grapheme).
+ */
 QString firstCharacters(const QString& text, int limit)
 {
-    int units = 0;
-    for (int characters = 0; characters < limit && units < text.size(); ++characters) {
-        const bool pair = text.at(units).isHighSurrogate() && units + 1 < text.size()
-                          && text.at(units + 1).isLowSurrogate();
-        units += pair ? 2 : 1;
+    QTextBoundaryFinder characters(QTextBoundaryFinder::Grapheme, text);
+    int end = 0;
+    for (int count = 0; count < limit; ++count) {
+        const int next = characters.toNextBoundary();
+        if (next < 0) {
+            break;
+        }
+        end = next;
     }
-    return text.left(units);
+    return text.left(end);
 }
 
 /** Lines of a mail end with CRLF (RFC 6068), whatever ended them before. */

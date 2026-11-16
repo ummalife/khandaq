@@ -56,7 +56,10 @@ struct GroupReport
 
 /** Where reports go. */
 constexpr char reportAddress[] = "support@khandaq.org";
-/** The text of the message goes up to this many characters; none is cut in half. */
+/**
+ * The text of the message goes up to this many characters, as a person counts them: a flag, an
+ * emoji joined of several or a letter with its marks is one, and none is cut in half.
+ */
 constexpr int reportTextLimit = 500;
 
 /**

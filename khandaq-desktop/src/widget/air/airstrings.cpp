@@ -66,6 +66,23 @@ const Source sources[] = {
     {Text::NetConnecting, QT_TRANSLATE_NOOP3("Air", "connecting", "own node or a contact: the link is being set up")},
     {Text::NetOffline, QT_TRANSLATE_NOOP3("Air", "no network: messages wait", "own node: the device has no network")},
     {Text::NetHint, QT_TRANSLATE_NOOP3("Air", "Opens the state of the network", "tooltip of the line under your name")},
+    {Text::NoNetworkTitle,
+     QT_TRANSLATE_NOOP3("Air", "No network",
+                        "band at the top of the window: the computer has had no network for 3 "
+                        "seconds")},
+    {Text::NoNetworkNote,
+     QT_TRANSLATE_NOOP3("Air",
+                        "Messages and files will wait and go on their own once you're back "
+                        "online.",
+                        "band at the top of the window, after No network")},
+    {Text::NoNetworkConnecting,
+     QT_TRANSLATE_NOOP3("Air", "Connecting",
+                        "band at the top of the window: the network is back and the app is "
+                        "getting online")},
+    {Text::NoNetworkBack,
+     QT_TRANSLATE_NOOP3("Air", "Back online",
+                        "band at the top of the window, for a moment before it goes: the app is "
+                        "online again")},
     {Text::CommandPlaceholder, QT_TRANSLATE_NOOP3("Air", "Find a chat or paste an ID", "placeholder of the command line")},
     {Text::CommandKeyHint, QT_TRANSLATE_NOOP3("Air", "Press / to search", "tooltip of the key hint in the command line")},
     {Text::NewContact, QT_TRANSLATE_NOOP3("Air", "New contact", "button and empty state action")},

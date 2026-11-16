@@ -66,4 +66,44 @@ struct NetworkReport
     bool operator==(const NetworkReport& other) const;
 };
 
+/**
+ * KHANDAQ (0.2.57): the band at the top of the window while the computer has no network at all.
+ * It comes once there has been none for 3 s, so a quick change of network shows nothing. With a
+ * network back it says Connecting until our node is online, then Back online for 1.5 s, then it
+ * goes; still not online after 30 s, it goes all the same, and the line under the name keeps the
+ * state. Connecting with a network at hand is the line's to say, never the band's.
+ * It is fed what the computer and the node say, with a monotonic clock in milliseconds.
+ */
+class NoNetworkNotice
+{
+public:
+    enum class Phase
+    {
+        Hidden,
+        /** No network for 3 s or more: messages and files wait. */
+        NoNetwork,
+        /** A network is back; our node is not online yet. */
+        Connecting,
+        /** Our node is online again: said for a moment. */
+        BackOnline,
+    };
+
+    static constexpr qint64 noNetworkAfterMs = 3000;
+    static constexpr qint64 backOnlineMs = 1500;
+    static constexpr qint64 connectingAtMostMs = 30000;
+
+    /** What the computer and our node say at nowMs; true when the phase changed. */
+    bool update(bool network, bool nodeOnline, qint64 nowMs);
+    Phase phase() const;
+    /** How long until the time alone can change the phase, in milliseconds; -1 when it cannot. */
+    qint64 msToNextStep(qint64 nowMs) const;
+
+private:
+    Phase current = Phase::Hidden;
+    /** Since when the computer has had no network; -1 while it has one. */
+    qint64 withoutSince = -1;
+    /** Since when the phase is what it is. */
+    qint64 phaseSince = 0;
+};
+
 } // namespace Air

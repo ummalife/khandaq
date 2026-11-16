@@ -562,6 +562,17 @@ Air::NetworkState AirSource::networkState() const
     return Air::networkState(selfLink, selfLink != Air::toxConnectionNone || networkReachable());
 }
 
+bool AirSource::computerHasNetwork()
+{
+    const bool before = reachable;
+    reachabilityAge.invalidate();
+    if (networkReachable() != before) {
+        emit networkChanged();
+        emit changed();
+    }
+    return reachable;
+}
+
 Air::Nodes AirSource::nodes() const
 {
     Air::Nodes nodes;
@@ -587,9 +598,9 @@ QString AirSource::networkReport() const
 }
 
 #ifdef KHANDAQ_SCREENSHOT_HOOK
-void AirSource::forgetNetworkForWalk()
+void AirSource::setNetworkForWalk(bool present)
 {
-    walkWithoutNetwork = true;
+    walkWithoutNetwork = !present;
     reachabilityAge.invalidate();
     emit networkChanged();
     emit changed();

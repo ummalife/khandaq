@@ -467,6 +467,8 @@ set(${PROJECT_NAME}_SOURCES
   src/widget/air/airlocal.h
   src/widget/air/airmediaparts.cpp
   src/widget/air/airmediaparts.h
+  src/widget/air/airnetworkband.cpp
+  src/widget/air/airnetworkband.h
   src/widget/air/airnewcontact.cpp
   src/widget/air/airnewcontact.h
   src/widget/air/airnewgroup.cpp

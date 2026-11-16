@@ -42,6 +42,7 @@
 #include <QSvgRenderer>
 #include <QTime>
 #include <QTimer>
+#include <QVBoxLayout>
 #include <QWindow>
 #ifdef Q_OS_MAC
 #include <QMenuBar>
@@ -111,6 +112,7 @@
 #include "src/widget/air/airlistview.h"
 #include "src/widget/air/airlocal.h"
 #include "src/widget/air/airmediaparts.h"
+#include "src/widget/air/airnetworkband.h"
 #include "src/widget/air/airnewcontact.h"
 #include "src/widget/air/airnewgroup.h"
 #include "src/widget/air/airoverlay.h"
@@ -4009,7 +4011,14 @@ void Widget::setupAir()
     AirStyle::instance().follow(settings, style, this);
 
     airBand = new AirBand(ui->centralwidget);
-    ui->verticalLayout_4->insertWidget(0, airBand);
+    // KHANDAQ (0.2.57): the band of no network hangs right under the Air band, with no gap between
+    // the two whatever the spacing of the style; their holder stands where the Air band stood.
+    auto* const top = new QWidget(ui->centralwidget);
+    auto* const topLayout = new QVBoxLayout(top);
+    topLayout->setContentsMargins(0, 0, 0, 0);
+    topLayout->setSpacing(0);
+    topLayout->addWidget(airBand);
+    ui->verticalLayout_4->insertWidget(0, top);
     // The window keeps the band's width as its least, as the band's pills come and go.
     airBand->installEventFilter(this);
 
@@ -4024,6 +4033,8 @@ void Widget::setupAir()
     ui->statusLayout->addWidget(airList, 1);
 
     airSource = new AirSource(*core, profile, settings, *friendList, *groupList, this);
+    // KHANDAQ (0.2.57): over the list and the conversation, which it pushes down.
+    topLayout->addWidget(new AirNetworkBand(*airSource, top));
     airController = new AirController(*airSource, *airBand, *airList, settings, this);
     airLocal = new AirLocal(settings, this);
     // Requests and invitations wait in the local store until they are answered (E12).
@@ -4636,7 +4647,7 @@ void Widget::showStatusMenu(const QPoint& globalPos)
  * newcontact [text] | toxlink <tox:...> | fill <object name>|<text> | key <key> | focuslist |
  * card accept|decline <words> | newgroup [contact] | joingroup [text] | private <member> |
  * groupask <member>|moderator|member|observer|remove | sendfile <title>|<path> |
- * access microphone|camera granted|undecided|denied | network offline|report <path> |
+ * access microphone|camera granted|undecided|denied | network offline|online|report <path> |
  * waitband <words>|<ms> | band hold|leave|open | minimize | restore | link <address> | clear |
  * quote <text> | spoken list|log | grab <file.png> | grabpopup <file.png> |
  * frames <count> <ms> <path prefix> | audit <label> | idle <ms> <label> |
@@ -4750,9 +4761,10 @@ void Widget::runShotScript(const QString& path)
                 settings.setFavoriteChat(entryByTitle(rest), command == QStringLiteral("favorite"));
             } else if (command == QStringLiteral("network")) {
                 // network offline: the node reads this computer's network as gone, as without one.
+                // network online: as it is again. The band of no network follows both.
                 // network report <path>: the network part of the log for support, into a file.
-                if (rest == QStringLiteral("offline")) {
-                    airSource->forgetNetworkForWalk();
+                if (rest == QStringLiteral("offline") || rest == QStringLiteral("online")) {
+                    airSource->setNetworkForWalk(rest == QStringLiteral("online"));
                     // The next step comes at once, so a grab after a short wait catches the
                     // change halfway through its cross-fade.
                     delay = 0;

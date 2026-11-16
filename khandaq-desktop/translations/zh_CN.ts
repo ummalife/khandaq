@@ -342,6 +342,26 @@
         <translation>无网络：消息将等待发送</translation>
     </message>
     <message>
+        <source>No network</source>
+        <comment>band at the top of the window: the computer has had no network for 3 seconds</comment>
+        <translation>无网络</translation>
+    </message>
+    <message>
+        <source>Messages and files will wait and go on their own once you&apos;re back online.</source>
+        <comment>band at the top of the window, after No network</comment>
+        <translation>消息和文件会等待，恢复联网后自动发出。</translation>
+    </message>
+    <message>
+        <source>Connecting</source>
+        <comment>band at the top of the window: the network is back and the app is getting online</comment>
+        <translation>连接中</translation>
+    </message>
+    <message>
+        <source>Back online</source>
+        <comment>band at the top of the window, for a moment before it goes: the app is online again</comment>
+        <translation>已恢复联网</translation>
+    </message>
+    <message>
         <source>Find a chat or paste an ID</source>
         <comment>placeholder of the command line</comment>
         <translation>查找聊天或粘贴 ID</translation>

@@ -25,6 +25,7 @@
         <file alias="user-plus.svg">../img/air/user-plus.svg</file>
         <file alias="users.svg">../img/air/users.svg</file>
         <file alias="video.svg">../img/air/video.svg</file>
+        <file alias="wifi-off.svg">../img/air/wifi-off.svg</file>
         <file alias="x.svg">../img/air/x.svg</file>
     </qresource>
     <qresource prefix="/font/plex">

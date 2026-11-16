@@ -44,6 +44,10 @@ private slots:
     void nodesAreTheRelaysAndTheContactsReachedDirectly();
     void lineNamesTheStateWithoutACount();
     void lineAndSettingsSpeakEveryLanguage();
+    void noBandForAnOutageUnderThreeSeconds();
+    void bandGoesFromNoNetworkThroughConnectingAndBackOnline();
+    void bandGoesAfterThirtySecondsOfConnecting();
+    void bandSpeaksEveryLanguage();
 
 private:
     void use(const QString& language);
@@ -198,6 +202,136 @@ void TestAirNetwork::lineAndSettingsSpeakEveryLanguage()
     QCOMPARE(AirStrings::networkText(NetworkState::Relay), QStringLiteral("在线，经中继服务器"));
     QCOMPARE(AirStrings::reachText(relayed), QStringLiteral("经中继"));
     QCOMPARE(AirStrings::networkLinkText(Link::Relay), QStringLiteral("经中继服务器"));
+}
+
+/**
+ * KHANDAQ (0.2.57): a quick change of network, or one lost for less than 3 s, shows nothing; the
+ * node going offline with a network at hand is the line's to say.
+ */
+void TestAirNetwork::noBandForAnOutageUnderThreeSeconds()
+{
+    using Phase = Air::NoNetworkNotice::Phase;
+    Air::NoNetworkNotice notice;
+    QVERIFY(!notice.update(true, true, 0));
+    QCOMPARE(notice.msToNextStep(0), qint64{-1});
+
+    QVERIFY(!notice.update(false, true, 1000));
+    QCOMPARE(notice.msToNextStep(1000), qint64{3000});
+    QVERIFY(!notice.update(false, false, 3999));
+    QCOMPARE(notice.msToNextStep(3999), qint64{1});
+    QVERIFY(!notice.update(true, false, 3999));
+    QCOMPARE(notice.phase(), Phase::Hidden);
+    QCOMPARE(notice.msToNextStep(3999), qint64{-1});
+
+    // Lost again: the 3 s count from the new loss, not the old one.
+    QVERIFY(!notice.update(false, false, 5000));
+    QVERIFY(!notice.update(false, false, 7999));
+    QCOMPARE(notice.phase(), Phase::Hidden);
+
+    // Connecting with a network at hand: no band, however long it lasts.
+    Air::NoNetworkNotice connecting;
+    QVERIFY(!connecting.update(true, false, 0));
+    QVERIFY(!connecting.update(true, false, 60 * 1000));
+    QCOMPARE(connecting.phase(), Phase::Hidden);
+}
+
+/**
+ * KHANDAQ (0.2.57): no network for 3 s, then the network back: Connecting until our node is online,
+ * Back online for 1.5 s, then the band goes. A network back with the node still online says Back
+ * online at once.
+ */
+void TestAirNetwork::bandGoesFromNoNetworkThroughConnectingAndBackOnline()
+{
+    using Phase = Air::NoNetworkNotice::Phase;
+    Air::NoNetworkNotice notice;
+    QVERIFY(!notice.update(false, true, 10000));
+    QVERIFY(notice.update(false, false, 13000));
+    QCOMPARE(notice.phase(), Phase::NoNetwork);
+    // It stays while there is no network, with nothing to wait for.
+    QVERIFY(!notice.update(false, false, 300000));
+    QCOMPARE(notice.msToNextStep(300000), qint64{-1});
+
+    QVERIFY(notice.update(true, false, 300500));
+    QCOMPARE(notice.phase(), Phase::Connecting);
+    QCOMPARE(notice.msToNextStep(300500), qint64{30000});
+    QVERIFY(!notice.update(true, false, 310000));
+
+    QVERIFY(notice.update(true, true, 312000));
+    QCOMPARE(notice.phase(), Phase::BackOnline);
+    QCOMPARE(notice.msToNextStep(312000), qint64{1500});
+    QVERIFY(!notice.update(true, true, 313499));
+    QVERIFY(notice.update(true, true, 313500));
+    QCOMPARE(notice.phase(), Phase::Hidden);
+    QCOMPARE(notice.msToNextStep(313500), qint64{-1});
+
+    // Back while the node never noticed the network go: Back online, then gone.
+    Air::NoNetworkNotice quick;
+    QVERIFY(!quick.update(false, true, 0));
+    QVERIFY(quick.update(false, true, 3000));
+    QVERIFY(quick.update(true, true, 4000));
+    QCOMPARE(quick.phase(), Phase::BackOnline);
+    QVERIFY(quick.update(true, true, 5500));
+    QCOMPARE(quick.phase(), Phase::Hidden);
+
+    // The network goes again while connecting: No network once it has been gone for 3 s.
+    Air::NoNetworkNotice again;
+    QVERIFY(!again.update(false, false, 0));
+    QVERIFY(again.update(false, false, 3000));
+    QVERIFY(again.update(true, false, 4000));
+    QCOMPARE(again.phase(), Phase::Connecting);
+    QVERIFY(!again.update(false, false, 5000));
+    QCOMPARE(again.msToNextStep(5000), qint64{3000});
+    QVERIFY(!again.update(false, false, 7999));
+    QCOMPARE(again.phase(), Phase::Connecting);
+    QVERIFY(again.update(false, false, 8000));
+    QCOMPARE(again.phase(), Phase::NoNetwork);
+}
+
+/**
+ * KHANDAQ (0.2.57): still connecting 30 s after the network came back, the band goes anyway; the
+ * line under the name keeps saying connecting.
+ */
+void TestAirNetwork::bandGoesAfterThirtySecondsOfConnecting()
+{
+    using Phase = Air::NoNetworkNotice::Phase;
+    Air::NoNetworkNotice notice;
+    QVERIFY(!notice.update(false, false, 0));
+    QVERIFY(notice.update(false, false, 3000));
+    QVERIFY(notice.update(true, false, 20000));
+    QCOMPARE(notice.phase(), Phase::Connecting);
+    QVERIFY(!notice.update(true, false, 49999));
+    QCOMPARE(notice.msToNextStep(49999), qint64{1});
+    QVERIFY(notice.update(true, false, 50000));
+    QCOMPARE(notice.phase(), Phase::Hidden);
+    // Online later: nothing comes back.
+    QVERIFY(!notice.update(true, true, 70000));
+    QCOMPARE(notice.phase(), Phase::Hidden);
+}
+
+void TestAirNetwork::bandSpeaksEveryLanguage()
+{
+    using AirStrings::Text;
+    QCOMPARE(AirStrings::text(Text::NoNetworkTitle), QStringLiteral("No network"));
+    QCOMPARE(AirStrings::text(Text::NoNetworkNote),
+             QStringLiteral("Messages and files will wait and go on their own once you're back "
+                            "online."));
+    QCOMPARE(AirStrings::text(Text::NoNetworkConnecting), QStringLiteral("Connecting"));
+    QCOMPARE(AirStrings::text(Text::NoNetworkBack), QStringLiteral("Back online"));
+
+    use(QStringLiteral("ru"));
+    QCOMPARE(AirStrings::text(Text::NoNetworkTitle), QStringLiteral("Нет сети"));
+    QCOMPARE(AirStrings::text(Text::NoNetworkNote),
+             QStringLiteral("Сообщения и файлы подождут и уйдут сами, когда связь вернётся."));
+    QCOMPARE(AirStrings::text(Text::NoNetworkConnecting), QStringLiteral("Подключаемся"));
+    QCOMPARE(AirStrings::text(Text::NoNetworkBack), QStringLiteral("Снова в сети"));
+
+    use(QStringLiteral("ar"));
+    QCOMPARE(AirStrings::text(Text::NoNetworkTitle), QStringLiteral("لا شبكة"));
+    QCOMPARE(AirStrings::text(Text::NoNetworkBack), QStringLiteral("عاد الاتصال"));
+
+    use(QStringLiteral("zh_CN"));
+    QCOMPARE(AirStrings::text(Text::NoNetworkTitle), QStringLiteral("无网络"));
+    QCOMPARE(AirStrings::text(Text::NoNetworkConnecting), QStringLiteral("连接中"));
 }
 
 QTEST_GUILESS_MAIN(TestAirNetwork)

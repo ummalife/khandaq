@@ -350,6 +350,26 @@
         <translation>нет сети: сообщения ждут</translation>
     </message>
     <message>
+        <source>No network</source>
+        <comment>band at the top of the window: the computer has had no network for 3 seconds</comment>
+        <translation>Нет сети</translation>
+    </message>
+    <message>
+        <source>Messages and files will wait and go on their own once you&apos;re back online.</source>
+        <comment>band at the top of the window, after No network</comment>
+        <translation>Сообщения и файлы подождут и уйдут сами, когда связь вернётся.</translation>
+    </message>
+    <message>
+        <source>Connecting</source>
+        <comment>band at the top of the window: the network is back and the app is getting online</comment>
+        <translation>Подключаемся</translation>
+    </message>
+    <message>
+        <source>Back online</source>
+        <comment>band at the top of the window, for a moment before it goes: the app is online again</comment>
+        <translation>Снова в сети</translation>
+    </message>
+    <message>
         <source>Find a chat or paste an ID</source>
         <comment>placeholder of the command line</comment>
         <translation>Найти чат или вставить ID</translation>

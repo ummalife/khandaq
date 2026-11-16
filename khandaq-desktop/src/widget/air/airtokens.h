@@ -332,6 +332,7 @@ constexpr const char* iconNames[] = {
     "user-plus",
     "users",
     "video",
+    "wifi-off",
     "x",
 };
 

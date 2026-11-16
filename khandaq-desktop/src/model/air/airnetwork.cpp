@@ -65,4 +65,76 @@ bool NetworkReport::operator==(const NetworkReport& other) const
            && live == other.live && offersReconnect == other.offersReconnect && alarm == other.alarm;
 }
 
+constexpr qint64 NoNetworkNotice::noNetworkAfterMs;
+constexpr qint64 NoNetworkNotice::backOnlineMs;
+constexpr qint64 NoNetworkNotice::connectingAtMostMs;
+
+bool NoNetworkNotice::update(bool network, bool nodeOnline, qint64 nowMs)
+{
+    if (network) {
+        withoutSince = -1;
+    } else if (withoutSince < 0) {
+        withoutSince = nowMs;
+    }
+    const bool longWithout = withoutSince >= 0 && nowMs - withoutSince >= noNetworkAfterMs;
+    Phase next = current;
+    switch (current) {
+    case Phase::Hidden:
+        if (longWithout) {
+            next = Phase::NoNetwork;
+        }
+        break;
+    case Phase::NoNetwork:
+        if (network) {
+            next = nodeOnline ? Phase::BackOnline : Phase::Connecting;
+        }
+        break;
+    case Phase::Connecting:
+        if (longWithout) {
+            next = Phase::NoNetwork;
+        } else if (nodeOnline) {
+            next = Phase::BackOnline;
+        } else if (nowMs - phaseSince >= connectingAtMostMs) {
+            next = Phase::Hidden;
+        }
+        break;
+    case Phase::BackOnline:
+        if (longWithout) {
+            next = Phase::NoNetwork;
+        } else if (nowMs - phaseSince >= backOnlineMs) {
+            next = Phase::Hidden;
+        }
+        break;
+    }
+    if (next == current) {
+        return false;
+    }
+    current = next;
+    phaseSince = nowMs;
+    return true;
+}
+
+NoNetworkNotice::Phase NoNetworkNotice::phase() const
+{
+    return current;
+}
+
+qint64 NoNetworkNotice::msToNextStep(qint64 nowMs) const
+{
+    qint64 next = -1;
+    const auto sooner = [&next](qint64 ms) {
+        const qint64 at = qMax<qint64>(0, ms);
+        next = next < 0 ? at : qMin(next, at);
+    };
+    if (withoutSince >= 0 && current != Phase::NoNetwork) {
+        sooner(noNetworkAfterMs - (nowMs - withoutSince));
+    }
+    if (current == Phase::Connecting) {
+        sooner(connectingAtMostMs - (nowMs - phaseSince));
+    } else if (current == Phase::BackOnline) {
+        sooner(backOnlineMs - (nowMs - phaseSince));
+    }
+    return next;
+}
+
 } // namespace Air

@@ -90,6 +90,12 @@ public:
     /** Messages matching the query, newest first, at most 50. */
     QVector<Air::MessageHit> search(const QString& query) const;
     Air::NetworkState networkState() const;
+    /**
+     * KHANDAQ (0.2.57): whether this computer has a network, asked of the system now rather than
+     * within 5 s: the band of no network goes by it. A change found is told as networkChanged, so
+     * the line under the name follows at the same moment.
+     */
+    bool computerHasNetwork();
     /** The relays our node holds a connection to and the contacts it reaches directly. */
     Air::Nodes nodes() const;
     /** The network part of the log for support (NetworkDiagnostics::supportReport). */
@@ -97,9 +103,9 @@ public:
 #ifdef KHANDAQ_SCREENSHOT_HOOK
     /**
      * The walk runs where the computer always has a network: this makes the node read it as gone,
-     * so the line and Settings show No network.
+     * so the line and Settings show No network, and the band comes; present gives it back.
      */
-    void forgetNetworkForWalk();
+    void setNetworkForWalk(bool present);
 #endif
     /** Our node came online less than a minute ago: friends seen today may still be linking. */
     bool selfLinkSettling() const;

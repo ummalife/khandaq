@@ -37,6 +37,7 @@
 #include <QMutexLocker>
 #include <QSignalSpy>
 
+#include <chrono>
 #include <iostream>
 #include <memory>
 #include <random>
@@ -101,6 +102,14 @@ const int friend_timeout = 50000;
 /** What a file sends in a packet at most (MAX_FILE_DATA_SIZE of toxcore). */
 const qint64 fileChunkMax = 1371;
 
+/** The clock of the core loop (monotonicMs in core.cpp). */
+qint64 steadyMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
 /** KHANDAQ (0.2.57): what the core thread of a node says of its files and friends, for the test. */
 class NodeLog : public QObject
 {
@@ -110,7 +119,13 @@ public:
         CoreFile& files = *core.getCoreFile();
         connect(&files, &CoreFile::fileReceiveRequested, this, keep(&offered),
                 Qt::DirectConnection);
-        connect(&files, &CoreFile::fileSendStarted, this, keep(&started), Qt::DirectConnection);
+        connect(&files, &CoreFile::fileSendStarted, this,
+                [this](ToxFile file) {
+                    const QMutexLocker locker{&lock};
+                    started.append(file);
+                    lastStartMs = steadyMs();
+                },
+                Qt::DirectConnection);
         connect(&files, &CoreFile::fileTransferAccepted, this, keep(&accepted),
                 Qt::DirectConnection);
         connect(&files, &CoreFile::fileTransferFinished, this, keep(&finished),
@@ -135,6 +150,10 @@ public:
         connect(&core, &Core::friendLinkChanged, this,
                 [this](uint32_t friendId, int link) {
                     const QMutexLocker locker{&lock};
+                    if (link != TOX_CONNECTION_NONE
+                        && links.value(friendId, TOX_CONNECTION_NONE) == TOX_CONNECTION_NONE) {
+                        backMs[friendId] = steadyMs();
+                    }
                     links[friendId] = link;
                 },
                 Qt::DirectConnection);
@@ -161,6 +180,12 @@ public:
         const QMutexLocker locker{&lock};
         return links.value(friendId, TOX_CONNECTION_NONE) != TOX_CONNECTION_NONE;
     }
+    /** From the moment the link to friendId last came back to the last file this node sent. */
+    qint64 msFromBackToLastStart(uint32_t friendId)
+    {
+        const QMutexLocker locker{&lock};
+        return lastStartMs - backMs.value(friendId, lastStartMs);
+    }
 
     QList<ToxFile> offered;
     QList<ToxFile> started;
@@ -182,6 +207,8 @@ private:
     uint64_t bytes = 0;
     uint64_t firstContinued = 0;
     QHash<uint32_t, int> links;
+    QHash<uint32_t, qint64> backMs;
+    qint64 lastStartMs = 0;
 };
 
 /** A file of size bytes that no shift of itself matches, so a part from a wrong place shows. */
@@ -761,8 +788,9 @@ void TestCore::an_invite_from_a_friend_online_replaces_a_group_joined_by_its_id(
  * KHANDAQ (0.2.57): the link between Alice and Bob goes in the middle of a file of Alice, as when
  * the network goes, and comes back. Alice's node stops for longer than toxcore waits for a friend,
  * so both call the other offline and forget the transfer. Both keep it waiting; once they are
- * linked again Alice offers it with the same Tox file id by herself, and Bob's node goes on with it
- * from what came, asking his window nothing. The file ends whole, byte for byte.
+ * linked again Alice offers it with the same Tox file id by herself, a moment later (an older
+ * receiver would forget an offer that came with the link), and Bob's node goes on with it from what
+ * came, asking his window nothing. The file ends whole, byte for byte.
  */
 void TestCore::a_file_goes_on_from_where_it_stopped_once_the_friend_is_back()
 {
@@ -813,6 +841,8 @@ void TestCore::a_file_goes_on_from_where_it_stopped_once_the_friend_is_back()
     QCOMPARE(aliceLog.of(aliceLog.started).size(), 2);
     QVERIFY(aliceLog.of(aliceLog.started).last().continued);
     QCOMPARE(aliceLog.of(aliceLog.started).last().resumeFileId, offer.resumeFileId);
+    // Not with the link: the status that comes with it is through on the other side first.
+    QVERIFY(aliceLog.msFromBackToLastStart(bobOnAlice) >= CoreFile::offerAgainAfterMs - 5);
     QCOMPARE(bobLog.of(bobLog.offered).size(), 1);
     QVERIFY(bobLog.of(bobLog.accepted).last().continued);
     QVERIFY(bobLog.of(bobLog.finished).first().continued);

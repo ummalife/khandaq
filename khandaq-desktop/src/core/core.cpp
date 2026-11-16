@@ -424,7 +424,7 @@ void Core::process()
         leaveRecordedGroup(leave, "due");
     }
     iterateTox();
-    // 0.2.57: the files of the friends that came back in it are offered to them again.
+    // 0.2.57: the files of the friends that came back are offered to them again, a moment later.
     getCoreFile()->process(monotonicMs());
     // 0.2.56: once toxcore has read the acknowledgements of those before.
     sendGroupFileChunks();

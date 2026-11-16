@@ -84,6 +84,14 @@ public:
      */
     void process(qint64 nowMs);
 
+    /**
+     * KHANDAQ (0.2.57): how long after a friend is back our files that waited are offered to them
+     * again. 0.2.56 and older qTox, on the status every connection brings, mark each file of that
+     * friend as going and forget it, on their GUI thread a moment after the status came: an offer
+     * that reached them first was taken so, showed no Accept and never went on.
+     */
+    static constexpr qint64 offerAgainAfterMs = 2000;
+
 signals:
     void fileSendStarted(ToxFile file);
     void fileReceiveRequested(ToxFile file);
@@ -104,7 +112,8 @@ private:
     void removeFile(uint32_t friendId, uint32_t fileId);
     /** The transfers of a friend who went offline wait for them, under numbers of their own. */
     void keepForFriend(uint32_t friendId);
-    void offerAgain(uint32_t friendId, qint64 nowMs);
+    /** backMs: when the friend came back (monotonic ms), from which theirs wait for an offer. */
+    void offerAgain(uint32_t friendId, qint64 backMs);
     /** An offer that goes on with a file that waits for its sender; false when none waits. */
     bool takeWaitingFile(const ToxFile& offer);
     /** Seeks to offset, opens the file there and accepts the offer, unless it is paused here. */
@@ -135,8 +144,11 @@ private slots:
 
 private:
     QHash<uint64_t, ToxFile> fileMap;
-    /** Friends back online, whose files that waited process() offers again. */
-    QSet<uint32_t> friendsBack;
+    /**
+     * Friends back online, whose files that waited process() offers again offerAgainAfterMs later:
+     * when they came back (monotonic ms), or -1 until process() has seen them.
+     */
+    QHash<uint32_t, qint64> friendsBack;
     /**
      * Incoming files that wait for their sender, by key: when the sender came back (monotonic ms),
      * or -1 while they are offline.

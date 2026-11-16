@@ -73,8 +73,9 @@ bool khandaqImageDimensionsSane(const QByteArray& data)
 
 /**
  * KHANDAQ (0.2.57): how long an incoming file waits for its sender to offer it again once they are
- * back. A client that goes on offers it as soon as it sees them; one that cannot (0.2.56 and older)
- * never does, and its entry then ends as stopped instead of waiting for ever.
+ * back. A client that goes on offers it a moment after it sees them (offerAgainAfterMs); one that
+ * cannot (0.2.56 and older) never does, and its entry then ends as stopped instead of waiting for
+ * ever.
  */
 constexpr qint64 waitForOfferMs = 60 * 1000;
 /** Files that wait for their friend are numbered from here: toxcore numbers stay below 1 << 24. */
@@ -89,6 +90,8 @@ const uint8_t* toxFileId(const QByteArray& fileId)
     return reinterpret_cast<const uint8_t*>(fileId.constData());
 }
 } // namespace
+
+constexpr qint64 CoreFile::offerAgainAfterMs;
 
 /**
  * @class CoreFile
@@ -789,22 +792,32 @@ void CoreFile::onFriendLinkChanged(uint32_t friendId, int toxConnection)
 {
     QMutexLocker locker{coreLoopLock};
     if (toxConnection == TOX_CONNECTION_NONE) {
+        friendsBack.remove(friendId);
         keepForFriend(friendId);
-    } else {
-        // Ours are offered again once tox_iterate is done (process).
-        friendsBack.insert(friendId);
+    } else if (!friendsBack.contains(friendId)) {
+        // Ours are offered again a moment later (process, offerAgainAfterMs); a change between TCP
+        // and UDP keeps that moment.
+        friendsBack.insert(friendId, -1);
     }
 }
 
 void CoreFile::process(qint64 nowMs)
 {
     QMutexLocker locker{coreLoopLock};
-    if (!friendsBack.isEmpty()) {
-        const QSet<uint32_t> back = friendsBack;
-        friendsBack.clear();
-        for (const uint32_t friendId : back) {
-            offerAgain(friendId, nowMs);
+    QVector<QPair<uint32_t, qint64>> due;
+    for (auto it = friendsBack.begin(); it != friendsBack.end();) {
+        if (it.value() < 0) {
+            it.value() = nowMs;
         }
+        if (nowMs - it.value() >= offerAgainAfterMs) {
+            due.append({it.key(), it.value()});
+            it = friendsBack.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    for (const auto& back : due) {
+        offerAgain(back.first, back.second);
     }
     QVector<uint64_t> ended;
     for (auto it = waitingSince.cbegin(); it != waitingSince.cend(); ++it) {
@@ -865,7 +878,7 @@ void CoreFile::keepForFriend(uint32_t friendId)
 }
 
 /** KHANDAQ (0.2.57): the friend is back. Ours that waited are offered again with their own id. */
-void CoreFile::offerAgain(uint32_t friendId, qint64 nowMs)
+void CoreFile::offerAgain(uint32_t friendId, qint64 backMs)
 {
     for (const uint64_t key : fileMap.keys()) {
         if (key >> 32 != friendId || !fileMap.value(key).connectionLost) {
@@ -874,7 +887,7 @@ void CoreFile::offerAgain(uint32_t friendId, qint64 nowMs)
         if (fileMap.value(key).direction == ToxFile::RECEIVING) {
             // Theirs: the sender offers it again, if it can; it is not waited for for ever.
             if (waitingSince.value(key, -1) < 0) {
-                waitingSince.insert(key, nowMs);
+                waitingSince.insert(key, backMs);
             }
             continue;
         }

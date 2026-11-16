@@ -483,6 +483,88 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
     XCTAssertEqualObjects(chat.lastMessage.messageText.text, parts.lastObject);
 }
 
+// KHANDAQ (0.2.57, review of the desktop twin): a record of the group's history whose author is our own key in
+// that group (tox_group_self_get_public_key, not our Tox key). We hold our own messages already, so it is one of
+// ours coming back from a member who re-serves it, or somebody claiming to be us. Kept as ours, its row would be
+// outgoing and skip the Community hold; kept as somebody else's, our words would show under another name, and a
+// file would be written and shown at once. It is dropped before anything: no row, no file on disk, no receipt.
+// The same records under a member's key go in, so the key alone decides, whatever the case of the hex the core
+// hands back for our key.
+- (void)testAHistoryRecordUnderOurOwnGroupKeyIsDroppedBeforeAnything
+{
+    OCTChat *chat = [self groupChat];
+    NSString *directory = [self.root stringByAppendingPathComponent:@"HistoryFiles"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil];
+    NSMutableArray<NSNumber *> *receipts = [NSMutableArray new];
+    const uint32_t now = (uint32_t)[[NSDate date] timeIntervalSince1970];
+    NSData *payload = [self generatedBytesOfLength:2048];
+    uint32_t messageId = 7100;
+
+    for (NSString *selfKeyHex in @[kGroupRealmTestsSelfKeyHex, kGroupRealmTestsSelfKeyHex.lowercaseString]) {
+        OCTNgcGroupHistSync *histSync = [self realmBackedHistorySyncForChat:chat
+                                                                  directory:directory
+                                                                 selfKeyHex:selfKeyHex
+                                                                   receipts:receipts];
+        NSUInteger rowsBefore = [self rowsOfChat:chat].count;
+        NSUInteger filesBefore = [self filesInDirectory:directory].count;
+
+        uint32_t ownTextId = ++messageId;
+        NSData *ownFileHash = [self generatedBytesOfLength:32];
+        [histSync handleIncomingPrivatePacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                                      peerId:kGroupRealmTestsPeerId
+                                                        data:[self historyTextRecordWithMessageId:ownTextId
+                                                                                     authorKeyHex:kGroupRealmTestsSelfKeyHex
+                                                                                             time:now - 60
+                                                                                             text:@"our own words"]];
+        [histSync handleIncomingPrivatePacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                                      peerId:kGroupRealmTestsPeerId
+                                                        data:[self historyFileRecordWithMsgIdHash:ownFileHash
+                                                                                     authorKeyHex:kGroupRealmTestsSelfKeyHex
+                                                                                             time:now - 60
+                                                                                         fileName:@"ours.jpg"
+                                                                                          payload:payload]];
+
+        XCTAssertEqual([self rowsOfChat:chat].count, rowsBefore, @"a record under our own key made a row (%@)", selfKeyHex);
+        XCTAssertEqual([self rowsOfChat:chat authoredBy:kGroupRealmTestsSelfKeyHex].count, 0u);
+        XCTAssertEqual([self filesInDirectory:directory].count, filesBefore, @"a file under our own key reached the disk");
+
+        // The same records under a member's key: they go in, and the text is receipted to its author.
+        uint32_t memberTextId = ++messageId;
+        [histSync handleIncomingPrivatePacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                                      peerId:kGroupRealmTestsPeerId
+                                                        data:[self historyTextRecordWithMessageId:memberTextId
+                                                                                     authorKeyHex:kGroupRealmTestsPeerKeyHex
+                                                                                             time:now - 60
+                                                                                             text:@"our own words"]];
+        [histSync handleIncomingPrivatePacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                                      peerId:kGroupRealmTestsPeerId
+                                                        data:[self historyFileRecordWithMsgIdHash:[self generatedBytesOfLength:32]
+                                                                                     authorKeyHex:kGroupRealmTestsPeerKeyHex
+                                                                                             time:now - 60
+                                                                                         fileName:@"ours.jpg"
+                                                                                          payload:payload]];
+
+        RLMResults *memberRows = [self rowsOfChat:chat authoredBy:kGroupRealmTestsPeerKeyHex];
+        XCTAssertEqual([self rowsOfChat:chat].count, rowsBefore + 2, @"the member's records did not go in");
+        XCTAssertEqual([self filesInDirectory:directory].count, filesBefore + 1);
+        for (OCTMessageAbstract *row in memberRows) {
+            XCTAssertTrue(row.groupHistorySync);
+            XCTAssertFalse([row isOutgoing], @"a row from the history counts as ours");
+        }
+
+        // Receipts leave one after another from one queue: once the member's has gone, any for ours would have.
+        [self waitUntil:^BOOL {
+            @synchronized (receipts) {
+                return [receipts containsObject:@(memberTextId)];
+            }
+        }];
+        @synchronized (receipts) {
+            XCTAssertTrue([receipts containsObject:@(memberTextId)], @"the member's text was not receipted");
+            XCTAssertFalse([receipts containsObject:@(ownTextId)], @"a record under our own key was receipted");
+        }
+    }
+}
+
 #pragma mark - Rig
 
 - (NSArray<NSString *> *)partsOfALongText
@@ -508,6 +590,107 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
     }
 
     return texts;
+}
+
+/**
+ * A history sync for this client alone in the group of the chat, whose blocks store what it takes as the app's do,
+ * through the realm manager, with files in `directory`. Every author resolves to the member kGroupRealmTestsPeerId,
+ * so a record taken in would be receipted; the message ids of the receipts sent go to `receipts`.
+ */
+- (OCTNgcGroupHistSync *)realmBackedHistorySyncForChat:(OCTChat *)chat
+                                             directory:(NSString *)directory
+                                            selfKeyHex:(NSString *)selfKeyHex
+                                              receipts:(NSMutableArray<NSNumber *> *)receipts
+{
+    OCTRealmManager *realmManager = self.realmManager;
+
+    return [[OCTNgcGroupHistSync alloc] initWithSendPrivatePacketBlock:^BOOL (uint32_t groupNumber, uint32_t peerId, NSData *packet, NSError **error) {
+        const uint8_t *bytes = packet.bytes;
+
+        if (packet.length == 12 && bytes[7] == 0x04) {
+            uint32_t receipted = ((uint32_t)bytes[8] << 24) | ((uint32_t)bytes[9] << 16) | ((uint32_t)bytes[10] << 8) | (uint32_t)bytes[11];
+            @synchronized (receipts) {
+                [receipts addObject:@(receipted)];
+            }
+        }
+        return YES;
+    } peerPublicKeyBlock:^NSString *(uint32_t groupNumber, uint32_t peerId) {
+        return kGroupRealmTestsPeerKeyHex;
+    } peerNameForPeerIdBlock:^NSString *(uint32_t groupNumber, uint32_t peerId) {
+        return @"member";
+    } defaultPeerNameBlock:^NSString *{
+        return @"me";
+    } selfPublicKeyBlock:^NSString *(uint32_t groupNumber) {
+        return selfKeyHex;
+    } peerIdForPublicKeyBlock:^uint32_t (uint32_t groupNumber, NSString *publicKeyHex) {
+        return kGroupRealmTestsPeerId;
+    } isPublicGroupBlock:^BOOL (uint32_t groupNumber) {
+        return YES;
+    } selfPeerIdBlock:^uint32_t (uint32_t groupNumber) {
+        return 1;
+    } peerIdsBlock:^NSArray<NSNumber *> *(uint32_t groupNumber) {
+        return @[];
+    } chatForGroupBlock:^OCTChat *(uint32_t groupNumber, BOOL createIfNeeded) {
+        return chat;
+    } messagesToSyncBlock:^NSArray<OCTMessageAbstract *> *(OCTChat *theChat) {
+        return @[];
+    } messageExistsBlock:^BOOL (OCTChat *theChat, uint32_t messageId, uint32_t peerId, NSString *senderPubkeyHex,
+                                NSString *peerName, NSString *text, NSTimeInterval dateInterval) {
+        return NO;
+    } fileExistsBlock:^BOOL (OCTChat *theChat, NSString *msgIdHashHex) {
+        return NO;
+    } insertSyncedMessageBlock:^OCTMessageAbstract *(OCTChat *theChat, NSString *text, OCTToxMessageType type, uint32_t peerId,
+                                                     NSString *peerName, NSString *senderPubkeyHex, uint32_t messageId,
+                                                     NSTimeInterval dateInterval) {
+        return [realmManager addGroupSyncedMessageWithText:text
+                                                      type:type
+                                                      chat:theChat
+                                                    peerId:peerId
+                                                  peerName:peerName
+                                           senderPubkeyHex:senderPubkeyHex
+                                                 messageId:(OCTToxMessageId)messageId
+                                              dateInterval:dateInterval];
+    } insertSyncedFileBlock:^OCTMessageAbstract *(OCTChat *theChat, NSString *fileName, NSString *filePath, uint64_t fileSize,
+                                                  NSString *fileUTI, uint32_t peerId, NSString *peerName,
+                                                  NSString *senderPubkeyHex, NSString *msgIdHashHex, NSTimeInterval dateInterval) {
+        return [realmManager addGroupSyncedMessageWithFileName:fileName
+                                                      fileSize:fileSize
+                                                      filePath:filePath
+                                                      fileType:OCTMessageFileTypeReady
+                                                          chat:theChat
+                                                        peerId:peerId
+                                                      peerName:peerName
+                                               senderPubkeyHex:senderPubkeyHex
+                                                       fileUTI:fileUTI
+                                             groupMsgIdHashHex:msgIdHashHex
+                                                  dateInterval:dateInterval];
+    } incomingFilesDirectoryBlock:^NSString *(uint32_t groupNumber) {
+        return directory;
+    } fileUTIBlock:^NSString *(NSString *fileName) {
+        return nil;
+    } isBlockedPeerBlock:^BOOL (uint32_t groupNumber, uint32_t peerId) {
+        return NO;
+    } deliveryReceiptBlock:^(OCTChat *theChat, uint32_t messageId, uint32_t peerId) {
+    } fileSyncConfirmationBlock:^(OCTChat *theChat, NSString *msgIdHashHex, uint32_t syncerPeerId) {
+    }];
+}
+
+- (RLMResults *)rowsOfChat:(OCTChat *)chat
+{
+    return [OCTMessageAbstract objectsInRealm:self.realmManager.realm where:@"chatUniqueIdentifier == %@", chat.uniqueIdentifier];
+}
+
+/** The rows of the chat whose text or file names `keyHex` as its author, in any case. */
+- (RLMResults *)rowsOfChat:(OCTChat *)chat authoredBy:(NSString *)keyHex
+{
+    return [OCTMessageAbstract objectsInRealm:self.realmManager.realm
+                                        where:@"chatUniqueIdentifier == %@ AND (messageText.groupSenderPubkey ==[c] %@ OR messageFile.groupSenderPubkey ==[c] %@)",
+            chat.uniqueIdentifier, keyHex, keyHex];
+}
+
+- (NSArray<NSString *> *)filesInDirectory:(NSString *)directory
+{
+    return [[NSFileManager defaultManager] contentsOfDirectoryAtPath:directory error:nil] ?: @[];
 }
 
 /** The texts of both history sync queries, which must agree, in the order they are served. */
@@ -768,6 +951,53 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
 {
     uint32_t bigEndian = CFSwapInt32HostToBig(value);
     [packet appendBytes:&bigEndian length:sizeof(bigEndian)];
+}
+
+/** A text of the group's history as a member serves it (OCTNgcGroupHistSync, layer 0x01, type 0x02). */
+- (NSData *)historyTextRecordWithMessageId:(uint32_t)messageId
+                              authorKeyHex:(NSString *)authorKeyHex
+                                      time:(uint32_t)time
+                                      text:(NSString *)text
+{
+    NSMutableData *messageIdBytes = [NSMutableData new];
+    [self appendU32:messageId toPacket:messageIdBytes];
+    NSMutableData *packet = [self packetOfType:0x02 msgId:messageIdBytes];
+    [self appendKeyHex:authorKeyHex toPacket:packet];
+    [self appendU32:time toPacket:packet];
+    [self appendString:@"member" length:25 toPacket:packet];
+    [packet appendData:[text dataUsingEncoding:NSUTF8StringEncoding]];
+    return packet;
+}
+
+/** A file of the group's history as a member serves it (OCTNgcGroupHistSync, layer 0x01, type 0x03). */
+- (NSData *)historyFileRecordWithMsgIdHash:(NSData *)msgIdHash
+                              authorKeyHex:(NSString *)authorKeyHex
+                                      time:(uint32_t)time
+                                  fileName:(NSString *)fileName
+                                   payload:(NSData *)payload
+{
+    NSMutableData *packet = [self packetOfType:0x03 msgId:msgIdHash];
+    [self appendKeyHex:authorKeyHex toPacket:packet];
+    [self appendU32:time toPacket:packet];
+    [self appendString:@"member" length:25 toPacket:packet];
+    [self appendString:fileName length:255 toPacket:packet];
+    [packet appendData:payload];
+    return packet;
+}
+
+- (void)appendKeyHex:(NSString *)keyHex toPacket:(NSMutableData *)packet
+{
+    for (NSUInteger index = 0; index + 1 < keyHex.length; index += 2) {
+        uint8_t byte = (uint8_t)strtoul([keyHex substringWithRange:NSMakeRange(index, 2)].UTF8String, NULL, 16);
+        [packet appendBytes:&byte length:1];
+    }
+}
+
+- (void)appendString:(NSString *)string length:(NSUInteger)length toPacket:(NSMutableData *)packet
+{
+    NSMutableData *bytes = [[string dataUsingEncoding:NSUTF8StringEncoding] mutableCopy];
+    bytes.length = length;
+    [packet appendData:bytes];
 }
 
 - (NSData *)singlePacketWithMsgId:(NSData *)msgId fileName:(NSString *)fileName payload:(NSData *)payload

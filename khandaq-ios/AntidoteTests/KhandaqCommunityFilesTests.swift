@@ -63,8 +63,8 @@ class KhandaqCommunityFilesTests: XCTestCase {
         XCTAssertFalse(synced.isOutgoing())
         XCTAssertEqual(KhandaqCommunity.fileHold(of: synced, in: world.chat), .held)
         XCTAssertEqual(KhandaqCommunity.heldMessageIds(in: world.chat, objects: world.objects), [synced.uniqueIdentifier])
-        let read = KhandaqCommunity.folderEntries(of: world.objects.messages(predicate: NSPredicate(format: "chatUniqueIdentifier == %@", world.chat.uniqueIdentifier)))
-        XCTAssertEqual(read.entries["from-history.jpg"], Entry(kind: .held, date: 1), "it counts in the room of the files that wait")
+        let entries = KhandaqCommunity.folderEntries(of: world.rows(), folder: world.folder.path)
+        XCTAssertEqual(entries["from-history.jpg"], Entry(kind: .held, date: 1), "it counts in the room of the files that wait")
     }
 
     func testAWaitingEntryShowsItsNameAndSizeWithAcceptAlone() {
@@ -191,13 +191,87 @@ class KhandaqCommunityFilesTests: XCTestCase {
                        ["stopped", "old-stranger", "from-056-no-entry"])
     }
 
-    func testOnlyTheFolderNamedAfterTheGroupIsEverCleaned() {
+    func testOnlyAFileRightInTheFolderNamedAfterTheGroupIsOneOfItsFiles() {
         let community = "/profile/files/group/" + KhandaqCommunity.chatIdHex.lowercased()
-        XCTAssertEqual(KhandaqCommunity.communityFolder(fromPaths: [community + "/a.jpg", "/profile/files/group/abc/b.jpg", community + "/c.jpg"]),
-                       community)
-        XCTAssertNil(KhandaqCommunity.communityFolder(fromPaths: ["/profile/files/group/a.jpg", "/profile/files/b.jpg"]),
+        XCTAssertEqual(KhandaqCommunity.name(ofPath: community + "/a.jpg", inFolder: community), "a.jpg")
+        XCTAssertEqual(KhandaqCommunity.name(ofPath: "/old-container/Documents/files/group/" + KhandaqCommunity.chatIdHex + "/.b.jpg",
+                                             inFolder: community),
+                       ".b.jpg", "a path written under another root of the app's container, a hidden name")
+        XCTAssertNil(KhandaqCommunity.name(ofPath: "/profile/files/group/a.jpg", inFolder: community),
                      "the folder of every group's uploads is never the Community's")
-        XCTAssertNil(KhandaqCommunity.communityFolder(fromPaths: []))
+        XCTAssertNil(KhandaqCommunity.name(ofPath: "/profile/files/group/abc/a.jpg", inFolder: community), "another group")
+        XCTAssertNil(KhandaqCommunity.name(ofPath: community + "/inner/a.jpg", inFolder: community), "a folder in it")
+        XCTAssertNil(KhandaqCommunity.name(ofPath: "/profile/files/other/" + KhandaqCommunity.chatIdHex + "/a.jpg", inFolder: community))
+        XCTAssertNil(KhandaqCommunity.name(ofPath: community + "/a.jpg", inFolder: ""))
+        XCTAssertEqual(KhandaqCommunity.names(ofPaths: [community + "/clip.mp4", "/profile/files/group/abc/clip.mp4"], inFolder: community),
+                       ["clip.mp4"])
+    }
+
+    // MARK: Hidden files, files under way
+
+    func testAHiddenFileCountsInTheRoomAndGoesLikeAnyOther() throws {
+        let now: TimeInterval = 10_000
+        let folder = [file(".first.mp4", 200), file("second.mp4", 100), file(".orphan", 1, modified: 1)]
+        let entries = [".first.mp4": Entry(kind: .held, date: 1), "second.mp4": Entry(kind: .held, date: 2)]
+        XCTAssertEqual(Set(KhandaqCommunity.filesToDelete(in: folder, entries: entries, now: now)), [".first.mp4", ".orphan"])
+
+        // On the disk: listed, kept out of the backup while it waits, and dropped with the group.
+        let disk = makeFolder()
+        try sparse(disk, ".hidden.bin", mebibytes: 1)
+        XCTAssertEqual(KhandaqCommunity.folderFiles(atPath: disk.path).map { $0.name }, [".hidden.bin"])
+        KhandaqCommunity.keepRoom(inFolder: disk.path, entries: [".hidden.bin": Entry(kind: .held, date: 1)], now: Date().timeIntervalSince1970)
+        XCTAssertEqual(try excludedFromBackup(disk.appendingPathComponent(".hidden.bin").path), true)
+        XCTAssertEqual(KhandaqCommunity.dropWaitingFiles(inFolder: disk.path), [".hidden.bin"])
+        XCTAssertEqual(names(in: disk), [])
+    }
+
+    func testAFileToxcoreIsWritingIsNeverDeleted() throws {
+        let now: TimeInterval = 10_000
+        let folder = [file("stopped.bin", 1), file("orphan.bin", 1), file("large.bin", 300), file("other.bin", 1, modified: 1)]
+        let entries = ["stopped.bin": Entry(kind: .stopped, date: 1), "large.bin": Entry(kind: .held, date: 1)]
+        XCTAssertEqual(KhandaqCommunity.filesToDelete(in: folder, entries: entries, busy: ["stopped.bin", "orphan.bin", "large.bin"], now: now),
+                       ["other.bin"])
+
+        let disk = makeFolder()
+        try sparse(disk, "coming.bin", mebibytes: 1)
+        try sparse(disk, "waiting.bin", mebibytes: 1)
+        XCTAssertEqual(KhandaqCommunity.dropWaitingFiles(inFolder: disk.path, busy: ["coming.bin"]), ["waiting.bin"])
+        XCTAssertEqual(names(in: disk), ["coming.bin"])
+    }
+
+    // MARK: A file and its entry
+
+    /// An entry names its file by its path: a file of ours of the same name, among the uploads of every group or
+    /// in the group's folder itself (one we passed on from there), never keeps a file of someone else out of the
+    /// room. Of two entries of others on one path, the one whose bytes are there decides.
+    func testAnEntryNamesItsFileByItsPath() throws {
+        let world = try communityWorld()
+        let photo = try world.incoming("photo.jpg", mebibytes: 200, date: 1)
+        _ = try world.ours("photo.jpg", date: 2)
+        _ = try world.incoming("next.jpg", mebibytes: 100, date: 3)
+        _ = try world.incoming("passed-on.jpg", mebibytes: 1, date: 8)
+        _ = try world.ours("passed-on.jpg", date: 9, inTheGroupFolder: true)
+        _ = try world.ours("only-ours.jpg", date: 10, inTheGroupFolder: true)
+        // Two entries on one path, as a file of 0.2.56 may have left: the newer one's bytes are there.
+        let same = try world.incoming("same.jpg", mebibytes: 1, date: 5)
+        _ = try world.row(sharingThePathOf: same, date: 4, type: .canceled)
+        let twice = try world.incoming("twice.jpg", mebibytes: 1, date: 7)
+        _ = try world.row(sharingThePathOf: twice, date: 6, type: .ready)
+
+        let entries = KhandaqCommunity.folderEntries(of: world.rows(), folder: world.folder.path)
+        XCTAssertEqual(entries["photo.jpg"], Entry(kind: .held, date: 1))
+        XCTAssertEqual(entries["same.jpg"], Entry(kind: .held, date: 5), "not the stopped one")
+        XCTAssertEqual(entries["twice.jpg"], Entry(kind: .held, date: 7), "the newer one")
+        XCTAssertEqual(entries["passed-on.jpg"], Entry(kind: .held, date: 8), "theirs decides")
+        XCTAssertEqual(entries["only-ours.jpg"], Entry(kind: .kept, date: 10))
+        XCTAssertEqual(entries.count, 6, "nothing outside the folder")
+
+        XCTAssertEqual(KhandaqCommunity.keepRoom(inFolder: world.folder.path, entries: entries, now: Date().timeIntervalSince1970),
+                       ["photo.jpg"])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: world.folder.deletingLastPathComponent().appendingPathComponent("photo.jpg").path),
+                      "ours stays")
+        XCTAssertEqual(KhandaqCommunity.fileHold(of: photo, in: world.chat), .dropped, "it went, and Accept with it")
+        XCTAssertEqual(Set(names(in: world.folder)), ["next.jpg", "same.jpg", "twice.jpg", "passed-on.jpg", "only-ours.jpg"])
     }
 
     func testAPassDeletesOnTheDiskAndCountsATransferBySize() throws {
@@ -256,35 +330,77 @@ class KhandaqCommunityFilesTests: XCTestCase {
         XCTAssertNotNil(preview.indexOfMessage(taken))
         XCTAssertNotNil(preview.indexOfMessage(ours))
 
-        let read = KhandaqCommunity.folderEntries(of: world.objects.messages(predicate: NSPredicate(format: "chatUniqueIdentifier == %@", world.chat.uniqueIdentifier)))
-        XCTAssertEqual(read.folder.map { URL(fileURLWithPath: $0).standardizedFileURL.path },
-                       world.folder.standardizedFileURL.path)
-        XCTAssertEqual(read.entries["waiting.jpg"]?.kind, .held)
-        XCTAssertEqual(read.entries["ours.jpg"]?.kind, .kept)
+        let entries = KhandaqCommunity.folderEntries(of: world.rows(), folder: world.folder.path)
+        XCTAssertEqual(entries["waiting.jpg"]?.kind, .held)
+        XCTAssertNil(entries["ours.jpg"], "ours is among the uploads, outside the folder")
     }
 
-    func testTheKeeperMakesRoomAndDeletesWhatWaitedWhenThePersonLeaves() throws {
+    func testTheKeeperMakesRoomAndDeletesWhatWaitedWhenTheChatGoes() throws {
         let world = try communityWorld()
         _ = try world.incoming("1-oldest.bin", mebibytes: 100, date: 1)
         _ = try world.incoming("2.bin", mebibytes: 100, date: 2)
         _ = try world.incoming("3-newest.bin", mebibytes: 100, date: 3)
         let taken = try world.incoming("taken.bin", mebibytes: 100, date: 0.5)
         XCTAssertTrue(KhandaqCommunity.take(taken))
-        var left = false
-        let keeper = KhandaqCommunityFileKeeper(submanagerObjects: world.objects, left: { left })
+        let coming = try XCTUnwrap(try world.incoming("coming.bin", mebibytes: 1, date: 4).messageFile?.filePath())
+        let keeper = KhandaqCommunityFileKeeper(submanagerObjects: world.objects, folder: world.folder.path,
+                                                pathsInProgress: { [coming] })
         kept.append(keeper)
 
         keeper.start()
         wait(until: { !self.names(in: world.folder).contains("1-oldest.bin") }, "the oldest went to make room")
-        XCTAssertEqual(Set(names(in: world.folder)), ["2.bin", "3-newest.bin", "taken.bin"])
+        XCTAssertEqual(Set(names(in: world.folder)), ["2.bin", "3-newest.bin", "taken.bin", "coming.bin"])
 
-        // The person leaves: the group's chat goes, and every file that waited with it.
-        left = true
+        // The group's chat goes, left or removed by a moderator alike: every file that waited goes with it, but
+        // the one toxcore is still writing.
         let realm: RLMRealm = world.realmManager.realm
         realm.beginWriteTransaction()
         realm.delete(world.chat)
         try realm.commitWriteTransaction()
-        wait(until: { self.names(in: world.folder) == ["taken.bin"] }, "what waited went with the group")
+        wait(until: { Set(self.names(in: world.folder)) == ["taken.bin", "coming.bin"] }, "what waited went with the group")
+        keeper.stop()
+    }
+
+    /// The app may stop after the group's chat went and before its files did, or the person was removed from the
+    /// group while it was not running: at the next start what waited goes, and nothing outside its folder.
+    func testAtAStartWithNoChatOfTheGroupWhatWaitedInItsFolderGoes() throws {
+        let world = try communityWorld(withChat: false)
+        let files = world.folder.deletingLastPathComponent().deletingLastPathComponent()
+        try sparse(world.folder, "waiting.jpg", mebibytes: 1)
+        try sparse(world.folder, ".hidden.jpg", mebibytes: 1)
+        let taken = try sparse(world.folder, "taken.jpg", mebibytes: 1)
+        XCTAssertTrue(KhandaqCommunity.markTaken(atPath: taken.path))
+        let inner = world.folder.appendingPathComponent("inner", isDirectory: true)
+        try FileManager.default.createDirectory(at: inner, withIntermediateDirectories: true)
+        try sparse(inner, "inside.jpg", mebibytes: 1)
+        try sparse(world.folder.deletingLastPathComponent(), "ours.jpg", mebibytes: 1)
+        // A download of a friend that waits for the connection: hidden, among the files of friends.
+        try sparse(files, ".4F2A.part", mebibytes: 1)
+
+        let keeper = KhandaqCommunityFileKeeper(submanagerObjects: world.objects, folder: world.folder.path, pathsInProgress: { [] })
+        kept.append(keeper)
+        keeper.start()
+
+        wait(until: { self.names(in: world.folder) == ["inner", "taken.jpg"] }, "what waited went")
+        XCTAssertEqual(names(in: inner), ["inside.jpg"])
+        XCTAssertEqual(names(in: world.folder.deletingLastPathComponent()), [KhandaqCommunity.chatIdHex.lowercased(), "ours.jpg"])
+        XCTAssertEqual(names(in: files), [".4F2A.part", "group"])
+        keeper.stop()
+    }
+
+    /// A history cleared while the app did not run leaves files no entry names: the folder comes from the chat id,
+    /// not from the entries, so they still go.
+    func testFilesNoEntryNamesGoWithTheChatStillThere() throws {
+        let world = try communityWorld()
+        let old = try sparse(world.folder, "old.jpg", mebibytes: 1)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -86_400)], ofItemAtPath: old.path)
+        try sparse(world.folder, "new.jpg", mebibytes: 1)
+
+        let keeper = KhandaqCommunityFileKeeper(submanagerObjects: world.objects, folder: world.folder.path, pathsInProgress: { [] })
+        kept.append(keeper)
+        keeper.start()
+
+        wait(until: { self.names(in: world.folder) == ["new.jpg"] }, "the file no entry names went")
         keeper.stop()
     }
 
@@ -339,8 +455,9 @@ class KhandaqCommunityFilesTests: XCTestCase {
         wait(for: [done], timeout: 10)
     }
 
-    /// A profile with Khandaq Community in its Realm, and the group's folder as objcTox names it.
-    private func communityWorld() throws -> CommunityWorld {
+    /// A profile with Khandaq Community in its Realm (or without its chat), and the group's folder as objcTox
+    /// names it.
+    private func communityWorld(withChat: Bool = true) throws -> CommunityWorld {
         let directory = makeFolder()
         let folder = directory.appendingPathComponent("files/group/" + KhandaqCommunity.chatIdHex.lowercased(), isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -352,7 +469,9 @@ class KhandaqCommunityFilesTests: XCTestCase {
         chat.groupNumber = 3
         chat.groupName = "Khandaq Community"
         chat.groupChatIdHex = KhandaqCommunity.chatIdHex
-        realmManager.add(chat)
+        if withChat {
+            realmManager.add(chat)
+        }
         let objects = OCTSubmanagerObjectsMock(realm: realmManager.realm)
         kept += [realmManager, objects]
         return CommunityWorld(test: self, realmManager: realmManager, objects: objects, chat: chat, folder: folder)
@@ -381,11 +500,26 @@ class KhandaqCommunityFilesTests: XCTestCase {
             return message
         }
 
-        /// One of ours, which objcTox keeps among the uploads.
-        func ours(_ name: String, date: TimeInterval) throws -> OCTMessageAbstract {
-            let uploads = folder.deletingLastPathComponent()
-            let url = try test.sparse(uploads, name, mebibytes: 1)
+        /// One of ours, which objcTox keeps among the uploads, or where it was when we passed it on.
+        func ours(_ name: String, date: TimeInterval, inTheGroupFolder: Bool = false) throws -> OCTMessageAbstract {
+            let url = try test.sparse(inTheGroupFolder ? folder : folder.deletingLastPathComponent(), name, mebibytes: 1)
             return try add(name, path: url.path, bytes: test.mebibyte, date: date)
+        }
+
+        /// Another entry of someone else on the path of `other`.
+        func row(sharingThePathOf other: OCTMessageAbstract, date: TimeInterval, type: OCTMessageFileType) throws -> OCTMessageAbstract {
+            let file = try XCTUnwrap(other.messageFile)
+            let message = try add(try XCTUnwrap(file.fileName), path: try XCTUnwrap(file.filePath()), bytes: file.fileSize, date: date)
+            let realm: RLMRealm = realmManager.realm
+            realm.beginWriteTransaction()
+            message.groupSenderPeerId = 8
+            message.messageFile?.fileType = type
+            try realm.commitWriteTransaction()
+            return message
+        }
+
+        func rows() -> Results<OCTMessageAbstract> {
+            return objects.messages(predicate: NSPredicate(format: "chatUniqueIdentifier == %@ AND messageFile != nil", chat.uniqueIdentifier))
         }
 
         private func add(_ name: String, path: String, bytes: Int64, date: TimeInterval) throws -> OCTMessageAbstract {

@@ -15,9 +15,9 @@ import Foundation
 /// background at any moment, and a file kept in memory would be lost each time. Held bytes get a cleanup of
 /// their own instead (KhandaqCommunityFileKeeper): complete held files take at most `heldLimitBytes` in all,
 /// the oldest going first; the partial bytes of one that stopped, and the bytes no entry names any more
-/// (a message taken back by its author, a cleared history), go at once; leaving the group deletes them all;
-/// and while they wait they stay out of the phone's backup. Taken files are never deleted here, as in every
-/// other group.
+/// (a message taken back by its author, a cleared history), go at once; when the group's chat goes (left,
+/// removed, or the app stopped between the two) they all go; and while they wait they stay out of the phone's
+/// backup. Taken files and a file toxcore is writing are never deleted here, as in every other group.
 extension KhandaqCommunity {
     /// What a file entry of the conversation is, for the person.
     enum FileHold: Equatable {
@@ -203,54 +203,66 @@ extension KhandaqCommunity {
         }
     }
 
-    /// The folder of the group's files among the folders of its entries: the one most of them are in, and
-    /// only when it is named after the group, so nothing outside it is ever deleted.
-    static func communityFolder(fromPaths paths: [String]) -> String? {
-        var counts: [String: Int] = [:]
-        for path in paths {
-            let folder = (path as NSString).deletingLastPathComponent
-            guard (folder as NSString).lastPathComponent.caseInsensitiveCompare(chatIdHex) == .orderedSame else {
-                continue
-            }
-            counts[folder, default: 0] += 1
+    /// The name of the file at `path` when it is right in `folder`, else nil. The folder of a group is named after
+    /// its chat id (files/group/<chat id>), so the last two parts of a path and its name say which file it is,
+    /// whatever root the app's container had when the path was written.
+    static func name(ofPath path: String, inFolder folder: String) -> String? {
+        let parent = (path as NSString).deletingLastPathComponent as NSString
+        let home = folder as NSString
+        guard !home.lastPathComponent.isEmpty,
+              parent.lastPathComponent.caseInsensitiveCompare(home.lastPathComponent) == .orderedSame,
+              (parent.deletingLastPathComponent as NSString).lastPathComponent == (home.deletingLastPathComponent as NSString).lastPathComponent else {
+            return nil
         }
-        return counts.max { $0.value != $1.value ? $0.value < $1.value : $0.key > $1.key }?.key
+        let name = (path as NSString).lastPathComponent
+        return name.isEmpty ? nil : name
     }
 
-    /// The entries of the group and the folder of their files, read on the main thread for the keeper.
-    static func folderEntries(of rows: Results<OCTMessageAbstract>) -> (folder: String?, entries: [String: EntryFile]) {
-        var entries: [String: EntryFile] = [:]
-        var incoming: [String] = []
+    /// The names in `folder` of the files toxcore is writing now.
+    static func names(ofPaths paths: Set<String>, inFolder folder: String) -> Set<String> {
+        return Set(paths.compactMap { name(ofPath: $0, inFolder: folder) })
+    }
+
+    /// The entries of the group that name a file of `folder`, by its name there, read on the main thread for the
+    /// keeper. For a file an entry of someone else names, only theirs decide: one of ours never keeps it out of
+    /// the room. Of two that name one file, the one that keeps it wins, and of two alike the newest, whose bytes
+    /// they are: no file takes the path of an entry any more (OCTFileTools createNewGroupFilePathInDirectory),
+    /// but one that came before may have.
+    static func folderEntries(of rows: Results<OCTMessageAbstract>, folder: String) -> [String: EntryFile] {
+        var theirs: [String: EntryFile] = [:]
+        var ours: [String: EntryFile] = [:]
         for index in 0..<rows.count {
             guard let message = rows.object(at: index), !message.isInvalidated,
-                  let file = message.messageFile, let path = file.filePath() else {
+                  let file = message.messageFile, let path = file.filePath(),
+                  let name = name(ofPath: path, inFolder: folder) else {
                 continue
             }
             let outgoing = message.isOutgoing()
-            if !outgoing {
-                incoming.append(path)
-            }
             let entry = EntryFile(kind: entryKind(isOutgoing: outgoing, fileType: file.fileType), date: message.dateInterval)
-            let name = (path as NSString).lastPathComponent
-            // Two entries naming one file: the one that keeps it wins.
-            if let other = entries[name], other.kind >= entry.kind {
+            if outgoing {
+                ours[name] = entry
+            }
+            else if let other = theirs[name], other.kind > entry.kind || (other.kind == entry.kind && other.date >= entry.date) {
                 continue
             }
-            entries[name] = entry
+            else {
+                theirs[name] = entry
+            }
         }
-        return (communityFolder(fromPaths: incoming), entries)
+        return theirs.merging(ours) { their, _ in their }
     }
 
     /// What to delete in the group's folder: the bytes of entries that stopped, those no entry has named for
-    /// `orphanGraceSeconds`, then the oldest complete held files until the rest fit in `limit`. Taken files and
-    /// the files of kept entries stay.
+    /// `orphanGraceSeconds`, then the oldest complete held files until the rest fit in `limit`. Taken files, the
+    /// files of kept entries and the files toxcore is writing (`busy`, by name) stay.
     static func filesToDelete(in folder: [FolderFile],
                               entries: [String: EntryFile],
+                              busy: Set<String> = [],
                               now: TimeInterval,
                               limit: Int64 = heldLimitBytes) -> [String] {
         var drop: [String] = []
         var held: [(name: String, date: TimeInterval, bytes: Int64)] = []
-        for file in folder where !file.taken {
+        for file in folder where !file.taken && !busy.contains(file.name) {
             guard let entry = entries[file.name] else {
                 if now - file.modified >= orphanGraceSeconds {
                     drop.append(file.name)
@@ -275,11 +287,13 @@ extension KhandaqCommunity {
         return drop
     }
 
+    /// The regular files right in `folder`, hidden ones too: a file of someone else may have come with a name that
+    /// starts with a dot before 0.2.57 gave it a "_" there.
     static func folderFiles(atPath folder: String) -> [FolderFile] {
         let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey, .isExcludedFromBackupKey]
         guard let urls = try? FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath: folder, isDirectory: true),
                                                                       includingPropertiesForKeys: keys,
-                                                                      options: [.skipsHiddenFiles]) else {
+                                                                      options: []) else {
             return []
         }
         return urls.compactMap { url in
@@ -299,10 +313,11 @@ extension KhandaqCommunity {
     @discardableResult
     static func keepRoom(inFolder folder: String,
                          entries: [String: EntryFile],
+                         busy: Set<String> = [],
                          now: TimeInterval,
                          limit: Int64 = heldLimitBytes) -> [String] {
         let files = folderFiles(atPath: folder)
-        let drop = filesToDelete(in: files, entries: entries, now: now, limit: limit)
+        let drop = filesToDelete(in: files, entries: entries, busy: busy, now: now, limit: limit)
         let freed = remove(drop, inFolder: folder, files: files)
         let dropped = Set(drop)
         for file in files where !file.taken && !file.excludedFromBackup && !dropped.contains(file.name) && entries[file.name]?.kind == .held {
@@ -314,15 +329,16 @@ extension KhandaqCommunity {
         return drop
     }
 
-    /// The person left the group: every file of it that was not taken goes. Its entries went with its chat, so
-    /// nothing reaches those bytes any more. Returns the names it deleted.
+    /// The group's chat is gone: every file right in its folder that was not taken goes, but one toxcore is
+    /// writing (`busy`, by name). Its entries went with its chat, so nothing reaches those bytes any more. Returns
+    /// the names it deleted.
     @discardableResult
-    static func dropWaitingFiles(inFolder folder: String) -> [String] {
+    static func dropWaitingFiles(inFolder folder: String, busy: Set<String> = []) -> [String] {
         let files = folderFiles(atPath: folder)
-        let drop = files.filter { !$0.taken }.map { $0.name }
+        let drop = files.filter { !$0.taken && !busy.contains($0.name) }.map { $0.name }
         let freed = remove(drop, inFolder: folder, files: files)
         if !drop.isEmpty {
-            log("Community: left; \(drop.count) waiting files deleted, \(freed) bytes")
+            log("Community: no chat; \(drop.count) waiting files deleted, \(freed) bytes")
         }
         return drop
     }
@@ -352,25 +368,36 @@ extension KhandaqCommunity {
 
 /// KHANDAQ (0.2.57, item 6): the room of the files that wait in Khandaq Community, for the session. It follows
 /// the group's chat; each time a file of the group completes or stops, or entries go, it runs a pass of
-/// KhandaqCommunity.keepRoom on a queue of its own, and when the person has left the group it deletes every
-/// file that waited.
+/// KhandaqCommunity.keepRoom on a queue of its own. With no chat of the group, at the start or when it goes, it
+/// deletes every file that waited in the group's folder, which it knows from the chat id alone.
 final class KhandaqCommunityFileKeeper {
     private let submanagerObjects: OCTSubmanagerObjects
-    private let left: () -> Bool
+    /// files/group/<chat id> (OCTSubmanagerGroups.groupFilesDirectory(forChatIdHex:)); empty: nothing to keep.
+    private let folder: String
+    /// The paths of the files toxcore is writing now, asked on the main thread.
+    private let pathsInProgress: () -> Set<String>
     private let queue = DispatchQueue(label: "khandaq.community.files", qos: .utility)
 
     private var chats: Results<OCTChat>?
     private var chatsToken: RLMNotificationToken?
     private var finished: Results<OCTMessageAbstract>?
     private var finishedToken: RLMNotificationToken?
+    private var bound = false
     private var boundChatId: String?
-    private var folder: String?
     private var passPending = false
 
-    init(submanagerObjects: OCTSubmanagerObjects,
-         left: @escaping () -> Bool = { AirLocalStore.shared.communityLeft }) {
+    init(submanagerObjects: OCTSubmanagerObjects, folder: String, pathsInProgress: @escaping () -> Set<String>) {
         self.submanagerObjects = submanagerObjects
-        self.left = left
+        self.folder = folder
+        self.pathsInProgress = pathsInProgress
+    }
+
+    convenience init(submanagerObjects: OCTSubmanagerObjects, submanagerGroups: OCTSubmanagerGroups) {
+        self.init(submanagerObjects: submanagerObjects,
+                  folder: submanagerGroups.groupFilesDirectory(forChatIdHex: KhandaqCommunity.chatIdHex),
+                  pathsInProgress: { [weak submanagerGroups] in
+                      submanagerGroups?.incomingGroupFilePathsInProgress() ?? []
+                  })
     }
 
     deinit {
@@ -378,7 +405,7 @@ final class KhandaqCommunityFileKeeper {
     }
 
     func start() {
-        guard chatsToken == nil else {
+        guard chatsToken == nil, !folder.isEmpty else {
             return
         }
         let results = submanagerObjects.chats(predicate: NSPredicate(format: "isGroup == YES AND groupChatIdHex ==[c] %@",
@@ -397,6 +424,7 @@ final class KhandaqCommunityFileKeeper {
         finishedToken?.invalidate()
         finishedToken = nil
         finished = nil
+        bound = false
         boundChatId = nil
     }
 
@@ -411,22 +439,22 @@ final class KhandaqCommunityFileKeeper {
             }
         }
         let chatId = chat?.uniqueIdentifier
-        guard chatId != boundChatId else {
+        guard !bound || chatId != boundChatId else {
             return
         }
-        let wasBound = boundChatId != nil
+        bound = true
         finishedToken?.invalidate()
         finishedToken = nil
         finished = nil
         boundChatId = chatId
 
         guard let id = chatId else {
-            // The group's chat went: when the person left it, what waited goes too.
-            if wasBound && left(), let folder = folder {
-                self.folder = nil
-                queue.async {
-                    KhandaqCommunity.dropWaitingFiles(inFolder: folder)
-                }
+            // No chat of the group, at the start or since it went: the person left it, was removed from it, or the
+            // app stopped between the two. Nothing reaches what waited in its folder any more.
+            let folder = self.folder
+            let busy = KhandaqCommunity.names(ofPaths: pathsInProgress(), inFolder: folder)
+            queue.async {
+                KhandaqCommunity.dropWaitingFiles(inFolder: folder, busy: busy)
             }
             return
         }
@@ -464,18 +492,13 @@ final class KhandaqCommunityFileKeeper {
         guard let chatId = boundChatId else {
             return
         }
+        let folder = self.folder
         let rows = submanagerObjects.messages(predicate: NSPredicate(format: "chatUniqueIdentifier == %@ AND messageFile != nil", chatId))
-        let read = KhandaqCommunity.folderEntries(of: rows)
-        if let found = read.folder {
-            folder = found
-        }
-        guard let folder = folder else {
-            return
-        }
-        let entries = read.entries
+        let entries = KhandaqCommunity.folderEntries(of: rows, folder: folder)
+        let busy = KhandaqCommunity.names(ofPaths: pathsInProgress(), inFolder: folder)
         let now = Date().timeIntervalSince1970
         queue.async {
-            KhandaqCommunity.keepRoom(inFolder: folder, entries: entries, now: now)
+            KhandaqCommunity.keepRoom(inFolder: folder, entries: entries, busy: busy, now: now)
         }
     }
 }

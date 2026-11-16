@@ -177,7 +177,7 @@ class ActiveSessionCoordinator: NSObject {
         guardian.start()
         blockGuard = guardian
         // KHANDAQ (0.2.57, SPEC-community item 6): the room of the files that wait in Khandaq Community.
-        let keeper = KhandaqCommunityFileKeeper(submanagerObjects: toxManager.objects)
+        let keeper = KhandaqCommunityFileKeeper(submanagerObjects: toxManager.objects, submanagerGroups: toxManager.groups)
         keeper.start()
         communityFileKeeper = keeper
 

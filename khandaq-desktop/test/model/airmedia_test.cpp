@@ -107,6 +107,7 @@ private slots:
     void ourGroupFileWaitsForSomeoneToSendItTo();
     void theMarkOfOurFileFollowsTheTransfer();
     void aFileWhoseFriendWentOfflineWaitsAndNeverFails();
+    void anOfferWhoseSenderWentOfflineIsNoNewOffer();
     void anOfferOfAFilePartlyHereGoesOnFromWhatIsHere();
     void anOfferOfAFileAllHereEndsQuietly();
     void anOfferOfAnotherFileIsANewEntry();
@@ -312,6 +313,28 @@ void TestAirMedia::aFileWhoseFriendWentOfflineWaitsAndNeverFails()
     QCOMPARE(Air::fileStatus(ours, false), Air::EntryStatus::Transit);
     ours.connectionLost = false;
     QCOMPARE(Air::fileStatus(ours, true), Air::EntryStatus::Sending);
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): an offer the window answers is theirs and not yet accepted; the same
+ * offer once its sender went offline only waits in its entry: no alert, no download.
+ */
+void TestAirMedia::anOfferWhoseSenderWentOfflineIsNoNewOffer()
+{
+    ToxFile offer(65536, 0, QStringLiteral("video.mp4"), QString(), 1000, ToxFile::RECEIVING);
+    QVERIFY(Air::isOffer(offer));
+    offer.connectionLost = true;
+    QVERIFY(!Air::isOffer(offer));
+    // Offered again once they are back, it is one: it waits in its entry or comes by itself.
+    offer.connectionLost = false;
+    offer.continued = true;
+    QVERIFY(Air::isOffer(offer));
+
+    ToxFile accepted = offer;
+    accepted.status = ToxFile::TRANSMITTING;
+    QVERIFY(!Air::isOffer(accepted));
+    ToxFile ours(0, 0, QStringLiteral("video.mp4"), QString(), 1000, ToxFile::SENDING);
+    QVERIFY(!Air::isOffer(ours));
 }
 
 namespace {

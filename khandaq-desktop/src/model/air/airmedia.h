@@ -155,6 +155,13 @@ EntryStatus fileStatus(ToxFile::FileStatus status, bool personOnline);
 EntryStatus fileStatus(const ToxFile& file, bool personOnline);
 
 /**
+ * KHANDAQ (0.2.57): whether a file of the person is an offer the window answers (an entry, the
+ * downloads rule, an alert): theirs and not yet accepted. One that waits for its sender is none:
+ * CoreFile only shows again, in its entry, an offer whose sender went offline.
+ */
+bool isOffer(const ToxFile& file);
+
+/**
  * KHANDAQ (0.2.57): what a file of theirs this side has is, for an offer of a file with its id
  * (fileResume): the id, the size and the state of its entry, whether it was accepted, and how much
  * of it the file it goes to holds.

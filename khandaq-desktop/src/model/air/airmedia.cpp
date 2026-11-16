@@ -292,6 +292,12 @@ EntryStatus fileStatus(const ToxFile& file, bool personOnline)
     return fileStatus(file.connectionLost ? ToxFile::INITIALIZING : file.status, personOnline);
 }
 
+bool isOffer(const ToxFile& file)
+{
+    return file.status == ToxFile::INITIALIZING && file.direction == ToxFile::RECEIVING
+           && !file.connectionLost;
+}
+
 FileResume fileResume(const QByteArray& offerId, qint64 offerSize, const FileHere& here)
 {
     FileResume resume;

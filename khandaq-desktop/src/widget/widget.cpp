@@ -1430,8 +1430,9 @@ void Widget::dispatchFile(ToxFile file)
 
     auto pk = f->getPublicKey();
 
-    const bool offered =
-        file.status == ToxFile::INITIALIZING && file.direction == ToxFile::RECEIVING;
+    // KHANDAQ (0.2.57): one that waits for its sender is no offer: no alert, sound or unread mark,
+    // and no download, each time the sender goes offline.
+    const bool offered = Air::isOffer(file);
     // KHANDAQ (0.2.57): an offer of a file the chat has an entry of goes on in it, with no alert.
     // CoreFile took one that waited for its sender already (continued); one that ended is looked
     // up here.

@@ -30,6 +30,11 @@ final class KhandaqCommunity
     static final String MARK_AUTO_JOIN_DONE = "community.autoJoinDone";
     /** The person left the group, or deleted it (SPEC item 3). */
     static final String MARK_LEFT = "community.left";
+    /**
+     * The group's notification switch is off, as the app left it for the row it made (autoJoin) or the person turned
+     * it (noteSoundChoice); gone once they turn it on, leave or delete it (mutesNewRow).
+     */
+    static final String MARK_MUTED = "community.muted";
 
     /**
      * The pause before the app asks a full Community again (SPEC-community: "a client whose join fails because the
@@ -43,7 +48,7 @@ final class KhandaqCommunity
     /** A profile is told apart by the start of its public key, as the logs name it: never the whole key. */
     private static final int PROFILE_TAG_LENGTH = 8;
 
-    /** The profile's two marks, and the group's own notification switch. */
+    /** The profile's marks, and the group's own notification switch. */
     interface Store
     {
         boolean autoJoinDone();
@@ -55,6 +60,10 @@ final class KhandaqCommunity
         void clearAutoJoinDone();
 
         void setLeft();
+
+        boolean keptMuted();
+
+        void keepMuted(boolean muted);
 
         /** Turns the notifications of the group with this chat id off, as its own switch does. */
         void mute(String chatId);
@@ -189,6 +198,7 @@ final class KhandaqCommunity
         {
             // The group mutes as it comes: a person added without asking hears nothing of it until they turn it on.
             store.mute(CHAT_ID);
+            store.keepMuted(true);
         }
         return true;
     }
@@ -209,15 +219,48 @@ final class KhandaqCommunity
 
     /**
      * A group was left or deleted by the person: when it is Khandaq Community it is never joined by itself again,
-     * however it was joined. True when that changed the store.
+     * however it was joined, and its switch is forgotten with its row. True when the leave was marked now.
      */
     static boolean noteGroupLeft(final Store store, final String groupId)
     {
-        if (!isCommunity(groupId) || store.left())
+        if (!isCommunity(groupId))
+        {
+            return false;
+        }
+        // Its switch goes with its row: a join by hand later starts as every group does (mutesNewRow).
+        store.keepMuted(false);
+        if (store.left())
         {
             return false;
         }
         store.setLeft();
+        return true;
+    }
+
+    /**
+     * Whether a row of a group made now starts muted: it is Khandaq Community, and the profile keeps its switch off
+     * (MARK_MUTED). A profile imported or restored again empties the list of groups and keeps its marks; toxcore still
+     * has the group, so the start gives it a new row, which came unmuted. Its switch is kept, not guessed from how it
+     * was joined: the auto-join mutes the row it makes, a group joined by hand starts with its sound on, and the
+     * person may have turned either since. A row made after a leave starts as every group does: the leave forgets the
+     * switch.
+     */
+    static boolean mutesNewRow(final String groupId, final Store store)
+    {
+        return isCommunity(groupId) && store.keptMuted();
+    }
+
+    /**
+     * The person turned the notifications of a group off or on ({@code muted}): for Khandaq Community the profile
+     * keeps it (mutesNewRow). True when that changed the store.
+     */
+    static boolean noteSoundChoice(final Store store, final String groupId, final boolean muted)
+    {
+        if (!isCommunity(groupId) || (store.keptMuted() == muted))
+        {
+            return false;
+        }
+        store.keepMuted(muted);
         return true;
     }
 

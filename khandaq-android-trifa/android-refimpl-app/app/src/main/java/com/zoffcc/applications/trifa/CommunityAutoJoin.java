@@ -260,10 +260,55 @@ final class CommunityAutoJoin
         }
     }
 
-    /** QA only (QaGroupBroadcastReceiver, debug builds): the running profile's two marks are removed. */
+    /**
+     * Whether the row made now for a group starts muted (KhandaqCommunity.mutesNewRow): Khandaq Community given a new
+     * row after the profile was imported or restored again. False for any other group, and while the profile's Tox
+     * ID is not known.
+     */
+    static boolean mutesNewRow(final String groupId)
+    {
+        if (!KhandaqCommunity.isCommunity(groupId))
+        {
+            return false;
+        }
+        try
+        {
+            final KhandaqCommunity.Store store = profileStore();
+            return (store != null) && KhandaqCommunity.mutesNewRow(groupId, store);
+        }
+        catch (Throwable e)
+        {
+            Log.w(TAG, "new_row:EE:" + e.getMessage());
+            return false;
+        }
+    }
+
+    /** The person turned the notifications of a group off or on: Khandaq Community's switch stays with the profile. */
+    static void noteSoundChoice(final String groupId, final boolean muted)
+    {
+        if (!KhandaqCommunity.isCommunity(groupId))
+        {
+            return;
+        }
+        try
+        {
+            final KhandaqCommunity.Store store = profileStore();
+            if ((store != null) && KhandaqCommunity.noteSoundChoice(store, groupId, muted))
+            {
+                NetworkDiagnosticsLog.log("community", muted ? "sound: off by the person" : "sound: on by the person");
+            }
+        }
+        catch (Throwable e)
+        {
+            Log.w(TAG, "sound:EE:" + e.getMessage());
+        }
+    }
+
+    /** QA only (QaGroupBroadcastReceiver, debug builds): the running profile's marks are removed. */
     static void qaForgetMarks()
     {
-        for (final String mark : new String[]{KhandaqCommunity.MARK_AUTO_JOIN_DONE, KhandaqCommunity.MARK_LEFT})
+        for (final String mark : new String[]{KhandaqCommunity.MARK_AUTO_JOIN_DONE, KhandaqCommunity.MARK_LEFT,
+                                              KhandaqCommunity.MARK_MUTED})
         {
             final String key = KhandaqCommunity.markKey(mark, TRIFAGlobals.global_my_toxid);
             if (key != null)
@@ -350,7 +395,8 @@ final class CommunityAutoJoin
         final String ownToxId = TRIFAGlobals.global_my_toxid;
         final String doneKey = KhandaqCommunity.markKey(KhandaqCommunity.MARK_AUTO_JOIN_DONE, ownToxId);
         final String leftKey = KhandaqCommunity.markKey(KhandaqCommunity.MARK_LEFT, ownToxId);
-        if ((doneKey == null) || (leftKey == null))
+        final String mutedKey = KhandaqCommunity.markKey(KhandaqCommunity.MARK_MUTED, ownToxId);
+        if ((doneKey == null) || (leftKey == null) || (mutedKey == null))
         {
             return null;
         }
@@ -384,6 +430,25 @@ final class CommunityAutoJoin
             public void setLeft()
             {
                 HelperGeneric.set_g_opts(leftKey, MARK_SET);
+            }
+
+            @Override
+            public boolean keptMuted()
+            {
+                return MARK_SET.equals(HelperGeneric.get_g_opts(mutedKey));
+            }
+
+            @Override
+            public void keepMuted(final boolean muted)
+            {
+                if (muted)
+                {
+                    HelperGeneric.set_g_opts(mutedKey, MARK_SET);
+                }
+                else
+                {
+                    HelperGeneric.del_g_opts(mutedKey);
+                }
             }
 
             @Override

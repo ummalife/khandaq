@@ -86,6 +86,25 @@ public class KhandaqCommunityTest
         }
 
         @Override
+        public boolean keptMuted()
+        {
+            return "true".equals(settings.get(key(KhandaqCommunity.MARK_MUTED)));
+        }
+
+        @Override
+        public void keepMuted(final boolean on)
+        {
+            if (on)
+            {
+                settings.put(key(KhandaqCommunity.MARK_MUTED), "true");
+            }
+            else
+            {
+                settings.remove(key(KhandaqCommunity.MARK_MUTED));
+            }
+        }
+
+        @Override
         public void mute(final String chatId)
         {
             muted.add(chatId);
@@ -518,6 +537,90 @@ public class KhandaqCommunityTest
                 "join_public_group_by_id(group_identifier,null,false,null,()->join_fail_retry_wanted(group_identifier));");
         assertTrue("before the join, which asks at each of its steps too", join > asked);
         assertFalse(retry.contains("join_public_group_by_id(group_identifier,false);"));
+    }
+
+    // ---- a new row of it after an import or a restore (review, 2026-11-16) ----
+
+    @Test
+    public void a_row_made_again_after_an_import_keeps_the_switch_the_auto_join_or_the_person_left_it_with()
+    {
+        final Map<String, String> settings = new HashMap<>();
+        final ProfileStore store = new ProfileStore(settings, TOX_ID);
+        assertFalse(KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, store));
+        // The auto-join mutes the row it makes, and the profile keeps that it did.
+        assertTrue(KhandaqCommunity.autoJoin(store, true, false, true, new Join(true)));
+        assertTrue(KhandaqCommunity.noteGroupKept(store, true));
+        final ProfileStore imported = new ProfileStore(settings, TOX_ID);
+        assertTrue("its row made again after an import",
+                   KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, imported));
+        assertTrue(KhandaqCommunity.mutesNewRow(COMMUNITY_ROW_ID, imported));
+        assertFalse(KhandaqCommunity.mutesNewRow(OTHER_GROUP, imported));
+        assertFalse("kept with this profile only",
+                    KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, new ProfileStore(settings, OTHER_TOX_ID)));
+
+        // The person turns its sound on: the row made after the next import has it on.
+        assertTrue(KhandaqCommunity.noteSoundChoice(imported, COMMUNITY_ROW_ID, false));
+        assertFalse(KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, new ProfileStore(settings, TOX_ID)));
+        assertFalse("nothing changes, nothing is written",
+                    KhandaqCommunity.noteSoundChoice(imported, KhandaqCommunity.CHAT_ID, false));
+        // And off again: muted after the next import.
+        assertTrue(KhandaqCommunity.noteSoundChoice(imported, KhandaqCommunity.CHAT_ID, true));
+        assertTrue(KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, new ProfileStore(settings, TOX_ID)));
+        // The switch of another group is not the Community's.
+        assertFalse(KhandaqCommunity.noteSoundChoice(imported, OTHER_GROUP, false));
+        assertTrue(imported.keptMuted());
+    }
+
+    @Test
+    public void a_row_joined_by_hand_and_a_row_after_a_leave_come_back_as_they_were_not_muted_by_a_guess()
+    {
+        // Joined by hand (by its chat id, before the auto-join ran), never muted: it connects, so the profile has it
+        // for good, and its row made again after an import has its sound on, as it had.
+        final Map<String, String> settings = new HashMap<>();
+        final ProfileStore store = new ProfileStore(settings, TOX_ID);
+        assertTrue(KhandaqCommunity.noteGroupKept(store, true));
+        assertFalse(KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, new ProfileStore(settings, TOX_ID)));
+
+        // Muted by the auto-join, then left: its switch goes with its row, and a join by hand starts as any group.
+        final Map<String, String> other = new HashMap<>();
+        final ProfileStore auto = new ProfileStore(other, TOX_ID);
+        assertTrue(KhandaqCommunity.autoJoin(auto, true, false, true, new Join(true)));
+        assertTrue(KhandaqCommunity.noteGroupLeft(auto, KhandaqCommunity.CHAT_ID));
+        assertFalse(auto.keptMuted());
+        assertFalse(KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, auto));
+        // Joined again by hand and muted by the person: that comes back after an import, the leave stays.
+        assertTrue(KhandaqCommunity.noteSoundChoice(auto, KhandaqCommunity.CHAT_ID, true));
+        final ProfileStore imported = new ProfileStore(other, TOX_ID);
+        assertTrue(KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, imported));
+        assertTrue(imported.left());
+        // Left again: forgotten again, with the leave still marked once.
+        assertFalse(KhandaqCommunity.noteGroupLeft(imported, KhandaqCommunity.CHAT_ID));
+        assertFalse(imported.keptMuted());
+        assertTrue(imported.left());
+    }
+
+    @Test
+    public void a_new_row_of_a_group_asks_the_rule_and_both_switches_keep_the_persons_choice()
+    {
+        final String rows = bare(method(read(JAVA + "HelperGroup.java"),
+                                        "static void new_or_updated_group(long group_num, "
+                                        + "String who_invited_public_key,"));
+        final int muted = rows.indexOf("conf_new.notification_silent=CommunityAutoJoin.mutesNewRow(group_identifier);");
+        assertTrue(muted > 0 && muted < rows.indexOf("orma.insertIntoGroupDB(conf_new);"));
+
+        final String dossier = bare(method(read(JAVA + "AirGroupDossierActivity.java"),
+                                           "private void setMuted(final boolean muted)"));
+        assertTrue(dossier.indexOf("CommunityAutoJoin.noteSoundChoice(groupId,muted);")
+                   > dossier.indexOf(".notification_silent(muted).execute();"));
+        final String holder = bare(read(JAVA + "GroupListHolder.java"));
+        assertTrue(holder.contains("notification_silent(this.group.notification_silent).execute();"
+                                   + "CommunityAutoJoin.noteSoundChoice(this.group.group_identifier,true);"));
+        assertTrue(holder.contains("CommunityAutoJoin.noteSoundChoice(this.group.group_identifier,false);"));
+
+        final String auto = read(JAVA + "CommunityAutoJoin.java");
+        assertTrue(bare(method(auto, "static boolean mutesNewRow(final String groupId)")).contains(
+                "return(store!=null)&&KhandaqCommunity.mutesNewRow(groupId,store);"));
+        assertTrue(bare(method(auto, "static void qaForgetMarks()")).contains("KhandaqCommunity.MARK_MUTED"));
     }
 
     // ---- a full Community (review, 2026-11-16) ----

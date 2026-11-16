@@ -278,6 +278,9 @@ public class HelperGroup
                 conf_new.group_active = true;
                 conf_new.tox_group_number = group_num;
                 conf_new.name = get_group_display_name(group_identifier, group_topic);
+                // KHANDAQ (0.2.57, review): Khandaq Community given a row again after its profile was imported or
+                // restored keeps its notification switch as it was (CommunityAutoJoin.mutesNewRow).
+                conf_new.notification_silent = CommunityAutoJoin.mutesNewRow(group_identifier);
                 //
                 orma.insertIntoGroupDB(conf_new);
                 HelperGeneric.logI(TAG, "new_or_updated_group:+ADD+");

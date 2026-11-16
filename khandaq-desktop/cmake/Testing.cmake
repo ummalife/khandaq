@@ -86,6 +86,7 @@ if(Python3_Interpreter_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/../design/system/to
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/gen-design-tokens.py --check)
 endif()
 auto_test(model friendlistmanager "" "")
+auto_test(model group "" "mock_library")
 auto_test(model friendmessagedispatcher "" "")
 auto_test(model groupmessagedispatcher "" "mock_library")
 auto_test(model messageprocessor "" "")

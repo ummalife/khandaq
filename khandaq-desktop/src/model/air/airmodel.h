@@ -180,13 +180,21 @@ enum class PreviewStyle
 enum class SectionKind
 {
     Requests,
+    /**
+     * KHANDAQ (0.2.57): the pinned rows (Entry::pinned), first of the conversations and without a
+     * heading, under the request cards only.
+     */
+    Pinned,
     Live,
     Away,
     Saved,
     Messages,
 };
 
-/** Request cards carry their own label; every other section has a heading with its count. */
+/**
+ * Request cards carry their own label and a pinned row stands alone; every other section has a
+ * heading with its count.
+ */
 bool sectionHasHeading(SectionKind kind);
 QString sectionName(SectionKind kind);
 
@@ -207,6 +215,12 @@ struct Entry
     int transitCount = 0;
     int unreadCount = 0;
     bool isFavorite = false;
+    /**
+     * KHANDAQ (0.2.57): the row stands first of the conversations, whatever its reach or activity:
+     * Khandaq Community (Air::Community), pinned for good. Filters and the search keep it or not as
+     * any row, and it is first wherever it is kept; leaving the group is how it goes.
+     */
+    bool pinned = false;
     /** Someone mentioned us in this group since we last looked. */
     bool mentioned = false;
     /** Whose photo the tile shows (a friend's public key), or empty for none. */

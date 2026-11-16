@@ -19,10 +19,15 @@
 
 #include "groupinvite.h"
 
+#include "src/model/air/aircommunity.h"
+
 GroupInvite::GroupInvite(uint32_t friendId_, const QByteArray& inviteData, const QString& groupName_)
     : friendId{friendId_}
     , invite{inviteData}
-    , groupName{groupName_}
+    // KHANDAQ (0.2.57): an invitation to Khandaq Community names it as its chat does. The invite
+    // starts with the chat id.
+    , groupName{Air::Community::groupTitle(inviteData.left(Air::Community::chatId().size()),
+                                           groupName_)}
     , date{QDateTime::currentDateTime()}
 {
 }

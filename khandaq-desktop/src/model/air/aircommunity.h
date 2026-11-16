@@ -80,6 +80,18 @@ QByteArray chatId();
 bool isCommunity(const QByteArray& groupChatId);
 
 /**
+ * The name the group always shows, wherever the name of a group is shown: its row, its chat, the
+ * dossier, notifications, the search and the Report mail (the owner, 2026-11-16). Neither its topic
+ * nor its name in the group state changes it: the founder's topic once began "Official Khandaq
+ * community", and the desktop takes the topic of a saved group for its name until the group state
+ * comes (Core::loadGroups). Not translated: it is the name of the group.
+ */
+constexpr char name[] = "Khandaq Community";
+
+/** The name a group shows: name for Khandaq Community, title as it is for any other group. */
+QString groupTitle(const QByteArray& groupChatId, const QString& title);
+
+/**
  * Whether to join it now: our node is connected, the profile never joined it by itself before
  * (autoJoinDone) nor left it (left), and it is not in it already, by hand or from an earlier join.
  */

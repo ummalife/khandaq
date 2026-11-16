@@ -1081,6 +1081,9 @@ QString sectionTitle(Air::SectionKind kind)
         return text(Text::SectionSaved);
     case Air::SectionKind::Messages:
         return text(Text::SectionMessages);
+    case Air::SectionKind::Pinned:
+        // No heading: the pinned row stands alone.
+        return QString();
     case Air::SectionKind::Requests:
         break;
     }

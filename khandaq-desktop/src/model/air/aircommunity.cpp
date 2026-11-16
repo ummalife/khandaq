@@ -78,6 +78,11 @@ bool isCommunity(const QByteArray& groupChatId)
     return groupChatId == chatId();
 }
 
+QString groupTitle(const QByteArray& groupChatId, const QString& title)
+{
+    return isCommunity(groupChatId) ? QString::fromLatin1(name) : title;
+}
+
 bool shouldAutoJoin(bool connected, bool autoJoinDone, bool left, bool alreadyInGroup)
 {
     return connected && !autoJoinDone && !left && !alreadyInGroup;

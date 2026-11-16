@@ -65,6 +65,16 @@ Entry saved()
                   Reach::local(), 1);
 }
 
+/** KHANDAQ (0.2.57): the row of Khandaq Community, pinned as AirSource marks it. */
+Entry community(Reach reach = Reach::group(0), qint64 activity = 1, int transit = 0)
+{
+    Entry value = titled(QStringLiteral("community"), QStringLiteral("Khandaq Community"),
+                         EntryKind::Group, reach, activity);
+    value.transitCount = transit;
+    value.pinned = true;
+    return value;
+}
+
 Request request(const QString& id, qint64 date)
 {
     Request value = Request::make(QString(64, QLatin1Char('A')), QString{}, QString{}, date);
@@ -304,6 +314,9 @@ private slots:
     void favoritesFilterDoesNotMatchEveryRow();
     void filterNamesRoundTrip();
     void queryMatchesTitlesIgnoringCaseAndMarksAndHidesRequests();
+    void thePinnedRowStandsFirstWhateverItsReachOrActivity();
+    void thePinnedRowIsFirstInEveryFilterAndSearchThatKeepsIt();
+    void thePinnedRowStaysPutWhileTheListMoves();
     void messageHitsAreIgnoredWithoutAQuery();
     void highlightsCoverEveryMatchInTheOriginalText();
     void countsIgnoreTheFilterAndTheQuery();
@@ -507,6 +520,124 @@ void TestAirModel::queryMatchesTitlesIgnoringCaseAndMarksAndHidesRequests()
     QCOMPARE(ids(snapshot, SectionKind::Live), (QStringList{"a"}));
     QCOMPARE(ids(snapshot, SectionKind::Messages), (QStringList{"m1"}));
     QCOMPARE(snapshot.emptyState, EmptyState::None);
+}
+
+void TestAirModel::thePinnedRowStandsFirstWhateverItsReachOrActivity()
+{
+    // Nobody online in it and its last message the oldest: it still comes first of the
+    // conversations, under the request cards; Saved Messages keeps its place at the end.
+    const QVector<Entry> entries{entry("live-new", Reach::direct(), 300),
+                                 entry("away-old", Reach::away(7200), 10), community(), saved()};
+
+    const Snapshot snapshot = buildAll(entries, {request("r", 1)});
+
+    QCOMPARE(kinds(snapshot),
+             (QVector<SectionKind>{SectionKind::Requests, SectionKind::Pinned, SectionKind::Live,
+                                   SectionKind::Away, SectionKind::Saved}));
+    QCOMPARE(ids(snapshot, SectionKind::Pinned), (QStringList{"community"}));
+    QCOMPARE(ids(snapshot, SectionKind::Away), (QStringList{"away-old"}));
+    QCOMPARE(snapshot.emptyState, EmptyState::None);
+
+    // Drawn: the card, the pinned row with no heading of its own, then the sections, whose
+    // counts leave it out.
+    const QVector<Row> rows = snapshot.rows();
+    QCOMPARE(rows.size(), 8);
+    QCOMPARE(rows.at(0).type, Row::Type::Request);
+    QCOMPARE(rows.at(1).type, Row::Type::Entry);
+    QCOMPARE(rows.at(1).item.entry.id, QStringLiteral("community"));
+    QCOMPARE(rows.at(2).type, Row::Type::Header);
+    QCOMPARE(rows.at(2).section, SectionKind::Live);
+    QCOMPARE(rows.at(2).count, 1);
+    QVERIFY(!sectionHasHeading(SectionKind::Pinned));
+
+    // Online and with the newest message, it is first all the same.
+    const Snapshot busy = buildAll(
+        {entry("live-new", Reach::direct(), 300), community(Reach::group(3), 500), saved()});
+    QCOMPARE(kinds(busy),
+             (QVector<SectionKind>{SectionKind::Pinned, SectionKind::Live, SectionKind::Saved}));
+    QCOMPARE(busy.rows().first().item.entry.id, QStringLiteral("community"));
+
+    // Any other group, and the same one unpinned, sorts as before.
+    Entry unpinned = community();
+    unpinned.pinned = false;
+    QCOMPARE(ids(buildAll({entry("away-old", Reach::away(7200), 10), unpinned}), SectionKind::Away),
+             (QStringList{"away-old", "community"}));
+}
+
+void TestAirModel::thePinnedRowIsFirstInEveryFilterAndSearchThatKeepsIt()
+{
+    // In transit for a message of its own, it heads the rows that wait, even with fewer waiting.
+    Snapshot snapshot = buildAll({entry("busy", Reach::direct(), 400, 5),
+                                  community(Reach::group(2), 1, 1)},
+                                 {}, Filter::Transit);
+    QCOMPARE(kinds(snapshot), (QVector<SectionKind>{SectionKind::Pinned, SectionKind::Live}));
+    QCOMPARE(snapshot.rows().first().item.entry.id, QStringLiteral("community"));
+
+    // Starred, it heads the favorites; not starred, it is none of them.
+    Entry starred = community();
+    starred.isFavorite = true;
+    snapshot = buildAll({favorite("star"), starred, saved()}, {}, Filter::Favorites);
+    QCOMPARE(kinds(snapshot),
+             (QVector<SectionKind>{SectionKind::Pinned, SectionKind::Live, SectionKind::Saved}));
+    snapshot = buildAll({favorite("star"), community(), saved()}, {}, Filter::Favorites);
+    QVERIFY(snapshot.section(SectionKind::Pinned) == nullptr);
+
+    // The Requests filter keeps cards and contacts who did not answer: never a group.
+    snapshot = buildAll({entry("pending", Reach::pending()), community()}, {request("r", 1)},
+                        Filter::Requests);
+    QVERIFY(snapshot.section(SectionKind::Pinned) == nullptr);
+
+    // The search finds it by its name and shows it before the other matches; a search that does
+    // not match its name leaves it out.
+    const QVector<Entry> people{
+        titled("fan", "Community fan", EntryKind::Direct, Reach::direct(), 900), community()};
+    snapshot = buildAll(people, {}, Filter::All, QStringLiteral("community"));
+    QCOMPARE(kinds(snapshot), (QVector<SectionKind>{SectionKind::Pinned, SectionKind::Live}));
+    QCOMPARE(snapshot.rows().first().item.entry.id, QStringLiteral("community"));
+    QCOMPARE(ids(snapshot, SectionKind::Live), (QStringList{"fan"}));
+    snapshot = buildAll(people, {}, Filter::All, QStringLiteral("fan"));
+    QVERIFY(snapshot.section(SectionKind::Pinned) == nullptr);
+    QCOMPARE(ids(snapshot, SectionKind::Live), (QStringList{"fan"}));
+}
+
+void TestAirModel::thePinnedRowStaysPutWhileTheListMoves()
+{
+    const QVector<Entry> before{entry("a", Reach::direct(), 10), entry("b", Reach::away(60), 20),
+                                community(), saved()};
+    QVector<Entry> after = before;
+    after[0].activity = 30;
+    after[1].reach = Reach::direct();
+    // Its members come online and a message comes: it stays where it is.
+    after[2].reach = Reach::group(4);
+    after[2].activity = 40;
+
+    const Snapshot oldSnapshot = buildAll(before);
+    const Snapshot newSnapshot = buildAll(after);
+    QCOMPARE(oldSnapshot.sections.first().kind, SectionKind::Pinned);
+    QCOMPARE(newSnapshot.sections.first().kind, SectionKind::Pinned);
+
+    Changes changes;
+    QVERIFY(diff(oldSnapshot, newSnapshot, changes));
+    for (const IndexPath& path : changes.deletedRows + changes.insertedRows) {
+        QVERIFY(path.section != 0);
+    }
+    for (const RowMove& move : changes.movedRows) {
+        QVERIFY(move.from.section != 0 && move.to.section != 0);
+    }
+    QVector<QStringList> replayed;
+    QVERIFY(replay(changes, oldSnapshot, newSnapshot, replayed));
+    QCOMPARE(replayed, sectionIds(newSnapshot));
+
+    // Joined, it comes in on top; left, it goes, and the rest stays as it was.
+    const Snapshot without = buildAll({before[0], before[1], before[3]});
+    QVERIFY(diff(without, oldSnapshot, changes));
+    QVERIFY(changes.insertedSections.contains(0));
+    QVERIFY(replay(changes, without, oldSnapshot, replayed));
+    QCOMPARE(replayed, sectionIds(oldSnapshot));
+    QVERIFY(diff(oldSnapshot, without, changes));
+    QVERIFY(changes.deletedSections.contains(0));
+    QVERIFY(replay(changes, oldSnapshot, without, replayed));
+    QCOMPARE(replayed, sectionIds(without));
 }
 
 void TestAirModel::messageHitsAreIgnoredWithoutAQuery()

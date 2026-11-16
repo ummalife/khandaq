@@ -25,6 +25,7 @@
 #include "src/core/toxpk.h"
 #include "src/friendlist.h"
 #include "src/grouplist.h"
+#include "src/model/air/aircommunity.h"
 #include "src/model/chatlogitem.h"
 #include "src/model/friend.h"
 #include "src/model/group.h"
@@ -325,6 +326,8 @@ Air::Entry AirSource::groupEntry(Group& group, const IChatLog* log, const QSet<Q
     // The peer list counts us too.
     entry.reach = Air::Reach::group(std::max(0, group.getPeersCount() - 1));
     entry.isFavorite = favorites.contains(entry.id);
+    // KHANDAQ (0.2.57): Khandaq Community stands first, however it was joined.
+    entry.pinned = Air::Community::isCommunity(group.getPersistentId().getByteArray());
 
     const Conversation conversation = log ? read(*log, true) : Conversation{};
     entry.transitCount = conversation.undelivered;

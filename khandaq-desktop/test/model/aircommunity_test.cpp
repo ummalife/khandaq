@@ -46,6 +46,7 @@ class TestAirCommunity : public QObject
     Q_OBJECT
 private slots:
     void theChatIdIsTheGroupOfOurBot();
+    void theCommunityIsAlwaysNamedKhandaqCommunity();
     void itJoinsOnlyWhenConnectedNeverJoinedNeverLeftAndNotInIt();
     void anAutoJoinMutesTheGroupAndIsDone();
     void aJoinToxcoreRefusedLeavesNothingAndIsTriedAgain();
@@ -81,6 +82,28 @@ void TestAirCommunity::theChatIdIsTheGroupOfOurBot()
     // Never the TRIfA public group of before, whose founder is not ours.
     QVERIFY(!Community::isCommunity(QByteArray::fromHex(
         "154b3973bd0e66304fd6179a8a54759073649e09e6e368f0334fc6ed666ab762")));
+}
+
+void TestAirCommunity::theCommunityIsAlwaysNamedKhandaqCommunity()
+{
+    // The topic of the founder that iOS and Android showed for its name, the name of a saved
+    // group before its state comes, the name in its state, nothing at all: always the same name.
+    const QString topic = QStringLiteral(
+        "Official Khandaq community \u00B7 Be kind, no spam or ads \u00B7 "
+        "\u041E\u0444\u0438\u0446\u0438\u0430\u043B\u044C\u043D\u043E\u0435");
+    for (const QString& title : {topic, QStringLiteral("Group CFF1995F"),
+                                 QStringLiteral("Khandaq Community"), QString()}) {
+        QCOMPARE(Community::groupTitle(Community::chatId(), title),
+                 QStringLiteral("Khandaq Community"));
+    }
+    QCOMPARE(QString::fromLatin1(Community::name), QStringLiteral("Khandaq Community"));
+    // Any other group shows what it has, as before, even nothing.
+    QCOMPARE(Community::groupTitle(otherGroup, topic), topic);
+    QCOMPARE(Community::groupTitle(otherGroup, QStringLiteral("Family")),
+             QStringLiteral("Family"));
+    QCOMPARE(Community::groupTitle(otherGroup, QString()), QString());
+    QCOMPARE(Community::groupTitle(QByteArray(), QStringLiteral("Family")),
+             QStringLiteral("Family"));
 }
 
 void TestAirCommunity::itJoinsOnlyWhenConnectedNeverJoinedNeverLeftAndNotInIt()

@@ -3294,7 +3294,7 @@ void Widget::onGroupTitleChanged(uint32_t groupnumber, const QString& author, co
 
     GroupWidget* widget = groupWidgets[groupId];
     if (widget->isActive()) {
-        setWindowTitle(title);
+        setWindowTitle(Air::Community::groupTitle(groupId.getByteArray(), title));
     }
 
     g->setTitle(author, title);

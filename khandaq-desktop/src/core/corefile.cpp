@@ -314,6 +314,7 @@ void CoreFile::cancelFileRecv(uint32_t friendId, uint32_t fileId)
     // KHANDAQ (0.2.57): one that waits for its sender is cancelled here only; an offer of it
     // again waits for the person, and declined it is cancelled on the sender's side too.
     file->refusedHere = true;
+    dropPart(*file);
     emit fileTransferCancelled(*file);
     removeFile(friendId, fileId);
 }
@@ -336,6 +337,7 @@ void CoreFile::rejectFileRecvRequest(uint32_t friendId, uint32_t fileId)
     }
     file->status = ToxFile::CANCELED;
     file->refusedHere = true;
+    dropPart(*file);
     emit fileTransferCancelled(*file);
     removeFile(friendId, fileId);
 }
@@ -353,21 +355,35 @@ void CoreFile::acceptFileRecvRequest(uint32_t friendId, uint32_t fileId, QString
         qWarning() << "acceptFileRecvRequest: The file waits for its sender";
         return;
     }
-    file->setFilePath(path);
+    // KHANDAQ (0.2.57): it is written to its part until all of it is here (giveWholeName). A part
+    // there already, which may still go on, or one another transfer writes, stays as it is. It
+    // starts from the start, so a part it left itself before goes first (dropPart).
+    dropPart(*file);
+    const uint64_t key = getFriendKey(friendId, fileId);
+    const auto taken = [this, key](const QString& candidate) {
+        return QFileInfo::exists(candidate) || otherFileAt(candidate, key);
+    };
+    QString part = Air::partFilePath(path);
+    if (taken(part)) {
+        part = Air::freePartPath(path, taken);
+    }
+    file->setFilePath(part);
     if (!file->open(true)) {
-        qWarning() << "acceptFileRecvRequest: Unable to open file" << path
+        qWarning() << "acceptFileRecvRequest: Unable to open file" << part
                    << file->file->errorString();
         return;
     }
     // KHANDAQ (0.2.57): the file it goes to is made now; it is told from another by when.
     file->stamp = ToxFile::Stamp();
-    file->stamp.bornMs = Air::fileStampAt(path).bornMs;
+    file->stamp.bornMs = Air::fileStampAt(part).bornMs;
     Tox_Err_File_Control err;
     tox_file_control(tox, file->friendId, file->fileNum, TOX_FILE_CONTROL_RESUME, &err);
     if (!PARSE_ERR(err)) {
         qWarning() << "acceptFileRecvRequest: tox_file_control RESUME failed for"
                    << file->friendId << ':' << file->fileNum;
         file->file->close();
+        // KHANDAQ (0.2.57): nothing came, and the part was made for it just now.
+        QFile::remove(part);
         return;
     }
     file->status = ToxFile::TRANSMITTING;
@@ -615,6 +631,7 @@ void CoreFile::onFileControlCallback(Tox* tox, uint32_t friendId, uint32_t fileI
         file->status = ToxFile::CANCELED;
         // The last byte of a file that is here already: nothing shows it.
         if (!coreFile->quietFiles.contains(getFriendKey(friendId, fileId))) {
+            coreFile->dropPart(*file);
             emit coreFile->fileTransferCancelled(*file);
         }
         coreFile->removeFile(friendId, fileId);
@@ -746,6 +763,7 @@ void CoreFile::onFileRecvChunkCallback(Tox* tox, uint32_t friendId, uint32_t fil
         qWarning("onFileRecvChunkCallback: Received a chunk out-of-order, aborting transfer");
         if (file->fileKind != TOX_FILE_KIND_AVATAR) {
             file->status = ToxFile::CANCELED;
+            coreFile->dropPart(*file);
             emit coreFile->fileTransferCancelled(*file);
         }
         Tox_Err_File_Control err;
@@ -782,6 +800,8 @@ void CoreFile::onFileRecvChunkCallback(Tox* tox, uint32_t friendId, uint32_t fil
                 emit core->friendAvatarChanged(core->getFriendPublicKey(friendId), file->avatarData);
             }
         } else {
+            // KHANDAQ (0.2.57): all of it is here: it takes the name it came for.
+            coreFile->giveWholeName(*file);
             emit coreFile->fileTransferFinished(*file);
         }
         coreFile->removeFile(friendId, fileId);
@@ -797,6 +817,7 @@ void CoreFile::onFileRecvChunkCallback(Tox* tox, uint32_t friendId, uint32_t fil
             qWarning() << "onFileRecvChunkCallback: FTV2 chunk shorter than file id"
                        << friendId << ':' << fileId << "length" << length;
             file->status = ToxFile::CANCELED;
+            coreFile->dropPart(*file);
             emit coreFile->fileTransferCancelled(*file);
             Tox_Err_File_Control err;
             tox_file_control(tox, friendId, fileId, TOX_FILE_CONTROL_CANCEL, &err);
@@ -1049,8 +1070,7 @@ bool CoreFile::takeWaitingFile(const ToxFile& offer)
             Air::fileResume(offer.resumeFileId, static_cast<qint64>(offer.progress.getFileSize()),
                             here);
         if (resume.newPath) {
-            const QFileInfo old(file.filePath);
-            taken->setFilePath(Air::freeFilePath(old.absolutePath(), old.fileName(), inUse));
+            taken->setFilePath(Air::freePartPath(file.filePath, inUse));
         }
         qDebug() << "takeWaitingFile: file" << offer.friendId << ':' << offer.fileNum
                  << "goes on from byte" << resume.offset;
@@ -1146,6 +1166,64 @@ bool CoreFile::otherFileAt(const QString& path, uint64_t key) const
         }
     }
     return false;
+}
+
+/**
+ * KHANDAQ (0.2.57): a file of the person that came whole leaves its part (Air::partFilePath) for
+ * the name it came for, or the next free one beside it when a file of that name is there now: it
+ * replaces nothing. Should the rename fail, it stays whole under its part, which its entry shows.
+ * A file of an older build, written under its own name, has that name already.
+ */
+void CoreFile::giveWholeName(ToxFile& file)
+{
+    if (!Air::isPartPath(file.filePath)) {
+        return;
+    }
+    if (file.file) {
+        file.file->close();
+    }
+    const uint64_t key = getFriendKey(file.friendId, file.fileNum);
+    const QFileInfo whole(Air::wholeFilePath(file.filePath));
+    const QString path = Air::freeFilePath(whole.absolutePath(), whole.fileName(),
+                                           [this, key](const QString& candidate) {
+                                               return QFileInfo::exists(candidate)
+                                                      || otherFileAt(candidate, key);
+                                           });
+    if (path.isEmpty() || !QFile::rename(file.filePath, path)) {
+        qWarning() << "giveWholeName: the file stays under its part name" << file.filePath;
+        return;
+    }
+    file.setFilePath(path);
+}
+
+/**
+ * KHANDAQ (0.2.57): one cancelled or declined, here or by its sender, or that failed, never goes
+ * on from what came of it (Air::fileResume starts it again), so its part goes: nothing of it stays
+ * in the folder. Only a part this transfer wrote, open in it until now or as it left it
+ * (Air::isOwnPart), and that no other transfer writes. One that waits for its sender, or stopped,
+ * keeps its part for when it goes on; a file of an older build, written under its own name, stays.
+ */
+void CoreFile::dropPart(ToxFile& file)
+{
+    if (file.direction != ToxFile::RECEIVING || file.fileKind == TOX_FILE_KIND_AVATAR
+        || !Air::isPartPath(file.filePath)) {
+        return;
+    }
+    const bool writing = file.file && file.file->isOpen();
+    if (file.file) {
+        file.file->close();
+    }
+    const uint64_t key = getFriendKey(file.friendId, file.fileNum);
+    if (!QFileInfo::exists(file.filePath) || otherFileAt(file.filePath, key)) {
+        return;
+    }
+    if (!writing && !Air::isOwnPart(file.stamp, Air::fileStampAt(file.filePath))) {
+        qWarning() << "dropPart: what is at" << file.filePath << "is not the part it left";
+        return;
+    }
+    if (!QFile::remove(file.filePath)) {
+        qWarning() << "dropPart: cannot remove" << file.filePath;
+    }
 }
 
 void CoreFile::endWaitingFile(uint64_t key)

@@ -275,23 +275,17 @@ bool Widget::toxUriEventHandler(const QByteArray& data, void* userData)
 
 void Widget::acceptFileTransfer(const ToxFile& file, const QString& path)
 {
-    QString filepath;
-    int number = 0;
-
-    QString suffix = QFileInfo(file.fileName).completeSuffix();
-    QString base = QFileInfo(file.fileName).baseName();
-
-    do {
-        filepath = QString("%1/%2%3.%4")
-                       .arg(path, base,
-                            number > 0 ? QString(" (%1)").arg(QString::number(number)) : QString(),
-                            suffix);
-        ++number;
-    } while (QFileInfo(filepath).exists());
+    // KHANDAQ (0.2.57): the first name where neither a file nor the part of one is: what comes is
+    // written to its part (Air::partFilePath) until it is whole.
+    const QString filepath =
+        Air::freeFilePath(path, file.fileName, [](const QString& candidate) {
+            return QFileInfo::exists(candidate)
+                   || QFileInfo::exists(Air::partFilePath(candidate));
+        });
 
     // Do not automatically accept the file-transfer if the path is not writable.
     // The user can still accept it manually.
-    if (tryRemoveFile(filepath)) {
+    if (!filepath.isEmpty() && tryRemoveFile(Air::partFilePath(filepath))) {
         CoreFile* coreFile = core->getCoreFile();
         coreFile->acceptFileRecvRequest(file.friendId, file.fileNum, filepath);
     } else {
@@ -1488,9 +1482,8 @@ void Widget::dispatchFile(ToxFile file)
             file.continued = true;
             QString path = shown.filePath;
             if (resume.newPath) {
-                const QFileInfo old(shown.filePath);
                 const auto taken = [](const QString& name) { return QFileInfo::exists(name); };
-                path = Air::freeFilePath(old.absolutePath(), old.fileName(), taken);
+                path = Air::freePartPath(shown.filePath, taken);
             }
             coreFile->resumeFileRecv(file.friendId, file.fileNum, path,
                                      static_cast<uint64_t>(resume.offset));

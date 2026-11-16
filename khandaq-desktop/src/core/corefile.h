@@ -64,10 +64,17 @@ public:
 
     void cancelFileRecv(uint32_t friendId, uint32_t fileId);
     void rejectFileRecvRequest(uint32_t friendId, uint32_t fileId);
+    /**
+     * Accepts an offer of a file to path. KHANDAQ (0.2.57): it is written to its part
+     * (Air::partFilePath) until all of it is here, and takes path only then; a part there already,
+     * which may still go on, gives it the next free name beside.
+     */
     void acceptFileRecvRequest(uint32_t friendId, uint32_t fileId, QString path);
     /**
      * KHANDAQ (0.2.57): accepts an offer of a file partly here (Air::fileResume): toxcore seeks to
-     * offset before the accept, and what comes is appended to path from there.
+     * offset before the accept, and what comes is appended to path from there. path is the part
+     * it left (or, from an older build, the file under its own name), or a free part beside it
+     * (Air::freePartPath) for one that starts again.
      */
     void resumeFileRecv(uint32_t friendId, uint32_t fileId, QString path, uint64_t offset);
     /**
@@ -150,6 +157,10 @@ private:
     void endWaitingFile(uint64_t key);
     /** KHANDAQ (0.2.57): whether a transfer other than the one under key has path as its file. */
     bool otherFileAt(const QString& path, uint64_t key) const;
+    /** KHANDAQ (0.2.57): a file that came whole leaves its part for the name it came for. */
+    void giveWholeName(ToxFile& file);
+    /** KHANDAQ (0.2.57): the part of a file of the person that will not come any more goes. */
+    void dropPart(ToxFile& file);
     static constexpr uint64_t getFriendKey(uint32_t friendId, uint32_t fileId)
     {
         return (static_cast<std::uint64_t>(friendId) << 32) + fileId;

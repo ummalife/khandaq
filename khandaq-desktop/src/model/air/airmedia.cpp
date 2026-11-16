@@ -170,19 +170,52 @@ QString voiceNoteFolder(const QString& appDataDir)
 QString freeFilePath(const QString& folder, const QString& fileName,
                      const std::function<bool(const QString&)>& taken)
 {
-    if (fileName.isEmpty()) {
+    // KHANDAQ (0.2.57): only the last part of the name counts: the file goes into folder.
+    const QString name = QFileInfo(fileName).fileName();
+    if (name.isEmpty()) {
         return QString();
     }
     const QDir dir(folder);
-    const int dot = fileName.indexOf(QLatin1Char('.'));
+    const int dot = name.indexOf(QLatin1Char('.'));
     // A name that starts with its dot, or has none, takes the number at its end.
-    const QString base = dot > 0 ? fileName.left(dot) : fileName;
-    const QString rest = dot > 0 ? fileName.mid(dot) : QString();
-    QString path = dir.filePath(fileName);
+    const QString base = dot > 0 ? name.left(dot) : name;
+    const QString rest = dot > 0 ? name.mid(dot) : QString();
+    QString path = dir.filePath(name);
     for (int number = 1; taken && taken(path); ++number) {
         path = dir.filePath(QStringLiteral("%1 (%2)%3").arg(base).arg(number).arg(rest));
     }
     return path;
+}
+
+const char partFileSuffix[] = ".khandaq-part";
+
+QString partFilePath(const QString& path)
+{
+    return path.isEmpty() ? QString() : path + QLatin1String(partFileSuffix);
+}
+
+bool isPartPath(const QString& path)
+{
+    const QLatin1String suffix(partFileSuffix);
+    return path.size() > suffix.size() && path.endsWith(suffix);
+}
+
+QString wholeFilePath(const QString& path)
+{
+    const QLatin1String suffix(partFileSuffix);
+    return isPartPath(path) ? path.left(path.size() - suffix.size()) : path;
+}
+
+QString freePartPath(const QString& path, const std::function<bool(const QString&)>& taken)
+{
+    const QFileInfo whole(wholeFilePath(path));
+    const QString free = freeFilePath(whole.absolutePath(), whole.fileName(),
+                                      [&taken](const QString& candidate) {
+                                          return taken
+                                                 && (taken(candidate)
+                                                     || taken(partFilePath(candidate)));
+                                      });
+    return partFilePath(free);
 }
 
 bool FileEntryState::isProblem() const

@@ -578,8 +578,11 @@ void FileTransferWidget::acceptVoiceNote(bool play)
     const QString folder = Air::voiceNoteFolder(settings.getPaths().getAppDataDirPath());
     QString path;
     if (QDir().mkpath(folder)) {
-        path = Air::freeFilePath(folder, fileInfo.fileName,
-                                 [](const QString& candidate) { return QFileInfo::exists(candidate); });
+        // Neither a note there nor the part of one (Air::partFilePath).
+        path = Air::freeFilePath(folder, fileInfo.fileName, [](const QString& candidate) {
+            return QFileInfo::exists(candidate)
+                   || QFileInfo::exists(Air::partFilePath(candidate));
+        });
     }
     QFile probe(path);
     const bool writable = !path.isEmpty() && probe.open(QIODevice::WriteOnly);

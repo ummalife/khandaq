@@ -100,6 +100,9 @@ class TestAirMedia : public QObject
 private slots:
     void aVoiceNoteIsKnownByItsWholeSuffixInAnyCase();
     void aFileTakenInWithoutAskingGetsAFreeName();
+    void aNameFromTheSenderStaysInItsFolder();
+    void aFileThatComesIsWrittenToItsPartUntilWhole();
+    void aFileThatStartsAgainGetsAFreePartBeside();
     void theirFileWaitsForAcceptOrDecline();
     void ourFileWaitsForTheOtherSide();
     void aMovingFileSaysWhatIsLeft();
@@ -164,6 +167,67 @@ void TestAirMedia::aFileTakenInWithoutAskingGetsAFreeName()
     QCOMPARE(Air::freeFilePath(folder, QString(), taken), QString());
     // Without a way to ask, the name is taken as it is.
     QCOMPARE(Air::freeFilePath(folder, QStringLiteral("note"), nullptr), QStringLiteral("/data/voice/note"));
+}
+
+/**
+ * KHANDAQ (0.2.57): the name of a file is the sender's, cleaned on Windows only: a name that
+ * names a path still puts the file into the folder, under its last part.
+ */
+void TestAirMedia::aNameFromTheSenderStaysInItsFolder()
+{
+    const auto taken = [](const QString&) { return false; };
+    const QString folder = QStringLiteral("/data/voice");
+    QCOMPARE(Air::freeFilePath(folder, QStringLiteral("../../.ssh/keys.file.m4a"), taken),
+             QStringLiteral("/data/voice/keys.file.m4a"));
+    QCOMPARE(Air::freeFilePath(folder, QStringLiteral("/etc/hosts"), taken),
+             QStringLiteral("/data/voice/hosts"));
+    QCOMPARE(Air::freeFilePath(folder, QStringLiteral("dir/"), taken), QString());
+}
+
+/**
+ * KHANDAQ (0.2.57): a file of the person is written beside the name it goes to, under its part,
+ * and takes that name once whole; nothing in the folder has the name of a file not there.
+ */
+void TestAirMedia::aFileThatComesIsWrittenToItsPartUntilWhole()
+{
+    const QString path = QStringLiteral("/home/me/Downloads/report.pdf");
+    const QString part = Air::partFilePath(path);
+    QCOMPARE(part, path + QLatin1String(Air::partFileSuffix));
+    QVERIFY(part != path);
+    QVERIFY(Air::isPartPath(part));
+    QVERIFY(!Air::isPartPath(path));
+    QCOMPARE(Air::wholeFilePath(part), path);
+    // A file of an older build, written under its own name, is whole where it is.
+    QCOMPARE(Air::wholeFilePath(path), path);
+    // A file whose own name ends as a part does comes back to that name.
+    const QString named = QStringLiteral("/tmp/x") + QLatin1String(Air::partFileSuffix);
+    QCOMPARE(Air::wholeFilePath(Air::partFilePath(named)), named);
+    QCOMPARE(Air::partFilePath(QString()), QString());
+    QVERIFY(!Air::isPartPath(QString()));
+    QVERIFY(!Air::isPartPath(QLatin1String(Air::partFileSuffix)));
+}
+
+/**
+ * KHANDAQ (0.2.57): a file that starts again beside the one it left gets the first name where
+ * neither a file nor its part is, and is written to that part.
+ */
+void TestAirMedia::aFileThatStartsAgainGetsAFreePartBeside()
+{
+    QStringList there;
+    const auto taken = [&there](const QString& path) { return there.contains(path); };
+    const QString folder = QStringLiteral("/home/me/Downloads");
+    const QString path = folder + QStringLiteral("/lecture.mkv");
+    there << Air::partFilePath(path);
+    QCOMPARE(Air::freePartPath(Air::partFilePath(path), taken),
+             Air::partFilePath(folder + QStringLiteral("/lecture (1).mkv")));
+    // A file there under the next name counts as much as a part of it.
+    there << folder + QStringLiteral("/lecture (1).mkv");
+    QCOMPARE(Air::freePartPath(Air::partFilePath(path), taken),
+             Air::partFilePath(folder + QStringLiteral("/lecture (2).mkv")));
+    // From a file of an older build, written under its own name, the same.
+    QCOMPARE(Air::freePartPath(path, taken),
+             Air::partFilePath(folder + QStringLiteral("/lecture (2).mkv")));
+    QCOMPARE(Air::freePartPath(QString(), taken), QString());
 }
 
 void TestAirMedia::theirFileWaitsForAcceptOrDecline()

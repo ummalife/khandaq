@@ -64,12 +64,33 @@ QString voiceNoteFolder(const QString& appDataDir);
 /**
  * Where a received file goes when nobody is asked where: in folder under its own name, or, while a
  * file of that name is there (taken), with " (1)", " (2)" ... after the part before its first dot,
- * as the files accepted by themselves are named (Widget::acceptFileTransfer). The name came through
- * CoreFile::getCleanFileName, so it has no path in it.
+ * as the files accepted by themselves are named (Widget::acceptFileTransfer). The name is the
+ * sender's, cleaned on Windows only (CoreFile::getCleanFileName): only its last part is taken, so
+ * the file goes into folder whatever path it names.
  * @return The path; empty for an empty name.
  */
 QString freeFilePath(const QString& folder, const QString& fileName,
                      const std::function<bool(const QString&)>& taken);
+
+/**
+ * KHANDAQ (0.2.57): a file of the person is written under a name of its own until all of it is
+ * here: the path it goes to with this after it (partFilePath). Whole, it takes that path
+ * (wholeFilePath); one that will not come leaves nothing behind, and one that may still go on
+ * keeps what came under this name. Until all of it is here, nothing in its folder has its name.
+ */
+extern const char partFileSuffix[];
+/** Where a file going to path is written until it is whole; empty for an empty path. */
+QString partFilePath(const QString& path);
+/** Whether a file is written at path until it is whole (partFilePath). */
+bool isPartPath(const QString& path);
+/** The path the file written at path goes to once whole: path itself unless it is a part. */
+QString wholeFilePath(const QString& path);
+/**
+ * The part for a file that starts again beside the one at path (a part, or a file of an older
+ * build written under its own name): the part of the first free name (freeFilePath) of the file
+ * it goes to, where neither that file nor its part is taken. Empty for an empty name.
+ */
+QString freePartPath(const QString& path, const std::function<bool(const QString&)>& taken);
 
 /** What a file entry offers, in the order it shows them. */
 enum class FileAction
@@ -216,7 +237,7 @@ struct FileResume
     qint64 offset = 0;
     /**
      * For GoOn: what is at its path may not be what came of it, so it goes on from the start under
-     * a free name beside it (freeFilePath), and that file stays as it is.
+     * a free name beside it (freePartPath), and that file stays as it is.
      */
     bool newPath = false;
 };

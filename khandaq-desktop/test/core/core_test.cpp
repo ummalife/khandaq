@@ -84,6 +84,7 @@ private slots:
     void a_file_that_cannot_be_read_is_offered_to_nobody();
     void a_file_that_changed_or_went_is_not_offered_again();
     void a_file_that_cannot_be_read_any_more_is_cancelled_for_its_receiver();
+    void a_file_cancelled_here_leaves_nothing_in_its_folder();
 
 private:
     /** Alice makes a group, and Bob joins it by her invite: both count the two of them then. */
@@ -805,7 +806,8 @@ void TestCore::an_invite_from_a_friend_online_replaces_a_group_joined_by_its_id(
  * so both call the other offline and forget the transfer. Both keep it waiting; once they are
  * linked again Alice offers it with the same Tox file id by herself, a moment later (an older
  * receiver would forget an offer that came with the link), and Bob's node goes on with it from what
- * came, asking his window nothing. The file ends whole, byte for byte.
+ * came, asking his window nothing. The file ends whole, byte for byte, and takes its name only
+ * then: until then what came is its part (Air::partFilePath).
  */
 void TestCore::a_file_goes_on_from_where_it_stopped_once_the_friend_is_back()
 {
@@ -817,6 +819,7 @@ void TestCore::a_file_goes_on_from_where_it_stopped_once_the_friend_is_back()
     const QByteArray content = fileBytes(6 * 1024 * 1024, 57);
     const QString source = dir.filePath(QStringLiteral("film.mkv"));
     const QString target = dir.filePath(QStringLiteral("film here.mkv"));
+    const QString part = Air::partFilePath(target);
     QVERIFY(writeFile(source, content));
 
     NodeLog aliceLog(*alice);
@@ -838,11 +841,12 @@ void TestCore::a_file_goes_on_from_where_it_stopped_once_the_friend_is_back()
         QVERIFY(waiting.connectionLost);
         QCOMPARE(waiting.status, ToxFile::TRANSMITTING);
         QCOMPARE(waiting.resumeFileId, offer.resumeFileId);
-        QCOMPARE(waiting.filePath, target);
+        QCOMPARE(waiting.filePath, part);
         QVERIFY(waiting.fileNum >= 0x80000000u);
         here = static_cast<qint64>(waiting.progress.getBytesSent());
         QVERIFY(here > 0 && here < content.size());
-        QCOMPARE(QFileInfo(target).size(), here);
+        QCOMPARE(QFileInfo(part).size(), here);
+        QVERIFY(!QFileInfo::exists(target));
     }
 
     // Her node goes on: it learns Bob went, keeps the file waiting too, and once they are linked
@@ -863,6 +867,8 @@ void TestCore::a_file_goes_on_from_where_it_stopped_once_the_friend_is_back()
     QVERIFY(bobLog.of(bobLog.finished).first().continued);
     QVERIFY(aliceLog.firstContinuedBytes() > here);
     QVERIFY(aliceLog.firstContinuedBytes() <= here + fileChunkMax);
+    QCOMPARE(bobLog.of(bobLog.finished).first().filePath, target);
+    QVERIFY(!QFileInfo::exists(part));
     QCOMPARE(QFileInfo(target).size(), static_cast<qint64>(content.size()));
     QVERIFY(readFile(target) == content);
 }
@@ -870,8 +876,8 @@ void TestCore::a_file_goes_on_from_where_it_stopped_once_the_friend_is_back()
 /**
  * KHANDAQ (0.2.57): an offer of a file that is partly here already, after a restart of either side
  * or Send again: the same Tox file id as the entry of it. Bob, as his window does for that entry
- * (Air::fileResume), seeks to what he has before he accepts; Alice reads on from there, and the
- * file ends whole, byte for byte.
+ * (Air::fileResume), seeks to what he has in its part before he accepts; Alice reads on from there,
+ * and the file ends whole, byte for byte, under its name.
  */
 void TestCore::an_offer_of_a_file_partly_here_goes_on_from_what_is_here()
 {
@@ -881,10 +887,11 @@ void TestCore::an_offer_of_a_file_partly_here_goes_on_from_what_is_here()
     const QByteArray content = fileBytes(2 * 1024 * 1024 + 333, 1116);
     const QString source = dir.filePath(QStringLiteral("album.zip"));
     const QString target = dir.filePath(QStringLiteral("album here.zip"));
+    const QString part = Air::partFilePath(target);
     QVERIFY(writeFile(source, content));
     // What came before: not a whole number of packets.
     const qint64 here = 700001;
-    QVERIFY(writeFile(target, content.left(static_cast<int>(here))));
+    QVERIFY(writeFile(part, content.left(static_cast<int>(here))));
     const QByteArray fileId(TOX_FILE_ID_LENGTH, '\x5a');
 
     NodeLog aliceLog(*alice);
@@ -901,14 +908,14 @@ void TestCore::an_offer_of_a_file_partly_here_goes_on_from_what_is_here()
     entry.size = content.size();
     entry.status = ToxFile::BROKEN;
     entry.accepted = true;
-    entry.bytes = QFileInfo(target).size();
+    entry.bytes = QFileInfo(part).size();
     // The part Bob's node made for it, as his window tells (Air::isOwnPart).
     entry.ownPart = true;
     const Air::FileResume resume = Air::fileResume(
         offer.resumeFileId, static_cast<qint64>(offer.progress.getFileSize()), entry);
     QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
     QCOMPARE(resume.offset, here);
-    bob->getCoreFile()->resumeFileRecv(offer.friendId, offer.fileNum, target,
+    bob->getCoreFile()->resumeFileRecv(offer.friendId, offer.fileNum, part,
                                        static_cast<uint64_t>(resume.offset));
     QTRY_VERIFY_WITH_TIMEOUT(bobLog.of(bobLog.finished).size() == 1
                                  && aliceLog.of(aliceLog.finished).size() == 1,
@@ -918,6 +925,8 @@ void TestCore::an_offer_of_a_file_partly_here_goes_on_from_what_is_here()
     QVERIFY(aliceLog.firstContinuedBytes() <= here + fileChunkMax);
     QVERIFY(bobLog.firstContinuedBytes() > here);
     QVERIFY(bobLog.of(bobLog.finished).first().continued);
+    QCOMPARE(bobLog.of(bobLog.finished).first().filePath, target);
+    QVERIFY(!QFileInfo::exists(part));
     QVERIFY(readFile(target) == content);
 }
 
@@ -1163,13 +1172,15 @@ void TestCore::a_file_the_person_refused_comes_again_only_by_their_tap()
     QCOMPARE(bobLog.of(bobLog.accepted).size(), 1);
     QVERIFY(!bobLog.of(bobLog.accepted).first().refusedHere);
     QVERIFY(!bobLog.of(bobLog.finished).first().refusedHere);
+    QCOMPARE(bobLog.of(bobLog.finished).first().filePath, target);
+    QVERIFY(!QFileInfo::exists(Air::partFilePath(target)));
     QVERIFY(readFile(target) == content);
 }
 
 /**
  * KHANDAQ (0.2.57): a file cut by a lost link goes on only in the part it left. While it waits,
- * another file comes to its path in place of that part; offered again, it goes on from the start
- * under a free name beside it, and the file at its path stays as it is.
+ * another file comes to the path of that part in its place; offered again, it goes on from the
+ * start in the part of a free name beside it, and the file at its path stays as it is.
  */
 void TestCore::a_file_goes_on_only_in_the_part_it_left()
 {
@@ -1180,6 +1191,7 @@ void TestCore::a_file_goes_on_only_in_the_part_it_left()
     const QByteArray content = fileBytes(3 * 1024 * 1024 + 11, 2029);
     const QString source = dir.filePath(QStringLiteral("lecture.mkv"));
     const QString target = dir.filePath(QStringLiteral("lecture here.mkv"));
+    const QString part = Air::partFilePath(target);
     const QString beside = dir.filePath(QStringLiteral("lecture here (1).mkv"));
     QVERIFY(writeFile(source, content));
 
@@ -1197,14 +1209,15 @@ void TestCore::a_file_goes_on_only_in_the_part_it_left()
     QTRY_COMPARE_WITH_TIMEOUT(bobLog.of(bobLog.waiting).size(), 1, friend_timeout);
     const ToxFile waiting = bobLog.of(bobLog.waiting).first();
     QVERIFY(waiting.connectionLost);
-    QCOMPARE(waiting.stamp.bytes, QFileInfo(target).size());
+    QCOMPARE(waiting.filePath, part);
+    QCOMPARE(waiting.stamp.bytes, QFileInfo(part).size());
     QVERIFY(waiting.stamp.bytes > 0 && waiting.stamp.bytes < content.size());
-    QCOMPARE(waiting.stamp.modifiedMs, QFileInfo(target).lastModified().toMSecsSinceEpoch());
+    QCOMPARE(waiting.stamp.modifiedMs, QFileInfo(part).lastModified().toMSecsSinceEpoch());
 
     // Another file in place of the part.
     const QByteArray other = fileBytes(200 * 1024 + 3, 2030);
-    QVERIFY(QFile::remove(target));
-    QVERIFY(writeFile(target, other));
+    QVERIFY(QFile::remove(part));
+    QVERIFY(writeFile(part, other));
 
     alice->acceptFriendRequest(bob->getSelfPublicKey());
     QTRY_VERIFY_WITH_TIMEOUT(linkedTo(*alice, bobOnAlice) && linkedTo(*bob, aliceOnBob),
@@ -1216,11 +1229,13 @@ void TestCore::a_file_goes_on_only_in_the_part_it_left()
                              bootstrap_timeout);
 
     QCOMPARE(bobLog.of(bobLog.offered).size(), 1);
-    QCOMPARE(bobLog.of(bobLog.accepted).last().filePath, beside);
+    QCOMPARE(bobLog.of(bobLog.accepted).last().filePath, Air::partFilePath(beside));
     QVERIFY(bobLog.of(bobLog.accepted).last().continued);
     QCOMPARE(bobLog.of(bobLog.finished).first().filePath, beside);
     QVERIFY(readFile(beside) == content);
-    QVERIFY(readFile(target) == other);
+    QVERIFY(!QFileInfo::exists(Air::partFilePath(beside)));
+    QVERIFY(readFile(part) == other);
+    QVERIFY(!QFileInfo::exists(target));
 }
 
 /** KHANDAQ (0.2.57): a file that cannot be read is offered to nobody, and the window learns it. */
@@ -1337,6 +1352,103 @@ void TestCore::a_file_that_cannot_be_read_any_more_is_cancelled_for_its_receiver
     QTRY_COMPARE_WITH_TIMEOUT(bobLog.of(bobLog.cancelled).size(), 1, connected_message_wait);
     QCOMPARE(aliceLog.of(aliceLog.cancelled).size(), 1);
     QCOMPARE(bobLog.of(bobLog.finished).size(), 0);
+    // Cancelled by its sender, it never goes on from what came: nothing of it stays.
+    QVERIFY(!QFileInfo::exists(Air::partFilePath(target)));
+    QVERIFY(!QFileInfo::exists(target));
+}
+
+/**
+ * KHANDAQ (0.2.57): what comes is written to its part (Air::partFilePath), and the file takes its
+ * name once whole. A file that ends where a file of its name is now goes beside it, replacing
+ * nothing. One Bob cancels leaves nothing in his folder: neither its part nor a file under its
+ * name, as it never goes on from what came. One that waits for its sender when he cancels it the
+ * same: the part it left goes.
+ */
+void TestCore::a_file_cancelled_here_leaves_nothing_in_its_folder()
+{
+    const uint32_t bobOnAlice = alice->getFriendList().first();
+    const uint32_t aliceOnBob = bob->getFriendList().first();
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    NodeLog aliceLog(*alice);
+    NodeLog bobLog(*bob);
+
+    // A file of its name came meanwhile: the file goes beside it.
+    const QByteArray note = fileBytes(48 * 1024 + 1, 2034);
+    const QByteArray there = fileBytes(1000, 2035);
+    const QString noteSource = dir.filePath(QStringLiteral("note.txt"));
+    const QString noteTarget = dir.filePath(QStringLiteral("note here.txt"));
+    const QString noteBeside = dir.filePath(QStringLiteral("note here (1).txt"));
+    QVERIFY(writeFile(noteSource, note));
+    alice->getCoreFile()->sendFile(bobOnAlice, QStringLiteral("note.txt"), noteSource,
+                                   note.size());
+    QTRY_COMPARE_WITH_TIMEOUT(bobLog.of(bobLog.offered).size(), 1, connected_message_wait);
+    const ToxFile noteOffer = bobLog.of(bobLog.offered).first();
+    {
+        // Her node waits, so the file ends only once the other is there.
+        const QMutexLocker stopped{&alice->getCoreLoopLock()};
+        bob->getCoreFile()->acceptFileRecvRequest(noteOffer.friendId, noteOffer.fileNum,
+                                                  noteTarget);
+        QCOMPARE(bobLog.of(bobLog.accepted).size(), 1);
+        QCOMPARE(bobLog.of(bobLog.accepted).first().filePath, Air::partFilePath(noteTarget));
+        QVERIFY(QFileInfo::exists(Air::partFilePath(noteTarget)));
+        QVERIFY(!QFileInfo::exists(noteTarget));
+        QVERIFY(writeFile(noteTarget, there));
+    }
+    QTRY_VERIFY_WITH_TIMEOUT(bobLog.of(bobLog.finished).size() == 1
+                                 && aliceLog.of(aliceLog.finished).size() == 1,
+                             bootstrap_timeout);
+    QCOMPARE(bobLog.of(bobLog.finished).first().filePath, noteBeside);
+    QVERIFY(readFile(noteBeside) == note);
+    QVERIFY(readFile(noteTarget) == there);
+    QVERIFY(!QFileInfo::exists(Air::partFilePath(noteTarget)));
+
+    // Cancelled while it comes.
+    const QByteArray content = fileBytes(6 * 1024 * 1024, 2036);
+    const QString source = dir.filePath(QStringLiteral("course.mkv"));
+    const QString target = dir.filePath(QStringLiteral("course here.mkv"));
+    QVERIFY(writeFile(source, content));
+    alice->getCoreFile()->sendFile(bobOnAlice, QStringLiteral("course.mkv"), source,
+                                   content.size());
+    QTRY_COMPARE_WITH_TIMEOUT(bobLog.of(bobLog.offered).size(), 2, connected_message_wait);
+    const ToxFile offer = bobLog.of(bobLog.offered).last();
+    bob->getCoreFile()->acceptFileRecvRequest(offer.friendId, offer.fileNum, target);
+    QTRY_VERIFY_WITH_TIMEOUT(QFileInfo(Air::partFilePath(target)).size() >= 128 * 1024,
+                             connected_message_wait);
+    {
+        // Her node stops, so the file cannot end before he cancels it.
+        const QMutexLocker stopped{&alice->getCoreLoopLock()};
+        bob->getCoreFile()->cancelFileRecv(offer.friendId, offer.fileNum);
+        QCOMPARE(bobLog.of(bobLog.cancelled).size(), 1);
+        QVERIFY(!QFileInfo::exists(Air::partFilePath(target)));
+        QVERIFY(!QFileInfo::exists(target));
+    }
+    QTRY_COMPARE_WITH_TIMEOUT(aliceLog.of(aliceLog.cancelled).size(), 1, connected_message_wait);
+    QCOMPARE(bobLog.of(bobLog.finished).size(), 1);
+
+    // Cancelled while it waits for its sender: the part it left goes too.
+    const QString later = dir.filePath(QStringLiteral("course later.mkv"));
+    alice->getCoreFile()->sendFile(bobOnAlice, QStringLiteral("course.mkv"), source,
+                                   content.size());
+    QTRY_COMPARE_WITH_TIMEOUT(bobLog.of(bobLog.offered).size(), 3, connected_message_wait);
+    const ToxFile third = bobLog.of(bobLog.offered).last();
+    bob->getCoreFile()->acceptFileRecvRequest(third.friendId, third.fileNum, later);
+    QTRY_VERIFY_WITH_TIMEOUT(QFileInfo(Air::partFilePath(later)).size() >= 128 * 1024,
+                             connected_message_wait);
+    alice->removeFriend(bobOnAlice);
+    QTRY_COMPARE_WITH_TIMEOUT(bobLog.of(bobLog.waiting).size(), 1, friend_timeout);
+    const ToxFile waiting = bobLog.of(bobLog.waiting).first();
+    QVERIFY(waiting.connectionLost);
+    QCOMPARE(waiting.filePath, Air::partFilePath(later));
+    QVERIFY(QFileInfo::exists(waiting.filePath));
+    bob->getCoreFile()->cancelFileRecv(waiting.friendId, waiting.fileNum);
+    QCOMPARE(bobLog.of(bobLog.cancelled).size(), 2);
+    QVERIFY(!QFileInfo::exists(Air::partFilePath(later)));
+    QVERIFY(!QFileInfo::exists(later));
+
+    alice->acceptFriendRequest(bob->getSelfPublicKey());
+    QTRY_VERIFY_WITH_TIMEOUT(linkedTo(*alice, bobOnAlice) && linkedTo(*bob, aliceOnBob),
+                             bootstrap_timeout);
 }
 
 QTEST_GUILESS_MAIN(TestCore)

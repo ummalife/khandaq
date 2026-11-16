@@ -1007,6 +1007,64 @@ static NSData *OCTResumeTestsContent(void)
     XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:[self partialPathOf:message]]);
 }
 
+// KHANDAQ (0.2.57): a sender that offers what waits one file at a time (Android: one per friend, the next once the
+// last has ended) had the rest ended, with their bytes, once the first one took longer than the grace.
+- (void)testTheirFilesOfferedAgainOneAtATimeWaitWhileOneComesAndEndAtTheGraceAfterTheLast
+{
+    [self setFriendConnected:NO notify:YES];
+    NSData *first = OCTResumeTestsId(0x10);
+    NSData *second = OCTResumeTestsId(0x40);
+    OCTMessageAbstract *comesFirst = [self addIncomingFileNamed:@"doc.bin" fileIdHex:OCTResumeTestsHex(first)
+                                                           type:OCTMessageFileTypeWaitingConfirmation
+                                                       pausedBy:OCTMessageFilePausedByConnection
+                                                      keptBytes:4];
+    OCTMessageAbstract *comesSecond = [self addIncomingFileNamed:@"doc2.bin" fileIdHex:OCTResumeTestsHex(second)
+                                                            type:OCTMessageFileTypeWaitingConfirmation
+                                                        pausedBy:OCTMessageFilePausedByConnection
+                                                       keptBytes:4];
+    OCTMessageAbstract *neverComes = [self addIncomingFileNamed:@"doc3.bin" fileIdHex:OCTResumeTestsHex(OCTResumeTestsId(0x70))
+                                                           type:OCTMessageFileTypeWaitingConfirmation
+                                                       pausedBy:OCTMessageFilePausedByConnection
+                                                      keptBytes:4];
+    NSData *kept = [OCTResumeTestsContent() subdataWithRange:NSMakeRange(0, 4)];
+    self.files.reofferGraceInterval = 0.5;
+    [self setFriendConnected:YES notify:YES];
+
+    [self spinFor:0.1];
+    [self offerTheirFile:kResumeTestsTheirFile fileId:first size:kResumeTestsFileSize name:@"doc.bin"];
+    XCTAssertTrue([self waitForEvent:@"resume 65536"]);
+
+    // The first one comes for longer than the grace.
+    [self spinFor:0.8];
+    for (OCTMessageAbstract *waiting in @[comesSecond, neverComes]) {
+        XCTAssertEqual(waiting.messageFile.fileType, OCTMessageFileTypeWaitingConfirmation, @"ended while one came");
+        XCTAssertEqual(waiting.messageFile.pausedBy, OCTMessageFilePausedByConnection);
+        XCTAssertEqualObjects([NSData dataWithContentsOfFile:[self partialPathOf:waiting]], kept);
+    }
+
+    [self receiveTheRestOfTheirFile:kResumeTestsTheirFile from:4];
+    XCTAssertTrue([self waitUntil:^BOOL { return comesFirst.messageFile.fileType == OCTMessageFileTypeReady; }]);
+
+    // The sender takes a moment to offer the next one.
+    [self spinFor:0.1];
+    XCTAssertEqual(comesSecond.messageFile.fileType, OCTMessageFileTypeWaitingConfirmation);
+    [self offerTheirFile:kResumeTestsTheirNextFile fileId:second size:kResumeTestsFileSize name:@"doc2.bin"];
+    XCTAssertTrue([self waitForEvent:@"resume 131072"]);
+    XCTAssertTrue([self.tox.events containsObject:@"seek 131072 4"], @"from the bytes it kept");
+    [self receiveTheRestOfTheirFile:kResumeTestsTheirNextFile from:4];
+    XCTAssertTrue([self waitUntil:^BOOL { return comesSecond.messageFile.fileType == OCTMessageFileTypeReady; }]);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:comesSecond.messageFile.filePath], OCTResumeTestsContent());
+    NSDate *lastEnded = [NSDate date];
+
+    // Nothing of theirs comes any more: the one they never offer ends at the grace after the last.
+    [self spinFor:0.2];
+    XCTAssertEqual(neverComes.messageFile.fileType, OCTMessageFileTypeWaitingConfirmation, @"ended before the grace");
+    XCTAssertTrue([self waitUntil:^BOOL { return neverComes.messageFile.fileType == OCTMessageFileTypeCanceled; }]);
+    XCTAssertGreaterThanOrEqual(-lastEnded.timeIntervalSinceNow, 0.4);
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:[self partialPathOf:neverComes]]);
+    XCTAssertEqual([self messageCount], 3u);
+}
+
 // KHANDAQ (0.2.57): each change between UDP and TCP began the grace anew: a link that flipped between them more
 // often than the grace never ended their file that waited.
 - (void)testAFileTheFriendNeverOffersAgainEndsAtTheGraceWhileTheirLinkFlipsBetweenUDPAndTCP

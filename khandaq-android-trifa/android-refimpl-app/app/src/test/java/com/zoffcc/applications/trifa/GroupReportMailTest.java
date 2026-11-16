@@ -9,10 +9,8 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.text.BreakIterator;
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.TimeZone;
 
@@ -20,7 +18,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assume.assumeTrue;
 
 /**
  * KHANDAQ (0.2.57, SPEC-community part B, items 5 and 8): the Report mail about a message of a group is the
@@ -46,6 +43,13 @@ public class GroupReportMailTest
     private static final String FAMILY = "\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67";
     private static final String THUMBS_UP_MEDIUM = "\uD83D\uDC4D\uD83C\uDFFD";
     private static final String RAINBOW_FLAG = "\uD83C\uDFF3\uFE0F\u200D\uD83C\uDF08";
+    /** Emoji joined by ZWJ that the ICU of API 26 to 28 splits after the ZWJ: newer than its Unicode. */
+    private static final String HEART_ON_FIRE = "\u2764\uFE0F\u200D\uD83D\uDD25";
+    private static final String POLAR_BEAR = "\uD83D\uDC3B\u200D\u2744";
+    private static final String PEOPLE_HOLDING_HANDS = "\uD83E\uDDD1\u200D\uD83E\uDD1D\u200D\uD83E\uDDD1";
+    /** A flag of tags: a black flag, the tags of "gbeng" and the cancel tag. */
+    private static final String FLAG_ENGLAND = "\uD83C\uDFF4\uDB40\uDC67\uDB40\uDC62\uDB40\uDC65\uDB40\uDC6E"
+                                               + "\uDB40\uDC67\uDB40\uDC7F";
 
     // ---- the mail (SPEC Tests: building the Report mail) ----
 
@@ -266,16 +270,58 @@ public class GroupReportMailTest
     @Test
     public void a_flag_an_emoji_joined_by_zwj_and_one_with_a_skin_tone_are_one_character_each()
     {
-        // java.text on the phone is ICU, which keeps them whole; a JVM before JDK 20 splits them, so this runs where
-        // the JVM counts as the phone does (JDK 20 and later), and the phone's own count is checked on the device.
-        assumeTrue("this JVM's BreakIterator splits a flag; the phone's (ICU) does not",
-                   jvmCountsEmojiAsThePhoneDoes());
-        for (final String one : new String[]{FLAG_RU, FAMILY, THUMBS_UP_MEDIUM, RAINBOW_FLAG})
+        // Whole on any JVM, as on the phone: what a BreakIterator splits off them (JDK 17's, the ICU of API 26 to 28)
+        // is put back (wholeClusterEnd).
+        for (final String one : new String[]{FLAG_RU, FAMILY, THUMBS_UP_MEDIUM, RAINBOW_FLAG, HEART_ON_FIRE, POLAR_BEAR,
+                                             PEOPLE_HOLDING_HANDS, FLAG_ENGLAND})
         {
             assertEquals(one, repeat('a', 499) + one, GroupReportMail.firstCharacters(repeat('a', 499) + one + "b", 500));
             assertEquals(one, repeat('a', 500), GroupReportMail.firstCharacters(repeat('a', 500) + one, 500));
             assertEquals(one, repeat(one, 500), GroupReportMail.firstCharacters(repeat(one, 501), 500));
         }
+    }
+
+    @Test
+    public void a_cut_an_older_icu_makes_inside_a_character_goes_on_to_its_end()
+    {
+        // Where the ICU of API 26 to 28 (Unicode 9 and 10) ends a character inside an emoji joined by ZWJ.
+        final String prefix = "ab";
+        for (final String one : new String[]{HEART_ON_FIRE, POLAR_BEAR, PEOPLE_HOLDING_HANDS, FAMILY, RAINBOW_FLAG})
+        {
+            final String text = prefix + one + "c";
+            final int whole = prefix.length() + one.length();
+            for (int cut = prefix.length() + 1; cut < whole; cut++)
+            {
+                final boolean afterJoiner = text.charAt(cut - 1) == '\u200D';
+                final boolean beforeJoiner = (text.charAt(cut) == '\u200D') || (text.charAt(cut) == '\uFE0F');
+                final boolean inPair = Character.isLowSurrogate(text.charAt(cut));
+                if (afterJoiner || beforeJoiner || inPair)
+                {
+                    assertEquals(one + " cut at " + cut, whole, GroupReportMail.wholeClusterEnd(text, cut));
+                }
+            }
+            // Its own ends stay where they are.
+            assertEquals(prefix.length(), GroupReportMail.wholeClusterEnd(text, prefix.length()));
+            assertEquals(whole, GroupReportMail.wholeClusterEnd(text, whole));
+        }
+        // The three of the review, cut right after their ZWJ as that ICU cuts them.
+        assertEquals(HEART_ON_FIRE.length(), GroupReportMail.wholeClusterEnd(HEART_ON_FIRE + "x", 3));
+        assertEquals(POLAR_BEAR.length(), GroupReportMail.wholeClusterEnd(POLAR_BEAR + "x", 3));
+        assertEquals(PEOPLE_HOLDING_HANDS.length(), GroupReportMail.wholeClusterEnd(PEOPLE_HOLDING_HANDS + "x", 3));
+        assertEquals(PEOPLE_HOLDING_HANDS.length(), GroupReportMail.wholeClusterEnd(PEOPLE_HOLDING_HANDS + "x", 6));
+        // Before a skin tone, a combining mark, an enclosing keycap, the tags of a flag; inside a flag.
+        assertEquals(4, GroupReportMail.wholeClusterEnd(THUMBS_UP_MEDIUM + "x", 2));
+        assertEquals(3, GroupReportMail.wholeClusterEnd(E_TILDE_ACUTE + "x", 1));
+        assertEquals(3, GroupReportMail.wholeClusterEnd(KEYCAP_ONE + "x", 2));
+        assertEquals(FLAG_ENGLAND.length(), GroupReportMail.wholeClusterEnd(FLAG_ENGLAND + "x", 2));
+        assertEquals(4, GroupReportMail.wholeClusterEnd(FLAG_RU + FLAG_RU, 2));
+        assertEquals(4, GroupReportMail.wholeClusterEnd(FLAG_RU + FLAG_RU, 4));
+        assertEquals(8, GroupReportMail.wholeClusterEnd(FLAG_RU + FLAG_RU, 6));
+        // A ZWJ that ends the text, and the ends of the text.
+        assertEquals(2, GroupReportMail.wholeClusterEnd("a\u200D", 1));
+        assertEquals(0, GroupReportMail.wholeClusterEnd("ab", 0));
+        assertEquals(1, GroupReportMail.wholeClusterEnd("ab", 1));
+        assertEquals(2, GroupReportMail.wholeClusterEnd("ab", 2));
     }
 
     @Test
@@ -419,19 +465,6 @@ public class GroupReportMailTest
             out.append(text);
         }
         return out.toString();
-    }
-
-    /**
-     * Whether this JVM's java.text.BreakIterator keeps a flag whole, as ICU's does under java.text on the phone and
-     * Swift's String on iOS: the extended grapheme clusters of UAX #29, from JDK 20 on. JDK 17's splits a flag into
-     * its two letters and an emoji sequence into its emoji.
-     */
-    private static boolean jvmCountsEmojiAsThePhoneDoes()
-    {
-        final BreakIterator clusters = BreakIterator.getCharacterInstance(Locale.ROOT);
-        clusters.setText(FLAG_RU);
-        clusters.first();
-        return clusters.next() == FLAG_RU.length();
     }
 
     private static String stringOf(final String folder, final String name)

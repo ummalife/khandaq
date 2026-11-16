@@ -29,6 +29,17 @@ final class GroupReportMail
     /** The author of a message that has no key of its author stored: named so, never guessed. */
     static final String UNKNOWN_AUTHOR = "unknown";
 
+    /** The joiners and marks of characters a BreakIterator may split off them (wholeClusterEnd). */
+    private static final int ZWJ = 0x200D;
+    private static final int ZWNJ = 0x200C;
+    private static final int EMOJI_PRESENTATION = 0xFE0F;
+    private static final int SKIN_TONE_FIRST = 0x1F3FB;
+    private static final int SKIN_TONE_LAST = 0x1F3FF;
+    private static final int TAG_FIRST = 0xE0020;
+    private static final int TAG_LAST = 0xE007F;
+    private static final int REGIONAL_INDICATOR_FIRST = 0x1F1E6;
+    private static final int REGIONAL_INDICATOR_LAST = 0x1F1FF;
+
     private static final char[] HEX = "0123456789ABCDEF".toCharArray();
     private static final int GROUP_KEY_HEX_LENGTH = 64;
     /** GroupMessage.direction of a message that came in. */
@@ -139,7 +150,9 @@ final class GroupReportMail
      * The first {@code limit} characters of text as a person counts them, as Swift's String counts them on iOS: each
      * an extended grapheme cluster, so a flag, emoji joined by ZWJ, an emoji with its skin tone, a letter with its
      * combining marks or a pair of surrogates is one character, never cut in half. On the phone java.text's
-     * BreakIterator is ICU's, which follows UAX #29 for all of them; a JVM before JDK 20 splits flags and emoji.
+     * BreakIterator is ICU's, which follows UAX #29. The ICU of API 26 to 28 (58 and 60) is older than most emoji
+     * joined by ZWJ and splits them after the ZWJ, and a JVM before JDK 20 splits flags and emoji too: each character
+     * it gives goes on to the end of what it split off (wholeClusterEnd), so they count and cut as on iOS.
      */
     static String firstCharacters(final String text, final int limit)
     {
@@ -149,17 +162,75 @@ final class GroupReportMail
         }
         final BreakIterator clusters = BreakIterator.getCharacterInstance(Locale.ROOT);
         clusters.setText(text);
-        int end = clusters.first();
-        for (int characters = 0; characters < limit; characters++)
+        int end = 0;
+        for (int characters = 0; (characters < limit) && (end < text.length()); characters++)
         {
-            final int next = clusters.next();
-            if (next == BreakIterator.DONE)
+            final int next = clusters.following(end);
+            end = (next == BreakIterator.DONE) ? text.length() : wholeClusterEnd(text, next);
+        }
+        return text.substring(0, end);
+    }
+
+    /**
+     * Where the character a BreakIterator ended at {@code cut} really ends: the cut moves on while it falls right
+     * after a ZWJ, right before a ZWJ, a variation selector, a mark that extends the character before it (a combining
+     * mark, the tag of a flag such as England's, UAX #29 Extend) or a skin tone, between the two halves of a flag
+     * (regional indicators, paired from the start of their run), or inside a pair of surrogates.
+     */
+    static int wholeClusterEnd(final String text, final int cut)
+    {
+        int end = cut;
+        while ((end > 0) && (end < text.length()))
+        {
+            final char before = text.charAt(end - 1);
+            final int after = text.codePointAt(end);
+            final boolean halfOfASurrogatePair = Character.isHighSurrogate(before) && Character.isLowSurrogate(
+                    text.charAt(end));
+            final boolean halfOfAFlag = isRegionalIndicator(after) && (regionalIndicatorsBefore(text, end) % 2 == 1);
+            if ((before != ZWJ) && !extendsThePrevious(after) && !halfOfASurrogatePair && !halfOfAFlag)
             {
                 break;
             }
-            end = next;
+            // A lone low surrogate is one char, as codePointAt gives it.
+            end += Character.charCount(after);
         }
-        return text.substring(0, end);
+        return end;
+    }
+
+    /** Whether a character never begins a character of its own but goes with the one before it (UAX #29 Extend). */
+    private static boolean extendsThePrevious(final int codePoint)
+    {
+        if ((codePoint == ZWJ) || (codePoint == ZWNJ) || (codePoint == EMOJI_PRESENTATION)
+            || ((codePoint >= SKIN_TONE_FIRST) && (codePoint <= SKIN_TONE_LAST))
+            || ((codePoint >= TAG_FIRST) && (codePoint <= TAG_LAST)))
+        {
+            return true;
+        }
+        final int type = Character.getType(codePoint);
+        return (type == Character.NON_SPACING_MARK) || (type == Character.ENCLOSING_MARK);
+    }
+
+    private static boolean isRegionalIndicator(final int codePoint)
+    {
+        return (codePoint >= REGIONAL_INDICATOR_FIRST) && (codePoint <= REGIONAL_INDICATOR_LAST);
+    }
+
+    /** How many regional indicators stand right before {@code end}, in a run. */
+    private static int regionalIndicatorsBefore(final String text, final int end)
+    {
+        int count = 0;
+        int i = end;
+        while (i > 0)
+        {
+            final int codePoint = text.codePointBefore(i);
+            if (!isRegionalIndicator(codePoint))
+            {
+                break;
+            }
+            count++;
+            i -= Character.charCount(codePoint);
+        }
+        return count;
     }
 
     /** Lines of a mail end with CRLF (RFC 6068), whatever ended them before. */

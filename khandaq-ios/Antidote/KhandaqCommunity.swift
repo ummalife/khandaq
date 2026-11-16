@@ -16,14 +16,17 @@ protocol KhandaqCommunityMarks: AnyObject {
 }
 
 /// KHANDAQ (0.2.57): Khandaq Community, the official group of the app (SPEC-community, part B). Every profile
-/// joins it once by itself, muted, and never again once the person has left it; otherwise it is a group like
-/// any other: its name comes from the group, and the list, the dossier, the mute switch and moderation are
-/// those of every group. Its founder is our bot on khandaq.org, whose state keeps the chat id, so the id is
-/// compiled in. The join needs the toxcore that looks a group up by its chat id (e24bb519): without it the
-/// group stays in "joining".
+/// joins it once by itself, muted, and never again once the person has left it. Wherever a group's name shows
+/// it is "Khandaq Community" (owner, 2026-11-16); otherwise it is a group like any other: the list, the
+/// dossier, the mute switch, leaving and moderation are those of every group.
+/// Its founder is our bot on khandaq.org, whose state keeps the chat id, so the id is compiled in. The join
+/// needs the toxcore that looks a group up by its chat id (e24bb519): without it the group stays in "joining".
 enum KhandaqCommunity {
     /// The chat id of the group, 64 hexadecimal characters in upper case.
     static let chatIdHex = "CFF1995F235303B88C4EF1CE903DCEDC77CEAC82DD1323DAB2CACD2EF840646F"
+
+    /// The group's name, the same in every language: a name, not a phrase to translate.
+    static let displayName = "Khandaq Community"
 
     static func isCommunity(chatIdHex id: String?) -> Bool {
         return id?.uppercased() == chatIdHex
@@ -34,6 +37,24 @@ enum KhandaqCommunity {
             return false
         }
         return isCommunity(chatIdHex: chat.groupChatIdHex)
+    }
+
+    /// `displayName` when `chat` is the group, else nil, and the caller names any other group as before. The
+    /// name the group's state gives is not used: its topic said "Official Khandaq community · Be kind, no spam
+    /// or ads · …", the list showed the topic, and the profile stores the topic as the name when the group
+    /// gave none (OCTRealmManager updateGroupTopic).
+    static func displayName(for chat: OCTChat?) -> String? {
+        return isCommunity(chat) ? displayName : nil
+    }
+
+    /// `displayName` when a group invitation (toxcore's invite data, which starts with the group's chat id) is
+    /// to the group, else nil.
+    static func displayName(forInviteData data: Data) -> String? {
+        guard data.count >= 32 else {
+            return nil
+        }
+        let id = data.prefix(32).map { String(format: "%02X", $0) }.joined()
+        return isCommunity(chatIdHex: id) ? displayName : nil
     }
 
     /// Whether to join it now (item 1): this profile's node is connected, the profile never joined it by

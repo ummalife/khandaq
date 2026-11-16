@@ -234,6 +234,12 @@ extension NotificationCoordinator {
         lastBecameActiveDate = Date()
         UIApplication.shared.cancelAllLocalNotifications()
     }
+
+    /// The name the notifications of a group give it: Khandaq Community by its own name, any other group by
+    /// the name it was made with.
+    static func groupName(of chat: OCTChat?) -> String {
+        return KhandaqCommunity.displayName(for: chat) ?? chat?.groupName ?? String(localized: "group_chat_default_title")
+    }
 }
 
 private extension NotificationCoordinator {
@@ -474,9 +480,10 @@ private extension NotificationCoordinator {
         let friends = submanagerObjects.friends(predicate: NSPredicate(format: "publicKey ==[c] %@", invite.inviterKey))
         let friend: OCTFriend? = friends.count > 0 ? friends[0] : nil
         let name = friend.map { $0.nickname.isEmpty ? $0.publicKey : $0.nickname } ?? invite.inviterKey
-        let body = invite.groupName.isEmpty
+        let groupName = KhandaqCommunity.displayName(forInviteData: invite.data) ?? invite.groupName
+        let body = groupName.isEmpty
             ? String(localized: "notification_group_invite")
-            : String(localized: "notification_group_invite_format", invite.groupName)
+            : String(localized: "notification_group_invite_format", groupName)
         let tile = AirTileView.Style.person(initials: AirInitials.from(name), tone: AirTone.index(for: friend?.publicKey ?? invite.inviterKey))
 
         return NotificationObject(title: name,
@@ -502,8 +509,9 @@ private extension NotificationCoordinator {
         let chat = submanagerObjects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat
         let isGroup = chat?.isGroup ?? false
         let isGroupPrivate = isGroup && message.groupPrivateMessage
+        let groupName = NotificationCoordinator.groupName(of: chat)
         // The band shows the tile the Air screen shows for this chat (E22).
-        let groupTile = AirTileView.Style.group(initials: AirInitials.from(chat?.groupName ?? String(localized: "group_chat_default_title")),
+        let groupTile = AirTileView.Style.group(initials: AirInitials.from(groupName),
                                                 tone: AirTone.index(for: message.chatUniqueIdentifier))
 
         // Sender display name for a group peer (used both for the private-message title and the
@@ -521,14 +529,12 @@ private extension NotificationCoordinator {
         if isGroupPrivate {
             // A direct (private) message sent to you inside a group: title it so it's unmistakably
             // addressed to you personally, not a normal group post (Android parity).
-            let sender = groupPeerName.isEmpty
-                ? (chat?.groupName ?? String(localized: "group_chat_default_title"))
-                : groupPeerName
+            let sender = groupPeerName.isEmpty ? groupName : groupPeerName
             title = String(localized: "group_private_message_notification_title_format", sender)
             tile = groupTile
         }
         else if isGroup {
-            title = chat?.groupName ?? String(localized: "group_chat_default_title")
+            title = groupName
             tile = groupTile
         }
         else if let friend = submanagerObjects.object(withUniqueIdentifier: message.senderUniqueIdentifier, for: .friend) as? OCTFriend {

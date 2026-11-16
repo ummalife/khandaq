@@ -138,7 +138,9 @@ final class AirGroupDossierController: AirScrollController {
         name.accessibilityTraits = UIAccessibilityTraitHeader
         name.accessibilityIdentifier = "air.group.dossier.name"
         var head: [UIView] = [name]
-        if let topic = chat.groupTopic, !topic.isEmpty, topic != chat.groupName, let original = chat.groupName, !original.isEmpty {
+        // The name the group was made with, under the topic it shows by; Khandaq Community has one name only.
+        if !KhandaqCommunity.isCommunity(chat),
+           let topic = chat.groupTopic, !topic.isEmpty, topic != chat.groupName, let original = chat.groupName, !original.isEmpty {
             head.append(AirKit.body(original))
         }
         let counts = AirKit.label(.label, weight: 400, color: KQColor.ink2, lines: 0)

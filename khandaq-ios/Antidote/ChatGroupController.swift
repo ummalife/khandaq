@@ -136,9 +136,8 @@ class ChatGroupController: PortraitChatController {
         edgesForExtendedLayout = UIRectEdge()
         hidesBottomBarWhenPushed = true
         // KHANDAQ (#46): prefer the owner-changeable TOPIC (NGC group name is immutable; a "rename"
-        // updates the topic), falling back to the immutable name.
-        title = (chat.groupTopic?.isEmpty == false ? chat.groupTopic : chat.groupName)
-            ?? String(localized: "group_chat_default_title")
+        // updates the topic), falling back to the immutable name; Khandaq Community by its own name.
+        title = ChatListContent.groupTitle(for: chat)
     }
 
     required convenience init?(coder aDecoder: NSCoder) {

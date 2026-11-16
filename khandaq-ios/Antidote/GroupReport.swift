@@ -92,7 +92,7 @@ struct GroupReport: Equatable {
 extension GroupReport {
     /// The report of `message`, an entry of the group `chat` or a private message in it.
     init(chat: OCTChat, message: OCTMessageAbstract) {
-        let stored = chat.groupName ?? ""
+        let stored = KhandaqCommunity.displayName(for: chat) ?? chat.groupName ?? ""
         let text: String
         if let file = message.messageFile {
             // A file says what it is by its name; what is in it stays on this phone.

@@ -740,7 +740,7 @@ enum MessageForwarder {
             return String(localized: "saved_messages_title")
         }
         if chat.isGroup {
-            let name = chat.groupName ?? ""
+            let name = KhandaqCommunity.displayName(for: chat) ?? chat.groupName ?? ""
             return name.isEmpty ? "—" : name
         }
         if let friend = chat.friends.lastObject() as? OCTFriend {

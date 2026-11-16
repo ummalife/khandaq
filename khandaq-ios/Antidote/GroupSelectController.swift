@@ -72,7 +72,7 @@ extension GroupSelectController: UITableViewDataSource {
         let chat = groups[indexPath.row]
         let cell = tableView.dequeueReusableCell(withIdentifier: ChatListCell.staticReuseIdentifier, for: indexPath) as! ChatListCell
         let model = ChatListCellModel()
-        let title = chat.groupName ?? String(localized: "group_chat_default_title")
+        let title = KhandaqCommunity.displayName(for: chat) ?? chat.groupName ?? String(localized: "group_chat_default_title")
         model.avatar = avatarManager.avatarFromString(title, diameter: CGFloat(ChatListCell.Constants.AvatarSize))
         model.nickname = title
         model.message = chat.groupTopic ?? ""

@@ -178,6 +178,50 @@ class KhandaqCommunityTests: XCTestCase {
         XCTAssertEqual(objects.chats(predicate: NotificationCoordinator.unreadChatsPredicate).count, 3)
     }
 
+    // MARK: Its name (owner, 2026-11-16)
+
+    /// Its founder's topic was "Official Khandaq community · Be kind, no spam or ads · …", the list showed the
+    /// topic, and a profile whose group gave no name stores the topic as the name. Wherever a group's name shows
+    /// it is "Khandaq Community"; any other group keeps its topic, then its name.
+    func testTheCommunityIsCalledKhandaqCommunityWhateverItsTopic() throws {
+        let official = "Official Khandaq community \u{00B7} Be kind, no spam or ads \u{00B7} \u{2026}"
+        let community = try groupChat("community", chatIdHex: KhandaqCommunity.chatIdHex.lowercased(), name: official, topic: official)
+        XCTAssertEqual(ChatListContent.groupTitle(for: community), "Khandaq Community", "the list, the header, the dossier, search")
+        XCTAssertEqual(MessageForwarder.displayName(for: community), "Khandaq Community", "forward, share, messages found")
+        XCTAssertEqual(NotificationCoordinator.groupName(of: community), "Khandaq Community", "its notifications")
+
+        let message = try appClass("OCTMessageAbstract", as: OCTMessageAbstract.Type.self).init()
+        message.groupSenderPeerId = 3
+        // A message without a date is not one the app keeps (OCTMessageAbstract date is then nil).
+        message.dateInterval = 1_763_296_496
+        let text = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        text.text = "spam"
+        message.messageText = text
+        let report = GroupReport(chat: community, message: message)
+        XCTAssertEqual(report.subject, "Report: Khandaq Community")
+        XCTAssertTrue(report.body.hasPrefix("Group: Khandaq Community\n"), report.body)
+
+        // An invitation to it: toxcore's invite data starts with the group's chat id.
+        var invite = Data()
+        var hex = KhandaqCommunity.chatIdHex[...]
+        while !hex.isEmpty {
+            invite.append(try XCTUnwrap(UInt8(hex.prefix(2), radix: 16)))
+            hex = hex.dropFirst(2)
+        }
+        invite.append(Data(repeating: 7, count: 32))
+        XCTAssertEqual(KhandaqCommunity.displayName(forInviteData: invite), "Khandaq Community")
+        XCTAssertNil(KhandaqCommunity.displayName(forInviteData: Data(repeating: 0xBB, count: 64)))
+        XCTAssertNil(KhandaqCommunity.displayName(forInviteData: invite.prefix(31)))
+
+        let other = try groupChat("book", chatIdHex: String(repeating: "B", count: 64), name: "Book club", topic: "Reading Tolstoy")
+        XCTAssertEqual(ChatListContent.groupTitle(for: other), "Reading Tolstoy")
+        XCTAssertEqual(MessageForwarder.displayName(for: other), "Book club")
+        XCTAssertEqual(NotificationCoordinator.groupName(of: other), "Book club")
+        XCTAssertEqual(GroupReport(chat: other, message: message).subject, "Report: Book club")
+        let unnamed = try groupChat("unnamed", chatIdHex: String(repeating: "C", count: 64), name: nil, topic: nil)
+        XCTAssertEqual(ChatListContent.groupTitle(for: unnamed), String(localized: "group_chat_default_title"))
+    }
+
     // MARK: Item 3, left means never again, across a restart
 
     func testLeavingTheCommunityIsKeptAcrossARestartAndItIsNeverJoinedAgain() {
@@ -330,6 +374,17 @@ class KhandaqCommunityTests: XCTestCase {
         let chat = try appClass("OCTChat", as: OCTChat.Type.self).init()
         chat.isGroup = true
         chat.groupChatIdHex = chatIdHex
+        return chat
+    }
+
+    /// A group's chat outside any Realm, made from the app's class.
+    private func groupChat(_ id: String, chatIdHex: String, name: String?, topic: String?) throws -> OCTChat {
+        let chat = try appClass("OCTChat", as: OCTChat.Type.self).init()
+        chat.uniqueIdentifier = id
+        chat.isGroup = true
+        chat.groupChatIdHex = chatIdHex
+        chat.groupName = name
+        chat.groupTopic = topic
         return chat
     }
 

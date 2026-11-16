@@ -1329,7 +1329,7 @@ private extension ActiveSessionCoordinator {
         // KHANDAQ (#15): the invited group name can arrive nil or as the literal "(null)"; fall
         // back to the default title instead of showing "(null)" in the alert.
         let cleanGroupName = (groupName?.isEmpty == false && groupName != "(null)") ? groupName : nil
-        let resolvedGroupName = cleanGroupName ?? String(localized: "group_chat_default_title")
+        let resolvedGroupName = KhandaqCommunity.displayName(forInviteData: inviteData) ?? cleanGroupName ?? String(localized: "group_chat_default_title")
         let title = String(localized: "group_invite_alert_title")
         // KHANDAQ (#15): String(localized:) is a custom initializer that ALREADY runs String(format:)
         // on the localized string with the given arguments. The old code called String(localized:)

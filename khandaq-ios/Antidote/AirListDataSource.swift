@@ -442,7 +442,8 @@ private extension AirListDataSource {
             guard let inviter = nextFriends[invite.inviterKey], !inviter.isInvalidated else {
                 continue
             }
-            let name = invite.groupName.isEmpty ? String(localized: "group_chat_default_title") : invite.groupName
+            let name = KhandaqCommunity.displayName(forInviteData: invite.data)
+                ?? (invite.groupName.isEmpty ? String(localized: "group_chat_default_title") : invite.groupName)
             airRequests.append(AirRequest(id: invite.id,
                                           publicKey: invite.inviterKey,
                                           message: "",

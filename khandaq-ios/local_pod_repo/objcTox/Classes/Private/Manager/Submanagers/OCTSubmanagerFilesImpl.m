@@ -491,9 +491,10 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
 
     [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
         file.fileType = OCTMessageFileTypeCanceled;
-        // KHANDAQ (0.2.57): theirs, cancelled while under way: their next offer of it is refused
-        // (dataFileReceiveForFileNumber), never taken by itself. With nothing live the cancel cannot tell them;
-        // with a transfer live it may not reach them (the connection goes first), and they offer it again.
+        // KHANDAQ (0.2.57): theirs, cancelled while under way: every later offer of it is refused
+        // (takeReofferOfMessage), across a restart too, never taken by itself, until the person asks for it again
+        // ("Download again", acceptFileTransfer). With nothing live the cancel cannot tell them; with a transfer
+        // live it may not reach them (the connection goes first), and they offer it again, or send it again.
         file.pausedBy = (incoming && underWay) ? OCTMessageFilePausedByConnection : OCTMessageFilePausedByNone;
         file.transferredBytes = 0;
     }];
@@ -1519,7 +1520,9 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
  * The friend offers the file of `message` again on `fileNumber`.
  * - Complete here (the connection went before they learnt it was done): its last byte once more, so both sides
  *   finish, and the card, its notification and the file on disk stay as they are.
- * - Cancelled here while nothing was live: refused now that they can hear it.
+ * - Cancelled here by the person, while it came or waited: refused, this time and every time it comes again, also
+ *   after a restart, until the person asks for it again ("Download again"). What they said no to never downloads
+ *   by itself.
  * - Otherwise the new transfer is the message's: it goes on from the bytes kept here, by itself when the person
  *   had accepted it or the auto-download rule takes it now (reofferAutoAcceptPolicy), else on their tap.
  */
@@ -1535,15 +1538,14 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
         return;
     }
 
+    // KHANDAQ (0.2.57): the mark stays. It went with the first refusal, so the next offer, the sender's second
+    // "Send again", was taken by the auto-download rule and the whole file came again by itself.
     if (file.fileType == OCTMessageFileTypeCanceled && (file.pausedBy & OCTMessageFilePausedByConnection)) {
-        OCTLogInfo(@"re-offer of a file cancelled while away, refusing it: %@", message);
+        OCTLogInfo(@"re-offer of a file the person cancelled here, refusing it: %@", message);
         [self.dataSource.managerGetTox fileSendControlForFileNumber:fileNumber
                                                        friendNumber:friendNumber
                                                             control:OCTToxFileControlCancel
                                                               error:nil];
-        [self updateMessageFile:message withBlock:^(OCTMessageFile *theFile) {
-            theFile.pausedBy = OCTMessageFilePausedByNone;
-        }];
         return;
     }
 

@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import QuickLook
 import XCTest
 @testable import Antidote
 
@@ -333,6 +334,38 @@ class KhandaqCommunityFilesTests: XCTestCase {
         let entries = KhandaqCommunity.folderEntries(of: world.rows(), folder: world.folder.path)
         XCTAssertEqual(entries["waiting.jpg"]?.kind, .held)
         XCTAssertNil(entries["ours.jpg"], "ours is among the uploads, outside the folder")
+    }
+
+    /// QuickLook asks for its items by number while it is open: a file that came meanwhile, one that waits for
+    /// Accept among them, never takes the number of one it opened with, and an entry deleted meanwhile is no crash.
+    func testThePreviewKeepsTheFilesItOpenedWith() throws {
+        let world = try communityWorld()
+        let first = try world.incoming("first.jpg", mebibytes: 1, date: 1)
+        let second = try world.incoming("second.pdf", mebibytes: 1, date: 2)
+        XCTAssertTrue(KhandaqCommunity.take(first))
+        XCTAssertTrue(KhandaqCommunity.take(second))
+        let preview = FilePreviewControllerDataSource(chat: world.chat,
+                                                      submanagerObjects: world.objects,
+                                                      excludingMessageIds: KhandaqCommunity.heldMessageIds(in: world.chat, objects: world.objects))
+        let quickLook = QLPreviewController()
+        let shown = { (0..<preview.numberOfPreviewItems(in: quickLook)).map { preview.previewController(quickLook, previewItemAt: $0).previewItemURL?.lastPathComponent } }
+        XCTAssertEqual(shown(), ["first.jpg", "second.pdf"])
+
+        // While it is open a file comes, first in the conversation's order, and waits; the first entry goes.
+        _ = try world.incoming("came.jpg", mebibytes: 1, date: 0.5)
+        let realm: RLMRealm = world.realmManager.realm
+        realm.beginWriteTransaction()
+        realm.delete(first)
+        try realm.commitWriteTransaction()
+
+        XCTAssertEqual(shown(), ["first.jpg", "second.pdf"])
+        XCTAssertNil(preview.previewController(quickLook, previewItemAt: 2).previewItemURL)
+        XCTAssertNil(preview.indexOfMessage(first), "an entry deleted since")
+        XCTAssertEqual(preview.indexOfMessage(second), 1)
+        XCTAssertEqual(preview.galleryStartIndex(forMessageIndex: 0), 0)
+        XCTAssertNil(preview.galleryStartIndex(forMessageIndex: 1), "a PDF goes to QuickLook")
+        XCTAssertNil(preview.galleryStartIndex(forMessageIndex: 5))
+        XCTAssertEqual(preview.galleryItems(myName: "me").map { $0.url.lastPathComponent }, ["first.jpg"])
     }
 
     func testTheKeeperMakesRoomAndDeletesWhatWaitedWhenTheChatGoes() throws {

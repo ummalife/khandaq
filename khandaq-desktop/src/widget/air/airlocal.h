@@ -127,6 +127,12 @@ public:
     void setEntryMarks(const QString& key, const Air::EntryMarks& marks) override;
     QByteArray wireId(const QString& key) const override;
     void setWireId(const QString& key, const QByteArray& wireId) override;
+    /**
+     * KHANDAQ (0.2.57, review): a file of a group came relayed from its history, under its
+     * fileEntryKey: a Report on it names nobody, in a later launch too (Air::LocalStore).
+     */
+    bool isRelayed(const QString& key) const;
+    void markRelayed(const QString& key);
     /** The history was erased: the marks and the ids of its entries go too. */
     void forgetEntries();
 

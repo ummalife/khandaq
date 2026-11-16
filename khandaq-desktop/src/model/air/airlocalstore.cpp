@@ -70,6 +70,8 @@ constexpr int anchorFile = 2;
 const QString communityField = QStringLiteral("community");
 const QString autoJoinDoneField = QStringLiteral("autoJoinDone");
 const QString leftField = QStringLiteral("left");
+// KHANDAQ (0.2.57, review): relayed files, optional too: the hash of each group, then its entries.
+const QString relayedField = QStringLiteral("relayed");
 
 /** An entry key: the hash of a conversation's key, "/", the hash of the entry. */
 bool isEntryKey(const QString& key)
@@ -87,6 +89,12 @@ bool isEntryKey(const QString& key)
         }
     }
     return true;
+}
+
+/** The hash of the conversation an entry key belongs to: what comes before its "/". */
+QString conversationOf(const QString& entryKey)
+{
+    return entryKey.left(entryKey.indexOf(QLatin1Char('/')));
 }
 
 /** Drops the keys of one conversation, by the prefix entryKeyPrefix gives it. */
@@ -110,6 +118,7 @@ constexpr qint64 LocalStore::keepSeconds;
 constexpr int LocalStore::privateLimit;
 constexpr int LocalStore::entryLimit;
 constexpr int LocalStore::wireLimit;
+constexpr int LocalStore::relayedLimit;
 
 bool LocalStore::PrivateLine::operator==(const PrivateLine& other) const
 {
@@ -158,6 +167,8 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
     entryOrder.clear();
     wires.clear();
     wireOrder.clear();
+    relayedKeys.clear();
+    relayedOrder.clear();
     communityJoined = false;
     communityGone = false;
     if (data.isEmpty()) {
@@ -247,6 +258,12 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
         const QJsonObject fields = value.toObject();
         setWireId(fields.value(keyField).toString(),
                   QByteArray::fromHex(fields.value(idField).toString().toLatin1()));
+    }
+    const QJsonObject relayed = root.value(relayedField).toObject();
+    for (auto it = relayed.constBegin(); it != relayed.constEnd(); ++it) {
+        for (const QJsonValue entry : it.value().toArray()) {
+            markRelayed(it.key() + QLatin1Char('/') + entry.toString());
+        }
     }
     pruneHours(now);
 }
@@ -357,6 +374,17 @@ QByteArray LocalStore::save() const
             wireList.append(fields);
         }
         root.insert(wiresField, wireList);
+    }
+    if (!relayedOrder.isEmpty()) {
+        QJsonObject relayed;
+        for (auto it = relayedOrder.constBegin(); it != relayedOrder.constEnd(); ++it) {
+            QJsonArray entryList;
+            for (const QString& entryKey : it.value()) {
+                entryList.append(entryKey.mid(it.key().size() + 1));
+            }
+            relayed.insert(it.key(), entryList);
+        }
+        root.insert(relayedField, relayed);
     }
     if (communityJoined || communityGone) {
         QJsonObject community;
@@ -478,6 +506,9 @@ bool LocalStore::forget(const QString& publicKey)
     const QString conversation = entryKeyPrefix(publicKey);
     changed = dropPrefix(entries, entryOrder, conversation) || changed;
     changed = dropPrefix(wires, wireOrder, conversation) || changed;
+    for (const QString& entryKey : relayedOrder.take(key)) {
+        changed = relayedKeys.remove(entryKey) || changed;
+    }
     return removeRequest(publicKey) || changed;
 }
 
@@ -847,13 +878,34 @@ bool LocalStore::setWireId(const QString& entryKey, const QByteArray& wireId)
     return true;
 }
 
+bool LocalStore::isRelayed(const QString& entryKey) const
+{
+    return relayedKeys.contains(entryKey);
+}
+
+bool LocalStore::markRelayed(const QString& entryKey)
+{
+    if (!isEntryKey(entryKey) || relayedKeys.contains(entryKey)) {
+        return false;
+    }
+    QStringList& order = relayedOrder[conversationOf(entryKey)];
+    order.append(entryKey);
+    relayedKeys.insert(entryKey);
+    while (order.size() > relayedLimit) {
+        relayedKeys.remove(order.takeFirst());
+    }
+    return true;
+}
+
 bool LocalStore::forgetEntries()
 {
-    const bool changed = !entryOrder.isEmpty() || !wireOrder.isEmpty();
+    const bool changed = !entryOrder.isEmpty() || !wireOrder.isEmpty() || !relayedKeys.isEmpty();
     entries.clear();
     entryOrder.clear();
     wires.clear();
     wireOrder.clear();
+    relayedKeys.clear();
+    relayedOrder.clear();
     return changed;
 }
 

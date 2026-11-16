@@ -3045,6 +3045,14 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
         return;
     }
     static uint32_t groupFileNum = 700000;
+    // KHANDAQ (0.2.57, review): once the entry of a relayed file is made, the local store marks
+    // it, so a Report on it names nobody in a later launch too (GroupChatForm::prepareReport). A
+    // file that makes no entry, as one dropped below, marks nothing: its id may be another's.
+    const auto keepRelayed = [this, &groupId, &fileId, wasSynced] {
+        if (wasSynced && airLocal && !fileId.isEmpty()) {
+            airLocal->markRelayed(Air::fileEntryKey(groupId.toString(), fileId));
+        }
+    };
 
     // KHANDAQ (0.2.57): in Khandaq Community the files of others wait for Accept, whatever the
     // download setting says (Air::Community::HeldFiles). The bytes are here already: the entry
@@ -3065,6 +3073,7 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
         entry.relayed = wasSynced;
         entry.status = ToxFile::INITIALIZING;
         updateGroupFileInChatLog(groupId, sender, entry);
+        keepRelayed();
         stopHeldGroupFiles(
             heldGroupFiles.hold({groupId.getByteArray(), sender, entry, fileData}));
         qDebug() << "onGroupFileReceived: a file of Khandaq Community waits for Accept,"
@@ -3125,6 +3134,7 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     file.relayed = wasSynced;
 
     dispatchGroupFileToChatLog(groupId, sender, file);
+    keepRelayed();
 
     // KHANDAQ (external audit 2026-08-21, K-01) — the desktop clause: "renders unverified legacy
     // rows visibly and suppresses notifications for them".

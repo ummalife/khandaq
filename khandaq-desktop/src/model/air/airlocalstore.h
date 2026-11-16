@@ -36,7 +36,8 @@ namespace Air {
  * contact was seen online (the day strip), "mute" and "key verified" from the dossier, the keys
  * blocked on this device, the friend requests and group invitations waiting for an answer (E12),
  * the edits and reactions shown on entries of the transcript and the ids groups gave their messages
- * (stage 3, item 10) and, in memory only, when this device saw the contact come online.
+ * (stage 3, item 10), the files of groups that came relayed and, in memory only, when this device
+ * saw the contact come online.
  *
  * A port of AirLocalStore in khandaq-ios/Antidote/AirLocalStores.swift. Contacts are filed under a
  * hash of their key, so their marks never name anyone; the block list has to show its keys, and a
@@ -211,6 +212,16 @@ public:
     QByteArray wireId(const QString& entryKey) const;
     /** Keeps a 4-byte id under an entry key; an empty id forgets it. */
     bool setWireId(const QString& entryKey, const QByteArray& wireId);
+    /**
+     * KHANDAQ (0.2.57, review): the files of groups a member relayed from the history (0x03), by
+     * fileEntryKey. Who sent one is only whom that member names, so a Report on it names nobody,
+     * in a later launch too. The relayedLimit marked last in each group are kept; a group left
+     * takes its own along (forget), an erased history all of them (forgetEntries).
+     */
+    static constexpr int relayedLimit = 4096;
+    bool isRelayed(const QString& entryKey) const;
+    /** Keeps the mark of a relayed file; false for a text that is no entry key, or a key kept. */
+    bool markRelayed(const QString& entryKey);
     /** The history was erased: no entry is left for marks or ids to belong to. */
     bool forgetEntries();
 
@@ -284,6 +295,9 @@ private:
     /** Group message ids by entry key, and the keys from the oldest to the newest. */
     QHash<QString, QByteArray> wires;
     QStringList wireOrder;
+    /** The relayed entry keys, and by the hash of their group those keys, oldest first. */
+    QSet<QString> relayedKeys;
+    QHash<QString, QStringList> relayedOrder;
     bool communityJoined = false;
     bool communityGone = false;
 };

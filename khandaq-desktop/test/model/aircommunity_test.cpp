@@ -19,8 +19,10 @@
 
 #include "src/model/air/aircommunity.h"
 #include "src/model/air/airlocalstore.h"
+#include "src/model/air/airmessagemarks.h"
 
 #include <QDateTime>
+#include <QTemporaryDir>
 #include <QUrlQuery>
 #include <QtTest/QtTest>
 
@@ -61,6 +63,8 @@ private slots:
     void aStoreOfBeforeHasNeverJoinedIt();
     void aReportIsAMailToSupportWithTheMessage();
     void aReportNamesNoAuthorNobodyVouchesFor();
+    void aRelayedFileIsKnownSoInALaterLaunch();
+    void theNewestRelayedFilesOfEachGroupAreKept();
     void everyPartOfTheReportIsEncoded();
     void aLongMessageIsCutAt500CharactersNeverInHalf();
     void filesOfOthersInTheCommunityWaitForATap();
@@ -403,6 +407,86 @@ void TestAirCommunity::aReportNamesNoAuthorNobodyVouchesFor()
                             "Time: 2026-11-16T12:04:05Z\r\n"
                             "Message:\r\n"
                             "Buy followers now"));
+}
+
+namespace {
+/** A file id of the history: 32 bytes, its number at the end. */
+QByteArray relayedId(int number)
+{
+    QByteArray id(32, '\x7e');
+    for (int i = 0; i < 4; ++i) {
+        id[31 - i] = static_cast<char>((number >> (8 * i)) & 0xff);
+    }
+    return id;
+}
+} // namespace
+
+void TestAirCommunity::aRelayedFileIsKnownSoInALaterLaunch()
+{
+    // GroupChatForm asks by the key ChatHistory gives the entry: the group's key and the file's id
+    // in its packets, which the history keeps (file_restart_id).
+    const QString relayed = fileEntryKey(communityKey, relayedId(1));
+    const QString live = fileEntryKey(communityKey, relayedId(2));
+    LocalStore store;
+    QVERIFY(!store.isRelayed(relayed));
+    QVERIFY(store.markRelayed(relayed));
+    QVERIFY(!store.markRelayed(relayed));
+    QVERIFY(!store.markRelayed(QStringLiteral("not an entry key")));
+    QVERIFY(store.isRelayed(relayed));
+    QVERIFY(!store.isRelayed(live));
+
+    // The next launch reads the same file, into a store of its own.
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QFile file(dir.filePath(QStringLiteral("store.json")));
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    QCOMPARE(file.write(store.save()), static_cast<qint64>(store.save().size()));
+    file.close();
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    LocalStore next;
+    next.load(file.readAll(), now);
+    QVERIFY(next.isRelayed(relayed));
+    QVERIFY(!next.isRelayed(live));
+    // The mark is the group's: the same id in another group is another file.
+    QVERIFY(!next.isRelayed(fileEntryKey(QString::fromLatin1(otherGroup.toHex()), relayedId(1))));
+
+    // A store of before has none.
+    LocalStore old;
+    old.load(QByteArray(R"({"version":1,"contacts":{}})"), now);
+    QVERIFY(!old.isRelayed(relayed));
+}
+
+void TestAirCommunity::theNewestRelayedFilesOfEachGroupAreKept()
+{
+    const QString other = QString::fromLatin1(otherGroup.toHex());
+    LocalStore store;
+    QVERIFY(store.markRelayed(fileEntryKey(other, relayedId(0))));
+    for (int i = 0; i <= LocalStore::relayedLimit; ++i) {
+        QVERIFY(store.markRelayed(fileEntryKey(communityKey, relayedId(i))));
+    }
+    // One past the bound: the oldest of the group went, the rest and the other group's stay.
+    QVERIFY(!store.isRelayed(fileEntryKey(communityKey, relayedId(0))));
+    QVERIFY(store.isRelayed(fileEntryKey(communityKey, relayedId(1))));
+    QVERIFY(store.isRelayed(fileEntryKey(communityKey, relayedId(LocalStore::relayedLimit))));
+    QVERIFY(store.isRelayed(fileEntryKey(other, relayedId(0))));
+
+    // So after a launch, in the same order: the next one past the bound takes the oldest again.
+    LocalStore next;
+    next.load(store.save(), now);
+    QVERIFY(!next.isRelayed(fileEntryKey(communityKey, relayedId(0))));
+    QVERIFY(next.isRelayed(fileEntryKey(communityKey, relayedId(1))));
+    QVERIFY(next.markRelayed(fileEntryKey(communityKey, relayedId(LocalStore::relayedLimit + 1))));
+    QVERIFY(!next.isRelayed(fileEntryKey(communityKey, relayedId(1))));
+    QVERIFY(next.isRelayed(fileEntryKey(communityKey, relayedId(2))));
+    QVERIFY(next.isRelayed(fileEntryKey(other, relayedId(0))));
+
+    // A group left takes its marks along; an erased history takes all.
+    QVERIFY(next.forgetGroup(communityKey));
+    QVERIFY(!next.isRelayed(fileEntryKey(communityKey, relayedId(2))));
+    QVERIFY(next.isRelayed(fileEntryKey(other, relayedId(0))));
+    QVERIFY(next.forgetEntries());
+    QVERIFY(!next.isRelayed(fileEntryKey(other, relayedId(0))));
+    QVERIFY(!next.forgetEntries());
 }
 
 void TestAirCommunity::everyPartOfTheReportIsEncoded()

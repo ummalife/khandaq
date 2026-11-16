@@ -298,6 +298,18 @@ void AirLocal::setWireId(const QString& key, const QByteArray& wireId)
     }
 }
 
+bool AirLocal::isRelayed(const QString& key) const
+{
+    return store.isRelayed(key);
+}
+
+void AirLocal::markRelayed(const QString& key)
+{
+    if (store.markRelayed(key)) {
+        saveLater.start();
+    }
+}
+
 void AirLocal::forgetEntries()
 {
     if (store.forgetEntries()) {

@@ -29,6 +29,7 @@
 #include "src/friendlist.h"
 #include "src/model/group.h"
 #include "src/model/status.h"
+#include "src/model/air/airmessagemarks.h"
 #include "src/model/air/airmodel.h"
 #include "src/widget/air/aircomposer.h"
 #include "src/widget/air/airgroupdossier.h"
@@ -987,19 +988,25 @@ bool GroupChatForm::prepareReport(ChatLogIdx idx)
         return false;
     }
     // KHANDAQ (0.2.57, review): the mail names the author only when toxcore vouches for them. An
-    // entry without a key, or a file a member relayed (ToxFile::relayed), is still reported, by
-    // nobody's name (Air::reportMailUrl).
+    // entry without a key, or a file a member relayed, in this launch (ToxFile::relayed) or an
+    // earlier one (AirLocal::isRelayed), is still reported, by nobody's name (Air::reportMailUrl).
     bool vouched = !sender.isEmpty();
     QString text;
     switch (item.getContentType()) {
     case ChatLogItem::ContentType::message:
         text = item.getContentAsMessage().message.content;
         break;
-    case ChatLogItem::ContentType::fileTransfer:
+    case ChatLogItem::ContentType::fileTransfer: {
         // A file says what it is by its name; what is in it stays on this computer.
-        text = item.getContentAsFile().file.fileName;
-        vouched = vouched && !item.getContentAsFile().file.relayed;
+        const ToxFile& file = item.getContentAsFile().file;
+        text = file.fileName;
+        const bool relayed =
+            file.relayed
+            || (airLocal && !file.resumeFileId.isEmpty()
+                && airLocal->isRelayed(Air::fileEntryKey(groupKey(), file.resumeFileId)));
+        vouched = vouched && !relayed;
         break;
+    }
     case ChatLogItem::ContentType::systemMessage:
         return false;
     }

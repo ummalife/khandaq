@@ -81,6 +81,9 @@ static NSData *OCTResumeTestsContent(void)
 @property (copy, atomic) NSString *friendKey;
 @property (assign, atomic) OCTToxConnectionStatus friendStatus;
 @property (assign, atomic) BOOL seekFails;
+/// Its send queue to the friend is full, as when the friend stops taking packets: every chunk is refused.
+@property (assign, atomic) BOOL sendQueueFull;
+@property (assign, atomic) NSUInteger refusedChunks;
 
 - (void)setFileId:(NSData *)fileId forFileNumber:(OCTToxFileNumber)fileNumber;
 - (NSArray<NSString *> *)events;
@@ -224,6 +227,16 @@ static NSData *OCTResumeTestsContent(void)
                               data:(NSData *)data
                              error:(NSError **)error
 {
+    if (self.sendQueueFull) {
+        @synchronized(self) {
+            self.refusedChunks += 1;
+        }
+        if (error) {
+            *error = [NSError errorWithDomain:kOCTToxErrorDomain code:OCTToxErrorFileSendChunkSendq userInfo:nil];
+        }
+        return NO;
+    }
+
     @synchronized(self) {
         [_events addObject:[NSString stringWithFormat:@"chunk %u %lld %lu", fileNumber, position, (unsigned long)data.length]];
         [_sentChunks addObject:[data copy]];
@@ -812,6 +825,63 @@ static NSData *OCTResumeTestsContent(void)
 
     [self.files tox:self.tox fileChunkRequestForFileNumber:0 friendNumber:kResumeTestsFriendNumber position:10 length:0];
     XCTAssertTrue([self waitUntil:^BOOL { return message.messageFile.fileType == OCTMessageFileTypeReady; }]);
+}
+
+- (void)testOurChunksWaitWhileTheFriendTakesNoPacketsAndThenGoInOrder
+{
+    OCTMessageAbstract *message = [self sendOurFile];
+    [self.files tox:self.tox fileReceiveControl:OCTToxFileControlResume friendNumber:kResumeTestsFriendNumber fileNumber:0];
+    [self.files tox:self.tox fileChunkRequestForFileNumber:0 friendNumber:kResumeTestsFriendNumber position:0 length:4];
+    XCTAssertTrue([self waitForEvent:@"chunk 0 0 4"]);
+
+    // Their network goes: toxcore's queue to them fills before it drops them (32 s), and toxcore asks for more.
+    self.tox.sendQueueFull = YES;
+    [self.files tox:self.tox fileChunkRequestForFileNumber:0 friendNumber:kResumeTestsFriendNumber position:4 length:3];
+    [self.files tox:self.tox fileChunkRequestForFileNumber:0 friendNumber:kResumeTestsFriendNumber position:7 length:3];
+    [self spinFor:1.5];
+    XCTAssertEqual(message.messageFile.fileType, OCTMessageFileTypeLoading, @"never failed");
+    XCTAssertFalse([self.tox.events containsObject:@"cancel 0"]);
+    XCTAssertEqual(self.tox.sentChunks.count, 1u);
+    XCTAssertGreaterThan(self.tox.refusedChunks, 2u, @"tried again");
+
+    // They take packets again: the chunks go in the order toxcore asked for them, and the file ends as one.
+    self.tox.sendQueueFull = NO;
+    XCTAssertTrue([self waitForEvent:@"chunk 0 7 3"]);
+    NSPredicate *chunks = [NSPredicate predicateWithFormat:@"SELF BEGINSWITH 'chunk'"];
+    XCTAssertEqualObjects([self.tox.events filteredArrayUsingPredicate:chunks], (@[@"chunk 0 0 4", @"chunk 0 4 3", @"chunk 0 7 3"]));
+    XCTAssertEqualObjects(self.tox.sentChunks.lastObject, [OCTResumeTestsContent() subdataWithRange:NSMakeRange(7, 3)]);
+
+    [self.files tox:self.tox fileChunkRequestForFileNumber:0 friendNumber:kResumeTestsFriendNumber position:10 length:0];
+    XCTAssertTrue([self waitUntil:^BOOL { return message.messageFile.fileType == OCTMessageFileTypeReady; }]);
+}
+
+- (void)testOurFileWhoseFriendTakesNoPacketsWaitsForTheConnectionOnceTheyAreDropped
+{
+    OCTMessageAbstract *message = [self sendOurFile];
+    NSData *fileId = [self.tox fileGetFileIdForFileNumber:0 friendNumber:kResumeTestsFriendNumber error:nil];
+    [self.files tox:self.tox fileReceiveControl:OCTToxFileControlResume friendNumber:kResumeTestsFriendNumber fileNumber:0];
+    [self.files tox:self.tox fileChunkRequestForFileNumber:0 friendNumber:kResumeTestsFriendNumber position:0 length:4];
+    XCTAssertTrue([self waitForEvent:@"chunk 0 0 4"]);
+
+    self.tox.sendQueueFull = YES;
+    [self.files tox:self.tox fileChunkRequestForFileNumber:0 friendNumber:kResumeTestsFriendNumber position:4 length:3];
+    [self spinFor:0.3];
+
+    // toxcore drops them: the file waits for the connection with what went, and what waited is not sent.
+    [self setFriendConnected:NO notify:YES];
+    XCTAssertEqual(message.messageFile.fileType, OCTMessageFileTypeWaitingConfirmation, @"never failed");
+    XCTAssertEqual(message.messageFile.pausedBy, OCTMessageFilePausedByConnection);
+    XCTAssertEqual(message.messageFile.transferredBytes, 4);
+    self.tox.sendQueueFull = NO;
+    [self spinFor:0.3];
+    XCTAssertEqual(self.tox.sentChunks.count, 1u);
+    XCTAssertFalse([self.tox.events containsObject:@"cancel 0"]);
+
+    // Back: offered again with its id, to go on from where the receiver is.
+    [self setFriendConnected:YES notify:YES];
+    [self waitForUploadsToOpenTheirFiles];
+    XCTAssertEqualObjects(self.tox.offeredIds.lastObject, fileId);
+    XCTAssertEqual(message.messageFile.internalFileNumber, 1);
 }
 
 - (void)testOurFileQueuedWhileTheyAreAwayAndSentAgainWhileAwayStaysQueued

@@ -89,6 +89,23 @@ class AirFileEntryTests: XCTestCase {
         XCTAssertEqual(done, AirFileEntryText())
     }
 
+    /// KHANDAQ (0.2.57): a file the lost connection cut keeps its bar and waits; it never says failed.
+    func testAFileCutByTheConnectionWaitsWithWhatHasMovedNeverFailed() {
+        for incoming in [true, false] {
+            let text = make(.waitingConnection, incoming: incoming, bytes: 60_000_000, progress: 0.4)
+            XCTAssertEqual(text.progress, 0.4)
+            XCTAssertEqual(text.note, "Waiting for the connection")
+            XCTAssertFalse(text.noteIsProblem)
+            XCTAssertEqual(text.actions, [.cancel], "Cancel still works")
+        }
+        XCTAssertEqual(make(.waitingConnection, incoming: true, progress: 1.4).progress, 1)
+        XCTAssertEqual(AirFileEntryText.status(state: .waitingConnection, delivered: false, personOnline: true), .transit)
+        XCTAssertEqual(AirFileEntryText.status(state: .waitingConnection, delivered: false, personOnline: false), .transit)
+
+        use("ru")
+        XCTAssertEqual(make(.waitingConnection, incoming: true, progress: 0.4).note, "Ждёт связи")
+    }
+
     func testAnActionShowsOnlyWithItsHandle() {
         // A group gives no pause: the bar and "Cancel" stay.
         let group = make(.loading, incoming: false, bytes: 1_000_000, progress: 0.2, available: [.cancel])

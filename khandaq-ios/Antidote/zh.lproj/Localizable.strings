@@ -1135,6 +1135,7 @@
 "air_file_failed_outgoing" = "未发送";
 "air_file_waits_accept_format" = "等待 %@ 接收";
 "air_file_waits_online_format" = "%@ 上线后发送";
+"air_file_waits_connection" = "等待连接";
 "air_size_bytes_format" = "%@ 字节";
 "air_size_kb_format" = "%@ KB";
 "air_size_mb_format" = "%@ MB";

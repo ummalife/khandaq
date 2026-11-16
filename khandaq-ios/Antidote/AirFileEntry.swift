@@ -55,6 +55,11 @@ struct AirFileEntryText: Equatable {
                     }
                     wanted = [.cancel]
                 }
+            case .waitingConnection:
+                // What has moved stays on the bar; it is waiting, never failed.
+                text.progress = clamped(progress)
+                text.note = String(localized: "air_file_waits_connection")
+                wanted = [.cancel]
             case .loading:
                 text.progress = clamped(progress)
                 text.note = leftText(bytesTotal: bytesTotal, progress: progress)
@@ -107,6 +112,8 @@ struct AirFileEntryText: Equatable {
                 return delivered ? .delivered : .sent
             case .waitingConfirmation:
                 return personOnline ? .sending : .transit
+            case .waitingConnection:
+                return .transit
             case .loading, .paused:
                 return .sending
             case .cancelled:

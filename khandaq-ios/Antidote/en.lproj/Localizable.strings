@@ -1146,6 +1146,7 @@
 "air_file_failed_outgoing" = "Not sent";
 "air_file_waits_accept_format" = "Waits for %@ to accept it";
 "air_file_waits_online_format" = "Goes when %@ is online";
+"air_file_waits_connection" = "Waiting for the connection";
 "air_size_bytes_format" = "%@ B";
 "air_size_kb_format" = "%@ KB";
 "air_size_mb_format" = "%@ MB";

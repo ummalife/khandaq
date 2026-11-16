@@ -1148,6 +1148,7 @@
 "air_file_failed_outgoing" = "Не отправлено";
 "air_file_waits_accept_format" = "Ждёт, когда %@ примет файл";
 "air_file_waits_online_format" = "Уйдёт, когда %@ будет в сети";
+"air_file_waits_connection" = "Ждёт связи";
 "air_size_bytes_format" = "%@ Б";
 "air_size_kb_format" = "%@ КБ";
 "air_size_mb_format" = "%@ МБ";

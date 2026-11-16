@@ -2701,7 +2701,18 @@ private extension ChatPrivateController {
 
         switch message.messageFile!.fileType {
             case .waitingConfirmation:
-                model.state = .waitingConfirmation
+                // KHANDAQ (0.2.57): a transfer the connection cut keeps its bar and goes on by itself.
+                let file = message.messageFile!
+                if (file.pausedBy.rawValue & OCTMessageFilePausedBy.connection.rawValue) != 0 {
+                    model.state = .waitingConnection
+                    model.transferProgress = file.fileSize > 0 ? Float(Double(file.transferredBytes) / Double(file.fileSize)) : 0
+                }
+                else {
+                    model.state = .waitingConfirmation
+                }
+                if let messageId = message.uniqueIdentifier {
+                    self.stopWatchingStall(of: messageId)
+                }
             case .loading:
                 model.state = .loading
 
@@ -3557,8 +3568,10 @@ extension ChatPrivateController {
         }
         // KHANDAQ (redesign stage 3, E8): a file that could not be offered while the person is away waits
         // in the tray too, as the list's "In transit" counts it (AirListDataSource.transitPredicate).
+        // KHANDAQ (0.2.57): not one the connection cut on its way: that one keeps its card and its bar in the
+        // log ("Waiting for the connection"); pausedBy is OCTMessageFilePausedByConnection or nothing here.
         let waiting = messages.objects(with: NSPredicate(
-            format: "senderUniqueIdentifier == nil AND ((messageText != nil AND messageText.isDelivered == NO) OR (messageFile != nil AND messageFile.fileType == %d AND messageFile.internalFileNumber == %d))",
+            format: "senderUniqueIdentifier == nil AND ((messageText != nil AND messageText.isDelivered == NO) OR (messageFile != nil AND messageFile.fileType == %d AND messageFile.internalFileNumber == %d AND messageFile.pausedBy == 0))",
             OCTMessageFileType.waitingConfirmation.rawValue,
             Int32(bitPattern: kOCTToxFileNumberFailure)))
         var items: [AirQueueItem] = []

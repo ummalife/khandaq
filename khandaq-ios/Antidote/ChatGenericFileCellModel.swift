@@ -7,6 +7,9 @@ import UIKit
 class ChatGenericFileCellModel: ChatMovableDateCellModel {
     enum State {
         case waitingConfirmation
+        /// KHANDAQ (0.2.57): the transfer was under way when the connection went; it goes on by itself from
+        /// `transferProgress` once the person is back (OCTMessageFilePausedByConnection).
+        case waitingConnection
         case loading
         case paused
         case cancelled

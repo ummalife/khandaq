@@ -1135,6 +1135,7 @@
 "air_file_failed_outgoing" = "لم يُرسل";
 "air_file_waits_accept_format" = "بانتظار أن يقبله %@";
 "air_file_waits_online_format" = "سيُرسل عندما يتصل %@";
+"air_file_waits_connection" = "بانتظار الاتصال";
 "air_size_bytes_format" = "%@ بايت";
 "air_size_kb_format" = "%@ ك.ب";
 "air_size_mb_format" = "%@ م.ب";

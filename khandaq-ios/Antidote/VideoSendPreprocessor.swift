@@ -734,7 +734,10 @@ enum ChatFileMediaLoader {
 final class FileTransferStallWatcher {
     static let shared = FileTransferStallWatcher()
 
-    static let stallInterval: TimeInterval = 30
+    /// KHANDAQ (0.2.57): longer than toxcore's friend timeout (32 s). A transfer whose connection went quiet then
+    /// waits for the connection and goes on by itself once it is back (OCTSubmanagerFilesImpl); at 30 s the
+    /// watcher cancelled it first. As long as objcTox's own download watchdog.
+    static let stallInterval: TimeInterval = 90
 
     private var timers: [String: Timer] = [:]
     private var handlers: [String: () -> Void] = [:]

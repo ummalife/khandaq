@@ -266,6 +266,16 @@ enum QaCommandHandler {
             }
             sendFriendMessage(publicKey: toxId, text: text, toxManager: toxManager)
 
+        case "send_file":
+            // Shell QA: put the file into "$CONTAINER/Documents/qa_send/<name>", then
+            // khandaq://qa/send_file?tox_id=<id>&name=<name>. It goes the way the attach sheet sends a file.
+            guard let toxId = param("tox_id"), !toxId.isEmpty,
+                  let name = param("name"), !name.isEmpty, !name.contains("/") else {
+                logFail(action, reason: "missing_args")
+                return
+            }
+            sendFriendFile(publicKey: toxId, name: name, toxManager: toxManager)
+
         case "log_theme":
             logDone(action, detail: "dark=\(ThemeAppearance.isDarkMode ? 1 : 0)")
 
@@ -370,6 +380,30 @@ enum QaCommandHandler {
         }, failureBlock: { error in
             logFail("send_friend", reason: error?.localizedDescription ?? "send_failed")
         })
+    }
+
+    private static func sendFriendFile(publicKey: String, name: String, toxManager: OCTManager) {
+        let key = normalizedPublicKey(publicKey)
+        let predicate = NSPredicate(format: "publicKey BEGINSWITH[c] %@ OR publicKey ENDSWITH[c] %@",
+                                    String(key.prefix(64)), String(key.suffix(64)))
+        let friends = toxManager.objects.friends(predicate: predicate)
+        guard friends.count > 0, let chat = toxManager.chats.getOrCreateChat(with: friends[0]) else {
+            logFail("send_file", reason: "friend_not_found")
+            return
+        }
+        guard let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            logFail("send_file", reason: "no_documents")
+            return
+        }
+        let path = documents.appendingPathComponent("qa_send").appendingPathComponent(name).path
+        guard FileManager.default.fileExists(atPath: path) else {
+            logFail("send_file", reason: "file_not_found name=\(name)")
+            return
+        }
+        toxManager.files.sendFile(atPath: path, moveToUploads: true, to: chat) { error in
+            logFail("send_file", reason: (error as NSError).localizedDescription)
+        }
+        logDone("send_file", detail: "name=\(name)")
     }
 
     private static func verifyFriendMessage(text: String, toxManager: OCTManager, action: String, attempt: Int) {

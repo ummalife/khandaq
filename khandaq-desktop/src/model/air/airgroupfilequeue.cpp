@@ -29,6 +29,7 @@ constexpr qint64 GroupFileQueue::urgentMs;
 constexpr qint64 GroupFileQueue::windowMs;
 constexpr qint64 GroupFileQueue::restartMs;
 constexpr qint64 UploadPace::bytesPerSecond;
+constexpr qint64 UploadPace::relayedBytesPerSecond;
 constexpr qint64 UploadPace::burstMs;
 constexpr qint64 UploadPace::burstBytes;
 
@@ -194,13 +195,16 @@ bool GroupFileQueue::next(Packet* packet, qint64 nowMs) const
 
 qint64 GroupFileQueue::cost(const Packet& packet) const
 {
+    return UploadPace::cost(bytes(packet), members.value(packet.group, 1));
+}
+
+qint64 GroupFileQueue::bytes(const Packet& packet) const
+{
     const int index = indexOf(packet.fileId);
     const qint64 size = index >= 0 ? files.at(index).size : 0;
-    const qint64 bytes = packet.chunk < 0
-                             ? static_cast<qint64>(NGC_FILE_BEGIN_SIZE)
-                             : static_cast<qint64>(NGC_FILE_CHUNK_HEADER_SIZE)
-                                   + chunkBytes(size, packet.chunk);
-    return UploadPace::cost(bytes, members.value(packet.group, 1));
+    return packet.chunk < 0 ? static_cast<qint64>(NGC_FILE_BEGIN_SIZE)
+                            : static_cast<qint64>(NGC_FILE_CHUNK_HEADER_SIZE)
+                                  + chunkBytes(size, packet.chunk);
 }
 
 bool GroupFileQueue::sent(const Packet& packet, qint64 nowMs)
@@ -348,6 +352,12 @@ qint64 GroupFileQueue::leastGoingCost(int except) const
     return least;
 }
 
+UploadPace::UploadPace(qint64 perSecond)
+    : rate(qMax(qint64{1}, perSecond))
+    , burst(qMax(qint64{1}, rate * burstMs / 1000))
+{
+}
+
 qint64 UploadPace::cost(qint64 packetBytes, int members)
 {
     return packetBytes * qMax(1, members);
@@ -356,10 +366,10 @@ qint64 UploadPace::cost(qint64 packetBytes, int members)
 bool UploadPace::ready(qint64 nowMs)
 {
     if (lastMs < 0) {
-        credit = burstBytes;
+        credit = burst;
     } else if (nowMs > lastMs) {
         const qint64 pauseMs = qMin(nowMs - lastMs, longestPauseMs);
-        credit = qMin(burstBytes, credit + pauseMs * bytesPerSecond / 1000);
+        credit = qMin(burst, credit + pauseMs * rate / 1000);
     }
     lastMs = qMax(lastMs, nowMs);
     return credit > 0;
@@ -377,7 +387,7 @@ qint64 UploadPace::msUntilReady(qint64 nowMs) const
     }
     // The shortest pause whose share of the rate, rounded down as ready() rounds it, makes the
     // credit positive.
-    const qint64 pauseMs = ((1 - credit) * 1000 + bytesPerSecond - 1) / bytesPerSecond;
+    const qint64 pauseMs = ((1 - credit) * 1000 + rate - 1) / rate;
     return qMax(qint64{0}, lastMs + pauseMs - nowMs);
 }
 

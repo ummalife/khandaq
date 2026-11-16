@@ -439,15 +439,19 @@ private:
     bool sendGroupFileBegin(OutgoingGroupFile& send, const QByteArray& fileId);
     bool sendGroupFileChunk(OutgoingGroupFile& send, const QByteArray& fileId, int chunk);
     void sendGroupFileChunks();
-    bool sendQueuedGroupFilePacket(const Air::GroupFileQueue::Packet& packet, qint64 nowMs);
+    bool sendQueuedGroupFilePacket(const Air::GroupFileQueue::Packet& packet, qint64 nowMs,
+                                   bool relayed);
     void tellGroupFilesWaiting();
     int groupFileMembers(int groupId) const;
+    bool groupPeerRelayed(uint32_t groupId, uint32_t peerId) const;
+    bool groupFileRelayed(int groupId) const;
+    bool groupFileResendRelayed(int index) const;
     void failGroupFileSend(const QByteArray& fileId, const char* reason);
     void keepSentGroupFile(const QByteArray& fileId, const OutgoingGroupFile& send, qint64 nowMs);
     void answerGroupFileRequest(uint32_t groupId, uint32_t peerId, const uint8_t* data,
                                 size_t length);
     int nextGroupFileResend(qint64 nowMs) const;
-    void sendGroupFileResend(int index, qint64 nowMs);
+    void sendGroupFileResend(int index, qint64 nowMs, bool relayed);
     void askForMissingChunks(uint32_t groupId, uint32_t senderPeer, const QByteArray& msgId,
                              const QVector<bool>& received);
 
@@ -558,6 +562,9 @@ private:
     QHash<QByteArray, OutgoingGroupFile> outgoingGroupFiles;
     Air::GroupFileQueue groupFileQueue;
     Air::UploadPace groupFilePace;
+    // 0.2.57: and the packets to members that toxcore reaches only through a relay, a packet's
+    // bytes once whatever members it goes to (groupFileRelayed).
+    Air::UploadPace groupFileRelayPace{Air::UploadPace::relayedBytesPerSecond};
     // 0.2.57: the files whose chunks all went, kept a while for the members that ask for chunks
     // they missed (answerGroupFileRequest), by file id. Under coreLoopLock.
     QHash<QByteArray, OutgoingGroupFile> sentGroupFiles;

@@ -472,11 +472,15 @@ void Core::process()
     unsigned sleeptime =
         qMin(tox_iteration_interval(tox.get()), getCoreFile()->corefileIterationInterval());
     // Not while every group with a file waits for a member: nothing of them can go. While the
-    // pace holds the next packet back, the loop sleeps until it may go, or as toxcore asks.
+    // pace holds the next packet back, the loop sleeps until it may go, or as toxcore asks. The
+    // pace of the relays counts even for a packet to no member over a relay: that costs it a turn
+    // of toxcore's at most.
     Air::GroupFileQueue::Packet nextGroupFilePacket;
     const qint64 nowMs = monotonicMs();
     if (groupFileQueue.next(&nextGroupFilePacket, nowMs) || nextGroupFileResend(nowMs) >= 0) {
-        const qint64 turnMs = qMax<qint64>(groupFileTurnMs, groupFilePace.msUntilReady(nowMs));
+        const qint64 paceMs = qMax(groupFilePace.msUntilReady(nowMs),
+                                   groupFileRelayPace.msUntilReady(nowMs));
+        const qint64 turnMs = qMax<qint64>(groupFileTurnMs, paceMs);
         sleeptime = static_cast<unsigned>(qMin<qint64>(sleeptime, turnMs));
     }
     toxTimer->start(sleeptime);
@@ -3727,8 +3731,13 @@ bool Core::sendGroupFileChunk(OutgoingGroupFile& send, const QByteArray& fileId,
 void Core::sendGroupFileChunks()
 {
     const qint64 nowMs = monotonicMs();
+    // 0.2.57: the groups whose packets go to a member over a relay, at the pace of the relays too.
+    QSet<int> relayed;
     for (const int group : groupFileQueue.groups()) {
         groupFileQueue.setMembers(group, groupFileMembers(group), nowMs);
+        if (groupFileRelayed(group)) {
+            relayed.insert(group);
+        }
     }
     // Members came that the files going no longer fit the pace with: those that began last start
     // again from their BEGIN, and their entries with them.
@@ -3749,29 +3758,38 @@ void Core::sendGroupFileChunks()
         }
     }
     // The chunks members asked for again and the packets of the queue take turns at the pace:
-    // neither holds the other back for long.
+    // neither holds the other back for long. One to a member over a relay waits for the pace of
+    // the relays too, and the other waits with it.
     Air::GroupFileQueue::Packet packet;
     while (groupFilePace.ready(nowMs)) {
         const bool queued = groupFileQueue.next(&packet, nowMs);
         const int resend = nextGroupFileResend(nowMs);
-        if (resend >= 0 && (!queued || !groupFileResendWent)) {
-            groupFileResendWent = true;
-            sendGroupFileResend(resend, nowMs);
-            continue;
-        }
-        if (!queued) {
+        const bool resendTurn = resend >= 0 && (!queued || !groupFileResendWent);
+        if (!resendTurn && !queued) {
             break;
         }
+        const bool overRelay =
+            resendTurn ? groupFileResendRelayed(resend) : relayed.contains(packet.group);
+        if (overRelay && !groupFileRelayPace.ready(nowMs)) {
+            break;
+        }
+        if (resendTurn) {
+            groupFileResendWent = true;
+            sendGroupFileResend(resend, nowMs, overRelay);
+            continue;
+        }
         groupFileResendWent = false;
-        sendQueuedGroupFilePacket(packet, nowMs);
+        sendQueuedGroupFilePacket(packet, nowMs, overRelay);
     }
 }
 
 /**
  * @brief Sends the packet of the queue whose turn it is, and tells what came of its file. False
- * when it did not go. Called with coreLoopLock held.
+ * when it did not go. relayed: it goes to a member over a relay (groupFileRelayed). Called with
+ * coreLoopLock held.
  */
-bool Core::sendQueuedGroupFilePacket(const Air::GroupFileQueue::Packet& packet, qint64 nowMs)
+bool Core::sendQueuedGroupFilePacket(const Air::GroupFileQueue::Packet& packet, qint64 nowMs,
+                                     bool relayed)
 {
     const auto it = outgoingGroupFiles.find(packet.fileId);
     if (it == outgoingGroupFiles.end()) {
@@ -3786,6 +3804,9 @@ bool Core::sendQueuedGroupFilePacket(const Air::GroupFileQueue::Packet& packet, 
         return false;
     }
     groupFilePace.spend(groupFileQueue.cost(packet));
+    if (relayed) {
+        groupFileRelayPace.spend(groupFileQueue.bytes(packet));
+    }
 
     if (groupFileQueue.sent(packet, nowMs)) {
         const OutgoingGroupFile done = send;
@@ -3938,9 +3959,10 @@ int Core::nextGroupFileResend(qint64 nowMs) const
  * @brief 0.2.57: the next packet of a resend, to its member alone: the BEGIN, then the chunks it
  * asked for. A member whose send array toxcore says is full gets it a moment later, as Android
  * waits refusals out; one that left, or a group or a file that changed, ends the resend: a member
- * that comes back asks again. Called with coreLoopLock held.
+ * that comes back asks again. relayed: the member is over a relay (groupFileResendRelayed).
+ * Called with coreLoopLock held.
  */
-void Core::sendGroupFileResend(int index, qint64 nowMs)
+void Core::sendGroupFileResend(int index, qint64 nowMs, bool relayed)
 {
     GroupFileResend& resend = groupFileResends[index];
     const auto end = [this, index](const char* why) {
@@ -3996,6 +4018,9 @@ void Core::sendGroupFileResend(int index, qint64 nowMs)
         return;
     }
     groupFilePace.spend(Air::UploadPace::cost(packet.size(), 1));
+    if (relayed) {
+        groupFileRelayPace.spend(packet.size());
+    }
     resend.refusedSinceMs = -1;
     if (resend.begin) {
         resend.begin = false;
@@ -4043,6 +4068,64 @@ int Core::groupFileMembers(int groupId) const
         return 1;
     }
     return static_cast<int>(peers) - 1;
+}
+
+/**
+ * @brief 0.2.57: whether toxcore reaches the member of the group only through a TCP relay: it
+ * says TCP for any member it has no direct path to. Called with coreLoopLock held.
+ */
+bool Core::groupPeerRelayed(uint32_t groupId, uint32_t peerId) const
+{
+    Tox_Err_Group_Peer_Query error;
+    const Tox_Connection connection =
+        tox_group_peer_get_connection_status(tox.get(), groupId, peerId, &error);
+    return error == TOX_ERR_GROUP_PEER_QUERY_OK && connection == TOX_CONNECTION_TCP;
+}
+
+/**
+ * @brief 0.2.57: whether a packet into the group goes to a member over a relay
+ * (groupPeerRelayed), and so at the pace of the relays too (Air::UploadPace). Called with
+ * coreLoopLock held.
+ */
+bool Core::groupFileRelayed(int groupId) const
+{
+    const uint32_t group = static_cast<uint32_t>(groupId);
+    Tox_Err_Group_Peer_Query error;
+    const uint32_t count = tox_group_peer_count(tox.get(), group, &error);
+    if (error != TOX_ERR_GROUP_PEER_QUERY_OK || count == 0) {
+        return false;
+    }
+    QVector<uint32_t> peers(static_cast<int>(count));
+    tox_group_get_peerlist(tox.get(), group, peers.data(), &error);
+    if (error != TOX_ERR_GROUP_PEER_QUERY_OK) {
+        return false;
+    }
+    // toxcore lists this node too, as TCP while it has no UDP of its own.
+    Tox_Err_Group_Self_Query selfError;
+    const uint32_t self = tox_group_self_get_peer_id(tox.get(), group, &selfError);
+    for (const uint32_t peer : peers) {
+        if (selfError == TOX_ERR_GROUP_SELF_QUERY_OK && peer == self) {
+            continue;
+        }
+        if (groupPeerRelayed(group, peer)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * @brief 0.2.57: whether the member of a resend is over a relay (groupPeerRelayed); not when it
+ * is gone, which ends the resend at its turn. Called with coreLoopLock held.
+ */
+bool Core::groupFileResendRelayed(int index) const
+{
+    const GroupFileResend& resend = groupFileResends.at(index);
+    const uint32_t group = static_cast<uint32_t>(resend.group);
+    Tox_Err_Group_Peer_Query error;
+    const uint32_t peer =
+        tox_group_peer_by_public_key(tox.get(), group, resend.member.getData(), &error);
+    return error == TOX_ERR_GROUP_PEER_QUERY_OK && groupPeerRelayed(group, peer);
 }
 
 /**

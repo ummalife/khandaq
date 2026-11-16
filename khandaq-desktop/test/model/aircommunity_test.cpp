@@ -23,6 +23,7 @@
 
 #include <QDateTime>
 #include <QTemporaryDir>
+#include <QTextBoundaryFinder>
 #include <QUrlQuery>
 #include <QtTest/QtTest>
 
@@ -67,6 +68,7 @@ private slots:
     void theNewestRelayedFilesOfEachGroupAreKept();
     void everyPartOfTheReportIsEncoded();
     void aLongMessageIsCutAt500CharactersNeverInHalf();
+    void aReportMailStaysWithinWhatWindowsTakes();
     void filesOfOthersInTheCommunityWaitForATap();
     void heldFilesAreTakenByTheNumberOfTheirEntry();
     void aFileStaysHeldUntilItIsWritten();
@@ -539,13 +541,18 @@ void TestAirCommunity::aLongMessageIsCutAt500CharactersNeverInHalf()
     const QString smile = QStringLiteral("\U0001F600");
     report.text = QString(499, QLatin1Char('z')) + smile + smile;
     QCOMPARE(textOf(reportMailUrl(report)), QString(499, QLatin1Char('z')) + smile);
+    // 500 of them would be some 6000 characters encoded, past reportUrlLimit: fewer go, and none
+    // is cut in half.
     report.text.clear();
     for (int i = 0; i < 501; ++i) {
         report.text += smile;
     }
     const QString cut = textOf(reportMailUrl(report));
-    QCOMPARE(cut.size(), 1000);
+    QVERIFY(!cut.isEmpty());
+    QVERIFY(cut.size() < 1000);
+    QCOMPARE(cut.size() % 2, 0);
     QVERIFY(cut.at(cut.size() - 1).isLowSurrogate());
+    QCOMPARE(cut, report.text.left(cut.size()));
 
     // As a person counts, and iOS: a flag is two regional indicators and one character...
     const QString turkey = QStringLiteral("\U0001F1F9\U0001F1F7");
@@ -559,6 +566,53 @@ void TestAirCommunity::aLongMessageIsCutAt500CharactersNeverInHalf()
     report.text = QString(500, QLatin1Char('e')) + QStringLiteral("\u0301x");
     QCOMPARE(textOf(reportMailUrl(report)),
              QString(499, QLatin1Char('e')) + QStringLiteral("e\u0301"));
+}
+
+void TestAirCommunity::aReportMailStaysWithinWhatWindowsTakes()
+{
+    GroupReport report = sampleReport();
+    const QString head = QStringLiteral("Group: Khandaq Community\r\n"
+                                        "Author: 0A1B2C3D\r\n"
+                                        "Time: 2026-11-16T12:04:05Z\r\n"
+                                        "Message:\r\n");
+    // A short text in Cyrillic, six characters a letter once encoded, goes whole.
+    report.text = QStringLiteral("\u041A\u0443\u043F\u0438\u0442\u0435 \u043F\u043E\u0434\u043F"
+                                 "\u0438\u0441\u0447\u0438\u043A\u043E\u0432");
+    QCOMPARE(decodedPart(reportMailUrl(report), QStringLiteral("body")), head + report.text);
+
+    // A long one would be thousands: the text gives way from its end, by whole characters. A
+    // letter keeps its stress mark, and a flag its two halves.
+    const QString words =
+        QStringLiteral("\u041F\u0440\u0438\u0432\u0435\u0301\u0442 \U0001F1F9\U0001F1F7 ");
+    report.text.clear();
+    for (int i = 0; i < 80; ++i) {
+        report.text += words;
+    }
+    const QUrl mail = reportMailUrl(report);
+    const int length = mail.toEncoded().size();
+    QVERIFY(length <= reportUrlLimit);
+    // And no shorter than it must be: the next character, a flag at most, 24 encoded, did not fit.
+    QVERIFY(length > reportUrlLimit - 24);
+    QCOMPARE(decodedPart(mail, QStringLiteral("subject")),
+             QStringLiteral("Report: Khandaq Community"));
+    const QString body = decodedPart(mail, QStringLiteral("body"));
+    QVERIFY(body.startsWith(head));
+    const QString cut = body.mid(head.size());
+    QVERIFY(!cut.isEmpty());
+    QVERIFY(report.text.startsWith(cut));
+    QTextBoundaryFinder characters(QTextBoundaryFinder::Grapheme, report.text);
+    characters.setPosition(cut.size());
+    QVERIFY(characters.isAtBoundary());
+
+    // The group, the author and the time are never cut: a name that fills the mail alone leaves
+    // the text out, and the mail goes as it is.
+    report.groupName = QString(400, QChar(0x0416));
+    const QUrl crowded = reportMailUrl(report);
+    QVERIFY(crowded.toEncoded().size() > reportUrlLimit);
+    QCOMPARE(decodedPart(crowded, QStringLiteral("body")),
+             QStringLiteral("Group: ") + report.groupName
+                 + QStringLiteral("\r\nAuthor: 0A1B2C3D\r\nTime: 2026-11-16T12:04:05Z\r\n"
+                                  "Message:\r\n"));
 }
 
 namespace {

@@ -61,10 +61,18 @@ constexpr char reportAddress[] = "support@khandaq.org";
  * emoji joined of several or a letter with its marks is one, and none is cut in half.
  */
 constexpr int reportTextLimit = 500;
+/**
+ * The whole mailto, encoded, goes up to this many characters: past about 2083 Outlook and
+ * ShellExecute on Windows refuse a mail or cut it. Only the text gives way, by whole characters
+ * from its end; the group, the author and the time are never cut.
+ */
+constexpr int reportUrlLimit = 2000;
 
 /**
  * mailto: reportAddress, with a subject that names the group and a body with the group, the
  * author, the time in UTC and the text, each part percent-encoded and its lines ended with CRLF.
+ * The text goes up to reportTextLimit characters, as many as keep the mail within reportUrlLimit;
+ * a group name that fills the mail alone leaves the text out, and the mail as long as it is.
  * The words of the mail are support's, in English: the person reads them before sending.
  */
 QUrl reportMailUrl(const GroupReport& report);

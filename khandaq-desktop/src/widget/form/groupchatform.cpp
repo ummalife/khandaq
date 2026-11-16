@@ -1023,6 +1023,10 @@ void GroupChatForm::report()
              << menuReport.authorKey.left(8) << "in a group," << mail.toEncoded().size() << "bytes";
     if (!QDesktopServices::openUrl(mail)) {
         qWarning() << "Report: no mail app took the mail";
+        // KHANDAQ (0.2.57, review): as iOS does, the person sees where to write instead: the title
+        // of Report and support's address, no new words to translate.
+        AirDialog::notice(this, AirStrings::text(AirText::MessageReport),
+                          QString::fromLatin1(Air::reportAddress));
     }
 }
 

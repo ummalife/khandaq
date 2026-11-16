@@ -27,22 +27,23 @@ namespace Air {
 
 namespace {
 /**
- * The first limit characters of text as a person counts them, and as iOS counts a String: a flag,
- * an emoji joined of several, a letter with its marks is one character, never cut in half
- * (QTextBoundaryFinder::Grapheme).
+ * Where the first characters of text end, up to limit of them, as a person counts them and as iOS
+ * counts a String: a flag, an emoji joined of several, a letter with its marks is one character,
+ * never cut in half (QTextBoundaryFinder::Grapheme). The nth end, in units of UTF-16, closes the
+ * first n characters; the first is 0, for none.
  */
-QString firstCharacters(const QString& text, int limit)
+QVector<int> characterEnds(const QString& text, int limit)
 {
+    QVector<int> ends{0};
     QTextBoundaryFinder characters(QTextBoundaryFinder::Grapheme, text);
-    int end = 0;
-    for (int count = 0; count < limit; ++count) {
+    while (ends.size() <= limit) {
         const int next = characters.toNextBoundary();
         if (next < 0) {
             break;
         }
-        end = next;
+        ends.append(next);
     }
-    return text.left(end);
+    return ends;
 }
 
 /** Lines of a mail end with CRLF (RFC 6068), whatever ended them before. */
@@ -64,17 +65,33 @@ QUrl reportMailUrl(const GroupReport& report)
     const QString group = report.groupName.simplified();
     const QString author =
         report.authorKey.isEmpty() ? QStringLiteral("unknown") : report.authorKey.left(8).toUpper();
-    const QString body =
-        mailLines(QStringLiteral("Group: %1\nAuthor: %2\nTime: %3\nMessage:\n%4")
-                      .arg(group, author,
-                           report.time.toUTC().toString(Qt::ISODate),
-                           firstCharacters(report.text, reportTextLimit)));
-    QUrl url;
-    url.setScheme(QStringLiteral("mailto"));
-    url.setPath(QString::fromLatin1(reportAddress));
-    url.setQuery(QStringLiteral("subject=") + encoded(QStringLiteral("Report: %1").arg(group))
-                 + QStringLiteral("&body=") + encoded(body));
-    return url;
+    // Every line but the text, which is never cut.
+    const QString head = QStringLiteral("Group: %1\nAuthor: %2\nTime: %3\nMessage:\n")
+                             .arg(group, author, report.time.toUTC().toString(Qt::ISODate));
+    const QString subject = encoded(QStringLiteral("Report: %1").arg(group));
+    const auto mailWith = [&report, &head, &subject](int textEnd) {
+        QUrl url;
+        url.setScheme(QStringLiteral("mailto"));
+        url.setPath(QString::fromLatin1(reportAddress));
+        url.setQuery(QStringLiteral("subject=") + subject + QStringLiteral("&body=")
+                     + encoded(mailLines(head + report.text.left(textEnd))));
+        return url;
+    };
+    // As many characters of the text as keep the mail within reportUrlLimit, reportTextLimit at
+    // most. The mail only grows with the text, so halving finds them: the mail with the first
+    // "fits" characters is taken, as none at all is whatever its length; with "tooMany" it is not.
+    const QVector<int> ends = characterEnds(report.text, reportTextLimit);
+    int fits = 0;
+    int tooMany = ends.size();
+    while (tooMany - fits > 1) {
+        const int middle = (fits + tooMany) / 2;
+        if (mailWith(ends.at(middle)).toEncoded().size() <= reportUrlLimit) {
+            fits = middle;
+        } else {
+            tooMany = middle;
+        }
+    }
+    return mailWith(ends.at(fits));
 }
 
 namespace Community {

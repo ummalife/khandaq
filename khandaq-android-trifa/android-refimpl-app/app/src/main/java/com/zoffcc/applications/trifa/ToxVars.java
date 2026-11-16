@@ -53,7 +53,16 @@ public class ToxVars
     public static final int TOX_GROUP_CHAT_ID_SIZE = 32;
     public static final int TOX_GROUP_PEER_PUBLIC_KEY_SIZE = 32;
     public static final int GC_MAX_SAVED_PEERS = 100;
+    // KHANDAQ (gc IPv6 MTU): toxcore's chunk size before 0.2.57, the largest chunk it still accepts
+    // (MAX_GC_PACKET_INCOMING_CHUNK_SIZE). The NGC audio encoder's buffer is 10 less: the JNI hands it to
+    // toxav_ngc_audio_encode without its length, and toxav writes up to 1362 bytes into it. Not what is sent lossy.
     public static final int MAX_GC_PACKET_CHUNK_SIZE = 1372;
+    // KHANDAQ (gc IPv6 MTU): toxcore's MAX_GC_PACKET_CHUNK_SIZE, the largest group packet it sends in one piece. A
+    // lossy packet cannot be split into chunks, and toxcore refuses a longer one (TOO_LONG): live media of a group
+    // goes lossy up to this size and lossless above (HelperGroup.is_ngc_media_packet_lossy). toxcore sends chunks of
+    // 1150 bytes since 0.2.57, not 1372, so that a group packet fits the IPv6 minimum MTU: 1150 + 82 bytes of wrapping
+    // are 1232 bytes of UDP payload, 1280 as an IPv6 packet. scripts/check-gc-ipv6-mtu.py keeps the two equal.
+    public static final int MAX_GC_LOSSY_PACKET_SIZE = 1150;
     // -- Group chat numeric constants
     //
     public static final int TOX_MSGV3_MSGID_LENGTH = 32;

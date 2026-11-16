@@ -411,6 +411,17 @@ jobs:
       # leave an offer alone until it is accepted.
       - name: Every toxcore copy must leave an FTV2 offer alone until it is accepted
         run: python3 scripts/check-ftv2-stale-accept.py
+      # KHANDAQ (0.2.57): a full group chunk went out as a 1502 byte IPv6 packet, over a 1500 byte MTU, so
+      # a direct IPv6 path split it into fragments that were lost and no group file chunk arrived. Every
+      # copy of toxcore (and the Android build) must send chunks that fit the IPv6 minimum MTU and still
+      # accept the 1372 byte chunks of an older peer. toxcore refuses a lossy packet over the size it
+      # sends, so Android and iOS must send live media lossy up to that size and no further, and each
+      # check must catch the mutant made for it.
+      - name: Every toxcore copy must send group packets that fit the IPv6 minimum MTU
+        run: |
+          set -euo pipefail
+          python3 scripts/check-gc-ipv6-mtu.py
+          python3 scripts/check-gc-ipv6-mtu.py --self-test
       # KHANDAQ (2026-08-23, CodeQL triage): a group file's name arrives unfiltered off the wire, and
       # it was stored as-is on the row. send_ngch_syncfile joins that name with the directory, reads the
       # file and sends the bytes to a peer — so ../ in a filename read a file outside the group and

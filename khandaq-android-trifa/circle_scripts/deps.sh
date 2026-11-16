@@ -554,6 +554,11 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_group_search_key
 # the sender and a paused transfer stays paused. The desktop and iOS copies of toxcore carry the same
 # change. Fail-fast, like the patches above.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_ftv2_stale_accept.py toxcore || exit 1 ; cd "$_s_"
+# KHANDAQ (gc IPv6 MTU): every group packet we send is at most 1232 bytes of UDP payload, so it fits
+# the IPv6 minimum MTU and a direct IPv6 path does not split it into IP fragments that get lost;
+# chunks of up to 1372 bytes from a peer before this change are still accepted. The desktop and iOS
+# copies of toxcore carry the same change. Fail-fast, like the patches above.
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_ipv6_mtu.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
@@ -1166,6 +1171,11 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_group_search_key
 # the sender and a paused transfer stays paused. The desktop and iOS copies of toxcore carry the same
 # change. Fail-fast, like the patches above.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_ftv2_stale_accept.py toxcore || exit 1 ; cd "$_s_"
+# KHANDAQ (gc IPv6 MTU): every group packet we send is at most 1232 bytes of UDP payload, so it fits
+# the IPv6 minimum MTU and a direct IPv6 path does not split it into IP fragments that get lost;
+# chunks of up to 1372 bytes from a peer before this change are still accepted. The desktop and iOS
+# copies of toxcore carry the same change. Fail-fast, like the patches above.
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_ipv6_mtu.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
@@ -1779,6 +1789,11 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_group_search_key
 # the sender and a paused transfer stays paused. The desktop and iOS copies of toxcore carry the same
 # change. Fail-fast, like the patches above.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_ftv2_stale_accept.py toxcore || exit 1 ; cd "$_s_"
+# KHANDAQ (gc IPv6 MTU): every group packet we send is at most 1232 bytes of UDP payload, so it fits
+# the IPv6 minimum MTU and a direct IPv6 path does not split it into IP fragments that get lost;
+# chunks of up to 1372 bytes from a peer before this change are still accepted. The desktop and iOS
+# copies of toxcore carry the same change. Fail-fast, like the patches above.
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_ipv6_mtu.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
@@ -2238,6 +2253,11 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_group_search_key
 # the sender and a paused transfer stays paused. The desktop and iOS copies of toxcore carry the same
 # change. Fail-fast, like the patches above.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_ftv2_stale_accept.py toxcore || exit 1 ; cd "$_s_"
+# KHANDAQ (gc IPv6 MTU): every group packet we send is at most 1232 bytes of UDP payload, so it fits
+# the IPv6 minimum MTU and a direct IPv6 path does not split it into IP fragments that get lost;
+# chunks of up to 1372 bytes from a peer before this change are still accepted. The desktop and iOS
+# copies of toxcore carry the same change. Fail-fast, like the patches above.
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_ipv6_mtu.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------

@@ -99,32 +99,79 @@ class GroupReportTests: XCTestCase {
         let live = try entry(peerId: 5)
         live.groupPrivatePeerPubkey = key
         live.messageText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
-        XCTAssertEqual(GroupReport.authorKey(of: live), key, "a live text: the key toxcore gave with the packet")
+        XCTAssertEqual(GroupReport.authorKey(of: live, authorVerified: false), key, "a live text: the key toxcore gave with the packet")
 
         let synced = try entry(peerId: 5)
         synced.groupHistorySync = true
         let syncedText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
         syncedText.groupSenderPubkey = "A1B2C3D4" + String(repeating: "0", count: 56)
         synced.messageText = syncedText
-        XCTAssertEqual(GroupReport(groupName: "G", authorKey: GroupReport.authorKey(of: synced), time: time, text: "").author,
-                       "A1B2C3D4", "a text from the group's history")
+        XCTAssertEqual(GroupReport(groupName: "G", authorKey: GroupReport.authorKey(of: synced, authorVerified: true), time: time, text: "").author,
+                       "A1B2C3D4", "a text from the group's history whose signature proved its author")
 
         let file = try entry(peerId: 5)
         let messageFile = try appClass("OCTMessageFile", as: OCTMessageFile.Type.self).init()
         messageFile.groupSenderPubkey = "e5f60718" + String(repeating: "0", count: 56)
         file.messageFile = messageFile
-        XCTAssertEqual(GroupReport(groupName: "G", authorKey: GroupReport.authorKey(of: file), time: time, text: "").author, "E5F60718")
+        XCTAssertEqual(GroupReport(groupName: "G", authorKey: GroupReport.authorKey(of: file, authorVerified: false), time: time, text: "").author,
+                       "E5F60718", "a live file")
 
         let keptNone = try entry(peerId: 5)
         keptNone.messageText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
-        XCTAssertEqual(GroupReport.authorKey(of: keptNone), "")
-        XCTAssertEqual(GroupReport(groupName: "G", authorKey: GroupReport.authorKey(of: keptNone), time: time, text: "").author, "unknown")
+        XCTAssertEqual(GroupReport.authorKey(of: keptNone, authorVerified: false), "")
+        XCTAssertEqual(GroupReport(groupName: "G", authorKey: GroupReport.authorKey(of: keptNone, authorVerified: false), time: time, text: "").author,
+                       "unknown")
 
         // Our own private message keeps the key of the member it went to, who is not its author.
         let ours = try entry(peerId: 0)
         ours.groupPrivateMessage = true
         ours.groupPrivatePeerPubkey = key
-        XCTAssertEqual(GroupReport.authorKey(of: ours), "")
+        XCTAssertEqual(GroupReport.authorKey(of: ours, authorVerified: false), "")
+    }
+
+    /// An entry from the group's history names the author the member who relayed it claims, and nobody signed
+    /// that claim: a member who forges one could make a report name somebody innocent, and support would then
+    /// mute the wrong person. Such an entry names no author unless a signature proved this entry; a live one
+    /// keeps the key the transport vouched for.
+    func testAnEntryFromTheGroupsHistoryNamesNoAuthorUnlessASignatureProvedIt() throws {
+        let chat = try appClass("OCTChat", as: OCTChat.Type.self).init()
+        chat.isGroup = true
+        chat.groupName = "Book club"
+        let claimed = "A1B2C3D4" + String(repeating: "0", count: 56)
+
+        let relayed = try entry(peerId: 5)
+        relayed.groupHistorySync = true
+        relayed.dateInterval = time.timeIntervalSince1970
+        let relayedText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        relayedText.groupSenderPubkey = claimed
+        relayedText.text = "spam"
+        relayed.messageText = relayedText
+
+        let unproved = GroupReport(chat: chat, message: relayed, groups: OCTSubmanagerGroupsMock())
+        XCTAssertEqual(unproved.author, "unknown")
+        XCTAssertEqual(unproved.body, "Group: Book club\nAuthor: unknown\nTime: 2026-11-16T12:34:56Z\nMessage:\nspam")
+        XCTAssertEqual(GroupReport(chat: chat, message: relayed, groups: nil).author, "unknown", "no submanager, no proof")
+        XCTAssertEqual(GroupReport(chat: chat, message: relayed, groups: VerifyingGroups()).author, "A1B2C3D4",
+                       "the signature proved who wrote it")
+
+        // A file from the history can carry no signature at all.
+        let relayedFile = try entry(peerId: 5)
+        relayedFile.groupHistorySync = true
+        relayedFile.dateInterval = time.timeIntervalSince1970
+        let file = try appClass("OCTMessageFile", as: OCTMessageFile.Type.self).init()
+        file.groupSenderPubkey = claimed.lowercased()
+        file.fileName = "photo.jpg"
+        relayedFile.messageFile = file
+        XCTAssertEqual(GroupReport(chat: chat, message: relayedFile, groups: OCTSubmanagerGroupsMock()).author, "unknown")
+
+        // The same text as it came live: the transport vouched for its sender, whatever the verdict says.
+        let live = try entry(peerId: 5)
+        live.dateInterval = time.timeIntervalSince1970
+        let liveText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        liveText.groupSenderPubkey = claimed
+        liveText.text = "spam"
+        live.messageText = liveText
+        XCTAssertEqual(GroupReport(chat: chat, message: live, groups: OCTSubmanagerGroupsMock()).author, "A1B2C3D4")
     }
 
     func testAPrivateMessageInTheGroupIsReportedWithTheMailOfTheGroup() throws {
@@ -139,7 +186,7 @@ class GroupReportTests: XCTestCase {
         text.text = "Peace be upon you"
         message.messageText = text
 
-        let report = GroupReport(chat: chat, message: message)
+        let report = GroupReport(chat: chat, message: message, groups: OCTSubmanagerGroupsMock())
 
         XCTAssertEqual(report.subject, "Report: Khandaq Community")
         XCTAssertEqual(report.body, "Group: Khandaq Community\nAuthor: 7F3A91C0\nTime: 2026-11-16T12:34:56Z\nMessage:\nPeace be upon you")
@@ -156,6 +203,13 @@ class GroupReportTests: XCTestCase {
     }
 
     // MARK: Helpers
+
+    /// The groups of the demo world, where a signature proved every entry from a group's history.
+    private final class VerifyingGroups: OCTSubmanagerGroupsMock {
+        override func isGroupMessageAuthorVerified(_ message: OCTMessageAbstract?, in chat: OCTChat?) -> Bool {
+            return message?.groupHistorySync == true
+        }
+    }
 
     /// An entry of a group outside any Realm, made from the app's class: objcTox is in the app and in this bundle.
     private func entry(peerId: Int32) throws -> OCTMessageAbstract {

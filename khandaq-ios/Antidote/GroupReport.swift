@@ -32,7 +32,16 @@ struct GroupReport: Equatable {
     /// on its file, a live text or a private message on the entry itself. Never the key of whoever has the
     /// author's number now: toxcore gives a freed number to the next member who comes. Empty for an entry
     /// that kept none.
-    static func authorKey(of message: OCTMessageAbstract) -> String {
+    ///
+    /// An entry from the group's history came from the member who relayed it, and the key on it is that
+    /// member's claim, signed by nobody (OCTMessageText groupSenderPubkey): it names the author only when a
+    /// signature proved this entry (`authorVerified`, OCTSubmanagerGroups isGroupMessageAuthorVerified). Else it
+    /// names nobody, and the mail says "unknown": a forged entry must not send support after a member who
+    /// never wrote it. A live entry keeps its key: the transport vouched for its sender.
+    static func authorKey(of message: OCTMessageAbstract, authorVerified: Bool) -> String {
+        if message.groupHistorySync && !authorVerified {
+            return ""
+        }
         if let key = message.messageText?.groupSenderPubkey, !key.isEmpty {
             return key
         }
@@ -90,8 +99,10 @@ struct GroupReport: Equatable {
 }
 
 extension GroupReport {
-    /// The report of `message`, an entry of the group `chat` or a private message in it.
-    init(chat: OCTChat, message: OCTMessageAbstract) {
+    /// The report of `message`, an entry of the group `chat` or a private message in it. `groups` tells whether
+    /// a signature proved the author of an entry from the group's history; without it, none did.
+    init(chat: OCTChat, message: OCTMessageAbstract, groups: OCTSubmanagerGroups?) {
+        let authorVerified = groups?.isGroupMessageAuthorVerified(message, in: chat) ?? false
         let stored = KhandaqCommunity.displayName(for: chat) ?? chat.groupName ?? ""
         let text: String
         if let file = message.messageFile {
@@ -102,7 +113,7 @@ extension GroupReport {
             text = MessageReplyHelper.plainBody(for: message) ?? message.messageText?.text ?? ""
         }
         self.init(groupName: stored.isEmpty ? ChatListContent.groupTitle(for: chat) : stored,
-                  authorKey: GroupReport.authorKey(of: message),
+                  authorKey: GroupReport.authorKey(of: message, authorVerified: authorVerified),
                   time: message.date(),
                   text: text)
     }

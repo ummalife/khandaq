@@ -463,7 +463,7 @@ extension GroupPeerPrivateController: UITableViewDelegate {
                 guard let self = self, !message.isInvalidated else {
                     return
                 }
-                GroupReport(chat: self.chat, message: message).present(from: self)
+                GroupReport(chat: self.chat, message: message, groups: self.submanagerGroups).present(from: self)
             }
             return UIMenu(title: "", children: [report])
         }

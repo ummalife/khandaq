@@ -197,7 +197,7 @@ class KhandaqCommunityTests: XCTestCase {
         let text = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
         text.text = "spam"
         message.messageText = text
-        let report = GroupReport(chat: community, message: message)
+        let report = GroupReport(chat: community, message: message, groups: nil)
         XCTAssertEqual(report.subject, "Report: Khandaq Community")
         XCTAssertTrue(report.body.hasPrefix("Group: Khandaq Community\n"), report.body)
 
@@ -217,7 +217,7 @@ class KhandaqCommunityTests: XCTestCase {
         XCTAssertEqual(ChatListContent.groupTitle(for: other), "Reading Tolstoy")
         XCTAssertEqual(MessageForwarder.displayName(for: other), "Book club")
         XCTAssertEqual(NotificationCoordinator.groupName(of: other), "Book club")
-        XCTAssertEqual(GroupReport(chat: other, message: message).subject, "Report: Book club")
+        XCTAssertEqual(GroupReport(chat: other, message: message, groups: nil).subject, "Report: Book club")
         let unnamed = try groupChat("unnamed", chatIdHex: String(repeating: "C", count: 64), name: nil, topic: nil)
         XCTAssertEqual(ChatListContent.groupTitle(for: unnamed), String(localized: "group_chat_default_title"))
     }

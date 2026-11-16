@@ -446,6 +446,6 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
         guard !message.isInvalidated else {
             return
         }
-        GroupReport(chat: chat, message: message).present(from: self)
+        GroupReport(chat: chat, message: message, groups: submanagerGroups).present(from: self)
     }
 }

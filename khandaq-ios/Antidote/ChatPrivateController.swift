@@ -2801,7 +2801,7 @@ private extension ChatPrivateController {
                     return
                 }
 
-                // KHANDAQ (#156): autodownload defaults to Never and the voice bubble hides the
+                // KHANDAQ (#156): autodownload can be Never (the default until 0.2.57) and the voice bubble hides the
                 // file-box download/retry buttons, so an incoming voice note could never be
                 // fetched at all. Tapping play on a not-yet-downloaded note starts the transfer.
                 if !message.isOutgoing(),

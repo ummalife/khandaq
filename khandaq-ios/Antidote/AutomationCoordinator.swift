@@ -23,6 +23,12 @@ class AutomationCoordinator: NSObject {
 
         super.init()
 
+        // KHANDAQ (0.2.57): a file of theirs offered again after the connection went (no new message, so no
+        // insertion below) goes by the same rule as a new one.
+        submanagerFiles.reofferAutoAcceptPolicy = { [weak self] message in
+            return self?.shouldAutoAccept(message) ?? false
+        }
+
         let predicate = NSPredicate(format: "senderUniqueIdentifier != nil AND messageFile != nil")
         let results = submanagerObjects.messages(predicate: predicate)
         fileMessagesToken = results.addNotificationBlock { [unowned self] change in
@@ -60,12 +66,27 @@ extension AutomationCoordinator: CoordinatorProtocol {
 
 private extension AutomationCoordinator {
     func proceedNewFileMessage(_ message: OCTMessageAbstract) {
+        guard shouldAutoAccept(message) else {
+            return
+        }
+
+        // workaround for deadlock in objcTox https://github.com/Antidote-for-Tox/objcTox/issues/51
+        let delayTime = DispatchTime.now() + Double(Int64(0.0 * Double(NSEC_PER_SEC))) / Double(NSEC_PER_SEC)
+        DispatchQueue.main.asyncAfter(deadline: delayTime) { [weak self] in
+            self?.submanagerFiles.acceptFileTransfer(message, failureBlock: nil)
+        }
+    }
+
+    /// Whether the person's rule takes this file of theirs by itself now: the setting, the voice note
+    /// exemption and the size caps.
+    func shouldAutoAccept(_ message: OCTMessageAbstract) -> Bool {
         let usingWiFi = self.usingWiFi()
         os_log("AutomationCoordinator:usingWiFi=%d", usingWiFi)
 
         // KHANDAQ (#156): voice notes are part of core messaging (Telegram-style) — fetched from
-        // accepted friends even when the attachment-autodownload setting says Never, which is its
-        // default and would otherwise leave incoming voice bubbles permanently unloadable.
+        // accepted friends even when the attachment-autodownload setting says Never (the default until
+        // 0.2.57, still the person's choice to make), which would otherwise leave incoming voice bubbles
+        // permanently unloadable.
         //
         // KHANDAQ (internal audit 2026-08-22): the test is now the strict one, and the exemption is
         // narrower than it was.
@@ -86,11 +107,11 @@ private extension AutomationCoordinator {
         switch userDefaults.autodownloadImages {
             case .Never:
                 if !isVoiceNote {
-                    return
+                    return false
                 }
             case .UsingWiFi:
                 if !usingWiFi {
-                    return
+                    return false
                 }
             case .Always:
                 break
@@ -105,20 +126,16 @@ private extension AutomationCoordinator {
         // skip too large files
         if usingWiFi {
             if message.messageFile!.fileSize > Constants.MaxFileSizeWiFi {
-                return
+                return false
             }
         }
         else {
             if message.messageFile!.fileSize > Constants.MaxFileSizeWWAN {
-                return
+                return false
             }
         }
 
-        // workaround for deadlock in objcTox https://github.com/Antidote-for-Tox/objcTox/issues/51
-        let delayTime = DispatchTime.now() + Double(Int64(0.0 * Double(NSEC_PER_SEC))) / Double(NSEC_PER_SEC)
-        DispatchQueue.main.asyncAfter(deadline: delayTime) { [weak self] in
-            self?.submanagerFiles.acceptFileTransfer(message, failureBlock: nil)
-        }
+        return true
     }
 
     func usingWiFi() -> Bool

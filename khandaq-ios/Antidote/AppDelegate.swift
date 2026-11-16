@@ -131,6 +131,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         configureLoggingStuff()
 
+        // KHANDAQ (0.2.57): before AppCoordinator, whose session's AutomationCoordinator reads the setting.
+        if UserDefaultsManager().applyAutoDownloadDefaultOnce() {
+            os_log("AppDelegate:autoDownloadDefault:applied")
+        }
+
         if ProcessInfo.processInfo.arguments.contains("UI_TESTING") {
             // Speeding up animations for UI tests.
             window?.layer.speed = 1000

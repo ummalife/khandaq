@@ -225,6 +225,10 @@ public class TrifaToxService extends Service
     // polled by the import + logout worker threads ("wait until tox is really down", "did the restart
     // take?"). Without it those polls may spin on a cached value and time out for no reason.
     static volatile boolean is_tox_started = false;
+    // KHANDAQ (0.2.57, review): the tox sessions of this process, counted. A new one begins with every start of tox,
+    // also after a profile import or a logout and login, which start tox again in the same process. Work that waits
+    // across a start (the join of Khandaq Community) keeps the number it began in and stops once it changed.
+    static final AtomicInteger tox_session_number = new AtomicInteger(0);
     static boolean manually_logged_out = false;
     static boolean global_toxid_text_set = false;
     static volatile boolean TOX_SERVICE_STARTED = false;
@@ -1031,6 +1035,7 @@ public class TrifaToxService extends Service
                 // KHANDAQ (0.2.56): a new session, also after a profile switch or a service restart in this
                 // process: what the last one queued to group peers went with it (NgcHistoryServeLedger).
                 NgcHistoryServeLedger.reset();
+                tox_session_number.incrementAndGet();
                 is_tox_started = true;
                 // KHANDAQ (logout crash fix): tox is up again, so we are no longer "logged out". Clearing
                 // here (cold start AND same-process re-login) re-enables the reloadProfileFromTox guard

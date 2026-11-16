@@ -10660,6 +10660,20 @@ public class HelperGroup
     static boolean join_public_group_by_id(final String group_id, @Nullable final String password, final boolean show_toast,
                                            @Nullable final java.util.function.Consumer<String> failures)
     {
+        return join_public_group_by_id(group_id, password, show_toast, failures, null);
+    }
+
+    /**
+     * KHANDAQ (0.2.57, review): with {@code still_wanted}, a join the person did not ask for just now (Khandaq
+     * Community's by itself, the retry of a refused join) asks before each step that would bring the group into
+     * toxcore or give it a row, and stops once the answer is no: the person left the group or deleted it meanwhile,
+     * or another tox session began (a profile import, or a logout and login, start tox again in this process). An
+     * instance this join made by then is left again; one that was there before stays as it was.
+     */
+    static boolean join_public_group_by_id(final String group_id, @Nullable final String password, final boolean show_toast,
+                                           @Nullable final java.util.function.Consumer<String> failures,
+                                           @Nullable final java.util.function.BooleanSupplier still_wanted)
+    {
         try
         {
             final String normalized_group_id = normalize_public_group_chat_id(group_id);
@@ -10676,6 +10690,11 @@ public class HelperGroup
                 say_join_failure(join_public_group_failure_message(-1L), show_toast, failures);
                 return false;
             }
+            if (!join_still_wanted(still_wanted))
+            {
+                HelperGeneric.logI(TAG, "join_group:no longer wanted, stopped once tox was ready");
+                return false;
+            }
 
             // KHANDAQ (QA live, F11): a group we are still leaving: the old instance goes first.
             if (!finish_pending_group_leave_before_join(normalized_group_id))
@@ -10688,7 +10707,7 @@ public class HelperGroup
             if (existing_group_num >= 0)
             {
                 HelperGeneric.logI(TAG, "join_group:already_in_tox gn=" + existing_group_num);
-                return finish_public_group_join(existing_group_num, normalized_group_id, show_toast);
+                return finish_join_if_wanted(existing_group_num, normalized_group_id, show_toast, still_wanted, false);
             }
 
             perform_khandaq_bootstrap_burst();
@@ -10721,10 +10740,16 @@ public class HelperGroup
                     if (existing_group_num >= 0)
                     {
                         HelperGeneric.logI(TAG, "join_group:appeared_in_tox attempt=" + attempt + " gn=" + existing_group_num);
-                        return finish_public_group_join(existing_group_num, normalized_group_id, show_toast);
+                        return finish_join_if_wanted(existing_group_num, normalized_group_id, show_toast, still_wanted,
+                                                     false);
                     }
                 }
 
+                if (!join_still_wanted(still_wanted))
+                {
+                    HelperGeneric.logI(TAG, "join_group:no longer wanted, stopped before attempt=" + attempt);
+                    return false;
+                }
                 join_chat_id_buffer.rewind();
                 new_group_num = MainActivity.tox_group_join(join_chat_id_buffer, TOX_GROUP_CHAT_ID_SIZE,
                                                             get_group_peer_join_name(), password);
@@ -10740,7 +10765,8 @@ public class HelperGroup
                 {
                     HelperGeneric.logI(TAG, "join_group:already_exists_after_fail gn=" + existing_group_num +
                             " err=" + new_group_num);
-                    return finish_public_group_join(existing_group_num, normalized_group_id, show_toast);
+                    return finish_join_if_wanted(existing_group_num, normalized_group_id, show_toast, still_wanted,
+                                                 false);
                 }
             }
 
@@ -10748,7 +10774,7 @@ public class HelperGroup
             if ((new_group_num >= 0) && (new_group_num < UINT32_MAX_JAVA))
             {
                 HelperGeneric.logI(TAG, "join_group:new groupnum:=" + new_group_num);
-                return finish_public_group_join(new_group_num, normalized_group_id, show_toast);
+                return finish_join_if_wanted(new_group_num, normalized_group_id, show_toast, still_wanted, true);
             }
 
             say_join_failure(join_public_group_failure_message(last_join_result), show_toast, failures);
@@ -10772,6 +10798,34 @@ public class HelperGroup
         {
             display_toast(words, false, 300);
         }
+    }
+
+    /** KHANDAQ (0.2.57, review): whether a join goes on (join_public_group_by_id); a join without the question does. */
+    private static boolean join_still_wanted(@Nullable final java.util.function.BooleanSupplier still_wanted)
+    {
+        return (still_wanted == null) || still_wanted.getAsBoolean();
+    }
+
+    /**
+     * KHANDAQ (0.2.57, review): finish_public_group_join, which gives the group its row and clears its "we left" mark,
+     * while the join is still wanted. Otherwise the join ends here: toxcore leaves the instance this join made
+     * ({@code made_by_this_join}), which would go on looking for the group, and no row is made.
+     */
+    private static boolean finish_join_if_wanted(final long group_num, @NonNull final String group_identifier,
+                                                 final boolean show_toast,
+                                                 @Nullable final java.util.function.BooleanSupplier still_wanted,
+                                                 final boolean made_by_this_join)
+    {
+        if (join_still_wanted(still_wanted))
+        {
+            return finish_public_group_join(group_num, group_identifier, show_toast);
+        }
+        if (made_by_this_join)
+        {
+            tox_group_leave(group_num, "");
+        }
+        HelperGeneric.logI(TAG, "join_group:no longer wanted, stopped gn=" + group_num + " left=" + made_by_this_join);
+        return false;
     }
 
     static void do_join_public_group(Intent data)

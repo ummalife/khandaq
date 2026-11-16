@@ -3,7 +3,7 @@ package com.zoffcc.applications.trifa;
 import android.util.Log;
 
 import java.util.Locale;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * KHANDAQ (0.2.57, SPEC-community part B): what the app does for Khandaq Community, by the rules of
@@ -21,9 +21,14 @@ final class CommunityAutoJoin
 {
     private static final String TAG = "trifa.Community";
     private static final String MARK_SET = "true";
+    private static final int NO_SESSION = -1;
 
-    /** One join at a time: the node can connect again while a join still waits for toxcore. */
-    private static final AtomicBoolean JOINING = new AtomicBoolean(false);
+    /**
+     * The tox session (TrifaToxService.tox_session_number) whose join runs now, or NO_SESSION. One join at a time:
+     * the node can connect again while a join still waits for toxcore. A join left from an earlier session (a
+     * profile import, a logout and login) stops at its next step and does not hold up the join of this one.
+     */
+    private static final AtomicInteger JOINING_SESSION = new AtomicInteger(NO_SESSION);
 
     private CommunityAutoJoin()
     {
@@ -35,14 +40,16 @@ final class CommunityAutoJoin
      */
     static void onNodeConnected()
     {
-        if (!JOINING.compareAndSet(false, true))
+        final int session = TrifaToxService.tox_session_number.get();
+        final int running = JOINING_SESSION.get();
+        if ((running == session) || !JOINING_SESSION.compareAndSet(running, session))
         {
             return;
         }
         final Thread t = new Thread(() -> {
             try
             {
-                joinIfDue();
+                joinIfDue(session);
             }
             catch (Throwable e)
             {
@@ -50,17 +57,26 @@ final class CommunityAutoJoin
             }
             finally
             {
-                JOINING.set(false);
+                JOINING_SESSION.compareAndSet(session, NO_SESSION);
             }
         }, "khandaq-community-join");
         t.setDaemon(true);
         t.start();
     }
 
-    private static void joinIfDue()
+    /**
+     * Whether the tox session a join began in still runs. A profile import, or a logout and login, starts tox again in
+     * this process, with another profile maybe: a join of the last session must not land in it, past its marks.
+     */
+    private static boolean sessionGoesOn(final int session)
+    {
+        return TrifaToxService.is_tox_started && (TrifaToxService.tox_session_number.get() == session);
+    }
+
+    private static void joinIfDue(final int session)
     {
         // Not the person's profile (#244): a stand-in identity joins nothing and marks nothing.
-        if ((TrifaToxService.orma == null) || !TrifaToxService.is_tox_started || MainActivity.identity_load_blocked)
+        if ((TrifaToxService.orma == null) || !sessionGoesOn(session) || MainActivity.identity_load_blocked)
         {
             return;
         }
@@ -86,7 +102,8 @@ final class CommunityAutoJoin
         final boolean newGroup = !hasRow();
         final boolean joined = KhandaqCommunity.autoJoin(store, connected, groupNumber >= 0, newGroup, () -> {
             // No toast and no words on screen: the person did not ask for this join.
-            final boolean here = HelperGroup.join_public_group_by_id(KhandaqCommunity.CHAT_ID, null, false, null)
+            final boolean here = HelperGroup.join_public_group_by_id(KhandaqCommunity.CHAT_ID, null, false, null,
+                                                                     () -> sessionGoesOn(session))
                                  && inGroup();
             if (!here)
             {

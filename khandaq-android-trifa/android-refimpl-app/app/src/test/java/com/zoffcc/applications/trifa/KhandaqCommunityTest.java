@@ -411,7 +411,7 @@ public class KhandaqCommunityTest
         assertTrue("the mark follows the save", kept > saved);
 
         final String auto = read(JAVA + "CommunityAutoJoin.java");
-        final String joinIfDue = bare(method(auto, "private static void joinIfDue()"));
+        final String joinIfDue = bare(method(auto, JOIN_IF_DUE));
         assertTrue(joinIfDue.contains(
                 "KhandaqCommunity.noteGroupKept(store,(groupNumber>=0)&&connectedNow(groupNumber))"));
         assertTrue(joinIfDue.contains("finalbooleannewGroup=!hasRow();"));
@@ -424,15 +424,64 @@ public class KhandaqCommunityTest
     public void the_join_is_the_join_by_chat_id_with_the_profile_name_and_no_password()
     {
         final String auto = read(JAVA + "CommunityAutoJoin.java");
-        assertTrue(auto.contains("HelperGroup.join_public_group_by_id(KhandaqCommunity.CHAT_ID, null, false, null)"));
+        assertTrue(bare(auto).contains(
+                "HelperGroup.join_public_group_by_id(KhandaqCommunity.CHAT_ID,null,false,null,()->sessionGoesOn(session))"));
         // A stand-in identity (#244) joins nothing.
-        assertTrue(bare(method(auto, "private static void joinIfDue()")).contains("MainActivity.identity_load_blocked"));
+        assertTrue(bare(method(auto, JOIN_IF_DUE)).contains("MainActivity.identity_load_blocked"));
         // The mute is the group's own switch, the one its dossier turns.
         assertTrue(bare(auto).contains("notification_silent(true).execute();"));
-        final String join = method(read(JAVA + "HelperGroup.java"),
-                                   "static boolean join_public_group_by_id(final String group_id, @Nullable final String password, final boolean show_toast,\n");
+        final String join = method(read(JAVA + "HelperGroup.java"), JOIN_BY_ID);
         assertTrue(bare(join).contains("get_group_peer_join_name(),password);"));
     }
+
+    @Test
+    public void a_join_of_an_earlier_tox_session_stops_before_it_reaches_the_next_one()
+    {
+        // A profile import, or a logout and login, start tox again in the same process: each start is a new session.
+        final String start = read(JAVA + "TrifaToxService.java");
+        final int ledger = start.indexOf("NgcHistoryServeLedger.reset();");
+        final int numbered = start.indexOf("tox_session_number.incrementAndGet();", ledger);
+        assertTrue(ledger > 0);
+        assertTrue("numbered before it counts as started",
+                   numbered > ledger && numbered < start.indexOf("is_tox_started = true;", ledger));
+
+        // The auto-join keeps the session it began in, and its join asks for it at every step.
+        final String auto = read(JAVA + "CommunityAutoJoin.java");
+        final String connected = bare(method(auto, "static void onNodeConnected()"));
+        assertTrue(connected.contains("finalintsession=TrifaToxService.tox_session_number.get();"));
+        assertTrue(connected.contains("joinIfDue(session);"));
+        assertTrue("a join of the last session does not hold up this one",
+                   connected.contains("JOINING_SESSION.compareAndSet(session,NO_SESSION);"));
+        assertTrue(bare(method(auto, "private static boolean sessionGoesOn(final int session)")).contains(
+                "returnTrifaToxService.is_tox_started&&(TrifaToxService.tox_session_number.get()==session);"));
+        assertTrue(bare(method(auto, JOIN_IF_DUE)).contains("!sessionGoesOn(session)"));
+
+        // The join by chat id asks before each step that brings the group into toxcore or gives it a row.
+        final String helper = read(JAVA + "HelperGroup.java");
+        final String join = bare(method(helper, JOIN_BY_ID));
+        assertEquals("no row is made without asking", 0, count(join, "finish_public_group_join("));
+        assertEquals(4, count(join, "finish_join_if_wanted("));
+        final int ready = join.indexOf("if(!wait_for_tox_ready(12000L))");
+        assertTrue(ready > 0 && join.indexOf("if(!join_still_wanted(still_wanted))", ready) > ready);
+        final int attempt = join.indexOf("join_chat_id_buffer.rewind();new_group_num=MainActivity.tox_group_join(");
+        assertTrue("every attempt asks first", attempt > 0 && join.substring(0, attempt).endsWith(
+                "if(!join_still_wanted(still_wanted)){HelperGeneric.logI(TAG,\"join_group:nolongerwanted,stoppedbeforeattempt=\"+attempt);returnfalse;}"));
+        final String finish = bare(method(helper, "private static boolean finish_join_if_wanted("));
+        assertTrue(finish.contains("if(join_still_wanted(still_wanted)){returnfinish_public_group_join(group_num,"
+                                   + "group_identifier,show_toast);}if(made_by_this_join){tox_group_leave(group_num,\"\");}"));
+        assertTrue(join.contains("finish_join_if_wanted(new_group_num,normalized_group_id,show_toast,still_wanted,true);"));
+        // A join the person asks for asks nothing.
+        assertTrue(bare(method(helper, "static boolean join_public_group_by_id(final String group_id, @Nullable final"
+                                       + " String password, final boolean show_toast,\n"))
+                           .contains("returnjoin_public_group_by_id(group_id,password,show_toast,failures,null);"));
+    }
+
+    private static final String JOIN_IF_DUE = "private static void joinIfDue(final int session)";
+    /** The join by chat id itself, the one with every argument. */
+    private static final String JOIN_BY_ID =
+            "static boolean join_public_group_by_id(final String group_id, @Nullable final String password, final boolean show_toast,\n"
+            + "                                           @Nullable final java.util.function.Consumer<String> failures,\n"
+            + "                                           @Nullable final java.util.function.BooleanSupplier still_wanted)";
 
     // ---- its name and its place at the top of the list (the owner's rule, 2026-11-16) ----
 

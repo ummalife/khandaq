@@ -35,6 +35,7 @@
 @interface OCTNgcGroupFileTransfer (GroupRealmTests)
 
 - (NSMutableDictionary<NSString *, id> *)assemblies;
+- (NSMutableDictionary<NSString *, NSNumber *> *)completedAssemblyKeys;
 - (void)nackTickForAssembly:(id)assembly assemblyKey:(NSString *)assemblyKey;
 
 @end
@@ -352,6 +353,143 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
     XCTAssertEqual(theirs.messageFile.fileType, OCTMessageFileTypeCanceled);
     XCTAssertEqual(ours.messageFile.fileType, OCTMessageFileTypeLoading, @"our own file was ended by a drop");
     XCTAssertEqual(came.messageFile.fileType, OCTMessageFileTypeReady, @"a file that came was ended by a drop");
+}
+
+// KHANDAQ (0.2.57): the transfer remembers the files it put together only while the app runs. A member that sends a
+// file again after a restart has it put together once more, under a name of its own; its message was Ready already,
+// so that copy stayed on disk with no message. It goes now, and the message keeps its file.
+- (void)testAGroupFileThatComesAgainAfterARestartLeavesNoSecondCopy
+{
+    OCTChat *chat = [self groupChat];
+    NSArray *mocks = [self groupFileMocksWithDownloads:[self.root stringByAppendingPathComponent:@"Downloads"]];
+    NSData *payload = [self generatedBytesOfLength:2500];
+    NSData *msgId = [self generatedBytesOfLength:32];
+    NSArray<NSData *> *packets = [self packetsOfFile:payload named:@"clip.mp4" msgId:msgId chunkPayload:1000];
+
+    OCTSubmanagerGroupsImpl *before = [self startedSubmanagerWithDataSource:mocks.firstObject];
+    [self deliverPackets:packets toSubmanager:before];
+    OCTMessageAbstract *row = [self fileRowWithMsgId:msgId inChat:chat];
+    XCTAssertEqual(row.messageFile.fileType, OCTMessageFileTypeReady, @"the file did not come");
+    NSString *keptPath = row.messageFile.filePath;
+    NSString *folder = [keptPath stringByDeletingLastPathComponent];
+    XCTAssertEqualObjects([self filesInDirectory:folder], @[@"clip.mp4"]);
+
+    // The app starts again: the Realm and the files stay, and the new transfer knows of no file that came.
+    OCTSubmanagerGroupsImpl *after = [self startedSubmanagerWithDataSource:mocks.firstObject];
+    [self deliverPackets:packets toSubmanager:after];
+
+    OCTNgcGroupFileTransfer *transfer = [after valueForKey:@"fileTransfer"];
+    @synchronized (transfer.assemblies) {
+        XCTAssertEqual(transfer.completedAssemblyKeys.count, 1u, @"the file was not put together again");
+    }
+    XCTAssertEqualObjects([self filesInDirectory:folder], @[@"clip.mp4"], @"a second copy of the file stayed");
+    XCTAssertEqual(row.messageFile.fileType, OCTMessageFileTypeReady);
+    XCTAssertEqualObjects(row.messageFile.filePath, keptPath, @"the message took the second copy");
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:keptPath], payload);
+
+    // Every mock and both submanagers live until here: a submanager holds its data source weakly, and the blocks of
+    // its transfer hold the submanager weakly.
+    XCTAssertNotNil(before);
+    XCTAssertEqual(mocks.count, 3u);
+}
+
+// KHANDAQ (0.2.57): when the file of the message went (to make room), the copy that comes again is the only one on
+// disk, and it stays.
+- (void)testAGroupFileThatComesAgainKeepsItsCopyWhenTheFileOfItsMessageWent
+{
+    OCTChat *chat = [self groupChat];
+    NSArray *mocks = [self groupFileMocksWithDownloads:[self.root stringByAppendingPathComponent:@"Downloads"]];
+    NSData *payload = [self generatedBytesOfLength:2500];
+    NSData *msgId = [self generatedBytesOfLength:32];
+    NSArray<NSData *> *packets = [self packetsOfFile:payload named:@"clip.mp4" msgId:msgId chunkPayload:1000];
+
+    OCTSubmanagerGroupsImpl *before = [self startedSubmanagerWithDataSource:mocks.firstObject];
+    [self deliverPackets:packets toSubmanager:before];
+    NSString *keptPath = [self fileRowWithMsgId:msgId inChat:chat].messageFile.filePath;
+    NSString *folder = [keptPath stringByDeletingLastPathComponent];
+    XCTAssertTrue([[NSFileManager defaultManager] removeItemAtPath:keptPath error:nil]);
+
+    OCTSubmanagerGroupsImpl *after = [self startedSubmanagerWithDataSource:mocks.firstObject];
+    [self deliverPackets:packets toSubmanager:after];
+
+    NSArray<NSString *> *files = [self filesInDirectory:folder];
+    XCTAssertEqual(files.count, 1u, @"%@", files);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:[folder stringByAppendingPathComponent:files.firstObject]], payload,
+                          @"the bytes that came again were removed");
+
+    XCTAssertNotNil(before);
+    XCTAssertNotNil(after);
+    XCTAssertEqual(mocks.count, 3u);
+}
+
+/** The data source of a submanager as the app's, on the Realm of the test, and the mocks it returns; first itself. */
+- (NSArray *)groupFileMocksWithDownloads:(NSString *)downloads
+{
+    id dataSource = OCMProtocolMock(@protocol(OCTSubmanagerDataSource));
+    id tox = OCMClassMock([OCTTox class]);
+    id fileStorage = OCMProtocolMock(@protocol(OCTFileStorageProtocol));
+    OCMStub([dataSource managerGetTox]).andReturn(tox);
+    OCMStub([dataSource managerGetRealmManager]).andReturn(self.realmManager);
+    OCMStub([dataSource managerGetFileStorage]).andReturn(fileStorage);
+    OCMStub([fileStorage pathForDownloadedFilesDirectory]).andReturn(downloads);
+    return @[dataSource, tox, fileStorage];
+}
+
+/** A submanager of groups set up as the app sets one up when it starts. */
+- (OCTSubmanagerGroupsImpl *)startedSubmanagerWithDataSource:(id)dataSource
+{
+    OCTSubmanagerGroupsImpl *submanager = [OCTSubmanagerGroupsImpl new];
+    submanager.dataSource = dataSource;
+    [submanager setupFileTransferIfNeeded];
+    XCTAssertNotNil([submanager valueForKey:@"fileTransfer"]);
+    return submanager;
+}
+
+/** The BEGIN and the chunks of `payload`, in order, as a member sends a file. */
+- (NSArray<NSData *> *)packetsOfFile:(NSData *)payload
+                               named:(NSString *)fileName
+                               msgId:(NSData *)msgId
+                        chunkPayload:(uint32_t)chunkPayload
+{
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    [packets addObject:[self beginPacketWithMsgId:msgId fileName:fileName size:payload.length chunkPayload:chunkPayload]];
+
+    for (uint32_t index = 0; index * chunkPayload < payload.length; index++) {
+        NSUInteger length = MIN((NSUInteger)chunkPayload, payload.length - index * chunkPayload);
+        [packets addObject:[self chunkPacketWithMsgId:msgId
+                                                index:index
+                                              payload:[payload subdataWithRange:NSMakeRange(index * chunkPayload, length)]]];
+    }
+
+    return packets;
+}
+
+/**
+ * Hands `packets` from the peer to the file transfer of `submanager`, and returns when the transfer has taken them all
+ * and the blocks it handed to the main queue for them have run.
+ */
+- (void)deliverPackets:(NSArray<NSData *> *)packets toSubmanager:(OCTSubmanagerGroupsImpl *)submanager
+{
+    OCTNgcGroupFileTransfer *transfer = [submanager valueForKey:@"fileTransfer"];
+
+    for (NSData *packet in packets) {
+        [transfer handleIncomingPacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                               peerId:kGroupRealmTestsPeerId
+                                     peerPublicKeyHex:kGroupRealmTestsPeerKeyHex
+                                                 data:packet];
+    }
+
+    // The transfer takes the packets on its send queue in the order they came, and hands its blocks to the main queue
+    // from there; the main queue runs blocks in the order they came.
+    dispatch_sync([transfer valueForKey:@"sendQueue"], ^{});
+    __block BOOL reached = NO;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        reached = YES;
+    });
+    [self waitUntil:^BOOL {
+        return reached;
+    }];
+    XCTAssertTrue(reached);
 }
 
 - (OCTMessageAbstract *)fileRowNamed:(NSString *)fileName

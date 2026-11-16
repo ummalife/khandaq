@@ -1922,6 +1922,29 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
                                 filePath:(NSString *)filePath
                                 fileSize:(uint64_t)fileSize
 {
+    return [self markGroupIncomingFileReadyInChat:chat
+                                        msgIdHash:msgIdHash
+                                           peerId:peerId
+                                     senderPubkey:senderPubkey
+                                         fileName:fileName
+                                         filePath:filePath
+                                         fileSize:fileSize
+                                    readyFilePath:NULL];
+}
+
+- (BOOL)markGroupIncomingFileReadyInChat:(OCTChat *)chat
+                               msgIdHash:(NSString *)msgIdHash
+                                  peerId:(uint32_t)peerId
+                            senderPubkey:(NSString *)senderPubkey
+                                fileName:(NSString *)fileName
+                                filePath:(NSString *)filePath
+                                fileSize:(uint64_t)fileSize
+                           readyFilePath:(NSString **)readyFilePath
+{
+    if (readyFilePath) {
+        *readyFilePath = nil;
+    }
+
     // KHANDAQ (#15): find the loading bubble AND update it to ready ATOMICALLY on the manager's own
     // realm/queue. The previous approach looked up via the calling thread's default realm (which can
     // be a stale/separate instance) and then updated via this realm — so the lookup missed the
@@ -1932,6 +1955,8 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     }
 
     __block BOOL handled = NO;
+    // Set on the Realm's queue and handed out after it: the queue's autorelease pool must not own what the caller gets.
+    __block NSString *foundReadyFilePath = nil;
 
     dispatch_sync(self.queue, ^{
         OCTMessageAbstract *existing = nil;
@@ -1971,6 +1996,7 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         handled = YES;
 
         if (existing.messageFile.fileType == OCTMessageFileTypeReady) {
+            foundReadyFilePath = existing.messageFile.filePath;
             return;
         }
 
@@ -1987,6 +2013,10 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         (void)peerId;
         [self.realm commitWriteTransaction];
     });
+
+    if (readyFilePath) {
+        *readyFilePath = foundReadyFilePath;
+    }
 
     return handled;
 }

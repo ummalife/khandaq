@@ -5292,6 +5292,21 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     }];
 }
 
+// KHANDAQ (0.2.57): what tells one file on disk from another, whatever the spelling of its path (a symlink in it, the
+// container re-rooted); nil when the path names no regular file, or when that cannot be read.
+static id OCTGroupRegularFileIdentifier(NSString *path)
+{
+    if (path.length == 0) {
+        return nil;
+    }
+
+    NSDictionary<NSURLResourceKey, id> *values =
+        [[NSURL fileURLWithPath:path] resourceValuesForKeys:@[NSURLFileResourceIdentifierKey, NSURLIsRegularFileKey]
+                                                      error:nil];
+
+    return [values[NSURLIsRegularFileKey] boolValue] ? values[NSURLFileResourceIdentifierKey] : nil;
+}
+
 - (void)handleIncomingGroupFileCompleteWithGroupNumber:(uint32_t)groupNumber
                                                 peerId:(uint32_t)peerId
                                     senderPublicKeyHex:(NSString *)senderPublicKeyHex
@@ -5313,15 +5328,38 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     // KHANDAQ (audit F-5): the msg-id hash is public inside the group, so the row lookup alone lets any
     // member finish somebody else's transfer with its own payload. Pass the key of the peer this file
     // really came from — the row keeps the sender frozen at BEGIN and refuses a different one.
+    NSString *readyFilePath = nil;
     BOOL handled = [realmManager markGroupIncomingFileReadyInChat:chat
                                                         msgIdHash:msgIdHex
                                                            peerId:peerId
                                                      senderPubkey:senderPublicKeyHex
                                                          fileName:fileName
                                                          filePath:filePath
-                                                         fileSize:fileSize];
+                                                         fileSize:fileSize
+                                                    readyFilePath:&readyFilePath];
 
     if (handled) {
+        // KHANDAQ (0.2.57): the message of this file was Ready already. The transfer remembers the files it put
+        // together only while the app runs, so a member that sends one again after a restart has it put together once
+        // more, under a name of its own, and that copy stayed on disk with no message. It goes when the message's own
+        // file is on disk; when that file went (to make room), the copy is the only one and stays.
+        id keptFile = OCTGroupRegularFileIdentifier(readyFilePath);
+        id newFile = OCTGroupRegularFileIdentifier(filePath);
+
+        if (keptFile && newFile && ! [keptFile isEqual:newFile]) {
+            NSString *shortMsgId = [(msgIdHex.length > 8 ? [msgIdHex substringToIndex:8] : (msgIdHex ?: @"")) lowercaseString];
+            NSError *error = nil;
+
+            if ([[NSFileManager defaultManager] removeItemAtPath:filePath error:&error]) {
+                OCTLogInfo(@"NGC group file %@ of group %u came again; its message has it as %@: the copy %@ is removed",
+                           shortMsgId, groupNumber, readyFilePath.lastPathComponent, filePath.lastPathComponent);
+            }
+            else {
+                OCTLogWarn(@"NGC group file %@ of group %u came again: cannot remove the copy %@: %@",
+                           shortMsgId, groupNumber, filePath.lastPathComponent, error);
+            }
+        }
+
         return;
     }
 

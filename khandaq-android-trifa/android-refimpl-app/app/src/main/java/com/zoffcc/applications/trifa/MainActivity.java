@@ -545,9 +545,10 @@ public class MainActivity extends AppCompatActivity
     static int PREF__video_play_delay_ms = GLOBAL_INIT_PLAY_DELAY;
     static int GLOBAL_AV_BUFFER_MS = 120;
     static int PREF__audio_group_play_volume_percent = 100;
-    static boolean PREF__auto_accept_image = true;
-    static boolean PREF__auto_accept_video = false;
-    static boolean PREF__auto_accept_all_upto = false;
+    // KHANDAQ (0.2.57): on by default, see AutoDownloadPreference.
+    static boolean PREF__auto_accept_image = AutoDownloadPreference.DEFAULT;
+    static boolean PREF__auto_accept_video = AutoDownloadPreference.DEFAULT;
+    static boolean PREF__auto_accept_all_upto = AutoDownloadPreference.DEFAULT;
     // KHANDAQ (Figma "Загрузка вложений"): global attachment auto-download policy. 0=Никогда, 1=Только Wi-Fi, 2=Всегда (default = current behavior)
     static int PREF__attachment_download_mode = 2;
     static int PREF__video_cam_resolution = 0;
@@ -1265,32 +1266,45 @@ public class MainActivity extends AppCompatActivity
 
         try
         {
-            PREF__auto_accept_image = settings.getBoolean("auto_accept_image", true);
+            // KHANDAQ (0.2.57): files download by themselves by default, see AutoDownloadPreference.
+            AutoDownloadPreference.applyDefaultOnce(settings);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__auto_accept_image = true;
         }
 
         try
         {
-            PREF__auto_accept_video = settings.getBoolean("auto_accept_video", false);
+            PREF__auto_accept_image = settings.getBoolean(AutoDownloadPreference.KEY_PICTURES,
+                                                          AutoDownloadPreference.DEFAULT);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__auto_accept_video = false;
+            PREF__auto_accept_image = AutoDownloadPreference.DEFAULT;
         }
 
         try
         {
-            PREF__auto_accept_all_upto = settings.getBoolean("auto_accept_all_upto", false);
+            PREF__auto_accept_video = settings.getBoolean(AutoDownloadPreference.KEY_VIDEOS,
+                                                          AutoDownloadPreference.DEFAULT);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__auto_accept_all_upto = false;
+            PREF__auto_accept_video = AutoDownloadPreference.DEFAULT;
+        }
+
+        try
+        {
+            PREF__auto_accept_all_upto = settings.getBoolean(AutoDownloadPreference.KEY_ALL_FILES,
+                                                             AutoDownloadPreference.DEFAULT);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            PREF__auto_accept_all_upto = AutoDownloadPreference.DEFAULT;
         }
 
         try
@@ -4146,32 +4160,45 @@ public class MainActivity extends AppCompatActivity
 
         try
         {
-            PREF__auto_accept_image = settings.getBoolean("auto_accept_image", true);
+            // KHANDAQ (0.2.57): files download by themselves by default, see AutoDownloadPreference.
+            AutoDownloadPreference.applyDefaultOnce(settings);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__auto_accept_image = true;
         }
 
         try
         {
-            PREF__auto_accept_video = settings.getBoolean("auto_accept_video", false);
+            PREF__auto_accept_image = settings.getBoolean(AutoDownloadPreference.KEY_PICTURES,
+                                                          AutoDownloadPreference.DEFAULT);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__auto_accept_video = false;
+            PREF__auto_accept_image = AutoDownloadPreference.DEFAULT;
         }
 
         try
         {
-            PREF__auto_accept_all_upto = settings.getBoolean("auto_accept_all_upto", false);
+            PREF__auto_accept_video = settings.getBoolean(AutoDownloadPreference.KEY_VIDEOS,
+                                                          AutoDownloadPreference.DEFAULT);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__auto_accept_all_upto = false;
+            PREF__auto_accept_video = AutoDownloadPreference.DEFAULT;
+        }
+
+        try
+        {
+            PREF__auto_accept_all_upto = settings.getBoolean(AutoDownloadPreference.KEY_ALL_FILES,
+                                                             AutoDownloadPreference.DEFAULT);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            PREF__auto_accept_all_upto = AutoDownloadPreference.DEFAULT;
         }
 
         try

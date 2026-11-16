@@ -227,9 +227,19 @@ final class AirFileEntry
             // in the file table still holds the size.
             e.total = storedSize(m);
         }
-        if (e.state == State.MOVING || e.state == State.PAUSED)
+        final Filetransfer ft = transferOf(m);
+        final boolean online = HelperFiletransfer.is_dm_sender_online(m.tox_friendpubkey);
+        // KHANDAQ (0.2.57, SPEC-network 1.6, 1.7): a file under way while its connection is gone keeps its
+        // progress and says it waits for the connection, never that it failed, and goes on by itself; a file of
+        // theirs that its sender did not offer again once back reads as stopped, with its Retry.
+        final FileResume.Wait wait = (e.state == State.PREPARING) ? FileResume.Wait.NONE
+                                     : HelperFiletransfer.direct_file_wait(m, ft, outgoing, online);
+        if (wait == FileResume.Wait.STOPPED)
         {
-            final Filetransfer ft = transferOf(m);
+            e.state = State.FAILED;
+        }
+        if ((e.state == State.MOVING) || (e.state == State.PAUSED) || (wait == FileResume.Wait.CONNECTION))
+        {
             if (ft != null)
             {
                 if (ft.filesize > 0)
@@ -240,10 +250,15 @@ final class AirFileEntry
             }
         }
 
-        final boolean online = HelperFiletransfer.is_dm_sender_online(m.tox_friendpubkey);
         final ChatTransferProgressHelper.Callbacks calls = ChatTransferProgressHelper.directCallbacks(context, itemRoot,
                                                                                                      m, outgoing);
-        switch (e.state)
+        if (wait == FileResume.Wait.CONNECTION)
+        {
+            e.note = context.getString(R.string.air_file_waits_connection);
+            e.bar = e.total > 0;
+            e.cancel = view -> calls.onCancel();
+        }
+        else switch (e.state)
         {
             case PREPARING:
                 // The bar is the copy's: the bytes copied of the file's size.

@@ -263,12 +263,8 @@ public class MessageListHolder_file_incoming_state_resume extends RecyclerView.V
             // cancel FT
             Log.i(TAG, "button_cancel:OnTouch:001");
             // values.get(position).state = TOX_FILE_CONTROL_CANCEL.value;
-            tox_file_control(tox_friend_by_public_key__wrapper(message.tox_friendpubkey),
-                             get_filetransfer_filenum_from_id(message.filetransfer_id), TOX_FILE_CONTROL_CANCEL.value);
-            set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_CANCEL.value);
-            set_message_state_from_id(message.id, TOX_FILE_CONTROL_CANCEL.value);
-
-            remove_vfs_ft_from_cache(message);
+            // KHANDAQ (0.2.57): the cancel of the file entry's own Cancel, which also lets the bytes kept go.
+            HelperFiletransfer.cancel_incoming_filetransfer(message);
 
             button_ok.setVisibility(View.GONE);
             button_cancel.setVisibility(View.GONE);

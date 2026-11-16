@@ -43,6 +43,32 @@ public class BufferedOutputStreamCustom extends info.guardianproject.iocipher.Fi
     }
 
     /**
+     * KHANDAQ (0.2.57): the stream opened by path empties its file (O_TRUNC). This one opens it without emptying
+     * it and writes from {@code position} on: a 1:1 transfer that goes on after a cut or a restart appends to the
+     * bytes it already holds. IOCipher's descriptor is a path and a position, and a stream made over it writes at
+     * that position (O_WRONLY, no O_APPEND).
+     */
+    private BufferedOutputStreamCustom(final info.guardianproject.iocipher.FileDescriptor fd, final long position)
+            throws IOException
+    {
+        super(fd);
+        count = 0;
+        buf = new byte[cache_buffer_size];
+        super.getChannel().lseek(position, info.guardianproject.libcore.io.OsConstants.SEEK_SET);
+        cur_pos = position;
+    }
+
+    static BufferedOutputStreamCustom openAt(final String path, final long position) throws IOException
+    {
+        // The path as the stream opened by path takes it (IOCipher's File folds a doubled separator).
+        final String absolute = new info.guardianproject.iocipher.File(path).getAbsolutePath();
+        final info.guardianproject.iocipher.FileDescriptor fd = info.guardianproject.libcore.io.IoBridge.open(
+                absolute, info.guardianproject.libcore.io.OsConstants.O_WRONLY
+                          | info.guardianproject.libcore.io.OsConstants.O_CREAT);
+        return new BufferedOutputStreamCustom(fd, position);
+    }
+
+    /**
      * Flush the internal buffer
      */
     private void flushBuffer() throws IOException
@@ -102,9 +128,11 @@ public class BufferedOutputStreamCustom extends info.guardianproject.iocipher.Fi
             flushBuffer();
             super.flush();
             count = 0;
-            cur_pos = 0;
             buf = new byte[cache_buffer_size];
             super.getChannel().lseek(seek_position, info.guardianproject.libcore.io.OsConstants.SEEK_SET);
+            // KHANDAQ (0.2.57): the stream is at the seek position now, not at 0. With 0 every chunk after a seek
+            // seemed out of place, and each one flushed the buffer and seeked again.
+            cur_pos = seek_position;
             // Log.i("BufOutStream:seek:22:", "buf=" + buf + " cur_pos=" + cur_pos + " seek_position=" + seek_position);
         }
     }

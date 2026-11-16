@@ -195,7 +195,6 @@ import static com.zoffcc.applications.trifa.HelperGeneric.is_nightmode_active;
 import static com.zoffcc.applications.trifa.HelperGeneric.set_g_opts;
 import static com.zoffcc.applications.trifa.HelperGeneric.update_savedata_file_wrapper;
 import static com.zoffcc.applications.trifa.HelperGeneric.update_savedata_file_wrapper_throttled_last_trigger_ts;
-import static com.zoffcc.applications.trifa.HelperGeneric.write_chunk_to_VFS_file;
 import static com.zoffcc.applications.trifa.HelperGroup.add_group_peer_to_db;
 import static com.zoffcc.applications.trifa.HelperGroup.add_system_message_to_group_chat;
 import static com.zoffcc.applications.trifa.HelperGroup.android_tox_callback_group_message_cb_method_wrapper;
@@ -6765,6 +6764,12 @@ public class MainActivity extends AppCompatActivity
                     // exact accept moment instead of waiting on (and racing) the 15s background poll.
                     TrifaToxService.resend_unsent_text_messages();
                 }
+                else
+                {
+                    // KHANDAQ (0.2.57): files under way with this friend wait for the connection and go on from
+                    // where they stopped, instead of spinning on a transfer toxcore broke.
+                    HelperFiletransfer.on_friend_connection_lost(f.tox_public_key_string);
+                }
             }
 
             if (is_any_relay(f.tox_public_key_string))
@@ -7504,6 +7509,11 @@ public class MainActivity extends AppCompatActivity
         if (a_TOX_FILE_CONTROL == TOX_FILE_CONTROL_CANCEL.value)
         {
             HelperGeneric.logI(TAG, "file_recv_control:CANCEL fn=" + friend_number + " filenum=" + file_number);
+            // KHANDAQ (0.2.57): the transfer of a file that is whole here already has nothing of ours to cancel.
+            if (HelperFiletransfer.forget_incoming_already_here(friend_number, file_number))
+            {
+                return;
+            }
             HelperFiletransfer.cancel_filetransfer(friend_number, file_number);
         }
         else if (a_TOX_FILE_CONTROL == TOX_FILE_CONTROL_RESUME.value)
@@ -7792,7 +7802,9 @@ public class MainActivity extends AppCompatActivity
 
                     if (ft.filesize < UPDATE_MESSAGE_PROGRESS_SMALL_FILE_IS_LESS_THAN_BYTES)
                     {
-                        if ((ft.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES_SMALL_FILES) < position)
+                        // KHANDAQ (0.2.57): an offer made again goes on from where the receiver says,
+                        // which can be before the progress shown so far.
+                        if ((position < ft.current_position) || ((ft.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES_SMALL_FILES) < position))
                         {
                             ft.current_position = position;
                             HelperFiletransfer.update_filetransfer_db_current_position((Filetransfer) ft);
@@ -7815,7 +7827,9 @@ public class MainActivity extends AppCompatActivity
                     }
                     else
                     {
-                        if ((ft.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES) < position)
+                        // KHANDAQ (0.2.57): an offer made again goes on from where the receiver says,
+                        // which can be before the progress shown so far.
+                        if ((position < ft.current_position) || ((ft.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES) < position))
                         {
                             ft.current_position = position;
                             HelperFiletransfer.update_filetransfer_db_current_position((Filetransfer) ft);
@@ -7953,7 +7967,9 @@ public class MainActivity extends AppCompatActivity
 
                     if (ft.filesize < UPDATE_MESSAGE_PROGRESS_SMALL_FILE_IS_LESS_THAN_BYTES)
                     {
-                        if ((ft.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES_SMALL_FILES) < position)
+                        // KHANDAQ (0.2.57): an offer made again goes on from where the receiver says,
+                        // which can be before the progress shown so far.
+                        if ((position < ft.current_position) || ((ft.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES_SMALL_FILES) < position))
                         {
                             ft.current_position = position;
                             HelperFiletransfer.update_filetransfer_db_current_position((Filetransfer) ft);
@@ -7976,7 +7992,9 @@ public class MainActivity extends AppCompatActivity
                     }
                     else
                     {
-                        if ((ft.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES) < position)
+                        // KHANDAQ (0.2.57): an offer made again goes on from where the receiver says,
+                        // which can be before the progress shown so far.
+                        if ((position < ft.current_position) || ((ft.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES) < position))
                         {
                             ft.current_position = position;
                             HelperFiletransfer.update_filetransfer_db_current_position((Filetransfer) ft);
@@ -8158,6 +8176,13 @@ public class MainActivity extends AppCompatActivity
                                                                        file_id_buffer.limit()).toUpperCase();
             HelperGeneric.logI(TAG, "TOX_FILE_ID_LENGTH=" + TOX_FILE_ID_LENGTH + " file_id_buffer_hex=" + file_id_buffer_hex);
 
+            // KHANDAQ (0.2.57, SPEC-network 1.4): a file this friend offered before goes on in its entry.
+            if (HelperFiletransfer.resume_incoming_offer(friend_number, file_number, a_TOX_FILE_KIND, file_size,
+                                                         file_id_buffer_hex, filename))
+            {
+                return;
+            }
+
             Filetransfer f = new Filetransfer();
             f.tox_public_key_string = HelperFriend.tox_friend_get_public_key__wrapper(friend_number);
             f.direction = TRIFA_FT_DIRECTION_INCOMING.value;
@@ -8307,6 +8332,14 @@ public class MainActivity extends AppCompatActivity
                                                file_id_buffer.limit()).toUpperCase()
                     : null;
 
+            // KHANDAQ (0.2.57, SPEC-network 1.4): a file this friend offered before goes on in its entry; desktop
+            // and iOS offer it again with the same id after a cut, as Android does.
+            if (HelperFiletransfer.resume_incoming_offer(friend_number, file_number, a_TOX_FILE_KIND, file_size,
+                                                         file_id_buffer_hex, filename))
+            {
+                return;
+            }
+
             Filetransfer f = new Filetransfer();
             f.tox_public_key_string = HelperFriend.tox_friend_get_public_key__wrapper(friend_number);
             f.direction = TRIFA_FT_DIRECTION_INCOMING.value;
@@ -8435,6 +8468,12 @@ public class MainActivity extends AppCompatActivity
         //HelperGeneric.logI(TAG, "file_recv_chunk:" + friend_number + ":fn==" + file_number + ":position=" + position + ":length=" + length + ":data len=" + data.length + ":data=" + data);
         //HelperGeneric.logI(TAG, "file_recv_chunk:--START--");
         //HelperGeneric.logI(TAG, "file_recv_chunk:" + friend_number + ":" + file_number + ":" + position + ":" + length);
+        // KHANDAQ (0.2.57): the last byte of a file that is whole here already (resume_incoming_offer) only lets
+        // both ends finish; its entry, its file and its notification stay as they are.
+        if (HelperFiletransfer.incoming_chunk_of_file_already_here(friend_number, file_number, length))
+        {
+            return;
+        }
         Filetransfer f = null;
 
         try
@@ -8595,13 +8634,15 @@ public class MainActivity extends AppCompatActivity
                     {
                         if (f.kind == TOX_FILE_KIND_FTV2.value)
                         {
-                            write_chunk_to_VFS_file(f.path_name + "/" + f.file_name, position,
-                                                    length - TOX_FILE_ID_LENGTH,
-                                                    Arrays.copyOfRange(data, TOX_FILE_ID_LENGTH, data.length));
+                            HelperGeneric.write_direct_chunk_to_VFS_file(f.path_name + "/" + f.file_name, position,
+                                                                         length - TOX_FILE_ID_LENGTH,
+                                                                         Arrays.copyOfRange(data, TOX_FILE_ID_LENGTH,
+                                                                                            data.length));
                         }
                         else
                         {
-                            write_chunk_to_VFS_file(f.path_name + "/" + f.file_name, position, length, data);
+                            HelperGeneric.write_direct_chunk_to_VFS_file(f.path_name + "/" + f.file_name, position,
+                                                                         length, data);
                         }
                     }
                     catch (Exception e)

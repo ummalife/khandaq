@@ -61,9 +61,13 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Random;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 
 import androidx.core.content.FileProvider;
@@ -89,11 +93,7 @@ import static com.zoffcc.applications.trifa.MainActivity.context_s;
 import static com.zoffcc.applications.trifa.MainActivity.tox_file_control;
 import static com.zoffcc.applications.trifa.MainActivity.tox_file_send;
 import static com.zoffcc.applications.trifa.MainActivity.tox_friend_get_capabilities;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.AUTO_ACCEPT_FT_MAX_ANYKIND_SIZE_IN_MB;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.AUTO_ACCEPT_FT_MAX_IMAGE_SIZE_IN_MB;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.AUTO_ACCEPT_FT_MAX_VIDEO_SIZE_IN_MB;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.AUTO_ACCEPT_FT_SMALL_FILE_MAX_SIZE_IN_MB;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.KHANDAQ_MAX_FILE_TRANSFER_BYTES;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_FT_DIRECTION.TRIFA_FT_DIRECTION_INCOMING;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_FT_DIRECTION.TRIFA_FT_DIRECTION_OUTGOING;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE;
@@ -166,110 +166,17 @@ public class HelperFiletransfer
     {
         try
         {
-            // KHANDAQ: respect the global attachment-download policy (Никогда / Только Wi-Fi) for 1:1 too.
-            if (!attachment_auto_download_allowed())
-            {
-                return false;
-            }
-
             if (get_filetransfer_state_from_id(message.filetransfer_id) != TOX_FILE_CONTROL_PAUSE.value)
             {
                 return false;
             }
 
-            if (should_force_auto_accept_incoming(message))
+            if (!auto_download_allows(message))
             {
-                return accept_paused_incoming_filetransfer(message);
+                return false;
             }
 
-            String mimeType = guess_mime_type_from_filename(
-                    get_filetransfer_filename_from_id(message.filetransfer_id).toLowerCase());
-            // Log.i(TAG, "check_auto_accept_incoming_filetransfer:mime-type=" + mimeType);
-
-            if (mimeType != null)
-            {
-                if (PREF__auto_accept_image)
-                {
-                    if (get_filetransfer_filesize_from_id(message.filetransfer_id) <=
-                        (long) AUTO_ACCEPT_FT_MAX_IMAGE_SIZE_IN_MB * 1024 *
-                        1024) // if file size is smaller than 12 MByte accept FT
-                    {
-                        if (mimeType.startsWith("image/"))
-                        {
-                            if (get_filetransfer_state_from_id(message.filetransfer_id) == TOX_FILE_CONTROL_PAUSE.value)
-                            {
-                                // accept FT
-                                set_filetransfer_accepted_from_id(message.filetransfer_id);
-                                set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_RESUME.value);
-                                set_message_accepted_from_id(message.id);
-                                set_message_state_from_id(message.id, TOX_FILE_CONTROL_RESUME.value);
-                                tox_file_control(tox_friend_by_public_key__wrapper(message.tox_friendpubkey),
-                                                 get_filetransfer_filenum_from_id(message.filetransfer_id),
-                                                 TOX_FILE_CONTROL_RESUME.value);
-
-                                // update message view
-                                update_single_message_from_messge_id(message.id, true);
-                                // Log.i(TAG, "check_auto_accept_incoming_filetransfer:image:accepted");
-                                return true;
-                            }
-                        }
-                    }
-                }
-
-                if (PREF__auto_accept_video)
-                {
-                    if (get_filetransfer_filesize_from_id(message.filetransfer_id) <=
-                        (long) AUTO_ACCEPT_FT_MAX_VIDEO_SIZE_IN_MB * 1024 *
-                        1024) // if file size is smaller than 40 MByte accept FT
-                    {
-                        if (mimeType.startsWith("video/"))
-                        {
-                            if (get_filetransfer_state_from_id(message.filetransfer_id) == TOX_FILE_CONTROL_PAUSE.value)
-                            {
-                                // accept FT
-                                set_filetransfer_accepted_from_id(message.filetransfer_id);
-                                set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_RESUME.value);
-                                set_message_accepted_from_id(message.id);
-                                set_message_state_from_id(message.id, TOX_FILE_CONTROL_RESUME.value);
-                                tox_file_control(tox_friend_by_public_key__wrapper(message.tox_friendpubkey),
-                                                 get_filetransfer_filenum_from_id(message.filetransfer_id),
-                                                 TOX_FILE_CONTROL_RESUME.value);
-
-                                // update message view
-                                update_single_message_from_messge_id(message.id, true);
-                                // Log.i(TAG, "check_auto_accept_incoming_filetransfer:video:accepted");
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (PREF__auto_accept_all_upto)
-            {
-                if (get_filetransfer_filesize_from_id(message.filetransfer_id) <=
-                    (long) AUTO_ACCEPT_FT_MAX_ANYKIND_SIZE_IN_MB * 1024 *
-                    1024) // if file size is smaller than 200 MByte accept FT
-                {
-                    if (get_filetransfer_state_from_id(message.filetransfer_id) == TOX_FILE_CONTROL_PAUSE.value)
-                    {
-                        // accept FT
-                        set_filetransfer_accepted_from_id(message.filetransfer_id);
-                        set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_RESUME.value);
-                        set_message_accepted_from_id(message.id);
-                        set_message_state_from_id(message.id, TOX_FILE_CONTROL_RESUME.value);
-                        tox_file_control(tox_friend_by_public_key__wrapper(message.tox_friendpubkey),
-                                         get_filetransfer_filenum_from_id(message.filetransfer_id),
-                                         TOX_FILE_CONTROL_RESUME.value);
-
-                        // update message view
-                        update_single_message_from_messge_id(message.id, true);
-                        // Log.i(TAG, "check_auto_accept_incoming_filetransfer:video:accepted");
-                        return true;
-                    }
-                }
-            }
-
+            return accept_paused_incoming_filetransfer(message);
         }
         catch (Exception e)
         {
@@ -279,7 +186,28 @@ public class HelperFiletransfer
         return false;
     }
 
-    /** Accept paused incoming DM file if auto-accept prefs did not resume it yet. */
+    /**
+     * KHANDAQ (0.2.57, SPEC-network part 3): whether a 1:1 file of theirs downloads by itself now, by the switches
+     * of Settings and the attachment download mode (AutoDownloadPreference). A file downloads by itself only so;
+     * the switches used to be passed over (ensure_incoming_dm_file_accepted accepted every file), so turning
+     * them off did nothing.
+     */
+    static boolean auto_download_allows(final Message message)
+    {
+        if ((message == null) || (message.filetransfer_id <= 0))
+        {
+            return false;
+        }
+        final String name = get_filetransfer_filename_from_id(message.filetransfer_id);
+        final String mime = (name == null) ? null : guess_mime_type_from_filename(name.toLowerCase(Locale.ROOT));
+        final boolean voice = isVoiceMessagePath(name) || ((mime != null) && mime.startsWith("audio/"));
+        final int mode = MainActivity.PREF__attachment_download_mode;
+        return AutoDownloadPreference.allows(mode, (mode == 1) && is_on_wifi(), PREF__auto_accept_image,
+                                             PREF__auto_accept_video, PREF__auto_accept_all_upto,
+                                             get_filetransfer_filesize_from_id(message.filetransfer_id), mime, voice);
+    }
+
+    /** After a new offer of theirs: the same rule as check_auto_accept_incoming_filetransfer, kept for its callers. */
     static void ensure_incoming_dm_file_accepted(final Message message)
     {
         if (message == null || message.filetransfer_id <= 0)
@@ -289,18 +217,7 @@ public class HelperFiletransfer
 
         try
         {
-            if (get_filetransfer_state_from_id(message.filetransfer_id) != TOX_FILE_CONTROL_PAUSE.value)
-            {
-                return;
-            }
-
-            final long filesize = get_filetransfer_filesize_from_id(message.filetransfer_id);
-            if ((filesize <= 0) || (filesize > KHANDAQ_MAX_FILE_TRANSFER_BYTES))
-            {
-                return;
-            }
-
-            accept_paused_incoming_filetransfer(message);
+            check_auto_accept_incoming_filetransfer(message);
         }
         catch (Exception e)
         {
@@ -874,6 +791,12 @@ public class HelperFiletransfer
             {
                 if ((f.kind == TOX_FILE_KIND_DATA.value) || (f.kind == TOX_FILE_KIND_FTV2.value))
                 {
+                    // KHANDAQ (0.2.57): a receiver that lost the transfer in a restart is offered it again.
+                    if (outgoing_kill_means_lost_transfer(f))
+                    {
+                        try_start_next_queued_outgoing_file(f.tox_public_key_string);
+                        return;
+                    }
                     long ft_id = get_filetransfer_id_from_friendnum_and_filenum(friend_number, file_number);
                     long msg_id = HelperMessage.get_message_id_from_filetransfer_id_and_friendnum(ft_id, friend_number);
                     // set state for FT in message
@@ -928,24 +851,95 @@ public class HelperFiletransfer
     {
         try
         {
-            List<com.zoffcc.applications.sorm.Filetransfer> fts_active = orma.selectFromFiletransfer().file_numberNotEq(-1).toList();
-            for (com.zoffcc.applications.sorm.Filetransfer f : fts_active)
+            // KHANDAQ (0.2.57, SPEC-network 1.1, 1.5): toxcore starts with no transfers, and the 1:1 files under way
+            // in the last run are not cancelled for it any more. Ours go back to the queue and are offered again
+            // with the same file id; theirs keep their bytes in the encrypted store and wait for the sender's next
+            // offer, which goes on from those bytes.
+            // The rows toxcore had a transfer for, and the files that waited for the connection (no number).
+            final List<Filetransfer> rows = new ArrayList<>();
+            rows.addAll(orma.selectFromFiletransfer().file_numberNotEq(-1).toList());
+            rows.addAll(orma.selectFromFiletransfer().file_numberEq(-1).stateNotEq(TOX_FILE_CONTROL_CANCEL.value).toList());
+            final List<Filetransfer> kept = new ArrayList<>();
+            final List<Message> kept_messages = new ArrayList<>();
+            for (Filetransfer f : rows)
             {
-                // Log.i(TAG, "set_all_filetransfers_inactive:cancel:id=" + f.tox_file_id_hex + " filename=" + f.file_name);
-                cancel_filetransfer_f((Filetransfer) f);
+                final Message m = message_of_filetransfer(f);
+                if (resumable_after_restart(f, m))
+                {
+                    kept.add(f);
+                    kept_messages.add(m);
+                }
+                else if ((f.file_number != -1) && !((m != null) && incoming_cancelled_by_person(m, f)))
+                {
+                    // A file of theirs the person cancelled keeps its cancelled row, without its bytes: a later
+                    // offer of it then waits for a tap (resume_incoming_offer).
+                    // Log.i(TAG, "set_all_filetransfers_inactive:cancel:id=" + f.tox_file_id_hex + " filename=" + f.file_name);
+                    cancel_filetransfer_f((Filetransfer) f);
+                }
             }
 
             orma.updateFiletransfer().
                     file_number(-1).
                     state(TOX_FILE_CONTROL_CANCEL.value).
                     execute();
-            Log.i(TAG, "set_all_filetransfers_inactive");
+
+            for (int i = 0; i < kept.size(); i++)
+            {
+                final Filetransfer f = kept.get(i);
+                final Message m = kept_messages.get(i);
+                if (f.direction == TRIFA_FT_DIRECTION_OUTGOING.value)
+                {
+                    requeue_cut_off_outgoing(f, m.id, "start");
+                }
+                else
+                {
+                    final boolean accepted = m.ft_accepted || f.ft_accepted;
+                    orma.updateFiletransfer().idEq(f.id).
+                            state(accepted ? TOX_FILE_CONTROL_RESUME.value : TOX_FILE_CONTROL_PAUSE.value).
+                            execute();
+                }
+            }
+            Log.i(TAG, "set_all_filetransfers_inactive:kept=" + kept.size());
         }
         catch (Exception e)
         {
             e.printStackTrace();
             Log.i(TAG, "set_all_filetransfers_inactive:EE:" + e.getMessage());
         }
+    }
+
+    /** The 1:1 file entry a transfer row belongs to, or null. */
+    private static Message message_of_filetransfer(final Filetransfer f)
+    {
+        try
+        {
+            final List<Message> rows = orma.selectFromMessage().filetransfer_idEq(f.id).toList();
+            if ((rows == null) || rows.isEmpty())
+            {
+                return null;
+            }
+            final Message m = rows.get(0);
+            final boolean outgoing = f.direction == TRIFA_FT_DIRECTION_OUTGOING.value;
+            if ((m.TRIFA_MESSAGE_TYPE != TRIFA_MSG_FILE.value) || (outgoing != (m.direction == 1))
+                || (m.tox_friendpubkey == null) || !m.tox_friendpubkey.equals(f.tox_public_key_string))
+            {
+                return null;
+            }
+            return m;
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
+    }
+
+    /** A 1:1 file under way that goes on after the app starts again (set_all_filetransfers_inactive). */
+    private static boolean resumable_after_restart(final Filetransfer f, final Message m)
+    {
+        return (m != null) && ((f.kind == TOX_FILE_KIND_DATA.value) || (f.kind == TOX_FILE_KIND_FTV2.value))
+               && (f.filesize > 0) && (m.filedb_id == -1) && (m.state != TOX_FILE_CONTROL_CANCEL.value)
+               && !m.ft_outgoing_preparing
+               && ((f.state != TOX_FILE_CONTROL_CANCEL.value) || (f.file_number == -1));
     }
 
     static void update_filetransfer_db_current_position(final Filetransfer f)
@@ -1063,8 +1057,9 @@ public class HelperFiletransfer
     {
         try
         {
-            String path_name = get_filetransfer_filename_from_id(m.filetransfer_id);
-            String file_name = get_filetransfer_path_name_from_id(m.filetransfer_id);
+            // KHANDAQ (0.2.57): path and name were swapped, so no stream of the file was ever found and closed.
+            String path_name = get_filetransfer_path_name_from_id(m.filetransfer_id);
+            String file_name = get_filetransfer_filename_from_id(m.filetransfer_id);
             BufferedOutputStreamCustom fos = cache_ft_fos.get(path_name + "/" + file_name);
             // Log.i(TAG, "remove_vfs_ft_from_cache:m:" + path_name + "/" + file_name);
             if (fos != null)
@@ -1166,9 +1161,14 @@ public class HelperFiletransfer
 
             set_message_queueing_from_id(m.id, false);
 
-            Filetransfer ft = (Filetransfer) orma.selectFromFiletransfer().
-                    idEq(m.filetransfer_id).
-                    orderByIdDesc().get(0);
+            // KHANDAQ (0.2.57): Retry after the receiver killed the transfer, or the cancel of an older build at
+            // start, left the message without its transfer row; it is made again from the copy the message names.
+            final Filetransfer ft = outgoing_filetransfer_for_offer(m);
+            if (ft == null)
+            {
+                Log.i(TAG, "start_outgoing_ft:no transfer row and no copy mid=" + m.id);
+                return;
+            }
 
             Log.i(TAG, "MM2MM:8:ft.filesize=" + ft.filesize + " ftid=" + ft.id + " ft.mid=" + ft.message_id + " mid=" +
                        m.id);
@@ -1179,26 +1179,39 @@ public class HelperFiletransfer
 
             ByteBuffer file_id_buffer = ByteBuffer.allocateDirect(TOX_FILE_ID_LENGTH);
 
-            //if (TOX_CAPABILITY_DECODE(
-            //        tox_friend_get_capabilities(tox_friend_by_public_key__wrapper(m.tox_friendpubkey))).ftv2)
-            //{
-            MainActivity.tox_messagev3_get_new_message_id(file_id_buffer);
-            //}
-            //else
-            //{
-            //    byte[] sha256_buf = TrifaSetPatternActivity.sha256(TrifaSetPatternActivity.StringToBytes2(
-            //            "" + ft.path_name + ":" + ft.file_name + ":" + ft.filesize));
-            //    file_id_buffer.put(sha256_buf);
-            //}
+            // KHANDAQ (0.2.57, SPEC-network 1.1): one Tox file id for the file's whole life. The first offer makes
+            // it and stores it as the message's anchor (reactions, deletes, read receipts); every later offer (the
+            // friend back online, a restart, the stall checks, Retry) passes the same id, so that the receiver
+            // knows the file and goes on from the bytes it holds.
+            final String earlier_id_hex = earlier_outgoing_file_id(m, ft);
+            final byte[] earlier_id = FileResume.fileIdBytes(earlier_id_hex);
+            if (earlier_id != null)
+            {
+                file_id_buffer.put(earlier_id);
+                file_id_buffer.rewind();
+            }
+            else
+            {
+                MainActivity.tox_messagev3_get_new_message_id(file_id_buffer);
+            }
 
             final String file_id_buffer_hex = HelperGeneric.bytesToHex(file_id_buffer.array(),
                                                                        file_id_buffer.arrayOffset(),
                                                                        file_id_buffer.limit()).toUpperCase();
-            Log.i(TAG, "TOX_FILE_ID_LENGTH=" + TOX_FILE_ID_LENGTH + " file_id_buffer_hex=" + file_id_buffer_hex);
+            Log.i(TAG, "TOX_FILE_ID_LENGTH=" + TOX_FILE_ID_LENGTH + " file_id_buffer_hex=" + file_id_buffer_hex
+                       + " again=" + (earlier_id != null));
             ft.tox_file_id_hex = file_id_buffer_hex;
-            // KHANDAQ (#192): durable reaction anchor for this 1:1 file — survives FT-row deletion.
-            m.ft_id_anchor_hex = file_id_buffer_hex;
-            orma.updateMessage().idEq(m.id).ft_id_anchor_hex(file_id_buffer_hex).execute();
+            if (!file_id_buffer_hex.equals(m.ft_id_anchor_hex))
+            {
+                // KHANDAQ (#192): durable reaction anchor for this 1:1 file, it survives FT-row deletion.
+                m.ft_id_anchor_hex = file_id_buffer_hex;
+                orma.updateMessage().idEq(m.id).ft_id_anchor_hex(file_id_buffer_hex).execute();
+            }
+            // KHANDAQ (0.2.57): a row offered before (cut off, or cancelled and sent again) is a new transfer of
+            // toxcore: not accepted yet, and not cancelled, since chunk requests skip a cancelled row. Its
+            // position stays: it is the progress shown until the receiver says where to go on.
+            ft.state = TOX_FILE_CONTROL_PAUSE.value;
+            ft.ft_accepted = false;
 
             final tox_send_filename send_name = tox_send_filename_for_filetransfer(ft.file_name);
 
@@ -1246,6 +1259,11 @@ public class HelperFiletransfer
 
                 ft.file_number = file_number;
                 update_filetransfer_db_full(ft);
+                orma.updateFiletransfer().idEq(ft.id).ft_accepted(false).execute();
+                // KHANDAQ (0.2.57): the lookups by friend and file number take the newest row with the number, and
+                // a row offered again can be older than one a cut left with it.
+                unbind_other_filetransfers(ft.tox_public_key_string, file_number, ft.id);
+                outgoing_offered_at.put(m.id, System.currentTimeMillis());
             }
         }
         catch (Exception e)
@@ -1511,9 +1529,528 @@ public class HelperFiletransfer
         {
             return;
         }
+        friend_online_since.put(pubkey, System.currentTimeMillis());
         FileTransferDebug.logPeerConnectionStatus(tox_friend_by_public_key__wrapper(pubkey));
         try_start_next_queued_outgoing_file(pubkey);
         TrifaToxService.wakeup_tox_thread();
+        // KHANDAQ (0.2.57, SPEC-network 1.7): a file of theirs the cut stopped and that its sender does not offer
+        // again reads as stopped once the wait is over; nothing else draws its entry again then.
+        final Handler handler = MainActivity.main_handler_s != null ? MainActivity.main_handler_s
+                                                                    : new Handler(Looper.getMainLooper());
+        handler.postDelayed(() -> redraw_incoming_files_waiting_for(pubkey),
+                            FileResume.INCOMING_WAIT_AFTER_ONLINE_MS + 1000L);
+    }
+
+    // ---- KHANDAQ (0.2.57, SPEC-network part 1): a 1:1 file goes on after a network change ----
+
+    /** When each friend last came online, while online (the lost transfer rule, the wait of a file of theirs). */
+    private static final ConcurrentHashMap<String, Long> friend_online_since = new ConcurrentHashMap<>();
+    /** When this process last offered each message's file. */
+    private static final ConcurrentHashMap<Long, Long> outgoing_offered_at = new ConcurrentHashMap<>();
+    /** The connection (its online time) in which a message was offered again after the receiver lost it. */
+    private static final ConcurrentHashMap<Long, Long> outgoing_offered_again_after_loss = new ConcurrentHashMap<>();
+    /** Transfers of a file that is whole here already, by friend and file number: their bytes are not written. */
+    private static final Set<String> incoming_already_here = ConcurrentHashMap.newKeySet();
+    /** When the person asked again for a file of theirs that no transfer carries (retry_incoming_filetransfer). */
+    private static final ConcurrentHashMap<Long, Long> incoming_wait_restarted_at = new ConcurrentHashMap<>();
+
+    /** How long this friend has been online again, or -1 while offline or not known. */
+    static long friend_online_for_ms(final String pubkey)
+    {
+        final Long since = (pubkey == null) ? null : friend_online_since.get(pubkey);
+        return (since == null) ? -1L : Math.max(0L, System.currentTimeMillis() - since);
+    }
+
+    private static String already_here_key(final String pubkey, final long file_number)
+    {
+        return pubkey + ":" + file_number;
+    }
+
+    /**
+     * The friend went offline (MainActivity, friend connection). toxcore broke their DATA transfers without a
+     * word (break_files) and keeps their FTV2 ones. Ours go back to the queue with their progress and are offered
+     * again, with the same file id, once the friend is back; theirs keep their bytes on disk and wait for the
+     * sender's next offer, which goes on from those bytes (SPEC-network 1.2, 1.5).
+     */
+    static void on_friend_connection_lost(final String pubkey)
+    {
+        if ((pubkey == null) || pubkey.isEmpty() || (orma == null))
+        {
+            return;
+        }
+        friend_online_since.remove(pubkey);
+        final String prefix = pubkey + ":";
+        incoming_already_here.removeIf(key -> key.startsWith(prefix));
+        try
+        {
+            final List<Filetransfer> bound = orma.selectFromFiletransfer().
+                    tox_public_key_stringEq(pubkey).
+                    file_numberNotEq(-1).
+                    stateNotEq(TOX_FILE_CONTROL_CANCEL.value).
+                    toList();
+            if (bound == null)
+            {
+                return;
+            }
+            for (Filetransfer f : bound)
+            {
+                if ((f.kind != TOX_FILE_KIND_DATA.value) && (f.kind != TOX_FILE_KIND_FTV2.value))
+                {
+                    continue;
+                }
+                final long mid = message_id_of_filetransfer(f);
+                if (f.direction == TRIFA_FT_DIRECTION_INCOMING.value)
+                {
+                    // The bytes so far are on disk now: they are where the next offer goes on from.
+                    HelperGeneric.flush_close_vfs_write_cache(f.path_name + "/" + f.file_name);
+                    if (f.kind == TOX_FILE_KIND_DATA.value)
+                    {
+                        orma.updateFiletransfer().idEq(f.id).file_number(-1).execute();
+                    }
+                    Log.i(TAG, "on_friend_connection_lost:incoming waits ftid=" + f.id + " kind=" + f.kind
+                               + " pos=" + f.current_position + "/" + f.filesize);
+                }
+                else if (f.kind == TOX_FILE_KIND_DATA.value)
+                {
+                    requeue_cut_off_outgoing(f, mid, "friend offline");
+                }
+                if (mid > 0)
+                {
+                    update_single_message_from_messge_id(mid, true);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "on_friend_connection_lost:EE:" + e.getMessage());
+        }
+    }
+
+    /** Ours, cut off: back to the queue, its bytes sent kept as its progress, to be offered again. */
+    private static void requeue_cut_off_outgoing(final Filetransfer f, final long mid, final String why)
+    {
+        orma.updateFiletransfer().idEq(f.id).
+                file_number(-1).
+                state(TOX_FILE_CONTROL_PAUSE.value).
+                ft_accepted(false).
+                ft_outgoing_started(false).
+                execute();
+        remove_ft_from_cache(f);
+        if (mid > 0)
+        {
+            orma.updateMessage().idEq(mid).
+                    state(TOX_FILE_CONTROL_PAUSE.value).
+                    ft_accepted(false).
+                    ft_outgoing_started(false).
+                    ft_outgoing_queued(true).
+                    execute();
+        }
+        Log.i(TAG, "requeue_cut_off_outgoing:" + why + " ftid=" + f.id + " mid=" + mid + " pos=" + f.current_position
+                   + "/" + f.filesize);
+    }
+
+    private static long message_id_of_filetransfer(final Filetransfer f)
+    {
+        if (f.message_id > 0)
+        {
+            return f.message_id;
+        }
+        try
+        {
+            final List<Message> rows = orma.selectFromMessage().filetransfer_idEq(f.id).toList();
+            return ((rows == null) || rows.isEmpty()) ? -1L : rows.get(0).id;
+        }
+        catch (Exception e)
+        {
+            return -1L;
+        }
+    }
+
+    /**
+     * The receiver killed our transfer. Right after the friend came back, for a transfer offered before that, it
+     * means its app started again while toxcore kept our FTV2 transfer, and its new toxcore answered our next data
+     * with a kill (FileResume.LOST_TRANSFER_WINDOW_MS): the file goes back to the queue and is offered again, once.
+     */
+    private static boolean outgoing_kill_means_lost_transfer(final Filetransfer f)
+    {
+        final long mid = message_id_of_filetransfer(f);
+        if (mid <= 0)
+        {
+            return false;
+        }
+        final Long since = friend_online_since.get(f.tox_public_key_string);
+        final Long offered = outgoing_offered_at.get(mid);
+        final Long again = outgoing_offered_again_after_loss.get(mid);
+        final long since_ms = (since == null) ? 0L : since;
+        if (!FileResume.killMeansLostTransfer(System.currentTimeMillis(), since_ms, (offered == null) ? 0L : offered,
+                                              (again != null) && (again == since_ms)))
+        {
+            return false;
+        }
+        outgoing_offered_again_after_loss.put(mid, since_ms);
+        requeue_cut_off_outgoing(f, mid, "lost by the receiver");
+        update_single_message_from_messge_id(mid, true);
+        return true;
+    }
+
+    /** Takes the number off every other row of this friend that has it; see start_outgoing_ft. */
+    private static void unbind_other_filetransfers(final String pubkey, final long file_number, final long keep_id)
+    {
+        try
+        {
+            orma.updateFiletransfer().
+                    tox_public_key_stringEq(pubkey).
+                    file_numberEq(file_number).
+                    idNotEq(keep_id).
+                    file_number(-1).
+                    execute();
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "unbind_other_filetransfers:EE:" + e.getMessage());
+        }
+    }
+
+    /**
+     * The row a message's file is offered from. Retry after the receiver's cancel, or after an older build's
+     * start, finds the message without one: it is made again from the copy the message names.
+     */
+    private static Filetransfer outgoing_filetransfer_for_offer(final Message m)
+    {
+        if (m.filetransfer_id > 0)
+        {
+            final List<Filetransfer> rows = orma.selectFromFiletransfer().idEq(m.filetransfer_id).toList();
+            if ((rows != null) && !rows.isEmpty())
+            {
+                return rows.get(0);
+            }
+        }
+        if ((m.filename_fullpath == null) || m.filename_fullpath.isEmpty())
+        {
+            return null;
+        }
+        final File copy = new File(m.filename_fullpath);
+        if (!copy.isFile() || (copy.length() <= 0) || (copy.getParentFile() == null))
+        {
+            return null;
+        }
+        final Filetransfer f = new Filetransfer();
+        f.tox_public_key_string = m.tox_friendpubkey;
+        f.direction = TRIFA_FT_DIRECTION_OUTGOING.value;
+        f.file_number = -1;
+        f.kind = TOX_FILE_KIND_DATA.value;
+        f.state = TOX_FILE_CONTROL_PAUSE.value;
+        f.path_name = copy.getParentFile().getAbsolutePath();
+        f.file_name = copy.getName();
+        f.filesize = copy.length();
+        f.ft_accepted = false;
+        f.ft_outgoing_started = false;
+        f.current_position = 0;
+        f.storage_frame_work = false;
+        f.message_id = m.id;
+        f.tox_file_id_hex = m.ft_id_anchor_hex;
+        f.id = insert_into_filetransfer_db(f);
+        if (f.id <= 0)
+        {
+            return null;
+        }
+        m.filetransfer_id = f.id;
+        orma.updateMessage().idEq(m.id).filetransfer_id(f.id).execute();
+        Log.i(TAG, "outgoing_filetransfer_for_offer:made again mid=" + m.id + " ftid=" + f.id);
+        return f;
+    }
+
+    /** The Tox file id an earlier offer gave this message's file, or null before its first offer. */
+    private static String earlier_outgoing_file_id(final Message m, final Filetransfer ft)
+    {
+        final String anchor = FileResume.reusableFileId(m.ft_id_anchor_hex);
+        return (anchor != null) ? anchor : FileResume.reusableFileId(ft.tox_file_id_hex);
+    }
+
+    /**
+     * An incoming 1:1 offer (MainActivity, file_recv, DATA and FTV2). When an entry of this friend has the same
+     * file id (in either case) and size, no new entry comes (SPEC-network 1.4): a whole file there takes the
+     * last byte again, silently, so that both ends finish; a partial one binds this transfer and tells toxcore
+     * where to go on before it accepts, or waits for a tap as the rule says. Returns false for a new entry.
+     */
+    static boolean resume_incoming_offer(final long friend_number, final long file_number, final int kind,
+                                         final long file_size, final String offered_id_hex, final String offered_name)
+    {
+        if (orma == null)
+        {
+            return false;
+        }
+        try
+        {
+            final String pubkey = HelperFriend.tox_friend_get_public_key__wrapper(friend_number);
+            // toxcore gives a number to a new offer only, so a row of this friend that still has it is stale; the
+            // lookups by friend and file number would take it for this transfer.
+            unbind_other_filetransfers(pubkey, file_number, -1L);
+            final String id = FileResume.reusableFileId(offered_id_hex);
+            if (id == null)
+            {
+                return false;
+            }
+            final Message m = find_incoming_file_message(pubkey, id, file_size);
+            if (m == null)
+            {
+                return false;
+            }
+
+            final Filetransfer earlier = transfer_row(m.filetransfer_id);
+            if (m.filedb_id != -1)
+            {
+                final FileResume.Decision d = FileResume.decide(true, true, -1L, file_size);
+                incoming_already_here.add(already_here_key(pubkey, file_number));
+                final int seek = (d.seekTo >= 0) ? MainActivity.tox_file_seek(friend_number, file_number, d.seekTo) : 0;
+                final int accept = tox_file_control(friend_number, file_number, TOX_FILE_CONTROL_RESUME.value);
+                Log.i(TAG, "resume_incoming_offer:already here mid=" + m.id + " " + d + " seek=" + seek + " accept="
+                           + accept);
+                return true;
+            }
+
+            final boolean refused = incoming_cancelled_by_person(m, earlier);
+            final boolean accepted_before = !refused && (m.ft_accepted || ((earlier != null) && earlier.ft_accepted));
+            Filetransfer f = earlier;
+            if (f == null)
+            {
+                // Its row went with an earlier cancel or failure, and its bytes with it: a new row, the same entry.
+                f = new Filetransfer();
+                f.tox_public_key_string = pubkey;
+                f.direction = TRIFA_FT_DIRECTION_INCOMING.value;
+                f.path_name = VFS_PREFIX + VFS_TMP_FILE_DIR + "/" + pubkey + "/";
+                f.file_name = get_incoming_filetransfer_local_filename(offered_name, pubkey);
+                f.ft_outgoing_started = false;
+                f.message_id = m.id;
+                f.file_number = -1;
+                f.id = insert_into_filetransfer_db(f);
+                if (f.id <= 0)
+                {
+                    return false;
+                }
+            }
+            else if ((f.file_number >= 0) && (f.file_number != file_number) && (f.state != TOX_FILE_CONTROL_CANCEL.value))
+            {
+                // Its sender gave up the transfer this one replaces (an FTV2 one toxcore keeps through a cut); the
+                // number is still that transfer's, since every new offer takes its number off other rows.
+                tox_file_control(friend_number, f.file_number, TOX_FILE_CONTROL_CANCEL.value);
+            }
+
+            // A stream still open from the cut writes its bytes now, and they are counted.
+            HelperGeneric.flush_close_vfs_write_cache(f.path_name + "/" + f.file_name);
+            if (refused)
+            {
+                // The person cancelled it: its bytes do not stay (SPEC-network 1.5), and it waits for a tap.
+                delete_filetransfer_tmpfile(f.id);
+            }
+            final long partial = refused ? -1L : get_vfs_file_length(f.path_name, f.file_name);
+            final FileResume.Decision d = FileResume.decide(true, false, partial, file_size);
+            if ((d.step == FileResume.Step.FROM_START) && (partial > file_size))
+            {
+                delete_filetransfer_tmpfile(f.id);
+            }
+
+            f.file_number = file_number;
+            f.kind = kind;
+            f.filesize = file_size;
+            f.tox_file_id_hex = id;
+            f.state = TOX_FILE_CONTROL_PAUSE.value;
+            f.current_position = (d.step == FileResume.Step.RESUME) ? d.seekTo : 0L;
+            f.message_id = m.id;
+            update_filetransfer_db_full(f);
+            orma.updateFiletransfer().idEq(f.id).ft_accepted(false).execute();
+            orma.updateMessage().idEq(m.id).
+                    filetransfer_id(f.id).
+                    filetransfer_kind(kind).
+                    state(TOX_FILE_CONTROL_PAUSE.value).
+                    ft_accepted(accepted_before).
+                    execute();
+
+            final Message current = (Message) orma.selectFromMessage().idEq(m.id).get(0);
+            final boolean by_itself = FileResume.acceptsByItself(accepted_before, refused,
+                                                                 auto_download_allows(current));
+            Log.i(TAG, "resume_incoming_offer:mid=" + m.id + " ftid=" + f.id + " " + d + " partial=" + partial + "/"
+                       + file_size + " kind=" + kind + " accepted_before=" + accepted_before + " refused=" + refused
+                       + " by_itself=" + by_itself);
+            if (by_itself)
+            {
+                accept_paused_incoming_filetransfer(current);
+            }
+            update_single_message_from_messge_id(m.id, true);
+            return true;
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "resume_incoming_offer:EE:" + e.getMessage());
+            return false;
+        }
+    }
+
+    /** A chunk of a file that is whole here already: not written; its end forgets the transfer. */
+    static boolean incoming_chunk_of_file_already_here(final long friend_number, final long file_number,
+                                                       final long length)
+    {
+        if (incoming_already_here.isEmpty())
+        {
+            return false;
+        }
+        final String key = already_here_key(HelperFriend.tox_friend_get_public_key__wrapper(friend_number),
+                                            file_number);
+        if (!incoming_already_here.contains(key))
+        {
+            return false;
+        }
+        if (length == 0)
+        {
+            incoming_already_here.remove(key);
+            Log.i(TAG, "incoming_chunk_of_file_already_here:done " + key);
+        }
+        return true;
+    }
+
+    /** The control of a transfer of a file that is whole here already; true when it was one. */
+    static boolean forget_incoming_already_here(final long friend_number, final long file_number)
+    {
+        return !incoming_already_here.isEmpty() && incoming_already_here.remove(
+                already_here_key(HelperFriend.tox_friend_get_public_key__wrapper(friend_number), file_number));
+    }
+
+    private static Message find_incoming_file_message(final String pubkey, final String id, final long size)
+    {
+        for (final String variant : new String[]{id, id.toLowerCase(Locale.ROOT)})
+        {
+            final List<Message> found = orma.selectFromMessage().
+                    tox_friendpubkeyEq(pubkey).
+                    directionEq(0).
+                    TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
+                    ft_id_anchor_hexEq(variant).
+                    orderByIdDesc().
+                    toList();
+            if (found == null)
+            {
+                continue;
+            }
+            for (final Message m : found)
+            {
+                if (FileResume.sameFile(m.ft_id_anchor_hex, known_incoming_size(m), id, size))
+                {
+                    return m;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** The size an incoming file entry was offered with: its row's, the finished file's, or its text's. */
+    private static long known_incoming_size(final Message m)
+    {
+        final Filetransfer f = transfer_row(m.filetransfer_id);
+        if ((f != null) && (f.filesize > 0))
+        {
+            return f.filesize;
+        }
+        if (m.filedb_id > 0)
+        {
+            try
+            {
+                final List<FileDB> rows = orma.selectFromFileDB().idEq(m.filedb_id).toList();
+                if ((rows != null) && !rows.isEmpty() && (rows.get(0).filesize > 0))
+                {
+                    return rows.get(0).filesize;
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+        return FileResume.sizeFromIncomingText(m.text);
+    }
+
+    private static Filetransfer transfer_row(final long filetransfer_id)
+    {
+        if (filetransfer_id <= 0)
+        {
+            return null;
+        }
+        try
+        {
+            final List<Filetransfer> rows = orma.selectFromFiletransfer().idEq(filetransfer_id).toList();
+            return ((rows == null) || rows.isEmpty()) ? null : rows.get(0);
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
+    }
+
+    /**
+     * A file of theirs the person cancelled: cancelled with its row kept (cancel_incoming_filetransfer and the
+     * row holders). A failure or the sender's cancel take the row away.
+     */
+    private static boolean incoming_cancelled_by_person(final Message m, final Filetransfer f)
+    {
+        return (m.state == TOX_FILE_CONTROL_CANCEL.value) && (m.filedb_id == -1) && (f != null)
+               && (f.state == TOX_FILE_CONTROL_CANCEL.value);
+    }
+
+    /**
+     * What the entry of a 1:1 file says while its connection is gone (SPEC-network 1.6), read from the message
+     * and its row as they are now.
+     */
+    static FileResume.Wait direct_file_wait(final Message m, final Filetransfer f, final boolean outgoing,
+                                            final boolean online)
+    {
+        if ((m == null) || (m.state == TOX_FILE_CONTROL_CANCEL.value) || (m.filedb_id != -1))
+        {
+            return FileResume.Wait.NONE;
+        }
+        if (outgoing)
+        {
+            final boolean cut_off = (m.state == TOX_FILE_CONTROL_PAUSE.value) && !m.ft_outgoing_started
+                                    && (f != null) && (f.current_position > 0);
+            return FileResume.outgoingWait(online, m.ft_outgoing_started, cut_off);
+        }
+        final boolean under_way = m.ft_accepted || (m.state == TOX_FILE_CONTROL_RESUME.value);
+        long online_for = friend_online_for_ms(m.tox_friendpubkey);
+        final Long asked_again = incoming_wait_restarted_at.get(m.id);
+        if (asked_again != null)
+        {
+            final long since_asked = Math.max(0L, System.currentTimeMillis() - asked_again);
+            online_for = (online_for < 0) ? since_asked : Math.min(online_for, since_asked);
+        }
+        return FileResume.incomingWait(online, (online_for < 0) ? Long.MAX_VALUE : online_for, under_way,
+                                       (f != null) && (f.file_number >= 0));
+    }
+
+    /** Draws again the files of theirs that wait for this friend's next offer (see on_friend_connection_available). */
+    private static void redraw_incoming_files_waiting_for(final String pubkey)
+    {
+        try
+        {
+            final List<Message> waiting = orma.selectFromMessage().
+                    tox_friendpubkeyEq(pubkey).
+                    directionEq(0).
+                    TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
+                    filedb_idEq(-1).
+                    stateNotEq(TOX_FILE_CONTROL_CANCEL.value).
+                    toList();
+            if (waiting == null)
+            {
+                return;
+            }
+            for (final Message m : waiting)
+            {
+                final Filetransfer f = transfer_row(m.filetransfer_id);
+                if ((f == null) || (f.file_number < 0))
+                {
+                    update_single_message_from_messge_id(m.id, true);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "redraw_incoming_files_waiting_for:EE:" + e.getMessage());
+        }
     }
 
     static void try_start_next_queued_outgoing_file(final String pubkey)
@@ -3313,52 +3850,83 @@ public class HelperFiletransfer
         }
     }
 
-    private static boolean should_force_auto_accept_incoming(Message message)
-    {
-        try
-        {
-            final String incoming_filename = get_filetransfer_filename_from_id(message.filetransfer_id);
-            if (isVoiceMessagePath(incoming_filename))
-            {
-                return true;
-            }
-
-            final String mimeType = guess_mime_type_from_filename(incoming_filename);
-            if ((mimeType != null) && mimeType.startsWith("audio/"))
-            {
-                return true;
-            }
-
-            // KHANDAQ (#19): 1:1 (DM) chats auto-accept ALL incoming files with no accept/decline
-            // prompt — this method is only reached on the friend path. Accept anything up to the
-            // protocol's max transfer size (group files use a separate NGC path and are unaffected).
-            final long filesize = get_filetransfer_filesize_from_id(message.filetransfer_id);
-            return (filesize > 0) && (filesize <= KHANDAQ_MAX_FILE_TRANSFER_BYTES);
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-        return false;
-    }
-
     private static boolean accept_paused_incoming_filetransfer(Message message)
     {
-        if (get_filetransfer_state_from_id(message.filetransfer_id) != TOX_FILE_CONTROL_PAUSE.value)
+        final Filetransfer f = transfer_row(message.filetransfer_id);
+        if ((f == null) || (f.state != TOX_FILE_CONTROL_PAUSE.value))
         {
             return false;
         }
+        if (f.file_number < 0)
+        {
+            // KHANDAQ (0.2.57): no transfer carries it now (the cut); its sender's next offer finds it again.
+            return false;
+        }
 
+        final long friendNum = tox_friend_by_public_key__wrapper(message.tox_friendpubkey);
         set_filetransfer_accepted_from_id(message.filetransfer_id);
         set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_RESUME.value);
         set_message_accepted_from_id(message.id);
         set_message_state_from_id(message.id, TOX_FILE_CONTROL_RESUME.value);
-        final long friendNum = tox_friend_by_public_key__wrapper(message.tox_friendpubkey);
-        final long fileNum = get_filetransfer_filenum_from_id(message.filetransfer_id);
-        FileTransferDebug.logFileControlResume(friendNum, fileNum);
-        tox_file_control(friendNum, fileNum, TOX_FILE_CONTROL_RESUME.value);
+        FileTransferDebug.logFileControlResume(friendNum, f.file_number);
+        seek_then_resume_incoming(friendNum, f, !f.ft_accepted);
         update_single_message_from_messge_id(message.id, true);
         return true;
+    }
+
+    /**
+     * KHANDAQ (0.2.57, SPEC-network 1.4): the accept of a file of theirs. toxcore takes a seek only before the
+     * accept, so an offer bound to the bytes already here (resume_incoming_offer) is told where to go on first.
+     * A transfer accepted before only gets the resume, the nudge it always was. Nothing writes to a transfer not
+     * accepted yet, and the bind closed any stream of its file, so its bytes on disk are all there is.
+     */
+    private static void seek_then_resume_incoming(final long friend_number, final Filetransfer f,
+                                                  final boolean first_accept)
+    {
+        if (first_accept && (f.current_position > 0))
+        {
+            final long partial = get_vfs_file_length(f.path_name, f.file_name);
+            final long seek_to = FileResume.seekBeforeAccept(f.current_position, partial, f.filesize);
+            final boolean sought = (seek_to > 0)
+                                   && (MainActivity.tox_file_seek(friend_number, f.file_number, seek_to) == 0);
+            Log.i(TAG, "seek_then_resume_incoming:ftid=" + f.id + " at=" + f.current_position + " partial=" + partial
+                       + " seek=" + seek_to + " ok=" + sought);
+            if (!sought)
+            {
+                // The bytes here no longer reach the point it was bound at, or toxcore did not take the seek: the
+                // file comes from its first byte, and its first write empties the partial file.
+                orma.updateFiletransfer().idEq(f.id).current_position(0).execute();
+            }
+        }
+        tox_file_control(friend_number, f.file_number, TOX_FILE_CONTROL_RESUME.value);
+    }
+
+    /**
+     * The Accept of a file of theirs (the waiting row's button). Also with no transfer carrying it now: the tap
+     * is kept, and the sender's next offer goes on by itself.
+     */
+    static void accept_incoming_filetransfer_by_person(final Message message)
+    {
+        if ((message == null) || (message.filetransfer_id <= 0))
+        {
+            return;
+        }
+        final Filetransfer f = transfer_row(message.filetransfer_id);
+        if ((f == null) || (f.state == TOX_FILE_CONTROL_CANCEL.value))
+        {
+            return;
+        }
+        if (f.file_number < 0)
+        {
+            set_message_accepted_from_id(message.id);
+            update_single_message_from_messge_id(message.id, true);
+            return;
+        }
+        if (f.state != TOX_FILE_CONTROL_PAUSE.value)
+        {
+            set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_PAUSE.value);
+        }
+        accept_paused_incoming_filetransfer(message);
     }
 
     static long get_vfs_file_length(String path_name, String file_name)
@@ -3484,7 +4052,7 @@ public class HelperFiletransfer
 
         if (MainActivity.main_handler_s != null)
         {
-            MainActivity.main_handler_s.post(() -> retry_incoming_filetransfer(message));
+            MainActivity.main_handler_s.post(() -> resume_incoming_filetransfer_by_itself(message));
         }
     }
 
@@ -3507,7 +4075,7 @@ public class HelperFiletransfer
             {
                 if (!is_message_file_complete(m) && !isMessageMediaReady(m, null))
                 {
-                    retry_incoming_filetransfer(m);
+                    resume_incoming_filetransfer_by_itself(m);
                 }
             }
         }
@@ -3524,6 +4092,7 @@ public class HelperFiletransfer
             final List<Filetransfer> transfers = orma.selectFromFiletransfer().
                     directionEq(TRIFA_FT_DIRECTION_INCOMING.value).
                     stateNotEq(TOX_FILE_CONTROL_CANCEL.value).
+                    file_numberNotEq(-1).
                     toList();
 
             for (Filetransfer f : transfers)
@@ -3553,27 +4122,7 @@ public class HelperFiletransfer
                         continue;
                     }
 
-                    if ((!f.ft_accepted) || (f.state == TOX_FILE_CONTROL_PAUSE.value))
-                    {
-                        final Message m = (Message) orma.selectFromMessage().idEq(msg_id).get(0);
-                        if (accept_paused_incoming_filetransfer(m))
-                        {
-                            continue;
-                        }
-                    }
-
-                    if ((f.state != TOX_FILE_CONTROL_PAUSE.value) && (f.state != TOX_FILE_CONTROL_RESUME.value))
-                    {
-                        continue;
-                    }
-
-                    tox_file_control(friend_number, f.file_number, TOX_FILE_CONTROL_RESUME.value);
-                    if (f.state == TOX_FILE_CONTROL_PAUSE.value)
-                    {
-                        set_filetransfer_state_from_id(f.id, TOX_FILE_CONTROL_RESUME.value);
-                        set_message_state_from_id(msg_id, TOX_FILE_CONTROL_RESUME.value);
-                        update_single_message_from_messge_id(msg_id, false);
-                    }
+                    resume_incoming_filetransfer_by_itself((Message) orma.selectFromMessage().idEq(msg_id).get(0));
                 }
                 catch (Exception e)
                 {
@@ -3584,6 +4133,59 @@ public class HelperFiletransfer
         catch (Exception e)
         {
             Log.i(TAG, "resume_stalled_incoming_filetransfers:EE:" + e.getMessage());
+        }
+    }
+
+    /**
+     * KHANDAQ (0.2.57): the retries that run by themselves (the friend back, the row drawn, the app in front).
+     * They nudge a transfer that was accepted, as before, and accept one not accepted yet only when the
+     * automatic download allows it: they used to accept every file, so its switches did nothing. A file no
+     * transfer carries now waits for its sender's next offer (resume_incoming_offer).
+     */
+    static void resume_incoming_filetransfer_by_itself(final Message message)
+    {
+        if (message == null)
+        {
+            return;
+        }
+        try
+        {
+            final Message current = (Message) orma.selectFromMessage().idEq(message.id).get(0);
+            if (!incoming_retry_applies(current.filedb_id, current.filetransfer_id)
+                || (current.state == TOX_FILE_CONTROL_CANCEL.value))
+            {
+                return;
+            }
+            final Filetransfer f = transfer_row(current.filetransfer_id);
+            if ((f == null) || (f.file_number < 0) || (f.state == TOX_FILE_CONTROL_CANCEL.value))
+            {
+                return;
+            }
+            final boolean accepted = current.ft_accepted || f.ft_accepted;
+            if (!accepted)
+            {
+                if (auto_download_allows(current))
+                {
+                    accept_paused_incoming_filetransfer(current);
+                }
+                return;
+            }
+            if (accept_paused_incoming_filetransfer(current))
+            {
+                return;
+            }
+            tox_file_control(tox_friend_by_public_key__wrapper(current.tox_friendpubkey), f.file_number,
+                             TOX_FILE_CONTROL_RESUME.value);
+            if (current.state != TOX_FILE_CONTROL_RESUME.value)
+            {
+                set_filetransfer_state_from_id(f.id, TOX_FILE_CONTROL_RESUME.value);
+                set_message_state_from_id(current.id, TOX_FILE_CONTROL_RESUME.value);
+                update_single_message_from_messge_id(current.id, true);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "resume_incoming_filetransfer_by_itself:EE:" + e.getMessage());
         }
     }
 
@@ -3646,6 +4248,11 @@ public class HelperFiletransfer
             set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_CANCEL.value);
             set_message_state_from_id(message.id, TOX_FILE_CONTROL_CANCEL.value);
             remove_vfs_ft_from_cache(message);
+            // KHANDAQ (0.2.57, SPEC-network 1.5): the bytes of a file kept for the next offer go when the person
+            // cancels it. Its row stays, cancelled and without the number toxcore gives to its next transfer: that
+            // is how a later offer of it knows the person said no.
+            delete_filetransfer_tmpfile(message.filetransfer_id);
+            orma.updateFiletransfer().idEq(message.filetransfer_id).file_number(-1).execute();
             update_single_message_from_messge_id(message.id, true);
         }
         catch (Exception ignored)
@@ -3728,6 +4335,27 @@ public class HelperFiletransfer
             if (!incoming_retry_applies(current.filedb_id, current.filetransfer_id))
             {
                 Log.i(TAG, "retry_incoming_filetransfer:nothing_to_retry:" + current.id);
+                return;
+            }
+            final Filetransfer f = transfer_row(current.filetransfer_id);
+            if ((f == null) || (f.file_number < 0) || (f.state == TOX_FILE_CONTROL_CANCEL.value)
+                || (current.state == TOX_FILE_CONTROL_CANCEL.value))
+            {
+                // KHANDAQ (0.2.57): no transfer here to take up again (the cut, or a cancel). The file is wanted:
+                // its sender's next offer of it is accepted and goes on by itself (resume_incoming_offer), and the
+                // entry waits for that offer again; a resume of a cancelled transfer only spun forever.
+                if (f != null)
+                {
+                    orma.updateFiletransfer().idEq(f.id).file_number(-1).state(TOX_FILE_CONTROL_PAUSE.value).execute();
+                }
+                orma.updateMessage().idEq(current.id).state(TOX_FILE_CONTROL_PAUSE.value).ft_accepted(true).execute();
+                incoming_wait_restarted_at.put(current.id, System.currentTimeMillis());
+                final Handler handler = MainActivity.main_handler_s != null ? MainActivity.main_handler_s
+                                                                            : new Handler(Looper.getMainLooper());
+                handler.postDelayed(() -> update_single_message_from_messge_id(current.id, true),
+                                    FileResume.INCOMING_WAIT_AFTER_ONLINE_MS + 1000L);
+                update_single_message_from_messge_id(current.id, true);
+                Log.i(TAG, "retry_incoming_filetransfer:waits for the next offer mid=" + current.id);
                 return;
             }
             if (accept_paused_incoming_filetransfer(current))

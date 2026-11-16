@@ -3299,6 +3299,31 @@ public class HelperGeneric
     }
 
     /**
+     * KHANDAQ (0.2.57, SPEC-network 1.4, 1.5): a chunk of a 1:1 file of theirs. Its transfer can go on from a later
+     * byte than its first (after a cut, a restart of either app, or a stream closed when the friend went offline),
+     * and the bytes before it are the file's: the write cache this process opens for it then keeps them, where the
+     * stream opened by path empties its file (O_TRUNC). A transfer from the first byte opens it as before. Group
+     * files keep their own way (NgcGroupFileTransfer.writeChunk).
+     */
+    static void write_direct_chunk_to_VFS_file(String file_name_with_path, long position, long file_chunk_length,
+                                               final byte[] data)
+    {
+        if (VFS_CUSTOM_WRITE_CACHE && (position > 0) && (file_name_with_path != null)
+            && !cache_ft_fos.containsKey(file_name_with_path))
+        {
+            try
+            {
+                cache_ft_fos.put(file_name_with_path, BufferedOutputStreamCustom.openAt(file_name_with_path, position));
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+        }
+        write_chunk_to_VFS_file(file_name_with_path, position, file_chunk_length, data);
+    }
+
+    /**
      * Flush + close the buffered write cache for a VFS file so its tail (up to one buffer) hits disk.
      * Chunked group downloads otherwise leave the last buffered bytes in RAM — lost on app close,
      * making an already-complete file look short and re-download on next launch.

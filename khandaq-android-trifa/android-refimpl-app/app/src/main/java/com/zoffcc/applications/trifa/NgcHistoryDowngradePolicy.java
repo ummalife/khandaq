@@ -119,6 +119,23 @@ final class NgcHistoryDowngradePolicy
     }
 
     /**
+     * KHANDAQ (0.2.57, review of the desktop's Community code) — whether a history record names our own key in the
+     * group as its author, so that it is dropped on every path that brings history here.
+     *
+     * <p>Our own messages and files are in the database already; a record about them came from someone else, signed
+     * by no one. Kept as an incoming row it would show as someone else's message; turned into an outgoing row it
+     * would skip the Community hold, and its file would be saved or opened at once. Without our own key the record
+     * cannot be told apart from ours, so it is dropped too.
+     *
+     * @param ownGroupKey      our public key in the group, either case, or null when not known.
+     * @param claimedAuthorKey the author the record names, either case.
+     */
+    static boolean claimsOwnKey(final String ownGroupKey, final String claimedAuthorKey)
+    {
+        return (ownGroupKey == null) || ownGroupKey.equalsIgnoreCase(claimedAuthorKey);
+    }
+
+    /**
      * KHANDAQ (re-review 2026-08-22, KQ-03) — whether a row that survived {@link #decide} may be
      * shown as an ordinary message FROM the author it names.
      *

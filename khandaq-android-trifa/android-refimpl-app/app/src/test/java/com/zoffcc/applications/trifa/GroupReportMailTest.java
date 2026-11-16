@@ -9,14 +9,18 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.text.BreakIterator;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TimeZone;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 
 /**
  * KHANDAQ (0.2.57, SPEC-community part B, items 5 and 8): the Report mail about a message of a group is the
@@ -31,6 +35,17 @@ public class GroupReportMailTest
     private static final long TIME = Instant.parse("2026-11-16T05:54:57.123Z").toEpochMilli();
     private static final String SMILE = "😀";
     private static final String HELLO_RU = "Привет";
+    // One character each as a person counts them (an extended grapheme cluster), written as escapes.
+    private static final String E_ACUTE = "e\u0301";
+    private static final String E_TILDE_ACUTE = "e\u0303\u0301";
+    private static final String BEH_SHADDA_FATHA = "\u0628\u0651\u064E";
+    private static final String HANGUL_JAMO = "\u1100\u1161\u11A8";
+    private static final String KEYCAP_ONE = "1\uFE0F\u20E3";
+    private static final String RED_HEART = "\u2764\uFE0F";
+    private static final String FLAG_RU = "\uD83C\uDDF7\uD83C\uDDFA";
+    private static final String FAMILY = "\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67";
+    private static final String THUMBS_UP_MEDIUM = "\uD83D\uDC4D\uD83C\uDFFD";
+    private static final String RAINBOW_FLAG = "\uD83C\uDFF3\uFE0F\u200D\uD83C\uDF08";
 
     // ---- the mail (SPEC Tests: building the Report mail) ----
 
@@ -143,13 +158,37 @@ public class GroupReportMailTest
     }
 
     @Test
+    public void a_message_from_history_names_its_author_only_when_a_signature_proved_it()
+    {
+        // Came live: the key frozen when it came.
+        assertEquals(AUTHOR, GroupReportMail.reportedAuthorKey(AUTHOR, false, false));
+        // Came through history sync: the key is the unsigned claim of the peer that relayed it.
+        assertNull(GroupReportMail.reportedAuthorKey(AUTHOR, true, false));
+        assertEquals("Group: G\r\nAuthor: unknown\r\nTime: 2026-11-16T05:54:57Z\r\nMessage:\r\nhi",
+                     GroupReportMail.body("G", GroupReportMail.reportedAuthorKey(AUTHOR, true, false), TIME, "hi"));
+        // Unless a signature proved this very message.
+        assertEquals(AUTHOR, GroupReportMail.reportedAuthorKey(AUTHOR, true, true));
+        assertEquals("ABCDEF01", GroupReportMail.authorPrefix(GroupReportMail.reportedAuthorKey(AUTHOR, true, true)));
+        // No key stored stays unknown whichever way it came.
+        assertNull(GroupReportMail.reportedAuthorKey(null, false, false));
+        assertNull(GroupReportMail.reportedAuthorKey(null, true, true));
+    }
+
+    @Test
     public void the_author_is_the_key_stored_with_the_message_never_looked_up_from_a_member_number()
     {
         // toxcore gives the number of a member who left to the next one who joins: a lookup by number would
         // name an innocent newcomer.
         final String helper = read(JAVA + "HelperMessageReport.java");
-        assertTrue(helper.contains("GroupReportMail.mailto(groupName, m.tox_group_peer_pubkey, time, text)"));
-        assertTrue(helper.contains("GroupReportMail.body(groupName, m.tox_group_peer_pubkey, time, text)"));
+        // The stored key, through the rule for history: the row's own sync mark and the verdict on its signature,
+        // the same two its bubble reads for "sender not verified".
+        assertTrue(bare(helper).contains("finalStringauthor=GroupReportMail.reportedAuthorKey(m.tox_group_peer_pubkey,"
+                                         + "m.was_synced,m.was_synced&&NgcSignedHistory.isAuthorVerified(m));"));
+        assertTrue(helper.contains("GroupReportMail.mailto(groupName, author, time, text)"));
+        assertTrue(helper.contains("GroupReportMail.body(groupName, author, time, text)"));
+        assertTrue(helper.contains("GroupReportMail.authorPrefix(author)"));
+        // Nothing names the author from the stored key past the rule; Report itself stays for others' messages.
+        assertEquals(2, occurrences(helper, "m.tox_group_peer_pubkey"));
         assertTrue(helper.contains("GroupReportMail.reportable(m.direction, m.tox_group_peer_pubkey, ownGroupKey)"));
         for (final String lookup : new String[]{"tox_group_peer_get_public_key", "tox_group_peer_by_public_key",
                                                 "peer_id", "peer_number"})
@@ -176,6 +215,38 @@ public class GroupReportMailTest
         assertEquals(1000, GroupReportMail.firstCharacters(smiles.toString(), 500).length());
         final String body = GroupReportMail.body("G", AUTHOR, TIME, repeat('x', 700));
         assertTrue(body.endsWith("Message:\r\n" + repeat('x', 500)));
+    }
+
+    @Test
+    public void a_letter_keeps_its_combining_marks_at_the_cut_and_counts_as_one_character()
+    {
+        // As Swift's String counts on iOS: a letter with its marks, a syllable written as its jamo, a keycap and
+        // an emoji with its presentation selector are one character each, cut whole or not at all.
+        for (final String one : new String[]{E_ACUTE, E_TILDE_ACUTE, BEH_SHADDA_FATHA, HANGUL_JAMO, KEYCAP_ONE,
+                                             RED_HEART})
+        {
+            assertEquals(one, repeat('a', 499) + one, GroupReportMail.firstCharacters(repeat('a', 499) + one + "b", 500));
+            assertEquals(one, repeat('a', 500), GroupReportMail.firstCharacters(repeat('a', 500) + one, 500));
+            assertEquals(one, repeat(one, 500), GroupReportMail.firstCharacters(repeat(one, 600), 500));
+        }
+        assertEquals("", GroupReportMail.firstCharacters(E_ACUTE, 0));
+        assertTrue(GroupReportMail.body("G", AUTHOR, TIME, repeat(E_ACUTE, 501))
+                                  .endsWith("Message:\r\n" + repeat(E_ACUTE, 500)));
+    }
+
+    @Test
+    public void a_flag_an_emoji_joined_by_zwj_and_one_with_a_skin_tone_are_one_character_each()
+    {
+        // java.text on the phone is ICU, which keeps them whole; a JVM before JDK 20 splits them, so this runs where
+        // the JVM counts as the phone does (JDK 20 and later), and the phone's own count is checked on the device.
+        assumeTrue("this JVM's BreakIterator splits a flag; the phone's (ICU) does not",
+                   jvmCountsEmojiAsThePhoneDoes());
+        for (final String one : new String[]{FLAG_RU, FAMILY, THUMBS_UP_MEDIUM, RAINBOW_FLAG})
+        {
+            assertEquals(one, repeat('a', 499) + one, GroupReportMail.firstCharacters(repeat('a', 499) + one + "b", 500));
+            assertEquals(one, repeat('a', 500), GroupReportMail.firstCharacters(repeat('a', 500) + one, 500));
+            assertEquals(one, repeat(one, 500), GroupReportMail.firstCharacters(repeat(one, 501), 500));
+        }
     }
 
     @Test
@@ -298,12 +369,40 @@ public class GroupReportMailTest
 
     private static String repeat(final char c, final int count)
     {
-        final StringBuilder out = new StringBuilder(count);
+        return repeat(String.valueOf(c), count);
+    }
+
+    private static int occurrences(final String text, final String part)
+    {
+        int count = 0;
+        for (int at = text.indexOf(part); at >= 0; at = text.indexOf(part, at + part.length()))
+        {
+            count++;
+        }
+        return count;
+    }
+
+    private static String repeat(final String text, final int count)
+    {
+        final StringBuilder out = new StringBuilder(text.length() * count);
         for (int i = 0; i < count; i++)
         {
-            out.append(c);
+            out.append(text);
         }
         return out.toString();
+    }
+
+    /**
+     * Whether this JVM's java.text.BreakIterator keeps a flag whole, as ICU's does under java.text on the phone and
+     * Swift's String on iOS: the extended grapheme clusters of UAX #29, from JDK 20 on. JDK 17's splits a flag into
+     * its two letters and an emoji sequence into its emoji.
+     */
+    private static boolean jvmCountsEmojiAsThePhoneDoes()
+    {
+        final BreakIterator clusters = BreakIterator.getCharacterInstance(Locale.ROOT);
+        clusters.setText(FLAG_RU);
+        clusters.first();
+        return clusters.next() == FLAG_RU.length();
     }
 
     private static String stringOf(final String folder, final String name)

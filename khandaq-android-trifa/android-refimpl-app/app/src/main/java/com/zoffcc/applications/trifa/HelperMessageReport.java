@@ -69,14 +69,18 @@ final class HelperMessageReport
         final long time = (m.rcvd_timestamp > 0) ? m.rcvd_timestamp : m.sent_timestamp;
 
         // The author is the key stored with the message when it came, never looked up again from a member's number.
-        final String link = GroupReportMail.mailto(groupName, m.tox_group_peer_pubkey, time, text);
+        // A message that came through history sync carries the relaying peer's unsigned claim: unknown, unless a
+        // signature proved this very message, as its bubble shows it ("sender not verified").
+        final String author = GroupReportMail.reportedAuthorKey(m.tox_group_peer_pubkey, m.was_synced,
+                                                                m.was_synced && NgcSignedHistory.isAuthorVerified(m));
+        final String link = GroupReportMail.mailto(groupName, author, time, text);
         final Intent mail = new Intent(Intent.ACTION_SENDTO, Uri.parse(link));
         // For the mail apps that read the extras rather than the link: the same subject and body.
         mail.putExtra(Intent.EXTRA_SUBJECT, GroupReportMail.subject(groupName));
-        mail.putExtra(Intent.EXTRA_TEXT, GroupReportMail.body(groupName, m.tox_group_peer_pubkey, time, text));
+        mail.putExtra(Intent.EXTRA_TEXT, GroupReportMail.body(groupName, author, time, text));
         // Who and where, never the words of the message.
-        HelperGeneric.logI(TAG, "report: a mail to support about a message of " + GroupReportMail.authorPrefix(
-                m.tox_group_peer_pubkey) + " in a group, " + link.length() + " characters");
+        HelperGeneric.logI(TAG, "report: a mail to support about a message of " + GroupReportMail.authorPrefix(author)
+                                + " in a group, " + link.length() + " characters");
         try
         {
             context.startActivity(mail);

@@ -6035,6 +6035,14 @@ public class HelperGroup
         }
 
         long group_num_ = tox_group_by_groupid__wrapper(group_identifier);
+        // KHANDAQ (0.2.57): a record that names our own key in the group is dropped on every path that brings history
+        // here, the relay's (TRIFA_SYNC_TYPE_TOXPROXY) too, which comes without the key check of the group's own path.
+        if (NgcHistoryDowngradePolicy.claimsOwnKey(
+                (group_num_ >= 0) ? tox_group_self_get_public_key__wrapper(group_num_) : null, peer_pubkey))
+        {
+            HelperGeneric.logI(TAG, "group_message_add_from_sync: dropping a record that names our own key");
+            return;
+        }
         int res = -1;
         if (peer_number2 == -1)
         {
@@ -11853,7 +11861,8 @@ public class HelperGroup
             }
             // check for muted or kicked peers
 
-            if (tox_group_self_get_public_key(group_number).toUpperCase().equalsIgnoreCase(original_sender_peerpubkey))
+            if (NgcHistoryDowngradePolicy.claimsOwnKey(tox_group_self_get_public_key(group_number),
+                                                       original_sender_peerpubkey))
             {
                 // HINT: do not add our own messages, they are already in the DB!
                 // HelperGeneric.logI(TAG, "handle_incoming_sync_group_message:gn=" + group_number + " peerid=" + peer_id + " ignoring myself as original sender");
@@ -12133,7 +12142,8 @@ public class HelperGroup
             }
             // check for muted or kicked peers
 
-            if (tox_group_self_get_public_key(group_number).toUpperCase().equalsIgnoreCase(original_sender_peerpubkey))
+            if (NgcHistoryDowngradePolicy.claimsOwnKey(tox_group_self_get_public_key(group_number),
+                                                       original_sender_peerpubkey))
             {
                 // HINT: do not add our own files, they are already in the DB!
                 // HelperGeneric.logI(TAG, "handle_incoming_sync_group_file:gn=" + group_number + " peerid=" + peer_id + " ignoring myself as original sender");

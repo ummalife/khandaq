@@ -1,5 +1,6 @@
 package com.zoffcc.applications.trifa;
 
+import java.text.BreakIterator;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -12,14 +13,16 @@ import java.util.TimeZone;
  * <p>
  * The mail is the desktop's (aircommunity.cpp, reportMailUrl), so that support gets the same mail from every
  * platform: to support@khandaq.org, the subject "Report: " and the group's name, and a body with the group, the
- * first 8 characters of the author's key in the group in upper case ("unknown" when the message has none stored),
- * the time in UTC (ISO 8601) and the text, up to 500 characters, its lines ended with CRLF. The words of the mail are support's, in English: the person reads
- * them before sending. Free of Android, so that the unit tests hold it as the phone builds it.
+ * first 8 characters of the author's key in the group in upper case ("unknown" when the message has none stored, or
+ * came through history sync and no signature proved it: reportedAuthorKey), the time in UTC (ISO 8601) and the
+ * text, up to 500 characters as a person counts them (firstCharacters), its lines ended with CRLF. The words of the
+ * mail are support's, in English: the person reads them before sending. Free of Android, so that the unit tests
+ * hold it as the phone builds it.
  */
 final class GroupReportMail
 {
     static final String ADDRESS = "support@khandaq.org";
-    /** The text of the message goes up to this many characters; none is cut in half. */
+    /** The text of the message goes up to this many characters, as a person counts them; none is cut in half. */
     static final int TEXT_LIMIT = 500;
     /** The author is named by the first characters of their key in the group. */
     static final int AUTHOR_KEY_CHARS = 8;
@@ -90,6 +93,19 @@ final class GroupReportMail
         return authorKey.substring(0, AUTHOR_KEY_CHARS).toUpperCase(Locale.ROOT);
     }
 
+    /**
+     * The key the mail names the author by (authorPrefix), the rule on every platform. A message that came live keeps
+     * the key stored when it came. One that came through history sync ({@code cameThroughHistory},
+     * GroupMessage.was_synced) carries the key the peer that relayed it claimed, signed by no one: it names its
+     * author only when a signature proved this very message ({@code signatureVerified},
+     * NgcSignedHistory.isAuthorVerified), else none (null), which the mail says as UNKNOWN_AUTHOR.
+     */
+    static String reportedAuthorKey(final String storedKey, final boolean cameThroughHistory,
+                                    final boolean signatureVerified)
+    {
+        return (cameThroughHistory && !signatureVerified) ? null : storedKey;
+    }
+
     /** ISO 8601 in UTC, to the second: 2026-11-16T05:54:57Z; empty for a time not known (0), as the desktop has it. */
     static String isoUtc(final long timeMs)
     {
@@ -102,21 +118,31 @@ final class GroupReportMail
         return format.format(new Date(timeMs));
     }
 
-    /** The first {@code limit} characters of text: a pair of surrogates is one character, never cut in half. */
+    /**
+     * The first {@code limit} characters of text as a person counts them, as Swift's String counts them on iOS: each
+     * an extended grapheme cluster, so a flag, emoji joined by ZWJ, an emoji with its skin tone, a letter with its
+     * combining marks or a pair of surrogates is one character, never cut in half. On the phone java.text's
+     * BreakIterator is ICU's, which follows UAX #29 for all of them; a JVM before JDK 20 splits flags and emoji.
+     */
     static String firstCharacters(final String text, final int limit)
     {
         if (text == null)
         {
             return "";
         }
-        int units = 0;
-        for (int characters = 0; (characters < limit) && (units < text.length()); characters++)
+        final BreakIterator clusters = BreakIterator.getCharacterInstance(Locale.ROOT);
+        clusters.setText(text);
+        int end = clusters.first();
+        for (int characters = 0; characters < limit; characters++)
         {
-            final boolean pair = Character.isHighSurrogate(text.charAt(units)) && (units + 1 < text.length())
-                                 && Character.isLowSurrogate(text.charAt(units + 1));
-            units += pair ? 2 : 1;
+            final int next = clusters.next();
+            if (next == BreakIterator.DONE)
+            {
+                break;
+            }
+            end = next;
         }
-        return text.substring(0, units);
+        return text.substring(0, end);
     }
 
     /** Lines of a mail end with CRLF (RFC 6068), whatever ended them before. */

@@ -836,6 +836,14 @@ enum MessageForwarder {
     }
 
     private static func forward(_ message: OCTMessageAbstract, to chat: OCTChat, manager: OCTManager) {
+        // KHANDAQ (0.2.57, SPEC-community item 6): a file of Khandaq Community that waits for Accept stays
+        // where it is, in a selection too.
+        if message.messageFile != nil,
+           let source = manager.objects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat,
+           KhandaqCommunity.fileHold(of: message, in: source) != .none {
+            return
+        }
+
         if chat.isSavedMessages {
             saveLocally(message, to: chat, manager: manager)
             return

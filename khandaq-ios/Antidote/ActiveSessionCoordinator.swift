@@ -120,6 +120,7 @@ class ActiveSessionCoordinator: NSObject {
     fileprivate var didReportConnectedPill = false
     fileprivate var presenceRecorder: AirPresenceRecorder?
     fileprivate var blockGuard: AirBlockGuard?
+    fileprivate var communityFileKeeper: KhandaqCommunityFileKeeper?
     fileprivate var offlineWatchdog: OfflineReconnectWatchdog?
 
     init(theme: Theme, window: UIWindow, toxManager: OCTManager) {
@@ -175,6 +176,10 @@ class ActiveSessionCoordinator: NSObject {
         let guardian = AirBlockGuard(submanagerObjects: toxManager.objects, submanagerFriends: toxManager.friends)
         guardian.start()
         blockGuard = guardian
+        // KHANDAQ (0.2.57, SPEC-community item 6): the room of the files that wait in Khandaq Community.
+        let keeper = KhandaqCommunityFileKeeper(submanagerObjects: toxManager.objects)
+        keeper.start()
+        communityFileKeeper = keeper
 
         friendsCoordinator.delegate = self
         settingsCoordinator.delegate = self
@@ -214,6 +219,7 @@ class ActiveSessionCoordinator: NSObject {
     deinit {
         presenceRecorder?.stop()
         blockGuard?.stop()
+        communityFileKeeper?.stop()
         offlineWatchdog?.stop()
         MessageDeliveryWatchdog.shared.stop()
         NotificationCenter.default.removeObserver(self, name: .khandaqManualReconnectRequested, object: nil)
@@ -366,6 +372,8 @@ class ActiveSessionCoordinator: NSObject {
         presenceRecorder = nil
         blockGuard?.stop()
         blockGuard = nil
+        communityFileKeeper?.stop()
+        communityFileKeeper = nil
         AirLocalStore.shared.detach()
         ActiveSessionCoordinator.releaseDelegates(user: toxManager?.user, groups: toxManager?.groups, heldBy: self)
         callCoordinator = nil
@@ -377,6 +385,8 @@ class ActiveSessionCoordinator: NSObject {
         presenceRecorder = nil
         blockGuard?.stop()
         blockGuard = nil
+        communityFileKeeper?.stop()
+        communityFileKeeper = nil
         offlineWatchdog?.stop()
         networkReachabilityMonitor.stop()
         ActiveSessionCoordinator.releaseDelegates(user: toxManager?.user, groups: toxManager?.groups, heldBy: self)

@@ -184,6 +184,9 @@ final class AirLocalStore {
     private struct CommunityMarks: Codable {
         var autoJoinDone = false
         var left = false
+        /// When this profile first ran 0.2.57 (seconds since 1970): files of others in the group that came
+        /// before were shown as they came, and stay so; those after wait for Accept (item 6).
+        var holdSince: Double?
 
         init() {
         }
@@ -193,10 +196,11 @@ final class AirLocalStore {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             autoJoinDone = try container.decodeIfPresent(Bool.self, forKey: .autoJoinDone) ?? false
             left = try container.decodeIfPresent(Bool.self, forKey: .left) ?? false
+            holdSince = try container.decodeIfPresent(Double.self, forKey: .holdSince)
         }
 
         var isEmpty: Bool {
-            return !autoJoinDone && !left
+            return !autoJoinDone && !left && holdSince == nil
         }
     }
 
@@ -250,6 +254,10 @@ final class AirLocalStore {
             read(data)
         }
         pruneHours(now: Date())
+        if community.holdSince == nil {
+            community.holdSince = Date().timeIntervalSince1970
+            save()
+        }
         notify()
     }
 
@@ -536,6 +544,12 @@ final class AirLocalStore {
     /// The person left Khandaq Community: it is never joined by itself again (item 3).
     var communityLeft: Bool {
         return community.left
+    }
+
+    /// From when files of others in Khandaq Community wait for Accept (item 6); nil while no profile is
+    /// attached.
+    var communityHoldSince: TimeInterval? {
+        return community.holdSince
     }
 
     func setCommunityAutoJoinDone() {

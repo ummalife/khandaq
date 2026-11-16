@@ -22,16 +22,22 @@ class FilePreviewControllerDataSource: NSObject , QuickLookPreviewControllerData
     var messagesToken: RLMNotificationToken?
     private let chat: OCTChat
 
-    init(chat: OCTChat, submanagerObjects: OCTSubmanagerObjects) {
+    /// `excludingMessageIds`: entries whose files are not to be shown, as those of Khandaq Community that wait
+    /// for Accept (KhandaqCommunity.heldMessageIds).
+    init(chat: OCTChat, submanagerObjects: OCTSubmanagerObjects, excludingMessageIds: [String] = []) {
         self.chat = chat
-        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+        var subpredicates: [NSPredicate] = [
             NSPredicate(format: "chatUniqueIdentifier == %@ AND messageFile != nil", chat.uniqueIdentifier),
 
             NSCompoundPredicate(orPredicateWithSubpredicates: [
                 NSPredicate(format: "messageFile.fileType == \(OCTMessageFileType.ready.rawValue)"),
                 NSPredicate(format: "senderUniqueIdentifier == nil AND messageFile.fileType == \(OCTMessageFileType.canceled.rawValue)"),
             ]),
-        ])
+        ]
+        if !excludingMessageIds.isEmpty {
+            subpredicates.append(NSPredicate(format: "NOT (uniqueIdentifier IN %@)", excludingMessageIds))
+        }
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: subpredicates)
 
         // KHANDAQ (0.2.56): in the conversation's order (OCTMessageAbstract.chatOrderSortDescriptors).
         self.messages = submanagerObjects.messages(predicate: predicate)

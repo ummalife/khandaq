@@ -401,11 +401,15 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
         if quoteText(for: message) != nil {
             actions.append(ChatContextMenuAction(title: String(localized: "chat_reply_action"), systemImageName: "arrowshape.turn.up.left") { [weak self] in self?.startReply(to: message) })
         }
-        actions.append(ChatContextMenuAction(title: String(localized: "chat_forward_action"), systemImageName: "arrowshape.turn.up.right") { [weak self] in
-            guard let self = self else { return }
-            let source: UIView = self.tableView.cellForRow(at: indexPath) ?? self.tableView
-            MessageForwarder.presentForwardPicker(for: message, from: self, sourceView: source)
-        })
+        // KHANDAQ (0.2.57, SPEC-community item 6): a file of Khandaq Community that waits for Accept is not
+        // the person's to pass on.
+        if KhandaqCommunity.fileHold(of: message, in: chat) == .none {
+            actions.append(ChatContextMenuAction(title: String(localized: "chat_forward_action"), systemImageName: "arrowshape.turn.up.right") { [weak self] in
+                guard let self = self else { return }
+                let source: UIView = self.tableView.cellForRow(at: indexPath) ?? self.tableView
+                MessageForwarder.presentForwardPicker(for: message, from: self, sourceView: source)
+            })
+        }
         actions.append(ChatContextMenuAction(title: String(localized: "chat_pin_action"), systemImageName: "pin") { [weak self] in
             guard let self = self, let id = message.uniqueIdentifier else { return }
             ChatPinStore.setPinned(messageId: id, forChat: self.chat.uniqueIdentifier)

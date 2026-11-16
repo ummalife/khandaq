@@ -242,7 +242,10 @@ extension ChatAttachmentsController: UITableViewDataSource, UITableViewDelegate 
         tableView.deselectRow(at: indexPath, animated: true)
 
         let message = rows[indexPath.row]
+        // KHANDAQ (0.2.57, SPEC-community item 6): a file of Khandaq Community that waits for Accept is not
+        // here for the person yet; Accept is on its entry in the conversation.
         guard let file = message.messageFile,
+              KhandaqCommunity.fileHold(of: message, in: chat) == .none,
               let path = file.filePath(),
               FileManager.default.fileExists(atPath: path) else {
             // A transfer that never finished has nothing on disk yet — say so rather than opening an

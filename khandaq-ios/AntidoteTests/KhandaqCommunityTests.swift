@@ -192,6 +192,7 @@ class KhandaqCommunityTests: XCTestCase {
         store.attach(directory: directory)
         XCTAssertFalse(store.communityAutoJoinDone)
         XCTAssertFalse(store.communityLeft)
+        XCTAssertNotNil(store.communityHoldSince, "the files that came in 0.2.56 stay shown")
         store.setCommunityAutoJoinDone()
         store.setCommunityLeft()
         store.flush()
@@ -202,6 +203,26 @@ class KhandaqCommunityTests: XCTestCase {
         again.attach(directory: directory)
         XCTAssertTrue(again.communityAutoJoinDone)
         XCTAssertTrue(again.communityLeft)
+    }
+
+    // MARK: Item 6, from when files wait
+
+    func testFilesWaitFromTheFirstStartOf057AndThatMomentIsKept() throws {
+        let directory = makeDirectory()
+        let first = AirLocalStore(sealing: PlainSealing())
+        XCTAssertNil(first.communityHoldSince, "no profile yet")
+        let before = Date().timeIntervalSince1970
+        first.attach(directory: directory)
+        let since = try XCTUnwrap(first.communityHoldSince)
+        XCTAssertGreaterThanOrEqual(since, before)
+        first.flush()
+
+        // A later start keeps it: what waited still waits, what was shown is still shown.
+        let second = AirLocalStore(sealing: PlainSealing())
+        second.attach(directory: directory)
+        XCTAssertEqual(second.communityHoldSince, since)
+        second.detach()
+        XCTAssertNil(second.communityHoldSince)
     }
 
     // MARK: A failed join of its own says nothing

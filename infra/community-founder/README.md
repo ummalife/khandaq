@@ -14,6 +14,10 @@ It never writes in the group.
   they drifted: public, topic lock on, peer limit 250 (or what `/limit` set), the topic from
   `topic.txt`. With the lock on, only the founder and moderators can change the topic; a
   moderator's change is kept in `topic.txt`, so a restart does not undo it.
+- **The topic is the group's name, `Khandaq Community`.** The clients show a group's topic as its
+  title (an NGC group keeps the name it was created with, so they let the topic rename it), and a
+  topic such as rules text would show up as the group's name in builds that do not fix the
+  Community's title themselves. Keep `/topic` for that name.
 - **Mutes outlast restarts and rejoins.** toxcore keeps mutes in memory only (at most 30 at a
   time), and both a restart of the bot and a kick drop them. The bot keeps the muted members' group
   keys in `muted.txt` and mutes them again when they come back, including mutes that moderators

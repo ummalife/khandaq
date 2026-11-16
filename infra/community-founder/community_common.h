@@ -29,10 +29,10 @@
 
 #define COMMUNITY_GROUP_NAME "Khandaq Community"
 #define COMMUNITY_SELF_NICK  "Khandaq"
-/* One line, as the owner set it on 2026-11-16. */
-#define COMMUNITY_DEFAULT_TOPIC                                                                     \
-    "Official Khandaq community · Be kind, no spam or ads · Официальное сообщество Khandaq · Без " \
-    "спама и рекламы"
+/* The group's name again: the clients show a group's topic as its title (an NGC group keeps the name
+ * it was created with, so they let the topic rename it), and the owner wants the group called
+ * "Khandaq Community" everywhere (2026-11-16). */
+#define COMMUNITY_DEFAULT_TOPIC COMMUNITY_GROUP_NAME
 #define COMMUNITY_DEFAULT_PEER_LIMIT 250
 #define COMMUNITY_MIN_PEER_LIMIT     10
 #define COMMUNITY_MAX_PEER_LIMIT     1000

@@ -130,6 +130,54 @@ class KhandaqCommunityTests: XCTestCase {
         XCTAssertTrue(marks.communityAutoJoinDone)
     }
 
+    /// The join mutes the group: a muted group, this one or any other, adds nothing to the badge of the Chats tab
+    /// nor to the app icon's, and its row keeps its own counter.
+    func testAMutedGroupAddsNothingToTheBadgesAndItsRowKeepsItsCounter() throws {
+        let directory = makeDirectory()
+        let realmManagerClass = try appClass("OCTRealmManager", as: OCTRealmManager.Type.self)
+        let realmManager = try XCTUnwrap(realmManagerClass.init(databaseFileURL: directory.appendingPathComponent("profile.realm"),
+                                                                encryptionKey: nil))
+        let objects = OCTSubmanagerObjectsMock(realm: realmManager.realm)
+        func unreadChat(group: Bool, muted: Bool) throws -> OCTChat {
+            let chat = try appClass("OCTChat", as: OCTChat.Type.self).init()
+            chat.uniqueIdentifier = UUID().uuidString
+            chat.isGroup = group
+            chat.groupNotificationsSilent = muted
+            chat.lastReadDateInterval = 5
+            let message = try appClass("OCTMessageAbstract", as: OCTMessageAbstract.Type.self).init()
+            message.uniqueIdentifier = UUID().uuidString
+            message.chatUniqueIdentifier = chat.uniqueIdentifier
+            message.dateInterval = 10
+            if group {
+                message.groupSenderPeerId = 4
+            }
+            else {
+                message.senderUniqueIdentifier = UUID().uuidString
+            }
+            chat.lastMessage = message
+            realmManager.add(chat)
+            return chat
+        }
+        let friend = try unreadChat(group: false, muted: false)
+        let group = try unreadChat(group: true, muted: false)
+        let muted = try unreadChat(group: true, muted: true)
+
+        let unread = objects.chats(predicate: NotificationCoordinator.unreadChatsPredicate)
+        XCTAssertEqual(unread.count, 2)
+        XCTAssertGreaterThanOrEqual(unread.indexOfObject(friend), 0)
+        XCTAssertGreaterThanOrEqual(unread.indexOfObject(group), 0)
+        XCTAssertEqual(unread.indexOfObject(muted), -1, "a muted group adds nothing")
+        XCTAssertEqual(ChatListContent.unreadCount(for: muted, submanagerGroups: OCTSubmanagerGroupsMock(), submanagerObjects: objects), 1,
+                       "its row keeps its counter")
+
+        // Its notifications on again, it counts again.
+        let realm: RLMRealm = realmManager.realm
+        realm.beginWriteTransaction()
+        muted.groupNotificationsSilent = false
+        try realm.commitWriteTransaction()
+        XCTAssertEqual(objects.chats(predicate: NotificationCoordinator.unreadChatsPredicate).count, 3)
+    }
+
     // MARK: Item 3, left means never again, across a restart
 
     func testLeavingTheCommunityIsKeptAcrossARestartAndItIsNeverJoinedAgain() {

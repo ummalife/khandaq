@@ -93,6 +93,19 @@ class NotificationCoordinator: NSObject {
     // in bursts every 30 s or so.
     fileprivate var appIconBadgeNumber: Int?
 
+    // KHANDAQ (#41): a chat is "unread" for the tab/app badge only when its last message is a
+    // genuine INCOMING, non-system message newer than lastRead. The old date-only predicate also
+    // counted our own outgoing messages (badge stuck after you send) and "X joined" system notes.
+    // For groups both incoming & outgoing have senderUniqueIdentifier == nil, so incoming is
+    // distinguished by groupSenderPeerId > 0 (mirrors OCTMessageAbstract.isOutgoing).
+    // KHANDAQ (0.2.57): a group whose notifications are off, Khandaq Community from its join or any group
+    // muted by hand, adds nothing to the tab or the app icon; its row in the list keeps its own counter.
+    static let unreadChatsPredicate = NSPredicate(format:
+        "lastMessage.dateInterval > lastReadDateInterval"
+        + " AND lastMessage.groupSystemMessage == NO"
+        + " AND (lastMessage.groupSenderPeerId > 0 OR lastMessage.senderUniqueIdentifier != nil)"
+        + " AND NOT (isGroup == YES AND groupNotificationsSilent == YES)")
+
     init(theme: Theme, submanagerObjects: OCTSubmanagerObjects) {
         self.theme = theme
         self.notificationWindow = NotificationWindow()
@@ -100,16 +113,7 @@ class NotificationCoordinator: NSObject {
         self.submanagerObjects = submanagerObjects
         self.avatarManager = AvatarManager(theme: theme)
 
-        // KHANDAQ (#41): a chat is "unread" for the tab/app badge only when its last message is a
-        // genuine INCOMING, non-system message newer than lastRead. The old date-only predicate also
-        // counted our own outgoing messages (badge stuck after you send) and "X joined" system notes.
-        // For groups both incoming & outgoing have senderUniqueIdentifier == nil, so incoming is
-        // distinguished by groupSenderPeerId > 0 (mirrors OCTMessageAbstract.isOutgoing).
-        let predicate = NSPredicate(format:
-            "lastMessage.dateInterval > lastReadDateInterval"
-            + " AND lastMessage.groupSystemMessage == NO"
-            + " AND (lastMessage.groupSenderPeerId > 0 OR lastMessage.senderUniqueIdentifier != nil)")
-        self.chats = submanagerObjects.chats(predicate: predicate)
+        self.chats = submanagerObjects.chats(predicate: NotificationCoordinator.unreadChatsPredicate)
         self.requests = submanagerObjects.friendRequests()
 
         super.init()

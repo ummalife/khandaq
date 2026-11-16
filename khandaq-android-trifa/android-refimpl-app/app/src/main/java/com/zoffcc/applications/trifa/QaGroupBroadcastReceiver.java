@@ -6,6 +6,8 @@ package com.zoffcc.applications.trifa;
 import org.khandaq.messenger.BuildConfig;
 import org.khandaq.messenger.R;
 
+import com.zoffcc.applications.sorm.GroupDB;
+
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -35,6 +37,7 @@ public class QaGroupBroadcastReceiver extends BroadcastReceiver
     public static final String ACTION_FORGET_COMMUNITY_MARKS = "org.khandaq.qa.FORGET_COMMUNITY_MARKS";
     public static final String ACTION_LIST_TEMP_FILES = "org.khandaq.qa.LIST_TEMP_FILES";
     public static final String ACTION_REFUSE_GROUP_JOIN = "org.khandaq.qa.REFUSE_GROUP_JOIN";
+    public static final String ACTION_GROUP_ROW = "org.khandaq.qa.GROUP_ROW";
 
     public static final String EXTRA_NAME = "name";
     public static final String EXTRA_GROUP_ID = "group_id";
@@ -42,6 +45,8 @@ public class QaGroupBroadcastReceiver extends BroadcastReceiver
     public static final String EXTRA_TOX_ID = "tox_id";
     /** REFUSE_GROUP_JOIN: toxcore's Tox_Group_Join_Fail (ToxVars.TOX_GROUP_JOIN_FAIL), PEER_LIMIT when left out. */
     public static final String EXTRA_FAIL = "fail";
+    /** GROUP_ROW: true removes the row after it is logged. */
+    public static final String EXTRA_FORGET = "forget";
 
     private static String friendPublicKeyFromToxId(@Nullable final String toxId)
     {
@@ -322,6 +327,37 @@ public class QaGroupBroadcastReceiver extends BroadcastReceiver
                 }
                 MainActivity.android_tox_callback_group_join_fail_cb_method(groupNumber, fail);
                 HelperGeneric.logI(TAG, "qa_group_broadcast:done action=" + action + " gn=" + groupNumber + " fail=" + fail);
+                return;
+            }
+            case ACTION_GROUP_ROW:
+            {
+                // KHANDAQ (0.2.57, review QA): a group's row as the database has it. With forget it is removed while
+                // toxcore keeps the group, as an import or a restore of the same profile leaves every group, and the
+                // next start makes it again (#202).
+                final String groupId = intent.getStringExtra(EXTRA_GROUP_ID);
+                if (groupId == null)
+                {
+                    Log.w(TAG, "qa_group_broadcast:fail action=" + action + " reason=no_group_id");
+                    return;
+                }
+                final String id = groupId.toLowerCase(java.util.Locale.ROOT);
+                final java.util.List<GroupDB> rows = TrifaToxService.orma.selectFromGroupDB().group_identifierEq(
+                        id).toList();
+                for (final GroupDB row : rows)
+                {
+                    HelperGeneric.logI(TAG, "qa_group_row:silent=" + row.notification_silent + " we_left="
+                                            + row.group_we_left + " active=" + row.group_active);
+                }
+                if (rows.isEmpty())
+                {
+                    HelperGeneric.logI(TAG, "qa_group_row:none");
+                }
+                if (intent.getBooleanExtra(EXTRA_FORGET, false))
+                {
+                    TrifaToxService.orma.deleteFromGroupDB().group_identifierEq(id).execute();
+                    HelperGeneric.logI(TAG, "qa_group_row:forgotten");
+                }
+                HelperGeneric.logI(TAG, "qa_group_broadcast:done action=" + action);
                 return;
             }
             default:

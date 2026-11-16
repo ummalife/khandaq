@@ -3939,8 +3939,23 @@ void sanctions_list_cleanup(Moderation *moderation);
 #define GC_MAX_SAVED_PEERS 100
 #define GC_SAVED_PEER_SIZE (ENC_PUBLIC_KEY_SIZE + sizeof(Node_format) + sizeof(IP_Port))
 
-/* Max size of a packet chunk. Packets larger than this must be split up. */
-#define MAX_GC_PACKET_CHUNK_SIZE 1372 // 500
+/* Max size of a packet chunk we send. Packets larger than this must be split up.
+ *
+ * KHANDAQ (gc IPv6 MTU): a full chunk goes out wrapped in 82 more bytes (packet type, sender key, nonce,
+ * group packet type, message id, MAC). At 1372 that was a 1454 byte UDP payload, a 1502 byte IPv6 packet:
+ * over a 1500 byte MTU, so a direct IPv6 path split it into IP fragments, which were lost, and no group file
+ * chunk arrived while small packets passed. At 1150 every group packet we send is at most 1232 bytes of UDP
+ * payload, 1280 bytes with the IPv6 and UDP headers: the IPv6 minimum MTU. A lossy group packet cannot be
+ * split, so this is also the largest lossy group packet we send.
+ */
+#define MAX_GC_PACKET_CHUNK_SIZE 1150 // 500
+
+/* KHANDAQ (gc IPv6 MTU): max size of a packet chunk we accept. A peer before this change (0.2.56 and older,
+ * the Community bot) sends chunks of up to 1372, so every incoming length check and assert uses this; only
+ * what we build and send uses MAX_GC_PACKET_CHUNK_SIZE. Upstream c-toxcore keeps the same split (500 sent,
+ * 1372 accepted).
+ */
+#define MAX_GC_PACKET_INCOMING_CHUNK_SIZE 1372
 
 /* Max size of a complete encrypted packet including headers. */
 #define MAX_GC_PACKET_SIZE (500 * 100) // (MAX_GC_PACKET_CHUNK_SIZE * 100)
@@ -28996,6 +29011,21 @@ static_assert(MAX_GC_PACKET_SIZE >= 50000,
 static_assert(MAX_GC_PACKET_SIZE <= UINT16_MAX - MAX_GC_PACKET_CHUNK_SIZE,
               "MAX_GC_PACKET_SIZE must be <= UINT16_MAX - MAX_GC_PACKET_CHUNK_SIZE");
 
+// KHANDAQ (gc IPv6 MTU): we accept every chunk we send, a reassembled packet stays within 16 bits, and a
+// full chunk we send, wrapped (packet type, sender key, nonce, group packet type, message id, MAC; a full
+// chunk has no padding), fits the IPv6 minimum MTU of 1280 bytes less the IPv6 (40) and UDP (8) headers.
+static_assert(MAX_GC_PACKET_INCOMING_CHUNK_SIZE >= MAX_GC_PACKET_CHUNK_SIZE,
+              "MAX_GC_PACKET_INCOMING_CHUNK_SIZE must be >= MAX_GC_PACKET_CHUNK_SIZE");
+
+static_assert(MAX_GC_PACKET_INCOMING_CHUNK_SIZE < MAX_GC_PACKET_SIZE,
+              "MAX_GC_PACKET_INCOMING_CHUNK_SIZE must be < MAX_GC_PACKET_SIZE");
+
+static_assert(MAX_GC_PACKET_SIZE <= UINT16_MAX - MAX_GC_PACKET_INCOMING_CHUNK_SIZE,
+              "MAX_GC_PACKET_SIZE must be <= UINT16_MAX - MAX_GC_PACKET_INCOMING_CHUNK_SIZE");
+
+static_assert(1 + ENC_PUBLIC_KEY_SIZE + GC_MIN_LOSSLESS_PAYLOAD_SIZE + MAX_GC_PACKET_CHUNK_SIZE <= 1280 - 40 - 8,
+              "a full group packet chunk we send must fit the IPv6 minimum MTU");
+
 /** Types of broadcast messages. */
 typedef enum Group_Message_Type {
     GC_MESSAGE_TYPE_NORMAL = 0x00,
@@ -29091,7 +29121,12 @@ GC_Connection *get_gc_connection(const GC_Chat *chat, int peer_number)
     return &peer->gconn;
 }
 
-/** Returns the amount of empty padding a packet of designated length should have. */
+/** @brief Returns the amount of empty padding a packet of designated length should have.
+ *
+ * KHANDAQ (gc IPv6 MTU): only the sender uses it. The receiver drops the zero bytes in front of the group
+ * packet type (group_packet_unwrap), so a packet padded up to another chunk size, as a peer before this
+ * change pads it, reads the same.
+ */
 static uint16_t group_packet_padding_length(uint16_t length)
 {
     return (MAX_GC_PACKET_CHUNK_SIZE - length) % GC_MAX_PACKET_PADDING;
@@ -35264,15 +35299,18 @@ static int handle_gc_tcp_packet(void *object, int id, const uint8_t *packet, uin
         return -1;
     }
 
+    // KHANDAQ (gc IPv6 MTU): a peer before this change sends chunks of up to MAX_GC_PACKET_INCOMING_CHUNK_SIZE.
     if (length <= MIN_TCP_PACKET_SIZE) {
         LOGGER_WARNING(m->log, "Got tcp packet with invalid length: %u (expected %u to %u)", length,
-                       MIN_TCP_PACKET_SIZE, MAX_GC_PACKET_CHUNK_SIZE + MIN_TCP_PACKET_SIZE + ENC_PUBLIC_KEY_SIZE);
+                       MIN_TCP_PACKET_SIZE,
+                       MAX_GC_PACKET_INCOMING_CHUNK_SIZE + MIN_TCP_PACKET_SIZE + ENC_PUBLIC_KEY_SIZE);
         return -1;
     }
 
-    if (length > MAX_GC_PACKET_CHUNK_SIZE + MIN_TCP_PACKET_SIZE + ENC_PUBLIC_KEY_SIZE) {
+    if (length > MAX_GC_PACKET_INCOMING_CHUNK_SIZE + MIN_TCP_PACKET_SIZE + ENC_PUBLIC_KEY_SIZE) {
         LOGGER_WARNING(m->log, "Got tcp packet with invalid length: %u (expected %u to %u)", length,
-                       MIN_TCP_PACKET_SIZE, MAX_GC_PACKET_CHUNK_SIZE + MIN_TCP_PACKET_SIZE + ENC_PUBLIC_KEY_SIZE);
+                       MIN_TCP_PACKET_SIZE,
+                       MAX_GC_PACKET_INCOMING_CHUNK_SIZE + MIN_TCP_PACKET_SIZE + ENC_PUBLIC_KEY_SIZE);
         return -1;
     }
 
@@ -35345,15 +35383,18 @@ static int handle_gc_tcp_oob_packet(void *object, const uint8_t *public_key, uns
         return -1;
     }
 
+    // KHANDAQ (gc IPv6 MTU): a peer before this change sends chunks of up to MAX_GC_PACKET_INCOMING_CHUNK_SIZE.
     if (length <= GC_MIN_HS_PACKET_PAYLOAD_SIZE) {
         LOGGER_WARNING(m->log, "Got tcp oob packet with invalid length: %u (expected %u to %u)", length,
-                       GC_MIN_HS_PACKET_PAYLOAD_SIZE, MAX_GC_PACKET_CHUNK_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE);
+                       GC_MIN_HS_PACKET_PAYLOAD_SIZE,
+                       MAX_GC_PACKET_INCOMING_CHUNK_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE);
         return -1;
     }
 
-    if (length > MAX_GC_PACKET_CHUNK_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE) {
+    if (length > MAX_GC_PACKET_INCOMING_CHUNK_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE) {
         LOGGER_WARNING(m->log, "Got tcp oob packet with invalid length: %u (expected %u to %u)", length,
-                       GC_MIN_HS_PACKET_PAYLOAD_SIZE, MAX_GC_PACKET_CHUNK_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE);
+                       GC_MIN_HS_PACKET_PAYLOAD_SIZE,
+                       MAX_GC_PACKET_INCOMING_CHUNK_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE);
         return -1;
     }
 
@@ -35401,15 +35442,18 @@ static int handle_gc_udp_packet(void *object, const IP_Port *ipp, const uint8_t 
         return -1;
     }
 
+    // KHANDAQ (gc IPv6 MTU): a peer before this change sends chunks of up to MAX_GC_PACKET_INCOMING_CHUNK_SIZE.
     if (length <= MIN_UDP_PACKET_SIZE) {
         LOGGER_WARNING(m->log, "Got UDP packet with invalid length: %u (expected %u to %u)", length,
-                       MIN_UDP_PACKET_SIZE, MAX_GC_PACKET_CHUNK_SIZE + MIN_UDP_PACKET_SIZE + ENC_PUBLIC_KEY_SIZE);
+                       MIN_UDP_PACKET_SIZE,
+                       MAX_GC_PACKET_INCOMING_CHUNK_SIZE + MIN_UDP_PACKET_SIZE + ENC_PUBLIC_KEY_SIZE);
         return -1;
     }
 
-    if (length > MAX_GC_PACKET_CHUNK_SIZE + MIN_UDP_PACKET_SIZE + ENC_PUBLIC_KEY_SIZE) {
+    if (length > MAX_GC_PACKET_INCOMING_CHUNK_SIZE + MIN_UDP_PACKET_SIZE + ENC_PUBLIC_KEY_SIZE) {
         LOGGER_WARNING(m->log, "Got UDP packet with invalid length: %u (expected %u to %u)", length,
-                       MIN_UDP_PACKET_SIZE, MAX_GC_PACKET_CHUNK_SIZE + MIN_UDP_PACKET_SIZE + ENC_PUBLIC_KEY_SIZE);
+                       MIN_UDP_PACKET_SIZE,
+                       MAX_GC_PACKET_INCOMING_CHUNK_SIZE + MIN_UDP_PACKET_SIZE + ENC_PUBLIC_KEY_SIZE);
         return -1;
     }
 
@@ -37905,7 +37949,8 @@ static uint16_t reassemble_packet(const Logger *log, GC_Connection *gconn, uint8
     // search backwards in recv array until we find an empty slot or a non-fragment packet type
     while (!array_entry_is_empty(entry) && entry->packet_type == GP_FRAGMENT) {
         assert(entry->data != nullptr);
-        assert(entry->data_length <= MAX_GC_PACKET_CHUNK_SIZE);
+        // KHANDAQ (gc IPv6 MTU): a fragment from a peer before this change holds up to 1372 bytes.
+        assert(entry->data_length <= MAX_GC_PACKET_INCOMING_CHUNK_SIZE);
 
         const uint16_t diff = packet_length + entry->data_length;
 

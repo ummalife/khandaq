@@ -24,11 +24,20 @@ final class KhandaqCommunity
     /**
      * The profile has the group for good (SPEC item 1, "the group exists locally"): it has connected once, so toxcore
      * keeps it. Toxcore saves a group only once its state came from a member (gc_group_is_valid); a join that never
-     * connected is gone after a restart, and the next start joins again.
+     * connected is gone after a restart, and the next start joins again. So is a group the app let go of while it
+     * was full (noteGroupLetGo).
      */
     static final String MARK_AUTO_JOIN_DONE = "community.autoJoinDone";
     /** The person left the group, or deleted it (SPEC item 3). */
     static final String MARK_LEFT = "community.left";
+
+    /**
+     * The pause before the app asks a full Community again (SPEC-community: "a client whose join fails because the
+     * group is full just retries later"): 5 minutes after the first refusal, doubled after each one in a row, an
+     * hour at most.
+     */
+    static final long ROOM_RETRY_FIRST_MS = 5L * 60L * 1000L;
+    static final long ROOM_RETRY_LONGEST_MS = 60L * 60L * 1000L;
 
     private static final int PUBLIC_KEY_HEX_LENGTH = 64;
     /** A profile is told apart by the start of its public key, as the logs name it: never the whole key. */
@@ -42,6 +51,8 @@ final class KhandaqCommunity
         boolean left();
 
         void setAutoJoinDone();
+
+        void clearAutoJoinDone();
 
         void setLeft();
 
@@ -193,6 +204,48 @@ final class KhandaqCommunity
             return false;
         }
         store.setLeft();
+        return true;
+    }
+
+    /**
+     * Whether a refused join waits for room: the group is Khandaq Community, and it refused us because it has as many
+     * members as its founder allows (toxcore's TOX_GROUP_JOIN_FAIL_PEER_LIMIT, {@code failType}). Every client over
+     * its limit asked again at once and at every start, each try a handshake with the founder and the members, so the
+     * app lets go of it and asks again later (roomRetryDelayMs). Any other refusal, and a refusal of any other group,
+     * is tried again at once, as before.
+     */
+    static boolean waitsForRoom(final String groupId, final int failType)
+    {
+        return isCommunity(groupId) && (failType == ToxVars.TOX_GROUP_JOIN_FAIL.TOX_GROUP_JOIN_FAIL_PEER_LIMIT.value);
+    }
+
+    /**
+     * The pause before the app asks the full Community again, after the {@code refusalsInARow}-th refusal in a row
+     * (from 1): ROOM_RETRY_FIRST_MS, doubled each time, ROOM_RETRY_LONGEST_MS at most.
+     */
+    static long roomRetryDelayMs(final int refusalsInARow)
+    {
+        long delay = ROOM_RETRY_FIRST_MS;
+        for (int refusal = 1; (refusal < refusalsInARow) && (delay < ROOM_RETRY_LONGEST_MS); refusal++)
+        {
+            delay *= 2;
+        }
+        return Math.min(delay, ROOM_RETRY_LONGEST_MS);
+    }
+
+    /**
+     * The app let go of the group's instance while it is full (waitsForRoom): toxcore does not keep it now, so the
+     * profile does not have it for good either, and the next try, or the next start, joins it by itself again, as
+     * it does a join that never connected. The person's own leave (left) stays as it is, and so do the row and its
+     * switch. True when that changed the store.
+     */
+    static boolean noteGroupLetGo(final Store store)
+    {
+        if (!store.autoJoinDone())
+        {
+            return false;
+        }
+        store.clearAutoJoinDone();
         return true;
     }
 

@@ -961,6 +961,12 @@ public class HelperGroup
         {
             return -1;
         }
+        // KHANDAQ (0.2.57, review): the chat, the header, the members and the mentions of Khandaq Community all come
+        // here; while it is full (CommunityAutoJoin.waitForRoom) none of them joins it again before its pause is over.
+        if (CommunityAutoJoin.waitsForRoom(group_identifier))
+        {
+            return -1;
+        }
 
         try
         {
@@ -8792,7 +8798,10 @@ public class HelperGroup
             {
                 final long deadline = System.currentTimeMillis() + GROUP_POST_JOIN_DISCOVERY_MS;
                 int round = 0;
-                while (System.currentTimeMillis() < deadline && is_tox_started && !is_group_we_left(group_identifier))
+                // KHANDAQ (0.2.57, review): nor for Khandaq Community the app let go of while it is full: the friends
+                // this asks would invite us straight back.
+                while (System.currentTimeMillis() < deadline && is_tox_started && !is_group_we_left(group_identifier)
+                       && !CommunityAutoJoin.waitsForRoom(group_identifier))
                 {
                     final long peers = Math.max(0L, tox_group_peer_count(group_num));
                     final int conn = tox_group_is_connected(group_num);
@@ -10587,11 +10596,37 @@ public class HelperGroup
         {
             return;
         }
+        // KHANDAQ (0.2.57, review): Khandaq Community, full, is not asked again at once (CommunityAutoJoin.waitForRoom).
+        if (KhandaqCommunity.waitsForRoom(group_identifier, fail_type))
+        {
+            CommunityAutoJoin.waitForRoom(group_number);
+            update_group_in_friendlist(group_identifier);
+            return;
+        }
         reconnect_group_if_disconnected(group_number, group_identifier, true);
         sync_group_peers_from_tox_to_db(group_number);
         update_group_in_friendlist(group_identifier);
         TrifaToxService.wakeup_tox_thread();
         schedule_group_join_fail_retry(group_identifier);
+    }
+
+    /**
+     * KHANDAQ (0.2.57, review): toxcore lets go of a group the app keeps, with its row, its history and its marks:
+     * Khandaq Community while it is full (CommunityAutoJoin.waitForRoom), so that toxcore stops asking it. No leave
+     * notice: nobody let us in. A friend's late answer to our request to be invited would be taken at once and bring
+     * the group straight back, so the request is forgotten too.
+     */
+    static void let_go_of_group_instance(final long group_num)
+    {
+        if (group_num < 0 || is_group_leave_pending(group_num))
+        {
+            return;
+        }
+        clear_pending_friend_assisted_join(tox_group_by_groupnum__wrapper(group_num));
+        final int res = tox_group_leave(group_num, "");
+        HelperGeneric.logI(TAG, "let_go_of_group_instance:gn=" + group_num + " res=" + res);
+        // toxcore deletes the group on its next iterate. A save that still finds it only makes the next start ask once.
+        HelperGeneric.update_savedata_file_wrapper_async();
     }
 
     /**

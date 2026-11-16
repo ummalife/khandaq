@@ -74,6 +74,12 @@ public class KhandaqCommunityTest
         }
 
         @Override
+        public void clearAutoJoinDone()
+        {
+            settings.remove(key(KhandaqCommunity.MARK_AUTO_JOIN_DONE));
+        }
+
+        @Override
         public void setLeft()
         {
             settings.put(key(KhandaqCommunity.MARK_LEFT), "true");
@@ -499,6 +505,117 @@ public class KhandaqCommunityTest
                 "join_public_group_by_id(group_identifier,null,false,null,()->join_fail_retry_wanted(group_identifier));");
         assertTrue("before the join, which asks at each of its steps too", join > asked);
         assertFalse(retry.contains("join_public_group_by_id(group_identifier,false);"));
+    }
+
+    // ---- a full Community (review, 2026-11-16) ----
+
+    private static final int PEER_LIMIT = ToxVars.TOX_GROUP_JOIN_FAIL.TOX_GROUP_JOIN_FAIL_PEER_LIMIT.value;
+    private static final long MINUTE_MS = 60_000L;
+
+    @Test
+    public void toxcore_says_full_password_and_unknown_in_the_order_of_tox_h()
+    {
+        assertEquals(0, ToxVars.TOX_GROUP_JOIN_FAIL.TOX_GROUP_JOIN_FAIL_PEER_LIMIT.value);
+        assertEquals(1, ToxVars.TOX_GROUP_JOIN_FAIL.TOX_GROUP_JOIN_FAIL_INVALID_PASSWORD.value);
+        assertEquals(2, ToxVars.TOX_GROUP_JOIN_FAIL.TOX_GROUP_JOIN_FAIL_UNKNOWN.value);
+    }
+
+    @Test
+    public void only_the_community_refused_as_full_waits_for_room()
+    {
+        assertTrue(KhandaqCommunity.waitsForRoom(KhandaqCommunity.CHAT_ID, PEER_LIMIT));
+        assertTrue(KhandaqCommunity.waitsForRoom(COMMUNITY_ROW_ID, PEER_LIMIT));
+        // Another refusal of it, and the same refusal of another group, are tried again at once as before.
+        assertFalse(KhandaqCommunity.waitsForRoom(KhandaqCommunity.CHAT_ID,
+                                                  ToxVars.TOX_GROUP_JOIN_FAIL.TOX_GROUP_JOIN_FAIL_INVALID_PASSWORD.value));
+        assertFalse(KhandaqCommunity.waitsForRoom(KhandaqCommunity.CHAT_ID,
+                                                  ToxVars.TOX_GROUP_JOIN_FAIL.TOX_GROUP_JOIN_FAIL_UNKNOWN.value));
+        assertFalse(KhandaqCommunity.waitsForRoom(OTHER_GROUP, PEER_LIMIT));
+        assertFalse(KhandaqCommunity.waitsForRoom(LEGACY_TRIFA_GROUP, PEER_LIMIT));
+        assertFalse(KhandaqCommunity.waitsForRoom(null, PEER_LIMIT));
+    }
+
+    @Test
+    public void the_pause_before_asking_a_full_community_again_grows_from_five_minutes_to_an_hour()
+    {
+        assertEquals(5 * MINUTE_MS, KhandaqCommunity.roomRetryDelayMs(1));
+        assertEquals(10 * MINUTE_MS, KhandaqCommunity.roomRetryDelayMs(2));
+        assertEquals(20 * MINUTE_MS, KhandaqCommunity.roomRetryDelayMs(3));
+        assertEquals(40 * MINUTE_MS, KhandaqCommunity.roomRetryDelayMs(4));
+        assertEquals(60 * MINUTE_MS, KhandaqCommunity.roomRetryDelayMs(5));
+        assertEquals(60 * MINUTE_MS, KhandaqCommunity.roomRetryDelayMs(6));
+        assertEquals(60 * MINUTE_MS, KhandaqCommunity.roomRetryDelayMs(Integer.MAX_VALUE));
+        assertEquals(5 * MINUTE_MS, KhandaqCommunity.roomRetryDelayMs(0));
+    }
+
+    @Test
+    public void a_full_community_let_go_of_is_joined_again_later_with_its_switch_and_its_leave_untouched()
+    {
+        final Map<String, String> settings = new HashMap<>();
+        final ProfileStore store = new ProfileStore(settings, TOX_ID);
+        store.setAutoJoinDone();
+        assertTrue(KhandaqCommunity.noteGroupLetGo(store));
+        assertFalse(store.autoJoinDone());
+        assertFalse(store.left());
+        assertFalse(KhandaqCommunity.noteGroupLetGo(store));
+
+        // The next try, or the next start, joins it again; its row was kept, so its switch stays as it was.
+        final ProfileStore restarted = new ProfileStore(settings, TOX_ID);
+        final Join join = new Join(true);
+        assertTrue(KhandaqCommunity.autoJoin(restarted, true, false, false, join));
+        assertEquals(1, join.calls);
+        assertTrue(restarted.muted.isEmpty());
+
+        // A Community the person left stays left.
+        final ProfileStore leaver = new ProfileStore(new HashMap<>(), TOX_ID);
+        leaver.setAutoJoinDone();
+        leaver.setLeft();
+        KhandaqCommunity.noteGroupLetGo(leaver);
+        assertTrue(leaver.left());
+        final Join never = new Join(true);
+        assertFalse(KhandaqCommunity.autoJoin(leaver, true, false, false, never));
+        assertEquals(0, never.calls);
+    }
+
+    @Test
+    public void a_full_community_is_let_go_of_and_nothing_joins_it_again_before_its_pause_is_over()
+    {
+        final String helper = read(JAVA + "HelperGroup.java");
+        // No hard reconnect and no quick retries for it: those are for every other refusal.
+        final String fail = bare(method(helper, "static void handle_group_join_fail_async(final long group_number, final int fail_type)"));
+        final int full = fail.indexOf("if(KhandaqCommunity.waitsForRoom(group_identifier,fail_type)){"
+                                      + "CommunityAutoJoin.waitForRoom(group_number);update_group_in_friendlist(group_identifier);return;}");
+        assertTrue(full > 0);
+        assertTrue(full < fail.indexOf("reconnect_group_if_disconnected(group_number,group_identifier,true);"));
+        assertTrue(full < fail.indexOf("schedule_group_join_fail_retry(group_identifier);"));
+
+        // toxcore lets go of the instance, without a notice; a friend's late invitation is not taken by itself.
+        final String letGo = bare(method(helper, "static void let_go_of_group_instance(final long group_num)"));
+        assertTrue(letGo.contains("clear_pending_friend_assisted_join(tox_group_by_groupnum__wrapper(group_num));"
+                                  + "finalintres=tox_group_leave(group_num,\"\");"));
+        assertFalse(letGo.contains("tox_group_send_custom_packet"));
+        assertFalse("its row stays", letGo.contains("delete_group"));
+        assertFalse("its leave mark stays unset", letGo.contains("set_group_group_we_left"));
+
+        final String auto = read(JAVA + "CommunityAutoJoin.java");
+        final String room = bare(method(auto, "static void waitForRoom(final long groupNumber)"));
+        assertTrue(room.contains("delayMs=KhandaqCommunity.roomRetryDelayMs(roomRefusals);"));
+        assertTrue(room.contains("HelperGroup.let_go_of_group_instance(groupNumber);"));
+        assertTrue(room.contains("KhandaqCommunity.noteGroupLetGo(store);"));
+        assertFalse(room.contains("setLeft"));
+        assertTrue("asked again once the pause is over, in the same session only",
+                   room.contains("Thread.sleep(delayMs);") && room.contains("if(sessionGoesOn(session)){onNodeConnected();}"));
+        assertTrue(bare(method(auto, "static void onGroupConnected(final String groupId)")).contains("roomWait=NO_WAIT;"));
+
+        // Nothing joins it by itself meanwhile: the auto-join, the screens that show it, the friends asked to invite us.
+        final String joinIfDue = bare(method(auto, JOIN_IF_DUE));
+        final int gate = joinIfDue.indexOf("if(waitsForRoom(KhandaqCommunity.CHAT_ID)){return;}");
+        assertTrue(gate > 0 && gate < joinIfDue.indexOf("KhandaqCommunity.autoJoin("));
+        final String ensure = bare(method(helper, "static long ensure_group_in_tox(@NonNull String group_identifier)"));
+        final int ensureGate = ensure.indexOf("if(CommunityAutoJoin.waitsForRoom(group_identifier)){return-1;}");
+        assertTrue(ensureGate > 0 && ensureGate < ensure.indexOf("MainActivity.tox_group_join("));
+        assertTrue(bare(method(helper, "static void schedule_post_join_peer_discovery(")).contains(
+                "&&!is_group_we_left(group_identifier)&&!CommunityAutoJoin.waitsForRoom(group_identifier))"));
     }
 
     private static final String JOIN_IF_DUE = "private static void joinIfDue(final int session)";

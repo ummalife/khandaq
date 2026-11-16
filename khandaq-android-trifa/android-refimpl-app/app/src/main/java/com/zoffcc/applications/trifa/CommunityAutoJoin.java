@@ -30,6 +30,17 @@ final class CommunityAutoJoin
      */
     private static final AtomicInteger JOINING_SESSION = new AtomicInteger(NO_SESSION);
 
+    /**
+     * Khandaq Community refused us as full (waitForRoom): the tox session of the last refusal, how many came in a row
+     * in it, and the wait that runs now (NO_WAIT for none). Nothing joins the Community by itself while one runs.
+     */
+    private static final Object ROOM_LOCK = new Object();
+    private static final int NO_WAIT = 0;
+    private static int roomSession = NO_SESSION;
+    private static int roomRefusals = 0;
+    private static int roomWait = NO_WAIT;
+    private static int roomWaits = NO_WAIT;
+
     private CommunityAutoJoin()
     {
     }
@@ -96,6 +107,11 @@ final class CommunityAutoJoin
         {
             NetworkDiagnosticsLog.log("community", "kept: never joined by itself again");
         }
+        // Full when it was last asked: it is asked again when its pause is over (waitForRoom).
+        if (waitsForRoom(KhandaqCommunity.CHAT_ID))
+        {
+            return;
+        }
         final boolean connected = TRIFAGlobals.global_self_connection_status
                                   != ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value;
         // A row without the group in toxcore: an earlier join that never connected, which toxcore did not save.
@@ -128,6 +144,13 @@ final class CommunityAutoJoin
         {
             return;
         }
+        synchronized (ROOM_LOCK)
+        {
+            // It let us in: a refusal that comes later is the first one again.
+            roomSession = NO_SESSION;
+            roomRefusals = 0;
+            roomWait = NO_WAIT;
+        }
         try
         {
             final KhandaqCommunity.Store store = profileStore();
@@ -139,6 +162,86 @@ final class CommunityAutoJoin
         catch (Throwable e)
         {
             Log.w(TAG, "kept:EE:" + e.getMessage());
+        }
+    }
+
+    /**
+     * Khandaq Community refused our join as full (KhandaqCommunity.waitsForRoom): {@code groupNumber} is the instance
+     * toxcore refused. Every client over its limit asked again at once (a hard reconnect and the quick retries) and at
+     * every start, each try a handshake with the founder and the members. So the app lets go of the instance, which
+     * stops toxcore asking; keeps the row as it is, in the list and pinned, with its switch and its history; keeps the
+     * person's leave mark unset; and asks again by its chat id once the pause is over (KhandaqCommunity
+     * .roomRetryDelayMs: 5 minutes, doubled after each refusal in a row, an hour at most), and at the next start.
+     * On the tox thread, from the group's join fail.
+     */
+    static void waitForRoom(final long groupNumber)
+    {
+        final int session = TrifaToxService.tox_session_number.get();
+        final int wait;
+        final long delayMs;
+        synchronized (ROOM_LOCK)
+        {
+            roomRefusals = (roomSession == session) ? roomRefusals + 1 : 1;
+            roomSession = session;
+            delayMs = KhandaqCommunity.roomRetryDelayMs(roomRefusals);
+            roomWaits = (roomWaits == Integer.MAX_VALUE) ? (NO_WAIT + 1) : (roomWaits + 1);
+            roomWait = roomWaits;
+            wait = roomWait;
+        }
+        HelperGroup.let_go_of_group_instance(groupNumber);
+        try
+        {
+            final KhandaqCommunity.Store store = profileStore();
+            if (store != null)
+            {
+                KhandaqCommunity.noteGroupLetGo(store);
+            }
+        }
+        catch (Throwable e)
+        {
+            Log.w(TAG, "full:EE:" + e.getMessage());
+        }
+        NetworkDiagnosticsLog.log("community", "full: let go of it, asked again in " + (delayMs / 60_000L) + " min");
+        final Thread t = new Thread(() -> {
+            try
+            {
+                Thread.sleep(delayMs);
+            }
+            catch (InterruptedException e)
+            {
+                return;
+            }
+            synchronized (ROOM_LOCK)
+            {
+                // A later refusal began a wait of its own, or the group let us in meanwhile.
+                if (roomWait != wait)
+                {
+                    return;
+                }
+                roomWait = NO_WAIT;
+            }
+            if (sessionGoesOn(session))
+            {
+                onNodeConnected();
+            }
+        }, "khandaq-community-room");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * Whether {@code groupId} is Khandaq Community and the app waits for room in it (waitForRoom): until the pause is
+     * over, nothing joins it by itself, neither the auto-join nor a screen that shows it.
+     */
+    static boolean waitsForRoom(final String groupId)
+    {
+        if (!KhandaqCommunity.isCommunity(groupId))
+        {
+            return false;
+        }
+        synchronized (ROOM_LOCK)
+        {
+            return (roomWait != NO_WAIT) && (roomSession == TrifaToxService.tox_session_number.get());
         }
     }
 
@@ -254,6 +357,12 @@ final class CommunityAutoJoin
             public void setAutoJoinDone()
             {
                 HelperGeneric.set_g_opts(doneKey, MARK_SET);
+            }
+
+            @Override
+            public void clearAutoJoinDone()
+            {
+                HelperGeneric.del_g_opts(doneKey);
             }
 
             @Override

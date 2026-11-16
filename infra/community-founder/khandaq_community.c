@@ -7,8 +7,10 @@
  * the group from a 1:1 chat with it. It never writes in the group itself.
  *
  * It links the toxcore the iOS client ships (see build.sh), so NGC behaves exactly as it does
- * between the clients, with one change for the founder: its group is connected as soon as it is
- * restored (toxcore-founder-connected.patch), rather than silent until a member it invited syncs.
+ * between the clients, with two changes for the founder: its group is connected as soon as it is
+ * restored (toxcore-founder-connected.patch), rather than silent until a member it invited syncs;
+ * and it renews the group's announce on the DHT every 16 s per node, within the 30 s a node keeps
+ * it (toxcore-founder-announce.patch), so a join by chat id finds it however long it has been up.
  *
  * Single-threaded: every tox_* call is made from the main loop or from a toxcore callback inside
  * tox_iterate. Admin commands and contact-request bookkeeping are queued by the callbacks and run

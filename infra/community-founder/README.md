@@ -83,7 +83,7 @@ built from the same tree, so a passing probe says nothing about such clients.
 | `probe.c` | joins as a new member would and checks the group; exit 0 only when every check passes |
 | `community_admin_test.c` | local end-to-end test of pairing and every command; also `--mesh`, a private local DHT |
 | `community_unit_test.c` | unit tests of the shared helpers; `build.sh` runs it |
-| `toxcore-founder-connected.patch` | the change above |
+| `toxcore-founder-connected.patch`, `toxcore-founder-announce.patch` | the two changes above |
 | `build.sh` | builds all four against the pod toxcore (Linux and macOS) |
 | `deploy-community.sh` | builds on khandaq.org, backs up the state, installs, restarts, runs the probe |
 | `khandaq-community.service` | hardened systemd unit |

@@ -120,6 +120,13 @@ public class ToolbarActionMode implements ActionMode.Callback
             reactItem.setVisible(HelperMessageReaction.canReactToCurrentSelection());
         }
 
+        // KHANDAQ (0.2.57, SPEC-community item 5): Report — exactly one message someone else wrote in a group
+        final MenuItem reportItem = menu.findItem(R.id.action_report);
+        if (reportItem != null)
+        {
+            reportItem.setVisible(HelperMessageReport.canReportCurrentSelection());
+        }
+
         // KHANDAQ (#Saved): hide "В избранное" (forward-to-self) when we are ALREADY inside the
         // Favorites/Saved chat — re-saving a Saved message into Saved is meaningless. Only the 1:1 view
         // can be the Favorites chat, so gate on the same null-checks the forward click-handler uses.
@@ -150,6 +157,15 @@ public class ToolbarActionMode implements ActionMode.Callback
     @Override
     public boolean onActionItemClicked(ActionMode mode, MenuItem item)
     {
+        if (item.getItemId() == R.id.action_report)
+        {
+            // KHANDAQ (0.2.57, SPEC-community item 5): the mail is built from the selection before it ends. Not a
+            // case of the switch below: resource IDs stop being constants (lint NonConstantResourceId).
+            action_active = true;
+            HelperMessageReport.reportSelectedGroupMessage(context);
+            mode.finish();
+            return false;
+        }
         switch (item.getItemId())
         {
             case R.id.action_delete:

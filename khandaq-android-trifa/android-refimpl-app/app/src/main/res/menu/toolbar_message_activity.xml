@@ -44,4 +44,10 @@
         android:title="@string/layout___info"
         android:visible="false"
         app:showAsAction="ifRoom"/>
+    <!-- KHANDAQ (0.2.57, SPEC-community item 5): Report, on one message someone else wrote in a group. -->
+    <item
+        android:id="@+id/action_report"
+        android:title="@string/chat_report_action"
+        android:visible="false"
+        app:showAsAction="never"/>
 </menu>

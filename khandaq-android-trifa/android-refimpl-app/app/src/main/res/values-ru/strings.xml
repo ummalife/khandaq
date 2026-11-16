@@ -531,6 +531,7 @@
     <string name="notification_media_generic">📎 Вложение</string>
     <string name="reaction_notification_body">отреагировал(а) %1$s</string>
     <string name="chat_react_action">Реакция</string>
+    <string name="chat_report_action">Пожаловаться</string>
     <!-- KHANDAQ (#205): delete scope choice -->
     <string name="delete_for_me">Удалить у меня</string>
     <string name="delete_for_everyone">Удалить у всех</string>

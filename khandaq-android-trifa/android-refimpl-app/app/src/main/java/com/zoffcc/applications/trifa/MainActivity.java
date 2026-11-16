@@ -6499,6 +6499,8 @@ public class MainActivity extends AppCompatActivity
         ProfileTabConnectionIndicator.updateAsync();
         MainHeaderBrandingHelper.updateAsync();
         AirRepository.requestRefresh();
+        // KHANDAQ (0.2.57, SPEC-network part 2): after "No network", the band says Connecting until our node is online.
+        AirNoNetworkBand.nodeChanged();
         // -- notification ------------------
         // -- notification ------------------
     }

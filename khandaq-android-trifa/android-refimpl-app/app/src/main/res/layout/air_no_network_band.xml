@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    KHANDAQ (0.2.57, SPEC-network part 2): the "no network" band under the header of the chat list and of a
+    chat (AirNoNetworkBand, as AirNetworkBand on the desktop): the sunken ground with a hairline under it, the
+    20 dp icon, the title in Label and, while there is no network, what the messages do in Caption. It is a
+    row of the screen, so it pushes what is under it down; it starts gone.
+-->
+<com.zoffcc.applications.trifa.AirNoNetworkBand xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/kq_sunken"
+    android:visibility="gone"
+    tools:ignore="Overdraw">
+
+    <LinearLayout
+        android:id="@+id/air_no_network_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/kq_space_16"
+        android:paddingTop="@dimen/kq_space_8"
+        android:paddingEnd="@dimen/kq_space_16"
+        android:paddingBottom="@dimen/kq_space_8">
+
+        <ImageView
+            android:id="@+id/air_no_network_icon"
+            android:layout_width="@dimen/kq_size_icon"
+            android:layout_height="@dimen/kq_size_icon"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kq_ic_wifi_off" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/kq_space_8"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/air_no_network_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/air_network_title_offline"
+                android:textAlignment="viewStart"
+                android:textAppearance="@style/TextAppearance.KQ.Label"
+                android:textColor="@color/kq_ink" />
+
+            <TextView
+                android:id="@+id/air_no_network_note"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/air_no_network_note"
+                android:textAlignment="viewStart"
+                android:textAppearance="@style/TextAppearance.KQ.Caption"
+                android:textColor="@color/kq_ink_2" />
+        </LinearLayout>
+    </LinearLayout>
+</com.zoffcc.applications.trifa.AirNoNetworkBand>

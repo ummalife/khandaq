@@ -233,6 +233,9 @@
         android:layout_height="@dimen/kq_stroke_hairline"
         android:background="@color/kq_line" />
 
+    <!-- KHANDAQ (0.2.57): the "no network" band, under the header; it pushes the conversation down. -->
+    <include layout="@layout/air_no_network_band" />
+
     <!-- the layout which will contain (host) the drawerLayout -->
     <FrameLayout
         android:id="@+id/drawer_container"

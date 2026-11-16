@@ -371,11 +371,17 @@ void CoreFile::resumeFileRecv(uint32_t friendId, uint32_t fileId, QString path, 
     }
     file->setFilePath(path);
     file->continued = true;
-    if (!startReceiving(*file, offset)) {
-        // It waits for Accept in its entry then.
+    switch (startReceiving(*file, offset)) {
+    case Receiving::Started:
+        emit fileTransferAccepted(*file);
+        return;
+    case Receiving::Offered:
+        // It waits for Accept in its entry then, from the start.
+        return;
+    case Receiving::Failed:
+        stopReceiving(friendId, fileId);
         return;
     }
-    emit fileTransferAccepted(*file);
 }
 
 void CoreFile::finishFileRecvQuietly(uint32_t friendId, uint32_t fileId, uint64_t offset)
@@ -988,13 +994,19 @@ bool CoreFile::takeWaitingFile(const ToxFile& offer)
                             here);
         qDebug() << "takeWaitingFile: file" << offer.friendId << ':' << offer.fileNum
                  << "goes on from byte" << resume.offset;
-        if (startReceiving(*taken, static_cast<uint64_t>(resume.offset))) {
+        switch (startReceiving(*taken, static_cast<uint64_t>(resume.offset))) {
+        case Receiving::Started:
             if (taken->status == ToxFile::PAUSED) {
                 emit fileTransferPaused(*taken);
             } else {
                 emit fileTransferAccepted(*taken);
             }
             return true;
+        case Receiving::Failed:
+            stopReceiving(offer.friendId, offer.fileNum);
+            return true;
+        case Receiving::Offered:
+            break;
         }
     }
     // It waits for Accept in its entry, as an offer does.
@@ -1004,21 +1016,25 @@ bool CoreFile::takeWaitingFile(const ToxFile& offer)
     return true;
 }
 
-bool CoreFile::startReceiving(ToxFile& file, uint64_t offset)
+CoreFile::Receiving CoreFile::startReceiving(ToxFile& file, uint64_t offset)
 {
+    // KHANDAQ (0.2.57): what is here is touched only once toxcore takes it from the offset, and
+    // nothing is written elsewhere: what comes goes where toxcore says (onFileRecvChunkCallback).
     if (offset > 0) {
         Tox_Err_File_Seek seekErr;
         tox_file_seek(tox, file.friendId, file.fileNum, offset, &seekErr);
         if (seekErr != TOX_ERR_FILE_SEEK_OK) {
-            qWarning() << "startReceiving: seek failed with" << seekErr << ", from the start";
-            offset = 0;
+            qWarning() << "startReceiving: seek failed with" << seekErr << ", nothing touched";
+            return Receiving::Offered;
         }
     }
+    // Past a seek, toxcore takes it from the offset only: anything that fails ends it.
+    const Receiving failed = offset > 0 ? Receiving::Failed : Receiving::Offered;
     file.file->close();
     if (!file.openAt(offset)) {
         qWarning() << "startReceiving: Unable to open file" << file.filePath
                    << file.file->errorString();
-        return false;
+        return failed;
     }
     // The hash goes on only with all that came before; from the start it is a new one.
     if (offset == 0) {
@@ -1031,16 +1047,31 @@ bool CoreFile::startReceiving(ToxFile& file, uint64_t offset)
     if (file.pauseStatus.localPaused()) {
         // Paused here: Resume accepts it (pauseResumeFile).
         file.status = ToxFile::PAUSED;
-        return true;
+        return Receiving::Started;
     }
     Tox_Err_File_Control err;
     tox_file_control(tox, file.friendId, file.fileNum, TOX_FILE_CONTROL_RESUME, &err);
     if (!PARSE_ERR(err)) {
         file.file->close();
-        return false;
+        return failed;
     }
     file.status = ToxFile::TRANSMITTING;
-    return true;
+    return Receiving::Started;
+}
+
+void CoreFile::stopReceiving(uint32_t friendId, uint32_t fileId)
+{
+    const ToxFile* const found = findFile(friendId, fileId);
+    if (!found) {
+        return;
+    }
+    ToxFile file = *found;
+    Tox_Err_File_Control err;
+    tox_file_control(tox, friendId, fileId, TOX_FILE_CONTROL_CANCEL, &err);
+    PARSE_ERR(err);
+    removeFile(friendId, fileId);
+    file.status = ToxFile::BROKEN;
+    emit fileTransferBrokenUnbroken(file, true);
 }
 
 void CoreFile::endWaitingFile(uint64_t key)

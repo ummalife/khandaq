@@ -78,6 +78,7 @@ private slots:
     void an_offer_of_a_file_partly_here_goes_on_from_what_is_here();
     void an_offer_of_a_file_all_here_ends_quietly();
     void a_removed_friend_leaves_no_file_to_whoever_gets_their_number();
+    void an_offer_that_cannot_go_on_where_asked_leaves_its_part_as_it_was();
 
 private:
     /** Alice makes a group, and Bob joins it by her invite: both count the two of them then. */
@@ -1014,6 +1015,51 @@ void TestCore::a_removed_friend_leaves_no_file_to_whoever_gets_their_number()
     QCOMPARE(bobLog.of(bobLog.accepted).size(), 0);
     bob->getCoreFile()->rejectFileRecvRequest(again.friendId, again.fileNum);
     QTRY_COMPARE_WITH_TIMEOUT(aliceLog.of(aliceLog.cancelled).size(), 1, connected_message_wait);
+}
+
+/**
+ * KHANDAQ (0.2.57): an offer that cannot go on from where Bob asks. Where toxcore cannot seek,
+ * nothing is touched: the part here stays as it was, and the offer is still one. Where toxcore
+ * sought but the file cannot be opened there, nothing is written either: the offer is declined, so
+ * Alice learns it, and Bob's ends as stopped.
+ */
+void TestCore::an_offer_that_cannot_go_on_where_asked_leaves_its_part_as_it_was()
+{
+    const uint32_t bobOnAlice = alice->getFriendList().first();
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QByteArray content = fileBytes(256 * 1024 + 5, 2027);
+    const QString source = dir.filePath(QStringLiteral("notes.zip"));
+    const QString target = dir.filePath(QStringLiteral("notes here.zip"));
+    QVERIFY(writeFile(source, content));
+    const QByteArray part = content.left(100000);
+    QVERIFY(writeFile(target, part));
+
+    NodeLog aliceLog(*alice);
+    NodeLog bobLog(*bob);
+    alice->getCoreFile()->sendFile(bobOnAlice, QStringLiteral("notes.zip"), source, content.size(),
+                                   QByteArray(TOX_FILE_ID_LENGTH, '\x3c'));
+    QTRY_COMPARE_WITH_TIMEOUT(bobLog.of(bobLog.offered).size(), 1, connected_message_wait);
+    const ToxFile offer = bobLog.of(bobLog.offered).first();
+
+    // toxcore seeks nowhere past the end.
+    bob->getCoreFile()->resumeFileRecv(offer.friendId, offer.fileNum, target,
+                                       static_cast<uint64_t>(content.size()));
+    QTest::qWait(500);
+    QVERIFY(readFile(target) == part);
+    QCOMPARE(bobLog.of(bobLog.accepted).size(), 0);
+    QCOMPARE(bobLog.of(bobLog.waiting).size(), 0);
+    QCOMPARE(aliceLog.of(aliceLog.cancelled).size(), 0);
+
+    const QString gone = dir.filePath(QStringLiteral("gone/notes here.zip"));
+    bob->getCoreFile()->resumeFileRecv(offer.friendId, offer.fileNum, gone,
+                                       static_cast<uint64_t>(part.size()));
+    QTRY_COMPARE_WITH_TIMEOUT(aliceLog.of(aliceLog.cancelled).size(), 1, connected_message_wait);
+    QCOMPARE(bobLog.of(bobLog.waiting).size(), 1);
+    QCOMPARE(bobLog.of(bobLog.waiting).first().status, ToxFile::BROKEN);
+    QCOMPARE(bobLog.of(bobLog.accepted).size(), 0);
+    QVERIFY(!QFileInfo::exists(gone));
+    QVERIFY(readFile(target) == part);
 }
 
 QTEST_GUILESS_MAIN(TestCore)

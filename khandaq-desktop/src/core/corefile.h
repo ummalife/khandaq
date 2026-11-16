@@ -122,8 +122,23 @@ private:
     void offerAgain(uint32_t friendId, qint64 backMs);
     /** An offer that goes on with a file that waits for its sender; false when none waits. */
     bool takeWaitingFile(const ToxFile& offer);
+    /** What came of startReceiving. */
+    enum class Receiving
+    {
+        /** It goes on from the offset, or waits paused here. */
+        Started,
+        /** toxcore is still at the start, as the offer came, and nothing here was touched. */
+        Offered,
+        /** toxcore went to the offset, but nothing can be written there: stopReceiving ends it. */
+        Failed,
+    };
     /** Seeks to offset, opens the file there and accepts the offer, unless it is paused here. */
-    bool startReceiving(ToxFile& file, uint64_t offset);
+    Receiving startReceiving(ToxFile& file, uint64_t offset);
+    /**
+     * Ends an offer toxcore went on with where this side cannot: declined there, so its sender
+     * knows, and stopped here, with what came of it as it was.
+     */
+    void stopReceiving(uint32_t friendId, uint32_t fileId);
     /** Ends an incoming file that waited for its sender as stopped, keeping what came of it. */
     void endWaitingFile(uint64_t key);
     static constexpr uint64_t getFriendKey(uint32_t friendId, uint32_t fileId)

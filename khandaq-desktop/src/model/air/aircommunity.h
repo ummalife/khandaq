@@ -119,6 +119,14 @@ bool autoJoin(LocalStore& store, bool connected, bool alreadyInGroup,
 bool noteGroupLeft(LocalStore& store, const QByteArray& groupChatId);
 
 /**
+ * A group is in this profile, however it came: by hand, by an invitation, from the save or by
+ * itself. When it is Khandaq Community it is never joined by itself again, so the auto-join never
+ * runs over a join by hand, nor after a rejoin of it fails and its row goes without a leave. True
+ * when that changed store.
+ */
+bool noteGroupHere(LocalStore& store, const QByteArray& groupChatId);
+
+/**
  * Whether a file that came whole in a group goes to the download folder at once, as in every
  * group, or waits for a tap: in Khandaq Community, where strangers write, the files of others
  * wait, whatever the download setting says (item 6). A relayed file (history sync) is never

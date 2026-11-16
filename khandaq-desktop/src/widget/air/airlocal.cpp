@@ -264,6 +264,16 @@ void AirLocal::noteGroupLeft(const QByteArray& groupChatId)
     }
 }
 
+bool AirLocal::noteGroupHere(const QByteArray& groupChatId)
+{
+    if (!Air::Community::noteGroupHere(store, groupChatId)) {
+        return false;
+    }
+    saveLater.stop();
+    save();
+    return true;
+}
+
 Air::EntryMarks AirLocal::entryMarks(const QString& key) const
 {
     return store.entryMarks(key);

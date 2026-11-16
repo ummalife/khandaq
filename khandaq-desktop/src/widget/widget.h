@@ -565,6 +565,11 @@ private:
     /** The group the user joined that opens once it comes into the list (openJoinedGroup). */
     GroupId groupToOpenWhenJoined;
     /**
+     * KHANDAQ (0.2.57): a group comes into the list now that nobody asked for (the auto-join of
+     * Khandaq Community), so createGroup does not bring the window forward.
+     */
+    bool groupComesByItself = false;
+    /**
      * 0.2.56: the invitations the user accepts, by their group, with the id of their card (none for
      * one accepted by itself): the card goes once the group is joined (onGroupJoined), as toxcore
      * may accept an invitation only after it let go of another instance of its group, and refuse it

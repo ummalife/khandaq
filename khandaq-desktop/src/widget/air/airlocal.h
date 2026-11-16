@@ -117,6 +117,11 @@ public:
     bool autoJoinCommunity(bool connected, bool alreadyInGroup, const std::function<bool()>& join);
     /** A group was left: when it is Khandaq Community it is never joined by itself again. */
     void noteGroupLeft(const QByteArray& groupChatId);
+    /**
+     * A group is here, however it came: when it is Khandaq Community it is never joined by itself
+     * again (Air::Community::noteGroupHere). True when that changed the store, which is written then.
+     */
+    bool noteGroupHere(const QByteArray& groupChatId);
 
     Air::EntryMarks entryMarks(const QString& key) const override;
     void setEntryMarks(const QString& key, const Air::EntryMarks& marks) override;

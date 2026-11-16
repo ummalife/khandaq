@@ -121,6 +121,11 @@ bool noteGroupLeft(LocalStore& store, const QByteArray& groupChatId)
     return isCommunity(groupChatId) && store.setCommunityLeft();
 }
 
+bool noteGroupHere(LocalStore& store, const QByteArray& groupChatId)
+{
+    return isCommunity(groupChatId) && store.setCommunityAutoJoinDone();
+}
+
 bool savesFileAtOnce(const QByteArray& groupChatId, bool fromSelf, bool relayed)
 {
     return (fromSelf && !relayed) || !isCommunity(groupChatId);

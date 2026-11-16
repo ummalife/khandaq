@@ -49,6 +49,7 @@ private slots:
     void theCommunityIsAlwaysNamedKhandaqCommunity();
     void itJoinsOnlyWhenConnectedNeverJoinedNeverLeftAndNotInIt();
     void anAutoJoinMutesTheGroupAndIsDone();
+    void aGroupHereByAnyWayIsNeverJoinedByItself();
     void aJoinToxcoreRefusedLeavesNothingAndIsTriedAgain();
     void nothingIsJoinedWhileTheAnswerIsNo();
     void aGroupJoinedByHandKeepsItsSound();
@@ -147,6 +148,43 @@ void TestAirCommunity::anAutoJoinMutesTheGroupAndIsDone()
         return true;
     }));
     QCOMPARE(joins, 1);
+}
+
+void TestAirCommunity::aGroupHereByAnyWayIsNeverJoinedByItself()
+{
+    // Joined by hand: once its rejoin fails and its row goes without a leave, the app does not join
+    // it by itself, muted, over what the person did.
+    LocalStore store;
+    QVERIFY(Community::noteGroupHere(store, Community::chatId()));
+    QVERIFY(store.communityAutoJoinDone());
+    QVERIFY(!Community::noteGroupHere(store, Community::chatId()));
+    int joins = 0;
+    QVERIFY(!Community::autoJoin(store, true, false, [&joins] {
+        ++joins;
+        return true;
+    }));
+    QCOMPARE(joins, 0);
+    QVERIFY(!store.isMuted(communityKey));
+    QVERIFY(!store.communityLeft());
+    // It stays so across a restart.
+    LocalStore next;
+    next.load(store.save(), now);
+    QVERIFY(next.communityAutoJoinDone());
+
+    // Any other group changes nothing.
+    LocalStore other;
+    QVERIFY(!Community::noteGroupHere(other, otherGroup));
+    QVERIFY(!other.communityAutoJoinDone());
+
+    // The join by itself: the group comes into the list during the join, and it is muted all the
+    // same.
+    LocalStore fresh;
+    QVERIFY(Community::autoJoin(fresh, true, false, [&fresh] {
+        Community::noteGroupHere(fresh, Community::chatId());
+        return true;
+    }));
+    QVERIFY(fresh.communityAutoJoinDone());
+    QVERIFY(fresh.isMuted(communityKey));
 }
 
 void TestAirCommunity::aJoinToxcoreRefusedLeavesNothingAndIsTriedAgain()

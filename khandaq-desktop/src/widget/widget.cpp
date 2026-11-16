@@ -34,6 +34,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QRegularExpression>
+#include <QScopedValueRollback>
 #include <QScreen>
 #include <QSet>
 #include <QShortcut>
@@ -1008,6 +1009,10 @@ void Widget::joinCommunity()
     const QByteArray chatId = Air::Community::chatId();
     const bool alreadyInGroup = groupList->findGroup(GroupId(chatId)) != nullptr;
     const bool joined = airLocal->autoJoinCommunity(true, alreadyInGroup, [this, &chatId] {
+        // The group comes into the list during the join (Core::groupJoined, createGroup), muted
+        // and unasked for: it does not bring the window forward, which on Windows flashes the
+        // button of an app in the background.
+        const QScopedValueRollback<bool> unasked(groupComesByItself, true);
         return core->joinGroupByChatId(chatId) != std::numeric_limits<uint32_t>::max();
     });
     if (joined) {
@@ -3443,6 +3448,10 @@ void Widget::removeGroup(const GroupId& groupId)
 Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
 {
     assert(core != nullptr);
+    // KHANDAQ (0.2.57): Khandaq Community here, however it came, is never joined by itself again.
+    if (airLocal && airLocal->noteGroupHere(groupId.getByteArray())) {
+        qDebug() << "Khandaq Community is here: it is never joined by itself again";
+    }
 
     Group* g = groupList->findGroup(groupId);
     if (g) {
@@ -3532,7 +3541,9 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
 
     chatListWidget->addGroupWidget(widget);
     widget->updateStatusLight();
-    chatListWidget->activateWindow();
+    if (!groupComesByItself) {
+        chatListWidget->activateWindow();
+    }
 
     connect(widget, &GroupWidget::chatroomWidgetClicked, this, &Widget::onChatroomWidgetClicked);
     connect(widget, &GroupWidget::newWindowOpened, this, &Widget::openNewDialog);

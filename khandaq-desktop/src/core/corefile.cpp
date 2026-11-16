@@ -801,6 +801,18 @@ void CoreFile::onFriendLinkChanged(uint32_t friendId, int toxConnection)
     }
 }
 
+void CoreFile::forgetFriend(uint32_t friendId)
+{
+    QMutexLocker locker{coreLoopLock};
+    // Their files close with them; nothing says so, as their chat goes too.
+    for (const uint64_t key : fileMap.keys()) {
+        if (key >> 32 == friendId) {
+            removeFile(friendId, static_cast<uint32_t>(key & 0xffffffffu));
+        }
+    }
+    friendsBack.remove(friendId);
+}
+
 void CoreFile::process(qint64 nowMs)
 {
     QMutexLocker locker{coreLoopLock};

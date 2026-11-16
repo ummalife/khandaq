@@ -1405,6 +1405,7 @@ void Core::removeFriend(uint32_t friendId)
     }
     // KHANDAQ (0.2.57): a friend added later can get the same number.
     highLevelAcks.remove(friendId);
+    getCoreFile()->forgetFriend(friendId);
 
     emit saveRequest();
     emit friendRemoved(friendId);

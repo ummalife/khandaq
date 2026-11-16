@@ -77,6 +77,7 @@ private slots:
     void a_file_goes_on_from_where_it_stopped_once_the_friend_is_back();
     void an_offer_of_a_file_partly_here_goes_on_from_what_is_here();
     void an_offer_of_a_file_all_here_ends_quietly();
+    void a_removed_friend_leaves_no_file_to_whoever_gets_their_number();
 
 private:
     /** Alice makes a group, and Bob joins it by her invite: both count the two of them then. */
@@ -949,6 +950,70 @@ void TestCore::an_offer_of_a_file_all_here_ends_quietly()
     QCOMPARE(bobLog.of(bobLog.accepted).size(), 0);
     QCOMPARE(bobLog.lastBytes(), qint64{0});
     QVERIFY(readFile(target) == content);
+}
+
+/**
+ * KHANDAQ (0.2.57): a removed friend takes their files with them. Alice offers Bob a talk and Bob
+ * offers her a photo; she removes him, so his node learns at once that she went and keeps both
+ * waiting for her, and then he removes her too. Added again, each gets the number the other had.
+ * Nothing of before is offered then, and a talk of Alice's with the id of the first is a new offer
+ * to Bob, not one his node goes on with.
+ */
+void TestCore::a_removed_friend_leaves_no_file_to_whoever_gets_their_number()
+{
+    const uint32_t bobOnAlice = alice->getFriendList().first();
+    const uint32_t aliceOnBob = bob->getFriendList().first();
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QByteArray talk = fileBytes(512 * 1024, 1414);
+    const QByteArray photo = fileBytes(64 * 1024, 1415);
+    const QString talkPath = dir.filePath(QStringLiteral("talk.mkv"));
+    const QString photoPath = dir.filePath(QStringLiteral("garden.jpg"));
+    QVERIFY(writeFile(talkPath, talk));
+    QVERIFY(writeFile(photoPath, photo));
+    const auto linked = [](Core& core, uint32_t friendId) {
+        QMutexLocker locker{&core.getCoreLoopLock()};
+        return tox_friend_get_connection_status(core.getTox(), friendId, nullptr)
+               != TOX_CONNECTION_NONE;
+    };
+
+    NodeLog aliceLog(*alice);
+    NodeLog bobLog(*bob);
+    alice->getCoreFile()->sendFile(bobOnAlice, QStringLiteral("talk.mkv"), talkPath, talk.size());
+    bob->getCoreFile()->sendFile(aliceOnBob, QStringLiteral("garden.jpg"), photoPath, photo.size());
+    QTRY_VERIFY_WITH_TIMEOUT(bobLog.of(bobLog.offered).size() == 1
+                                 && aliceLog.of(aliceLog.offered).size() == 1,
+                             connected_message_wait);
+    const QByteArray talkId = bobLog.of(bobLog.offered).first().resumeFileId;
+
+    alice->removeFriend(bobOnAlice);
+    QTRY_COMPARE_WITH_TIMEOUT(bobLog.of(bobLog.waiting).size(), 2, friend_timeout);
+    for (const ToxFile& waiting : bobLog.of(bobLog.waiting)) {
+        QVERIFY(waiting.connectionLost);
+    }
+    bob->removeFriend(aliceOnBob);
+
+    bob->acceptFriendRequest(alice->getSelfPublicKey());
+    alice->acceptFriendRequest(bob->getSelfPublicKey());
+    QCOMPARE(alice->getFriendList(), QVector<uint32_t>{bobOnAlice});
+    QCOMPARE(bob->getFriendList(), QVector<uint32_t>{aliceOnBob});
+    QTRY_VERIFY_WITH_TIMEOUT(linked(*alice, bobOnAlice) && linked(*bob, aliceOnBob),
+                             bootstrap_timeout);
+
+    // Past the moment files that waited are offered again: Bob's photo goes to nobody.
+    QTest::qWait(CoreFile::offerAgainAfterMs + 3000);
+    QCOMPARE(bobLog.of(bobLog.started).size(), 1);
+    QCOMPARE(aliceLog.of(aliceLog.offered).size(), 1);
+
+    alice->getCoreFile()->sendFile(bobOnAlice, QStringLiteral("talk.mkv"), talkPath, talk.size(),
+                                   talkId);
+    QTRY_COMPARE_WITH_TIMEOUT(bobLog.of(bobLog.offered).size(), 2, connected_message_wait);
+    const ToxFile again = bobLog.of(bobLog.offered).last();
+    QCOMPARE(again.resumeFileId, talkId);
+    QVERIFY(!again.continued);
+    QCOMPARE(bobLog.of(bobLog.accepted).size(), 0);
+    bob->getCoreFile()->rejectFileRecvRequest(again.friendId, again.fileNum);
+    QTRY_COMPARE_WITH_TIMEOUT(aliceLog.of(aliceLog.cancelled).size(), 1, connected_message_wait);
 }
 
 QTEST_GUILESS_MAIN(TestCore)

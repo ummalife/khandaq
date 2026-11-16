@@ -78,6 +78,12 @@ public:
 
     unsigned corefileIterationInterval();
     /**
+     * KHANDAQ (0.2.57): the friend was removed, and toxcore forgot their transfers without a word
+     * (m_delfriend). Nothing of theirs is kept, waiting or not: a friend added later can get their
+     * number, and none of it is offered to that friend or taken for one of theirs.
+     */
+    void forgetFriend(uint32_t friendId);
+    /**
      * KHANDAQ (0.2.57): called by the core loop after tox_iterate, with its lock held. Offers again
      * our files that waited for a friend who is back, and ends as stopped those of a friend who is
      * back and offered nothing again for a while: an older client that cannot go on.

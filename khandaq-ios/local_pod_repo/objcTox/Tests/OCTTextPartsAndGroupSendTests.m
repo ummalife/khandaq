@@ -22,6 +22,9 @@
 #import "OCTFileTools.h"
 #import "OCTToxOptions.h"
 
+// The bytes of a group file in one chunk: a packet of 37000 bytes, less the 48 of its header.
+static const NSUInteger kGroupTestChunkPayload = 37000 - 48;
+
 // The name toxcore was given for a file offered to a friend, by mocked_tox_file_send.
 static NSData *offeredFileName;
 static size_t offeredFileNameLength;
@@ -1353,6 +1356,116 @@ static uint32_t mocked_tox_file_send(Tox *tox, uint32_t friend_number, uint32_t 
     [[NSFileManager defaultManager] removeItemAtPath:inbox error:nil];
 }
 
+#pragma mark - A request for missing chunks
+
+// KHANDAQ (0.2.57): Android asks the sender for the chunks it misses with a bitmap: the file's count of chunks (u32),
+// then a bit a chunk, set when it is missing (seen: 55 bytes for a file of 86 chunks). iOS read only its own form, a
+// list of indices, took the bitmap for a list too short for its count, and dropped it: an Android member never got
+// from an iPhone the chunks it missed.
+
+- (void)testAnAndroidRequestForMissingChunksGetsThem
+{
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *sender = [self stallTestTransferCollectingPackets:packets];
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    [self groupTestSendContent:[self groupTestContentOfLength:4 * kGroupTestChunkPayload + 10] named:@"clip.mp4" msgIdHex:msgIdHex by:sender];
+    XCTAssertEqual(packets.count, 6u, @"a BEGIN and five chunks");
+    [packets removeAllObjects];
+
+    // Chunks 1 and 4 of the 5 are missing: 0b00010010.
+    const uint8_t bitmap[] = {0x12};
+    NSData *request = [self groupTestRequestFor:msgIdHex count:5 then:[NSData dataWithBytes:bitmap length:sizeof(bitmap)]];
+    XCTAssertEqual(request.length, 45u);
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:request];
+    [self groupTestDrainQueueOf:sender];
+
+    XCTAssertEqualObjects([self groupTestChunkIndicesOf:packets], (@[@1, @4]));
+    XCTAssertEqual(packets[0].length, 48u + kGroupTestChunkPayload);
+    XCTAssertEqual(packets[1].length, 48u + 10u, @"the last chunk is short");
+}
+
+- (void)testAnAndroidRequestForTheChunksOfAFileOfManyGetsThem
+{
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *sender = [self stallTestTransferCollectingPackets:packets];
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    [self groupTestSendContent:[self groupTestContentOfLength:11 * kGroupTestChunkPayload] named:@"clip.mp4" msgIdHex:msgIdHex by:sender];
+    XCTAssertEqual(packets.count, 12u);
+    [packets removeAllObjects];
+
+    // Chunks 0, 8 and 10 of 11: two bytes, low bit first.
+    const uint8_t bitmap[] = {0x01, 0x05};
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil
+                                           data:[self groupTestRequestFor:msgIdHex count:11 then:[NSData dataWithBytes:bitmap length:sizeof(bitmap)]]];
+    [self groupTestDrainQueueOf:sender];
+
+    XCTAssertEqualObjects([self groupTestChunkIndicesOf:packets], (@[@0, @8, @10]));
+}
+
+- (void)testARequestListingTheMissingChunksStillGetsThem
+{
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *sender = [self stallTestTransferCollectingPackets:packets];
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    [self groupTestSendContent:[self groupTestContentOfLength:4 * kGroupTestChunkPayload + 10] named:@"clip.mp4" msgIdHex:msgIdHex by:sender];
+    [packets removeAllObjects];
+
+    NSMutableData *list = [NSMutableData new];
+    for (NSNumber *index in @[@3, @0, @3, @9]) {
+        uint32_t value = CFSwapInt32HostToBig(index.unsignedIntValue);
+        [list appendBytes:&value length:4];
+    }
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:[self groupTestRequestFor:msgIdHex count:4 then:list]];
+    [self groupTestDrainQueueOf:sender];
+
+    XCTAssertEqualObjects([self groupTestChunkIndicesOf:packets], (@[@0, @3]), @"once each, none past the file");
+}
+
+- (void)testARequestOfNoKnownFormGetsNothing
+{
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *sender = [self stallTestTransferCollectingPackets:packets];
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    [self groupTestSendContent:[self groupTestContentOfLength:4 * kGroupTestChunkPayload + 10] named:@"clip.mp4" msgIdHex:msgIdHex by:sender];
+    [packets removeAllObjects];
+    const uint8_t all[] = {0xff, 0xff};
+
+    // A bitmap for a file of another count of chunks, one too short for its count, and the full request of an old
+    // Android (the count 0 and nothing after it).
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:[self groupTestRequestFor:msgIdHex count:9 then:[NSData dataWithBytes:all length:2]]];
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:8 peerPublicKeyHex:nil data:[self groupTestRequestFor:msgIdHex count:5 then:[NSData data]]];
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:9 peerPublicKeyHex:nil data:[self groupTestRequestFor:msgIdHex count:0 then:[NSData data]]];
+    // A file this member did not send.
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:10 peerPublicKeyHex:nil
+                                           data:[self groupTestRequestFor:[OCTNgcGroupFileTransfer generateMsgIdHex] count:5 then:[NSData dataWithBytes:all length:1]]];
+    [self groupTestDrainQueueOf:sender];
+
+    XCTAssertEqual(packets.count, 0u);
+}
+
+// What this client asks with stays a list: the members of 0.2.56 read no other form.
+- (void)testTheRequestOfAnIPhoneListsTheMissingChunks
+{
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *transfer = [self stallTestTransferCollectingPackets:packets];
+    id assembly = [self stallTestAssemblyWithChunks:5];
+    transfer.assemblies[@"coming"] = assembly;
+    [self stallTestAssembly:assembly receiveChunk:0];
+    [self stallTestAssembly:assembly receiveChunk:2];
+
+    [transfer nackTickForAssembly:assembly assemblyKey:@"coming"];
+    [transfer nackTickForAssembly:assembly assemblyKey:@"coming"];
+
+    XCTAssertEqual(packets.count, 1u);
+    NSData *request = packets.firstObject;
+    XCTAssertEqual(request.length, 44u + 3u * 4u);
+    XCTAssertEqual(((const uint8_t *)request.bytes)[7], 0x14);
+    XCTAssertEqual([self groupTestU32In:request at:40], 3u);
+    XCTAssertEqual([self groupTestU32In:request at:44], 1u);
+    XCTAssertEqual([self groupTestU32In:request at:48], 3u);
+    XCTAssertEqual([self groupTestU32In:request at:52], 4u);
+}
+
 #pragma mark - The name of a file offered to a friend
 
 // KHANDAQ (0.2.57, SPEC-community risk 3): toxcore takes that name as UTF-8 bytes and their count, at most
@@ -1488,21 +1601,59 @@ static uint32_t mocked_tox_file_send(Tox *tox, uint32_t friend_number, uint32_t 
 /// The packets a member sends `content` as, a file named `name`.
 - (NSArray<NSData *> *)groupTestPacketsSendingContent:(NSData *)content named:(NSString *)name msgIdHex:(NSString *)msgIdHex
 {
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    [self groupTestSendContent:content named:name msgIdHex:msgIdHex by:[self stallTestTransferCollectingPackets:packets]];
+    return [packets copy];
+}
+
+/// `sender` sends `content` to group 5 as a file named `name`; its file stays, for the chunks asked for again.
+- (void)groupTestSendContent:(NSData *)content named:(NSString *)name msgIdHex:(NSString *)msgIdHex by:(OCTNgcGroupFileTransfer *)sender
+{
     NSString *outbox = [self nameTestDirectory];
     NSString *path = [outbox stringByAppendingPathComponent:name];
     XCTAssertTrue([content writeToFile:path atomically:YES]);
 
-    NSMutableArray<NSData *> *packets = [NSMutableArray new];
-    OCTNgcGroupFileTransfer *sender = [self stallTestTransferCollectingPackets:packets];
     XCTestExpectation *sent = [self expectationWithDescription:@"the file went"];
     [sender sendFileAtPath:path groupNumber:5 msgIdHex:msgIdHex progress:nil completion:^(BOOL success, NSError *error) {
         XCTAssertTrue(success, @"%@", error);
         [sent fulfill];
     }];
     [self waitForExpectations:@[sent] timeout:5.0];
+}
 
-    [[NSFileManager defaultManager] removeItemAtPath:outbox error:nil];
-    return [packets copy];
+/// A request for chunks of the file `msgIdHex`: the magic, the layer and the type, the msg id, the count, then `tail`.
+- (NSData *)groupTestRequestFor:(NSString *)msgIdHex count:(uint32_t)count then:(NSData *)tail
+{
+    const uint8_t head[] = {0x66, 0x77, 0x88, 0x11, 0x34, 0x35, 0x01, 0x14};
+    NSMutableData *request = [NSMutableData dataWithBytes:head length:sizeof(head)];
+    for (NSUInteger i = 0; i + 1 < msgIdHex.length; i += 2) {
+        unsigned int byte = 0;
+        [[NSScanner scannerWithString:[msgIdHex substringWithRange:NSMakeRange(i, 2)]] scanHexInt:&byte];
+        uint8_t value = (uint8_t)byte;
+        [request appendBytes:&value length:1];
+    }
+    uint32_t bigCount = CFSwapInt32HostToBig(count);
+    [request appendBytes:&bigCount length:4];
+    [request appendData:tail];
+    return request;
+}
+
+- (uint32_t)groupTestU32In:(NSData *)data at:(NSUInteger)offset
+{
+    uint32_t value = 0;
+    [data getBytes:&value range:NSMakeRange(offset, 4)];
+    return CFSwapInt32BigToHost(value);
+}
+
+/// The index of each chunk in `packets`, in their order.
+- (NSArray<NSNumber *> *)groupTestChunkIndicesOf:(NSArray<NSData *> *)packets
+{
+    NSMutableArray<NSNumber *> *indices = [NSMutableArray new];
+    for (NSData *packet in packets) {
+        XCTAssertEqual(((const uint8_t *)packet.bytes)[7], 0x13, @"not a chunk");
+        [indices addObject:@([self groupTestU32In:packet at:40])];
+    }
+    return indices;
 }
 
 /// A member that stores what comes in `inbox`, and adds the path of each file complete to `completed`.
@@ -1518,10 +1669,12 @@ static uint32_t mocked_tox_file_send(Tox *tox, uint32_t friend_number, uint32_t 
     } transferProgressBlock:nil];
 }
 
-/// What came is handled on the transfer's queue.
+/// What came is handled on the transfer's queue, and a resend it asks for goes on it after.
 - (void)groupTestDrainQueueOf:(OCTNgcGroupFileTransfer *)transfer
 {
-    dispatch_sync([transfer valueForKey:@"sendQueue"], ^{});
+    for (int round = 0; round < 3; round++) {
+        dispatch_sync([transfer valueForKey:@"sendQueue"], ^{});
+    }
 }
 
 - (NSArray<NSString *> *)groupTestNamesIn:(NSString *)folder

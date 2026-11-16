@@ -40,6 +40,9 @@ static const uint64_t kOCTNgcMaxFileTransferBytes = 200ULL * 1024ULL * 1024ULL;
 static const size_t kOCTNgcSingleFileHeader = 6 + 1 + 1 + 32 + 4 + 255;
 static const size_t kOCTNgcFileBeginHeader = 6 + 1 + 1 + 32 + 4 + 255 + 8 + 4 + 4;
 static const size_t kOCTNgcFileChunkHeader = 6 + 1 + 1 + 32 + 4 + 4;
+// A request for missing chunks: the magic, the type, the msg id, a count; what follows depends on its form
+// (chunksWantedByRequest:totalChunks:).
+static const size_t kOCTNgcFileRequestHeader = 6 + 1 + 1 + 32 + 4;
 static const size_t kOCTNgcChunkPayloadMax = kOCTNgcMaxPacketSize - kOCTNgcFileChunkHeader;
 static const NSUInteger kOCTNgcMaxOrphanChunks = 64;
 // KHANDAQ (audit F-4): orphan chunks (chunks that beat their BEGIN) were kept per assembly key with no
@@ -1190,11 +1193,6 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
     NSData *msgId = [data subdataWithRange:NSMakeRange(8, 32)];
     NSString *msgIdHex = [[OCTTox binToHexString:msgId.bytes length:msgId.length] lowercaseString];
-    uint32_t count = [self readU32BEFromData:data offset:40];
-
-    if (count == 0 || count > kOCTNgcNackMaxIndicesPerPacket || data.length < 44 + (NSUInteger)count * 4) {
-        return;
-    }
 
     OCTNgcSentChunkedFile *context = nil;
     @synchronized (self.sentChunkedFiles) {
@@ -1203,6 +1201,14 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
     if (! context) {
         return;  // not the original sender of this file (or it has been forgotten)
+    }
+
+    // Duplicates are free to send and expensive to serve: 256 copies of index 0 used to mean 256
+    // full chunk broadcasts. An index set collapses them, and keeps the result ordered, which is
+    // also what the receiver's assembler prefers.
+    NSIndexSet *wanted = [self chunksWantedByRequest:data totalChunks:context.totalChunks];
+    if (wanted.count == 0) {
+        return;
     }
 
     // KHANDAQ (audit 2026-08-20): who is asking, and how often. Both were unchecked; see
@@ -1223,20 +1229,6 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
             [self.lastResendServedAt removeAllObjects];
             self.lastResendServedAt[cooldownKey] = @(now);
         }
-    }
-
-    // Duplicates are free to send and expensive to serve: 256 copies of index 0 used to mean 256
-    // full chunk broadcasts. An index set collapses them, and keeps the result ordered, which is
-    // also what the receiver's assembler prefers.
-    NSMutableIndexSet *wanted = [NSMutableIndexSet indexSet];
-    for (uint32_t i = 0; i < count; i++) {
-        uint32_t idx = [self readU32BEFromData:data offset:(44 + i * 4)];
-        if (idx < (uint32_t)context.totalChunks) {
-            [wanted addIndex:(NSUInteger)idx];
-        }
-    }
-    if (wanted.count == 0) {
-        return;
     }
 
     NSMutableArray<NSNumber *> *indices = [NSMutableArray arrayWithCapacity:wanted.count];
@@ -1262,6 +1254,51 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
             }
         }
     });
+}
+
+/**
+ * KHANDAQ (0.2.57): the chunks a request asks for, of a file of `totalChunks` chunks; empty for a request of no form
+ * known here. After the magic, the type and the msg id come one of two forms:
+ * - a list, as this client sends it (sendNackForAssembly): a count n of 1 to kOCTNgcNackMaxIndicesPerPacket (u32),
+ *   then n chunk indices (u32 each);
+ * - a bitmap, as Android sends it: the file's count of chunks (u32), then (count + 7) / 8 bytes, the bit i & 7 of
+ *   byte i >> 3 set when chunk i is missing.
+ * A bitmap of n chunks is (n + 7) / 8 bytes, never 4 n, so the two never read as each other. Android's request was
+ * dropped here as a list too short for its count: an iPhone never sent the chunks an Android member missed. The full
+ * request of an old Android, the count 0 and nothing after it, asks for no chunk.
+ */
+- (NSIndexSet *)chunksWantedByRequest:(NSData *)data totalChunks:(int)totalChunks
+{
+    NSMutableIndexSet *wanted = [NSMutableIndexSet indexSet];
+
+    if (data.length < kOCTNgcFileRequestHeader || totalChunks < 1) {
+        return wanted;
+    }
+
+    const uint32_t count = [self readU32BEFromData:data offset:40];
+
+    if (count >= 1 && count <= kOCTNgcNackMaxIndicesPerPacket && data.length >= kOCTNgcFileRequestHeader + (NSUInteger)count * 4) {
+        for (uint32_t i = 0; i < count; i++) {
+            uint32_t idx = [self readU32BEFromData:data offset:(kOCTNgcFileRequestHeader + i * 4)];
+            if (idx < (uint32_t)totalChunks) {
+                [wanted addIndex:(NSUInteger)idx];
+            }
+        }
+        return wanted;
+    }
+
+    if (count != (uint32_t)totalChunks || data.length < kOCTNgcFileRequestHeader + ((NSUInteger)count + 7) / 8) {
+        return wanted;
+    }
+
+    const uint8_t *bitmap = (const uint8_t *)data.bytes + kOCTNgcFileRequestHeader;
+    for (uint32_t i = 0; i < count; i++) {
+        if (bitmap[i >> 3] & (1u << (i & 7))) {
+            [wanted addIndex:(NSUInteger)i];
+        }
+    }
+
+    return wanted;
 }
 
 - (void)resendChunks:(NSArray<NSNumber *> *)indices forContext:(OCTNgcSentChunkedFile *)context

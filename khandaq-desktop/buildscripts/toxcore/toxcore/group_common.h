@@ -33,8 +33,23 @@
 #define GC_MAX_SAVED_PEERS 100
 #define GC_SAVED_PEER_SIZE (ENC_PUBLIC_KEY_SIZE + sizeof(Node_format) + sizeof(IP_Port))
 
-/* Max size of a packet chunk. Packets larger than this must be split up. */
-#define MAX_GC_PACKET_CHUNK_SIZE 1372 // 500
+/* Max size of a packet chunk we send. Packets larger than this must be split up.
+ *
+ * KHANDAQ (gc IPv6 MTU): a full chunk goes out wrapped in 82 more bytes (packet type, sender key, nonce,
+ * group packet type, message id, MAC). At 1372 that was a 1454 byte UDP payload, a 1502 byte IPv6 packet:
+ * over a 1500 byte MTU, so a direct IPv6 path split it into IP fragments, which were lost, and no group file
+ * chunk arrived while small packets passed. At 1150 every group packet we send is at most 1232 bytes of UDP
+ * payload, 1280 bytes with the IPv6 and UDP headers: the IPv6 minimum MTU. A lossy group packet cannot be
+ * split, so this is also the largest lossy group packet we send.
+ */
+#define MAX_GC_PACKET_CHUNK_SIZE 1150 // 500
+
+/* KHANDAQ (gc IPv6 MTU): max size of a packet chunk we accept. A peer before this change (0.2.56 and older,
+ * the Community bot) sends chunks of up to 1372, so every incoming length check and assert uses this; only
+ * what we build and send uses MAX_GC_PACKET_CHUNK_SIZE. Upstream c-toxcore keeps the same split (500 sent,
+ * 1372 accepted).
+ */
+#define MAX_GC_PACKET_INCOMING_CHUNK_SIZE 1372
 
 /* Max size of a complete encrypted packet including headers. */
 #define MAX_GC_PACKET_SIZE (500 * 100) // (MAX_GC_PACKET_CHUNK_SIZE * 100)

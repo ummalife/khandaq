@@ -405,6 +405,12 @@ jobs:
       # the Android build) must look a group up by its chat id, or the change works on no platform.
       - name: Every toxcore copy must look a group up by its chat id
         run: python3 scripts/check-group-search-key.py
+      # KHANDAQ (0.2.57): toxcore's stale-receiver step sent ACCEPT for an FTV2 offer still waiting for
+      # the person, so the sender streamed the whole file into the void about once a minute, and it
+      # resumed a transfer the receiver had paused. Every copy of toxcore (and the Android build) must
+      # leave an offer alone until it is accepted.
+      - name: Every toxcore copy must leave an FTV2 offer alone until it is accepted
+        run: python3 scripts/check-ftv2-stale-accept.py
       # KHANDAQ (2026-08-23, CodeQL triage): a group file's name arrives unfiltered off the wire, and
       # it was stored as-is on the row. send_ngch_syncfile joins that name with the directory, reads the
       # file and sends the bytes to a peer — so ../ in a filename read a file outside the group and

@@ -545,6 +545,10 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_audio_length.py 
 # and gc_accept_invite() replaces the chat no peer has answered. The iOS copy of toxcore carries the
 # same change. Fail-fast, like the patches above.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_join_by_id.py toxcore || exit 1 ; cd "$_s_"
+# KHANDAQ (group search key): look a group up on the DHT by its chat id, not by a random key, so a
+# join by chat id finds the members that are online (the Khandaq Community founder). The desktop and
+# iOS copies of toxcore carry the same change. Fail-fast, like the patches above.
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_group_search_key.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
@@ -1148,6 +1152,10 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_audio_length.py 
 # and gc_accept_invite() replaces the chat no peer has answered. The iOS copy of toxcore carries the
 # same change. Fail-fast, like the patches above.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_join_by_id.py toxcore || exit 1 ; cd "$_s_"
+# KHANDAQ (group search key): look a group up on the DHT by its chat id, not by a random key, so a
+# join by chat id finds the members that are online (the Khandaq Community founder). The desktop and
+# iOS copies of toxcore carry the same change. Fail-fast, like the patches above.
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_group_search_key.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
@@ -1752,6 +1760,10 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_audio_length.py 
 # and gc_accept_invite() replaces the chat no peer has answered. The iOS copy of toxcore carries the
 # same change. Fail-fast, like the patches above.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_join_by_id.py toxcore || exit 1 ; cd "$_s_"
+# KHANDAQ (group search key): look a group up on the DHT by its chat id, not by a random key, so a
+# join by chat id finds the members that are online (the Khandaq Community founder). The desktop and
+# iOS copies of toxcore carry the same change. Fail-fast, like the patches above.
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_group_search_key.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
@@ -2202,6 +2214,10 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_audio_length.py 
 # and gc_accept_invite() replaces the chat no peer has answered. The iOS copy of toxcore carries the
 # same change. Fail-fast, like the patches above.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_join_by_id.py toxcore || exit 1 ; cd "$_s_"
+# KHANDAQ (group search key): look a group up on the DHT by its chat id, not by a random key, so a
+# join by chat id finds the members that are online (the Khandaq Community founder). The desktop and
+# iOS copies of toxcore carry the same change. Fail-fast, like the patches above.
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_group_search_key.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------

@@ -42403,6 +42403,22 @@ static bool do_all_filetransfers(Messenger *m, int32_t friendnumber, void *userd
     return true;
 }
 
+/** KHANDAQ (FTV2 stale accept): whether a receiving FTV2 transfer is owed data by its sender.
+ *
+ * do_reqchunk_filecb() sends SEEK + ACCEPT to the sender of a receiving FTV2 transfer that has had no data
+ * for STALE_CYCLES_ON_FTV2_RECEIVER iterations, in case our ACCEPT was lost while the sender was offline.
+ * Upstream did that for every receiving FTV2 transfer. An offer still waiting for the person
+ * (FILESTATUS_NOT_ACCEPTED) was started by it: the sender sent the whole file, and PACKET_ID_FILE_DATA
+ * dropped every chunk of a transfer that is not FILESTATUS_TRANSFERRING, once a stale period (about a minute
+ * on Android) for as long as the offer waited. A transfer we had paused was resumed by it. Only a transfer
+ * we accepted and have not paused is owed data; the others get nothing from toxcore by itself.
+ */
+non_null()
+static bool ftv2_receiver_expects_data(const struct File_Transfers *ft)
+{
+    return ft->status == FILESTATUS_TRANSFERRING && (ft->paused & FILE_PAUSE_US) == 0;
+}
+
 non_null(1) nullable(3)
 static void do_reqchunk_filecb(Messenger *m, int32_t friendnumber, void *userdata)
 {
@@ -42445,7 +42461,11 @@ static void do_reqchunk_filecb(Messenger *m, int32_t friendnumber, void *userdat
             if (ft->status != FILESTATUS_NONE) {
                 found_sending_ft = true;
                 if (ft->file_type == FILEKIND_FTV2) {
-                    if (ft->file_receiver_last_received_chunk_this_many_iterations_ago > (uint32_t)STALE_CYCLES_ON_FTV2_RECEIVER) {
+                    if (!ftv2_receiver_expects_data(ft)) {
+                        // KHANDAQ (FTV2 stale accept): a transfer waiting for the person, or one we paused,
+                        // is owed nothing and is not stale; its count starts when it is owed data again.
+                        ft->file_receiver_last_received_chunk_this_many_iterations_ago = 0;
+                    } else if (ft->file_receiver_last_received_chunk_this_many_iterations_ago > (uint32_t)STALE_CYCLES_ON_FTV2_RECEIVER) {
                         ft->file_receiver_last_received_chunk_this_many_iterations_ago = 0;
                         // the receiving FT has not received a data chunk for many tox_iterate cycles. send a SEEK control to the sender
                         uint32_t real_filenumber;

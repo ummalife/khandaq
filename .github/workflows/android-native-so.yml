@@ -80,6 +80,10 @@ jobs:
           search_sites=$(grep -c apply_khandaq_group_search_key.py /root/work/circle_scripts/deps.sh)
           echo "wired at $search_sites site(s)"
           [ "$search_sites" -eq 4 ]
+          echo "=== confirm the FTV2 stale accept patch is wired into deps.sh (4 ABIs) ==="
+          ftv2_sites=$(grep -c apply_khandaq_ftv2_stale_accept.py /root/work/circle_scripts/deps.sh)
+          echo "wired at $ftv2_sites site(s)"
+          [ "$ftv2_sites" -eq 4 ]
 
       - name: build native deps + patched toxcore + libjni-c-toxcore.so (deps.sh)
         id: build
@@ -108,7 +112,7 @@ jobs:
           path: |
             /root/work/artefacts/android/libs/**/libjni-c-toxcore.so
 
-      - name: fail the job unless arm64 .so was produced AND the patched trees carry the audit-F2 guard, the join-by-ID patch and the group search key
+      - name: fail the job unless arm64 .so was produced AND the patched trees carry the audit-F2 guard, the join-by-ID patch, the group search key and the FTV2 stale accept fix
         if: always()
         run: |
           rc=0
@@ -145,6 +149,12 @@ jobs:
               echo "group search key present in $tree/toxcore/onion_client.c"
             else
               echo "ERROR: group search key MISSING in $tree/toxcore/onion_client.c -- a join by chat id would not find the founder"
+              rc=1
+            fi
+            if grep -q 'KHANDAQ (FTV2 stale accept)' "$tree/toxcore/Messenger.c"; then
+              echo "FTV2 stale accept fix present in $tree/toxcore/Messenger.c"
+            else
+              echo "ERROR: FTV2 stale accept fix MISSING in $tree/toxcore/Messenger.c -- an FTV2 offer waiting for the person would start the sender"
               rc=1
             fi
           done

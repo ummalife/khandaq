@@ -53,9 +53,11 @@ QString encoded(const QString& text)
 QUrl reportMailUrl(const GroupReport& report)
 {
     const QString group = report.groupName.simplified();
+    const QString author =
+        report.authorKey.isEmpty() ? QStringLiteral("unknown") : report.authorKey.left(8).toUpper();
     const QString body =
         mailLines(QStringLiteral("Group: %1\nAuthor: %2\nTime: %3\nMessage:\n%4")
-                      .arg(group, report.authorKey.left(8).toUpper(),
+                      .arg(group, author,
                            report.time.toUTC().toString(Qt::ISODate),
                            firstCharacters(report.text, reportTextLimit)));
     QUrl url;
@@ -110,9 +112,9 @@ bool noteGroupLeft(LocalStore& store, const QByteArray& groupChatId)
     return isCommunity(groupChatId) && store.setCommunityLeft();
 }
 
-bool savesFileAtOnce(const QByteArray& groupChatId, bool fromSelf)
+bool savesFileAtOnce(const QByteArray& groupChatId, bool fromSelf, bool relayed)
 {
-    return fromSelf || !isCommunity(groupChatId);
+    return (fromSelf && !relayed) || !isCommunity(groupChatId);
 }
 
 bool HeldFiles::known(const QByteArray& groupChatId, const QByteArray& fileId) const

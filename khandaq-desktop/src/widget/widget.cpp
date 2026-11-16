@@ -3036,10 +3036,11 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
 
     // KHANDAQ (0.2.57): in Khandaq Community the files of others wait for Accept, whatever the
     // download setting says (Air::Community::HeldFiles). The bytes are here already: the entry
-    // shows the name and the size, and nothing is written or shown as a picture until then.
+    // shows the name and the size, and nothing is written or shown as a picture until then. A
+    // relayed file (history sync) is never ours, whatever key it names (savesFileAtOnce).
     const bool fromSelf = sender == core->getSelfPublicKey()
                           || sender == core->getGroupSelfPublicKey(groupnumber);
-    if (!Air::Community::savesFileAtOnce(groupId.getByteArray(), fromSelf)) {
+    if (!Air::Community::savesFileAtOnce(groupId.getByteArray(), fromSelf, wasSynced)) {
         if (heldGroupFiles.known(groupId.getByteArray(), fileId)) {
             qDebug() << "onGroupFileReceived: a file of Khandaq Community came again under the id"
                      << "of an earlier one; dropped";
@@ -3049,6 +3050,7 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
                       sanitizeGroupFileName(fileName), QString(),
                       static_cast<uint64_t>(fileData.size()), ToxFile::RECEIVING);
         entry.resumeFileId = fileId;
+        entry.relayed = wasSynced;
         entry.status = ToxFile::INITIALIZING;
         updateGroupFileInChatLog(groupId, sender, entry);
         stopHeldGroupFiles(
@@ -3107,6 +3109,8 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     file.progress.addSample(file.progress.getFileSize(), QTime::currentTime());
     // The id of the file in its packets, which its sender's deletion and the reactions point at.
     file.resumeFileId = fileId;
+    // KHANDAQ (0.2.57): who sent a relayed file is what the member who relayed it says (Report).
+    file.relayed = wasSynced;
 
     dispatchGroupFileToChatLog(groupId, sender, file);
 

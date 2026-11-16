@@ -3288,9 +3288,6 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
             return;
         }
         const QByteArray msgId(reinterpret_cast<const char*>(data + 8), 32);
-        if (ngcFileMsgIdSeen(msgId)) {
-            return;
-        }
         // KHANDAQ (audit F-6): orig_sender_pk is unauthenticated — the syncing peer picks it freely, so a
         // malicious member can attribute a synced file to anyone. The wire format has no signature and
         // adding one would break the shipped clients, so this pk is treated as a per-message display
@@ -3302,8 +3299,18 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
             return; // all-zero pk is no member; it would show up as a phantom sender in history
         }
         const ToxPk origSender(origSenderRaw);
-        if (origSender == getSelfPublicKey()) {
-            return; // our own message echoed back via history sync
+        // KHANDAQ (0.2.57, review): a record that names us is our own file echoed back, or a forgery:
+        // every member sees our key in the group, and a file "of ours" would skip the hold of Khandaq
+        // Community (Widget::onGroupFileReceived) and stand in the chat under our name. So our key in
+        // the group is dropped as our Tox key always was.
+        if (origSender == getSelfPublicKey()
+            || origSender == getGroupSelfPublicKey(static_cast<int>(groupId))) {
+            return;
+        }
+        // After the checks of the record itself, as the time window above: a record dropped there
+        // must not burn its msg id, or a forged copy would suppress the honest file with that id.
+        if (ngcFileMsgIdSeen(msgId)) {
+            return;
         }
         const QString fileName = ngcParseFilename(data + 101, 255);
         const QByteArray fileData(reinterpret_cast<const char*>(data + NGC_SYNC_FILE_HEADER_SIZE),

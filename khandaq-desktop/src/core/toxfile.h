@@ -118,6 +118,12 @@ struct ToxFile
      * entry for the person, never coming by itself, until they accept it.
      */
     bool refusedHere = false;
+    /**
+     * KHANDAQ (0.2.57): a file of a group that a member relayed (history sync) instead of its
+     * sender: toxcore vouches for nobody, so the key its entry names is what that member says. It
+     * is never taken for ours, and a Report on it names no author.
+     */
+    bool relayed = false;
     /** KHANDAQ (0.2.57): of a file of the person, what tells the file it goes to (Stamp). */
     Stamp stamp;
 };

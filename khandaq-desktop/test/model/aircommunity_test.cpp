@@ -59,6 +59,7 @@ private slots:
     void leavingForgetsTheMuteButNotTheMarks();
     void aStoreOfBeforeHasNeverJoinedIt();
     void aReportIsAMailToSupportWithTheMessage();
+    void aReportNamesNoAuthorNobodyVouchesFor();
     void everyPartOfTheReportIsEncoded();
     void aLongMessageIsCutAt500CharactersNeverInHalf();
     void filesOfOthersInTheCommunityWaitForATap();
@@ -351,6 +352,20 @@ void TestAirCommunity::aReportIsAMailToSupportWithTheMessage()
                         "Buy%20followers%20now"));
 }
 
+void TestAirCommunity::aReportNamesNoAuthorNobodyVouchesFor()
+{
+    // A file a member relayed names whom that member says, and an entry may have no key at all:
+    // the mail goes all the same, by nobody's name.
+    GroupReport report = sampleReport();
+    report.authorKey.clear();
+    QCOMPARE(decodedPart(reportMailUrl(report), QStringLiteral("body")),
+             QStringLiteral("Group: Khandaq Community\r\n"
+                            "Author: unknown\r\n"
+                            "Time: 2026-11-16T12:04:05Z\r\n"
+                            "Message:\r\n"
+                            "Buy followers now"));
+}
+
 void TestAirCommunity::everyPartOfTheReportIsEncoded()
 {
     GroupReport report = sampleReport();
@@ -381,7 +396,7 @@ void TestAirCommunity::everyPartOfTheReportIsEncoded()
     const QUrl empty = reportMailUrl(GroupReport{});
     QCOMPARE(empty.path(), QStringLiteral("support@khandaq.org"));
     QCOMPARE(decodedPart(empty, QStringLiteral("body")),
-             QStringLiteral("Group: \r\nAuthor: \r\nTime: \r\nMessage:\r\n"));
+             QStringLiteral("Group: \r\nAuthor: unknown\r\nTime: \r\nMessage:\r\n"));
 }
 
 void TestAirCommunity::aLongMessageIsCutAt500CharactersNeverInHalf()
@@ -436,12 +451,16 @@ constexpr qint64 megabyte = 1024 * 1024;
 void TestAirCommunity::filesOfOthersInTheCommunityWaitForATap()
 {
     // Whatever the download setting says: it is not asked.
-    QVERIFY(!Community::savesFileAtOnce(Community::chatId(), false));
+    QVERIFY(!Community::savesFileAtOnce(Community::chatId(), false, false));
+    QVERIFY(!Community::savesFileAtOnce(Community::chatId(), false, true));
     // Our own files, and the files of every other group, are written as they come.
-    QVERIFY(Community::savesFileAtOnce(Community::chatId(), true));
-    QVERIFY(Community::savesFileAtOnce(otherGroup, false));
-    QVERIFY(Community::savesFileAtOnce(otherGroup, true));
-    QVERIFY(Community::savesFileAtOnce(QByteArray(), false));
+    QVERIFY(Community::savesFileAtOnce(Community::chatId(), true, false));
+    QVERIFY(Community::savesFileAtOnce(otherGroup, false, false));
+    QVERIFY(Community::savesFileAtOnce(otherGroup, true, false));
+    QVERIFY(Community::savesFileAtOnce(otherGroup, false, true));
+    QVERIFY(Community::savesFileAtOnce(QByteArray(), false, false));
+    // A relayed file that names our key is no file of ours: anyone can name it.
+    QVERIFY(!Community::savesFileAtOnce(Community::chatId(), true, true));
 }
 
 void TestAirCommunity::heldFilesAreTakenByTheNumberOfTheirEntry()
@@ -520,8 +539,15 @@ void TestAirCommunity::aFileIdComesOnceInARun()
     Community::HeldFiles::File file;
     QVERIFY(held.take(1, file));
     QVERIFY(held.known(Community::chatId(), id));
-    held.hold(heldFile(2, Community::chatId(), Community::HeldFiles::limitBytes));
+    // Gone to make room, though no other place remembers it any more (the core keeps the last 512
+    // ids): a file again under its id gets no entry, so none takes the place of the one that went.
+    const Community::HeldFiles::File third = heldFile(3, Community::chatId(), 4);
+    held.hold(third);
+    QCOMPARE(numbersOf(held.hold(heldFile(2, Community::chatId(), Community::HeldFiles::limitBytes))),
+             (QVector<uint32_t>{3}));
     QVERIFY(held.known(Community::chatId(), id));
+    QVERIFY(held.known(Community::chatId(), third.entry.resumeFileId));
+    QVERIFY(!held.take(3, file));
     // Only in its group, and never for a file without an id.
     QVERIFY(!held.known(otherGroup, id));
     QVERIFY(!held.known(Community::chatId(), QByteArray()));

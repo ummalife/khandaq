@@ -44,7 +44,10 @@ class LocalStore;
 struct GroupReport
 {
     QString groupName;
-    /** The author's key in the group, in hexadecimal; the mail names its first 8 characters. */
+    /**
+     * The author's key in the group, in hexadecimal; the mail names its first 8 characters. Empty
+     * when nobody vouches for it, as for a file a member relayed: the mail says unknown.
+     */
     QString authorKey;
     /** When the message was written. */
     QDateTime time;
@@ -115,9 +118,10 @@ bool noteGroupLeft(LocalStore& store, const QByteArray& groupChatId);
 /**
  * Whether a file that came whole in a group goes to the download folder at once, as in every
  * group, or waits for a tap: in Khandaq Community, where strangers write, the files of others
- * wait, whatever the download setting says (item 6).
+ * wait, whatever the download setting says (item 6). A relayed file (history sync) is never
+ * fromSelf: the key it names is what the member who relayed it says, and every member sees ours.
  */
-bool savesFileAtOnce(const QByteArray& groupChatId, bool fromSelf);
+bool savesFileAtOnce(const QByteArray& groupChatId, bool fromSelf, bool relayed);
 
 /**
  * The files of Khandaq Community that came and wait for a tap. The group file packets push every

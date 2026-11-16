@@ -983,9 +983,13 @@ bool GroupChatForm::prepareReport(ChatLogIdx idx)
     const ToxPk& sender = item.getSender();
     // Our own entries carry the key of our profile; a group knows us by a key of its own too.
     const ToxPk groupSelf = core.getGroupSelfPublicKey(static_cast<int>(group->getId()));
-    if (sender.isEmpty() || sender == core.getSelfPublicKey() || sender == groupSelf) {
+    if (!sender.isEmpty() && (sender == core.getSelfPublicKey() || sender == groupSelf)) {
         return false;
     }
+    // KHANDAQ (0.2.57, review): the mail names the author only when toxcore vouches for them. An
+    // entry without a key, or a file a member relayed (ToxFile::relayed), is still reported, by
+    // nobody's name (Air::reportMailUrl).
+    bool vouched = !sender.isEmpty();
     QString text;
     switch (item.getContentType()) {
     case ChatLogItem::ContentType::message:
@@ -994,11 +998,13 @@ bool GroupChatForm::prepareReport(ChatLogIdx idx)
     case ChatLogItem::ContentType::fileTransfer:
         // A file says what it is by its name; what is in it stays on this computer.
         text = item.getContentAsFile().file.fileName;
+        vouched = vouched && !item.getContentAsFile().file.relayed;
         break;
     case ChatLogItem::ContentType::systemMessage:
         return false;
     }
-    menuReport = Air::GroupReport{group->getName(), sender.toString(), item.getTimestamp(), text};
+    menuReport = Air::GroupReport{group->getName(), vouched ? sender.toString() : QString(),
+                                  item.getTimestamp(), text};
     return true;
 }
 

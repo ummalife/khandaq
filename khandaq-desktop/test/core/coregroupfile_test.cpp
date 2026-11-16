@@ -22,6 +22,7 @@
 #include "src/core/core.h"
 #include "src/core/khandaqlimits.h"
 
+#include <QDateTime>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -69,6 +70,23 @@ QByteArray chunkPacket(const QByteArray& msgId, const QByteArray& file, int inde
     return packet;
 }
 
+// A file a member relays from the history of the group (0x03, only privately): the msg id, the
+// key it names for the author, its time, a name of 25 bytes nobody reads, the file name, then the
+// bytes (core.cpp, NGC_SYNC_FILE_HEADER_SIZE).
+constexpr int syncHeaderSize = 6 + 1 + 1 + 32 + 32 + 4 + 25 + 255;
+
+QByteArray syncPacket(const QByteArray& msgId, const QByteArray& author, const QString& name,
+                      const QByteArray& bytes)
+{
+    QByteArray packet = ngcPacket('\x03', msgId, syncHeaderSize + bytes.size());
+    packet.replace(40, author.size(), author);
+    qToBigEndian(static_cast<quint32>(QDateTime::currentSecsSinceEpoch()), packet.data() + 72);
+    const QByteArray utf8 = name.toUtf8();
+    packet.replace(101, utf8.size(), utf8);
+    packet.replace(syncHeaderSize, bytes.size(), bytes);
+    return packet;
+}
+
 void hand(Core& core, int group, uint32_t peer, const QByteArray& packet, bool isPrivate)
 {
     core.handleNgcFileTransferPacket(static_cast<uint32_t>(group), peer,
@@ -103,6 +121,7 @@ private slots:
     void aFileThatCannotBeReadIsRefused();
     void aChunkedFileThatComesPrivatelyArrives();
     void aChunkedFileThatComesBothWaysArrivesOnce();
+    void aRelayedFileThatNamesUsIsDroppedWithoutBurningItsId();
 
 private:
     ToxCorePtr makeCore();
@@ -329,6 +348,50 @@ void TestCoreGroupFile::aChunkedFileThatComesBothWaysArrivesOnce()
         hand(*core, group, peer, chunkPacket(msgId, file, chunk), true);
     }
     QCOMPARE(received.count(), 1);
+}
+
+void TestCoreGroupFile::aRelayedFileThatNamesUsIsDroppedWithoutBurningItsId()
+{
+    ToxCorePtr core = makeCore();
+    QVERIFY(core);
+    const int group = core->createGroup(QStringLiteral("Files"), TOX_GROUP_PRIVACY_STATE_PUBLIC);
+    QVERIFY(group >= 0);
+    Tox_Err_Group_Self_Query selfError;
+    const uint32_t peer =
+        tox_group_self_get_peer_id(core->getTox(), static_cast<uint32_t>(group), &selfError) + 1;
+    const QByteArray msgId(32, 'r');
+    const QByteArray bytes = fileBytes(2000);
+    const QByteArray ourGroupKey = core->getGroupSelfPublicKey(group).getByteArray();
+    QCOMPARE(ourGroupKey.size(), 32);
+    const QByteArray member(32, '\x5a');
+    // The key each file names, as the window gets it.
+    QVector<ToxPk> senders;
+    QVector<bool> relayed;
+    connect(core.get(), &Core::groupFileReceived, this,
+            [&](int, const ToxPk& sender, const QString&, const QByteArray& data, const QDateTime&,
+                bool wasSynced, const QByteArray& id) {
+                QCOMPARE(data, bytes);
+                QCOMPARE(id, msgId);
+                senders.append(sender);
+                relayed.append(wasSynced);
+            },
+            Qt::DirectConnection);
+
+    // Every member sees our key in the group: a record that names it is a forgery, or our own file
+    // echoed back. So is one that names our Tox key, and one that names nobody.
+    hand(*core, group, peer, syncPacket(msgId, ourGroupKey, QStringLiteral("x.png"), bytes), true);
+    hand(*core, group, peer,
+         syncPacket(msgId, core->getSelfPublicKey().getByteArray(), QStringLiteral("x.png"), bytes),
+         true);
+    hand(*core, group, peer, syncPacket(msgId, QByteArray(32, '\0'), QStringLiteral("x.png"), bytes),
+         true);
+    QVERIFY(senders.isEmpty());
+
+    // None of them burnt the id: the record of the member who wrote it comes, and only once.
+    hand(*core, group, peer, syncPacket(msgId, member, QStringLiteral("photo.png"), bytes), true);
+    hand(*core, group, peer, syncPacket(msgId, member, QStringLiteral("photo.png"), bytes), true);
+    QCOMPARE(senders, (QVector<ToxPk>{ToxPk(member)}));
+    QCOMPARE(relayed, (QVector<bool>{true}));
 }
 
 QTEST_GUILESS_MAIN(TestCoreGroupFile)

@@ -105,5 +105,58 @@ bool noteGroupLeft(LocalStore& store, const QByteArray& groupChatId)
     return isCommunity(groupChatId) && store.setCommunityLeft();
 }
 
+bool savesFileAtOnce(const QByteArray& groupChatId, bool fromSelf)
+{
+    return fromSelf || !isCommunity(groupChatId);
+}
+
+QVector<HeldFiles::File> HeldFiles::hold(const File& file)
+{
+    const qint64 size = file.data.size();
+    if (size > limitBytes) {
+        return {file};
+    }
+    QVector<File> gone;
+    while (!files.isEmpty() && total + size > limitBytes) {
+        total -= files.first().data.size();
+        gone.append(files.takeFirst());
+    }
+    files.append(file);
+    total += size;
+    return gone;
+}
+
+bool HeldFiles::take(uint32_t number, File& file)
+{
+    for (int i = 0; i < files.size(); ++i) {
+        if (files.at(i).entry.fileNum == number) {
+            file = files.takeAt(i);
+            total -= file.data.size();
+            return true;
+        }
+    }
+    return false;
+}
+
+void HeldFiles::forgetGroup(const QByteArray& groupChatId)
+{
+    for (int i = files.size() - 1; i >= 0; --i) {
+        if (files.at(i).groupChatId == groupChatId) {
+            total -= files.at(i).data.size();
+            files.removeAt(i);
+        }
+    }
+}
+
+qint64 HeldFiles::bytes() const
+{
+    return total;
+}
+
+int HeldFiles::count() const
+{
+    return files.size();
+}
+
 } // namespace Community
 } // namespace Air

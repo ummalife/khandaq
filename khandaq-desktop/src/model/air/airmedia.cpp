@@ -210,6 +210,9 @@ FileEntryState fileEntryState(const FileFacts& facts)
             // The size is on the line above; Accept is the whole question.
             if (controls) {
                 state.actions = {FileAction::Accept, FileAction::Decline};
+            } else if (facts.held) {
+                // Here already, in memory: there is nothing to decline from the sender.
+                state.actions = {FileAction::Accept};
             }
         } else {
             state.note = facts.group ? FileNote::None : FileNote::WaitsAccept;

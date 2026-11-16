@@ -104,6 +104,7 @@ private slots:
     void aStoppedFileSaysWhichWayItWent();
     void aFileThatIsHereOpens();
     void aGroupFileHasNothingToAnswer();
+    void aHeldGroupFileWaitsForAcceptAlone();
     void ourGroupFileWaitsForSomeoneToSendItTo();
     void theMarkOfOurFileFollowsTheTransfer();
     void aFileWhoseFriendWentOfflineWaitsAndNeverFails();
@@ -252,6 +253,29 @@ void TestAirMedia::aGroupFileHasNothingToAnswer()
     Air::FileFacts ours = facts(ToxFile::INITIALIZING, false);
     ours.group = true;
     QCOMPARE(Air::fileEntryState(ours).note, FileNote::None);
+}
+
+void TestAirMedia::aHeldGroupFileWaitsForAcceptAlone()
+{
+    // KHANDAQ (0.2.57): a file of Khandaq Community came and is held: Accept writes it, and
+    // there is no sender to decline it to. Nothing tells of a transfer.
+    Air::FileFacts held = facts(ToxFile::INITIALIZING, true);
+    held.group = true;
+    held.held = true;
+    const Air::FileEntryState state = Air::fileEntryState(held);
+    QCOMPARE(state.actions, (QVector<FileAction>{FileAction::Accept}));
+    QCOMPARE(state.note, FileNote::None);
+    QVERIFY(state.progress < 0);
+    QVERIFY(!state.isProblem());
+    // Once written it is a file like any other here; one that went to make room stopped.
+    held.status = ToxFile::FINISHED;
+    held.here = true;
+    QCOMPARE(Air::fileEntryState(held).actions,
+             (QVector<FileAction>{FileAction::Open, FileAction::ShowInFolder}));
+    held.status = ToxFile::BROKEN;
+    held.here = false;
+    QCOMPARE(Air::fileEntryState(held).note, FileNote::DownloadStopped);
+    QVERIFY(Air::fileEntryState(held).actions.isEmpty());
 }
 
 void TestAirMedia::ourGroupFileWaitsForSomeoneToSendItTo()

@@ -211,6 +211,8 @@ GroupChatForm::GroupChatForm(Core& core_, Group* chatGroup, IChatLog& chatLog_,
     connect(dossier, &AirGroupDossier::privacyChangeRequested, this, &GroupChatForm::setPrivacy);
     connect(privateThread, &AirPrivateThread::sendRequested, this, &GroupChatForm::sendPrivate);
     connect(composer, &AirComposer::readOnlyActionRequested, this, &GroupChatForm::askToWrite);
+    connect(chatWidget, &ChatWidget::heldFileAccepted, this,
+            [this](const ToxFile& file) { emit heldFileAccepted(group->getPersistentId(), file); });
 
     connect(msgEdit, &ChatTextEdit::tabPressed, tabber, &TabCompleter::complete);
     connect(msgEdit, &ChatTextEdit::keyPressed, tabber, &TabCompleter::reset);

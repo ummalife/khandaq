@@ -19,10 +19,14 @@
 
 #pragma once
 
+#include "src/core/toxfile.h"
+#include "src/core/toxpk.h"
+
 #include <QByteArray>
 #include <QDateTime>
 #include <QString>
 #include <QUrl>
+#include <QVector>
 
 #include <functional>
 
@@ -93,6 +97,51 @@ bool autoJoin(LocalStore& store, bool connected, bool alreadyInGroup,
  * was joined. True when that changed store.
  */
 bool noteGroupLeft(LocalStore& store, const QByteArray& groupChatId);
+
+/**
+ * Whether a file that came whole in a group goes to the download folder at once, as in every
+ * group, or waits for a tap: in Khandaq Community, where strangers write, the files of others
+ * wait, whatever the download setting says (item 6).
+ */
+bool savesFileAtOnce(const QByteArray& groupChatId, bool fromSelf);
+
+/**
+ * The files of Khandaq Community that came and wait for a tap. The group file packets push every
+ * byte to every member, so the files are here already: they are held in memory, out of the
+ * download folder, their entries shown without a picture until Accept writes them. Up to
+ * limitBytes together, the oldest going first to make room; none is kept across a restart.
+ */
+class HeldFiles
+{
+public:
+    static constexpr qint64 limitBytes = 256LL * 1024 * 1024;
+
+    struct File
+    {
+        QByteArray groupChatId;
+        ToxPk sender;
+        /** Its entry in the transcript, which waits; the number is unique while the app runs. */
+        ToxFile entry;
+        QByteArray data;
+    };
+
+    /**
+     * Holds a file, and returns those that went to make room for it, oldest first: their entries
+     * stop. A file bigger than limitBytes alone is not held and comes back itself.
+     */
+    QVector<File> hold(const File& file);
+    /** Takes out the file of the entry with this number, for Accept; false when none is held. */
+    bool take(uint32_t number, File& file);
+    /** The group is gone: its files go with it. */
+    void forgetGroup(const QByteArray& groupChatId);
+    qint64 bytes() const;
+    int count() const;
+
+private:
+    /** The oldest first. */
+    QVector<File> files;
+    qint64 total = 0;
+};
 
 } // namespace Community
 } // namespace Air

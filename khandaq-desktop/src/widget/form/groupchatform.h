@@ -87,6 +87,8 @@ public:
 signals:
     /** Leaving was confirmed in the dossier: the main window leaves the group. */
     void leaveRequested(const GroupId& groupId);
+    /** KHANDAQ (0.2.57): Accept on a file of the group held for a tap: the main window writes it. */
+    void heldFileAccepted(const GroupId& groupId, const ToxFile& file);
 
 private slots:
     void onScreenshotClicked() override;

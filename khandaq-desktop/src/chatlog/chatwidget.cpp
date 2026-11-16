@@ -1878,6 +1878,7 @@ void ChatWidget::renderFile(const ChatMessage::AirLook& look, ToxFile file, QDat
             resizedLines.push_back(weak);
             resizedLater->start();
         });
+        connect(entry, &FileTransferWidget::heldFileAccepted, this, &ChatWidget::heldFileAccepted);
     } else {
         FileTransferWidget* const entry = fileEntryOf(*chatMessage);
         assert(entry);

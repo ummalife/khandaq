@@ -3013,6 +3013,31 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     if (g == nullptr) {
         return;
     }
+    static uint32_t groupFileNum = 700000;
+
+    // KHANDAQ (0.2.57): in Khandaq Community the files of others wait for Accept, whatever the
+    // download setting says (Air::Community::HeldFiles). The bytes are here already: the entry
+    // shows the name and the size, and nothing is written or shown as a picture until then.
+    const bool fromSelf = sender == core->getSelfPublicKey()
+                          || sender == core->getGroupSelfPublicKey(groupnumber);
+    if (!Air::Community::savesFileAtOnce(groupId.getByteArray(), fromSelf)) {
+        ToxFile entry(++groupFileNum, static_cast<uint32_t>(groupnumber),
+                      sanitizeGroupFileName(fileName), QString(),
+                      static_cast<uint64_t>(fileData.size()), ToxFile::RECEIVING);
+        entry.resumeFileId = fileId;
+        entry.status = ToxFile::INITIALIZING;
+        updateGroupFileInChatLog(groupId, sender, entry);
+        stopHeldGroupFiles(
+            heldGroupFiles.hold({groupId.getByteArray(), sender, entry, fileData}));
+        qDebug() << "onGroupFileReceived: a file of Khandaq Community waits for Accept,"
+                 << fileData.size() << "bytes;" << heldGroupFiles.count() << "held,"
+                 << heldGroupFiles.bytes() << "bytes";
+        // As below: a synced row's sender is unauthenticated, so it alerts nobody.
+        if (!wasSynced) {
+            newGroupMessageAlert(groupId, sender, fileName, settings.getGroupAlwaysNotify());
+        }
+        return;
+    }
 
     // KHANDAQ (audit 2026-08-20): bound what one group may write to the user's disk unattended.
     //
@@ -3053,7 +3078,6 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     // Booked after the write actually happened, so a failed open above costs nothing.
     savedForGroup += static_cast<quint64>(fileData.size());
 
-    static uint32_t groupFileNum = 700000;
     ToxFile file(++groupFileNum, static_cast<uint32_t>(groupnumber), safeName, filePath,
                  static_cast<uint64_t>(fileData.size()), ToxFile::RECEIVING);
     file.progress.addSample(file.progress.getFileSize(), QTime::currentTime());
@@ -3079,6 +3103,46 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     } else {
         qDebug() << "onGroupFileReceived: synced row, storing without a notification"
                  << "(attribution to" << sender.toString().left(8) << "is unauthenticated)";
+    }
+}
+
+void Widget::saveHeldGroupFile(const GroupId& groupId, const ToxFile& entry)
+{
+    Air::Community::HeldFiles::File held;
+    if (!heldGroupFiles.take(entry.fileNum, held)) {
+        // It went to make room for newer files, and its entry says so already.
+        return;
+    }
+    Group* const g = groupList->findGroup(groupId);
+    if (g == nullptr) {
+        return;
+    }
+    ToxFile file = held.entry;
+    const QString filePath = uniqueFilePath(groupDownloadDir(g), file.fileName);
+    QFile out(filePath);
+    if (!out.open(QIODevice::WriteOnly) || out.write(held.data) != held.data.size()) {
+        qWarning() << "saveHeldGroupFile: cannot write" << filePath << out.errorString();
+        out.close();
+        out.remove();
+        file.status = ToxFile::BROKEN;
+        updateGroupFileInChatLog(groupId, held.sender, file);
+        return;
+    }
+    out.close();
+    file.setFilePath(filePath);
+    file.progress.addSample(file.progress.getFileSize(), QTime::currentTime());
+    file.status = ToxFile::FINISHED;
+    updateGroupFileInChatLog(groupId, held.sender, file);
+}
+
+void Widget::stopHeldGroupFiles(const QVector<Air::Community::HeldFiles::File>& files)
+{
+    for (const Air::Community::HeldFiles::File& gone : files) {
+        qDebug() << "A held file of Khandaq Community goes to make room:" << gone.data.size()
+                 << "bytes";
+        ToxFile file = gone.entry;
+        file.status = ToxFile::BROKEN;
+        updateGroupFileInChatLog(GroupId(gone.groupChatId), gone.sender, file);
     }
 }
 
@@ -3301,6 +3365,8 @@ void Widget::discardGroup(Group* g, bool fake, bool historyRemoved)
             airLocal->noteGroupLeft(groupId.getByteArray());
         }
     }
+    // KHANDAQ (0.2.57): the files it held for a tap go with its conversation.
+    heldGroupFiles.forgetGroup(groupId.getByteArray());
     chatListWidget->removeGroupWidget(widget); // deletes widget
 
     groupWidgets.remove(groupId);
@@ -3412,6 +3478,7 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
     form->setAir(airLocal, airSource);
     // The form goes with the group, so leaving waits until the dossier's click is over.
     connect(form, &GroupChatForm::leaveRequested, this, &Widget::leaveGroup, Qt::QueuedConnection);
+    connect(form, &GroupChatForm::heldFileAccepted, this, &Widget::saveHeldGroupFile);
     groupMessageDispatchers[groupId] = messageDispatcher;
     groupChatLogs[groupId] = chatHistory;
     groupWidgets[groupId] = widget;

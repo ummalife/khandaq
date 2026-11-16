@@ -392,6 +392,10 @@ Air::FileFacts FileTransferWidget::facts() const
     result.here = fileInfo.status == ToxFile::FINISHED && onDisk;
     result.canSendAgain = !result.incoming && !group && !resent && personOnline && onDisk;
     result.waitsConnection = fileInfo.connectionLost;
+    // KHANDAQ (0.2.57): a group file that is not on this computer yet came and waits for Accept;
+    // every other group file is written as it comes, its path known from the start.
+    result.held = group && result.incoming && fileInfo.status == ToxFile::INITIALIZING
+                  && fileInfo.filePath.isEmpty();
     return result;
 }
 
@@ -443,8 +447,10 @@ void FileTransferWidget::refresh()
             QFile file(voicePath);
             voiceLengthMs = file.open(QIODevice::ReadOnly) ? Air::mp4DurationMs(file) : -1;
         }
-        // A note of a person that waits for Accept: Listen fetches it (acceptVoiceNote).
-        const bool fetchable = now.incoming && !now.group && fileInfo.status == ToxFile::INITIALIZING;
+        // A note of a person that waits for Accept: Listen fetches it (acceptVoiceNote). So does
+        // a note of a group that holds it.
+        const bool fetchable = now.incoming && (!now.group || now.held)
+                               && fileInfo.status == ToxFile::INITIALIZING;
         voice->setNote(fileInfo.filePath, voiceLengthMs, now.here, sizeText(), fetchable);
         if (playWhenHere && now.here) {
             playWhenHere = false;
@@ -546,6 +552,12 @@ void FileTransferWidget::act(Air::FileAction action)
 
 void FileTransferWidget::accept()
 {
+    if (facts().held) {
+        // KHANDAQ (0.2.57): the file is here already, in memory; the app writes it where the
+        // files of its group go.
+        emit heldFileAccepted(fileInfo);
+        return;
+    }
     if (Air::isVoiceNote(fileInfo.fileName)) {
         acceptVoiceNote(false);
         return;
@@ -555,6 +567,11 @@ void FileTransferWidget::accept()
 
 void FileTransferWidget::acceptVoiceNote(bool play)
 {
+    if (facts().held) {
+        playWhenHere = play;
+        emit heldFileAccepted(fileInfo);
+        return;
+    }
     // KHANDAQ (QA live 2026-11-14): a voice note is listened to, not kept as a file. It had to be
     // accepted and saved somewhere before Listen would play it. Accept and Listen now take it into
     // the app's own folder without asking where. It still comes only when one of them is pressed.

@@ -36,6 +36,7 @@
 #include "src/core/toxfile.h"
 #include "src/core/toxid.h"
 #include "src/core/toxpk.h"
+#include "src/model/air/aircommunity.h"
 #include "src/model/air/airgroup.h"
 #include "src/model/friendmessagedispatcher.h"
 #include "src/model/groupmessagedispatcher.h"
@@ -431,6 +432,10 @@ private:
      * left (Air::Community); it does not open.
      */
     void joinCommunity();
+    /** KHANDAQ (0.2.57): Accept on a held file of Khandaq Community: written where the group's go. */
+    void saveHeldGroupFile(const GroupId& groupId, const ToxFile& entry);
+    /** Their entries say the download stopped: the files went to make room, or were too big. */
+    void stopHeldGroupFiles(const QVector<Air::Community::HeldFiles::File>& files);
     /** The contacts New group offers to invite. */
     QVector<Air::InviteCandidate> inviteCandidates() const;
     /** The legacy form, kept for importing a file of IDs. */
@@ -555,6 +560,8 @@ private:
     };
     /** By the id of the file in its packets. */
     QHash<QByteArray, GroupFileSend> groupFileSends;
+    /** KHANDAQ (0.2.57): the files of Khandaq Community that wait for Accept. */
+    Air::Community::HeldFiles heldGroupFiles;
     /** The group the user joined that opens once it comes into the list (openJoinedGroup). */
     GroupId groupToOpenWhenJoined;
     /**

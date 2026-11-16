@@ -129,6 +129,11 @@ struct FileFacts
     bool canSendAgain = false;
     /** KHANDAQ (0.2.57): the friend went offline in the middle of it (ToxFile::connectionLost). */
     bool waitsConnection = false;
+    /**
+     * KHANDAQ (0.2.57): a group file of someone else that came and waits for Accept to be written
+     * (Air::Community::HeldFiles); only Khandaq Community holds its files.
+     */
+    bool held = false;
 };
 
 struct FileEntryState

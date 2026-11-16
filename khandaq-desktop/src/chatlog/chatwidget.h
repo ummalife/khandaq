@@ -114,6 +114,8 @@ signals:
 
     void messageNotFoundShow(SearchDirection direction);
     void renderFinished();
+    /** KHANDAQ (0.2.57): Accept on a group file that is held for a tap (FileTransferWidget). */
+    void heldFileAccepted(const ToxFile& file);
 public slots:
     void forceRelayout();
     void reloadTheme();

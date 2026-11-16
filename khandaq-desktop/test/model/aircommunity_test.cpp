@@ -60,6 +60,10 @@ private slots:
     void aReportIsAMailToSupportWithTheMessage();
     void everyPartOfTheReportIsEncoded();
     void aLongMessageIsCutAt500CharactersNeverInHalf();
+    void filesOfOthersInTheCommunityWaitForATap();
+    void heldFilesAreTakenByTheNumberOfTheirEntry();
+    void theOldestHeldFilesMakeRoomForNewOnes();
+    void aGroupThatGoesTakesItsHeldFiles();
 };
 
 void TestAirCommunity::theChatIdIsTheGroupOfOurBot()
@@ -379,6 +383,100 @@ void TestAirCommunity::aLongMessageIsCutAt500CharactersNeverInHalf()
     const QString cut = textOf(reportMailUrl(report));
     QCOMPARE(cut.size(), 1000);
     QVERIFY(cut.at(cut.size() - 1).isLowSurrogate());
+}
+
+namespace {
+Community::HeldFiles::File heldFile(uint32_t number, const QByteArray& group, qint64 size)
+{
+    ToxFile entry(number, 0, QStringLiteral("photo.jpg"), QString(), static_cast<uint64_t>(size),
+                  ToxFile::RECEIVING);
+    return {group, ToxPk(QByteArray(32, '\x0c')), entry, QByteArray(static_cast<int>(size), 'f')};
+}
+
+QVector<uint32_t> numbersOf(const QVector<Community::HeldFiles::File>& files)
+{
+    QVector<uint32_t> numbers;
+    for (const Community::HeldFiles::File& file : files) {
+        numbers.append(file.entry.fileNum);
+    }
+    return numbers;
+}
+
+constexpr qint64 megabyte = 1024 * 1024;
+} // namespace
+
+void TestAirCommunity::filesOfOthersInTheCommunityWaitForATap()
+{
+    // Whatever the download setting says: it is not asked.
+    QVERIFY(!Community::savesFileAtOnce(Community::chatId(), false));
+    // Our own files, and the files of every other group, are written as they come.
+    QVERIFY(Community::savesFileAtOnce(Community::chatId(), true));
+    QVERIFY(Community::savesFileAtOnce(otherGroup, false));
+    QVERIFY(Community::savesFileAtOnce(otherGroup, true));
+    QVERIFY(Community::savesFileAtOnce(QByteArray(), false));
+}
+
+void TestAirCommunity::heldFilesAreTakenByTheNumberOfTheirEntry()
+{
+    Community::HeldFiles held;
+    QVERIFY(held.hold(heldFile(700001, Community::chatId(), 3)).isEmpty());
+    QVERIFY(held.hold(heldFile(700002, Community::chatId(), 5)).isEmpty());
+    QCOMPARE(held.count(), 2);
+    QCOMPARE(held.bytes(), qint64{8});
+
+    Community::HeldFiles::File file;
+    QVERIFY(held.take(700002, file));
+    QCOMPARE(file.entry.fileNum, uint32_t{700002});
+    QCOMPARE(file.data, QByteArray(5, 'f'));
+    QCOMPARE(file.groupChatId, Community::chatId());
+    QCOMPARE(file.sender, ToxPk(QByteArray(32, '\x0c')));
+    QCOMPARE(held.bytes(), qint64{3});
+    // Taken once: a second Accept finds nothing, nor does a number never held.
+    QVERIFY(!held.take(700002, file));
+    QVERIFY(!held.take(123, file));
+    QCOMPARE(held.count(), 1);
+}
+
+void TestAirCommunity::theOldestHeldFilesMakeRoomForNewOnes()
+{
+    Community::HeldFiles held;
+    const qint64 limit = Community::HeldFiles::limitBytes;
+    // The largest file a group carries fits alone.
+    QVERIFY(limit >= 200 * megabyte);
+    QVERIFY(held.hold(heldFile(1, Community::chatId(), 100 * megabyte)).isEmpty());
+    QVERIFY(held.hold(heldFile(2, Community::chatId(), 100 * megabyte)).isEmpty());
+    QVERIFY(held.hold(heldFile(3, Community::chatId(), 50 * megabyte)).isEmpty());
+    QCOMPARE(held.bytes(), 250 * megabyte);
+    // 100 more do not fit: the oldest goes, and only as many as needed.
+    QCOMPARE(numbersOf(held.hold(heldFile(4, Community::chatId(), 100 * megabyte))),
+             (QVector<uint32_t>{1}));
+    QCOMPARE(held.bytes(), 250 * megabyte);
+    QCOMPARE(numbersOf(held.hold(heldFile(5, Community::chatId(), 200 * megabyte))),
+             (QVector<uint32_t>{2, 3, 4}));
+    QCOMPARE(held.count(), 1);
+    QVERIFY(held.bytes() <= limit);
+    // Bigger than all the room there is: not held, and the others stay.
+    QCOMPARE(numbersOf(held.hold(heldFile(6, Community::chatId(), limit + 1))),
+             (QVector<uint32_t>{6}));
+    QCOMPARE(held.count(), 1);
+    Community::HeldFiles::File file;
+    QVERIFY(held.take(5, file));
+    QVERIFY(!held.take(1, file));
+    QCOMPARE(held.bytes(), qint64{0});
+}
+
+void TestAirCommunity::aGroupThatGoesTakesItsHeldFiles()
+{
+    Community::HeldFiles held;
+    held.hold(heldFile(1, Community::chatId(), 4));
+    held.hold(heldFile(2, otherGroup, 6));
+    held.hold(heldFile(3, Community::chatId(), 8));
+    held.forgetGroup(Community::chatId());
+    QCOMPARE(held.count(), 1);
+    QCOMPARE(held.bytes(), qint64{6});
+    Community::HeldFiles::File file;
+    QVERIFY(!held.take(1, file));
+    QVERIFY(held.take(2, file));
 }
 
 QTEST_GUILESS_MAIN(TestAirCommunity)

@@ -581,11 +581,9 @@ private:
         QString localPath;
         qint64 size = 0;
         std::shared_ptr<QFile> file;
-        // The BEGIN goes first, for a member that holds nothing of the file any more.
-        bool begin = true;
-        // The chunks to send, in order, and the next of them.
-        QVector<int> chunks;
-        int next = 0;
+        // What goes: the BEGIN first, for a member that holds nothing of the file any more, then
+        // the chunks it asked for (Air::ResendBudget::answer).
+        Air::Resend plan;
         // When it may go again after toxcore refused it (monotonicMs), and since when it does.
         qint64 dueMs = 0;
         qint64 refusedSinceMs = -1;

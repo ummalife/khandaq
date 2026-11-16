@@ -102,6 +102,55 @@ QVector<FileArrival::Step> looks(FileArrival& arrival, const QVector<qint64>& at
 }
 
 using Step = FileArrival::Step;
+
+// What goes to a member, in a few words: "none" when nothing does, else whether the whole file
+// goes, whether its BEGIN goes first, and the chunks still to go.
+QString going(const Resend& resend)
+{
+    if (!resend.goes()) {
+        return QStringLiteral("none");
+    }
+    QStringList words;
+    if (resend.whole) {
+        words.append(QStringLiteral("whole"));
+    }
+    if (resend.begin) {
+        words.append(QStringLiteral("begin"));
+    }
+    QStringList chunks;
+    for (int i = resend.next; i < resend.chunks.size(); ++i) {
+        chunks.append(QString::number(resend.chunks.at(i)));
+    }
+    words.append(chunks.join(QLatin1Char(',')));
+    return words.join(QLatin1Char(' '));
+}
+
+// A file of 8 chunks, as Android asks for all of it (count 0, nothing after) and as iOS lists some.
+const int fileChunks = 8;
+FileRequest::Wanted wholeFile()
+{
+    return parsed(head(0), fileChunks);
+}
+
+FileRequest::Wanted listed(const QVector<quint32>& chunks)
+{
+    return parsed(listRequest(chunks), fileChunks);
+}
+
+// Whether the budget answers the request of member for fileA, of which went chunks went.
+bool answers(ResendBudget& budget, const QByteArray& member, const FileRequest::Wanted& wanted,
+             int went, bool wholeElsewhere, Resend& resend, qint64 nowMs)
+{
+    return budget.answer(fileA, member, wanted, went, fileChunks, wholeElsewhere, resend, nowMs)
+           == nullptr;
+}
+
+// The BEGIN of what goes and its first chunks went: the member is that far.
+void sendSome(Resend& resend, int chunks)
+{
+    resend.begin = false;
+    resend.next += chunks;
+}
 } // namespace
 
 // 0.2.57: the repair of a group file whose chunks did not all come (packet 0x14).
@@ -130,6 +179,14 @@ private slots:
     void aMemberGetsThreeTimesTheFileAtMost();
     void aFileForgottenForgetsItsRequests();
     void theOldestEntriesGoFirst();
+    void androidsRequestForTheWholeFileGetsAllThatWentFromItsBegin();
+    void theWholeFileGoesToOneMemberAtATime();
+    void theWholeFileGoesAgainFourSecondsApartAtMost();
+    void chunksAskedForWhileTheWholeFileGoesJoinIt();
+    void chunksOfAMemberWithNothingOnItsWayWaitForTheCooldown();
+    void aMemberThatHoldsNothingAnyMoreGetsTheWholeFileInstead();
+    void whatDidNotGoYetIsNotSentAgain();
+    void theWholeFileCountsAgainstTheShare();
 };
 
 void TestAirGroupFileRepair::aListIsReadAsIosWritesIt()
@@ -418,6 +475,159 @@ void TestAirGroupFileRepair::theOldestEntriesGoFirst()
     QCOMPARE(budget.kept(), ResendBudget::maxKept);
     QCOMPARE(budget.take(fileA, last, 1, 86, 600), 0);
     QCOMPARE(budget.take(fileA, first, 1, 86, 600), 1);
+}
+
+void TestAirGroupFileRepair::androidsRequestForTheWholeFileGetsAllThatWentFromItsBegin()
+{
+    ResendBudget budget;
+    Resend resend;
+    QCOMPARE(going(resend), QStringLiteral("none"));
+    QVERIFY(wholeFile().kind == FileRequest::Wanted::Kind::Whole);
+    // A file whose chunks all went: all of them go again to the member, its BEGIN first.
+    QVERIFY(answers(budget, memberA, wholeFile(), fileChunks, false, resend, 1000));
+    QCOMPARE(going(resend), QStringLiteral("whole begin 0,1,2,3,4,5,6,7"));
+    // One that goes still: what went of it, as the rest comes in its turn.
+    Resend some;
+    QVERIFY(budget.answer(fileB, memberA, wholeFile(), 3, fileChunks, false, some, 1000)
+            == nullptr);
+    QCOMPARE(going(some), QStringLiteral("whole begin 0,1,2"));
+}
+
+void TestAirGroupFileRepair::theWholeFileGoesToOneMemberAtATime()
+{
+    ResendBudget budget;
+    Resend toA;
+    QVERIFY(answers(budget, memberA, wholeFile(), fileChunks, false, toA, 1000));
+    sendSome(toA, 2);
+    // A asks again while it goes: nothing more goes, and it goes on from where it is.
+    const qint64 later = 1000 + 2 * ResendBudget::wholeGapMs;
+    QVERIFY(!answers(budget, memberA, wholeFile(), fileChunks, false, toA, later));
+    QCOMPARE(going(toA), QStringLiteral("whole 2,3,4,5,6,7"));
+    // B asks while it goes to A: not now.
+    Resend toB;
+    QVERIFY(!answers(budget, memberB, wholeFile(), fileChunks, true, toB, later));
+    QCOMPARE(going(toB), QStringLiteral("none"));
+    // Once all of it went to A, B gets it whole.
+    QVERIFY(answers(budget, memberB, wholeFile(), fileChunks, false, toB, later));
+    QCOMPARE(going(toB), QStringLiteral("whole begin 0,1,2,3,4,5,6,7"));
+    // Another file goes whole meanwhile all the same.
+    Resend other;
+    QVERIFY(budget.answer(fileB, memberA, wholeFile(), fileChunks, fileChunks, false, other, later)
+            == nullptr);
+}
+
+void TestAirGroupFileRepair::theWholeFileGoesAgainFourSecondsApartAtMost()
+{
+    ResendBudget budget;
+    Resend toA;
+    QVERIFY(answers(budget, memberA, wholeFile(), fileChunks, false, toA, 1000));
+    // All of it went to A at once; B asks a moment later, and is answered once the gap passed.
+    Resend toB;
+    QVERIFY(!answers(budget, memberB, wholeFile(), fileChunks, false, toB,
+                     1000 + ResendBudget::wholeGapMs - 1));
+    QCOMPARE(going(toB), QStringLiteral("none"));
+    QVERIFY(answers(budget, memberB, wholeFile(), fileChunks, false, toB,
+                    1000 + ResendBudget::wholeGapMs));
+    // The chunks a member names are not held back by it.
+    Resend toC;
+    const QByteArray memberC(32, 'o');
+    QVERIFY(budget.answer(fileA, memberC, listed({4}), fileChunks, fileChunks, false, toC,
+                          1000 + ResendBudget::wholeGapMs + 1)
+            == nullptr);
+    QCOMPARE(going(toC), QStringLiteral("begin 4"));
+    // A file forgotten forgets when it last went whole too.
+    budget.forget(fileA);
+    Resend again;
+    QVERIFY(answers(budget, memberC, wholeFile(), fileChunks, false, again,
+                    1000 + ResendBudget::wholeGapMs + 2));
+}
+
+void TestAirGroupFileRepair::chunksAskedForWhileTheWholeFileGoesJoinIt()
+{
+    ResendBudget budget;
+    Resend toA;
+    QVERIFY(answers(budget, memberA, wholeFile(), fileChunks, false, toA, 1000));
+    sendSome(toA, 3);
+    // A misses 1, which went, and 5, which is on its way. Its request comes within the cooldown,
+    // and is not lost: 1 joins what goes, in order, and the file goes on whole to A.
+    QVERIFY(answers(budget, memberA, listed({1, 5}), fileChunks, false, toA, 1001));
+    QCOMPARE(going(toA), QStringLiteral("whole 1,3,4,5,6,7"));
+    // The same again: all of it is on its way, and nothing changes.
+    QVERIFY(!answers(budget, memberA, listed({1, 5}), fileChunks, false, toA, 1002));
+    QCOMPARE(going(toA), QStringLiteral("whole 1,3,4,5,6,7"));
+    // And in Android's form, a bitmap of what it misses.
+    QVERIFY(answers(budget, memberA, parsed(bitmapRequest(fileChunks, {0, 7}), fileChunks),
+                    fileChunks, false, toA, 1003));
+    QCOMPARE(going(toA), QStringLiteral("whole 0,1,3,4,5,6,7"));
+    // So does a request that comes before the BEGIN went: the BEGIN still goes first.
+    Resend toB;
+    QVERIFY(answers(budget, memberB, listed({2}), fileChunks, false, toB, 1000));
+    QVERIFY(answers(budget, memberB, listed({1, 6}), fileChunks, false, toB, 1001));
+    QCOMPARE(going(toB), QStringLiteral("begin 1,2,6"));
+}
+
+void TestAirGroupFileRepair::chunksOfAMemberWithNothingOnItsWayWaitForTheCooldown()
+{
+    ResendBudget budget;
+    Resend first;
+    QVERIFY(answers(budget, memberA, listed({2}), fileChunks, false, first, 1000));
+    QCOMPARE(going(first), QStringLiteral("begin 2"));
+    // It all went; the next request begins a new resend, and waits for the cooldown first.
+    Resend next;
+    QVERIFY(!answers(budget, memberA, listed({3}), fileChunks, false, next,
+                     1000 + ResendBudget::cooldownMs - 1));
+    QCOMPARE(going(next), QStringLiteral("none"));
+    QVERIFY(answers(budget, memberA, listed({3}), fileChunks, false, next,
+                    1000 + ResendBudget::cooldownMs));
+    QCOMPARE(going(next), QStringLiteral("begin 3"));
+}
+
+void TestAirGroupFileRepair::aMemberThatHoldsNothingAnyMoreGetsTheWholeFileInstead()
+{
+    ResendBudget budget;
+    Resend toA;
+    QVERIFY(answers(budget, memberA, listed({2, 6}), fileChunks, false, toA, 1000));
+    sendSome(toA, 1);
+    QCOMPARE(going(toA), QStringLiteral("6"));
+    // A lost what it had (its app started again): the whole file takes the place of chunk 6.
+    QVERIFY(answers(budget, memberA, wholeFile(), fileChunks, false, toA,
+                    1000 + ResendBudget::cooldownMs));
+    QCOMPARE(going(toA), QStringLiteral("whole begin 0,1,2,3,4,5,6,7"));
+}
+
+void TestAirGroupFileRepair::whatDidNotGoYetIsNotSentAgain()
+{
+    ResendBudget budget;
+    Resend resend;
+    // Nothing of a file that goes went yet, or not the chunks named: they come in their turn.
+    QVERIFY(!answers(budget, memberA, wholeFile(), 0, false, resend, 1000));
+    QVERIFY(!answers(budget, memberA, listed({3, 4}), 3, false, resend, 1000));
+    QCOMPARE(going(resend), QStringLiteral("none"));
+    // Neither cost the member anything, nor held the whole file back.
+    QCOMPARE(budget.kept(), 0);
+    QVERIFY(answers(budget, memberA, listed({2, 3}), 3, false, resend, 1000));
+    QCOMPARE(going(resend), QStringLiteral("begin 2"));
+    Resend whole;
+    QVERIFY(answers(budget, memberB, wholeFile(), 3, false, whole, 1000));
+    QCOMPARE(going(whole), QStringLiteral("whole begin 0,1,2"));
+}
+
+void TestAirGroupFileRepair::theWholeFileCountsAgainstTheShare()
+{
+    ResendBudget budget;
+    // As the chunks a member names: the file three times at most.
+    for (int i = 0; i < ResendBudget::chunkShare; ++i) {
+        Resend resend;
+        QVERIFY(answers(budget, memberA, wholeFile(), fileChunks, false, resend,
+                        i * ResendBudget::wholeGapMs));
+    }
+    Resend resend;
+    QVERIFY(!answers(budget, memberA, wholeFile(), fileChunks, false, resend,
+                     ResendBudget::chunkShare * ResendBudget::wholeGapMs));
+    QCOMPARE(going(resend), QStringLiteral("none"));
+    // Another member has a share of its own.
+    QVERIFY(answers(budget, memberB, wholeFile(), fileChunks, false, resend,
+                    ResendBudget::chunkShare * ResendBudget::wholeGapMs));
 }
 
 QTEST_GUILESS_MAIN(TestAirGroupFileRepair)

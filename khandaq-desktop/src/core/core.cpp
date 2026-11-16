@@ -3854,8 +3854,9 @@ void Core::keepSentGroupFile(const QByteArray& fileId, const OutgoingGroupFile& 
 /**
  * @brief 0.2.57: a member asks for chunks of a file of ours again (pkt 0x14, Air::FileRequest).
  * Only for a file of ours in the group it went to; only the chunks that went already, as the
- * others come in their turn; and as often as its budget lets (Air::ResendBudget). The chunks go
- * to that member alone, its BEGIN first (sendGroupFileResend). Called with coreLoopLock held.
+ * others come in their turn; and as often as its budget lets, the whole file to one member at a
+ * time (Air::ResendBudget::answer). The chunks go to that member alone, its BEGIN first, at the
+ * pace of the others (sendGroupFileResend). Called with coreLoopLock held.
  */
 void Core::answerGroupFileRequest(uint32_t groupId, uint32_t peerId, const uint8_t* data,
                                   size_t length)
@@ -3883,61 +3884,41 @@ void Core::answerGroupFileRequest(uint32_t groupId, uint32_t peerId, const uint8
     }
     const int totalChunks = Air::GroupFileQueue::chunkCount(known.size);
     const Air::FileRequest::Wanted wanted = Air::FileRequest::parse(data, length, totalChunks);
-    const int went = going ? groupFileQueue.chunksSent(fileId) : totalChunks;
-    QVector<int> chunks;
-    if (wanted.kind == Air::FileRequest::Wanted::Kind::Whole) {
-        for (int chunk = 0; chunk < went; ++chunk) {
-            chunks.append(chunk);
-        }
-    } else {
-        for (const int chunk : wanted.chunks) {
-            if (chunk < went) {
-                chunks.append(chunk);
-            }
-        }
-    }
-    if (chunks.isEmpty()) {
+    if (wanted.kind == Air::FileRequest::Wanted::Kind::Invalid) {
         return;
     }
+    const int went = going ? groupFileQueue.chunksSent(fileId) : totalChunks;
+    // What goes to that member of the file now, and whether the file goes whole to another one.
     GroupFileResend* pending = nullptr;
+    bool wholeElsewhere = false;
     for (GroupFileResend& resend : groupFileResends) {
-        if (resend.fileId == fileId && resend.member == member) {
+        if (resend.fileId != fileId) {
+            continue;
+        }
+        if (resend.member == member) {
             pending = &resend;
+        } else if (resend.plan.whole) {
+            wholeElsewhere = true;
         }
     }
-    if (pending != nullptr) {
-        // Only what is not on its way to the member yet costs its share: one that asks again for
-        // the chunks a resend still has to send it gets nothing more.
-        const QVector<int> onItsWay = pending->chunks.mid(pending->next);
-        chunks.erase(std::remove_if(chunks.begin(), chunks.end(),
-                                    [&onItsWay](int chunk) {
-                                        return std::binary_search(onItsWay.begin(),
-                                                                  onItsWay.end(), chunk);
-                                    }),
-                     chunks.end());
-        if (chunks.isEmpty()) {
-            return;
-        }
-    } else if (groupFileResends.size() >= groupFileResendsKept) {
+    if (pending == nullptr && groupFileResends.size() >= groupFileResendsKept) {
         qDebug() << "answerGroupFileRequest: too many resends wait; this request is dropped";
         return;
     }
-    const int granted = groupFileResendBudget.take(fileId, member.getByteArray(), chunks.size(),
-                                                   totalChunks, monotonicMs());
-    if (granted <= 0) {
-        qDebug() << "answerGroupFileRequest: the member had its share of" << known.fileName;
+    Air::Resend plan = pending != nullptr ? pending->plan : Air::Resend{};
+    const char* const dropped =
+        groupFileResendBudget.answer(fileId, member.getByteArray(), wanted, went, totalChunks,
+                                     wholeElsewhere, plan, monotonicMs());
+    if (dropped != nullptr) {
+        qDebug() << "answerGroupFileRequest: a request for" << known.fileName
+                 << "is not answered:" << dropped;
         return;
     }
-    chunks.resize(granted);
-    qDebug() << "NGC chunked file: a member asked for" << chunks.size() << "chunks of"
-             << known.fileName << "again";
+    const bool whole = wanted.kind == Air::FileRequest::Wanted::Kind::Whole;
+    qDebug() << "NGC chunked file: a member asked for" << (whole ? "the whole of" : "chunks of")
+             << known.fileName << "again;" << plan.chunks.size() << "chunks go to it";
     if (pending != nullptr) {
-        // What it still had to send, and what it asks for now, once each and in order.
-        QVector<int> merged = pending->chunks.mid(pending->next) + chunks;
-        std::sort(merged.begin(), merged.end());
-        merged.erase(std::unique(merged.begin(), merged.end()), merged.end());
-        pending->chunks = merged;
-        pending->next = 0;
+        pending->plan = plan;
         return;
     }
     GroupFileResend resend;
@@ -3948,7 +3929,7 @@ void Core::answerGroupFileRequest(uint32_t groupId, uint32_t peerId, const uint8
     resend.fileName = known.fileName;
     resend.localPath = known.localPath;
     resend.size = known.size;
-    resend.chunks = chunks;
+    resend.plan = plan;
     groupFileResends.append(resend);
 }
 
@@ -3998,9 +3979,9 @@ void Core::sendGroupFileResend(int index, qint64 nowMs, bool relayed)
         }
     }
     const QByteArray packet =
-        resend.begin ? ngcBeginPacket(resend.fileId, resend.fileName, resend.size)
-                     : ngcChunkPacket(*resend.file, resend.fileId, resend.size,
-                                      resend.chunks.at(resend.next));
+        resend.plan.begin ? ngcBeginPacket(resend.fileId, resend.fileName, resend.size)
+                          : ngcChunkPacket(*resend.file, resend.fileId, resend.size,
+                                           resend.plan.chunks.at(resend.plan.next));
     if (packet.isEmpty()) {
         end("the file cannot be read");
         return;
@@ -4030,12 +4011,12 @@ void Core::sendGroupFileResend(int index, qint64 nowMs, bool relayed)
         groupFileRelayPace.spend(packet.size());
     }
     resend.refusedSinceMs = -1;
-    if (resend.begin) {
-        resend.begin = false;
+    if (resend.plan.begin) {
+        resend.plan.begin = false;
     } else {
-        ++resend.next;
+        ++resend.plan.next;
     }
-    if (resend.next >= resend.chunks.size()) {
+    if (!resend.plan.goes()) {
         end("all of it went");
         return;
     }

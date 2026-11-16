@@ -152,12 +152,35 @@ private:
 };
 
 /**
+ * 0.2.57: what goes again to a member that asked for chunks of one of our files, to it alone and
+ * at the pace of the others (Core::sendGroupFileResend): the file's BEGIN, then the chunks in
+ * order. A member has one at a time for a file (ResendBudget::answer); a default one is none.
+ */
+struct Resend
+{
+    /**
+     * The member asked for all of the file: it holds nothing of it (FileRequest::Wanted::Whole).
+     * A file goes whole to one member at a time.
+     */
+    bool whole = false;
+    /** Its BEGIN is still to go: it goes first. */
+    bool begin = false;
+    /** The chunks to send, in order, and the next of them. */
+    QVector<int> chunks;
+    int next = 0;
+
+    /** Whether something of it is still to go. */
+    bool goes() const;
+};
+
+/**
  * 0.2.57: how often this client answers the requests of a member for one of its files. A request
  * costs a resend of the chunks it names, so one member could make us send a file over and over;
- * each member gets at most maxAnswers requests answered for a file, cooldownMs apart (Android's
- * SELECTIVE_RESEND_COOLDOWN_MS; iOS waits 2 s), and at most chunkShare times the file's chunks in
- * all. A member and a file are one entry; past maxKept entries the oldest is forgotten: a member
- * gets a new share only by keeping us busy with that many other files and members first.
+ * each member gets at most maxAnswers requests answered for a file, cooldownMs apart unless they
+ * join what goes to it (answer; Android's SELECTIVE_RESEND_COOLDOWN_MS; iOS waits 2 s), and at
+ * most chunkShare times the file's chunks in all. A member and a file are one entry; past maxKept
+ * entries the oldest is forgotten: a member gets a new share only by keeping us busy with that
+ * many other files and members first.
  */
 class ResendBudget
 {
@@ -167,6 +190,11 @@ public:
     static constexpr qint64 cooldownMs = 2500;
     static constexpr int chunkShare = 3;
     static constexpr int maxKept = 512;
+    /**
+     * The whole file goes again at most once in so long, to whichever member asks: each time it
+     * costs the whole file (Android's RESEND_SERVICE_THROTTLE_MS for its requests of 44 bytes).
+     */
+    static constexpr qint64 wholeGapMs = 4000;
 
     /**
      * How many of the chunks chunks that member asks for of fileId, a file of totalChunks, are
@@ -175,11 +203,31 @@ public:
      */
     int take(const QByteArray& fileId, const QByteArray& member, int chunks, int totalChunks,
              qint64 nowMs);
+    /**
+     * What wanted, a request of member for fileId, changes in resend, what goes to that member of
+     * the file now: a file of totalChunks chunks whose first went went already, the ones it may
+     * ask for again, as the others come in their turn. nullptr once it is answered (take), else
+     * why it is not, and resend stays as it was.
+     *  - The whole file (Android asks for it when it holds nothing of it) goes from its BEGIN, all
+     *    of it that went, to one member at a time and wholeGapMs apart: wholeElsewhere, it goes
+     *    whole to another member now. Asked for while it goes to that member whole, nothing more
+     *    goes. It takes the place of chunks that go to that member: it holds nothing now.
+     *  - Chunks join what goes to the member, those on their way left out, and wait for no
+     *    cooldown: they add to it at the same pace, and the request is not lost (Android drops
+     *    one while the file goes to the member). With nothing on its way they go from the BEGIN.
+     */
+    const char* answer(const QByteArray& fileId, const QByteArray& member,
+                       const FileRequest::Wanted& wanted, int went, int totalChunks,
+                       bool wholeElsewhere, Resend& resend, qint64 nowMs);
     /** The file is forgotten, and the requests for it with it. */
     void forget(const QByteArray& fileId);
     int kept() const;
 
 private:
+    /** As take; cooled: within cooldownMs of the last answer it gets nothing. why: why not. */
+    int grant(const QByteArray& fileId, const QByteArray& member, int chunks, int totalChunks,
+              qint64 nowMs, bool cooled, const char** why);
+
     struct Entry
     {
         QByteArray fileId;
@@ -191,6 +239,8 @@ private:
     };
     QHash<QByteArray, Entry> entries;
     qint64 made = 0;
+    /** When each file last began to go whole again, while that is within wholeGapMs. */
+    QHash<QByteArray, qint64> wholeBeganMs;
 };
 
 } // namespace Air

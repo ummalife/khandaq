@@ -19,6 +19,8 @@
 
 #include "airgroupfilerepair.h"
 
+#include <algorithm>
+
 namespace Air {
 
 // C++11 wants a definition of what qMin and qBound take by reference.
@@ -32,6 +34,7 @@ constexpr int ResendBudget::maxAnswers;
 constexpr qint64 ResendBudget::cooldownMs;
 constexpr int ResendBudget::chunkShare;
 constexpr int ResendBudget::maxKept;
+constexpr qint64 ResendBudget::wholeGapMs;
 
 namespace {
 uint32_t readU32(const uint8_t* p)
@@ -157,11 +160,99 @@ qint64 FileArrival::askAfterMs() const
     return qBound(stallMs, 2 * gapMs, longestStallMs);
 }
 
+bool Resend::goes() const
+{
+    return begin || next < chunks.size();
+}
+
 int ResendBudget::take(const QByteArray& fileId, const QByteArray& member, int chunks,
                        int totalChunks, qint64 nowMs)
 {
-    if (chunks <= 0 || totalChunks <= 0) {
+    return grant(fileId, member, chunks, totalChunks, nowMs, true, nullptr);
+}
+
+const char* ResendBudget::answer(const QByteArray& fileId, const QByteArray& member,
+                                 const FileRequest::Wanted& wanted, int went, int totalChunks,
+                                 bool wholeElsewhere, Resend& resend, qint64 nowMs)
+{
+    const bool whole = wanted.kind == FileRequest::Wanted::Kind::Whole;
+    if (!whole && wanted.kind != FileRequest::Wanted::Kind::Chunks) {
+        return "it asks for nothing this client reads";
+    }
+    const bool goes = resend.goes();
+    QVector<int> chunks;
+    if (whole) {
+        if (goes && resend.whole) {
+            return "the whole file goes to the member already";
+        }
+        if (wholeElsewhere) {
+            return "the whole file goes to another member now";
+        }
+        const auto began = wholeBeganMs.constFind(fileId);
+        if (began != wholeBeganMs.constEnd() && nowMs - began.value() < wholeGapMs) {
+            return "the whole file went again a moment ago";
+        }
+        for (int chunk = 0; chunk < went; ++chunk) {
+            chunks.append(chunk);
+        }
+    } else {
+        // Only what is not on its way to the member yet costs its share: one that asks again for
+        // the chunks a resend still has to send it gets nothing more.
+        const QVector<int> onItsWay = goes ? resend.chunks.mid(resend.next) : QVector<int>();
+        for (const int chunk : wanted.chunks) {
+            if (chunk < went && !std::binary_search(onItsWay.begin(), onItsWay.end(), chunk)) {
+                chunks.append(chunk);
+            }
+        }
+    }
+    if (chunks.isEmpty()) {
+        return goes ? "all it asks for is on its way" : "none of what it asks for went yet";
+    }
+    const char* why = nullptr;
+    const int granted =
+        grant(fileId, member, chunks.size(), totalChunks, nowMs, whole || !goes, &why);
+    if (granted <= 0) {
+        return why;
+    }
+    chunks.resize(granted);
+    if (whole) {
+        for (auto it = wholeBeganMs.begin(); it != wholeBeganMs.end();) {
+            if (nowMs - it.value() >= wholeGapMs) {
+                it = wholeBeganMs.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        wholeBeganMs.insert(fileId, nowMs);
+        resend.whole = true;
+        resend.begin = true;
+        resend.chunks = chunks;
+    } else if (goes) {
+        // What it still had to send, and what it asks for now, once each and in order.
+        QVector<int> merged = resend.chunks.mid(resend.next) + chunks;
+        std::sort(merged.begin(), merged.end());
+        merged.erase(std::unique(merged.begin(), merged.end()), merged.end());
+        resend.chunks = merged;
+    } else {
+        resend.whole = false;
+        resend.begin = true;
+        resend.chunks = chunks;
+    }
+    resend.next = 0;
+    return nullptr;
+}
+
+int ResendBudget::grant(const QByteArray& fileId, const QByteArray& member, int chunks,
+                        int totalChunks, qint64 nowMs, bool cooled, const char** why)
+{
+    const auto refuse = [why](const char* reason) {
+        if (why != nullptr) {
+            *why = reason;
+        }
         return 0;
+    };
+    if (chunks <= 0 || totalChunks <= 0) {
+        return refuse("it asks for nothing");
     }
     const QByteArray key = fileId + member;
     auto it = entries.find(key);
@@ -181,13 +272,16 @@ int ResendBudget::take(const QByteArray& fileId, const QByteArray& member, int c
         it = entries.insert(key, entry);
     }
     Entry& entry = it.value();
-    if (entry.answers >= maxAnswers || (entry.answers > 0 && nowMs - entry.lastMs < cooldownMs)) {
-        return 0;
+    if (entry.answers >= maxAnswers) {
+        return refuse("the member had all its answers");
+    }
+    if (cooled && entry.answers > 0 && nowMs - entry.lastMs < cooldownMs) {
+        return refuse("the member was answered a moment ago");
     }
     const qint64 left = static_cast<qint64>(chunkShare) * totalChunks - entry.chunks;
     const int granted = static_cast<int>(qMin<qint64>(chunks, qMax(qint64{0}, left)));
     if (granted <= 0) {
-        return 0;
+        return refuse("the member had its share");
     }
     ++entry.answers;
     entry.lastMs = nowMs;
@@ -197,6 +291,7 @@ int ResendBudget::take(const QByteArray& fileId, const QByteArray& member, int c
 
 void ResendBudget::forget(const QByteArray& fileId)
 {
+    wholeBeganMs.remove(fileId);
     for (auto it = entries.begin(); it != entries.end();) {
         if (it->fileId == fileId) {
             it = entries.erase(it);

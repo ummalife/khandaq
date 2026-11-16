@@ -144,8 +144,9 @@ final class CommunityAutoJoin
         });
         if (joined)
         {
+            // Its row was there: a join toxcore did not keep (it never connected), or one let go while full.
             NetworkDiagnosticsLog.log("community", newGroup ? "auto_join: joined, muted"
-                                                            : "auto_join: joined again, it had not connected before");
+                                                            : "auto_join: joined again, into its row as it was");
         }
     }
 

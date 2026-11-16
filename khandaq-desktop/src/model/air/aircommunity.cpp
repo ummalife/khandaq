@@ -21,9 +21,51 @@
 
 #include "src/model/air/airlocalstore.h"
 
-#include <QString>
-
 namespace Air {
+
+namespace {
+/** The first limit characters of text: a pair of surrogates is one character. */
+QString firstCharacters(const QString& text, int limit)
+{
+    int units = 0;
+    for (int characters = 0; characters < limit && units < text.size(); ++characters) {
+        const bool pair = text.at(units).isHighSurrogate() && units + 1 < text.size()
+                          && text.at(units + 1).isLowSurrogate();
+        units += pair ? 2 : 1;
+    }
+    return text.left(units);
+}
+
+/** Lines of a mail end with CRLF (RFC 6068), whatever ended them before. */
+QString mailLines(QString text)
+{
+    text.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
+    text.replace(QLatin1Char('\r'), QLatin1Char('\n'));
+    return text.replace(QLatin1Char('\n'), QStringLiteral("\r\n"));
+}
+
+QString encoded(const QString& text)
+{
+    return QString::fromLatin1(QUrl::toPercentEncoding(text));
+}
+} // namespace
+
+QUrl reportMailUrl(const GroupReport& report)
+{
+    const QString group = report.groupName.simplified();
+    const QString body =
+        mailLines(QStringLiteral("Group: %1\nAuthor: %2\nTime: %3\nMessage:\n%4")
+                      .arg(group, report.authorKey.left(8).toUpper(),
+                           report.time.toUTC().toString(Qt::ISODate),
+                           firstCharacters(report.text, reportTextLimit)));
+    QUrl url;
+    url.setScheme(QStringLiteral("mailto"));
+    url.setPath(QString::fromLatin1(reportAddress));
+    url.setQuery(QStringLiteral("subject=") + encoded(QStringLiteral("Report: %1").arg(group))
+                 + QStringLiteral("&body=") + encoded(body));
+    return url;
+}
+
 namespace Community {
 
 QByteArray chatId()

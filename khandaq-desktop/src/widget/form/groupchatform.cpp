@@ -50,6 +50,7 @@
 #include <QAbstractButton>
 #include <QBuffer>
 #include <QCursor>
+#include <QDesktopServices>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QFileDialog>
@@ -240,6 +241,11 @@ GroupChatForm::GroupChatForm(Core& core_, Group* chatGroup, IChatLog& chatLog_,
         }
     });
     settings.connectTo_blackListChanged(this, [later](QStringList const&) { later(); });
+
+    // KHANDAQ (0.2.57): Report, after the actions of every conversation; prepareChatMenu shows it
+    // on a message of someone else only.
+    menu.addSeparator();
+    reportAction = menu.addAction(QString(), this, [this] { report(); });
 
     if (settings.getShowGroupJoinLeaveMessages()) {
         addSystemInfoMessage(QDateTime::currentDateTime(), SystemMessageType::selfJoinedGroup, {});
@@ -959,7 +965,50 @@ void GroupChatForm::retranslateUi()
         AirStrings::groupFileLimitText(code.isEmpty() ? QLocale::system() : QLocale(code));
     fileButton->setToolTip(limit);
     setAttachLimit(limit);
+    reportAction->setText(AirStrings::text(AirText::MessageReport));
     refreshMembers();
+}
+
+void GroupChatForm::prepareChatMenu(QPoint globalPos)
+{
+    ChatLogIdx idx{0};
+    reportAction->setVisible(chatWidget->entryAtGlobalPos(globalPos, idx) && prepareReport(idx));
+}
+
+bool GroupChatForm::prepareReport(ChatLogIdx idx)
+{
+    const ChatLogItem& item = chatLog.at(idx);
+    const ToxPk& sender = item.getSender();
+    // Our own entries carry the key of our profile; a group knows us by a key of its own too.
+    const ToxPk groupSelf = core.getGroupSelfPublicKey(static_cast<int>(group->getId()));
+    if (sender.isEmpty() || sender == core.getSelfPublicKey() || sender == groupSelf) {
+        return false;
+    }
+    QString text;
+    switch (item.getContentType()) {
+    case ChatLogItem::ContentType::message:
+        text = item.getContentAsMessage().message.content;
+        break;
+    case ChatLogItem::ContentType::fileTransfer:
+        // A file says what it is by its name; what is in it stays on this computer.
+        text = item.getContentAsFile().file.fileName;
+        break;
+    case ChatLogItem::ContentType::systemMessage:
+        return false;
+    }
+    menuReport = Air::GroupReport{group->getName(), sender.toString(), item.getTimestamp(), text};
+    return true;
+}
+
+void GroupChatForm::report()
+{
+    const QUrl mail = Air::reportMailUrl(menuReport);
+    // Who and where, never the words of the message.
+    qDebug() << "Report: a mail to" << mail.path() << "about a message of"
+             << menuReport.authorKey.left(8) << "in a group," << mail.toEncoded().size() << "bytes";
+    if (!QDesktopServices::openUrl(mail)) {
+        qWarning() << "Report: no mail app took the mail";
+    }
 }
 
 void GroupChatForm::joinGroupCall()

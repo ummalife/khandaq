@@ -20,12 +20,42 @@
 #pragma once
 
 #include <QByteArray>
+#include <QDateTime>
+#include <QString>
+#include <QUrl>
 
 #include <functional>
 
 namespace Air {
 
 class LocalStore;
+
+/**
+ * KHANDAQ (0.2.57): Report, on a message someone wrote in a group, any group (SPEC-community,
+ * part B, item 5): a mail to support for the person to send from their own mail app. App Review
+ * asks for it on iOS (guideline 1.2, content from strangers), and every platform has it.
+ */
+struct GroupReport
+{
+    QString groupName;
+    /** The author's key in the group, in hexadecimal; the mail names its first 8 characters. */
+    QString authorKey;
+    /** When the message was written. */
+    QDateTime time;
+    QString text;
+};
+
+/** Where reports go. */
+constexpr char reportAddress[] = "support@khandaq.org";
+/** The text of the message goes up to this many characters; none is cut in half. */
+constexpr int reportTextLimit = 500;
+
+/**
+ * mailto: reportAddress, with a subject that names the group and a body with the group, the
+ * author, the time in UTC and the text, each part percent-encoded and its lines ended with CRLF.
+ * The words of the mail are support's, in English: the person reads them before sending.
+ */
+QUrl reportMailUrl(const GroupReport& report);
 
 /**
  * KHANDAQ (0.2.57): Khandaq Community, the official group of the app (SPEC-community, part B).

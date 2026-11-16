@@ -3751,6 +3751,11 @@ Opening it can run a program on your computer. Links in messages come from other
         <translation>В ответ %1</translation>
     </message>
     <message>
+        <source>Report</source>
+        <comment>menu action on a message someone else wrote in a group: opens a mail to support about it, with the message</comment>
+        <translation>Пожаловаться</translation>
+    </message>
+    <message>
         <source>via a relay</source>
         <comment>contact reach mark: online, connected through a TCP relay; short, it shares the line with the name</comment>
         <translation>через ретранслятор</translation>

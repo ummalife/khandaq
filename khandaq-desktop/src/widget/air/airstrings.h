@@ -799,6 +799,7 @@ enum class Text
     MessageEdited,
     ReplyUnknownSender,
     SpokenReply,
+    MessageReport,
 };
 
 /** The translation context of every Air string. */

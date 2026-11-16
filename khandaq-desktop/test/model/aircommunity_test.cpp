@@ -21,6 +21,7 @@
 #include "src/model/air/airlocalstore.h"
 
 #include <QDateTime>
+#include <QUrlQuery>
 #include <QtTest/QtTest>
 
 using namespace Air;
@@ -56,6 +57,9 @@ private slots:
     void leavingAnotherGroupChangesNothing();
     void leavingForgetsTheMuteButNotTheMarks();
     void aStoreOfBeforeHasNeverJoinedIt();
+    void aReportIsAMailToSupportWithTheMessage();
+    void everyPartOfTheReportIsEncoded();
+    void aLongMessageIsCutAt500CharactersNeverInHalf();
 };
 
 void TestAirCommunity::theChatIdIsTheGroupOfOurBot()
@@ -276,6 +280,105 @@ void TestAirCommunity::aStoreOfBeforeHasNeverJoinedIt()
     QVERIFY(fresh.setCommunityLeft());
     fresh.load(QByteArray("not json"), now);
     QVERIFY(!fresh.communityLeft());
+}
+
+namespace {
+GroupReport sampleReport()
+{
+    GroupReport report;
+    report.groupName = QStringLiteral("Khandaq Community");
+    report.authorKey = QStringLiteral("0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9");
+    // 15:04:05 in Istanbul is 12:04:05 UTC.
+    report.time = QDateTime(QDate(2026, 11, 16), QTime(15, 4, 5), Qt::OffsetFromUTC, 3 * 3600);
+    report.text = QStringLiteral("Buy followers now");
+    return report;
+}
+
+QString decodedPart(const QUrl& url, const QString& key)
+{
+    return QUrlQuery(url).queryItemValue(key, QUrl::FullyDecoded);
+}
+} // namespace
+
+void TestAirCommunity::aReportIsAMailToSupportWithTheMessage()
+{
+    const QUrl mail = reportMailUrl(sampleReport());
+    QVERIFY(mail.isValid());
+    QCOMPARE(mail.scheme(), QStringLiteral("mailto"));
+    QCOMPARE(mail.path(), QStringLiteral("support@khandaq.org"));
+    QCOMPARE(decodedPart(mail, QStringLiteral("subject")),
+             QStringLiteral("Report: Khandaq Community"));
+    QCOMPARE(decodedPart(mail, QStringLiteral("body")),
+             QStringLiteral("Group: Khandaq Community\r\n"
+                            "Author: 0A1B2C3D\r\n"
+                            "Time: 2026-11-16T12:04:05Z\r\n"
+                            "Message:\r\n"
+                            "Buy followers now"));
+    // Exactly as a mail app gets it.
+    QCOMPARE(mail.toEncoded(),
+             QByteArray("mailto:support@khandaq.org?subject=Report%3A%20Khandaq%20Community"
+                        "&body=Group%3A%20Khandaq%20Community%0D%0AAuthor%3A%200A1B2C3D%0D%0A"
+                        "Time%3A%202026-11-16T12%3A04%3A05Z%0D%0AMessage%3A%0D%0A"
+                        "Buy%20followers%20now"));
+}
+
+void TestAirCommunity::everyPartOfTheReportIsEncoded()
+{
+    GroupReport report = sampleReport();
+    // What would end the subject, start another field or the fragment, or read as a space.
+    report.groupName = QStringLiteral("A&B=C #1\n+ Группа");
+    report.text = QStringLiteral("50% off & more=free?\nline two\r\nline three #tag +1 مرحبا 你好 \U0001F600");
+    const QUrl mail = reportMailUrl(report);
+    const QByteArray encoded = mail.toEncoded();
+    QCOMPARE(encoded.count('&'), 1);
+    QCOMPARE(encoded.count('?'), 1);
+    QVERIFY(!encoded.contains('#'));
+    QVERIFY(!encoded.contains('+'));
+    QVERIFY(!encoded.contains(' '));
+    QVERIFY(!encoded.contains('\n'));
+    QVERIFY(!encoded.contains('\r'));
+    QVERIFY(encoded.contains("%26"));
+    QVERIFY(encoded.contains("%2B"));
+    QVERIFY(encoded.contains("%23"));
+    QVERIFY(encoded.contains("%25"));
+    // The group's name stays one line, in the subject and in the body.
+    QCOMPARE(decodedPart(mail, QStringLiteral("subject")),
+             QStringLiteral("Report: A&B=C #1 + Группа"));
+    const QString body = decodedPart(mail, QStringLiteral("body"));
+    QVERIFY(body.startsWith(QStringLiteral("Group: A&B=C #1 + Группа\r\n")));
+    QVERIFY(body.endsWith(QStringLiteral("Message:\r\n50% off & more=free?\r\nline two\r\n"
+                                         "line three #tag +1 مرحبا 你好 \U0001F600")));
+    // An empty report is still a mail to support.
+    const QUrl empty = reportMailUrl(GroupReport{});
+    QCOMPARE(empty.path(), QStringLiteral("support@khandaq.org"));
+    QCOMPARE(decodedPart(empty, QStringLiteral("body")),
+             QStringLiteral("Group: \r\nAuthor: \r\nTime: \r\nMessage:\r\n"));
+}
+
+void TestAirCommunity::aLongMessageIsCutAt500CharactersNeverInHalf()
+{
+    const QString bodyStart = QStringLiteral("Message:\r\n");
+    const auto textOf = [&bodyStart](const QUrl& mail) {
+        const QString body = decodedPart(mail, QStringLiteral("body"));
+        return body.mid(body.indexOf(bodyStart) + bodyStart.size());
+    };
+    GroupReport report = sampleReport();
+    report.text = QString(600, QLatin1Char('x'));
+    QCOMPARE(textOf(reportMailUrl(report)), QString(500, QLatin1Char('x')));
+    report.text = QString(500, QLatin1Char('y'));
+    QCOMPARE(textOf(reportMailUrl(report)), report.text);
+
+    // A character outside the first plane is two units of UTF-16 and counts once.
+    const QString smile = QStringLiteral("\U0001F600");
+    report.text = QString(499, QLatin1Char('z')) + smile + smile;
+    QCOMPARE(textOf(reportMailUrl(report)), QString(499, QLatin1Char('z')) + smile);
+    report.text.clear();
+    for (int i = 0; i < 501; ++i) {
+        report.text += smile;
+    }
+    const QString cut = textOf(reportMailUrl(report));
+    QCOMPARE(cut.size(), 1000);
+    QVERIFY(cut.at(cut.size() - 1).isLowSurrogate());
 }
 
 QTEST_GUILESS_MAIN(TestAirCommunity)

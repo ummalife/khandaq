@@ -203,6 +203,29 @@ final class CommunityAutoJoin
         }
     }
 
+    /**
+     * Whether the person left Khandaq Community or deleted it ({@code groupId}), by the profile's own mark, whatever
+     * its row says: a row deleted is gone with its own mark. False for any other group, and while the profile's
+     * Tox ID is not known.
+     */
+    static boolean leftByThePerson(final String groupId)
+    {
+        if (!KhandaqCommunity.isCommunity(groupId))
+        {
+            return false;
+        }
+        try
+        {
+            final KhandaqCommunity.Store store = profileStore();
+            return (store != null) && store.left();
+        }
+        catch (Throwable e)
+        {
+            Log.w(TAG, "left?:EE:" + e.getMessage());
+            return false;
+        }
+    }
+
     /** The marks of the profile now running, or null while its Tox ID is not known. */
     private static KhandaqCommunity.Store profileStore()
     {

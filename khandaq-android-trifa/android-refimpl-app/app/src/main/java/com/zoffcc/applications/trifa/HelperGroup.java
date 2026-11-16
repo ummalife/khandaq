@@ -10594,10 +10594,22 @@ public class HelperGroup
         schedule_group_join_fail_retry(group_identifier);
     }
 
+    /**
+     * KHANDAQ (0.2.57, review): whether the retry of a refused join still has a group to bring back. The person may
+     * have deleted it meanwhile: its row is gone then, and its "we left" mark with it, and the next try made a new
+     * row, unmuted, and for Khandaq Community pinned, every ten seconds while the group refused us. Khandaq Community
+     * the person left is never joined by itself again, whatever its row says (its profile's mark).
+     */
+    private static boolean join_fail_retry_wanted(@NonNull final String group_identifier)
+    {
+        return group_db_row_exists(group_identifier) && !is_group_we_left(group_identifier)
+               && !CommunityAutoJoin.leftByThePerson(group_identifier);
+    }
+
     private static void schedule_group_join_fail_retry(@NonNull final String group_identifier)
     {
         final String key = group_identifier.toLowerCase(Locale.ENGLISH);
-        if (is_group_we_left(group_identifier))
+        if (!join_fail_retry_wanted(group_identifier))
         {
             return;
         }
@@ -10613,7 +10625,8 @@ public class HelperGroup
                 for (int attempt = 1; attempt <= 4; attempt++)
                 {
                     Thread.sleep(2500L * attempt);
-                    if (!is_tox_started || is_group_we_left(group_identifier))
+                    // Asked again after every pause, before either way on: both give the group its row back.
+                    if (!is_tox_started || !join_fail_retry_wanted(group_identifier))
                     {
                         return;
                     }
@@ -10627,7 +10640,9 @@ public class HelperGroup
                     }
                     HelperGeneric.logI(TAG, "group_join_fail_retry:attempt=" + attempt + " id="
                             + group_identifier_short(group_identifier, false));
-                    join_public_group_by_id(group_identifier, false);
+                    // And at every step of the join, which may wait: a delete in the middle of it stops it too.
+                    join_public_group_by_id(group_identifier, null, false, null,
+                                            () -> join_fail_retry_wanted(group_identifier));
                 }
             }
             catch (InterruptedException ignored)

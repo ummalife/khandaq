@@ -476,6 +476,31 @@ public class KhandaqCommunityTest
                            .contains("returnjoin_public_group_by_id(group_id,password,show_toast,failures,null);"));
     }
 
+    @Test
+    public void the_retry_of_a_refused_join_stops_once_the_group_is_deleted_or_the_community_left()
+    {
+        // A deleted group has no row, and so no "we left" mark either; the Community's leave is the profile's mark.
+        final String helper = read(JAVA + "HelperGroup.java");
+        assertTrue(bare(method(helper, "private static boolean join_fail_retry_wanted(@NonNull final String group_identifier)"))
+                           .contains("returngroup_db_row_exists(group_identifier)&&!is_group_we_left(group_identifier)"
+                                     + "&&!CommunityAutoJoin.leftByThePerson(group_identifier);"));
+        assertTrue(bare(method(read(JAVA + "CommunityAutoJoin.java"), "static boolean leftByThePerson(final String groupId)"))
+                           .contains("return(store!=null)&&store.left();"));
+
+        final String retry = bare(method(helper,
+                                         "private static void schedule_group_join_fail_retry(@NonNull final String group_identifier)"));
+        assertTrue("asked before the retry starts",
+                   retry.indexOf("if(!join_fail_retry_wanted(group_identifier)){return;}") < retry.indexOf("newThread("));
+        final int asked = retry.indexOf("if(!is_tox_started||!join_fail_retry_wanted(group_identifier)){return;}");
+        assertTrue("asked after every pause", asked > retry.indexOf("Thread.sleep(2500L*attempt);"));
+        assertTrue("before the way of a group that connected",
+                   asked < retry.indexOf("finish_public_group_join(existing,group_identifier,false);"));
+        final int join = retry.indexOf(
+                "join_public_group_by_id(group_identifier,null,false,null,()->join_fail_retry_wanted(group_identifier));");
+        assertTrue("before the join, which asks at each of its steps too", join > asked);
+        assertFalse(retry.contains("join_public_group_by_id(group_identifier,false);"));
+    }
+
     private static final String JOIN_IF_DUE = "private static void joinIfDue(final int session)";
     /** The join by chat id itself, the one with every argument. */
     private static final String JOIN_BY_ID =

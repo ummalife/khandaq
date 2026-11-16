@@ -323,9 +323,15 @@ trap 'rm -f "$STAMPED"' EXIT
 # pages, so the ?v= every page carries is the hash of exactly these bytes. It refuses to write
 # them if any stamp is stale, and verify-site-deploy.py compares the served files with the stamps.
 PUBLISHED="$(mktemp -d "${TMPDIR:-/tmp}/khandaq-site-assets.XXXXXX")"
-trap 'rm -rf "$STAMPED" "$PUBLISHED"' EXIT
+# KHANDAQ (SEO, 2026-11-16): the sitemap pages as served before anything below replaces them, so that
+# the pages this deploy changes, and only those, go to IndexNow once the site is verified. It also
+# stops the deploy here when web/ lost its IndexNow key file (scripts/indexnow-submit.py).
+INDEXNOW_BEFORE="$(mktemp -t khandaq-indexnow)"
+trap 'rm -rf "$STAMPED" "$PUBLISHED" "$INDEXNOW_BEFORE"' EXIT
 python3 "$ROOT/scripts/generate-release-manifest.py" --stamp "$STAMPED"
 python3 "$ROOT/scripts/version-site-assets.py" --out "$PUBLISHED"
+python3 "$ROOT/scripts/indexnow-submit.py" snapshot --out "$INDEXNOW_BEFORE"
+INDEXNOW_KEY="$(python3 "$ROOT/scripts/indexnow-submit.py" key)"
 
 # KHANDAQ (re-audit 2026-08-22, W-02): upload to a staging directory, then replace.
 #
@@ -346,6 +352,9 @@ scp -p "$WEB/index.html" "$WEB/changelog.html" "$WEB/changelog.json" "$WEB/404.h
 # verification once they are gone, so they stay for good, byte for byte as the services issued them.
 # verify-site-deploy.py checks that each answers 200, text/html, with no redirect and these bytes.
 scp -p "$WEB/googleed8b77188642d163.html" "$WEB/yandex_3641f7482369653c.html" "$REMOTE:$INCOMING/"
+# KHANDAQ (SEO, 2026-11-16): the IndexNow key file. The engines fetch it to check every submission,
+# so it stays for good too; verify-site-deploy.py checks it is 200, text/plain, the committed bytes.
+scp -p "$WEB/$INDEXNOW_KEY.txt" "$REMOTE:$INCOMING/"
 scp -p "$STAMPED" "$REMOTE:$INCOMING/release-manifest.json"
 scp -pr "$WEB/assets" "$REMOTE:$INCOMING/"
 # style.css, assets/site.js and assets/tokens.css as published: minified, over the readable copies
@@ -437,6 +446,14 @@ if ! python3 "$ROOT/scripts/verify-site-deploy.py"; then
   echo "DEPLOY FAILED VERIFICATION — the site is live but does not match this checkout." >&2
   echo "Fix the failures above and re-run; do not announce the release until this passes." >&2
   exit 1
+fi
+
+# KHANDAQ (SEO, 2026-11-16): the site is live and verified, so tell IndexNow (Bing, Yandex and the
+# others) which pages changed. A failure here leaves a correct site that the engines recrawl on their
+# own schedule, so it warns instead of failing the deploy.
+echo "==> IndexNow: the pages this deploy changed"
+if ! python3 "$ROOT/scripts/indexnow-submit.py" submit --since "$INDEXNOW_BEFORE"; then
+  echo "    WARNING: the IndexNow submission failed; the site itself is deployed and verified" >&2
 fi
 
 echo "==> Done"

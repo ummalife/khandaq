@@ -576,6 +576,11 @@ final class AirGroupDossierController: AirScrollController {
     /// Watches who can join as the profile keeps it: objcTox writes it there when the founder changes it,
     /// here or in the group settings, and when the group's state arrives from its members (toxcore's
     /// privacy callback). Only a managed chat can be watched.
+    ///
+    /// The answer waits for the next turn of the main loop: Realm may call this block inside objcTox's next
+    /// write (the privacy callback stores the state, then the system line that says so), on the queue of
+    /// the realm manager, and the rebuild reads through that queue (the count of system lines), which
+    /// would be a dispatch_sync onto the queue the thread already holds.
     private func observePrivacy() {
         guard privacyToken == nil, !chat.isInvalidated, chat.realm != nil else {
             return
@@ -584,7 +589,9 @@ final class AirGroupDossierController: AirScrollController {
             guard !deleted else {
                 return
             }
-            self?.privacyMayHaveChanged()
+            DispatchQueue.main.async {
+                self?.privacyMayHaveChanged()
+            }
         }, keyPaths: ["groupPrivacyState"])
     }
 

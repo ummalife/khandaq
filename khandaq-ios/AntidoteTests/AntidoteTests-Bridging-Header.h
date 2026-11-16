@@ -52,6 +52,10 @@
 // Who can join a group (new groups public by default): the Realm the dossier watches, written as the privacy
 // callback of toxcore writes it.
 @property (strong, nonatomic, readonly) RLMRealm *realm;
+// The group settings and the dossier while objcTox stores what toxcore holds of a group: its writes, made
+// through the queue of the realm manager.
+- (void)updateGroupPrivacyState:(OCTToxGroupPrivacyState)privacyState forChat:(OCTChat *)chat;
+- (void)updateGroupVoiceState:(OCTToxGroupVoiceState)voiceState forChat:(OCTChat *)chat;
 @end
 
 // Redesign stage 3, item 10: the receive paths of the KQ packets (1:1 186, 187, 188 and group 0x41,

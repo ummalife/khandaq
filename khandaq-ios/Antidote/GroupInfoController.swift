@@ -60,21 +60,36 @@ final class GroupInfoController: AirScrollController {
     /// Who can join changes in the profile when the founder changes it (here or in the dossier) and when
     /// the group's state arrives from its members (toxcore's privacy callback): the screen follows it
     /// while it is open. A write of the same value notifies too, so nothing is rebuilt then.
+    ///
+    /// The answer waits for the next turn of the main loop. Realm calls this block inside the writes that
+    /// reload() itself makes (a write first delivers what is pending for this thread), on the queue of the
+    /// realm manager, and reload() writing again from there stopped the app: a dispatch_sync onto the queue
+    /// the thread already holds. That was every opening of the settings of a group open by its key, as
+    /// `privacy` still holds its default (invitation only) when that first notification comes.
     private func observePrivacy() {
         guard !chat.isInvalidated, chat.realm != nil else {
             return
         }
         privacyToken = chat.addNotificationBlock({ [weak self] deleted, _, _ in
-            guard let self = self, !deleted, self.isViewLoaded, !self.chat.isInvalidated else {
+            guard !deleted else {
                 return
             }
-            var error: NSError?
-            guard AirGroupPrivacy(state: self.submanagerGroups.groupPrivacyState(for: self.chat, error: &error)) != self.privacy else {
-                return
+            DispatchQueue.main.async {
+                self?.privacyMayHaveChanged()
             }
-            self.reload()
-            self.build()
         }, keyPaths: ["groupPrivacyState"])
+    }
+
+    private func privacyMayHaveChanged() {
+        guard isViewLoaded, !chat.isInvalidated, let groups = submanagerGroups else {
+            return
+        }
+        var error: NSError?
+        guard AirGroupPrivacy(state: groups.groupPrivacyState(for: chat, error: &error)) != privacy else {
+            return
+        }
+        reload()
+        build()
     }
 
     override func viewWillAppear(_ animated: Bool) {

@@ -464,6 +464,64 @@ class AirGroupModelTests: XCTestCase {
         XCTAssertFalse(showsKey(world.dossier))
     }
 
+    /// The settings of a group open by its key. Opening them asks objcTox to store what toxcore holds of the
+    /// group, one write after another through the queue of the realm manager, and Realm hands the screen the
+    /// stored "who can join" inside the next of those writes. The screen answered there, wrote once more from
+    /// inside the queue and stopped the app; it answers once the write is done, and only when who can join is
+    /// not what it shows.
+    func testTheSettingsOfAGroupOpenByItsKeyOpenAndFollowItWithoutWritingInsideAWrite() throws {
+        for role in [OCTToxGroupRole.user, .founder] {
+            let groups = StoringGroups()
+            let world = try dossierWorld(privacy: .public, role: role, groups: groups)
+            groups.realmManager = world.realmManager
+            let settings = GroupInfoController(chat: world.chat, submanagerGroups: groups)
+            settings.loadViewIfNeeded()
+            settings.viewWillAppear(false)
+            runMainQueue()
+            XCTAssertEqual(groups.callsInsideAWrite, [], "role \(role.rawValue)")
+            XCTAssertEqual(groups.refreshes, 1, "an unchanged state rebuilt the screen, role \(role.rawValue)")
+            if role == .founder {
+                XCTAssertEqual((view(in: settings, "air.group.settings.open") as? UIControl)?.isSelected, true)
+            }
+
+            // The founder closes the group elsewhere: the screen follows, once.
+            groups.storeAsThePrivacyCallbackDoes(.private, for: world.chat)
+            let followed = expectation(description: "the settings followed who can join, role \(role.rawValue)")
+            pollUntil({ groups.refreshes == 2 }) {
+                followed.fulfill()
+            }
+            wait(for: [followed], timeout: 5)
+            runMainQueue()
+            XCTAssertEqual(groups.refreshes, 2, "role \(role.rawValue)")
+            XCTAssertEqual(groups.callsInsideAWrite, [], "role \(role.rawValue)")
+            if role == .founder {
+                XCTAssertEqual((view(in: settings, "air.group.settings.inviteOnly") as? UIControl)?.isSelected, true)
+            }
+        }
+    }
+
+    /// The same change as toxcore's privacy callback brings it while the dossier is open: objcTox stores who
+    /// can join, then the system line that says so, and Realm hands the dossier the change inside that second
+    /// write. Rebuilt there, the dossier counted the group's system lines through the queue of the realm
+    /// manager from inside it, which stops the app; it rebuilds once the write is done.
+    func testTheDossierFollowsWhoCanJoinWithoutReadingInsideAWrite() throws {
+        let groups = StoringGroups()
+        let world = try dossierWorld(privacy: .public, role: .user, groups: groups)
+        groups.realmManager = world.realmManager
+        world.dossier.loadViewIfNeeded()
+        XCTAssertNotNil(view(in: world.dossier, "air.group.dossier.key"))
+
+        groups.storeAsThePrivacyCallbackDoes(.private, for: world.chat)
+        XCTAssertEqual(groups.callsInsideAWrite, [])
+        let closed = expectation(description: "the dossier took the key away")
+        pollUntil({ self.view(in: world.dossier, "air.group.dossier.inviteOnly") != nil }) {
+            closed.fulfill()
+        }
+        wait(for: [closed], timeout: 5)
+        XCTAssertNil(view(in: world.dossier, "air.group.dossier.key"))
+        XCTAssertEqual(groups.callsInsideAWrite, [])
+    }
+
     func testNameIsOneLineAndFitsInFortyEightBytes() {
         XCTAssertEqual(AirGroupName.clean("  Book\nclub \r\n2026 "), "Book club 2026")
         XCTAssertNil(AirGroupName.overflow(String(repeating: "a", count: 48)))
@@ -687,7 +745,9 @@ private extension AirGroupModelTests {
     /// A group in a profile of the test's own, joined with `role`, and its dossier (not loaded yet). The
     /// profile and its rows are made from the app's copies of the objcTox and Realm classes, which the
     /// screens use: this bundle has copies of its own, which do not mix with them (OwnCaptionOrderTests).
-    func dossierWorld(privacy: OCTToxGroupPrivacyState, role: OCTToxGroupRole) throws -> DossierWorld {
+    func dossierWorld(privacy: OCTToxGroupPrivacyState,
+                      role: OCTToxGroupRole,
+                      groups: OCTSubmanagerGroupsMock = OCTSubmanagerGroupsMock()) throws -> DossierWorld {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("air-group-dossier-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
@@ -705,7 +765,6 @@ private extension AirGroupModelTests {
         realmManager.add(chat)
         let realm: RLMRealm = realmManager.realm
 
-        let groups = OCTSubmanagerGroupsMock()
         groups.realm = realm
         groups.selfRoles[DossierWorld.groupNumber] = role
         let dossier = AirGroupDossierController(theme: ThemeAppearance.resolvedTheme(),
@@ -736,6 +795,15 @@ private extension AirGroupModelTests {
         }
     }
 
+    /// Runs what the main queue holds now, as the next turn of the main loop would.
+    func runMainQueue() {
+        let ran = expectation(description: "the main queue ran what it held")
+        DispatchQueue.main.async {
+            ran.fulfill()
+        }
+        wait(for: [ran], timeout: 2)
+    }
+
     func pollUntil(_ condition: @escaping () -> Bool, then done: @escaping () -> Void) {
         if condition() {
             done()
@@ -744,6 +812,57 @@ private extension AirGroupModelTests {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             self?.pollUntil(condition, then: done)
         }
+    }
+}
+
+/// objcTox's groups as far as the group settings and the dossier go. What toxcore holds of a group is stored
+/// as objcTox stores it (refreshGroupMetadataForChat:), one write after another through the queue of the
+/// realm manager; a call that objcTox makes through that queue, made while one of those writes is still
+/// running, is written down instead, as it would stop the app there.
+private final class StoringGroups: OCTSubmanagerGroupsMock {
+    var realmManager: OCTRealmManager?
+    /// Who can join, as toxcore holds it.
+    var privacyState = OCTToxGroupPrivacyState.public
+    private(set) var refreshes = 0
+    private(set) var callsInsideAWrite: [String] = []
+    private var writing = false
+
+    /// As toxcore's privacy callback stores a change: the state, then (here) another write of the chat
+    /// where objcTox adds the system line that tells it.
+    func storeAsThePrivacyCallbackDoes(_ state: OCTToxGroupPrivacyState, for chat: OCTChat) {
+        privacyState = state
+        write { $0.update(state, for: chat) }
+        write { $0.update(OCTToxGroupVoiceState.all, for: chat) }
+    }
+
+    override func refreshGroupMetadata(for chat: OCTChat!) {
+        guard !writing else {
+            callsInsideAWrite.append("refreshGroupMetadata")
+            return
+        }
+        refreshes += 1
+        write { $0.update(privacyState, for: chat) }
+        write { $0.update(OCTToxGroupVoiceState.all, for: chat) }
+    }
+
+    override func groupSystemMessageCount(for chat: OCTChat!) -> UInt {
+        if writing {
+            callsInsideAWrite.append("groupSystemMessageCount")
+        }
+        return 0
+    }
+
+    override func groupPrivacyState(for chat: OCTChat!, error: NSErrorPointer) -> OCTToxGroupPrivacyState {
+        return privacyState
+    }
+
+    private func write(_ body: (OCTRealmManager) -> Void) {
+        guard let realmManager = realmManager else {
+            return
+        }
+        writing = true
+        body(realmManager)
+        writing = false
     }
 }
 

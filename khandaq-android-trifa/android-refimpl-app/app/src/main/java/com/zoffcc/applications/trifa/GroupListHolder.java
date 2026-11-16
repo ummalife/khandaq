@@ -519,8 +519,8 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
         if (f2.group_identifier != null)
         {
             // KHANDAQ (0.2.57, SPEC-community item 3): deleting Khandaq Community leaves it for good, as Leave does;
-            // marked first, as Leave marks it.
-            CommunityAutoJoin.noteGroupLeft(f2.group_identifier);
+            // marked first, as Leave marks it. Its notification switch goes with its row (review).
+            CommunityAutoJoin.noteGroupDeleted(f2.group_identifier);
             final long group_num = tox_group_by_groupid__wrapper(f2.group_identifier);
             HelperGroup.leave_group_with_notice(group_num, "bye");
             GroupInviteAcceptPolicy.forget(f2.group_identifier);

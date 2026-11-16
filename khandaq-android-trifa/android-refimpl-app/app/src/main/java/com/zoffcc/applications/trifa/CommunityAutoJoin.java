@@ -304,6 +304,28 @@ final class CommunityAutoJoin
         }
     }
 
+    /** The person deleted a group: a leave for good (noteGroupLeft); Khandaq Community's switch goes with its row. */
+    static void noteGroupDeleted(final String groupId)
+    {
+        noteGroupLeft(groupId);
+        if (!KhandaqCommunity.isCommunity(groupId))
+        {
+            return;
+        }
+        try
+        {
+            final KhandaqCommunity.Store store = profileStore();
+            if (store != null)
+            {
+                KhandaqCommunity.noteRowDeleted(store, groupId);
+            }
+        }
+        catch (Throwable e)
+        {
+            Log.w(TAG, "deleted:EE:" + e.getMessage());
+        }
+    }
+
     /** QA only (QaGroupBroadcastReceiver, debug builds): the running profile's marks are removed. */
     static void qaForgetMarks()
     {

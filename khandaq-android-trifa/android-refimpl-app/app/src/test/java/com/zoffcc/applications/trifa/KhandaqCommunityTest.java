@@ -572,7 +572,7 @@ public class KhandaqCommunityTest
     }
 
     @Test
-    public void a_row_joined_by_hand_and_a_row_after_a_leave_come_back_as_they_were_not_muted_by_a_guess()
+    public void a_row_joined_by_hand_left_or_deleted_comes_back_as_it_was_not_muted_by_a_guess()
     {
         // Joined by hand (by its chat id, before the auto-join ran), never muted: it connects, so the profile has it
         // for good, and its row made again after an import has its sound on, as it had.
@@ -581,22 +581,29 @@ public class KhandaqCommunityTest
         assertTrue(KhandaqCommunity.noteGroupKept(store, true));
         assertFalse(KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, new ProfileStore(settings, TOX_ID)));
 
-        // Muted by the auto-join, then left: its switch goes with its row, and a join by hand starts as any group.
+        // Muted by the auto-join, then left: a leave keeps the row, muted, and a join by hand takes that row again,
+        // so its switch stays kept: the row made after an import is muted as that row was.
         final Map<String, String> other = new HashMap<>();
         final ProfileStore auto = new ProfileStore(other, TOX_ID);
         assertTrue(KhandaqCommunity.autoJoin(auto, true, false, true, new Join(true)));
         assertTrue(KhandaqCommunity.noteGroupLeft(auto, KhandaqCommunity.CHAT_ID));
+        assertTrue(auto.keptMuted());
+        assertTrue(KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, new ProfileStore(other, TOX_ID)));
+
+        // Deleted: its row is gone, and its switch with it; a join by hand makes a row as for any group.
+        assertTrue(KhandaqCommunity.noteRowDeleted(auto, COMMUNITY_ROW_ID));
         assertFalse(auto.keptMuted());
         assertFalse(KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, auto));
+        assertFalse("nothing to forget", KhandaqCommunity.noteRowDeleted(auto, KhandaqCommunity.CHAT_ID));
         // Joined again by hand and muted by the person: that comes back after an import, the leave stays.
         assertTrue(KhandaqCommunity.noteSoundChoice(auto, KhandaqCommunity.CHAT_ID, true));
         final ProfileStore imported = new ProfileStore(other, TOX_ID);
         assertTrue(KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, imported));
         assertTrue(imported.left());
-        // Left again: forgotten again, with the leave still marked once.
-        assertFalse(KhandaqCommunity.noteGroupLeft(imported, KhandaqCommunity.CHAT_ID));
-        assertFalse(imported.keptMuted());
-        assertTrue(imported.left());
+
+        // The row of another group is not the Community's.
+        assertFalse(KhandaqCommunity.noteRowDeleted(imported, OTHER_GROUP));
+        assertTrue(imported.keptMuted());
     }
 
     @Test
@@ -896,10 +903,16 @@ public class KhandaqCommunityTest
         assertTrue(left < leave.indexOf("HelperGroup.leave_group_with_notice(group_num, \"left\");"));
         assertTrue(left < leave.indexOf("set_group_group_we_left(group_identifier);"));
         final String delete = method(list, "private static void delete_group_now(final GroupDB f2)");
-        final int deleted = delete.indexOf("CommunityAutoJoin.noteGroupLeft(f2.group_identifier);");
+        final int deleted = delete.indexOf("CommunityAutoJoin.noteGroupDeleted(f2.group_identifier);");
         assertTrue(deleted > 0);
         assertTrue(deleted < delete.indexOf("HelperGroup.leave_group_with_notice(group_num, \"bye\");"));
         assertTrue(deleted < delete.indexOf("delete_group(f2.group_identifier);"));
+        // A delete is a leave too, and the Community's switch goes with its row; a leave keeps the row and its switch.
+        final String auto = read(JAVA + "CommunityAutoJoin.java");
+        final String onDelete = bare(method(auto, "static void noteGroupDeleted(final String groupId)"));
+        assertTrue(onDelete.startsWith("staticvoidnoteGroupDeleted(finalStringgroupId){noteGroupLeft(groupId);"));
+        assertTrue(onDelete.contains("KhandaqCommunity.noteRowDeleted(store,groupId);"));
+        assertFalse(bare(method(auto, "static void noteGroupLeft(final String groupId)")).contains("noteRowDeleted"));
 
         // The auto-join's join stops at its next step on a leave, and leaves again as the person leaves.
         final String joinIfDue = bare(method(read(JAVA + "CommunityAutoJoin.java"), JOIN_IF_DUE));

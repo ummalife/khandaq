@@ -20,6 +20,9 @@
 #include "src/model/air/airmedia.h"
 
 #include <QBuffer>
+#include <QFile>
+#include <QFileInfo>
+#include <QTemporaryDir>
 #include <QtTest/QtTest>
 
 #include <limits>
@@ -108,10 +111,15 @@ private slots:
     void ourGroupFileWaitsForSomeoneToSendItTo();
     void theMarkOfOurFileFollowsTheTransfer();
     void aFileWhoseFriendWentOfflineWaitsAndNeverFails();
+    void anOfferWhoseSenderWentOfflineIsNoNewOffer();
     void anOfferOfAFilePartlyHereGoesOnFromWhatIsHere();
     void anOfferOfAFileAllHereEndsQuietly();
     void anOfferOfAnotherFileIsANewEntry();
     void anOfferOfAFileNeverAcceptedWaitsInItsEntry();
+    void anOfferOfAFileThePersonRefusedWaitsForTheirTap();
+    void anOfferGoesOnOnlyInThePartItLeft();
+    void aPartIsToldFromAnotherFileByItsStamp();
+    void aFileOfOursGoesAgainUnderItsIdOnlyWhileItIsTheSame();
     void theLengthOfANoteComesFromItsMovieHeader();
     void aBrokenHeaderHasNoLength();
     void lengthsReadAsClocks();
@@ -338,6 +346,28 @@ void TestAirMedia::aFileWhoseFriendWentOfflineWaitsAndNeverFails()
     QCOMPARE(Air::fileStatus(ours, true), Air::EntryStatus::Sending);
 }
 
+/**
+ * @brief KHANDAQ (0.2.57): an offer the window answers is theirs and not yet accepted; the same
+ * offer once its sender went offline only waits in its entry: no alert, no download.
+ */
+void TestAirMedia::anOfferWhoseSenderWentOfflineIsNoNewOffer()
+{
+    ToxFile offer(65536, 0, QStringLiteral("video.mp4"), QString(), 1000, ToxFile::RECEIVING);
+    QVERIFY(Air::isOffer(offer));
+    offer.connectionLost = true;
+    QVERIFY(!Air::isOffer(offer));
+    // Offered again once they are back, it is one: it waits in its entry or comes by itself.
+    offer.connectionLost = false;
+    offer.continued = true;
+    QVERIFY(Air::isOffer(offer));
+
+    ToxFile accepted = offer;
+    accepted.status = ToxFile::TRANSMITTING;
+    QVERIFY(!Air::isOffer(accepted));
+    ToxFile ours(0, 0, QStringLiteral("video.mp4"), QString(), 1000, ToxFile::SENDING);
+    QVERIFY(!Air::isOffer(ours));
+}
+
 namespace {
 Air::FileHere fileHere(ToxFile::FileStatus status, bool accepted, qint64 bytes)
 {
@@ -347,6 +377,7 @@ Air::FileHere fileHere(ToxFile::FileStatus status, bool accepted, qint64 bytes)
     here.status = status;
     here.accepted = accepted;
     here.bytes = bytes;
+    here.ownPart = accepted;
     return here;
 }
 } // namespace
@@ -362,10 +393,11 @@ void TestAirMedia::anOfferOfAFilePartlyHereGoesOnFromWhatIsHere()
     resume = Air::fileResume(id, 1000, fileHere(ToxFile::BROKEN, true, 0));
     QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
     QCOMPARE(resume.offset, qint64{0});
-    // More than its size is not this file: it starts again.
+    // More than its size is not this file: it starts again, beside it.
     resume = Air::fileResume(id, 1000, fileHere(ToxFile::BROKEN, true, 1200));
     QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
     QCOMPARE(resume.offset, qint64{0});
+    QVERIFY(resume.newPath);
     // All of it came but not its end: the last byte once more ends it as usual.
     resume = Air::fileResume(id, 1000, fileHere(ToxFile::BROKEN, true, 1000));
     QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
@@ -405,8 +437,8 @@ void TestAirMedia::anOfferOfAnotherFileIsANewEntry()
 }
 
 /**
- * @brief KHANDAQ (0.2.57): one never accepted, or cancelled, waits in its entry for Accept or for
- * the downloads rule, as a new offer does.
+ * @brief KHANDAQ (0.2.57): one never accepted, or cancelled by its sender, waits in its entry for
+ * Accept or for the downloads rule, as a new offer does.
  */
 void TestAirMedia::anOfferOfAFileNeverAcceptedWaitsInItsEntry()
 {
@@ -416,6 +448,152 @@ void TestAirMedia::anOfferOfAFileNeverAcceptedWaitsInItsEntry()
         QCOMPARE(resume.step, Air::FileResume::Step::WaitInEntry);
         QCOMPARE(resume.offset, qint64{0});
     }
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): one the person cancelled or declined waits in its entry for their tap,
+ * from the start, whatever came of it before; never by itself, nor by the downloads rule.
+ */
+void TestAirMedia::anOfferOfAFileThePersonRefusedWaitsForTheirTap()
+{
+    const QByteArray id(32, '\x07');
+    for (const ToxFile::FileStatus status : {ToxFile::CANCELED, ToxFile::BROKEN}) {
+        for (const bool accepted : {false, true}) {
+            Air::FileHere here = fileHere(status, accepted, accepted ? 400 : 0);
+            here.refused = true;
+            const Air::FileResume resume = Air::fileResume(id, 1000, here);
+            QCOMPARE(resume.step, Air::FileResume::Step::AskAgain);
+            QCOMPARE(resume.offset, qint64{0});
+        }
+    }
+    // Another file is a new offer all the same, and one all here still ends quietly.
+    Air::FileHere refused = fileHere(ToxFile::CANCELED, false, 0);
+    refused.refused = true;
+    QCOMPARE(Air::fileResume(QByteArray(32, '\x08'), 1000, refused).step,
+             Air::FileResume::Step::NewEntry);
+    QCOMPARE(Air::fileResume(id, 1001, refused).step, Air::FileResume::Step::NewEntry);
+    Air::FileHere whole = fileHere(ToxFile::FINISHED, true, 1000);
+    whole.refused = true;
+    QCOMPARE(Air::fileResume(id, 1000, whole).step, Air::FileResume::Step::EndQuietly);
+
+    // The downloads rule takes a new offer, or one that waits as a new offer does, and no other.
+    QVERIFY(!Air::downloadsRuleApplies(Air::FileResume::Step::AskAgain));
+    QVERIFY(Air::downloadsRuleApplies(Air::FileResume::Step::NewEntry));
+    QVERIFY(Air::downloadsRuleApplies(Air::FileResume::Step::WaitInEntry));
+    QVERIFY(!Air::downloadsRuleApplies(Air::FileResume::Step::GoOn));
+    QVERIFY(!Air::downloadsRuleApplies(Air::FileResume::Step::EndQuietly));
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): an accepted file goes on in its path only when what is there is the part
+ * it left; otherwise from the start under a new name, and that file is not touched.
+ */
+void TestAirMedia::anOfferGoesOnOnlyInThePartItLeft()
+{
+    const QByteArray id(32, '\x07');
+    Air::FileHere own = fileHere(ToxFile::BROKEN, true, 400);
+    Air::FileResume resume = Air::fileResume(id, 1000, own);
+    QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
+    QCOMPARE(resume.offset, qint64{400});
+    QVERIFY(!resume.newPath);
+
+    for (const qint64 bytes : {qint64{0}, qint64{400}, qint64{1000}}) {
+        Air::FileHere other = fileHere(ToxFile::BROKEN, true, bytes);
+        other.ownPart = false;
+        resume = Air::fileResume(id, 1000, other);
+        QCOMPARE(resume.step, Air::FileResume::Step::GoOn);
+        QCOMPARE(resume.offset, qint64{0});
+        QVERIFY(resume.newPath);
+    }
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): the part a file left is the file made for it, as it was when the
+ * transfer was cut where that is known; with nothing to tell it by, a file at that path is not its
+ * part.
+ */
+void TestAirMedia::aPartIsToldFromAnotherFileByItsStamp()
+{
+    ToxFile::Stamp recorded;
+    recorded.bornMs = 1000;
+    recorded.bytes = 400;
+    recorded.modifiedMs = 2000;
+    ToxFile::Stamp now = recorded;
+    QVERIFY(Air::isOwnPart(recorded, now));
+    // Another file made there, or the same one written since the cut.
+    now.bornMs = 1001;
+    QVERIFY(!Air::isOwnPart(recorded, now));
+    now = recorded;
+    now.bytes = 401;
+    QVERIFY(!Air::isOwnPart(recorded, now));
+    now = recorded;
+    now.modifiedMs = 2001;
+    QVERIFY(!Air::isOwnPart(recorded, now));
+    // No file there.
+    QVERIFY(!Air::isOwnPart(recorded, ToxFile::Stamp()));
+
+    // Not cut (the app stopped in the middle of it): when it was made tells it.
+    ToxFile::Stamp made;
+    made.bornMs = 1000;
+    QVERIFY(Air::isOwnPart(made, now));
+    now.bornMs = -1;
+    QVERIFY(!Air::isOwnPart(made, now));
+    // Where the system tells no birth time, only a cut tells it.
+    ToxFile::Stamp unborn = recorded;
+    unborn.bornMs = -1;
+    now = unborn;
+    QVERIFY(Air::isOwnPart(unborn, now));
+    ToxFile::Stamp nothing;
+    QVERIFY(!Air::isOwnPart(nothing, now));
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("part.bin"));
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    QCOMPARE(file.write(QByteArray(400, '\x01')), qint64{400});
+    file.close();
+    const ToxFile::Stamp stamp = Air::fileStampAt(path);
+    QCOMPARE(stamp.bytes, qint64{400});
+    QCOMPARE(stamp.modifiedMs, QFileInfo(path).lastModified().toMSecsSinceEpoch());
+    QVERIFY(stamp.bornMs == -1 || stamp.bornMs > 0);
+    QVERIFY(Air::isOwnPart(stamp, Air::fileStampAt(path)));
+    QCOMPARE(Air::fileStampAt(dir.filePath(QStringLiteral("none.bin"))), ToxFile::Stamp());
+    QCOMPARE(Air::fileStampAt(dir.path()), ToxFile::Stamp());
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): a file of ours goes again under its Tox file id only while it is the
+ * file that went: the length of the offer and the same last change, and made when it was where
+ * that is known.
+ */
+void TestAirMedia::aFileOfOursGoesAgainUnderItsIdOnlyWhileItIsTheSame()
+{
+    ToxFile::Stamp sent;
+    sent.bornMs = 1000;
+    sent.bytes = 400;
+    sent.modifiedMs = 2000;
+    QVERIFY(Air::isSameSource(sent, 400, sent));
+    QVERIFY(!Air::isSameSource(sent, 500, sent));
+    ToxFile::Stamp now = sent;
+    now.bytes = 401;
+    QVERIFY(!Air::isSameSource(sent, 400, now));
+    now = sent;
+    now.modifiedMs = 2001;
+    QVERIFY(!Air::isSameSource(sent, 400, now));
+    now = sent;
+    now.bornMs = 1001;
+    QVERIFY(!Air::isSameSource(sent, 400, now));
+    QVERIFY(!Air::isSameSource(sent, 400, ToxFile::Stamp()));
+
+    // Made when nobody could tell: its length and last change tell it.
+    ToxFile::Stamp unborn = sent;
+    unborn.bornMs = -1;
+    QVERIFY(Air::isSameSource(unborn, 400, sent));
+    // Its last change when it went is not known (a row of before): a new file.
+    ToxFile::Stamp unknown = sent;
+    unknown.modifiedMs = -1;
+    QVERIFY(!Air::isSameSource(unknown, 400, sent));
 }
 
 void TestAirMedia::theLengthOfANoteComesFromItsMovieHeader()

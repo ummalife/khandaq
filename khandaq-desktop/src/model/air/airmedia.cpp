@@ -19,7 +19,9 @@
 
 #include "airmedia.h"
 
+#include <QDateTime>
 #include <QDir>
+#include <QFileInfo>
 #include <QIODevice>
 #include <QRegularExpression>
 
@@ -295,6 +297,12 @@ EntryStatus fileStatus(const ToxFile& file, bool personOnline)
     return fileStatus(file.connectionLost ? ToxFile::INITIALIZING : file.status, personOnline);
 }
 
+bool isOffer(const ToxFile& file)
+{
+    return file.status == ToxFile::INITIALIZING && file.direction == ToxFile::RECEIVING
+           && !file.connectionLost;
+}
+
 FileResume fileResume(const QByteArray& offerId, qint64 offerSize, const FileHere& here)
 {
     FileResume resume;
@@ -306,11 +314,20 @@ FileResume fileResume(const QByteArray& offerId, qint64 offerSize, const FileHer
         resume.offset = qMax<qint64>(0, offerSize - 1);
         return resume;
     }
+    if (here.refused) {
+        resume.step = FileResume::Step::AskAgain;
+        return resume;
+    }
     if (!here.accepted) {
         resume.step = FileResume::Step::WaitInEntry;
         return resume;
     }
     resume.step = FileResume::Step::GoOn;
+    if (!here.ownPart || here.bytes > offerSize) {
+        // Never into a file that may not be what came of it.
+        resume.newPath = true;
+        return resume;
+    }
     if (here.bytes > 0 && here.bytes < offerSize) {
         resume.offset = here.bytes;
     } else if (here.bytes == offerSize && offerSize > 0) {
@@ -318,6 +335,46 @@ FileResume fileResume(const QByteArray& offerId, qint64 offerSize, const FileHer
         resume.offset = offerSize - 1;
     }
     return resume;
+}
+
+ToxFile::Stamp fileStampAt(const QString& path)
+{
+    ToxFile::Stamp stamp;
+    const QFileInfo info(path);
+    if (path.isEmpty() || !info.isFile()) {
+        return stamp;
+    }
+    stamp.bytes = info.size();
+    const QDateTime modified = info.lastModified();
+    stamp.modifiedMs = modified.isValid() ? modified.toMSecsSinceEpoch() : -1;
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+    const QDateTime born = info.birthTime();
+    stamp.bornMs = born.isValid() ? born.toMSecsSinceEpoch() : -1;
+#endif
+    return stamp;
+}
+
+bool isOwnPart(const ToxFile::Stamp& recorded, const ToxFile::Stamp& now)
+{
+    if (now.bytes < 0 || recorded.bornMs != now.bornMs) {
+        return false;
+    }
+    const bool cutKnown = recorded.bytes >= 0 && recorded.modifiedMs >= 0;
+    if (cutKnown && (recorded.bytes != now.bytes || recorded.modifiedMs != now.modifiedMs)) {
+        return false;
+    }
+    return recorded.bornMs >= 0 || cutKnown;
+}
+
+bool isSameSource(const ToxFile::Stamp& sent, qint64 size, const ToxFile::Stamp& now)
+{
+    return sent.modifiedMs >= 0 && now.bytes == size && now.modifiedMs == sent.modifiedMs
+           && (sent.bornMs < 0 || now.bornMs == sent.bornMs);
+}
+
+bool downloadsRuleApplies(FileResume::Step step)
+{
+    return step == FileResume::Step::NewEntry || step == FileResume::Step::WaitInEntry;
 }
 
 qint64 mp4DurationMs(QIODevice& device)

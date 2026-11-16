@@ -104,6 +104,10 @@ private slots:
     void theNewestMessageOfThePersonIsWhatWeSaw();
     void anAcceptedFileOfThePersonIsKeptAsInterrupted();
     void aFileThatGoesOnAfterARestartEndsInItsRow();
+    void aFileOfThePersonThatEndedCancelledIsRefusedAfterARestart();
+    void anInterruptedFileKeepsWhatTellsItsPartAfterARestart();
+    void aLaterFileOfAPersonThatGoesToThePathIsKnown();
+    void aFileOfOursKeepsWhatItWasWhenItWentAfterARestart();
 
 private:
     /** The one file of the chat, as a later start reads it. */
@@ -401,6 +405,124 @@ void TestHistory::aFileThatGoesOnAfterARestartEndsInItsRow()
     QCOMPARE(storedFile(maryam).status, ToxFile::FINISHED);
     QCOMPARE(storedFile(maryam).filePath, filePath);
     QCOMPARE(history->getNumMessagesForChat(maryam), size_t{1});
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): a file of the person whose row ended cancelled counts as one they
+ * refused after a restart: the row does not say who stopped it, so an offer of it again waits for
+ * their tap (ToxFile::refusedHere). One that was interrupted, and one of ours, are none.
+ */
+void TestHistory::aFileOfThePersonThatEndedCancelledIsRefusedAfterARestart()
+{
+    history->addNewFileMessage(maryam, fileId, QStringLiteral("video.mp4"), QString(), 5000, maryam,
+                               QDateTime::currentDateTime(), QStringLiteral("Maryam"),
+                               ToxFile::RECEIVING);
+    const ToxPk omar{QByteArray(ToxPk::size, 'o')};
+    const QByteArray cutId{"fedcba9876543210fedcba9876543210"};
+    history->addNewFileMessage(omar, cutId, QStringLiteral("talk.mkv"), QString(), 5000, omar,
+                               QDateTime::currentDateTime(), QStringLiteral("Omar"),
+                               ToxFile::RECEIVING);
+    history->setFileUnderway(omar, cutId, filePath);
+    const ToxPk yusuf{QByteArray(ToxPk::size, 'y')};
+    const QByteArray oursId{"00112233445566778899aabbccddeeff"};
+    history->addNewFileMessage(yusuf, oursId, QStringLiteral("notes.zip"), filePath, 5000, self,
+                               QDateTime::currentDateTime(), QStringLiteral("Me"),
+                               ToxFile::SENDING);
+    letRowsIn();
+    history->setFileFinished(fileId, false, QString(), QByteArray());
+    history->setFileFinished(oursId, false, filePath, QByteArray());
+    restart();
+
+    QCOMPARE(storedFile(maryam).status, ToxFile::CANCELED);
+    QVERIFY(storedFile(maryam).refusedHere);
+    QCOMPARE(storedFile(omar).status, ToxFile::BROKEN);
+    QVERIFY(!storedFile(omar).refusedHere);
+    QCOMPARE(storedFile(yusuf).status, ToxFile::CANCELED);
+    QVERIFY(!storedFile(yusuf).refusedHere);
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): an interrupted file of the person keeps what tells the part it left
+ * (ToxFile::Stamp) for a later start, as it changes; once it ends, its hash takes that place and
+ * nothing of it is read as a stamp.
+ */
+void TestHistory::anInterruptedFileKeepsWhatTellsItsPartAfterARestart()
+{
+    history->addNewFileMessage(maryam, fileId, QStringLiteral("video.mp4"), QString(), 5000, maryam,
+                               QDateTime::currentDateTime(), QStringLiteral("Maryam"),
+                               ToxFile::RECEIVING);
+    ToxFile::Stamp made;
+    made.bornMs = 1700000000123;
+    history->setFileUnderway(maryam, fileId, filePath, made);
+    letRowsIn();
+    restart();
+    QCOMPARE(storedFile(maryam).status, ToxFile::BROKEN);
+    QCOMPARE(storedFile(maryam).stamp, made);
+
+    ToxFile::Stamp cut = made;
+    cut.bytes = 2500;
+    cut.modifiedMs = 1700000004567;
+    history->setFileUnderway(maryam, fileId, filePath, cut);
+    restart();
+    QCOMPARE(storedFile(maryam).stamp, cut);
+
+    history->reopenFileMessage(maryam, fileId, ToxFile::RECEIVING);
+    history->setFileFinished(fileId, true, filePath, QByteArray(32, '\x5c'));
+    restart();
+    QCOMPARE(storedFile(maryam).status, ToxFile::FINISHED);
+    QCOMPARE(storedFile(maryam).stamp, ToxFile::Stamp());
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): a file of a person that came after another goes to that one's path too:
+ * what is there may be the later one. One that came before, one of ours, or another path is none.
+ */
+void TestHistory::aLaterFileOfAPersonThatGoesToThePathIsKnown()
+{
+    history->addNewFileMessage(maryam, fileId, QStringLiteral("photo.jpg"), QString(), 5000, maryam,
+                               QDateTime::currentDateTime(), QStringLiteral("Maryam"),
+                               ToxFile::RECEIVING);
+    history->setFileUnderway(maryam, fileId, filePath);
+    const ToxPk omar{QByteArray(ToxPk::size, 'o')};
+    const QByteArray laterId{"fedcba9876543210fedcba9876543210"};
+    history->addNewFileMessage(omar, laterId, QStringLiteral("photo.jpg"), QString(), 7000, omar,
+                               QDateTime::currentDateTime(), QStringLiteral("Omar"),
+                               ToxFile::RECEIVING);
+    history->setFileUnderway(omar, laterId, filePath);
+    const ToxPk yusuf{QByteArray(ToxPk::size, 'y')};
+    history->addNewFileMessage(yusuf, QByteArray("00112233445566778899aabbccddeeff"),
+                               QStringLiteral("photo.jpg"), filePath, 9000, self,
+                               QDateTime::currentDateTime(), QStringLiteral("Me"),
+                               ToxFile::SENDING);
+    letRowsIn();
+
+    QVERIFY(history->laterFileGoesTo(maryam, fileId, filePath));
+    QVERIFY(!history->laterFileGoesTo(omar, laterId, filePath));
+    QVERIFY(!history->laterFileGoesTo(maryam, fileId, QStringLiteral("/files/other.jpg")));
+    QVERIFY(!history->laterFileGoesTo(maryam, laterId, filePath));
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): a file of ours keeps what it was when it went (ToxFile::Stamp) in its
+ * row, also once it stopped, so Send again after a restart knows whether it is still that file.
+ */
+void TestHistory::aFileOfOursKeepsWhatItWasWhenItWentAfterARestart()
+{
+    ToxFile::Stamp sent;
+    sent.bornMs = 1700000000123;
+    sent.bytes = 5000;
+    sent.modifiedMs = 1700000000456;
+    history->addNewFileMessage(maryam, fileId, QStringLiteral("notes.zip"), filePath, 5000, self,
+                               QDateTime::currentDateTime(), QStringLiteral("Me"),
+                               ToxFile::SENDING, sent);
+    letRowsIn();
+    QCOMPARE(storedFile(maryam).stamp, sent);
+
+    history->setFileFinished(fileId, false, filePath, History::stampRecord(sent));
+    restart();
+    QCOMPARE(storedFile(maryam).status, ToxFile::CANCELED);
+    QCOMPARE(storedFile(maryam).direction, ToxFile::SENDING);
+    QCOMPARE(storedFile(maryam).stamp, sent);
 }
 
 int main(int argc, char* argv[])

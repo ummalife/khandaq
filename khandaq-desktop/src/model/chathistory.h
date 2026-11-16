@@ -25,6 +25,8 @@
 #include "src/model/brokenmessagereason.h"
 #include "src/persistence/history.h"
 
+#include <QHash>
+#include <QPair>
 #include <QSet>
 
 class Settings;
@@ -99,6 +101,11 @@ public:
      */
     bool findFileEntry(const QByteArray& fileId, ToxFile::FileDirection direction,
                        ToxFile* found) const;
+    /**
+     * KHANDAQ (0.2.57): whether a file of a person that came after this one of theirs goes to its
+     * path too (History::laterFileGoesTo): what is there may be that one.
+     */
+    bool laterFileGoesTo(const ToxFile& file) const;
 
 signals:
     /** A message joined the queue, left it, or failed. */
@@ -183,6 +190,9 @@ private:
     Air::EntryMarksStore* entryStore = nullptr;
     /** A conversation between two people, not a group. */
     bool friendChat = false;
-    /** KHANDAQ (0.2.57): files of the person accepted in this run, whose row says so already. */
-    QSet<QByteArray> underwayFiles;
+    /**
+     * KHANDAQ (0.2.57): files of the person accepted in this run, whose row says so already, with
+     * the path and the stamp it has.
+     */
+    QHash<QByteArray, QPair<QString, ToxFile::Stamp>> underwayFiles;
 };

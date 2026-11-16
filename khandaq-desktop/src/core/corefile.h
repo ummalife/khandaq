@@ -75,8 +75,21 @@ public:
      * byte, so both sides end; nothing is written and nothing is signalled for it.
      */
     void finishFileRecvQuietly(uint32_t friendId, uint32_t fileId, uint64_t offset);
+    /**
+     * KHANDAQ (0.2.57): an offer of a file the person cancelled or declined before
+     * (Air::FileResume::Step::AskAgain) stays theirs to answer, also once its sender went offline
+     * and offers it again (ToxFile::refusedHere). By its Tox file id: it may wait for its sender
+     * under a number of its own already.
+     */
+    void markFileRecvRefused(uint32_t friendId, const QByteArray& resumeFileId);
 
     unsigned corefileIterationInterval();
+    /**
+     * KHANDAQ (0.2.57): the friend was removed, and toxcore forgot their transfers without a word
+     * (m_delfriend). Nothing of theirs is kept, waiting or not: a friend added later can get their
+     * number, and none of it is offered to that friend or taken for one of theirs.
+     */
+    void forgetFriend(uint32_t friendId);
     /**
      * KHANDAQ (0.2.57): called by the core loop after tox_iterate, with its lock held. Offers again
      * our files that waited for a friend who is back, and ends as stopped those of a friend who is
@@ -116,10 +129,27 @@ private:
     void offerAgain(uint32_t friendId, qint64 backMs);
     /** An offer that goes on with a file that waits for its sender; false when none waits. */
     bool takeWaitingFile(const ToxFile& offer);
+    /** What came of startReceiving. */
+    enum class Receiving
+    {
+        /** It goes on from the offset, or waits paused here. */
+        Started,
+        /** toxcore is still at the start, as the offer came, and nothing here was touched. */
+        Offered,
+        /** toxcore went to the offset, but nothing can be written there: stopReceiving ends it. */
+        Failed,
+    };
     /** Seeks to offset, opens the file there and accepts the offer, unless it is paused here. */
-    bool startReceiving(ToxFile& file, uint64_t offset);
+    Receiving startReceiving(ToxFile& file, uint64_t offset);
+    /**
+     * Ends an offer toxcore went on with where this side cannot: declined there, so its sender
+     * knows, and stopped here, with what came of it as it was.
+     */
+    void stopReceiving(uint32_t friendId, uint32_t fileId);
     /** Ends an incoming file that waited for its sender as stopped, keeping what came of it. */
     void endWaitingFile(uint64_t key);
+    /** KHANDAQ (0.2.57): whether a transfer other than the one under key has path as its file. */
+    bool otherFileAt(const QString& path, uint64_t key) const;
     static constexpr uint64_t getFriendKey(uint32_t friendId, uint32_t fileId)
     {
         return (static_cast<std::uint64_t>(friendId) << 32) + fileId;

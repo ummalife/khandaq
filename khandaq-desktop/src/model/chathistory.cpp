@@ -262,20 +262,25 @@ void ChatHistory::onFileUpdated(const ToxPk& sender, const ToxFile& file)
             // with a different order when loading from history
             history->addNewFileMessage(chat.getPersistentId(), file.resumeFileId, file.fileName,
                                        file.filePath, file.progress.getFileSize(), sender,
-                                       QDateTime::currentDateTime(), username, file.direction);
+                                       QDateTime::currentDateTime(), username, file.direction,
+                                       file.stamp);
             break;
         }
-        case ToxFile::TRANSMITTING:
+        case ToxFile::PAUSED:
+        case ToxFile::TRANSMITTING: {
             // KHANDAQ (0.2.57): a file of the person, once accepted, is in its row as interrupted,
-            // with the path it goes to: what came of it stays there for an offer of it later, after
-            // a restart too. Its end writes the row again.
+            // with the path it goes to and what tells that file (ToxFile::Stamp), as they change:
+            // what came of it stays there for an offer of it later, after a restart too. Its end
+            // writes the row again.
+            const QPair<QString, ToxFile::Stamp> underway{file.filePath, file.stamp};
             if (friendChat && file.direction == ToxFile::RECEIVING
-                && !underwayFiles.contains(file.resumeFileId)) {
-                underwayFiles.insert(file.resumeFileId);
+                && underwayFiles.value(file.resumeFileId) != underway) {
+                underwayFiles.insert(file.resumeFileId, underway);
                 history->setFileUnderway(chat.getPersistentId(), file.resumeFileId,
-                                         file.filePath);
+                                         file.filePath, file.stamp);
             }
             break;
+        }
         case ToxFile::BROKEN:
             // KHANDAQ (0.2.57): between two people an interrupted file keeps its row as it is, so
             // an offer of it later goes on with what came.
@@ -292,12 +297,15 @@ void ChatHistory::onFileUpdated(const ToxPk& sender, const ToxFile& file)
             underwayFiles.remove(file.resumeFileId);
             const bool isSuccess = file.status == ToxFile::FINISHED;
             // The hash is not known for a transfer that went on from the middle of the file.
-            history->setFileFinished(file.resumeFileId, isSuccess, file.filePath,
-                                     file.hashGenerator ? file.hashGenerator->result()
-                                                        : QByteArray());
+            QByteArray kept = file.hashGenerator ? file.hashGenerator->result() : QByteArray();
+            if (!isSuccess && friendChat && file.direction == ToxFile::SENDING) {
+                // KHANDAQ (0.2.57): a file of ours that stopped keeps what it was when it went
+                // instead, so Send again after a restart knows whether it is still that file.
+                kept = History::stampRecord(file.stamp);
+            }
+            history->setFileFinished(file.resumeFileId, isSuccess, file.filePath, kept);
             break;
         }
-        case ToxFile::PAUSED:
         default:
             break;
         }
@@ -576,6 +584,12 @@ bool ChatHistory::findFileEntry(const QByteArray& fileId, ToxFile::FileDirection
                                 ToxFile* found) const
 {
     return sessionChatLog.findFileEntry(fileId, direction, found);
+}
+
+bool ChatHistory::laterFileGoesTo(const ToxFile& file) const
+{
+    return canUseHistory()
+           && history->laterFileGoesTo(chat.getPersistentId(), file.resumeFileId, file.filePath);
 }
 
 bool ChatHistory::hasIncomingText(const ToxPk& sender, const QByteArray& msgV3Id) const

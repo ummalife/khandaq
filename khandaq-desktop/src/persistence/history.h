@@ -128,6 +128,8 @@ struct FileDbInsertionData
     QString filePath;
     int64_t size;
     int direction;
+    /** KHANDAQ (0.2.57): of a file of ours, what it was when it went (ToxFile::Stamp). */
+    ToxFile::Stamp stamp;
 };
 Q_DECLARE_METATYPE(FileDbInsertionData)
 
@@ -248,7 +250,14 @@ public:
     void addNewFileMessage(const ChatId& chatId, const QByteArray& fileId,
                            const QString& fileName, const QString& filePath, int64_t size,
                            const ToxPk& sender, const QDateTime& time, QString const& dispName,
-                           ToxFile::FileDirection direction);
+                           ToxFile::FileDirection direction,
+                           const ToxFile::Stamp& stamp = ToxFile::Stamp());
+    /**
+     * KHANDAQ (0.2.57): what a row keeps of a stamp (ToxFile::Stamp) where an ended file keeps its
+     * hash, which nothing reads back: a file of ours that stopped keeps what it was when it went,
+     * for Send again after a restart.
+     */
+    static QByteArray stampRecord(const ToxFile::Stamp& stamp);
 
     void addNewSystemMessage(const ChatId& chatId, const SystemMessage& systemMessage);
 
@@ -261,10 +270,17 @@ public:
                            ToxFile::FileDirection direction);
     /**
      * KHANDAQ (0.2.57): the row of an incoming file that was accepted says interrupted (BROKEN),
-     * with the path it goes to, until its end writes it again: after a restart, what came of it is
-     * known, and an offer of it goes on from there.
+     * with the path it goes to and what tells that file (stamp, kept where an ended file keeps its
+     * hash), until its end writes it again: after a restart, what came of it is known, and an offer
+     * of it goes on from there.
      */
-    void setFileUnderway(const ChatId& chatId, const QByteArray& fileId, const QString& filePath);
+    void setFileUnderway(const ChatId& chatId, const QByteArray& fileId, const QString& filePath,
+                         const ToxFile::Stamp& stamp = ToxFile::Stamp());
+    /**
+     * KHANDAQ (0.2.57): whether a file of a person that came after the newest one of chatId with
+     * fileId, in any chat, goes to filePath too.
+     */
+    bool laterFileGoesTo(const ChatId& chatId, const QByteArray& fileId, const QString& filePath);
     size_t getNumMessagesForChat(const ChatId& chatId);
     size_t getNumMessagesForChatBeforeDate(const ChatId& chatId, const QDateTime& date);
     QList<HistMessage> getMessagesForChat(const ChatId& chatId, size_t firstIdx, size_t lastIdx);

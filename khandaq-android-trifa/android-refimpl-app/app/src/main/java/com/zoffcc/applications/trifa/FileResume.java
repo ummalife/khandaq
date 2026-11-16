@@ -224,6 +224,19 @@ final class FileResume
                                                                     : collapsed;
     }
 
+    /**
+     * Whether a file of theirs under way when the app stopped waits for its sender's next offer after the start
+     * (SPEC 1.5), or is cancelled there as before 0.2.57. A DATA transfer goes at the sender's end with the
+     * connection (break_files), and its sender offers the file again. An FTV2 one stays there, and toxcore offers
+     * it again only while no answer came: an offer this end had received and never accepted, with no bytes here,
+     * would wait for good. One accepted before, or with bytes here, goes on: its sender takes the kill of our new
+     * toxcore for a lost transfer and offers it again (LOST_TRANSFER_WINDOW_MS).
+     */
+    static boolean incomingKeptAfterRestart(final boolean ftv2, final boolean acceptedBefore, final long partialBytes)
+    {
+        return !ftv2 || acceptedBefore || (partialBytes > 0);
+    }
+
     // ---- the friend ----
 
     /**

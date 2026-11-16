@@ -905,10 +905,12 @@ public class HelperFiletransfer
                     kept.add(f);
                     kept_messages.add(m);
                 }
-                else if ((f.file_number != -1) && !((m != null) && incoming_cancelled_by_person(m, f)))
+                else if (((f.file_number != -1) || under_way_at_restart(f, m))
+                         && !((m != null) && incoming_cancelled_by_person(m, f)))
                 {
                     // A file of theirs the person cancelled keeps its cancelled row, without its bytes: a later
-                    // offer of it then waits for a tap (resume_incoming_offer).
+                    // offer of it then waits for a tap (resume_incoming_offer). One that does not wait for its
+                    // sender (resumable_after_restart) is cancelled also without a number of toxcore.
                     // Log.i(TAG, "set_all_filetransfers_inactive:cancel:id=" + f.tox_file_id_hex + " filename=" + f.file_name);
                     cancel_filetransfer_f((Filetransfer) f);
                 }
@@ -1013,6 +1015,20 @@ public class HelperFiletransfer
 
     /** A 1:1 file under way that goes on after the app starts again (set_all_filetransfers_inactive). */
     private static boolean resumable_after_restart(final Filetransfer f, final Message m)
+    {
+        return under_way_at_restart(f, m) && ((f.direction != TRIFA_FT_DIRECTION_INCOMING.value)
+                                               || FileResume.incomingKeptAfterRestart(f.kind == TOX_FILE_KIND_FTV2.value,
+                                                                                      m.ft_accepted || f.ft_accepted,
+                                                                                      get_vfs_file_length(f.path_name,
+                                                                                                          f.file_name)));
+    }
+
+    /**
+     * A 1:1 file under way when the app stopped: its entry not finished or cancelled. A file of theirs among them
+     * that does not wait for its sender (FileResume.incomingKeptAfterRestart) is cancelled at the start, as
+     * before 0.2.57, also when no transfer carried it any more.
+     */
+    private static boolean under_way_at_restart(final Filetransfer f, final Message m)
     {
         return (m != null) && ((f.kind == TOX_FILE_KIND_DATA.value) || (f.kind == TOX_FILE_KIND_FTV2.value))
                && (f.filesize > 0) && (m.filedb_id == -1) && (m.state != TOX_FILE_CONTROL_CANCEL.value)

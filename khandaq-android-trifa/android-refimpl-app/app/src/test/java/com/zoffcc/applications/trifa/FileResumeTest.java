@@ -461,6 +461,33 @@ public class FileResumeTest
         assertTrue(start.contains("if(resumable_after_restart(f,m))"));
     }
 
+    @Test
+    public void an_ftv2_offer_never_accepted_and_with_no_bytes_does_not_wait_after_a_restart()
+    {
+        // FTV2: the transfer stays at the sender's end, and toxcore there does not offer it again once answered.
+        assertFalse(FileResume.incomingKeptAfterRestart(true, false, 0L));
+        assertFalse(FileResume.incomingKeptAfterRestart(true, false, -1L));
+        // Accepted before, or bytes here: its sender takes the kill of our new toxcore for a lost transfer.
+        assertTrue(FileResume.incomingKeptAfterRestart(true, true, 0L));
+        assertTrue(FileResume.incomingKeptAfterRestart(true, false, 4096L));
+        assertTrue(FileResume.incomingKeptAfterRestart(true, true, 4096L));
+        // DATA: gone at the sender's end with the connection (break_files), and offered again.
+        assertTrue(FileResume.incomingKeptAfterRestart(false, false, 0L));
+        assertTrue(FileResume.incomingKeptAfterRestart(false, false, -1L));
+        assertTrue(FileResume.incomingKeptAfterRestart(false, true, 4096L));
+
+        // The start and its cleanup ask it for every file of theirs (resumable_after_restart); one it does not
+        // keep is cancelled, also when no transfer carried it any more. Ours are not asked.
+        final String helper = read(JAVA + "HelperFiletransfer.java");
+        assertTrue(bare(method(helper, "private static boolean resumable_after_restart(")).contains(
+                "returnunder_way_at_restart(f,m)&&((f.direction!=TRIFA_FT_DIRECTION_INCOMING.value)"
+                + "||FileResume.incomingKeptAfterRestart(f.kind==TOX_FILE_KIND_FTV2.value,m.ft_accepted||f.ft_accepted,"
+                + "get_vfs_file_length(f.path_name,f.file_name)));"));
+        assertTrue(bare(method(helper, "static synchronized void set_all_filetransfers_inactive()")).contains(
+                "elseif(((f.file_number!=-1)||under_way_at_restart(f,m))&&!((m!=null)&&incoming_cancelled_by_person(m,f)))"
+                + "{"));
+    }
+
     // ---- the sender reads at the requested position (SPEC Tests) ----
 
     @Test

@@ -64,11 +64,14 @@ public class GroupFileSendWiringTest
         final String ngc = code("NgcGroupFileTransfer.java");
         final String paced = body(ngc, "private static final class PacedSend");
         // The private sends of file packets are those of PacedSend, after the pace let them go; the others are the
-        // requests for missing chunks (sendFileResendRequest).
+        // requests for missing chunks (sendFileResendRequest, through sendFileRequestPrivately).
         final String request = body(ngc, "static void sendFileResendRequest(");
+        final String requestPackets = body(ngc, "private static int sendFileRequestPrivately(");
         assertEquals(count(ngc, "tox_group_send_custom_private_packet("),
                      count(paced, "tox_group_send_custom_private_packet(")
-                     + count(request, "tox_group_send_custom_private_packet("));
+                     + count(request, "tox_group_send_custom_private_packet(")
+                     + count(requestPackets, "tox_group_send_custom_private_packet("));
+        assertEquals(1, count(requestPackets, "tox_group_send_custom_private_packet("));
         final String sendLoop = body(paced, "private int send(final byte[] pkt, final boolean isBegin)");
         assertTrue(sendLoop.indexOf("awaitPace(g)") < sendLoop.indexOf("tox_group_send_custom_private_packet("));
         assertTrue(sendLoop.contains("spendPace(pkt.length, took)"));
@@ -171,7 +174,41 @@ public class GroupFileSendWiringTest
         assertFalse(request.contains("clear_ngc_outgoing_send_resume_state"));
         // And it never takes the place of the file's own send.
         final String enqueue = body(ngc, "private static void enqueueChunkedSend(");
-        assertTrue(enqueue.contains("!inflightOwnSends.contains(key) && inflightServes.add(key)"));
+        final int own = enqueue.indexOf("else if (inflightOwnSends.contains(key))");
+        assertTrue(own > 0);
+        assertTrue(own < enqueue.indexOf("SERVES.ask(serveKey, wanted)"));
+        assertTrue(own < enqueue.indexOf("inflightServes.add(key)"));
+    }
+
+    @Test
+    public void a_members_request_of_chunks_merges_into_its_resend_and_no_cooldown_drops_it() throws Exception
+    {
+        // QA 0.2.57: the packets of one request after its first, and an iPhone's repeats, were dropped by the cooldown
+        // of 2.5 s per file, and a request while another member's resend of the file ran by the one resend per file.
+        final String ngc = code("NgcGroupFileTransfer.java");
+        assertFalse(ngc.contains("SELECTIVE_RESEND_COOLDOWN_MS"));
+        assertFalse(ngc.contains("selectiveResendTs"));
+        final String enqueue = body(ngc, "private static void enqueueChunkedSend(");
+        // One resend per file and member.
+        assertTrue(enqueue.contains("(!isUserSend && (wanted != null)) ? (key + \":\" + targetPeerId) : null"));
+        assertTrue(enqueue.contains("sendGroupFileSelectiveOnWorker(g, targetPeerId, serveKey)"));
+        // Ended however it ends, also when it was not queued.
+        assertEquals(2, count(enqueue, "endInflightSend(isUserSend, key, serveKey)"));
+        assertTrue(body(ngc, "private static void endInflightSend(").contains("SERVES.end(serveKey)"));
+        // The resend sends what its member asked for, the requests that came meanwhile counted.
+        final String selective = body(ngc, "private static void sendGroupFileSelectiveOnWorker(");
+        assertTrue(selective.contains("SERVES.takeNext(serveKey, at)"));
+    }
+
+    @Test
+    public void an_incoming_file_asks_for_its_missing_chunks_as_a_list() throws Exception
+    {
+        // QA 0.2.57: an iPhone dropped Android's bitmap request (55 bytes for 86 chunks).
+        final String request = body(code("NgcGroupFileTransfer.java"), "static void sendFileResendRequest(");
+        assertTrue(request.contains("buildListedFileRequestPackets(msgId, missing)"));
+        // Without an assembly yet it asks for the whole file, as before.
+        assertTrue(request.contains("buildFileRequestPacket(msgId, totalChunks, null)"));
+        assertFalse(code("NgcGroupFileTransfer.java").contains("buildMissingChunkBitmap"));
     }
 
     @Test
@@ -188,7 +225,7 @@ public class GroupFileSendWiringTest
         final String request = body(ngc, "static void sendFileResendRequest(");
         final int take = request.indexOf("NACKS.takeRequest(");
         assertTrue(take > 0);
-        assertTrue(take < request.indexOf("tox_group_send_custom_private_packet("));
+        assertTrue(take < request.indexOf("sendFileRequestPrivately("));
         assertTrue(take < request.indexOf("tox_group_send_custom_packet("));
         assertFalse(ngc.contains("FILE_RESEND_REQUEST_COOLDOWN_MS"));
 

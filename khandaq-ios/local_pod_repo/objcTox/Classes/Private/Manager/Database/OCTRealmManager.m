@@ -2057,6 +2057,26 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     return ended;
 }
 
+- (BOOL)groupIncomingFileIsReadyInChat:(OCTChat *)chat
+                             msgIdHash:(NSString *)msgIdHash
+                          senderPubkey:(NSString *)senderPubkey
+{
+    if (chat.uniqueIdentifier.length == 0 || msgIdHash.length == 0) {
+        return NO;
+    }
+
+    __block BOOL ready = NO;
+
+    dispatch_sync(self.queue, ^{
+        ready = [self groupFileRowOwnedBySenderPubkey:senderPubkey
+                                            inResults:[OCTMessageAbstract objectsInRealm:self.realm
+                                                                                   where:@"chatUniqueIdentifier == %@ AND messageFile.groupMsgIdHashHex ==[c] %@ AND messageFile.fileType == %d",
+                                                       chat.uniqueIdentifier, msgIdHash, (int)OCTMessageFileTypeReady]] != nil;
+    });
+
+    return ready;
+}
+
 // KHANDAQ (#170): strip the "NNN_" uniquifier prefixes that OCTFileTools/receivers prepend when
 // storing a file under an already-taken name, so re-broadcast copies compare equal to the original.
 static NSString *OCTGroupFileBaseName(NSString *fileName)

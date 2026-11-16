@@ -5181,6 +5181,18 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         return;
     }
 
+    // KHANDAQ (0.2.57): the lookup below goes to the default Realm (+objectsWithPredicate:), which in the app is not
+    // the manager's Realm and holds nothing, so it never found a finished row. A BEGIN of a file whose message is Ready
+    // (a file sent again after a restart, which the transfer no longer remembers; a re-served copy of our own file)
+    // added a second, loading row that no completion finished. The test that row is finished is asked of the
+    // manager's Realm here; the rest of the lookup stays as it was.
+    if ([realmManager groupIncomingFileIsReadyInChat:chat msgIdHash:msgIdHex senderPubkey:senderPublicKeyHex]) {
+        OCTLogInfo(@"NGC group file %@ of group %u: BEGIN from peer %u, its message is Ready here: no new row",
+                   [(msgIdHex.length > 8 ? [msgIdHex substringToIndex:8] : (msgIdHex ?: @"")) lowercaseString],
+                   groupNumber, peerId);
+        return;
+    }
+
     // KHANDAQ (audit F-5): only the peer a row already names may re-open (resume) it. The in-memory
     // BEGIN dedup stops a second BEGIN only while the assembly lives — after the NACK eviction (see
     // OCTNgcGroupFileTransfer) the row is still 'Loading' with no assembly behind it, and a foreign peer

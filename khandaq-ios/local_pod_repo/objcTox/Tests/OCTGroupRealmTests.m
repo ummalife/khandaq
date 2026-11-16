@@ -383,6 +383,7 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
         XCTAssertEqual(transfer.completedAssemblyKeys.count, 1u, @"the file was not put together again");
     }
     XCTAssertEqualObjects([self filesInDirectory:folder], @[@"clip.mp4"], @"a second copy of the file stayed");
+    XCTAssertEqual([self rowsOfChat:chat].count, 1u, @"a second message of the file appeared");
     XCTAssertEqual(row.messageFile.fileType, OCTMessageFileTypeReady);
     XCTAssertEqualObjects(row.messageFile.filePath, keptPath, @"the message took the second copy");
     XCTAssertEqualObjects([NSData dataWithContentsOfFile:keptPath], payload);
@@ -419,6 +420,41 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
 
     XCTAssertNotNil(before);
     XCTAssertNotNil(after);
+    XCTAssertEqual(mocks.count, 3u);
+}
+
+// KHANDAQ (0.2.57, #170): a member serves a copy of a file this device sent. Our message of it is Ready from the
+// upload on: the copy adds no message, and no second file stays.
+- (void)testACopyOfOurOwnGroupFileThatComesBackAddsNothing
+{
+    OCTChat *chat = [self groupChat];
+    NSArray *mocks = [self groupFileMocksWithDownloads:[self.root stringByAppendingPathComponent:@"Downloads"]];
+    NSData *payload = [self generatedBytesOfLength:2500];
+    NSData *msgId = [self generatedBytesOfLength:32];
+    NSString *ourPath = [self.root stringByAppendingPathComponent:@"clip.mp4"];
+    XCTAssertTrue([payload writeToFile:ourPath atomically:YES]);
+    [self.realmManager addGroupMessageWithFileName:@"clip.mp4"
+                                          fileSize:payload.length
+                                          filePath:ourPath
+                                          fileType:OCTMessageFileTypeReady
+                                              chat:chat
+                                            peerId:0
+                                           fileUTI:nil
+                                 groupMsgIdHashHex:[OCTTox binToHexString:(uint8_t *)msgId.bytes length:msgId.length]
+                             groupTransferProgress:1.0f];
+
+    OCTSubmanagerGroupsImpl *submanager = [self startedSubmanagerWithDataSource:mocks.firstObject];
+    [self deliverPackets:[self packetsOfFile:payload named:@"clip.mp4" msgId:msgId chunkPayload:1000] toSubmanager:submanager];
+
+    OCTNgcGroupFileTransfer *transfer = [submanager valueForKey:@"fileTransfer"];
+    @synchronized (transfer.assemblies) {
+        XCTAssertEqual(transfer.completedAssemblyKeys.count, 1u, @"the copy was not put together");
+    }
+    XCTAssertEqual([self rowsOfChat:chat].count, 1u, @"the copy added a message");
+    XCTAssertEqualObjects([self filesInDirectory:[submanager groupFilesDirectoryForChatIdHex:kGroupRealmTestsChatIdHex]], @[],
+                          @"a copy of our file stayed");
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:ourPath], payload);
+
     XCTAssertEqual(mocks.count, 3u);
 }
 

@@ -243,6 +243,14 @@
                                   senderPubkey:(nullable NSString *)senderPubkey;
 
 /**
+ * KHANDAQ (0.2.57): YES when the chat has a Ready row of the incoming file with this msg-id hash that `senderPubkey`
+ * may own, by the test the row a COMPLETE finishes is found with. Looked up on this manager's own Realm.
+ */
+- (BOOL)groupIncomingFileIsReadyInChat:(nonnull OCTChat *)chat
+                             msgIdHash:(nonnull NSString *)msgIdHash
+                          senderPubkey:(nullable NSString *)senderPubkey;
+
+/**
  * KHANDAQ (#170): content-level dedup for incoming NGC group files. YES when the chat already has a
  * READY file with the same size and same base file name (leading "NNN_" uniquifier prefixes ignored)
  * within the recent window — a re-broadcast / re-served copy of a file we already show.

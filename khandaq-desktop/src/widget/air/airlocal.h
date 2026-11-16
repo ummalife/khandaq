@@ -29,6 +29,8 @@
 #include <QSet>
 #include <QTimer>
 
+#include <functional>
+
 class Friend;
 class Settings;
 class ToxPk;
@@ -106,6 +108,15 @@ public:
                         const QString& text);
     /** The group was left: its mute and its private messages go. */
     void forgetGroup(const QString& groupKey);
+
+    /**
+     * KHANDAQ (0.2.57): joins Khandaq Community through join, muted, when
+     * Air::Community::shouldAutoJoin says so (Air::Community::autoJoin), and then writes the store
+     * at once. True when it joined.
+     */
+    bool autoJoinCommunity(bool connected, bool alreadyInGroup, const std::function<bool()>& join);
+    /** A group was left: when it is Khandaq Community it is never joined by itself again. */
+    void noteGroupLeft(const QByteArray& groupChatId);
 
     Air::EntryMarks entryMarks(const QString& key) const override;
     void setEntryMarks(const QString& key, const Air::EntryMarks& marks) override;

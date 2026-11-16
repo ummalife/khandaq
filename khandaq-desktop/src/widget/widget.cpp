@@ -91,6 +91,7 @@
 #include "src/model/chatroom/groupchatroom.h"
 #include "src/model/friend.h"
 #include "src/model/group.h"
+#include "src/model/air/aircommunity.h"
 #include "src/model/air/airmedia.h"
 #include "src/model/air/airmessagemarks.h"
 #include "src/model/air/airpreferences.h"
@@ -987,6 +988,25 @@ void Widget::onConnected()
 {
     ui->statusButton->setEnabled(true);
     emit core->statusSet(core->getStatus());
+    joinCommunity();
+}
+
+void Widget::joinCommunity()
+{
+    // KHANDAQ (0.2.57): Khandaq Community, once per profile (Air::Community). Asked at every
+    // connection, the first after a start too, until toxcore takes the join. The groups of the save
+    // are in the list by now: Core::loadGroups gave them before the node could connect.
+    if (!airLocal) {
+        return;
+    }
+    const QByteArray chatId = Air::Community::chatId();
+    const bool alreadyInGroup = groupList->findGroup(GroupId(chatId)) != nullptr;
+    const bool joined = airLocal->autoJoinCommunity(true, alreadyInGroup, [this, &chatId] {
+        return core->joinGroupByChatId(chatId) != std::numeric_limits<uint32_t>::max();
+    });
+    if (joined) {
+        qDebug() << "Khandaq Community joined by itself, muted";
+    }
 }
 
 void Widget::onDisconnected()
@@ -3277,6 +3297,8 @@ void Widget::discardGroup(Group* g, bool fake, bool historyRemoved)
         // Its mute and the private messages with its members leave with it.
         if (airLocal) {
             airLocal->forgetGroup(groupId.toString());
+            // KHANDAQ (0.2.57): Khandaq Community, left, is never joined by itself again.
+            airLocal->noteGroupLeft(groupId.getByteArray());
         }
     }
     chatListWidget->removeGroupWidget(widget); // deletes widget

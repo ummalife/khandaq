@@ -298,6 +298,8 @@ set(${PROJECT_NAME}_SOURCES
   src/model/about/aboutfriend.h
   src/model/about/iaboutfriend.cpp
   src/model/about/iaboutfriend.h
+  src/model/air/aircommunity.cpp
+  src/model/air/aircommunity.h
   src/model/air/airconversation.cpp
   src/model/air/airconversation.h
   src/model/air/airgroup.cpp

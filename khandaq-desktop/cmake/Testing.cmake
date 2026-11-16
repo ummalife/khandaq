@@ -65,6 +65,7 @@ auto_test(persistence profileremove "" "")
 if(NOT "${SMILEYS}" STREQUAL "DISABLED")
   auto_test(persistence smileypack "${SMILEY_RESOURCES}" "") # needs emojione
 endif()
+auto_test(model aircommunity "" "")
 auto_test(model airconversation "" "")
 auto_test(model airgroup "" "")
 auto_test(model airgroupfilequeue "" "")

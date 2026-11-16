@@ -240,6 +240,17 @@ public:
     /** The receipt for anchor went; false when that is not the pending readAnchor. */
     bool noteReadSent(const QString& publicKey, const SeenAnchor& anchor);
 
+    /**
+     * KHANDAQ (0.2.57): Khandaq Community (Air::Community). Whether this profile joined it by
+     * itself once, and whether the person left it; after either it is never joined by itself
+     * again. Both only ever become true, and leaving the group (forgetGroup) keeps them. Each
+     * setter is false when the mark was there already.
+     */
+    bool communityAutoJoinDone() const;
+    bool setCommunityAutoJoinDone();
+    bool communityLeft() const;
+    bool setCommunityLeft();
+
 private:
     struct Contact
     {
@@ -273,6 +284,8 @@ private:
     /** Group message ids by entry key, and the keys from the oldest to the newest. */
     QHash<QString, QByteArray> wires;
     QStringList wireOrder;
+    bool communityJoined = false;
+    bool communityGone = false;
 };
 
 } // namespace Air

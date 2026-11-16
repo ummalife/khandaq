@@ -426,6 +426,11 @@ private:
      * opens when Core::groupJoined puts it in the list (onGroupJoined).
      */
     void openJoinedGroup(const GroupId& groupId);
+    /**
+     * KHANDAQ (0.2.57): joins Khandaq Community, muted, once per profile and never after it was
+     * left (Air::Community); it does not open.
+     */
+    void joinCommunity();
     /** The contacts New group offers to invite. */
     QVector<Air::InviteCandidate> inviteCandidates() const;
     /** The legacy form, kept for importing a file of IDs. */

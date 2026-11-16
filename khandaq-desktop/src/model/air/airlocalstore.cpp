@@ -66,6 +66,10 @@ const QString anchorField = QStringLiteral("anchor");
 const QString pendingField = QStringLiteral("pending");
 constexpr int anchorText = 1;
 constexpr int anchorFile = 2;
+// KHANDAQ (0.2.57): Khandaq Community. Optional, like the fields of read receipts.
+const QString communityField = QStringLiteral("community");
+const QString autoJoinDoneField = QStringLiteral("autoJoinDone");
+const QString leftField = QStringLiteral("left");
 
 /** An entry key: the hash of a conversation's key, "/", the hash of the entry. */
 bool isEntryKey(const QString& key)
@@ -154,6 +158,8 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
     entryOrder.clear();
     wires.clear();
     wireOrder.clear();
+    communityJoined = false;
+    communityGone = false;
     if (data.isEmpty()) {
         return;
     }
@@ -161,6 +167,9 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
     if (root.value(versionField).toInt() != storeVersion) {
         return;
     }
+    const QJsonObject community = root.value(communityField).toObject();
+    communityJoined = community.value(autoJoinDoneField).toBool();
+    communityGone = community.value(leftField).toBool();
     const QJsonObject stored = root.value(contactsField).toObject();
     for (auto it = stored.constBegin(); it != stored.constEnd(); ++it) {
         const QJsonObject fields = it.value().toObject();
@@ -348,6 +357,12 @@ QByteArray LocalStore::save() const
             wireList.append(fields);
         }
         root.insert(wiresField, wireList);
+    }
+    if (communityJoined || communityGone) {
+        QJsonObject community;
+        community.insert(autoJoinDoneField, communityJoined);
+        community.insert(leftField, communityGone);
+        root.insert(communityField, community);
     }
     return QJsonDocument(root).toJson(QJsonDocument::Compact);
 }
@@ -839,6 +854,30 @@ bool LocalStore::forgetEntries()
     entryOrder.clear();
     wires.clear();
     wireOrder.clear();
+    return changed;
+}
+
+bool LocalStore::communityAutoJoinDone() const
+{
+    return communityJoined;
+}
+
+bool LocalStore::setCommunityAutoJoinDone()
+{
+    const bool changed = !communityJoined;
+    communityJoined = true;
+    return changed;
+}
+
+bool LocalStore::communityLeft() const
+{
+    return communityGone;
+}
+
+bool LocalStore::setCommunityLeft()
+{
+    const bool changed = !communityGone;
+    communityGone = true;
     return changed;
 }
 

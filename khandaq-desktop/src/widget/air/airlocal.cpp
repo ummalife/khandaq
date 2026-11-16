@@ -20,6 +20,7 @@
 #include "airlocal.h"
 
 #include "src/core/toxpk.h"
+#include "src/model/air/aircommunity.h"
 #include "src/model/friend.h"
 #include "src/model/status.h"
 #include "src/persistence/settings.h"
@@ -237,6 +238,27 @@ void AirLocal::addPrivateLine(const QString& groupKey, const QString& peerKey, b
 void AirLocal::forgetGroup(const QString& groupKey)
 {
     if (store.forgetGroup(groupKey)) {
+        saveLater.stop();
+        save();
+    }
+}
+
+bool AirLocal::autoJoinCommunity(bool connected, bool alreadyInGroup,
+                                 const std::function<bool()>& join)
+{
+    if (!Air::Community::autoJoin(store, connected, alreadyInGroup, join)) {
+        return false;
+    }
+    // At once: a profile that closes now has joined, and must not join again at the next start.
+    saveLater.stop();
+    save();
+    emit changed(ToxPk(Air::Community::chatId()));
+    return true;
+}
+
+void AirLocal::noteGroupLeft(const QByteArray& groupChatId)
+{
+    if (Air::Community::noteGroupLeft(store, groupChatId)) {
         saveLater.stop();
         save();
     }

@@ -968,7 +968,8 @@ final class AirRepository
                                   activity > 0L ? ChatListUiHelper.format_chat_list_time(context, activity) : "",
                                   activity, transitCount, ChatListUiHelper.cached_group_unread_count(groupId),
                                   ChatFavoritesHelper.isFavorite(context, ChatFavoritesHelper.groupKey(groupId)),
-                                  null, AirModel.Tone.index(groupId));
+                                  null, AirModel.Tone.index(groupId),
+                                  KhandaqCommunity.pinned(groupId, group.group_we_left));
     }
 
     private static AirModel.Entry conferenceEntry(final Context context, final ConferenceDB conference)

@@ -825,6 +825,7 @@ public class TrifaToxService extends Service
 
         remove_legacy_public_community_group();
         prune_stale_tox_groups();
+        HelperGroup.store_community_display_name();
 
         long num_groups = tox_group_get_number_groups();
         HelperGeneric.logI(TAG, "load groups at startup: num=" + num_groups);

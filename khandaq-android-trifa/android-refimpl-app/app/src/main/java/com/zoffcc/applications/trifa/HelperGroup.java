@@ -1800,11 +1800,29 @@ public class HelperGroup
 
     static String get_group_display_name(final String group_identifier, final String raw_name)
     {
-        if (raw_name == null)
+        // KHANDAQ (0.2.57): Khandaq Community goes by its own name whatever its topic says.
+        return KhandaqCommunity.displayName(group_identifier, raw_name);
+    }
+
+    /**
+     * KHANDAQ (0.2.57): the stored name of Khandaq Community is its own (get_group_display_name), also on a row
+     * stored before (the founder's topic, an invitation's name) and on a row of it the person left, which toxcore
+     * no longer names again: the screens that read the stored name (notifications, the search) say it too. Run at
+     * the start, where the groups are loaded.
+     */
+    static void store_community_display_name()
+    {
+        try
         {
-            return "";
+            orma.updateGroupDB().
+                    group_identifierEq(KhandaqCommunity.CHAT_ID.toLowerCase(Locale.ROOT)).
+                    name(KhandaqCommunity.DISPLAY_NAME).
+                    execute();
         }
-        return raw_name;
+        catch (Exception e)
+        {
+            Log.w(TAG, "store_community_display_name:EE:" + e.getMessage());
+        }
     }
 
     static boolean should_show_group_system_messages(final String group_identifier)
@@ -4654,7 +4672,7 @@ public class HelperGroup
             {
                 return;
             }
-            orma.updateGroupDB().group_identifierEq(id).name(name).execute();
+            orma.updateGroupDB().group_identifierEq(id).name(get_group_display_name(id, name)).execute();
             update_group_in_friendlist(id);
             update_group_in_groupmessagelist(id);
         }

@@ -1,5 +1,6 @@
 package com.zoffcc.applications.trifa;
 
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -16,6 +17,9 @@ final class KhandaqCommunity
 {
     /** The chat id of the group, 64 hexadecimal characters in upper case. */
     static final String CHAT_ID = "CFF1995F235303B88C4EF1CE903DCEDC77CEAC82DD1323DAB2CACD2EF840646F";
+
+    /** The name the group goes by on every screen, whatever its topic says (the owner's rule, 2026-11-16). */
+    static final String DISPLAY_NAME = "Khandaq Community";
 
     /**
      * The profile has the group for good (SPEC item 1, "the group exists locally"): it has connected once, so toxcore
@@ -51,6 +55,16 @@ final class KhandaqCommunity
         boolean join();
     }
 
+    /** Tells the rows of a chat list apart, for pinRow. */
+    interface ChatRows<T>
+    {
+        /** The row of Khandaq Community while the person is in it (pinned). */
+        boolean pinned(T row);
+
+        /** The Saved Messages row, which stands first in every filter of the list. */
+        boolean saved(T row);
+    }
+
     private KhandaqCommunity()
     {
     }
@@ -59,6 +73,62 @@ final class KhandaqCommunity
     static boolean isCommunity(final String groupId)
     {
         return (groupId != null) && CHAT_ID.equalsIgnoreCase(groupId.trim());
+    }
+
+    /**
+     * The name a group goes by: Khandaq Community by its own, whatever its founder put in its topic or its name, on
+     * every screen that names it (the list, its chat, its dossier, notifications, the pickers, the search, a report);
+     * any other group by {@code rawName}, or "" for none. HelperGroup.get_group_display_name asks it.
+     */
+    static String displayName(final String groupId, final String rawName)
+    {
+        if (isCommunity(groupId))
+        {
+            return DISPLAY_NAME;
+        }
+        return (rawName == null) ? "" : rawName;
+    }
+
+    /**
+     * Whether the row of a group is pinned to the top of the chat list: Khandaq Community while the person is in it,
+     * joined by itself or by hand. A row of it they left ({@code weLeft}) is a group like any other. There is no
+     * unpin: leaving the group is how the person takes it away.
+     */
+    static boolean pinned(final String groupId, final boolean weLeft)
+    {
+        return isCommunity(groupId) && !weLeft;
+    }
+
+    /**
+     * Puts the pinned row of Khandaq Community at the top of a chat list ({@code shown}): right below the Saved
+     * Messages row when that one stands first, or first. The Saved Messages row stands in every filter of the list,
+     * and so does this one: a filter that left it out of {@code shown} gets it from {@code all}. Without a pinned row
+     * in {@code all} nothing changes.
+     */
+    static <T> void pinRow(final List<T> shown, final List<T> all, final ChatRows<T> rows)
+    {
+        T community = null;
+        for (final T row : all)
+        {
+            if (rows.pinned(row))
+            {
+                community = row;
+                break;
+            }
+        }
+        if (community == null)
+        {
+            return;
+        }
+        for (int i = shown.size() - 1; i >= 0; i--)
+        {
+            if (rows.pinned(shown.get(i)))
+            {
+                shown.remove(i);
+            }
+        }
+        final boolean savedOnTop = !shown.isEmpty() && rows.saved(shown.get(0));
+        shown.add(savedOnTop ? 1 : 0, community);
     }
 
     /**

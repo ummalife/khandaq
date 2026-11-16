@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -431,6 +432,151 @@ public class KhandaqCommunityTest
         final String join = method(read(JAVA + "HelperGroup.java"),
                                    "static boolean join_public_group_by_id(final String group_id, @Nullable final String password, final boolean show_toast,\n");
         assertTrue(bare(join).contains("get_group_peer_join_name(),password);"));
+    }
+
+    // ---- its name and its place at the top of the list (the owner's rule, 2026-11-16) ----
+
+    /** A row of a chat list, told apart as FriendListFragment.CHAT_ROWS tells its rows apart. */
+    private static final class ListRow
+    {
+        final String name;
+        /** Null for a row that is not a group. */
+        final String groupId;
+        final boolean weLeft;
+
+        ListRow(final String name, final String groupId, final boolean weLeft)
+        {
+            this.name = name;
+            this.groupId = groupId;
+            this.weLeft = weLeft;
+        }
+    }
+
+    private static final KhandaqCommunity.ChatRows<ListRow> ROWS = new KhandaqCommunity.ChatRows<ListRow>()
+    {
+        @Override
+        public boolean pinned(final ListRow row)
+        {
+            return (row.groupId != null) && KhandaqCommunity.pinned(row.groupId, row.weLeft);
+        }
+
+        @Override
+        public boolean saved(final ListRow row)
+        {
+            return "Saved Messages".equals(row.name);
+        }
+    };
+
+    private static final String COMMUNITY_ROW_ID = KhandaqCommunity.CHAT_ID.toLowerCase(Locale.ROOT);
+    private static final ListRow SAVED = new ListRow("Saved Messages", null, false);
+    private static final ListRow AMINA = new ListRow("Amina", null, false);
+    private static final ListRow STUDY = new ListRow("Study circle", OTHER_GROUP, false);
+    private static final ListRow COMMUNITY = new ListRow("Khandaq Community", COMMUNITY_ROW_ID, false);
+    private static final ListRow COMMUNITY_LEFT = new ListRow("Khandaq Community", COMMUNITY_ROW_ID, true);
+
+    @Test
+    public void the_community_goes_by_its_own_name_whatever_its_topic()
+    {
+        final String topic = "Official Khandaq community · Be kind, no spam or ads · Admins never write first";
+        for (final String id : new String[]{KhandaqCommunity.CHAT_ID, COMMUNITY_ROW_ID})
+        {
+            assertEquals("Khandaq Community", KhandaqCommunity.displayName(id, topic));
+            assertEquals("Khandaq Community", KhandaqCommunity.displayName(id, ""));
+            assertEquals("Khandaq Community", KhandaqCommunity.displayName(id, null));
+            // The hook every screen names a group through, and every name stored for one.
+            assertEquals("Khandaq Community", HelperGroup.get_group_display_name(id, topic));
+        }
+    }
+
+    @Test
+    public void other_groups_keep_the_name_they_have()
+    {
+        assertEquals("Study circle", KhandaqCommunity.displayName(OTHER_GROUP, "Study circle"));
+        assertEquals("", KhandaqCommunity.displayName(OTHER_GROUP, null));
+        assertEquals("Official Khandaq community",
+                     HelperGroup.get_group_display_name(OTHER_GROUP, "Official Khandaq community"));
+        assertEquals("", HelperGroup.get_group_display_name(LEGACY_TRIFA_GROUP, null));
+    }
+
+    @Test
+    public void every_name_shown_or_stored_for_a_group_goes_through_the_name_rule()
+    {
+        final String helper = read(JAVA + "HelperGroup.java");
+        // The title the list, the chat, the dossier, the pickers and a report show: each way out asks the rule.
+        final String title = method(helper,
+                                    "static String get_effective_group_title(final long group_num, final String group_identifier)");
+        assertEquals(count(title, "return "), count(title, "return get_group_display_name(group_identifier, "));
+        // The stored name that notifications and the search read.
+        assertTrue(bare(method(helper, "static void update_group_in_db_name(final String group_identifier, final String name)"))
+                           .contains(".name(get_group_display_name(group_identifier,name))."));
+        assertTrue(bare(method(helper, "static void name_group_from_invitation(final String group_identifier,"))
+                           .contains(".name(get_group_display_name(id,name))."));
+        assertTrue(bare(helper).contains("conf_new.name=get_group_display_name(group_identifier,group_topic);"));
+        // A row stored before, or a row of it the person left, gets its name where the groups load at the start.
+        assertTrue(bare(method(helper, "static void store_community_display_name()"))
+                           .contains(".name(KhandaqCommunity.DISPLAY_NAME)."));
+        assertTrue(method(read(JAVA + "TrifaToxService.java"), "void load_and_add_all_groups()")
+                           .contains("HelperGroup.store_community_display_name();"));
+    }
+
+    @Test
+    public void its_row_stands_second_right_below_saved_messages()
+    {
+        final List<ListRow> all = Arrays.asList(SAVED, AMINA, STUDY, COMMUNITY);
+        assertEquals(Arrays.asList("Saved Messages", "Khandaq Community", "Amina", "Study circle"), pin(all, all));
+    }
+
+    @Test
+    public void without_saved_messages_on_top_its_row_stands_first()
+    {
+        final List<ListRow> all = Arrays.asList(AMINA, STUDY, COMMUNITY);
+        assertEquals(Arrays.asList("Khandaq Community", "Amina", "Study circle"), pin(all, all));
+        assertEquals(Collections.singletonList("Khandaq Community"), pin(Collections.<ListRow>emptyList(), all));
+    }
+
+    @Test
+    public void a_filter_that_left_it_out_shows_it_as_it_shows_saved_messages()
+    {
+        // Saved Messages stands in every filter of the list (FavoritesChatHelper.prependPinnedRow); so does it.
+        final List<ListRow> all = Arrays.asList(SAVED, AMINA, STUDY, COMMUNITY);
+        assertEquals(Arrays.asList("Saved Messages", "Khandaq Community", "Amina"), pin(Arrays.asList(SAVED, AMINA), all));
+    }
+
+    @Test
+    public void once_left_its_row_is_not_pinned()
+    {
+        assertTrue(KhandaqCommunity.pinned(KhandaqCommunity.CHAT_ID, false));
+        assertTrue(KhandaqCommunity.pinned(COMMUNITY_ROW_ID, false));
+        assertFalse(KhandaqCommunity.pinned(KhandaqCommunity.CHAT_ID, true));
+        assertFalse(KhandaqCommunity.pinned(OTHER_GROUP, false));
+        assertFalse(KhandaqCommunity.pinned(null, false));
+        // A row of it the person left is a group like any other: it stays where the list put it.
+        final List<ListRow> all = Arrays.asList(SAVED, AMINA, COMMUNITY_LEFT, STUDY);
+        assertEquals(Arrays.asList("Saved Messages", "Amina", "Khandaq Community", "Study circle"), pin(all, all));
+    }
+
+    @Test
+    public void both_chat_lists_pin_the_row_of_the_group_the_person_is_in()
+    {
+        final String list = read(JAVA + "FriendListFragment.java");
+        final String filter = bare(method(list, "private List<CombinedFriendsAndConferences> filterChatsListItems("));
+        final int saved = filter.indexOf("FavoritesChatHelper.prependPinnedRow(filtered);");
+        assertTrue(saved >= 0 && filter.indexOf("KhandaqCommunity.pinRow(filtered,items,CHAT_ROWS);") > saved);
+        assertTrue(bare(list).contains(
+                "KhandaqCommunity.pinned(row.group_item.group_identifier,row.group_item.group_we_left)"));
+        assertTrue(bare(read(JAVA + "AirRepository.java")).contains("KhandaqCommunity.pinned(groupId,group.group_we_left)"));
+    }
+
+    private static List<String> pin(final List<ListRow> shown, final List<ListRow> all)
+    {
+        final List<ListRow> rows = new ArrayList<>(shown);
+        KhandaqCommunity.pinRow(rows, all, ROWS);
+        final List<String> names = new ArrayList<>();
+        for (final ListRow row : rows)
+        {
+            names.add(row.name);
+        }
+        return names;
     }
 
     @Test

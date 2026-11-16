@@ -59,6 +59,11 @@ typedef void (^OCTNgcGroupFileTransferIncomingDroppedBlock)(uint32_t groupNumber
 /// directory block, for a file that is about to be stored. Set it before the first packet comes.
 @property (atomic, copy, nullable) NSSet<NSString *> *(^incomingFileNamesInUseBlock)(uint32_t groupNumber);
 
+/// KHANDAQ (0.2.57): how many members a packet to the group goes to now, for the pace of the group file packets this
+/// device sends: a packet costs its bytes once for each. Called on the queues that send, never on the main one. Set it
+/// before the first file goes; without it a packet costs as if it went to one member.
+@property (atomic, copy, nullable) NSUInteger (^memberCountBlock)(uint32_t groupNumber);
+
 - (instancetype)initWithSendPacketBlock:(OCTNgcGroupFileTransferSendPacketBlock)sendPacketBlock
                 incomingFilesDirectory:(NSString *(^)(uint32_t groupNumber))incomingFilesDirectoryBlock
                    incomingBeginBlock:(nullable OCTNgcGroupFileTransferIncomingBeginBlock)incomingBeginBlock

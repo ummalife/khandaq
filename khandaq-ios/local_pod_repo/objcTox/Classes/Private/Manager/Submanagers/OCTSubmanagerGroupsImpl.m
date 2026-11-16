@@ -4350,10 +4350,20 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                 return NO;
             }
 
-            return [[self.dataSource managerGetTox] groupSendCustomPacket:packet
-                                                            groupNumber:groupNumber
-                                                               lossless:YES
-                                                                  error:error];
+            // KHANDAQ (0.2.57): on the tox queue. The packets of a group file go from the transfer's own queues, and
+            // toxcore, which has no lock of its own here, ran them into the send array of each member while
+            // tox_iterate acknowledged, resent and dropped entries of the same arrays on its queue.
+            __block BOOL sent = NO;
+            __block NSError *sendError = nil;
+            [self performSyncOnToxQueue:^(OCTTox *tox) {
+                NSError *toxError = nil;
+                sent = [tox groupSendCustomPacket:packet groupNumber:groupNumber lossless:YES error:&toxError];
+                sendError = toxError;
+            }];
+            if (error) {
+                *error = sendError;
+            }
+            return sent;
         }
         incomingFilesDirectory:^NSString *(uint32_t groupNumber) {
             __strong typeof(weakSelf) self = weakSelf;
@@ -4433,6 +4443,16 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         [self handleIncomingGroupFileDroppedWithGroupNumber:groupNumber
                                          senderPublicKeyHex:senderPublicKeyHex
                                                    msgIdHex:msgIdHex];
+    };
+    // KHANDAQ (0.2.57): the members a group file packet goes to, for the pace of what this device sends: the confirmed
+    // peers but this one (the count has this one in it).
+    self.fileTransfer.memberCountBlock = ^NSUInteger (uint32_t groupNumber) {
+        __strong typeof(weakSelf) self = weakSelf;
+        __block uint32_t count = 0;
+        [self performSyncOnToxQueue:^(OCTTox *tox) {
+            count = [tox groupPeerCountForGroupNumber:groupNumber error:nil];
+        }];
+        return count > 1 ? (NSUInteger)(count - 1) : 0;
     };
     self.fileTransfer.incomingFileNamesInUseBlock = ^NSSet<NSString *> *(uint32_t groupNumber) {
         __strong typeof(weakSelf) self = weakSelf;

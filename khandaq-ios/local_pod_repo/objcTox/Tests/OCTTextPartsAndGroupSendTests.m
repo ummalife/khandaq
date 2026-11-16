@@ -64,11 +64,29 @@ static uint32_t mocked_tox_file_send(Tox *tox, uint32_t friend_number, uint32_t 
 @interface OCTNgcGroupFileTransfer (StallTests)
 
 - (NSMutableDictionary<NSString *, id> *)assemblies;
+- (void)setNowMsBlock:(uint64_t (^)(void))block;
+- (void)setSleepMsBlock:(void (^)(uint64_t ms))block;
 - (void)nackTickForAssembly:(id)assembly assemblyKey:(NSString *)assemblyKey;
 - (void)appendFilename:(NSString *)fileName toData:(NSMutableData *)data;
 - (NSString *)utf8FilenameFromData:(NSData *)data offset:(NSUInteger)offset length:(NSUInteger)maxLen;
 
 @end
+
+// OCTNgcUploadPace, private to OCTNgcGroupFileTransfer.m.
+@interface NSObject (OCTNgcUploadPaceTests)
+
++ (uint64_t)costOfPacketBytes:(uint64_t)packetBytes members:(NSUInteger)members;
+- (instancetype)initWithBytesPerSecond:(uint64_t)bytesPerSecond burstMs:(uint64_t)burstMs;
+- (BOOL)readyAtMs:(uint64_t)nowMs;
+- (void)spend:(uint64_t)cost;
+- (uint64_t)msUntilReadyAtMs:(uint64_t)nowMs;
+
+@end
+
+static const uint64_t kPaceTestsRate = 512 * 1024;
+static const uint64_t kPaceTestsBurst = 512 * 1024 / 4;
+static const uint64_t kPaceTestsChunk = 37000;
+static const uint64_t kPaceTestsT0 = 1000000;
 
 /**
  * KHANDAQ (long texts, group connection).
@@ -1466,6 +1484,318 @@ static uint32_t mocked_tox_file_send(Tox *tox, uint32_t friend_number, uint32_t 
     XCTAssertEqual([self groupTestU32In:request at:52], 4u);
 }
 
+#pragma mark - The pace of what this device sends to a group
+
+// KHANDAQ (0.2.57): iOS handed every chunk of a group file to toxcore at once (a pause of 2 ms every 8). toxcore keeps
+// each of the 28 parts of a chunk in the member's send array until the member acknowledges it, and the member drops
+// every part after a lost one: of a file of 86 chunks an Android member got 27, the desktop none, and the rest never
+// came. The packets go at the pace of Android's NgcUploadPace and the desktop's Air::UploadPace now: 512 KiB/s, what
+// this device uploads, a packet once for each member it goes to.
+
+- (id)paceTestsPace
+{
+    Class paceClass = NSClassFromString(@"OCTNgcUploadPace");
+    XCTAssertNotNil(paceClass);
+    return [[paceClass alloc] initWithBytesPerSecond:kPaceTestsRate burstMs:250];
+}
+
+/// Packets of `kPaceTestsChunk` bytes to `members`, as fast as the pace lets them, for `durationMs`: the bytes let go.
+- (uint64_t)paceTestsBytesLetGoBy:(id)pace members:(NSUInteger)members durationMs:(uint64_t)durationMs
+{
+    uint64_t now = kPaceTestsT0;
+    uint64_t bytes = 0;
+    while (now < kPaceTestsT0 + durationMs) {
+        if ([pace readyAtMs:now]) {
+            const uint64_t cost = [NSClassFromString(@"OCTNgcUploadPace") costOfPacketBytes:kPaceTestsChunk members:members];
+            [pace spend:cost];
+            bytes += cost;
+        }
+        else {
+            now += MAX((uint64_t)1, [pace msUntilReadyAtMs:now]);
+        }
+    }
+    return bytes;
+}
+
+- (void)testThePaceLetsChunksGoAtItsRateHoweverFastTheyAreHandedOver
+{
+    const uint64_t bytes = [self paceTestsBytesLetGoBy:[self paceTestsPace] members:1 durationMs:10000];
+    const uint64_t expected = kPaceTestsRate * 10;
+    XCTAssertGreaterThanOrEqual(bytes, expected - kPaceTestsChunk);
+    XCTAssertLessThanOrEqual(bytes, expected + kPaceTestsBurst + 2 * kPaceTestsChunk);
+}
+
+- (void)testAPacketToMoreMembersCostsMore
+{
+    Class paceClass = NSClassFromString(@"OCTNgcUploadPace");
+    XCTAssertEqual([paceClass costOfPacketBytes:kPaceTestsChunk members:8], 8 * kPaceTestsChunk);
+    XCTAssertEqual([paceClass costOfPacketBytes:kPaceTestsChunk members:1], kPaceTestsChunk);
+    XCTAssertEqual([paceClass costOfPacketBytes:kPaceTestsChunk members:0], kPaceTestsChunk, @"what goes out is paid for");
+
+    const uint64_t toOne = [self paceTestsBytesLetGoBy:[self paceTestsPace] members:1 durationMs:20000] / kPaceTestsChunk;
+    const uint64_t toEight = [self paceTestsBytesLetGoBy:[self paceTestsPace] members:8 durationMs:20000] / (8 * kPaceTestsChunk);
+    XCTAssertLessThanOrEqual(toEight * 8, toOne + 8);
+    XCTAssertGreaterThanOrEqual(toEight * 8 + 16, toOne);
+}
+
+- (void)testThePaceLetsTheFirstPacketGoAtOnceAndAPauseGivesOneBurstAtMost
+{
+    id pace = [self paceTestsPace];
+    XCTAssertTrue([pace readyAtMs:kPaceTestsT0]);
+    XCTAssertEqual([pace msUntilReadyAtMs:kPaceTestsT0], 0u);
+
+    // An hour of silence gives back one burst, not an hour of the rate.
+    [pace spend:kPaceTestsBurst];
+    XCTAssertFalse([pace readyAtMs:kPaceTestsT0]);
+    const uint64_t later = kPaceTestsT0 + 60 * 60 * 1000;
+    XCTAssertTrue([pace readyAtMs:later]);
+    [pace spend:kPaceTestsBurst];
+    XCTAssertFalse([pace readyAtMs:later]);
+}
+
+- (void)testTheWaitThePaceNamesIsTheWaitItKeeps
+{
+    for (uint64_t debt = 0; debt <= 12 * kPaceTestsChunk; debt += 997) {
+        id (^afterFirstPacket)(void) = ^id {
+            id pace = [self paceTestsPace];
+            XCTAssertTrue([pace readyAtMs:kPaceTestsT0]);
+            [pace spend:kPaceTestsBurst + debt];
+            return pace;
+        };
+        const uint64_t wait = [afterFirstPacket() msUntilReadyAtMs:kPaceTestsT0];
+        XCTAssertGreaterThan(wait, 0u, @"debt=%llu", debt);
+        // Ready when it says, and not a millisecond earlier: the sender sleeps that long, not longer.
+        XCTAssertTrue([afterFirstPacket() readyAtMs:kPaceTestsT0 + wait], @"debt=%llu wait=%llu", debt, wait);
+        XCTAssertFalse([afterFirstPacket() readyAtMs:kPaceTestsT0 + wait - 1], @"debt=%llu wait=%llu", debt, wait);
+    }
+
+    id pace = [self paceTestsPace];
+    XCTAssertTrue([pace readyAtMs:kPaceTestsT0]);
+    [pace spend:1];
+    XCTAssertEqual([pace msUntilReadyAtMs:kPaceTestsT0], 0u, @"credit left names no wait");
+}
+
+- (void)testAClockThatGoesBackGivesThePaceNothing
+{
+    id pace = [self paceTestsPace];
+    XCTAssertTrue([pace readyAtMs:kPaceTestsT0]);
+    [pace spend:kPaceTestsBurst + kPaceTestsChunk];
+    const uint64_t wait = [pace msUntilReadyAtMs:kPaceTestsT0];
+    XCTAssertGreaterThan(wait, 0u);
+    XCTAssertFalse([pace readyAtMs:kPaceTestsT0 - 10000]);
+    XCTAssertFalse([pace readyAtMs:kPaceTestsT0]);
+    XCTAssertTrue([pace readyAtMs:kPaceTestsT0 + wait]);
+}
+
+/// A member that sends at a clock of its own, which only its waits move: the time of each packet goes to `sentAt`.
+- (OCTNgcGroupFileTransfer *)paceTestsSenderRecording:(NSMutableArray<NSNumber *> *)sentAt
+                                              packets:(NSMutableArray<NSData *> *)packets
+                                              members:(NSUInteger)members
+                                                sleep:(void (^)(uint64_t ms))onSleep
+{
+    __block uint64_t now = kPaceTestsT0;
+    OCTNgcGroupFileTransfer *sender = [[OCTNgcGroupFileTransfer alloc] initWithSendPacketBlock:^BOOL (uint32_t groupNumber, NSData *packet, NSError **error) {
+        [sentAt addObject:@(now)];
+        [packets addObject:packet];
+        return YES;
+    } incomingFilesDirectory:^NSString *(uint32_t groupNumber) {
+        return NSTemporaryDirectory();
+    } incomingBeginBlock:nil incomingCompleteBlock:^(uint32_t groupNumber, uint32_t peerId, NSString *senderPublicKeyHex,
+                                                    NSString *fileName, NSString *filePath, uint64_t fileSize, NSString *msgIdHex) {
+    } transferProgressBlock:nil];
+    [sender setNowMsBlock:^uint64_t {
+        return now;
+    }];
+    [sender setSleepMsBlock:^(uint64_t ms) {
+        now += ms;
+        if (onSleep) {
+            onSleep(ms);
+        }
+    }];
+    sender.memberCountBlock = ^NSUInteger (uint32_t groupNumber) {
+        XCTAssertFalse([NSThread isMainThread]);
+        return members;
+    };
+    return sender;
+}
+
+- (void)testTheChunksOfAGroupFileGoAtThePaceForTheMembersOfTheGroup
+{
+    NSMutableArray<NSNumber *> *sentAt = [NSMutableArray new];
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *sender = [self paceTestsSenderRecording:sentAt packets:packets members:2 sleep:nil];
+
+    [self groupTestSendContent:[self groupTestContentOfLength:12 * kGroupTestChunkPayload]
+                         named:@"clip.mp4"
+                      msgIdHex:[OCTNgcGroupFileTransfer generateMsgIdHex]
+                            by:sender];
+
+    XCTAssertEqual(packets.count, 13u);
+    // The BEGIN and two chunks fit in the burst; the rest go at the rate, each costing 37000 bytes twice.
+    XCTAssertEqual(sentAt[0].unsignedLongLongValue, kPaceTestsT0);
+    XCTAssertEqual(sentAt[2].unsignedLongLongValue, kPaceTestsT0);
+    XCTAssertGreaterThan(sentAt[3].unsignedLongLongValue, kPaceTestsT0);
+    const uint64_t costBeforeTheLast = 2 * (packets[0].length + 11 * kPaceTestsChunk);
+    const uint64_t expected = (costBeforeTheLast - kPaceTestsBurst) * 1000 / kPaceTestsRate;
+    const uint64_t elapsed = sentAt.lastObject.unsignedLongLongValue - kPaceTestsT0;
+    XCTAssertGreaterThanOrEqual(elapsed, expected);
+    XCTAssertLessThanOrEqual(elapsed, expected + 50);
+    for (NSUInteger i = 4; i < sentAt.count; i++) {
+        const uint64_t gap = sentAt[i].unsignedLongLongValue - sentAt[i - 1].unsignedLongLongValue;
+        XCTAssertGreaterThanOrEqual(gap, 2 * kPaceTestsChunk * 1000 / kPaceTestsRate - 1, @"chunk %lu", (unsigned long)i);
+    }
+}
+
+- (void)testAGroupFileCancelledWhileItWaitsForThePaceStops
+{
+    NSMutableArray<NSNumber *> *sentAt = [NSMutableArray new];
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    __block OCTNgcGroupFileTransfer *sender = nil;
+    sender = [self paceTestsSenderRecording:sentAt packets:packets members:50 sleep:^(uint64_t ms) {
+        [sender cancelSendForMsgIdHex:msgIdHex];
+    }];
+
+    NSString *outbox = [self nameTestDirectory];
+    NSString *path = [outbox stringByAppendingPathComponent:@"clip.mp4"];
+    XCTAssertTrue([[self groupTestContentOfLength:5 * kGroupTestChunkPayload] writeToFile:path atomically:YES]);
+    __block NSError *failure = nil;
+    XCTestExpectation *ended = [self expectationWithDescription:@"the send ended"];
+    [sender sendFileAtPath:path groupNumber:5 msgIdHex:msgIdHex progress:nil completion:^(BOOL success, NSError *error) {
+        XCTAssertFalse(success);
+        failure = error;
+        [ended fulfill];
+    }];
+    [self waitForExpectations:@[ended] timeout:5.0];
+
+    // The BEGIN and the first chunk went in the burst; the second waited, and the cancel stopped it.
+    XCTAssertEqual(packets.count, 2u);
+    XCTAssertEqual(failure.code, OCTNgcGroupFileTransferErrorCancelled);
+    sender = nil;
+    [[NSFileManager defaultManager] removeItemAtPath:outbox error:nil];
+}
+
+- (void)testChunksAskedForAgainGoAtThePaceOnceEachHoweverOftenTheyAreAskedFor
+{
+    NSMutableArray<NSNumber *> *sentAt = [NSMutableArray new];
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *sender = [self paceTestsSenderRecording:sentAt packets:packets members:1 sleep:nil];
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    [self groupTestSendContent:[self groupTestContentOfLength:4 * kGroupTestChunkPayload + 10] named:@"clip.mp4" msgIdHex:msgIdHex by:sender];
+    XCTAssertEqual(packets.count, 6u);
+    [packets removeAllObjects];
+    [sentAt removeAllObjects];
+
+    // Two members ask while the resend has not started: chunks 1 and 4, then 1 and 2.
+    dispatch_semaphore_t held = dispatch_semaphore_create(0);
+    dispatch_async([sender valueForKey:@"resendQueue"], ^{
+        dispatch_semaphore_wait(held, DISPATCH_TIME_FOREVER);
+    });
+    const uint8_t first[] = {0x12};
+    const uint8_t second[] = {0x06};
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:[self groupTestRequestFor:msgIdHex count:5 then:[NSData dataWithBytes:first length:1]]];
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:8 peerPublicKeyHex:nil data:[self groupTestRequestFor:msgIdHex count:5 then:[NSData dataWithBytes:second length:1]]];
+    dispatch_sync([sender valueForKey:@"sendQueue"], ^{});
+    dispatch_semaphore_signal(held);
+    [self groupTestDrainQueueOf:sender];
+
+    XCTAssertEqualObjects([self groupTestChunkIndicesOf:packets], (@[@1, @2, @4]));
+    XCTAssertGreaterThan(sentAt.lastObject.unsignedLongLongValue, sentAt.firstObject.unsignedLongLongValue, @"at the pace");
+}
+
+// At the pace a chunk to a big group takes seconds, and a member that hears nothing for a round asks for every chunk it
+// lacks: the ones still to come are not sent twice.
+- (void)testChunksTheUploadHasNotReachedAreNotSentAgainForARequest
+{
+    NSMutableArray<NSNumber *> *sentAt = [NSMutableArray new];
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    dispatch_semaphore_t held = dispatch_semaphore_create(0);
+    dispatch_semaphore_t waiting = dispatch_semaphore_create(0);
+    __block BOOL heldOnce = NO;
+    OCTNgcGroupFileTransfer *sender = [self paceTestsSenderRecording:sentAt packets:packets members:1 sleep:^(uint64_t ms) {
+        const char *label = dispatch_queue_get_label(DISPATCH_CURRENT_QUEUE_LABEL);
+        if (! heldOnce && strcmp(label, "ngc-group-file-upload") == 0) {
+            heldOnce = YES;
+            dispatch_semaphore_signal(waiting);
+            dispatch_semaphore_wait(held, DISPATCH_TIME_FOREVER);
+        }
+    }];
+
+    NSString *outbox = [self nameTestDirectory];
+    NSString *path = [outbox stringByAppendingPathComponent:@"clip.mp4"];
+    XCTAssertTrue([[self groupTestContentOfLength:8 * kGroupTestChunkPayload] writeToFile:path atomically:YES]);
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    XCTestExpectation *sent = [self expectationWithDescription:@"the file went"];
+    [sender sendFileAtPath:path groupNumber:5 msgIdHex:msgIdHex progress:nil completion:^(BOOL success, NSError *error) {
+        XCTAssertTrue(success, @"%@", error);
+        [sent fulfill];
+    }];
+    XCTAssertEqual(dispatch_semaphore_wait(waiting, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)), 0, @"the file never waited");
+
+    // The burst let the BEGIN and chunks 0 to 3 go. A member asks for chunk 1, lost, and 6, still to come.
+    NSArray<NSNumber *> *handedOver = [self groupTestChunkIndicesOf:[packets subarrayWithRange:NSMakeRange(1, packets.count - 1)]];
+    XCTAssertEqualObjects(handedOver, (@[@0, @1, @2, @3]));
+    const uint8_t bitmap[] = {0x42};
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil
+                                           data:[self groupTestRequestFor:msgIdHex count:8 then:[NSData dataWithBytes:bitmap length:1]]];
+    dispatch_sync([sender valueForKey:@"sendQueue"], ^{});
+    dispatch_sync([sender valueForKey:@"resendQueue"], ^{});
+    XCTAssertEqualObjects([self groupTestChunkIndicesOf:[packets subarrayWithRange:NSMakeRange(5, packets.count - 5)]], (@[@1]));
+
+    dispatch_semaphore_signal(held);
+    [self waitForExpectations:@[sent] timeout:5.0];
+    XCTAssertEqualObjects([self groupTestChunkIndicesOf:[packets subarrayWithRange:NSMakeRange(5, packets.count - 5)]],
+                          (@[@1, @4, @5, @6, @7]), @"chunk 6 once, with the file");
+    [[NSFileManager defaultManager] removeItemAtPath:outbox error:nil];
+}
+
+// A file that waits for the pace holds up nothing that comes: what comes is read on a queue of its own.
+- (void)testWhatComesIsReadWhileAGroupFileWaitsForThePace
+{
+    dispatch_semaphore_t held = dispatch_semaphore_create(0);
+    dispatch_semaphore_t waiting = dispatch_semaphore_create(0);
+    __block BOOL heldOnce = NO;
+    NSString *inbox = [self nameTestDirectory];
+    __block XCTestExpectation *came = [self expectationWithDescription:@"the file came"];
+    OCTNgcGroupFileTransfer *member = [[OCTNgcGroupFileTransfer alloc] initWithSendPacketBlock:^BOOL (uint32_t groupNumber, NSData *packet, NSError **error) {
+        return YES;
+    } incomingFilesDirectory:^NSString *(uint32_t groupNumber) {
+        return inbox;
+    } incomingBeginBlock:nil incomingCompleteBlock:^(uint32_t groupNumber, uint32_t peerId, NSString *senderPublicKeyHex,
+                                                    NSString *fileName, NSString *filePath, uint64_t fileSize, NSString *msgIdHex) {
+        [came fulfill];
+    } transferProgressBlock:nil];
+    [member setSleepMsBlock:^(uint64_t ms) {
+        if (! heldOnce) {
+            heldOnce = YES;
+            dispatch_semaphore_signal(waiting);
+            dispatch_semaphore_wait(held, DISPATCH_TIME_FOREVER);
+        }
+        usleep((useconds_t)(ms * 1000));
+    }];
+
+    NSString *outbox = [self nameTestDirectory];
+    NSString *path = [outbox stringByAppendingPathComponent:@"clip.mp4"];
+    XCTAssertTrue([[self groupTestContentOfLength:8 * kGroupTestChunkPayload] writeToFile:path atomically:YES]);
+    XCTestExpectation *sent = [self expectationWithDescription:@"the file went"];
+    [member sendFileAtPath:path groupNumber:5 msgIdHex:[OCTNgcGroupFileTransfer generateMsgIdHex] progress:nil completion:^(BOOL success, NSError *error) {
+        XCTAssertTrue(success, @"%@", error);
+        [sent fulfill];
+    }];
+    XCTAssertEqual(dispatch_semaphore_wait(waiting, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)), 0, @"the file never waited");
+
+    NSArray<NSData *> *photo = [self groupTestPacketsSendingContent:[self groupTestContentOfLength:2000]
+                                                             named:@"photo.jpg"
+                                                          msgIdHex:[OCTNgcGroupFileTransfer generateMsgIdHex]];
+    [member handleIncomingPacketWithGroupNumber:5 peerId:2 peerPublicKeyHex:nil data:photo.firstObject];
+    [self waitForExpectations:@[came] timeout:5.0];
+
+    dispatch_semaphore_signal(held);
+    [self waitForExpectations:@[sent] timeout:10.0];
+    [[NSFileManager defaultManager] removeItemAtPath:inbox error:nil];
+    [[NSFileManager defaultManager] removeItemAtPath:outbox error:nil];
+}
+
 #pragma mark - The name of a file offered to a friend
 
 // KHANDAQ (0.2.57, SPEC-community risk 3): toxcore takes that name as UTF-8 bytes and their count, at most
@@ -1669,11 +1999,13 @@ static uint32_t mocked_tox_file_send(Tox *tox, uint32_t friend_number, uint32_t 
     } transferProgressBlock:nil];
 }
 
-/// What came is handled on the transfer's queue, and a resend it asks for goes on it after.
+/// What came is handled on the transfer's queue, and a resend it asks for goes on another after.
 - (void)groupTestDrainQueueOf:(OCTNgcGroupFileTransfer *)transfer
 {
     for (int round = 0; round < 3; round++) {
         dispatch_sync([transfer valueForKey:@"sendQueue"], ^{});
+        dispatch_sync([transfer valueForKey:@"resendQueue"], ^{});
+        dispatch_sync([transfer valueForKey:@"uploadQueue"], ^{});
     }
 }
 

@@ -74,6 +74,33 @@ public class FileResumeTest
     }
 
     @Test
+    public void the_bind_of_an_offer_and_the_accepts_of_a_file_of_theirs_take_turns()
+    {
+        // One lock, the class's: the bind writes the row in two steps, and an accept or a tap in between read it as
+        // it was, or was written over.
+        final String helper = read(JAVA + "HelperFiletransfer.java");
+        for (final String signature : new String[]{
+                "static synchronized boolean resume_incoming_offer(final long friend_number",
+                "private static synchronized boolean accept_paused_incoming_filetransfer(Message message)",
+                "static synchronized void accept_incoming_filetransfer_by_person(final Message message)",
+                "static synchronized void retry_incoming_filetransfer(final Message message)"})
+        {
+            assertTrue(signature, helper.contains(signature));
+        }
+        // The two steps of the bind are inside it.
+        final String resume = bare(method(helper, "boolean resume_incoming_offer(final long friend_number"));
+        assertTrue(resume.contains("update_filetransfer_db_full(f);orma.updateFiletransfer().idEq(f.id).ft_accepted(false)"
+                                   + ".execute();"));
+        // Every seek before an accept goes through the accept that is synchronized.
+        final String seek = "seek_then_resume_incoming(friendNum,f,!f.ft_accepted);";
+        final String all = bare(helper);
+        assertEquals(all.indexOf(seek), all.lastIndexOf(seek));
+        assertTrue(bare(method(helper, "private static synchronized boolean accept_paused_incoming_filetransfer("))
+                           .contains(seek));
+        assertEquals("one route to the seek", 2, all.split("seek_then_resume_incoming\\(", -1).length - 1);
+    }
+
+    @Test
     public void an_id_of_zeros_is_no_id()
     {
         // What a buffer toxcore did not fill reads as: two such files are not one, and nothing is offered with it.

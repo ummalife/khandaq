@@ -1884,9 +1884,15 @@ public class HelperFiletransfer
      * file id (in either case) and size, no new entry comes (SPEC-network 1.4): a whole file there takes the
      * last byte again, silently, so that both ends finish; a partial one binds this transfer and tells toxcore
      * where to go on before it accepts, or waits for a tap as the rule says. Returns false for a new entry.
+     * <p>
+     * KHANDAQ (0.2.57): synchronized, as the accepts of a file of theirs are (accept_paused_incoming_filetransfer,
+     * the person's Accept and Retry). The bind writes the row in two steps and gives the entry what it read as
+     * accepted before: an accept from another thread in between took the bound transfer for one accepted before,
+     * resumed it without the seek, and the file came again from its first byte; a tap in between was lost.
      */
-    static boolean resume_incoming_offer(final long friend_number, final long file_number, final int kind,
-                                         final long file_size, final String offered_id_hex, final String offered_name)
+    static synchronized boolean resume_incoming_offer(final long friend_number, final long file_number, final int kind,
+                                                      final long file_size, final String offered_id_hex,
+                                                      final String offered_name)
     {
         if (orma == null)
         {
@@ -3966,7 +3972,13 @@ public class HelperFiletransfer
         }
     }
 
-    private static boolean accept_paused_incoming_filetransfer(Message message)
+    /**
+     * KHANDAQ (0.2.57): the accept of a paused file of theirs, on every route (the automatic download, the person's
+     * tap, the retries that run by themselves, a recognised offer). Synchronized with resume_incoming_offer: two
+     * at once both read the transfer as not accepted yet and both told toxcore to seek, and the second, refused
+     * after the accept, set its position back to 0.
+     */
+    private static synchronized boolean accept_paused_incoming_filetransfer(Message message)
     {
         final Filetransfer f = transfer_row(message.filetransfer_id);
         if ((f == null) || (f.state != TOX_FILE_CONTROL_PAUSE.value))
@@ -4021,9 +4033,10 @@ public class HelperFiletransfer
 
     /**
      * The Accept of a file of theirs (the waiting row's button). Also with no transfer carrying it now: the tap
-     * is kept, and the sender's next offer goes on by itself.
+     * is kept, and the sender's next offer goes on by itself. Synchronized with resume_incoming_offer, whose bind
+     * would write over the tap.
      */
-    static void accept_incoming_filetransfer_by_person(final Message message)
+    static synchronized void accept_incoming_filetransfer_by_person(final Message message)
     {
         if ((message == null) || (message.filetransfer_id <= 0))
         {
@@ -4436,7 +4449,12 @@ public class HelperFiletransfer
         return (filetransfer_id > 0) && (filedb_id == -1);
     }
 
-    static void retry_incoming_filetransfer(final Message message)
+    /**
+     * The Retry of a file of theirs. KHANDAQ (0.2.57): synchronized with resume_incoming_offer: the retry writes the
+     * row from what it read, and an offer bound in between lost its transfer again (no number), so nothing
+     * accepted it.
+     */
+    static synchronized void retry_incoming_filetransfer(final Message message)
     {
         if (message == null)
         {

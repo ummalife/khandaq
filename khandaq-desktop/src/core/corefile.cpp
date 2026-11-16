@@ -290,6 +290,8 @@ void CoreFile::cancelFileSend(uint32_t friendId, uint32_t fileId)
         }
     }
     file->status = ToxFile::CANCELED;
+    // KHANDAQ (0.2.57): it waits no more: its entry says it was not sent (endWaitingFile).
+    file->connectionLost = false;
     emit fileTransferCancelled(*file);
     removeFile(friendId, fileId);
 }
@@ -312,8 +314,10 @@ void CoreFile::cancelFileRecv(uint32_t friendId, uint32_t fileId)
     }
     file->status = ToxFile::CANCELED;
     // KHANDAQ (0.2.57): one that waits for its sender is cancelled here only; an offer of it
-    // again waits for the person, and declined it is cancelled on the sender's side too.
+    // again waits for the person, and declined it is cancelled on the sender's side too. It waits
+    // no more: its entry says the download stopped (endWaitingFile).
     file->refusedHere = true;
+    file->connectionLost = false;
     dropPart(*file);
     emit fileTransferCancelled(*file);
     removeFile(friendId, fileId);

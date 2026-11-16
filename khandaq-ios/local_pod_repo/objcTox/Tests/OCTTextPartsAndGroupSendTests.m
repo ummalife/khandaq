@@ -60,6 +60,8 @@ static uint32_t mocked_tox_file_send(Tox *tox, uint32_t friend_number, uint32_t 
 
 - (NSMutableDictionary<NSString *, id> *)assemblies;
 - (void)nackTickForAssembly:(id)assembly assemblyKey:(NSString *)assemblyKey;
+- (void)appendFilename:(NSString *)fileName toData:(NSMutableData *)data;
+- (NSString *)utf8FilenameFromData:(NSData *)data offset:(NSUInteger)offset length:(NSUInteger)maxLen;
 
 @end
 
@@ -1051,7 +1053,9 @@ static uint32_t mocked_tox_file_send(Tox *tox, uint32_t friend_number, uint32_t 
 
 // KHANDAQ (0.2.57, SPEC-community risk 3): the risk is a name whose UTF-16 length is taken for its count of bytes.
 // Not for a group file: its name goes as UTF-8 in a field of 255 bytes, ended by zeroes, and is read back by its
-// bytes, so a name in Cyrillic arrives whole.
+// bytes, so a name in Cyrillic of up to 255 bytes arrives whole. A longer one is cut on a whole character with its
+// extension kept, as for a file offered to a friend (OCTToxFileNameBytes); cut in the middle of a letter, it did not
+// read back as UTF-8 and came as "file".
 
 - (void)testAGroupFileCarriesANameInCyrillicWhole
 {
@@ -1097,6 +1101,27 @@ static uint32_t mocked_tox_file_send(Tox *tox, uint32_t friend_number, uint32_t 
 
     [[NSFileManager defaultManager] removeItemAtPath:outbox error:nil];
     [[NSFileManager defaultManager] removeItemAtPath:inbox error:nil];
+}
+
+- (void)testALongGroupFileNameKeepsItsExtensionAndIsCutOnAWholeCharacter
+{
+    OCTNgcGroupFileTransfer *transfer = [self stallTestTransferCollectingPackets:[NSMutableArray new]];
+    // Two bytes a letter: 200 letters and ".pdf" make 404 bytes; 125 of them and ".pdf" make 254, one more 256.
+    NSString *letters = [@"" stringByPaddingToLength:200 withString:@"я" startingAtIndex:0];
+    NSMutableData *field = [NSMutableData new];
+    [transfer appendFilename:[letters stringByAppendingString:@".pdf"] toData:field];
+
+    XCTAssertEqual(field.length, 255u, @"the field keeps its size");
+    XCTAssertEqualObjects([transfer utf8FilenameFromData:field offset:0 length:255],
+                          [[letters substringToIndex:125] stringByAppendingString:@".pdf"]);
+
+    // A name that fits goes whole, an empty one as zeroes the other side reads as "file".
+    NSMutableData *whole = [NSMutableData new];
+    [transfer appendFilename:@"Отчёт.pdf" toData:whole];
+    XCTAssertEqualObjects([transfer utf8FilenameFromData:whole offset:0 length:255], @"Отчёт.pdf");
+    NSMutableData *empty = [NSMutableData new];
+    [transfer appendFilename:@"" toData:empty];
+    XCTAssertEqualObjects(empty, [NSMutableData dataWithLength:255]);
 }
 
 #pragma mark - The name of a file offered to a friend

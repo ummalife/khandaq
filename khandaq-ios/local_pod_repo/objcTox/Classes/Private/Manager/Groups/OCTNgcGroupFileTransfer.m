@@ -1404,11 +1404,9 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
 - (void)appendFilename:(NSString *)fileName toData:(NSMutableData *)data
 {
-    NSData *nameData = [fileName dataUsingEncoding:NSUTF8StringEncoding];
-
-    if (nameData.length > 255) {
-        nameData = [nameData subdataWithRange:NSMakeRange(0, 255)];
-    }
+    // KHANDAQ (0.2.57): cut at 255 bytes in the middle of a letter, the name did not read back as UTF-8 and came as
+    // "file"; it keeps its extension and its whole characters, as for a file offered to a friend.
+    NSData *nameData = OCTToxFileNameBytes(fileName) ?: [NSData data];
 
     [data appendData:nameData];
 

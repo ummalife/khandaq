@@ -16,9 +16,9 @@ uint8_t *hex_to_bin(const char *hex_string_buffer, size_t hex_string_len);
 /**
  * KHANDAQ (0.2.57, SPEC-community risk 3): the bytes toxcore takes for the name of a file offered to a friend: its
  * UTF-8, at most TOX_MAX_FILENAME_LENGTH bytes. A longer name keeps its extension and loses the end of the rest,
- * on a whole character.
+ * on a whole character. The name field of a group file is as long, so its packets take these bytes too.
  */
-static NSData *OCTToxFileNameBytes(NSString *fileName)
+NSData *OCTToxFileNameBytes(NSString *fileName)
 {
     if (fileName.length == 0) {
         return nil;

@@ -741,11 +741,11 @@ static const NSUInteger kOCTNgcHistBudgetMaxBytesPerGroupPerSession = 8 * 1024 *
                           atOffset:76
                          inBuffer:bytes];
 
+    // KHANDAQ (0.2.57): on whole characters, its extension kept (OCTToxFileNameBytes): cut in the middle of a letter,
+    // the name did not read back as UTF-8 and came as "file".
     NSString *fileName = messageFile.fileName.length > 0 ? messageFile.fileName : @"file";
-    [self writePaddedUTF8String:fileName
-                         maxBytes:kOCTNgcHistMaxFilenameBytes
-                          atOffset:101
-                         inBuffer:bytes];
+    NSData *fileNameBytes = OCTToxFileNameBytes(fileName);
+    memcpy(bytes + 101, fileNameBytes.bytes, MIN(fileNameBytes.length, kOCTNgcHistMaxFilenameBytes));
 
     memcpy(bytes + kOCTNgcHistSyncFileHeader, fileData.bytes, fileData.length);
 

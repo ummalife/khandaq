@@ -605,6 +605,7 @@
 "chat_reply_action" = "Reply";
 "chat_forward_action" = "Forward";
 "chat_pin_action" = "Pin";
+"chat_report_action" = "Report";
 "chat_pinned_banner_title" = "Pinned message";
 "chat_copy_action" = "Copy";
 "chat_select_action" = "Select";

@@ -619,6 +619,7 @@
 "chat_reply_action" = "回复";
 "chat_forward_action" = "转发";
 "chat_pin_action" = "置顶";
+"chat_report_action" = "举报";
 "chat_pinned_banner_title" = "置顶消息";
 "chat_copy_action" = "复制";
 "chat_select_action" = "选择";

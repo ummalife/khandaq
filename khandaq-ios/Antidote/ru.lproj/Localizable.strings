@@ -606,6 +606,7 @@
 "chat_reply_action" = "Ответить";
 "chat_forward_action" = "Переслать";
 "chat_pin_action" = "Закрепить";
+"chat_report_action" = "Пожаловаться";
 "chat_pinned_banner_title" = "Закреплённое сообщение";
 "chat_copy_action" = "Скопировать";
 "chat_select_action" = "Выбрать";

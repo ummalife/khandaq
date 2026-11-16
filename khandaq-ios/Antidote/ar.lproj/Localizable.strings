@@ -619,6 +619,7 @@
 "chat_reply_action" = "رد";
 "chat_forward_action" = "إعادة توجيه";
 "chat_pin_action" = "تثبيت";
+"chat_report_action" = "إبلاغ";
 "chat_pinned_banner_title" = "رسالة مثبّتة";
 "chat_copy_action" = "نسخ";
 "chat_select_action" = "تحديد";

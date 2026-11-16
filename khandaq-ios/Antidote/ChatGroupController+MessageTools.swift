@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import MessageUI
 import UIKit
 import SnapKit
 
@@ -411,6 +412,12 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
             self.refreshPinnedBanner()
         })
         actions.append(ChatContextMenuAction(title: String(localized: "group_messages_select_action"), systemImageName: "checkmark.circle") { [weak self] in self?.chatMovableDateCellMorePressed(cell) })
+        // KHANDAQ (0.2.57, SPEC-community item 5): a message or a file someone else sent can be reported.
+        if !message.isOutgoing() {
+            actions.append(ChatContextMenuAction(title: String(localized: "chat_report_action"), systemImageName: "exclamationmark.bubble") { [weak self] in
+                self?.report(message)
+            })
+        }
 
         let editable = cell as? ChatEditable
         let bubbleRectInCell = editable?.menuTargetRect() ?? cell.bounds
@@ -427,5 +434,94 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
                                       self.submanagerGroups.toggleReaction(onGroupMessage: message, emoji: emoji, in: self.chat)
                                   },
                                   onDismiss: { editable?.willHideMenu() })
+    }
+
+    // MARK: Report
+
+    /// The mail about a message someone else wrote here: the mail composer with it written, or, without a
+    /// mail account on the phone, the same mail through a mailto: link. The person sends it themselves. When
+    /// no app takes the link either, the address is shown, so the person still knows where to write.
+    func report(_ message: OCTMessageAbstract) {
+        guard !message.isInvalidated else {
+            return
+        }
+        let report = groupReport(for: message)
+        // Who and where, never the words of the message.
+        log("Report: a mail to support about a message of \(report.author) in a group")
+
+        if MFMailComposeViewController.canSendMail() {
+            let composer = MFMailComposeViewController()
+            composer.mailComposeDelegate = self
+            composer.setToRecipients([GroupReport.address])
+            composer.setSubject(report.subject)
+            composer.setMessageBody(report.body, isHTML: false)
+            present(composer, animated: true, completion: nil)
+            return
+        }
+        guard let url = report.mailtoURL else {
+            log("Report: the mail could not be written as a link")
+            showReportAddress()
+            return
+        }
+        UIApplication.shared.open(url, options: [:]) { [weak self] opened in
+            if !opened {
+                log("Report: no mail app took the mail")
+                self?.showReportAddress()
+            }
+        }
+    }
+
+    /// The address of support, under the title of the action: no new words to translate.
+    private func showReportAddress() {
+        let alert = UIAlertController(title: String(localized: "chat_report_action"),
+                                      message: GroupReport.address,
+                                      preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: String(localized: "alert_ok"), style: .cancel, handler: nil))
+        present(alert, animated: true, completion: nil)
+    }
+
+    func groupReport(for message: OCTMessageAbstract) -> GroupReport {
+        let stored = chat.groupName ?? ""
+        let text: String
+        if let file = message.messageFile {
+            // A file says what it is by its name; what is in it stays on this phone.
+            text = file.fileName ?? ""
+        }
+        else {
+            text = MessageReplyHelper.plainBody(for: message) ?? message.messageText?.text ?? ""
+        }
+        return GroupReport(groupName: stored.isEmpty ? ChatListContent.groupTitle(for: chat) : stored,
+                           authorKey: reportAuthorKey(for: message),
+                           time: message.date(),
+                           text: text)
+    }
+
+    /// The key the entry kept of its author, else that of the member with its number now.
+    private func reportAuthorKey(for message: OCTMessageAbstract) -> String {
+        if let key = message.messageText?.groupSenderPubkey, !key.isEmpty {
+            return key
+        }
+        if let key = message.messageFile?.groupSenderPubkey, !key.isEmpty {
+            return key
+        }
+        guard message.groupSenderPeerId > 0, let peers = submanagerGroups.peers(for: chat) else {
+            return ""
+        }
+        for index in 0..<peers.count {
+            if let peer = peers.object(at: index) as? OCTGroupPeer, !peer.isInvalidated,
+               peer.peerId == message.groupSenderPeerId,
+               let key = peer.peerPublicKeyHex, !key.isEmpty {
+                return key
+            }
+        }
+        return ""
+    }
+}
+
+extension ChatGroupController: MFMailComposeViewControllerDelegate {
+    func mailComposeController(_ controller: MFMailComposeViewController,
+                               didFinishWith result: MFMailComposeResult,
+                               error: Error?) {
+        controller.dismiss(animated: true, completion: nil)
     }
 }

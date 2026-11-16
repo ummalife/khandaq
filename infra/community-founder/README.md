@@ -40,18 +40,26 @@ matches several members gets "give more digits". Commands are case-insensitive, 
 carries a command works, and anything else gets a one-line error. Every message is acknowledged
 (msgV3), and a resent message is acknowledged again but answered once.
 
-## The one change to toxcore in the founder build
+## The two changes to toxcore in the founder build
 
 `build.sh` compiles the toxcore the iOS client ships, as `infra/demo-contact` does, so that NGC
-moderation, the topic lock and msgV3 behave exactly as between the clients. It applies one patch to
-its copy, `toxcore-founder-connected.patch`: a founder's group is connected as soon as it is
-restored from savedata, the way a group is when it has just been created.
+moderation, the topic lock and msgV3 behave exactly as between the clients. It applies two patches
+to its copy, and stops if one no longer applies exactly, so a toxcore update in the pod gets them
+reviewed.
 
-Without it a restarted founder waits in "connecting" for a sync response that only comes back to a
-peer that invited someone itself; members who join a founder that came back alone never trigger
-one. While it waits it sends no pings, so every member drops it after 58 s, and it gives joiners no
-topic. Both were seen with the probe before the patch, and are gone with it. The build stops if the
-patch no longer applies exactly, so a toxcore update in the pod gets it reviewed.
+`toxcore-founder-connected.patch`: a founder's group is connected as soon as it is restored from
+savedata, the way a group is when it has just been created. Without it a restarted founder waits in
+"connecting" for a sync response that only comes back to a peer that invited someone itself; members
+who join a founder that came back alone never trigger one. While it waits it sends no pings, so every
+member drops it after 58 s, and it gives joiners no topic. Both were seen with the probe before the
+patch, and are gone with it.
+
+`toxcore-founder-announce.patch`: the founder renews its group's announce on the DHT every 16 s per
+node. A node keeps an announce for 30 s, and toxcore spaces a group's requests by the backoff it uses
+for an offline friend, up to once an hour per node, so a founder that had been up for a few hours
+could not be found by a join by chat id at all. Only the founder gets it: `build.sh` compiles
+`onion_client.c` once more with `-DKHANDAQ_GROUP_ANNOUNCE_INTERVAL=8` for `khandaq-community`
+alone, and the probe and the test client keep the clients' timing.
 
 ## Clients need toxcore that looks a group up by its chat id
 

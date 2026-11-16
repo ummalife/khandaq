@@ -11,10 +11,14 @@
 # The pod keeps its C sources under .m names (CocoaPods compiles them as Objective-C); they are plain
 # C and are copied back to .c.
 #
-# The copy gets one change, toxcore-founder-connected.patch, which says why: a founder's group is
-# connected as soon as it is restored, instead of waiting for a sync that may never come while its
-# members drop it. The build stops if the patch no longer applies exactly, so that a toxcore update
-# in the pod gets the patch reviewed instead of silently skipped.
+# The copy gets two changes, each of which says why:
+#   - toxcore-founder-connected.patch: a founder's group is connected as soon as it is restored,
+#     instead of waiting for a sync that may never come while its members drop it;
+#   - toxcore-founder-announce.patch: the founder renews its group's announce on the DHT before a node
+#     drops it. It takes effect only in the founder's own copy of onion_client.o, compiled with
+#     -DKHANDAQ_GROUP_ANNOUNCE_INTERVAL; the probe and the test client keep the timing of the clients.
+# The build stops if a patch no longer applies exactly, so that a toxcore update in the pod gets the
+# patches reviewed instead of silently skipped.
 #
 # Requires a C compiler, pkg-config, patch and libsodium development files.
 #   Ubuntu:  apt install build-essential patch pkg-config libsodium-dev
@@ -28,6 +32,7 @@ CMP="${CMP_DIR:-$ROOT/khandaq-desktop/buildscripts/toxcore/third_party/cmp}"
 OUT="${OUT:-$HERE/build}"
 SRC="$OUT/src"
 OBJ="$OUT/obj"
+FOUNDER_OBJ="$OUT/obj-founder"
 CC="${CC:-cc}"
 
 [[ -f "$POD/toxcore/tox.h" ]] || { echo "toxcore sources not found at $POD" >&2; exit 1; }
@@ -35,8 +40,8 @@ CC="${CC:-cc}"
 command -v patch >/dev/null || { echo "patch is required" >&2; exit 1; }
 pkg-config --exists libsodium || { echo "missing development files for libsodium (pkg-config libsodium)" >&2; exit 1; }
 
-rm -rf "$SRC" "$OBJ"
-mkdir -p "$SRC/toxcore/events" "$SRC/toxencryptsave" "$SRC/third_party" "$OBJ"
+rm -rf "$SRC" "$OBJ" "$FOUNDER_OBJ"
+mkdir -p "$SRC/toxcore/events" "$SRC/toxencryptsave" "$SRC/third_party" "$OBJ" "$FOUNDER_OBJ"
 
 # Copy one pod directory, turning foo.m into foo.c. Backup files (*.m.bak) are not sources.
 copy_dir() {
@@ -56,11 +61,13 @@ copy_dir "$POD/toxcore/events" "$SRC/toxcore/events"
 cp "$POD/toxencryptsave/defines.h" "$SRC/toxencryptsave/"
 cp "$CMP/cmp.c" "$CMP/cmp.h" "$SRC/third_party/"
 
-# No fuzz: the patch applies to exactly the code it was written against, or the build stops.
-if ! patch -s -t -N -F0 -p1 -d "$SRC" <"$HERE/toxcore-founder-connected.patch"; then
-  echo "toxcore-founder-connected.patch does not apply to $POD; review it against the new toxcore" >&2
-  exit 1
-fi
+# No fuzz: each patch applies to exactly the code it was written against, or the build stops.
+for change in toxcore-founder-connected.patch toxcore-founder-announce.patch; do
+  if ! patch -s -t -N -F0 -p1 -d "$SRC" <"$HERE/$change"; then
+    echo "$change does not apply to $POD; review it against the new toxcore" >&2
+    exit 1
+  fi
+done
 
 SODIUM_INC="$(pkg-config --variable=includedir libsodium)"
 CFLAGS_COMMON=(-O2 -g -std=gnu11 -pthread -fstack-protector-strong -D_FORTIFY_SOURCE=2
@@ -88,6 +95,21 @@ for pid in ${pids[@]+"${pids[@]}"}; do
   wait "$pid" || exit 1
 done
 
+# The founder's own onion_client.o, with the cap of toxcore-founder-announce.patch; every other tool
+# links the clients' one. 8 s: each of the 8 nodes is renewed every 16 s, within the 30 s a node keeps
+# an announce.
+grep -q 'KHANDAQ_GROUP_ANNOUNCE_INTERVAL > 0 && o_friend->is_groupchat' "$SRC/toxcore/onion_client.c" ||
+  { echo "toxcore-founder-announce.patch left no cap in onion_client.c" >&2; exit 1; }
+"$CC" "${CFLAGS_COMMON[@]}" "${PKG_CFLAGS[@]}" -w -DKHANDAQ_GROUP_ANNOUNCE_INTERVAL=8 \
+  -c "$SRC/toxcore/onion_client.c" -o "$FOUNDER_OBJ/toxcore_onion_client.c.o"
+CLIENT_OBJS=("$OBJ"/*.o)
+FOUNDER_OBJS=("$FOUNDER_OBJ/toxcore_onion_client.c.o")
+for object in "${CLIENT_OBJS[@]}"; do
+  [[ "$object" == "$OBJ/toxcore_onion_client.c.o" ]] || FOUNDER_OBJS+=("$object")
+done
+(( ${#FOUNDER_OBJS[@]} == ${#CLIENT_OBJS[@]} )) ||
+  { echo "the clients' onion_client.o was not among the objects" >&2; exit 1; }
+
 # Our own code builds without warnings. WERROR=1 turns any warning into a failed build; it is left
 # off by default so that a newer compiler on a server cannot block a deploy over a new warning.
 OWN_WARNINGS=(-Wall -Wextra -Wshadow -Wno-unused-parameter)
@@ -96,13 +118,14 @@ if [[ "${WERROR:-0}" == 1 ]]; then
 fi
 link_tool() {
   local name="$1" source="$2"
+  shift 2
   "$CC" "${CFLAGS_COMMON[@]}" "${PKG_CFLAGS[@]}" "${OWN_WARNINGS[@]}" -I"$HERE" \
-    -o "$OUT/$name" "$HERE/$source" "$OBJ"/*.o "${PKG_LIBS[@]}" -lm
+    -o "$OUT/$name" "$HERE/$source" "$@" "${PKG_LIBS[@]}" -lm
 }
-link_tool khandaq-community khandaq_community.c
-link_tool community-probe probe.c
-link_tool community-admin-test community_admin_test.c
-link_tool community-unit-test community_unit_test.c
+link_tool khandaq-community khandaq_community.c "${FOUNDER_OBJS[@]}"
+link_tool community-probe probe.c "${CLIENT_OBJS[@]}"
+link_tool community-admin-test community_admin_test.c "${CLIENT_OBJS[@]}"
+link_tool community-unit-test community_unit_test.c "${CLIENT_OBJS[@]}"
 
 "$OUT/community-unit-test"
 echo "built $OUT/khandaq-community, $OUT/community-probe and $OUT/community-admin-test"

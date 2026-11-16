@@ -23,7 +23,7 @@ HOST="${HOST:-Khandaq}"
 REMOTE=/opt/khandaq-community
 
 command -v rsync >/dev/null || { echo "rsync is required" >&2; exit 1; }
-for path in "$HERE/assets/nodes.txt" "$HERE/toxcore-founder-connected.patch" \
+for path in "$HERE/assets/nodes.txt" "$HERE/toxcore-founder-connected.patch" "$HERE/toxcore-founder-announce.patch" \
             "$ROOT/khandaq-ios/local_pod_repo/toxcore/toxcore/toxcore/tox.h" \
             "$ROOT/khandaq-desktop/buildscripts/toxcore/third_party/cmp/cmp.c"; do
   [[ -f "$path" ]] || { echo "missing $path" >&2; exit 1; }

@@ -1,0 +1,51 @@
+The second change build.sh makes to the pod toxcore, for the founder alone: it renews its group's
+announce on the DHT before a node drops it.
+
+A group's onion friend walks the DHT toward the chat id, and its announce requests are also the
+group's announce: a node keeps one for GCA_ANNOUNCE_SAVE_TIMEOUT (30 s) after the last request that
+carried it. do_friend spaces the requests by a backoff meant for a friend who stays offline: every
+3 s for the first 20 or so, then 16, 32, 64 s and on, up to once an hour per node. A founder alone in
+its group has no peer to tell joiners about it, so once it had been up for a while its announce was
+gone from the nodes for all but 30 s an hour, and a join by chat id found nobody: on 2026-11-16 the
+live founder was found 4 and 12 s after a restart, and by no probe, Android or iOS client 2 to 4 hours
+later (180 to 1500 s each). A local founder put at the longest interval from its start
+(experiment, not shipped) was not found in 300 s; the same founder with this change was found in
+24.9 s, every probe check passing.
+
+The cap applies when onion_client.c is compiled with -DKHANDAQ_GROUP_ANNOUNCE_INTERVAL=8, which
+build.sh does only for khandaq-community; the probe and the test client keep the timing of the
+clients, so a passing probe says what a client sees. With an interval of 8 s one request goes out
+every 2 s and each of the 8 nodes is renewed every 16 s; friends keep toxcore's timing.
+
+--- a/toxcore/onion_client.c
++++ b/toxcore/onion_client.c
+@@ -1732,6 +1732,13 @@
+ /* Max exponent when calculating the announce request interval */
+ #define MAX_RUN_COUNT_EXPONENT 12
+ 
++/* KHANDAQ (founder build): the longest time between two requests to one node for a group. build.sh
++ * compiles this file a second time for the founder alone with -DKHANDAQ_GROUP_ANNOUNCE_INTERVAL=8;
++ * everywhere else it is 0 and the requests keep toxcore's timing. */
++#ifndef KHANDAQ_GROUP_ANNOUNCE_INTERVAL
++#define KHANDAQ_GROUP_ANNOUNCE_INTERVAL 0
++#endif
++
+ non_null()
+ static void do_friend(Onion_Client *onion_c, uint16_t friendnum)
+ {
+@@ -1759,6 +1766,15 @@
+         interval = ANNOUNCE_FRIEND_NEW_INTERVAL;
+     }
+ 
++    // KHANDAQ (founder build): for a group these requests carry its announce, which a node keeps for
++    // GCA_ANNOUNCE_SAVE_TIMEOUT (30 s). Under the backoff above the founder renewed it less and less
++    // often, at last once an hour per node, so a join by chat id found nobody once the founder had been
++    // up for a while. One request every interval / 4 goes round the 8 nodes in 2 * interval: 16 s.
++    if (KHANDAQ_GROUP_ANNOUNCE_INTERVAL > 0 && o_friend->is_groupchat
++            && interval > KHANDAQ_GROUP_ANNOUNCE_INTERVAL) {
++        interval = KHANDAQ_GROUP_ANNOUNCE_INTERVAL;
++    }
++
+     if (o_friend->is_online) {
+         return;
+     }

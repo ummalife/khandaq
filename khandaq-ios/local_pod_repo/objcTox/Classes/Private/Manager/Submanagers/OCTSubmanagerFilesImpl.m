@@ -43,9 +43,11 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
 @property (strong, nonatomic, readonly) NSObject *filesCleanupLock;
 @property (assign, nonatomic) BOOL filesCleanupInProgress;
 
-/// KHANDAQ (0.2.57): public key of a friend -> how many times their connection changed, so a grace that began
+/// KHANDAQ (0.2.57): public key of a friend -> how many times they went online or offline, so a grace that began
 /// while they were online ends nothing once they have gone away and come back since.
 @property (strong, nonatomic, readonly) NSMutableDictionary<NSString *, NSNumber *> *friendLinkGenerations;
+/// KHANDAQ (0.2.57): public key of a friend -> whether they were online at the last change of their connection.
+@property (strong, nonatomic, readonly) NSMutableDictionary<NSString *, NSNumber *> *friendLinkConnected;
 
 @end
 
@@ -66,6 +68,7 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
     _queue = [NSOperationQueue new];
     _filesCleanupLock = [NSObject new];
     _friendLinkGenerations = [NSMutableDictionary new];
+    _friendLinkConnected = [NSMutableDictionary new];
     _reofferGraceInterval = kReofferGraceInterval;
 
     return self;
@@ -869,16 +872,28 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
         return;
     }
 
+    // KHANDAQ (0.2.57): only going online or offline is a new connection. A change between UDP and TCP, or the
+    // same status again, keeps the grace that runs: a link that flipped between them more often than the grace
+    // began it anew each time, and their file that waited never ended.
+    BOOL linkChanged = YES;
     if (friend.publicKey.length > 0) {
-        NSUInteger generation = [self.friendLinkGenerations[friend.publicKey] unsignedIntegerValue];
-        self.friendLinkGenerations[friend.publicKey] = @(generation + 1);
+        NSNumber *wasConnected = self.friendLinkConnected[friend.publicKey];
+        linkChanged = (! wasConnected || wasConnected.boolValue != friend.isConnected);
+        self.friendLinkConnected[friend.publicKey] = @(friend.isConnected);
+
+        if (linkChanged) {
+            NSUInteger generation = [self.friendLinkGenerations[friend.publicKey] unsignedIntegerValue];
+            self.friendLinkGenerations[friend.publicKey] = @(generation + 1);
+        }
     }
 
     [self sendAvatarToFriend:friend];
 
     if (friend.isConnected) {
         [self resendPendingOutgoingFilesToFriend:friend];
-        [self beginReofferGraceForFriend:friend];
+        if (linkChanged) {
+            [self beginReofferGraceForFriend:friend];
+        }
     }
     else {
         [self requeueInFlightTransfersForDisconnectedFriend:friend];

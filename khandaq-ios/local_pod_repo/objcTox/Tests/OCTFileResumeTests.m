@@ -1007,6 +1007,32 @@ static NSData *OCTResumeTestsContent(void)
     XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:[self partialPathOf:message]]);
 }
 
+// KHANDAQ (0.2.57): each change between UDP and TCP began the grace anew: a link that flipped between them more
+// often than the grace never ended their file that waited.
+- (void)testAFileTheFriendNeverOffersAgainEndsAtTheGraceWhileTheirLinkFlipsBetweenUDPAndTCP
+{
+    [self setFriendConnected:NO notify:YES];
+    OCTMessageAbstract *message = [self addIncomingFileWithIdHex:OCTResumeTestsHex(OCTResumeTestsId(0x10))
+                                                            type:OCTMessageFileTypeWaitingConfirmation
+                                                        pausedBy:OCTMessageFilePausedByConnection
+                                                       keptBytes:4];
+    self.files.reofferGraceInterval = 0.3;
+    [self setFriendConnected:YES notify:YES];
+    NSDate *online = [NSDate date];
+
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.5];
+    BOOL tcp = YES;
+    while (message.messageFile.fileType != OCTMessageFileTypeCanceled && deadline.timeIntervalSinceNow > 0) {
+        [self spinFor:0.1];
+        [self setFriendOnlineOver:tcp ? OCTToxConnectionStatusTCP : OCTToxConnectionStatusUDP];
+        tcp = ! tcp;
+    }
+
+    XCTAssertEqual(message.messageFile.fileType, OCTMessageFileTypeCanceled, @"the flips began the grace anew");
+    XCTAssertLessThan(-online.timeIntervalSinceNow, 1.0);
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:[self partialPathOf:message]]);
+}
+
 #pragma mark - The sender
 
 - (void)testOurFileKeepsItsIdThroughARequeueARestartAndSendAgain
@@ -1235,6 +1261,17 @@ static NSData *OCTResumeTestsContent(void)
     if (notify) {
         [self.dataSource.notificationCenter postNotificationName:kOCTFriendConnectionStatusChangeNotification object:self.friend];
     }
+}
+
+/// The friend stays online over another link, as toxcore tells it.
+- (void)setFriendOnlineOver:(OCTToxConnectionStatus)status
+{
+    self.tox.friendStatus = status;
+    [self.realmManager updateObject:self.friend withBlock:^(OCTFriend *theFriend) {
+        theFriend.isConnected = YES;
+        theFriend.connectionStatus = status;
+    }];
+    [self.dataSource.notificationCenter postNotificationName:kOCTFriendConnectionStatusChangeNotification object:self.friend];
 }
 
 /**

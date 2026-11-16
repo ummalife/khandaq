@@ -183,12 +183,13 @@ final class FileResume
 
     /**
      * Whether a recognised offer the person said no to gets that no again at once instead of waiting for a tap
-     * (acceptsByItself): an FTV2 one. The receiving toxcore accepts an FTV2 transfer by itself once it has had no
-     * data for STALE_CYCLES_ON_FTV2_RECEIVER iterations (Messenger.c, do_reqchunk_filecb; about 50 s here), one
-     * not accepted here as well, with a seek to the bytes it holds; it then drops every byte while the app has not
-     * accepted it. The sender sent the whole file into nothing, again each minute (QA run 7). A waiting DATA
-     * offer moves no bytes. The first no, given in a cut, reached the sender as a lost transfer
-     * (killMeansLostTransfer); this one reaches it as the no.
+     * (acceptsByItself): an FTV2 one. The first no, given in a cut, reached the sender as a lost transfer
+     * (killMeansLostTransfer), which offers the file again; this one reaches it as the no, so both sides end where
+     * the person left it, not with a question about a file already refused here and a card that waits on the
+     * sender's side. Toxcore before the FTV2 stale-accept fix (native slices before 0.2.57) also accepted a waiting
+     * FTV2 offer by itself once it had had no data for STALE_CYCLES_ON_FTV2_RECEIVER iterations (Messenger.c,
+     * do_reqchunk_filecb; about 50 s here) and then dropped every byte while the app had not accepted it: the
+     * sender sent the whole file into nothing, again each minute (QA run 7). A DATA offer still waits for a tap.
      */
     static boolean refusesAgain(final boolean refusedByPerson, final int kind)
     {

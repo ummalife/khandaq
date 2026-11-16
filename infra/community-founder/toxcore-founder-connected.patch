@@ -1,0 +1,49 @@
+The one change build.sh makes to the pod toxcore, in its own copy of the sources: a founder's group
+is connected as soon as it is restored from savedata (and after tox_group_reconnect), the way
+gc_group_add() leaves a group it has just created.
+
+Unpatched, a restored group stays "connecting" until a sync response arrives, and a sync response
+answers a sync request the founder sent itself: after an invite it sent, or on a ping that shows
+newer state than its own. Members who join a founder that came back alone send the invites, and
+their state is never newer, so the founder can stay connecting for good. While it does:
+  - it sends no pings (do_gc_ping_and_key_rotation runs only when connected), and every member
+    drops it after GC_CONFIRMED_PEER_TIMEOUT (58 s) of silence: the probe saw the founder leave,
+    exit type timeout, 58 s after joining;
+  - it leaves the topic out of the state it gives joiners (sync_response_send_state wants
+    time_connected): the probe saw no topic;
+  - toxcore withholds the topic change callback, so the bot cannot keep a moderator's topic.
+The founder's state is the authoritative one (handle_gc_mod_list says as much), so there is nothing
+for it to wait for. On the wire it then behaves as a founder that never restarted.
+
+--- a/toxcore/group_chats.c
++++ b/toxcore/group_chats.c
+@@ -7649,6 +7649,16 @@
+         return group_number;
+     }
+ 
++    // Khandaq community founder: the founder's own state is the authoritative one, so its group is
++    // connected as soon as it is restored, the way gc_group_add() leaves a new group. Left
++    // connecting, it would wait for a sync response that only a member it invited sends; until
++    // then it pings nobody (members drop it after GC_CONFIRMED_PEER_TIMEOUT) and gives joiners no
++    // topic.
++    if (self_gc_is_founder(chat)) {
++        chat->connection_state = CS_CONNECTED;
++        chat->time_connected = tm;
++    }
++
+     if (is_public_chat(chat)) {
+         if (!m_create_group_connection(m, chat)) {
+             LOGGER_ERROR(chat->log, "Failed to initialize group friend connection");
+@@ -7833,6 +7843,12 @@
+ 
+     chat->connection_state = CS_CONNECTING;
+ 
++    // Khandaq community founder: as in gc_group_load().
++    if (self_gc_is_founder(chat)) {
++        chat->connection_state = CS_CONNECTED;
++        chat->time_connected = mono_time_get(chat->mono_time);
++    }
++
+     return 0;
+ }
+ 

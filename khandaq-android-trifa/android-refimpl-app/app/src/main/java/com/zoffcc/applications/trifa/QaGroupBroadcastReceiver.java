@@ -34,11 +34,14 @@ public class QaGroupBroadcastReceiver extends BroadcastReceiver
     public static final String ACTION_VERIFY_FRIEND_MESSAGE = "org.khandaq.qa.VERIFY_FRIEND_MESSAGE";
     public static final String ACTION_FORGET_COMMUNITY_MARKS = "org.khandaq.qa.FORGET_COMMUNITY_MARKS";
     public static final String ACTION_LIST_TEMP_FILES = "org.khandaq.qa.LIST_TEMP_FILES";
+    public static final String ACTION_REFUSE_GROUP_JOIN = "org.khandaq.qa.REFUSE_GROUP_JOIN";
 
     public static final String EXTRA_NAME = "name";
     public static final String EXTRA_GROUP_ID = "group_id";
     public static final String EXTRA_TEXT = "text";
     public static final String EXTRA_TOX_ID = "tox_id";
+    /** REFUSE_GROUP_JOIN: toxcore's Tox_Group_Join_Fail (ToxVars.TOX_GROUP_JOIN_FAIL), PEER_LIMIT when left out. */
+    public static final String EXTRA_FAIL = "fail";
 
     private static String friendPublicKeyFromToxId(@Nullable final String toxId)
     {
@@ -302,6 +305,23 @@ public class QaGroupBroadcastReceiver extends BroadcastReceiver
                 // KHANDAQ (0.2.57, SPEC-network 1.5 QA): where the bytes of the files under way are, and what is left.
                 HelperGeneric.qa_log_temp_dir();
                 HelperGeneric.logI(TAG, "qa_group_broadcast:done action=" + action);
+                return;
+            }
+            case ACTION_REFUSE_GROUP_JOIN:
+            {
+                // KHANDAQ (0.2.57, review QA): toxcore's refusal of a join (its join_fail callback) for a group of this
+                // profile, as a group that is full refuses it; nobody can fill Khandaq Community to its limit to test.
+                final String groupId = intent.getStringExtra(EXTRA_GROUP_ID);
+                final int fail = intent.getIntExtra(EXTRA_FAIL,
+                                                    ToxVars.TOX_GROUP_JOIN_FAIL.TOX_GROUP_JOIN_FAIL_PEER_LIMIT.value);
+                final long groupNumber = (groupId == null) ? -1 : HelperGroup.tox_group_by_groupid__wrapper(groupId);
+                if (groupNumber < 0)
+                {
+                    Log.w(TAG, "qa_group_broadcast:fail action=" + action + " reason=not_in_tox");
+                    return;
+                }
+                MainActivity.android_tox_callback_group_join_fail_cb_method(groupNumber, fail);
+                HelperGeneric.logI(TAG, "qa_group_broadcast:done action=" + action + " gn=" + groupNumber + " fail=" + fail);
                 return;
             }
             default:

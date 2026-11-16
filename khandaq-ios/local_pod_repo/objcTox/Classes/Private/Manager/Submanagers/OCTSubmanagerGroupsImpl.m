@@ -4454,6 +4454,27 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         }];
         return count > 1 ? (NSUInteger)(count - 1) : 0;
     };
+    // KHANDAQ (0.2.57): a group file packet to one member alone, for a member that asks for the whole of a file this
+    // device sent. On the tox queue, as the packets to the whole group above.
+    self.fileTransfer.sendPrivatePacketBlock = ^BOOL (uint32_t groupNumber, uint32_t peerId, NSData *packet, NSError **error) {
+        __strong typeof(weakSelf) self = weakSelf;
+
+        if (! self || [self.pendingGroupLeaves containsGroupNumber:groupNumber]) {
+            return NO;
+        }
+
+        __block BOOL sent = NO;
+        __block NSError *sendError = nil;
+        [self performSyncOnToxQueue:^(OCTTox *tox) {
+            NSError *toxError = nil;
+            sent = [tox groupSendCustomPrivatePacket:packet groupNumber:groupNumber peerId:peerId lossless:YES error:&toxError];
+            sendError = toxError;
+        }];
+        if (error) {
+            *error = sendError;
+        }
+        return sent;
+    };
     self.fileTransfer.incomingFileNamesInUseBlock = ^NSSet<NSString *> *(uint32_t groupNumber) {
         __strong typeof(weakSelf) self = weakSelf;
 

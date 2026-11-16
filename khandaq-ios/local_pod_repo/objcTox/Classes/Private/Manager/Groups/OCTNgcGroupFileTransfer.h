@@ -17,6 +17,12 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferError) {
 
 typedef BOOL (^OCTNgcGroupFileTransferSendPacketBlock)(uint32_t groupNumber, NSData *packet, NSError **error);
 
+// KHANDAQ (0.2.57): a packet to the member `peerId` of the group alone.
+typedef BOOL (^OCTNgcGroupFileTransferSendPrivatePacketBlock)(uint32_t groupNumber,
+                                                              uint32_t peerId,
+                                                              NSData *packet,
+                                                              NSError **error);
+
 // KHANDAQ (audit F-5): senderPublicKeyHex is the STABLE key of the peer this file really came from
 // (the BEGIN opener for a chunked transfer, the delivering peer for a single-packet one). The msgId is
 // public inside the group, so the row it lands on must be matched on the key, not on the msgId alone.
@@ -63,6 +69,12 @@ typedef void (^OCTNgcGroupFileTransferIncomingDroppedBlock)(uint32_t groupNumber
 /// device sends: a packet costs its bytes once for each. Called on the queues that send, never on the main one. Set it
 /// before the first file goes; without it a packet costs as if it went to one member.
 @property (atomic, copy, nullable) NSUInteger (^memberCountBlock)(uint32_t groupNumber);
+
+/// KHANDAQ (0.2.57): sends a packet of a group file to one member alone: the whole of a file this device sent, to a
+/// member that asks for all of it (an Android that has the file's message and no BEGIN of it asks so). Called on the
+/// queues that send, never on the main one. Set it before the first request comes; without it such a request is not
+/// served.
+@property (atomic, copy, nullable) OCTNgcGroupFileTransferSendPrivatePacketBlock sendPrivatePacketBlock;
 
 - (instancetype)initWithSendPacketBlock:(OCTNgcGroupFileTransferSendPacketBlock)sendPacketBlock
                 incomingFilesDirectory:(NSString *(^)(uint32_t groupNumber))incomingFilesDirectoryBlock

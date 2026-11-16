@@ -89,6 +89,14 @@ static const uint64_t kPaceTestsBurst = 512 * 1024 / 4;
 static const uint64_t kPaceTestsChunk = 37000;
 static const uint64_t kPaceTestsT0 = 1000000;
 
+/// The clock of a transfer under test, which the test moves on and the transfer's waits move as long as they last.
+@interface OCTGroupTestClock : NSObject
+@property (atomic, assign) uint64_t nowMs;
+@end
+
+@implementation OCTGroupTestClock
+@end
+
 /**
  * KHANDAQ (long texts, group connection).
  *
@@ -1548,16 +1556,22 @@ static const uint64_t kPaceTestsT0 = 1000000;
     NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
     [self groupTestSendContent:[self groupTestContentOfLength:4 * kGroupTestChunkPayload + 10] named:@"clip.mp4" msgIdHex:msgIdHex by:sender];
     [packets removeAllObjects];
+    sender.sendPrivatePacketBlock = ^BOOL (uint32_t groupNumber, uint32_t peerId, NSData *packet, NSError **error) {
+        XCTFail(@"a packet to peer %u alone", peerId);
+        return NO;
+    };
     const uint8_t all[] = {0xff, 0xff};
 
-    // A bitmap for a file of another count of chunks, one too short for its count, and the full request of an old
-    // Android (the count 0 and nothing after it).
+    // A bitmap for a file of another count of chunks, one too short for its count, and the count 0 with something
+    // after it (the request for the whole file is the count 0 alone).
     [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:[self groupTestRequestFor:msgIdHex count:9 then:[NSData dataWithBytes:all length:2]]];
     [sender handleIncomingPacketWithGroupNumber:5 peerId:8 peerPublicKeyHex:nil data:[self groupTestRequestFor:msgIdHex count:5 then:[NSData data]]];
-    [sender handleIncomingPacketWithGroupNumber:5 peerId:9 peerPublicKeyHex:nil data:[self groupTestRequestFor:msgIdHex count:0 then:[NSData data]]];
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:9 peerPublicKeyHex:nil data:[self groupTestRequestFor:msgIdHex count:0 then:[NSData dataWithBytes:all length:1]]];
     // A file this member did not send.
     [sender handleIncomingPacketWithGroupNumber:5 peerId:10 peerPublicKeyHex:nil
                                            data:[self groupTestRequestFor:[OCTNgcGroupFileTransfer generateMsgIdHex] count:5 then:[NSData dataWithBytes:all length:1]]];
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:11 peerPublicKeyHex:nil
+                                           data:[self groupTestRequestFor:[OCTNgcGroupFileTransfer generateMsgIdHex] count:0 then:[NSData data]]];
     [self groupTestDrainQueueOf:sender];
 
     XCTAssertEqual(packets.count, 0u);
@@ -1898,6 +1912,185 @@ static const uint64_t kPaceTestsT0 = 1000000;
     [[NSFileManager defaultManager] removeItemAtPath:outbox error:nil];
 }
 
+#pragma mark - The whole file a member asks for
+
+// KHANDAQ (0.2.57): an Android that has the message of a file and no assembly of it asks the sender for the whole file:
+// the count 0 and nothing after it. An iPhone read that as a request for no chunk, and such a member never got the file
+// from it. The file goes to that member alone now, its BEGIN first, at the pace, a packet costing its size once.
+- (void)testARequestForTheWholeFileSendsItToThatMemberAlone
+{
+    OCTGroupTestClock *clock = [OCTGroupTestClock new];
+    clock.nowMs = kPaceTestsT0;
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    NSMutableArray<NSArray *> *privatePackets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *sender = [self wholeFileTestSenderWithClock:clock members:3 packets:packets privatePackets:privatePackets];
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    [self groupTestSendContent:[self groupTestContentOfLength:4 * kGroupTestChunkPayload + 10] named:@"clip.mp4" msgIdHex:msgIdHex by:sender];
+    NSArray<NSData *> *uploaded = [packets copy];
+    XCTAssertEqual(uploaded.count, 6u);
+    [packets removeAllObjects];
+
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:[self groupTestRequestFor:msgIdHex count:0 then:[NSData data]]];
+    [self groupTestDrainQueueOf:sender];
+
+    XCTAssertEqual(packets.count, 0u, @"something went to the whole group");
+    XCTAssertEqualObjects([self wholeFileTestContentsOf:privatePackets], (@[@"BEGIN", @0, @1, @2, @3, @4]));
+    for (NSUInteger i = 0; i < privatePackets.count && i < uploaded.count; i++) {
+        XCTAssertEqualObjects(privatePackets[i][0], @7);
+        XCTAssertEqualObjects(privatePackets[i][1], uploaded[i], @"packet %lu is not as the upload sent it", (unsigned long)i);
+    }
+    // A chunk paid for once, not once for each of the three members: about 71 ms of the pace, not 212.
+    for (NSUInteger i = 2; i < privatePackets.count; i++) {
+        const uint64_t gap = [privatePackets[i][2] unsignedLongLongValue] - [privatePackets[i - 1][2] unsignedLongLongValue];
+        XCTAssertGreaterThanOrEqual(gap, kPaceTestsChunk * 1000 / kPaceTestsRate - 1, @"packet %lu", (unsigned long)i);
+        XCTAssertLessThan(gap, 2 * kPaceTestsChunk * 1000 / kPaceTestsRate, @"packet %lu", (unsigned long)i);
+    }
+}
+
+// One resend of the whole file at a time, and a member's request for it taken once in 4 s at most, as Android serves it.
+- (void)testTheWholeFileGoesOnceAtATimeAndToAMemberOnceInFourSeconds
+{
+    OCTGroupTestClock *clock = [OCTGroupTestClock new];
+    clock.nowMs = kPaceTestsT0;
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    NSMutableArray<NSArray *> *privatePackets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *sender = [self wholeFileTestSenderWithClock:clock members:1 packets:packets privatePackets:privatePackets];
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    [self groupTestSendContent:[self groupTestContentOfLength:2 * kGroupTestChunkPayload] named:@"clip.mp4" msgIdHex:msgIdHex by:sender];
+    NSData *whole = [self groupTestRequestFor:msgIdHex count:0 then:[NSData data]];
+
+    // The first request is taken and waits for its queue; the same member's next one and another member's are not.
+    dispatch_semaphore_t held = dispatch_semaphore_create(0);
+    dispatch_async([sender valueForKey:@"wholeFileQueue"], ^{
+        dispatch_semaphore_wait(held, DISPATCH_TIME_FOREVER);
+    });
+    const uint64_t askedAt = clock.nowMs;
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:whole];
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:whole];
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:8 peerPublicKeyHex:nil data:whole];
+    dispatch_sync([sender valueForKey:@"sendQueue"], ^{});
+    dispatch_semaphore_signal(held);
+    [self groupTestDrainQueueOf:sender];
+    XCTAssertEqualObjects([self wholeFileTestContentsOf:privatePackets], (@[@"BEGIN", @0, @1]));
+    XCTAssertEqualObjects([self wholeFileTestPeersOf:privatePackets], ([NSSet setWithObject:@7]));
+    [privatePackets removeAllObjects];
+
+    clock.nowMs = askedAt + 3999;
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:whole];
+    [self groupTestDrainQueueOf:sender];
+    XCTAssertEqual(privatePackets.count, 0u, @"taken again within 4 s");
+
+    clock.nowMs = askedAt + 4000;
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:whole];
+    [self groupTestDrainQueueOf:sender];
+    XCTAssertEqualObjects([self wholeFileTestContentsOf:privatePackets], (@[@"BEGIN", @0, @1]));
+    [privatePackets removeAllObjects];
+
+    // The other member's request was not taken, so nothing holds its next one back.
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:8 peerPublicKeyHex:nil data:whole];
+    [self groupTestDrainQueueOf:sender];
+    XCTAssertEqualObjects([self wholeFileTestContentsOf:privatePackets], (@[@"BEGIN", @0, @1]));
+    XCTAssertEqualObjects([self wholeFileTestPeersOf:privatePackets], ([NSSet setWithObject:@8]));
+    XCTAssertEqual(packets.count, 3u, @"only the upload went to the whole group");
+}
+
+// The chunks the member asks for while the whole file goes to it are not lost: not to the cooldown of its requests, nor
+// to the resend that runs. They go with the whole file, to it alone, lowest first. Another member's request goes to
+// the group as before.
+- (void)testChunksTheMemberAsksForWhileTheWholeFileGoesToItGoWithIt
+{
+    OCTGroupTestClock *clock = [OCTGroupTestClock new];
+    clock.nowMs = kPaceTestsT0;
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    NSMutableArray<NSArray *> *privatePackets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *sender = [self wholeFileTestSenderWithClock:clock members:1 packets:packets privatePackets:privatePackets];
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    [self groupTestSendContent:[self groupTestContentOfLength:4 * kGroupTestChunkPayload + 10] named:@"clip.mp4" msgIdHex:msgIdHex by:sender];
+    [packets removeAllObjects];
+
+    // The whole file waits once chunk 2 went.
+    dispatch_semaphore_t reached = dispatch_semaphore_create(0);
+    dispatch_semaphore_t held = dispatch_semaphore_create(0);
+    __block BOOL heldOnce = NO;
+    OCTNgcGroupFileTransferSendPrivatePacketBlock record = sender.sendPrivatePacketBlock;
+    sender.sendPrivatePacketBlock = ^BOOL (uint32_t groupNumber, uint32_t peerId, NSData *packet, NSError **error) {
+        const BOOL sent = record(groupNumber, peerId, packet, error);
+        uint32_t index = 0;
+        if (packet.length > 44) {
+            [packet getBytes:&index range:NSMakeRange(40, 4)];
+        }
+        if (! heldOnce && ((const uint8_t *)packet.bytes)[7] == 0x13 && CFSwapInt32BigToHost(index) == 2) {
+            heldOnce = YES;
+            dispatch_semaphore_signal(reached);
+            dispatch_semaphore_wait(held, DISPATCH_TIME_FOREVER);
+        }
+        return sent;
+    };
+
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:[self groupTestRequestFor:msgIdHex count:0 then:[NSData data]]];
+    XCTAssertEqual(dispatch_semaphore_wait(reached, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)), 0, @"the whole file never went");
+
+    // The member lacks chunk 0, which went, and asks for it and for 3, still to go; then at once, in a second packet,
+    // for 1. Another member asks for chunk 4.
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:[self wholeFileTestListRequestFor:msgIdHex chunks:@[@0, @3]]];
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:[self wholeFileTestListRequestFor:msgIdHex chunks:@[@1]]];
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:8 peerPublicKeyHex:nil data:[self wholeFileTestListRequestFor:msgIdHex chunks:@[@4]]];
+    dispatch_sync([sender valueForKey:@"sendQueue"], ^{});
+    dispatch_semaphore_signal(held);
+    [self groupTestDrainQueueOf:sender];
+
+    XCTAssertEqualObjects([self wholeFileTestContentsOf:privatePackets], (@[@"BEGIN", @0, @1, @2, @0, @1, @3, @4]));
+    XCTAssertEqualObjects([self wholeFileTestPeersOf:privatePackets], ([NSSet setWithObject:@7]));
+    XCTAssertEqualObjects([self groupTestChunkIndicesOf:packets], (@[@4]), @"the other member's request");
+}
+
+// While the file's own upload goes, the whole file is its BEGIN and the chunks the upload handed over already: the
+// rest reach the member with the upload.
+- (void)testTheWholeFileAskedForDuringItsUploadLeavesTheRestToTheUpload
+{
+    OCTGroupTestClock *clock = [OCTGroupTestClock new];
+    clock.nowMs = kPaceTestsT0;
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    NSMutableArray<NSArray *> *privatePackets = [NSMutableArray new];
+    OCTNgcGroupFileTransfer *sender = [self wholeFileTestSenderWithClock:clock members:1 packets:packets privatePackets:privatePackets];
+    dispatch_semaphore_t held = dispatch_semaphore_create(0);
+    dispatch_semaphore_t waiting = dispatch_semaphore_create(0);
+    __block BOOL heldOnce = NO;
+    [sender setSleepMsBlock:^(uint64_t ms) {
+        const char *label = dispatch_queue_get_label(DISPATCH_CURRENT_QUEUE_LABEL);
+        if (! heldOnce && strcmp(label, "ngc-group-file-upload") == 0) {
+            heldOnce = YES;
+            dispatch_semaphore_signal(waiting);
+            dispatch_semaphore_wait(held, DISPATCH_TIME_FOREVER);
+        }
+        clock.nowMs += ms;
+    }];
+
+    NSString *outbox = [self nameTestDirectory];
+    NSString *path = [outbox stringByAppendingPathComponent:@"clip.mp4"];
+    XCTAssertTrue([[self groupTestContentOfLength:8 * kGroupTestChunkPayload] writeToFile:path atomically:YES]);
+    NSString *msgIdHex = [OCTNgcGroupFileTransfer generateMsgIdHex];
+    XCTestExpectation *sent = [self expectationWithDescription:@"the file went"];
+    [sender sendFileAtPath:path groupNumber:5 msgIdHex:msgIdHex progress:nil completion:^(BOOL success, NSError *error) {
+        XCTAssertTrue(success, @"%@", error);
+        [sent fulfill];
+    }];
+    XCTAssertEqual(dispatch_semaphore_wait(waiting, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)), 0, @"the file never waited");
+
+    // The burst let the BEGIN and chunks 0 to 3 go.
+    [sender handleIncomingPacketWithGroupNumber:5 peerId:7 peerPublicKeyHex:nil data:[self groupTestRequestFor:msgIdHex count:0 then:[NSData data]]];
+    dispatch_sync([sender valueForKey:@"sendQueue"], ^{});
+    dispatch_sync([sender valueForKey:@"wholeFileQueue"], ^{});
+    XCTAssertEqualObjects([self wholeFileTestContentsOf:privatePackets], (@[@"BEGIN", @0, @1, @2, @3]));
+
+    dispatch_semaphore_signal(held);
+    [self waitForExpectations:@[sent] timeout:5.0];
+    XCTAssertEqualObjects([self wholeFileTestContentsOf:privatePackets], (@[@"BEGIN", @0, @1, @2, @3]));
+    XCTAssertEqualObjects([self groupTestChunkIndicesOf:[packets subarrayWithRange:NSMakeRange(1, packets.count - 1)]],
+                          (@[@0, @1, @2, @3, @4, @5, @6, @7]));
+    [[NSFileManager defaultManager] removeItemAtPath:outbox error:nil];
+}
+
 #pragma mark - The name of a file offered to a friend
 
 // KHANDAQ (0.2.57, SPEC-community risk 3): toxcore takes that name as UTF-8 bytes and their count, at most
@@ -2107,8 +2300,78 @@ static const uint64_t kPaceTestsT0 = 1000000;
     for (int round = 0; round < 3; round++) {
         dispatch_sync([transfer valueForKey:@"sendQueue"], ^{});
         dispatch_sync([transfer valueForKey:@"resendQueue"], ^{});
+        dispatch_sync([transfer valueForKey:@"wholeFileQueue"], ^{});
         dispatch_sync([transfer valueForKey:@"uploadQueue"], ^{});
     }
+}
+
+/// A member that sends to group 5 by `clock`, a packet to the group costing `members` times its size. What it sends to
+/// the group goes to `packets`, and what it sends to one member to `privatePackets`, as @[peer id, packet, clock].
+- (OCTNgcGroupFileTransfer *)wholeFileTestSenderWithClock:(OCTGroupTestClock *)clock
+                                                  members:(NSUInteger)members
+                                                  packets:(NSMutableArray<NSData *> *)packets
+                                           privatePackets:(NSMutableArray<NSArray *> *)privatePackets
+{
+    OCTNgcGroupFileTransfer *sender = [[OCTNgcGroupFileTransfer alloc] initWithSendPacketBlock:^BOOL (uint32_t groupNumber, NSData *packet, NSError **error) {
+        @synchronized (packets) {
+            [packets addObject:packet];
+        }
+        return YES;
+    } incomingFilesDirectory:^NSString *(uint32_t groupNumber) {
+        return NSTemporaryDirectory();
+    } incomingBeginBlock:nil incomingCompleteBlock:^(uint32_t groupNumber, uint32_t peerId, NSString *senderPublicKeyHex,
+                                                    NSString *fileName, NSString *filePath, uint64_t fileSize, NSString *msgIdHex) {
+    } transferProgressBlock:nil];
+    [sender setNowMsBlock:^uint64_t {
+        return clock.nowMs;
+    }];
+    [sender setSleepMsBlock:^(uint64_t ms) {
+        clock.nowMs += ms;
+    }];
+    sender.memberCountBlock = ^NSUInteger (uint32_t groupNumber) {
+        return members;
+    };
+    sender.sendPrivatePacketBlock = ^BOOL (uint32_t groupNumber, uint32_t peerId, NSData *packet, NSError **error) {
+        XCTAssertFalse([NSThread isMainThread]);
+        XCTAssertEqual(groupNumber, 5u);
+        @synchronized (privatePackets) {
+            [privatePackets addObject:@[@(peerId), packet, @(clock.nowMs)]];
+        }
+        return YES;
+    };
+    return sender;
+}
+
+/// What `privatePackets` carry, in their order: "BEGIN" for a BEGIN, its index for a chunk.
+- (NSArray *)wholeFileTestContentsOf:(NSArray<NSArray *> *)privatePackets
+{
+    NSMutableArray *contents = [NSMutableArray new];
+    for (NSArray *sent in privatePackets) {
+        NSData *packet = sent[1];
+        const uint8_t type = ((const uint8_t *)packet.bytes)[7];
+        [contents addObject:(type == 0x12) ? @"BEGIN" : (type == 0x13) ? @([self groupTestU32In:packet at:40]) : @"?"];
+    }
+    return contents;
+}
+
+- (NSSet<NSNumber *> *)wholeFileTestPeersOf:(NSArray<NSArray *> *)privatePackets
+{
+    NSMutableSet<NSNumber *> *peers = [NSMutableSet new];
+    for (NSArray *sent in privatePackets) {
+        [peers addObject:sent[0]];
+    }
+    return peers;
+}
+
+/// A request for the chunks `chunks` of the file `msgIdHex`, as a list.
+- (NSData *)wholeFileTestListRequestFor:(NSString *)msgIdHex chunks:(NSArray<NSNumber *> *)chunks
+{
+    NSMutableData *list = [NSMutableData new];
+    for (NSNumber *index in chunks) {
+        uint32_t value = CFSwapInt32HostToBig(index.unsignedIntValue);
+        [list appendBytes:&value length:4];
+    }
+    return [self groupTestRequestFor:msgIdHex count:(uint32_t)chunks.count then:list];
 }
 
 - (NSArray<NSString *> *)groupTestNamesIn:(NSString *)folder

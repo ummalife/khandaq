@@ -1,7 +1,6 @@
 package com.zoffcc.applications.trifa;
 
 import android.content.Context;
-import android.text.TextUtils;
 
 import androidx.annotation.Nullable;
 
@@ -26,6 +25,14 @@ final class MessageReplyHelper
         String previewText;
         /** Legacy swipe-quote without structured metadata. */
         boolean legacyQuote;
+        /**
+         * KHANDAQ (0.2.58, as iOS 0.2.56): how the bar above the field names the author when the header
+         * names them otherwise: "You" over a reply to your own message, whose header names you as the
+         * others know you. It never goes on the wire ({@link #encode} writes senderName); null for a reply
+         * that arrived.
+         */
+        @Nullable
+        String localSenderName;
     }
 
     static final class ParsedMessage
@@ -201,7 +208,8 @@ final class MessageReplyHelper
 
     static String previewForDisplay(final Context context, final String text, final int maxLen)
     {
-        final String single = TextUtils.isEmpty(text) ? "" : text.replace('\n', ' ').replace('\r', ' ').trim();
+        // Plain Java rather than TextUtils: encode() comes through here, and the JVM tests read the wire it writes.
+        final String single = (text == null || text.isEmpty()) ? "" : text.replace('\n', ' ').replace('\r', ' ').trim();
         if (single.length() <= maxLen)
         {
             return single;

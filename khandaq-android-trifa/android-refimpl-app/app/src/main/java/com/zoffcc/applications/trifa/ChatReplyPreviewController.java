@@ -206,7 +206,9 @@ final class ChatReplyPreviewController
         meta.senderPubkeyTail = MessageReplyHelper.pubkeyTail(message.tox_friendpubkey);
         if (message.direction == 1)
         {
-            meta.senderName = context.getString(R.string.chat_reply_self_name);
+            // KHANDAQ (0.2.58): the person knows you by your profile name.
+            nameOwnAuthor(meta, context.getString(R.string.chat_reply_self_name),
+                          context.getString(R.string.chat_reply_unknown_sender), TRIFAGlobals.global_my_name);
         }
         else
         {
@@ -250,7 +252,11 @@ final class ChatReplyPreviewController
         meta.senderPubkeyTail = MessageReplyHelper.pubkeyTail(message.tox_group_peer_pubkey);
         if (message.direction == 1)
         {
-            meta.senderName = context.getString(R.string.chat_reply_self_name);
+            // KHANDAQ (0.2.58): the group knows you by the name you have in it, else by your profile name.
+            // Our own row has no name frozen on it (tox_group_peername is null on what we send).
+            nameOwnAuthor(meta, context.getString(R.string.chat_reply_self_name),
+                          context.getString(R.string.chat_reply_unknown_sender),
+                          groupSelfName(message.group_identifier), TRIFAGlobals.global_my_name);
         }
         else
         {
@@ -304,6 +310,58 @@ final class ChatReplyPreviewController
         show(context, meta);
     }
 
+    /**
+     * KHANDAQ (0.2.58, as iOS 0.2.56 in ChatReplyController.replyMeta): a reply to our own message. The
+     * header travels, and every client shows the name it carries, so it names us as the others in the chat
+     * know us: the first of {@code knownAs} that is a name, else {@code unknownWord}. "You" there named the
+     * reader on the other side. Only the bar above the field says {@code selfWord} (barName). Pure, so it
+     * can be unit tested.
+     */
+    static void nameOwnAuthor(final MessageReplyHelper.ReplyMeta meta, final String selfWord,
+                              final String unknownWord, @Nullable final String... knownAs)
+    {
+        meta.senderName = unknownWord;
+        if (knownAs != null)
+        {
+            for (final String name : knownAs)
+            {
+                final String trimmed = name == null ? "" : name.trim();
+                // "-1" is what the old name lookups give for none.
+                if (!trimmed.isEmpty() && !"-1".equals(trimmed))
+                {
+                    meta.senderName = trimmed;
+                    break;
+                }
+            }
+        }
+        meta.localSenderName = selfWord;
+    }
+
+    /** How the bar above the field names the author: as the header does, unless only the bar says "You". */
+    static String barName(final MessageReplyHelper.ReplyMeta meta)
+    {
+        final String local = meta.localSenderName;
+        return (local == null || local.isEmpty()) ? meta.senderName : local;
+    }
+
+    /** Our name in this group as its members see it; null while toxcore has none for us or the group is not there. */
+    @Nullable
+    private static String groupSelfName(@Nullable final String groupIdentifier)
+    {
+        if (groupIdentifier == null)
+        {
+            return null;
+        }
+        try
+        {
+            return MainActivity.tox_group_self_get_name_safe(HelperGroup.tox_group_by_groupid__wrapper(groupIdentifier));
+        }
+        catch (Throwable ignored)
+        {
+            return null;
+        }
+    }
+
     private static void show(final Context context, final MessageReplyHelper.ReplyMeta meta)
     {
         pendingReply = meta;
@@ -312,7 +370,7 @@ final class ChatReplyPreviewController
             return;
         }
         applyTheme(context);
-        headerView.setText(context.getString(R.string.chat_reply_header, meta.senderName));
+        headerView.setText(context.getString(R.string.chat_reply_header, barName(meta)));
         previewView.setText(MessageReplyHelper.previewForDisplay(context, meta.previewText, 120));
         bar.setVisibility(View.VISIBLE);
         if (inputField != null)

@@ -226,12 +226,70 @@ public class GroupFileSendWiringTest
         assertFalse(request.contains("record_ngc_transfer_started"));
         assertFalse(request.contains("clear_ngc_file_transfer_failed"));
         assertFalse(request.contains("clear_ngc_outgoing_send_resume_state"));
-        // And it never takes the place of the file's own send.
+        // And it never takes the place of the file's own send, nor swallows it: the own send is let in by its key
+        // alone, a resend of the whole file does not run while it does, and a resend of the chunks a member asked for
+        // has a key of its own (SERVES) and leaves where the own send stands alone.
         final String enqueue = body(ngc, "private static void enqueueChunkedSend(");
         final int own = enqueue.indexOf("else if (inflightOwnSends.contains(key))");
         assertTrue(own > 0);
-        assertTrue(own < enqueue.indexOf("SERVES.ask(serveKey, wanted)"));
         assertTrue(own < enqueue.indexOf("inflightServes.add(key)"));
+        assertEquals(1, count(enqueue, "inflightOwnSends.add(key)"));
+        final int ownLetIn = enqueue.indexOf("queued = inflightOwnSends.add(key);");
+        assertTrue(ownLetIn > 0);
+        assertTrue(ownLetIn < enqueue.indexOf("else if (serveKey != null)"));
+        final String selective = body(ngc, "private static void sendGroupFileSelectiveOnWorker(");
+        assertFalse(selective.contains("inflightOwnSends"));
+        assertFalse(selective.contains("record_ngc_outgoing_chunk_sent"));
+    }
+
+    @Test
+    public void a_members_request_during_the_own_send_is_served_not_dropped() throws Exception
+    {
+        // QA 0.2.57 (g5, g6): a group file of 6 MiB, its own send 96 s at the relay pace. Every request of a member
+        // during it was dropped ("send:skip already in-flight"); an iPhone spent its 24 requests on it and gave the
+        // file up, and so did the desktop. The rule is tested in NgcFileServesTest; the resends call toxcore, so this
+        // reads the source.
+        final String enqueue = body(code("NgcGroupFileTransfer.java"), "private static void enqueueChunkedSend(");
+        final int selective = enqueue.indexOf("else if (serveKey != null)");
+        assertTrue(selective > 0);
+        // A request for chunks is looked at before the own send's branch, which is for the whole file alone.
+        assertTrue(selective < enqueue.indexOf("else if (inflightOwnSends.contains(key))"));
+        final String serve = block(enqueue, enqueue.indexOf('{', selective));
+        assertFalse(serve.contains("queued = false"));
+        assertTrue(serve.contains("queued = SERVES.ask(serveKey, asked);"));
+        // Queued, it goes on the resends' thread, as one that came after the own send.
+        assertTrue(enqueue.contains("final ExecutorService exec = isUserSend ? SEND_EXECUTOR : RESEND_EXECUTOR;"));
+        assertTrue(enqueue.contains("sendGroupFileSelectiveOnWorker(g, targetPeerId, serveKey)"));
+    }
+
+    @Test
+    public void the_chunks_the_own_send_passed_reach_the_member_during_it() throws Exception
+    {
+        // The own send counts a chunk as sent once any member took it, and does not come back for a member that toxcore
+        // refused it to (its send array full). A request while it runs takes the chunks it passed (NgcFileServesTest),
+        // as the desktop's answerGroupFileRequest does; a request when it does not run, all that was asked, as before.
+        final String ngc = code("NgcGroupFileTransfer.java");
+        final String enqueue = body(ngc, "private static void enqueueChunkedSend(");
+        final String serve = block(enqueue, enqueue.indexOf('{', enqueue.indexOf("else if (serveKey != null)")));
+        final int at = serve.indexOf("final int ownSendAt = inflightOwnSends.contains(key) ? ownSendPassed(g) : -1;");
+        assertTrue(at >= 0);
+        final int passed = serve.indexOf(
+                "final boolean[] asked = (ownSendAt < 0) ? wanted : NgcFileServes.passedByOwnSend(wanted, ownSendAt);");
+        assertTrue(passed > at);
+        assertTrue(passed < serve.indexOf("SERVES.ask(serveKey, asked)"));
+        // Where the own send stands: past the last chunk it sent (its resume point), recorded once that chunk went.
+        assertTrue(body(ngc, "private static int ownSendPassed(final GroupMessage g)").contains(
+                "return HelperGroup.ngc_outgoing_last_chunk_index(g.group_identifier, g.msg_id_hash) + 1;"));
+        final String send = body(ngc, "private static void sendChunkedFrom(");
+        final int went = send.indexOf("if (res != SEND_OK)", send.indexOf("send.chunk("));
+        assertTrue(went > 0);
+        assertTrue(send.indexOf("HelperGroup.record_ngc_outgoing_chunk_sent(g.group_identifier, g.msg_id_hash, idx);")
+                   > went);
+        // They go to that member alone, at the pace of the others, relays included (PacedSend).
+        final String selective = body(ngc, "private static void sendGroupFileSelectiveOnWorker(");
+        assertTrue(selective.contains("new PeerSendTargets(new long[]{targetPeerId}, false);"));
+        assertTrue(selective.contains("new PacedSend("));
+        assertTrue(selective.contains("SERVES.takeNext(serveKey, at)"));
     }
 
     @Test

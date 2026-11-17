@@ -17,6 +17,11 @@ import java.util.Map;
  * that came less than 2.5 s after the one before (it asks every 2.5 s, with 0.5 s of timer leeway), and every request
  * of a member while the resend of another member ran.
  *
+ * <p>KHANDAQ (0.2.57): a request that comes while the file's own send runs is served too, with the chunks that send
+ * passed ({@link #passedByOwnSend}). In 0.2.56 it was dropped, as the own send went to every member; but a member that
+ * toxcore refused a chunk to (its send array full) never got it from the own send, spent its requests while that send
+ * ran, and gave the file up.
+ *
  * <p>Keys are the caller's (one per file and member); thread-safe.
  */
 final class NgcFileServes
@@ -74,5 +79,26 @@ final class NgcFileServes
     synchronized void end(final String key)
     {
         asked.remove(key);
+    }
+
+    /**
+     * KHANDAQ (0.2.57): the chunks of a member's request ({@code wanted[i]}: chunk i) that the file's own send has
+     * passed while it runs: those below {@code passed}, the first chunk it has not sent yet. Null when there are none.
+     * The own send counts a chunk as sent once any member took it, and does not come back for a member that toxcore
+     * refused it to, so a member may miss any of these. The chunks from {@code passed} on are left to the own send,
+     * which sends them to every member in their turn; a member that misses one of them asks for it again. The
+     * desktop answers the same way (Core::answerGroupFileRequest, its chunksSent).
+     */
+    static boolean[] passedByOwnSend(final boolean[] wanted, final int passed)
+    {
+        final boolean[] chunks = Arrays.copyOf(wanted, Math.max(0, Math.min(wanted.length, passed)));
+        for (final boolean chunk : chunks)
+        {
+            if (chunk)
+            {
+                return chunks;
+            }
+        }
+        return null;
     }
 }

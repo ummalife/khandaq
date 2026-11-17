@@ -7,11 +7,14 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
  * KHANDAQ (0.2.57, cross-platform QA): the resends of the chunks members ask for, one per file and member
- * (NgcFileServes). A request merges into the resend of its member while that one is queued or running.
+ * (NgcFileServes). A request merges into the resend of its member while that one is queued or running, and is served
+ * while the file's own send runs, with the chunks that send passed.
  *
  * QA: a request of more than 256 chunks comes as several packets, and an iPhone asks again every 2.5 s while its file
  * is stalled. A cooldown of 2.5 s per file dropped the packets after the first and some of the repeats, and one resend
@@ -132,5 +135,53 @@ public class NgcFileServesTest
         serves.end(MEMBER_A);
         assertTrue(serves.ask(MEMBER_A, chunks(3)));
         assertEquals("a request of nothing sends nothing", -1, serves.takeNext(MEMBER_A, 0));
+    }
+
+    @Test
+    public void a_request_during_the_own_send_is_served_not_dropped()
+    {
+        // QA 0.2.57 (g5, g6): a group file of 6 MiB, 171 chunks, its own send 96 s at the relay pace. An iPhone that
+        // toxcore refused the chunks to (its send array full) asked 24 times during the send; every request was dropped
+        // ("send:skip already in-flight"), and it gave the file up. The own send has passed 60 chunks; the member has
+        // the first 51.
+        final boolean[] passed = NgcFileServes.passedByOwnSend(chunks(171, range(51, 171)), 60);
+        assertNotNull("served, not dropped", passed);
+        final NgcFileServes serves = new NgcFileServes();
+        assertTrue("its resend starts", serves.ask(MEMBER_A, passed));
+        assertEquals(list(range(51, 60)), sendAll(serves, MEMBER_A, 0));
+    }
+
+    @Test
+    public void the_chunks_the_own_send_passed_reach_the_member_during_it()
+    {
+        final NgcFileServes serves = new NgcFileServes();
+        assertTrue(serves.ask(MEMBER_A, NgcFileServes.passedByOwnSend(chunks(171, range(51, 171)), 60)));
+        assertEquals(51, serves.takeNext(MEMBER_A, 0));
+        assertEquals(52, serves.takeNext(MEMBER_A, 52));
+        // The own send went on to chunk 75, the member still refused: what it passed since joins the member's resend.
+        assertFalse("merged", serves.ask(MEMBER_A, NgcFileServes.passedByOwnSend(chunks(171, range(53, 171)), 75)));
+        assertEquals(list(range(53, 75)), sendAll(serves, MEMBER_A, 53));
+        // Another member that missed other chunks has a resend of its own, with those the own send passed.
+        assertTrue(serves.ask(MEMBER_B, NgcFileServes.passedByOwnSend(chunks(171, 7, 74, 75, 170), 75)));
+        assertEquals(list(7, 74), sendAll(serves, MEMBER_B, 0));
+        // The last chunk, once the own send passed it.
+        serves.end(MEMBER_B);
+        assertTrue(serves.ask(MEMBER_B, NgcFileServes.passedByOwnSend(chunks(171, 170), 171)));
+        assertEquals(list(170), sendAll(serves, MEMBER_B, 0));
+    }
+
+    @Test
+    public void what_the_own_send_has_not_passed_is_left_to_it()
+    {
+        assertNull("before its first chunk", NgcFileServes.passedByOwnSend(chunks(171, 0, 1, 170), 0));
+        assertNull("it sends them to every member in their turn",
+                   NgcFileServes.passedByOwnSend(chunks(171, 60, 61, 170), 60));
+        // The caller's array stays its own.
+        final boolean[] wanted = chunks(171, 5, 60);
+        final boolean[] passed = NgcFileServes.passedByOwnSend(wanted, 60);
+        assertEquals(60, passed.length);
+        passed[5] = false;
+        assertTrue(wanted[5]);
+        assertTrue(wanted[60]);
     }
 }

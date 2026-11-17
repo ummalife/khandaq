@@ -102,7 +102,8 @@ public final class NgcGroupFileTransfer
      * sendGroupFileSmall), and of those a resend of the whole file for one member's request is
      * (handleIncomingFileRequest). Each kind once per file. Apart, so that a resend that runs for one member cannot
      * swallow the file's own send. KHANDAQ (0.2.57): a resend of the chunks a member asked for is one per file and
-     * member (SERVES).
+     * member (SERVES), and runs while the file's own send does too, with the chunks that send passed
+     * (enqueueChunkedSend).
      */
     private static final java.util.Set<String> inflightOwnSends = ConcurrentHashMap.newKeySet();
     private static final java.util.Set<String> inflightServes = ConcurrentHashMap.newKeySet();
@@ -474,7 +475,8 @@ public final class NgcGroupFileTransfer
      * would otherwise pile up full re-sends on the single executor, starving freshly picked user files. KHANDAQ
      * (0.2.57): a resend of the chunks a member asked for is one per file and member, and a later request of that
      * member merges into it while it is queued or running (NgcFileServes): it was one per file, and a request that
-     * came meanwhile, from any member, was dropped.
+     * came meanwhile, from any member, was dropped. Such a request is served while the file's own send runs too, with
+     * the chunks that send passed (NgcFileServes.passedByOwnSend).
      */
     private static void enqueueChunkedSend(final GroupMessage g, final long targetPeerId, final boolean[] wanted)
     {
@@ -497,22 +499,42 @@ public final class NgcGroupFileTransfer
         {
             queued = inflightOwnSends.add(key);
         }
-        else if (inflightOwnSends.contains(key))
-        {
-            // KHANDAQ (0.2.56): a resend for one member's request is not needed while the file's own send goes to
-            // every member, and must never take the place of that send: the file then stayed unsent with nothing to
-            // send it.
-            queued = false;
-        }
         else if (serveKey != null)
         {
-            queued = SERVES.ask(serveKey, wanted);
+            // KHANDAQ (0.2.57): a member's request that comes while the file's own send runs is served, with the chunks
+            // that send passed. It was dropped ("send:skip already in-flight"), as the own send goes to every member;
+            // but the own send counts a chunk as sent once any member took it, and does not come back for a member that
+            // toxcore refused it to (its send array full). In cross-platform QA an iPhone asked 24 times during the
+            // 96 s own send of a 6 MiB file at the relay pace, all its requests for the file, and gave the file up.
+            // The chunks the own send has not passed yet are left to it; a member that misses one of them asks for it
+            // again.
+            final int ownSendAt = inflightOwnSends.contains(key) ? ownSendPassed(g) : -1;
+            final boolean[] asked = (ownSendAt < 0) ? wanted : NgcFileServes.passedByOwnSend(wanted, ownSendAt);
+            if (asked == null)
+            {
+                HelperGeneric.logI(TAG, "send:selective left to the own send at chunk " + ownSendAt + " peer="
+                        + targetPeerId + " msg=" + g.msg_id_hash.substring(0, 8));
+                return;
+            }
+            queued = SERVES.ask(serveKey, asked);
             if (!queued)
             {
                 HelperGeneric.logI(TAG, "send:selective merged peer=" + targetPeerId + " msg="
                         + g.msg_id_hash.substring(0, 8));
                 return;
             }
+            if (ownSendAt >= 0)
+            {
+                HelperGeneric.logI(TAG, "send:selective while the own send is at chunk " + ownSendAt + " peer="
+                        + targetPeerId + " msg=" + g.msg_id_hash.substring(0, 8));
+            }
+        }
+        else if (inflightOwnSends.contains(key))
+        {
+            // KHANDAQ (0.2.56): a resend of the whole file for one member's request does not run while the file's own
+            // send goes to every member, and must never take the place of that send: the file then stayed unsent with
+            // nothing to send it.
+            queued = false;
         }
         else
         {
@@ -583,6 +605,16 @@ public final class NgcGroupFileTransfer
         {
             inflightServes.remove(key);
         }
+    }
+
+    /**
+     * KHANDAQ (0.2.57): how many chunks of our file its own send, queued or running, has passed: those below the one
+     * after the last it sent (HelperGroup.record_ngc_outgoing_chunk_sent, its resume point); 0 before its first. They
+     * went to the members that took them (enqueueChunkedSend).
+     */
+    private static int ownSendPassed(final GroupMessage g)
+    {
+        return HelperGroup.ngc_outgoing_last_chunk_index(g.group_identifier, g.msg_id_hash) + 1;
     }
 
     static void sendGroupFileSmall(final GroupMessage g)
@@ -786,6 +818,7 @@ public final class NgcGroupFileTransfer
 
             if (ownSend)
             {
+                // KHANDAQ (0.2.57): also where the own send stands for the members' requests meanwhile (ownSendPassed).
                 HelperGroup.record_ngc_outgoing_chunk_sent(g.group_identifier, g.msg_id_hash, idx);
                 final long bytesDone = Math.min(fileSize, (long) (idx + 1) * CHUNK_PAYLOAD_MAX);
                 notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash, bytesDone, fileSize);

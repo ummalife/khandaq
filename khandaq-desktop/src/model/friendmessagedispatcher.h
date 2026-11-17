@@ -56,7 +56,10 @@ public:
 
     std::pair<DispatchedMessageId, DispatchedMessageId> sendExtendedMessage(const QString& content, ExtensionSet extensions) override;
     bool cancelMessage(DispatchedMessageId id) override;
-    void onMessageReceived(bool isAction, const QString& content);
+    std::pair<DispatchedMessageId, DispatchedMessageId> resendMessage(const Message& message) override;
+    /** msgV3Id: the id the text came with (Core::friendMessageReceived), or empty. */
+    void onMessageReceived(bool isAction, const QString& content,
+                           const QByteArray& msgV3Id = QByteArray());
     void onReceiptReceived(ReceiptNum receipt);
     void onExtMessageReceived(const QString& content);
     void onExtReceiptReceived(uint64_t receiptId);
@@ -82,6 +85,8 @@ private:
                                                           const char* sendKind, uint64_t receiptId,
                                                           uint64_t tag, int attempt, bool isExtended);
     static uint64_t tagOf(DispatchedMessageId messageId);
+    void stampParts(std::vector<Message>& parts);
+    std::pair<DispatchedMessageId, DispatchedMessageId> dispatchParts(const std::vector<Message>& parts);
 
     Friend& f;
     ICoreExtPacketAllocator& coreExtPacketAllocator;
@@ -93,4 +98,9 @@ private:
     FriendMessageRetryPolicy retryPolicy;
     /** Engine tags of the messages taken back with cancelMessage(). */
     QSet<quint64> cancelledTags;
+    /**
+     * KHANDAQ (0.2.57): the time the last text went with, in milliseconds since 1970, for the next
+     * (MsgV3::sentMsAfter); 0 before the first. Kept for this launch only, as the phones keep theirs.
+     */
+    qint64 lastSentMs = 0;
 };

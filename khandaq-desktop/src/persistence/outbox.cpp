@@ -47,6 +47,19 @@ QString historyRowOf(qint64 id)
     return QStringLiteral("(SELECT history_id FROM outbox WHERE id = %1)").arg(id);
 }
 
+/**
+ * KHANDAQ (0.2.57): the value of a msgv3_id column, for a query that binds its blobs in order: a
+ * bound id, or NULL for none, which a bound empty blob would not be.
+ */
+QString msgV3Value(const QByteArray& msgV3Id, QVector<QByteArray>& boundParams)
+{
+    if (msgV3Id.isEmpty()) {
+        return QStringLiteral("NULL");
+    }
+    boundParams << msgV3Id;
+    return QStringLiteral("?");
+}
+
 qint64 maxId(RawDatabase& db, const QString& table)
 {
     qint64 result = 0;
@@ -99,33 +112,40 @@ qint64 Outbox::reserveId()
     return nextId++;
 }
 
-RawDatabase::Query Outbox::linkedInsertQuery(qint64 id, const ChatId& chatId, const QString& message,
-                                             const QDateTime& time, ExtensionSet extensions)
+RawDatabase::Query Outbox::linkedInsertQuery(qint64 id, const ChatId& chatId,
+                                             const QString& message, const QDateTime& time,
+                                             ExtensionSet extensions, const QByteArray& msgV3Id)
 {
+    QVector<QByteArray> boundParams{chatId.getByteArray(), message.toUtf8()};
+    const QString idValue = msgV3Value(msgV3Id, boundParams);
     return RawDatabase::Query(QStringLiteral(
                                   "INSERT INTO outbox (id, chat_uuid, timestamp, message, "
-                                  "required_extensions, history_id, state) "
-                                  "VALUES (%1, ?, %2, ?, %3, last_insert_rowid(), %4);")
+                                  "required_extensions, history_id, state, msgv3_id) "
+                                  "VALUES (%1, ?, %2, ?, %3, last_insert_rowid(), %4, %5);")
                                   .arg(id)
                                   .arg(time.toMSecsSinceEpoch())
                                   .arg(extensions.to_ulong())
-                                  .arg(static_cast<int>(OutboxState::Waiting)),
-                              {chatId.getByteArray(), message.toUtf8()});
+                                  .arg(static_cast<int>(OutboxState::Waiting))
+                                  .arg(idValue),
+                              boundParams);
 }
 
 qint64 Outbox::add(const ChatId& chatId, const QString& message, const QDateTime& time,
-                   ExtensionSet extensions)
+                   ExtensionSet extensions, const QByteArray& msgV3Id)
 {
     const qint64 id = reserveId();
+    QVector<QByteArray> boundParams{chatId.getByteArray(), message.toUtf8()};
+    const QString idValue = msgV3Value(msgV3Id, boundParams);
     db->execLater(
         RawDatabase::Query(QStringLiteral("INSERT INTO outbox (id, chat_uuid, timestamp, message, "
-                                          "required_extensions, history_id, state) "
-                                          "VALUES (%1, ?, %2, ?, %3, NULL, %4);")
+                                          "required_extensions, history_id, state, msgv3_id) "
+                                          "VALUES (%1, ?, %2, ?, %3, NULL, %4, %5);")
                                .arg(id)
                                .arg(time.toMSecsSinceEpoch())
                                .arg(extensions.to_ulong())
-                               .arg(static_cast<int>(OutboxState::Waiting)),
-                           {chatId.getByteArray(), message.toUtf8()}));
+                               .arg(static_cast<int>(OutboxState::Waiting))
+                               .arg(idValue),
+                           boundParams));
     return id;
 }
 
@@ -136,9 +156,9 @@ QVector<Outbox::Entry> Outbox::entriesForChat(const ChatId& chatId)
     const RawDatabase::Query adoptPending(
         QStringLiteral(
             "INSERT INTO outbox (chat_uuid, timestamp, message, required_extensions, "
-            "history_id, state) "
+            "history_id, state, msgv3_id) "
             "SELECT chats.uuid, history.timestamp, text_messages.message, "
-            "faux_offline_pending.required_extensions, history.id, %1 "
+            "faux_offline_pending.required_extensions, history.id, %1, text_messages.msgv3_id "
             "FROM faux_offline_pending "
             "JOIN history ON history.id = faux_offline_pending.id "
             "JOIN text_messages ON text_messages.id = history.id "
@@ -154,8 +174,9 @@ QVector<Outbox::Entry> Outbox::entriesForChat(const ChatId& chatId)
     const RawDatabase::Query adoptBroken(
         QStringLiteral(
             "INSERT INTO outbox (chat_uuid, timestamp, message, required_extensions, "
-            "history_id, state) "
-            "SELECT chats.uuid, history.timestamp, text_messages.message, 0, history.id, %1 "
+            "history_id, state, msgv3_id) "
+            "SELECT chats.uuid, history.timestamp, text_messages.message, 0, history.id, %1, "
+            "text_messages.msgv3_id "
             "FROM broken_messages "
             "JOIN history ON history.id = broken_messages.id "
             "JOIN text_messages ON text_messages.id = history.id "
@@ -172,8 +193,8 @@ QVector<Outbox::Entry> Outbox::entriesForChat(const ChatId& chatId)
                                     });
     QVector<Entry> entries;
     const RawDatabase::Query listing(
-        QStringLiteral("SELECT id, timestamp, message, required_extensions, history_id, state "
-                       "FROM outbox WHERE chat_uuid = ? AND state != %1 "
+        QStringLiteral("SELECT id, timestamp, message, required_extensions, history_id, state, "
+                       "msgv3_id FROM outbox WHERE chat_uuid = ? AND state != %1 "
                        "ORDER BY timestamp, id;")
             .arg(static_cast<int>(OutboxState::Cancelled)),
         {chatId.getByteArray()}, [&entries](const QVector<QVariant>& row) {
@@ -184,6 +205,7 @@ QVector<Outbox::Entry> Outbox::entriesForChat(const ChatId& chatId)
             entry.extensionSet = ExtensionSet(row[3].toLongLong());
             entry.historyId = RowId{row[4].isNull() ? -1 : row[4].toLongLong()};
             entry.failed = row[5].toInt() == static_cast<int>(OutboxState::Failed);
+            entry.msgV3Id = row[6].toByteArray();
             entries << entry;
         });
 

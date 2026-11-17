@@ -22,6 +22,7 @@
 #include "genericchatform.h"
 #include "src/core/groupid.h"
 #include "src/core/toxpk.h"
+#include "src/model/air/aircommunity.h"
 #include "src/model/air/airgroup.h"
 #include "src/persistence/igroupsettings.h"
 
@@ -86,6 +87,8 @@ public:
 signals:
     /** Leaving was confirmed in the dossier: the main window leaves the group. */
     void leaveRequested(const GroupId& groupId);
+    /** KHANDAQ (0.2.57): Accept on a file of the group held for a tap: the main window writes it. */
+    void heldFileAccepted(const GroupId& groupId, const ToxFile& file);
 
 private slots:
     void onScreenshotClicked() override;
@@ -107,9 +110,15 @@ protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
     bool canSendNow() const override;
+    /** Report shows on a message or a file someone else sent (SPEC-community, item 5). */
+    void prepareChatMenu(QPoint globalPos) override;
 
 private:
     void retranslateUi();
+    /** Whether the entry is someone else's message or file; if so it is the one Report mails. */
+    bool prepareReport(ChatLogIdx idx);
+    /** Opens the mail to support about menuReport in the person's mail app. */
+    void report();
     /** Asks toxcore again who is in the group and what you may do, and shows it everywhere. */
     void refreshMembers();
     void refreshCounter();
@@ -159,4 +168,7 @@ private:
     QTimer refreshLater;
     /** Presence and the connection to the group have no signal: asked again while it shows. */
     QTimer refreshTicker;
+    QAction* reportAction = nullptr;
+    /** The entry the menu was opened on, as Report mails it. */
+    Air::GroupReport menuReport;
 };

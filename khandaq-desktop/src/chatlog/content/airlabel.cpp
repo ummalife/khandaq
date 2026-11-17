@@ -184,14 +184,19 @@ void AirMark::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, Q
         // kq-st-sending: the faint clock of a message leaving right now.
         opacity = 0.45;
         break;
-    case Air::EntryStatus::Delivered:
-        color = air().color(Color::Ink);
+    case Air::EntryStatus::Seen:
+        color = air().seenColor();
         break;
     case Air::EntryStatus::Failed:
         color = air().color(Color::Danger);
         break;
     case Air::EntryStatus::None:
     case Air::EntryStatus::Sent:
+    case Air::EntryStatus::Delivered:
+        // KHANDAQ (0.2.57): sent and delivered in the ink of the time beside them, as on the
+        // phones, so that only the teal of a message seen stands out. Only our messages to a
+        // person reach these: a text in a group shows a clock or an alert at most, as before
+        // (Air::groupTextStatus).
         break;
     }
 

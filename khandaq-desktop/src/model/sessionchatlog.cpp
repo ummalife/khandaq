@@ -25,6 +25,8 @@
 
 #include <QDebug>
 #include <QtGlobal>
+
+#include <algorithm>
 #include <mutex>
 
 namespace {
@@ -107,6 +109,18 @@ firstItemAfterDate(QDate date, const std::map<ChatLogIdx, ChatLogItem>& items)
                             [](const MessageDateAdaptor& a, MessageDateAdaptor const& b) {
                                 return a.timestamp.date() < b.timestamp.date();
                             });
+}
+
+/**
+ * KHANDAQ (0.2.57): one transfer, whatever toxcore numbers it now. One that waits for its friend,
+ * or is offered again, has a number of its own each time; its Tox file id stays.
+ */
+bool sameTransfer(const ToxFile& shown, const ToxFile& file)
+{
+    if (!shown.resumeFileId.isEmpty() && shown.resumeFileId == file.resumeFileId) {
+        return shown.direction == file.direction;
+    }
+    return shown == file;
 }
 
 QString resolveToxPk(FriendList& friendList, GroupList& groupList, const ToxPk& pk)
@@ -600,6 +614,47 @@ void SessionChatLog::onMessageBroken(DispatchedMessageId id, BrokenMessageReason
     emit itemUpdated(messageIt->first);
 }
 
+bool SessionChatLog::isCurrentFile(const ToxFile& file) const
+{
+    return std::any_of(currentFileTransfers.begin(), currentFileTransfers.end(),
+                       [&](const CurrentFileTransfer& transfer) {
+                           return sameTransfer(transfer.file, file);
+                       });
+}
+
+bool SessionChatLog::findFileEntry(const QByteArray& fileId, ToxFile::FileDirection direction,
+                                   ToxFile* found) const
+{
+    ChatLogIdx idx;
+    if (!fileEntryIdx(fileId, direction, &idx)) {
+        return false;
+    }
+    if (found) {
+        *found = items.at(idx).getContentAsFile().file;
+    }
+    return true;
+}
+
+bool SessionChatLog::fileEntryIdx(const QByteArray& fileId, ToxFile::FileDirection direction,
+                                  ChatLogIdx* idx) const
+{
+    if (fileId.isEmpty()) {
+        return false;
+    }
+    for (auto it = items.rbegin(); it != items.rend(); ++it) {
+        if (it->second.getContentType() != ChatLogItem::ContentType::fileTransfer
+            || hiddenItems.count(it->first) != 0) {
+            continue;
+        }
+        const ToxFile& shown = it->second.getContentAsFile().file;
+        if (shown.resumeFileId == fileId && shown.direction == direction) {
+            *idx = it->first;
+            return true;
+        }
+    }
+    return false;
+}
+
 /**
  * @brief Updates file state in the chatlog
  * @note The files need to be pre-filtered for the current chat since we do no validation
@@ -607,12 +662,22 @@ void SessionChatLog::onMessageBroken(DispatchedMessageId id, BrokenMessageReason
  */
 void SessionChatLog::onFileUpdated(const ToxPk& sender, const ToxFile& file)
 {
-    auto fileIt =
-        std::find_if(currentFileTransfers.begin(), currentFileTransfers.end(),
-                     [&](const CurrentFileTransfer& transfer) { return transfer.file == file; });
+    auto fileIt = std::find_if(currentFileTransfers.begin(), currentFileTransfers.end(),
+                               [&](const CurrentFileTransfer& transfer) {
+                                   return sameTransfer(transfer.file, file);
+                               });
 
     ChatLogIdx messageIdx;
-    if (fileIt == currentFileTransfers.end() && file.status == ToxFile::INITIALIZING) {
+    // KHANDAQ (0.2.57): a file that goes on in an entry of before, which ended, makes no new one:
+    // that entry moves again. ChatHistory keeps its history row for it the same way.
+    if (fileIt == currentFileTransfers.end() && file.status == ToxFile::INITIALIZING
+        && file.continued && fileEntryIdx(file.resumeFileId, file.direction, &messageIdx)) {
+        CurrentFileTransfer currentTransfer;
+        currentTransfer.file = file;
+        currentTransfer.idx = messageIdx;
+        currentFileTransfers.push_back(currentTransfer);
+        items.at(messageIdx).getContentAsFile().file = file;
+    } else if (fileIt == currentFileTransfers.end() && file.status == ToxFile::INITIALIZING) {
         assert(file.status == ToxFile::INITIALIZING);
         CurrentFileTransfer currentTransfer;
         currentTransfer.file = file;

@@ -58,6 +58,20 @@ public:
     /** Leaves out an item as it is loaded, one the history keeps erased; nothing is signalled. */
     void markHidden(ChatLogIdx idx);
 
+    /**
+     * KHANDAQ (0.2.57): whether an entry shows this transfer now, while it waits, moves or is
+     * offered; the Tox file id says which, whatever toxcore numbers it now.
+     */
+    bool isCurrentFile(const ToxFile& file) const;
+    /**
+     * KHANDAQ (0.2.57): the newest entry shown of the file with this Tox file id, in this
+     * direction, in whatever state it is.
+     * @param found Takes the file of the entry; may be null.
+     * @return Whether there is one
+     */
+    bool findFileEntry(const QByteArray& fileId, ToxFile::FileDirection direction,
+                       ToxFile* found) const;
+
     /** What an edit, a deletion or a reaction did to the log (stage 3, item 10). */
     struct EffectResult
     {
@@ -120,6 +134,8 @@ public slots:
 
 private:
     QString resolveSenderNameFromSender(const ToxPk &sender);
+    bool fileEntryIdx(const QByteArray& fileId, ToxFile::FileDirection direction,
+                      ChatLogIdx* idx) const;
 
 
 private:

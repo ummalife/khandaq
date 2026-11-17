@@ -65,6 +65,8 @@ const QString Settings::globalSettingsFile = "khandaq.ini";
 CompatibleRecursiveMutex Settings::bigLock;
 QThread* Settings::settingsThread{nullptr};
 static constexpr int GLOBAL_SETTINGS_VERSION = 1;
+/** Set once the rule of Air::attachmentRuleAtUpdate was applied (0.2.57). */
+static const char autoDownloadAppliedKey[] = "autoDownloadDefaultV0257Applied";
 static constexpr int PERSONAL_SETTINGS_VERSION = 1;
 
 namespace {
@@ -180,8 +182,17 @@ void Settings::loadGlobal()
         globalAutoAcceptDir = s.value("globalAutoAcceptDir",
                                       QStandardPaths::writableLocation(QStandardPaths::DownloadLocation))
                                   .toString();
-        autoAcceptMaxSize =
-            static_cast<size_t>(s.value("autoAcceptMaxSize", 0).toLongLong());
+        autoAcceptMaxSize = static_cast<size_t>(
+            s.value("autoAcceptMaxSize", Air::smallAttachmentDefault).toLongLong());
+        // KHANDAQ (0.2.57): files download by themselves by default now, and an installation that
+        // ran before gets that once (Air::attachmentRuleAtUpdate). saveGlobal writes the mark, so
+        // what the person chooses after this start is kept.
+        if (!s.value(autoDownloadAppliedKey, false).toBool()) {
+            const Air::AttachmentRule rule = Air::attachmentRuleAtUpdate(
+                autoSaveEnabled, static_cast<qint64>(autoAcceptMaxSize));
+            autoSaveEnabled = rule.autoSave;
+            autoAcceptMaxSize = static_cast<size_t>(rule.maxSize);
+        }
         stylePreference = static_cast<StyleType>(s.value("stylePreference", 1).toInt());
     }
     s.endGroup();
@@ -699,6 +710,7 @@ void Settings::saveGlobal()
         s.setValue("busySound", busySound);
         s.setValue("autoSaveEnabled", autoSaveEnabled);
         s.setValue("autoAcceptMaxSize", static_cast<qlonglong>(autoAcceptMaxSize));
+        s.setValue(autoDownloadAppliedKey, true);
         s.setValue("globalAutoAcceptDir", globalAutoAcceptDir);
         s.setValue("stylePreference", static_cast<int>(stylePreference));
     }

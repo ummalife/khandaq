@@ -25,6 +25,7 @@
 #include "src/core/toxpk.h"
 #include "src/friendlist.h"
 #include "src/grouplist.h"
+#include "src/model/air/aircommunity.h"
 #include "src/model/chatlogitem.h"
 #include "src/model/friend.h"
 #include "src/model/group.h"
@@ -289,6 +290,12 @@ Air::Entry AirSource::friendEntry(Friend& frnd, const IChatLog* log, qint64 nowS
         entry.lastDelivery = conversation.lastPending
                                  ? Air::outgoingTextDelivery(false, true, entry.reach.isLive())
                                  : conversation.delivery;
+        // KHANDAQ (0.2.57): seen once the person's read receipts reach it, as in the conversation.
+        const qint64 seenUpTo = local ? local->seenUpTo(publicKey) : -1;
+        entry.lastDelivery =
+            Air::seenDelivery(entry.lastDelivery,
+                              seenUpTo >= 0 && !conversation.lastFileMoving
+                                  && conversation.lastTime.toMSecsSinceEpoch() <= seenUpTo);
         entry.timeText = timeText(conversation.lastTime);
         if (entry.preview.isEmpty() && pending) {
             entry.preview = AirStrings::text(Text::HintRequestSent);
@@ -319,6 +326,8 @@ Air::Entry AirSource::groupEntry(Group& group, const IChatLog* log, const QSet<Q
     // The peer list counts us too.
     entry.reach = Air::Reach::group(std::max(0, group.getPeersCount() - 1));
     entry.isFavorite = favorites.contains(entry.id);
+    // KHANDAQ (0.2.57): Khandaq Community stands first, however it was joined.
+    entry.pinned = Air::Community::isCommunity(group.getPersistentId().getByteArray());
 
     const Conversation conversation = log ? read(*log, true) : Conversation{};
     entry.transitCount = conversation.undelivered;
@@ -416,6 +425,7 @@ AirSource::Conversation AirSource::read(const IChatLog& log, bool group) const
                 result.lastTime = file.timestamp;
                 result.preview = AirStrings::text(Text::FileMessage).arg(flat(file.file.fileName));
                 result.delivery = outgoing ? fileDelivery(file.file.status) : Air::Delivery::None;
+                result.lastFileMoving = result.delivery == Air::Delivery::Sent;
             }
             break;
         }
@@ -434,6 +444,7 @@ void AirSource::setLocal(AirLocal* local_)
     local = local_;
     if (local) {
         connect(local, &AirLocal::requestsChanged, this, &AirSource::changed);
+        connect(local, &AirLocal::seenChanged, this, &AirSource::changed);
     }
     emit changed();
 }
@@ -554,6 +565,17 @@ Air::NetworkState AirSource::networkState() const
     return Air::networkState(selfLink, selfLink != Air::toxConnectionNone || networkReachable());
 }
 
+bool AirSource::computerHasNetwork()
+{
+    const bool before = reachable;
+    reachabilityAge.invalidate();
+    if (networkReachable() != before) {
+        emit networkChanged();
+        emit changed();
+    }
+    return reachable;
+}
+
 Air::Nodes AirSource::nodes() const
 {
     Air::Nodes nodes;
@@ -579,9 +601,9 @@ QString AirSource::networkReport() const
 }
 
 #ifdef KHANDAQ_SCREENSHOT_HOOK
-void AirSource::forgetNetworkForWalk()
+void AirSource::setNetworkForWalk(bool present)
 {
-    walkWithoutNetwork = true;
+    walkWithoutNetwork = !present;
     reachabilityAge.invalidate();
     emit networkChanged();
     emit changed();

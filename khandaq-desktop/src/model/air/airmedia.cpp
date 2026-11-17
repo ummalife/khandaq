@@ -19,7 +19,9 @@
 
 #include "airmedia.h"
 
+#include <QDateTime>
 #include <QDir>
+#include <QFileInfo>
 #include <QIODevice>
 #include <QRegularExpression>
 
@@ -160,22 +162,60 @@ bool isVoiceNote(const QString& fileName)
     return fileName.size() > suffix.size() && fileName.endsWith(suffix, Qt::CaseInsensitive);
 }
 
+QString voiceNoteFolder(const QString& appDataDir)
+{
+    return QDir(appDataDir).filePath(QStringLiteral("voice"));
+}
+
 QString freeFilePath(const QString& folder, const QString& fileName,
                      const std::function<bool(const QString&)>& taken)
 {
-    if (fileName.isEmpty()) {
+    // KHANDAQ (0.2.57): only the last part of the name counts: the file goes into folder.
+    const QString name = QFileInfo(fileName).fileName();
+    if (name.isEmpty()) {
         return QString();
     }
     const QDir dir(folder);
-    const int dot = fileName.indexOf(QLatin1Char('.'));
+    const int dot = name.indexOf(QLatin1Char('.'));
     // A name that starts with its dot, or has none, takes the number at its end.
-    const QString base = dot > 0 ? fileName.left(dot) : fileName;
-    const QString rest = dot > 0 ? fileName.mid(dot) : QString();
-    QString path = dir.filePath(fileName);
+    const QString base = dot > 0 ? name.left(dot) : name;
+    const QString rest = dot > 0 ? name.mid(dot) : QString();
+    QString path = dir.filePath(name);
     for (int number = 1; taken && taken(path); ++number) {
         path = dir.filePath(QStringLiteral("%1 (%2)%3").arg(base).arg(number).arg(rest));
     }
     return path;
+}
+
+const char partFileSuffix[] = ".khandaq-part";
+
+QString partFilePath(const QString& path)
+{
+    return path.isEmpty() ? QString() : path + QLatin1String(partFileSuffix);
+}
+
+bool isPartPath(const QString& path)
+{
+    const QLatin1String suffix(partFileSuffix);
+    return path.size() > suffix.size() && path.endsWith(suffix);
+}
+
+QString wholeFilePath(const QString& path)
+{
+    const QLatin1String suffix(partFileSuffix);
+    return isPartPath(path) ? path.left(path.size() - suffix.size()) : path;
+}
+
+QString freePartPath(const QString& path, const std::function<bool(const QString&)>& taken)
+{
+    const QFileInfo whole(wholeFilePath(path));
+    const QString free = freeFilePath(whole.absolutePath(), whole.fileName(),
+                                      [&taken](const QString& candidate) {
+                                          return taken
+                                                 && (taken(candidate)
+                                                     || taken(partFilePath(candidate)));
+                                      });
+    return partFilePath(free);
 }
 
 bool FileEntryState::isProblem() const
@@ -188,12 +228,26 @@ FileEntryState fileEntryState(const FileFacts& facts)
     FileEntryState state;
     // A group file has nothing to answer: it arrives whole or not at all.
     const bool controls = !facts.group;
+    // KHANDAQ (0.2.57): a transfer whose friend went offline waits, never fails: the bar stays at
+    // what came, and only Cancel is offered until they are back.
+    if (facts.waitsConnection && controls) {
+        if (facts.status == ToxFile::TRANSMITTING || facts.status == ToxFile::PAUSED) {
+            state.progress =
+                std::isfinite(facts.progress) ? qBound(0.0, facts.progress, 1.0) : 0.0;
+        }
+        state.note = FileNote::WaitsConnection;
+        state.actions = {FileAction::Cancel};
+        return state;
+    }
     switch (facts.status) {
     case ToxFile::INITIALIZING:
         if (facts.incoming) {
             // The size is on the line above; Accept is the whole question.
             if (controls) {
                 state.actions = {FileAction::Accept, FileAction::Decline};
+            } else if (facts.held) {
+                // Here already, in memory: there is nothing to decline from the sender.
+                state.actions = {FileAction::Accept};
             }
         } else {
             state.note = facts.group ? FileNote::None : FileNote::WaitsAccept;
@@ -269,6 +323,91 @@ EntryStatus fileStatus(ToxFile::FileStatus status, bool personOnline)
         return EntryStatus::Failed;
     }
     return EntryStatus::None;
+}
+
+EntryStatus fileStatus(const ToxFile& file, bool personOnline)
+{
+    return fileStatus(file.connectionLost ? ToxFile::INITIALIZING : file.status, personOnline);
+}
+
+bool isOffer(const ToxFile& file)
+{
+    return file.status == ToxFile::INITIALIZING && file.direction == ToxFile::RECEIVING
+           && !file.connectionLost;
+}
+
+FileResume fileResume(const QByteArray& offerId, qint64 offerSize, const FileHere& here)
+{
+    FileResume resume;
+    if (offerId.isEmpty() || offerId != here.id || offerSize != here.size || offerSize < 0) {
+        return resume;
+    }
+    if (here.status == ToxFile::FINISHED) {
+        resume.step = FileResume::Step::EndQuietly;
+        resume.offset = qMax<qint64>(0, offerSize - 1);
+        return resume;
+    }
+    if (here.refused) {
+        resume.step = FileResume::Step::AskAgain;
+        return resume;
+    }
+    if (!here.accepted) {
+        resume.step = FileResume::Step::WaitInEntry;
+        return resume;
+    }
+    resume.step = FileResume::Step::GoOn;
+    if (!here.ownPart || here.bytes > offerSize) {
+        // Never into a file that may not be what came of it.
+        resume.newPath = true;
+        return resume;
+    }
+    if (here.bytes > 0 && here.bytes < offerSize) {
+        resume.offset = here.bytes;
+    } else if (here.bytes == offerSize && offerSize > 0) {
+        // All of it came, but its end did not: the last byte once more ends it as usual.
+        resume.offset = offerSize - 1;
+    }
+    return resume;
+}
+
+ToxFile::Stamp fileStampAt(const QString& path)
+{
+    ToxFile::Stamp stamp;
+    const QFileInfo info(path);
+    if (path.isEmpty() || !info.isFile()) {
+        return stamp;
+    }
+    stamp.bytes = info.size();
+    const QDateTime modified = info.lastModified();
+    stamp.modifiedMs = modified.isValid() ? modified.toMSecsSinceEpoch() : -1;
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+    const QDateTime born = info.birthTime();
+    stamp.bornMs = born.isValid() ? born.toMSecsSinceEpoch() : -1;
+#endif
+    return stamp;
+}
+
+bool isOwnPart(const ToxFile::Stamp& recorded, const ToxFile::Stamp& now)
+{
+    if (now.bytes < 0 || recorded.bornMs != now.bornMs) {
+        return false;
+    }
+    const bool cutKnown = recorded.bytes >= 0 && recorded.modifiedMs >= 0;
+    if (cutKnown && (recorded.bytes != now.bytes || recorded.modifiedMs != now.modifiedMs)) {
+        return false;
+    }
+    return recorded.bornMs >= 0 || cutKnown;
+}
+
+bool isSameSource(const ToxFile::Stamp& sent, qint64 size, const ToxFile::Stamp& now)
+{
+    return sent.modifiedMs >= 0 && now.bytes == size && now.modifiedMs == sent.modifiedMs
+           && (sent.bornMs < 0 || now.bornMs == sent.bornMs);
+}
+
+bool downloadsRuleApplies(FileResume::Step step)
+{
+    return step == FileResume::Step::NewEntry || step == FileResume::Step::WaitInEntry;
 }
 
 qint64 mp4DurationMs(QIODevice& device)

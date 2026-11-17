@@ -32,6 +32,7 @@
 #include <QHash>
 #include <QMutex>
 #include <QObject>
+#include <QSet>
 #include <QString>
 
 #include <cstddef>
@@ -51,17 +52,65 @@ public:
     void handleAvatarOffer(uint32_t friendId, uint32_t fileId, bool accept, uint64_t filesize);
     static CoreFilePtr makeCoreFile(Core* core, Tox* tox, CompatibleRecursiveMutex& coreLoopLock);
 
-    void sendFile(uint32_t friendId, QString filename, QString filePath,
-                         long long filesize);
+    /**
+     * fileId: KHANDAQ (0.2.57), the Tox file id the file had before (Send again), so its receiver
+     * can go on with what it has of it; empty for a new file, which toxcore gives an id of its own.
+     */
+    void sendFile(uint32_t friendId, QString filename, QString filePath, long long filesize,
+                  const QByteArray& fileId = QByteArray());
     void sendAvatarFile(uint32_t friendId, const QByteArray& data);
     void pauseResumeFile(uint32_t friendId, uint32_t fileId);
     void cancelFileSend(uint32_t friendId, uint32_t fileId);
 
     void cancelFileRecv(uint32_t friendId, uint32_t fileId);
     void rejectFileRecvRequest(uint32_t friendId, uint32_t fileId);
+    /**
+     * Accepts an offer of a file to path. KHANDAQ (0.2.57): it is written to its part
+     * (Air::partFilePath) until all of it is here, and takes path only then; a part there already,
+     * which may still go on, gives it the next free name beside.
+     */
     void acceptFileRecvRequest(uint32_t friendId, uint32_t fileId, QString path);
+    /**
+     * KHANDAQ (0.2.57): accepts an offer of a file partly here (Air::fileResume): toxcore seeks to
+     * offset before the accept, and what comes is appended to path from there. path is the part
+     * it left (or, from an older build, the file under its own name), or a free part beside it
+     * (Air::freePartPath) for one that starts again.
+     */
+    void resumeFileRecv(uint32_t friendId, uint32_t fileId, QString path, uint64_t offset);
+    /**
+     * KHANDAQ (0.2.57): accepts an offer of a file that is all here already from offset, its last
+     * byte, so both sides end; nothing is written and nothing is signalled for it.
+     */
+    void finishFileRecvQuietly(uint32_t friendId, uint32_t fileId, uint64_t offset);
+    /**
+     * KHANDAQ (0.2.57): an offer of a file the person cancelled or declined before
+     * (Air::FileResume::Step::AskAgain) stays theirs to answer, also once its sender went offline
+     * and offers it again (ToxFile::refusedHere). By its Tox file id: it may wait for its sender
+     * under a number of its own already.
+     */
+    void markFileRecvRefused(uint32_t friendId, const QByteArray& resumeFileId);
 
     unsigned corefileIterationInterval();
+    /**
+     * KHANDAQ (0.2.57): the friend was removed, and toxcore forgot their transfers without a word
+     * (m_delfriend). Nothing of theirs is kept, waiting or not: a friend added later can get their
+     * number, and none of it is offered to that friend or taken for one of theirs.
+     */
+    void forgetFriend(uint32_t friendId);
+    /**
+     * KHANDAQ (0.2.57): called by the core loop after tox_iterate, with its lock held. Offers again
+     * our files that waited for a friend who is back, and ends as stopped those of a friend who is
+     * back and offered nothing again for a while: an older client that cannot go on.
+     */
+    void process(qint64 nowMs);
+
+    /**
+     * KHANDAQ (0.2.57): how long after a friend is back our files that waited are offered to them
+     * again. 0.2.56 and older qTox, on the status every connection brings, mark each file of that
+     * friend as going and forget it, on their GUI thread a moment after the status came: an offer
+     * that reached them first was taken so, showed no Accept and never went on.
+     */
+    static constexpr qint64 offerAgainAfterMs = 2000;
 
 signals:
     void fileSendStarted(ToxFile file);
@@ -81,6 +130,37 @@ private:
     ToxFile* findFile(uint32_t friendId, uint32_t fileId);
     void addFile(uint32_t friendId, uint32_t fileId, const ToxFile& file);
     void removeFile(uint32_t friendId, uint32_t fileId);
+    /** The transfers of a friend who went offline wait for them, under numbers of their own. */
+    void keepForFriend(uint32_t friendId);
+    /** backMs: when the friend came back (monotonic ms), from which theirs wait for an offer. */
+    void offerAgain(uint32_t friendId, qint64 backMs);
+    /** An offer that goes on with a file that waits for its sender; false when none waits. */
+    bool takeWaitingFile(const ToxFile& offer);
+    /** What came of startReceiving. */
+    enum class Receiving
+    {
+        /** It goes on from the offset, or waits paused here. */
+        Started,
+        /** toxcore is still at the start, as the offer came, and nothing here was touched. */
+        Offered,
+        /** toxcore went to the offset, but nothing can be written there: stopReceiving ends it. */
+        Failed,
+    };
+    /** Seeks to offset, opens the file there and accepts the offer, unless it is paused here. */
+    Receiving startReceiving(ToxFile& file, uint64_t offset);
+    /**
+     * Ends an offer toxcore went on with where this side cannot: declined there, so its sender
+     * knows, and stopped here, with what came of it as it was.
+     */
+    void stopReceiving(uint32_t friendId, uint32_t fileId);
+    /** Ends an incoming file that waited for its sender as stopped, keeping what came of it. */
+    void endWaitingFile(uint64_t key);
+    /** KHANDAQ (0.2.57): whether a transfer other than the one under key has path as its file. */
+    bool otherFileAt(const QString& path, uint64_t key) const;
+    /** KHANDAQ (0.2.57): a file that came whole leaves its part for the name it came for. */
+    void giveWholeName(ToxFile& file);
+    /** KHANDAQ (0.2.57): the part of a file of the person that will not come any more goes. */
+    void dropPart(ToxFile& file);
     static constexpr uint64_t getFriendKey(uint32_t friendId, uint32_t fileId)
     {
         return (static_cast<std::uint64_t>(friendId) << 32) + fileId;
@@ -100,10 +180,25 @@ private:
     static QString getCleanFileName(QString filename);
 
 private slots:
-    void onConnectionStatusChanged(uint32_t friendId, Status::Status state);
+    /** Called on the core thread, in tox_iterate (Qt::DirectConnection). */
+    void onFriendLinkChanged(uint32_t friendId, int toxConnection);
 
 private:
     QHash<uint64_t, ToxFile> fileMap;
+    /**
+     * Friends back online, whose files that waited process() offers again offerAgainAfterMs later:
+     * when they came back (monotonic ms), or -1 until process() has seen them.
+     */
+    QHash<uint32_t, qint64> friendsBack;
+    /**
+     * Incoming files that wait for their sender, by key: when the sender came back (monotonic ms),
+     * or -1 while they are offline.
+     */
+    QHash<uint64_t, qint64> waitingSince;
+    /** Incoming files that are all here already: their last byte comes once more, unseen. */
+    QSet<uint64_t> quietFiles;
+    /** Numbers for files that wait, which toxcore never gives (it gives below 1 << 24). */
+    uint32_t nextWaitingNumber = 0;
     Tox* tox;
     CompatibleRecursiveMutex* coreLoopLock = nullptr;
 };

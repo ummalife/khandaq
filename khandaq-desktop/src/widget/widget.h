@@ -36,6 +36,7 @@
 #include "src/core/toxfile.h"
 #include "src/core/toxid.h"
 #include "src/core/toxpk.h"
+#include "src/model/air/aircommunity.h"
 #include "src/model/air/airgroup.h"
 #include "src/model/friendmessagedispatcher.h"
 #include "src/model/groupmessagedispatcher.h"
@@ -54,6 +55,7 @@ class MainWindow;
 
 namespace Air {
 struct CommandOffer;
+class SeenReceipts;
 }
 
 class AddFriendForm;
@@ -223,7 +225,8 @@ public slots:
     void onFriendDisplayedNameChanged(const QString& displayed);
     void onFriendUsernameChanged(int friendId, const QString& username);
     void onFriendAliasChanged(const ToxPk& friendId, const QString& alias);
-    void onFriendMessageReceived(uint32_t friendnumber, const QString& message, bool isAction);
+    void onFriendMessageReceived(uint32_t friendnumber, const QString& message, bool isAction,
+                                 const QByteArray& msgV3Id);
     void onReceiptReceived(int friendId, ReceiptNum receipt);
     void onExtendedMessageSupport(uint32_t friendNumber, bool supported);
     void onFriendExtMessageReceived(uint32_t friendNumber, const QString& message);
@@ -239,7 +242,7 @@ public slots:
     void onGroupJoinFailed(const QString& reason);
     void onGroupJoinSucceeded();
     void onGroupJoinByIdPrompt();
-    void onGroupMessageReceived(int groupnumber, int peernumber, const QString& message,
+    void onGroupMessageReceived(int groupnumber, const ToxPk& author, const QString& message,
                                 bool isAction, uint32_t messageId);
     void onGroupFileReceived(int groupnumber, const ToxPk& sender, const QString& fileName,
                              const QByteArray& fileData, const QDateTime& timestamp, bool wasSynced,
@@ -252,8 +255,15 @@ public slots:
     void onGroupFileSendProgress(const QByteArray& fileId, qint64 bytesSent);
     void onGroupFileSendWaiting(const QByteArray& fileId, bool waiting);
     void onGroupFileSendFailed(const QByteArray& fileId);
+    /** 0.2.57: a file that comes into a group in chunks shows from its BEGIN, as under way. */
+    void onGroupFileArrivalStarted(int groupnumber, const ToxPk& sender, const QString& fileName,
+                                   qint64 fileSize, const QByteArray& fileId);
+    void onGroupFileArrivalProgress(const QByteArray& fileId, qint64 bytesReceived);
+    void onGroupFileArrivalFailed(const QByteArray& fileId);
     /** An edit, a deletion or a reaction a friend sent (stage 3, item 10). */
     void onFriendMessageEffect(uint32_t friendnumber, const QByteArray& packet);
+    /** KHANDAQ (0.2.57): a read receipt a friend sent, lossless packet 189. */
+    void onFriendSeenReceived(uint32_t friendnumber, const QByteArray& packet);
     /** An edit, a deletion or a reaction a member sent to a group (stage 3, item 10). */
     void onGroupMessageEffect(int groupnumber, const ToxPk& sender, const QByteArray& packet);
     void onGroupPeerlistChanged(uint32_t groupnumber);
@@ -342,6 +352,15 @@ private:
     void showInviteBand(QWidget* front, const Friend& inviter, const QString& groupName);
     /** Whether a system notification shows for news now; the window is not alerted when it does. */
     bool systemNotificationShows() const;
+    /**
+     * KHANDAQ (0.2.57): whether the person reads the chat with friendPk right now: it is shown in a
+     * window that is active, visible and not minimized, with the app in front (read receipts).
+     */
+    bool isFriendChatInFront(const ToxPk& friendPk) const;
+    /** Tells friendPk what we have seen of theirs, when their chat is in front. */
+    void reportSeen(const ToxPk& friendPk);
+    /** reportSeen for every chat between two people that is in front now. */
+    void reportSeenInFront();
     /** Settings, made the first time they are opened and kept for the session. */
     AirSettingsPage& settingsScreen();
     void setActiveToolMenuButton(ActiveToolMenuButton newActiveButton);
@@ -413,6 +432,15 @@ private:
      * opens when Core::groupJoined puts it in the list (onGroupJoined).
      */
     void openJoinedGroup(const GroupId& groupId);
+    /**
+     * KHANDAQ (0.2.57): joins Khandaq Community, muted, once per profile and never after it was
+     * left (Air::Community); it does not open.
+     */
+    void joinCommunity();
+    /** KHANDAQ (0.2.57): Accept on a held file of Khandaq Community: written where the group's go. */
+    void saveHeldGroupFile(const GroupId& groupId, const ToxFile& entry);
+    /** Their entries say the download stopped: the files went to make room, or were too big. */
+    void stopHeldGroupFiles(const QVector<Air::Community::HeldFiles::File>& files);
     /** The contacts New group offers to invite. */
     QVector<Air::InviteCandidate> inviteCandidates() const;
     /** The legacy form, kept for importing a file of IDs. */
@@ -537,8 +565,29 @@ private:
     };
     /** By the id of the file in its packets. */
     QHash<QByteArray, GroupFileSend> groupFileSends;
+    /**
+     * 0.2.57: a file that comes into a group while its chunks come (Core::groupFileArrivalStarted),
+     * by the id of the file in its packets. It ends in onGroupFileReceived or as not come.
+     */
+    struct GroupFileArrival
+    {
+        GroupId groupId;
+        ToxPk sender;
+        ToxFile file;
+    };
+    QHash<QByteArray, GroupFileArrival> groupFileArrivals;
+    /** 0.2.57: the files that stopped coming this run: one that comes again has its entry back. */
+    QSet<QByteArray> stoppedGroupFileArrivals;
+    void stopGroupFileArrival(const QByteArray& fileId);
+    /** KHANDAQ (0.2.57): the files of Khandaq Community that wait for Accept. */
+    Air::Community::HeldFiles heldGroupFiles;
     /** The group the user joined that opens once it comes into the list (openJoinedGroup). */
     GroupId groupToOpenWhenJoined;
+    /**
+     * KHANDAQ (0.2.57): a group comes into the list now that nobody asked for (the auto-join of
+     * Khandaq Community), so createGroup does not bring the window forward.
+     */
+    bool groupComesByItself = false;
     /**
      * 0.2.56: the invitations the user accepts, by their group, with the id of their card (none for
      * one accepted by itself): the card goes once the group is joined (onGroupJoined), as toxcore
@@ -597,6 +646,8 @@ private:
     AirSource* airSource = nullptr;
     AirController* airController = nullptr;
     AirLocal* airLocal = nullptr;
+    /** KHANDAQ (0.2.57): the read receipts we send (reportSeen). */
+    Air::SeenReceipts* seenReceipts = nullptr;
     AirNewContact* newContact = nullptr;
     AirNewGroup* newGroup = nullptr;
     /** "New contact with this ID" over the list while the command line holds the start of one. */

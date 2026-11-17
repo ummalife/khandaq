@@ -323,8 +323,15 @@ void FileTransferWidget::onFileTransferUpdate(ToxFile file)
     const bool sameState = file.status == fileInfo.status
                            && file.pauseStatus.localPaused() == fileInfo.pauseStatus.localPaused()
                            && file.pauseStatus.remotePaused() == fileInfo.pauseStatus.remotePaused()
-                           && file.filePath == fileInfo.filePath;
+                           && file.filePath == fileInfo.filePath
+                           && file.connectionLost == fileInfo.connectionLost;
     fileInfo = file;
+    // KHANDAQ (0.2.57): Send again goes on in this entry, so it can be offered again once that
+    // transfer has ended too.
+    if (file.status != ToxFile::FINISHED && file.status != ToxFile::CANCELED
+        && file.status != ToxFile::BROKEN) {
+        resent = false;
+    }
     // While it moves, the bar and the words go on a few times a second, not at every packet.
     if (sameState && file.status == ToxFile::TRANSMITTING && lastProgress.isValid()
         && lastProgress.elapsed() < progressEveryMs) {
@@ -350,7 +357,7 @@ Air::EntryStatus FileTransferWidget::status() const
     if (group || fileInfo.direction != ToxFile::SENDING) {
         return Air::EntryStatus::None;
     }
-    return Air::fileStatus(fileInfo.status, personOnline);
+    return Air::fileStatus(fileInfo, personOnline);
 }
 
 bool FileTransferWidget::hasHeightForWidth() const
@@ -384,6 +391,11 @@ Air::FileFacts FileTransferWidget::facts() const
     const bool onDisk = !fileInfo.filePath.isEmpty() && QFileInfo(fileInfo.filePath).isFile();
     result.here = fileInfo.status == ToxFile::FINISHED && onDisk;
     result.canSendAgain = !result.incoming && !group && !resent && personOnline && onDisk;
+    result.waitsConnection = fileInfo.connectionLost;
+    // KHANDAQ (0.2.57): a group file that is not on this computer yet came and waits for Accept;
+    // every other group file is written as it comes, its path known from the start.
+    result.held = group && result.incoming && fileInfo.status == ToxFile::INITIALIZING
+                  && fileInfo.filePath.isEmpty();
     return result;
 }
 
@@ -435,8 +447,10 @@ void FileTransferWidget::refresh()
             QFile file(voicePath);
             voiceLengthMs = file.open(QIODevice::ReadOnly) ? Air::mp4DurationMs(file) : -1;
         }
-        // A note of a person that waits for Accept: Listen fetches it (acceptVoiceNote).
-        const bool fetchable = now.incoming && !now.group && fileInfo.status == ToxFile::INITIALIZING;
+        // A note of a person that waits for Accept: Listen fetches it (acceptVoiceNote). So does
+        // a note of a group that holds it.
+        const bool fetchable = now.incoming && (!now.group || now.held)
+                               && fileInfo.status == ToxFile::INITIALIZING;
         voice->setNote(fileInfo.filePath, voiceLengthMs, now.here, sizeText(), fetchable);
         if (playWhenHere && now.here) {
             playWhenHere = false;
@@ -538,6 +552,12 @@ void FileTransferWidget::act(Air::FileAction action)
 
 void FileTransferWidget::accept()
 {
+    if (facts().held) {
+        // KHANDAQ (0.2.57): the file is here already, in memory; the app writes it where the
+        // files of its group go.
+        emit heldFileAccepted(fileInfo);
+        return;
+    }
     if (Air::isVoiceNote(fileInfo.fileName)) {
         acceptVoiceNote(false);
         return;
@@ -547,15 +567,22 @@ void FileTransferWidget::accept()
 
 void FileTransferWidget::acceptVoiceNote(bool play)
 {
+    if (facts().held) {
+        playWhenHere = play;
+        emit heldFileAccepted(fileInfo);
+        return;
+    }
     // KHANDAQ (QA live 2026-11-14): a voice note is listened to, not kept as a file. It had to be
     // accepted and saved somewhere before Listen would play it. Accept and Listen now take it into
     // the app's own folder without asking where. It still comes only when one of them is pressed.
-    const QDir appData(settings.getPaths().getAppDataDirPath());
-    const QString folder = appData.filePath(QStringLiteral("voice"));
+    const QString folder = Air::voiceNoteFolder(settings.getPaths().getAppDataDirPath());
     QString path;
-    if (appData.mkpath(QStringLiteral("voice"))) {
-        path = Air::freeFilePath(folder, fileInfo.fileName,
-                                 [](const QString& candidate) { return QFileInfo::exists(candidate); });
+    if (QDir().mkpath(folder)) {
+        // Neither a note there nor the part of one (Air::partFilePath).
+        path = Air::freeFilePath(folder, fileInfo.fileName, [](const QString& candidate) {
+            return QFileInfo::exists(candidate)
+                   || QFileInfo::exists(Air::partFilePath(candidate));
+        });
     }
     QFile probe(path);
     const bool writable = !path.isEmpty() && probe.open(QIODevice::WriteOnly);
@@ -641,7 +668,14 @@ void FileTransferWidget::sendAgain()
         return;
     }
     resent = true;
-    coreFile.sendFile(fileInfo.friendId, fileInfo.fileName, fileInfo.filePath, info.size());
+    // KHANDAQ (0.2.57): the same file goes under the same Tox file id, so the person can go on
+    // with what they have of it, in its entry. A file changed since is another file: its length or
+    // its last change tells it, and one whose last change is not known goes as a new file.
+    const bool same =
+        Air::isSameSource(fileInfo.stamp, static_cast<qint64>(fileInfo.progress.getFileSize()),
+                          Air::fileStampAt(fileInfo.filePath));
+    coreFile.sendFile(fileInfo.friendId, fileInfo.fileName, fileInfo.filePath, info.size(),
+                      same ? fileInfo.resumeFileId : QByteArray());
     refresh();
 }
 

@@ -269,6 +269,8 @@ set(${PROJECT_NAME}_SOURCES
   src/core/icoregroupquery.h
   src/core/icoreidhandler.cpp
   src/core/icoreidhandler.h
+  src/core/msgv3.cpp
+  src/core/msgv3.h
   src/core/toxcall.cpp
   src/core/toxcall.h
   src/core/toxencrypt.cpp
@@ -296,12 +298,16 @@ set(${PROJECT_NAME}_SOURCES
   src/model/about/aboutfriend.h
   src/model/about/iaboutfriend.cpp
   src/model/about/iaboutfriend.h
+  src/model/air/aircommunity.cpp
+  src/model/air/aircommunity.h
   src/model/air/airconversation.cpp
   src/model/air/airconversation.h
   src/model/air/airgroup.cpp
   src/model/air/airgroup.h
   src/model/air/airgroupfilequeue.cpp
   src/model/air/airgroupfilequeue.h
+  src/model/air/airgroupfilerepair.cpp
+  src/model/air/airgroupfilerepair.h
   src/model/air/airgroupleave.cpp
   src/model/air/airgroupleave.h
   src/model/air/airlocalstore.cpp
@@ -316,6 +322,8 @@ set(${PROJECT_NAME}_SOURCES
   src/model/air/airnetwork.h
   src/model/air/airpreferences.cpp
   src/model/air/airpreferences.h
+  src/model/air/airseenreceipts.cpp
+  src/model/air/airseenreceipts.h
   src/model/air/airstart.cpp
   src/model/air/airstart.h
   src/model/air/airvoicedecoder.cpp
@@ -463,6 +471,8 @@ set(${PROJECT_NAME}_SOURCES
   src/widget/air/airlocal.h
   src/widget/air/airmediaparts.cpp
   src/widget/air/airmediaparts.h
+  src/widget/air/airnetworkband.cpp
+  src/widget/air/airnetworkband.h
   src/widget/air/airnewcontact.cpp
   src/widget/air/airnewcontact.h
   src/widget/air/airnewgroup.cpp

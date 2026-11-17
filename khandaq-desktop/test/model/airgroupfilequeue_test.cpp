@@ -95,11 +95,15 @@ private slots:
     void aFileThatFailsLetsTheNextOneGo();
     void aPacketThatIsNotTheNextOneChangesNothing();
     void theBytesSentGrowWithTheChunks();
+    void theChunksSentAreThoseSinceTheLastBegin();
     void thePaceStartsWithABurstAndThenKeepsItsRate();
     void aLongPauseGivesNoMoreThanTheBurst();
     void aCostlyPacketIsPaidForByTheWaitAfterIt();
     void thePaceSaysWhenTheNextPacketMayGo();
     void aPacketCostsItsBytesForEachMember();
+    void aPacketGivesEachMemberItsBytes();
+    void thePaceOfTheRelaysKeepsItsOwnRate();
+    void aPaceOfNothingStillLetsAPacketGo();
 };
 
 void TestAirGroupFileQueue::aFileIsCutIntoChunksOfThePacketPayload()
@@ -580,6 +584,26 @@ void TestAirGroupFileQueue::theBytesSentGrowWithTheChunks()
     QCOMPARE(queue.bytesSent(fileB), qint64{0});
 }
 
+void TestAirGroupFileQueue::theChunksSentAreThoseSinceTheLastBegin()
+{
+    GroupFileQueue queue;
+    queue.add(1, fileA, 3 * payload);
+    QCOMPARE(queue.chunksSent(fileA), 0);
+    drain(queue, 2);
+    QCOMPARE(queue.chunksSent(fileA), 1);
+    drain(queue, 1);
+    QCOMPARE(queue.chunksSent(fileA), 2);
+    // A member back after the group had nobody: the file goes again from its BEGIN, and a
+    // request for its chunks waits for them.
+    queue.setMembers(1, 0, 10);
+    queue.setMembers(1, 1, 20);
+    QCOMPARE(queue.chunksSent(fileA), 0);
+    QCOMPARE(queue.chunksSent(fileB), 0);
+    // A file that went whole is not the queue's any more.
+    drain(queue);
+    QCOMPARE(queue.chunksSent(fileA), 0);
+}
+
 void TestAirGroupFileQueue::thePaceStartsWithABurstAndThenKeepsItsRate()
 {
     UploadPace pace;
@@ -674,6 +698,88 @@ void TestAirGroupFileQueue::aPacketCostsItsBytesForEachMember()
     // not get the rest of the file at once.
     QCOMPARE(UploadPace::cost(chunkPacket, 0), chunkPacket);
     QCOMPARE(UploadPace::cost(chunkPacket, -1), chunkPacket);
+}
+
+/**
+ * 0.2.57: the pace of the relays counts what one member gets: the bytes of a packet, whatever
+ * members it goes to.
+ */
+void TestAirGroupFileQueue::aPacketGivesEachMemberItsBytes()
+{
+    GroupFileQueue queue;
+    queue.add(1, fileA, payload + 10);
+    queue.setMembers(1, 3, 0);
+    GroupFileQueue::Packet packet;
+    QVERIFY(queue.next(&packet, 0));
+    QCOMPARE(queue.bytes(packet), static_cast<qint64>(NGC_FILE_BEGIN_SIZE));
+    QCOMPARE(queue.cost(packet), 3 * queue.bytes(packet));
+    queue.sent(packet, 0);
+    QVERIFY(queue.next(&packet, 0));
+    QCOMPARE(queue.bytes(packet), chunkPacket);
+    QCOMPARE(queue.cost(packet), 3 * chunkPacket);
+    queue.sent(packet, 0);
+    QVERIFY(queue.next(&packet, 0));
+    QCOMPARE(queue.bytes(packet), static_cast<qint64>(NGC_FILE_CHUNK_HEADER_SIZE) + 10);
+    // A file the queue does not hold is its header alone.
+    GroupFileQueue::Packet other;
+    other.fileId = fileB;
+    other.group = 1;
+    other.chunk = 0;
+    QCOMPARE(queue.bytes(other), static_cast<qint64>(NGC_FILE_CHUNK_HEADER_SIZE));
+}
+
+/**
+ * 0.2.57: a member over a relay gets the packets at relayedBytesPerSecond: after a quarter of a
+ * second's burst, one chunk at a time, about two a second.
+ */
+void TestAirGroupFileQueue::thePaceOfTheRelaysKeepsItsOwnRate()
+{
+    QVERIFY(UploadPace::relayedBytesPerSecond < UploadPace::bytesPerSecond);
+    UploadPace pace(UploadPace::relayedBytesPerSecond);
+    const qint64 start = 5000000;
+    const qint64 burst = UploadPace::relayedBytesPerSecond * UploadPace::burstMs / 1000;
+    int first = 0;
+    while (pace.ready(start)) {
+        pace.spend(chunkPacket);
+        ++first;
+    }
+    QCOMPARE(first, static_cast<int>((burst + chunkPacket - 1) / chunkPacket));
+
+    // The next one waits until the rate has paid for what went beyond the burst.
+    const qint64 waitMs = pace.msUntilReady(start);
+    const qint64 owed = first * chunkPacket - burst;
+    QVERIFY2(waitMs >= owed * 1000 / UploadPace::relayedBytesPerSecond
+                 && waitMs <= owed * 1000 / UploadPace::relayedBytesPerSecond + 1,
+             qPrintable(QString::number(waitMs)));
+
+    // Ten seconds carry ten times the rate, give or take a chunk.
+    int went = 0;
+    for (qint64 at = start + 10; at <= start + 10000; at += 10) {
+        while (pace.ready(at)) {
+            pace.spend(chunkPacket);
+            ++went;
+        }
+    }
+    const qint64 sent = went * chunkPacket;
+    const qint64 rate = 10 * UploadPace::relayedBytesPerSecond;
+    QVERIFY2(sent >= rate - chunkPacket && sent <= rate + chunkPacket,
+             qPrintable(QString::number(sent)));
+    // The default pace is the one of the whole upload.
+    UploadPace upload;
+    QVERIFY(upload.ready(0));
+    upload.spend(UploadPace::burstBytes);
+    QVERIFY(!upload.ready(0));
+}
+
+/** 0.2.57: a pace said to be of no bytes is one of a byte a second, not a division by zero. */
+void TestAirGroupFileQueue::aPaceOfNothingStillLetsAPacketGo()
+{
+    UploadPace pace(0);
+    QVERIFY(pace.ready(0));
+    pace.spend(1);
+    QVERIFY(!pace.ready(0));
+    QCOMPARE(pace.msUntilReady(0), qint64{1000});
+    QVERIFY(pace.ready(1000));
 }
 
 QTEST_GUILESS_MAIN(TestAirGroupFileQueue)

@@ -49,6 +49,10 @@ enum class Text
     NetConnecting,
     NetOffline,
     NetHint,
+    NoNetworkTitle,
+    NoNetworkNote,
+    NoNetworkConnecting,
+    NoNetworkBack,
     CommandPlaceholder,
     CommandKeyHint,
     NewContact,
@@ -80,6 +84,7 @@ enum class Text
     DeliveryTransit,
     DeliverySent,
     DeliveryDelivered,
+    DeliverySeen,
     DeliveryFailed,
     TransitFlag,
     UnreadCount,
@@ -420,6 +425,7 @@ enum class Text
     FileWaitsMembers,
     FileDownloadStopped,
     FileNotSent,
+    FileWaitsConnection,
     FileNameAndSize,
     FileSaveTitle,
     GroupFileLimit,
@@ -793,6 +799,7 @@ enum class Text
     MessageEdited,
     ReplyUnknownSender,
     SpokenReply,
+    MessageReport,
 };
 
 /** The translation context of every Air string. */

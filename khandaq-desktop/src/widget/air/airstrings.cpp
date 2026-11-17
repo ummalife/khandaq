@@ -66,6 +66,23 @@ const Source sources[] = {
     {Text::NetConnecting, QT_TRANSLATE_NOOP3("Air", "connecting", "own node or a contact: the link is being set up")},
     {Text::NetOffline, QT_TRANSLATE_NOOP3("Air", "no network: messages wait", "own node: the device has no network")},
     {Text::NetHint, QT_TRANSLATE_NOOP3("Air", "Opens the state of the network", "tooltip of the line under your name")},
+    {Text::NoNetworkTitle,
+     QT_TRANSLATE_NOOP3("Air", "No network",
+                        "band at the top of the window: the computer has had no network for 3 "
+                        "seconds")},
+    {Text::NoNetworkNote,
+     QT_TRANSLATE_NOOP3("Air",
+                        "Messages and files will wait and go on their own once you're back "
+                        "online.",
+                        "band at the top of the window, after No network")},
+    {Text::NoNetworkConnecting,
+     QT_TRANSLATE_NOOP3("Air", "Connecting",
+                        "band at the top of the window: the network is back and the app is "
+                        "getting online")},
+    {Text::NoNetworkBack,
+     QT_TRANSLATE_NOOP3("Air", "Back online",
+                        "band at the top of the window, for a moment before it goes: the app is "
+                        "online again")},
     {Text::CommandPlaceholder, QT_TRANSLATE_NOOP3("Air", "Find a chat or paste an ID", "placeholder of the command line")},
     {Text::CommandKeyHint, QT_TRANSLATE_NOOP3("Air", "Press / to search", "tooltip of the key hint in the command line")},
     {Text::NewContact, QT_TRANSLATE_NOOP3("Air", "New contact", "button and empty state action")},
@@ -97,6 +114,7 @@ const Source sources[] = {
     {Text::DeliveryTransit, QT_TRANSLATE_NOOP3("Air", "in transit", "state of our last message")},
     {Text::DeliverySent, QT_TRANSLATE_NOOP3("Air", "sent", "state of our last message")},
     {Text::DeliveryDelivered, QT_TRANSLATE_NOOP3("Air", "delivered", "state of our last message")},
+    {Text::DeliverySeen, QT_TRANSLATE_NOOP3("Air", "seen", "state of our last message: the person has read it")},
     {Text::DeliveryFailed, QT_TRANSLATE_NOOP3("Air", "not sent", "state of our last message: it broke")},
     {Text::TransitFlag, QT_TRANSLATE_NOOP3("Air", "%1 in transit", "row flag: %1 messages on their way")},
     {Text::UnreadCount, QT_TRANSLATE_NOOP3("Air", "unread: %1", "accessible text of the unread badge")},
@@ -433,6 +451,11 @@ const Source sources[] = {
     {Text::FileWaitsMembers, QT_TRANSLATE_NOOP3("Air", "Waits for someone in the group to come online", "file entry of ours in a group where nobody else is online now: it goes when someone is")},
     {Text::FileDownloadStopped, QT_TRANSLATE_NOOP3("Air", "The download stopped", "file entry of theirs that broke or was cancelled")},
     {Text::FileNotSent, QT_TRANSLATE_NOOP3("Air", "Not sent", "file entry of ours that broke or was cancelled")},
+    {Text::FileWaitsConnection,
+     QT_TRANSLATE_NOOP3("Air", "Waiting for the connection",
+                        "file entry, either way: the other person went offline in the middle of "
+                        "the transfer; it goes on by itself from where it stopped once they are "
+                        "back")},
     {Text::FileNameAndSize, QT_TRANSLATE_NOOP3("Air", "%1, %2", "what a screen reader says for a file: %1 the name, %2 the size or the length")},
     {Text::FileSaveTitle, QT_TRANSLATE_NOOP3("Air", "Save the file", "title of the dialog that chooses where a received file goes")},
     {Text::GroupFileLimit, QT_TRANSLATE_NOOP3("Air", "A group takes files up to %1", "group: tooltip of the paperclip and the reason of a refusal; %1 is a size such as 200 MB")},
@@ -806,6 +829,7 @@ const Source sources[] = {
     {Text::MessageEdited, QT_TRANSLATE_NOOP3("Air", "edited", "under a message its author changed after sending it; as message_edited_marker on the phones")},
     {Text::ReplyUnknownSender, QT_TRANSLATE_NOOP3("Air", "Unknown", "in the quote of a reply, in place of the name when the reply does not say who wrote the quoted message; as chat_reply_unknown_sender on the phones")},
     {Text::SpokenReply, QT_TRANSLATE_NOOP3("Air", "In reply to %1", "what a screen reader says before the quote of a reply: the name of who wrote the quoted message; as chat_reply_header on the phones")},
+    {Text::MessageReport, QT_TRANSLATE_NOOP3("Air", "Report", "menu action on a message someone else wrote in a group: opens a mail to support about it, with the message")},
 };
 // clang-format on
 
@@ -1057,6 +1081,9 @@ QString sectionTitle(Air::SectionKind kind)
         return text(Text::SectionSaved);
     case Air::SectionKind::Messages:
         return text(Text::SectionMessages);
+    case Air::SectionKind::Pinned:
+        // No heading: the pinned row stands alone.
+        return QString();
     case Air::SectionKind::Requests:
         break;
     }
@@ -1072,6 +1099,8 @@ QString deliveryText(Air::Delivery delivery)
         return text(Text::DeliverySent);
     case Air::Delivery::Delivered:
         return text(Text::DeliveryDelivered);
+    case Air::Delivery::Seen:
+        return text(Text::DeliverySeen);
     case Air::Delivery::Failed:
         return text(Text::DeliveryFailed);
     case Air::Delivery::None:
@@ -1129,6 +1158,8 @@ QString statusText(Air::EntryStatus status)
         return text(Text::DeliverySent);
     case Air::EntryStatus::Delivered:
         return text(Text::DeliveryDelivered);
+    case Air::EntryStatus::Seen:
+        return text(Text::DeliverySeen);
     case Air::EntryStatus::Failed:
         return text(Text::DeliveryFailed);
     case Air::EntryStatus::None:
@@ -1620,6 +1651,8 @@ QString fileNoteText(const Air::FileEntryState& state, const QString& person, co
         return text(Text::FileDownloadStopped);
     case Air::FileNote::NotSent:
         return text(Text::FileNotSent);
+    case Air::FileNote::WaitsConnection:
+        return text(Text::FileWaitsConnection);
     }
     return QString();
 }

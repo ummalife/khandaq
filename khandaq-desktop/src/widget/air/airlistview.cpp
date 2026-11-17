@@ -1613,6 +1613,10 @@ void AirListView::paintEntry(QPainter& painter, const Line& line, const QRect& r
             case Air::Delivery::Delivered:
                 icon = QStringLiteral("check-double");
                 break;
+            case Air::Delivery::Seen:
+                icon = QStringLiteral("check-double");
+                color = air().seenColor();
+                break;
             case Air::Delivery::Failed:
                 icon = QStringLiteral("alert");
                 color = air().color(Color::Danger);

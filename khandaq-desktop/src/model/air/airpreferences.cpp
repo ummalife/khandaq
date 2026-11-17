@@ -53,6 +53,15 @@ AttachmentRule attachmentRule(AttachmentMode mode, qint64 previousMaxSize)
     return rule;
 }
 
+AttachmentRule attachmentRuleAtUpdate(bool autoSave, qint64 maxSize)
+{
+    AttachmentRule rule;
+    rule.autoSave = true;
+    // Always takes every file already; any other choice takes them up to the default at least.
+    rule.maxSize = autoSave && maxSize <= 0 ? 0 : qMax(maxSize, smallAttachmentDefault);
+    return rule;
+}
+
 QString autoAcceptFolder(const QString& contactFolder, bool autoSave, const QString& globalFolder,
                          const QString& downloads, qint64 maxSize, qint64 fileSize)
 {

@@ -389,6 +389,13 @@ void ChatForm::setAir(AirSource* source, AirLocal* local)
                 headLater.start();
             }
         });
+        // KHANDAQ (0.2.57): the person's read receipts turn our messages seen as they come.
+        connect(airLocal, &AirLocal::seenChanged, this, [this](const ToxPk& friendPk) {
+            if (friendPk == f->getPublicKey()) {
+                chatWidget->setSeenUpTo(airLocal->seenUpTo(friendPk));
+            }
+        });
+        chatWidget->setSeenUpTo(airLocal->seenUpTo(f->getPublicKey()));
     }
     refreshHead();
 }
@@ -581,10 +588,12 @@ void ChatForm::retryQueued(qint64 id)
     for (const ChatHistory::QueuedMessage& message : queueLog->queuedMessages()) {
         if (message.outboxId == id && message.failed) {
             // The same text goes again as a new message; the failed one leaves the conversation.
-            const bool isAction = message.isAction;
-            const QString text = message.text;
+            // KHANDAQ (0.2.57): with the msgV3 id it went with, so that a phone that got it after
+            // all keeps one copy; the time is new.
+            const Message again{message.isAction, message.text, QDateTime(),
+                                ExtensionSet(),   {},           message.msgV3Id};
             queueLog->cancelQueuedMessage(id);
-            messageDispatcher.sendMessage(isAction, text);
+            messageDispatcher.resendMessage(again);
             emit updateFriendActivity(*f);
             return;
         }

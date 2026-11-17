@@ -131,6 +131,8 @@ public:
     bool next(Packet* packet, qint64 nowMs) const;
     /** What the packet costs the pace: its bytes once for each member of its group (UploadPace). */
     qint64 cost(const Packet& packet) const;
+    /** 0.2.57: the bytes of the packet, which each member of its group gets. */
+    qint64 bytes(const Packet& packet) const;
     /**
      * The next packet of its group went at nowMs, and its cost counts for the group; a BEGIN
      * first brings the group level with the files that go. True when it was the last of its file,
@@ -141,6 +143,12 @@ public:
     void remove(const QByteArray& fileId);
     /** The bytes of the file whose chunks went. */
     qint64 bytesSent(const QByteArray& fileId) const;
+    /**
+     * 0.2.57: how many chunks of the file went, in order, since its BEGIN last went: the ones a
+     * member may ask for again (Air::FileRequest). 0 before its first chunk, and for a file the
+     * queue does not hold.
+     */
+    int chunksSent(const QByteArray& fileId) const;
     bool contains(const QByteArray& fileId) const;
     bool isEmpty() const;
 
@@ -191,14 +199,33 @@ private:
 // those bursts, and fills the array before it is whole again. Two nodes on one Mac got a file of
 // 14 MB whole at this rate; at 1 and 2 MiB/s the array filled, and the rest of the file was lost.
 // The rate counts what this device uploads: once for every member a packet goes to.
+//
+// 0.2.57: what goes to a member that toxcore reaches only through a TCP relay goes at most at
+// relayedBytesPerSecond, its bytes counted once whatever members it goes to. A relay passes a
+// packet on only when its connection has room for it and drops it otherwise
+// (write_packet_TCP_secure_connection in TCP_common.c, which TCP_server.c forwards with), so the
+// copies of a second's parts that toxcore sends again at once (above) are lost there first, and
+// the member waits for each lost part with all that came after it. QA 2026-11-16, a file of 3 MiB
+// from a desktop into a group of three on one Mac, both receivers over relays: Android on an
+// emulator, which never has a direct path, lost it at 256 and at 128 KiB/s each (256 is this pace
+// with two members), and got it whole as it went, asking for nothing, at 64 KiB/s twice and at 32
+// once. The other receiver, a desktop, lost it at every rate that evening but two (at 128 after
+// asking for chunks again, at 64 whole), at 32 too: its relay, not the rate. A receiver with a
+// direct path got it whole at 128 and at 64 KiB/s; a group whose members all have one keeps the
+// rate above.
 class UploadPace
 {
 public:
     /** About 4 Mbit/s, shared by the members a packet goes to. */
     static constexpr qint64 bytesPerSecond = 512 * 1024;
+    /** 0.2.57: the most a member that toxcore reaches only through a relay gets of them. */
+    static constexpr qint64 relayedBytesPerSecond = 64 * 1024;
     /** After a pause, at most this much of the rate goes at once. */
     static constexpr qint64 burstMs = 250;
     static constexpr qint64 burstBytes = bytesPerSecond * burstMs / 1000;
+
+    /** 0.2.57: a pace of perSecond bytes a second (at least 1), burstMs of which go at once. */
+    explicit UploadPace(qint64 perSecond = bytesPerSecond);
 
     /** What a packet of this size costs when it goes to this many members: at least one. */
     static qint64 cost(qint64 packetBytes, int members);
@@ -214,6 +241,8 @@ public:
     qint64 msUntilReady(qint64 nowMs) const;
 
 private:
+    qint64 rate;
+    qint64 burst;
     qint64 credit = 0;
     qint64 lastMs = -1;
 };

@@ -23,6 +23,7 @@
 #include "src/core/groupid.h"
 #include "src/core/toxpk.h"
 #include "src/friendlist.h"
+#include "src/model/air/aircommunity.h"
 
 #include <cassert>
 
@@ -41,7 +42,7 @@ Group::Group(int groupId_, const GroupId persistentGroupId, const QString& name,
     : groupQuery(groupQuery_)
     , idHandler(idHandler_)
     , selfName{selfName_}
-    , title{name}
+    , title{Air::Community::groupTitle(persistentGroupId.getByteArray(), name)}
     , toxGroupNum(groupId_)
     , groupId{persistentGroupId}
     , avGroupchat{isAvGroupchat}
@@ -57,7 +58,10 @@ Group::Group(int groupId_, const GroupId persistentGroupId, const QString& name,
 
 void Group::setName(const QString& newTitle)
 {
-    const QString shortTitle = newTitle.left(MAX_GROUP_TITLE_LENGTH);
+    // KHANDAQ (0.2.57): Khandaq Community keeps its name (Air::Community::groupTitle), so a rename
+    // changes nothing and sets no topic (Widget::titleChangedByUser).
+    const QString shortTitle =
+        Air::Community::groupTitle(groupId.getByteArray(), newTitle.left(MAX_GROUP_TITLE_LENGTH));
     if (!shortTitle.isEmpty() && title != shortTitle) {
         title = shortTitle;
         emit displayedNameChanged(title);
@@ -68,7 +72,9 @@ void Group::setName(const QString& newTitle)
 
 void Group::setTitle(const QString& author, const QString& newTitle)
 {
-    const QString shortTitle = newTitle.left(MAX_GROUP_TITLE_LENGTH);
+    // KHANDAQ (0.2.57): nor does its topic or its name in the group state rename Khandaq Community.
+    const QString shortTitle =
+        Air::Community::groupTitle(groupId.getByteArray(), newTitle.left(MAX_GROUP_TITLE_LENGTH));
     if (!shortTitle.isEmpty() && title != shortTitle) {
         title = shortTitle;
         emit displayedNameChanged(title);

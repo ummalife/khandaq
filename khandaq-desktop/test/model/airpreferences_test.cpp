@@ -102,7 +102,8 @@ private slots:
     void filesGoToTheChosenFolderElseDownloads();
     void theSaveQuestionOpensInAFolderThatIsThere();
     void neverLeavesFilesWaiting();
-    void aNewInstallationLetsFilesWait();
+    void aNewInstallationDownloadsFilesUpTo200Megabytes();
+    void theUpdateTurnsDownloadsOnOnce();
     void theLimitCountsTheFileItself();
     void theDownloadsFolderGoesByItsName();
     void anotherFolderShowsItsPath();
@@ -197,17 +198,53 @@ void TestAirPreferences::neverLeavesFilesWaiting()
     QCOMPARE(Air::autoAcceptFolder(QString(), false, QString(), downloads, 0, 1), QString());
 }
 
-void TestAirPreferences::aNewInstallationLetsFilesWait()
+void TestAirPreferences::aNewInstallationDownloadsFilesUpTo200Megabytes()
 {
-    // Settings::loadGlobal falls back to this when nothing is stored yet: a new installation saves
-    // nothing a contact sends until Accept, and its settings page shows Never.
-    QVERIFY(!Air::autoSaveDefault);
-    QCOMPARE(Air::attachmentMode(Air::autoSaveDefault, 0), Air::AttachmentMode::Never);
-    QCOMPARE(Air::autoAcceptFolder(QString(), Air::autoSaveDefault, globalFolder, downloads, 0, 1),
+    // Settings::loadGlobal falls back to these when nothing is stored yet (0.2.57, the owner's
+    // decision of 2026-11-16): a new installation saves what a contact sends by itself up to
+    // 200 MB, and its settings page shows Small files.
+    QVERIFY(Air::autoSaveDefault);
+    QCOMPARE(Air::smallAttachmentDefault, 200 * megabyte);
+    QCOMPARE(Air::attachmentMode(Air::autoSaveDefault, Air::smallAttachmentDefault),
+             Air::AttachmentMode::Small);
+    QCOMPARE(Air::autoAcceptFolder(QString(), Air::autoSaveDefault, globalFolder, downloads,
+                                   Air::smallAttachmentDefault, 200 * megabyte),
+             globalFolder);
+    // A bigger file waits for Accept.
+    QCOMPARE(Air::autoAcceptFolder(QString(), Air::autoSaveDefault, globalFolder, downloads,
+                                   Air::smallAttachmentDefault, 200 * megabyte + 1),
              QString());
-    // A folder chosen for a contact still takes their files: that was chosen, not defaulted.
-    QCOMPARE(Air::autoAcceptFolder(contactFolder, Air::autoSaveDefault, globalFolder, downloads, 0, 1),
-             contactFolder);
+    // The first start applies the rule of the update to the defaults too, and it changes nothing.
+    const Air::AttachmentRule first =
+        Air::attachmentRuleAtUpdate(Air::autoSaveDefault, Air::smallAttachmentDefault);
+    QVERIFY(first.autoSave);
+    QCOMPARE(first.maxSize, Air::smallAttachmentDefault);
+}
+
+void TestAirPreferences::theUpdateTurnsDownloadsOnOnce()
+{
+    // Everything off before 0.2.57 (Never, as a new installation of 2026-11-13 had it): on, up to
+    // 200 MB.
+    Air::AttachmentRule rule = Air::attachmentRuleAtUpdate(false, 0);
+    QVERIFY(rule.autoSave);
+    QCOMPARE(rule.maxSize, 200 * megabyte);
+    QCOMPARE(Air::attachmentMode(rule.autoSave, rule.maxSize), Air::AttachmentMode::Small);
+    // Never with a limit kept for later, and Small with a smaller limit: up to 200 MB at least.
+    rule = Air::attachmentRuleAtUpdate(false, 3 * megabyte);
+    QVERIFY(rule.autoSave);
+    QCOMPARE(rule.maxSize, 200 * megabyte);
+    rule = Air::attachmentRuleAtUpdate(true, 10 * megabyte);
+    QCOMPARE(rule.maxSize, 200 * megabyte);
+    // More than the rule stays as it was: Always, and a larger limit.
+    rule = Air::attachmentRuleAtUpdate(true, 0);
+    QCOMPARE(Air::attachmentMode(rule.autoSave, rule.maxSize), Air::AttachmentMode::Always);
+    rule = Air::attachmentRuleAtUpdate(true, 1000 * megabyte);
+    QCOMPARE(rule.maxSize, 1000 * megabyte);
+    // Settings applies it only while its mark is missing: Never chosen after the update reads back
+    // as Never, so it stays off after a restart.
+    const Air::AttachmentRule chosen =
+        Air::attachmentRule(Air::AttachmentMode::Never, rule.maxSize);
+    QCOMPARE(Air::attachmentMode(chosen.autoSave, chosen.maxSize), Air::AttachmentMode::Never);
 }
 
 void TestAirPreferences::theLimitCountsTheFileItself()

@@ -58,6 +58,20 @@ const QString emojiField = QStringLiteral("emoji");
 const QString actorsField = QStringLiteral("actors");
 const QString wiresField = QStringLiteral("wires");
 const QString idField = QStringLiteral("id");
+// KHANDAQ (0.2.57): read receipts. Optional fields of a contact: a store without them reads as
+// before, and a desktop of 0.2.56 skips them.
+const QString seenUpToField = QStringLiteral("seenUpTo");
+const QString readField = QStringLiteral("read");
+const QString anchorField = QStringLiteral("anchor");
+const QString pendingField = QStringLiteral("pending");
+constexpr int anchorText = 1;
+constexpr int anchorFile = 2;
+// KHANDAQ (0.2.57): Khandaq Community. Optional, like the fields of read receipts.
+const QString communityField = QStringLiteral("community");
+const QString autoJoinDoneField = QStringLiteral("autoJoinDone");
+const QString leftField = QStringLiteral("left");
+// KHANDAQ (0.2.57, review): relayed files, optional too: the hash of each group, then its entries.
+const QString relayedField = QStringLiteral("relayed");
 
 /** An entry key: the hash of a conversation's key, "/", the hash of the entry. */
 bool isEntryKey(const QString& key)
@@ -75,6 +89,12 @@ bool isEntryKey(const QString& key)
         }
     }
     return true;
+}
+
+/** The hash of the conversation an entry key belongs to: what comes before its "/". */
+QString conversationOf(const QString& entryKey)
+{
+    return entryKey.left(entryKey.indexOf(QLatin1Char('/')));
 }
 
 /** Drops the keys of one conversation, by the prefix entryKeyPrefix gives it. */
@@ -98,6 +118,7 @@ constexpr qint64 LocalStore::keepSeconds;
 constexpr int LocalStore::privateLimit;
 constexpr int LocalStore::entryLimit;
 constexpr int LocalStore::wireLimit;
+constexpr int LocalStore::relayedLimit;
 
 bool LocalStore::PrivateLine::operator==(const PrivateLine& other) const
 {
@@ -123,7 +144,8 @@ bool LocalStore::WaitingInvite::operator==(const WaitingInvite& other) const
 
 bool LocalStore::Contact::isEmpty() const
 {
-    return hours.isEmpty() && !muted && verifiedAt < 0 && askedAt < 0;
+    return hours.isEmpty() && !muted && verifiedAt < 0 && askedAt < 0 && seenUpTo < 0
+           && readAnchor.isEmpty();
 }
 
 QString LocalStore::hashedKey(const QString& publicKey)
@@ -145,6 +167,10 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
     entryOrder.clear();
     wires.clear();
     wireOrder.clear();
+    relayedKeys.clear();
+    relayedOrder.clear();
+    communityJoined = false;
+    communityGone = false;
     if (data.isEmpty()) {
         return;
     }
@@ -152,6 +178,9 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
     if (root.value(versionField).toInt() != storeVersion) {
         return;
     }
+    const QJsonObject community = root.value(communityField).toObject();
+    communityJoined = community.value(autoJoinDoneField).toBool();
+    communityGone = community.value(leftField).toBool();
     const QJsonObject stored = root.value(contactsField).toObject();
     for (auto it = stored.constBegin(); it != stored.constEnd(); ++it) {
         const QJsonObject fields = it.value().toObject();
@@ -162,6 +191,17 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
         contact.muted = fields.value(mutedField).toBool();
         contact.verifiedAt = static_cast<qint64>(fields.value(verifiedField).toDouble(-1));
         contact.askedAt = static_cast<qint64>(fields.value(askedField).toDouble(-1));
+        contact.seenUpTo = static_cast<qint64>(fields.value(seenUpToField).toDouble(-1));
+        const QJsonObject read = fields.value(readField).toObject();
+        const int anchor = read.value(anchorField).toInt();
+        const QByteArray readId = QByteArray::fromHex(read.value(idField).toString().toLatin1());
+        if ((anchor == anchorText || anchor == anchorFile) && !readId.isEmpty()) {
+            contact.readAnchor.anchor =
+                anchor == anchorFile ? MessageEffect::Anchor::File : MessageEffect::Anchor::Text;
+            contact.readAnchor.id = readId;
+            contact.readAnchor.timeMs = static_cast<qint64>(read.value(dateField).toDouble());
+            contact.readPending = read.value(pendingField).toBool();
+        }
         if (!contact.isEmpty()) {
             contacts.insert(it.key(), contact);
         }
@@ -219,6 +259,12 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
         setWireId(fields.value(keyField).toString(),
                   QByteArray::fromHex(fields.value(idField).toString().toLatin1()));
     }
+    const QJsonObject relayed = root.value(relayedField).toObject();
+    for (auto it = relayed.constBegin(); it != relayed.constEnd(); ++it) {
+        for (const QJsonValue entry : it.value().toArray()) {
+            markRelayed(it.key() + QLatin1Char('/') + entry.toString());
+        }
+    }
     pruneHours(now);
 }
 
@@ -238,6 +284,19 @@ QByteArray LocalStore::save() const
         }
         if (it.value().askedAt >= 0) {
             fields.insert(askedField, static_cast<double>(it.value().askedAt));
+        }
+        if (it.value().seenUpTo >= 0) {
+            fields.insert(seenUpToField, static_cast<double>(it.value().seenUpTo));
+        }
+        const SeenAnchor& anchor = it.value().readAnchor;
+        if (!anchor.isEmpty()) {
+            QJsonObject read;
+            read.insert(anchorField,
+                        anchor.anchor == MessageEffect::Anchor::File ? anchorFile : anchorText);
+            read.insert(idField, QString::fromLatin1(anchor.id.toHex()));
+            read.insert(dateField, static_cast<double>(anchor.timeMs));
+            read.insert(pendingField, it.value().readPending);
+            fields.insert(readField, read);
         }
         stored.insert(it.key(), fields);
     }
@@ -315,6 +374,23 @@ QByteArray LocalStore::save() const
             wireList.append(fields);
         }
         root.insert(wiresField, wireList);
+    }
+    if (!relayedOrder.isEmpty()) {
+        QJsonObject relayed;
+        for (auto it = relayedOrder.constBegin(); it != relayedOrder.constEnd(); ++it) {
+            QJsonArray entryList;
+            for (const QString& entryKey : it.value()) {
+                entryList.append(entryKey.mid(it.key().size() + 1));
+            }
+            relayed.insert(it.key(), entryList);
+        }
+        root.insert(relayedField, relayed);
+    }
+    if (communityJoined || communityGone) {
+        QJsonObject community;
+        community.insert(autoJoinDoneField, communityJoined);
+        community.insert(leftField, communityGone);
+        root.insert(communityField, community);
     }
     return QJsonDocument(root).toJson(QJsonDocument::Compact);
 }
@@ -430,7 +506,67 @@ bool LocalStore::forget(const QString& publicKey)
     const QString conversation = entryKeyPrefix(publicKey);
     changed = dropPrefix(entries, entryOrder, conversation) || changed;
     changed = dropPrefix(wires, wireOrder, conversation) || changed;
+    for (const QString& entryKey : relayedOrder.take(key)) {
+        changed = relayedKeys.remove(entryKey) || changed;
+    }
     return removeRequest(publicKey) || changed;
+}
+
+qint64 LocalStore::seenUpTo(const QString& publicKey) const
+{
+    return contacts.value(hashedKey(publicKey)).seenUpTo;
+}
+
+bool LocalStore::raiseSeenUpTo(const QString& publicKey, qint64 timeMs)
+{
+    const QString key = hashedKey(publicKey);
+    Contact contact = contacts.value(key);
+    if (timeMs < 0 || timeMs <= contact.seenUpTo) {
+        return false;
+    }
+    contact.seenUpTo = timeMs;
+    store(key, contact);
+    return true;
+}
+
+SeenAnchor LocalStore::readAnchor(const QString& publicKey) const
+{
+    return contacts.value(hashedKey(publicKey)).readAnchor;
+}
+
+bool LocalStore::isReadPending(const QString& publicKey) const
+{
+    return contacts.value(hashedKey(publicKey)).readPending;
+}
+
+bool LocalStore::noteRead(const QString& publicKey, const SeenAnchor& anchor)
+{
+    const QString key = hashedKey(publicKey);
+    Contact contact = contacts.value(key);
+    const SeenAnchor& last = contact.readAnchor;
+    // Newer: another message, at a later time or at the same millisecond.
+    const bool newer = !anchor.isEmpty()
+                       && (last.isEmpty() || (anchor.id != last.id && anchor.timeMs >= last.timeMs));
+    if (!newer) {
+        return false;
+    }
+    contact.readAnchor = anchor;
+    contact.readPending = true;
+    store(key, contact);
+    return true;
+}
+
+bool LocalStore::noteReadSent(const QString& publicKey, const SeenAnchor& anchor)
+{
+    const QString key = hashedKey(publicKey);
+    Contact contact = contacts.value(key);
+    if (!contact.readPending || contact.readAnchor.id != anchor.id
+        || contact.readAnchor.anchor != anchor.anchor) {
+        return false;
+    }
+    contact.readPending = false;
+    store(key, contact);
+    return true;
 }
 
 bool LocalStore::pruneHours(const QDateTime& now)
@@ -742,13 +878,58 @@ bool LocalStore::setWireId(const QString& entryKey, const QByteArray& wireId)
     return true;
 }
 
+bool LocalStore::isRelayed(const QString& entryKey) const
+{
+    return relayedKeys.contains(entryKey);
+}
+
+bool LocalStore::markRelayed(const QString& entryKey)
+{
+    if (!isEntryKey(entryKey) || relayedKeys.contains(entryKey)) {
+        return false;
+    }
+    QStringList& order = relayedOrder[conversationOf(entryKey)];
+    order.append(entryKey);
+    relayedKeys.insert(entryKey);
+    while (order.size() > relayedLimit) {
+        relayedKeys.remove(order.takeFirst());
+    }
+    return true;
+}
+
 bool LocalStore::forgetEntries()
 {
-    const bool changed = !entryOrder.isEmpty() || !wireOrder.isEmpty();
+    const bool changed = !entryOrder.isEmpty() || !wireOrder.isEmpty() || !relayedKeys.isEmpty();
     entries.clear();
     entryOrder.clear();
     wires.clear();
     wireOrder.clear();
+    relayedKeys.clear();
+    relayedOrder.clear();
+    return changed;
+}
+
+bool LocalStore::communityAutoJoinDone() const
+{
+    return communityJoined;
+}
+
+bool LocalStore::setCommunityAutoJoinDone()
+{
+    const bool changed = !communityJoined;
+    communityJoined = true;
+    return changed;
+}
+
+bool LocalStore::communityLeft() const
+{
+    return communityGone;
+}
+
+bool LocalStore::setCommunityLeft()
+{
+    const bool changed = !communityGone;
+    communityGone = true;
     return changed;
 }
 

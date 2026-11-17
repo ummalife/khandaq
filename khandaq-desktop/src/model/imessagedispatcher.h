@@ -70,6 +70,21 @@ public:
         return false;
     }
 
+    /**
+     * @brief KHANDAQ (0.2.57): sends one of our messages again, a message kept in the queue from an
+     * earlier launch or one sent again by hand, as the same message: with the id it had
+     * (Message::wireId) and, when Message::timestamp is valid, the time it had. By default it goes
+     * as a new message, for a dispatcher that gives its messages no ids.
+     * @param[in] message The message as it was sent: its words, without the action prefix
+     * @return Pair of first and last dispatched message IDs
+     */
+    virtual std::pair<DispatchedMessageId, DispatchedMessageId> resendMessage(const Message& message)
+    {
+        return message.extensionSet.none()
+                   ? sendMessage(message.isAction, message.content)
+                   : sendExtendedMessage(message.content, message.extensionSet);
+    }
+
 signals:
     /**
      * @brief Emitted when a message is received and processed

@@ -36,7 +36,8 @@ namespace Air {
  * contact was seen online (the day strip), "mute" and "key verified" from the dossier, the keys
  * blocked on this device, the friend requests and group invitations waiting for an answer (E12),
  * the edits and reactions shown on entries of the transcript and the ids groups gave their messages
- * (stage 3, item 10) and, in memory only, when this device saw the contact come online.
+ * (stage 3, item 10), the files of groups that came relayed and, in memory only, when this device
+ * saw the contact come online.
  *
  * A port of AirLocalStore in khandaq-ios/Antidote/AirLocalStores.swift. Contacts are filed under a
  * hash of their key, so their marks never name anyone; the block list has to show its keys, and a
@@ -211,8 +212,55 @@ public:
     QByteArray wireId(const QString& entryKey) const;
     /** Keeps a 4-byte id under an entry key; an empty id forgets it. */
     bool setWireId(const QString& entryKey, const QByteArray& wireId);
+    /**
+     * KHANDAQ (0.2.57, review): the files of groups a member relayed from the history (0x03), by
+     * fileEntryKey. Who sent one is only whom that member names, so a Report on it names nobody,
+     * in a later launch too. The relayedLimit marked last in each group are kept; a group left
+     * takes its own along (forget), an erased history all of them (forgetEntries).
+     */
+    static constexpr int relayedLimit = 4096;
+    bool isRelayed(const QString& entryKey) const;
+    /** Keeps the mark of a relayed file; false for a text that is no entry key, or a key kept. */
+    bool markRelayed(const QString& entryKey);
     /** The history was erased: no entry is left for marks or ids to belong to. */
     bool forgetEntries();
+
+    /**
+     * KHANDAQ (0.2.57): read receipts between two people (protocol v1), kept per contact until the
+     * contact is removed (forget).
+     *
+     * The time, by our clock, of the newest of our messages the contact has seen (their read
+     * receipts), in milliseconds since 1970; -1 before the first receipt. Every message of ours
+     * up to that time counts as seen.
+     */
+    qint64 seenUpTo(const QString& publicKey) const;
+    /** Moves seenUpTo to timeMs; false, and nothing changed, for a time not after it: never back. */
+    bool raiseSeenUpTo(const QString& publicKey, qint64 timeMs);
+    /**
+     * The newest of the contact's messages we have seen and told them about, or still owe them
+     * telling (isReadPending); empty before the first.
+     */
+    SeenAnchor readAnchor(const QString& publicKey) const;
+    /** Whether the receipt for readAnchor has yet to go: the contact was offline, say. */
+    bool isReadPending(const QString& publicKey) const;
+    /**
+     * Takes anchor as the newest message seen, its receipt still to go; false, and nothing changed,
+     * for an empty anchor or one not newer than readAnchor.
+     */
+    bool noteRead(const QString& publicKey, const SeenAnchor& anchor);
+    /** The receipt for anchor went; false when that is not the pending readAnchor. */
+    bool noteReadSent(const QString& publicKey, const SeenAnchor& anchor);
+
+    /**
+     * KHANDAQ (0.2.57): Khandaq Community (Air::Community). Whether this profile joined it by
+     * itself once, and whether the person left it; after either it is never joined by itself
+     * again. Both only ever become true, and leaving the group (forgetGroup) keeps them. Each
+     * setter is false when the mark was there already.
+     */
+    bool communityAutoJoinDone() const;
+    bool setCommunityAutoJoinDone();
+    bool communityLeft() const;
+    bool setCommunityLeft();
 
 private:
     struct Contact
@@ -223,6 +271,10 @@ private:
         qint64 verifiedAt = -1;
         /** When their request came, in milliseconds since 1970, or -1 (askedAt). */
         qint64 askedAt = -1;
+        /** KHANDAQ (0.2.57): seenUpTo, readAnchor and isReadPending. */
+        qint64 seenUpTo = -1;
+        SeenAnchor readAnchor;
+        bool readPending = false;
 
         bool isEmpty() const;
     };
@@ -243,6 +295,11 @@ private:
     /** Group message ids by entry key, and the keys from the oldest to the newest. */
     QHash<QString, QByteArray> wires;
     QStringList wireOrder;
+    /** The relayed entry keys, and by the hash of their group those keys, oldest first. */
+    QSet<QString> relayedKeys;
+    QHash<QString, QStringList> relayedOrder;
+    bool communityJoined = false;
+    bool communityGone = false;
 };
 
 } // namespace Air

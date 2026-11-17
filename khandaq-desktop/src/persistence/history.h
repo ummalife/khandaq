@@ -33,6 +33,7 @@
 #include "src/core/extension.h"
 #include "src/core/toxfile.h"
 #include "src/core/toxpk.h"
+#include "src/model/air/airmessagemarks.h"
 #include "src/model/brokenmessagereason.h"
 #include "src/model/systemmessage.h"
 #include "src/persistence/db/rawdatabase.h"
@@ -127,6 +128,8 @@ struct FileDbInsertionData
     QString filePath;
     int64_t size;
     int direction;
+    /** KHANDAQ (0.2.57): of a file of ours, what it was when it went (ToxFile::Stamp). */
+    ToxFile::Stamp stamp;
 };
 Q_DECLARE_METATYPE(FileDbInsertionData)
 
@@ -183,6 +186,7 @@ public:
             , state{other.state}
             , extensionSet{other.extensionSet}
             , content{other.content}
+            , msgV3Id{other.msgV3Id}
         {}
 
         HistMessage& operator=(const HistMessage& other)
@@ -195,6 +199,7 @@ public:
             state = other.state;
             extensionSet = other.extensionSet;
             content = other.content;
+            msgV3Id = other.msgV3Id;
             return *this;
         }
 
@@ -206,6 +211,8 @@ public:
         MessageState state;
         ExtensionSet extensionSet;
         HistMessageContent content;
+        /** KHANDAQ (0.2.57): the msgV3 id of a text between two people; empty for any other. */
+        QByteArray msgV3Id;
     };
 
     struct DateIdx
@@ -225,12 +232,14 @@ public:
 
     void eraseHistory();
     void removeChatHistory(const ChatId& chatId);
+    /** msgV3Id: KHANDAQ (0.2.57) the id of a text between two people (Message::wireId), or empty. */
     void addNewMessage(const ChatId& chatId, const QString& message, const ToxPk& sender,
                        const QDateTime& time, bool isDelivered, ExtensionSet extensions,
-                       QString dispName, const std::function<void(RowId)>& insertIdCallback = {});
+                       QString dispName, const std::function<void(RowId)>& insertIdCallback = {},
+                       const QByteArray& msgV3Id = QByteArray());
     void addNewOutgoingMessage(const ChatId& chatId, const QString& message, const ToxPk& sender,
-                               const QDateTime& time, ExtensionSet extensions,
-                               const QString& dispName, qint64 outboxId);
+                               const QDateTime& time, ExtensionSet extensions, const QString& dispName,
+                               qint64 outboxId, const QByteArray& msgV3Id = QByteArray());
     Outbox* getOutbox();
     SavedNotes* getSavedNotes();
 
@@ -241,11 +250,37 @@ public:
     void addNewFileMessage(const ChatId& chatId, const QByteArray& fileId,
                            const QString& fileName, const QString& filePath, int64_t size,
                            const ToxPk& sender, const QDateTime& time, QString const& dispName,
-                           ToxFile::FileDirection direction);
+                           ToxFile::FileDirection direction,
+                           const ToxFile::Stamp& stamp = ToxFile::Stamp());
+    /**
+     * KHANDAQ (0.2.57): what a row keeps of a stamp (ToxFile::Stamp) where an ended file keeps its
+     * hash, which nothing reads back: a file of ours that stopped keeps what it was when it went,
+     * for Send again after a restart.
+     */
+    static QByteArray stampRecord(const ToxFile::Stamp& stamp);
 
     void addNewSystemMessage(const ChatId& chatId, const SystemMessage& systemMessage);
 
     void setFileFinished(const QByteArray& fileId, bool success, const QString& filePath, const QByteArray& fileHash);
+    /**
+     * KHANDAQ (0.2.57): a file offered again with the id of its row goes on in that row, the
+     * newest of the chat in that direction: its end writes that row, as for a new one.
+     */
+    void reopenFileMessage(const ChatId& chatId, const QByteArray& fileId,
+                           ToxFile::FileDirection direction);
+    /**
+     * KHANDAQ (0.2.57): the row of an incoming file that was accepted says interrupted (BROKEN),
+     * with the path it goes to and what tells that file (stamp, kept where an ended file keeps its
+     * hash), until its end writes it again: after a restart, what came of it is known, and an offer
+     * of it goes on from there.
+     */
+    void setFileUnderway(const ChatId& chatId, const QByteArray& fileId, const QString& filePath,
+                         const ToxFile::Stamp& stamp = ToxFile::Stamp());
+    /**
+     * KHANDAQ (0.2.57): whether a file of a person that came after the newest one of chatId with
+     * fileId, in any chat, goes to filePath too.
+     */
+    bool laterFileGoesTo(const ChatId& chatId, const QByteArray& fileId, const QString& filePath);
     size_t getNumMessagesForChat(const ChatId& chatId);
     size_t getNumMessagesForChatBeforeDate(const ChatId& chatId, const QDateTime& date);
     QList<HistMessage> getMessagesForChat(const ChatId& chatId, size_t firstIdx, size_t lastIdx);
@@ -271,6 +306,20 @@ public:
      * conversation leaves a file without either out. A transfer that ends later keeps them erased.
      */
     void eraseFileEntry(const ChatId& chatId, const QByteArray& fileId);
+
+    /**
+     * KHANDAQ (0.2.57): read receipts. The time, by our clock, of the newest of our own messages
+     * in the chat that a read receipt names: a text by its msgV3 id, a file we sent by its Tox file
+     * id. -1 when the chat keeps none.
+     */
+    qint64 ownItemTime(const ChatId& chatId, const ToxPk& self, const Air::SeenAnchor& anchor);
+    /**
+     * The newest message of the other person in the chat that a read receipt can name: a text
+     * with a msgV3 id, or a file they sent; neither one deleted by them. Empty when there is none.
+     */
+    Air::SeenAnchor newestIncomingAnchor(const ChatId& chatId, const ToxPk& self);
+    /** Whether author's text with this msgV3 id is in the chat already: one that came again. */
+    bool hasText(const ChatId& chatId, const ToxPk& author, const QByteArray& msgV3Id);
 
 signals:
     void fileInserted(RowId dbId, QByteArray fileId);

@@ -59,6 +59,11 @@ enum class EntryStatus
     Sent,
     /** The person's device confirmed it (two checks). */
     Delivered,
+    /**
+     * KHANDAQ (0.2.57): the person saw it, by their read receipt (two checks in the brand teal).
+     * Only between two people.
+     */
+    Seen,
     /** The network gave up on it; "Retry" sends the same text again (red). */
     Failed,
 };
@@ -83,6 +88,13 @@ EntryStatus directTextStatus(bool isSaved, bool isDelivered, bool gaveUp, bool h
  * confirms a group message.
  */
 EntryStatus groupTextStatus(bool waits, bool gaveUp);
+
+/**
+ * KHANDAQ (0.2.57): read receipts. A message or a file of ours the person has seen: one that left
+ * this device, sent or delivered, turns seen, which says delivered as well. One that waits here,
+ * is leaving or failed keeps its state, and so does everything else.
+ */
+EntryStatus seenStatus(EntryStatus status, bool seen);
 
 /** The icon of the design-system sprite for the mark, empty for no mark. */
 QString statusIconName(EntryStatus status);

@@ -20,6 +20,7 @@
 #pragma once
 
 #include "src/model/air/airlocalstore.h"
+#include "src/model/air/airseenreceipts.h"
 
 #include <QDateTime>
 #include <QHash>
@@ -27,6 +28,8 @@
 #include <QPointer>
 #include <QSet>
 #include <QTimer>
+
+#include <functional>
 
 class Friend;
 class Settings;
@@ -41,7 +44,7 @@ class ToxPk;
  * It also keeps, for the conversations, the edits and reactions shown on entries and the ids
  * groups gave their messages (stage 3, item 10).
  */
-class AirLocal : public QObject, public Air::EntryMarksStore
+class AirLocal : public QObject, public Air::EntryMarksStore, public Air::ReadMarkStore
 {
     Q_OBJECT
 public:
@@ -106,12 +109,45 @@ public:
     /** The group was left: its mute and its private messages go. */
     void forgetGroup(const QString& groupKey);
 
+    /**
+     * KHANDAQ (0.2.57): joins Khandaq Community through join, muted, when
+     * Air::Community::shouldAutoJoin says so (Air::Community::autoJoin), and then writes the store
+     * at once. True when it joined.
+     */
+    bool autoJoinCommunity(bool connected, bool alreadyInGroup, const std::function<bool()>& join);
+    /** A group was left: when it is Khandaq Community it is never joined by itself again. */
+    void noteGroupLeft(const QByteArray& groupChatId);
+    /**
+     * A group is here, however it came: when it is Khandaq Community it is never joined by itself
+     * again (Air::Community::noteGroupHere). True, and the store written, when that changed it.
+     */
+    bool noteGroupHere(const QByteArray& groupChatId);
+
     Air::EntryMarks entryMarks(const QString& key) const override;
     void setEntryMarks(const QString& key, const Air::EntryMarks& marks) override;
     QByteArray wireId(const QString& key) const override;
     void setWireId(const QString& key, const QByteArray& wireId) override;
+    /**
+     * KHANDAQ (0.2.57, review): a file of a group came relayed from its history, under its
+     * fileEntryKey: a Report on it names nobody, in a later launch too (Air::LocalStore).
+     */
+    bool isRelayed(const QString& key) const;
+    void markRelayed(const QString& key);
     /** The history was erased: the marks and the ids of its entries go too. */
     void forgetEntries();
+
+    /**
+     * KHANDAQ (0.2.57): read receipts between two people, as Air::LocalStore keeps them: how far
+     * the person has seen our messages, and the newest of theirs we have seen.
+     */
+    qint64 seenUpTo(const ToxPk& publicKey) const;
+    /** Moves seenUpTo forward and says so (seenChanged); a time not after it changes nothing. */
+    void raiseSeenUpTo(const ToxPk& publicKey, qint64 timeMs);
+    Air::SeenAnchor readAnchor(const ToxPk& publicKey) const override;
+    bool isReadPending(const ToxPk& publicKey) const override;
+    /** False when anchor is not newer than readAnchor (Air::LocalStore::noteRead). */
+    bool noteRead(const ToxPk& publicKey, const Air::SeenAnchor& anchor) override;
+    void noteReadSent(const ToxPk& publicKey, const Air::SeenAnchor& anchor) override;
 
 #ifdef KHANDAQ_SCREENSHOT_HOOK
     /** Test builds only: marks the hour of at as one the person was online in. */
@@ -127,6 +163,8 @@ signals:
     void requestsChanged();
     /** A private message was kept in the conversation with that member of that group. */
     void privateLinesChanged(const QString& groupKey, const QString& peerKey);
+    /** KHANDAQ (0.2.57): the person has seen more of our messages: seenUpTo moved. */
+    void seenChanged(const ToxPk& publicKey);
 
 private:
     void onStatus(Friend& frnd);

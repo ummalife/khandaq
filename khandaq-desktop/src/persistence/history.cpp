@@ -18,6 +18,7 @@
 */
 
 #include <QDebug>
+#include <QtEndian>
 #include <cassert>
 
 #include "history.h"
@@ -54,6 +55,27 @@ void addChatIdSubQuery(QString& queryString, QVector<QByteArray>& boundParams, c
 {
     boundParams.append(chatId.getByteArray());
     queryString += "(SELECT id FROM chats WHERE uuid = ?)";
+}
+
+/**
+ * KHANDAQ (0.2.57): the stamp of a file that has not ended (ToxFile::Stamp) is kept where an ended
+ * one keeps its hash, which nothing reads back: a mark and three 64-bit numbers, so it is never
+ * taken for a hash (32 bytes) nor for the empty one a row begins with.
+ */
+const QByteArray stampMark{"KST1"};
+constexpr int stampRecordSize = 4 + 3 * 8;
+
+ToxFile::Stamp stampOfRecord(const QByteArray& record)
+{
+    ToxFile::Stamp stamp;
+    if (record.size() != stampRecordSize || !record.startsWith(stampMark)) {
+        return stamp;
+    }
+    const char* const values = record.constData() + stampMark.size();
+    stamp.bornMs = qFromBigEndian<qint64>(values);
+    stamp.bytes = qFromBigEndian<qint64>(values + 8);
+    stamp.modifiedMs = qFromBigEndian<qint64>(values + 16);
+    return stamp;
 }
 
 RawDatabase::Query generateEnsurePkInChats(ChatId const& id)
@@ -104,7 +126,8 @@ RawDatabase::Query generateHistoryTableInsertion(char type, const QDateTime& tim
 QVector<RawDatabase::Query>
 generateNewTextMessageQueries(const ChatId& chatId, const QString& message, const ToxPk& sender,
                               const QDateTime& time, bool isDelivered, ExtensionSet extensionSet,
-                              QString dispName, std::function<void(RowId)> insertIdCallback)
+                              QString dispName, std::function<void(RowId)> insertIdCallback,
+                              const QByteArray& msgV3Id)
 {
     QVector<RawDatabase::Query> queries;
 
@@ -115,7 +138,7 @@ generateNewTextMessageQueries(const ChatId& chatId, const QString& message, cons
 
     QVector<QByteArray> boundParams;
     QString queryString = QStringLiteral(
-                "INSERT INTO text_messages (id, message_type, sender_alias, message) "
+                "INSERT INTO text_messages (id, message_type, sender_alias, message, msgv3_id) "
                 "VALUES ( "
                 "    last_insert_rowid(), "
                 "    'T', "
@@ -125,6 +148,13 @@ generateNewTextMessageQueries(const ChatId& chatId, const QString& message, cons
     boundParams += dispName.toUtf8();
     queryString += "), ?";
     boundParams += message.toUtf8();
+    // KHANDAQ (0.2.57): NULL for a text without an id; a bound empty blob would not be NULL.
+    if (msgV3Id.isEmpty()) {
+        queryString += ", NULL";
+    } else {
+        queryString += ", ?";
+        boundParams += msgV3Id;
+    }
     queryString += ");";
     queries += RawDatabase::Query(queryString, boundParams, insertIdCallback);
 
@@ -420,7 +450,8 @@ History::generateNewFileTransferQueries(const ChatId& chatId, const ToxPk& sende
     queryString += ", ?";
     boundParams += insertionData.filePath.toUtf8();
     queryString += ", ?";
-    boundParams += QByteArray();
+    boundParams += insertionData.stamp == ToxFile::Stamp() ? QByteArray()
+                                                           : stampRecord(insertionData.stamp);
     queryString += QStringLiteral(", %1, %2, %3);")
                         .arg(insertionData.size)
                         .arg(insertionData.direction)
@@ -454,10 +485,21 @@ RawDatabase::Query History::generateFileFinished(RowId id, bool success, const Q
     }
 }
 
+QByteArray History::stampRecord(const ToxFile::Stamp& stamp)
+{
+    QByteArray record = stampMark;
+    for (const qint64 value : {stamp.bornMs, stamp.bytes, stamp.modifiedMs}) {
+        char bytes[8];
+        qToBigEndian<qint64>(value, bytes);
+        record.append(bytes, sizeof(bytes));
+    }
+    return record;
+}
+
 void History::addNewFileMessage(const ChatId& chatId, const QByteArray& fileId,
                                 const QString& fileName, const QString& filePath, int64_t size,
                                 const ToxPk& sender, const QDateTime& time, QString const& dispName,
-                                ToxFile::FileDirection direction)
+                                ToxFile::FileDirection direction, const ToxFile::Stamp& stamp)
 {
     if (historyAccessBlocked()) {
         return;
@@ -483,6 +525,7 @@ void History::addNewFileMessage(const ChatId& chatId, const QByteArray& fileId,
     insertionData.filePath = filePath;
     insertionData.size = size;
     insertionData.direction = direction;
+    insertionData.stamp = stamp;
 
     auto queries = generateNewFileTransferQueries(chatId, sender, time, dispName, insertionData);
 
@@ -511,14 +554,15 @@ void History::addNewSystemMessage(const ChatId& chatId, const SystemMessage& sys
  */
 void History::addNewMessage(const ChatId& chatId, const QString& message, const ToxPk& sender,
                             const QDateTime& time, bool isDelivered, ExtensionSet extensionSet,
-                            QString dispName, const std::function<void(RowId)>& insertIdCallback)
+                            QString dispName, const std::function<void(RowId)>& insertIdCallback,
+                            const QByteArray& msgV3Id)
 {
     if (historyAccessBlocked()) {
         return;
     }
 
     db->execLater(generateNewTextMessageQueries(chatId, message, sender, time, isDelivered,
-                                                extensionSet, dispName, insertIdCallback));
+                                                extensionSet, dispName, insertIdCallback, msgV3Id));
 }
 
 void History::setFileFinished(const QByteArray& fileId, bool success, const QString& filePath,
@@ -551,15 +595,16 @@ void History::setFileFinished(const QByteArray& fileId, bool success, const QStr
  */
 void History::addNewOutgoingMessage(const ChatId& chatId, const QString& message,
                                     const ToxPk& sender, const QDateTime& time,
-                                    ExtensionSet extensions, const QString& dispName, qint64 outboxId)
+                                    ExtensionSet extensions, const QString& dispName,
+                                    qint64 outboxId, const QByteArray& msgV3Id)
 {
     if (historyAccessBlocked()) {
         return;
     }
 
-    auto queries =
-        generateNewTextMessageQueries(chatId, message, sender, time, false, extensions, dispName, {});
-    queries += Outbox::linkedInsertQuery(outboxId, chatId, message, time, extensions);
+    auto queries = generateNewTextMessageQueries(chatId, message, sender, time, false, extensions,
+                                                 dispName, {}, msgV3Id);
+    queries += Outbox::linkedInsertQuery(outboxId, chatId, message, time, extensions, msgV3Id);
     db->execLater(queries);
 }
 
@@ -632,6 +677,8 @@ QList<History::HistMessage> History::getMessagesForChat(const ChatId& chatId, si
         constexpr auto fileOffset = 7;
         constexpr auto senderOffset = 13;
         constexpr auto systemOffset = 15;
+        constexpr auto msgV3Offset = 20;
+        constexpr auto fileHashOffset = 21;
 
         auto it = row.begin();
 
@@ -656,8 +703,10 @@ QList<History::HistMessage> History::getMessagesForChat(const ChatId& chatId, si
             it = std::next(row.begin(), senderOffset);
             const auto senderKey = ToxPk{(*it++).toByteArray()};
             const auto senderName = QString::fromUtf8((*it++).toByteArray().replace('\0', ""));
-            messages += HistMessage(id, messageState, requiredExtensions, timestamp,
-                                    chatId.clone(), senderName, senderKey, messageContent);
+            HistMessage text(id, messageState, requiredExtensions, timestamp, chatId.clone(),
+                             senderName, senderKey, messageContent);
+            text.msgV3Id = row[msgV3Offset].toByteArray();
+            messages += text;
             break;
         }
         case 'F': {
@@ -675,6 +724,11 @@ QList<History::HistMessage> History::getMessagesForChat(const ChatId& chatId, si
             file.fileKind = fileKind;
             file.resumeFileId = resumeFileId;
             file.status = status;
+            // KHANDAQ (0.2.57): a row keeps no word of who stopped a file of theirs: one that ended
+            // cancelled counts as refused here, so an offer of it again waits for the person after
+            // a restart too (ToxFile::refusedHere). One its sender stopped waits all the same.
+            file.refusedHere = direction == ToxFile::RECEIVING && status == ToxFile::CANCELED;
+            file.stamp = stampOfRecord(row[fileHashOffset].toByteArray());
 
             it = std::next(row.begin(), senderOffset);
             const auto senderKey = ToxPk{(*it++).toByteArray()};
@@ -710,7 +764,8 @@ QList<History::HistMessage> History::getMessagesForChat(const ChatId& chatId, si
             "    file_restart_id, file_name, file_path, file_size, file_transfers.direction, "
             "    file_state, authors.public_key as sender_key, aliases.display_name, "
             "    system_messages.system_message_type, system_messages.arg1, system_messages.arg2, "
-            "    system_messages.arg3, system_messages.arg4 "
+            "    system_messages.arg3, system_messages.arg4, text_messages.msgv3_id, "
+            "    file_transfers.file_hash "
             "FROM history "
             "LEFT JOIN text_messages ON history.id = text_messages.id "
             "LEFT JOIN file_transfers ON history.id = file_transfers.id "
@@ -1002,6 +1057,72 @@ void History::setMessageText(const ChatId& chatId, const ToxPk& author, const QD
     db->execLater(RawDatabase::Query(queryString, boundParams));
 }
 
+void History::reopenFileMessage(const ChatId& chatId, const QByteArray& fileId,
+                                ToxFile::FileDirection direction)
+{
+    // A row this run inserted and that has not ended is still known to it.
+    if (historyAccessBlocked() || fileInfos.contains(fileId) || erasedFiles.contains(fileId)) {
+        return;
+    }
+    QVector<QByteArray> boundParams{fileId};
+    QString queryString = QStringLiteral("SELECT file_transfers.id FROM file_transfers "
+                                         "JOIN history ON history.id = file_transfers.id "
+                                         "WHERE file_transfers.file_restart_id = ? "
+                                         "AND file_transfers.direction = %1 AND history.chat_id = ")
+                              .arg(static_cast<int>(direction));
+    addChatIdSubQuery(queryString, boundParams, chatId);
+    queryString += QStringLiteral(" ORDER BY file_transfers.id DESC LIMIT 1;");
+    RowId found{-1};
+    db->execNow({queryString, boundParams,
+                 [&found](const QVector<QVariant>& row) { found = RowId{row[0].toLongLong()}; }});
+    if (found.get() != -1) {
+        fileInfos[fileId].fileId = found;
+    }
+}
+
+void History::setFileUnderway(const ChatId& chatId, const QByteArray& fileId,
+                              const QString& filePath, const ToxFile::Stamp& stamp)
+{
+    if (historyAccessBlocked() || erasedFiles.contains(fileId)) {
+        return;
+    }
+    // By the id rather than the row: the row of a new file may not be in yet, and the queue of the
+    // database runs this after the insert.
+    QVector<QByteArray> boundParams{filePath.toUtf8(), stampRecord(stamp), fileId};
+    QString queryString =
+        QStringLiteral("UPDATE file_transfers SET file_state = %1, file_path = ?, file_hash = ? "
+                       "WHERE id = (SELECT max(file_transfers.id) FROM file_transfers "
+                       "JOIN history ON history.id = file_transfers.id "
+                       "WHERE file_transfers.file_restart_id = ? "
+                       "AND file_transfers.direction = %2 AND history.chat_id = ")
+            .arg(static_cast<int>(ToxFile::BROKEN))
+            .arg(static_cast<int>(ToxFile::RECEIVING));
+    addChatIdSubQuery(queryString, boundParams, chatId);
+    queryString += QStringLiteral(");");
+    db->execLater(RawDatabase::Query(queryString, boundParams));
+}
+
+bool History::laterFileGoesTo(const ChatId& chatId, const QByteArray& fileId,
+                              const QString& filePath)
+{
+    if (historyAccessBlocked() || filePath.isEmpty()) {
+        return false;
+    }
+    QVector<QByteArray> boundParams{filePath.toUtf8(), fileId};
+    QString queryString =
+        QStringLiteral("SELECT 1 FROM file_transfers WHERE direction = %1 AND file_path = ? "
+                       "AND id > (SELECT max(file_transfers.id) FROM file_transfers "
+                       "JOIN history ON history.id = file_transfers.id "
+                       "WHERE file_transfers.file_restart_id = ? "
+                       "AND file_transfers.direction = %1 AND history.chat_id = ")
+            .arg(static_cast<int>(ToxFile::RECEIVING));
+    addChatIdSubQuery(queryString, boundParams, chatId);
+    queryString += QStringLiteral(") LIMIT 1;");
+    bool found = false;
+    db->execNow({queryString, boundParams, [&found](const QVector<QVariant>&) { found = true; }});
+    return found;
+}
+
 void History::eraseFileEntry(const ChatId& chatId, const QByteArray& fileId)
 {
     if (historyAccessBlocked()) {
@@ -1019,6 +1140,100 @@ void History::eraseFileEntry(const ChatId& chatId, const QByteArray& fileId)
     addChatIdSubQuery(queryString, boundParams, chatId);
     queryString += QStringLiteral(");");
     db->execLater(RawDatabase::Query(queryString, boundParams));
+}
+
+qint64 History::ownItemTime(const ChatId& chatId, const ToxPk& self, const Air::SeenAnchor& anchor)
+{
+    if (historyAccessBlocked() || anchor.isEmpty()) {
+        return -1;
+    }
+
+    QVector<QByteArray> boundParams{anchor.id};
+    QString queryString;
+    if (anchor.anchor == Air::MessageEffect::Anchor::File) {
+        queryString = QStringLiteral("SELECT history.timestamp FROM file_transfers "
+                                     "JOIN history ON history.id = file_transfers.id "
+                                     "WHERE file_transfers.file_restart_id = ? "
+                                     "AND file_transfers.direction = %1 AND history.chat_id = ")
+                          .arg(static_cast<int>(ToxFile::SENDING));
+        addChatIdSubQuery(queryString, boundParams, chatId);
+    } else {
+        queryString = QStringLiteral("SELECT history.timestamp FROM text_messages "
+                                     "JOIN history ON history.id = text_messages.id "
+                                     "JOIN aliases ON aliases.id = text_messages.sender_alias "
+                                     "WHERE text_messages.msgv3_id = ? AND history.chat_id = ");
+        addChatIdSubQuery(queryString, boundParams, chatId);
+        queryString += QStringLiteral(" AND aliases.owner = ");
+        addAuthorIdSubQuery(queryString, boundParams, self);
+    }
+    queryString += QStringLiteral(" ORDER BY history.id DESC LIMIT 1;");
+
+    qint64 timeMs = -1;
+    db->execNow({queryString, boundParams,
+                 [&timeMs](const QVector<QVariant>& row) { timeMs = row[0].toLongLong(); }});
+    return timeMs;
+}
+
+Air::SeenAnchor History::newestIncomingAnchor(const ChatId& chatId, const ToxPk& self)
+{
+    if (historyAccessBlocked()) {
+        return {};
+    }
+
+    // A text keeps no words once its author deleted it, a file neither name nor place
+    // (setMessageText, eraseFileEntry): the person cannot have seen those.
+    QVector<QByteArray> boundParams;
+    QString queryString = QStringLiteral(
+        "SELECT history.timestamp, text_messages.msgv3_id, file_transfers.file_restart_id "
+        "FROM history "
+        "LEFT JOIN text_messages ON text_messages.id = history.id "
+        "LEFT JOIN file_transfers ON file_transfers.id = history.id "
+        "LEFT JOIN aliases ON aliases.id = text_messages.sender_alias "
+        "WHERE history.chat_id = ");
+    addChatIdSubQuery(queryString, boundParams, chatId);
+    queryString +=
+        QStringLiteral(" AND ((text_messages.msgv3_id IS NOT NULL "
+                       "AND length(text_messages.message) > 0 AND aliases.owner IS NOT ");
+    addAuthorIdSubQuery(queryString, boundParams, self);
+    queryString += QStringLiteral(") OR (file_transfers.direction = %1 "
+                                  "AND length(file_transfers.file_name) > 0)) "
+                                  "ORDER BY history.id DESC LIMIT 1;")
+                       .arg(static_cast<int>(ToxFile::RECEIVING));
+
+    Air::SeenAnchor anchor;
+    db->execNow({queryString, boundParams, [&anchor](const QVector<QVariant>& row) {
+                     anchor.timeMs = row[0].toLongLong();
+                     if (row[1].isNull()) {
+                         anchor.anchor = Air::MessageEffect::Anchor::File;
+                         anchor.id = row[2].toByteArray();
+                     } else {
+                         anchor.anchor = Air::MessageEffect::Anchor::Text;
+                         anchor.id = row[1].toByteArray();
+                     }
+                 }});
+    return anchor;
+}
+
+bool History::hasText(const ChatId& chatId, const ToxPk& author, const QByteArray& msgV3Id)
+{
+    if (historyAccessBlocked() || msgV3Id.isEmpty()) {
+        return false;
+    }
+
+    QVector<QByteArray> boundParams{msgV3Id};
+    QString queryString = QStringLiteral("SELECT COUNT(*) FROM text_messages "
+                                         "JOIN history ON history.id = text_messages.id "
+                                         "JOIN aliases ON aliases.id = text_messages.sender_alias "
+                                         "WHERE text_messages.msgv3_id = ? AND history.chat_id = ");
+    addChatIdSubQuery(queryString, boundParams, chatId);
+    queryString += QStringLiteral(" AND aliases.owner = ");
+    addAuthorIdSubQuery(queryString, boundParams, author);
+    queryString += QStringLiteral(";");
+
+    qint64 count = 0;
+    db->execNow({queryString, boundParams,
+                 [&count](const QVector<QVariant>& row) { count = row[0].toLongLong(); }});
+    return count > 0;
 }
 
 void History::markAsBroken(RowId messageId, BrokenMessageReason reason)

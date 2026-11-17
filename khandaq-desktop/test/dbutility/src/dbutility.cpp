@@ -179,6 +179,38 @@ withOutboxAndNotes(std::vector<DbUtility::SqliteMasterEntry> schema)
 const std::vector<DbUtility::SqliteMasterEntry> DbUtility::schema12 =
     withOutboxAndNotes(DbUtility::schema11);
 
+namespace {
+/**
+ * KHANDAQ (0.2.57): the msgV3 ids of schema 13, as ALTER TABLE ADD COLUMN writes them into the SQL
+ * of a table: after its last column, before its constraints.
+ */
+std::vector<DbUtility::SqliteMasterEntry> withMsgV3Ids(std::vector<DbUtility::SqliteMasterEntry> schema)
+{
+    for (auto& entry : schema) {
+        if (entry.name == QStringLiteral("text_messages")) {
+            entry.sql = QStringLiteral(
+                "CREATE TABLE text_messages (id INTEGER PRIMARY KEY, message_type CHAR(1) NOT NULL "
+                "CHECK (message_type = 'T'), sender_alias INTEGER NOT NULL, message BLOB NOT NULL, "
+                "msgv3_id BLOB, FOREIGN KEY (id, message_type) REFERENCES history(id, "
+                "message_type), FOREIGN KEY (sender_alias) REFERENCES aliases(id))");
+        } else if (entry.name == QStringLiteral("outbox")) {
+            entry.sql = QStringLiteral(
+                "CREATE TABLE outbox (id INTEGER PRIMARY KEY, chat_uuid BLOB NOT NULL, timestamp "
+                "INTEGER NOT NULL, message BLOB NOT NULL, required_extensions INTEGER NOT NULL "
+                "DEFAULT 0, history_id INTEGER UNIQUE, state INTEGER NOT NULL DEFAULT 0, msgv3_id "
+                "BLOB, FOREIGN KEY (history_id) REFERENCES history(id) ON DELETE SET NULL)");
+        }
+    }
+    schema.push_back({"text_messages_msgv3_idx",
+                      "CREATE INDEX text_messages_msgv3_idx ON text_messages (msgv3_id) WHERE "
+                      "msgv3_id IS NOT NULL"});
+    return schema;
+}
+} // namespace
+
+const std::vector<DbUtility::SqliteMasterEntry> DbUtility::schema13 =
+    withMsgV3Ids(DbUtility::schema12);
+
 void DbUtility::createSchemaAtVersion(std::shared_ptr<RawDatabase> db, const std::vector<DbUtility::SqliteMasterEntry>& schema)
 {
     QVector<RawDatabase::Query> queries;

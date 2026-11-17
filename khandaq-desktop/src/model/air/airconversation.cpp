@@ -107,6 +107,12 @@ EntryStatus groupTextStatus(bool waits, bool gaveUp)
     return waits ? EntryStatus::Transit : EntryStatus::None;
 }
 
+EntryStatus seenStatus(EntryStatus status, bool seen)
+{
+    return seen && (status == EntryStatus::Sent || status == EntryStatus::Delivered) ? EntryStatus::Seen
+                                                                                     : status;
+}
+
 QString statusIconName(EntryStatus status)
 {
     switch (status) {
@@ -116,6 +122,7 @@ QString statusIconName(EntryStatus status)
     case EntryStatus::Sent:
         return QStringLiteral("check");
     case EntryStatus::Delivered:
+    case EntryStatus::Seen:
         return QStringLiteral("check-double");
     case EntryStatus::Failed:
         return QStringLiteral("alert");
@@ -128,6 +135,8 @@ QString statusIconName(EntryStatus status)
 Delivery rowDelivery(EntryStatus status)
 {
     switch (status) {
+    case EntryStatus::Seen:
+        return Delivery::Seen;
     case EntryStatus::Delivered:
         return Delivery::Delivered;
     case EntryStatus::Sent:

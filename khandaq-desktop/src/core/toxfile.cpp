@@ -83,3 +83,13 @@ bool ToxFile::open(bool write)
     return write ? file->open(QIODevice::WriteOnly | QIODevice::Truncate)
                  : file->open(QIODevice::ReadOnly);
 }
+
+bool ToxFile::openAt(uint64_t offset)
+{
+    if (offset == 0) {
+        return open(true);
+    }
+    // KHANDAQ (0.2.57): a transfer that goes on appends to the part that came before.
+    return file->resize(static_cast<qint64>(offset))
+           && file->open(QIODevice::WriteOnly | QIODevice::Append);
+}

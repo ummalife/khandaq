@@ -58,6 +58,7 @@ private slots:
     void erasingTheHistoryKeepsTheQueue();
     void removingAContactDropsOnlyTheirQueue();
     void savedNotesStayAfterARestart();
+    void queuedTextsKeepTheirMsgV3Ids();
 
 private:
     void open();
@@ -312,6 +313,54 @@ void TestOutbox::savedNotesStayAfterARestart()
     QCOMPARE(all[0].timestamp, at(17));
     QCOMPARE(all[1].text, QStringLiteral("Read the second volume"));
     QVERIFY(reopened.add(at(19), "Next") > all[1].id);
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): a queued text keeps the msgV3 id it goes with across launches, so that
+ * every send of it is the same message; one queued before keeps none (NULL, not an empty blob), and
+ * a pending or broken history row joins the queue with the id it has.
+ */
+void TestOutbox::queuedTextsKeepTheirMsgV3Ids()
+{
+    const QByteArray withId(32, '\x0A');
+    outbox->add(maryam, "With an id", at(30), ExtensionSet(), withId);
+    outbox->add(maryam, "Without", at(31), ExtensionSet());
+    const qint64 linked = outbox->reserveId();
+    QVector<RawDatabase::Query> queries;
+    queries += RawDatabase::Query(QStringLiteral("INSERT INTO history (message_type, timestamp, "
+                                                 "chat_id) VALUES ('T', %1, 1);")
+                                      .arg(at(32).toMSecsSinceEpoch()));
+    queries += RawDatabase::Query("INSERT INTO text_messages (id, message_type, sender_alias, "
+                                  "message, msgv3_id) VALUES (last_insert_rowid(), 'T', 1, ?, ?);",
+                                  {QByteArray("Linked"), QByteArray(32, '\x0B')});
+    queries += Outbox::linkedInsertQuery(linked, maryam, "Linked", at(32), ExtensionSet(),
+                                         QByteArray(32, '\x0B'));
+    QVERIFY(db->execNow(queries));
+
+    open();
+    auto entries = outbox->entriesForChat(maryam);
+    QCOMPARE(entries.size(), 3);
+    QCOMPARE(entries[0].msgV3Id, withId);
+    QVERIFY(entries[1].msgV3Id.isEmpty());
+    QCOMPARE(entries[2].id, linked);
+    QCOMPARE(entries[2].msgV3Id, QByteArray(32, '\x0B'));
+    QCOMPARE(count("SELECT COUNT(*) FROM outbox WHERE msgv3_id IS NULL;"), 1);
+
+    // A pending row of a kept history, with its id, joins the queue with it.
+    QVector<RawDatabase::Query> pending;
+    pending +=
+        RawDatabase::Query(QStringLiteral("INSERT INTO history (id, message_type, timestamp, "
+                                          "chat_id) VALUES (60, 'T', %1, 2);")
+                               .arg(at(33).toMSecsSinceEpoch()));
+    pending += RawDatabase::Query("INSERT INTO text_messages (id, message_type, sender_alias, "
+                                  "message, msgv3_id) VALUES (60, 'T', 1, ?, ?);",
+                                  {QByteArray("Kept"), QByteArray(32, '\x0C')});
+    pending += RawDatabase::Query("INSERT INTO faux_offline_pending (id, required_extensions) "
+                                  "VALUES (60, 0);");
+    QVERIFY(db->execNow(pending));
+    entries = outbox->entriesForChat(omar);
+    QCOMPARE(entries.size(), 1);
+    QCOMPARE(entries[0].msgV3Id, QByteArray(32, '\x0C'));
 }
 
 QTEST_GUILESS_MAIN(TestOutbox)

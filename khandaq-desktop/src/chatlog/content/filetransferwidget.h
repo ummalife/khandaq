@@ -81,6 +81,11 @@ public:
 signals:
     /** The entry grew or shrank: a bar, a note or a preview came or went. */
     void heightChanged();
+    /**
+     * KHANDAQ (0.2.57): Accept or Listen on a group file that came and is held for a tap
+     * (Air::FileFacts::held): the main window writes it and the entry gets its path.
+     */
+    void heldFileAccepted(const ToxFile& file);
 
 private:
     void restyle();

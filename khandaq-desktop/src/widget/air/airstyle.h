@@ -68,6 +68,12 @@ public:
     bool reducedMotion() const;
 
     QColor color(AirTokens::Color role) const;
+    /**
+     * KHANDAQ (0.2.57): the brand teal of the two checks of a message the person has seen, as the
+     * phones draw it (Android @color/khandaq_teal: #029B7D, at night #10B98F). The tokens have no
+     * such role yet.
+     */
+    QColor seenColor() const;
     /** One of the six initials tones; the index wraps. */
     QColor tone(int index) const;
     /** A role of the type scale, in Plex Sans (Plex Sans Arabic first in right-to-left languages). */

@@ -34,6 +34,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QRegularExpression>
+#include <QScopedValueRollback>
 #include <QScreen>
 #include <QSet>
 #include <QShortcut>
@@ -42,6 +43,7 @@
 #include <QSvgRenderer>
 #include <QTime>
 #include <QTimer>
+#include <QVBoxLayout>
 #include <QWindow>
 #ifdef Q_OS_MAC
 #include <QMenuBar>
@@ -90,8 +92,11 @@
 #include "src/model/chatroom/groupchatroom.h"
 #include "src/model/friend.h"
 #include "src/model/group.h"
+#include "src/model/air/aircommunity.h"
+#include "src/model/air/airmedia.h"
 #include "src/model/air/airmessagemarks.h"
 #include "src/model/air/airpreferences.h"
+#include "src/model/air/airseenreceipts.h"
 #include "src/model/groupinvite.h"
 #include "src/model/notes.h"
 #include "src/model/sessionchatlog.h"
@@ -109,6 +114,7 @@
 #include "src/widget/air/airlistview.h"
 #include "src/widget/air/airlocal.h"
 #include "src/widget/air/airmediaparts.h"
+#include "src/widget/air/airnetworkband.h"
 #include "src/widget/air/airnewcontact.h"
 #include "src/widget/air/airnewgroup.h"
 #include "src/widget/air/airoverlay.h"
@@ -216,6 +222,41 @@ void bringForward(QWidget* mainWindow)
     mainWindow->activateWindow();
 }
 
+/**
+ * KHANDAQ (0.2.57): an offer of a file of the person whose entry the chat shows, ended, under the
+ * same Tox file id: from before an interruption that outlasted the wait, a restart of either side,
+ * or Send again (Air::fileResume). An entry that still moves is not one: CoreFile goes on with it.
+ * @param shown Takes the file of that entry.
+ */
+Air::FileResume knownOffer(const ChatHistory* chatLog, const ToxFile& offer, ToxFile* shown)
+{
+    if (!chatLog || !chatLog->findFileEntry(offer.resumeFileId, ToxFile::RECEIVING, shown)) {
+        return {};
+    }
+    const bool ended = shown->status == ToxFile::BROKEN || shown->status == ToxFile::CANCELED
+                       || shown->status == ToxFile::FINISHED;
+    if (!ended) {
+        return {};
+    }
+    Air::FileHere here;
+    here.id = shown->resumeFileId;
+    here.size = static_cast<qint64>(shown->progress.getFileSize());
+    here.status = shown->status;
+    // Only an interruption goes on by itself. One the person cancelled or declined waits for
+    // their tap, also once an offer of it again ended unanswered; one its sender or a failure
+    // stopped waits for it or for the downloads rule, as a new offer does.
+    here.refused = shown->refusedHere;
+    here.accepted = shown->status == ToxFile::BROKEN && !shown->filePath.isEmpty();
+    // It goes on in its path only when that is still the part it left there, and no file that
+    // came later goes there too; otherwise from the start under a free name beside it.
+    const ToxFile::Stamp partial = Air::fileStampAt(shown->filePath);
+    here.bytes = here.accepted ? qMax<qint64>(0, partial.bytes) : 0;
+    here.ownPart = here.accepted && Air::isOwnPart(shown->stamp, partial)
+                   && !chatLog->laterFileGoesTo(*shown);
+    return Air::fileResume(offer.resumeFileId, static_cast<qint64>(offer.progress.getFileSize()),
+                           here);
+}
+
 } // namespace
 
 bool Widget::toxActivateEventHandler(const QByteArray& data, void* userData)
@@ -234,23 +275,17 @@ bool Widget::toxUriEventHandler(const QByteArray& data, void* userData)
 
 void Widget::acceptFileTransfer(const ToxFile& file, const QString& path)
 {
-    QString filepath;
-    int number = 0;
-
-    QString suffix = QFileInfo(file.fileName).completeSuffix();
-    QString base = QFileInfo(file.fileName).baseName();
-
-    do {
-        filepath = QString("%1/%2%3.%4")
-                       .arg(path, base,
-                            number > 0 ? QString(" (%1)").arg(QString::number(number)) : QString(),
-                            suffix);
-        ++number;
-    } while (QFileInfo(filepath).exists());
+    // KHANDAQ (0.2.57): the first name where neither a file nor the part of one is: what comes is
+    // written to its part (Air::partFilePath) until it is whole.
+    const QString filepath =
+        Air::freeFilePath(path, file.fileName, [](const QString& candidate) {
+            return QFileInfo::exists(candidate)
+                   || QFileInfo::exists(Air::partFilePath(candidate));
+        });
 
     // Do not automatically accept the file-transfer if the path is not writable.
     // The user can still accept it manually.
-    if (tryRemoveFile(filepath)) {
+    if (!filepath.isEmpty() && tryRemoveFile(Air::partFilePath(filepath))) {
         CoreFile* coreFile = core->getCoreFile();
         coreFile->acceptFileRecvRequest(file.friendId, file.fileNum, filepath);
     } else {
@@ -463,7 +498,8 @@ void Widget::init()
     connect(actionLogout, &QAction::triggered, this, &Widget::askLogout);
 
 
-    connect(coreFile, &CoreFile::fileReceiveRequested, this, &Widget::onFileReceiveRequested);
+    // KHANDAQ (0.2.57): the alert of a file offered is in dispatchFile, which knows whether the
+    // offer is a new file or goes on in its entry.
     connect(ui->addButton, &QPushButton::clicked, this, [this] { openNewContact(QString()); });
     connect(ui->groupButton, &QPushButton::clicked, this, &Widget::onGroupClicked);
     connect(ui->transferButton, &QPushButton::clicked, this, &Widget::onTransferClicked);
@@ -696,6 +732,17 @@ bool Widget::eventFilter(QObject* obj, QEvent* event)
             refreshLeastSize();
         }
         break;
+    case QEvent::Show:
+        // KHANDAQ (0.2.57): a conversation between two people came into view, in this window or
+        // in another (read receipts). It counts once its window has settled.
+        for (auto it = chatForms.cbegin(); it != chatForms.cend(); ++it) {
+            if (it.value() == obj) {
+                const ToxPk shownPk = it.key();
+                QTimer::singleShot(0, this, [this, shownPk] { reportSeen(shownPk); });
+                break;
+            }
+        }
+        break;
     default:
         break;
     }
@@ -902,6 +949,7 @@ void Widget::onCoreChanged(Core& core_)
     connect(core, &Core::groupInviteReceived, this, &Widget::onGroupInviteReceived);
     connect(core, &Core::groupMessageReceived, this, &Widget::onGroupMessageReceived);
     connect(core, &Core::friendMessageEffect, this, &Widget::onFriendMessageEffect);
+    connect(core, &Core::friendSeenReceived, this, &Widget::onFriendSeenReceived);
     connect(core, &Core::groupMessageEffect, this, &Widget::onGroupMessageEffect);
     connect(core, &Core::groupFileReceived, this, &Widget::onGroupFileReceived);
     connect(core, &Core::groupFileSent, this, &Widget::onGroupFileSent);
@@ -909,6 +957,9 @@ void Widget::onCoreChanged(Core& core_)
     connect(core, &Core::groupFileSendProgress, this, &Widget::onGroupFileSendProgress);
     connect(core, &Core::groupFileSendWaiting, this, &Widget::onGroupFileSendWaiting);
     connect(core, &Core::groupFileSendFailed, this, &Widget::onGroupFileSendFailed);
+    connect(core, &Core::groupFileArrivalStarted, this, &Widget::onGroupFileArrivalStarted);
+    connect(core, &Core::groupFileArrivalProgress, this, &Widget::onGroupFileArrivalProgress);
+    connect(core, &Core::groupFileArrivalFailed, this, &Widget::onGroupFileArrivalFailed);
     connect(core, &Core::groupPeerlistChanged, this, &Widget::onGroupPeerlistChanged);
     connect(core, &Core::groupPeerNameChanged, this, &Widget::onGroupPeerNameChanged);
     connect(core, &Core::groupTitleChanged, this, &Widget::onGroupTitleChanged);
@@ -941,6 +992,29 @@ void Widget::onConnected()
 {
     ui->statusButton->setEnabled(true);
     emit core->statusSet(core->getStatus());
+    joinCommunity();
+}
+
+void Widget::joinCommunity()
+{
+    // KHANDAQ (0.2.57): Khandaq Community, once per profile (Air::Community). Asked at every
+    // connection, the first after a start too, until toxcore takes the join. The groups of the save
+    // are in the list by now: Core::loadGroups gave them before the node could connect.
+    if (!airLocal) {
+        return;
+    }
+    const QByteArray chatId = Air::Community::chatId();
+    const bool alreadyInGroup = groupList->findGroup(GroupId(chatId)) != nullptr;
+    const bool joined = airLocal->autoJoinCommunity(true, alreadyInGroup, [this, &chatId] {
+        // The group comes into the list during the join (Core::groupJoined, createGroup), muted
+        // and unasked for: it does not bring the window forward, which on Windows flashes the
+        // button of an app in the background.
+        const QScopedValueRollback<bool> unasked(groupComesByItself, true);
+        return core->joinGroupByChatId(chatId) != std::numeric_limits<uint32_t>::max();
+    });
+    if (joined) {
+        qDebug() << "Khandaq Community joined by itself, muted";
+    }
 }
 
 void Widget::onDisconnected()
@@ -1384,7 +1458,53 @@ void Widget::dispatchFile(ToxFile file)
 
     auto pk = f->getPublicKey();
 
-    if (file.status == ToxFile::INITIALIZING && file.direction == ToxFile::RECEIVING) {
+    // KHANDAQ (0.2.57): one that waits for its sender is no offer: no alert, sound or unread mark,
+    // and no download, each time the sender goes offline.
+    const bool offered = Air::isOffer(file);
+    // KHANDAQ (0.2.57): an offer of a file the chat has an entry of goes on in it, with no alert.
+    // CoreFile took one that waited for its sender already (continued); one that ended is looked
+    // up here.
+    Air::FileResume resume;
+    if (offered && file.continued) {
+        resume.step = file.refusedHere ? Air::FileResume::Step::AskAgain
+                                       : Air::FileResume::Step::WaitInEntry;
+    } else if (offered) {
+        ToxFile shown;
+        resume = knownOffer(friendChatLogs.value(pk).get(), file, &shown);
+        CoreFile* const coreFile = core->getCoreFile();
+        switch (resume.step) {
+        case Air::FileResume::Step::EndQuietly:
+            // All of it is here: its entry, its notification and the file stay as they are.
+            coreFile->finishFileRecvQuietly(file.friendId, file.fileNum,
+                                            static_cast<uint64_t>(resume.offset));
+            return;
+        case Air::FileResume::Step::GoOn: {
+            file.continued = true;
+            QString path = shown.filePath;
+            if (resume.newPath) {
+                const auto taken = [](const QString& name) { return QFileInfo::exists(name); };
+                path = Air::freePartPath(shown.filePath, taken);
+            }
+            coreFile->resumeFileRecv(file.friendId, file.fileNum, path,
+                                     static_cast<uint64_t>(resume.offset));
+            break;
+        }
+        case Air::FileResume::Step::WaitInEntry:
+            file.continued = true;
+            break;
+        case Air::FileResume::Step::AskAgain:
+            file.continued = true;
+            file.refusedHere = true;
+            coreFile->markFileRecvRefused(file.friendId, file.resumeFileId);
+            break;
+        case Air::FileResume::Step::NewEntry:
+            onFileReceiveRequested(file);
+            break;
+        }
+    }
+
+    // KHANDAQ (0.2.57): a file the person cancelled or declined comes only by their tap.
+    if (offered && Air::downloadsRuleApplies(resume.step)) {
         // Download attachments (Settings, Network): Never leaves every file waiting for Accept,
         // except where a folder was chosen for this contact; Small files takes them up to the limit.
         const QString autoAcceptDir =
@@ -1394,12 +1514,26 @@ void Widget::dispatchFile(ToxFile file)
                                   static_cast<qint64>(settings.getMaxAutoAcceptSize()),
                                   static_cast<qint64>(file.progress.getFileSize()));
         if (!autoAcceptDir.isEmpty()) {
-            acceptFileTransfer(file, autoAcceptDir);
+            // KHANDAQ (0.2.57): files come by themselves by default now. A voice note keeps its
+            // own place, the folder of the app where Listen takes it too, not the downloads.
+            if (!Air::isVoiceNote(file.fileName)) {
+                acceptFileTransfer(file, autoAcceptDir);
+            } else {
+                const QString voiceFolder =
+                    Air::voiceNoteFolder(settings.getPaths().getAppDataDirPath());
+                if (QDir().mkpath(voiceFolder)) {
+                    acceptFileTransfer(file, voiceFolder);
+                }
+            }
         }
     }
 
     const auto senderPk = (file.direction == ToxFile::SENDING) ? core->getSelfPublicKey() : pk;
     friendChatLogs[pk]->onFileUpdated(senderPk, file);
+    // KHANDAQ (0.2.57): a file that comes while the person reads the chat is seen at once.
+    if (offered && !file.continued) {
+        reportSeen(pk);
+    }
 
     filesForm->onFileUpdated(file);
 }
@@ -1466,6 +1600,8 @@ void Widget::addFriend(uint32_t friendId, const ToxPk& friendPk)
         settings, style, *messageBoxManager, *contentDialogManager, *friendList,
         *groupList);
     connect(friendForm, &ChatForm::updateFriendActivity, this, &Widget::updateFriendActivity);
+    // KHANDAQ (0.2.57): the form coming into view may start the reading (eventFilter).
+    friendForm->installEventFilter(this);
 
     friendMessageDispatchers[friendPk] = friendMessageDispatcher;
     friendChatLogs[friendPk] = chatHistory;
@@ -1504,6 +1640,16 @@ void Widget::addFriend(uint32_t friendId, const ToxPk& friendPk)
                 notifyReceivedCallback);
 
     friendAlertConnections.insert(friendPk, notifyReceivedConnection);
+    // KHANDAQ (0.2.57): a message that comes while the person reads the chat is seen at once
+    // (after ChatHistory took it, which it hooked up first), and the read receipt owed them goes
+    // when they come online.
+    connect(friendMessageDispatcher.get(), &IMessageDispatcher::messageReceived, this,
+            [this, friendPk] { reportSeen(friendPk); });
+    connect(newfriend, &Friend::onlineOfflineChanged, this, [this](const ToxPk& onlinePk, bool online) {
+        if (online && seenReceipts) {
+            seenReceipts->friendOnline(onlinePk);
+        }
+    });
     connect(newfriend, &Friend::aliasChanged, this, &Widget::onFriendAliasChanged);
     connect(newfriend, &Friend::displayedNameChanged, this, &Widget::onFriendDisplayedNameChanged);
     connect(newfriend, &Friend::statusChanged, this, &Widget::onFriendStatusChanged);
@@ -1730,7 +1876,8 @@ void Widget::openDialog(GenericChatroomWidget* widget, bool newWindow)
     }
 }
 
-void Widget::onFriendMessageReceived(uint32_t friendnumber, const QString& message, bool isAction)
+void Widget::onFriendMessageReceived(uint32_t friendnumber, const QString& message, bool isAction,
+                                     const QByteArray& msgV3Id)
 {
     const auto& friendId = friendList->id2Key(friendnumber);
     Friend* f = friendList->findFriend(friendId);
@@ -1739,9 +1886,18 @@ void Widget::onFriendMessageReceived(uint32_t friendnumber, const QString& messa
     }
 
     const auto dispatcher = friendMessageDispatchers.value(f->getPublicKey());
-    if (dispatcher) {
-        dispatcher->onMessageReceived(isAction, message);
+    if (!dispatcher) {
+        return;
     }
+    // KHANDAQ (0.2.57): a phone sends a msgV3 text again until our receipt of it comes
+    // (Core::onFriendMessage), so one whose receipt was lost on the way comes twice. The core
+    // confirmed it again; the conversation shows it once.
+    const auto chatLog = friendChatLogs.value(f->getPublicKey());
+    if (chatLog && chatLog->hasIncomingText(f->getPublicKey(), msgV3Id)) {
+        qDebug() << "Widget: a msgV3 text came again from friend" << friendnumber;
+        return;
+    }
+    dispatcher->onMessageReceived(isAction, message, msgV3Id);
 }
 
 void Widget::onReceiptReceived(int friendId, ReceiptNum receipt)
@@ -2148,6 +2304,48 @@ bool Widget::systemNotificationShows() const
 #endif
 }
 
+bool Widget::isFriendChatInFront(const ToxPk& friendPk) const
+{
+    const ChatForm* const form = chatForms.value(friendPk);
+    if (form == nullptr || friendList->findFriend(friendPk) == nullptr) {
+        return false;
+    }
+    // Where the chat is shown, as newFriendMessageAlert tells whether it is active.
+    const bool inDialog = contentDialogManager->getFriendDialog(friendPk) != nullptr;
+    const bool active = inDialog ? contentDialogManager->isChatActive(friendPk)
+                                 : friendWidgets.value(friendPk) == activeChatroomWidget;
+    const QWidget* const front = form->window();
+    const QWindow* const handle = front->windowHandle();
+
+    Air::ReadingFacts facts;
+    facts.appActive = QGuiApplication::applicationState() == Qt::ApplicationActive;
+    facts.windowShown = front->isVisible();
+    facts.windowMinimized = front->isMinimized();
+    facts.windowActive = front->isActiveWindow();
+    facts.windowExposed = handle != nullptr && handle->isExposed();
+    facts.chatShown = active && form->isVisible();
+    return Air::isReadingNow(facts);
+}
+
+void Widget::reportSeen(const ToxPk& friendPk)
+{
+    if (seenReceipts == nullptr || !isFriendChatInFront(friendPk)) {
+        return;
+    }
+    const std::shared_ptr<ChatHistory> chatLog = friendChatLogs.value(friendPk);
+    if (chatLog) {
+        seenReceipts->seen(friendPk, chatLog->newestIncomingAnchor());
+    }
+}
+
+void Widget::reportSeenInFront()
+{
+    const QList<ToxPk> keys = chatForms.keys();
+    for (const ToxPk& key : keys) {
+        reportSeen(key);
+    }
+}
+
 void Widget::onFriendRequestReceived(const ToxPk& friendPk, const QString& message)
 {
     // A request from a blocked key is dropped as it lands, the way Decline drops one: no card, no
@@ -2316,7 +2514,10 @@ void Widget::onDialogShown(GenericChatroomWidget* widget)
 
 void Widget::onFriendDialogShown(const Friend* f)
 {
-    onDialogShown(friendWidgets[f->getPublicKey()]);
+    const ToxPk friendPk = f->getPublicKey();
+    onDialogShown(friendWidgets[friendPk]);
+    // KHANDAQ (0.2.57): the window of the chat became the active one (read receipts).
+    QTimer::singleShot(0, this, [this, friendPk] { reportSeen(friendPk); });
 }
 
 void Widget::onGroupDialogShown(Group* g)
@@ -2589,7 +2790,7 @@ void Widget::onGroupJoinByIdPrompt()
     openJoinGroup();
 }
 
-void Widget::onGroupMessageReceived(int groupnumber, int peernumber, const QString& message,
+void Widget::onGroupMessageReceived(int groupnumber, const ToxPk& author, const QString& message,
                                     bool isAction, uint32_t messageId)
 {
     const GroupId& groupId = groupList->id2Key(groupnumber);
@@ -2598,8 +2799,6 @@ void Widget::onGroupMessageReceived(int groupnumber, int peernumber, const QStri
     if (!dispatcher) {
         return;
     }
-
-    ToxPk author = core->getGroupPeerPk(groupnumber, peernumber);
 
     dispatcher->onMessageReceived(author, isAction, message, messageId);
 }
@@ -2623,7 +2822,8 @@ void Widget::onFriendMessageEffect(uint32_t friendnumber, const QByteArray& pack
     const SessionChatLog::EffectResult result =
         chatLog->applyEffect(friendPk, effect, core->getSelfPublicKey());
     if (result.change == Change::None) {
-        // A text between two people is known by its msgV3 hash, which this client has none of.
+        // A text between two people is known by its msgV3 hash: one kept before 0.2.57 has none,
+        // and only the entries loaded are searched.
         qDebug() << "An edit, deletion or reaction from a friend points at nothing shown here";
         return;
     }
@@ -2635,6 +2835,34 @@ void Widget::onFriendMessageEffect(uint32_t friendnumber, const QByteArray& pack
         && file.direction == ToxFile::RECEIVING && live) {
         core->getCoreFile()->cancelFileRecv(friendnumber, file.fileNum);
     }
+}
+
+void Widget::onFriendSeenReceived(uint32_t friendnumber, const QByteArray& packet)
+{
+    Air::SeenReceipt receipt;
+    if (!Air::readSeenPacket(packet, &receipt)) {
+        // Another length, magic, version or kind of anchor: dropped, never shown.
+        qDebug() << "Dropped a read receipt of" << packet.size() << "bytes from friend" << friendnumber;
+        return;
+    }
+    const ToxPk friendPk = friendList->id2Key(friendnumber);
+    const std::shared_ptr<ChatHistory> chatLog = friendChatLogs.value(friendPk);
+    if (!chatLog || airLocal == nullptr || friendList->findFriend(friendPk) == nullptr) {
+        return;
+    }
+    Air::SeenAnchor anchor;
+    anchor.anchor = receipt.anchor;
+    anchor.id = receipt.anchorId;
+    const qint64 sentMs = chatLog->ownItemTime(anchor);
+    if (sentMs < 0) {
+        qDebug() << "A read receipt from friend" << friendnumber
+                 << "points at no message of ours in the chat";
+        return;
+    }
+    // What we sent up to that message, and the message itself, shows seen.
+    airLocal->raiseSeenUpTo(friendPk, sentMs);
+    qDebug() << "A read receipt from friend" << friendnumber << "marks what we sent up to" << sentMs
+             << "as seen";
 }
 
 void Widget::onGroupMessageEffect(int groupnumber, const ToxPk& sender, const QByteArray& packet)
@@ -2737,6 +2965,13 @@ uint32_t nextSentGroupFileNumber()
     return ++groupFileNum;
 }
 
+// The number of a file that comes into a group, from its BEGIN or once it is here.
+uint32_t nextReceivedGroupFileNumber()
+{
+    static uint32_t groupFileNum = 700000;
+    return ++groupFileNum;
+}
+
 QString uniqueFilePath(const QDir& dir, const QString& fileName)
 {
     QString candidate = dir.filePath(fileName);
@@ -2801,8 +3036,68 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
 {
     std::ignore = timestamp;
     const GroupId& groupId = groupList->id2Key(groupnumber);
+    // 0.2.57: the entry its BEGIN made goes on as this file's; where no entry of the file is made
+    // below, it ends as not come (stopGroupFileArrival).
+    const auto arrival = groupFileArrivals.constFind(fileId);
+    const bool arrived = arrival != groupFileArrivals.constEnd() && arrival->groupId == groupId
+                         && arrival->sender == sender;
+    const uint32_t fileNum = arrived ? arrival->file.fileNum : nextReceivedGroupFileNumber();
     Group* g = groupList->findGroup(groupId);
     if (g == nullptr) {
+        stopGroupFileArrival(fileId);
+        return;
+    }
+    // KHANDAQ (0.2.57, review): a member whose messages are hidden on this device sends no file
+    // here either, as GroupMessageDispatcher drops their messages: no entry, no Accept, no unread
+    // count, nothing held in Khandaq Community to push the files of others out.
+    if (settings.getBlackList().contains(sender.toString())) {
+        qDebug() << "onGroupFileReceived: a file of a member whose messages are hidden; dropped";
+        stopGroupFileArrival(fileId);
+        return;
+    }
+    // KHANDAQ (0.2.57, review): once the entry of a relayed file is made, the local store marks
+    // it, so a Report on it names nobody in a later launch too (GroupChatForm::prepareReport). A
+    // file that makes no entry, as one dropped below, marks nothing: its id may be another's.
+    const auto keepRelayed = [this, &groupId, &fileId, wasSynced] {
+        if (wasSynced && airLocal && !fileId.isEmpty()) {
+            airLocal->markRelayed(Air::fileEntryKey(groupId.toString(), fileId));
+        }
+    };
+
+    // KHANDAQ (0.2.57): in Khandaq Community the files of others wait for Accept, whatever the
+    // download setting says (Air::Community::HeldFiles). The bytes are here already: the entry
+    // shows the name and the size, and nothing is written or shown as a picture until then. A
+    // relayed file (history sync) is never ours, whatever key it names (savesFileAtOnce).
+    const bool fromSelf = sender == core->getSelfPublicKey()
+                          || sender == core->getGroupSelfPublicKey(groupnumber);
+    if (!Air::Community::savesFileAtOnce(groupId.getByteArray(), fromSelf, wasSynced)) {
+        if (heldGroupFiles.known(groupId.getByteArray(), fileId)) {
+            qDebug() << "onGroupFileReceived: a file of Khandaq Community came again under the id"
+                     << "of an earlier one; dropped";
+            stopGroupFileArrival(fileId);
+            return;
+        }
+        if (!arrived) {
+            stopGroupFileArrival(fileId);
+        }
+        groupFileArrivals.remove(fileId);
+        ToxFile entry(fileNum, static_cast<uint32_t>(groupnumber),
+                      sanitizeGroupFileName(fileName), QString(),
+                      static_cast<uint64_t>(fileData.size()), ToxFile::RECEIVING);
+        entry.resumeFileId = fileId;
+        entry.relayed = wasSynced;
+        entry.status = ToxFile::INITIALIZING;
+        updateGroupFileInChatLog(groupId, sender, entry);
+        keepRelayed();
+        stopHeldGroupFiles(
+            heldGroupFiles.hold({groupId.getByteArray(), sender, entry, fileData}));
+        qDebug() << "onGroupFileReceived: a file of Khandaq Community waits for Accept,"
+                 << fileData.size() << "bytes;" << heldGroupFiles.count() << "held,"
+                 << heldGroupFiles.bytes() << "bytes";
+        // As below: a synced row's sender is unauthenticated, so it alerts nobody.
+        if (!wasSynced) {
+            newGroupMessageAlert(groupId, sender, fileName, settings.getGroupAlwaysNotify());
+        }
         return;
     }
 
@@ -2828,6 +3123,7 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
             qWarning() << "onGroupFileReceived: group auto-save cap reached for" << g->getName()
                        << "- further files from this group will not be written this session";
         }
+        stopGroupFileArrival(fileId);
         return;
     }
 
@@ -2838,6 +3134,7 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     QFile out(filePath);
     if (!out.open(QIODevice::WriteOnly)) {
         qWarning() << "onGroupFileReceived: cannot write" << filePath;
+        stopGroupFileArrival(fileId);
         return;
     }
     out.write(fileData);
@@ -2845,14 +3142,20 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     // Booked after the write actually happened, so a failed open above costs nothing.
     savedForGroup += static_cast<quint64>(fileData.size());
 
-    static uint32_t groupFileNum = 700000;
-    ToxFile file(++groupFileNum, static_cast<uint32_t>(groupnumber), safeName, filePath,
+    if (!arrived) {
+        stopGroupFileArrival(fileId);
+    }
+    groupFileArrivals.remove(fileId);
+    ToxFile file(fileNum, static_cast<uint32_t>(groupnumber), safeName, filePath,
                  static_cast<uint64_t>(fileData.size()), ToxFile::RECEIVING);
     file.progress.addSample(file.progress.getFileSize(), QTime::currentTime());
     // The id of the file in its packets, which its sender's deletion and the reactions point at.
     file.resumeFileId = fileId;
+    // KHANDAQ (0.2.57): who sent a relayed file is what the member who relayed it says (Report).
+    file.relayed = wasSynced;
 
     dispatchGroupFileToChatLog(groupId, sender, file);
+    keepRelayed();
 
     // KHANDAQ (external audit 2026-08-21, K-01) — the desktop clause: "renders unverified legacy
     // rows visibly and suppresses notifications for them".
@@ -2871,6 +3174,55 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     } else {
         qDebug() << "onGroupFileReceived: synced row, storing without a notification"
                  << "(attribution to" << sender.toString().left(8) << "is unauthenticated)";
+    }
+}
+
+void Widget::saveHeldGroupFile(const GroupId& groupId, const ToxFile& entry)
+{
+    Air::Community::HeldFiles::File held;
+    // KHANDAQ (0.2.57, review): only a file written leaves the hold (take, below): one that could
+    // not be written stays there for Accept again.
+    if (!heldGroupFiles.find(entry.fileNum, held)) {
+        // It went to make room for newer files, and its entry says so already.
+        return;
+    }
+    Group* const g = groupList->findGroup(groupId);
+    if (g == nullptr) {
+        return;
+    }
+    ToxFile file = held.entry;
+    const QString filePath = uniqueFilePath(groupDownloadDir(g), file.fileName);
+    QFile out(filePath);
+    // NewOnly: a file already there, another entry's, is never written over.
+    const bool opened = out.open(QIODevice::WriteOnly | QIODevice::NewOnly);
+    if (!opened || out.write(held.data) != held.data.size()) {
+        qWarning() << "saveHeldGroupFile: cannot write" << filePath << out.errorString();
+        out.close();
+        if (opened) {
+            out.remove();
+        }
+        // The disk is full, the volume went, or every name is taken: the entry waits as it was,
+        // for Accept once there is room again.
+        AirDialog::notice(this, AirStrings::text(AirStrings::Text::FileAcceptFailedTitle),
+                          AirStrings::text(AirStrings::Text::TryAgain));
+        return;
+    }
+    out.close();
+    heldGroupFiles.take(entry.fileNum, held);
+    file.setFilePath(filePath);
+    file.progress.addSample(file.progress.getFileSize(), QTime::currentTime());
+    file.status = ToxFile::FINISHED;
+    updateGroupFileInChatLog(groupId, held.sender, file);
+}
+
+void Widget::stopHeldGroupFiles(const QVector<Air::Community::HeldFiles::File>& files)
+{
+    for (const Air::Community::HeldFiles::File& gone : files) {
+        qDebug() << "A held file of Khandaq Community goes to make room:" << gone.data.size()
+                 << "bytes";
+        ToxFile file = gone.entry;
+        file.status = ToxFile::BROKEN;
+        updateGroupFileInChatLog(GroupId(gone.groupChatId), gone.sender, file);
     }
 }
 
@@ -2968,6 +3320,85 @@ void Widget::onGroupFileSendFailed(const QByteArray& fileId)
     updateGroupFileInChatLog(sentTo, core->getSelfPublicKey(), file);
 }
 
+void Widget::onGroupFileArrivalStarted(int groupnumber, const ToxPk& sender,
+                                       const QString& fileName, qint64 fileSize,
+                                       const QByteArray& fileId)
+{
+    const GroupId& groupId = groupList->id2Key(groupnumber);
+    const auto known = groupFileArrivals.find(fileId);
+    if (known != groupFileArrivals.end()) {
+        if (known->groupId == groupId && (sender.isEmpty() || known->sender == sender)) {
+            // Its BEGIN again, from a sender that starts it over: the bar starts over with it.
+            ToxFile& file = known->file;
+            file.progress = ToxFileProgress(static_cast<uint64_t>(fileSize));
+            file.progress.addSample(0, QTime::currentTime());
+            updateGroupFileInChatLog(known->groupId, known->sender, file);
+            return;
+        }
+        // Another member declares it now: the entry of the first ends, and this one is new.
+        stopGroupFileArrival(fileId);
+        stoppedGroupFileArrivals.remove(fileId);
+    }
+    // No entry for a file whose sender toxcore cannot name yet, nor one of a member whose
+    // messages are hidden: onGroupFileReceived makes its entry, or drops it, once it is here.
+    if (fileId.isEmpty() || sender.isEmpty() || !groupList->findGroup(groupId)
+        || settings.getBlackList().contains(sender.toString())) {
+        return;
+    }
+    // A file of Khandaq Community held already keeps its entry with Accept, which this one would
+    // take the place of: the copy is dropped once it is here.
+    if (heldGroupFiles.known(groupId.getByteArray(), fileId)) {
+        return;
+    }
+    ToxFile file(nextReceivedGroupFileNumber(), static_cast<uint32_t>(groupnumber),
+                 sanitizeGroupFileName(fileName), QString(), static_cast<uint64_t>(fileSize),
+                 ToxFile::RECEIVING);
+    file.resumeFileId = fileId;
+    // One that stopped coming before has its entry of then back.
+    file.continued = stoppedGroupFileArrivals.remove(fileId);
+    // INITIALIZING creates the history record; TRANSMITTING shows the bar, which the chunks move.
+    file.status = ToxFile::INITIALIZING;
+    updateGroupFileInChatLog(groupId, sender, file);
+    file.continued = false;
+    file.status = ToxFile::TRANSMITTING;
+    file.progress.addSample(0, QTime::currentTime());
+    updateGroupFileInChatLog(groupId, sender, file);
+    groupFileArrivals.insert(fileId, GroupFileArrival{groupId, sender, file});
+}
+
+void Widget::onGroupFileArrivalProgress(const QByteArray& fileId, qint64 bytesReceived)
+{
+    const auto arrival = groupFileArrivals.find(fileId);
+    if (arrival == groupFileArrivals.end()) {
+        return;
+    }
+    arrival->file.progress.addSample(static_cast<uint64_t>(bytesReceived), QTime::currentTime());
+    updateGroupFileInChatLog(arrival->groupId, arrival->sender, arrival->file);
+}
+
+void Widget::onGroupFileArrivalFailed(const QByteArray& fileId)
+{
+    stopGroupFileArrival(fileId);
+}
+
+/**
+ * @brief 0.2.57: the entry of a file that came in part ends: the history keeps it as not come,
+ * and the entry says the download stopped. A file that comes again later has that entry back.
+ */
+void Widget::stopGroupFileArrival(const QByteArray& fileId)
+{
+    const auto arrival = groupFileArrivals.find(fileId);
+    if (arrival == groupFileArrivals.end()) {
+        return;
+    }
+    const GroupFileArrival stopped = arrival.value();
+    groupFileArrivals.erase(arrival);
+    ToxFile file = stopped.file;
+    file.status = ToxFile::BROKEN;
+    updateGroupFileInChatLog(stopped.groupId, stopped.sender, file);
+    stoppedGroupFileArrivals.insert(fileId);
+}
+
 void Widget::onGroupPeerNameChanged(uint32_t groupnumber, const ToxPk& peerPk, const QString& newName)
 {
     const GroupId& groupId = groupList->id2Key(groupnumber);
@@ -2994,7 +3425,7 @@ void Widget::onGroupTitleChanged(uint32_t groupnumber, const QString& author, co
 
     GroupWidget* widget = groupWidgets[groupId];
     if (widget->isActive()) {
-        setWindowTitle(title);
+        setWindowTitle(Air::Community::groupTitle(groupId.getByteArray(), title));
     }
 
     g->setTitle(author, title);
@@ -3089,7 +3520,14 @@ void Widget::discardGroup(Group* g, bool fake, bool historyRemoved)
         // Its mute and the private messages with its members leave with it.
         if (airLocal) {
             airLocal->forgetGroup(groupId.toString());
+            // KHANDAQ (0.2.57): Khandaq Community, left, is never joined by itself again.
+            airLocal->noteGroupLeft(groupId.getByteArray());
         }
+    }
+    // KHANDAQ (0.2.57): the files it held for a tap go with its conversation, and those that came.
+    heldGroupFiles.forgetGroup(groupId.getByteArray());
+    for (auto it = groupFileArrivals.begin(); it != groupFileArrivals.end();) {
+        it = it->groupId == groupId ? groupFileArrivals.erase(it) : std::next(it);
     }
     chatListWidget->removeGroupWidget(widget); // deletes widget
 
@@ -3123,6 +3561,10 @@ void Widget::removeGroup(const GroupId& groupId)
 Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
 {
     assert(core != nullptr);
+    // KHANDAQ (0.2.57): Khandaq Community here, however it came, is never joined by itself again.
+    if (airLocal && airLocal->noteGroupHere(groupId.getByteArray())) {
+        qDebug() << "Khandaq Community is here: it is never joined by itself again";
+    }
 
     Group* g = groupList->findGroup(groupId);
     if (g) {
@@ -3202,6 +3644,7 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
     form->setAir(airLocal, airSource);
     // The form goes with the group, so leaving waits until the dossier's click is over.
     connect(form, &GroupChatForm::leaveRequested, this, &Widget::leaveGroup, Qt::QueuedConnection);
+    connect(form, &GroupChatForm::heldFileAccepted, this, &Widget::saveHeldGroupFile);
     groupMessageDispatchers[groupId] = messageDispatcher;
     groupChatLogs[groupId] = chatHistory;
     groupWidgets[groupId] = widget;
@@ -3211,7 +3654,9 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
 
     chatListWidget->addGroupWidget(widget);
     widget->updateStatusLight();
-    chatListWidget->activateWindow();
+    if (!groupComesByItself) {
+        chatListWidget->activateWindow();
+    }
 
     connect(widget, &GroupWidget::chatroomWidgetClicked, this, &Widget::onChatroomWidgetClicked);
     connect(widget, &GroupWidget::newWindowOpened, this, &Widget::openNewDialog);
@@ -3301,6 +3746,8 @@ bool Widget::event(QEvent* e)
         if (notificationGenerator) {
             notificationGenerator->onNotificationActivated();
         }
+        // KHANDAQ (0.2.57): and the chat in front, once the window is the active one.
+        QTimer::singleShot(0, this, &Widget::reportSeenInFront);
 
         focusChatInput();
 
@@ -3821,7 +4268,14 @@ void Widget::setupAir()
     AirStyle::instance().follow(settings, style, this);
 
     airBand = new AirBand(ui->centralwidget);
-    ui->verticalLayout_4->insertWidget(0, airBand);
+    // KHANDAQ (0.2.57): the band of no network hangs right under the Air band, with no gap between
+    // the two whatever the spacing of the style; their holder stands where the Air band stood.
+    auto* const top = new QWidget(ui->centralwidget);
+    auto* const topLayout = new QVBoxLayout(top);
+    topLayout->setContentsMargins(0, 0, 0, 0);
+    topLayout->setSpacing(0);
+    topLayout->addWidget(airBand);
+    ui->verticalLayout_4->insertWidget(0, top);
     // The window keeps the band's width as its least, as the band's pills come and go.
     airBand->installEventFilter(this);
 
@@ -3836,10 +4290,29 @@ void Widget::setupAir()
     ui->statusLayout->addWidget(airList, 1);
 
     airSource = new AirSource(*core, profile, settings, *friendList, *groupList, this);
+    // KHANDAQ (0.2.57): over the list and the conversation, which it pushes down.
+    topLayout->addWidget(new AirNetworkBand(*airSource, top));
     airController = new AirController(*airSource, *airBand, *airList, settings, this);
     airLocal = new AirLocal(settings, this);
     // Requests and invitations wait in the local store until they are answered (E12).
     airSource->setLocal(airLocal);
+    // KHANDAQ (0.2.57): the read receipts we send; those still owed stay in the local store.
+    seenReceipts = new Air::SeenReceipts(
+        *airLocal,
+        [this](const ToxPk& toPk, const QByteArray& packet) {
+            const Friend* const f = friendList->findFriend(toPk);
+            return f != nullptr && core->sendSeenReceipt(f->getId(), packet);
+        },
+        [this](const ToxPk& toPk) {
+            const Friend* const f = friendList->findFriend(toPk);
+            return f != nullptr && Status::isOnline(f->getStatus());
+        },
+        Air::SeenReceipts::defaultGapMs, this);
+    connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
+        if (state == Qt::ApplicationActive) {
+            QTimer::singleShot(0, this, &Widget::reportSeenInFront);
+        }
+    });
 
     // New contact (E11): a panel that drops over the list column, under the band.
     AirNewContact::Lookup lookup;
@@ -4431,7 +4904,7 @@ void Widget::showStatusMenu(const QPoint& globalPos)
  * newcontact [text] | toxlink <tox:...> | fill <object name>|<text> | key <key> | focuslist |
  * card accept|decline <words> | newgroup [contact] | joingroup [text] | private <member> |
  * groupask <member>|moderator|member|observer|remove | sendfile <title>|<path> |
- * access microphone|camera granted|undecided|denied | network offline|report <path> |
+ * access microphone|camera granted|undecided|denied | network offline|online|report <path> |
  * waitband <words>|<ms> | band hold|leave|open | minimize | restore | link <address> | clear |
  * quote <text> | spoken list|log | grab <file.png> | grabpopup <file.png> |
  * frames <count> <ms> <path prefix> | audit <label> | idle <ms> <label> |
@@ -4545,9 +5018,10 @@ void Widget::runShotScript(const QString& path)
                 settings.setFavoriteChat(entryByTitle(rest), command == QStringLiteral("favorite"));
             } else if (command == QStringLiteral("network")) {
                 // network offline: the node reads this computer's network as gone, as without one.
+                // network online: as it is again. The band of no network follows both.
                 // network report <path>: the network part of the log for support, into a file.
-                if (rest == QStringLiteral("offline")) {
-                    airSource->forgetNetworkForWalk();
+                if (rest == QStringLiteral("offline") || rest == QStringLiteral("online")) {
+                    airSource->setNetworkForWalk(rest == QStringLiteral("online"));
                     // The next step comes at once, so a grab after a short wait catches the
                     // change halfway through its cross-fade.
                     delay = 0;

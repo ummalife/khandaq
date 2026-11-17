@@ -20,6 +20,7 @@
 #include "airlocal.h"
 
 #include "src/core/toxpk.h"
+#include "src/model/air/aircommunity.h"
 #include "src/model/friend.h"
 #include "src/model/status.h"
 #include "src/persistence/settings.h"
@@ -242,6 +243,37 @@ void AirLocal::forgetGroup(const QString& groupKey)
     }
 }
 
+bool AirLocal::autoJoinCommunity(bool connected, bool alreadyInGroup,
+                                 const std::function<bool()>& join)
+{
+    if (!Air::Community::autoJoin(store, connected, alreadyInGroup, join)) {
+        return false;
+    }
+    // At once: a profile that closes now has joined, and must not join again at the next start.
+    saveLater.stop();
+    save();
+    emit changed(ToxPk(Air::Community::chatId()));
+    return true;
+}
+
+void AirLocal::noteGroupLeft(const QByteArray& groupChatId)
+{
+    if (Air::Community::noteGroupLeft(store, groupChatId)) {
+        saveLater.stop();
+        save();
+    }
+}
+
+bool AirLocal::noteGroupHere(const QByteArray& groupChatId)
+{
+    if (!Air::Community::noteGroupHere(store, groupChatId)) {
+        return false;
+    }
+    saveLater.stop();
+    save();
+    return true;
+}
+
 Air::EntryMarks AirLocal::entryMarks(const QString& key) const
 {
     return store.entryMarks(key);
@@ -266,11 +298,62 @@ void AirLocal::setWireId(const QString& key, const QByteArray& wireId)
     }
 }
 
+bool AirLocal::isRelayed(const QString& key) const
+{
+    return store.isRelayed(key);
+}
+
+void AirLocal::markRelayed(const QString& key)
+{
+    if (store.markRelayed(key)) {
+        saveLater.start();
+    }
+}
+
 void AirLocal::forgetEntries()
 {
     if (store.forgetEntries()) {
         saveLater.stop();
         save();
+    }
+}
+
+qint64 AirLocal::seenUpTo(const ToxPk& publicKey) const
+{
+    return store.seenUpTo(publicKey.toString());
+}
+
+void AirLocal::raiseSeenUpTo(const ToxPk& publicKey, qint64 timeMs)
+{
+    if (store.raiseSeenUpTo(publicKey.toString(), timeMs)) {
+        saveLater.start();
+        emit seenChanged(publicKey);
+    }
+}
+
+Air::SeenAnchor AirLocal::readAnchor(const ToxPk& publicKey) const
+{
+    return store.readAnchor(publicKey.toString());
+}
+
+bool AirLocal::isReadPending(const ToxPk& publicKey) const
+{
+    return store.isReadPending(publicKey.toString());
+}
+
+bool AirLocal::noteRead(const ToxPk& publicKey, const Air::SeenAnchor& anchor)
+{
+    if (!store.noteRead(publicKey.toString(), anchor)) {
+        return false;
+    }
+    saveLater.start();
+    return true;
+}
+
+void AirLocal::noteReadSent(const ToxPk& publicKey, const Air::SeenAnchor& anchor)
+{
+    if (store.noteReadSent(publicKey.toString(), anchor)) {
+        saveLater.start();
     }
 }
 

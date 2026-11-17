@@ -342,6 +342,26 @@
         <translation>无网络：消息将等待发送</translation>
     </message>
     <message>
+        <source>No network</source>
+        <comment>band at the top of the window: the computer has had no network for 3 seconds</comment>
+        <translation>无网络</translation>
+    </message>
+    <message>
+        <source>Messages and files will wait and go on their own once you&apos;re back online.</source>
+        <comment>band at the top of the window, after No network</comment>
+        <translation>消息和文件会等待，恢复联网后自动发出。</translation>
+    </message>
+    <message>
+        <source>Connecting</source>
+        <comment>band at the top of the window: the network is back and the app is getting online</comment>
+        <translation>连接中</translation>
+    </message>
+    <message>
+        <source>Back online</source>
+        <comment>band at the top of the window, for a moment before it goes: the app is online again</comment>
+        <translation>已恢复联网</translation>
+    </message>
+    <message>
         <source>Find a chat or paste an ID</source>
         <comment>placeholder of the command line</comment>
         <translation>查找聊天或粘贴 ID</translation>
@@ -485,6 +505,11 @@
         <source>delivered</source>
         <comment>state of our last message</comment>
         <translation>已送达</translation>
+    </message>
+    <message>
+        <source>seen</source>
+        <comment>state of our last message: the person has read it</comment>
+        <translation>已读</translation>
     </message>
     <message>
         <source>not sent</source>
@@ -2117,6 +2142,11 @@
         <translation>未发送</translation>
     </message>
     <message>
+        <source>Waiting for the connection</source>
+        <comment>file entry, either way: the other person went offline in the middle of the transfer; it goes on by itself from where it stopped once they are back</comment>
+        <translation>等待连接</translation>
+    </message>
+    <message>
         <source>%1, %2</source>
         <comment>what a screen reader says for a file: %1 the name, %2 the size or the length</comment>
         <translation>%1，%2</translation>
@@ -3677,6 +3707,11 @@ Opening it can run a program on your computer. Links in messages come from other
         <source>In reply to %1</source>
         <comment>what a screen reader says before the quote of a reply: the name of who wrote the quoted message; as chat_reply_header on the phones</comment>
         <translation>回复%1</translation>
+    </message>
+    <message>
+        <source>Report</source>
+        <comment>menu action on a message someone else wrote in a group: opens a mail to support about it, with the message</comment>
+        <translation>举报</translation>
     </message>
     <message>
         <source>via a relay</source>

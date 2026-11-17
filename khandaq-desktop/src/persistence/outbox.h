@@ -57,6 +57,11 @@ public:
         /** The same message in the history, or -1 when it was written with the history off. */
         RowId historyId{-1};
         bool failed = false;
+        /**
+         * KHANDAQ (0.2.57): the msgV3 id the message went with (schema 13), which it goes with
+         * again; empty for a message queued before.
+         */
+        QByteArray msgV3Id;
     };
 
     /** Opens the queue of db: removes what was cancelled, with its history rows. */
@@ -70,11 +75,12 @@ public:
      * transaction (it reads last_insert_rowid()).
      */
     static RawDatabase::Query linkedInsertQuery(qint64 id, const ChatId& chatId, const QString& message,
-                                                const QDateTime& time, ExtensionSet extensions);
+                                                const QDateTime& time, ExtensionSet extensions,
+                                                const QByteArray& msgV3Id = QByteArray());
 
     /** Queues a message that has no history row. Returns its id. */
     qint64 add(const ChatId& chatId, const QString& message, const QDateTime& time,
-               ExtensionSet extensions);
+               ExtensionSet extensions, const QByteArray& msgV3Id = QByteArray());
 
     /**
      * The queue of one chat, oldest first, without the cancelled messages. Pending history rows

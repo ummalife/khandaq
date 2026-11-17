@@ -29,6 +29,7 @@
 #include "src/friendlist.h"
 #include "src/model/group.h"
 #include "src/model/status.h"
+#include "src/model/air/airmessagemarks.h"
 #include "src/model/air/airmodel.h"
 #include "src/widget/air/aircomposer.h"
 #include "src/widget/air/airgroupdossier.h"
@@ -50,6 +51,7 @@
 #include <QAbstractButton>
 #include <QBuffer>
 #include <QCursor>
+#include <QDesktopServices>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QFileDialog>
@@ -210,6 +212,8 @@ GroupChatForm::GroupChatForm(Core& core_, Group* chatGroup, IChatLog& chatLog_,
     connect(dossier, &AirGroupDossier::privacyChangeRequested, this, &GroupChatForm::setPrivacy);
     connect(privateThread, &AirPrivateThread::sendRequested, this, &GroupChatForm::sendPrivate);
     connect(composer, &AirComposer::readOnlyActionRequested, this, &GroupChatForm::askToWrite);
+    connect(chatWidget, &ChatWidget::heldFileAccepted, this,
+            [this](const ToxFile& file) { emit heldFileAccepted(group->getPersistentId(), file); });
 
     connect(msgEdit, &ChatTextEdit::tabPressed, tabber, &TabCompleter::complete);
     connect(msgEdit, &ChatTextEdit::keyPressed, tabber, &TabCompleter::reset);
@@ -240,6 +244,11 @@ GroupChatForm::GroupChatForm(Core& core_, Group* chatGroup, IChatLog& chatLog_,
         }
     });
     settings.connectTo_blackListChanged(this, [later](QStringList const&) { later(); });
+
+    // KHANDAQ (0.2.57): Report, after the actions of every conversation; prepareChatMenu shows it
+    // on a message of someone else only.
+    menu.addSeparator();
+    reportAction = menu.addAction(QString(), this, [this] { report(); });
 
     if (settings.getShowGroupJoinLeaveMessages()) {
         addSystemInfoMessage(QDateTime::currentDateTime(), SystemMessageType::selfJoinedGroup, {});
@@ -959,7 +968,66 @@ void GroupChatForm::retranslateUi()
         AirStrings::groupFileLimitText(code.isEmpty() ? QLocale::system() : QLocale(code));
     fileButton->setToolTip(limit);
     setAttachLimit(limit);
+    reportAction->setText(AirStrings::text(AirText::MessageReport));
     refreshMembers();
+}
+
+void GroupChatForm::prepareChatMenu(QPoint globalPos)
+{
+    ChatLogIdx idx{0};
+    reportAction->setVisible(chatWidget->entryAtGlobalPos(globalPos, idx) && prepareReport(idx));
+}
+
+bool GroupChatForm::prepareReport(ChatLogIdx idx)
+{
+    const ChatLogItem& item = chatLog.at(idx);
+    const ToxPk& sender = item.getSender();
+    // Our own entries carry the key of our profile; a group knows us by a key of its own too.
+    const ToxPk groupSelf = core.getGroupSelfPublicKey(static_cast<int>(group->getId()));
+    if (!sender.isEmpty() && (sender == core.getSelfPublicKey() || sender == groupSelf)) {
+        return false;
+    }
+    // KHANDAQ (0.2.57, review): the mail names the author only when toxcore vouches for them. An
+    // entry without a key, or a file a member relayed, in this launch (ToxFile::relayed) or an
+    // earlier one (AirLocal::isRelayed), is still reported, by nobody's name (Air::reportMailUrl).
+    bool vouched = !sender.isEmpty();
+    QString text;
+    switch (item.getContentType()) {
+    case ChatLogItem::ContentType::message:
+        text = item.getContentAsMessage().message.content;
+        break;
+    case ChatLogItem::ContentType::fileTransfer: {
+        // A file says what it is by its name; what is in it stays on this computer.
+        const ToxFile& file = item.getContentAsFile().file;
+        text = file.fileName;
+        const bool relayed =
+            file.relayed
+            || (airLocal && !file.resumeFileId.isEmpty()
+                && airLocal->isRelayed(Air::fileEntryKey(groupKey(), file.resumeFileId)));
+        vouched = vouched && !relayed;
+        break;
+    }
+    case ChatLogItem::ContentType::systemMessage:
+        return false;
+    }
+    menuReport = Air::GroupReport{group->getName(), vouched ? sender.toString() : QString(),
+                                  item.getTimestamp(), text};
+    return true;
+}
+
+void GroupChatForm::report()
+{
+    const QUrl mail = Air::reportMailUrl(menuReport);
+    // Who and where, never the words of the message.
+    qDebug() << "Report: a mail to" << mail.path() << "about a message of"
+             << menuReport.authorKey.left(8) << "in a group," << mail.toEncoded().size() << "bytes";
+    if (!QDesktopServices::openUrl(mail)) {
+        qWarning() << "Report: no mail app took the mail";
+        // KHANDAQ (0.2.57, review): as iOS does, the person sees where to write instead: the title
+        // of Report and support's address, no new words to translate.
+        AirDialog::notice(this, AirStrings::text(AirText::MessageReport),
+                          QString::fromLatin1(Air::reportAddress));
+    }
 }
 
 void GroupChatForm::joinGroupCall()

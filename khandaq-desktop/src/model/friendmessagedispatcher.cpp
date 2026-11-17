@@ -18,11 +18,13 @@
 */
 
 #include "friendmessagedispatcher.h"
+#include "src/core/msgv3.h"
 #include "src/persistence/settings.h"
 #include "src/model/status.h"
 
 #include <QTimer>
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -55,19 +57,10 @@ FriendMessageDispatcher::FriendMessageDispatcher(Friend& f_, MessageProcessor pr
 std::pair<DispatchedMessageId, DispatchedMessageId>
 FriendMessageDispatcher::sendMessage(bool isAction, const QString& content)
 {
-    const auto firstId = nextMessageId;
-    auto lastId = nextMessageId;
-    for (const auto& message : processor.processOutgoingMessage(isAction, content,
-                                                               coreOnlyExtensions(f.getSupportedExtensions()))) {
-        auto messageId = nextMessageId++;
-        lastId = messageId;
-
-        auto onOfflineMsgComplete = getCompletionFn(messageId);
-        sendProcessedMessage(message, onOfflineMsgComplete, tagOf(messageId));
-
-        emit messageSent(messageId, message);
-    }
-    return std::make_pair(firstId, lastId);
+    auto parts = processor.processOutgoingMessage(isAction, content,
+                                                  coreOnlyExtensions(f.getSupportedExtensions()));
+    stampParts(parts);
+    return dispatchParts(parts);
 }
 
 /**
@@ -76,10 +69,63 @@ FriendMessageDispatcher::sendMessage(bool isAction, const QString& content)
 std::pair<DispatchedMessageId, DispatchedMessageId>
 FriendMessageDispatcher::sendExtendedMessage(const QString& content, ExtensionSet extensions)
 {
+    auto parts = processor.processOutgoingMessage(false, content, coreOnlyExtensions(extensions));
+    stampParts(parts);
+    return dispatchParts(parts);
+}
+
+/**
+ * @see IMessageDispatcher::resendMessage
+ * @note A message without an id, one queued before 0.2.57, goes again as it would have then: as a
+ * plain text, never with an id that the next launch would not know.
+ */
+std::pair<DispatchedMessageId, DispatchedMessageId>
+FriendMessageDispatcher::resendMessage(const Message& message)
+{
+    const ExtensionSet extensions =
+        message.extensionSet.none() ? f.getSupportedExtensions() : message.extensionSet;
+    auto parts = processor.processOutgoingMessage(message.isAction, message.content,
+                                                  coreOnlyExtensions(extensions));
+    if (parts.size() != 1) {
+        // It no longer fits one message: its parts go as new messages.
+        return IMessageDispatcher::resendMessage(message);
+    }
+
+    Message& part = parts.front();
+    part.wireId = message.wireId;
+    if (message.timestamp.isValid()) {
+        part.timestamp = message.timestamp;
+        lastSentMs = std::max(lastSentMs, message.timestamp.toMSecsSinceEpoch());
+    } else {
+        lastSentMs = MsgV3::sentMsAfter(lastSentMs, QDateTime::currentMSecsSinceEpoch());
+        part.timestamp = QDateTime::fromMSecsSinceEpoch(lastSentMs);
+    }
+    return dispatchParts(parts);
+}
+
+/**
+ * @brief KHANDAQ (0.2.57): gives every part a msgV3 id of its own and the time it goes with: the
+ * first in a later second than the text before it (MsgV3::sentMsAfter), every further part a second
+ * after the one before, as the phones stamp theirs (DirectTextStamps, MessageSplitter.PART_GAP_MS).
+ * A read receipt marks every message up to the time of the one it names, so no two may share one.
+ */
+void FriendMessageDispatcher::stampParts(std::vector<Message>& parts)
+{
+    qint64 sentMs = MsgV3::sentMsAfter(lastSentMs, QDateTime::currentMSecsSinceEpoch());
+    for (auto& part : parts) {
+        part.wireId = MsgV3::newId();
+        part.timestamp = QDateTime::fromMSecsSinceEpoch(sentMs);
+        lastSentMs = sentMs;
+        sentMs += MsgV3::partGapMs;
+    }
+}
+
+std::pair<DispatchedMessageId, DispatchedMessageId>
+FriendMessageDispatcher::dispatchParts(const std::vector<Message>& parts)
+{
     const auto firstId = nextMessageId;
     auto lastId = nextMessageId;
-
-    for (const auto& message : processor.processOutgoingMessage(false, content, coreOnlyExtensions(extensions))) {
+    for (const auto& message : parts) {
         auto messageId = nextMessageId++;
         lastId = messageId;
 
@@ -118,9 +164,12 @@ uint64_t FriendMessageDispatcher::tagOf(DispatchedMessageId messageId)
  * @param[in] isAction True if action message
  * @param[in] content Unprocessed toxcore message
  */
-void FriendMessageDispatcher::onMessageReceived(bool isAction, const QString& content)
+void FriendMessageDispatcher::onMessageReceived(bool isAction, const QString& content,
+                                                const QByteArray& msgV3Id)
 {
-    emit messageReceived(f.getPublicKey(), processor.processIncomingCoreMessage(isAction, content));
+    Message message = processor.processIncomingCoreMessage(isAction, content);
+    message.wireId = msgV3Id;
+    emit messageReceived(f.getPublicKey(), message);
 }
 
 /**
@@ -256,7 +305,11 @@ void FriendMessageDispatcher::sendCoreProcessedMessage(Message const& message,
     auto sendFn = message.isAction ? std::mem_fn(&ICoreFriendMessageSender::sendAction)
                                    : std::mem_fn(&ICoreFriendMessageSender::sendMessage);
 
-    const auto messageSent = sendFn(messageSender, friendId, message.content, receipt);
+    // The same id and time on every send of the message: a receipt that did not come, a reconnect
+    // or a later launch sends it again as itself, and the friend keeps one copy.
+    const auto messageSent =
+        sendFn(messageSender, friendId, message.content, message.wireId,
+               static_cast<quint32>(message.timestamp.toSecsSinceEpoch()), receipt);
 
     if (messageSent) {
         offlineMsgEngine.addSentCoreMessage(receipt, message,

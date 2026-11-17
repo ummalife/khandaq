@@ -265,6 +265,12 @@ Delivery outgoingTextDelivery(bool isDelivered, bool handedOver, bool personOnli
     return personOnline && handedOver ? Delivery::Sent : Delivery::Transit;
 }
 
+Delivery seenDelivery(Delivery delivery, bool seen)
+{
+    return seen && (delivery == Delivery::Sent || delivery == Delivery::Delivered) ? Delivery::Seen
+                                                                                   : delivery;
+}
+
 bool Reach::operator==(const Reach& other) const
 {
     return kind == other.kind && secondsAgo == other.secondsAgo && online == other.online;
@@ -279,7 +285,7 @@ bool Reach::operator!=(const Reach& other) const
 
 bool sectionHasHeading(SectionKind kind)
 {
-    return kind != SectionKind::Requests;
+    return kind != SectionKind::Requests && kind != SectionKind::Pinned;
 }
 
 QString sectionName(SectionKind kind)
@@ -287,6 +293,8 @@ QString sectionName(SectionKind kind)
     switch (kind) {
     case SectionKind::Requests:
         return QStringLiteral("requests");
+    case SectionKind::Pinned:
+        return QStringLiteral("pinned");
     case SectionKind::Live:
         return QStringLiteral("live");
     case SectionKind::Away:
@@ -301,6 +309,9 @@ QString sectionName(SectionKind kind)
 
 SectionKind Entry::section() const
 {
+    if (pinned) {
+        return SectionKind::Pinned;
+    }
     if (kind == EntryKind::Saved) {
         return SectionKind::Saved;
     }
@@ -314,7 +325,8 @@ bool Entry::operator==(const Entry& other) const
            && lastDelivery == other.lastDelivery && timeText == other.timeText
            && activity == other.activity && transitCount == other.transitCount
            && unreadCount == other.unreadCount && isFavorite == other.isFavorite
-           && mentioned == other.mentioned && photoKey == other.photoKey && tone == other.tone;
+           && pinned == other.pinned && mentioned == other.mentioned
+           && photoKey == other.photoKey && tone == other.tone;
 }
 
 bool Entry::operator!=(const Entry& other) const
@@ -600,7 +612,10 @@ Snapshot build(const QVector<Entry>& entries, const QVector<Request>& requests,
         snapshot.sections.append(block);
     }
 
-    for (SectionKind kind : {SectionKind::Live, SectionKind::Away, SectionKind::Saved}) {
+    // KHANDAQ (0.2.57): a pinned row comes before every other conversation, under the request
+    // cards: the list, a filter or the search that keeps it shows it first.
+    for (SectionKind kind :
+         {SectionKind::Pinned, SectionKind::Live, SectionKind::Away, SectionKind::Saved}) {
         QVector<Entry> inSection;
         for (const Entry& entry : visible) {
             if (entry.section() == kind) {

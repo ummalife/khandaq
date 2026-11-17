@@ -19,6 +19,7 @@
 
 #include "airgroupdossier.h"
 
+#include "src/model/air/aircommunity.h"
 #include "src/model/air/airconversation.h"
 #include "src/model/air/airmodel.h"
 #include "src/widget/air/airchatparts.h"
@@ -342,6 +343,10 @@ void AirGroupDossier::setInfo(const AirGroupInfo& info_)
     info = info_;
     tile->setPerson(info.name, info.tone);
     nameLabel->setText(info.name);
+    // KHANDAQ (0.2.57): Khandaq Community keeps its name (Air::Community::groupTitle), so it offers
+    // no Rename, which here sets the topic of the group.
+    renameButton->setVisible(
+        !Air::Community::isCommunity(QByteArray::fromHex(info.groupKey.toLatin1())));
     countsLabel->setText(AirStrings::groupHeaderText(info.reach));
     roleText->setText(AirStrings::groupRoleExplanation(info.selfRole));
     // A group by invitation only is joined by invitation, not with its key: the key is neither

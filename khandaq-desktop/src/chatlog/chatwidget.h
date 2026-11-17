@@ -96,6 +96,12 @@ public:
     void setPersonOnline(bool online);
     /** The short name of that person, as the file entries say it ("Waits for Yusuf to accept it"). */
     void setPersonName(const QString& name);
+    /**
+     * KHANDAQ (0.2.57): how far that person has seen our messages, by their read receipts
+     * (AirLocal::seenUpTo): the time of the newest one seen, in milliseconds since 1970, or -1. Our
+     * messages and files up to it show seen.
+     */
+    void setSeenUpTo(qint64 timeMs);
 
     /** The lines a screen reader goes through (AirAccessible): those the log shows, in order. */
     std::vector<ChatLine::Ptr> spokenLines() const;
@@ -108,6 +114,8 @@ signals:
 
     void messageNotFoundShow(SearchDirection direction);
     void renderFinished();
+    /** KHANDAQ (0.2.57): Accept on a group file that is held for a tap (FileTransferWidget). */
+    void heldFileAccepted(const ToxFile& file);
 public slots:
     void forceRelayout();
     void reloadTheme();
@@ -265,6 +273,7 @@ private:
     bool groupChat = false;
     bool notesChat = false;
     bool personOnline = true;
+    qint64 seenUpToMs = -1;
     QString personName;
     bool typingShown = false;
     /** Lines whose file entry changed its height: laid out again on the next turn of the loop. */

@@ -66,6 +66,7 @@
     <string name="air_delivery_transit">في الطريق</string>
     <string name="air_delivery_sent">أُرسلت</string>
     <string name="air_delivery_delivered">وصلت</string>
+    <string name="air_delivery_seen">قُرئت</string>
     <string name="air_transit_format">في الطريق: %1$d</string>
     <string name="air_unread_a11y">غير مقروءة: %1$d</string>
     <string name="air_hint_request_sent">أُرسل الطلب</string>
@@ -426,6 +427,8 @@
     <string name="air_network_title_relay">متصل، عبر خادم وسيط</string>
     <string name="air_network_title_connecting">جارٍ الاتصال</string>
     <string name="air_network_title_offline">لا شبكة</string>
+    <string name="air_no_network_note">ستنتظر الرسائل والملفات وتُرسَل تلقائيًا عند عودة الاتصال.</string>
+    <string name="air_no_network_back">عاد الاتصال</string>
     <string name="air_network_meaning_direct">تُرسل الرسائل فورًا، مباشرةً إلى هاتف الطرف الآخر.</string>
     <string name="air_network_meaning_relay">تُرسل الرسائل فورًا عبر خادم وسيط: هذه الشبكة تغلق الطريق المباشر، ولا يؤثر ذلك على التسليم.</string>
     <string name="air_network_meaning_connecting">الإنترنت متوفر والتطبيق يبحث عن الشبكة. تنتظر الرسائل الجديدة في الطريق وستُرسل تلقائيًا.</string>

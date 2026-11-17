@@ -278,6 +278,9 @@ public class HelperGroup
                 conf_new.group_active = true;
                 conf_new.tox_group_number = group_num;
                 conf_new.name = get_group_display_name(group_identifier, group_topic);
+                // KHANDAQ (0.2.57, review): Khandaq Community given a row again after its profile was imported or
+                // restored keeps its notification switch as it was (CommunityAutoJoin.mutesNewRow).
+                conf_new.notification_silent = CommunityAutoJoin.mutesNewRow(group_identifier);
                 //
                 orma.insertIntoGroupDB(conf_new);
                 HelperGeneric.logI(TAG, "new_or_updated_group:+ADD+");
@@ -958,6 +961,12 @@ public class HelperGroup
         }
 
         if (is_group_we_left(group_identifier) || !is_tox_started)
+        {
+            return -1;
+        }
+        // KHANDAQ (0.2.57, review): the chat, the header, the members and the mentions of Khandaq Community all come
+        // here; while it is full (CommunityAutoJoin.waitForRoom) none of them joins it again before its pause is over.
+        if (CommunityAutoJoin.waitsForRoom(group_identifier))
         {
             return -1;
         }
@@ -1800,11 +1809,29 @@ public class HelperGroup
 
     static String get_group_display_name(final String group_identifier, final String raw_name)
     {
-        if (raw_name == null)
+        // KHANDAQ (0.2.57): Khandaq Community goes by its own name whatever its topic says.
+        return KhandaqCommunity.displayName(group_identifier, raw_name);
+    }
+
+    /**
+     * KHANDAQ (0.2.57): the stored name of Khandaq Community is its own (get_group_display_name), also on a row
+     * stored before (the founder's topic, an invitation's name) and on a row of it the person left, which toxcore
+     * no longer names again: the screens that read the stored name (notifications, the search) say it too. Run at
+     * the start, where the groups are loaded.
+     */
+    static void store_community_display_name()
+    {
+        try
         {
-            return "";
+            orma.updateGroupDB().
+                    group_identifierEq(KhandaqCommunity.CHAT_ID.toLowerCase(Locale.ROOT)).
+                    name(KhandaqCommunity.DISPLAY_NAME).
+                    execute();
         }
-        return raw_name;
+        catch (Exception e)
+        {
+            Log.w(TAG, "store_community_display_name:EE:" + e.getMessage());
+        }
     }
 
     static boolean should_show_group_system_messages(final String group_identifier)
@@ -4654,7 +4681,7 @@ public class HelperGroup
             {
                 return;
             }
-            orma.updateGroupDB().group_identifierEq(id).name(name).execute();
+            orma.updateGroupDB().group_identifierEq(id).name(get_group_display_name(id, name)).execute();
             update_group_in_friendlist(id);
             update_group_in_groupmessagelist(id);
         }
@@ -5763,7 +5790,10 @@ public class HelperGroup
             {
                 do_notification = false;
             }
-            if (GroupMentionHelper.isSelfMentioned(message_, group_id))
+            // KHANDAQ (0.2.57, SPEC-community): a mention breaks through the mute of a group, but not of Khandaq
+            // Community, where strangers write.
+            if (GroupMentionHelper.isSelfMentioned(message_, group_id)
+                && KhandaqCommunity.mentionBreaksMute(group_id, group_temp.notification_silent))
             {
                 do_notification = true;
             }
@@ -6014,6 +6044,14 @@ public class HelperGroup
         }
 
         long group_num_ = tox_group_by_groupid__wrapper(group_identifier);
+        // KHANDAQ (0.2.57): a record that names our own key in the group is dropped on every path that brings history
+        // here, the relay's (TRIFA_SYNC_TYPE_TOXPROXY) too, which comes without the key check of the group's own path.
+        if (NgcHistoryDowngradePolicy.claimsOwnKey(
+                (group_num_ >= 0) ? tox_group_self_get_public_key__wrapper(group_num_) : null, peer_pubkey))
+        {
+            HelperGeneric.logI(TAG, "group_message_add_from_sync: dropping a record that names our own key");
+            return;
+        }
         int res = -1;
         if (peer_number2 == -1)
         {
@@ -6408,7 +6446,9 @@ public class HelperGroup
         byte[] data = new byte[(int)data_length];
         data_buf.rewind();
         data_buf.get(data);
-        if (!NgcGroupFileTransfer.awaitPace(g))
+        // KHANDAQ (0.2.57): the packet goes to every member: at the pace of the relays too when one is over a relay.
+        final boolean overRelay = NgcGroupFileTransfer.overRelay(groupNum, members);
+        if (!NgcGroupFileTransfer.awaitPace(g, overRelay))
         {
             return;
         }
@@ -6432,11 +6472,12 @@ public class HelperGroup
             AirComposerNotice.say(context_s.getString(R.string.group_file_send_failed), true);
             return;
         }
-        NgcGroupFileTransfer.spendPace(data_length, members.length);
+        NgcGroupFileTransfer.spendPace(data_length, members.length, overRelay);
 
         notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash, length_sum, length_sum);
         NgcGroupFileTransfer.outgoingSent(g);
-        HelperGeneric.logI(TAG, "send_group_image:done bytes=" + length_sum + " res=" + sendRes);
+        HelperGeneric.logI(TAG, "send_group_image:done bytes=" + length_sum + " res=" + sendRes
+                + (overRelay ? " over a relay" : ""));
     }
 
     /** tox_group_send_custom_packet's TOX_ERR_GROUP_SEND_CUSTOM_PACKET_DISCONNECTED (5), as the JNI returns it. */
@@ -7340,11 +7381,14 @@ public class HelperGroup
     }
 
     // KHANDAQ (#120): the single chokepoint deciding whether we may pull/save an incoming group file
-    // right now. True when the global policy permits auto-download (Всегда, or Wi-Fi-only on Wi-Fi),
+    // right now. True when the global policy permits auto-download (Always, or Wi-Fi only on Wi-Fi),
     // OR the user explicitly tapped download for this specific file.
+    // KHANDAQ (0.2.57, SPEC-community item 6): in Khandaq Community, where strangers write, a file of another
+    // member comes only on that tap, whatever the policy says: the pushed bytes are dropped as on "Never", and
+    // nothing of it reaches the device's storage, the chat or the gallery before the tap fetches it again.
     static boolean ngc_incoming_download_allowed(final String groupId, final String msgIdHash)
     {
-        return HelperFiletransfer.attachment_auto_download_allowed()
+        return KhandaqCommunity.fileComesByItself(groupId, HelperFiletransfer.attachment_auto_download_allowed())
                 || is_ngc_manual_download_requested(groupId, msgIdHash);
     }
 
@@ -8770,7 +8814,10 @@ public class HelperGroup
             {
                 final long deadline = System.currentTimeMillis() + GROUP_POST_JOIN_DISCOVERY_MS;
                 int round = 0;
-                while (System.currentTimeMillis() < deadline && is_tox_started && !is_group_we_left(group_identifier))
+                // KHANDAQ (0.2.57, review): nor for Khandaq Community the app let go of while it is full: the friends
+                // this asks would invite us straight back.
+                while (System.currentTimeMillis() < deadline && is_tox_started && !is_group_we_left(group_identifier)
+                       && !CommunityAutoJoin.waitsForRoom(group_identifier))
                 {
                     final long peers = Math.max(0L, tox_group_peer_count(group_num));
                     final int conn = tox_group_is_connected(group_num);
@@ -10565,6 +10612,13 @@ public class HelperGroup
         {
             return;
         }
+        // KHANDAQ (0.2.57, review): Khandaq Community, full, is not asked again at once (CommunityAutoJoin.waitForRoom).
+        if (KhandaqCommunity.waitsForRoom(group_identifier, fail_type))
+        {
+            CommunityAutoJoin.waitForRoom(group_number);
+            update_group_in_friendlist(group_identifier);
+            return;
+        }
         reconnect_group_if_disconnected(group_number, group_identifier, true);
         sync_group_peers_from_tox_to_db(group_number);
         update_group_in_friendlist(group_identifier);
@@ -10572,10 +10626,41 @@ public class HelperGroup
         schedule_group_join_fail_retry(group_identifier);
     }
 
+    /**
+     * KHANDAQ (0.2.57, review): toxcore lets go of a group the app keeps, with its row, its history and its marks:
+     * Khandaq Community while it is full (CommunityAutoJoin.waitForRoom), so that toxcore stops asking it. No leave
+     * notice: nobody let us in. A friend's late answer to our request to be invited would be taken at once and bring
+     * the group straight back, so the request is forgotten too.
+     */
+    static void let_go_of_group_instance(final long group_num)
+    {
+        if (group_num < 0 || is_group_leave_pending(group_num))
+        {
+            return;
+        }
+        clear_pending_friend_assisted_join(tox_group_by_groupnum__wrapper(group_num));
+        final int res = tox_group_leave(group_num, "");
+        HelperGeneric.logI(TAG, "let_go_of_group_instance:gn=" + group_num + " res=" + res);
+        // toxcore deletes the group on its next iterate. A save that still finds it only makes the next start ask once.
+        HelperGeneric.update_savedata_file_wrapper_async();
+    }
+
+    /**
+     * KHANDAQ (0.2.57, review): whether the retry of a refused join still has a group to bring back. The person may
+     * have deleted it meanwhile: its row is gone then, and its "we left" mark with it, and the next try made a new
+     * row, unmuted, and for Khandaq Community pinned, every ten seconds while the group refused us. Khandaq Community
+     * the person left is never joined by itself again, whatever its row says (its profile's mark).
+     */
+    private static boolean join_fail_retry_wanted(@NonNull final String group_identifier)
+    {
+        return group_db_row_exists(group_identifier) && !is_group_we_left(group_identifier)
+               && !CommunityAutoJoin.leftByThePerson(group_identifier);
+    }
+
     private static void schedule_group_join_fail_retry(@NonNull final String group_identifier)
     {
         final String key = group_identifier.toLowerCase(Locale.ENGLISH);
-        if (is_group_we_left(group_identifier))
+        if (!join_fail_retry_wanted(group_identifier))
         {
             return;
         }
@@ -10591,7 +10676,8 @@ public class HelperGroup
                 for (int attempt = 1; attempt <= 4; attempt++)
                 {
                     Thread.sleep(2500L * attempt);
-                    if (!is_tox_started || is_group_we_left(group_identifier))
+                    // Asked again after every pause, before either way on: both give the group its row back.
+                    if (!is_tox_started || !join_fail_retry_wanted(group_identifier))
                     {
                         return;
                     }
@@ -10605,7 +10691,9 @@ public class HelperGroup
                     }
                     HelperGeneric.logI(TAG, "group_join_fail_retry:attempt=" + attempt + " id="
                             + group_identifier_short(group_identifier, false));
-                    join_public_group_by_id(group_identifier, false);
+                    // And at every step of the join, which may wait: a delete in the middle of it stops it too.
+                    join_public_group_by_id(group_identifier, null, false, null,
+                                            () -> join_fail_retry_wanted(group_identifier));
                 }
             }
             catch (InterruptedException ignored)
@@ -10638,6 +10726,20 @@ public class HelperGroup
     static boolean join_public_group_by_id(final String group_id, @Nullable final String password, final boolean show_toast,
                                            @Nullable final java.util.function.Consumer<String> failures)
     {
+        return join_public_group_by_id(group_id, password, show_toast, failures, null);
+    }
+
+    /**
+     * KHANDAQ (0.2.57, review): with {@code still_wanted}, a join the person did not ask for just now (Khandaq
+     * Community's by itself, the retry of a refused join) asks before each step that would bring the group into
+     * toxcore or give it a row, and stops once the answer is no: the person left the group or deleted it meanwhile,
+     * or another tox session began (a profile import, or a logout and login, start tox again in this process). An
+     * instance this join made by then is left again; one that was there before stays as it was.
+     */
+    static boolean join_public_group_by_id(final String group_id, @Nullable final String password, final boolean show_toast,
+                                           @Nullable final java.util.function.Consumer<String> failures,
+                                           @Nullable final java.util.function.BooleanSupplier still_wanted)
+    {
         try
         {
             final String normalized_group_id = normalize_public_group_chat_id(group_id);
@@ -10654,6 +10756,11 @@ public class HelperGroup
                 say_join_failure(join_public_group_failure_message(-1L), show_toast, failures);
                 return false;
             }
+            if (!join_still_wanted(still_wanted))
+            {
+                HelperGeneric.logI(TAG, "join_group:no longer wanted, stopped once tox was ready");
+                return false;
+            }
 
             // KHANDAQ (QA live, F11): a group we are still leaving: the old instance goes first.
             if (!finish_pending_group_leave_before_join(normalized_group_id))
@@ -10666,7 +10773,7 @@ public class HelperGroup
             if (existing_group_num >= 0)
             {
                 HelperGeneric.logI(TAG, "join_group:already_in_tox gn=" + existing_group_num);
-                return finish_public_group_join(existing_group_num, normalized_group_id, show_toast);
+                return finish_join_if_wanted(existing_group_num, normalized_group_id, show_toast, still_wanted, false);
             }
 
             perform_khandaq_bootstrap_burst();
@@ -10699,10 +10806,16 @@ public class HelperGroup
                     if (existing_group_num >= 0)
                     {
                         HelperGeneric.logI(TAG, "join_group:appeared_in_tox attempt=" + attempt + " gn=" + existing_group_num);
-                        return finish_public_group_join(existing_group_num, normalized_group_id, show_toast);
+                        return finish_join_if_wanted(existing_group_num, normalized_group_id, show_toast, still_wanted,
+                                                     false);
                     }
                 }
 
+                if (!join_still_wanted(still_wanted))
+                {
+                    HelperGeneric.logI(TAG, "join_group:no longer wanted, stopped before attempt=" + attempt);
+                    return false;
+                }
                 join_chat_id_buffer.rewind();
                 new_group_num = MainActivity.tox_group_join(join_chat_id_buffer, TOX_GROUP_CHAT_ID_SIZE,
                                                             get_group_peer_join_name(), password);
@@ -10718,7 +10831,8 @@ public class HelperGroup
                 {
                     HelperGeneric.logI(TAG, "join_group:already_exists_after_fail gn=" + existing_group_num +
                             " err=" + new_group_num);
-                    return finish_public_group_join(existing_group_num, normalized_group_id, show_toast);
+                    return finish_join_if_wanted(existing_group_num, normalized_group_id, show_toast, still_wanted,
+                                                 false);
                 }
             }
 
@@ -10726,7 +10840,7 @@ public class HelperGroup
             if ((new_group_num >= 0) && (new_group_num < UINT32_MAX_JAVA))
             {
                 HelperGeneric.logI(TAG, "join_group:new groupnum:=" + new_group_num);
-                return finish_public_group_join(new_group_num, normalized_group_id, show_toast);
+                return finish_join_if_wanted(new_group_num, normalized_group_id, show_toast, still_wanted, true);
             }
 
             say_join_failure(join_public_group_failure_message(last_join_result), show_toast, failures);
@@ -10750,6 +10864,34 @@ public class HelperGroup
         {
             display_toast(words, false, 300);
         }
+    }
+
+    /** KHANDAQ (0.2.57, review): whether a join goes on (join_public_group_by_id); a join without the question does. */
+    private static boolean join_still_wanted(@Nullable final java.util.function.BooleanSupplier still_wanted)
+    {
+        return (still_wanted == null) || still_wanted.getAsBoolean();
+    }
+
+    /**
+     * KHANDAQ (0.2.57, review): finish_public_group_join, which gives the group its row and clears its "we left" mark,
+     * while the join is still wanted. Otherwise the join ends here: toxcore leaves the instance this join made
+     * ({@code made_by_this_join}), which would go on looking for the group, and no row is made.
+     */
+    private static boolean finish_join_if_wanted(final long group_num, @NonNull final String group_identifier,
+                                                 final boolean show_toast,
+                                                 @Nullable final java.util.function.BooleanSupplier still_wanted,
+                                                 final boolean made_by_this_join)
+    {
+        if (join_still_wanted(still_wanted))
+        {
+            return finish_public_group_join(group_num, group_identifier, show_toast);
+        }
+        if (made_by_this_join)
+        {
+            tox_group_leave(group_num, "");
+        }
+        HelperGeneric.logI(TAG, "join_group:no longer wanted, stopped gn=" + group_num + " left=" + made_by_this_join);
+        return false;
     }
 
     static void do_join_public_group(Intent data)
@@ -11839,7 +11981,8 @@ public class HelperGroup
             }
             // check for muted or kicked peers
 
-            if (tox_group_self_get_public_key(group_number).toUpperCase().equalsIgnoreCase(original_sender_peerpubkey))
+            if (NgcHistoryDowngradePolicy.claimsOwnKey(tox_group_self_get_public_key(group_number),
+                                                       original_sender_peerpubkey))
             {
                 // HINT: do not add our own messages, they are already in the DB!
                 // HelperGeneric.logI(TAG, "handle_incoming_sync_group_message:gn=" + group_number + " peerid=" + peer_id + " ignoring myself as original sender");
@@ -12119,7 +12262,8 @@ public class HelperGroup
             }
             // check for muted or kicked peers
 
-            if (tox_group_self_get_public_key(group_number).toUpperCase().equalsIgnoreCase(original_sender_peerpubkey))
+            if (NgcHistoryDowngradePolicy.claimsOwnKey(tox_group_self_get_public_key(group_number),
+                                                       original_sender_peerpubkey))
             {
                 // HINT: do not add our own files, they are already in the DB!
                 // HelperGeneric.logI(TAG, "handle_incoming_sync_group_file:gn=" + group_number + " peerid=" + peer_id + " ignoring myself as original sender");

@@ -609,6 +609,8 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
         AirRequestStore.forgetAccepted(pubkey);
         // KHANDAQ (redesign, E12): their invitations go too, toxcore joins only through them.
         AirInviteStore.removeFrom(pubkey);
+        // KHANDAQ (0.2.57): how far they had seen our messages, and the seen anchor that waited for them.
+        HelperMessageSeen.forgetFriend(pubkey);
         AirRepository.requestRefresh();
     }
 

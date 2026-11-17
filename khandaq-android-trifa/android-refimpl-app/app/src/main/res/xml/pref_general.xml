@@ -49,13 +49,13 @@
             android:title="@string/air_pref_accept_pictures_title" />
 
         <SwitchPreference
-            android:defaultValue="false"
+            android:defaultValue="true"
             android:key="auto_accept_video"
             android:summary="@string/air_pref_accept_videos_summary"
             android:title="@string/air_pref_accept_videos_title" />
 
         <SwitchPreference
-            android:defaultValue="false"
+            android:defaultValue="true"
             android:key="auto_accept_all_upto"
             android:summary="@string/air_pref_accept_files_summary"
             android:title="@string/air_pref_accept_files_title" />

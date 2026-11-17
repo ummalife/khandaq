@@ -1255,9 +1255,13 @@ public class AirFragment extends Fragment
                 return;
             }
             adapter.setQuery(needle);
-            if (atTop && list != null)
+            if (list != null && list.getLayoutManager() != null
+                && AirListView.keepsTop(atTop, !list.canScrollVertically(-1)))
             {
-                list.scrollToPosition(0);
+                // KHANDAQ (0.2.57): through the layout manager. RecyclerView.scrollToPosition also wakes the
+                // scrollbar, and this runs on every refresh at the top: the strip at the edge flashed with
+                // nothing scrolled.
+                list.getLayoutManager().scrollToPosition(0);
             }
             if (firstLoad && !revealed)
             {

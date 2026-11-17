@@ -275,7 +275,8 @@ public class TRIFAGlobals
 
     // ---- lookup cache ----
     // static Map<String, info.guardianproject.iocipher.RandomAccessFile> cache_ft_fos = new HashMap<String, info.guardianproject.iocipher.RandomAccessFile>();
-    static Map<String, BufferedOutputStreamCustom> cache_ft_fos = new HashMap<String, BufferedOutputStreamCustom>();
+    // KHANDAQ (0.2.57): written by the tox thread and closed by a cancel on the main thread, so a concurrent map.
+    static Map<String, BufferedOutputStreamCustom> cache_ft_fos = new java.util.concurrent.ConcurrentHashMap<>();
     // static Map<String, java.io.FileOutputStream> cache_ft_fos_normal = new HashMap<String, java.io.FileOutputStream>();
     static Map<String, PositionInputStream> cache_ft_fis_saf = new HashMap<String, PositionInputStream>();
     // ---- lookup cache ----

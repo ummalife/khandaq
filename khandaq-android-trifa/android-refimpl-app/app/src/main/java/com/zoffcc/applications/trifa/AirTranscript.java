@@ -479,7 +479,7 @@ final class AirTranscript
         setTopMargin(views.mark, Math.max(0, (firstLine - res.getDimensionPixelSize(R.dimen.kq_size_mark)) / 2));
 
         final AirConversationModel.EntryStatus status = statusOf(m);
-        showMark(views.mark, status, m.id);
+        showMark(views.mark, status, m.id, true);
 
         final boolean failed = status == AirConversationModel.EntryStatus.FAILED;
         if (views.retry != null)
@@ -506,7 +506,10 @@ final class AirTranscript
                                                       : View.IMPORTANT_FOR_ACCESSIBILITY_NO);
     }
 
-    /** Our mark: a clock while it waits or leaves, one check sent, two delivered, red when it was refused. */
+    /**
+     * Our mark: a clock while it waits or leaves, one check sent, two delivered, red when it was refused.
+     * KHANDAQ (0.2.57): two teal checks once the person's seen watermark covers one sent or delivered.
+     */
     static AirConversationModel.EntryStatus statusOf(final Message m)
     {
         if (m == null || m.direction != 1 || HelperMessageEdit.isLocalCallLogRow(m)
@@ -517,7 +520,8 @@ final class AirTranscript
         }
         return AirConversationModel.EntryStatus.ofDirectText(false, m.read,
                                                              MessageDeliveryRetryHelper.isDirectFailed(m),
-                                                             m.message_id, personOnline);
+                                                             m.message_id, personOnline)
+                                               .seenIf(HelperMessageSeen.coveredBySeen(m));
     }
 
     /** The word TalkBack says for a mark, empty for none. */
@@ -533,6 +537,8 @@ final class AirTranscript
                 return context.getString(R.string.air_delivery_sent);
             case DELIVERED:
                 return context.getString(R.string.air_delivery_delivered);
+            case SEEN:
+                return context.getString(R.string.air_delivery_seen);
             case FAILED:
                 return context.getString(R.string.air_delivery_failed);
             case NONE:
@@ -541,8 +547,19 @@ final class AirTranscript
         }
     }
 
-    /** Puts the mark of {@code status} on {@code mark}; tint and opacity as on iOS. */
+    /** Puts the mark of {@code status} on {@code mark}, as a group draws it; tint and opacity as on iOS. */
     static void setMarkIcon(final ImageView mark, final AirConversationModel.EntryStatus status)
+    {
+        setMarkIcon(mark, status, false);
+    }
+
+    /**
+     * Puts the mark of {@code status} on {@code mark}. KHANDAQ (0.2.57): in a conversation with one person
+     * ({@code direct}) sent and delivered take the muted ink of the time beside them, so that seen, in brand
+     * teal, stands out; a group, which has no seen, keeps its marks as they were.
+     */
+    static void setMarkIcon(final ImageView mark, final AirConversationModel.EntryStatus status,
+                            final boolean direct)
     {
         final Context context = mark.getContext();
         final int icon;
@@ -559,11 +576,15 @@ final class AirTranscript
                 break;
             case SENT:
                 icon = R.drawable.kq_ic_check;
-                tint = R.color.kq_ink;
+                tint = direct ? R.color.kq_ink_3 : R.color.kq_ink;
                 break;
             case DELIVERED:
                 icon = R.drawable.kq_ic_check_double;
-                tint = R.color.kq_ink;
+                tint = direct ? R.color.kq_ink_3 : R.color.kq_ink;
+                break;
+            case SEEN:
+                icon = R.drawable.kq_ic_check_double;
+                tint = R.color.khandaq_teal;
                 break;
             case FAILED:
                 icon = R.drawable.kq_ic_alert;
@@ -597,7 +618,7 @@ final class AirTranscript
     }
 
     private static void showMark(final ImageView mark, final AirConversationModel.EntryStatus status,
-                                 final long messageId)
+                                 final long messageId, final boolean direct)
     {
         final Object before = mark.getTag(R.id.air_entry_status);
         mark.setTag(R.id.air_entry_status, new MarkState(messageId, status));
@@ -616,13 +637,13 @@ final class AirTranscript
                                && ((MarkState) before).status != AirConversationModel.EntryStatus.NONE;
         if (!change || AirUi.reducedMotion() || !mark.isAttachedToWindow())
         {
-            setMarkIcon(mark, status);
+            setMarkIcon(mark, status, direct);
             mark.setAlpha(alpha);
             return;
         }
         final long half = Math.max(1L, AirUi.duration(mark.getContext(), R.integer.kq_dur_state) / 2L);
         mark.animate().alpha(0f).setDuration(half).withEndAction(() -> {
-            setMarkIcon(mark, status);
+            setMarkIcon(mark, status, direct);
             mark.animate().alpha(alpha).setDuration(half).start();
         }).start();
     }
@@ -776,7 +797,7 @@ final class AirTranscript
         }
         setTopMargin(views.time, Math.max(0, (firstLine - res.getDimensionPixelSize(R.dimen.kq_line_caption)) / 2));
         setTopMargin(views.mark, Math.max(0, (firstLine - res.getDimensionPixelSize(R.dimen.kq_size_mark)) / 2));
-        showMark(views.mark, outgoingStatus(m, entry), m.id);
+        showMark(views.mark, outgoingStatus(m, entry), m.id, false);
 
         if (views.container != null)
         {

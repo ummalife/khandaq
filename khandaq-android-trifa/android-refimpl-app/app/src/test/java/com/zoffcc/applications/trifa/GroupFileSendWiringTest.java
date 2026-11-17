@@ -64,16 +64,23 @@ public class GroupFileSendWiringTest
         final String ngc = code("NgcGroupFileTransfer.java");
         final String paced = body(ngc, "private static final class PacedSend");
         // The private sends of file packets are those of PacedSend, after the pace let them go; the others are the
-        // requests for missing chunks (sendFileResendRequest).
+        // requests for missing chunks (sendFileResendRequest, through sendFileRequestPrivately).
         final String request = body(ngc, "static void sendFileResendRequest(");
+        final String requestPackets = body(ngc, "private static int sendFileRequestPrivately(");
         assertEquals(count(ngc, "tox_group_send_custom_private_packet("),
                      count(paced, "tox_group_send_custom_private_packet(")
-                     + count(request, "tox_group_send_custom_private_packet("));
+                     + count(request, "tox_group_send_custom_private_packet(")
+                     + count(requestPackets, "tox_group_send_custom_private_packet("));
+        assertEquals(1, count(requestPackets, "tox_group_send_custom_private_packet("));
         final String sendLoop = body(paced, "private int send(final byte[] pkt, final boolean isBegin)");
-        assertTrue(sendLoop.indexOf("awaitPace(g)") < sendLoop.indexOf("tox_group_send_custom_private_packet("));
-        assertTrue(sendLoop.contains("spendPace(pkt.length, took)"));
+        final int sendWait = sendLoop.indexOf("awaitPace(g, overRelay)");
+        assertTrue(sendWait > 0);
+        assertTrue(sendWait < sendLoop.indexOf("tox_group_send_custom_private_packet("));
+        assertTrue(sendLoop.contains("spendPace(pkt.length, took, overRelay)"));
         final String newMembers = body(paced, "private boolean sendBeginToNewMembers()");
-        assertTrue(newMembers.indexOf("awaitPace(g)") < newMembers.indexOf("tox_group_send_custom_private_packet("));
+        final int beginWait = newMembers.indexOf("awaitPace(g, overRelay)");
+        assertTrue(beginWait > 0);
+        assertTrue(beginWait < newMembers.indexOf("tox_group_send_custom_private_packet("));
         // A refusal is toxcore's full send array: waited out, never "not sent".
         assertTrue(sendLoop.contains("REFUSED_LIMIT_MS"));
         assertFalse(paced.contains("mark_ngc_file_transfer_failed"));
@@ -87,8 +94,58 @@ public class GroupFileSendWiringTest
         final String image = body(code("HelperGroup.java"), "static void send_group_image(");
         final int packet = image.indexOf("tox_group_send_custom_packet(");
         assertTrue(packet > 0);
-        assertTrue(image.indexOf("NgcGroupFileTransfer.awaitPace(g)") < packet);
+        final int imageWait = image.indexOf("NgcGroupFileTransfer.awaitPace(g, overRelay)");
+        assertTrue(imageWait > 0);
+        assertTrue(imageWait < packet);
         assertTrue(image.indexOf("NgcGroupFileTransfer.spendPace(") > packet);
+    }
+
+    @Test
+    public void a_file_packet_to_a_member_over_a_relay_waits_for_the_pace_of_the_relays_too() throws Exception
+    {
+        // QA 0.2.57: over a TCP relay a member lost the chunks of a group file sent at 256 and 128 KiB/s and got them
+        // whole at 64; an iPhone over a relay got 27 of the 86 chunks Android sent it at 512 KiB/s. The rule is tested
+        // in NgcUploadPaceTest; the senders call toxcore, so this reads how they use it.
+        final String ngc = code("NgcGroupFileTransfer.java");
+        assertTrue(ngc.contains("private static final NgcUploadPace RELAY_PACE = "
+                                + "new NgcUploadPace(NgcUploadPace.RELAYED_BYTES_PER_SECOND);"));
+        assertTrue(body(ngc, "static boolean awaitPace(final GroupMessage g, final boolean overRelay)")
+                           .contains("NgcUploadPace.msUntilReady(PACE, RELAY_PACE, overRelay, nowMs())"));
+        assertTrue(body(ngc, "static void spendPace(final long packetBytes, final int members, final boolean overRelay")
+                           .contains("NgcUploadPace.spend(PACE, RELAY_PACE, packetBytes, members, overRelay)"));
+        // As toxcore says each member is reached, our own peer left out (NgcUploadPace.overRelay).
+        final String relay = body(ngc, "static boolean overRelay(final long groupNum, final long... peerIds)");
+        assertTrue(relay.contains("tox_group_self_get_peer_id(groupNum)"));
+        assertTrue(relay.contains("tox_group_peer_get_connection_status(groupNum, peerId)"));
+
+        // The BEGIN and each chunk: the members they go to now, asked before every packet.
+        final String paced = body(ngc, "private static final class PacedSend");
+        final String sendLoop = body(paced, "private int send(final byte[] pkt, final boolean isBegin)");
+        final int refreshed = sendLoop.indexOf("targets.refreshOnlinePeers(groupNum)");
+        assertTrue(refreshed > 0);
+        final int asked = sendLoop.indexOf("final boolean overRelay = overRelay(groupNum, targets.peerIds);");
+        assertTrue(asked > refreshed);
+        assertTrue(asked < sendLoop.indexOf("awaitPace(g, overRelay)"));
+        // The BEGIN to a member that came: that member alone.
+        final String newMembers = body(paced, "private boolean sendBeginToNewMembers()");
+        final int member = newMembers.indexOf("final boolean overRelay = overRelay(groupNum, peerId);");
+        assertTrue(member > 0);
+        assertTrue(member < newMembers.indexOf("awaitPace(g, overRelay)"));
+        assertTrue(newMembers.contains("spendPace(beginPkt.length, 1, overRelay)"));
+        // The whole file again, or the chunks a member asked for, go to that member alone: the send asks about it.
+        assertTrue(body(ngc, "private static void sendChunkedFrom(")
+                           .contains(": new PeerSendTargets(new long[]{targetPeerId}, false);"));
+        assertTrue(body(ngc, "private static void sendGroupFileSelectiveOnWorker(")
+                           .contains("new PeerSendTargets(new long[]{targetPeerId}, false);"));
+
+        // A small file goes as one packet to the group: every member.
+        final String image = body(code("HelperGroup.java"), "static void send_group_image(");
+        final int picked = image.indexOf("final long[] members = pickChunkedFileUnicastPeerIds(groupNum);");
+        assertTrue(picked > 0);
+        final int small = image.indexOf("final boolean overRelay = NgcGroupFileTransfer.overRelay(groupNum, members);");
+        assertTrue(small > picked);
+        assertTrue(small < image.indexOf("NgcGroupFileTransfer.awaitPace(g, overRelay)"));
+        assertTrue(image.contains("NgcGroupFileTransfer.spendPace(data_length, members.length, overRelay)"));
     }
 
     @Test
@@ -169,9 +226,101 @@ public class GroupFileSendWiringTest
         assertFalse(request.contains("record_ngc_transfer_started"));
         assertFalse(request.contains("clear_ngc_file_transfer_failed"));
         assertFalse(request.contains("clear_ngc_outgoing_send_resume_state"));
-        // And it never takes the place of the file's own send.
+        // And it never takes the place of the file's own send, nor swallows it: the own send is let in by its key
+        // alone, a resend of the whole file does not run while it does, and a resend of the chunks a member asked for
+        // has a key of its own (SERVES) and leaves where the own send stands alone.
         final String enqueue = body(ngc, "private static void enqueueChunkedSend(");
-        assertTrue(enqueue.contains("!inflightOwnSends.contains(key) && inflightServes.add(key)"));
+        final int own = enqueue.indexOf("else if (inflightOwnSends.contains(key))");
+        assertTrue(own > 0);
+        assertTrue(own < enqueue.indexOf("inflightServes.add(key)"));
+        assertEquals(1, count(enqueue, "inflightOwnSends.add(key)"));
+        final int ownLetIn = enqueue.indexOf("queued = inflightOwnSends.add(key);");
+        assertTrue(ownLetIn > 0);
+        assertTrue(ownLetIn < enqueue.indexOf("else if (serveKey != null)"));
+        final String selective = body(ngc, "private static void sendGroupFileSelectiveOnWorker(");
+        assertFalse(selective.contains("inflightOwnSends"));
+        assertFalse(selective.contains("record_ngc_outgoing_chunk_sent"));
+    }
+
+    @Test
+    public void a_members_request_during_the_own_send_is_served_not_dropped() throws Exception
+    {
+        // QA 0.2.57 (g5, g6): a group file of 6 MiB, its own send 96 s at the relay pace. Every request of a member
+        // during it was dropped ("send:skip already in-flight"); an iPhone spent its 24 requests on it and gave the
+        // file up, and so did the desktop. The rule is tested in NgcFileServesTest; the resends call toxcore, so this
+        // reads the source.
+        final String enqueue = body(code("NgcGroupFileTransfer.java"), "private static void enqueueChunkedSend(");
+        final int selective = enqueue.indexOf("else if (serveKey != null)");
+        assertTrue(selective > 0);
+        // A request for chunks is looked at before the own send's branch, which is for the whole file alone.
+        assertTrue(selective < enqueue.indexOf("else if (inflightOwnSends.contains(key))"));
+        final String serve = block(enqueue, enqueue.indexOf('{', selective));
+        assertFalse(serve.contains("queued = false"));
+        assertTrue(serve.contains("queued = SERVES.ask(serveKey, asked);"));
+        // Queued, it goes on the resends' thread, as one that came after the own send.
+        assertTrue(enqueue.contains("final ExecutorService exec = isUserSend ? SEND_EXECUTOR : RESEND_EXECUTOR;"));
+        assertTrue(enqueue.contains("sendGroupFileSelectiveOnWorker(g, targetPeerId, serveKey)"));
+    }
+
+    @Test
+    public void the_chunks_the_own_send_passed_reach_the_member_during_it() throws Exception
+    {
+        // The own send counts a chunk as sent once any member took it, and does not come back for a member that toxcore
+        // refused it to (its send array full). A request while it runs takes the chunks it passed (NgcFileServesTest),
+        // as the desktop's answerGroupFileRequest does; a request when it does not run, all that was asked, as before.
+        final String ngc = code("NgcGroupFileTransfer.java");
+        final String enqueue = body(ngc, "private static void enqueueChunkedSend(");
+        final String serve = block(enqueue, enqueue.indexOf('{', enqueue.indexOf("else if (serveKey != null)")));
+        final int at = serve.indexOf("final int ownSendAt = inflightOwnSends.contains(key) ? ownSendPassed(g) : -1;");
+        assertTrue(at >= 0);
+        final int passed = serve.indexOf(
+                "final boolean[] asked = (ownSendAt < 0) ? wanted : NgcFileServes.passedByOwnSend(wanted, ownSendAt);");
+        assertTrue(passed > at);
+        assertTrue(passed < serve.indexOf("SERVES.ask(serveKey, asked)"));
+        // Where the own send stands: past the last chunk it sent (its resume point), recorded once that chunk went.
+        assertTrue(body(ngc, "private static int ownSendPassed(final GroupMessage g)").contains(
+                "return HelperGroup.ngc_outgoing_last_chunk_index(g.group_identifier, g.msg_id_hash) + 1;"));
+        final String send = body(ngc, "private static void sendChunkedFrom(");
+        final int went = send.indexOf("if (res != SEND_OK)", send.indexOf("send.chunk("));
+        assertTrue(went > 0);
+        assertTrue(send.indexOf("HelperGroup.record_ngc_outgoing_chunk_sent(g.group_identifier, g.msg_id_hash, idx);")
+                   > went);
+        // They go to that member alone, at the pace of the others, relays included (PacedSend).
+        final String selective = body(ngc, "private static void sendGroupFileSelectiveOnWorker(");
+        assertTrue(selective.contains("new PeerSendTargets(new long[]{targetPeerId}, false);"));
+        assertTrue(selective.contains("new PacedSend("));
+        assertTrue(selective.contains("SERVES.takeNext(serveKey, at)"));
+    }
+
+    @Test
+    public void a_members_request_of_chunks_merges_into_its_resend_and_no_cooldown_drops_it() throws Exception
+    {
+        // QA 0.2.57: the packets of one request after its first, and an iPhone's repeats, were dropped by the cooldown
+        // of 2.5 s per file, and a request while another member's resend of the file ran by the one resend per file.
+        final String ngc = code("NgcGroupFileTransfer.java");
+        assertFalse(ngc.contains("SELECTIVE_RESEND_COOLDOWN_MS"));
+        assertFalse(ngc.contains("selectiveResendTs"));
+        final String enqueue = body(ngc, "private static void enqueueChunkedSend(");
+        // One resend per file and member.
+        assertTrue(enqueue.contains("(!isUserSend && (wanted != null)) ? (key + \":\" + targetPeerId) : null"));
+        assertTrue(enqueue.contains("sendGroupFileSelectiveOnWorker(g, targetPeerId, serveKey)"));
+        // Ended however it ends, also when it was not queued.
+        assertEquals(2, count(enqueue, "endInflightSend(isUserSend, key, serveKey)"));
+        assertTrue(body(ngc, "private static void endInflightSend(").contains("SERVES.end(serveKey)"));
+        // The resend sends what its member asked for, the requests that came meanwhile counted.
+        final String selective = body(ngc, "private static void sendGroupFileSelectiveOnWorker(");
+        assertTrue(selective.contains("SERVES.takeNext(serveKey, at)"));
+    }
+
+    @Test
+    public void an_incoming_file_asks_for_its_missing_chunks_as_a_list() throws Exception
+    {
+        // QA 0.2.57: an iPhone dropped Android's bitmap request (55 bytes for 86 chunks).
+        final String request = body(code("NgcGroupFileTransfer.java"), "static void sendFileResendRequest(");
+        assertTrue(request.contains("buildListedFileRequestPackets(msgId, missing)"));
+        // Without an assembly yet it asks for the whole file, as before.
+        assertTrue(request.contains("buildFileRequestPacket(msgId, totalChunks, null)"));
+        assertFalse(code("NgcGroupFileTransfer.java").contains("buildMissingChunkBitmap"));
     }
 
     @Test
@@ -188,7 +337,7 @@ public class GroupFileSendWiringTest
         final String request = body(ngc, "static void sendFileResendRequest(");
         final int take = request.indexOf("NACKS.takeRequest(");
         assertTrue(take > 0);
-        assertTrue(take < request.indexOf("tox_group_send_custom_private_packet("));
+        assertTrue(take < request.indexOf("sendFileRequestPrivately("));
         assertTrue(take < request.indexOf("tox_group_send_custom_packet("));
         assertFalse(ngc.contains("FILE_RESEND_REQUEST_COOLDOWN_MS"));
 

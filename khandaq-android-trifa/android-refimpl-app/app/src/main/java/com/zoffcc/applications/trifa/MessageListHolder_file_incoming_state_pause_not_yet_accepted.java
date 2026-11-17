@@ -240,13 +240,8 @@ public class MessageListHolder_file_incoming_state_pause_not_yet_accepted extend
         try
         {
             // accept FT
-            set_filetransfer_accepted_from_id(message.filetransfer_id);
-            set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_RESUME.value);
-            set_message_accepted_from_id(message.id);
-            set_message_state_from_id(message.id, TOX_FILE_CONTROL_RESUME.value);
-            tox_file_control(tox_friend_by_public_key__wrapper(message.tox_friendpubkey),
-                             get_filetransfer_filenum_from_id(message.filetransfer_id),
-                             TOX_FILE_CONTROL_RESUME.value);
+            // KHANDAQ (0.2.57): toxcore is told where a file kept from a cut goes on before the accept.
+            HelperFiletransfer.accept_incoming_filetransfer_by_person(message);
 
             ft_progressbar.setProgress(0);
             ft_progressbar.setMax(100);
@@ -270,12 +265,8 @@ public class MessageListHolder_file_incoming_state_pause_not_yet_accepted extend
             // cancel FT
             Log.i(TAG, "button_cancel:OnTouch:001");
             // values.get(position).state = TOX_FILE_CONTROL_CANCEL.value;
-            tox_file_control(tox_friend_by_public_key__wrapper(message.tox_friendpubkey),
-                             get_filetransfer_filenum_from_id(message.filetransfer_id), TOX_FILE_CONTROL_CANCEL.value);
-            set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_CANCEL.value);
-            set_message_state_from_id(message.id, TOX_FILE_CONTROL_CANCEL.value);
-
-            remove_vfs_ft_from_cache(message);
+            // KHANDAQ (0.2.57): the cancel of the file entry's own Cancel, which also lets the bytes kept go.
+            HelperFiletransfer.cancel_incoming_filetransfer(message);
 
             button_ok.setVisibility(View.GONE);
             button_cancel.setVisibility(View.GONE);

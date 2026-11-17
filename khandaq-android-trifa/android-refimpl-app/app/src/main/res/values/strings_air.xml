@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The Air screen (design/redesign/02-plan.md, screens 1 and 2). Same keys and wording as iOS. -->
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="air_command_placeholder">Find a chat or paste an ID</string>
     <string name="air_clear">Clear</string>
     <string name="air_create">Create</string>
@@ -66,6 +66,7 @@
     <string name="air_delivery_transit">in transit</string>
     <string name="air_delivery_sent">sent</string>
     <string name="air_delivery_delivered">delivered</string>
+    <string name="air_delivery_seen">seen</string>
     <string name="air_transit_format">%1$d in transit</string>
     <string name="air_unread_a11y">unread: %1$d</string>
     <string name="air_hint_request_sent">request sent</string>
@@ -374,6 +375,10 @@
     <string name="air_network_title_relay">Online, via a relay</string>
     <string name="air_network_title_connecting">Connecting</string>
     <string name="air_network_title_offline">No network</string>
+    <!-- KHANDAQ (0.2.57, SPEC-network part 2): the band under the header of the chat list and of a chat while the phone
+         has no network (AirNoNetworkBand); its other titles are air_network_title_offline and _connecting. -->
+    <string name="air_no_network_note" tools:ignore="TypographyQuotes">Messages and files will wait and go on their own once you\'re back online.</string>
+    <string name="air_no_network_back">Back online</string>
     <string name="air_network_meaning_direct">Messages go at once, straight to the other phone.</string>
     <string name="air_network_meaning_relay">Messages go at once through a relay: this network closes the direct path, and delivery does not suffer.</string>
     <string name="air_network_meaning_connecting">The phone has internet and the app is looking for the network. New messages wait in transit and go on their own.</string>

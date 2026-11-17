@@ -101,10 +101,12 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Random;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import androidx.annotation.NonNull;
@@ -437,17 +439,30 @@ public class HelperGeneric
 
                 try
                 {
-                    if (MainActivity.VFS_ENCRYPT)
+                    // KHANDAQ (0.2.57, SPEC-network 1.5): a file of theirs under way keeps its bytes in the temp
+                    // dir across a restart (set_all_filetransfers_inactive keeps its transfer), and the sender's
+                    // next offer goes on from them; the rest of the dir goes. When those files could not be
+                    // read, the dir stays as it is until the next start.
+                    final Set<String> kept = HelperFiletransfer.incoming_files_kept_after_restart();
+                    if (kept == null)
+                    {
+                        Log.w(TAG, "cleanup_temp_dirs:temp dir left, the files under way could not be read");
+                    }
+                    else if (MainActivity.VFS_ENCRYPT)
                     {
                         Log.i(TAG, "cleanup_temp_dirs:001");
-                        vfs_deleteFilesAndFilesSubDirectories_vfs(VFS_PREFIX + VFS_TMP_FILE_DIR + "/");
+                        vfs_deleteFilesAndFilesSubDirectories_vfs(VFS_PREFIX + VFS_TMP_FILE_DIR + "/", kept);
                         Log.i(TAG, "cleanup_temp_dirs:002");
                     }
                     else
                     {
                         Log.i(TAG, "cleanup_temp_dirs:003");
-                        vfs_deleteFilesAndFilesSubDirectories_real(VFS_PREFIX + VFS_TMP_FILE_DIR + "/");
+                        vfs_deleteFilesAndFilesSubDirectories_real(VFS_PREFIX + VFS_TMP_FILE_DIR + "/", kept);
                         Log.i(TAG, "cleanup_temp_dirs:004");
+                    }
+                    if ((kept != null) && !kept.isEmpty())
+                    {
+                        NetworkDiagnosticsLog.log("file_resume", "cleanup_temp_dirs:kept=" + kept.size());
                     }
                 }
                 catch (Exception e)
@@ -476,27 +491,53 @@ public class HelperGeneric
 
     public static void vfs_deleteFilesAndFilesSubDirectories_real(String directoryName)
     {
+        vfs_deleteFilesAndFilesSubDirectories_real(directoryName, Collections.<String>emptySet());
+    }
+
+    /**
+     * Empties the directory but for the files in kept (paths as FileResume.tempFileKey gives them) and the
+     * directories that hold them. True when it kept a file.
+     */
+    static boolean vfs_deleteFilesAndFilesSubDirectories_real(String directoryName, Set<String> kept)
+    {
         File directory1 = new File(directoryName);
         File[] fList1 = directory1.listFiles();
+        boolean kept_one = false;
 
         for (File file : fList1)
         {
             if (file.isFile())
             {
-                // Log.i(TAG, "VFS:REAL:rm:" + file);
-                file.delete();
+                if (kept.contains(FileResume.tempFileKey(file.getAbsolutePath())))
+                {
+                    kept_one = true;
+                }
+                else
+                {
+                    // Log.i(TAG, "VFS:REAL:rm:" + file);
+                    file.delete();
+                }
             }
             else if (file.isDirectory())
             {
                 // Log.i(TAG, "VFS:REAL:rm:D:" + file);
-                vfs_deleteFilesAndFilesSubDirectories_real(file.getAbsolutePath());
-                file.delete();
+                if (vfs_deleteFilesAndFilesSubDirectories_real(file.getAbsolutePath(), kept))
+                {
+                    kept_one = true;
+                }
+                else
+                {
+                    file.delete();
+                }
             }
         }
+        return kept_one;
     }
 
-    public static void vfs_deleteFilesAndFilesSubDirectories_vfs(String directoryName)
+    /** As vfs_deleteFilesAndFilesSubDirectories_real, in the encrypted store. True when it kept a file. */
+    static boolean vfs_deleteFilesAndFilesSubDirectories_vfs(String directoryName, Set<String> kept)
     {
+        boolean kept_one = false;
         if (MainActivity.VFS_ENCRYPT)
         {
             Log.i(TAG, "cleanup_temp_dirs:00a");
@@ -507,19 +548,121 @@ public class HelperGeneric
             {
                 if (file.isFile())
                 {
-                    // Log.i(TAG, "VFS:VFS:rm:" + file);
-                    file.delete();
+                    if (kept.contains(FileResume.tempFileKey(file.getAbsolutePath())))
+                    {
+                        kept_one = true;
+                    }
+                    else
+                    {
+                        // Log.i(TAG, "VFS:VFS:rm:" + file);
+                        file.delete();
+                    }
                 }
                 else if (file.isDirectory())
                 {
                     // Log.i(TAG, "VFS:VFS:rm:D:" + file);
-                    vfs_deleteFilesAndFilesSubDirectories_vfs(file.getAbsolutePath());
-                    file.delete();
+                    if (vfs_deleteFilesAndFilesSubDirectories_vfs(file.getAbsolutePath(), kept))
+                    {
+                        kept_one = true;
+                    }
+                    else
+                    {
+                        file.delete();
+                    }
                 }
             }
 
             Log.i(TAG, "cleanup_temp_dirs:00b");
         }
+        return kept_one;
+    }
+
+    /**
+     * QA only (QaGroupBroadcastReceiver, debug builds): logs what the temp dir of the files under way holds, every
+     * folder and every file with its size, then the totals. A live check sees in which folder the bytes of a file of
+     * theirs are, and that nothing is left there once it finished. Friend keys in the paths are cut to 8 characters.
+     */
+    static void qa_log_temp_dir()
+    {
+        final String root = VFS_PREFIX + VFS_TMP_FILE_DIR + "/";
+        // files, folders, bytes
+        final long[] totals = new long[3];
+        try
+        {
+            if (MainActivity.VFS_ENCRYPT)
+            {
+                qa_log_temp_dir_vfs(new info.guardianproject.iocipher.File(root), root, totals);
+            }
+            else
+            {
+                qa_log_temp_dir_real(new File(root), root, totals);
+            }
+        }
+        catch (Exception e)
+        {
+            logI(TAG, "qa_temp_dir:EE:" + e.getMessage());
+        }
+        logI(TAG, "qa_temp_dir:total files=" + totals[0] + " folders=" + totals[1] + " bytes=" + totals[2]);
+    }
+
+    private static void qa_log_temp_dir_vfs(final info.guardianproject.iocipher.File directory, final String root,
+                                            final long[] totals)
+    {
+        final info.guardianproject.iocipher.File[] entries = directory.listFiles();
+        if (entries == null)
+        {
+            return;
+        }
+        for (final info.guardianproject.iocipher.File entry : entries)
+        {
+            if (entry.isDirectory())
+            {
+                totals[1]++;
+                logI(TAG, "qa_temp_dir:folder " + qa_temp_dir_path(entry.getAbsolutePath(), root));
+                qa_log_temp_dir_vfs(entry, root, totals);
+            }
+            else
+            {
+                totals[0]++;
+                totals[2] += entry.length();
+                logI(TAG, "qa_temp_dir:file " + qa_temp_dir_path(entry.getAbsolutePath(), root) + " bytes="
+                          + entry.length());
+            }
+        }
+    }
+
+    private static void qa_log_temp_dir_real(final File directory, final String root, final long[] totals)
+    {
+        final File[] entries = directory.listFiles();
+        if (entries == null)
+        {
+            return;
+        }
+        for (final File entry : entries)
+        {
+            if (entry.isDirectory())
+            {
+                totals[1]++;
+                logI(TAG, "qa_temp_dir:folder " + qa_temp_dir_path(entry.getAbsolutePath(), root));
+                qa_log_temp_dir_real(entry, root, totals);
+            }
+            else
+            {
+                totals[0]++;
+                totals[2] += entry.length();
+                logI(TAG, "qa_temp_dir:file " + qa_temp_dir_path(entry.getAbsolutePath(), root) + " bytes="
+                          + entry.length());
+            }
+        }
+    }
+
+    /** A path under the temp dir as the QA log shows it: from the dir on, a friend's key cut to 8 characters. */
+    static String qa_temp_dir_path(final String path, final String root)
+    {
+        final String normalized = FileResume.tempFileKey(path);
+        final String rootKey = FileResume.tempFileKey(root);
+        final String relative = normalized.startsWith(rootKey) ? normalized.substring(rootKey.length()) : normalized;
+        return relative.replaceAll("([0-9A-Fa-f]{8})[0-9A-Fa-f]{56}", "$1");
     }
 
     static void conference_message_add_from_sync(long conference_number, long peer_number2, String peer_pubkey, int a_TOX_MESSAGE_TYPE, String message, long length, long sent_timestamp_in_ms, String message_id)
@@ -706,7 +849,9 @@ public class HelperGeneric
             }
 
             HelperFriend.add_all_friends_clear_wrapper(0);
-            HelperFiletransfer.on_friend_connection_available(f.tox_public_key_string);
+            // KHANDAQ (0.2.57): this status also follows a relay and TCP <-> UDP, so it only wakes the queue; the
+            // friend coming back is MainActivity's, from the friend's own connection.
+            HelperFiletransfer.on_friend_connection_available(f.tox_public_key_string, false);
         }
         else // went offline -------------------
         {
@@ -3296,6 +3441,31 @@ public class HelperGeneric
         {
             write_chunk_to_VFS_file__no_extra_write_cache(file_name_with_path, position, file_chunk_length, data);
         }
+    }
+
+    /**
+     * KHANDAQ (0.2.57, SPEC-network 1.4, 1.5): a chunk of a 1:1 file of theirs. Its transfer can go on from a later
+     * byte than its first (after a cut, a restart of either app, or a stream closed when the friend went offline),
+     * and the bytes before it are the file's: the write cache this process opens for it then keeps them, where the
+     * stream opened by path empties its file (O_TRUNC). A transfer from the first byte opens it as before. Group
+     * files keep their own way (NgcGroupFileTransfer.writeChunk).
+     */
+    static void write_direct_chunk_to_VFS_file(String file_name_with_path, long position, long file_chunk_length,
+                                               final byte[] data)
+    {
+        if (VFS_CUSTOM_WRITE_CACHE && (position > 0) && (file_name_with_path != null)
+            && !cache_ft_fos.containsKey(file_name_with_path))
+        {
+            try
+            {
+                cache_ft_fos.put(file_name_with_path, BufferedOutputStreamCustom.openAt(file_name_with_path, position));
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+        }
+        write_chunk_to_VFS_file(file_name_with_path, position, file_chunk_length, data);
     }
 
     /**

@@ -219,7 +219,10 @@
             android:background="@color/kq_line" />
     </LinearLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
+    <!-- KHANDAQ (0.2.57): the "no network" band, under the header; it pushes the list down. -->
+    <include layout="@layout/air_no_network_band" />
+
+    <com.zoffcc.applications.trifa.AirListView
         android:id="@+id/air_list"
         android:layout_width="match_parent"
         android:layout_height="0dp"

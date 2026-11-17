@@ -31,4 +31,6 @@
     <!-- 0.2.56: our file from Send on, while its copy for sending is made, and a copy that failed -->
     <string name="air_file_preparing">جارٍ تجهيز الملف</string>
     <string name="air_file_prepare_failed">لم يُرسل الملف. حاول مرة أخرى</string>
+    <!-- 0.2.57: a 1:1 file under way while its connection is gone; it goes on by itself -->
+    <string name="air_file_waits_connection">بانتظار الاتصال</string>
 </resources>

@@ -75,6 +75,7 @@ final class NetworkConnectivityMonitor
             @Override
             public void onAvailable(final Network network)
             {
+                AirNoNetworkBand.networkChanged(true);
                 if (defaultNetworkLost)
                 {
                     // Tox's own state speaks again: connecting until it finds the network.
@@ -90,6 +91,7 @@ final class NetworkConnectivityMonitor
             {
                 // A default network callback hears onLost only when no other network took its place.
                 defaultNetworkLost = true;
+                AirNoNetworkBand.networkChanged(false);
                 AirRepository.requestRefresh();
                 sync_have_internet_connectivity(appContext);
                 append_logger_msg(TAG + "::onLost HAVE_INTERNET=" + HAVE_INTERNET_CONNECTIVITY);
@@ -138,6 +140,20 @@ final class NetworkConnectivityMonitor
             {
                 Log.e(TAG, "registerNetworkCallback failed", e2);
             }
+        }
+
+        // KHANDAQ (0.2.57, SPEC-network part 2): a start without any network hears no callback at all, and the
+        // "no network" band has to come all the same.
+        try
+        {
+            if (cm.getActiveNetwork() == null)
+            {
+                AirNoNetworkBand.networkChanged(false);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "getActiveNetwork failed", e);
         }
     }
 

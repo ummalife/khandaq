@@ -1793,6 +1793,36 @@ public class ToxVars
         }
     }
 
+    /**
+     * Represents types of failed group join attempts. These are used in the tox_callback_group_join_fail
+     * callback when a peer fails to join a group.
+     */
+    public static enum TOX_GROUP_JOIN_FAIL
+    {
+        /**
+         * The group peer limit has been reached.
+         */
+        TOX_GROUP_JOIN_FAIL_PEER_LIMIT(0),
+
+        /**
+         * You have supplied an invalid password.
+         */
+        TOX_GROUP_JOIN_FAIL_INVALID_PASSWORD(1),
+
+        /**
+         * The join attempt failed due to an unspecified error. This often occurs when the group is
+         * not found in the DHT.
+         */
+        TOX_GROUP_JOIN_FAIL_UNKNOWN(2);
+
+        public int value;
+
+        private TOX_GROUP_JOIN_FAIL(int value)
+        {
+            this.value = value;
+        }
+    }
+
     public static enum Tox_Group_Topic_Lock
     {
         TOX_GROUP_TOPIC_LOCK_ENABLED(0),

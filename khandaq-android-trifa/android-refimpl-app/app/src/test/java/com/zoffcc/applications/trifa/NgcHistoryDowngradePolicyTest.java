@@ -2,9 +2,16 @@ package com.zoffcc.applications.trifa;
 
 import org.junit.Test;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.Locale;
+
 import static com.zoffcc.applications.trifa.NgcHistoryDowngradePolicy.Decision;
 import static com.zoffcc.applications.trifa.NgcHistoryDowngradePolicy.KEY_STALE_MS;
 import static com.zoffcc.applications.trifa.NgcHistoryDowngradePolicy.allowsNotification;
+import static com.zoffcc.applications.trifa.NgcHistoryDowngradePolicy.claimsOwnKey;
 import static com.zoffcc.applications.trifa.NgcHistoryDowngradePolicy.decide;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -144,5 +151,118 @@ public class NgcHistoryDowngradePolicyTest
     public void anUnverifiedRowRelayedByAThirdPartyDoesNotNotify()
     {
         assertFalse(allowsNotification(false, false));
+    }
+
+    private static final String OWN = "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789";
+    private static final String STRANGER = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+    private static final String JAVA = "src/main/java/com/zoffcc/applications/trifa/";
+
+    /**
+     * KHANDAQ (0.2.57, review of the desktop's Community code): a history record that names our own key in the
+     * group as its author is dropped. Our own rows are here already; this one came from someone else, signed by no
+     * one, and would show as a stranger's message or, made our own, skip the Community hold.
+     */
+    @Test
+    public void aRecordNamingOurOwnKeyIsDroppedWhateverItsCase()
+    {
+        assertTrue(claimsOwnKey(OWN, OWN));
+        assertTrue(claimsOwnKey(OWN.toLowerCase(Locale.ROOT), OWN));
+        assertTrue(claimsOwnKey(OWN, OWN.toLowerCase(Locale.ROOT)));
+        assertFalse(claimsOwnKey(OWN, STRANGER));
+        assertFalse(claimsOwnKey(OWN, null));
+        assertFalse(claimsOwnKey(OWN, ""));
+    }
+
+    /** Not knowing our own key, a record cannot be told apart from ours: it is dropped rather than shown. */
+    @Test
+    public void withoutOurOwnKeyARecordIsDropped()
+    {
+        assertTrue(claimsOwnKey(null, STRANGER));
+        assertTrue(claimsOwnKey(null, null));
+    }
+
+    /**
+     * A failed read of our own key is no key: the JNI read gives "-1" when toxcore has none for us in the group, and
+     * anything but 64 hexadecimal characters is not a key either. A record is dropped then, as without a key.
+     */
+    @Test
+    public void aFailedReadOfOurOwnKeyIsNoKeyAndTheRecordIsDropped()
+    {
+        for (final String notAKey : new String[]{"-1", "", " ", OWN.substring(1), OWN + "0",
+                                                 "ZZ" + OWN.substring(2), OWN.substring(2) + "-1"})
+        {
+            assertTrue(notAKey, claimsOwnKey(notAKey, STRANGER));
+            assertTrue(notAKey, claimsOwnKey(notAKey, null));
+            assertTrue(notAKey, claimsOwnKey(notAKey, "-1"));
+        }
+        // A key read well still tells a stranger's record from ours.
+        assertFalse(claimsOwnKey(OWN.toLowerCase(Locale.ROOT), STRANGER));
+        assertTrue(claimsOwnKey(OWN.toLowerCase(Locale.ROOT), OWN));
+        // Why: the JNI read of our key gives "-1" when toxcore has none for us in the group.
+        final String jni = read("../../jni-c-toxcore/jni-c-toxcore.c");
+        final int start = jni.indexOf(
+                "Java_com_zoffcc_applications_trifa_MainActivity_tox_1group_1self_1get_1public_1key(");
+        assertTrue(start > 0);
+        final String body = jni.substring(start, jni.indexOf("\n}\n", start));
+        assertTrue(body.contains("result = (*env)->NewStringUTF(env, \"-1\");"));
+    }
+
+    /**
+     * Every path that makes a row of a history record asks before the row exists: the group's own history, its
+     * text and its files, and the relay's (ToxProxy), whose text goes through the same insert. A file from history
+     * is always a row that came in, never one of ours that the Community hold would let through.
+     */
+    @Test
+    public void everyPathFromHistoryToARowDropsARecordNamingOurOwnKeyFirst()
+    {
+        final String helper = read(JAVA + "HelperGroup.java");
+        final String ask = "if (NgcHistoryDowngradePolicy.claimsOwnKey(tox_group_self_get_public_key(group_number),";
+        assertBefore(method(helper, "static void handle_incoming_sync_group_message("), ask,
+                     "group_message_add_from_sync(");
+        assertBefore(method(helper, "static void handle_incoming_sync_group_file("), ask, "group_file_add_from_sync(");
+        assertBefore(method(helper, "static void group_message_add_from_sync("),
+                     "if (NgcHistoryDowngradePolicy.claimsOwnKey(", "insert_into_group_message_db(");
+        final String fileRow = method(helper, "private static void group_file_add_from_sync(");
+        assertTrue(fileRow.contains("m.direction = 0;"));
+        assertFalse(fileRow.contains("m.direction = 1;"));
+        // The relay's record takes that same insert.
+        assertTrue(read(JAVA + "MainActivity.java").contains(
+                "group_message_add_from_sync(real_conference_id, syncer_pubkey, sender_peer_num, real_sender_peer_pubkey,"));
+    }
+
+    private static void assertBefore(final String source, final String first, final String then)
+    {
+        final int at = source.indexOf(first);
+        assertTrue(first, at >= 0);
+        assertTrue(then, source.indexOf(then) > at);
+    }
+
+    /** A method of a class at the usual indent: from its signature to the brace that closes it. */
+    private static String method(final String source, final String signature)
+    {
+        final int start = source.indexOf(signature);
+        assertTrue(signature, start >= 0);
+        return source.substring(start, source.indexOf("\n    }\n", start));
+    }
+
+    private static String read(final String name)
+    {
+        // Gradle runs unit tests from the module directory; an IDE may use the project root.
+        for (final String root : new String[]{"", "app/"})
+        {
+            final File f = new File(root + name);
+            if (f.isFile())
+            {
+                try
+                {
+                    return new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8).replace("\r\n", "\n");
+                }
+                catch (IOException e)
+                {
+                    throw new AssertionError(name, e);
+                }
+            }
+        }
+        throw new AssertionError(name + " not found from " + new File("").getAbsolutePath());
     }
 }

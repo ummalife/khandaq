@@ -811,6 +811,7 @@
     <string name="notification_media_generic">📎 附件</string>
     <string name="reaction_notification_body">回应了 %1$s</string>
     <string name="chat_react_action">回应</string>
+    <string name="chat_report_action">举报</string>
     <string name="delete_for_me">仅删除我的</string>
     <string name="delete_for_everyone">为所有人删除</string>
     <string name="voice_recording_cancel">取消</string>

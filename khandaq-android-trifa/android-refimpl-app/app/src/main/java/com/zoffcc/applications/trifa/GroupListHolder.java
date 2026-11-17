@@ -285,6 +285,7 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
                     this.group.notification_silent = true;
                     orma.updateGroupDB().group_identifierEq(this.group.group_identifier.toLowerCase()).
                             notification_silent(this.group.notification_silent).execute();
+                    CommunityAutoJoin.noteSoundChoice(this.group.group_identifier, true);
 
                     final Drawable d_notification = new IconicsDrawable(context).
                             icon(GoogleMaterial.Icon.gmd_notifications_off).
@@ -299,6 +300,8 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
                     this.group.notification_silent = false;
                     orma.updateGroupDB().group_identifierEq(this.group.group_identifier.toLowerCase()).
                             notification_silent(this.group.notification_silent).execute();
+                    // KHANDAQ (0.2.57, review): as the dossier keeps it (AirGroupDossierActivity.setMuted).
+                    CommunityAutoJoin.noteSoundChoice(this.group.group_identifier, false);
 
                     final Drawable d_notification = new IconicsDrawable(context).
                             icon(GoogleMaterial.Icon.gmd_notifications_active).
@@ -419,6 +422,9 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
     {
         if (group_identifier != null)
         {
+            // KHANDAQ (0.2.57, SPEC-community item 3): a person who leaves Khandaq Community is never put back. Marked
+            // first: an auto-join under way sees it at its next step, or once it is done, and leaves again.
+            CommunityAutoJoin.noteGroupLeft(group_identifier);
             final long group_num = tox_group_by_groupid__wrapper(group_identifier);
             if (group_num >= 0)
             {
@@ -512,6 +518,9 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
     {
         if (f2.group_identifier != null)
         {
+            // KHANDAQ (0.2.57, SPEC-community item 3): deleting Khandaq Community leaves it for good, as Leave does;
+            // marked first, as Leave marks it. Its notification switch goes with its row (review).
+            CommunityAutoJoin.noteGroupDeleted(f2.group_identifier);
             final long group_num = tox_group_by_groupid__wrapper(f2.group_identifier);
             HelperGroup.leave_group_with_notice(group_num, "bye");
             GroupInviteAcceptPolicy.forget(f2.group_identifier);

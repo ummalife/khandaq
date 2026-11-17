@@ -794,6 +794,7 @@
     <string name="notification_media_generic">📎 مرفق</string>
     <string name="reaction_notification_body">تفاعل %1$s</string>
     <string name="chat_react_action">تفاعل</string>
+    <string name="chat_report_action">إبلاغ</string>
     <string name="delete_for_me">حذف لدي</string>
     <string name="delete_for_everyone">حذف لدى الجميع</string>
     <string name="MessageListActivity_longpress_to_record_audiomsg">اضغط مطولا لتسجيل رسالة صوتية</string>

@@ -403,6 +403,8 @@ final class AirUi
                 return context.getString(R.string.air_delivery_transit);
             case DELIVERED:
                 return context.getString(R.string.air_delivery_delivered);
+            case SEEN:
+                return context.getString(R.string.air_delivery_seen);
             case SENT:
             default:
                 return context.getString(R.string.air_delivery_sent);

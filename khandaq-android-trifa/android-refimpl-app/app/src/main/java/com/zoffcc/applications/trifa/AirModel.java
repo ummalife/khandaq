@@ -275,7 +275,19 @@ final class AirModel
     {
         TRANSIT,
         SENT,
-        DELIVERED;
+        DELIVERED,
+        /** KHANDAQ (0.2.57): the person had the conversation open with it; 1:1 only (HelperMessageSeen). */
+        SEEN;
+
+        /**
+         * KHANDAQ (0.2.57): the state once the person's seen watermark covers the message, by the
+         * conversation's rule ({@link AirConversationModel.EntryStatus#seenIf}): sent or delivered turn seen,
+         * one in transit stays in transit.
+         */
+        Delivery seenIf(final boolean covered)
+        {
+            return covered && (this == SENT || this == DELIVERED) ? SEEN : this;
+        }
 
         /**
          * Our own last text to one person, by the conversation's rule
@@ -325,6 +337,8 @@ final class AirModel
         {
             switch (status)
             {
+                case SEEN:
+                    return SEEN;
                 case DELIVERED:
                     return DELIVERED;
                 case SENT:
@@ -375,11 +389,25 @@ final class AirModel
         final String photoKey;
         /** {@link Tone} index for the initials, from the friend's public key or the group's id. */
         final int tone;
+        /**
+         * KHANDAQ (0.2.57): the row stands at the top of the chats under no heading, whatever its reach
+         * (KhandaqCommunity.pinned: Khandaq Community while the person is in it).
+         */
+        final boolean pinned;
 
         Entry(final String id, final EntryKind kind, final String title, final Reach reach, final String preview,
               final PreviewStyle previewStyle, final Delivery lastDelivery, final String timeText,
               final long activity, final int transitCount, final int unreadCount, final boolean isFavorite,
               final String photoKey, final int tone)
+        {
+            this(id, kind, title, reach, preview, previewStyle, lastDelivery, timeText, activity, transitCount,
+                 unreadCount, isFavorite, photoKey, tone, false);
+        }
+
+        Entry(final String id, final EntryKind kind, final String title, final Reach reach, final String preview,
+              final PreviewStyle previewStyle, final Delivery lastDelivery, final String timeText,
+              final long activity, final int transitCount, final int unreadCount, final boolean isFavorite,
+              final String photoKey, final int tone, final boolean pinned)
         {
             this.id = id;
             this.kind = kind;
@@ -395,10 +423,15 @@ final class AirModel
             this.isFavorite = isFavorite;
             this.photoKey = photoKey;
             this.tone = tone;
+            this.pinned = pinned;
         }
 
         SectionKind section()
         {
+            if (pinned)
+            {
+                return SectionKind.PINNED;
+            }
             if (kind == EntryKind.SAVED)
             {
                 return SectionKind.SAVED;
@@ -420,7 +453,7 @@ final class AirModel
             final Entry that = (Entry) other;
             return activity == that.activity && transitCount == that.transitCount
                    && unreadCount == that.unreadCount && isFavorite == that.isFavorite && tone == that.tone
-                   && id.equals(that.id) && kind == that.kind && title.equals(that.title)
+                   && pinned == that.pinned && id.equals(that.id) && kind == that.kind && title.equals(that.title)
                    && reach.equals(that.reach) && preview.equals(that.preview)
                    && previewStyle == that.previewStyle && lastDelivery == that.lastDelivery
                    && timeText.equals(that.timeText) && Objects.equals(photoKey, that.photoKey);
@@ -430,7 +463,7 @@ final class AirModel
         public int hashCode()
         {
             return Objects.hash(id, kind, title, reach, preview, previewStyle, lastDelivery, timeText, activity,
-                                transitCount, unreadCount, isFavorite, photoKey, tone);
+                                transitCount, unreadCount, isFavorite, photoKey, tone, pinned);
         }
 
         @Override
@@ -561,6 +594,8 @@ final class AirModel
     enum SectionKind
     {
         REQUESTS("requests"),
+        /** KHANDAQ (0.2.57): the pinned row (Entry.pinned), above every other chat, below the request cards. */
+        PINNED("pinned"),
         LIVE("live"),
         AWAY("away"),
         SAVED("saved"),
@@ -568,7 +603,7 @@ final class AirModel
 
         /** The order sections stand in, top to bottom. */
         static final List<SectionKind> ORDER = Collections.unmodifiableList(
-                java.util.Arrays.asList(REQUESTS, LIVE, AWAY, SAVED, MESSAGES));
+                java.util.Arrays.asList(REQUESTS, PINNED, LIVE, AWAY, SAVED, MESSAGES));
 
         final String accessibilityName;
 
@@ -577,10 +612,13 @@ final class AirModel
             this.accessibilityName = accessibilityName;
         }
 
-        /** Request cards carry their own label; every other section has a heading with its count. */
+        /**
+         * Request cards carry their own label and the pinned row stands alone; every other section has a heading
+         * with its count.
+         */
         boolean hasHeading()
         {
-            return this != REQUESTS;
+            return this != REQUESTS && this != PINNED;
         }
     }
 
@@ -857,7 +895,8 @@ final class AirModel
             }
 
             final Comparator<Entry> order = rowOrder();
-            for (final SectionKind kind : new SectionKind[]{SectionKind.LIVE, SectionKind.AWAY, SectionKind.SAVED})
+            for (final SectionKind kind : new SectionKind[]{SectionKind.PINNED, SectionKind.LIVE, SectionKind.AWAY,
+                                                            SectionKind.SAVED})
             {
                 final List<Entry> inSection = new ArrayList<>();
                 for (final Entry entry : visible)
@@ -903,11 +942,20 @@ final class AirModel
                 case TRANSIT:
                     return entry.transitCount > 0;
                 case FAVORITES:
-                    return entry.isFavorite || entry.kind == EntryKind.SAVED;
+                    return entry.isFavorite || alwaysListed(entry);
                 case ALL:
                 default:
                     return true;
             }
+        }
+
+        /**
+         * Saved Messages, and the pinned row that stands wherever it does (KHANDAQ 0.2.57): every person has them, so
+         * they neither need a star to be among the favorites nor make the list any less empty.
+         */
+        private static boolean alwaysListed(final Entry entry)
+        {
+            return entry.kind == EntryKind.SAVED || entry.pinned;
         }
 
         /** Latest activity first; contacts without a conversation (no activity) last, by name. */
@@ -952,7 +1000,7 @@ final class AirModel
                 case FAVORITES:
                     for (final Entry entry : visible)
                     {
-                        if (entry.kind != EntryKind.SAVED)
+                        if (!alwaysListed(entry))
                         {
                             return null;
                         }
@@ -966,7 +1014,7 @@ final class AirModel
                     }
                     for (final Entry entry : entries)
                     {
-                        if (entry.kind != EntryKind.SAVED)
+                        if (!alwaysListed(entry))
                         {
                             return null;
                         }

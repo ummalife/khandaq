@@ -66,6 +66,7 @@
     <string name="air_delivery_transit">传送中</string>
     <string name="air_delivery_sent">已发送</string>
     <string name="air_delivery_delivered">已送达</string>
+    <string name="air_delivery_seen">已读</string>
     <string name="air_transit_format">%1$d 条传送中</string>
     <string name="air_unread_a11y">未读：%1$d</string>
     <string name="air_hint_request_sent">请求已发送</string>
@@ -361,6 +362,8 @@
     <string name="air_network_title_relay">在线，经中继服务器</string>
     <string name="air_network_title_connecting">连接中</string>
     <string name="air_network_title_offline">无网络</string>
+    <string name="air_no_network_note">消息和文件会等待，恢复联网后自动发出。</string>
+    <string name="air_no_network_back">已恢复联网</string>
     <string name="air_network_meaning_direct">消息立即发出，直接到达对方的手机。</string>
     <string name="air_network_meaning_relay">消息立即发出，经中继服务器转发：当前网络不允许直连，但不影响送达。</string>
     <string name="air_network_meaning_connecting">手机已联网，应用正在寻找网络。新消息在传送中等待，之后会自动发出。</string>

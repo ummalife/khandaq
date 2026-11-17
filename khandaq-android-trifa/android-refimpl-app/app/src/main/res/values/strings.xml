@@ -767,6 +767,8 @@
     <string name="notification_media_generic">📎 Attachment</string>
     <string name="reaction_notification_body">reacted %1$s</string>
     <string name="chat_react_action">React</string>
+    <!-- KHANDAQ (0.2.57, SPEC-community item 5): a mail to support about a message someone wrote in a group -->
+    <string name="chat_report_action">Report</string>
     <!-- KHANDAQ (#205): delete scope choice -->
     <string name="delete_for_me">Delete for me</string>
     <string name="delete_for_everyone">Delete for everyone</string>

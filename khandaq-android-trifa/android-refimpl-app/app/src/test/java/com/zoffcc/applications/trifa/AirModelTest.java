@@ -570,7 +570,105 @@ public class AirModelTest
         }
     }
 
+    // ---- Khandaq Community at the top (KHANDAQ 0.2.57, the owner's rule of 2026-11-16) ----
+
+    @Test
+    public void the_community_row_stands_first_among_the_chats_under_no_heading()
+    {
+        final List<Entry> entries = Arrays.asList(
+                entry("live-new", Reach.DIRECT, 300),
+                entry("away-old", Reach.away(7200), 10),
+                community(false, 1),
+                saved());
+
+        final Snapshot snapshot = build(entries, Collections.<Request>emptyList(), Filter.ALL, "");
+
+        assertEquals(Arrays.asList(SectionKind.PINNED, SectionKind.LIVE, SectionKind.AWAY, SectionKind.SAVED),
+                     kinds(snapshot));
+        assertEquals(Collections.singletonList("community"), ids(snapshot, SectionKind.PINNED));
+        // Neither its reach nor its last message moves it: the first line of the list is the row itself.
+        assertEquals(Row.Type.ENTRY, snapshot.rows.get(0).type);
+        assertEquals("community", snapshot.rows.get(0).item.entry.id);
+        assertEquals(Row.Type.HEADER, snapshot.rows.get(1).type);
+        assertFalse(SectionKind.PINNED.hasHeading());
+        assertNotEquals(community(false, 1), community(true, 1));
+    }
+
+    @Test
+    public void request_cards_stay_above_the_community_row()
+    {
+        final Snapshot snapshot = build(Arrays.asList(entry("live", Reach.DIRECT, 300), community(false, 1)),
+                                        Collections.singletonList(request("asking", 1)), Filter.ALL, "");
+        assertEquals(Arrays.asList(SectionKind.REQUESTS, SectionKind.PINNED, SectionKind.LIVE), kinds(snapshot));
+    }
+
+    @Test
+    public void a_community_row_the_person_left_is_a_group_like_any_other()
+    {
+        final Snapshot snapshot = build(Arrays.asList(entry("live", Reach.DIRECT, 300), community(true, 400), saved()),
+                                        Collections.<Request>emptyList(), Filter.ALL, "");
+        assertEquals(Arrays.asList(SectionKind.LIVE, SectionKind.AWAY, SectionKind.SAVED), kinds(snapshot));
+        assertEquals(Collections.singletonList("community"), ids(snapshot, SectionKind.AWAY));
+    }
+
+    @Test
+    public void in_every_filter_and_in_search_the_community_row_does_what_saved_messages_does()
+    {
+        final List<Entry> entries = Arrays.asList(favorite("star"), entry("plain", Reach.away(60), 5),
+                                                  entry("waiting", Reach.PENDING, 0), entry("queued", 2),
+                                                  community(false, 1), saved());
+        final List<Request> none = Collections.emptyList();
+
+        // Favorites: both of them, without a star.
+        Snapshot snapshot = build(entries, none, Filter.FAVORITES, "");
+        assertEquals(Arrays.asList(SectionKind.PINNED, SectionKind.LIVE, SectionKind.SAVED), kinds(snapshot));
+        assertEquals(Collections.singletonList("community"), ids(snapshot, SectionKind.PINNED));
+        assertEquals(Collections.singletonList("star"), ids(snapshot, SectionKind.LIVE));
+
+        // Requests and in transit: neither of them.
+        snapshot = build(entries, none, Filter.REQUESTS, "");
+        assertEquals(Collections.singletonList(SectionKind.AWAY), kinds(snapshot));
+        assertEquals(Collections.singletonList("waiting"), ids(snapshot, SectionKind.AWAY));
+        snapshot = build(entries, none, Filter.TRANSIT, "");
+        assertEquals(Collections.singletonList(SectionKind.AWAY), kinds(snapshot));
+        assertEquals(Collections.singletonList("queued"), ids(snapshot, SectionKind.AWAY));
+
+        // Search: found by its name and shown on top; a query that does not name it leaves it out.
+        snapshot = build(entries, none, Filter.ALL, "commun");
+        assertEquals(Collections.singletonList(SectionKind.PINNED), kinds(snapshot));
+        snapshot = build(entries, none, Filter.ALL, "KHANDAQ");
+        assertEquals(Collections.singletonList("community"), ids(snapshot, SectionKind.PINNED));
+        snapshot = build(entries, none, Filter.ALL, "saved");
+        assertEquals(Collections.singletonList(SectionKind.SAVED), kinds(snapshot));
+    }
+
+    @Test
+    public void the_community_row_leaves_the_hints_of_an_empty_list_as_saved_messages_does()
+    {
+        final List<Request> none = Collections.emptyList();
+        final List<Entry> fresh = Arrays.asList(community(false, 1), saved());
+
+        Snapshot snapshot = build(fresh, none, Filter.ALL, "");
+        assertEquals(EmptyState.NOTHING_YET, snapshot.emptyState);
+        assertEquals(Arrays.asList(SectionKind.PINNED, SectionKind.SAVED), kinds(snapshot));
+
+        snapshot = build(fresh, none, Filter.FAVORITES, "");
+        assertEquals(EmptyState.NO_FAVORITES, snapshot.emptyState);
+        assertEquals(Arrays.asList(SectionKind.PINNED, SectionKind.SAVED), kinds(snapshot));
+
+        // Left, it is a chat like any other.
+        assertNull(build(Arrays.asList(community(true, 1), saved()), none, Filter.ALL, "").emptyState);
+    }
+
     // ---- fixtures ----
+
+    /** Khandaq Community's row as AirRepository.groupEntry makes it: pinned while the person is in it. */
+    private static Entry community(final boolean weLeft, final long activity)
+    {
+        return new Entry("community", EntryKind.GROUP, KhandaqCommunity.DISPLAY_NAME, Reach.group(0), "",
+                         PreviewStyle.MESSAGE, null, "", activity, 0, 0, false, null, AirModel.Tone.index("community"),
+                         KhandaqCommunity.pinned(KhandaqCommunity.CHAT_ID, weLeft));
+    }
 
     private static Snapshot build(final List<Entry> entries, final List<Request> requests, final Filter filter,
                                   final String query)

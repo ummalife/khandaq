@@ -195,7 +195,6 @@ import static com.zoffcc.applications.trifa.HelperGeneric.is_nightmode_active;
 import static com.zoffcc.applications.trifa.HelperGeneric.set_g_opts;
 import static com.zoffcc.applications.trifa.HelperGeneric.update_savedata_file_wrapper;
 import static com.zoffcc.applications.trifa.HelperGeneric.update_savedata_file_wrapper_throttled_last_trigger_ts;
-import static com.zoffcc.applications.trifa.HelperGeneric.write_chunk_to_VFS_file;
 import static com.zoffcc.applications.trifa.HelperGroup.add_group_peer_to_db;
 import static com.zoffcc.applications.trifa.HelperGroup.add_system_message_to_group_chat;
 import static com.zoffcc.applications.trifa.HelperGroup.android_tox_callback_group_message_cb_method_wrapper;
@@ -546,9 +545,10 @@ public class MainActivity extends AppCompatActivity
     static int PREF__video_play_delay_ms = GLOBAL_INIT_PLAY_DELAY;
     static int GLOBAL_AV_BUFFER_MS = 120;
     static int PREF__audio_group_play_volume_percent = 100;
-    static boolean PREF__auto_accept_image = true;
-    static boolean PREF__auto_accept_video = false;
-    static boolean PREF__auto_accept_all_upto = false;
+    // KHANDAQ (0.2.57): on by default, see AutoDownloadPreference.
+    static boolean PREF__auto_accept_image = AutoDownloadPreference.DEFAULT;
+    static boolean PREF__auto_accept_video = AutoDownloadPreference.DEFAULT;
+    static boolean PREF__auto_accept_all_upto = AutoDownloadPreference.DEFAULT;
     // KHANDAQ (Figma "Загрузка вложений"): global attachment auto-download policy. 0=Никогда, 1=Только Wi-Fi, 2=Всегда (default = current behavior)
     static int PREF__attachment_download_mode = 2;
     static int PREF__video_cam_resolution = 0;
@@ -1266,32 +1266,45 @@ public class MainActivity extends AppCompatActivity
 
         try
         {
-            PREF__auto_accept_image = settings.getBoolean("auto_accept_image", true);
+            // KHANDAQ (0.2.57): files download by themselves by default, see AutoDownloadPreference.
+            AutoDownloadPreference.applyDefaultOnce(settings);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__auto_accept_image = true;
         }
 
         try
         {
-            PREF__auto_accept_video = settings.getBoolean("auto_accept_video", false);
+            PREF__auto_accept_image = settings.getBoolean(AutoDownloadPreference.KEY_PICTURES,
+                                                          AutoDownloadPreference.DEFAULT);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__auto_accept_video = false;
+            PREF__auto_accept_image = AutoDownloadPreference.DEFAULT;
         }
 
         try
         {
-            PREF__auto_accept_all_upto = settings.getBoolean("auto_accept_all_upto", false);
+            PREF__auto_accept_video = settings.getBoolean(AutoDownloadPreference.KEY_VIDEOS,
+                                                          AutoDownloadPreference.DEFAULT);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__auto_accept_all_upto = false;
+            PREF__auto_accept_video = AutoDownloadPreference.DEFAULT;
+        }
+
+        try
+        {
+            PREF__auto_accept_all_upto = settings.getBoolean(AutoDownloadPreference.KEY_ALL_FILES,
+                                                             AutoDownloadPreference.DEFAULT);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            PREF__auto_accept_all_upto = AutoDownloadPreference.DEFAULT;
         }
 
         try
@@ -3537,17 +3550,18 @@ public class MainActivity extends AppCompatActivity
     // 170/176/181-183, so without this toxcore silently DROPS these packets on the recipient and
     // delete-for-both / edit / reactions never apply on an Android peer (iOS registered them, which
     // is why Android->iOS worked but iOS/Android->Android did not). The JNI registrar already exists.
+    // KHANDAQ (0.2.57): and seen (189, HelperMessageSeen), which 0.2.56 and older leave to toxcore to drop.
     private void register_khandaq_lossless_pktids()
     {
         try
         {
             int last_res = -1000;
-            for (int pktid = 184; pktid <= 188; pktid++)
+            for (int pktid = 184; pktid <= HelperMessageSeen.PKT_MSG_SEEN; pktid++)
             {
                 last_res = tox_callback_friend_lossless_packet_per_pktid(pktid);
             }
             // plain android Log on purpose: this runs very early, before the app logger is up
-            android.util.Log.i("trifa.KQREG", "registered lossless pktids 184-188, last_res=" + last_res);
+            android.util.Log.i("trifa.KQREG", "registered lossless pktids 184-189, last_res=" + last_res);
         }
         catch (Throwable e)
         {
@@ -4146,32 +4160,45 @@ public class MainActivity extends AppCompatActivity
 
         try
         {
-            PREF__auto_accept_image = settings.getBoolean("auto_accept_image", true);
+            // KHANDAQ (0.2.57): files download by themselves by default, see AutoDownloadPreference.
+            AutoDownloadPreference.applyDefaultOnce(settings);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__auto_accept_image = true;
         }
 
         try
         {
-            PREF__auto_accept_video = settings.getBoolean("auto_accept_video", false);
+            PREF__auto_accept_image = settings.getBoolean(AutoDownloadPreference.KEY_PICTURES,
+                                                          AutoDownloadPreference.DEFAULT);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__auto_accept_video = false;
+            PREF__auto_accept_image = AutoDownloadPreference.DEFAULT;
         }
 
         try
         {
-            PREF__auto_accept_all_upto = settings.getBoolean("auto_accept_all_upto", false);
+            PREF__auto_accept_video = settings.getBoolean(AutoDownloadPreference.KEY_VIDEOS,
+                                                          AutoDownloadPreference.DEFAULT);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__auto_accept_all_upto = false;
+            PREF__auto_accept_video = AutoDownloadPreference.DEFAULT;
+        }
+
+        try
+        {
+            PREF__auto_accept_all_upto = settings.getBoolean(AutoDownloadPreference.KEY_ALL_FILES,
+                                                             AutoDownloadPreference.DEFAULT);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            PREF__auto_accept_all_upto = AutoDownloadPreference.DEFAULT;
         }
 
         try
@@ -6431,6 +6458,9 @@ public class MainActivity extends AppCompatActivity
         if ((connection_status_prev == TOX_CONNECTION_NONE.value) && (a_TOX_CONNECTION != TOX_CONNECTION_NONE.value))
         {
             DeliveryRestoreCoordinator.onConnectionRestored();
+            // KHANDAQ (0.2.57, SPEC-community item 1): Khandaq Community, joined once by itself; after a start and
+            // after every reconnect, until a join took.
+            CommunityAutoJoin.onNodeConnected();
         }
 
         if (bootstrapping)
@@ -6472,6 +6502,8 @@ public class MainActivity extends AppCompatActivity
         ProfileTabConnectionIndicator.updateAsync();
         MainHeaderBrandingHelper.updateAsync();
         AirRepository.requestRefresh();
+        // KHANDAQ (0.2.57, SPEC-network part 2): after "No network", the band says Connecting until our node is online.
+        AirNoNetworkBand.nodeChanged();
         // -- notification ------------------
         // -- notification ------------------
     }
@@ -6590,6 +6622,8 @@ public class MainActivity extends AppCompatActivity
                     // KHANDAQ (#192): deliver reaction changes made while this friend was offline
                     // (packet is rebuilt from the CURRENT own-reaction state — toggles collapse)
                     HelperMessageReaction.flushPendingReactionsForFriend(friend_number);
+                    // KHANDAQ (0.2.57): the seen anchor that waits for this friend, of this run or an earlier one
+                    HelperMessageSeen.onFriendOnline(friend_number);
                 }
             }
 
@@ -6743,13 +6777,15 @@ public class MainActivity extends AppCompatActivity
                     }
                 }
 
+                // KHANDAQ (0.2.57): from none is the friend coming back; TCP <-> UDP is the same connection.
+                final boolean came_back = FileResume.friendCameBack(f.TOX_CONNECTION_real, a_TOX_CONNECTION);
                 f.TOX_CONNECTION_real = a_TOX_CONNECTION;
                 f.TOX_CONNECTION_on_off_real = HelperGeneric.get_toxconnection_wrapper(f.TOX_CONNECTION);
                 HelperFriend.update_friend_in_db_connection_status_real(f);
 
                 if (a_TOX_CONNECTION != TOX_CONNECTION_NONE.value)
                 {
-                    HelperFiletransfer.on_friend_connection_available(f.tox_public_key_string);
+                    HelperFiletransfer.on_friend_connection_available(f.tox_public_key_string, came_back);
                     // KHANDAQ: friend just came online — re-arm unacked outgoing messages so they are
                     // resent and re-acknowledged (re-syncs delivery status, clears stale "failed").
                     HelperMessage.rearm_unacked_direct_messages_on_reconnect(f.tox_public_key_string);
@@ -6761,6 +6797,12 @@ public class MainActivity extends AppCompatActivity
                     // check now returns online for this friend and does a fresh, proven send. Runs at the
                     // exact accept moment instead of waiting on (and racing) the 15s background poll.
                     TrifaToxService.resend_unsent_text_messages();
+                }
+                else
+                {
+                    // KHANDAQ (0.2.57): files under way with this friend wait for the connection and go on from
+                    // where they stopped, instead of spinning on a transfer toxcore broke.
+                    HelperFiletransfer.on_friend_connection_lost(f.tox_public_key_string);
                 }
             }
 
@@ -7114,6 +7156,11 @@ public class MainActivity extends AppCompatActivity
             {
                 // KHANDAQ (#192): app-level message reaction (add/remove)
                 HelperMessageReaction.handleIncomingFriendReaction(friend_number, data, (int) length);
+            }
+            else if (data[0] == (byte) HelperMessageSeen.PKT_MSG_SEEN)
+            {
+                // KHANDAQ (0.2.57): the person has seen our 1:1 items up to the anchored one
+                HelperMessageSeen.handleIncomingFriendSeen(friend_number, data, (int) length);
             }
             else if (data[0] == (byte) CONTROL_PROXY_MESSAGE_TYPE_PUSH_URL_FOR_FRIEND.value)
             {
@@ -7496,6 +7543,11 @@ public class MainActivity extends AppCompatActivity
         if (a_TOX_FILE_CONTROL == TOX_FILE_CONTROL_CANCEL.value)
         {
             HelperGeneric.logI(TAG, "file_recv_control:CANCEL fn=" + friend_number + " filenum=" + file_number);
+            // KHANDAQ (0.2.57): the transfer of a file that is whole here already has nothing of ours to cancel.
+            if (HelperFiletransfer.forget_incoming_already_here(friend_number, file_number))
+            {
+                return;
+            }
             HelperFiletransfer.cancel_filetransfer(friend_number, file_number);
         }
         else if (a_TOX_FILE_CONTROL == TOX_FILE_CONTROL_RESUME.value)
@@ -7784,7 +7836,9 @@ public class MainActivity extends AppCompatActivity
 
                     if (ft.filesize < UPDATE_MESSAGE_PROGRESS_SMALL_FILE_IS_LESS_THAN_BYTES)
                     {
-                        if ((ft.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES_SMALL_FILES) < position)
+                        // KHANDAQ (0.2.57): an offer made again goes on from where the receiver says,
+                        // which can be before the progress shown so far.
+                        if ((position < ft.current_position) || ((ft.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES_SMALL_FILES) < position))
                         {
                             ft.current_position = position;
                             HelperFiletransfer.update_filetransfer_db_current_position((Filetransfer) ft);
@@ -7807,7 +7861,9 @@ public class MainActivity extends AppCompatActivity
                     }
                     else
                     {
-                        if ((ft.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES) < position)
+                        // KHANDAQ (0.2.57): an offer made again goes on from where the receiver says,
+                        // which can be before the progress shown so far.
+                        if ((position < ft.current_position) || ((ft.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES) < position))
                         {
                             ft.current_position = position;
                             HelperFiletransfer.update_filetransfer_db_current_position((Filetransfer) ft);
@@ -7945,7 +8001,9 @@ public class MainActivity extends AppCompatActivity
 
                     if (ft.filesize < UPDATE_MESSAGE_PROGRESS_SMALL_FILE_IS_LESS_THAN_BYTES)
                     {
-                        if ((ft.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES_SMALL_FILES) < position)
+                        // KHANDAQ (0.2.57): an offer made again goes on from where the receiver says,
+                        // which can be before the progress shown so far.
+                        if ((position < ft.current_position) || ((ft.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES_SMALL_FILES) < position))
                         {
                             ft.current_position = position;
                             HelperFiletransfer.update_filetransfer_db_current_position((Filetransfer) ft);
@@ -7968,7 +8026,9 @@ public class MainActivity extends AppCompatActivity
                     }
                     else
                     {
-                        if ((ft.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES) < position)
+                        // KHANDAQ (0.2.57): an offer made again goes on from where the receiver says,
+                        // which can be before the progress shown so far.
+                        if ((position < ft.current_position) || ((ft.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES) < position))
                         {
                             ft.current_position = position;
                             HelperFiletransfer.update_filetransfer_db_current_position((Filetransfer) ft);
@@ -8144,11 +8204,21 @@ public class MainActivity extends AppCompatActivity
             // --- notification ---
 
             ByteBuffer file_id_buffer = ByteBuffer.allocateDirect(TOX_FILE_ID_LENGTH);
-            tox_file_get_file_id(friend_number, file_number, file_id_buffer);
-            final String file_id_buffer_hex = HelperGeneric.bytesToHex(file_id_buffer.array(),
-                                                                       file_id_buffer.arrayOffset(),
-                                                                       file_id_buffer.limit()).toUpperCase();
+            // KHANDAQ (0.2.57): left unset when toxcore cannot give the id, as in the DATA branch below: the buffer
+            // it did not fill reads as an id of zeros, and every such file would read as the same one.
+            final String file_id_buffer_hex =
+                    tox_file_get_file_id(friend_number, file_number, file_id_buffer) == 0
+                    ? HelperGeneric.bytesToHex(file_id_buffer.array(), file_id_buffer.arrayOffset(),
+                                               file_id_buffer.limit()).toUpperCase()
+                    : null;
             HelperGeneric.logI(TAG, "TOX_FILE_ID_LENGTH=" + TOX_FILE_ID_LENGTH + " file_id_buffer_hex=" + file_id_buffer_hex);
+
+            // KHANDAQ (0.2.57, SPEC-network 1.4): a file this friend offered before goes on in its entry.
+            if (HelperFiletransfer.resume_incoming_offer(friend_number, file_number, a_TOX_FILE_KIND, file_size,
+                                                         file_id_buffer_hex, filename))
+            {
+                return;
+            }
 
             Filetransfer f = new Filetransfer();
             f.tox_public_key_string = HelperFriend.tox_friend_get_public_key__wrapper(friend_number);
@@ -8166,6 +8236,8 @@ public class MainActivity extends AppCompatActivity
             f.tox_file_id_hex = file_id_buffer_hex;
             long ft_id = HelperFiletransfer.insert_into_filetransfer_db(f);
             f.id = ft_id;
+            // KHANDAQ (0.2.57): its bytes so far go to a temp folder of its own, written with the row below.
+            f.path_name = HelperFiletransfer.incoming_temp_path_name(f);
             // add FT message to UI
             Message m = new Message();
 
@@ -8289,6 +8361,23 @@ public class MainActivity extends AppCompatActivity
             // --- notification ---
             // --- notification ---
 
+            // KHANDAQ (0.2.57): the Tox file id is this incoming 1:1 file's durable anchor (reactions, deletes,
+            // read receipts), as in the FTV2 branch above. Desktop and iOS send their files as DATA: without the
+            // anchor Android never reported such a file as seen. Left unset when toxcore cannot give the id.
+            final ByteBuffer file_id_buffer = ByteBuffer.allocateDirect(TOX_FILE_ID_LENGTH);
+            final String file_id_buffer_hex =
+                    tox_file_get_file_id(friend_number, file_number, file_id_buffer) == 0
+                    ? HelperGeneric.bytesToHex(file_id_buffer.array(), file_id_buffer.arrayOffset(),
+                                               file_id_buffer.limit()).toUpperCase()
+                    : null;
+
+            // KHANDAQ (0.2.57, SPEC-network 1.4): a file this friend offered before goes on in its entry; desktop
+            // and iOS offer it again with the same id after a cut, as Android does.
+            if (HelperFiletransfer.resume_incoming_offer(friend_number, file_number, a_TOX_FILE_KIND, file_size,
+                                                         file_id_buffer_hex, filename))
+            {
+                return;
+            }
 
             Filetransfer f = new Filetransfer();
             f.tox_public_key_string = HelperFriend.tox_friend_get_public_key__wrapper(friend_number);
@@ -8305,6 +8394,8 @@ public class MainActivity extends AppCompatActivity
             f.message_id = -1;
             long ft_id = HelperFiletransfer.insert_into_filetransfer_db(f);
             f.id = ft_id;
+            // KHANDAQ (0.2.57): its bytes so far go to a temp folder of its own, written with the row below.
+            f.path_name = HelperFiletransfer.incoming_temp_path_name(f);
             // add FT message to UI
             Message m = new Message();
 
@@ -8332,6 +8423,7 @@ public class MainActivity extends AppCompatActivity
             m.text = filename + "\n" + file_size + " bytes";
             m.sent_push = 0;
             m.filetransfer_kind = TOX_FILE_KIND_DATA.value;
+            m.ft_id_anchor_hex = file_id_buffer_hex;
             long new_msg_id = -1;
 
             if (message_list_activity != null)
@@ -8417,6 +8509,12 @@ public class MainActivity extends AppCompatActivity
         //HelperGeneric.logI(TAG, "file_recv_chunk:" + friend_number + ":fn==" + file_number + ":position=" + position + ":length=" + length + ":data len=" + data.length + ":data=" + data);
         //HelperGeneric.logI(TAG, "file_recv_chunk:--START--");
         //HelperGeneric.logI(TAG, "file_recv_chunk:" + friend_number + ":" + file_number + ":" + position + ":" + length);
+        // KHANDAQ (0.2.57): the last byte of a file that is whole here already (resume_incoming_offer) only lets
+        // both ends finish; its entry, its file and its notification stay as they are.
+        if (HelperFiletransfer.incoming_chunk_of_file_already_here(friend_number, file_number, length))
+        {
+            return;
+        }
         Filetransfer f = null;
 
         try
@@ -8474,12 +8572,20 @@ public class MainActivity extends AppCompatActivity
                     return;
                 }
 
+                // KHANDAQ (0.2.57): never over a finished file of the same name (HelperFiletransfer.incoming_final_name).
+                final String final_name = HelperFiletransfer.incoming_final_name(f);
+                if (final_name == null)
+                {
+                    fail_incoming_filetransfer(f, friend_number, file_number, "no_free_name");
+                    return;
+                }
+
                 // HelperGeneric.logI(TAG, "file_recv_chunk:file fully received");
                 HelperGeneric.move_tmp_file_to_real_file(f.path_name, f.file_name,
                                                          VFS_PREFIX + VFS_FILE_DIR + "/" + f.tox_public_key_string +
-                                                         "/", f.file_name);
+                                                         "/", final_name);
                 if (HelperFiletransfer.get_vfs_file_length(VFS_PREFIX + VFS_FILE_DIR + "/" + f.tox_public_key_string + "/",
-                                                           f.file_name) < f.filesize)
+                                                           final_name) < f.filesize)
                 {
                     fail_incoming_filetransfer(f, friend_number, file_number, "incomplete_after_move");
                     return;
@@ -8495,12 +8601,12 @@ public class MainActivity extends AppCompatActivity
                     file_.direction = f.direction;
                     file_.tox_public_key_string = f.tox_public_key_string;
                     file_.path_name = VFS_PREFIX + VFS_FILE_DIR + "/" + f.tox_public_key_string + "/";
-                    file_.file_name = f.file_name;
+                    file_.file_name = final_name;
                     file_.filesize = f.filesize;
                     long row_id = orma.insertIntoFileDB(file_);
                     // HelperGeneric.logI(TAG, "file_recv_chunk:FileDB:row_id=" + row_id);
                     filedb_id = orma.selectFromFileDB().tox_public_key_stringEq(
-                            f.tox_public_key_string).file_nameEq(f.file_name).orderByIdDesc().get(0).id;
+                            f.tox_public_key_string).file_nameEq(final_name).orderByIdDesc().get(0).id;
                     // HelperGeneric.logI(TAG, "file_recv_chunk:FileDB:filedb_id=" + filedb_id);
                 }
 
@@ -8532,7 +8638,7 @@ public class MainActivity extends AppCompatActivity
                                                                                                             "/" +
                                                                                                             f.tox_public_key_string +
                                                                                                             "/" +
-                                                                                                            f.file_name);
+                                                                                                            final_name);
                     HelperMessage.set_message_state_from_friendnum_and_filenum(friend_number, file_number,
                                                                                TOX_FILE_CONTROL_CANCEL.value);
                     HelperMessage.set_message_filedb_from_friendnum_and_filenum(friend_number, file_number, filedb_id);
@@ -8577,13 +8683,15 @@ public class MainActivity extends AppCompatActivity
                     {
                         if (f.kind == TOX_FILE_KIND_FTV2.value)
                         {
-                            write_chunk_to_VFS_file(f.path_name + "/" + f.file_name, position,
-                                                    length - TOX_FILE_ID_LENGTH,
-                                                    Arrays.copyOfRange(data, TOX_FILE_ID_LENGTH, data.length));
+                            HelperGeneric.write_direct_chunk_to_VFS_file(f.path_name + "/" + f.file_name, position,
+                                                                         length - TOX_FILE_ID_LENGTH,
+                                                                         Arrays.copyOfRange(data, TOX_FILE_ID_LENGTH,
+                                                                                            data.length));
                         }
                         else
                         {
-                            write_chunk_to_VFS_file(f.path_name + "/" + f.file_name, position, length, data);
+                            HelperGeneric.write_direct_chunk_to_VFS_file(f.path_name + "/" + f.file_name, position,
+                                                                         length, data);
                         }
                     }
                     catch (Exception e)
@@ -9576,6 +9684,9 @@ public class MainActivity extends AppCompatActivity
         set_group_active(group_identifier);
         add_system_message_to_group_chat(group_identifier, "You joined the group");
         update_savedata_file_wrapper();
+        // KHANDAQ (0.2.57, SPEC-community item 1): connected, the group is in the saved state now; Khandaq Community
+        // is the profile's for good then.
+        CommunityAutoJoin.onGroupConnected(group_identifier);
         update_group_in_friendlist(group_identifier);
         update_group_in_groupmessagelist(group_identifier);
         int peer_role = tox_group_self_get_role(group_number);

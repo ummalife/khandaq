@@ -66,6 +66,7 @@
     <string name="air_delivery_transit">в пути</string>
     <string name="air_delivery_sent">отправлено</string>
     <string name="air_delivery_delivered">доставлено</string>
+    <string name="air_delivery_seen">прочитано</string>
     <string name="air_transit_format">%1$d в пути</string>
     <string name="air_unread_a11y">непрочитанных: %1$d</string>
     <string name="air_hint_request_sent">запрос отправлен</string>
@@ -400,6 +401,8 @@
     <string name="air_network_title_relay">В сети, через ретранслятор</string>
     <string name="air_network_title_connecting">Подключаемся</string>
     <string name="air_network_title_offline">Нет сети</string>
+    <string name="air_no_network_note">Сообщения и файлы подождут и уйдут сами, когда связь вернётся.</string>
+    <string name="air_no_network_back">Снова в сети</string>
     <string name="air_network_meaning_direct">Сообщения уходят сразу, прямо на телефон собеседника.</string>
     <string name="air_network_meaning_relay">Сообщения уходят сразу, через ретранслятор: эта сеть закрывает прямой путь, на доставку это не влияет.</string>
     <string name="air_network_meaning_connecting">Интернет есть, приложение ищет сеть. Новые сообщения ждут в пути и уйдут сами.</string>

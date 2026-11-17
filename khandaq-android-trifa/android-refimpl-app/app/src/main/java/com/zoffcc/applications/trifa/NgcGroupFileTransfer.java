@@ -99,11 +99,16 @@ public final class NgcGroupFileTransfer
 
     /**
      * KHANDAQ (0.2.56): keys (group:msg) of files whose own send is queued or running (sendGroupFileChunked,
-     * sendGroupFileSmall), and of those a resend for one member's request is (handleIncomingFileRequest). Each kind
-     * once per file. Apart, so that a resend that runs for one member cannot swallow the file's own send.
+     * sendGroupFileSmall), and of those a resend of the whole file for one member's request is
+     * (handleIncomingFileRequest). Each kind once per file. Apart, so that a resend that runs for one member cannot
+     * swallow the file's own send. KHANDAQ (0.2.57): a resend of the chunks a member asked for is one per file and
+     * member (SERVES), and runs while the file's own send does too, with the chunks that send passed
+     * (enqueueChunkedSend).
      */
     private static final java.util.Set<String> inflightOwnSends = ConcurrentHashMap.newKeySet();
     private static final java.util.Set<String> inflightServes = ConcurrentHashMap.newKeySet();
+    /** KHANDAQ (0.2.57): the resends of the chunks members asked for, per file and member (NgcFileServes). */
+    private static final NgcFileServes SERVES = new NgcFileServes();
     /** Diagnostic: counts every incoming chunk packet that reaches the callback (delivery vs processing). */
     private static final java.util.concurrent.atomic.AtomicLong recvChunkPktCount =
             new java.util.concurrent.atomic.AtomicLong();
@@ -115,6 +120,8 @@ public final class NgcGroupFileTransfer
 
     /** KHANDAQ (0.2.56): one pace for every group file packet this device sends (NgcUploadPace). */
     private static final NgcUploadPace PACE = new NgcUploadPace();
+    /** KHANDAQ (0.2.57): and one for those that go to a member over a relay (NgcUploadPace.overRelay). */
+    private static final NgcUploadPace RELAY_PACE = new NgcUploadPace(NgcUploadPace.RELAYED_BYTES_PER_SECOND);
     /** KHANDAQ (0.2.56): our group files that wait for a member to send them to (NgcOutgoingFileWaits). */
     private static final NgcOutgoingFileWaits WAITS = new NgcOutgoingFileWaits();
     /** KHANDAQ (0.2.56): how often each incoming file asked its sender for missing chunks (NgcFileNackBudget). */
@@ -275,9 +282,6 @@ public final class NgcGroupFileTransfer
     private static final java.util.concurrent.atomic.AtomicLong lastResendServiceTs =
             new java.util.concurrent.atomic.AtomicLong();
     private static final long RESEND_SERVICE_THROTTLE_MS = 4_000L;
-    /** Per-message cooldown for selective (NACK) resends — bypasses the global full-resend throttle. */
-    private static final Map<String, Long> selectiveResendTs = new ConcurrentHashMap<>();
-    private static final long SELECTIVE_RESEND_COOLDOWN_MS = 2_500L;
     /** Guards {@code tox_group_reconnect} so a mid-transfer flap can't reset the lossless session repeatedly. */
     private static final Map<String, Long> lastGroupReconnectTs = new ConcurrentHashMap<>();
     private static final long GROUP_RECONNECT_MIN_INTERVAL_MS = 25_000L;
@@ -457,7 +461,10 @@ public final class NgcGroupFileTransfer
         enqueueChunkedSend(g, targetPeerId, null);
     }
 
-    /** Selective resend: {@code wanted[i] == true} sends only chunk {@code i} (receiver's missing set). */
+    /**
+     * Selective resend: {@code wanted[i] == true} sends only chunk {@code i} (receiver's missing set) to the member
+     * {@code targetPeerId} (>= 0) who asked.
+     */
     static void sendGroupFileChunkedSelective(final GroupMessage g, final long targetPeerId, final boolean[] wanted)
     {
         enqueueChunkedSend(g, targetPeerId, wanted);
@@ -465,7 +472,11 @@ public final class NgcGroupFileTransfer
 
     /**
      * One in-flight (queued or running) send per message and kind — receiver resend requests arrive every ~12s and
-     * would otherwise pile up full re-sends on the single executor, starving freshly picked user files.
+     * would otherwise pile up full re-sends on the single executor, starving freshly picked user files. KHANDAQ
+     * (0.2.57): a resend of the chunks a member asked for is one per file and member, and a later request of that
+     * member merges into it while it is queued or running (NgcFileServes): it was one per file, and a request that
+     * came meanwhile, from any member, was dropped. Such a request is served while the file's own send runs too, with
+     * the chunks that send passed (NgcFileServes.passedByOwnSend).
      */
     private static void enqueueChunkedSend(final GroupMessage g, final long targetPeerId, final boolean[] wanted)
     {
@@ -482,11 +493,53 @@ public final class NgcGroupFileTransfer
         }
         final String key = beginResendKey(g.group_identifier, g.msg_id_hash);
         final boolean isUserSend = targetPeerId < 0L;
-        // KHANDAQ (0.2.56): a resend for one member's request is not needed while the file's own send goes to every
-        // member, and must never take the place of that send: the file then stayed unsent with nothing to send it.
-        final boolean queued = isUserSend
-                ? inflightOwnSends.add(key)
-                : (!inflightOwnSends.contains(key) && inflightServes.add(key));
+        final String serveKey = (!isUserSend && (wanted != null)) ? (key + ":" + targetPeerId) : null;
+        final boolean queued;
+        if (isUserSend)
+        {
+            queued = inflightOwnSends.add(key);
+        }
+        else if (serveKey != null)
+        {
+            // KHANDAQ (0.2.57): a member's request that comes while the file's own send runs is served, with the chunks
+            // that send passed. It was dropped ("send:skip already in-flight"), as the own send goes to every member;
+            // but the own send counts a chunk as sent once any member took it, and does not come back for a member that
+            // toxcore refused it to (its send array full). In cross-platform QA an iPhone asked 24 times during the
+            // 96 s own send of a 6 MiB file at the relay pace, all its requests for the file, and gave the file up.
+            // The chunks the own send has not passed yet are left to it; a member that misses one of them asks for it
+            // again.
+            final int ownSendAt = inflightOwnSends.contains(key) ? ownSendPassed(g) : -1;
+            final boolean[] asked = (ownSendAt < 0) ? wanted : NgcFileServes.passedByOwnSend(wanted, ownSendAt);
+            if (asked == null)
+            {
+                HelperGeneric.logI(TAG, "send:selective left to the own send at chunk " + ownSendAt + " peer="
+                        + targetPeerId + " msg=" + g.msg_id_hash.substring(0, 8));
+                return;
+            }
+            queued = SERVES.ask(serveKey, asked);
+            if (!queued)
+            {
+                HelperGeneric.logI(TAG, "send:selective merged peer=" + targetPeerId + " msg="
+                        + g.msg_id_hash.substring(0, 8));
+                return;
+            }
+            if (ownSendAt >= 0)
+            {
+                HelperGeneric.logI(TAG, "send:selective while the own send is at chunk " + ownSendAt + " peer="
+                        + targetPeerId + " msg=" + g.msg_id_hash.substring(0, 8));
+            }
+        }
+        else if (inflightOwnSends.contains(key))
+        {
+            // KHANDAQ (0.2.56): a resend of the whole file for one member's request does not run while the file's own
+            // send goes to every member, and must never take the place of that send: the file then stayed unsent with
+            // nothing to send it.
+            queued = false;
+        }
+        else
+        {
+            queued = inflightServes.add(key);
+        }
         if (!queued)
         {
             HelperGeneric.logI(TAG, "send:skip already in-flight msg=" + g.msg_id_hash.substring(0, 8));
@@ -507,9 +560,9 @@ public final class NgcGroupFileTransfer
             {
                 try
                 {
-                    if (wanted != null)
+                    if (serveKey != null)
                     {
-                        sendGroupFileSelectiveOnWorker(g, targetPeerId, wanted);
+                        sendGroupFileSelectiveOnWorker(g, targetPeerId, serveKey);
                     }
                     else
                     {
@@ -518,7 +571,7 @@ public final class NgcGroupFileTransfer
                 }
                 finally
                 {
-                    (isUserSend ? inflightOwnSends : inflightServes).remove(key);
+                    endInflightSend(isUserSend, key, serveKey);
                     if (isUserSend)
                     {
                         activeUserSends.decrementAndGet();
@@ -528,13 +581,40 @@ public final class NgcGroupFileTransfer
         }
         catch (RuntimeException e)
         {
-            (isUserSend ? inflightOwnSends : inflightServes).remove(key);
+            endInflightSend(isUserSend, key, serveKey);
             if (isUserSend)
             {
                 activeUserSends.decrementAndGet();
                 waitForMember(g, "send not queued: " + e.getMessage());
             }
         }
+    }
+
+    /** The send of enqueueChunkedSend is over (or was not queued): its file, or file and member, may send again. */
+    private static void endInflightSend(final boolean isUserSend, final String key, final String serveKey)
+    {
+        if (isUserSend)
+        {
+            inflightOwnSends.remove(key);
+        }
+        else if (serveKey != null)
+        {
+            SERVES.end(serveKey);
+        }
+        else
+        {
+            inflightServes.remove(key);
+        }
+    }
+
+    /**
+     * KHANDAQ (0.2.57): how many chunks of our file its own send, queued or running, has passed: those below the one
+     * after the last it sent (HelperGroup.record_ngc_outgoing_chunk_sent, its resume point); 0 before its first. They
+     * went to the members that took them (enqueueChunkedSend).
+     */
+    private static int ownSendPassed(final GroupMessage g)
+    {
+        return HelperGroup.ngc_outgoing_last_chunk_index(g.group_identifier, g.msg_id_hash) + 1;
     }
 
     static void sendGroupFileSmall(final GroupMessage g)
@@ -738,6 +818,7 @@ public final class NgcGroupFileTransfer
 
             if (ownSend)
             {
+                // KHANDAQ (0.2.57): also where the own send stands for the members' requests meanwhile (ownSendPassed).
                 HelperGroup.record_ngc_outgoing_chunk_sent(g.group_identifier, g.msg_id_hash, idx);
                 final long bytesDone = Math.min(fileSize, (long) (idx + 1) * CHUNK_PAYLOAD_MAX);
                 notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash, bytesDone, fileSize);
@@ -2193,17 +2274,11 @@ public final class NgcGroupFileTransfer
                 }
                 lastResendServiceTs.set(now);
             }
-            else
-            {
-                // Selective NACK — targeted & cheap; must NOT be starved by the background full-resend flood.
-                final String cd = beginResendKey(groupId, msgIdHex);
-                final Long last = selectiveResendTs.get(cd);
-                if (last != null && (now - last) < SELECTIVE_RESEND_COOLDOWN_MS)
-                {
-                    return;
-                }
-                selectiveResendTs.put(cd, now);
-            }
+            // A selective NACK (wanted != null) — targeted & cheap — must NOT be starved by the background full-resend
+            // flood. KHANDAQ (0.2.57): nor dropped by a cooldown: it merges into the requester's resend of the file
+            // while that one is queued or running (enqueueChunkedSend). The cooldown of 2.5 s per file dropped the
+            // packets of a request after its first, and an iPhone's repeat that came less than 2.5 s after the one
+            // before (it asks every 2.5 s, with 0.5 s of timer leeway).
 
             HelperGeneric.logI(TAG, "handleFileRequest:resend group=" + groupId + " msg=" + msgIdHex.substring(0, 8)
                     + " requester_peer=" + peerId + (wanted != null ? " selective" : " full"));
@@ -2274,21 +2349,21 @@ public final class NgcGroupFileTransfer
                 msgId = fixed;
             }
 
-            final byte[] missingBitmap = buildMissingChunkBitmap(groupNum, msgId);
             final int totalChunks = (int) ((message.filesize + CHUNK_PAYLOAD_MAX - 1) / CHUNK_PAYLOAD_MAX);
-            final byte[] requestPkt = buildFileRequestPacket(msgId, totalChunks, missingBitmap);
-            if (missingBitmap != null)
+            // KHANDAQ (0.2.57): the chunks it misses go as a list, the layout every client reads, in as many packets as
+            // it takes (buildListedFileRequestPackets). Without an assembly yet it asks for the whole file, as before.
+            final int[] missing = missingChunkIndices(groupNum, msgId);
+            final byte[][] requestPkts = (missing != null)
+                                         ? buildListedFileRequestPackets(msgId, missing)
+                                         : new byte[][]{buildFileRequestPacket(msgId, totalChunks, null)};
+            if (missing != null)
             {
-                int miss = 0;
-                for (int i = 0; i < totalChunks; i++)
-                {
-                    if ((missingBitmap[i >> 3] & (1 << (i & 7))) != 0)
-                    {
-                        miss++;
-                    }
-                }
                 HelperGeneric.logI(TAG, "sendFileResendRequest:nack msg=" + message.msg_id_hash.substring(0, 8)
-                        + " missing=" + miss + "/" + totalChunks);
+                        + " missing=" + missing.length + "/" + totalChunks + " packets=" + requestPkts.length);
+                if (requestPkts.length == 0)
+                {
+                    return;
+                }
             }
             long senderPeerId = -1L;
             if (message.tox_group_peer_pubkey != null && !message.tox_group_peer_pubkey.isEmpty())
@@ -2310,11 +2385,7 @@ public final class NgcGroupFileTransfer
                 // peers and would suppress the one correct lossless recovery target (the actual sender). The
                 // private-send return code is the real reachability signal.
                 waitForPeerOnline(groupNum, senderPeerId, 2000L);
-                final int res = tox_group_send_custom_private_packet(
-                        groupNum, senderPeerId, 1, requestPkt, requestPkt.length);
-                HelperGeneric.logI(TAG, "sendFileResendRequest:private msg="
-                        + message.msg_id_hash.substring(0, 8) + " peer=" + senderPeerId + " res=" + res);
-                if (HelperGroup.is_ngc_custom_packet_send_ok(res))
+                if (sendFileRequestPrivately(groupNum, senderPeerId, requestPkts, message.msg_id_hash) > 0)
                 {
                     okCount++;
                 }
@@ -2333,11 +2404,7 @@ public final class NgcGroupFileTransfer
                         continue;
                     }
                     waitForPeerOnline(groupNum, peerId, 2000L);
-                    final int res = tox_group_send_custom_private_packet(
-                            groupNum, peerId, 1, requestPkt, requestPkt.length);
-                    HelperGeneric.logI(TAG, "sendFileResendRequest:private msg="
-                            + message.msg_id_hash.substring(0, 8) + " peer=" + peerId + " res=" + res);
-                    if (HelperGroup.is_ngc_custom_packet_send_ok(res))
+                    if (sendFileRequestPrivately(groupNum, peerId, requestPkts, message.msg_id_hash) > 0)
                     {
                         okCount++;
                     }
@@ -2346,9 +2413,19 @@ public final class NgcGroupFileTransfer
 
             if (okCount == 0)
             {
-                final int res = tox_group_send_custom_packet(groupNum, 1, requestPkt, requestPkt.length);
-                HelperGeneric.logI(TAG, "sendFileResendRequest:broadcast msg="
-                        + message.msg_id_hash.substring(0, 8) + " res=" + res);
+                int sent = 0;
+                int res = 0;
+                for (final byte[] pkt : requestPkts)
+                {
+                    res = tox_group_send_custom_packet(groupNum, 1, pkt, pkt.length);
+                    if (!HelperGroup.is_ngc_custom_packet_send_ok(res))
+                    {
+                        break;
+                    }
+                    sent++;
+                }
+                HelperGeneric.logI(TAG, "sendFileResendRequest:broadcast msg=" + message.msg_id_hash.substring(0, 8)
+                        + " packets=" + sent + "/" + requestPkts.length + " res=" + res);
             }
             TrifaToxService.wakeup_tox_thread();
         }
@@ -2359,6 +2436,33 @@ public final class NgcGroupFileTransfer
     }
 
     /**
+     * KHANDAQ (0.2.57): the packets of one request to one member, in their order, until toxcore refuses one (its send
+     * array for the member is full). Returns how many went.
+     */
+    private static int sendFileRequestPrivately(final long groupNum, final long peerId, final byte[][] packets,
+                                                final String msgIdHash)
+    {
+        int sent = 0;
+        int res = 0;
+        for (final byte[] pkt : packets)
+        {
+            res = tox_group_send_custom_private_packet(groupNum, peerId, 1, pkt, pkt.length);
+            if (!HelperGroup.is_ngc_custom_packet_send_ok(res))
+            {
+                break;
+            }
+            sent++;
+        }
+        HelperGeneric.logI(TAG, "sendFileResendRequest:private msg=" + msgIdHash.substring(0, 8) + " peer=" + peerId
+                + " packets=" + sent + "/" + packets.length + " res=" + res);
+        return sent;
+    }
+
+    /**
+     * Android's request layout up to 0.2.56, still read from the members that run it (parseWantedChunks). KHANDAQ
+     * (0.2.57): sent only without a bitmap now, as the request for the whole file; the missing chunks go as a list
+     * (buildListedFileRequestPackets).
+     *
      * @param totalChunks    total chunk count (only meaningful when {@code missingBitmap != null})
      * @param missingBitmap  bit {@code i} set ⇒ chunk {@code i} still missing; {@code null} ⇒ legacy full request
      */
@@ -2384,29 +2488,74 @@ public final class NgcGroupFileTransfer
         return buf.array();
     }
 
-    /** @return bitmap (bit i set ⇒ chunk i still missing), or {@code null} when no assembly exists yet. */
-    private static byte[] buildMissingChunkBitmap(final long groupNum, final byte[] msgId)
+    /**
+     * KHANDAQ (0.2.57): a request for the chunks {@code missing} lists, in the layout every client reads
+     * (parseListedChunks; iOS since 0.2.56, which reads no other, and the desktop from 0.2.57): after the msg id a count
+     * n, then n chunk indices, u32 big-endian each, so that a packet is FILE_REQUEST_HEADER + 4 n bytes. One packet per
+     * FILE_REQUEST_MAX_LISTED_CHUNKS indices, in their order; none when nothing is missing. Android asked with a bitmap
+     * (buildFileRequestPacket), which an iPhone read as a list as long as the file's chunk count, found too short, and
+     * dropped.
+     */
+    static byte[][] buildListedFileRequestPackets(final byte[] msgId, final int[] missing)
+    {
+        final int perPacket = FILE_REQUEST_MAX_LISTED_CHUNKS;
+        final byte[][] packets = new byte[(missing.length + perPacket - 1) / perPacket][];
+        for (int p = 0; p < packets.length; p++)
+        {
+            final int from = p * perPacket;
+            final int n = Math.min(perPacket, missing.length - from);
+            final ByteBuffer buf = ByteBuffer.allocate(FILE_REQUEST_HEADER + 4 * n).order(ByteOrder.BIG_ENDIAN);
+            putMagic(buf);
+            buf.put(PKT_FILE_REQUEST);
+            buf.put(msgId, 0, Math.min(32, msgId.length));
+            for (int i = msgId.length; i < 32; i++)
+            {
+                buf.put((byte) 0);
+            }
+            buf.putInt(n);
+            for (int k = 0; k < n; k++)
+            {
+                buf.putInt(missing[from + k]);
+            }
+            packets[p] = buf.array();
+        }
+        return packets;
+    }
+
+    /** @return the chunks still missing, in ascending order, or {@code null} when no assembly exists yet. */
+    private static int[] missingChunkIndices(final long groupNum, final byte[] msgId)
     {
         final IncomingAssembly asm = assemblies.get(assemblyKey(groupNum, msgId));
         if (asm == null || asm.received == null || asm.totalChunks < 1)
         {
             return null;
         }
-        final byte[] bm = new byte[(asm.totalChunks + 7) / 8];
-        for (int i = 0; i < asm.totalChunks; i++)
+        final boolean[] received = asm.received;
+        final int total = Math.min(asm.totalChunks, received.length);
+        int count = 0;
+        for (int i = 0; i < total; i++)
         {
-            if (!asm.received[i])
+            if (!received[i])
             {
-                bm[i >> 3] |= (byte) (1 << (i & 7));
+                count++;
             }
         }
-        return bm;
+        final int[] missing = new int[count];
+        int k = 0;
+        for (int i = 0; (i < total) && (k < count); i++)
+        {
+            if (!received[i])
+            {
+                missing[k++] = i;
+            }
+        }
+        return (k == count) ? missing : Arrays.copyOf(missing, k);
     }
 
     /**
      * Parses a FILE_REQUEST into per-chunk wanted[] (true ⇒ send); null ⇒ legacy full request. After the msg id comes
-     * Android's layout, the file's chunk count (u32) and a bitmap of the missing chunks, or iOS's, a list of them
-     * (parseListedChunks).
+     * the layout of an Android up to 0.2.56, the file's chunk count (u32) and a bitmap of the missing chunks, or the
+     * list of them that iOS sends, and Android since 0.2.57 (parseListedChunks).
      */
     static boolean[] parseWantedChunks(final byte[] data, final int length, final long fileSize)
     {
@@ -2453,8 +2602,9 @@ public final class NgcGroupFileTransfer
      * big-endian), and the packet ends there. Android read the count as the file's chunk count, found it was not, and
      * took the request for a full one: dropped while one of our files went, else the whole file again from its first
      * chunk at the pace. The iPhone ignores the chunks it has, counts that as silence, and gives the file up after a
-     * minute of it. Indices beyond the file are left out. Android's own request never has this length: its bitmap of
-     * n chunks is (n + 7) / 8 bytes, not 4 n. Null when the packet is not of this layout.
+     * minute of it. Indices beyond the file are left out. The bitmap request of an Android up to 0.2.56 never has
+     * this length: its bitmap of n chunks is (n + 7) / 8 bytes, not 4 n. KHANDAQ (0.2.57): Android asks in this layout
+     * too (buildListedFileRequestPackets). Null when the packet is not of this layout.
      */
     private static boolean[] parseListedChunks(final byte[] data, final int length, final int expectedTotal)
     {
@@ -2478,10 +2628,11 @@ public final class NgcGroupFileTransfer
     /**
      * Resend only the chunks the receiver marked missing — avoids re-streaming the whole file each retry. KHANDAQ
      * (0.2.56): at the pace, like every other packet of a group file; it pushed them back to back and gave up at the
-     * first refusal (-99) of toxcore's full send array.
+     * first refusal (-99) of toxcore's full send array. KHANDAQ (0.2.57): the chunks are those of the member's resend
+     * of the file ({@code serveKey}, NgcFileServes), which the member's requests add to while it runs.
      */
     private static void sendGroupFileSelectiveOnWorker(final GroupMessage g, final long targetPeerId,
-                                                       final boolean[] wanted)
+                                                       final String serveKey)
     {
         try
         {
@@ -2530,14 +2681,19 @@ public final class NgcGroupFileTransfer
 
                 int sent = 0;
                 final byte[] readBuf = new byte[CHUNK_PAYLOAD_MAX];
-                for (int idx = 0; idx < totalChunks; idx++)
+                // The stream stands at the start of chunk "at" and skips to the next chunk asked for. A request that
+                // came meanwhile counts for the chunks ahead; one behind is left to the member's next request.
+                int at = 0;
+                while (true)
                 {
-                    final int toRead = (int) Math.min(CHUNK_PAYLOAD_MAX, fileSize - (long) idx * CHUNK_PAYLOAD_MAX);
-                    if (idx >= wanted.length || !wanted[idx])
+                    final int idx = SERVES.takeNext(serveKey, at);
+                    if ((idx < 0) || (idx >= totalChunks))
                     {
-                        skipFully(in, toRead, readBuf);
-                        continue;
+                        break;
                     }
+                    skipFully(in, (long) (idx - at) * CHUNK_PAYLOAD_MAX, readBuf);
+                    at = idx + 1;
+                    final int toRead = (int) Math.min(CHUNK_PAYLOAD_MAX, fileSize - (long) idx * CHUNK_PAYLOAD_MAX);
                     readFully(in, readBuf, toRead);
                     final int res = send.chunk(buildChunkPacket(msgId, idx, readBuf, toRead));
                     if (res != SEND_OK)
@@ -2664,33 +2820,50 @@ public final class NgcGroupFileTransfer
 
     /**
      * KHANDAQ (0.2.56): waits until the pace lets a packet go (NgcUploadPace); false when the file was stopped
-     * meanwhile. The packet's cost is spent by the caller once it went ({@link #spendPace}).
+     * meanwhile. The packet's cost is spent by the caller once it went ({@link #spendPace}). 0.2.57: a packet that goes
+     * to a member over a relay ({@link #overRelay}) waits for the pace of the relays too.
      */
-    static boolean awaitPace(final GroupMessage g)
+    static boolean awaitPace(final GroupMessage g, final boolean overRelay)
     {
         while (true)
         {
             final long waitMs;
             synchronized (PACE)
             {
-                final long now = nowMs();
-                if (PACE.ready(now))
+                synchronized (RELAY_PACE)
                 {
-                    return true;
+                    waitMs = NgcUploadPace.msUntilReady(PACE, RELAY_PACE, overRelay, nowMs());
                 }
-                waitMs = PACE.msUntilReady(now);
             }
-            if (isStopped(g) || !sleepQuietly(Math.max(1L, Math.min(waitMs, 50L))))
+            if (waitMs <= 0L)
+            {
+                return true;
+            }
+            if (isStopped(g) || !sleepQuietly(Math.min(waitMs, 50L)))
             {
                 return false;
             }
         }
     }
 
-    /** KHANDAQ (0.2.56): a packet of this many bytes went to this many members (NgcUploadPace.cost). */
-    static void spendPace(final long packetBytes, final int members)
+    /**
+     * KHANDAQ (0.2.56): a packet of this many bytes went to this many members (NgcUploadPace.cost); 0.2.57: and over
+     * a relay, as {@link #awaitPace} was told.
+     */
+    static void spendPace(final long packetBytes, final int members, final boolean overRelay)
     {
-        PACE.spend(NgcUploadPace.cost(packetBytes, members));
+        NgcUploadPace.spend(PACE, RELAY_PACE, packetBytes, members, overRelay);
+    }
+
+    /**
+     * KHANDAQ (0.2.57): whether a packet to these members of the group goes to one that toxcore reaches only through a
+     * relay (NgcUploadPace.overRelay). A private packet asks about its member alone.
+     */
+    static boolean overRelay(final long groupNum, final long... peerIds)
+    {
+        final long selfPeerId = tox_group_self_get_peer_id(groupNum);
+        return NgcUploadPace.overRelay(peerIds, selfPeerId,
+                                       peerId -> tox_group_peer_get_connection_status(groupNum, peerId));
     }
 
     /**
@@ -2718,6 +2891,8 @@ public final class NgcGroupFileTransfer
         /** The members that took the BEGIN. */
         private final java.util.Set<Long> begun = new java.util.HashSet<>();
         private int refusals = 0;
+        /** KHANDAQ (0.2.57): the last packet went to a member over a relay (overRelay); logged when it changes. */
+        private boolean relayed = false;
 
         PacedSend(final long groupNum, final PeerSendTargets targets, final GroupMessage g, final byte[] beginPkt)
         {
@@ -2791,7 +2966,15 @@ public final class NgcGroupFileTransfer
                 {
                     return SEND_STOPPED;
                 }
-                if (!awaitPace(g))
+                // KHANDAQ (0.2.57): a packet that goes to a member over a relay goes at the pace of the relays too.
+                final boolean overRelay = overRelay(groupNum, targets.peerIds);
+                if (overRelay != relayed)
+                {
+                    relayed = overRelay;
+                    HelperGeneric.logI(TAG, "send:" + (overRelay ? "over a relay" : "direct") + " msg="
+                            + g.msg_id_hash.substring(0, 8) + " " + targets.describe());
+                }
+                if (!awaitPace(g, overRelay))
                 {
                     return SEND_STOPPED;
                 }
@@ -2810,7 +2993,7 @@ public final class NgcGroupFileTransfer
                 }
                 if (took > 0)
                 {
-                    spendPace(pkt.length, took);
+                    spendPace(pkt.length, took, overRelay);
                     return SEND_OK;
                 }
 
@@ -2858,7 +3041,9 @@ public final class NgcGroupFileTransfer
                 {
                     continue;
                 }
-                if (!awaitPace(g))
+                // KHANDAQ (0.2.57): a private packet: over a relay when its member is.
+                final boolean overRelay = overRelay(groupNum, peerId);
+                if (!awaitPace(g, overRelay))
                 {
                     return false;
                 }
@@ -2866,7 +3051,7 @@ public final class NgcGroupFileTransfer
                                                                      beginPkt.length);
                 if (HelperGroup.is_ngc_custom_packet_send_ok(res))
                 {
-                    spendPace(beginPkt.length, 1);
+                    spendPace(beginPkt.length, 1, overRelay);
                     begun.add(peerId);
                     HelperGeneric.logI(TAG, "send:begin to member that came peer=" + peerId);
                 }

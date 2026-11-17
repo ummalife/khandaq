@@ -782,6 +782,18 @@ public class HelperMessage
         {
         }
 
+        // KHANDAQ (0.2.57): a row from the person whose conversation is on screen may be the newest one seen.
+        try
+        {
+            if (row_id != -1)
+            {
+                HelperMessageSeen.onIncomingItem(m);
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+
         try
         {
             if ((row_id != -1) && (update_message_view_flag))

@@ -1413,8 +1413,28 @@ public class FriendListFragment extends Fragment
             }
         }
         FavoritesChatHelper.prependPinnedRow(filtered);
+        // KHANDAQ (0.2.57): Khandaq Community right below it, in every filter as it.
+        KhandaqCommunity.pinRow(filtered, items, CHAT_ROWS);
         return filtered;
     }
+
+    /** The rows KhandaqCommunity.pinRow tells apart: Saved Messages, and Khandaq Community while the person is in it. */
+    private static final KhandaqCommunity.ChatRows<CombinedFriendsAndConferences> CHAT_ROWS =
+            new KhandaqCommunity.ChatRows<CombinedFriendsAndConferences>()
+            {
+                @Override
+                public boolean pinned(final CombinedFriendsAndConferences row)
+                {
+                    return (row.is_friend == COMBINED_IS_GROUP) && (row.group_item != null)
+                           && KhandaqCommunity.pinned(row.group_item.group_identifier, row.group_item.group_we_left);
+                }
+
+                @Override
+                public boolean saved(final CombinedFriendsAndConferences row)
+                {
+                    return row.is_friend == CombinedFriendsAndConferences.COMBINED_IS_FAVORITES;
+                }
+            };
 
     private void reloadChatsListFromDb(final int delay)
     {

@@ -43,7 +43,22 @@ final class AirConversationModel
         /** The person's device confirmed it (two checks). */
         DELIVERED,
         /** The network gave up on it; "Retry" sends the same text again (red). */
-        FAILED;
+        FAILED,
+        /**
+         * KHANDAQ (0.2.57): the person had the conversation open with it (two checks in brand teal). Read
+         * receipts are 1:1 only (HelperMessageSeen): never in a group or in Saved.
+         */
+        SEEN;
+
+        /**
+         * KHANDAQ (0.2.57): the state once the person's seen watermark covers the item ({@code covered}). Only
+         * an item that left this device, sent or delivered, turns seen: one that waits, is leaving or failed
+         * keeps its own state, and so does everything when nothing covers it.
+         */
+        EntryStatus seenIf(final boolean covered)
+        {
+            return covered && (this == SENT || this == DELIVERED) ? SEEN : this;
+        }
 
         /**
          * An outgoing text: {@code messageId} is -1 until toxcore has taken the message, {@code isDelivered}
@@ -103,6 +118,7 @@ final class AirConversationModel
                 case SENT:
                     return "check";
                 case DELIVERED:
+                case SEEN:
                     return "check-double";
                 case FAILED:
                     return "alert";

@@ -574,6 +574,76 @@ class AirGroupModelTests: XCTestCase {
         XCTAssertEqual(AirGroupTranscript.status(pending: false, delivered: true, confirmations: 0), .delivered)
     }
 
+    /// KHANDAQ (0.2.58): the name over an entry opens the member who wrote it. Amina wrote with number 5,
+    /// left, and toxcore gave 5 to Bilal, who came next: her entry is hers by the key it kept, never Bilal's
+    /// by the number, and with Amina gone it is nobody's.
+    func testTheAuthorOfAnEntryIsTheMemberWithTheKeyItKept() {
+        let aminaKey = String(repeating: "A1", count: 32)
+        let bilalKey = String(repeating: "B2", count: 32)
+        let bilal = member(5, "Bilal", .user, key: bilalKey)
+        let amina = member(9, "Amina", .moderator, key: aminaKey)
+
+        XCTAssertEqual(AirGroupTranscript.author(key: aminaKey, peerId: 5, name: "Amina", among: [bilal, amina]), amina,
+                       "she came back with another number")
+        XCTAssertEqual(AirGroupTranscript.author(key: aminaKey.lowercased(), peerId: 5, name: nil, among: [bilal, amina]), amina,
+                       "a file keeps its author's key in lower case")
+        XCTAssertNil(AirGroupTranscript.author(key: aminaKey, peerId: 5, name: "Amina", among: [bilal]),
+                     "Bilal has her number now, not her entry")
+        XCTAssertNil(AirGroupTranscript.author(key: aminaKey, peerId: 5, name: "Amina", among: [member(5, "Amina", .user)]),
+                     "a member whose key is not known yet is nobody's author")
+        XCTAssertNil(AirGroupTranscript.author(key: aminaKey, peerId: 9, name: "Amina", among: []))
+    }
+
+    /// An older entry kept no key: its author is the member with its number, while that member has the name
+    /// the entry kept; an entry without a number names nobody.
+    func testAnEntryWithoutAKeyGoesByItsNumberWhileTheNameItKeptAgrees() {
+        let bilal = member(5, "Bilal", .user, key: String(repeating: "B2", count: 32))
+        let far = member(UInt32.max - 1, "Omar", .user)
+
+        XCTAssertEqual(AirGroupTranscript.author(key: "", peerId: 5, name: nil, among: [bilal]), bilal, "the entry kept no name")
+        XCTAssertEqual(AirGroupTranscript.author(key: "  ", peerId: 5, name: " Bilal ", among: [bilal]), bilal)
+        XCTAssertNil(AirGroupTranscript.author(key: "", peerId: 5, name: "Amina", among: [bilal]), "number 5 went to someone else")
+        XCTAssertNil(AirGroupTranscript.author(key: "", peerId: 6, name: nil, among: [bilal]), "the author is not in the group now")
+        XCTAssertNil(AirGroupTranscript.author(key: "", peerId: 0, name: "Bilal", among: [member(0, "Bilal", .user)]),
+                     "toxcore numbers only the entries of others")
+        XCTAssertEqual(AirGroupTranscript.author(key: "", peerId: Int32(bitPattern: UInt32.max - 1), name: "Omar", among: [bilal, far]), far,
+                       "a number past Int32.max is stored by its bits")
+    }
+
+    /// The key and the name an entry kept of its author: a text from the group's history keeps them on its
+    /// text, a file on its file, a live text the key on the entry; our own entries keep the key of nobody.
+    func testAnEntryKeepsTheKeyAndTheNameOfItsAuthorWhereItCame() throws {
+        let key = String(repeating: "C3", count: 32)
+
+        let live = try groupEntry(peerId: 5)
+        live.groupPrivatePeerPubkey = key.lowercased()
+        let liveText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        liveText.groupPeerName = "Amina"
+        live.messageText = liveText
+        XCTAssertEqual(AirGroupTranscript.authorKey(of: live), key.lowercased())
+        XCTAssertEqual(AirGroupTranscript.authorName(of: live), "Amina")
+
+        let synced = try groupEntry(peerId: 5)
+        let syncedText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        syncedText.groupSenderPubkey = key
+        synced.messageText = syncedText
+        XCTAssertEqual(AirGroupTranscript.authorKey(of: synced), key)
+        XCTAssertNil(AirGroupTranscript.authorName(of: synced), "it kept no name")
+
+        let file = try groupEntry(peerId: 5)
+        let messageFile = try appClass("OCTMessageFile", as: OCTMessageFile.Type.self).init()
+        messageFile.groupSenderPubkey = key.lowercased()
+        messageFile.groupPeerName = "Bilal"
+        file.messageFile = messageFile
+        XCTAssertEqual(AirGroupTranscript.authorKey(of: file), key.lowercased())
+        XCTAssertEqual(AirGroupTranscript.authorName(of: file), "Bilal")
+
+        let ours = try groupEntry(peerId: 0)
+        ours.groupPrivateMessage = true
+        ours.groupPrivatePeerPubkey = key
+        XCTAssertEqual(AirGroupTranscript.authorKey(of: ours), "", "the key of the member it went to")
+    }
+
     // MARK: - Joining by key, the group settings
 
     func testJoinKeyFieldSaysWhatItHolds() {
@@ -780,6 +850,13 @@ private extension AirGroupModelTests {
     func appClass<T>(_ name: String, as type: T.Type) throws -> T {
         let cls: AnyClass = try XCTUnwrap(NSClassFromString(name), "no class \(name)")
         return unsafeBitCast(cls, to: type)
+    }
+
+    /// An entry of a group outside any Realm, made from the app's class (GroupReportTests).
+    func groupEntry(peerId: Int32) throws -> OCTMessageAbstract {
+        let message = try appClass("OCTMessageAbstract", as: OCTMessageAbstract.Type.self).init()
+        message.groupSenderPeerId = peerId
+        return message
     }
 
     func view(in controller: UIViewController, _ identifier: String) -> UIView? {

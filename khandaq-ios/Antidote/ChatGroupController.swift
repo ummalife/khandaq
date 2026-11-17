@@ -105,6 +105,29 @@ class ChatGroupController: PortraitChatController {
     var groupAirObservers: [NSObjectProtocol] = []
     /// The mark each of our messages showed when last drawn, so a change cross-fades.
     var groupStatusMemory: [String: AirEntryStatus] = [:]
+    /// KHANDAQ (0.2.58): the actions on the member whose name over an entry was tapped (openAuthor): the
+    /// sheet of the member's row in the dossier, its toasts above the field.
+    lazy var authorSheet: AirGroupMemberSheet = {
+        let sheet = AirGroupMemberSheet(host: self,
+                                        theme: theme,
+                                        chat: chat,
+                                        submanagerGroups: submanagerGroups,
+                                        submanagerObjects: submanagerObjects,
+                                        submanagerFriends: submanagerFriends)
+        sheet.onOpenFriend = { [weak self] friend in
+            guard let self = self else {
+                return
+            }
+            self.delegate?.chatGroupController(self, didRequestOpenFriend: friend)
+        }
+        sheet.onMembersChanged = { [weak self] in
+            self?.refreshGroupAir(animated: true)
+        }
+        sheet.toastAnchor = { [weak self] in
+            self?.groupToastAnchor
+        }
+        return sheet
+    }()
 
     private let membersDrawerWidth: CGFloat = 300
 
@@ -1606,14 +1629,11 @@ extension ChatGroupController {
     func peerName(for message: OCTMessageAbstract) -> String? {
         // KHANDAQ (#42): prefer the name FROZEN on the message at receipt (resolved then by the STABLE
         // sender pubkey). The live peerId lookup below is unreliable after an app restart (the group
-        // roster has not re-synced yet → generic "Участник N") and whenever the volatile peerId has
+        // roster has not re-synced yet → the generic "Member N" fallback) and whenever the volatile peerId has
         // since been reused by another peer. That made stored messages change sender/name on relaunch.
-        if let stored = message.messageText?.groupPeerName, !stored.isEmpty {
-            return stored
-        }
         // KHANDAQ (#82): FILE messages freeze their sender name separately (OCTMessageFile.groupPeerName).
-        if let storedFile = message.messageFile?.groupPeerName, !storedFile.isEmpty {
-            return storedFile
+        if let stored = AirGroupTranscript.authorName(of: message) {
+            return stored
         }
 
         guard message.groupSenderPeerId > 0 else {

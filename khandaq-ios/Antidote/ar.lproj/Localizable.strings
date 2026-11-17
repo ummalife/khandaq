@@ -1126,6 +1126,7 @@
 "air_group_hint_one_other" = "العضو الآخر متصل ويستلمها الآن";
 "air_group_open_chat" = "فتح المحادثة";
 "air_group_author_unknown" = "عضو في المجموعة";
+"air_group_author_not_here_format" = "%@ ليس في المجموعة الآن";
 
 /* Redesign stage 3: files, photos and voice notes in the transcript (E8) */
 "air_file_accept" = "قبول";

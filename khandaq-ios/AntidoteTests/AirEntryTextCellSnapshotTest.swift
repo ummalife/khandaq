@@ -78,3 +78,202 @@ private extension AirEntryTextCellSnapshotTest {
         verifyView(cell)
     }
 }
+
+/// KHANDAQ (0.2.58): the name over an entry of another member of a group opens that member, as the
+/// member's row in the dossier does. The touch takes the name, a margin to each side and the room of the
+/// entry above it, never the message under it; VoiceOver has the name as a button after its entry.
+class AirAuthorTapTests: CellSnapshotTest {
+    func testTheNameOfAnotherMemberTakesATapAndLeavesTheMessageItsOwn() throws {
+        var opened: [UIView] = []
+        let cell = textCell(author: "Amina") { opened.append($0) }
+        let label = try XCTUnwrap(authorLabel(in: cell))
+        let name = label.nameRect
+
+        XCTAssertTrue(hit(cell, label, CGPoint(x: name.midX, y: name.midY)) === label, "the name")
+        XCTAssertTrue(hit(cell, label, CGPoint(x: name.midX, y: 1 - AirEntryMetrics.entryInset)) === label, "the room above the name")
+        XCTAssertTrue(hit(cell, label, CGPoint(x: name.maxX + AirAuthorLabel.touchMargin - 1, y: name.midY)) === label,
+                      "the margin after the name")
+        XCTAssertFalse(hit(cell, label, CGPoint(x: name.midX, y: label.bounds.maxY + 1)) === label, "the message under the name")
+        XCTAssertFalse(hit(cell, label, CGPoint(x: label.touchRect.maxX + 4, y: name.midY)) === label, "the line after the name")
+        XCTAssertGreaterThanOrEqual(label.touchRect.width, KQSize.targetIos)
+
+        XCTAssertTrue(label.accessibilityActivate(), "a double tap on the name does nothing")
+        XCTAssertEqual(opened.count, 1)
+        XCTAssertTrue(opened.first === label, "the actions point at the name")
+    }
+
+    func testVoiceOverHasTheEntryThenTheNameAsAButton() throws {
+        let cell = textCell(author: "Amina, moderator") { _ in }
+        let label = try XCTUnwrap(authorLabel(in: cell))
+
+        XCTAssertFalse(cell.isAccessibilityElement)
+        let elements = try XCTUnwrap(cell.accessibilityElements)
+        XCTAssertEqual(elements.count, 2)
+        let entry = try XCTUnwrap(elements.first as? UIAccessibilityElement)
+        XCTAssertEqual(entry.accessibilityLabel, cell.accessibilityLabel, "the entry says what the row said")
+        XCTAssertEqual(entry.accessibilityValue, cell.accessibilityValue)
+        XCTAssertTrue(elements.last as? AirAuthorLabel === label)
+        XCTAssertTrue(label.isAccessibilityElement)
+        XCTAssertEqual(label.accessibilityLabel, "Amina, moderator")
+        XCTAssertEqual(label.accessibilityHint, String(localized: "air_group_member_hint"))
+        XCTAssertTrue(label.accessibilityTraits & UIAccessibilityTraitButton != 0, "the name is not read as a button")
+    }
+
+    func testWithoutATapTheNameIsSaidWithItsEntryAndTakesNoTouch() throws {
+        let cell = textCell(author: "Amina", tap: nil)
+        let label = try XCTUnwrap(authorLabel(in: cell))
+        let name = label.nameRect
+
+        XCTAssertFalse(hit(cell, label, CGPoint(x: name.midX, y: name.midY)) === label)
+        XCTAssertTrue(cell.isAccessibilityElement)
+        XCTAssertNil(cell.accessibilityElements)
+        XCTAssertFalse(label.isAccessibilityElement)
+        XCTAssertFalse(label.accessibilityActivate())
+    }
+
+    /// A row drawn again for another entry (the log reuses its rows) loses the tap of the one before.
+    func testAReusedRowForgetsTheTapOfItsLastEntry() throws {
+        var opened = 0
+        let cell = textCell(author: "Amina") { _ in opened += 1 }
+        let ours = entry(author: String(localized: "air_you"), tap: nil)
+        ours.isOutgoing = true
+        ours.status = .sent
+        cell.setupWithTheme(theme, model: ours)
+        layoutAsTheLogDoes(cell)
+        let label = try XCTUnwrap(authorLabel(in: cell))
+        let name = label.nameRect
+
+        XCTAssertFalse(hit(cell, label, CGPoint(x: name.midX, y: name.midY)) === label)
+        XCTAssertFalse(label.accessibilityActivate())
+        XCTAssertEqual(opened, 0)
+        XCTAssertTrue(cell.isAccessibilityElement)
+    }
+
+    /// While the log selects messages a tap on the name selects its row, as on any other part of it.
+    func testWhileTheLogSelectsMessagesTheNameLeavesTheTapToTheRow() throws {
+        var opened = 0
+        let cell = textCell(author: "Amina") { _ in opened += 1 }
+        let label = try XCTUnwrap(authorLabel(in: cell))
+
+        cell.setEditing(true, animated: false)
+        cell.layoutIfNeeded()
+        let name = label.nameRect
+        XCTAssertFalse(hit(cell, label, CGPoint(x: name.midX, y: name.midY)) === label)
+        XCTAssertTrue(cell.isAccessibilityElement)
+        XCTAssertFalse(label.accessibilityActivate())
+        XCTAssertEqual(opened, 0)
+
+        cell.setEditing(false, animated: false)
+        cell.layoutIfNeeded()
+        XCTAssertTrue(hit(cell, label, CGPoint(x: label.nameRect.midX, y: label.nameRect.midY)) === label)
+    }
+
+    func testTheNameOverAFileOfAnotherMemberIsAButtonToo() throws {
+        var opened = 0
+        let model = fileEntry(ChatIncomingFileCellModel(), state: .done)
+        model.authorText = "Bilal"
+        model.onAuthorTap = { _ in
+            opened += 1
+        }
+        let cell = ChatIncomingFileCell()
+        cell.setupWithTheme(theme, model: model)
+        layoutAsTheLogDoes(cell)
+        let label = cell.entry.authorLabel
+        let name = label.nameRect
+
+        XCTAssertTrue(hit(cell, label, CGPoint(x: name.midX, y: name.midY)) === label)
+        XCTAssertFalse(hit(cell, label, CGPoint(x: name.midX, y: label.bounds.maxY + 1)) === label, "the file under the name")
+        let elements = try XCTUnwrap(cell.accessibilityElements)
+        XCTAssertGreaterThanOrEqual(elements.count, 2)
+        XCTAssertTrue(elements[1] as? AirAuthorLabel === label, "the name follows its entry")
+        XCTAssertTrue(label.accessibilityActivate())
+        XCTAssertEqual(opened, 1)
+    }
+
+    /// The touch is on the words wherever the label draws them: at the start of a left-to-right row and of a
+    /// right-to-left one (Arabic), a name in either script.
+    func testTheTouchCoversTheNameInBothDirections() throws {
+        for (rightToLeft, name) in [(false, "Amina"), (false, "أمينة"), (true, "أمينة"), (true, "Amina")] {
+            let cell = AirEntryTextCell()
+            cell.setupWithTheme(theme, model: entry(author: name) { _ in })
+            if rightToLeft {
+                mirror(cell)
+            }
+            layoutAsTheLogDoes(cell)
+            let label = try XCTUnwrap(authorLabel(in: cell))
+            let ink = try XCTUnwrap(inkColumns(of: label), "\(name) draws nothing")
+            let touch = label.touchRect
+            let context = "\(name), right to left: \(rightToLeft), words at \(ink), touch at \(touch.minX)...\(touch.maxX)"
+            XCTAssertLessThanOrEqual(touch.minX, ink.lowerBound, context)
+            XCTAssertGreaterThanOrEqual(touch.maxX, ink.upperBound, context)
+            XCTAssertLessThan(touch.width, label.bounds.width / 2, "the touch is the name's, not the row's: " + context)
+        }
+    }
+}
+
+private extension AirAuthorTapTests {
+    func entry(author: String, text: String = "Salam! Are we still on for tonight?", tap: ((UIView) -> Void)?) -> AirEntryTextCellModel {
+        let model = AirEntryTextCellModel()
+        model.message = text
+        model.timeText = "9:41"
+        model.authorText = author
+        model.spokenAuthor = author
+        model.authorColor = AirTone.color(at: 2)
+        model.onAuthorTap = tap
+        return model
+    }
+
+    func textCell(author: String, tap: ((UIView) -> Void)?) -> AirEntryTextCell {
+        let cell = AirEntryTextCell()
+        cell.setupWithTheme(theme, model: entry(author: author, tap: tap))
+        layoutAsTheLogDoes(cell)
+        return cell
+    }
+
+    func authorLabel(in view: UIView) -> AirAuthorLabel? {
+        for subview in view.subviews {
+            if let label = subview as? AirAuthorLabel {
+                return label
+            }
+            if let label = authorLabel(in: subview) {
+                return label
+            }
+        }
+        return nil
+    }
+
+    /// What a finger at `point` of `label` touches in `cell`.
+    func hit(_ cell: UITableViewCell, _ label: UIView, _ point: CGPoint) -> UIView? {
+        return cell.hitTest(label.convert(point, to: cell), with: nil)
+    }
+
+    /// The row as an Arabic phone lays it out (AppLanguage turns every view right to left).
+    func mirror(_ view: UIView) {
+        view.semanticContentAttribute = .forceRightToLeft
+        view.subviews.forEach { mirror($0) }
+    }
+
+    /// The columns where the label draws its words, in its own coordinates.
+    func inkColumns(of label: UILabel) -> ClosedRange<CGFloat>? {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        let image = UIGraphicsImageRenderer(bounds: label.bounds, format: format).image { _ in
+            label.drawText(in: label.bounds)
+        }
+        guard let picture = image.cgImage, let data = picture.dataProvider?.data, let bytes = CFDataGetBytePtr(data) else {
+            return nil
+        }
+        let bytesPerPixel = picture.bitsPerPixel / 8
+        let columns = (0..<picture.width).filter { x in
+            (0..<picture.height).contains { y in
+                let pixel = bytes + y * picture.bytesPerRow + x * bytesPerPixel
+                return (0..<bytesPerPixel).contains { pixel[$0] != 0 }
+            }
+        }
+        guard let first = columns.first, let last = columns.last else {
+            return nil
+        }
+        return CGFloat(first)...CGFloat(last + 1)
+    }
+}

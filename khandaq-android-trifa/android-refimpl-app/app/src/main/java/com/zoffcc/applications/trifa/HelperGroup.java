@@ -6448,6 +6448,16 @@ public class HelperGroup
         return result > 0;
     }
 
+    /**
+     * KHANDAQ (gc IPv6 MTU): whether a live media packet of a group (NGC video or audio) of this length goes lossy: up
+     * to ToxVars.MAX_GC_LOSSY_PACKET_SIZE, the largest group packet toxcore sends in one piece. A longer one goes
+     * lossless, which toxcore splits into chunks; sent lossy, toxcore would refuse it and the frame would be lost.
+     */
+    static boolean is_ngc_media_packet_lossy(final int length)
+    {
+        return length <= ToxVars.MAX_GC_LOSSY_PACKET_SIZE;
+    }
+
     static String describe_ngc_custom_packet_error(final int result)
     {
         if (result >= 0)

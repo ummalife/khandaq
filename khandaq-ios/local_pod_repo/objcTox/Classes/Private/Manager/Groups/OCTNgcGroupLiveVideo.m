@@ -4,6 +4,7 @@
 
 #import "OCTNgcGroupLiveVideo.h"
 #import "OCTLogging.h"
+#import "OCTNgcLiveMedia.h"
 
 #include <string.h>
 
@@ -573,7 +574,8 @@ static const CFTimeInterval kOCTNgcRemoteFrameTimeoutSec = 5.0;
 
     dispatch_async(self.videoQueue, ^{
         NSError *sendError = nil;
-        const BOOL lossless = packetLength >= TOX_MAX_CUSTOM_PACKET_SIZE;
+        // KHANDAQ (gc IPv6 MTU): lossy only if toxcore sends it in one piece (OCTNgcLiveMedia.h).
+        const BOOL lossless = packetLength > kOCTNgcMaxLossyPacketLength;
         self.sendPacketBlock(self.captureGroupNumber, packet, lossless, &sendError);
 
         if (sendError) {

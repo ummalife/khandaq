@@ -28,6 +28,7 @@
 #include "src/core/coreav.h"
 #include "src/core/corefile.h"
 #include "src/model/air/airconversation.h"
+#include "src/model/air/airmodel.h"
 #include "src/model/chathistory.h"
 #include "src/model/friend.h"
 #include "src/model/status.h"
@@ -55,6 +56,7 @@
 #include "src/widget/maskablepixmapwidget.h"
 #include "src/widget/searchform.h"
 #include "src/widget/style.h"
+#include "src/widget/tool/chatquotepreview.h"
 #include "src/widget/tool/chattextedit.h"
 #include "src/widget/tool/croppinglabel.h"
 #include "src/widget/tool/imessageboxmanager.h"
@@ -298,6 +300,7 @@ ChatForm::ChatForm(Profile& profile_, Friend* chatFriend, IChatLog& chatLog_,
     connect(&headTicker, &QTimer::timeout, this, &ChatForm::refreshHead);
     headTicker.start();
     connect(msgEdit, &ChatTextEdit::textChanged, this, &ChatForm::refreshCounter);
+    connect(quotePreview, &ChatQuotePreview::changed, this, &ChatForm::refreshCounter);
 
     const CoreFile* coreFile = core.getCoreFile();
     connect(&profile, &Profile::friendAvatarChanged, this, &ChatForm::onAvatarChanged);
@@ -442,7 +445,9 @@ void ChatForm::refreshQueue()
             AirQueueItem item;
             item.id = message.outboxId;
             item.time = clockText(message.timestamp);
-            item.text = message.isAction ? ChatForm::ACTION_PREFIX + message.text : message.text;
+            // The words, as the transcript shows them: a reply without its header.
+            const QString words = AirStrings::messageWords(message.text);
+            item.text = message.isAction ? ChatForm::ACTION_PREFIX + words : words;
             (message.failed ? failed : waiting).append(item);
         }
     }
@@ -468,8 +473,9 @@ void ChatForm::orderTabs()
 
 void ChatForm::refreshCounter()
 {
-    // The room left once a tenth of a message remains; past the limit the text goes in parts.
-    const int bytes = msgEdit->toPlainText().toUtf8().size();
+    // The room left once a tenth of a message remains; past the limit the text goes in parts. The
+    // quote or the header of a reply goes in front of the words and takes room too.
+    const int bytes = outgoingText().toUtf8().size();
     const Air::ComposeRoom room = Air::composeRoom(bytes, static_cast<int>(core.getMaxMessageSize()));
     composer->setCounter(room.shown ? AirStrings::composeCounterText(room.left) : QString());
 }
@@ -562,9 +568,20 @@ void ChatForm::editQueued(qint64 id)
         if (message.outboxId != id) {
             continue;
         }
-        const QString text = message.isAction ? ChatForm::ACTION_PREFIX + message.text : message.text;
+        // KHANDAQ (0.2.58): a reply comes back as it was written: its quote over the field, its
+        // words in it.
+        Air::ReplyMeta reply;
+        const bool replied = !message.isAction && Air::readReplyHead(message.text, &reply);
+        const QString words =
+            replied ? message.text.mid(Air::replyHeadLength(message.text)) : message.text;
+        const QString text = message.isAction ? ChatForm::ACTION_PREFIX + words : words;
         // The message comes back into the field; a draft already there stays in front of it.
         queueLog->cancelQueuedMessage(id);
+        if (replied) {
+            const bool self = reply.authorKey == Air::keyTail(core.getSelfPublicKey().toString());
+            const bool person = reply.authorKey == Air::keyTail(f->getPublicKey().toString());
+            quotePreview->setReply(reply, person ? f->getDisplayedName() : reply.authorName, self);
+        }
         const QString draft = msgEdit->toPlainText();
         msgEdit->setPlainText(draft.isEmpty() ? text : draft + QLatin1Char('\n') + text);
         msgEdit->moveCursor(QTextCursor::End);
@@ -598,6 +615,23 @@ void ChatForm::retryQueued(qint64 id)
             return;
         }
     }
+}
+
+GenericChatForm::ReplyAuthor ChatForm::replyAuthorOf(const ChatLogItem& item) const
+{
+    ReplyAuthor author;
+    if (item.getSender() == core.getSelfPublicKey()) {
+        author.self = true;
+        author.key = core.getSelfPublicKey();
+        author.name = core.getUsername();
+        return author;
+    }
+    // The name the person gave themselves, which the others know too, not the one this device
+    // gives them (iOS sends the same).
+    author.key = f->getPublicKey();
+    const QString own = f->getUserName().trimmed();
+    author.name = own.isEmpty() ? f->getDisplayedName() : own;
+    return author;
 }
 
 bool ChatForm::editLastQueued()

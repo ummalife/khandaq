@@ -17,6 +17,7 @@
     along with qTox.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "src/model/air/airmodel.h"
 #include "src/model/message.h"
 
 #include <tox/tox.h>
@@ -45,6 +46,7 @@ private slots:
     void testSelfMention();
     void testReplyIsNoMention();
     void testOutgoingMessage();
+    void testOutgoingReplyKeepsItsHeadInTheFirstPart();
     void testIncomingMessage();
 };
 
@@ -202,6 +204,71 @@ void TestMessageProcessor::testOutgoingMessage()
 
     // If we have multipart messages we shouldn't split our messages
     QVERIFY(messages.size() == 1);
+}
+
+/**
+ * @brief KHANDAQ (0.2.58): a reply too long for one message goes in parts: the first opens with
+ * the whole head of the reply and some of its words, the others are plain text.
+ */
+void TestMessageProcessor::testOutgoingReplyKeepsItsHeadInTheFirstPart()
+{
+    constexpr uint64_t limit = 120;
+    auto sharedParams = MessageProcessor::SharedParams(limit, 10 * 1024 * 1024);
+    auto messageProcessor = MessageProcessor(sharedParams);
+
+    Air::ReplyMeta reply;
+    reply.localId = 7;
+    reply.authorKey = QStringLiteral("ABCDEF12");
+    reply.timeMs = 1700000000000;
+    reply.authorName = QStringLiteral("Amina");
+    reply.words = QStringLiteral("what time?");
+    const QString head = Air::replyHead(reply);
+    QCOMPARE(head.toUtf8().size(), 56);
+
+    const auto check = [&](const QString& words) {
+        const QString text = head + words;
+        const std::vector<Message> parts =
+            messageProcessor.processOutgoingMessage(false, text, ExtensionSet());
+        QVERIFY(parts.size() >= 2);
+        QString joined;
+        for (size_t i = 0; i < parts.size(); ++i) {
+            QVERIFY(static_cast<uint64_t>(parts[i].content.toUtf8().size()) <= limit);
+            QCOMPARE(Air::replyHeadLength(parts[i].content) > 0, i == 0);
+            joined += parts[i].content;
+        }
+        QCOMPARE(joined, text);
+        // The first part is a reply with words of its own.
+        const Air::MessageText first = Air::readMessageText(parts.front().content);
+        QVERIFY(first.reply);
+        QCOMPARE(first.replyName, QStringLiteral("Amina"));
+        QCOMPARE(first.replyPreview, QStringLiteral("what time?"));
+        QVERIFY(!first.body.isEmpty());
+    };
+    // No line break or space in the words: the only line break within the limit is the one after
+    // the footer, and a cut there would leave the head alone in the first part.
+    check(QString(100, QLatin1Char('y')));
+    // Words with spaces are cut at a space after the head.
+    check(QStringLiteral("word ").repeated(30));
+    // A line break in the words is a place to cut too.
+    check(QStringLiteral("at five\n") + QString(100, QLatin1Char('z')));
+
+    // A head that leaves no room for words is cut as any text is.
+    // The processor keeps a reference to its parameters: they live as long as it does.
+    const auto tightParams = MessageProcessor::SharedParams(40, 10 * 1024 * 1024);
+    auto tight = MessageProcessor(tightParams);
+    const QString text = head + QStringLiteral("ok");
+    QString joined;
+    for (const Message& part : tight.processOutgoingMessage(false, text, ExtensionSet())) {
+        QVERIFY(part.content.toUtf8().size() <= 40);
+        joined += part.content;
+    }
+    QCOMPARE(joined, text);
+
+    // A plain text is cut where it was before: at the last line break within the limit.
+    const QString plain = QStringLiteral("line one\n") + QString(150, QLatin1Char('p'));
+    const std::vector<Message> plainParts =
+        messageProcessor.processOutgoingMessage(false, plain, ExtensionSet());
+    QCOMPARE(plainParts.front().content, QStringLiteral("line one\n"));
 }
 
 /**

@@ -830,6 +830,8 @@ const Source sources[] = {
     {Text::ReplyUnknownSender, QT_TRANSLATE_NOOP3("Air", "Unknown", "in the quote of a reply, in place of the name when the reply does not say who wrote the quoted message; as chat_reply_unknown_sender on the phones")},
     {Text::SpokenReply, QT_TRANSLATE_NOOP3("Air", "In reply to %1", "what a screen reader says before the quote of a reply: the name of who wrote the quoted message; as chat_reply_header on the phones")},
     {Text::MessageReport, QT_TRANSLATE_NOOP3("Air", "Report", "menu action on a message someone else wrote in a group: opens a mail to support about it, with the message")},
+    {Text::MessageReply, QT_TRANSLATE_NOOP3("Air", "Reply", "menu action on a message or a file: the next message answers it, with its quote above the message field; as chat_reply_action on the phones")},
+    {Text::ReplyCancel, QT_TRANSLATE_NOOP3("Air", "Cancel reply", "the button that takes away the reply above the message field; as chat_reply_cancel on the phones")},
 };
 // clang-format on
 

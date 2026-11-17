@@ -61,6 +61,17 @@ public:
     void setText(const QString& text);
     /** The width the text takes on one line. */
     qreal naturalWidth() const;
+    /**
+     * Where the text stands in the label: at the start edge of the interface, as wide as it shows
+     * (cut short when the label is narrower).
+     */
+    QRectF textRect() const;
+    /**
+     * KHANDAQ (0.2.58): the text opens a menu on a click (an author's name in a group, whose
+     * member menu it opens): the pointer turns to a hand over it.
+     */
+    void setOpensMenu(bool opens);
+    bool opensMenu() const;
 
     void setWidth(float width) override;
     QRectF boundingRect() const override;
@@ -68,6 +79,10 @@ public:
     QString getText() const override;
     QString getSpokenText() const override;
     qreal getAscent() const override;
+
+protected:
+    void hoverMoveEvent(QGraphicsSceneHoverEvent* event) override;
+    void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;
 
 private:
     QFont font() const;
@@ -79,6 +94,7 @@ private:
     bool copied;
     int tone;
     qreal width = 0;
+    bool opens = false;
 };
 
 /** The state mark of one of our messages: a clock, one check, two checks, or the red alert. */

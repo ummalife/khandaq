@@ -115,6 +115,8 @@ protected slots:
     void showFileMenu();
     void hideFileMenu();
     void quoteSelectedText();
+    /** KHANDAQ (0.2.58): Reply in the menu of the transcript, on the entry it was opened on. */
+    void replyToMenuEntry();
     void copyLink();
     void onLoadHistory();
     void onExportChat();
@@ -133,8 +135,35 @@ protected:
      * the entry there.
      */
     virtual void prepareChatMenu(QPoint globalPos);
-    /** What Send would hand over now: the quote and the field, without the action prefix. */
+    /**
+     * What Send would hand over now: the quote or the reply's header and the field, without the
+     * action prefix.
+     */
     QString outgoingText() const;
+    /**
+     * KHANDAQ (0.2.58): who wrote an entry, as a reply to it names them on the wire. The name is
+     * the one the others know them by (ours too, never "You") and the key the one this
+     * conversation knows them by.
+     */
+    struct ReplyAuthor
+    {
+        QString name;
+        ToxPk key;
+        /** The entry is ours: the bar over the field says "You". */
+        bool self = false;
+    };
+    /** The base reads the log: our own key and name, else the entry's sender and the name it shows. */
+    virtual ReplyAuthor replyAuthorOf(const ChatLogItem& item) const;
+    /**
+     * Whether the entry at idx may be answered now: a message or a file with words to quote, in a
+     * conversation that takes replies, while you may write.
+     */
+    bool canReplyTo(ChatLogIdx idx) const;
+    /**
+     * Puts a reply to the entry at idx above the field, quoting words, or the words the entry
+     * shows when words is empty. False, and nothing changes, when it may not be answered.
+     */
+    bool startReply(ChatLogIdx idx, const QString& words = QString());
     /** Whether Send may hand the text over now; a form that limits it says why under the field. */
     virtual bool canSendNow() const;
     ChatMessage::Ptr createMessage(const ToxPk& author, const QString& message,
@@ -155,6 +184,7 @@ protected:
     int curRow;
 
     QAction* clearAction;
+    QAction* replyAction;
     QAction* quoteAction;
     QAction* copyLinkAction;
     QAction* searchAction;
@@ -198,4 +228,10 @@ protected:
     Style& style;
     FriendList& friendList;
     GroupList& groupList;
+
+private:
+    /** Notes take no replies: they have no author to answer. */
+    bool takesReplies = true;
+    /** The entry the menu of the transcript was opened on, as Reply answers it. */
+    ChatLogIdx menuEntry{0};
 };

@@ -46,6 +46,7 @@ private slots:
 
     void membersGoByRoleThenOnlineThenName();
     void searchByNameIgnoresCaseAndMarks();
+    void authorOfAnEntryIsFoundByTheirKey();
     void memberRowSaysTheRoleAndThePresence();
     void toneFollowsTheGroupKeyWhenKnown();
     void headerAndHintCountTheMembersAndTheOnesOnline();
@@ -178,6 +179,34 @@ void TestAirGroup::membersGoByRoleThenOnlineThenName()
     const QVector<Air::GroupMember> sortedTwins = Air::sortedRoster(twins);
     QCOMPARE(sortedTwins.at(0).peerId, 11u);
     QCOMPARE(sortedTwins.at(1).peerId, 12u);
+}
+
+/**
+ * KHANDAQ (0.2.58): a click on the name over an entry finds its author among the members by the
+ * key the entry carries, whatever the case of its hex digits; a key nobody has now finds nobody.
+ */
+void TestAirGroup::authorOfAnEntryIsFoundByTheirKey()
+{
+    const QString otherKey = QString(peerKey).replace(QLatin1Char('1'), QLatin1Char('2'));
+    const QVector<Air::GroupMember> members{
+        member(0, QStringLiteral("Amina"), Air::GroupRole::Founder, true, true, groupKey),
+        member(4, QStringLiteral("Yusuf"), Air::GroupRole::Member, true, false, peerKey),
+        member(9, QStringLiteral("Mariam"), Air::GroupRole::Moderator, false, false, QString())};
+
+    Air::GroupMember found;
+    QVERIFY(Air::memberWithKey(members, peerKey.toLower(), &found));
+    QCOMPARE(found.name, QStringLiteral("Yusuf"));
+    QCOMPARE(found.peerId, 4u);
+    QVERIFY(!found.isSelf);
+    // Our own key finds us: the caller opens no menu on it.
+    QVERIFY(Air::memberWithKey(members, groupKey, &found));
+    QVERIFY(found.isSelf);
+    // Someone who left, and an entry without a key, find nobody; a member without a key is never
+    // taken for them.
+    found = Air::GroupMember{};
+    QVERIFY(!Air::memberWithKey(members, otherKey, &found));
+    QVERIFY(!Air::memberWithKey(members, QString(), &found));
+    QVERIFY(found.name.isEmpty());
 }
 
 void TestAirGroup::searchByNameIgnoresCaseAndMarks()

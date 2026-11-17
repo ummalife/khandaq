@@ -1511,6 +1511,152 @@ int ownWordsStart(const QString& raw)
     return headerEnd >= 0 ? headerEnd + 1 : raw.size();
 }
 
+namespace {
+/** The most characters the quote of a reply carries, the ellipsis included (truncatePreview). */
+constexpr int replyQuoteLimit = 200;
+/**
+ * The most bytes of UTF-8 it carries, as 200 characters of the phones' own scripts take at most, so
+ * that the head of a reply leaves room for words in one message: 200 characters joined of several
+ * code points each (a family of emoji) would take kilobytes.
+ */
+constexpr int replyQuoteBytes = 600;
+
+/**
+ * Without the markers that open a header or end a quote: in a name or a quote they would end the
+ * header or the quote where they stand on every reader (Android audit #18). Taken out until none is
+ * left, since taking one out may join the halves of another.
+ */
+QString withoutReplyMarkers(QString text)
+{
+    for (;;) {
+        const int before = text.size();
+        text.remove(replyFooter);
+        text.remove(replyHeaderPrefix);
+        if (text.size() == before) {
+            return text;
+        }
+    }
+}
+} // namespace
+
+QString replyHead(const ReplyMeta& meta)
+{
+    return replyHeaderPrefix + QString::number(meta.localId) + QLatin1Char('|')
+           + keyTail(meta.authorKey) + QLatin1Char('|') + QString::number(meta.timeMs)
+           + QLatin1Char('|') + replyHeaderName(meta.authorName) + QLatin1Char(']') + QLatin1Char('\n')
+           + replyQuote(meta.words) + QLatin1Char('\n') + replyFooter + QLatin1Char('\n');
+}
+
+QString replyQuote(const QString& words)
+{
+    // On one line (quoteLine): a NUL older builds left at the end of a message, or a line break,
+    // would end the quote early on the phones (iOS #161).
+    const QString single = withoutReplyMarkers(quoteLine(words)).trimmed();
+    // One end more than the limit tells whether the words go on past it.
+    const QVector<int> ends = characterEnds(single, replyQuoteLimit + 1);
+    const bool longer = ends.size() > replyQuoteLimit + 1;
+    if (!longer && single.toUtf8().size() <= replyQuoteBytes) {
+        return single;
+    }
+    // 199 characters and the ellipsis; fewer when they would not fit in replyQuoteBytes.
+    const int ellipsisBytes = 3;
+    int kept = 0;
+    int bytes = 0;
+    while (kept < replyQuoteLimit - 1 && kept + 1 < ends.size()) {
+        const int next = single.mid(ends.at(kept), ends.at(kept + 1) - ends.at(kept)).toUtf8().size();
+        if (bytes + next > replyQuoteBytes - ellipsisBytes) {
+            break;
+        }
+        bytes += next;
+        ++kept;
+    }
+    return single.left(ends.at(kept)).trimmed() + QChar(0x2026);
+}
+
+QString replyHeaderName(const QString& name)
+{
+    QString field = withoutReplyMarkers(quoteLine(name));
+    // A "]" ends the header on every reader and a "|" would read as the next field.
+    field.replace(QLatin1Char(']'), QLatin1Char(' '));
+    field.replace(QLatin1Char('|'), QLatin1Char(' '));
+    return field.trimmed();
+}
+
+QString keyTail(const QString& key)
+{
+    return (key.size() < 8 ? key : key.right(8)).toUpper();
+}
+
+qint64 stableLocalId(const QString& uniqueIdentifier)
+{
+    quint64 hash = 5381;
+    for (const char byte : uniqueIdentifier.toUtf8()) {
+        hash = (hash << 5) + hash + static_cast<quint8>(byte);
+    }
+    return static_cast<qint64>(hash & 0x7FFFFFFFFFFFFFFFULL);
+}
+
+namespace {
+/**
+ * The head of a reply in the form replyHead writes, read: its fields into meta (the key tail stands
+ * for the key) and where it ends into length. False for any other text.
+ */
+bool parseReplyHead(const QString& raw, ReplyMeta* meta, int* length)
+{
+    MessageText text;
+    if (!readReply(raw, &text)) {
+        return false;
+    }
+    // readReply took the quote up to the footer when there is one after the header.
+    const int headerEnd = raw.indexOf(QLatin1Char(']'));
+    const int footer = raw.indexOf(replyFooter, headerEnd + 1);
+    if (footer < 0) {
+        return false;
+    }
+    int end = footer + replyFooter.size();
+    if (end < raw.size() && raw.at(end) == QLatin1Char('\n')) {
+        ++end;
+    }
+    // readReply checked the three fields before the name.
+    const QStringList fields =
+        raw.mid(replyHeaderPrefix.size(), headerEnd - replyHeaderPrefix.size()).split(QLatin1Char('|'));
+    meta->localId = fields.at(0).trimmed().toLongLong();
+    meta->authorKey = fields.at(1).trimmed();
+    meta->timeMs = fields.at(2).trimmed().toLongLong();
+    meta->authorName = text.replyName;
+    meta->words = text.replyPreview;
+    *length = end;
+    return true;
+}
+} // namespace
+
+int replyHeadLength(const QString& raw)
+{
+    ReplyMeta meta;
+    int length = 0;
+    return parseReplyHead(raw, &meta, &length) ? length : 0;
+}
+
+bool readReplyHead(const QString& raw, ReplyMeta* meta)
+{
+    int length = 0;
+    return parseReplyHead(raw, meta, &length);
+}
+
+QVector<int> characterEnds(const QString& text, int limit)
+{
+    QVector<int> ends{0};
+    QTextBoundaryFinder characters(QTextBoundaryFinder::Grapheme, text);
+    while (ends.size() <= limit) {
+        const int next = characters.toNextBoundary();
+        if (next < 0) {
+            break;
+        }
+        ends.append(next);
+    }
+    return ends;
+}
+
 AwayWords AwayWords::of(qint64 secondsAgo)
 {
     AwayWords words;

@@ -132,6 +132,20 @@ QVector<GroupMember> reachableNow(const QVector<GroupMember>& members)
     return sortedRoster(online);
 }
 
+bool memberWithKey(const QVector<GroupMember>& members, const QString& publicKey, GroupMember* found)
+{
+    if (publicKey.isEmpty()) {
+        return false;
+    }
+    for (const GroupMember& member : members) {
+        if (member.publicKey.compare(publicKey, Qt::CaseInsensitive) == 0) {
+            *found = member;
+            return true;
+        }
+    }
+    return false;
+}
+
 QVector<GroupMember> askable(const QVector<GroupMember>& members, bool founderOnly)
 {
     QVector<GroupMember> kept;

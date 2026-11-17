@@ -6,6 +6,7 @@
 
 #include "chatquotepreview.h"
 
+#include "src/widget/air/airstrings.h"
 #include "src/widget/air/airstyle.h"
 #include "src/widget/air/airtokens.h"
 #include "src/widget/air/airwidgets.h"
@@ -28,6 +29,8 @@ namespace {
 /** Two lines never hold more: a long selection is cut before it is laid out. */
 constexpr int maxLaidOut = 1024;
 constexpr int maxLines = 2;
+/** A reply shows one line of the words it quotes, as on the phones. */
+constexpr int replyLines = 1;
 
 const AirStyle& air()
 {
@@ -64,12 +67,39 @@ ChatQuotePreview::~ChatQuotePreview()
 
 void ChatQuotePreview::setQuoteText(const QString& text)
 {
-    quote = text.trimmed();
-    if (quote.isEmpty()) {
+    const QString words = text.trimmed();
+    if (words.isEmpty()) {
         clearQuote();
         return;
     }
 
+    quote = words;
+    replying = false;
+    replyMeta = Air::ReplyMeta{};
+    replyName.clear();
+    replyToSelf = false;
+    retranslateUi();
+    setAccessibleDescription(quote);
+    setVisible(true);
+    updateGeometry();
+    update();
+    emit changed();
+}
+
+void ChatQuotePreview::setReply(const Air::ReplyMeta& meta, const QString& name, bool self)
+{
+    const QString words = Air::replyQuote(meta.words);
+    if (words.isEmpty()) {
+        clearQuote();
+        return;
+    }
+
+    quote = words;
+    replying = true;
+    replyMeta = meta;
+    replyName = name;
+    replyToSelf = self;
+    retranslateUi();
     setAccessibleDescription(quote);
     setVisible(true);
     updateGeometry();
@@ -81,6 +111,14 @@ void ChatQuotePreview::clearQuote()
 {
     const bool had = !quote.isEmpty();
     quote.clear();
+    const bool wasReply = replying;
+    replying = false;
+    replyMeta = Air::ReplyMeta{};
+    replyName.clear();
+    replyToSelf = false;
+    if (wasReply) {
+        retranslateUi();
+    }
     setAccessibleDescription(QString());
     setVisible(false);
     if (had) {
@@ -93,6 +131,16 @@ bool ChatQuotePreview::hasQuote() const
     return !quote.isEmpty();
 }
 
+bool ChatQuotePreview::isReply() const
+{
+    return replying;
+}
+
+const Air::ReplyMeta& ChatQuotePreview::reply() const
+{
+    return replyMeta;
+}
+
 QString ChatQuotePreview::quoteText() const
 {
     return quote;
@@ -101,7 +149,7 @@ QString ChatQuotePreview::quoteText() const
 QStringList ChatQuotePreview::shownLines(int width) const
 {
     return AirPaint::linesOf(quote.left(maxLaidOut), air().font(TextRole::Body),
-                             textRect(width).width(), maxLines);
+                             textRect(width).width(), replying ? replyLines : maxLines);
 }
 
 bool ChatQuotePreview::hasHeightForWidth() const
@@ -144,9 +192,17 @@ void ChatQuotePreview::placeButton()
 
 void ChatQuotePreview::retranslateUi()
 {
-    title = tr("Quote");
+    using AirStrings::Text;
+    if (replying) {
+        // As the phones name it: "In reply to Yusuf", or "In reply to You" over an entry of ours.
+        const QString name =
+            replyToSelf ? AirStrings::text(Text::You) : AirStrings::replyName(replyName);
+        title = AirStrings::text(Text::SpokenReply).arg(name);
+    } else {
+        title = tr("Quote");
+    }
     setAccessibleName(title);
-    const QString cancel = tr("Cancel quote");
+    const QString cancel = replying ? AirStrings::text(Text::ReplyCancel) : tr("Cancel quote");
     closeButton->setToolTip(cancel);
     closeButton->setAccessibleName(cancel);
     update();

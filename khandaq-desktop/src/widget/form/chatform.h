@@ -181,6 +181,8 @@ private:
     bool editLastQueued();
 
 protected:
+    /** KHANDAQ (0.2.58): the person by their own name and key, and us by ours. */
+    ReplyAuthor replyAuthorOf(const ChatLogItem& item) const override;
     std::unique_ptr<NetCamView> createNetcam();
     void dragEnterEvent(QDragEnterEvent* ev) final;
     void dropEvent(QDropEvent* ev) final;

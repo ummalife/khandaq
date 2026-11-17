@@ -98,6 +98,12 @@ QVector<GroupMember> filteredRoster(const QVector<GroupMember>& members, const Q
 QVector<GroupMember> reachableNow(const QVector<GroupMember>& members);
 
 /**
+ * KHANDAQ (0.2.58): the member whose key is publicKey, in any case of the hex digits, into found;
+ * false when no member has it, or for an empty key.
+ */
+bool memberWithKey(const QVector<GroupMember>& members, const QString& publicKey, GroupMember* found);
+
+/**
  * Whom someone who may not write can ask for the right to: the founder alone when only the
  * founder writes, otherwise the moderators and the founder; online first.
  */

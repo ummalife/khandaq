@@ -800,6 +800,8 @@ enum class Text
     ReplyUnknownSender,
     SpokenReply,
     MessageReport,
+    MessageReply,
+    ReplyCancel,
 };
 
 /** The translation context of every Air string. */

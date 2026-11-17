@@ -52198,6 +52198,21 @@ bool onion_friend_is_groupchat(const Onion_Friend *const onion_friend)
     return onion_friend->is_groupchat;
 }
 
+/** KHANDAQ (group search key): the key this contact is looked up by on the DHT.
+ *
+ * A group's onion friend is created with a random key (m_create_group_connection), and upstream walks the
+ * DHT toward that key. Every member of a group therefore announced to, and searched, a different part of
+ * the DHT, and members met only when they happened to ask the same node on the way. A group with one
+ * always-online member and nobody else (the Khandaq Community founder) could not be joined by its chat id
+ * at all. Walking toward the chat id sends every member of a group to the same nodes, so a join by chat id
+ * finds the members that are online. A friend is still looked up by its real public key.
+ */
+non_null()
+static const uint8_t *onion_friend_search_key(const Onion_Friend *onion_friend)
+{
+    return onion_friend->is_groupchat ? onion_friend->gc_public_key : onion_friend->real_public_key;
+}
+
 DHT *onion_get_dht(const Onion_Client *onion_c)
 {
     return onion_c->dht;
@@ -52672,7 +52687,7 @@ static int client_send_announce_request(Onion_Client *onion_c, uint32_t num, con
         if (onion_friend->gc_data_length == 0) { // contact is a friend
             len = create_announce_request(
                       onion_c->rng, request, sizeof(request), dest_pubkey, onion_friend->temp_public_key,
-                      onion_friend->temp_secret_key, ping_id, onion_friend->real_public_key,
+                      onion_friend->temp_secret_key, ping_id, onion_friend_search_key(onion_friend),
                       zero_ping_id, sendback);
         } else { // contact is a gc
 #ifndef VANILLA_NACL
@@ -52680,7 +52695,7 @@ static int client_send_announce_request(Onion_Client *onion_c, uint32_t num, con
 
             len = create_gca_announce_request(
                       onion_c->rng, request, sizeof(request), dest_pubkey, onion_friend->temp_public_key,
-                      onion_friend->temp_secret_key, ping_id, onion_friend->real_public_key,
+                      onion_friend->temp_secret_key, ping_id, onion_friend_search_key(onion_friend),
                       zero_ping_id, sendback, onion_friend->gc_data,
                       onion_friend->gc_data_length);
 #else
@@ -52792,7 +52807,7 @@ static int client_add_to_list(Onion_Client *onion_c, uint32_t num, const uint8_t
         }
 
         node_list = onion_c->friends_list[num - 1].clients_list;
-        reference_id = onion_c->friends_list[num - 1].real_public_key;
+        reference_id = onion_friend_search_key(&onion_c->friends_list[num - 1]);
         list_length = MAX_ONION_CLIENTS;
     }
 
@@ -52888,7 +52903,7 @@ static int client_ping_nodes(Onion_Client *onion_c, uint32_t num, const Node_for
         last_pinged_index = &onion_c->last_pinged_index;
     } else {
         node_list = onion_c->friends_list[num - 1].clients_list;
-        reference_id = onion_c->friends_list[num - 1].real_public_key;
+        reference_id = onion_friend_search_key(&onion_c->friends_list[num - 1]);
         list_length = MAX_ONION_CLIENTS;
         last_pinged = onion_c->friends_list[num - 1].last_pinged;
         last_pinged_index = &onion_c->friends_list[num - 1].last_pinged_index;

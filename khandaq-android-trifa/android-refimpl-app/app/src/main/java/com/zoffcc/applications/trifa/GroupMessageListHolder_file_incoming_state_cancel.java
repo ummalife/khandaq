@@ -121,6 +121,8 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
     ViewGroup layout_peer_name_container;
     TextView peer_name_text;
     ViewGroup layout_message_container;
+    /** The author over the file's entry (AirFileEntry draws it); null in a layout without one. */
+    TextView file_author;
     boolean is_selected = false;
     boolean is_system_message = false;
     ImageView img_corner;
@@ -146,6 +148,7 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
         peer_name_text = (TextView) itemView.findViewById(R.id.peer_name_text);
         layout_message_container = (ViewGroup) itemView.findViewById(R.id.layout_message_container);
         img_corner = (ImageView) itemView.findViewById(R.id.img_corner);
+        file_author = (TextView) itemView.findViewById(R.id.air_file_author);
 
         ft_preview_container = (ViewGroup) itemView.findViewById(R.id.ft_preview_container);
         ft_preview_image = (ImageButton) itemView.findViewById(R.id.ft_preview_image);
@@ -523,6 +526,19 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
             peer_name_text.setOnClickListener(open_peer_profile_listener);
 
         }
+
+        // KHANDAQ (0.2.58): the entry shows the author in air_file_author (AirFileEntry), not in the views
+        // above, which it hides: the name it shows opens the member's profile, by the rule of a text.
+        final String author_pubkey = message__tox_peerpubkey;
+        AirTranscript.bindAuthorTap(file_author, layout_message_container,
+                                    GroupMessageListHolder_text_incoming_not_read.should_open_author_profile(
+                                            is_system_message, m, author_pubkey) ? v -> {
+                                        if (!is_selected)
+                                        {
+                                            GroupMessageListActivity.open_group_peer_info_activity(
+                                                    v.getContext(), author_pubkey, m.group_identifier);
+                                        }
+                                    } : null);
 
         // --------- peer name (show only if different from previous message) ---------
         // --------- peer name (show only if different from previous message) ---------

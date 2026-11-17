@@ -88,6 +88,8 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
     ViewGroup layout_peer_name_container;
     TextView peer_name_text;
     ViewGroup layout_message_container;
+    /** The author over an entry of the transcript; null in the old bubble layout. */
+    TextView entry_author;
     boolean is_selected = false;
     boolean is_system_message = false;
     ImageView img_corner;
@@ -112,6 +114,7 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
         peer_name_text = (TextView) itemView.findViewById(R.id.peer_name_text);
         layout_message_container = (ViewGroup) itemView.findViewById(R.id.layout_message_container);
         img_corner = (ImageView) itemView.findViewById(R.id.img_corner);
+        entry_author = (TextView) itemView.findViewById(R.id.air_entry_author);
 
         // KHANDAQ (redesign, stage 3b): the group conversation's text rows are entries of the transcript.
         if (AirTranscript.isEntry(itemView))
@@ -616,6 +619,18 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
                                                 meta -> HelperReply.scrollToReplyTargetInGroupChat(meta));
         }
         AirTranscript.bindGroupText(itemView, position, m, parsedGroup, locationBound, is_selected, entry);
+
+        // KHANDAQ (0.2.58): the name over the entry opens the member's profile, as the old bubble's name did;
+        // the listener the bubble path sets stays on its views, which an entry never shows.
+        final String authorKey = peerPubkey;
+        AirTranscript.bindAuthorTap(entry_author, layout_message_container,
+                                    should_open_author_profile(is_system_message, m, authorKey) ? v -> {
+                                        if (!is_selected)
+                                        {
+                                            GroupMessageListActivity.open_group_peer_info_activity(
+                                                    v.getContext(), authorKey, m.group_identifier);
+                                        }
+                                    } : null);
     }
 
     /** The member's name as the group knows it now, else the one frozen on the message, else "A member". */
@@ -753,6 +768,25 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
         return !is_system_message && m != null
                && m.TRIFA_SYNC_TYPE
                   == TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS_UNATTRIBUTED.value;
+    }
+
+    /**
+     * KHANDAQ (0.2.58): whether a tap on the author named over this row opens the member's profile. Pure,
+     * so it can be unit tested; the file holder asks it too.
+     *
+     * <p>Only another member's message named by their key in the group: never our own, never a service
+     * line, never a name with no member behind it (the IRC bridge's nicks get a made-up key that is not a
+     * key), and never relayed history whose author could not be confirmed (KQ-03): that row does not name
+     * the author it claims, so it does not lead to them either.
+     *
+     * @param author_pubkey the key the row is shown under, after the IRC bridge's correction
+     */
+    static boolean should_open_author_profile(final boolean is_system_message, final GroupMessage m,
+                                              final String author_pubkey)
+    {
+        return !is_system_message && m != null && m.direction == 0
+               && !should_hide_claimed_author(false, m)
+               && HelperGroup.is_valid_group_peer_pubkey(author_pubkey);
     }
 
     /**

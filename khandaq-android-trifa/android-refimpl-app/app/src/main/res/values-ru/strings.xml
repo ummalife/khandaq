@@ -1089,4 +1089,6 @@
     <string name="chat_edit_blocked_unsupported">Приложение собеседника не принимает правки. Попросите его обновить Khandaq</string>
     <string name="chat_edit_blocked_reply">Ответы пока нельзя изменять</string>
     <string name="chat_edit_blocked_too_old">Сообщение можно изменить в течение 48 часов после отправки</string>
+    <!-- KHANDAQ (0.2.58): what a tap on the author over a member's message in a group does, read by TalkBack -->
+    <string name="group_msg_author_hint">Открывает профиль участника</string>
 </resources>

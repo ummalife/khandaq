@@ -1070,4 +1070,6 @@
     <string name="plaintext_export_reauth_description">افتح القفل لتصدير هويتك بصيغة غير مشفرة.</string>
     <string name="plaintext_export_typed_confirm_message">لا يوجد قفل شاشة على هذا الجهاز، لذلك لا يوجد ما يُفتح به. اكتب %1$s للتأكيد.</string>
     <string name="plaintext_export_typed_confirm_word">تصدير</string>
+    <!-- KHANDAQ (0.2.58): what a tap on the author over a member's message in a group does, read by TalkBack -->
+    <string name="group_msg_author_hint">يفتح الملف الشخصي للعضو</string>
 </resources>

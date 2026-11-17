@@ -99,6 +99,10 @@
 
 #define MAX_FOREIGN_GROUPS   16
 #define FOREIGN_GROUP_TTL_MS (24ull * 3600ull * 1000ull)
+/* Group members already welcomed, by their key in the group; the oldest is forgotten past this. */
+#define GROUP_WELCOMED_MAX   4096
+/* Slots of the members a group remembers across restarts: GC_MAX_SAVED_PEERS in group_common.h. */
+#define GROUP_SAVED_PEER_SLOTS 100
 
 #define TOKENS_MAX         10.0
 #define TOKEN_REFILL_MS    2000.0
@@ -581,6 +585,101 @@ static void welcomed_load(void)
         }
     }
     fclose(f);
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+/* group members already welcomed, persisted across restarts                                      */
+/* ---------------------------------------------------------------------------------------------- */
+
+/* toxcore drops a group member that stops answering and announces them as a new member when they
+ * come back, which a phone does every time it leaves the background. Welcoming on every such join
+ * filled the group with "Welcome to the group" for the same people, so a member is welcomed once:
+ * by their key in the group, which stays the same until they leave the group and join it again. */
+static uint8_t (*g_group_welcomed)[TOX_GROUP_PEER_PUBLIC_KEY_SIZE];
+static size_t g_group_welcomed_len;
+
+static void group_welcomed_save(void)
+{
+    char path[PATH_MAX];
+    const size_t line = 2 * TOX_GROUP_PEER_PUBLIC_KEY_SIZE + 1;
+    char *buf = malloc(g_group_welcomed_len * line + 1);
+    if (!buf) {
+        return;
+    }
+    size_t off = 0;
+    for (size_t i = 0; i < g_group_welcomed_len; i++) {
+        bin_to_hex(g_group_welcomed[i], TOX_GROUP_PEER_PUBLIC_KEY_SIZE, buf + off);
+        off += line - 1;
+        buf[off++] = '\n';
+    }
+    path_join(path, sizeof path, g_data_dir, "group-welcomed.txt");
+    if (!write_file_atomic(path, (const uint8_t *)buf, off)) {
+        log_line("group-welcomed.txt: save failed");
+    }
+    free(buf);
+}
+
+static bool group_welcomed_has(const uint8_t *pk)
+{
+    for (size_t i = 0; i < g_group_welcomed_len; i++) {
+        if (memcmp(g_group_welcomed[i], pk, TOX_GROUP_PEER_PUBLIC_KEY_SIZE) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void group_welcomed_add(const uint8_t *pk)
+{
+    if (!g_group_welcomed) {
+        g_group_welcomed = calloc(GROUP_WELCOMED_MAX, sizeof *g_group_welcomed);
+        if (!g_group_welcomed) {
+            return;
+        }
+    }
+    if (g_group_welcomed_len == GROUP_WELCOMED_MAX) {
+        memmove(g_group_welcomed[0], g_group_welcomed[1],
+                (GROUP_WELCOMED_MAX - 1) * sizeof *g_group_welcomed);
+        g_group_welcomed_len--;
+    }
+    memcpy(g_group_welcomed[g_group_welcomed_len++], pk, TOX_GROUP_PEER_PUBLIC_KEY_SIZE);
+}
+
+/* False when there was no registry yet: the first start of a version that keeps one. */
+static bool group_welcomed_load(void)
+{
+    char path[PATH_MAX];
+    path_join(path, sizeof path, g_data_dir, "group-welcomed.txt");
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        return false;
+    }
+    char line[256];
+    while (fgets(line, sizeof line, f)) {
+        char hex[2 * TOX_GROUP_PEER_PUBLIC_KEY_SIZE + 1];
+        uint8_t pk[TOX_GROUP_PEER_PUBLIC_KEY_SIZE];
+        if (sscanf(line, "%64s", hex) == 1 && hex_to_bin(hex, pk, sizeof pk) && !group_welcomed_has(pk)) {
+            group_welcomed_add(pk);
+        }
+    }
+    fclose(f);
+    return true;
+}
+
+/* The members the group remembered from before the registry existed are not new to it: without
+ * this, each of them would be welcomed once more as they come back after the update. Called before
+ * the loop runs, while none of them is connected, which is when toxcore lists them all. */
+static void group_welcomed_seed(uint32_t gn)
+{
+    for (uint32_t slot = 0; slot < GROUP_SAVED_PEER_SLOTS; slot++) {
+        uint8_t pk[TOX_GROUP_PEER_PUBLIC_KEY_SIZE];
+        Tox_Err_Group_Peer_Query err;
+        if (tox_group_savedpeer_get_public_key(g_tox, gn, slot, pk, &err) && !group_welcomed_has(pk)) {
+            group_welcomed_add(pk);
+        }
+    }
+    group_welcomed_save();
+    log_line("group members remembered from before: %zu", g_group_welcomed_len);
 }
 
 /* ---------------------------------------------------------------------------------------------- */
@@ -2164,6 +2263,15 @@ static void on_group_peer_join(Tox *tox, uint32_t gn, uint32_t peer, void *ud)
     if (!is_our_group(gn)) {
         return;
     }
+    uint8_t pk[TOX_GROUP_PEER_PUBLIC_KEY_SIZE];
+    Tox_Err_Group_Peer_Query err;
+    if (tox_group_peer_get_public_key(tox, gn, peer, pk, &err)) {
+        if (group_welcomed_has(pk)) {
+            return; /* back after a timeout, or after our restart: welcomed already */
+        }
+        group_welcomed_add(pk);
+        group_welcomed_save();
+    }
     Action *a = schedule(ACT_GROUP_WELCOME, NULL, 3000);
     if (a) {
         a->group_number = gn;
@@ -2603,6 +2711,7 @@ int main(int argc, char **argv)
         tox_hash(g_avatar_hash, g_avatar.data, g_avatar.size);
     }
     welcomed_load();
+    const bool group_registry_existed = group_welcomed_load();
 
     tox_callback_self_connection_status(g_tox, on_self_connection);
     tox_callback_friend_request(g_tox, on_friend_request);
@@ -2631,6 +2740,9 @@ int main(int argc, char **argv)
     toxav_callback_video_receive_frame(g_av, on_video_frame, NULL);
 
     ensure_demo_group();
+    if (!group_registry_existed && g_demo_group != UINT32_MAX) {
+        group_welcomed_seed(g_demo_group);
+    }
     save_tox();
     bootstrap();
 

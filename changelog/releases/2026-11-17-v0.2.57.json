@@ -1,0 +1,164 @@
+{
+  "version": "0.2.57",
+  "date": "2026-11-17",
+  "title": "Two teal checks when a message is seen, files that go on after the network drops, and Khandaq Community",
+  "summary": "In a chat with one person, the second check turns teal once they have seen your message. A file between two people goes on from where it stopped when the network changes or drops for a moment, and files from your contacts download by themselves up to 200 MB. Every Khandaq app joins Khandaq Community, the shared group of Khandaq users, once and muted; you can leave it. Group files ask for the parts they miss, groups are found by their ID, and group files reach phones on IPv6 networks. The fixes are in Khandaq for the computer 0.2.57, Android 0.2.57 and iPhone build 143001.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "Two teal checks once your message is seen",
+      "description": "In a chat with one person, the second check now turns teal once they have opened the chat and seen your message or file. Grey checks still mean sent and delivered. Groups keep their marks as before. A contact on 0.2.56 or older sends no read receipts, so their checks stay grey.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "A file goes on after the network drops",
+      "description": "A file between two people that stopped because the network changed, or because one of you was offline for a moment, now goes on from where it stopped once you are both back. Before, it failed or started again from the beginning. On iPhone it waits with its bar instead of saying Not sent.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Files from your contacts download by themselves",
+      "description": "Files and photos from your contacts now download as they come, up to 200 MB each, so they are there when you open the chat. Bigger files still wait for a tap.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Khandaq Community",
+      "description": "Every Khandaq app joins Khandaq Community, the shared group of Khandaq users, once by itself. It is muted, stays at the top of your chats and is always called Khandaq Community. You can leave it like any other group, and it does not join again by itself. Files that others post there wait for your tap.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Group files ask for the parts they miss",
+      "description": "A member who missed parts of a group file now asks the sender for just those parts and gets them, between every pair of Khandaq apps. Members reached through a relay get the file at a pace the relay can carry, instead of losing most of it.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Groups are found by their ID",
+      "description": "A group joined by its ID is now looked up on the network by that ID, so it is found even when its only member online is the founder. Before, members looked for each other in different places and often met only through an invitation.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Group files reach phones on IPv6 networks",
+      "description": "On a direct IPv6 path, every full part of a group file was a few bytes too big and was lost on the way, so the file never arrived while the group looked connected. Group packets now fit every IPv6 path. A member still on 0.2.56 sends the old size, so they need the update too.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "iPhone: group settings no longer close the app",
+      "description": "Opening the settings of a public group closed Khandaq on iPhone. Photos and files of groups also stay when the app starts again, and a group you joined by invitation is still there after a restart.",
+      "platforms": [
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "The Mac app stays online in the background",
+      "description": "macOS put Khandaq to sleep (App Nap) while its window was hidden, so it went offline after a while. It now stays online.",
+      "platforms": [
+        "macos"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "A calm No network band",
+      "description": "When the device has had no network for 3 seconds, a band at the top says No network, then Connecting and Back online.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Report a message in a group",
+      "description": "A message someone else wrote in a group can be reported: Report opens a mail to Khandaq support with the message, its author and the time it was written.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "A file you declined comes again only by your tap",
+      "description": "A file you declined or cancelled is no longer downloaded again by itself when it is offered again. Before, a refused file could be sent again in full in the background.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "A file warning no longer locks the window",
+      "description": "On the computer, a folder Khandaq could not save to showed its warning inside the file card, cut off and catching every click. The warning now covers the window, OK asks for another folder, and the save question opens in Downloads when the saved folder is gone.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "Quieter lists",
+      "description": "On Android, your photo no longer blinks in the chat list when a contact comes online, and the scrollbar shows only while you scroll. On iPhone, a muted group adds nothing to the badges, and a file name in Cyrillic, Arabic or Chinese stays as it was.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    }
+  ]
+}

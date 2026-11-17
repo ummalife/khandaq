@@ -17,6 +17,8 @@ So this runs against the public HTTPS endpoint, never against localhost, and fai
   * /.well-known/security.txt is 200, text/plain, and not expired;
   * the search engines' ownership files at the site root are 200, text/html, with no redirect and
     the committed bytes;
+  * the IndexNow key file at the site root is 200, text/plain, with no redirect and the committed
+    bytes;
   * TLS 1.0/1.1 are refused and 1.2/1.3 negotiate.
 
     scripts/verify-site-deploy.py                      # expect this checkout's HEAD
@@ -83,6 +85,9 @@ PAGES = ("/", "/changelog", "/privacy.html", "/ru/", "/ru/changelog.html", "/ru/
 VERSIONED_LINK = re.compile(r"""\s(?:src|href)=(["'])(/[^"'?#\s]+)\?v=([0-9a-f]+)\1""")
 # The names Google Search Console and Yandex Webmaster give their ownership files in web/.
 OWNERSHIP_FILE = re.compile(r"(?:google[0-9a-f]+|yandex_[0-9a-f]+)\.html")
+# KHANDAQ (SEO, 2026-11-16): the IndexNow key file, web/<32 hex digits>.txt (scripts/indexnow-submit.py).
+# Every IndexNow engine fetches it to check a submission, so it is held to the same rule.
+INDEXNOW_KEY_FILE = re.compile(r"[0-9a-f]{32}\.txt")
 
 
 def is_data_script(attrs: str) -> bool:
@@ -234,18 +239,20 @@ def check_versioned_assets(base: str) -> None:
             ok(f"{path}?v={stamp}: the server sends the bytes the pages name ({len(body)} B)")
 
 
-def check_ownership_files(base: str, published: str | None) -> None:
+def check_ownership_files(base: str, published: str | None, pattern: re.Pattern[str] = OWNERSHIP_FILE,
+                          ctype_want: str = "text/html", what: str = "search-engine ownership file") -> None:
     """Does the site root serve each search engine's ownership file exactly as committed?
 
     KHANDAQ (SEO, 2026-11-13). Google Search Console and Yandex Webmaster confirm who owns the site
     by fetching a file of theirs from its root, and fetch it again later: a file that is gone,
     redirected or changed costs the verification. Each must answer 200 as text/html, without a
     redirect, with the bytes of the published commit. A file that commit does not have is not asked
-    for, so a rollback past the commit that added it is reported rather than failed.
+    for, so a rollback past the commit that added it is reported rather than failed. The IndexNow key
+    file is held to the same rule, as text/plain (pattern, ctype_want and what say which files).
     """
-    names = sorted(p.name for p in (ROOT / "web").iterdir() if OWNERSHIP_FILE.fullmatch(p.name))
+    names = sorted(p.name for p in (ROOT / "web").iterdir() if pattern.fullmatch(p.name))
     if not names:
-        fail("web/ holds no search-engine ownership file: the check would pass vacuously")
+        fail(f"web/ holds no {what}: the check would pass vacuously")
         return
     for name in names:
         want = (ROOT / "web" / name).read_bytes()
@@ -267,8 +274,8 @@ def check_ownership_files(base: str, published: str | None) -> None:
             fail(f"/{name} answers {status}{where}: the search engine needs 200 at this exact path")
             continue
         ctype = headers.get("content-type", "")
-        if ctype.split(";", 1)[0].strip().lower() != "text/html":
-            fail(f"/{name} is served as {ctype!r}, not text/html")
+        if ctype.split(";", 1)[0].strip().lower() != ctype_want:
+            fail(f"/{name} is served as {ctype!r}, not {ctype_want}")
             continue
         if "gzip" in headers.get("content-encoding", ""):
             body = gzip.decompress(body)
@@ -421,8 +428,11 @@ def main() -> int:
         if not re.search(r"^Contact:\s*\S+", text, re.M):
             fail("в security.txt нет поля Contact")
 
+    published_sha = (manifest.get("site") or {}).get("gitSha") if manifest else None
     print("-- search-engine ownership files")
-    check_ownership_files(base, (manifest.get("site") or {}).get("gitSha") if manifest else None)
+    check_ownership_files(base, published_sha)
+    print("-- IndexNow key file")
+    check_ownership_files(base, published_sha, INDEXNOW_KEY_FILE, "text/plain", "IndexNow key file")
 
     # 5. every published artifact must have a published signature beside it
     print("-- подписи артефактов")

@@ -136,6 +136,9 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 // KHANDAQ (review 0.2.56): the transfer ids of the queued group files a flush is sending now, so that the
 // flushes that come meanwhile (peer joins, connection changes, maintenance) do not send them again. Main queue.
 @property (nonatomic, strong, readonly) NSMutableSet<NSString *> *groupFileSendsInFlight;
+// KHANDAQ (0.2.57): the chat ids (lowercase) of the groups joined here whose save waits for their first member
+// (-markGroupJoinedForFirstSaveWithChatIdHex:).
+@property (nonatomic, strong, readonly) NSMutableSet<NSString *> *groupsAwaitingFirstSave;
 #if TARGET_OS_IPHONE
 // KHANDAQ (QA live, F11): held while a leave is pending, so that the app is not suspended before it is done.
 @property (nonatomic, assign) UIBackgroundTaskIdentifier pendingGroupLeaveBackgroundTask;
@@ -191,6 +194,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     _pendingGroupLeaves = [OCTGroupPendingLeaves new];
     _pendingGroupLeaveDrains = [NSCountedSet set];
     _groupFileSendsInFlight = [NSMutableSet set];
+    _groupsAwaitingFirstSave = [NSMutableSet set];
 #if TARGET_OS_IPHONE
     _pendingGroupLeaveBackgroundTask = UIBackgroundTaskInvalid;
 #endif
@@ -463,6 +467,10 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                          peerName:peerName
                                          password:password
                                             error:&localError];
+
+        if (groupNumber != kOCTToxGroupNumberFailure) {
+            [self markGroupJoinedForFirstSaveWithChatIdHex:normalizedChatIdHex];
+        }
     }];
 
     if (rejoinedLeaves.count > 0) {
@@ -947,6 +955,8 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
         if (fromTox.length > 0) {
             resolvedChatIdHex = [self normalizedGroupChatIdHexString:fromTox];
         }
+
+        [self markGroupJoinedForFirstSaveWithChatIdHex:resolvedChatIdHex];
 
         privacyState = [tox groupPrivacyStateForGroupNumber:groupNumber error:nil];
 
@@ -2700,6 +2710,13 @@ groupNumber:(OCTToxGroupNumber)groupNumber
             [self clearPendingFriendAssistedJoinForChatIdHex:chat.groupChatIdHex];
         }
 
+        // KHANDAQ (0.2.57): a group joined here goes into the save with its first member
+        // (-markGroupJoinedForFirstSaveWithChatIdHex:). On the main queue, as after a create or a leave; never on the
+        // tox queue, which a save waits for while it holds its lock.
+        if ([self takeGroupJoinedForFirstSaveWithChatIdHex:chat.groupChatIdHex]) {
+            [self.dataSource managerSaveTox];
+        }
+
         // KHANDAQ (group connection): a peer confirmed is the moment a waiting message first reaches
         // somebody. toxcore marks the group connected when a sync response comes, and reports that
         // outside the pass that calls the connection callback, so the callback seldom comes: send what
@@ -4279,6 +4296,10 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                  password:chat.groupPassword
                                                     error:&localError];
         success = joinedGroupNumber != kOCTToxGroupNumberFailure;
+
+        if (success) {
+            [self markGroupJoinedForFirstSaveWithChatIdHex:chatIdHex];
+        }
     }];
 
     if (rejoinedLeaves.count > 0) {
@@ -6434,6 +6455,49 @@ static id OCTGroupRegularFileIdentifier(NSString *path)
 
     @synchronized (self.groupInviteAcceptedMs) {
         [self.groupInviteAcceptedMs removeObjectForKey:chatIdHex.lowercaseString];
+    }
+}
+
+/**
+ * KHANDAQ (0.2.57): marks the group of `chatIdHex`, just joined or accepted in toxcore, for a save of the profile when
+ * its first member joins (-tox:groupPeerJoinWithGroupNumber:peerId:). Nothing saved such a group: after a restart the
+ * profile came back without it, and the founder of a private group refuses a join by its id.
+ *
+ * Not at once, as after a create or a leave: toxcore writes a group into the save only once it holds the group's
+ * state (gc_group_is_valid), which a member sends it, so a save at the join leaves the group out. After an accept
+ * that replaced a stuck instance of the group (gc_accept_invite deletes that one at once), such a save would drop
+ * both. A member's join comes after that state (toxcore asks for its info on the sync response), and it puts the
+ * member among the saved peers the group reconnects through after a restart.
+ *
+ * Called on the tox queue, right after the join: no callback of the group can come before the mark.
+ */
+- (void)markGroupJoinedForFirstSaveWithChatIdHex:(NSString *)chatIdHex
+{
+    if (chatIdHex.length == 0) {
+        return;
+    }
+
+    @synchronized (self.groupsAwaitingFirstSave) {
+        [self.groupsAwaitingFirstSave addObject:chatIdHex.lowercaseString];
+    }
+}
+
+/// KHANDAQ (0.2.57): YES, once, for a group marked by -markGroupJoinedForFirstSaveWithChatIdHex:; the mark goes.
+- (BOOL)takeGroupJoinedForFirstSaveWithChatIdHex:(NSString *)chatIdHex
+{
+    if (chatIdHex.length == 0) {
+        return NO;
+    }
+
+    NSString *key = chatIdHex.lowercaseString;
+
+    @synchronized (self.groupsAwaitingFirstSave) {
+        if (! [self.groupsAwaitingFirstSave containsObject:key]) {
+            return NO;
+        }
+
+        [self.groupsAwaitingFirstSave removeObject:key];
+        return YES;
     }
 }
 

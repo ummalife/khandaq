@@ -29,6 +29,10 @@
 @interface OCTSubmanagerGroupsImpl (GroupRealmTests)
 
 - (void)setupFileTransferIfNeeded;
+- (void)setupHistSyncIfNeeded;
+- (void)setupHskAnnounceIfNeeded;
+- (void)schedulePendingGroupMessagesFlushForChatUniqueIdentifier:(NSString *)chatUniqueIdentifier;
+- (BOOL)prepareChatForGroupActivity:(OCTChat *)chat peerName:(NSString *)peerName error:(NSError **)error;
 
 @end
 
@@ -775,7 +779,127 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
     }
 }
 
+#pragma mark - The save of a group joined here
+
+// KHANDAQ (0.2.57): nothing saved the profile after a group was taken from an invite, so after a restart the profile
+// was out of the group, and the founder of a private group refuses a join by its id. toxcore writes a group into the
+// save only once a member has sent it the group's state: the save comes when the first member joins, and only then.
+- (void)testAGroupTakenFromAnInviteIsSavedWhenItsFirstMemberJoins
+{
+    NSArray *mocks = [self groupFileMocksWithDownloads:[self.root stringByAppendingPathComponent:@"Downloads"]];
+    id tox = mocks[1];
+    NSMutableArray *saves = [self savesAskedOfDataSource:mocks.firstObject tox:tox];
+    OCMStub([tox groupInviteAcceptWithFriendNumber:0
+                                        inviteData:[OCMArg any]
+                                          peerName:[OCMArg any]
+                                          password:[OCMArg any]
+                                             error:[OCMArg anyObjectRef]]).andReturn((OCTToxGroupNumber)kGroupRealmTestsGroupNumber);
+    OCMStub([tox groupChatIdHexForGroupNumber:kGroupRealmTestsGroupNumber error:[OCMArg anyObjectRef]])
+        .andReturn(kGroupRealmTestsChatIdHex);
+    OCMStub([tox groupPrivacyStateForGroupNumber:kGroupRealmTestsGroupNumber error:[OCMArg anyObjectRef]])
+        .andReturn(OCTToxGroupPrivacyStatePrivate);
+    OCTSubmanagerGroupsImpl *submanager = [self joiningSubmanagerWithDataSource:mocks.firstObject];
+
+    OCTChat *chat = [submanager acceptGroupInviteFromFriendNumber:0
+                                                       inviteData:[self inviteDataForChatIdHex:kGroupRealmTestsChatIdHex]
+                                                        groupName:@"family"
+                                                         password:nil
+                                                            error:nil];
+
+    XCTAssertEqual(chat.groupNumber, (int32_t)kGroupRealmTestsGroupNumber);
+    XCTAssertEqual(saves.count, 0u, @"saved before a member sent the group's state, which leaves the group out");
+
+    [submanager tox:tox groupPeerJoinWithGroupNumber:kGroupRealmTestsGroupNumber peerId:kGroupRealmTestsPeerId];
+    XCTAssertEqual(saves.count, 1u, @"the group was not saved when its first member joined");
+
+    [submanager tox:tox groupPeerJoinWithGroupNumber:kGroupRealmTestsGroupNumber peerId:kGroupRealmTestsPeerId + 1];
+    XCTAssertEqual(saves.count, 1u, @"saved again for a member after the first");
+
+    XCTAssertEqual(mocks.count, 3u);
+}
+
+// KHANDAQ (0.2.57): the same for a group joined by its id (a link, Khandaq Community) and for a chat whose group
+// toxcore does not have, which joins it again.
+- (void)testAGroupJoinedByItsIdOrJoinedAgainIsSavedWhenItsFirstMemberJoins
+{
+    NSString *const lostChatIdHex = @"7A6B5C4D3E2F10F1E2D3C4B5A69788796A5B4C3D2E1F0011223344556677889A";
+    const OCTToxGroupNumber rejoinedGroupNumber = 6;
+    NSArray *mocks = [self groupFileMocksWithDownloads:[self.root stringByAppendingPathComponent:@"Downloads"]];
+    id tox = mocks[1];
+    NSMutableArray *saves = [self savesAskedOfDataSource:mocks.firstObject tox:tox];
+    OCMStub([tox groupJoinWithChatIdHex:kGroupRealmTestsChatIdHex
+                               peerName:[OCMArg any]
+                               password:[OCMArg any]
+                                  error:[OCMArg anyObjectRef]]).andReturn((OCTToxGroupNumber)kGroupRealmTestsGroupNumber);
+    OCMStub([tox groupJoinWithChatIdHex:lostChatIdHex
+                               peerName:[OCMArg any]
+                               password:[OCMArg any]
+                                  error:[OCMArg anyObjectRef]]).andReturn(rejoinedGroupNumber);
+    OCTSubmanagerGroupsImpl *submanager = [self joiningSubmanagerWithDataSource:mocks.firstObject];
+
+    XCTAssertEqual([submanager joinGroupWithChatIdHex:kGroupRealmTestsChatIdHex peerName:@"me" password:nil error:nil],
+                   (OCTToxGroupNumber)kGroupRealmTestsGroupNumber);
+    XCTAssertEqual(saves.count, 0u);
+
+    [submanager tox:tox groupPeerJoinWithGroupNumber:kGroupRealmTestsGroupNumber peerId:kGroupRealmTestsPeerId];
+    XCTAssertEqual(saves.count, 1u, @"a group joined by its id was not saved when its first member joined");
+
+    // Group 9 is none of toxcore's: the chat joins its group again.
+    OCTChat *lost = [self.realmManager getOrCreateGroupChatWithGroupNumber:9
+                                                                 chatIdHex:lostChatIdHex
+                                                                 groupName:@"lost"
+                                                              privacyState:OCTToxGroupPrivacyStatePrivate];
+    XCTAssertTrue([submanager prepareChatForGroupActivity:lost peerName:@"me" error:nil]);
+    XCTAssertEqual(lost.groupNumber, (int32_t)rejoinedGroupNumber);
+    XCTAssertEqual(saves.count, 1u);
+
+    [submanager tox:tox groupPeerJoinWithGroupNumber:rejoinedGroupNumber peerId:kGroupRealmTestsPeerId];
+    XCTAssertEqual(saves.count, 2u, @"a group joined again was not saved when its first member joined");
+
+    [submanager tox:tox groupPeerJoinWithGroupNumber:kGroupRealmTestsGroupNumber peerId:kGroupRealmTestsPeerId + 1];
+    XCTAssertEqual(saves.count, 2u, @"saved again for a member after the first");
+
+    XCTAssertEqual(mocks.count, 3u);
+}
+
 #pragma mark - Rig
+
+/** The saves of the profile `dataSource` is asked for, as they come; the tox queue of `tox` runs its blocks in place. */
+- (NSMutableArray *)savesAskedOfDataSource:(id)dataSource tox:(id)tox
+{
+    NSMutableArray *saves = [NSMutableArray new];
+    OCMStub([dataSource managerSaveTox]).andDo(^(NSInvocation *invocation) {
+        [saves addObject:[NSDate date]];
+    });
+    OCMStub([tox performSyncBlockOnToxQueue:[OCMArg invokeBlock]]);
+    return saves;
+}
+
+/**
+ * A submanager of groups that joins them. A member's join does no more than the save needs here: no history sync, no
+ * key announce and no flush later, so nothing of the test runs after it.
+ */
+- (OCTSubmanagerGroupsImpl *)joiningSubmanagerWithDataSource:(id)dataSource
+{
+    OCTSubmanagerGroupsImpl *submanager = [OCTSubmanagerGroupsImpl new];
+    submanager.dataSource = dataSource;
+
+    id partial = OCMPartialMock(submanager);
+    OCMStub([partial setupHistSyncIfNeeded]);
+    OCMStub([partial setupHskAnnounceIfNeeded]);
+    OCMStub([partial schedulePendingGroupMessagesFlushForChatUniqueIdentifier:[OCMArg any]]);
+    return partial;
+}
+
+/** An invite to the group of `chatIdHex` as toxcore hands one over: the chat id first. */
+- (NSData *)inviteDataForChatIdHex:(NSString *)chatIdHex
+{
+    uint8_t *chatId = [OCTTox hexStringToBin:chatIdHex];
+    NSMutableData *invite = [NSMutableData dataWithBytes:chatId length:kOCTToxGroupChatIdLength];
+    free(chatId);
+    [invite increaseLengthBy:64];
+    return invite;
+}
 
 - (NSArray<NSString *> *)partsOfALongText
 {

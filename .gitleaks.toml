@@ -124,4 +124,10 @@ regexes = [
   # handed out on purpose, in the App Review notes, so that reviewers can add it. Like any Tox public key
   # it is an address, not a credential: knowing it lets you send a friend request and nothing more.
   '''(?i)872F45C1BAF8AC12C854003E6420C7459339056FF6E40E5BAD8B123AC397E117''',
+  # KHANDAQ (0.2.57): a made-up key of the Android unit tests, abcdef0123456789 four times. In
+  # GroupReportMailTest it sits in `private static final String AUTHOR`, and "AUTHOR" contains "auth", so
+  # `generic-api-key` reads it as a credential (NgcHistoryDowngradePolicyTest holds it as OWN, which does not
+  # trip the rule). The pull-request scan of #148 stopped on it (GroupReportMailTest.java line 29, commit
+  # 73c46c15). Nobody's key. Added by Claude (AI assistant), the value checked against the sources.
+  '''(?i)ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789''',
 ]

@@ -72,6 +72,10 @@ ALLOWED_BARE_JOINS = {
         1, "same"),
     ("FileLoader2.java", "t.join();"): (
         1, "Glide model loader — runs on Glide's own executor"),
+    ("KhandaqCommunity.java", "final boolean joined = join.join();"): (
+        1, "not a Thread: KhandaqCommunity.Join, the app's join of Khandaq Community by chat id. autoJoin "
+           "calls it only from joinIfDue, on the khandaq-community-join thread that "
+           "CommunityAutoJoin.onNodeConnected starts, never on the main thread"),
 }
 
 seen: dict[tuple[str, str], int] = {}

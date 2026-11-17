@@ -29,6 +29,18 @@
 @interface OCTSubmanagerGroupsImpl (GroupRealmTests)
 
 - (void)setupFileTransferIfNeeded;
+- (void)setupHistSyncIfNeeded;
+- (void)setupHskAnnounceIfNeeded;
+- (void)schedulePendingGroupMessagesFlushForChatUniqueIdentifier:(NSString *)chatUniqueIdentifier;
+- (BOOL)prepareChatForGroupActivity:(OCTChat *)chat peerName:(NSString *)peerName error:(NSError **)error;
+
+@end
+
+@interface OCTNgcGroupFileTransfer (GroupRealmTests)
+
+- (NSMutableDictionary<NSString *, id> *)assemblies;
+- (NSMutableDictionary<NSString *, NSNumber *> *)completedAssemblyKeys;
+- (void)nackTickForAssembly:(id)assembly assemblyKey:(NSString *)assemblyKey;
 
 @end
 
@@ -167,6 +179,414 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
     XCTAssertEqual(mocks.count, 3u);
 }
 
+// KHANDAQ (0.2.57, SPEC-community item 6): Khandaq Community deletes the bytes of a file that waited, to make room,
+// and keeps its message, which then says the file went. A second file of the same name took the free path: the old
+// message showed the new file as its own, with Accept again, and the cleanup took the two for one file.
+- (void)testAGroupFileNeverTakesThePathOfAMessageWhoseFileWent
+{
+    OCTChat *chat = [self groupChat];
+    NSString *downloads = [self.root stringByAppendingPathComponent:@"Downloads"];
+
+    id dataSource = OCMProtocolMock(@protocol(OCTSubmanagerDataSource));
+    id tox = OCMClassMock([OCTTox class]);
+    id fileStorage = OCMProtocolMock(@protocol(OCTFileStorageProtocol));
+    OCMStub([dataSource managerGetTox]).andReturn(tox);
+    OCMStub([dataSource managerGetRealmManager]).andReturn(self.realmManager);
+    OCMStub([dataSource managerGetFileStorage]).andReturn(fileStorage);
+    OCMStub([fileStorage pathForDownloadedFilesDirectory]).andReturn(downloads);
+
+    OCTSubmanagerGroupsImpl *submanager = [OCTSubmanagerGroupsImpl new];
+    submanager.dataSource = dataSource;
+    [submanager setupFileTransferIfNeeded];
+    OCTNgcGroupFileTransfer *transfer = [submanager valueForKey:@"fileTransfer"];
+    NSString *folder = [downloads stringByAppendingPathComponent:[@"group/" stringByAppendingString:kGroupRealmTestsChatIdHex.lowercaseString]];
+    XCTAssertEqualObjects([submanager groupFilesDirectoryForChatIdHex:kGroupRealmTestsChatIdHex], folder,
+                          @"the folder is known from the chat id alone");
+
+    NSData *firstId = [self generatedBytesOfLength:32];
+    [transfer handleIncomingPacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                           peerId:kGroupRealmTestsPeerId
+                                 peerPublicKeyHex:kGroupRealmTestsPeerKeyHex
+                                             data:[self singlePacketWithMsgId:firstId fileName:@"photo.jpg" payload:[self generatedBytesOfLength:3000]]];
+    __block OCTMessageAbstract *first = nil;
+    [self waitUntil:^BOOL {
+        first = [self fileRowWithMsgId:firstId inChat:chat];
+        return first.messageFile.fileType == OCTMessageFileTypeReady;
+    }];
+    NSString *firstPath = first.messageFile.filePath;
+    XCTAssertEqualObjects(firstPath.lastPathComponent, @"photo.jpg");
+
+    // Its bytes go to make room; its message stays.
+    XCTAssertTrue([[NSFileManager defaultManager] removeItemAtPath:firstPath error:nil]);
+
+    NSData *secondId = [self generatedBytesOfLength:32];
+    NSData *second = [self generatedBytesOfLength:2000];
+    [transfer handleIncomingPacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                           peerId:kGroupRealmTestsPeerId
+                                 peerPublicKeyHex:kGroupRealmTestsPeerKeyHex
+                                             data:[self singlePacketWithMsgId:secondId fileName:@"photo.jpg" payload:second]];
+    NSData *hiddenId = [self generatedBytesOfLength:32];
+    [transfer handleIncomingPacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                           peerId:kGroupRealmTestsPeerId
+                                 peerPublicKeyHex:kGroupRealmTestsPeerKeyHex
+                                             data:[self singlePacketWithMsgId:hiddenId fileName:@".profile" payload:[self generatedBytesOfLength:100]]];
+    __block OCTMessageAbstract *next = nil;
+    __block OCTMessageAbstract *hidden = nil;
+    [self waitUntil:^BOOL {
+        next = [self fileRowWithMsgId:secondId inChat:chat];
+        hidden = [self fileRowWithMsgId:hiddenId inChat:chat];
+        return next.messageFile.fileType == OCTMessageFileTypeReady && hidden.messageFile.fileType == OCTMessageFileTypeReady;
+    }];
+
+    XCTAssertEqualObjects(next.messageFile.filePath.lastPathComponent, @"photo 2.jpg");
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:next.messageFile.filePath], second);
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:first.messageFile.filePath], @"the first message got bytes again");
+    XCTAssertEqualObjects(hidden.messageFile.filePath.lastPathComponent, @"_profile", @"a file of a group is never hidden");
+
+    NSArray *mocks = @[dataSource, tox, fileStorage];
+    XCTAssertEqual(mocks.count, 3u);
+}
+
+// KHANDAQ (0.2.57): seen live, a member's app away for 45 s in the middle of a 40 MB file. The group took two
+// minutes to come back; a minute after the return the transfer dropped the file and its partial bytes, and the
+// card said "41.9 MB left" until the next start of the app. It ends now as that start ends it.
+- (void)testAGroupFileDroppedBeforeItIsCompleteEndsItsRowStopped
+{
+    OCTChat *chat = [self groupChat];
+    NSString *downloads = [self.root stringByAppendingPathComponent:@"Downloads"];
+
+    id dataSource = OCMProtocolMock(@protocol(OCTSubmanagerDataSource));
+    id tox = OCMClassMock([OCTTox class]);
+    id fileStorage = OCMProtocolMock(@protocol(OCTFileStorageProtocol));
+    OCMStub([dataSource managerGetTox]).andReturn(tox);
+    OCMStub([dataSource managerGetRealmManager]).andReturn(self.realmManager);
+    OCMStub([dataSource managerGetFileStorage]).andReturn(fileStorage);
+    OCMStub([fileStorage pathForDownloadedFilesDirectory]).andReturn(downloads);
+
+    OCTSubmanagerGroupsImpl *submanager = [OCTSubmanagerGroupsImpl new];
+    submanager.dataSource = dataSource;
+    [submanager setupFileTransferIfNeeded];
+    OCTNgcGroupFileTransfer *transfer = [submanager valueForKey:@"fileTransfer"];
+    XCTAssertNotNil(transfer);
+
+    NSData *payload = [self generatedBytesOfLength:3000];
+    NSData *msgId = [self generatedBytesOfLength:32];
+    const uint32_t chunkPayload = 1000;
+
+    // The BEGIN and the first chunk come; the rest never does.
+    [transfer handleIncomingPacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                           peerId:kGroupRealmTestsPeerId
+                                 peerPublicKeyHex:kGroupRealmTestsPeerKeyHex
+                                             data:[self beginPacketWithMsgId:msgId fileName:@"clip.mp4" size:payload.length chunkPayload:chunkPayload]];
+    [transfer handleIncomingPacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                           peerId:kGroupRealmTestsPeerId
+                                 peerPublicKeyHex:kGroupRealmTestsPeerKeyHex
+                                             data:[self chunkPacketWithMsgId:msgId
+                                                                       index:0
+                                                                     payload:[payload subdataWithRange:NSMakeRange(0, chunkPayload)]]];
+
+    __block NSString *assemblyKey = nil;
+    __block id assembly = nil;
+    [self waitUntil:^BOOL {
+        NSMutableDictionary *assemblies = transfer.assemblies;
+        @synchronized (assemblies) {
+            assemblyKey = assemblies.allKeys.firstObject;
+            assembly = assemblyKey ? assemblies[assemblyKey] : nil;
+        }
+        return [[assembly valueForKey:@"receivedCount"] intValue] == 1 && [self fileRowWithMsgId:msgId inChat:chat] != nil;
+    }];
+
+    OCTMessageAbstract *row = [self fileRowWithMsgId:msgId inChat:chat];
+    XCTAssertEqual(row.messageFile.fileType, OCTMessageFileTypeLoading, @"the BEGIN made no loading row");
+    NSString *partialPath = [assembly valueForKey:@"partialPath"];
+    NSString *outPath = [assembly valueForKey:@"outPath"];
+    XCTAssertTrue([[NSFileManager defaultManager] fileExistsAtPath:partialPath]);
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:outPath], @"bytes sit under the name before the last one");
+
+    // A round that sees the chunk, then the silent rounds in a row that drop the file.
+    for (int round = 0; round < 26; round++) {
+        [transfer nackTickForAssembly:assembly assemblyKey:assemblyKey];
+    }
+
+    @synchronized (transfer.assemblies) {
+        XCTAssertNil(transfer.assemblies[assemblyKey], @"the file was not dropped");
+    }
+
+    [self waitUntil:^BOOL {
+        return [self fileRowWithMsgId:msgId inChat:chat].messageFile.fileType == OCTMessageFileTypeCanceled;
+    }];
+
+    row = [self fileRowWithMsgId:msgId inChat:chat];
+    XCTAssertEqual(row.messageFile.fileType, OCTMessageFileTypeCanceled, @"the card of a dropped file still says it is coming");
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:partialPath]);
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:outPath]);
+
+    // Every mock lives until here: the submanager holds its data source weakly.
+    NSArray *mocks = @[dataSource, tox, fileStorage];
+    XCTAssertEqual(mocks.count, 3u);
+}
+
+// KHANDAQ (0.2.57): the msg-id hash is public in the group. A dropped file ends only the loading row of the peer
+// that opened it: never our own file under the same hash, never another member's row, never a file that came.
+- (void)testADroppedGroupFileEndsOnlyTheLoadingRowOfThePeerThatOpenedIt
+{
+    OCTChat *chat = [self groupChat];
+    OCTRealmManager *realmManager = self.realmManager;
+    NSString *otherKeyHex = [kGroupRealmTestsPeerKeyHex stringByReplacingOccurrencesOfString:@"9F8E" withString:@"0000"];
+
+    OCTMessageAbstract *theirs = [self fileRowNamed:@"theirs.mp4" type:OCTMessageFileTypeLoading peerId:kGroupRealmTestsPeerId
+                                               hash:@"a1" inChat:chat];
+    [realmManager updateObject:theirs.messageFile withBlock:^(OCTMessageFile *file) {
+        file.groupSenderPubkey = kGroupRealmTestsPeerKeyHex.lowercaseString;
+    }];
+    OCTMessageAbstract *ours = [self fileRowNamed:@"ours.mp4" type:OCTMessageFileTypeLoading peerId:0 hash:@"b2" inChat:chat];
+    OCTMessageAbstract *came = [self fileRowNamed:@"came.mp4" type:OCTMessageFileTypeReady peerId:kGroupRealmTestsPeerId
+                                             hash:@"c3" inChat:chat];
+
+    XCTAssertFalse([realmManager markGroupIncomingFileInterruptedInChat:chat msgIdHash:[self hashFrom:@"b2"] senderPubkey:nil]);
+    XCTAssertFalse([realmManager markGroupIncomingFileInterruptedInChat:chat msgIdHash:[self hashFrom:@"c3"] senderPubkey:nil]);
+    XCTAssertFalse([realmManager markGroupIncomingFileInterruptedInChat:chat msgIdHash:[self hashFrom:@"a1"] senderPubkey:otherKeyHex]);
+    XCTAssertEqual(theirs.messageFile.fileType, OCTMessageFileTypeLoading, @"another member's drop ended this file");
+
+    XCTAssertTrue([realmManager markGroupIncomingFileInterruptedInChat:chat
+                                                             msgIdHash:[self hashFrom:@"a1"].uppercaseString
+                                                          senderPubkey:kGroupRealmTestsPeerKeyHex]);
+    XCTAssertFalse([realmManager markGroupIncomingFileInterruptedInChat:chat msgIdHash:[self hashFrom:@"a1"] senderPubkey:nil],
+                   @"a file ended twice");
+
+    XCTAssertEqual(theirs.messageFile.fileType, OCTMessageFileTypeCanceled);
+    XCTAssertEqual(ours.messageFile.fileType, OCTMessageFileTypeLoading, @"our own file was ended by a drop");
+    XCTAssertEqual(came.messageFile.fileType, OCTMessageFileTypeReady, @"a file that came was ended by a drop");
+}
+
+// KHANDAQ (0.2.57): the transfer remembers the files it put together only while the app runs. A member that sends a
+// file again after a restart has it put together once more, under a name of its own; its message was Ready already,
+// so that copy stayed on disk with no message. It goes now, and the message keeps its file.
+- (void)testAGroupFileThatComesAgainAfterARestartLeavesNoSecondCopy
+{
+    OCTChat *chat = [self groupChat];
+    NSArray *mocks = [self groupFileMocksWithDownloads:[self.root stringByAppendingPathComponent:@"Downloads"]];
+    NSData *payload = [self generatedBytesOfLength:2500];
+    NSData *msgId = [self generatedBytesOfLength:32];
+    NSArray<NSData *> *packets = [self packetsOfFile:payload named:@"clip.mp4" msgId:msgId chunkPayload:1000];
+
+    OCTSubmanagerGroupsImpl *before = [self startedSubmanagerWithDataSource:mocks.firstObject];
+    [self deliverPackets:packets toSubmanager:before];
+    OCTMessageAbstract *row = [self fileRowWithMsgId:msgId inChat:chat];
+    XCTAssertEqual(row.messageFile.fileType, OCTMessageFileTypeReady, @"the file did not come");
+    NSString *keptPath = row.messageFile.filePath;
+    NSString *folder = [keptPath stringByDeletingLastPathComponent];
+    XCTAssertEqualObjects([self filesInDirectory:folder], @[@"clip.mp4"]);
+
+    // The app starts again: the Realm and the files stay, and the new transfer knows of no file that came.
+    OCTSubmanagerGroupsImpl *after = [self startedSubmanagerWithDataSource:mocks.firstObject];
+    [self deliverPackets:packets toSubmanager:after];
+
+    OCTNgcGroupFileTransfer *transfer = [after valueForKey:@"fileTransfer"];
+    @synchronized (transfer.assemblies) {
+        XCTAssertEqual(transfer.completedAssemblyKeys.count, 1u, @"the file was not put together again");
+    }
+    XCTAssertEqualObjects([self filesInDirectory:folder], @[@"clip.mp4"], @"a second copy of the file stayed");
+    XCTAssertEqual([self rowsOfChat:chat].count, 1u, @"a second message of the file appeared");
+    XCTAssertEqual(row.messageFile.fileType, OCTMessageFileTypeReady);
+    XCTAssertEqualObjects(row.messageFile.filePath, keptPath, @"the message took the second copy");
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:keptPath], payload);
+
+    // Every mock and both submanagers live until here: a submanager holds its data source weakly, and the blocks of
+    // its transfer hold the submanager weakly.
+    XCTAssertNotNil(before);
+    XCTAssertEqual(mocks.count, 3u);
+}
+
+// KHANDAQ (0.2.57): when the file of the message went (to make room), the copy that comes again is the only one on
+// disk, and it stays.
+- (void)testAGroupFileThatComesAgainKeepsItsCopyWhenTheFileOfItsMessageWent
+{
+    OCTChat *chat = [self groupChat];
+    NSArray *mocks = [self groupFileMocksWithDownloads:[self.root stringByAppendingPathComponent:@"Downloads"]];
+    NSData *payload = [self generatedBytesOfLength:2500];
+    NSData *msgId = [self generatedBytesOfLength:32];
+    NSArray<NSData *> *packets = [self packetsOfFile:payload named:@"clip.mp4" msgId:msgId chunkPayload:1000];
+
+    OCTSubmanagerGroupsImpl *before = [self startedSubmanagerWithDataSource:mocks.firstObject];
+    [self deliverPackets:packets toSubmanager:before];
+    NSString *keptPath = [self fileRowWithMsgId:msgId inChat:chat].messageFile.filePath;
+    NSString *folder = [keptPath stringByDeletingLastPathComponent];
+    XCTAssertTrue([[NSFileManager defaultManager] removeItemAtPath:keptPath error:nil]);
+
+    OCTSubmanagerGroupsImpl *after = [self startedSubmanagerWithDataSource:mocks.firstObject];
+    [self deliverPackets:packets toSubmanager:after];
+
+    NSArray<NSString *> *files = [self filesInDirectory:folder];
+    XCTAssertEqual(files.count, 1u, @"%@", files);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:[folder stringByAppendingPathComponent:files.firstObject]], payload,
+                          @"the bytes that came again were removed");
+
+    XCTAssertNotNil(before);
+    XCTAssertNotNil(after);
+    XCTAssertEqual(mocks.count, 3u);
+}
+
+// KHANDAQ (0.2.57, #170): a member serves a copy of a file this device sent. Our message of it is Ready from the
+// upload on: the copy adds no message, and no second file stays.
+- (void)testACopyOfOurOwnGroupFileThatComesBackAddsNothing
+{
+    OCTChat *chat = [self groupChat];
+    NSArray *mocks = [self groupFileMocksWithDownloads:[self.root stringByAppendingPathComponent:@"Downloads"]];
+    NSData *payload = [self generatedBytesOfLength:2500];
+    NSData *msgId = [self generatedBytesOfLength:32];
+    NSString *ourPath = [self.root stringByAppendingPathComponent:@"clip.mp4"];
+    XCTAssertTrue([payload writeToFile:ourPath atomically:YES]);
+    [self.realmManager addGroupMessageWithFileName:@"clip.mp4"
+                                          fileSize:payload.length
+                                          filePath:ourPath
+                                          fileType:OCTMessageFileTypeReady
+                                              chat:chat
+                                            peerId:0
+                                           fileUTI:nil
+                                 groupMsgIdHashHex:[OCTTox binToHexString:(uint8_t *)msgId.bytes length:msgId.length]
+                             groupTransferProgress:1.0f];
+
+    OCTSubmanagerGroupsImpl *submanager = [self startedSubmanagerWithDataSource:mocks.firstObject];
+    [self deliverPackets:[self packetsOfFile:payload named:@"clip.mp4" msgId:msgId chunkPayload:1000] toSubmanager:submanager];
+
+    OCTNgcGroupFileTransfer *transfer = [submanager valueForKey:@"fileTransfer"];
+    @synchronized (transfer.assemblies) {
+        XCTAssertEqual(transfer.completedAssemblyKeys.count, 1u, @"the copy was not put together");
+    }
+    XCTAssertEqual([self rowsOfChat:chat].count, 1u, @"the copy added a message");
+    XCTAssertEqualObjects([self filesInDirectory:[submanager groupFilesDirectoryForChatIdHex:kGroupRealmTestsChatIdHex]], @[],
+                          @"a copy of our file stayed");
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:ourPath], payload);
+
+    XCTAssertEqual(mocks.count, 3u);
+}
+
+/** The data source of a submanager as the app's, on the Realm of the test, and the mocks it returns; first itself. */
+- (NSArray *)groupFileMocksWithDownloads:(NSString *)downloads
+{
+    id dataSource = OCMProtocolMock(@protocol(OCTSubmanagerDataSource));
+    id tox = OCMClassMock([OCTTox class]);
+    id fileStorage = OCMProtocolMock(@protocol(OCTFileStorageProtocol));
+    OCMStub([dataSource managerGetTox]).andReturn(tox);
+    OCMStub([dataSource managerGetRealmManager]).andReturn(self.realmManager);
+    OCMStub([dataSource managerGetFileStorage]).andReturn(fileStorage);
+    OCMStub([fileStorage pathForDownloadedFilesDirectory]).andReturn(downloads);
+    return @[dataSource, tox, fileStorage];
+}
+
+/** A submanager of groups set up as the app sets one up when it starts. */
+- (OCTSubmanagerGroupsImpl *)startedSubmanagerWithDataSource:(id)dataSource
+{
+    OCTSubmanagerGroupsImpl *submanager = [OCTSubmanagerGroupsImpl new];
+    submanager.dataSource = dataSource;
+    [submanager setupFileTransferIfNeeded];
+    XCTAssertNotNil([submanager valueForKey:@"fileTransfer"]);
+    return submanager;
+}
+
+/** The BEGIN and the chunks of `payload`, in order, as a member sends a file. */
+- (NSArray<NSData *> *)packetsOfFile:(NSData *)payload
+                               named:(NSString *)fileName
+                               msgId:(NSData *)msgId
+                        chunkPayload:(uint32_t)chunkPayload
+{
+    NSMutableArray<NSData *> *packets = [NSMutableArray new];
+    [packets addObject:[self beginPacketWithMsgId:msgId fileName:fileName size:payload.length chunkPayload:chunkPayload]];
+
+    for (uint32_t index = 0; index * chunkPayload < payload.length; index++) {
+        NSUInteger length = MIN((NSUInteger)chunkPayload, payload.length - index * chunkPayload);
+        [packets addObject:[self chunkPacketWithMsgId:msgId
+                                                index:index
+                                              payload:[payload subdataWithRange:NSMakeRange(index * chunkPayload, length)]]];
+    }
+
+    return packets;
+}
+
+/**
+ * Hands `packets` from the peer to the file transfer of `submanager`, and returns when the transfer has taken them all
+ * and the blocks it handed to the main queue for them have run.
+ */
+- (void)deliverPackets:(NSArray<NSData *> *)packets toSubmanager:(OCTSubmanagerGroupsImpl *)submanager
+{
+    OCTNgcGroupFileTransfer *transfer = [submanager valueForKey:@"fileTransfer"];
+
+    for (NSData *packet in packets) {
+        [transfer handleIncomingPacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                               peerId:kGroupRealmTestsPeerId
+                                     peerPublicKeyHex:kGroupRealmTestsPeerKeyHex
+                                                 data:packet];
+    }
+
+    // The transfer takes the packets on its send queue in the order they came, and hands its blocks to the main queue
+    // from there; the main queue runs blocks in the order they came.
+    dispatch_sync([transfer valueForKey:@"sendQueue"], ^{});
+    __block BOOL reached = NO;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        reached = YES;
+    });
+    [self waitUntil:^BOOL {
+        return reached;
+    }];
+    XCTAssertTrue(reached);
+}
+
+- (OCTMessageAbstract *)fileRowNamed:(NSString *)fileName
+                                type:(OCTMessageFileType)fileType
+                              peerId:(uint32_t)peerId
+                                hash:(NSString *)hashSeed
+                              inChat:(OCTChat *)chat
+{
+    return [self.realmManager addGroupMessageWithFileName:fileName
+                                                 fileSize:3000
+                                                 filePath:[self.root stringByAppendingPathComponent:fileName]
+                                                 fileType:fileType
+                                                     chat:chat
+                                                   peerId:peerId
+                                                  fileUTI:nil
+                                        groupMsgIdHashHex:[self hashFrom:hashSeed]
+                                    groupTransferProgress:0.0f];
+}
+
+- (NSString *)hashFrom:(NSString *)seed
+{
+    return [@"" stringByPaddingToLength:64 withString:seed startingAtIndex:0];
+}
+
+#pragma mark - The pace of the relays
+
+// KHANDAQ (0.2.57): the submanager tells the file transfer which members are over a relay as toxcore says: TCP. toxcore
+// lists this device among the peers too, as TCP while it has no UDP of its own; that never makes a group relayed.
+- (void)testAMemberIsOverARelayWhenToxcoreSaysTCPAndThisDeviceIsLeftOut
+{
+    NSArray *mocks = [self groupFileMocksWithDownloads:[self.root stringByAppendingPathComponent:@"Downloads"]];
+    id tox = mocks[1];
+    OCMStub([tox performSyncBlockOnToxQueue:[OCMArg invokeBlock]]);
+    // Group 4: this device (peer 1) over TCP and a member with a direct path. Group 6: the same and a member over a relay.
+    for (NSNumber *group in @[@4, @6]) {
+        OCMStub([tox groupSelfPeerIdForGroupNumber:group.unsignedIntValue error:[OCMArg anyObjectRef]]).andReturn((uint32_t)1);
+        OCMStub([tox groupPeerConnectionStatusForGroupNumber:group.unsignedIntValue peerId:1 error:[OCMArg anyObjectRef]])
+            .andReturn(OCTToxConnectionStatusTCP);
+        OCMStub([tox groupPeerConnectionStatusForGroupNumber:group.unsignedIntValue peerId:2 error:[OCMArg anyObjectRef]])
+            .andReturn(OCTToxConnectionStatusUDP);
+    }
+    OCMStub([tox groupPeersForGroupNumber:4 error:[OCMArg anyObjectRef]]).andReturn((@[@{@"peerId": @1}, @{@"peerId": @2}]));
+    OCMStub([tox groupPeersForGroupNumber:6 error:[OCMArg anyObjectRef]])
+        .andReturn((@[@{@"peerId": @1}, @{@"peerId": @2}, @{@"peerId": @3}]));
+    OCMStub([tox groupPeerConnectionStatusForGroupNumber:6 peerId:3 error:[OCMArg anyObjectRef]]).andReturn(OCTToxConnectionStatusTCP);
+
+    OCTSubmanagerGroupsImpl *submanager = [self startedSubmanagerWithDataSource:mocks.firstObject];
+    OCTNgcGroupFileTransfer *transfer = [submanager valueForKey:@"fileTransfer"];
+
+    XCTAssertFalse(transfer.anyMemberRelayedBlock(4), @"this device made its group relayed");
+    XCTAssertTrue(transfer.anyMemberRelayedBlock(6));
+    XCTAssertFalse(transfer.memberRelayedBlock(6, 2));
+    XCTAssertTrue(transfer.memberRelayedBlock(6, 3));
+
+    XCTAssertEqual(mocks.count, 3u);
+}
+
 #pragma mark - The history sync
 
 // KHANDAQ (0.2.56): a text written while nobody else was in the group waits in the outbox, with no id yet, and
@@ -277,7 +697,209 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
     XCTAssertEqualObjects(chat.lastMessage.messageText.text, parts.lastObject);
 }
 
+// KHANDAQ (0.2.57, review of the desktop twin): a record of the group's history whose author is our own key in
+// that group (tox_group_self_get_public_key, not our Tox key). We hold our own messages already, so it is one of
+// ours coming back from a member who re-serves it, or somebody claiming to be us. Kept as ours, its row would be
+// outgoing and skip the Community hold; kept as somebody else's, our words would show under another name, and a
+// file would be written and shown at once. It is dropped before anything: no row, no file on disk, no receipt.
+// The same records under a member's key go in, so the key alone decides, whatever the case of the hex the core
+// hands back for our key.
+- (void)testAHistoryRecordUnderOurOwnGroupKeyIsDroppedBeforeAnything
+{
+    OCTChat *chat = [self groupChat];
+    NSString *directory = [self.root stringByAppendingPathComponent:@"HistoryFiles"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil];
+    NSMutableArray<NSNumber *> *receipts = [NSMutableArray new];
+    const uint32_t now = (uint32_t)[[NSDate date] timeIntervalSince1970];
+    NSData *payload = [self generatedBytesOfLength:2048];
+    uint32_t messageId = 7100;
+
+    for (NSString *selfKeyHex in @[kGroupRealmTestsSelfKeyHex, kGroupRealmTestsSelfKeyHex.lowercaseString]) {
+        OCTNgcGroupHistSync *histSync = [self realmBackedHistorySyncForChat:chat
+                                                                  directory:directory
+                                                                 selfKeyHex:selfKeyHex
+                                                                   receipts:receipts];
+        NSUInteger rowsBefore = [self rowsOfChat:chat].count;
+        NSUInteger filesBefore = [self filesInDirectory:directory].count;
+
+        uint32_t ownTextId = ++messageId;
+        NSData *ownFileHash = [self generatedBytesOfLength:32];
+        [histSync handleIncomingPrivatePacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                                      peerId:kGroupRealmTestsPeerId
+                                                        data:[self historyTextRecordWithMessageId:ownTextId
+                                                                                     authorKeyHex:kGroupRealmTestsSelfKeyHex
+                                                                                             time:now - 60
+                                                                                             text:@"our own words"]];
+        [histSync handleIncomingPrivatePacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                                      peerId:kGroupRealmTestsPeerId
+                                                        data:[self historyFileRecordWithMsgIdHash:ownFileHash
+                                                                                     authorKeyHex:kGroupRealmTestsSelfKeyHex
+                                                                                             time:now - 60
+                                                                                         fileName:@"ours.jpg"
+                                                                                          payload:payload]];
+
+        XCTAssertEqual([self rowsOfChat:chat].count, rowsBefore, @"a record under our own key made a row (%@)", selfKeyHex);
+        XCTAssertEqual([self rowsOfChat:chat authoredBy:kGroupRealmTestsSelfKeyHex].count, 0u);
+        XCTAssertEqual([self filesInDirectory:directory].count, filesBefore, @"a file under our own key reached the disk");
+
+        // The same records under a member's key: they go in, and the text is receipted to its author.
+        uint32_t memberTextId = ++messageId;
+        [histSync handleIncomingPrivatePacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                                      peerId:kGroupRealmTestsPeerId
+                                                        data:[self historyTextRecordWithMessageId:memberTextId
+                                                                                     authorKeyHex:kGroupRealmTestsPeerKeyHex
+                                                                                             time:now - 60
+                                                                                             text:@"our own words"]];
+        [histSync handleIncomingPrivatePacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                                      peerId:kGroupRealmTestsPeerId
+                                                        data:[self historyFileRecordWithMsgIdHash:[self generatedBytesOfLength:32]
+                                                                                     authorKeyHex:kGroupRealmTestsPeerKeyHex
+                                                                                             time:now - 60
+                                                                                         fileName:@"ours.jpg"
+                                                                                          payload:payload]];
+
+        RLMResults *memberRows = [self rowsOfChat:chat authoredBy:kGroupRealmTestsPeerKeyHex];
+        XCTAssertEqual([self rowsOfChat:chat].count, rowsBefore + 2, @"the member's records did not go in");
+        XCTAssertEqual([self filesInDirectory:directory].count, filesBefore + 1);
+        for (OCTMessageAbstract *row in memberRows) {
+            XCTAssertTrue(row.groupHistorySync);
+            XCTAssertFalse([row isOutgoing], @"a row from the history counts as ours");
+        }
+
+        // Receipts leave one after another from one queue: once the member's has gone, any for ours would have.
+        [self waitUntil:^BOOL {
+            @synchronized (receipts) {
+                return [receipts containsObject:@(memberTextId)];
+            }
+        }];
+        @synchronized (receipts) {
+            XCTAssertTrue([receipts containsObject:@(memberTextId)], @"the member's text was not receipted");
+            XCTAssertFalse([receipts containsObject:@(ownTextId)], @"a record under our own key was receipted");
+        }
+    }
+}
+
+#pragma mark - The save of a group joined here
+
+// KHANDAQ (0.2.57): nothing saved the profile after a group was taken from an invite, so after a restart the profile
+// was out of the group, and the founder of a private group refuses a join by its id. toxcore writes a group into the
+// save only once a member has sent it the group's state: the save comes when the first member joins, and only then.
+- (void)testAGroupTakenFromAnInviteIsSavedWhenItsFirstMemberJoins
+{
+    NSArray *mocks = [self groupFileMocksWithDownloads:[self.root stringByAppendingPathComponent:@"Downloads"]];
+    id tox = mocks[1];
+    NSMutableArray *saves = [self savesAskedOfDataSource:mocks.firstObject tox:tox];
+    OCMStub([tox groupInviteAcceptWithFriendNumber:0
+                                        inviteData:[OCMArg any]
+                                          peerName:[OCMArg any]
+                                          password:[OCMArg any]
+                                             error:[OCMArg anyObjectRef]]).andReturn((OCTToxGroupNumber)kGroupRealmTestsGroupNumber);
+    OCMStub([tox groupChatIdHexForGroupNumber:kGroupRealmTestsGroupNumber error:[OCMArg anyObjectRef]])
+        .andReturn(kGroupRealmTestsChatIdHex);
+    OCMStub([tox groupPrivacyStateForGroupNumber:kGroupRealmTestsGroupNumber error:[OCMArg anyObjectRef]])
+        .andReturn(OCTToxGroupPrivacyStatePrivate);
+    OCTSubmanagerGroupsImpl *submanager = [self joiningSubmanagerWithDataSource:mocks.firstObject];
+
+    OCTChat *chat = [submanager acceptGroupInviteFromFriendNumber:0
+                                                       inviteData:[self inviteDataForChatIdHex:kGroupRealmTestsChatIdHex]
+                                                        groupName:@"family"
+                                                         password:nil
+                                                            error:nil];
+
+    XCTAssertEqual(chat.groupNumber, (int32_t)kGroupRealmTestsGroupNumber);
+    XCTAssertEqual(saves.count, 0u, @"saved before a member sent the group's state, which leaves the group out");
+
+    [submanager tox:tox groupPeerJoinWithGroupNumber:kGroupRealmTestsGroupNumber peerId:kGroupRealmTestsPeerId];
+    XCTAssertEqual(saves.count, 1u, @"the group was not saved when its first member joined");
+
+    [submanager tox:tox groupPeerJoinWithGroupNumber:kGroupRealmTestsGroupNumber peerId:kGroupRealmTestsPeerId + 1];
+    XCTAssertEqual(saves.count, 1u, @"saved again for a member after the first");
+
+    XCTAssertEqual(mocks.count, 3u);
+}
+
+// KHANDAQ (0.2.57): the same for a group joined by its id (a link, Khandaq Community) and for a chat whose group
+// toxcore does not have, which joins it again.
+- (void)testAGroupJoinedByItsIdOrJoinedAgainIsSavedWhenItsFirstMemberJoins
+{
+    NSString *const lostChatIdHex = @"7A6B5C4D3E2F10F1E2D3C4B5A69788796A5B4C3D2E1F0011223344556677889A";
+    const OCTToxGroupNumber rejoinedGroupNumber = 6;
+    NSArray *mocks = [self groupFileMocksWithDownloads:[self.root stringByAppendingPathComponent:@"Downloads"]];
+    id tox = mocks[1];
+    NSMutableArray *saves = [self savesAskedOfDataSource:mocks.firstObject tox:tox];
+    OCMStub([tox groupJoinWithChatIdHex:kGroupRealmTestsChatIdHex
+                               peerName:[OCMArg any]
+                               password:[OCMArg any]
+                                  error:[OCMArg anyObjectRef]]).andReturn((OCTToxGroupNumber)kGroupRealmTestsGroupNumber);
+    OCMStub([tox groupJoinWithChatIdHex:lostChatIdHex
+                               peerName:[OCMArg any]
+                               password:[OCMArg any]
+                                  error:[OCMArg anyObjectRef]]).andReturn(rejoinedGroupNumber);
+    OCTSubmanagerGroupsImpl *submanager = [self joiningSubmanagerWithDataSource:mocks.firstObject];
+
+    XCTAssertEqual([submanager joinGroupWithChatIdHex:kGroupRealmTestsChatIdHex peerName:@"me" password:nil error:nil],
+                   (OCTToxGroupNumber)kGroupRealmTestsGroupNumber);
+    XCTAssertEqual(saves.count, 0u);
+
+    [submanager tox:tox groupPeerJoinWithGroupNumber:kGroupRealmTestsGroupNumber peerId:kGroupRealmTestsPeerId];
+    XCTAssertEqual(saves.count, 1u, @"a group joined by its id was not saved when its first member joined");
+
+    // Group 9 is none of toxcore's: the chat joins its group again.
+    OCTChat *lost = [self.realmManager getOrCreateGroupChatWithGroupNumber:9
+                                                                 chatIdHex:lostChatIdHex
+                                                                 groupName:@"lost"
+                                                              privacyState:OCTToxGroupPrivacyStatePrivate];
+    XCTAssertTrue([submanager prepareChatForGroupActivity:lost peerName:@"me" error:nil]);
+    XCTAssertEqual(lost.groupNumber, (int32_t)rejoinedGroupNumber);
+    XCTAssertEqual(saves.count, 1u);
+
+    [submanager tox:tox groupPeerJoinWithGroupNumber:rejoinedGroupNumber peerId:kGroupRealmTestsPeerId];
+    XCTAssertEqual(saves.count, 2u, @"a group joined again was not saved when its first member joined");
+
+    [submanager tox:tox groupPeerJoinWithGroupNumber:kGroupRealmTestsGroupNumber peerId:kGroupRealmTestsPeerId + 1];
+    XCTAssertEqual(saves.count, 2u, @"saved again for a member after the first");
+
+    XCTAssertEqual(mocks.count, 3u);
+}
+
 #pragma mark - Rig
+
+/** The saves of the profile `dataSource` is asked for, as they come; the tox queue of `tox` runs its blocks in place. */
+- (NSMutableArray *)savesAskedOfDataSource:(id)dataSource tox:(id)tox
+{
+    NSMutableArray *saves = [NSMutableArray new];
+    OCMStub([dataSource managerSaveTox]).andDo(^(NSInvocation *invocation) {
+        [saves addObject:[NSDate date]];
+    });
+    OCMStub([tox performSyncBlockOnToxQueue:[OCMArg invokeBlock]]);
+    return saves;
+}
+
+/**
+ * A submanager of groups that joins them. A member's join does no more than the save needs here: no history sync, no
+ * key announce and no flush later, so nothing of the test runs after it.
+ */
+- (OCTSubmanagerGroupsImpl *)joiningSubmanagerWithDataSource:(id)dataSource
+{
+    OCTSubmanagerGroupsImpl *submanager = [OCTSubmanagerGroupsImpl new];
+    submanager.dataSource = dataSource;
+
+    id partial = OCMPartialMock(submanager);
+    OCMStub([partial setupHistSyncIfNeeded]);
+    OCMStub([partial setupHskAnnounceIfNeeded]);
+    OCMStub([partial schedulePendingGroupMessagesFlushForChatUniqueIdentifier:[OCMArg any]]);
+    return partial;
+}
+
+/** An invite to the group of `chatIdHex` as toxcore hands one over: the chat id first. */
+- (NSData *)inviteDataForChatIdHex:(NSString *)chatIdHex
+{
+    uint8_t *chatId = [OCTTox hexStringToBin:chatIdHex];
+    NSMutableData *invite = [NSMutableData dataWithBytes:chatId length:kOCTToxGroupChatIdLength];
+    free(chatId);
+    [invite increaseLengthBy:64];
+    return invite;
+}
 
 - (NSArray<NSString *> *)partsOfALongText
 {
@@ -302,6 +924,107 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
     }
 
     return texts;
+}
+
+/**
+ * A history sync for this client alone in the group of the chat, whose blocks store what it takes as the app's do,
+ * through the realm manager, with files in `directory`. Every author resolves to the member kGroupRealmTestsPeerId,
+ * so a record taken in would be receipted; the message ids of the receipts sent go to `receipts`.
+ */
+- (OCTNgcGroupHistSync *)realmBackedHistorySyncForChat:(OCTChat *)chat
+                                             directory:(NSString *)directory
+                                            selfKeyHex:(NSString *)selfKeyHex
+                                              receipts:(NSMutableArray<NSNumber *> *)receipts
+{
+    OCTRealmManager *realmManager = self.realmManager;
+
+    return [[OCTNgcGroupHistSync alloc] initWithSendPrivatePacketBlock:^BOOL (uint32_t groupNumber, uint32_t peerId, NSData *packet, NSError **error) {
+        const uint8_t *bytes = packet.bytes;
+
+        if (packet.length == 12 && bytes[7] == 0x04) {
+            uint32_t receipted = ((uint32_t)bytes[8] << 24) | ((uint32_t)bytes[9] << 16) | ((uint32_t)bytes[10] << 8) | (uint32_t)bytes[11];
+            @synchronized (receipts) {
+                [receipts addObject:@(receipted)];
+            }
+        }
+        return YES;
+    } peerPublicKeyBlock:^NSString *(uint32_t groupNumber, uint32_t peerId) {
+        return kGroupRealmTestsPeerKeyHex;
+    } peerNameForPeerIdBlock:^NSString *(uint32_t groupNumber, uint32_t peerId) {
+        return @"member";
+    } defaultPeerNameBlock:^NSString *{
+        return @"me";
+    } selfPublicKeyBlock:^NSString *(uint32_t groupNumber) {
+        return selfKeyHex;
+    } peerIdForPublicKeyBlock:^uint32_t (uint32_t groupNumber, NSString *publicKeyHex) {
+        return kGroupRealmTestsPeerId;
+    } isPublicGroupBlock:^BOOL (uint32_t groupNumber) {
+        return YES;
+    } selfPeerIdBlock:^uint32_t (uint32_t groupNumber) {
+        return 1;
+    } peerIdsBlock:^NSArray<NSNumber *> *(uint32_t groupNumber) {
+        return @[];
+    } chatForGroupBlock:^OCTChat *(uint32_t groupNumber, BOOL createIfNeeded) {
+        return chat;
+    } messagesToSyncBlock:^NSArray<OCTMessageAbstract *> *(OCTChat *theChat) {
+        return @[];
+    } messageExistsBlock:^BOOL (OCTChat *theChat, uint32_t messageId, uint32_t peerId, NSString *senderPubkeyHex,
+                                NSString *peerName, NSString *text, NSTimeInterval dateInterval) {
+        return NO;
+    } fileExistsBlock:^BOOL (OCTChat *theChat, NSString *msgIdHashHex) {
+        return NO;
+    } insertSyncedMessageBlock:^OCTMessageAbstract *(OCTChat *theChat, NSString *text, OCTToxMessageType type, uint32_t peerId,
+                                                     NSString *peerName, NSString *senderPubkeyHex, uint32_t messageId,
+                                                     NSTimeInterval dateInterval) {
+        return [realmManager addGroupSyncedMessageWithText:text
+                                                      type:type
+                                                      chat:theChat
+                                                    peerId:peerId
+                                                  peerName:peerName
+                                           senderPubkeyHex:senderPubkeyHex
+                                                 messageId:(OCTToxMessageId)messageId
+                                              dateInterval:dateInterval];
+    } insertSyncedFileBlock:^OCTMessageAbstract *(OCTChat *theChat, NSString *fileName, NSString *filePath, uint64_t fileSize,
+                                                  NSString *fileUTI, uint32_t peerId, NSString *peerName,
+                                                  NSString *senderPubkeyHex, NSString *msgIdHashHex, NSTimeInterval dateInterval) {
+        return [realmManager addGroupSyncedMessageWithFileName:fileName
+                                                      fileSize:fileSize
+                                                      filePath:filePath
+                                                      fileType:OCTMessageFileTypeReady
+                                                          chat:theChat
+                                                        peerId:peerId
+                                                      peerName:peerName
+                                               senderPubkeyHex:senderPubkeyHex
+                                                       fileUTI:fileUTI
+                                             groupMsgIdHashHex:msgIdHashHex
+                                                  dateInterval:dateInterval];
+    } incomingFilesDirectoryBlock:^NSString *(uint32_t groupNumber) {
+        return directory;
+    } fileUTIBlock:^NSString *(NSString *fileName) {
+        return nil;
+    } isBlockedPeerBlock:^BOOL (uint32_t groupNumber, uint32_t peerId) {
+        return NO;
+    } deliveryReceiptBlock:^(OCTChat *theChat, uint32_t messageId, uint32_t peerId) {
+    } fileSyncConfirmationBlock:^(OCTChat *theChat, NSString *msgIdHashHex, uint32_t syncerPeerId) {
+    }];
+}
+
+- (RLMResults *)rowsOfChat:(OCTChat *)chat
+{
+    return [OCTMessageAbstract objectsInRealm:self.realmManager.realm where:@"chatUniqueIdentifier == %@", chat.uniqueIdentifier];
+}
+
+/** The rows of the chat whose text or file names `keyHex` as its author, in any case. */
+- (RLMResults *)rowsOfChat:(OCTChat *)chat authoredBy:(NSString *)keyHex
+{
+    return [OCTMessageAbstract objectsInRealm:self.realmManager.realm
+                                        where:@"chatUniqueIdentifier == %@ AND (messageText.groupSenderPubkey ==[c] %@ OR messageFile.groupSenderPubkey ==[c] %@)",
+            chat.uniqueIdentifier, keyHex, keyHex];
+}
+
+- (NSArray<NSString *> *)filesInDirectory:(NSString *)directory
+{
+    return [[NSFileManager defaultManager] contentsOfDirectoryAtPath:directory error:nil] ?: @[];
 }
 
 /** The texts of both history sync queries, which must agree, in the order they are served. */
@@ -562,6 +1285,53 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
 {
     uint32_t bigEndian = CFSwapInt32HostToBig(value);
     [packet appendBytes:&bigEndian length:sizeof(bigEndian)];
+}
+
+/** A text of the group's history as a member serves it (OCTNgcGroupHistSync, layer 0x01, type 0x02). */
+- (NSData *)historyTextRecordWithMessageId:(uint32_t)messageId
+                              authorKeyHex:(NSString *)authorKeyHex
+                                      time:(uint32_t)time
+                                      text:(NSString *)text
+{
+    NSMutableData *messageIdBytes = [NSMutableData new];
+    [self appendU32:messageId toPacket:messageIdBytes];
+    NSMutableData *packet = [self packetOfType:0x02 msgId:messageIdBytes];
+    [self appendKeyHex:authorKeyHex toPacket:packet];
+    [self appendU32:time toPacket:packet];
+    [self appendString:@"member" length:25 toPacket:packet];
+    [packet appendData:[text dataUsingEncoding:NSUTF8StringEncoding]];
+    return packet;
+}
+
+/** A file of the group's history as a member serves it (OCTNgcGroupHistSync, layer 0x01, type 0x03). */
+- (NSData *)historyFileRecordWithMsgIdHash:(NSData *)msgIdHash
+                              authorKeyHex:(NSString *)authorKeyHex
+                                      time:(uint32_t)time
+                                  fileName:(NSString *)fileName
+                                   payload:(NSData *)payload
+{
+    NSMutableData *packet = [self packetOfType:0x03 msgId:msgIdHash];
+    [self appendKeyHex:authorKeyHex toPacket:packet];
+    [self appendU32:time toPacket:packet];
+    [self appendString:@"member" length:25 toPacket:packet];
+    [self appendString:fileName length:255 toPacket:packet];
+    [packet appendData:payload];
+    return packet;
+}
+
+- (void)appendKeyHex:(NSString *)keyHex toPacket:(NSMutableData *)packet
+{
+    for (NSUInteger index = 0; index + 1 < keyHex.length; index += 2) {
+        uint8_t byte = (uint8_t)strtoul([keyHex substringWithRange:NSMakeRange(index, 2)].UTF8String, NULL, 16);
+        [packet appendBytes:&byte length:1];
+    }
+}
+
+- (void)appendString:(NSString *)string length:(NSUInteger)length toPacket:(NSMutableData *)packet
+{
+    NSMutableData *bytes = [[string dataUsingEncoding:NSUTF8StringEncoding] mutableCopy];
+    bytes.length = length;
+    [packet appendData:bytes];
 }
 
 - (NSData *)singlePacketWithMsgId:(NSData *)msgId fileName:(NSString *)fileName payload:(NSData *)payload

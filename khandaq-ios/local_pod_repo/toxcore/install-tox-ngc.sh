@@ -61,7 +61,8 @@ echo "      Diff it against ${DESKTOP_TOXCORE}/toxav/ by hand and port security 
 #
 # The desktop copy does not carry these, so rsync --delete removes them. Re-apply them after every
 # sync; `grep -rn KHANDAQ toxcore/toxcore` finds them in the current tree:
-#   - Messenger.h: TOX_CAPABILITIES_CURRENT without the H264/H265 bits (this toxav decodes VP8 only).
+#   - Messenger.h: TOX_CAPABILITIES_CURRENT without the H264/H265 bits (this toxav decodes VP8 only),
+#     keeping the MSGV3 bit that the desktop copy announces since 0.2.57 (read receipts need it).
 #   - Messenger.m, group_chats.h, group_chats.m: gc_group_known_only_by_id(), so a friend's invite
 #     reaches a group joined by its ID that no peer has answered yet.
 #   - group_chats.m: gc_accept_invite() deletes the chat with the invite's ID that it replaces (one

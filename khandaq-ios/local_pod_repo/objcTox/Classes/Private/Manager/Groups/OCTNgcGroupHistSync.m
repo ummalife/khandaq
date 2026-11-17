@@ -741,11 +741,11 @@ static const NSUInteger kOCTNgcHistBudgetMaxBytesPerGroupPerSession = 8 * 1024 *
                           atOffset:76
                          inBuffer:bytes];
 
+    // KHANDAQ (0.2.57): on whole characters, its extension kept (OCTToxFileNameBytes): cut in the middle of a letter,
+    // the name did not read back as UTF-8 and came as "file".
     NSString *fileName = messageFile.fileName.length > 0 ? messageFile.fileName : @"file";
-    [self writePaddedUTF8String:fileName
-                         maxBytes:kOCTNgcHistMaxFilenameBytes
-                          atOffset:101
-                         inBuffer:bytes];
+    NSData *fileNameBytes = OCTToxFileNameBytes(fileName);
+    memcpy(bytes + 101, fileNameBytes.bytes, MIN(fileNameBytes.length, kOCTNgcHistMaxFilenameBytes));
 
     memcpy(bytes + kOCTNgcHistSyncFileHeader, fileData.bytes, fileData.length);
 
@@ -936,7 +936,9 @@ static const NSUInteger kOCTNgcHistBudgetMaxBytesPerGroupPerSession = 8 * 1024 *
         return;
     }
 
-    NSString *filePath = [OCTFileTools createNewFilePathInDirectory:directory fileName:fileName];
+    // KHANDAQ (0.2.57): never a hidden name, never the name of a file a message of the group still names.
+    NSSet<NSString *> *namesInUse = self.incomingFileNamesInUseBlock ? self.incomingFileNamesInUseBlock(groupNumber) : nil;
+    NSString *filePath = [OCTFileTools createNewGroupFilePathInDirectory:directory fileName:fileName namesInUse:namesInUse];
 
     if (! [fileData writeToFile:filePath atomically:YES]) {
         return;

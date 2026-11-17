@@ -13,6 +13,51 @@
     NSParameterAssert(directory);
     NSParameterAssert(fileName);
 
+    return [self newPathInDirectory:directory safeName:[self safeNameForFileName:fileName] isTaken:^BOOL (NSString *path) {
+        return [self fileExistsAtPath:path];
+    }];
+}
+
++ (nonnull NSString *)createNewFilePathInDirectory:(nonnull NSString *)directory
+                                          fileName:(nonnull NSString *)fileName
+                                       nameIsTaken:(nullable BOOL (^)(NSString *_Nonnull name))nameIsTaken
+{
+    NSParameterAssert(directory);
+    NSParameterAssert(fileName);
+
+    return [self newPathInDirectory:directory safeName:[self safeNameForFileName:fileName] isTaken:^BOOL (NSString *path) {
+        return [self fileExistsAtPath:path] || (nameIsTaken && nameIsTaken([path lastPathComponent]));
+    }];
+}
+
++ (nonnull NSString *)createNewGroupFilePathInDirectory:(nonnull NSString *)directory
+                                               fileName:(nonnull NSString *)fileName
+                                             namesInUse:(nullable NSSet<NSString *> *)namesInUse
+{
+    NSParameterAssert(directory);
+    NSParameterAssert(fileName);
+
+    NSString *safeName = [self safeNameForFileName:fileName];
+    NSUInteger dots = 0;
+
+    while (dots < safeName.length && [safeName characterAtIndex:dots] == '.') {
+        dots++;
+    }
+
+    if (dots > 0) {
+        NSString *underscores = [@"" stringByPaddingToLength:dots withString:@"_" startingAtIndex:0];
+        safeName = [underscores stringByAppendingString:[safeName substringFromIndex:dots]];
+    }
+
+    return [self newPathInDirectory:directory safeName:safeName isTaken:^BOOL (NSString *path) {
+        return [namesInUse containsObject:[[path lastPathComponent] lowercaseString]] || [self fileExistsAtPath:path];
+    }];
+}
+
+#pragma mark -  Private
+
++ (NSString *)safeNameForFileName:(NSString *)fileName
+{
     NSString *safeName = [fileName lastPathComponent];
     if ((safeName.length == 0) || [safeName isEqualToString:@"."] || [safeName isEqualToString:@".."] ||
         [safeName containsString:@"/"] || [safeName containsString:@"\\"] || [safeName containsString:@".."])
@@ -20,9 +65,19 @@
         safeName = @"unsafe_filename";
     }
 
+    return safeName;
+}
+
+/**
+ * `safeName` in `directory`, or with the first " N" suffix whose path `isTaken` says is free.
+ */
++ (NSString *)newPathInDirectory:(NSString *)directory
+                        safeName:(NSString *)safeName
+                         isTaken:(BOOL (^)(NSString *path))isTaken
+{
     NSString *path = [directory stringByAppendingPathComponent:safeName];
 
-    if (! [self fileExistsAtPath:path]) {
+    if (! isTaken(path)) {
         return path;
     }
 
@@ -41,15 +96,13 @@
 
         NSString *path = [directory stringByAppendingPathComponent:resultName];
 
-        if (! [self fileExistsAtPath:path]) {
+        if (! isTaken(path)) {
             return path;
         }
 
         suffix++;
     }
 }
-
-#pragma mark -  Private
 
 + (BOOL)fileExistsAtPath:(NSString *)filePath
 {

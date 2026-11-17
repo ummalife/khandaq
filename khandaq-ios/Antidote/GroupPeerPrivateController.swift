@@ -33,6 +33,8 @@ class GroupPeerPrivateController: PortraitChatController {
     fileprivate var tableView: UITableView!
     fileprivate var chatInputView: ChatInputView!
     fileprivate var titleView: ChatPrivateTitleView!
+    /// KHANDAQ (0.2.57): above the member's line, the band of no network (AirNetworkNotice).
+    fileprivate let networkBand = AirNetworkBandView()
     fileprivate let band = AirGroupPrivateBandView()
     /// Who sees these messages, at the start of the thread: it scrolls away with it, so a large text size
     /// keeps room for the messages.
@@ -111,7 +113,12 @@ class GroupPeerPrivateController: PortraitChatController {
         // The name is a bar item next to the back button; the centre of the bar stays empty.
         navigationItem.titleView = UIView()
 
-        view.addSubview(band)
+        let topStack = UIStackView(arrangedSubviews: [networkBand, band])
+        topStack.axis = .vertical
+        view.addSubview(topStack)
+        networkBand.layoutHost = { [weak self] in
+            self?.view.layoutIfNeeded()
+        }
 
         tableView = UITableView(frame: .zero, style: .plain)
         tableView.estimatedRowHeight = 44
@@ -145,11 +152,11 @@ class GroupPeerPrivateController: PortraitChatController {
         filler.isUserInteractionEnabled = false
         view.insertSubview(filler, belowSubview: chatInputView)
 
-        band.snp.makeConstraints {
+        topStack.snp.makeConstraints {
             $0.top.leading.trailing.equalTo(view)
         }
         tableView.snp.makeConstraints {
-            $0.top.equalTo(band.snp.bottom)
+            $0.top.equalTo(topStack.snp.bottom)
             $0.leading.trailing.equalTo(view)
             $0.bottom.equalTo(chatInputView.snp.top)
         }
@@ -185,6 +192,9 @@ class GroupPeerPrivateController: PortraitChatController {
         observers.append(center.addObserver(forName: AirSelfNetwork.didChange, object: nil, queue: .main) { [weak self] _ in
             self?.refreshComposeState(animated: true)
         })
+        observers.append(center.addObserver(forName: AirNetworkNotice.didChange, object: nil, queue: .main) { [weak self] _ in
+            self?.networkBand.follow(AirNetworkNotice.shared, animated: true)
+        })
         observers.append(center.addObserver(forName: .UIContentSizeCategoryDidChange, object: nil, queue: .main) { [weak self] _ in
             // The time column and the fonts of the entries follow the text size.
             self?.rowHeights.removeAll()
@@ -200,6 +210,7 @@ class GroupPeerPrivateController: PortraitChatController {
         }
 
         installTitleItem()
+        networkBand.follow(AirNetworkNotice.shared, animated: false)
         refreshMember(animated: false)
     }
 
@@ -437,6 +448,25 @@ extension GroupPeerPrivateController: UITableViewDelegate {
             return tableView.estimatedRowHeight
         }
         return height
+    }
+
+    // KHANDAQ (0.2.57, SPEC-community item 5): a private message the member wrote here is reported with the
+    // mail of a message in the group.
+    func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
+        guard indexPath.row < messages.count, !messages[indexPath.row].isOutgoing() else {
+            return nil
+        }
+        let message = messages[indexPath.row]
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+            let report = UIAction(title: String(localized: "chat_report_action"),
+                                  image: UIImage(systemName: "exclamationmark.bubble")) { _ in
+                guard let self = self, !message.isInvalidated else {
+                    return
+                }
+                GroupReport(chat: self.chat, message: message, groups: self.submanagerGroups).present(from: self)
+            }
+            return UIMenu(title: "", children: [report])
+        }
     }
 }
 

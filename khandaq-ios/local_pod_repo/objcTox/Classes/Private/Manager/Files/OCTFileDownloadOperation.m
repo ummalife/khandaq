@@ -11,10 +11,15 @@
 
 static const CFTimeInterval kDownloadStallTimeout = 90.0;
 
+// KHANDAQ (0.2.57): how soon a seek or an accept that toxcore's send queue to the friend did not take is tried
+// again. The queue is full while the friend takes no packets, or while a transfer of ours to them fills it.
+static const NSTimeInterval kControlRetryInterval = 0.1;
+
 @interface OCTFileDownloadOperation ()
 
 @property (assign, nonatomic) CFTimeInterval lastChunkTime;
 @property (strong, nonatomic) dispatch_block_t stallWatchdog;
+@property (assign, nonatomic, readwrite) BOOL failedBeforeAccept;
 
 @end
 
@@ -130,26 +135,7 @@ static const CFTimeInterval kDownloadStallTimeout = 90.0;
 {
     [super operationStarted];
 
-    if (! [self.output prepareToWrite]) {
-        // KHANDAQ (#48): MUST return — without it, execution fell through to the Resume control below
-        // and called finishWithError a SECOND time (finishWithError has no already-finished guard),
-        // double-firing the failure block.
-        [self finishWithError:[NSError acceptFileErrorCannotWriteToFile]];
-        return;
-    }
-
-    NSError *error;
-    if (! [self.tox fileSendControlForFileNumber:self.fileNumber
-                                    friendNumber:self.friendNumber
-                                         control:OCTToxFileControlResume
-                                           error:&error]) {
-        OCTLogWarn(@"cannot send control %@", error);
-        [self finishWithError:[NSError acceptFileErrorFromToxFileControl:error.code]];
-        return;
-    }
-
-    self.lastChunkTime = CACurrentMediaTime();
-    [self resetStallWatchdog];
+    [self seekToResumePosition];
 }
 
 - (void)operationWasCanceled
@@ -162,6 +148,127 @@ static const CFTimeInterval kDownloadStallTimeout = 90.0;
     [super operationWasCanceled];
 
     [self.output cancel];
+}
+
+#pragma mark -  Private
+
+/**
+ * KHANDAQ (0.2.57): the seek must come before the Resume, while toxcore still waits for the accept. A seek the send
+ * queue did not take is tried again. Any other failure leaves the bytes kept as they are and fails the transfer
+ * before it was accepted (failedBeforeAccept), so it waits for the next offer. It used to take the file from its
+ * first byte instead, which emptied the partial file before anyone knew the Resume would go out: with the friend
+ * gone a moment after the offer, every byte that had come was lost.
+ */
+- (void)seekToResumePosition
+{
+    if (self.isCancelled || self.isFinished) {
+        return;
+    }
+
+    if (self.resumePosition <= 0) {
+        [self acceptFromPosition:0];
+        return;
+    }
+
+    NSError *seekError;
+    if ([self.tox fileSeekForFileNumber:self.fileNumber
+                           friendNumber:self.friendNumber
+                               position:self.resumePosition
+                                  error:&seekError]) {
+        [self acceptFromPosition:self.resumePosition];
+        return;
+    }
+
+    if (seekError.code == OCTToxErrorFileSeekSendq) {
+        [self retrySoon:^(OCTFileDownloadOperation *operation) {
+            [operation seekToResumePosition];
+        }];
+        return;
+    }
+
+    if (self.cancelsWhenSeekFails) {
+        OCTLogWarn(@"cannot seek to %lld, cancelling: %@", self.resumePosition, seekError);
+        [self.tox fileSendControlForFileNumber:self.fileNumber
+                                  friendNumber:self.friendNumber
+                                       control:OCTToxFileControlCancel
+                                         error:nil];
+        [self finishWithError:[NSError acceptFileErrorInternalError]];
+        return;
+    }
+
+    OCTLogWarn(@"cannot seek to %lld, the bytes kept wait for the next offer: %@", self.resumePosition, seekError);
+    self.failedBeforeAccept = YES;
+    [self finishWithError:[NSError acceptFileErrorInternalError]];
+}
+
+- (void)acceptFromPosition:(OCTToxFileSize)position
+{
+    BOOL prepared = (position > 0 && [self.output respondsToSelector:@selector(prepareToWriteFromOffset:)])
+        ? [self.output prepareToWriteFromOffset:position]
+        : [self.output prepareToWrite];
+
+    if (! prepared) {
+        // KHANDAQ (#48): MUST return — without it, execution fell through to the Resume control below
+        // and called finishWithError a SECOND time (finishWithError has no already-finished guard),
+        // double-firing the failure block.
+        // KHANDAQ (0.2.57): and tell the sender, whose offer would otherwise wait for an accept that never comes.
+        [self.tox fileSendControlForFileNumber:self.fileNumber
+                                  friendNumber:self.friendNumber
+                                       control:OCTToxFileControlCancel
+                                         error:nil];
+        [self finishWithError:[NSError acceptFileErrorCannotWriteToFile]];
+        return;
+    }
+
+    if (position > 0) {
+        [self beginAtBytes:position];
+    }
+
+    [self sendResumeFromPosition:position];
+}
+
+/// KHANDAQ (0.2.57): an accept the send queue did not take is tried again, as the seek before it is.
+- (void)sendResumeFromPosition:(OCTToxFileSize)position
+{
+    if (self.isCancelled || self.isFinished) {
+        return;
+    }
+
+    NSError *error;
+    if (! [self.tox fileSendControlForFileNumber:self.fileNumber
+                                    friendNumber:self.friendNumber
+                                         control:OCTToxFileControlResume
+                                           error:&error]) {
+        if (error.code == OCTToxErrorFileControlSendq) {
+            [self retrySoon:^(OCTFileDownloadOperation *operation) {
+                [operation sendResumeFromPosition:position];
+            }];
+            return;
+        }
+
+        OCTLogWarn(@"cannot send control %@", error);
+        // KHANDAQ (0.2.57): the bytes kept up to the seek are still there to go on from.
+        self.failedBeforeAccept = (position > 0);
+        [self finishWithError:[NSError acceptFileErrorFromToxFileControl:error.code]];
+        return;
+    }
+
+    self.lastChunkTime = CACurrentMediaTime();
+    [self resetStallWatchdog];
+}
+
+/// Runs `step` again shortly, on a global queue, unless the operation has ended meanwhile.
+- (void)retrySoon:(void (^)(OCTFileDownloadOperation *operation))step
+{
+    __weak OCTFileDownloadOperation *weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kControlRetryInterval * NSEC_PER_SEC)),
+                   dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        OCTFileDownloadOperation *strongSelf = weakSelf;
+        if (! strongSelf || strongSelf.isCancelled || strongSelf.isFinished) {
+            return;
+        }
+        step(strongSelf);
+    });
 }
 
 @end

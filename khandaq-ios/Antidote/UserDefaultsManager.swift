@@ -197,7 +197,12 @@ class UserDefaultsManager {
 
     var autodownloadImages: AutodownloadImages {
         get {
-            let defaultValue = AutodownloadImages.Never //Easy enough to reach option for users. Reverting change since there is an extremely high risk of people getting in trouble since an attacked can get you in prison by sending you cp.
+            // KHANDAQ (0.2.57): files download by themselves unless the person says otherwise, the owner's
+            // decision of 2026-11-16 ("all files"). The rule reaches only 1:1 files, and those come only from
+            // contacts the person accepted: Tox carries a file between friends alone, and AutomationCoordinator
+            // looks at nothing else (group files have no sender there). The public Community group gets its
+            // own rule in a separate task. Up to 200 MB (AutomationCoordinator); a bigger file waits for a tap.
+            let defaultValue = AutodownloadImages.Always
 
             guard let string = stringForKey(Keys.AutodownloadImages) else {
                 return defaultValue
@@ -222,6 +227,20 @@ class UserDefaultsManager {
     func resetUDPEnabled() {
         removeObjectForKey(Keys.UDPEnabled)
     }
+
+    /// KHANDAQ (0.2.57): the first start of 0.2.57 turns automatic downloads on for everyone, once, whatever
+    /// was stored before (the owner's decision of 2026-11-16); from then on the person's own choice in the
+    /// settings stays as they leave it. Call it at launch, before a session reads the setting. Returns whether
+    /// it changed anything.
+    @discardableResult
+    func applyAutoDownloadDefaultOnce() -> Bool {
+        guard !boolForKey(Keys.AutoDownloadDefaultApplied, defaultValue: false) else {
+            return false
+        }
+        autodownloadImages = .Always
+        setBool(true, forKey: Keys.AutoDownloadDefaultApplied)
+        return true
+    }
 }
 
 private extension UserDefaultsManager {
@@ -234,6 +253,7 @@ private extension UserDefaultsManager {
         static let ShowNotificationsPreview = "user-info/snow-notification-preview"
         static let LongerbgMode = "user-info/longerbg-mode"
         static let AutodownloadImages = "user-info/autodownload-images"
+        static let AutoDownloadDefaultApplied = "user-info/auto_download_default_v0257_applied"
         static let GroupShowSystemMessages = "user-info/group-show-system-messages"
         static let DarkModeEnabled = "user-info/dark-mode-enabled"
         static let ThemePreference = "user-info/theme-preference"

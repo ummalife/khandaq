@@ -117,6 +117,8 @@ class ChatPrivateController: PortraitChatController {
     // the end of this file. Under the header: the presence band and the pinned strip; between the log
     // and the field: the refused messages and the "On its way" tray; over everything: the dossier.
     fileprivate var topStack: UIStackView!
+    /// KHANDAQ (0.2.57): above the presence band, the band of no network (AirNetworkNotice).
+    fileprivate var networkBand: AirNetworkBandView!
     fileprivate var presenceBand: AirPresenceBandView?
     fileprivate var pinnedStrip: AirPinnedStripView!
     fileprivate var bottomStack: UIStackView!
@@ -160,6 +162,10 @@ class ChatPrivateController: PortraitChatController {
     /// Messages that rise into the log when their row appears, with the delay of each.
     fileprivate var arrivingIds: [String: TimeInterval] = [:]
     fileprivate var wasFriendOnline: Bool?
+    /// KHANDAQ (0.2.57): the person's seen watermark the marks were last drawn with.
+    fileprivate var shownSeenWatermark: TimeInterval?
+    /// KHANDAQ (0.2.57): the conversation is on screen, from viewDidAppear to viewWillDisappear.
+    fileprivate var isConversationOnScreen = false
     fileprivate var airObservers: [NSObjectProtocol] = []
 
     fileprivate struct DisplayMapKey: Equatable {
@@ -224,6 +230,12 @@ class ChatPrivateController: PortraitChatController {
                 self,
                 selector: #selector(ChatPrivateController.applicationDidBecomeActive),
                 name: NSNotification.Name.UIApplicationDidBecomeActive,
+                object: nil)
+        // KHANDAQ (0.2.57): the PIN lock screen went away from over the conversation: it is seen now.
+        NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(ChatPrivateController.lockScreenDidHide),
+                name: .khandaqLockScreenDidHide,
                 object: nil)
 
         NotificationCenter.default.addObserver(
@@ -472,6 +484,7 @@ class ChatPrivateController: PortraitChatController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        isConversationOnScreen = false
 
         // KHANDAQ: mark read on EXIT too — viewWillAppear alone misses messages that arrived while the
         // chat was open, leaving the unread badge stuck after the user has actually read everything.
@@ -499,6 +512,9 @@ class ChatPrivateController: PortraitChatController {
         scrollToGlobalSearchTargetIfNeeded()
         scrollToFirstUnreadIfNeeded()
         refreshPinnedBanner()   // KHANDAQ (#G5): restore the pinned-message banner if any.
+
+        isConversationOnScreen = true
+        reportSeenIfVisible()
     }
 
     /// KHANDAQ (Figma): on open, jump to the first unread incoming message (its cell carries the
@@ -827,6 +843,11 @@ extension ChatPrivateController {
 extension ChatPrivateController {
     @objc func applicationDidBecomeActive() {
         updateLastReadDate()
+        reportSeenIfVisible()
+    }
+
+    @objc func lockScreenDidHide() {
+        reportSeenIfVisible()
     }
 
     @objc func willShowMenuNotification(_ notification: Notification) {
@@ -930,10 +951,13 @@ extension ChatPrivateController: UITableViewDataSource {
                 }
 
                 outgoingModel.isOutgoing = true
+                // KHANDAQ (0.2.57): muted sent and delivered, teal once seen; the Saved chat keeps its marks.
+                outgoingModel.takesReadReceipts = !chat.isSavedMessages
                 outgoingModel.status = AirEntryStatus.ofOutgoingText(isSaved: chat.isSavedMessages,
                                                                      isDelivered: messageText.isDelivered,
                                                                      messageId: messageText.messageId,
                                                                      personOnline: isFriendOnline)
+                    .applyingSeen(hasFriendSeen(message))
                 if let id = message.uniqueIdentifier {
                     outgoingModel.previousStatus = statusMemory[id]
                     statusMemory[id] = outgoingModel.status
@@ -2143,7 +2167,10 @@ private extension ChatPrivateController {
                     if let readCount = self.tableReadMessageCount, readCount != self.messages.count {
                         tableView.reloadData()
                     }
+                    self.reportSeenAfterThisChange()
                 case .update(_, let deletions, let insertions, let modifications):
+                    // KHANDAQ (0.2.57): what came in while the person looks at the conversation is seen.
+                    self.reportSeenAfterThisChange()
                     // KHANDAQ (redesign stage 2): the rows of the log change with the messages; the
                     // tray takes what waits for the person, a new message rises into the log.
                     self.displayGeneration += 1
@@ -2664,6 +2691,8 @@ private extension ChatPrivateController {
         if let outgoingModel = model as? ChatOutgoingFileCellModel {
             outgoingModel.delivered = (message.messageFile?.isDelivered ?? false)
                 || (message.messageFile?.fileType == .ready)
+            outgoingModel.seen = hasFriendSeen(message)
+            outgoingModel.takesReadReceipts = !chat.isSavedMessages
         }
         if isVoice {
             model.fileName = VoiceMessageHelper.displayFileName(for: message.messageFile?.fileName)
@@ -2674,7 +2703,19 @@ private extension ChatPrivateController {
 
         switch message.messageFile!.fileType {
             case .waitingConfirmation:
-                model.state = .waitingConfirmation
+                // KHANDAQ (0.2.57): a transfer the connection cut keeps its bar and goes on by itself; ours, once
+                // offered again while the person is online, waits for their accept.
+                let file = message.messageFile!
+                model.state = ChatGenericFileCellModel.waitingState(
+                    cutByConnection: (file.pausedBy.rawValue & OCTMessageFilePausedBy.connection.rawValue) != 0,
+                    outgoing: message.isOutgoing(),
+                    offered: file.internalFileNumber != Int32(bitPattern: kOCTToxFileNumberFailure))
+                if model.state == .waitingConnection {
+                    model.transferProgress = file.fileSize > 0 ? Float(Double(file.transferredBytes) / Double(file.fileSize)) : 0
+                }
+                if let messageId = message.uniqueIdentifier {
+                    self.stopWatchingStall(of: messageId)
+                }
             case .loading:
                 model.state = .loading
 
@@ -2763,7 +2804,7 @@ private extension ChatPrivateController {
                     return
                 }
 
-                // KHANDAQ (#156): autodownload defaults to Never and the voice bubble hides the
+                // KHANDAQ (#156): autodownload can be Never (the default until 0.2.57) and the voice bubble hides the
                 // file-box download/retry buttons, so an incoming voice note could never be
                 // fetched at all. Tapping play on a not-yet-downloaded note starts the transfer.
                 if !message.isOutgoing(),
@@ -3169,6 +3210,39 @@ extension ChatPrivateController {
         return currentReach(for: friend).isLive
     }
 
+    /// KHANDAQ (0.2.57): whether the person's read receipt reached past our `message`.
+    fileprivate func hasFriendSeen(_ message: OCTMessageAbstract) -> Bool {
+        guard !chat.isSavedMessages, let friend = friend, !friend.isInvalidated else {
+            return false
+        }
+        return friend.hasSeenOutgoingMessage(message)
+    }
+
+    /// KHANDAQ (0.2.57): tells the person that what they sent is seen, while the conversation is on screen
+    /// in the foreground and no lock is over it (AirSeenGate). objcTox sends a receipt only for something
+    /// newer than the last one, at most once a second, and keeps it while the person is offline.
+    fileprivate func reportSeenIfVisible() {
+        let window = isViewLoaded ? view.window : nil
+        let sceneActive = window?.windowScene.map { $0.activationState == .foregroundActive } ?? false
+        guard AirSeenGate.allowsReport(onScreen: isConversationOnScreen && window != nil,
+                                       appActive: UIApplication.shared.applicationState == .active,
+                                       sceneActive: sceneActive,
+                                       lockScreenShown: PinAuthorizationCoordinator.isLockScreenShown,
+                                       isSaved: chat.isSavedMessages) else {
+            return
+        }
+        submanagerChats.reportSeen(in: chat)
+    }
+
+    /// KHANDAQ (0.2.57): reportSeenIfVisible once the Realm change being handled is through. The report
+    /// writes to the profile, and a write begun inside a notification callback moves the Realm to its
+    /// newest version while the callback still applies the changes it was handed to the table.
+    fileprivate func reportSeenAfterThisChange() {
+        DispatchQueue.main.async { [weak self] in
+            self?.reportSeenIfVisible()
+        }
+    }
+
     // MARK: Building
 
     fileprivate func createAirConversationViews() {
@@ -3177,7 +3251,11 @@ extension ChatPrivateController {
         pinnedStrip.addTarget(self, action: #selector(ChatPrivateController.pinnedBannerTapped), for: .touchUpInside)
         pinnedStrip.closeButton.addTarget(self, action: #selector(ChatPrivateController.pinnedBannerClosePressed), for: .touchUpInside)
 
-        var topViews: [UIView] = []
+        networkBand = AirNetworkBandView()
+        networkBand.layoutHost = { [weak self] in
+            self?.view.layoutIfNeeded()
+        }
+        var topViews: [UIView] = [networkBand]
         if friend != nil {
             let band = AirPresenceBandView()
             band.addTarget(self, action: #selector(ChatPrivateController.presenceBandTapped), for: .touchUpInside)
@@ -3229,6 +3307,9 @@ extension ChatPrivateController {
             // Our own node went off or came back (E4): the hint under the field says which.
             self?.refreshComposeState(animated: true)
         })
+        airObservers.append(center.addObserver(forName: AirNetworkNotice.didChange, object: nil, queue: .main) { [weak self] _ in
+            self?.networkBand.follow(AirNetworkNotice.shared, animated: true)
+        })
         airObservers.append(center.addObserver(forName: .UIContentSizeCategoryDidChange, object: nil, queue: .main) { [weak self] _ in
             // The time column and the fonts of the entries follow the text size; the refused messages
             // are laid out again so "Retry" stays at the text column.
@@ -3238,6 +3319,7 @@ extension ChatPrivateController {
         })
 
         wasFriendOnline = isFriendOnline
+        networkBand.follow(AirNetworkNotice.shared, animated: false)
         refreshTray(animated: false)
         refreshFailedSends(animated: false)
         refreshComposeState(animated: false)
@@ -3387,10 +3469,17 @@ extension ChatPrivateController {
         let online = isFriendOnline
         let onlineChanged = wasFriendOnline != nil && wasFriendOnline != online
         wasFriendOnline = online
+        // KHANDAQ (0.2.57): their read receipt moved: the marks of what they have seen turn teal.
+        let seenWatermark = friend.map { $0.isInvalidated ? 0 : $0.seenWatermark } ?? 0
+        let seenChanged = shownSeenWatermark != nil && shownSeenWatermark != seenWatermark
+        shownSeenWatermark = seenWatermark
         refreshComposeState(animated: true)
         let trayChanged = refreshTray(animated: true)
-        if (trayChanged || onlineChanged) && !isTrayDeparting {
+        if (trayChanged || onlineChanged || seenChanged) && !isTrayDeparting {
             tableView?.reloadData()
+        }
+        else if seenChanged {
+            needsLogReload = true
         }
         refreshDossierIfNeeded()
     }
@@ -3490,8 +3579,10 @@ extension ChatPrivateController {
         }
         // KHANDAQ (redesign stage 3, E8): a file that could not be offered while the person is away waits
         // in the tray too, as the list's "In transit" counts it (AirListDataSource.transitPredicate).
+        // KHANDAQ (0.2.57): not one the connection cut on its way: that one keeps its card and its bar in the
+        // log ("Waiting for the connection"); pausedBy is OCTMessageFilePausedByConnection or nothing here.
         let waiting = messages.objects(with: NSPredicate(
-            format: "senderUniqueIdentifier == nil AND ((messageText != nil AND messageText.isDelivered == NO) OR (messageFile != nil AND messageFile.fileType == %d AND messageFile.internalFileNumber == %d))",
+            format: "senderUniqueIdentifier == nil AND ((messageText != nil AND messageText.isDelivered == NO) OR (messageFile != nil AND messageFile.fileType == %d AND messageFile.internalFileNumber == %d AND messageFile.pausedBy == 0))",
             OCTMessageFileType.waitingConfirmation.rawValue,
             Int32(bitPattern: kOCTToxFileNumberFailure)))
         var items: [AirQueueItem] = []

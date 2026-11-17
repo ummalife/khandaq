@@ -1452,6 +1452,220 @@ private final class AirSelfYouElement: UIAccessibilityElement {
     }
 }
 
+// MARK: - The band of no network
+
+/// KHANDAQ (0.2.57, SPEC-network part 2): the band under the header of the chat list and of a
+/// conversation. It comes once the device has had no network for 3 s, says Connecting while our node
+/// gets online again and Back online for a moment, then slides away (AirNetworkNotice). It pushes the
+/// content down and covers nothing; it makes no sound, and a screen reader hears its title once, as it
+/// comes. The line under the name and the hint under the field say what they always said. The tokens of
+/// the band on the desktop: the sunken ground over a line rule, label and caption text, a 20-point icon.
+final class AirNetworkBandView: UIView {
+    /// Lays out the screen the band stands in; the band calls it inside its own animation.
+    var layoutHost: (() -> Void)?
+
+    private(set) var phase: AirNetworkNoticePhase = .hidden
+
+    private let content = UIView()
+    private let icon = UIImageView()
+    private let titleLabel = AirKit.label(.label, color: KQColor.ink, lines: 0)
+    private let lineLabel = AirKit.label(.caption, color: KQColor.ink2, lines: 0)
+    private let rule = UIView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = KQColor.sunken
+        // The words slide down from under the header as the band opens, rather than being squeezed.
+        clipsToBounds = true
+        isHidden = true
+        isAccessibilityElement = true
+        accessibilityTraits = UIAccessibilityTraitStaticText
+        accessibilityIdentifier = "air.network.band"
+        icon.contentMode = .scaleAspectFit
+        rule.backgroundColor = KQColor.line
+
+        let words = UIStackView(arrangedSubviews: [titleLabel, lineLabel])
+        words.axis = .vertical
+        words.spacing = KQSpace.x2
+        content.addSubview(icon)
+        content.addSubview(words)
+        addSubview(content)
+        addSubview(rule)
+
+        content.snp.makeConstraints {
+            $0.leading.trailing.bottom.equalToSuperview()
+            // Gives way while the stack folds the band, so the words keep their height and leave under the
+            // header instead of being squeezed. Below the words' compression resistance (750): at 999 the
+            // words gave way first, and mid-slide the title stood over the line. Above the stacks' pull to
+            // no height (249), so the band open is as tall as its words.
+            $0.top.equalToSuperview().priority(UILayoutPriority.defaultHigh.rawValue - 1)
+        }
+        icon.snp.makeConstraints {
+            $0.leading.equalTo(safeAreaLayoutGuide).offset(KQSpace.x16)
+            $0.centerY.equalTo(titleLabel)
+            $0.size.equalTo(KQSize.icon)
+        }
+        words.snp.makeConstraints {
+            $0.top.equalToSuperview().offset(KQSpace.x8)
+            $0.bottom.equalToSuperview().offset(-KQSpace.x8)
+            $0.leading.equalTo(icon.snp.trailing).offset(KQSpace.x8)
+            $0.trailing.equalTo(safeAreaLayoutGuide).offset(-KQSpace.x16)
+        }
+        rule.snp.makeConstraints {
+            $0.leading.trailing.bottom.equalToSuperview()
+            $0.height.equalTo(KQStroke.hairline)
+        }
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        // A stack lets go of the sides of a view it hides. Without these the band folded toward the width of
+        // its words as well as its height on the way out, and came in from a narrow frame with the words cut
+        // at the left. It keeps the stack's width; one step weaker than required, so it never fights the stack.
+        guard let stack = superview as? UIStackView, stack.axis == .vertical else {
+            return
+        }
+        snp.makeConstraints {
+            $0.leading.trailing.equalToSuperview().priority(UILayoutPriority.required.rawValue - 1)
+        }
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory {
+            arrangeForTextSize()
+        }
+    }
+
+    /// Follows the notice. A screen reader hears the title once as the band comes, from the first screen
+    /// that has the band on it.
+    func follow(_ notice: AirNetworkNotice, animated: Bool) {
+        let comes = phase == .hidden && notice.phase != .hidden
+        show(notice.phase, animated: animated)
+        if comes, window != nil, notice.takeAnnouncement() {
+            UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification, titleLabel.text)
+        }
+    }
+
+    /// Shows a phase. The band slides in and out with the layout of the screen; with Reduce Motion it is
+    /// there or gone at once and its words fade.
+    func show(_ next: AirNetworkNoticePhase, animated: Bool) {
+        guard next != phase else {
+            return
+        }
+        let previous = phase
+        phase = next
+        let moves = animated && window != nil
+        let reduce = UIAccessibilityIsReduceMotionEnabled()
+
+        if next == .hidden {
+            // The words of the last phase leave with the band.
+            guard moves else {
+                isHidden = true
+                return
+            }
+            if reduce {
+                UIView.animate(withDuration: KQMotion.duration(KQMotion.state), delay: 0, options: [.beginFromCurrentState], animations: {
+                    self.content.alpha = 0
+                }, completion: { _ in
+                    guard self.phase == .hidden else {
+                        return
+                    }
+                    self.isHidden = true
+                    self.layoutHost?()
+                    self.content.alpha = 1
+                })
+            }
+            else {
+                UIView.animate(withDuration: KQMotion.duration(KQMotion.state), delay: 0, options: [.curveEaseOut, .beginFromCurrentState], animations: {
+                    self.isHidden = true
+                    self.layoutHost?()
+                }, completion: nil)
+            }
+            return
+        }
+
+        guard moves else {
+            configureWords(for: next)
+            content.alpha = 1
+            isHidden = false
+            return
+        }
+        if previous == .hidden {
+            configureWords(for: next)
+            if reduce {
+                content.alpha = 0
+                isHidden = false
+                layoutHost?()
+                UIView.animate(withDuration: KQMotion.duration(KQMotion.state), delay: 0, options: [.beginFromCurrentState], animations: {
+                    self.content.alpha = 1
+                }, completion: nil)
+            }
+            else {
+                // The words take their place under the header first, so they come down whole.
+                content.alpha = 1
+                layoutIfNeeded()
+                UIView.animate(withDuration: KQMotion.duration(KQMotion.layout), delay: 0, options: [.curveEaseOut, .beginFromCurrentState], animations: {
+                    self.isHidden = false
+                    self.layoutHost?()
+                }, completion: nil)
+            }
+            return
+        }
+        // From one phase to the next the words cross-fade; the band takes the height of the new words, at
+        // once with Reduce Motion.
+        content.alpha = 1
+        UIView.transition(with: content, duration: KQMotion.duration(KQMotion.state),
+                          options: [.transitionCrossDissolve, .beginFromCurrentState, .allowUserInteraction],
+                          animations: { self.configureWords(for: next) }, completion: nil)
+        if reduce {
+            layoutHost?()
+        }
+        else {
+            UIView.animate(withDuration: KQMotion.duration(KQMotion.layout), delay: 0, options: [.curveEaseOut, .beginFromCurrentState], animations: {
+                self.layoutHost?()
+            }, completion: nil)
+        }
+    }
+
+    private func configureWords(for phase: AirNetworkNoticePhase) {
+        let title: String
+        var line: String?
+        let glyph: String
+        var tint = KQColor.ink2
+        switch phase {
+            case .hidden, .offline:
+                title = String(localized: "air_net_band_offline")
+                line = String(localized: "air_net_band_offline_line")
+                glyph = "wifi-off"
+            case .connecting:
+                title = String(localized: "air_net_band_connecting")
+                glyph = "clock"
+            case .backOnline:
+                title = String(localized: "air_net_band_back")
+                glyph = "check"
+                tint = KQColor.live
+        }
+        titleLabel.text = title
+        lineLabel.text = line
+        icon.image = AirIcon.image(glyph)
+        icon.tintColor = tint
+        arrangeForTextSize()
+        accessibilityLabel = [title, line].compactMap { $0 }.joined(separator: ". ")
+    }
+
+    /// At the accessibility text sizes the band keeps the title and leaves the line to a screen reader, so
+    /// the band does not take the room of the log, as the presence band leaves its day strip.
+    private func arrangeForTextSize() {
+        let folded = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        lineLabel.isHidden = folded || (lineLabel.text ?? "").isEmpty
+    }
+}
+
 // MARK: - Empty state
 
 /// What the list says when it has nothing to show, with the one action that helps.

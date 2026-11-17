@@ -5,10 +5,63 @@
 #import "OCTTox+Private.h"
 #import "OCTToxOptions+Private.h"
 #import "OCTLogging.h"
+#import "OCTSeenReceipt.h"
 
 void (*_tox_self_get_public_key)(const Tox *tox, uint8_t *public_key);
+uint32_t (*_tox_file_send)(Tox *tox, uint32_t friend_number, uint32_t kind, uint64_t file_size, const uint8_t *file_id,
+                           const uint8_t *filename, size_t filename_length, Tox_Err_File_Send *error);
 
 uint8_t *hex_to_bin(const char *hex_string_buffer, size_t hex_string_len);
+
+/**
+ * KHANDAQ (0.2.57, SPEC-community risk 3): the bytes toxcore takes for the name of a file offered to a friend: its
+ * UTF-8, at most TOX_MAX_FILENAME_LENGTH bytes. A longer name keeps its extension and loses the end of the rest,
+ * on a whole character. The name field of a group file is as long, so its packets take these bytes too.
+ */
+NSData *OCTToxFileNameBytes(NSString *fileName)
+{
+    if (fileName.length == 0) {
+        return nil;
+    }
+
+    NSData *bytes = [fileName dataUsingEncoding:NSUTF8StringEncoding allowLossyConversion:YES];
+
+    if (bytes.length <= TOX_MAX_FILENAME_LENGTH) {
+        return bytes;
+    }
+
+    NSString *extension = fileName.pathExtension;
+    NSString *suffix = extension.length ? [@"." stringByAppendingString:extension] : @"";
+    NSUInteger suffixBytes = [suffix dataUsingEncoding:NSUTF8StringEncoding allowLossyConversion:YES].length;
+
+    // An "extension" this long is only the end of the name.
+    if (! [fileName hasSuffix:suffix] || suffixBytes > TOX_MAX_FILENAME_LENGTH / 4) {
+        suffix = @"";
+        suffixBytes = 0;
+    }
+
+    NSString *stem = [fileName substringToIndex:fileName.length - suffix.length];
+    NSUInteger budget = TOX_MAX_FILENAME_LENGTH - suffixBytes;
+    __block NSUInteger used = 0;
+    __block NSUInteger end = 0;
+
+    [stem enumerateSubstringsInRange:NSMakeRange(0, stem.length)
+                             options:NSStringEnumerationByComposedCharacterSequences
+                          usingBlock:^(NSString *character, NSRange range, NSRange enclosingRange, BOOL *stop) {
+        NSUInteger size = [character dataUsingEncoding:NSUTF8StringEncoding allowLossyConversion:YES].length;
+
+        if (used + size > budget) {
+            *stop = YES;
+            return;
+        }
+
+        used += size;
+        end = NSMaxRange(range);
+    }];
+
+    return [[[stem substringToIndex:end] stringByAppendingString:suffix] dataUsingEncoding:NSUTF8StringEncoding
+                                                                         allowLossyConversion:YES];
+}
 
 @interface OCTTox ()
 
@@ -1163,7 +1216,6 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
     TOX_ERR_FILE_SEND cError;
     TOX_FILE_KIND cKind;
     const uint8_t *cFileId = NULL;
-    const uint8_t *cFileName = NULL;
 
     switch (kind) {
         case OCTToxFileKindData:
@@ -1178,11 +1230,14 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
         cFileId = [fileId bytes];
     }
 
-    if (fileName.length) {
-        cFileName = (const uint8_t *)[fileName cStringUsingEncoding:NSUTF8StringEncoding];
-    }
+    // KHANDAQ (0.2.57, SPEC-community risk 3): the name goes as its UTF-8 bytes with their own count. It went with
+    // its UTF-16 length, so a name in Cyrillic, Arabic or Chinese reached the friend cut short: without its
+    // extension, or in the middle of a letter, and then iOS read no name at all and Android and desktop its start
+    // with U+FFFD. A name over TOX_MAX_FILENAME_LENGTH bytes, which toxcore refuses, is cut to fit instead.
+    NSData *cFileName = OCTToxFileNameBytes(fileName);
 
-    OCTToxFileNumber result = tox_file_send(self.tox, friendNumber, cKind, fileSize, cFileId, cFileName, fileName.length, &cError);
+    OCTToxFileNumber result = _tox_file_send(self.tox, friendNumber, cKind, fileSize, cFileId,
+                                             cFileName.length ? cFileName.bytes : NULL, cFileName.length, &cError);
 
     [self fillError:error withCErrorFileSend:cError];
 
@@ -2166,6 +2221,7 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
 - (void)setupCFunctions
 {
     _tox_self_get_public_key = tox_self_get_public_key;
+    _tox_file_send = tox_file_send;
 }
 
 - (void)setupCallbacks
@@ -4323,6 +4379,27 @@ void friendLosslessPacketCallback(
             }
             else if ([tox.delegate respondsToSelector:@selector(tox:friendMessageReactionWithMsgv3Hash:emoji:add:friendNumber:)]) {
                 [tox.delegate tox:tox friendMessageReactionWithMsgv3Hash:hashHex emoji:emoji add:add friendNumber:friendNumber];
+            }
+        });
+
+        return;
+    }
+
+    if (pktType == kOCTSeenReceiptPacketId) {
+        // KHANDAQ (0.2.57): a read receipt ("KQ" packet 189, exactly 41 bytes, see OCTSeenReceipt). Anything
+        // else under this id is dropped with a debug line only, as the Android and desktop clients drop it.
+        OCTSeenReceipt *receipt = [OCTSeenReceipt receiptWithBytes:data length:length];
+        if (receipt == nil) {
+            OCTLogCDebug(@"dropping a malformed seen packet of %zu bytes from friend %u", tox, length, friendNumber);
+            return;
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if ([tox.delegate respondsToSelector:@selector(tox:friendSeenWithAnchorType:anchorHex:seenTime:friendNumber:)]) {
+                [tox.delegate tox:tox friendSeenWithAnchorType:receipt.anchorType
+                                                     anchorHex:receipt.anchorHex
+                                                      seenTime:receipt.seenTime
+                                                  friendNumber:friendNumber];
             }
         });
 

@@ -7,10 +7,20 @@ import UIKit
 class ChatGenericFileCellModel: ChatMovableDateCellModel {
     enum State {
         case waitingConfirmation
+        /// KHANDAQ (0.2.57): the transfer was under way when the connection went; it goes on by itself from
+        /// `transferProgress` once the person is back (OCTMessageFilePausedByConnection).
+        case waitingConnection
         case loading
         case paused
         case cancelled
         case done
+    }
+
+    /// KHANDAQ (0.2.57): the state of a file that waits for an accept. One the lost connection cut
+    /// (`cutByConnection`) waits for the connection with its bar until it is offered again: ours, offered again
+    /// while the person is online (`offered`: it has a transfer again), waits for them to accept it.
+    static func waitingState(cutByConnection: Bool, outgoing: Bool, offered: Bool) -> State {
+        return (cutByConnection && !(outgoing && offered)) ? .waitingConnection : .waitingConfirmation
     }
 
     var state: State = .waitingConfirmation

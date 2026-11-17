@@ -8,7 +8,9 @@ import XCTest
 /**
  Our own node (redesign stage 3, E4): the Network screen while the app connects, with "Connect again",
  and with no network at all in the dark on the narrowest phone. The in-app band (E22) over the top of
- a screen, light and dark, with the tile of the chat and with the dashed tile of a request.
+ a screen, light and dark, with the tile of the chat and with the dashed tile of a request. The band of
+ no network (0.2.57) under the top of a screen: No network, light, dark and right to left, Connecting
+ and Back online.
  */
 class AirNetworkSnapshotTest: SnapshotBaseTest {
     private var window: UIWindow?
@@ -44,6 +46,42 @@ class AirNetworkSnapshotTest: SnapshotBaseTest {
         let screen = bandScreen(title: "Incoming contact request", body: "Hello, this is Bilal from the study circle",
                                 tile: .pending, style: .dark)
         FBSnapshotVerifyView(screen, identifier: "dark")
+    }
+
+    func testTheBandOfNoNetwork() {
+        verifyView(networkBandScreen(.offline, style: .light))
+    }
+
+    func testTheBandOfNoNetworkInTheDark() {
+        FBSnapshotVerifyView(networkBandScreen(.offline, style: .dark), identifier: "dark")
+    }
+
+    func testTheBandConnectingAndBackOnline() {
+        FBSnapshotVerifyView(networkBandScreen(.connecting, style: .light), identifier: "connecting")
+        FBSnapshotVerifyView(networkBandScreen(.backOnline, style: .dark), identifier: "back-online-dark")
+    }
+
+    /// The band of no network at the top of a screen, in a stack as the list and the conversations hold it.
+    private func networkBandScreen(_ phase: AirNetworkNoticePhase, style: UIUserInterfaceStyle) -> UIView {
+        let controller = UIViewController()
+        host(controller, size: CGSize(width: 390, height: 120), style: style)
+        let screen = controller.view!
+        screen.backgroundColor = KQColor.surface
+        let band = AirNetworkBandView()
+        let stack = UIStackView(arrangedSubviews: [band])
+        stack.axis = .vertical
+        screen.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: screen.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: screen.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: screen.trailingAnchor),
+        ])
+        band.show(phase, animated: false)
+        screen.setNeedsLayout()
+        screen.layoutIfNeeded()
+        screen.layoutIfNeeded()
+        return screen
     }
 
     /// The top of a screen with the band where the band's window puts it.

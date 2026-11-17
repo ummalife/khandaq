@@ -104,6 +104,14 @@
 - (void)tox:(OCTTox *)tox friendFileReactionWithFileIdHex:(NSString *)fileIdHex emoji:(NSString *)emoji add:(BOOL)add friendNumber:(OCTToxFriendNumber)friendNumber;
 
 /**
+ * KHANDAQ (0.2.57): the friend has seen every message and file we sent them in our 1:1 chat, up to and
+ * including the anchored one (read receipt, "KQ" lossless packet 189). anchorType is 1 for a text, named
+ * by its msgV3 id, or 2 for a file, named by its Tox file id; anchorHex is that id in uppercase hex.
+ * seenTime is the friend's clock and information only.
+ */
+- (void)tox:(OCTTox *)tox friendSeenWithAnchorType:(uint8_t)anchorType anchorHex:(NSString *)anchorHex seenTime:(uint32_t)seenTime friendNumber:(OCTToxFriendNumber)friendNumber;
+
+/**
  * Friend's status message was updated.
  *
  * @param statusMessage Updated status message.

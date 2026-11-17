@@ -220,6 +220,37 @@
                                 fileSize:(uint64_t)fileSize;
 
 /**
+ * KHANDAQ (0.2.57): the same, and when the row it finds was Ready already, which it leaves as it was (YES), it
+ * gives the path of that row's file in `readyFilePath` (nil when the row has none). Else `readyFilePath` gets nil.
+ * The caller tells from it whether the file that came now is a second copy of one this device has.
+ */
+- (BOOL)markGroupIncomingFileReadyInChat:(nonnull OCTChat *)chat
+                               msgIdHash:(nonnull NSString *)msgIdHash
+                                  peerId:(uint32_t)peerId
+                            senderPubkey:(nullable NSString *)senderPubkey
+                                fileName:(nonnull NSString *)fileName
+                                filePath:(nonnull NSString *)filePath
+                                fileSize:(uint64_t)fileSize
+                           readyFilePath:(NSString *_Nullable *_Nullable)readyFilePath;
+
+/**
+ * KHANDAQ (0.2.57): ends the loading row of an incoming group file that was dropped before it was complete, as
+ * the next start of the app ends it: canceled, "The download stopped". Looked up on this manager's own Realm, as
+ * the row a COMPLETE finishes is. NO when there is no such row: none, not loading, or our own file.
+ */
+- (BOOL)markGroupIncomingFileInterruptedInChat:(OCTChat *)chat
+                                     msgIdHash:(NSString *)msgIdHash
+                                  senderPubkey:(nullable NSString *)senderPubkey;
+
+/**
+ * KHANDAQ (0.2.57): YES when the chat has a Ready row of the incoming file with this msg-id hash that `senderPubkey`
+ * may own, by the test the row a COMPLETE finishes is found with. Looked up on this manager's own Realm.
+ */
+- (BOOL)groupIncomingFileIsReadyInChat:(nonnull OCTChat *)chat
+                             msgIdHash:(nonnull NSString *)msgIdHash
+                          senderPubkey:(nullable NSString *)senderPubkey;
+
+/**
  * KHANDAQ (#170): content-level dedup for incoming NGC group files. YES when the chat already has a
  * READY file with the same size and same base file name (leading "NNN_" uniquifier prefixes ignored)
  * within the recent window — a re-broadcast / re-served copy of a file we already show.

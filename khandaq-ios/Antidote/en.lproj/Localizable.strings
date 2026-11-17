@@ -605,6 +605,7 @@
 "chat_reply_action" = "Reply";
 "chat_forward_action" = "Forward";
 "chat_pin_action" = "Pin";
+"chat_report_action" = "Report";
 "chat_pinned_banner_title" = "Pinned message";
 "chat_copy_action" = "Copy";
 "chat_select_action" = "Select";
@@ -805,6 +806,11 @@
 "air_net_relay" = "online, via a relay";
 "air_net_connecting" = "connecting";
 "air_net_offline" = "no network: messages wait";
+/* KHANDAQ (0.2.57): the band of no network under the header of the chat list and of a conversation. */
+"air_net_band_offline" = "No network";
+"air_net_band_offline_line" = "Messages and files will wait and go on their own once you're back online.";
+"air_net_band_connecting" = "Connecting";
+"air_net_band_back" = "Back online";
 "air_filter_all" = "All";
 "air_filter_requests" = "Requests";
 "air_filter_transit" = "In transit";
@@ -828,6 +834,7 @@
 "air_delivery_transit" = "in transit";
 "air_delivery_sent" = "sent";
 "air_delivery_delivered" = "delivered";
+"air_delivery_seen" = "seen";
 "air_transit_format" = "%d in transit";
 "air_unread_a11y" = "unread: %d";
 "air_hint_request_sent" = "request sent";
@@ -1145,6 +1152,7 @@
 "air_file_failed_outgoing" = "Not sent";
 "air_file_waits_accept_format" = "Waits for %@ to accept it";
 "air_file_waits_online_format" = "Goes when %@ is online";
+"air_file_waits_connection" = "Waiting for the connection";
 "air_size_bytes_format" = "%@ B";
 "air_size_kb_format" = "%@ KB";
 "air_size_mb_format" = "%@ MB";

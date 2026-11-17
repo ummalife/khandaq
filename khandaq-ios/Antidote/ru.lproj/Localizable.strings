@@ -606,6 +606,7 @@
 "chat_reply_action" = "Ответить";
 "chat_forward_action" = "Переслать";
 "chat_pin_action" = "Закрепить";
+"chat_report_action" = "Пожаловаться";
 "chat_pinned_banner_title" = "Закреплённое сообщение";
 "chat_copy_action" = "Скопировать";
 "chat_select_action" = "Выбрать";
@@ -807,6 +808,11 @@
 "air_net_relay" = "в сети, через ретранслятор";
 "air_net_connecting" = "подключаемся";
 "air_net_offline" = "нет сети: сообщения ждут";
+/* KHANDAQ (0.2.57): the band of no network under the header of the chat list and of a conversation. */
+"air_net_band_offline" = "Нет сети";
+"air_net_band_offline_line" = "Сообщения и файлы подождут и уйдут сами, когда связь вернётся.";
+"air_net_band_connecting" = "Подключаемся";
+"air_net_band_back" = "Снова в сети";
 "air_filter_all" = "Все";
 "air_filter_requests" = "Запросы";
 "air_filter_transit" = "В пути";
@@ -830,6 +836,7 @@
 "air_delivery_transit" = "в пути";
 "air_delivery_sent" = "отправлено";
 "air_delivery_delivered" = "доставлено";
+"air_delivery_seen" = "прочитано";
 "air_transit_format" = "%d в пути";
 "air_unread_a11y" = "непрочитанных: %d";
 "air_hint_request_sent" = "запрос отправлен";
@@ -1147,6 +1154,7 @@
 "air_file_failed_outgoing" = "Не отправлено";
 "air_file_waits_accept_format" = "Ждёт, когда %@ примет файл";
 "air_file_waits_online_format" = "Уйдёт, когда %@ будет в сети";
+"air_file_waits_connection" = "Ждёт связи";
 "air_size_bytes_format" = "%@ Б";
 "air_size_kb_format" = "%@ КБ";
 "air_size_mb_format" = "%@ МБ";

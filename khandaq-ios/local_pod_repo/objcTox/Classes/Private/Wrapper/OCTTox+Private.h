@@ -9,6 +9,14 @@
  * Tox functions
  */
 extern void (*_tox_self_get_public_key)(const Tox *tox, uint8_t *public_key);
+extern uint32_t (*_tox_file_send)(Tox *tox, uint32_t friend_number, uint32_t kind, uint64_t file_size, const uint8_t *file_id,
+                                  const uint8_t *filename, size_t filename_length, Tox_Err_File_Send *error);
+
+/**
+ * KHANDAQ (0.2.57): the UTF-8 of a file name in at most TOX_MAX_FILENAME_LENGTH bytes, cut on a whole character and
+ * keeping its extension; nil for an empty name.
+ */
+extern NSData *OCTToxFileNameBytes(NSString *fileName);
 
 /**
  * Callbacks

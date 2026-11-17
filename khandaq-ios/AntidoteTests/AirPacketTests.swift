@@ -7,10 +7,10 @@ import XCTest
 
 /**
  The shared minimum (redesign stage 3, item 10). Replies, edits, deletions and reactions travel as the
- KQ packets Android sends: 186, 187 and 188 between two people, 0x41, 0x42 and 0x43 in a group. Each
- test hands objcTox's receive path the exact bytes Android builds and checks what comes out, and that
- a packet of another shape is left alone. Markup this build cannot read is shown in words, never as a
- service string.
+ KQ packets Android sends: 186, 187 and 188 between two people, 0x41, 0x42 and 0x43 in a group; read
+ receipts (0.2.57) as 189 between two people. Each test hands objcTox's receive path the exact bytes
+ Android builds and checks what comes out, and that a packet of another shape is left alone. Markup
+ this build cannot read is shown in words, never as a service string.
  */
 class AirPacketTests: XCTestCase {
     /// Stands in for OCTTox: the 1:1 receive path reads only its delegate.
@@ -51,6 +51,11 @@ class AirPacketTests: XCTestCase {
         @objc(tox:friendFileReactionWithFileIdHex:emoji:add:friendNumber:)
         func reactFile(_ tox: AnyObject, fileId: String, emoji: String, add: Bool, friendNumber: Int32) {
             record("react file \(fileId) \(emoji) \(add) \(friendNumber)")
+        }
+
+        @objc(tox:friendSeenWithAnchorType:anchorHex:seenTime:friendNumber:)
+        func seen(_ tox: AnyObject, anchorType: UInt8, anchorHex: String, seenTime: UInt32, friendNumber: Int32) {
+            record("seen \(anchorType) \(anchorHex) \(seenTime) \(friendNumber)")
         }
     }
 
@@ -114,6 +119,33 @@ class AirPacketTests: XCTestCase {
 
         let noEmoji = bytes([188, 0x4B, 0x51, 1, 1], anchor, bigEndian(1), [1, 0, 0x41])
         XCTAssertEqual(deliver(noEmoji, expectingCall: false), [])
+    }
+
+    // MARK: 189, a read receipt (0.2.57)
+
+    /// The two test vectors of the read receipt SPEC, as all three clients send them.
+    private var seenTextVector: [UInt8] {
+        return bytes([0xBD, 0x4B, 0x51, 0x01, 0x01], anchor, [0x65, 0x53, 0xF1, 0x00])
+    }
+
+    private var seenFileVector: [UInt8] {
+        return bytes([0xBD, 0x4B, 0x51, 0x01, 0x02], [UInt8](repeating: 0xFF, count: 32), [0, 0, 0, 0])
+    }
+
+    func testAReadReceiptNamesTheTextOrTheFileThePersonHasSeen() {
+        XCTAssertEqual(seenTextVector.count, 41)
+        XCTAssertEqual(deliver(seenTextVector), ["seen 1 \(anchorHex) \(0x6553F100) 5"])
+        XCTAssertEqual(deliver(seenFileVector), ["seen 2 \(String(repeating: "F", count: 64)) 0 5"])
+    }
+
+    func testAReadReceiptOfAnotherShapeIsLeftAlone() {
+        XCTAssertEqual(deliver(Array(seenTextVector.prefix(40)), expectingCall: false), [], "a byte short")
+        XCTAssertEqual(deliver(seenTextVector + [0], expectingCall: false), [], "a byte over")
+        for (offset, value) in [(1, UInt8(0x4C)), (2, 0x52), (3, 2), (4, 0), (4, 3)] {
+            var packet = seenTextVector
+            packet[offset] = value
+            XCTAssertEqual(deliver(packet, expectingCall: false), [], "byte \(offset) set to \(value)")
+        }
     }
 
     // MARK: 0x41, 0x42, 0x43 in a group

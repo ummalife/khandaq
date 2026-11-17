@@ -120,6 +120,7 @@ class ActiveSessionCoordinator: NSObject {
     fileprivate var didReportConnectedPill = false
     fileprivate var presenceRecorder: AirPresenceRecorder?
     fileprivate var blockGuard: AirBlockGuard?
+    fileprivate var communityFileKeeper: KhandaqCommunityFileKeeper?
     fileprivate var offlineWatchdog: OfflineReconnectWatchdog?
 
     init(theme: Theme, window: UIWindow, toxManager: OCTManager) {
@@ -175,6 +176,10 @@ class ActiveSessionCoordinator: NSObject {
         let guardian = AirBlockGuard(submanagerObjects: toxManager.objects, submanagerFriends: toxManager.friends)
         guardian.start()
         blockGuard = guardian
+        // KHANDAQ (0.2.57, SPEC-community item 6): the room of the files that wait in Khandaq Community.
+        let keeper = KhandaqCommunityFileKeeper(submanagerObjects: toxManager.objects, submanagerGroups: toxManager.groups)
+        keeper.start()
+        communityFileKeeper = keeper
 
         friendsCoordinator.delegate = self
         settingsCoordinator.delegate = self
@@ -214,6 +219,7 @@ class ActiveSessionCoordinator: NSObject {
     deinit {
         presenceRecorder?.stop()
         blockGuard?.stop()
+        communityFileKeeper?.stop()
         offlineWatchdog?.stop()
         MessageDeliveryWatchdog.shared.stop()
         NotificationCenter.default.removeObserver(self, name: .khandaqManualReconnectRequested, object: nil)
@@ -272,6 +278,16 @@ class ActiveSessionCoordinator: NSObject {
         degradedNagTimer = nil
     }
 
+    /// KHANDAQ (0.2.57, SPEC-community part B): Khandaq Community, joined once per profile by itself while
+    /// the node is online, and tried again at every start and connection until the group is here. The demo
+    /// world of the UI tests joins nothing.
+    fileprivate func joinCommunityIfDue() {
+        guard !(toxManager is OCTManagerMock) else {
+            return
+        }
+        KhandaqCommunity.autoJoinIfDue(manager: toxManager)
+    }
+
     // KHANDAQ (#iOS connect-pill): poll the live tox status about once a second for the first ~12s after launch. If we
     // reach online but never got the connected transition (it flipped before the delegate observed it),
     // clear the pill here. Idempotent via didReportConnectedPill; self-cancels once online or on timeout.
@@ -290,6 +306,8 @@ class ActiveSessionCoordinator: NSObject {
                 SelfConnectionTracker.update(isOnline: true)
                 self.notificationCoordinator.setConnectionState(.connected, animated: true)
                 self.updatePhoneNetworkState()
+                // The connection the delegate did not tell of is a connection for the Community too.
+                self.joinCommunityIfDue()
             }
             if self.didReportConnectedPill || ticks >= 40 {
                 timer.invalidate()
@@ -309,10 +327,21 @@ class ActiveSessionCoordinator: NSObject {
     fileprivate func startNetworkMonitoringAndPushBinding() {
         KhandaqPushManager.shared.bind(toxManager: toxManager)
 
-        networkReachabilityMonitor.start { [weak self] in
+        // KHANDAQ (0.2.57): the band of no network hears the system's network both ways (SPEC-network part 2).
+        networkReachabilityMonitor.start(onReachabilityChange: { usable in
+            AirNetworkNotice.shared.networkChanged(available: usable)
+        }) { [weak self] in
             self?.handleNetworkPathChange()
         }
     }
+
+    #if DEBUG
+    /// QA only (khandaq://qa/net_notice): feeds the reachability monitor "no network", or gives it the
+    /// system's own state back, so the band of no network shows on a simulator.
+    func qaFeedNetwork(noNetwork: Bool) {
+        networkReachabilityMonitor.qaFeed(noNetwork: noNetwork)
+    }
+    #endif
 
     @objc func networkRebootstrapCompleted() {
         let connected = toxManager.user.connectionStatus != .none
@@ -343,6 +372,8 @@ class ActiveSessionCoordinator: NSObject {
         presenceRecorder = nil
         blockGuard?.stop()
         blockGuard = nil
+        communityFileKeeper?.stop()
+        communityFileKeeper = nil
         AirLocalStore.shared.detach()
         ActiveSessionCoordinator.releaseDelegates(user: toxManager?.user, groups: toxManager?.groups, heldBy: self)
         callCoordinator = nil
@@ -354,6 +385,8 @@ class ActiveSessionCoordinator: NSObject {
         presenceRecorder = nil
         blockGuard?.stop()
         blockGuard = nil
+        communityFileKeeper?.stop()
+        communityFileKeeper = nil
         offlineWatchdog?.stop()
         networkReachabilityMonitor.stop()
         ActiveSessionCoordinator.releaseDelegates(user: toxManager?.user, groups: toxManager?.groups, heldBy: self)
@@ -423,6 +456,9 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
             // delegate observes it; reconcile the pill against the live status until we go online.
             startConnectPillReconcile()
         }
+        // KHANDAQ (0.2.57): Khandaq Community, at once when the node is online already; otherwise when it
+        // comes online.
+        joinCommunityIfDue()
 
         if case .iPhone = InterfaceIdiom.current() {
             iPhone.navigationController.view.setNeedsLayout()
@@ -756,6 +792,7 @@ extension ActiveSessionCoordinator: OCTSubmanagerUserDelegate {
             connectPillReconcileTimer = nil
             notificationCoordinator.setConnectionState(.connected, animated: true)
             ConnectionQualityMonitor.shared.onBootstrapFinished(connected: true)
+            joinCommunityIfDue()
         }
     }
 }
@@ -780,6 +817,10 @@ extension ActiveSessionCoordinator: OCTSubmanagerGroupsDelegate {
     func submanagerGroups(_ submanager: OCTSubmanagerGroups,
                           groupJoinDidFail failType: OCTToxGroupJoinFail,
                           for chat: OCTChat) {
+        guard KhandaqCommunity.tellsJoinFailure(of: chat) else {
+            log("Community: the join it made by itself failed (\(failType.rawValue)); toxcore tries again")
+            return
+        }
         let message: String
         switch failType {
             case .peerLimit:
@@ -1288,7 +1329,7 @@ private extension ActiveSessionCoordinator {
         // KHANDAQ (#15): the invited group name can arrive nil or as the literal "(null)"; fall
         // back to the default title instead of showing "(null)" in the alert.
         let cleanGroupName = (groupName?.isEmpty == false && groupName != "(null)") ? groupName : nil
-        let resolvedGroupName = cleanGroupName ?? String(localized: "group_chat_default_title")
+        let resolvedGroupName = KhandaqCommunity.displayName(forInviteData: inviteData) ?? cleanGroupName ?? String(localized: "group_chat_default_title")
         let title = String(localized: "group_invite_alert_title")
         // KHANDAQ (#15): String(localized:) is a custom initializer that ALREADY runs String(format:)
         // on the localized string with the given arguments. The old code called String(localized:)
@@ -1396,6 +1437,8 @@ private extension ActiveSessionCoordinator {
                                     networkReachable: networkReachabilityMonitor.isReachable)
         // Conversations and the Network screen follow it on every device (E4).
         AirSelfNetwork.update(state)
+        // KHANDAQ (0.2.57): "Connecting" on the band of no network lasts until our node is online.
+        AirNetworkNotice.shared.nodeChanged(online: toxManager.user.connectionStatus != .none)
         guard case .iPhone = InterfaceIdiom.current(), let iPhone = iPhone else {
             return
         }

@@ -619,6 +619,7 @@
 "chat_reply_action" = "رد";
 "chat_forward_action" = "إعادة توجيه";
 "chat_pin_action" = "تثبيت";
+"chat_report_action" = "إبلاغ";
 "chat_pinned_banner_title" = "رسالة مثبّتة";
 "chat_copy_action" = "نسخ";
 "chat_select_action" = "تحديد";
@@ -794,6 +795,11 @@
 "air_net_relay" = "متصل، عبر خادم وسيط";
 "air_net_connecting" = "جارٍ الاتصال";
 "air_net_offline" = "لا شبكة: الرسائل بالانتظار";
+/* KHANDAQ (0.2.57): the band of no network under the header of the chat list and of a conversation. */
+"air_net_band_offline" = "لا شبكة";
+"air_net_band_offline_line" = "ستنتظر الرسائل والملفات وتُرسَل تلقائيًا عند عودة الاتصال.";
+"air_net_band_connecting" = "جارٍ الاتصال";
+"air_net_band_back" = "عاد الاتصال";
 "air_filter_all" = "الكل";
 "air_filter_requests" = "الطلبات";
 "air_filter_transit" = "في الطريق";
@@ -817,6 +823,7 @@
 "air_delivery_transit" = "في الطريق";
 "air_delivery_sent" = "أُرسلت";
 "air_delivery_delivered" = "وصلت";
+"air_delivery_seen" = "قُرئت";
 "air_transit_format" = "في الطريق: %d";
 "air_unread_a11y" = "غير مقروءة: %d";
 "air_hint_request_sent" = "أُرسل الطلب";
@@ -1134,6 +1141,7 @@
 "air_file_failed_outgoing" = "لم يُرسل";
 "air_file_waits_accept_format" = "بانتظار أن يقبله %@";
 "air_file_waits_online_format" = "سيُرسل عندما يتصل %@";
+"air_file_waits_connection" = "بانتظار الاتصال";
 "air_size_bytes_format" = "%@ بايت";
 "air_size_kb_format" = "%@ ك.ب";
 "air_size_mb_format" = "%@ م.ب";

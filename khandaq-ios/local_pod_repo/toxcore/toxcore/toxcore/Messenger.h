@@ -110,7 +110,11 @@ typedef struct Messenger_Options {
 #ifdef TOX_CAPABILITIES_ACTIVE
 #define TOX_CAPABILITIES_CURRENT (uint64_t)(TOX_CAPABILITY_CAPABILITIES | TOX_CAPABILITY_MSGV2 | TOX_CAPABILITY_MSGV3 | TOX_CAPABILITY_FTV2 | TOX_CAPABILITY_FTV2A)
 #else
-#define TOX_CAPABILITIES_CURRENT (uint64_t)(TOX_CAPABILITY_CAPABILITIES)
+/* KHANDAQ (0.2.57, read receipts): announce TOX_CAPABILITY_MSGV3, which this client reads and sends. An
+ * Android peer sends msgV3 texts, the only ones a read receipt can name, to a peer that announces the bit
+ * or has already sent it a msgV3 text: without it, Android's first texts to a new iOS contact carried no
+ * id and could never turn teal. toxcore itself only stores and reports these bits. */
+#define TOX_CAPABILITIES_CURRENT (uint64_t)(TOX_CAPABILITY_CAPABILITIES | TOX_CAPABILITY_MSGV3)
 #endif
 /* size of the FLAGS in bytes */
 #define TOX_CAPABILITIES_SIZE sizeof(uint64_t)

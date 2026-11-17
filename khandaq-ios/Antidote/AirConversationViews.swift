@@ -247,11 +247,28 @@ final class AirDayAxisView: UIView {
 
 // MARK: - Status mark
 
+extension KQColor {
+    /// KHANDAQ (0.2.57): two checks in this colour say the person has seen the message. The owner chose
+    /// read receipts in the brand teal (15.11), the one colour of a mark outside the Air palette, so it is
+    /// not in the generated tokens: #029B7D in light and #10B98F in dark, Android's khandaq_teal (values and
+    /// values-night) and the teal of AvatarManager, so the clients show the same seen.
+    static let seen = dynamic(light: 0x029B7DFF, dark: 0x10B98FFF)
+}
+
 /// The mark after one of our own messages: an amber clock in the tray, a faint clock while it leaves,
-/// one check when sent, two when delivered, a red alert when refused. A change cross-fades.
+/// one check when sent, two when delivered, two in teal once seen, a red alert when refused. A change
+/// cross-fades.
 final class AirStatusMarkView: UIView {
     private let imageView = UIImageView()
     private(set) var status: AirEntryStatus = .none
+    /// KHANDAQ (0.2.57): the mark of an entry in a 1:1 conversation with a friend, whose read receipts can
+    /// turn it teal: sent and delivered are muted there. False, the marks of 0.2.56, for a group, a group
+    /// member's private chat and the Saved chat.
+    var takesReadReceipts = false {
+        didSet {
+            imageView.tintColor = AirStatusMarkView.color(for: status, takesReadReceipts: takesReadReceipts)
+        }
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -278,7 +295,7 @@ final class AirStatusMarkView: UIView {
         let update = {
             self.imageView.image = status.iconName.flatMap { AirIcon.image($0) }
             self.imageView.alpha = status == .sending ? 0.45 : 1
-            self.imageView.tintColor = AirStatusMarkView.color(for: status)
+            self.imageView.tintColor = AirStatusMarkView.color(for: status, takesReadReceipts: self.takesReadReceipts)
         }
         if animated && changed && window != nil {
             UIView.transition(with: imageView,
@@ -293,14 +310,19 @@ final class AirStatusMarkView: UIView {
         isHidden = status == .none
     }
 
-    static func color(for status: AirEntryStatus) -> UIColor {
+    static func color(for status: AirEntryStatus, takesReadReceipts: Bool) -> UIColor {
         switch status {
             case .transit:
                 return KQColor.transit
             case .sending, .none:
                 return KQColor.ink3
+            // KHANDAQ (0.2.57): in a 1:1 conversation sent and delivered take the muted ink of the time
+            // beside the mark, so the teal of seen is the one that stands out. A group and the Saved chat
+            // have no seen and keep the ink of 0.2.56 (SPEC: groups are unchanged).
             case .sent, .delivered:
-                return KQColor.ink
+                return takesReadReceipts ? KQColor.ink3 : KQColor.ink
+            case .seen:
+                return KQColor.seen
             case .failed:
                 return KQColor.danger
         }

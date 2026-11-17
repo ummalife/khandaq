@@ -89,6 +89,48 @@ class AirFileEntryTests: XCTestCase {
         XCTAssertEqual(done, AirFileEntryText())
     }
 
+    /// KHANDAQ (0.2.57): a file the lost connection cut keeps its bar and waits; it never says failed.
+    func testAFileCutByTheConnectionWaitsWithWhatHasMovedNeverFailed() {
+        for incoming in [true, false] {
+            let text = make(.waitingConnection, incoming: incoming, bytes: 60_000_000, progress: 0.4)
+            XCTAssertEqual(text.progress, 0.4)
+            XCTAssertEqual(text.note, "Waiting for the connection")
+            XCTAssertFalse(text.noteIsProblem)
+            XCTAssertEqual(text.actions, [.cancel], "Cancel still works")
+        }
+        XCTAssertEqual(make(.waitingConnection, incoming: true, progress: 1.4).progress, 1)
+        XCTAssertEqual(AirFileEntryText.status(state: .waitingConnection, delivered: false, personOnline: true), .transit)
+        XCTAssertEqual(AirFileEntryText.status(state: .waitingConnection, delivered: false, personOnline: false), .transit)
+
+        use("ru")
+        XCTAssertEqual(make(.waitingConnection, incoming: true, progress: 0.4).note, "Ждёт связи")
+    }
+
+    /// KHANDAQ (0.2.57): our file the connection cut, once offered again while the person is online, waits for
+    /// their accept: it said "Waiting for the connection" with the person online until they took it.
+    func testOurFileOfferedAgainWhileThePersonIsOnlineWaitsForTheirAccept() {
+        let offeredAgain = ChatGenericFileCellModel.waitingState(cutByConnection: true, outgoing: true, offered: true)
+        XCTAssertEqual(offeredAgain, .waitingConfirmation)
+        XCTAssertEqual(make(offeredAgain, incoming: false, person: "Yusuf", online: true).note, "Waits for Yusuf to accept it")
+        XCTAssertEqual(AirFileEntryText.status(state: offeredAgain, delivered: false, personOnline: true), .sending)
+
+        // Not offered yet, or theirs (accepted here): it waits for the connection with its bar. Never cut: it
+        // waits for the accept as before.
+        let others: [(cut: Bool, outgoing: Bool, offered: Bool, state: ChatGenericFileCellModel.State)] = [
+            (true, true, false, .waitingConnection),
+            (true, false, true, .waitingConnection),
+            (true, false, false, .waitingConnection),
+            (false, true, true, .waitingConfirmation),
+            (false, false, true, .waitingConfirmation),
+        ]
+        for other in others {
+            let state = ChatGenericFileCellModel.waitingState(cutByConnection: other.cut,
+                                                              outgoing: other.outgoing,
+                                                              offered: other.offered)
+            XCTAssertEqual(state, other.state, "\(other)")
+        }
+    }
+
     func testAnActionShowsOnlyWithItsHandle() {
         // A group gives no pause: the bar and "Cancel" stay.
         let group = make(.loading, incoming: false, bytes: 1_000_000, progress: 0.2, available: [.cancel])

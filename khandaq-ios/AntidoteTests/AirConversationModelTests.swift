@@ -57,6 +57,82 @@ class AirConversationModelTests: XCTestCase {
         XCTAssertEqual(AirEntryStatus.transit.spokenText, "in transit")
     }
 
+    // MARK: - Seen (0.2.57)
+
+    func testOnlyAMessageThatHasLeftTurnsSeen() {
+        XCTAssertEqual(AirEntryStatus.sent.applyingSeen(true), .seen)
+        XCTAssertEqual(AirEntryStatus.delivered.applyingSeen(true), .seen)
+        // What waits, is leaving or was refused keeps its mark, whatever the person has seen.
+        XCTAssertEqual(AirEntryStatus.transit.applyingSeen(true), .transit)
+        XCTAssertEqual(AirEntryStatus.sending.applyingSeen(true), .sending)
+        XCTAssertEqual(AirEntryStatus.failed.applyingSeen(true), .failed)
+        XCTAssertEqual(AirEntryStatus.none.applyingSeen(true), .none)
+        // Not seen yet, or a person on an old client, which sends no read receipts: the marks stay.
+        XCTAssertEqual(AirEntryStatus.sent.applyingSeen(false), .sent)
+        XCTAssertEqual(AirEntryStatus.delivered.applyingSeen(false), .delivered)
+        // A file goes the same way.
+        XCTAssertEqual(AirFileEntryText.status(state: .done, delivered: true, personOnline: false).applyingSeen(true), .seen)
+        XCTAssertEqual(AirFileEntryText.status(state: .waitingConfirmation, delivered: false, personOnline: false).applyingSeen(true), .transit)
+        XCTAssertEqual(AirFileEntryText.status(state: .cancelled, delivered: false, personOnline: true).applyingSeen(true), .failed)
+    }
+
+    func testSeenIsTwoTealChecksAndSentAndDeliveredTakeTheInkOfTheTime() {
+        XCTAssertEqual(AirEntryStatus.seen.iconName, "check-double")
+        // In a 1:1 conversation with a friend, the one that takes read receipts.
+        XCTAssertTrue(AirStatusMarkView.color(for: .sent, takesReadReceipts: true) === KQColor.ink3)
+        XCTAssertTrue(AirStatusMarkView.color(for: .delivered, takesReadReceipts: true) === KQColor.ink3)
+        XCTAssertTrue(AirStatusMarkView.color(for: .seen, takesReadReceipts: true) === KQColor.seen)
+        XCTAssertTrue(AirStatusMarkView.color(for: .transit, takesReadReceipts: true) === KQColor.transit)
+        XCTAssertTrue(AirStatusMarkView.color(for: .failed, takesReadReceipts: true) === KQColor.danger)
+        // Android's khandaq_teal, light and dark, so the three clients show seen alike.
+        XCTAssertEqual(rgb(KQColor.seen, .light), 0x029B7D)
+        XCTAssertEqual(rgb(KQColor.seen, .dark), 0x10B98F)
+    }
+
+    func testAGroupAndTheSavedChatKeepTheInkOfTheirMarks() {
+        // SPEC: groups are unchanged. The group controllers and the Saved chat leave takesReadReceipts
+        // false, and sent and delivered keep the ink of 0.2.56 there, light and dark.
+        XCTAssertFalse(AirEntryTextCellModel().takesReadReceipts)
+        XCTAssertFalse(ChatOutgoingFileCellModel().takesReadReceipts)
+        XCTAssertTrue(AirStatusMarkView.color(for: .sent, takesReadReceipts: false) === KQColor.ink)
+        XCTAssertTrue(AirStatusMarkView.color(for: .delivered, takesReadReceipts: false) === KQColor.ink)
+        XCTAssertEqual(rgb(KQColor.ink, .light), 0x0F1218)
+        XCTAssertEqual(rgb(KQColor.ink, .dark), 0xE7EAEF)
+        XCTAssertTrue(AirStatusMarkView.color(for: .sending, takesReadReceipts: false) === KQColor.ink3)
+        XCTAssertTrue(AirStatusMarkView.color(for: .transit, takesReadReceipts: false) === KQColor.transit)
+        XCTAssertTrue(AirStatusMarkView.color(for: .failed, takesReadReceipts: false) === KQColor.danger)
+
+        // The mark as drawn: delivered in ink for a group, muted for the same entry of a 1:1 chat.
+        let mark = AirStatusMarkView()
+        mark.set(.delivered, animated: false)
+        XCTAssertTrue(tint(of: mark) === KQColor.ink)
+        mark.takesReadReceipts = true
+        XCTAssertTrue(tint(of: mark) === KQColor.ink3)
+        mark.takesReadReceipts = false
+        mark.set(.sent, animated: false)
+        XCTAssertTrue(tint(of: mark) === KQColor.ink)
+    }
+
+    func testSeenIsSaidInEveryLanguageThatSaysDelivered() {
+        XCTAssertEqual(AirEntryStatus.seen.spokenText, "seen")
+        use("ru")
+        XCTAssertEqual(AirEntryStatus.seen.spokenText, "прочитано")
+        use("ar")
+        XCTAssertEqual(AirEntryStatus.seen.spokenText, "قُرئت")
+        use("zh")
+        XCTAssertEqual(AirEntryStatus.seen.spokenText, "已读")
+    }
+
+    func testAReceiptLeavesOnlyFromAConversationInFrontOfThePerson() {
+        XCTAssertTrue(AirSeenGate.allowsReport(onScreen: true, appActive: true, sceneActive: true, lockScreenShown: false, isSaved: false))
+        // Another screen, the background or a locked device, the app's own lock over it, or the Saved chat.
+        XCTAssertFalse(AirSeenGate.allowsReport(onScreen: false, appActive: true, sceneActive: true, lockScreenShown: false, isSaved: false))
+        XCTAssertFalse(AirSeenGate.allowsReport(onScreen: true, appActive: false, sceneActive: true, lockScreenShown: false, isSaved: false))
+        XCTAssertFalse(AirSeenGate.allowsReport(onScreen: true, appActive: true, sceneActive: false, lockScreenShown: false, isSaved: false))
+        XCTAssertFalse(AirSeenGate.allowsReport(onScreen: true, appActive: true, sceneActive: true, lockScreenShown: true, isSaved: false))
+        XCTAssertFalse(AirSeenGate.allowsReport(onScreen: true, appActive: true, sceneActive: true, lockScreenShown: false, isSaved: true))
+    }
+
     // MARK: - Transcript
 
     func testARunGoesOnForTheSameAuthorWithinFiveMinutesOfTheSameDay() {
@@ -515,6 +591,21 @@ private extension AirConversationModelTests {
     func use(_ language: String) {
         AppLanguage.set(language)
         XCTAssertEqual(AppLanguage.current, language)
+    }
+
+    /// The colour a status mark draws its icon in.
+    func tint(of mark: AirStatusMarkView) -> UIColor? {
+        return mark.subviews.compactMap { $0 as? UIImageView }.first?.tintColor
+    }
+
+    /// The 0xRRGGBB of a colour in a theme.
+    func rgb(_ color: UIColor, _ style: UIUserInterfaceStyle) -> UInt32 {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        XCTAssertTrue(color.resolvedColor(with: UITraitCollection(userInterfaceStyle: style)).getRed(&red, green: &green, blue: &blue, alpha: &alpha))
+        return UInt32((red * 255).rounded()) << 16 | UInt32((green * 255).rounded()) << 8 | UInt32((blue * 255).rounded())
     }
 
     /// A text of yours as objcTox keeps it: no sender. Made from the app's classes, looked up by name:

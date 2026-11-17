@@ -442,7 +442,8 @@ private extension AirListDataSource {
             guard let inviter = nextFriends[invite.inviterKey], !inviter.isInvalidated else {
                 continue
             }
-            let name = invite.groupName.isEmpty ? String(localized: "group_chat_default_title") : invite.groupName
+            let name = KhandaqCommunity.displayName(forInviteData: invite.data)
+                ?? (invite.groupName.isEmpty ? String(localized: "group_chat_default_title") : invite.groupName)
             airRequests.append(AirRequest(id: invite.id,
                                           publicKey: invite.inviterKey,
                                           message: "",
@@ -509,7 +510,7 @@ private extension AirListDataSource {
                         reach: reach,
                         preview: preview,
                         previewStyle: style,
-                        lastDelivery: delivery(of: chat.lastMessage, isGroup: false, personOnline: reach.isLive),
+                        lastDelivery: delivery(of: chat.lastMessage, isGroup: false, personOnline: reach.isLive, seenBy: friend),
                         timeText: timeText(for: chat),
                         activity: chat.lastActivityDateInterval,
                         transitCount: reach.messagesInTransit(undelivered: transitCount),
@@ -535,7 +536,8 @@ private extension AirListDataSource {
                         unreadCount: ChatListContent.unreadCount(for: chat, submanagerGroups: submanagerGroups, submanagerObjects: submanagerObjects),
                         isFavorite: isFavorite,
                         avatarData: nil,
-                        tone: AirTone.index(for: chat.uniqueIdentifier))
+                        tone: AirTone.index(for: chat.uniqueIdentifier),
+                        isPinned: KhandaqCommunity.isCommunity(chat))
     }
 
     func savedEntry(for chat: OCTChat, isFavorite: Bool) -> AirEntry {
@@ -580,9 +582,10 @@ private extension AirListDataSource {
         return ChatListContent.timeText(for: date, timeFormatter: timeFormatter, dateFormatter: dateFormatter)
     }
 
-    /// The mark in front of our own last message: on its way, sent, delivered. The same rules as the
-    /// marks in the conversation; `personOnline` matters only for a 1:1 text.
-    func delivery(of message: OCTMessageAbstract?, isGroup: Bool, personOnline: Bool) -> AirDelivery? {
+    /// The mark in front of our own last message: on its way, sent, delivered, seen. The same rules as the
+    /// marks in the conversation; `personOnline` matters only for a 1:1 text, and `friend`, whose read
+    /// receipts say what they have seen, only for a 1:1 message (groups have no seen).
+    func delivery(of message: OCTMessageAbstract?, isGroup: Bool, personOnline: Bool, seenBy friend: OCTFriend? = nil) -> AirDelivery? {
         guard let message = message, message.isOutgoing() else {
             return nil
         }
@@ -600,15 +603,19 @@ private extension AirListDataSource {
             return nil
         }
 
+        // KHANDAQ (0.2.57): the person's read receipt reached past it.
+        let seen = friend.map { !$0.isInvalidated && $0.hasSeenOutgoingMessage(message) } ?? false
+
         if let text = message.messageText {
-            return AirDelivery.ofOutgoingText(isDelivered: text.isDelivered, messageId: text.messageId, personOnline: personOnline)
+            return AirDelivery.ofOutgoingText(isDelivered: text.isDelivered, messageId: text.messageId, personOnline: personOnline, seen: seen)
         }
         if let file = message.messageFile {
             switch file.fileType {
                 case .waitingConfirmation where file.internalFileNumber == Int32(bitPattern: kOCTToxFileNumberFailure):
                     return .transit
                 case .ready:
-                    return .delivered
+                    // Only a file that has gone all the way turns seen, as in the conversation.
+                    return seen ? .seen : .delivered
                 case .canceled:
                     return nil
                 default:
@@ -791,6 +798,9 @@ private extension AirListDataSource {
         switch kind {
             case .requests:
                 return String(localized: "air_request_tag")
+            case .pinned:
+                // No heading: the row says what it is.
+                return ""
             case .live:
                 return String(localized: "air_section_live")
             case .away:

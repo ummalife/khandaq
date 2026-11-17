@@ -24,7 +24,7 @@
 // KHANDAQ (#82): 36 adds OCTMessageFile.groupPeerName + groupSenderPubkey (nullable strings).
 // KHANDAQ (#192): 37 adds OCTMessageAbstract.reactionsJSON (nullable string) + reactionsPending
 // (BOOL, defaults NO). All additive auto-migrations (existing rows get nil/0); no enumerate block.
-static const uint64_t kCurrentSchemeVersion = 42; // 42: +OCTMessageText.groupSenderPubkey (nullable string, additive — the author a signature is checked against, mirroring OCTMessageFile.groupSenderPubkey from 36); 41: +OCTNgcKeyValue table (audit#2 finding 1 — new CLASS, no existing row touched); 40: +OCTMessageAbstract.sortTimestamp (#H5 stable cross-device chat order) w/ backfill; 39: +edited/editedTimestamp/editPending (#208); 38: +OCTMessageFile.fileIdHex
+static const uint64_t kCurrentSchemeVersion = 44; // 44: +OCTMessageFile.transferredBytes (0.2.57 transfers that resume after the connection comes back; additive, 0 on existing files, nothing to rewrite); 43: +OCTFriend.seenWatermark/seenReportedDateInterval/seenPendingPacket (0.2.57 read receipts; additive, 0 and nil on existing friends, nothing to rewrite); 42: +OCTMessageText.groupSenderPubkey (nullable string, additive — the author a signature is checked against, mirroring OCTMessageFile.groupSenderPubkey from 36); 41: +OCTNgcKeyValue table (audit#2 finding 1 — new CLASS, no existing row touched); 40: +OCTMessageAbstract.sortTimestamp (#H5 stable cross-device chat order) w/ backfill; 39: +edited/editedTimestamp/editPending (#208); 38: +OCTMessageFile.fileIdHex
 static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrimaryKey";
 
 @interface OCTRealmManager ()
@@ -296,6 +296,12 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     RLMRealmConfiguration *configuration = [RLMRealmConfiguration defaultConfiguration];
     configuration.fileURL = fileURL;
     configuration.schemaVersion = kCurrentSchemeVersion;
+    // KHANDAQ (0.2.57): the copy of the default configuration carries deleteRealmIfMigrationNeeded, which init
+    // sets for the stray default.realm once the first profile of the process is open. Realm then deletes, not
+    // migrates, a profile of an older schema opened after that one (switching profiles, logging in again),
+    // and the migration block is never run. A profile always migrates; a file Realm cannot open is moved
+    // aside by init.
+    configuration.deleteRealmIfMigrationNeeded = NO;
     configuration.migrationBlock = [self realmMigrationBlock];
     configuration.encryptionKey = encryptionKey;
 
@@ -1916,6 +1922,29 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
                                 filePath:(NSString *)filePath
                                 fileSize:(uint64_t)fileSize
 {
+    return [self markGroupIncomingFileReadyInChat:chat
+                                        msgIdHash:msgIdHash
+                                           peerId:peerId
+                                     senderPubkey:senderPubkey
+                                         fileName:fileName
+                                         filePath:filePath
+                                         fileSize:fileSize
+                                    readyFilePath:NULL];
+}
+
+- (BOOL)markGroupIncomingFileReadyInChat:(OCTChat *)chat
+                               msgIdHash:(NSString *)msgIdHash
+                                  peerId:(uint32_t)peerId
+                            senderPubkey:(NSString *)senderPubkey
+                                fileName:(NSString *)fileName
+                                filePath:(NSString *)filePath
+                                fileSize:(uint64_t)fileSize
+                           readyFilePath:(NSString **)readyFilePath
+{
+    if (readyFilePath) {
+        *readyFilePath = nil;
+    }
+
     // KHANDAQ (#15): find the loading bubble AND update it to ready ATOMICALLY on the manager's own
     // realm/queue. The previous approach looked up via the calling thread's default realm (which can
     // be a stale/separate instance) and then updated via this realm — so the lookup missed the
@@ -1926,6 +1955,8 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     }
 
     __block BOOL handled = NO;
+    // Set on the Realm's queue and handed out after it: the queue's autorelease pool must not own what the caller gets.
+    __block NSString *foundReadyFilePath = nil;
 
     dispatch_sync(self.queue, ^{
         OCTMessageAbstract *existing = nil;
@@ -1965,6 +1996,7 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         handled = YES;
 
         if (existing.messageFile.fileType == OCTMessageFileTypeReady) {
+            foundReadyFilePath = existing.messageFile.filePath;
             return;
         }
 
@@ -1982,7 +2014,67 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         [self.realm commitWriteTransaction];
     });
 
+    if (readyFilePath) {
+        *readyFilePath = foundReadyFilePath;
+    }
+
     return handled;
+}
+
+- (BOOL)markGroupIncomingFileInterruptedInChat:(OCTChat *)chat
+                                     msgIdHash:(NSString *)msgIdHash
+                                  senderPubkey:(NSString *)senderPubkey
+{
+    if (chat.uniqueIdentifier.length == 0 || msgIdHash.length == 0) {
+        return NO;
+    }
+
+    __block BOOL ended = NO;
+
+    dispatch_sync(self.queue, ^{
+        OCTMessageAbstract *existing =
+            [self groupFileRowOwnedBySenderPubkey:senderPubkey
+                                        inResults:[OCTMessageAbstract objectsInRealm:self.realm
+                                                                               where:@"chatUniqueIdentifier == %@ AND messageFile.groupMsgIdHashHex ==[c] %@ AND messageFile.fileType == %d",
+                                                   chat.uniqueIdentifier, msgIdHash, (int)OCTMessageFileTypeLoading]];
+
+        if (! existing || existing.isInvalidated || ! existing.messageFile) {
+            return;
+        }
+
+        // Our own file is never ended here: the same test of "ours" as for a BEGIN and a COMPLETE. Our row
+        // is loading for the whole upload, and its msg-id hash rides in the clear in every packet we send.
+        if (existing.groupSenderPeerId == 0 && ! existing.groupHistorySync) {
+            return;
+        }
+
+        [self.realm beginWriteTransaction];
+        existing.messageFile.fileType = OCTMessageFileTypeCanceled;
+        [self.realm commitWriteTransaction];
+        ended = YES;
+    });
+
+    return ended;
+}
+
+- (BOOL)groupIncomingFileIsReadyInChat:(OCTChat *)chat
+                             msgIdHash:(NSString *)msgIdHash
+                          senderPubkey:(NSString *)senderPubkey
+{
+    if (chat.uniqueIdentifier.length == 0 || msgIdHash.length == 0) {
+        return NO;
+    }
+
+    __block BOOL ready = NO;
+
+    dispatch_sync(self.queue, ^{
+        ready = [self groupFileRowOwnedBySenderPubkey:senderPubkey
+                                            inResults:[OCTMessageAbstract objectsInRealm:self.realm
+                                                                                   where:@"chatUniqueIdentifier == %@ AND messageFile.groupMsgIdHashHex ==[c] %@ AND messageFile.fileType == %d",
+                                                       chat.uniqueIdentifier, msgIdHash, (int)OCTMessageFileTypeReady]] != nil;
+    });
+
+    return ready;
 }
 
 // KHANDAQ (#170): strip the "NNN_" uniquifier prefixes that OCTFileTools/receivers prepend when
@@ -2218,6 +2310,17 @@ static NSString *OCTGroupFileBaseName(NSString *fileName)
                // additive: Realm creates an empty table and no existing object is read, rewritten
                // or enumerated, so there is deliberately nothing to do here. Left explicit rather
                // than absent so the next reader can see the version was considered, not skipped.
+
+               // KHANDAQ (0.2.57): 43 adds three columns to OCTFriend for read receipts: seenWatermark and
+               // seenReportedDateInterval (0 on every existing friend: nothing seen, nothing reported
+               // yet) and seenPendingPacket (nil: nothing waits). Realm adds a column with its zero value
+               // to every existing row by itself, and zero is the right start, so nothing is read or
+               // rewritten here either (OCTSeenReceiptTests opens a schema-42 profile to prove it).
+
+               // KHANDAQ (0.2.57): 44 adds OCTMessageFile.transferredBytes, the bytes a 1:1 transfer had moved
+               // when the friend connection went, shown on the card of a file waiting for the connection. 0 on
+               // every existing file is right (none of them waits that way yet), so nothing is read or
+               // rewritten here (OCTFileResumeTests opens a schema-43 profile to prove it).
     };
 }
 

@@ -114,6 +114,51 @@ class AirListModelTests: XCTestCase {
         XCTAssertEqual(AirDelivery.ofOutgoingText(isDelivered: true, messageId: 7, personOnline: true), .delivered)
     }
 
+    func testRowMarkOfALastTextTurnsSeenAsInTheConversation() {
+        XCTAssertEqual(AirDelivery.ofOutgoingText(isDelivered: true, messageId: 7, personOnline: true, seen: true), .seen)
+        XCTAssertEqual(AirDelivery.ofOutgoingText(isDelivered: false, messageId: 7, personOnline: true, seen: true), .seen)
+        // What waits for the person or is leaving is never seen.
+        XCTAssertEqual(AirDelivery.ofOutgoingText(isDelivered: false, messageId: 7, personOnline: false, seen: true), .transit)
+        XCTAssertEqual(AirDelivery.ofOutgoingText(isDelivered: false, messageId: -1, personOnline: true, seen: true), .transit)
+        XCTAssertEqual(AirDelivery.ofOutgoingText(isDelivered: true, messageId: 7, personOnline: true, seen: false), .delivered)
+    }
+
+    func testARowSaysSeenAndShowsItInTeal() {
+        use("en")
+        let cell = AirRowCell(style: .default, reuseIdentifier: AirRowCell.reuseIdentifier)
+        cell.configure(with: person(lastDelivery: .seen), photo: nil)
+        XCTAssertTrue(cell.accessibilityLabel?.contains("seen") == true, cell.accessibilityLabel ?? "")
+        XCTAssertTrue(imageViews(in: cell.contentView).contains { !$0.isHidden && $0.tintColor === KQColor.seen })
+
+        // Delivered, not seen: the muted ink of the time beside it.
+        cell.configure(with: person(lastDelivery: .delivered), photo: nil)
+        XCTAssertTrue(cell.accessibilityLabel?.contains("delivered") == true, cell.accessibilityLabel ?? "")
+        XCTAssertFalse(imageViews(in: cell.contentView).contains { $0.tintColor === KQColor.seen })
+        XCTAssertTrue(imageViews(in: cell.contentView).contains { !$0.isHidden && $0.tintColor === KQColor.ink3 })
+
+        use("ru")
+        cell.configure(with: person(lastDelivery: .seen), photo: nil)
+        XCTAssertTrue(cell.accessibilityLabel?.contains("прочитано") == true, cell.accessibilityLabel ?? "")
+    }
+
+    func testAGroupRowAndTheSavedRowKeepTheInkOfDelivered() {
+        // SPEC: groups are unchanged, and the Saved chat has no seen either: their delivered checks keep the
+        // ink of 0.2.56. A 1:1 row mutes them, as its conversation does.
+        XCTAssertTrue(AirRowCell.deliveredTint(for: .group) === KQColor.ink)
+        XCTAssertTrue(AirRowCell.deliveredTint(for: .saved) === KQColor.ink)
+        XCTAssertTrue(AirRowCell.deliveredTint(for: .direct) === KQColor.ink3)
+
+        // The row as drawn: the checks are the one icon that comes with the mark, in the tint of the kind.
+        let cell = AirRowCell(style: .default, reuseIdentifier: AirRowCell.reuseIdentifier)
+        for (kind, tint) in [(AirEntry.Kind.group, KQColor.ink), (.saved, KQColor.ink), (.direct, KQColor.ink3)] {
+            cell.configure(with: person(lastDelivery: nil, kind: kind), photo: nil)
+            let without = imageViews(in: cell.contentView).filter { !$0.isHidden && $0.tintColor === tint }.count
+            cell.configure(with: person(lastDelivery: .delivered, kind: kind), photo: nil)
+            let with = imageViews(in: cell.contentView).filter { !$0.isHidden && $0.tintColor === tint }.count
+            XCTAssertEqual(with, without + 1, "\(kind)")
+        }
+    }
+
     func testFavoritesFilterKeepsStarredRowsAndSavedMessages() {
         let entries = [entry("star", reach: .direct, favorite: true), entry("plain", reach: .direct), saved()]
 
@@ -122,6 +167,59 @@ class AirListModelTests: XCTestCase {
         XCTAssertEqual(kinds(snapshot), [.live, .saved])
         XCTAssertEqual(ids(snapshot, .live), ["star"])
         XCTAssertNil(snapshot.emptyState)
+    }
+
+    // MARK: - Khandaq Community
+
+    /// KHANDAQ (0.2.57, owner 2026-11-16): Khandaq Community stands above every other conversation, online or
+    /// not and whatever its activity, in each filter that keeps it and in a search that finds it, as Saved
+    /// Messages is pinned on the iPad. It has no heading of its own; once left, its row is gone.
+    func testKhandaqCommunityStandsAboveTheOtherConversations() {
+        let community = entry("community", title: "Khandaq Community", kind: .group, reach: .group(online: 0), activity: 1, pinned: true)
+        let others = [entry("live-new", reach: .direct, activity: 300), entry("group", kind: .group, reach: .group(online: 3), activity: 200),
+                      entry("away", activity: 50), saved()]
+
+        let all = AirListBuilder.build(entries: others + [community], requests: [request("r", date: 1)], filter: .all, query: "")
+        XCTAssertEqual(kinds(all), [.requests, .pinned, .live, .away, .saved])
+        XCTAssertEqual(ids(all, .pinned), ["community"])
+        XCTAssertEqual(ids(all, .live), ["live-new", "group"])
+        XCTAssertFalse(AirSectionKind.pinned.hasHeading)
+        let online = entry("community", title: "Khandaq Community", kind: .group, reach: .group(online: 40), activity: 1, pinned: true)
+        XCTAssertEqual(kinds(AirListBuilder.build(entries: others + [online], requests: [], filter: .all, query: "")), [.pinned, .live, .away, .saved])
+
+        // The favorites keep it when it is starred, as any conversation, and then it is first.
+        XCTAssertEqual(kinds(AirListBuilder.build(entries: others + [community], requests: [], filter: .favorites, query: "")), [.saved])
+        let starred = entry("community", title: "Khandaq Community", kind: .group, reach: .group(online: 0), activity: 1, favorite: true, pinned: true)
+        let favorites = AirListBuilder.build(entries: others + [entry("star", reach: .direct, activity: 9, favorite: true), starred],
+                                             requests: [], filter: .favorites, query: "")
+        XCTAssertEqual(kinds(favorites), [.pinned, .live, .saved])
+        XCTAssertEqual(ids(favorites, .live), ["star"])
+
+        // A search finds it by the name it shows, and it is first among what was found.
+        let found = AirListBuilder.build(entries: others + [community, entry("kh", title: "Khalid", reach: .direct, activity: 400)],
+                                         requests: [], filter: .all, query: "kh")
+        XCTAssertEqual(kinds(found), [.pinned, .live])
+        XCTAssertEqual(AirListBuilder.build(entries: others + [community], requests: [], filter: .all, query: "official").emptyState, .noMatch)
+
+        // Left: its chat is gone, and the list is as it was without it.
+        XCTAssertEqual(kinds(AirListBuilder.build(entries: others, requests: [request("r", date: 1)], filter: .all, query: "")),
+                       [.requests, .live, .away, .saved])
+    }
+
+    /// Joining it, or leaving it, while the list is on screen is an update the table can animate.
+    func testKhandaqCommunityComingAndGoingIsAnUpdateTheTableTakes() {
+        let others = [entry("a", reach: .direct, activity: 3), entry("b", activity: 2), saved()]
+        let community = entry("community", title: "Khandaq Community", kind: .group, reach: .group(online: 2), activity: 1, pinned: true)
+        let without = AirListBuilder.build(entries: others, requests: [], filter: .all, query: "")
+        let with = AirListBuilder.build(entries: others + [community], requests: [], filter: .all, query: "")
+
+        for (old, new) in [(without, with), (with, without)] {
+            let changes = AirListDiff.changes(from: old, to: new)
+            XCTAssertNotNil(changes)
+            if let changes = changes {
+                XCTAssertEqual(replay(changes, from: old, to: new), new.sections.map { $0.items.map { $0.id } })
+            }
+        }
     }
 
     // MARK: - Searching
@@ -549,7 +647,8 @@ private extension AirListModelTests {
                activity: TimeInterval = 0,
                transit: Int = 0,
                unread: Int = 0,
-               favorite: Bool = false) -> AirEntry {
+               favorite: Bool = false,
+               pinned: Bool = false) -> AirEntry {
         return AirEntry(id: id,
                         kind: kind,
                         title: title ?? id,
@@ -563,7 +662,8 @@ private extension AirListModelTests {
                         unreadCount: unread,
                         isFavorite: favorite,
                         avatarData: nil,
-                        tone: AirTone.index(for: id))
+                        tone: AirTone.index(for: id),
+                        isPinned: pinned)
     }
 
     func saved() -> AirEntry {
@@ -662,6 +762,33 @@ private extension AirListModelTests {
     func use(_ language: String) {
         AppLanguage.set(language)
         XCTAssertEqual(AppLanguage.current, language)
+    }
+
+    /// A person (or a group, or the Saved chat) whose last message is ours, with this mark.
+    func person(lastDelivery: AirDelivery?, kind: AirEntry.Kind = .direct) -> AirEntry {
+        let reach: AirReach
+        switch kind {
+            case .group:
+                reach = .group(online: 2)
+            case .saved:
+                reach = .local
+            case .direct, .contact:
+                reach = .direct
+        }
+        return AirEntry(id: "p1", kind: kind, title: "Bilal", reach: reach, preview: "Salam", previewStyle: .message,
+                        lastDelivery: lastDelivery, timeText: "10:57", activity: 1, transitCount: 0, unreadCount: 0,
+                        isFavorite: false, avatarData: nil, tone: 0)
+    }
+
+    func imageViews(in root: UIView) -> [UIImageView] {
+        var found: [UIImageView] = []
+        if let imageView = root as? UIImageView {
+            found.append(imageView)
+        }
+        for subview in root.subviews {
+            found += imageViews(in: subview)
+        }
+        return found
     }
 
     func airStrings(_ language: String) -> [String: String] {

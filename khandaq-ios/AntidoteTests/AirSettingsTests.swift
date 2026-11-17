@@ -8,7 +8,8 @@ import XCTest
 /**
  Settings (redesign stage 3, E18): the sections by task with the profile file in a section of its own,
  the theme as a segment with the system first that says only a real change, and the attachment choice
- that stores what it shows.
+ that stores what it shows. Files download by themselves from 0.2.57: on a new profile, once on an
+ existing one, and the person's own choice after that, also for a file offered again.
  */
 class AirSettingsTests: XCTestCase {
     private var attachmentsBefore = UserDefaultsManager.AutodownloadImages.Never
@@ -129,6 +130,111 @@ class AirSettingsTests: XCTestCase {
 
     /// Lays `row` out at `width` the way a column does: pinned at the top and the sides, as tall as it
     /// asks to be. The second pass is the one a label that wraps gets in the app on the next frame.
+    // MARK: - Files download by themselves (0.2.57)
+
+    private static let attachmentsKey = "user-info/autodownload-images"
+    private static let appliedKey = "user-info/auto_download_default_v0257_applied"
+
+    func testANewProfileDownloadsFilesByThemselves() {
+        withStoredDownloads(attachments: nil, applied: nil) {
+            XCTAssertEqual(UserDefaultsManager().autodownloadImages, .Always)
+        }
+    }
+
+    func testTheFirstStartOf0257TurnsDownloadsOnOnceAndThePersonsChoiceStays() {
+        withStoredDownloads(attachments: "Never", applied: nil) {
+            // An existing profile with everything off.
+            XCTAssertEqual(UserDefaultsManager().autodownloadImages, .Never)
+            XCTAssertTrue(UserDefaultsManager().applyAutoDownloadDefaultOnce())
+            XCTAssertEqual(UserDefaultsManager().autodownloadImages, .Always)
+
+            // The person switches it off again: every later start keeps it off.
+            UserDefaultsManager().autodownloadImages = .Never
+            XCTAssertFalse(UserDefaultsManager().applyAutoDownloadDefaultOnce())
+            XCTAssertFalse(UserDefaultsManager().applyAutoDownloadDefaultOnce())
+            XCTAssertEqual(UserDefaultsManager().autodownloadImages, .Never)
+        }
+        withStoredDownloads(attachments: "UsingWiFi", applied: nil) {
+            XCTAssertTrue(UserDefaultsManager().applyAutoDownloadDefaultOnce())
+            XCTAssertEqual(UserDefaultsManager().autodownloadImages, .Always)
+        }
+    }
+
+    func testTheSettingsShowTheNewStateAndSwitchItOff() {
+        withStoredDownloads(attachments: nil, applied: nil) {
+            UserDefaultsManager().applyAutoDownloadDefaultOnce()
+            let network = SettingsAdvancedController(theme: ThemeAppearance.resolvedTheme())
+            network.loadViewIfNeeded()
+            let rows = network.view.allSubviews.compactMap { $0 as? AirChoiceRow }
+            XCTAssertEqual(rows.map { $0.isSelected }, [false, false, true])
+
+            rows[0].sendActions(for: .touchUpInside)
+            XCTAssertFalse(UserDefaultsManager().applyAutoDownloadDefaultOnce())
+            XCTAssertEqual(UserDefaultsManager().autodownloadImages, .Never)
+        }
+    }
+
+    /// A file of theirs offered again after the connection went makes no new message, so the rule reaches it
+    /// through objcTox: up to 200 MB with Always, voice notes only with Never.
+    func testAFileOfferedAgainGoesByThePersonsRule() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("auto-download-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let realmManagerClass = try appClass("OCTRealmManager", as: OCTRealmManager.Type.self)
+        let realmManager = try XCTUnwrap(realmManagerClass.init(databaseFileURL: directory.appendingPathComponent("profile.realm"),
+                                                                encryptionKey: nil))
+        let files = OCTSubmanagerFilesMock()
+        let automation = AutomationCoordinator(submanagerObjects: OCTSubmanagerObjectsMock(realm: realmManager.realm),
+                                               submanagerFiles: files)
+        let policy = try XCTUnwrap(files.reofferAutoAcceptPolicy)
+        let messageClass = try appClass("OCTMessageAbstract", as: OCTMessageAbstract.Type.self)
+        let fileClass = try appClass("OCTMessageFile", as: OCTMessageFile.Type.self)
+        func offered(_ name: String, bytes: OCTToxFileSize) -> OCTMessageAbstract {
+            let file = fileClass.init()
+            file.fileName = name
+            file.fileSize = bytes
+            let message = messageClass.init()
+            message.messageFile = file
+            return message
+        }
+        let cap: OCTToxFileSize = 200 * 1024 * 1024
+
+        withStoredDownloads(attachments: "Always", applied: true) {
+            XCTAssertTrue(policy(offered("trip.mov", bytes: cap)))
+            XCTAssertFalse(policy(offered("trip.mov", bytes: cap + 1)), "a bigger file waits for a tap")
+        }
+        withStoredDownloads(attachments: "Never", applied: true) {
+            XCTAssertFalse(policy(offered("trip.mov", bytes: 1_000)))
+            XCTAssertTrue(policy(offered("note.file.m4a", bytes: 90_000)), "voice notes keep their exemption")
+        }
+        withExtendedLifetime(automation) {}
+    }
+
+    /// Runs `body` over the stored download choice and the 0.2.57 marker as given (nil: nothing stored), then
+    /// puts back what was stored.
+    private func withStoredDownloads(attachments: String?, applied: Bool?, _ body: () throws -> Void) rethrows {
+        let defaults = UserDefaults.standard
+        let keys = [AirSettingsTests.attachmentsKey, AirSettingsTests.appliedKey]
+        let saved = keys.map { defaults.object(forKey: $0) }
+        defer {
+            for (key, value) in zip(keys, saved) {
+                defaults.set(value, forKey: key)
+            }
+        }
+        defaults.set(attachments, forKey: AirSettingsTests.attachmentsKey)
+        defaults.set(applied, forKey: AirSettingsTests.appliedKey)
+        try body()
+    }
+
+    /// The app's own class of objcTox by its name: the test bundle links a copy of its own.
+    private func appClass<T>(_ name: String, as type: T.Type) throws -> T {
+        let cls: AnyClass = try XCTUnwrap(NSClassFromString(name), "no class \(name)")
+        return unsafeBitCast(cls, to: type)
+    }
+
     @discardableResult
     private func laidOut(_ row: UIView, width: CGFloat) -> UIView {
         let column = UIView(frame: CGRect(x: 0, y: 0, width: width, height: 800))

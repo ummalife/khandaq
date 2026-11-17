@@ -328,17 +328,12 @@ private extension ChatsTabCoordinator {
     }
 
     func defaultPeerName() -> String {
-        if let name = submanagerUser.userName(), !name.isEmpty {
-            return name
-        }
         // KHANDAQ (#15): the Tox self-name can be empty (e.g. an account created without an explicit
         // username), in which case we used to publish the literal app name "Khandaq" as our NGC peer
         // name, so every group member saw "Khandaq" and messages were attributed to "Khandaq"
         // instead of the real profile. Fall back to the active profile name before the app name.
-        if let profile = UserDefaultsManager().lastActiveProfile, !profile.isEmpty {
-            return profile
-        }
-        return "Khandaq"
+        return GroupJoinHelper.peerName(userName: submanagerUser.userName(),
+                                        profileName: UserDefaultsManager().lastActiveProfile)
     }
 
     /// KHANDAQ (redesign stage 3, E15): "New group" as a sheet the height of the screen: the name, who can

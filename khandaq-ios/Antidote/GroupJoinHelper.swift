@@ -39,6 +39,19 @@ enum GroupJoinHelper {
         return hex.uppercased()
     }
 
+    /// The name a profile has in a group it joins: its Tox name, else the name of the profile, the app's
+    /// name only when both are empty. KHANDAQ (#15): the Tox name can be empty (an account made without
+    /// one), and every member then saw "Khandaq", the name of the founder of Khandaq Community too.
+    static func peerName(userName: String?, profileName: String?) -> String {
+        if let name = userName, !name.isEmpty {
+            return name
+        }
+        if let profile = profileName, !profile.isEmpty {
+            return profile
+        }
+        return "Khandaq"
+    }
+
     /// Read clipboard only from an explicit user action (e.g. Join by ID). iOS 16+ prompts on pasteboard access.
     static func readGroupIdFromClipboard() -> String? {
         guard let raw = UIPasteboard.general.string else {

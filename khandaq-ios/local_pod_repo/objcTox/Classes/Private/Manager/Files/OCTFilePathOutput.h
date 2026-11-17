@@ -7,11 +7,44 @@
 
 @interface OCTFilePathOutput : NSObject <OCTFileOutputProtocol>
 
+/// Where the file is once complete. A download made with initWithResultFilePath:ownerIdentifier: may end under
+/// another name in the same folder, when a file came to have this one meanwhile: read it after finishWriting.
 @property (copy, nonatomic, readonly, nonnull) NSString *resultFilePath;
 
 - (nullable instancetype)initWithTempFolder:(nonnull NSString *)tempFolder
                                resultFolder:(nonnull NSString *)resultFolder
                                    fileName:(nonnull NSString *)fileName;
+
+/**
+ * KHANDAQ (0.2.57): a download that can go on after an interruption. The bytes go to
+ * partialFilePathForResultFilePath:ownerIdentifier:, next to the result in the profile rather than in the
+ * temporary directory, and a cancel keeps them: they are where the transfer goes on from when the friend offers
+ * the file again. The partial file becomes the result when the last byte is in.
+ *
+ * @param ownerIdentifier The unique identifier of the message the file belongs to: the partial file is named for
+ *        it, so it can never be a file another message holds.
+ */
+- (nullable instancetype)initWithResultFilePath:(nonnull NSString *)resultFilePath
+                                ownerIdentifier:(nonnull NSString *)ownerIdentifier;
+
+/**
+ * KHANDAQ (0.2.57): where the bytes of a download into `resultFilePath` for the message `ownerIdentifier` wait
+ * until the last one is in: ".<ownerIdentifier>.part" in the folder of the result.
+ */
++ (nonnull NSString *)partialFilePathForResultFilePath:(nonnull NSString *)resultFilePath
+                                       ownerIdentifier:(nonnull NSString *)ownerIdentifier;
+
+/**
+ * KHANDAQ (0.2.57): the message a partial file belongs to, from the name partialFilePathForResultFilePath:
+ * ownerIdentifier: gives it; nil for a name of another shape.
+ */
++ (nullable NSString *)ownerIdentifierOfPartialFileName:(nonnull NSString *)fileName;
+
+/**
+ * KHANDAQ (0.2.57): whether the file at `path` is an empty one, as the placeholder that reserved the name of a
+ * download until 0.2.57 was. No file that came is empty: a file of size 0 is refused.
+ */
++ (BOOL)isPlaceholderAtPath:(nonnull NSString *)path;
 
 - (nullable instancetype)init NS_UNAVAILABLE;
 + (nullable instancetype)new NS_UNAVAILABLE;

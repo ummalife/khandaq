@@ -128,4 +128,14 @@ class LocalizationTest: XCTestCase {
         formatter.dateFormat = "yyyy"
         XCTAssertEqual(formatter.string(from: Date(timeIntervalSince1970: 1_790_000_000)), "2026")
     }
+
+    // KHANDAQ (0.2.57, SPEC-community item 5): Report is in every language the actions of a message are in.
+    func testReportIsInTheLanguagesOfTheOtherMessageActions() {
+        let expected = ["en": "Report", "ru": "Пожаловаться", "ar": "إبلاغ", "zh": "举报"]
+        for (language, word) in expected {
+            use(language)
+            XCTAssertEqual(String(localized: "chat_report_action"), word, language)
+            XCTAssertNotEqual(String(localized: "chat_forward_action"), "chat_forward_action", language)
+        }
+    }
 }

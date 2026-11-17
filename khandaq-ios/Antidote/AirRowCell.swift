@@ -163,7 +163,11 @@ final class AirRowCell: UITableViewCell {
                 deliveryIcon.isHidden = false
             case .delivered?:
                 deliveryIcon.image = AirIcon.image("check-double")
-                deliveryIcon.tintColor = KQColor.ink
+                deliveryIcon.tintColor = AirRowCell.deliveredTint(for: entry.kind)
+                deliveryIcon.isHidden = false
+            case .seen?:
+                deliveryIcon.image = AirIcon.image("check-double")
+                deliveryIcon.tintColor = KQColor.seen
                 deliveryIcon.isHidden = false
             case nil:
                 deliveryIcon.image = nil
@@ -194,6 +198,13 @@ final class AirRowCell: UITableViewCell {
             case .contact:
                 return "air.row.contact"
         }
+    }
+
+    /// KHANDAQ (0.2.57): the two checks of our delivered last message. Muted in a 1:1 chat, as in its
+    /// conversation, so the teal of seen stands out; a group and the Saved chat have no seen and keep the
+    /// ink of 0.2.56 (SPEC: groups are unchanged).
+    static func deliveredTint(for kind: AirEntry.Kind) -> UIColor {
+        return kind == .direct ? KQColor.ink3 : KQColor.ink
     }
 
     static func tileStyle(for entry: AirEntry) -> AirTileView.Style {
@@ -250,6 +261,8 @@ final class AirRowCell: UITableViewCell {
                 parts.append(String(localized: "air_delivery_sent"))
             case .delivered?:
                 parts.append(String(localized: "air_delivery_delivered"))
+            case .seen?:
+                parts.append(String(localized: "air_delivery_seen"))
             case nil:
                 break
         }
@@ -621,6 +634,8 @@ final class AirSectionHeaderView: UITableViewHeaderFooterView {
         switch kind {
             case .requests:
                 return "requests"
+            case .pinned:
+                return "pinned"
             case .live:
                 return "live"
             case .away:

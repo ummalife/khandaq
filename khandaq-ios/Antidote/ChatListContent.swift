@@ -73,8 +73,12 @@ enum ChatListContent {
     }
 
     /// KHANDAQ (#46): the owner-changeable topic first (an NGC group's name cannot change after creation,
-    /// so a "rename" changes the topic), then the immutable name.
+    /// so a "rename" changes the topic), then the immutable name. Khandaq Community is always "Khandaq
+    /// Community" (KhandaqCommunity.displayName), whatever its topic.
     static func groupTitle(for chat: OCTChat) -> String {
+        if let fixed = KhandaqCommunity.displayName(for: chat) {
+            return fixed
+        }
         return (chat.groupTopic?.isEmpty == false ? chat.groupTopic : chat.groupName)
             ?? String(localized: "group_chat_default_title")
     }
@@ -208,6 +212,8 @@ enum ChatListContent {
     }
 
     private static func leaveAndRemove(_ chat: OCTChat, submanagerGroups: OCTSubmanagerGroups) {
+        // Read while the chat is still there: removing it below invalidates it.
+        KhandaqCommunity.willLeave(chat)
         if chat.groupNumber >= 0 {
             do {
                 try submanagerGroups.leaveGroup(withNumber: OCTToxGroupNumber(chat.groupNumber), partMessage: nil)

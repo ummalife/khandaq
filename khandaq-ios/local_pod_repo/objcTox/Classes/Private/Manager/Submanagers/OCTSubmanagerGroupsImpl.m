@@ -136,6 +136,9 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 // KHANDAQ (review 0.2.56): the transfer ids of the queued group files a flush is sending now, so that the
 // flushes that come meanwhile (peer joins, connection changes, maintenance) do not send them again. Main queue.
 @property (nonatomic, strong, readonly) NSMutableSet<NSString *> *groupFileSendsInFlight;
+// KHANDAQ (0.2.57): the chat ids (lowercase) of the groups joined here whose save waits for their first member
+// (-markGroupJoinedForFirstSaveWithChatIdHex:).
+@property (nonatomic, strong, readonly) NSMutableSet<NSString *> *groupsAwaitingFirstSave;
 #if TARGET_OS_IPHONE
 // KHANDAQ (QA live, F11): held while a leave is pending, so that the app is not suspended before it is done.
 @property (nonatomic, assign) UIBackgroundTaskIdentifier pendingGroupLeaveBackgroundTask;
@@ -191,6 +194,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     _pendingGroupLeaves = [OCTGroupPendingLeaves new];
     _pendingGroupLeaveDrains = [NSCountedSet set];
     _groupFileSendsInFlight = [NSMutableSet set];
+    _groupsAwaitingFirstSave = [NSMutableSet set];
 #if TARGET_OS_IPHONE
     _pendingGroupLeaveBackgroundTask = UIBackgroundTaskInvalid;
 #endif
@@ -463,6 +467,10 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                          peerName:peerName
                                          password:password
                                             error:&localError];
+
+        if (groupNumber != kOCTToxGroupNumberFailure) {
+            [self markGroupJoinedForFirstSaveWithChatIdHex:normalizedChatIdHex];
+        }
     }];
 
     if (rejoinedLeaves.count > 0) {
@@ -947,6 +955,8 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
         if (fromTox.length > 0) {
             resolvedChatIdHex = [self normalizedGroupChatIdHexString:fromTox];
         }
+
+        [self markGroupJoinedForFirstSaveWithChatIdHex:resolvedChatIdHex];
 
         privacyState = [tox groupPrivacyStateForGroupNumber:groupNumber error:nil];
 
@@ -2700,6 +2710,13 @@ groupNumber:(OCTToxGroupNumber)groupNumber
             [self clearPendingFriendAssistedJoinForChatIdHex:chat.groupChatIdHex];
         }
 
+        // KHANDAQ (0.2.57): a group joined here goes into the save with its first member
+        // (-markGroupJoinedForFirstSaveWithChatIdHex:). On the main queue, as after a create or a leave; never on the
+        // tox queue, which a save waits for while it holds its lock.
+        if ([self takeGroupJoinedForFirstSaveWithChatIdHex:chat.groupChatIdHex]) {
+            [self.dataSource managerSaveTox];
+        }
+
         // KHANDAQ (group connection): a peer confirmed is the moment a waiting message first reaches
         // somebody. toxcore marks the group connected when a sync response comes, and reports that
         // outside the pass that calls the connection callback, so the callback seldom comes: send what
@@ -4279,6 +4296,10 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                  password:chat.groupPassword
                                                     error:&localError];
         success = joinedGroupNumber != kOCTToxGroupNumberFailure;
+
+        if (success) {
+            [self markGroupJoinedForFirstSaveWithChatIdHex:chatIdHex];
+        }
     }];
 
     if (rejoinedLeaves.count > 0) {
@@ -4350,10 +4371,20 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                 return NO;
             }
 
-            return [[self.dataSource managerGetTox] groupSendCustomPacket:packet
-                                                            groupNumber:groupNumber
-                                                               lossless:YES
-                                                                  error:error];
+            // KHANDAQ (0.2.57): on the tox queue. The packets of a group file go from the transfer's own queues, and
+            // toxcore, which has no lock of its own here, ran them into the send array of each member while
+            // tox_iterate acknowledged, resent and dropped entries of the same arrays on its queue.
+            __block BOOL sent = NO;
+            __block NSError *sendError = nil;
+            [self performSyncOnToxQueue:^(OCTTox *tox) {
+                NSError *toxError = nil;
+                sent = [tox groupSendCustomPacket:packet groupNumber:groupNumber lossless:YES error:&toxError];
+                sendError = toxError;
+            }];
+            if (error) {
+                *error = sendError;
+            }
+            return sent;
         }
         incomingFilesDirectory:^NSString *(uint32_t groupNumber) {
             __strong typeof(weakSelf) self = weakSelf;
@@ -4423,6 +4454,143 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                         msgIdHex:msgIdHex
                                                         progress:progress];
         }];
+    self.fileTransfer.incomingDroppedBlock = ^(uint32_t groupNumber, NSString *senderPublicKeyHex, NSString *msgIdHex) {
+        __strong typeof(weakSelf) self = weakSelf;
+
+        if (! self) {
+            return;
+        }
+
+        [self handleIncomingGroupFileDroppedWithGroupNumber:groupNumber
+                                         senderPublicKeyHex:senderPublicKeyHex
+                                                   msgIdHex:msgIdHex];
+    };
+    // KHANDAQ (0.2.57): the members a group file packet goes to, for the pace of what this device sends: the confirmed
+    // peers but this one (the count has this one in it).
+    self.fileTransfer.memberCountBlock = ^NSUInteger (uint32_t groupNumber) {
+        __strong typeof(weakSelf) self = weakSelf;
+        __block uint32_t count = 0;
+        [self performSyncOnToxQueue:^(OCTTox *tox) {
+            count = [tox groupPeerCountForGroupNumber:groupNumber error:nil];
+        }];
+        return count > 1 ? (NSUInteger)(count - 1) : 0;
+    };
+    // KHANDAQ (0.2.57): whether toxcore reaches a member only through a TCP relay, for the pace of the relays (as the
+    // desktop, cbeb1d1f): it says TCP for a member it has no direct path to. toxcore lists this device among the peers
+    // too, as TCP while it has no UDP of its own, so it is left out. On the tox queue, as the member count above.
+    self.fileTransfer.anyMemberRelayedBlock = ^BOOL (uint32_t groupNumber) {
+        __strong typeof(weakSelf) self = weakSelf;
+        __block BOOL relayed = NO;
+        [self performSyncOnToxQueue:^(OCTTox *tox) {
+            NSError *selfError = nil;
+            const uint32_t selfPeerId = [tox groupSelfPeerIdForGroupNumber:groupNumber error:&selfError];
+
+            for (NSDictionary *peer in [tox groupPeersForGroupNumber:groupNumber error:nil]) {
+                const uint32_t peerId = [peer[@"peerId"] unsignedIntValue];
+
+                if (selfError == nil && peerId == selfPeerId) {
+                    continue;
+                }
+
+                if ([tox groupPeerConnectionStatusForGroupNumber:groupNumber peerId:peerId error:nil] == OCTToxConnectionStatusTCP) {
+                    relayed = YES;
+                    break;
+                }
+            }
+        }];
+        return relayed;
+    };
+    self.fileTransfer.memberRelayedBlock = ^BOOL (uint32_t groupNumber, uint32_t peerId) {
+        __strong typeof(weakSelf) self = weakSelf;
+        __block BOOL relayed = NO;
+        [self performSyncOnToxQueue:^(OCTTox *tox) {
+            relayed = [tox groupPeerConnectionStatusForGroupNumber:groupNumber peerId:peerId error:nil] == OCTToxConnectionStatusTCP;
+        }];
+        return relayed;
+    };
+    // KHANDAQ (0.2.57): a group file packet to one member alone, for a member that asks for the whole of a file this
+    // device sent. On the tox queue, as the packets to the whole group above.
+    self.fileTransfer.sendPrivatePacketBlock = ^BOOL (uint32_t groupNumber, uint32_t peerId, NSData *packet, NSError **error) {
+        __strong typeof(weakSelf) self = weakSelf;
+
+        if (! self || [self.pendingGroupLeaves containsGroupNumber:groupNumber]) {
+            return NO;
+        }
+
+        __block BOOL sent = NO;
+        __block NSError *sendError = nil;
+        [self performSyncOnToxQueue:^(OCTTox *tox) {
+            NSError *toxError = nil;
+            sent = [tox groupSendCustomPrivatePacket:packet groupNumber:groupNumber peerId:peerId lossless:YES error:&toxError];
+            sendError = toxError;
+        }];
+        if (error) {
+            *error = sendError;
+        }
+        return sent;
+    };
+    self.fileTransfer.incomingFileNamesInUseBlock = ^NSSet<NSString *> *(uint32_t groupNumber) {
+        __strong typeof(weakSelf) self = weakSelf;
+
+        return self ? [self groupFileNamesInUseForGroupNumber:groupNumber] : [NSSet set];
+    };
+}
+
+/**
+ * KHANDAQ (0.2.57): the names, in lower case, the messages of the group give their files in its folder, the files
+ * gone or not. A file that comes is never given one of them (OCTFileTools createNewGroupFilePathInDirectory:...):
+ * a message whose file went (to make room in Khandaq Community, or a transfer that stopped) would show the new file
+ * as its own, and the cleanup that went by its name would delete or keep the wrong one. Main thread, as the Realm.
+ */
+- (NSSet<NSString *> *)groupFileNamesInUseForGroupNumber:(OCTToxGroupNumber)groupNumber
+{
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    OCTChat *chat = [realmManager chatWithGroupNumber:groupNumber];
+    NSString *folder = chat ? [[self groupFilesDirectoryForChat:chat createIfNeeded:NO] lastPathComponent] : nil;
+
+    if (folder.length == 0) {
+        return [NSSet set];
+    }
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"chatUniqueIdentifier == %@ AND messageFile != nil",
+                              chat.uniqueIdentifier];
+    NSMutableSet<NSString *> *names = [NSMutableSet new];
+
+    for (OCTMessageAbstract *message in [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate]) {
+        // Stored relative to the container, with a tilde or whole: the last two parts are the folder and the name.
+        NSString *stored = message.messageFile.internalFilePath;
+
+        if (stored.length > 0 &&
+            [[[stored stringByDeletingLastPathComponent] lastPathComponent] caseInsensitiveCompare:folder] == NSOrderedSame) {
+            [names addObject:[[stored lastPathComponent] lowercaseString]];
+        }
+    }
+
+    return names;
+}
+
+/**
+ * KHANDAQ (0.2.57, SPEC-network part 1, item 8): the transfer dropped an incoming file that stopped coming. Seen
+ * live: a member's app away for 45 s in the middle of a 40 MB file; the group took two minutes to come back, the
+ * file was dropped a minute after the return with its partial bytes, and its card said "41.9 MB left" until the
+ * next start of the app. It ends now as that start ends it: "The download stopped".
+ */
+- (void)handleIncomingGroupFileDroppedWithGroupNumber:(uint32_t)groupNumber
+                                   senderPublicKeyHex:(NSString *)senderPublicKeyHex
+                                             msgIdHex:(NSString *)msgIdHex
+{
+    OCTChat *chat = [self chatForGroupNumber:groupNumber createIfNeeded:NO];
+
+    if (! chat) {
+        return;
+    }
+
+    if ([[self.dataSource managerGetRealmManager] markGroupIncomingFileInterruptedInChat:chat
+                                                                               msgIdHash:msgIdHex
+                                                                            senderPubkey:senderPublicKeyHex]) {
+        OCTLogInfo(@"NGC group file dropped before it was complete, its card ends failed group=%u msgId=%@",
+                   groupNumber, msgIdHex);
+    }
 }
 
 - (void)setupLiveAudioIfNeeded
@@ -4964,6 +5132,12 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     [self setupSignedHistoryIfNeeded];
     self.histSync.signedHistory = self.signedHistory;
 
+    self.histSync.incomingFileNamesInUseBlock = ^NSSet<NSString *> *(uint32_t groupNumber) {
+        __strong typeof(weakSelf) self = weakSelf;
+
+        return self ? [self groupFileNamesInUseForGroupNumber:groupNumber] : [NSSet set];
+    };
+
     self.histSync.historySyncPacketsForGroupBlock = ^NSArray<NSData *> *(uint32_t groupNumber) {
         __strong typeof(weakSelf) self = weakSelf;
 
@@ -5058,6 +5232,18 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     OCTChat *chat = [self chatForGroupNumber:groupNumber createIfNeeded:YES];
 
     if (! chat) {
+        return;
+    }
+
+    // KHANDAQ (0.2.57): the lookup below goes to the default Realm (+objectsWithPredicate:), which in the app is not
+    // the manager's Realm and holds nothing, so it never found a finished row. A BEGIN of a file whose message is Ready
+    // (a file sent again after a restart, which the transfer no longer remembers; a re-served copy of our own file)
+    // added a second, loading row that no completion finished. The test that row is finished is asked of the
+    // manager's Realm here; the rest of the lookup stays as it was.
+    if ([realmManager groupIncomingFileIsReadyInChat:chat msgIdHash:msgIdHex senderPubkey:senderPublicKeyHex]) {
+        OCTLogInfo(@"NGC group file %@ of group %u: BEGIN from peer %u, its message is Ready here: no new row",
+                   [(msgIdHex.length > 8 ? [msgIdHex substringToIndex:8] : (msgIdHex ?: @"")) lowercaseString],
+                   groupNumber, peerId);
         return;
     }
 
@@ -5172,6 +5358,21 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     }];
 }
 
+// KHANDAQ (0.2.57): what tells one file on disk from another, whatever the spelling of its path (a symlink in it, the
+// container re-rooted); nil when the path names no regular file, or when that cannot be read.
+static id OCTGroupRegularFileIdentifier(NSString *path)
+{
+    if (path.length == 0) {
+        return nil;
+    }
+
+    NSDictionary<NSURLResourceKey, id> *values =
+        [[NSURL fileURLWithPath:path] resourceValuesForKeys:@[NSURLFileResourceIdentifierKey, NSURLIsRegularFileKey]
+                                                      error:nil];
+
+    return [values[NSURLIsRegularFileKey] boolValue] ? values[NSURLFileResourceIdentifierKey] : nil;
+}
+
 - (void)handleIncomingGroupFileCompleteWithGroupNumber:(uint32_t)groupNumber
                                                 peerId:(uint32_t)peerId
                                     senderPublicKeyHex:(NSString *)senderPublicKeyHex
@@ -5193,15 +5394,38 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     // KHANDAQ (audit F-5): the msg-id hash is public inside the group, so the row lookup alone lets any
     // member finish somebody else's transfer with its own payload. Pass the key of the peer this file
     // really came from — the row keeps the sender frozen at BEGIN and refuses a different one.
+    NSString *readyFilePath = nil;
     BOOL handled = [realmManager markGroupIncomingFileReadyInChat:chat
                                                         msgIdHash:msgIdHex
                                                            peerId:peerId
                                                      senderPubkey:senderPublicKeyHex
                                                          fileName:fileName
                                                          filePath:filePath
-                                                         fileSize:fileSize];
+                                                         fileSize:fileSize
+                                                    readyFilePath:&readyFilePath];
 
     if (handled) {
+        // KHANDAQ (0.2.57): the message of this file was Ready already. The transfer remembers the files it put
+        // together only while the app runs, so a member that sends one again after a restart has it put together once
+        // more, under a name of its own, and that copy stayed on disk with no message. It goes when the message's own
+        // file is on disk; when that file went (to make room), the copy is the only one and stays.
+        id keptFile = OCTGroupRegularFileIdentifier(readyFilePath);
+        id newFile = OCTGroupRegularFileIdentifier(filePath);
+
+        if (keptFile && newFile && ! [keptFile isEqual:newFile]) {
+            NSString *shortMsgId = [(msgIdHex.length > 8 ? [msgIdHex substringToIndex:8] : (msgIdHex ?: @"")) lowercaseString];
+            NSError *error = nil;
+
+            if ([[NSFileManager defaultManager] removeItemAtPath:filePath error:&error]) {
+                OCTLogInfo(@"NGC group file %@ of group %u came again; its message has it as %@: the copy %@ is removed",
+                           shortMsgId, groupNumber, readyFilePath.lastPathComponent, filePath.lastPathComponent);
+            }
+            else {
+                OCTLogWarn(@"NGC group file %@ of group %u came again: cannot remove the copy %@: %@",
+                           shortMsgId, groupNumber, filePath.lastPathComponent, error);
+            }
+        }
+
         return;
     }
 
@@ -5249,9 +5473,25 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                 msgIdHex:msgIdHex];
 }
 
+- (NSString *)groupFilesDirectoryForChatIdHex:(NSString *)chatIdHex
+{
+    if (chatIdHex.length == 0) {
+        return @"";
+    }
+
+    id<OCTFileStorageProtocol> fileStorage = [self.dataSource managerGetFileStorage];
+
+    return [[fileStorage pathForDownloadedFilesDirectory]
+        stringByAppendingPathComponent:[NSString stringWithFormat:@"group/%@", [chatIdHex lowercaseString]]];
+}
+
+- (NSSet<NSString *> *)incomingGroupFilePathsInProgress
+{
+    return [self.fileTransfer incomingFilePathsInProgress] ?: [NSSet set];
+}
+
 - (NSString *)groupFilesDirectoryForChat:(OCTChat *)chat createIfNeeded:(BOOL)createIfNeeded
 {
-    id<OCTFileStorageProtocol> fileStorage = [self.dataSource managerGetFileStorage];
     NSString *chatIdHex = chat.groupChatIdHex;
 
     if (chatIdHex.length == 0) {
@@ -5262,8 +5502,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         return @"";
     }
 
-    NSString *path = [[fileStorage pathForDownloadedFilesDirectory]
-        stringByAppendingPathComponent:[NSString stringWithFormat:@"group/%@", [chatIdHex lowercaseString]]];
+    NSString *path = [self groupFilesDirectoryForChatIdHex:chatIdHex];
 
     if (createIfNeeded) {
         NSFileManager *fileManager = [NSFileManager defaultManager];
@@ -6216,6 +6455,49 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
     @synchronized (self.groupInviteAcceptedMs) {
         [self.groupInviteAcceptedMs removeObjectForKey:chatIdHex.lowercaseString];
+    }
+}
+
+/**
+ * KHANDAQ (0.2.57): marks the group of `chatIdHex`, just joined or accepted in toxcore, for a save of the profile when
+ * its first member joins (-tox:groupPeerJoinWithGroupNumber:peerId:). Nothing saved such a group: after a restart the
+ * profile came back without it, and the founder of a private group refuses a join by its id.
+ *
+ * Not at once, as after a create or a leave: toxcore writes a group into the save only once it holds the group's
+ * state (gc_group_is_valid), which a member sends it, so a save at the join leaves the group out. After an accept
+ * that replaced a stuck instance of the group (gc_accept_invite deletes that one at once), such a save would drop
+ * both. A member's join comes after that state (toxcore asks for its info on the sync response), and it puts the
+ * member among the saved peers the group reconnects through after a restart.
+ *
+ * Called on the tox queue, right after the join: no callback of the group can come before the mark.
+ */
+- (void)markGroupJoinedForFirstSaveWithChatIdHex:(NSString *)chatIdHex
+{
+    if (chatIdHex.length == 0) {
+        return;
+    }
+
+    @synchronized (self.groupsAwaitingFirstSave) {
+        [self.groupsAwaitingFirstSave addObject:chatIdHex.lowercaseString];
+    }
+}
+
+/// KHANDAQ (0.2.57): YES, once, for a group marked by -markGroupJoinedForFirstSaveWithChatIdHex:; the mark goes.
+- (BOOL)takeGroupJoinedForFirstSaveWithChatIdHex:(NSString *)chatIdHex
+{
+    if (chatIdHex.length == 0) {
+        return NO;
+    }
+
+    NSString *key = chatIdHex.lowercaseString;
+
+    @synchronized (self.groupsAwaitingFirstSave) {
+        if (! [self.groupsAwaitingFirstSave containsObject:key]) {
+            return NO;
+        }
+
+        [self.groupsAwaitingFirstSave removeObject:key];
+        return YES;
     }
 }
 

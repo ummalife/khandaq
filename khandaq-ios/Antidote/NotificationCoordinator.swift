@@ -93,6 +93,19 @@ class NotificationCoordinator: NSObject {
     // in bursts every 30 s or so.
     fileprivate var appIconBadgeNumber: Int?
 
+    // KHANDAQ (#41): a chat is "unread" for the tab/app badge only when its last message is a
+    // genuine INCOMING, non-system message newer than lastRead. The old date-only predicate also
+    // counted our own outgoing messages (badge stuck after you send) and "X joined" system notes.
+    // For groups both incoming & outgoing have senderUniqueIdentifier == nil, so incoming is
+    // distinguished by groupSenderPeerId > 0 (mirrors OCTMessageAbstract.isOutgoing).
+    // KHANDAQ (0.2.57): a group whose notifications are off, Khandaq Community from its join or any group
+    // muted by hand, adds nothing to the tab or the app icon; its row in the list keeps its own counter.
+    static let unreadChatsPredicate = NSPredicate(format:
+        "lastMessage.dateInterval > lastReadDateInterval"
+        + " AND lastMessage.groupSystemMessage == NO"
+        + " AND (lastMessage.groupSenderPeerId > 0 OR lastMessage.senderUniqueIdentifier != nil)"
+        + " AND NOT (isGroup == YES AND groupNotificationsSilent == YES)")
+
     init(theme: Theme, submanagerObjects: OCTSubmanagerObjects) {
         self.theme = theme
         self.notificationWindow = NotificationWindow()
@@ -100,16 +113,7 @@ class NotificationCoordinator: NSObject {
         self.submanagerObjects = submanagerObjects
         self.avatarManager = AvatarManager(theme: theme)
 
-        // KHANDAQ (#41): a chat is "unread" for the tab/app badge only when its last message is a
-        // genuine INCOMING, non-system message newer than lastRead. The old date-only predicate also
-        // counted our own outgoing messages (badge stuck after you send) and "X joined" system notes.
-        // For groups both incoming & outgoing have senderUniqueIdentifier == nil, so incoming is
-        // distinguished by groupSenderPeerId > 0 (mirrors OCTMessageAbstract.isOutgoing).
-        let predicate = NSPredicate(format:
-            "lastMessage.dateInterval > lastReadDateInterval"
-            + " AND lastMessage.groupSystemMessage == NO"
-            + " AND (lastMessage.groupSenderPeerId > 0 OR lastMessage.senderUniqueIdentifier != nil)")
-        self.chats = submanagerObjects.chats(predicate: predicate)
+        self.chats = submanagerObjects.chats(predicate: NotificationCoordinator.unreadChatsPredicate)
         self.requests = submanagerObjects.friendRequests()
 
         super.init()
@@ -229,6 +233,12 @@ extension NotificationCoordinator {
     @objc func applicationDidBecomeActive() {
         lastBecameActiveDate = Date()
         UIApplication.shared.cancelAllLocalNotifications()
+    }
+
+    /// The name the notifications of a group give it: Khandaq Community by its own name, any other group by
+    /// the name it was made with.
+    static func groupName(of chat: OCTChat?) -> String {
+        return KhandaqCommunity.displayName(for: chat) ?? chat?.groupName ?? String(localized: "group_chat_default_title")
     }
 }
 
@@ -470,9 +480,10 @@ private extension NotificationCoordinator {
         let friends = submanagerObjects.friends(predicate: NSPredicate(format: "publicKey ==[c] %@", invite.inviterKey))
         let friend: OCTFriend? = friends.count > 0 ? friends[0] : nil
         let name = friend.map { $0.nickname.isEmpty ? $0.publicKey : $0.nickname } ?? invite.inviterKey
-        let body = invite.groupName.isEmpty
+        let groupName = KhandaqCommunity.displayName(forInviteData: invite.data) ?? invite.groupName
+        let body = groupName.isEmpty
             ? String(localized: "notification_group_invite")
-            : String(localized: "notification_group_invite_format", invite.groupName)
+            : String(localized: "notification_group_invite_format", groupName)
         let tile = AirTileView.Style.person(initials: AirInitials.from(name), tone: AirTone.index(for: friend?.publicKey ?? invite.inviterKey))
 
         return NotificationObject(title: name,
@@ -498,8 +509,9 @@ private extension NotificationCoordinator {
         let chat = submanagerObjects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat
         let isGroup = chat?.isGroup ?? false
         let isGroupPrivate = isGroup && message.groupPrivateMessage
+        let groupName = NotificationCoordinator.groupName(of: chat)
         // The band shows the tile the Air screen shows for this chat (E22).
-        let groupTile = AirTileView.Style.group(initials: AirInitials.from(chat?.groupName ?? String(localized: "group_chat_default_title")),
+        let groupTile = AirTileView.Style.group(initials: AirInitials.from(groupName),
                                                 tone: AirTone.index(for: message.chatUniqueIdentifier))
 
         // Sender display name for a group peer (used both for the private-message title and the
@@ -517,14 +529,12 @@ private extension NotificationCoordinator {
         if isGroupPrivate {
             // A direct (private) message sent to you inside a group: title it so it's unmistakably
             // addressed to you personally, not a normal group post (Android parity).
-            let sender = groupPeerName.isEmpty
-                ? (chat?.groupName ?? String(localized: "group_chat_default_title"))
-                : groupPeerName
+            let sender = groupPeerName.isEmpty ? groupName : groupPeerName
             title = String(localized: "group_private_message_notification_title_format", sender)
             tile = groupTile
         }
         else if isGroup {
-            title = chat?.groupName ?? String(localized: "group_chat_default_title")
+            title = groupName
             tile = groupTile
         }
         else if let friend = submanagerObjects.object(withUniqueIdentifier: message.senderUniqueIdentifier, for: .friend) as? OCTFriend {

@@ -89,6 +89,8 @@ class ChatGroupController: PortraitChatController {
     // KHANDAQ (redesign stage 3, E13): the header with the group's name, the band under it with who gets
     // a message now, the pinned strip, and the bar that takes the field's place when you may only read.
     var groupTitleView: ChatPrivateTitleView!
+    /// KHANDAQ (0.2.57): above the group's band, the band of no network (AirNetworkNotice).
+    var networkBand: AirNetworkBandView!
     var groupBand: AirGroupBandView!
     var pinnedStrip: AirPinnedStripView!
     var groupTopStack: UIStackView!
@@ -134,9 +136,8 @@ class ChatGroupController: PortraitChatController {
         edgesForExtendedLayout = UIRectEdge()
         hidesBottomBarWhenPushed = true
         // KHANDAQ (#46): prefer the owner-changeable TOPIC (NGC group name is immutable; a "rename"
-        // updates the topic), falling back to the immutable name.
-        title = (chat.groupTopic?.isEmpty == false ? chat.groupTopic : chat.groupName)
-            ?? String(localized: "group_chat_default_title")
+        // updates the topic), falling back to the immutable name; Khandaq Community by its own name.
+        title = ChatListContent.groupTitle(for: chat)
     }
 
     required convenience init?(coder aDecoder: NSCoder) {
@@ -1160,6 +1161,7 @@ extension ChatGroupController: UITableViewDelegate {
     func inlinePreviewSize(for message: OCTMessageAbstract) -> CGSize? {
         guard let messageFile = message.messageFile,
               message.isOutgoing() || messageFile.fileType == .ready,
+              KhandaqCommunity.fileHold(of: message, in: chat) == .none,
               let file = messageFile.filePath(),
               messageFile.fileSize < Constants.MaxImageSizeToShowInline else {
             return nil
@@ -1231,6 +1233,7 @@ extension ChatGroupController: UITableViewDelegate {
     func isFileDisplayedInline(_ fileMessage: OCTMessageAbstract) -> Bool {
         guard let messageFile = fileMessage.messageFile,
               fileMessage.isOutgoing() || messageFile.fileType == .ready,
+              KhandaqCommunity.fileHold(of: fileMessage, in: chat) == .none,
               let path = messageFile.filePath(),
               messageFile.fileSize < Constants.MaxImageSizeToShowInline,
               inlineMediaSize(forFileAt: path, messageFile: messageFile) != nil else {
@@ -1381,11 +1384,14 @@ private extension ChatGroupController {
 
         cell.setupWithTheme(theme, model: model)
 
-        if messageFile.fileType == .loading && messageFile.groupTransferProgress > 0 {
+        // KHANDAQ (0.2.57, SPEC-community item 6): a file that waits for Accept has no bar.
+        let waits = KhandaqCommunity.fileHold(of: message, in: chat) != .none
+
+        if !waits && messageFile.fileType == .loading && messageFile.groupTransferProgress > 0 {
             cell.updateProgress(CGFloat(messageFile.groupTransferProgress))
         }
 
-        if messageFile.fileType == .loading {
+        if !waits && messageFile.fileType == .loading {
             let bridge = ChatGroupProgressBridge()
             cell.progressObject = bridge
             bridge.observe(message)
@@ -1402,6 +1408,9 @@ private extension ChatGroupController {
         guard let messageFile = message.messageFile else {
             return
         }
+        // KHANDAQ (0.2.57, SPEC-community item 6): a file of someone else in Khandaq Community that waits for
+        // Accept is not opened by any parser before the tap, the player that reads a voice's length included.
+        let hold = KhandaqCommunity.fileHold(of: message, in: chat)
 
         model.fileName = messageFile.fileName
         model.fileSizeBytes = messageFile.fileSize
@@ -1434,7 +1443,7 @@ private extension ChatGroupController {
 
         if isVoice {
             model.fileName = VoiceMessageHelper.displayFileName(for: messageFile.fileName)
-            if messageFile.fileType == .ready, let path = messageFile.filePath() {
+            if hold == .none, messageFile.fileType == .ready, let path = messageFile.filePath() {
                 model.voiceDuration = VoiceMessageHelper.audioDuration(at: path)
             }
         }
@@ -1506,10 +1515,27 @@ private extension ChatGroupController {
                     messageId: message.uniqueIdentifier, filePath: path, fraction: fraction)
             }
         }
+
+        // KHANDAQ (0.2.57, SPEC-community item 6): in Khandaq Community a file of someone else waits for
+        // Accept: its name and size, nothing to see or play until the tap.
+        KhandaqCommunity.shapeEntry(model, hold: hold) { [weak self] in
+            self?.takeCommunityFile(message)
+        }
+    }
+
+    /// Accept on a file of Khandaq Community that waited: from now on it is a file like any other, with its
+    /// picture, its caption and its bar.
+    func takeCommunityFile(_ message: OCTMessageAbstract) {
+        guard !message.isInvalidated else {
+            return
+        }
+        KhandaqCommunity.take(message)
+        tableView.reloadRows(at: tableView.indexPathsForVisibleRows ?? [], with: .none)
     }
 
     func presentFilePreview(for message: OCTMessageAbstract) {
         guard let messageFile = message.messageFile,
+              KhandaqCommunity.fileHold(of: message, in: chat) == .none,
               !VoiceMessageHelper.isVoiceMessage(fileName: messageFile.fileName, filePath: messageFile.filePath()) else {
             return
         }
@@ -1519,7 +1545,10 @@ private extension ChatGroupController {
             return
         }
 
-        let qlDataSource = FilePreviewControllerDataSource(chat: chat, submanagerObjects: submanagerObjects)
+        // KHANDAQ (0.2.57, SPEC-community item 6): the gallery and QuickLook pass over files that wait.
+        let qlDataSource = FilePreviewControllerDataSource(chat: chat,
+                                                          submanagerObjects: submanagerObjects,
+                                                          excludingMessageIds: KhandaqCommunity.heldMessageIds(in: chat, objects: submanagerObjects))
         guard let index = qlDataSource.indexOfMessage(message), index >= 0 else {
             return
         }
@@ -1708,6 +1737,11 @@ private extension ChatGroupController {
         // incoming transfer is still arriving, decoding the partial file renders a half image (top
         // strip + grey) — keep the clean loading box until it's Ready. Outgoing files are complete.
         guard message.isOutgoing() || messageFile.fileType == .ready else {
+            return
+        }
+
+        // KHANDAQ (0.2.57, SPEC-community item 6): nothing of a file that waits for Accept is decoded.
+        guard KhandaqCommunity.fileHold(of: message, in: chat) == .none else {
             return
         }
 

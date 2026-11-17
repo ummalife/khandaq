@@ -17,6 +17,12 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferError) {
 
 typedef BOOL (^OCTNgcGroupFileTransferSendPacketBlock)(uint32_t groupNumber, NSData *packet, NSError **error);
 
+// KHANDAQ (0.2.57): a packet to the member `peerId` of the group alone.
+typedef BOOL (^OCTNgcGroupFileTransferSendPrivatePacketBlock)(uint32_t groupNumber,
+                                                              uint32_t peerId,
+                                                              NSData *packet,
+                                                              NSError **error);
+
 // KHANDAQ (audit F-5): senderPublicKeyHex is the STABLE key of the peer this file really came from
 // (the BEGIN opener for a chunked transfer, the delivering peer for a single-packet one). The msgId is
 // public inside the group, so the row it lands on must be matched on the key, not on the msgId alone.
@@ -41,7 +47,45 @@ typedef void (^OCTNgcGroupFileTransferProgressBlock)(uint32_t groupNumber,
                                                      NSString *msgIdHex,
                                                      float progress);
 
+// KHANDAQ (0.2.57): an incoming chunked file that will never complete was dropped, with its partial file: no
+// chunk came for a minute (the sender's network went, or ours and the group took longer to come back), or its
+// slot was needed for another file. senderPublicKeyHex is the opener's key, as in the begin block.
+typedef void (^OCTNgcGroupFileTransferIncomingDroppedBlock)(uint32_t groupNumber,
+                                                            NSString *_Nullable senderPublicKeyHex,
+                                                            NSString *msgIdHex);
+
 @interface OCTNgcGroupFileTransfer : NSObject
+
+/// KHANDAQ (0.2.57): hears every incoming file dropped before it was complete, on the main queue like the
+/// other blocks. Set it before the first packet comes.
+@property (atomic, copy, nullable) OCTNgcGroupFileTransferIncomingDroppedBlock incomingDroppedBlock;
+
+/// KHANDAQ (0.2.57): the names, in lower case, the messages of the group give their files in its folder, gone or
+/// not (OCTFileTools createNewGroupFilePathInDirectory:fileName:namesInUse:). Called on the main thread with the
+/// directory block, for a file that is about to be stored. Set it before the first packet comes.
+@property (atomic, copy, nullable) NSSet<NSString *> *(^incomingFileNamesInUseBlock)(uint32_t groupNumber);
+
+/// KHANDAQ (0.2.57): how many members a packet to the group goes to now, for the pace of the group file packets this
+/// device sends: a packet costs its bytes once for each. Called on the queues that send, never on the main one. Set it
+/// before the first file goes; without it a packet costs as if it went to one member.
+@property (atomic, copy, nullable) NSUInteger (^memberCountBlock)(uint32_t groupNumber);
+
+/// KHANDAQ (0.2.57): whether a packet to the group goes to a member toxcore reaches only through a TCP relay (its
+/// connection status is TCP; this device, which toxcore lists too, left out). Such a packet waits for the pace of the
+/// relays too, which counts its bytes once. Called on the queues that send, never on the main one. Without it no packet
+/// waits for that pace.
+@property (atomic, copy, nullable) BOOL (^anyMemberRelayedBlock)(uint32_t groupNumber);
+
+/// KHANDAQ (0.2.57): whether toxcore reaches the member `peerId` of the group only through a TCP relay, for a packet to
+/// that member alone (sendPrivatePacketBlock). Called on the queues that send, never on the main one. Without it no
+/// such packet waits for the pace of the relays.
+@property (atomic, copy, nullable) BOOL (^memberRelayedBlock)(uint32_t groupNumber, uint32_t peerId);
+
+/// KHANDAQ (0.2.57): sends a packet of a group file to one member alone: the whole of a file this device sent, to a
+/// member that asks for all of it (an Android that has the file's message and no BEGIN of it asks so). Called on the
+/// queues that send, never on the main one. Set it before the first request comes; without it such a request is not
+/// served.
+@property (atomic, copy, nullable) OCTNgcGroupFileTransferSendPrivatePacketBlock sendPrivatePacketBlock;
 
 - (instancetype)initWithSendPacketBlock:(OCTNgcGroupFileTransferSendPacketBlock)sendPacketBlock
                 incomingFilesDirectory:(NSString *(^)(uint32_t groupNumber))incomingFilesDirectoryBlock
@@ -73,6 +117,17 @@ typedef void (^OCTNgcGroupFileTransferProgressBlock)(uint32_t groupNumber,
 + (NSString *)generateMsgIdHex;
 
 - (void)cancelSendForMsgIdHex:(NSString *)msgIdHex;
+
+/// KHANDAQ (0.2.57): the paths of the incoming files being written now, two per chunked file under way: where it
+/// goes once complete, and its hidden file (partialPathForGroupFilePath:msgIdHex:). From any thread.
+- (NSSet<NSString *> *)incomingFilePathsInProgress;
+
+/**
+ * KHANDAQ (0.2.57): the hidden file the chunks of the group file `msgIdHex`, to go to `filePath`, are written to until
+ * the last one is in: ".<msgIdHex in lower case>.part" in the folder of `filePath`. Nothing is under the file's name
+ * before that.
+ */
++ (NSString *)partialPathForGroupFilePath:(NSString *)filePath msgIdHex:(NSString *)msgIdHex;
 
 @end
 

@@ -11,6 +11,13 @@
 @protocol OCTSubmanagerFiles <NSObject>
 
 /**
+ * KHANDAQ (0.2.57): whether a file the friend offers again downloads by itself now, when its message waits for
+ * the person's tap. Asked on the main thread with that message once their offer comes back after the connection
+ * went; a transfer the person had accepted goes on without asking. nil, or NO: the file waits for the tap.
+ */
+@property (copy, nonatomic, nullable) BOOL (^reofferAutoAcceptPolicy)(OCTMessageAbstract *__nonnull message);
+
+/**
  * Send given data to particular chat. After sending OCTMessageAbstract with messageFile will be added to this chat.
  * You can monitor progress using this message.
  *

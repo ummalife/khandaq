@@ -86,6 +86,13 @@
 @property (nullable) NSString *groupSyncPeerKey3;
 
 /**
+ * KHANDAQ (0.2.57): bytes of a 1:1 transfer that had moved when the friend connection went, for the bar
+ * of a file waiting for the connection (pausedBy OCTMessageFilePausedByConnection): what we had sent, or
+ * what this side has kept of theirs. 0 otherwise.
+ */
+@property OCTToxFileSize transferredBytes;
+
+/**
  * Path of file on disk. If you need fileName to show to user please use
  * `fileName` property. filePath has it's own random fileName.
  *

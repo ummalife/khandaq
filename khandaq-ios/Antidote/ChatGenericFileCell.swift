@@ -203,6 +203,7 @@ class ChatGenericFileCell: ChatMovableDateCell {
         }
         entry.configure(fileModel, firstLine: firstLine)
         let status = entryStatus()
+        entry.mark.takesReadReceipts = (fileModel as? ChatOutgoingFileCellModel)?.takesReadReceipts ?? false
         entry.mark.set(status, animated: false)
         entry.mark.isHidden = isIncoming || status == .none
 
@@ -462,8 +463,10 @@ private extension ChatGenericFileCell {
         guard !isIncoming else {
             return .none
         }
-        let delivered = (fileModel as? ChatOutgoingFileCellModel)?.delivered ?? false
+        let outgoingModel = fileModel as? ChatOutgoingFileCellModel
+        let delivered = outgoingModel?.delivered ?? false
         return AirFileEntryText.status(state: state, delivered: delivered, personOnline: personOnline)
+            .applyingSeen(outgoingModel?.seen ?? false)
     }
 
     func perform(_ action: AirFileAction) {

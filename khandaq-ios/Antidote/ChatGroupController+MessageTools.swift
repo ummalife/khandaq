@@ -400,17 +400,27 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
         if quoteText(for: message) != nil {
             actions.append(ChatContextMenuAction(title: String(localized: "chat_reply_action"), systemImageName: "arrowshape.turn.up.left") { [weak self] in self?.startReply(to: message) })
         }
-        actions.append(ChatContextMenuAction(title: String(localized: "chat_forward_action"), systemImageName: "arrowshape.turn.up.right") { [weak self] in
-            guard let self = self else { return }
-            let source: UIView = self.tableView.cellForRow(at: indexPath) ?? self.tableView
-            MessageForwarder.presentForwardPicker(for: message, from: self, sourceView: source)
-        })
+        // KHANDAQ (0.2.57, SPEC-community item 6): a file of Khandaq Community that waits for Accept is not
+        // the person's to pass on.
+        if KhandaqCommunity.fileHold(of: message, in: chat) == .none {
+            actions.append(ChatContextMenuAction(title: String(localized: "chat_forward_action"), systemImageName: "arrowshape.turn.up.right") { [weak self] in
+                guard let self = self else { return }
+                let source: UIView = self.tableView.cellForRow(at: indexPath) ?? self.tableView
+                MessageForwarder.presentForwardPicker(for: message, from: self, sourceView: source)
+            })
+        }
         actions.append(ChatContextMenuAction(title: String(localized: "chat_pin_action"), systemImageName: "pin") { [weak self] in
             guard let self = self, let id = message.uniqueIdentifier else { return }
             ChatPinStore.setPinned(messageId: id, forChat: self.chat.uniqueIdentifier)
             self.refreshPinnedBanner()
         })
         actions.append(ChatContextMenuAction(title: String(localized: "group_messages_select_action"), systemImageName: "checkmark.circle") { [weak self] in self?.chatMovableDateCellMorePressed(cell) })
+        // KHANDAQ (0.2.57, SPEC-community item 5): a message or a file someone else sent can be reported.
+        if !message.isOutgoing() {
+            actions.append(ChatContextMenuAction(title: String(localized: "chat_report_action"), systemImageName: "exclamationmark.bubble") { [weak self] in
+                self?.report(message)
+            })
+        }
 
         let editable = cell as? ChatEditable
         let bubbleRectInCell = editable?.menuTargetRect() ?? cell.bounds
@@ -427,5 +437,15 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
                                       self.submanagerGroups.toggleReaction(onGroupMessage: message, emoji: emoji, in: self.chat)
                                   },
                                   onDismiss: { editable?.willHideMenu() })
+    }
+
+    // MARK: Report
+
+    /// The mail about a message someone else wrote here (GroupReport.present).
+    func report(_ message: OCTMessageAbstract) {
+        guard !message.isInvalidated else {
+            return
+        }
+        GroupReport(chat: chat, message: message, groups: submanagerGroups).present(from: self)
     }
 }

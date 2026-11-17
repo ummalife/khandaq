@@ -81,6 +81,188 @@ enum AirSelfNetwork {
     }
 }
 
+// MARK: - The band of no network
+
+/// What the band under the header of the chat list and of a conversation says (KHANDAQ 0.2.57,
+/// SPEC-network part 2).
+enum AirNetworkNoticePhase: Equatable {
+    /// Nothing: there is a network, or it went less than 3 s ago.
+    case hidden
+    /// "No network": the system has said for 3 s in a row that the device has no usable network.
+    case offline
+    /// "Connecting": the network is back and our node is not online yet.
+    case connecting
+    /// "Back online": our node is online again. For 1.5 s, then the band goes.
+    case backOnline
+}
+
+/// Runs the work of the notice later: on the main queue in the app, on a clock of their own in the tests.
+protocol AirNoticeScheduling: AnyObject {
+    /// Runs `work` after `delay` seconds, unless the returned timer is cancelled first.
+    func schedule(after delay: TimeInterval, _ work: @escaping () -> Void) -> AirNoticeTimer
+}
+
+/// A piece of work an AirNoticeScheduling holds until it runs or is cancelled.
+final class AirNoticeTimer {
+    private var cancelWork: (() -> Void)?
+
+    init(cancel: @escaping () -> Void) {
+        cancelWork = cancel
+    }
+
+    func cancel() {
+        cancelWork?()
+        cancelWork = nil
+    }
+}
+
+/// The work of the notice on the main queue, where the session feeds it.
+final class AirMainQueueNoticeScheduler: AirNoticeScheduling {
+    func schedule(after delay: TimeInterval, _ work: @escaping () -> Void) -> AirNoticeTimer {
+        let item = DispatchWorkItem(block: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+        return AirNoticeTimer {
+            item.cancel()
+        }
+    }
+}
+
+/// When the band of no network shows and what it says. The session tells it whether the system reports
+/// a usable network and whether our node is online; the time does the rest:
+/// - no network for 3 s in a row: "No network", for as long as there is none. A shorter drop, such as
+///   a handover from Wi-Fi to mobile data, shows nothing;
+/// - the network back: "Connecting" until our node is online, then "Back online" for 1.5 s, then the
+///   band goes. Our node still not online 30 s after the network came back: the band goes anyway, and
+///   the line under the name and the hint under the field keep saying the state;
+/// - the network gone again while the band is up: "No network" once it has been gone for 3 s;
+/// - our node connecting while there is a network is not this notice: the line under the name says it.
+/// The desktop (Air::NoNetworkNotice) and Android (NoNetworkNotice) follow the same rule.
+final class AirNetworkNotice {
+    static let offlineDelay: TimeInterval = 3
+    static let backOnlineTime: TimeInterval = 1.5
+    static let connectingCap: TimeInterval = 30
+
+    /// Posted on the main queue whenever `phase` changes.
+    static let didChange = Notification.Name("KhandaqAirNetworkNoticeDidChange")
+
+    /// The band of every screen, fed by the session (ActiveSessionCoordinator).
+    static let shared = AirNetworkNotice(scheduler: AirMainQueueNoticeScheduler()) { _, _ in
+        NotificationCenter.default.post(name: AirNetworkNotice.didChange, object: nil)
+    }
+
+    private(set) var phase: AirNetworkNoticePhase = .hidden
+
+    private let scheduler: AirNoticeScheduling
+    private let onChange: (_ previous: AirNetworkNoticePhase, _ current: AirNetworkNoticePhase) -> Void
+    private var networkAvailable = true
+    private var nodeOnline = false
+    private var lossTimer: AirNoticeTimer?
+    private var phaseTimer: AirNoticeTimer?
+    /// How many times the band has come, and the last of them a screen reader heard (takeAnnouncement).
+    private var appearances = 0
+    private var announcedAppearance = 0
+
+    #if DEBUG
+    /// QA only (khandaq://qa/net_notice): the band takes our node for offline, so "Connecting" stays.
+    var qaHoldsNodeOffline = false {
+        didSet {
+            follow(nodeOnline: reportedNodeOnline && !qaHoldsNodeOffline)
+        }
+    }
+    private var reportedNodeOnline = false
+    #endif
+
+    /// `onChange` hears every change of `phase`: the phase before it and the phase now.
+    init(scheduler: AirNoticeScheduling,
+         onChange: @escaping (_ previous: AirNetworkNoticePhase, _ current: AirNetworkNoticePhase) -> Void = { _, _ in }) {
+        self.scheduler = scheduler
+        self.onChange = onChange
+    }
+
+    /// Whether the system reports a usable network now.
+    func networkChanged(available: Bool) {
+        guard available != networkAvailable else {
+            return
+        }
+        networkAvailable = available
+        if available {
+            lossTimer?.cancel()
+            lossTimer = nil
+            if phase == .offline {
+                enter(nodeOnline ? .backOnline : .connecting)
+            }
+        }
+        else if phase != .offline {
+            lossTimer = scheduler.schedule(after: AirNetworkNotice.offlineDelay) { [weak self] in
+                self?.networkStayedAway()
+            }
+        }
+    }
+
+    /// Whether our node is online now.
+    func nodeChanged(online: Bool) {
+        #if DEBUG
+        reportedNodeOnline = online
+        follow(nodeOnline: online && !qaHoldsNodeOffline)
+        #else
+        follow(nodeOnline: online)
+        #endif
+    }
+
+    /// Whether a screen reader is to hear the title now: once each time the band comes, for the first
+    /// screen with the band on it that asks.
+    func takeAnnouncement() -> Bool {
+        guard phase != .hidden, announcedAppearance != appearances else {
+            return false
+        }
+        announcedAppearance = appearances
+        return true
+    }
+
+    private func follow(nodeOnline online: Bool) {
+        guard online != nodeOnline else {
+            return
+        }
+        nodeOnline = online
+        if online && phase == .connecting {
+            enter(.backOnline)
+        }
+    }
+
+    private func networkStayedAway() {
+        lossTimer = nil
+        if !networkAvailable {
+            enter(.offline)
+        }
+    }
+
+    private func enter(_ next: AirNetworkNoticePhase) {
+        phaseTimer?.cancel()
+        phaseTimer = nil
+        switch next {
+            case .backOnline:
+                phaseTimer = scheduler.schedule(after: AirNetworkNotice.backOnlineTime) { [weak self] in
+                    self?.enter(.hidden)
+                }
+            case .connecting:
+                phaseTimer = scheduler.schedule(after: AirNetworkNotice.connectingCap) { [weak self] in
+                    self?.enter(.hidden)
+                }
+            case .hidden, .offline:
+                break
+        }
+        guard next != phase else {
+            return
+        }
+        let previous = phase
+        phase = next
+        if previous == .hidden {
+            appearances += 1
+        }
+        onChange(previous, next)
+    }
+}
+
 /// How the person or group behind a row can be reached right now.
 enum AirReach: Equatable {
     /// Online, the link goes straight to their device.
@@ -156,11 +338,17 @@ enum AirDelivery: Equatable {
     case transit
     case sent
     case delivered
+    /// KHANDAQ (0.2.57): the person has seen it (two teal checks), as the conversation shows it.
+    case seen
 
     /// Our own last text to one person, by the conversation's rule (AirEntryStatus.ofOutgoingText):
-    /// in transit while the person is away, a clock while it is leaving, then sent and delivered.
-    static func ofOutgoingText(isDelivered: Bool, messageId: Int32, personOnline: Bool) -> AirDelivery {
-        switch AirEntryStatus.ofOutgoingText(isSaved: false, isDelivered: isDelivered, messageId: messageId, personOnline: personOnline) {
+    /// in transit while the person is away, a clock while it is leaving, then sent and delivered, and
+    /// seen once the person's read receipt reached past it (AirEntryStatus.applyingSeen).
+    static func ofOutgoingText(isDelivered: Bool, messageId: Int32, personOnline: Bool, seen: Bool = false) -> AirDelivery {
+        let status = AirEntryStatus.ofOutgoingText(isSaved: false, isDelivered: isDelivered, messageId: messageId, personOnline: personOnline)
+        switch status.applyingSeen(seen) {
+            case .seen:
+                return .seen
             case .delivered:
                 return .delivered
             case .sent:
@@ -206,10 +394,15 @@ struct AirEntry: Equatable {
     let avatarData: Data?
     /// AirTone index for the initials, from the friend's public key or the group's chat id.
     let tone: Int
+    /// KHANDAQ (0.2.57): Khandaq Community, which stands above the other conversations.
+    var isPinned = false
 
     var section: AirSectionKind {
         if kind == .saved {
             return .saved
+        }
+        if isPinned {
+            return .pinned
         }
         return reach.isLive ? .live : .away
     }
@@ -255,18 +448,22 @@ struct AirMessageHit: Equatable {
 
 enum AirSectionKind: Equatable {
     case requests
+    /// KHANDAQ (0.2.57, owner 2026-11-16): Khandaq Community, at the top of the conversations wherever it is
+    /// in the list (the filter or the query keeps it) and online or not, as Saved Messages is on the iPad.
+    case pinned
     case live
     case away
     case saved
     case messages
 
-    /// Request cards carry their own label; every other section has a heading with its count.
+    /// Request cards carry their own label, and the pinned row stands alone; every other section has a
+    /// heading with its count.
     var hasHeading: Bool {
-        return self != .requests
+        return self != .requests && self != .pinned
     }
 
     /// The order sections stand in, top to bottom.
-    static let order: [AirSectionKind] = [.requests, .live, .away, .saved, .messages]
+    static let order: [AirSectionKind] = [.requests, .pinned, .live, .away, .saved, .messages]
 }
 
 enum AirItem: Equatable {
@@ -372,7 +569,7 @@ enum AirListBuilder {
             sections.append(AirSnapshot.Section(kind: .requests, items: newestFirst.map { .request($0) }))
         }
 
-        for kind in [AirSectionKind.live, .away, .saved] {
+        for kind in [AirSectionKind.pinned, .live, .away, .saved] {
             let items = visible.filter { $0.section == kind }.sorted(by: rowOrder)
             if !items.isEmpty {
                 sections.append(AirSnapshot.Section(kind: kind, items: items.map { .entry($0) }))

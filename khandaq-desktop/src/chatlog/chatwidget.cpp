@@ -411,6 +411,13 @@ void ChatWidget::mousePressEvent(QMouseEvent* ev)
         clickPos = ev->pos();
         clearSelection();
         authorPressed = authorNameAt(mapToScene(ev->pos()), pressedAuthor);
+    } else {
+        // KHANDAQ (0.2.58): only left clicks add up to a double or a triple click. A right click
+        // opens the chat menu, which takes the release, so the multi-click timer never restarted
+        // and every third right click (Reply among them) selected the text under the pointer.
+        clickCount = 0;
+        lastClickButton = ev->button();
+        return;
     }
 
     if (lastClickButton == ev->button()) {

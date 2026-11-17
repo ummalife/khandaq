@@ -687,6 +687,13 @@ if(APPLE)
     src/platform/mediaaccess_osx.mm)
 endif()
 
+# Tox keeps its connections while the window is hidden or covered: macOS puts no App Nap on it.
+if(APPLE)
+  set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
+    src/platform/appnap.h
+    src/platform/appnap_osx.mm)
+endif()
+
 if(KHANDAQ_SCREENSHOT_HOOK)
   add_definitions(-DKHANDAQ_SCREENSHOT_HOOK=1)
   set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}

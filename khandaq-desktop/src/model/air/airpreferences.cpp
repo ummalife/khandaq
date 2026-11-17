@@ -68,6 +68,19 @@ QString autoAcceptFolder(const QString& contactFolder, bool autoSave, const QStr
     return globalFolder.isEmpty() ? downloads : globalFolder;
 }
 
+QString saveQuestionFolder(const QString& globalFolder, const QString& downloads,
+                           const QString& home,
+                           const std::function<bool(const QString&)>& isFolder)
+{
+    if (!globalFolder.isEmpty() && isFolder(globalFolder)) {
+        return globalFolder;
+    }
+    if (!downloads.isEmpty() && isFolder(downloads)) {
+        return downloads;
+    }
+    return home;
+}
+
 QString folderLabel(const QString& folder, const QString& downloads, const QString& downloadsName,
                     const QString& home, bool tildeForHome)
 {

@@ -25,6 +25,9 @@
 #include <QApplication>
 #include <QCoreApplication>
 #include <QEvent>
+#include <QGraphicsProxyWidget>
+#include <QGraphicsScene>
+#include <QGraphicsView>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -320,6 +323,37 @@ void AirFocus::followIntoView()
             }
         }
     });
+}
+
+// ---- AirWindow ----
+
+QWidget* AirWindow::of(const QWidget* widget)
+{
+    // KHANDAQ (0.2.57): an entry of a transcript lives in the scene of the transcript's view, so
+    // its window() is the entry itself. A dialog given that window was a child of the small entry:
+    // cut to its bounds, its OK out of reach, and the entry took no clicks any more.
+    QWidget* window = widget ? widget->window() : nullptr;
+    // One round per scene; a view inside a proxy of its own is followed out to its window too. The
+    // bound only stops a scene that would show itself.
+    constexpr int deepestScene = 8;
+    for (int depth = 0; window && depth <= deepestScene; ++depth) {
+        const QGraphicsProxyWidget* const proxy = window->graphicsProxyWidget();
+        if (!proxy) {
+            return window;
+        }
+        const QGraphicsScene* const scene = proxy->scene();
+        const QList<QGraphicsView*> views = scene ? scene->views() : QList<QGraphicsView*>();
+        // The view on screen, when the scene has several.
+        QGraphicsView* shown = views.isEmpty() ? nullptr : views.first();
+        for (QGraphicsView* const view : views) {
+            if (view->isVisible()) {
+                shown = view;
+                break;
+            }
+        }
+        window = shown ? shown->window() : nullptr;
+    }
+    return nullptr;
 }
 
 // ---- AirCoveredFocus ----

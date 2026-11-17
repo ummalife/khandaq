@@ -100,6 +100,7 @@ private slots:
     void neverKeepsTheLimitForLater();
     void filesFromAContactGoToTheirFolder();
     void filesGoToTheChosenFolderElseDownloads();
+    void theSaveQuestionOpensInAFolderThatIsThere();
     void neverLeavesFilesWaiting();
     void aNewInstallationLetsFilesWait();
     void theLimitCountsTheFileItself();
@@ -168,6 +169,25 @@ void TestAirPreferences::filesGoToTheChosenFolderElseDownloads()
     QCOMPARE(Air::autoAcceptFolder(QString(), true, globalFolder, downloads, 0, megabyte),
              globalFolder);
     QCOMPARE(Air::autoAcceptFolder(QString(), true, QString(), downloads, 0, megabyte), downloads);
+}
+
+void TestAirPreferences::theSaveQuestionOpensInAFolderThatIsThere()
+{
+    QSet<QString> folders{globalFolder, downloads, home};
+    const auto isFolder = [&folders](const QString& candidate) {
+        return folders.contains(candidate);
+    };
+    QCOMPARE(Air::saveQuestionFolder(globalFolder, downloads, home, isFolder), globalFolder);
+    // Nothing chosen in the settings: downloads.
+    QCOMPARE(Air::saveQuestionFolder(QString(), downloads, home, isFolder), downloads);
+    // The chosen folder is gone (or came from another computer): downloads, not the folder the app
+    // runs in.
+    folders.remove(globalFolder);
+    QCOMPARE(Air::saveQuestionFolder(globalFolder, downloads, home, isFolder), downloads);
+    // No downloads folder either: home.
+    folders.remove(downloads);
+    QCOMPARE(Air::saveQuestionFolder(globalFolder, downloads, home, isFolder), home);
+    QCOMPARE(Air::saveQuestionFolder(QString(), QString(), home, isFolder), home);
 }
 
 void TestAirPreferences::neverLeavesFilesWaiting()

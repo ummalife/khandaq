@@ -22,6 +22,8 @@
 #include <QString>
 #include <QStringList>
 
+#include <functional>
+
 // ---- Settings (E18): the rules behind the choices the settings page offers ----------------------
 
 namespace Air {
@@ -74,6 +76,15 @@ AttachmentRule attachmentRule(AttachmentMode mode, qint64 previousMaxSize);
  */
 QString autoAcceptFolder(const QString& contactFolder, bool autoSave, const QString& globalFolder,
                          const QString& downloads, qint64 maxSize, qint64 fileSize);
+/**
+ * The folder the question where to save a file opens in, after Accept: the folder of the settings
+ * while it is one (isFolder), else downloads while it is one, else home. A setting left empty or a
+ * folder that is gone opened the question in the folder the app runs in, which is the root of the
+ * disk for an app started from the macOS Finder, where nothing can be written.
+ */
+QString saveQuestionFolder(const QString& globalFolder, const QString& downloads,
+                           const QString& home,
+                           const std::function<bool(const QString&)>& isFolder);
 /**
  * How the page says the folder files are saved to: downloadsName (the name of the downloads folder
  * in the language of the interface) when it is that folder or none is chosen, else its path, the

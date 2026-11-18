@@ -23,8 +23,6 @@ private struct Constants {
 
     static let ResetPanAnimationDuration = 0.3
 
-    static let MaxImageSizeToShowInline: OCTToxFileSize = 20 * 1024 * 1024
-
     static let MaxInlineImageSide: CGFloat = LoadingImageView.Constants.ImageButtonSize * UIScreen.main.scale
 }
 
@@ -962,7 +960,7 @@ extension ChatPrivateController: UITableViewDataSource {
                     outgoingModel.previousStatus = statusMemory[id]
                     statusMemory[id] = outgoingModel.status
                 }
-                outgoingModel.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
+                outgoingModel.reactionChips = ChatReactionsFormat.chips(from: message.reactionsJSON)
                 attachReplyQuoteHandler(to: outgoingModel)
 
                 // KHANDAQ (#208): own text with a msgV3 hash is editable — but not replies (would
@@ -1017,7 +1015,7 @@ extension ChatPrivateController: UITableViewDataSource {
                                                + "dateInterval:\n" + s8 + "\n"
                 }
 
-                incomingModel.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
+                incomingModel.reactionChips = ChatReactionsFormat.chips(from: message.reactionsJSON)
                 attachReplyQuoteHandler(to: incomingModel)
 
                 // KHANDAQ (#208/#H2): the peer can edit their own message → the cell renders a small dim
@@ -1143,12 +1141,12 @@ extension ChatPrivateController: UITableViewDelegate {
     }
 
     /// The size of the preview of a photo or a video that can be shown inline: ours, or theirs once it
-    /// is here, and not larger than an inline preview may be.
+    /// is here. Of any size (0.2.61): the preview reads one frame or a downsampled photo, never the whole
+    /// file, and a video of 20 MB or more had been a bare file row instead.
     func inlinePreviewSize(for message: OCTMessageAbstract) -> CGSize? {
         guard let messageFile = message.messageFile,
               message.isOutgoing() || messageFile.fileType == .ready,
-              let file = messageFile.filePath(),
-              messageFile.fileSize < Constants.MaxImageSizeToShowInline else {
+              let file = messageFile.filePath() else {
             return nil
         }
         return inlineMediaSize(forFileAt: file, messageFile: messageFile)
@@ -1212,14 +1210,13 @@ extension ChatPrivateController: UITableViewDelegate {
     }
 
     /// KHANDAQ (#122): true only if the file message is actually rendered inline (downloaded/ready,
-    /// recognized media, within the inline size limit), as inlinePreviewSize decides. A caption is
+    /// recognized media), as inlinePreviewSize decides. A caption is
     /// merged into its file ONLY when this holds; otherwise the caption would vanish behind a failed /
     /// generic-file bubble.
     func isFileDisplayedInline(_ fileMessage: OCTMessageAbstract) -> Bool {
         guard let messageFile = fileMessage.messageFile,
               fileMessage.isOutgoing() || messageFile.fileType == .ready,
               let path = messageFile.filePath(),
-              messageFile.fileSize < Constants.MaxImageSizeToShowInline,
               inlineMediaSize(forFileAt: path, messageFile: messageFile) != nil else {
             return false
         }
@@ -1320,11 +1317,8 @@ extension ChatPrivateController: UITableViewDelegate {
                 result = CGSize(width: abs(transformed.width), height: abs(transformed.height))
             }
         }
-        else if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-                let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-                let width = props[kCGImagePropertyPixelWidth] as? CGFloat,
-                let height = props[kCGImagePropertyPixelHeight] as? CGFloat {
-            result = CGSize(width: width, height: height)
+        else if let size = ChatFileMediaLoader.imagePixelSize(at: path) {
+            result = size
         }
 
         guard result.width > 0, result.height > 0 else {
@@ -2660,7 +2654,7 @@ private extension ChatPrivateController {
         // KHANDAQ (redesign stage 3, E8): in the language chosen in the app, which ByteCountFormatter ignores.
         model.fileSize = AirByteSize.text(message.messageFile!.fileSize)
         model.fileUTI = message.messageFile!.fileUTI
-        model.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
+        model.reactionChips = ChatReactionsFormat.chips(from: message.reactionsJSON)
         // KHANDAQ (redesign stage 3, E8): the preview box takes its size before the image loads, so the
         // row sizes itself once; the person's name and presence say what a file of ours waits for.
         model.previewSize = inlinePreviewSize(for: message)
@@ -2834,11 +2828,13 @@ private extension ChatPrivateController {
             return
         }
 
-        guard let file = messageFile.filePath() else {
+        // Only a file that is all here, as in a group (KHANDAQ #15): a photo or a video still arriving
+        // would show a part of itself, and inlinePreviewSize gave it no box.
+        guard message.isOutgoing() || messageFile.fileType == .ready else {
             return
         }
 
-        if messageFile.fileSize >= Constants.MaxImageSizeToShowInline {
+        guard let file = messageFile.filePath() else {
             return
         }
 
@@ -2910,21 +2906,10 @@ private extension ChatPrivateController {
 
     func loadImageForCellAtIndexPath(_ indexPath: IndexPath, fromFile: String) {
         DispatchQueue.global(qos: .default).async { [weak self] in
-            guard var image = UIImage(contentsOfFile: fromFile) else {
+            guard let image = ChatFileMediaLoader.downsampledImage(at: fromFile,
+                                                                   maxPixelSide: Constants.MaxInlineImageSide) else {
                 return
             }
-
-            var size = image.size
-            guard size.width > 0 || size.height > 0 else {
-                return
-            }
-
-            let delta = (size.width > size.height) ? (Constants.MaxInlineImageSide / size.width) : (Constants.MaxInlineImageSide / size.height)
-
-            size.width *= delta
-            size.height *= delta
-
-            image = image.scaleToSize(size)
             self?.imageCache.setObject(image, forKey: fromFile as AnyObject)
 
             DispatchQueue.main.async {

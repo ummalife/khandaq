@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import AVFoundation
+import ImageIO
 import MobileCoreServices
 import PhotosUI
 import UIKit
@@ -643,14 +644,27 @@ enum PickedMediaLoader {
     }
 }
 
-/// Background thumbnail + duration for inline video bubbles in chat.
+/// Background thumbnail + duration for inline video bubbles in chat, and the reading of a photo's size
+/// and preview. Neither depends on how large the file is.
 enum ChatFileMediaLoader {
     private static let queue = DispatchQueue(label: "khandaq.chat.filemedia", qos: .utility)
-    private static let imageCache = NSCache<NSString, UIImage>()
+    /// The preview of each video as loadPreview read it: its first frame and its length together. The
+    /// cache had kept the frame alone, so a video bound again from it (a reaction, a message coming in,
+    /// a scroll back) lost the length in its corner (0.2.61).
+    private static let previewCache = NSCache<NSString, CachedPreview>()
 
     struct Preview {
         let image: UIImage
         let durationText: String?
+    }
+
+    /// A preview as NSCache holds it: an object.
+    private final class CachedPreview {
+        let preview: Preview
+
+        init(_ preview: Preview) {
+            self.preview = preview
+        }
     }
 
     static func isVideoFile(uti: String?, fileName: String?) -> Bool {
@@ -675,17 +689,51 @@ enum ChatFileMediaLoader {
         }
     }
 
-    static func cachedPreview(for path: String) -> Preview? {
-        guard let image = imageCache.object(forKey: path as NSString) else {
+    /// The pixel size of a photo as it is seen: a photo turned by its EXIF orientation (a portrait taken
+    /// with the phone on its side) is as tall as it is shown, not as it is stored. Reads the header only.
+    static func imagePixelSize(at path: String) -> CGSize? {
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, options),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, options) as? [CFString: Any],
+              let width = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
+              let height = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue,
+              width > 0, height > 0 else {
             return nil
         }
-        return Preview(image: image, durationText: nil)
+        // Orientations 5 to 8 turn the picture by a quarter.
+        let orientation = (props[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+        return (5...8).contains(orientation) ? CGSize(width: height, height: width) : CGSize(width: width, height: height)
+    }
+
+    /// A photo of any size read down to `maxPixelSide` on its longer side and turned by its EXIF
+    /// orientation. ImageIO decodes only what the smaller picture needs, so a camera original of tens of
+    /// megabytes costs the memory of its preview, where UIImage(contentsOfFile:) decoded all of it.
+    static func downsampledImage(at path: String, maxPixelSide: CGFloat) -> UIImage? {
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard maxPixelSide >= 1,
+              let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, sourceOptions) else {
+            return nil
+        }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: Int(maxPixelSide.rounded(.up)),
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return UIImage(cgImage: image)
+    }
+
+    static func cachedPreview(for path: String) -> Preview? {
+        return previewCache.object(forKey: path as NSString)?.preview
     }
 
     static func loadPreview(at path: String, completion: @escaping (Preview?) -> Void) {
-        if let cached = imageCache.object(forKey: path as NSString) {
+        if let cached = cachedPreview(for: path) {
             DispatchQueue.main.async {
-                completion(Preview(image: cached, durationText: nil))
+                completion(cached)
             }
             return
         }
@@ -717,11 +765,10 @@ enum ChatFileMediaLoader {
                 return
             }
 
-            imageCache.setObject(image, forKey: path as NSString)
-
             let seconds = CMTimeGetSeconds(asset.duration)
             let durationText = seconds.isFinite && seconds > 0 ? String(timeInterval: seconds) : nil
             let preview = Preview(image: image, durationText: durationText)
+            previewCache.setObject(CachedPreview(preview), forKey: path as NSString)
 
             DispatchQueue.main.async {
                 completion(preview)

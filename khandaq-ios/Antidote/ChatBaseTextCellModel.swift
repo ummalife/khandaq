@@ -40,24 +40,48 @@ struct LocationMessage {
     }
 }
 
-/// KHANDAQ (#192): renders OCTMessageAbstract.reactionsJSON ([{"e":emoji,"p":[actors]}]) as the
-/// compact chips line shown under the bubble text, e.g. "❤️ 2  👍". Returns nil when empty.
+/// KHANDAQ (0.2.61): one reaction under an entry as its chip shows it: the emoji, how many people chose
+/// it, and whether we are one of them.
+struct AirReactionChip: Equatable {
+    let emoji: String
+    let count: Int
+    let own: Bool
+
+    /// What the chip says: the emoji, with the count once more than one person chose it.
+    var text: String {
+        return count > 1 ? "\(emoji) \(count)" : emoji
+    }
+}
+
+/// KHANDAQ (#192): reads OCTMessageAbstract.reactionsJSON ([{"e":emoji,"p":[actors]}]) for the chips under
+/// an entry (AirReactionChipsView), and says them in words, e.g. "❤️ 2  👍".
 enum ChatReactionsFormat {
-    static func display(from reactionsJSON: String?) -> String? {
+    /// The actor that stands for us in reactionsJSON.
+    static let ownActor = "-OWN-"
+
+    /// The reactions in their order, each with the people who chose it; none for none.
+    static func chips(from reactionsJSON: String?) -> [AirReactionChip] {
         guard let json = reactionsJSON, !json.isEmpty,
               let data = json.data(using: .utf8),
               let arr = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else {
-            return nil
+            return []
         }
-        var parts: [String] = []
-        for entry in arr {
-            guard let emoji = entry["e"] as? String,
+        return arr.compactMap { entry in
+            guard let emoji = entry["e"] as? String, !emoji.isEmpty,
                   let actors = entry["p"] as? [String], !actors.isEmpty else {
-                continue
+                return nil
             }
-            parts.append(actors.count > 1 ? "\(emoji) \(actors.count)" : emoji)
+            return AirReactionChip(emoji: emoji, count: actors.count, own: actors.contains(ownActor))
         }
-        return parts.isEmpty ? nil : parts.joined(separator: "  ")
+    }
+
+    /// The chips in words, "❤️ 2  👍"; nil for none.
+    static func display(of chips: [AirReactionChip]) -> String? {
+        return chips.isEmpty ? nil : chips.map { $0.text }.joined(separator: "  ")
+    }
+
+    static func display(from reactionsJSON: String?) -> String? {
+        return display(of: chips(from: reactionsJSON))
     }
 
     /// The emoji the local user currently reacted with (the "-OWN-" actor), or nil.
@@ -68,7 +92,7 @@ enum ChatReactionsFormat {
             return nil
         }
         for entry in arr {
-            if let actors = entry["p"] as? [String], actors.contains("-OWN-") {
+            if let actors = entry["p"] as? [String], actors.contains(ownActor) {
                 return entry["e"] as? String
             }
         }
@@ -89,8 +113,12 @@ class ChatBaseTextCellModel: ChatMovableDateCellModel {
     /// tinted with the per-peer color. 0 = no header line.
     var senderHeaderLength: Int = 0
     var senderColor: UIColor?
-    /// KHANDAQ (#192): compact reactions line under the text ("❤️ 2  👍"), nil = none.
-    var reactionsDisplay: String?
+    /// KHANDAQ (#192, 0.2.61): the reactions under the text, as chips; none for none.
+    var reactionChips: [AirReactionChip] = []
+    /// The reactions in words ("❤️ 2  👍"), nil for none: what VoiceOver says of the chips.
+    var reactionsDisplay: String? {
+        return ChatReactionsFormat.display(of: reactionChips)
+    }
     /// KHANDAQ (#208): own outgoing text message that can be edited (msgV3 hash present, not a reply).
     var canEdit: Bool = false
     /// KHANDAQ (#208): message was edited — render an «изменено» marker after the text.

@@ -11,7 +11,6 @@ import AVFoundation
 
 private struct Constants {
     static let MessagesPortionSize = 50
-    static let MaxImageSizeToShowInline: OCTToxFileSize = 20 * 1024 * 1024
     static let MaxInlineImageSide: CGFloat = LoadingImageView.Constants.ImageButtonSize * UIScreen.main.scale
 }
 
@@ -1033,7 +1032,7 @@ extension ChatGroupController: UITableViewDataSource {
         model.dateString = dateText
         model.dateSeparator = daySeparatorString(forDisplayIndex: indexPath.row)
         model.transcriptMarks = true
-        model.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
+        model.reactionChips = ChatReactionsFormat.chips(from: message.reactionsJSON)
         // KHANDAQ (#208/#H2): «edited» is a small dim suffix drawn by the cell, not appended text.
         model.edited = message.edited
         model.timeText = dateText
@@ -1180,13 +1179,13 @@ extension ChatGroupController: UITableViewDelegate {
     }
 
     /// The size of the preview of a photo or a video that can be shown inline: ours, or theirs once it
-    /// is here, and not larger than an inline preview may be.
+    /// is here. Of any size (0.2.61): the preview reads one frame or a downsampled photo, never the whole
+    /// file, and a video of 20 MB or more had been a bare file row instead.
     func inlinePreviewSize(for message: OCTMessageAbstract) -> CGSize? {
         guard let messageFile = message.messageFile,
               message.isOutgoing() || messageFile.fileType == .ready,
               KhandaqCommunity.fileHold(of: message, in: chat) == .none,
-              let file = messageFile.filePath(),
-              messageFile.fileSize < Constants.MaxImageSizeToShowInline else {
+              let file = messageFile.filePath() else {
             return nil
         }
         return inlineMediaSize(forFileAt: file, messageFile: messageFile)
@@ -1250,7 +1249,7 @@ extension ChatGroupController: UITableViewDelegate {
     }
 
     /// KHANDAQ (#122): true only if the file message is actually rendered inline (downloaded/ready,
-    /// recognized media, within the inline size limit) — mirrors the heightForRowAt gate. A caption is
+    /// recognized media) — mirrors the heightForRowAt gate. A caption is
     /// merged into its file ONLY when this holds; otherwise it would vanish behind a failed/generic-file
     /// bubble.
     func isFileDisplayedInline(_ fileMessage: OCTMessageAbstract) -> Bool {
@@ -1258,7 +1257,6 @@ extension ChatGroupController: UITableViewDelegate {
               fileMessage.isOutgoing() || messageFile.fileType == .ready,
               KhandaqCommunity.fileHold(of: fileMessage, in: chat) == .none,
               let path = messageFile.filePath(),
-              messageFile.fileSize < Constants.MaxImageSizeToShowInline,
               inlineMediaSize(forFileAt: path, messageFile: messageFile) != nil else {
             return false
         }
@@ -1440,7 +1438,7 @@ private extension ChatGroupController {
         // KHANDAQ (redesign stage 3, E8): in the language chosen in the app, which ByteCountFormatter ignores.
         model.fileSize = AirByteSize.text(messageFile.fileSize)
         model.fileUTI = inferredFileUTI(for: messageFile)
-        model.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
+        model.reactionChips = ChatReactionsFormat.chips(from: message.reactionsJSON)
         // KHANDAQ (redesign stage 3, E8): the preview box takes its size before the image loads, so the
         // row sizes itself once; the bar starts where the transfer is.
         model.previewSize = inlinePreviewSize(for: message)
@@ -1769,10 +1767,6 @@ private extension ChatGroupController {
             return
         }
 
-        if messageFile.fileSize >= Constants.MaxImageSizeToShowInline {
-            return
-        }
-
         let uti = inferredFileUTI(for: messageFile)
         let fileName = messageFile.fileName
         let fileCell = (cell as? ChatIncomingFileCell) ?? (cell as? ChatOutgoingFileCell)
@@ -1825,11 +1819,8 @@ private extension ChatGroupController {
                 result = CGSize(width: abs(transformed.width), height: abs(transformed.height))
             }
         }
-        else if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-                let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-                let width = props[kCGImagePropertyPixelWidth] as? CGFloat,
-                let height = props[kCGImagePropertyPixelHeight] as? CGFloat {
-            result = CGSize(width: width, height: height)
+        else if let size = ChatFileMediaLoader.imagePixelSize(at: path) {
+            result = size
         }
 
         // Only cache a real measurement; a transient failure (e.g. file still downloading) must not
@@ -1905,23 +1896,10 @@ private extension ChatGroupController {
 
     func loadImageForCellAtIndexPath(_ indexPath: IndexPath, fromFile: String) {
         DispatchQueue.global(qos: .default).async { [weak self] in
-            guard var image = UIImage(contentsOfFile: fromFile) else {
+            guard let image = ChatFileMediaLoader.downsampledImage(at: fromFile,
+                                                                   maxPixelSide: Constants.MaxInlineImageSide) else {
                 return
             }
-
-            var size = image.size
-            guard size.width > 0 || size.height > 0 else {
-                return
-            }
-
-            let delta = (size.width > size.height)
-                ? (Constants.MaxInlineImageSide / size.width)
-                : (Constants.MaxInlineImageSide / size.height)
-
-            size.width *= delta
-            size.height *= delta
-
-            image = image.scaleToSize(size)
             self?.imageCache.setObject(image, forKey: fromFile as AnyObject)
 
             DispatchQueue.main.async {

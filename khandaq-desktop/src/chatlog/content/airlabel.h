@@ -172,11 +172,15 @@ private:
 };
 
 /**
- * What happened to an entry after it came (stage 3, item 10), under its text as on iOS: the
- * reactions in the label text and ink-2, each emoji with its count once more than one person chose
- * it ("❤️ 2  👍"), then "edited" in the caption and ink-3, a pixel lower. An emoji takes the
- * picture messages give it, from the smiley pack, so a heart is the same heart in both. An entry
- * with neither takes no room.
+ * What happened to an entry after it came (stage 3, item 10), under its text: the reactions, then
+ * "edited" in the caption and ink-3, a pixel lower. A reaction is a chip, as the phones draw it
+ * (AirTranscript.styleReactionChip on Android, AirReactionChipsView on iOS): its emoji and, once more
+ * than one person chose it, the count in the caption and ink, on the raised plate with a hairline
+ * and round ends. The chips follow each other from the start edge on one line and stop where the
+ * column ends. An emoji takes the picture messages give it, from the smiley pack, so a heart is the
+ * same heart in both; one the pack has no picture of is set in the colour emoji font of the system,
+ * as messages set the sequences the pack has none of (0.2.61: it was the text font's glyph in ink-2,
+ * a small grey ✍ for the ✍️ of an iPhone). An entry with neither takes no room.
  */
 class AirEntryNotes : public ChatLineContent
 {
@@ -187,6 +191,9 @@ public:
 
     /** Returns whether the room it takes changed. */
     bool setNotes(const Air::EntryMarks& marks);
+
+    /** The plates of the reactions that fit in the width, in this item, from the start edge. */
+    QVector<QRectF> plates() const;
 
     void setWidth(float width) override;
     QRectF boundingRect() const override;

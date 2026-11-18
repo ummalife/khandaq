@@ -4219,8 +4219,14 @@ public class HelperGroup
         {
             Log.w(TAG, "leave_group_with_notice:EE:" + e.getMessage());
         }
-        if (GroupPendingLeaves.noticeWasQueued(sent, tox_group_peer_count(group_num))
-            && record_pending_group_leave(group_num, part_message))
+        // KHANDAQ (0.2.59): with no notice to wait for (no other member, or its send failed) the group is left on the
+        // tox thread too, at its next pass, not here. toxcore deletes a group only in a tox_iterate and saves it with
+        // the profile until then, and this thread cannot tell which iterate follows its tox_group_leave: left here,
+        // the profile the leave or the delete saved at once still held the group, and an app killed before the next
+        // save had it back at the next start. The tox thread saves the profile after the iterate that deleted it
+        // (run_pending_group_leaves), and the persisted list leaves it at the next start until then.
+        final boolean notice_queued = GroupPendingLeaves.noticeWasQueued(sent, tox_group_peer_count(group_num));
+        if (record_pending_group_leave(group_num, part_message, notice_queued ? GroupPendingLeaves.LEAVE_DELAY_MS : 0L))
         {
             return;
         }
@@ -4238,11 +4244,12 @@ public class HelperGroup
         return GroupPendingLeaves.holdsGroupNumber(group_number);
     }
 
-    private static boolean record_pending_group_leave(final long group_num, final String part_message)
+    private static boolean record_pending_group_leave(final long group_num, final String part_message,
+                                                      final long delay_ms)
     {
         final long now = System.currentTimeMillis();
         final String group_identifier = tox_group_by_groupnum__wrapper(group_num);
-        if (!GroupPendingLeaves.record(group_num, group_identifier, part_message, now))
+        if (!GroupPendingLeaves.record(group_num, group_identifier, part_message, now, delay_ms))
         {
             return false;
         }
@@ -4250,7 +4257,7 @@ public class HelperGroup
         // The battery saving mode must not put the tox loop to sleep before the leave is due.
         global_last_activity_for_battery_savings_ts = now;
         HelperGeneric.logI(TAG, "pending_group_leave:recorded gn=" + group_num + " id="
-                + group_identifier_short(group_identifier, false) + " due_in_ms=" + GroupPendingLeaves.LEAVE_DELAY_MS);
+                + group_identifier_short(group_identifier, false) + " due_in_ms=" + delay_ms);
         return true;
     }
 

@@ -19,7 +19,8 @@ import java.util.TreeSet;
  * tox_iterate after tox_group_leave (group_chats.c, do_gc -> group_delete), so the notice and the QUIT had one send
  * attempt each: toxcore resends an unconfirmed lossless packet only later (group_connection.c, gcc_resend_packets).
  * The app now sends the notice, drops the group from its list and database at once, and leaves it in toxcore
- * {@link #LEAVE_DELAY_MS} later.
+ * {@link #LEAVE_DELAY_MS} later. KHANDAQ (0.2.59): with no notice to wait for, at the next pass of the tox thread,
+ * which saves the profile only once toxcore deleted the group.
  *
  * <p>A group is held here in two stages, and the app treats it as gone in both: it ignores the group's callbacks,
  * enumerations of the tox groups skip it, and a lookup by its chat id finds nothing.
@@ -137,8 +138,19 @@ final class GroupPendingLeaves
     /** The notice is out: the group waits {@link #LEAVE_DELAY_MS} for its leave. False if it cannot be held. */
     static boolean record(final long groupNumber, final String chatId, final String partMessage, final long nowMs)
     {
+        return record(groupNumber, chatId, partMessage, nowMs, LEAVE_DELAY_MS);
+    }
+
+    /**
+     * The group waits {@code delayMs} for its leave. KHANDAQ (0.2.59): 0 when there is no notice to wait for; the
+     * leave is still made on the tox thread ({@link #takeDue}), which saves the profile only after the tox_iterate
+     * that deleted the group. False if it cannot be held.
+     */
+    static boolean record(final long groupNumber, final String chatId, final String partMessage, final long nowMs,
+                          final long delayMs)
+    {
         final String k = key(chatId);
-        if (groupNumber < 0 || k == null)
+        if (groupNumber < 0 || k == null || delayMs < 0)
         {
             return false;
         }
@@ -148,7 +160,7 @@ final class GroupPendingLeaves
             {
                 return false;
             }
-            WAITING.put(k, new Leave(groupNumber, k, partMessage, nowMs + LEAVE_DELAY_MS));
+            WAITING.put(k, new Leave(groupNumber, k, partMessage, nowMs + delayMs));
             updateHeld();
             return true;
         }

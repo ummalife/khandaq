@@ -339,7 +339,7 @@ class ChatFileMediaLoaderTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    /// A JPEG of `width` × `height` stored pixels with the EXIF `orientation`.
+    /// A JPEG of `width` by `height` stored pixels with the EXIF `orientation`.
     private func jpeg(width: Int, height: Int, orientation: Int) throws -> String {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1

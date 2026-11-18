@@ -67,12 +67,157 @@ enum AirEntryMetrics {
     }
 }
 
+/// KHANDAQ (0.2.58): the author over the first entry of a run. Where the model gives it a tap
+/// (ChatMovableDateCellModel.onAuthorTap: the other members of a group), the name is a button: a tap on it,
+/// or a double tap with VoiceOver, opens the member. Anywhere else it is a plain label, as before.
+///
+/// The touch takes the words of the name, a margin to each side, at least a touch target's width, and the
+/// room of the entry above the name, so the layout stays as it is. It never reaches down into the message
+/// under the name, whose quote, links, mentions and media keep their taps; a long press, the swipe to reply
+/// and the scroll of the log win over it as over any tap. While the log selects messages it does nothing,
+/// and a tap on it selects the row.
+final class AirAuthorLabel: UILabel {
+    /// The margin to each side of the words.
+    static let touchMargin: CGFloat = KQSpace.x8
+
+    private let tap = UITapGestureRecognizer()
+    private var onTap: ((UIView) -> Void)?
+    private var spokenName = ""
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        tap.addTarget(self, action: #selector(tapped))
+        addGestureRecognizer(tap)
+        opens(nil, name: "")
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// Gives the name the tap of the entry it shows, or none; `name` is what VoiceOver says for the button,
+    /// the author alone (a stacked head starts with the time).
+    func opens(_ handler: ((UIView) -> Void)?, name: String) {
+        onTap = handler
+        spokenName = name
+        isUserInteractionEnabled = handler != nil
+        accessibilityTraits = handler != nil ? UIAccessibilityTraitButton : UIAccessibilityTraitNone
+        accessibilityHint = handler != nil ? String(localized: "air_group_member_hint") : nil
+    }
+
+    /// Whether the name opens the member now: it has a tap, it shows, and the log is not selecting.
+    var opensMember: Bool {
+        return onTap != nil && !isHidden && enclosingCell?.isEditing != true
+    }
+
+    /// Where the words of the name stand, in the label's coordinates: the label runs to the far end of the
+    /// row, the name only as far as it is long.
+    var nameRect: CGRect {
+        let words = sizeThatFits(CGSize(width: bounds.width, height: CGFloat.greatestFiniteMagnitude))
+        let width = min(ceil(words.width), bounds.width)
+        let x: CGFloat
+        switch resolvedAlignment {
+            case .right:
+                x = bounds.maxX - width
+            case .center:
+                x = bounds.midX - width / 2
+            default:
+                x = bounds.minX
+        }
+        return CGRect(x: x, y: bounds.minY, width: width, height: bounds.height)
+    }
+
+    /// Where a finger opens the member, in the label's coordinates.
+    var touchRect: CGRect {
+        var rect = nameRect.insetBy(dx: -AirAuthorLabel.touchMargin, dy: 0)
+        if rect.width < KQSize.targetIos {
+            rect = rect.insetBy(dx: -(KQSize.targetIos - rect.width) / 2, dy: 0)
+        }
+        rect.origin.y -= AirEntryMetrics.entryInset
+        rect.size.height += AirEntryMetrics.entryInset
+        return rect
+    }
+
+    /// Where the words stand: `.natural` puts them at the start of the layout's direction.
+    private var resolvedAlignment: NSTextAlignment {
+        guard textAlignment == .natural else {
+            return textAlignment
+        }
+        return effectiveUserInterfaceLayoutDirection == .rightToLeft ? .right : .left
+    }
+
+    private var enclosingCell: UITableViewCell? {
+        var view = superview
+        while let current = view {
+            if let cell = current as? UITableViewCell {
+                return cell
+            }
+            view = current.superview
+        }
+        return nil
+    }
+
+    /// Not the member's button now, the name lets every touch through, as a label does. Nor while VoiceOver
+    /// runs: it opens the member from the button's own element (accessibilityActivate), and the taps it makes
+    /// in the middle of an entry, for the entry, must not land on the name.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        return opensMember && !UIAccessibilityIsVoiceOverRunning() && touchRect.contains(point)
+    }
+
+    @objc private func tapped() {
+        guard opensMember else {
+            return
+        }
+        onTap?(self)
+    }
+
+    // MARK: Accessibility
+
+    /// An element of its own only while it opens the member: a plain name is said with its entry.
+    override var isAccessibilityElement: Bool {
+        get {
+            return opensMember
+        }
+        set {}
+    }
+
+    override var accessibilityLabel: String? {
+        get {
+            return spokenName.isEmpty ? super.accessibilityLabel : spokenName
+        }
+        set {
+            super.accessibilityLabel = newValue
+        }
+    }
+
+    /// The button is where a finger opens the member, not the whole width of the row.
+    override var accessibilityFrame: CGRect {
+        get {
+            guard let window = window else {
+                return super.accessibilityFrame
+            }
+            return window.convert(convert(touchRect, to: nil), to: window.screen.coordinateSpace)
+        }
+        set {
+            super.accessibilityFrame = newValue
+        }
+    }
+
+    override func accessibilityActivate() -> Bool {
+        guard opensMember, let onTap = onTap else {
+            return false
+        }
+        onTap(self)
+        return true
+    }
+}
+
 /// The frame a file or a call entry shares with a text (AirEntryTextCell): the time in the time column,
 /// the author over the first entry of a run, and the status mark of our own entries at the far end,
 /// around the body the cell puts between them.
 final class AirEntryFrame {
     let timeLabel = UILabel()
-    let authorLabel = UILabel()
+    let authorLabel = AirAuthorLabel()
     let mark = AirStatusMarkView()
     private var timeWidthConstraint: Constraint!
     private var timeTopConstraint: Constraint!
@@ -97,7 +242,6 @@ final class AirEntryFrame {
         authorLabel.adjustsFontForContentSizeCategory = true
         authorLabel.numberOfLines = 2
         authorLabel.lineBreakMode = .byTruncatingTail
-        authorLabel.isAccessibilityElement = false
     }
 
     /// Puts the frame around `body`, which the cell has added to its movable content view.
@@ -168,6 +312,7 @@ final class AirEntryFrame {
         if let author = model.authorText, !author.isEmpty {
             AirEntryMetrics.show(author: author, color: model.authorColor, time: timeLabel.text ?? "", stacked: stacked, in: authorLabel)
             authorLabel.isHidden = false
+            authorLabel.opens(model.onAuthorTap, name: author)
             bodyTopToContent.deactivate()
             bodyTopToTime.deactivate()
             bodyTopToAuthor.activate()
@@ -176,6 +321,7 @@ final class AirEntryFrame {
         else {
             authorLabel.text = nil
             authorLabel.isHidden = true
+            authorLabel.opens(nil, name: "")
             bodyTopToAuthor.deactivate()
             if stacked {
                 bodyTopToContent.deactivate()
@@ -210,7 +356,7 @@ final class AirEntryTextCellModel: ChatBaseTextCellModel {
 
 final class AirEntryTextCell: ChatBaseTextCell {
     private let timeLabel = UILabel()
-    private let authorLabel = UILabel()
+    private let authorLabel = AirAuthorLabel()
     private let mark = AirStatusMarkView()
     private var timeWidthConstraint: Constraint!
     private var timeTopConstraint: Constraint!
@@ -226,6 +372,8 @@ final class AirEntryTextCell: ChatBaseTextCell {
     private var timeFontCategory = UIApplication.shared.preferredContentSizeCategory
     private var spokenLabel = ""
     private var spokenValue = ""
+    /// KHANDAQ (0.2.58): the entry for VoiceOver while the author is a button of its own.
+    private lazy var entryElement = UIAccessibilityElement(accessibilityContainer: self)
 
     override func createViews() {
         revealsTime = false
@@ -246,7 +394,6 @@ final class AirEntryTextCell: ChatBaseTextCell {
         // Two lines: in a group the name comes with the role, which large text would otherwise cut.
         authorLabel.numberOfLines = 2
         authorLabel.lineBreakMode = .byTruncatingTail
-        authorLabel.isAccessibilityElement = false
         contentView.addSubview(authorLabel)
 
         contentView.addSubview(mark)
@@ -332,6 +479,7 @@ final class AirEntryTextCell: ChatBaseTextCell {
         if let author = entry.authorText, !author.isEmpty {
             AirEntryMetrics.show(author: author, color: entry.authorColor, time: entry.timeText, stacked: stacked, in: authorLabel)
             authorLabel.isHidden = false
+            authorLabel.opens(entry.onAuthorTap, name: author)
             bubbleTopToContent.deactivate()
             bubbleTopToTime.deactivate()
             bubbleTopToAuthor.activate()
@@ -342,6 +490,7 @@ final class AirEntryTextCell: ChatBaseTextCell {
         else if stacked {
             authorLabel.text = nil
             authorLabel.isHidden = true
+            authorLabel.opens(nil, name: "")
             bubbleTopToAuthor.deactivate()
             bubbleTopToContent.deactivate()
             bubbleTopToTime.activate()
@@ -351,6 +500,7 @@ final class AirEntryTextCell: ChatBaseTextCell {
         else {
             authorLabel.text = nil
             authorLabel.isHidden = true
+            authorLabel.opens(nil, name: "")
             bubbleTopToAuthor.deactivate()
             bubbleTopToTime.deactivate()
             bubbleTopToContent.activate()
@@ -433,7 +583,8 @@ final class AirEntryTextCell: ChatBaseTextCell {
     }
 }
 
-// Accessibility
+// Accessibility: one entry; while the author opens the member (AirAuthorLabel), the entry, then the
+// author's button.
 extension AirEntryTextCell {
     override var accessibilityLabel: String? {
         get {
@@ -448,4 +599,29 @@ extension AirEntryTextCell {
         }
         set {}
     }
+
+    override var isAccessibilityElement: Bool {
+        get {
+            return !authorLabel.opensMember
+        }
+        set {}
+    }
+
+    override var accessibilityElements: [Any]? {
+        get {
+            guard authorLabel.opensMember else {
+                return nil
+            }
+            // Says what the row said as one element; a double tap taps its middle as it did (AirAuthorLabel
+            // takes no touch while VoiceOver runs).
+            entryElement.accessibilityLabel = spokenLabel
+            entryElement.accessibilityValue = spokenValue
+            entryElement.accessibilityHint = accessibilityHint
+            entryElement.accessibilityTraits = accessibilityTraits
+            entryElement.accessibilityFrameInContainerSpace = bounds
+            return [entryElement, authorLabel]
+        }
+        set {}
+    }
+
 }

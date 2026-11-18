@@ -1126,6 +1126,7 @@
 "air_group_hint_one_other" = "另一位成员在线，会立即收到";
 "air_group_open_chat" = "打开聊天";
 "air_group_author_unknown" = "群成员";
+"air_group_author_not_here_format" = "%@ 目前不在群组中";
 
 /* Redesign stage 3: files, photos and voice notes in the transcript (E8) */
 "air_file_accept" = "接收";

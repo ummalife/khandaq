@@ -1137,6 +1137,7 @@
 "air_group_hint_one_other" = "The other member is online and gets it now";
 "air_group_open_chat" = "Open the conversation";
 "air_group_author_unknown" = "A member";
+"air_group_author_not_here_format" = "%@ is not in the group now";
 
 /* Redesign stage 3: files, photos and voice notes in the transcript (E8) */
 "air_file_accept" = "Accept";

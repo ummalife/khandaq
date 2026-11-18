@@ -237,6 +237,8 @@ extension ChatGroupController {
     /// VoiceOver on every entry.
     func configureGroupEntry(_ entry: ChatMovableDateCellModel, message: OCTMessageAbstract, row: Int) {
         let label: String
+        // The name over another member's entry that it names, which opens that member (openAuthor).
+        var opensAuthor: String?
         if message.isOutgoing() {
             label = String(localized: "air_you")
             entry.authorColor = KQColor.ink2
@@ -259,11 +261,51 @@ extension ChatGroupController {
             label = AirGroupTranscript.authorLabel(name: name, role: role)
             entry.authorColor = AirTone.color(at: AirTone.index(for: groupToneKey(for: message, name: name)))
             entry.spokenAuthor = label
+            // KHANDAQ (0.2.58): an entry that kept neither its author's key nor a peer number names nobody
+            // the group could have now, and a key of yours is you.
+            let key = AirGroupTranscript.authorKey(of: message).uppercased()
+            let named = !key.isEmpty || message.groupSenderPeerId != 0
+            if named && (key.isEmpty || key != AirGroupMembers.selfKey(in: groupMembers)?.uppercased()) {
+                opensAuthor = name
+            }
         }
 
         let previous = row + 1 < displayableRowCount() ? groupRunKey(forDisplayIndex: row + 1) : nil
         let startsRun = entry.unreadSeparator || AirTranscript.startsRun(groupRunKey(forDisplayIndex: row), after: previous)
         entry.authorText = startsRun ? label : nil
+        if startsRun, let name = opensAuthor {
+            entry.onAuthorTap = { [weak self] source in
+                self?.openAuthor(of: message, name: name, from: source)
+            }
+        }
+    }
+
+    /// KHANDAQ (0.2.58): the actions on the member who wrote `message`, from the name over the entry: the sheet
+    /// of the member's row in the dossier (AirGroupMemberSheet), pointing at the name. The member is the one
+    /// the group has now (AirGroupTranscript.author); an author who is not in the group now is said so in a
+    /// toast, by `name`, the name over the entry.
+    func openAuthor(of message: OCTMessageAbstract, name: String, from source: UIView) {
+        guard !message.isInvalidated, !chat.isInvalidated, tableView?.isEditing != true else {
+            return
+        }
+        let members = AirGroupMembers.load(chat: chat, submanagerGroups: submanagerGroups)
+        guard let member = AirGroupTranscript.author(key: AirGroupTranscript.authorKey(of: message),
+                                                     peerId: message.groupSenderPeerId,
+                                                     name: AirGroupTranscript.authorName(of: message),
+                                                     among: members) else {
+            AirToast.show(String(localized: "air_group_author_not_here_format", name), in: view, above: groupToastAnchor)
+            return
+        }
+        authorSheet.present(for: member, from: source, rect: (source as? AirAuthorLabel)?.nameRect)
+    }
+
+    /// What a toast of the conversation stands above: the field, or the bar in its place while you may only
+    /// read.
+    var groupToastAnchor: UIView? {
+        if let bar = readOnlyBar, !bar.isHidden {
+            return bar
+        }
+        return chatInputView
     }
 
     /// Whether a message names you, by your key in this group or by your name.

@@ -1139,6 +1139,7 @@
 "air_group_hint_one_other" = "Второй участник в сети и получит сразу";
 "air_group_open_chat" = "Открыть переписку";
 "air_group_author_unknown" = "Участник группы";
+"air_group_author_not_here_format" = "%@ сейчас не в группе";
 
 /* Redesign stage 3: files, photos and voice notes in the transcript (E8) */
 "air_file_accept" = "Принять";

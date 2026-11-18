@@ -521,7 +521,8 @@ private extension ChatGenericFileCell {
     }
 }
 
-// Accessibility: the entry, then the buttons of the voice note and of the transfer.
+// Accessibility: the entry, the author's button while it opens the member (AirAuthorLabel), then the
+// buttons of the voice note and of the transfer.
 extension ChatGenericFileCell {
     override var isAccessibilityElement: Bool {
         get {
@@ -534,6 +535,9 @@ extension ChatGenericFileCell {
         get {
             summaryElement.accessibilityFrameInContainerSpace = bounds
             var elements: [Any] = [summaryElement]
+            if entry.authorLabel.opensMember {
+                elements.append(entry.authorLabel)
+            }
             if !voiceMessageView.isHidden {
                 elements.append(voiceMessageView)
             }

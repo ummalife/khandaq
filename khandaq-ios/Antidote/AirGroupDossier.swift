@@ -34,6 +34,19 @@ final class AirGroupDossierController: AirScrollController {
     /// rebuilds it once that changes.
     private var shownPrivacy: AirGroupPrivacy?
     private var privacyToken: RLMNotificationToken?
+    /// The actions on a member, from the member's row.
+    private lazy var memberSheet: AirGroupMemberSheet = {
+        let sheet = AirGroupMemberSheet(host: self,
+                                        theme: theme,
+                                        chat: chat,
+                                        submanagerGroups: submanagerGroups,
+                                        submanagerObjects: submanagerObjects,
+                                        submanagerFriends: submanagerFriends)
+        sheet.onMembersChanged = { [weak self] in
+            self?.reloadMembers(animated: true)
+        }
+        return sheet
+    }()
 
     init(theme: Theme,
          chat: OCTChat,
@@ -379,145 +392,9 @@ final class AirGroupDossierController: AirScrollController {
 
     // MARK: Member actions
 
-    private func groupPeer(_ peerId: UInt32) -> OCTGroupPeer? {
-        guard let peers = submanagerGroups.peers(for: chat) else {
-            return nil
-        }
-        for index in 0..<peers.count {
-            if let peer = peers.object(at: index) as? OCTGroupPeer, !peer.isInvalidated, UInt32(bitPattern: peer.peerId) == peerId {
-                return peer
-            }
-        }
-        return nil
-    }
-
-    private func friend(withKey key: String) -> OCTFriend? {
-        guard !key.isEmpty else {
-            return nil
-        }
-        let found = submanagerObjects.friends(predicate: NSPredicate(format: "publicKey ==[c] %@", key))
-        return found.count > 0 ? found.firstObject : nil
-    }
-
     private func presentActions(for member: AirGroupMember, from source: UIView) {
-        guard !member.isSelf, let peer = groupPeer(member.peerId) else {
-            return
-        }
-        let sheet = UIAlertController(title: member.name,
-                                      message: AirGroupRoster.statusLine(for: member, now: Date().timeIntervalSince1970),
-                                      preferredStyle: .actionSheet)
-        sheet.addAction(UIAlertAction(title: String(localized: "air_group_write_privately"), style: .default) { [weak self] _ in
-            self?.openPrivate(with: peer)
-        })
-        if let friend = friend(withKey: member.publicKey), let open = onOpenFriend {
-            sheet.addAction(UIAlertAction(title: String(localized: "air_group_open_chat"), style: .default) { _ in
-                open(friend)
-            })
-        }
-        else if !member.publicKey.isEmpty {
-            sheet.addAction(UIAlertAction(title: String(localized: "air_group_add_contact"), style: .default) { [weak self] _ in
-                self?.addContact(member)
-            })
-        }
-        if !member.publicKey.isEmpty {
-            sheet.addAction(UIAlertAction(title: String(localized: "air_group_copy_member_key"), style: .default) { [weak self] _ in
-                UIPasteboard.general.string = member.publicKey
-                self?.toast(String(localized: "air_group_member_key_copied"))
-            })
-        }
-        let silent = peer.peerNotificationsSilent
-        sheet.addAction(UIAlertAction(title: String(localized: silent ? "air_group_member_unmute" : "air_group_member_mute"), style: .default) { [weak self] _ in
-            guard let self = self else {
-                return
-            }
-            self.submanagerGroups.setPeerNotificationsSilent(!silent, peerId: member.peerId, for: self.chat)
-            self.toast(String(localized: silent ? "air_group_member_unmuted_format" : "air_group_member_muted_format", member.name))
-        })
-        for action in AirGroupMemberAction.available(on: member.role, by: selfRole) where allowed(action, on: member) {
-            sheet.addAction(UIAlertAction(title: action.title, style: action == .kick ? .destructive : .default) { [weak self] _ in
-                self?.confirm(action, on: member, from: source)
-            })
-        }
-        sheet.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-        sheet.popoverPresentationController?.sourceView = source
-        sheet.popoverPresentationController?.sourceRect = source.bounds
-        present(sheet, animated: true, completion: nil)
-    }
-
-    /// The rules say what may be offered; toxcore has the last word.
-    private func allowed(_ action: AirGroupMemberAction, on member: AirGroupMember) -> Bool {
-        if let role = action.role {
-            return submanagerGroups.canSetPeerRole(role, peerId: member.peerId, in: chat)
-        }
-        return submanagerGroups.canKickPeer(withId: member.peerId, in: chat)
-    }
-
-    private func confirm(_ action: AirGroupMemberAction, on member: AirGroupMember, from source: UIView) {
-        let words = action.confirmation(name: member.name)
-        let sheet = UIAlertController(title: words.title, message: words.message, preferredStyle: .actionSheet)
-        sheet.addAction(UIAlertAction(title: action.title, style: action == .kick ? .destructive : .default) { [weak self] _ in
-            self?.perform(action, on: member)
-        })
-        sheet.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-        sheet.popoverPresentationController?.sourceView = source
-        sheet.popoverPresentationController?.sourceRect = source.bounds
-        present(sheet, animated: true, completion: nil)
-    }
-
-    private func perform(_ action: AirGroupMemberAction, on member: AirGroupMember) {
-        do {
-            if let role = action.role {
-                let previous = member.role
-                try submanagerGroups.setPeerRole(role, peerId: member.peerId, in: chat)
-                reloadMembers(animated: true)
-                let host: UIView = navigationController?.view ?? view
-                AirToast.show(action.doneText(name: member.name), actionTitle: String(localized: "air_undo"), seconds: 5, in: host,
-                              action: { [weak self] in
-                                  self?.undoRole(previous, of: member)
-                              })
-            }
-            else {
-                try submanagerGroups.kickPeer(withId: member.peerId, in: chat)
-                reloadMembers(animated: true)
-                toast(action.doneText(name: member.name))
-            }
-        }
-        catch let error as NSError {
-            handleErrorWithType(action == .kick ? .kickGroupPeer : .setGroupPeerRole, error: error)
-        }
-    }
-
-    private func undoRole(_ role: OCTToxGroupRole, of member: AirGroupMember) {
-        guard !chat.isInvalidated else {
-            return
-        }
-        do {
-            try submanagerGroups.setPeerRole(role, peerId: member.peerId, in: chat)
-            reloadMembers(animated: true)
-        }
-        catch let error as NSError {
-            handleErrorWithType(.setGroupPeerRole, error: error)
-        }
-    }
-
-    private func openPrivate(with peer: OCTGroupPeer) {
-        let controller = GroupPeerPrivateController(theme: theme,
-                                                    chat: chat,
-                                                    peer: peer,
-                                                    submanagerGroups: submanagerGroups,
-                                                    submanagerObjects: submanagerObjects)
-        navigationController?.pushViewController(controller, animated: true)
-    }
-
-    private func addContact(_ member: AirGroupMember) {
-        do {
-            // A group gives only the 64-character key, not a whole ID: the contact is added by key.
-            try submanagerFriends.addFriend(byPublicKey: member.publicKey)
-            toast(String(localized: "air_group_contact_added_format", member.name))
-        }
-        catch let error as NSError {
-            handleErrorWithType(.toxAddFriend, error: error)
-        }
+        memberSheet.onOpenFriend = onOpenFriend
+        memberSheet.present(for: member, from: source)
     }
 
     private func toast(_ text: String) {
@@ -687,6 +564,217 @@ final class AirGroupDossierController: AirScrollController {
         }
         catch let error as NSError {
             handleErrorWithType(.leaveGroup, error: error)
+        }
+    }
+}
+
+/// The actions on another member of a group: write privately, open the conversation or add the contact,
+/// copy the key, mute, and the roles and removal the founder and the moderators may give, each confirmed,
+/// a role change taken back from its toast. KHANDAQ (0.2.58): one sheet for the member's row in the dossier
+/// and for the name over the member's entry in the conversation (ChatGroupController.openAuthor).
+final class AirGroupMemberSheet {
+    /// Opens the conversation with a member who is a contact; without it the sheet does not offer one.
+    var onOpenFriend: ((OCTFriend) -> Void)?
+    /// After a role changed or a member was removed here.
+    var onMembersChanged: (() -> Void)?
+    /// The view the toasts stand above, inside the host's view: the field of a conversation. Without one they
+    /// go over the host's navigation, where they stay over a screen the sheet opened.
+    var toastAnchor: (() -> UIView?)?
+
+    private weak var host: UIViewController?
+    private let theme: Theme
+    private let chat: OCTChat
+    private let submanagerGroups: OCTSubmanagerGroups
+    private let submanagerObjects: OCTSubmanagerObjects
+    private let submanagerFriends: OCTSubmanagerFriends
+
+    init(host: UIViewController,
+         theme: Theme,
+         chat: OCTChat,
+         submanagerGroups: OCTSubmanagerGroups,
+         submanagerObjects: OCTSubmanagerObjects,
+         submanagerFriends: OCTSubmanagerFriends) {
+        self.host = host
+        self.theme = theme
+        self.chat = chat
+        self.submanagerGroups = submanagerGroups
+        self.submanagerObjects = submanagerObjects
+        self.submanagerFriends = submanagerFriends
+    }
+
+    /// The sheet on `member`; where it shows as a popover it points at `rect` of `source`, its bounds unless
+    /// given. Nothing for you, or for a member toxcore no longer lists.
+    func present(for member: AirGroupMember, from source: UIView, rect: CGRect? = nil) {
+        guard let host = host, !chat.isInvalidated, !member.isSelf, let peer = groupPeer(member.peerId) else {
+            return
+        }
+        let sheet = UIAlertController(title: member.name,
+                                      message: AirGroupRoster.statusLine(for: member, now: Date().timeIntervalSince1970),
+                                      preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: String(localized: "air_group_write_privately"), style: .default) { [weak self] _ in
+            self?.openPrivate(with: peer)
+        })
+        if let friend = friend(withKey: member.publicKey), let open = onOpenFriend {
+            sheet.addAction(UIAlertAction(title: String(localized: "air_group_open_chat"), style: .default) { _ in
+                open(friend)
+            })
+        }
+        else if !member.publicKey.isEmpty {
+            sheet.addAction(UIAlertAction(title: String(localized: "air_group_add_contact"), style: .default) { [weak self] _ in
+                self?.addContact(member)
+            })
+        }
+        if !member.publicKey.isEmpty {
+            sheet.addAction(UIAlertAction(title: String(localized: "air_group_copy_member_key"), style: .default) { [weak self] _ in
+                UIPasteboard.general.string = member.publicKey
+                self?.toast(String(localized: "air_group_member_key_copied"))
+            })
+        }
+        let silent = peer.peerNotificationsSilent
+        sheet.addAction(UIAlertAction(title: String(localized: silent ? "air_group_member_unmute" : "air_group_member_mute"), style: .default) { [weak self] _ in
+            guard let self = self, !self.chat.isInvalidated else {
+                return
+            }
+            self.submanagerGroups.setPeerNotificationsSilent(!silent, peerId: member.peerId, for: self.chat)
+            self.toast(String(localized: silent ? "air_group_member_unmuted_format" : "air_group_member_muted_format", member.name))
+        })
+        let selfRole = submanagerGroups.selfRole(in: chat)
+        for action in AirGroupMemberAction.available(on: member.role, by: selfRole) where allowed(action, on: member) {
+            sheet.addAction(UIAlertAction(title: action.title, style: action == .kick ? .destructive : .default) { [weak self] _ in
+                self?.confirm(action, on: member, from: source, rect: rect)
+            })
+        }
+        sheet.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        point(sheet, at: source, rect: rect)
+        host.present(sheet, animated: true, completion: nil)
+    }
+
+    /// A toast of the sheet: over the host's navigation, or above the anchor in the host's view.
+    func toast(_ text: String, actionTitle: String? = nil, seconds: TimeInterval = 3, action: (() -> Void)? = nil) {
+        guard let host = host else {
+            return
+        }
+        let anchor = toastAnchor?()
+        let place: UIView = anchor != nil ? host.view : (host.navigationController?.view ?? host.view)
+        AirToast.show(text, actionTitle: actionTitle, seconds: seconds, in: place, above: anchor, action: action)
+    }
+
+    private func groupPeer(_ peerId: UInt32) -> OCTGroupPeer? {
+        guard let peers = submanagerGroups.peers(for: chat) else {
+            return nil
+        }
+        for index in 0..<peers.count {
+            if let peer = peers.object(at: index) as? OCTGroupPeer, !peer.isInvalidated, UInt32(bitPattern: peer.peerId) == peerId {
+                return peer
+            }
+        }
+        return nil
+    }
+
+    private func friend(withKey key: String) -> OCTFriend? {
+        guard !key.isEmpty else {
+            return nil
+        }
+        let found = submanagerObjects.friends(predicate: NSPredicate(format: "publicKey ==[c] %@", key))
+        return found.count > 0 ? found.firstObject : nil
+    }
+
+    /// Where a sheet that shows as a popover points: at the source while it is on the screen; else, as the
+    /// row or the entry has gone since, at the middle of the host's view.
+    private func point(_ sheet: UIAlertController, at source: UIView, rect: CGRect?) {
+        guard let popover = sheet.popoverPresentationController else {
+            return
+        }
+        if source.window == nil, let view = host?.view {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+        else {
+            popover.sourceView = source
+            popover.sourceRect = rect ?? source.bounds
+        }
+    }
+
+    /// The rules say what may be offered; toxcore has the last word.
+    private func allowed(_ action: AirGroupMemberAction, on member: AirGroupMember) -> Bool {
+        if let role = action.role {
+            return submanagerGroups.canSetPeerRole(role, peerId: member.peerId, in: chat)
+        }
+        return submanagerGroups.canKickPeer(withId: member.peerId, in: chat)
+    }
+
+    private func confirm(_ action: AirGroupMemberAction, on member: AirGroupMember, from source: UIView, rect: CGRect?) {
+        guard let host = host else {
+            return
+        }
+        let words = action.confirmation(name: member.name)
+        let sheet = UIAlertController(title: words.title, message: words.message, preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: action.title, style: action == .kick ? .destructive : .default) { [weak self] _ in
+            self?.perform(action, on: member)
+        })
+        sheet.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        point(sheet, at: source, rect: rect)
+        host.present(sheet, animated: true, completion: nil)
+    }
+
+    private func perform(_ action: AirGroupMemberAction, on member: AirGroupMember) {
+        guard !chat.isInvalidated else {
+            return
+        }
+        do {
+            if let role = action.role {
+                let previous = member.role
+                try submanagerGroups.setPeerRole(role, peerId: member.peerId, in: chat)
+                onMembersChanged?()
+                toast(action.doneText(name: member.name), actionTitle: String(localized: "air_undo"), seconds: 5) { [weak self] in
+                    self?.undoRole(previous, of: member)
+                }
+            }
+            else {
+                try submanagerGroups.kickPeer(withId: member.peerId, in: chat)
+                onMembersChanged?()
+                toast(action.doneText(name: member.name))
+            }
+        }
+        catch let error as NSError {
+            handleErrorWithType(action == .kick ? .kickGroupPeer : .setGroupPeerRole, error: error)
+        }
+    }
+
+    private func undoRole(_ role: OCTToxGroupRole, of member: AirGroupMember) {
+        guard !chat.isInvalidated else {
+            return
+        }
+        do {
+            try submanagerGroups.setPeerRole(role, peerId: member.peerId, in: chat)
+            onMembersChanged?()
+        }
+        catch let error as NSError {
+            handleErrorWithType(.setGroupPeerRole, error: error)
+        }
+    }
+
+    private func openPrivate(with peer: OCTGroupPeer) {
+        guard !chat.isInvalidated, !peer.isInvalidated else {
+            return
+        }
+        let controller = GroupPeerPrivateController(theme: theme,
+                                                    chat: chat,
+                                                    peer: peer,
+                                                    submanagerGroups: submanagerGroups,
+                                                    submanagerObjects: submanagerObjects)
+        host?.navigationController?.pushViewController(controller, animated: true)
+    }
+
+    private func addContact(_ member: AirGroupMember) {
+        do {
+            // A group gives only the 64-character key, not a whole ID: the contact is added by key.
+            try submanagerFriends.addFriend(byPublicKey: member.publicKey)
+            toast(String(localized: "air_group_contact_added_format", member.name))
+        }
+        catch let error as NSError {
+            handleErrorWithType(.toxAddFriend, error: error)
         }
     }
 }

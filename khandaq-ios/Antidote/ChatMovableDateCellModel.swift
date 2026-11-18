@@ -29,4 +29,7 @@ class ChatMovableDateCellModel: BaseCellModel {
     var authorColor: UIColor = KQColor.ink2
     /// Who wrote it, for VoiceOver, on every entry of the run.
     var spokenAuthor = ""
+    /// KHANDAQ (0.2.58): a tap on the author opens that member, with the author's label to point at. A group
+    /// sets it over the entries of the other members it names; nil leaves the author a plain label.
+    var onAuthorTap: ((UIView) -> Void)?
 }

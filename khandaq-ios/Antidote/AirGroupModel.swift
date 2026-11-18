@@ -518,6 +518,60 @@ enum AirGroupTranscript {
         }
         return delivered || confirmations > 0 ? .delivered : .sent
     }
+
+    /// The key the entry kept of its author when it came: a text from the group's history on its text, a file
+    /// on its file, a live text or a private message on the entry itself. Never the key of whoever has the
+    /// author's number now: toxcore gives a freed number to the next member who comes. Empty for an entry that
+    /// kept none. It is what the entry claims; GroupReport.authorKey(of:authorVerified:) says when a report may
+    /// name it.
+    static func authorKey(of message: OCTMessageAbstract) -> String {
+        if let key = message.messageText?.groupSenderPubkey, !key.isEmpty {
+            return key
+        }
+        if let key = message.messageFile?.groupSenderPubkey, !key.isEmpty {
+            return key
+        }
+        // On an incoming entry it is the other member's key: the author's.
+        if !message.isOutgoing(), let key = message.groupPrivatePeerPubkey, !key.isEmpty {
+            return key
+        }
+        return ""
+    }
+
+    /// The name the entry kept of its author when it came; nil when it kept none.
+    static func authorName(of message: OCTMessageAbstract) -> String? {
+        if let name = message.messageText?.groupPeerName, !name.isEmpty {
+            return name
+        }
+        if let name = message.messageFile?.groupPeerName, !name.isEmpty {
+            return name
+        }
+        return nil
+    }
+
+    /// KHANDAQ (0.2.58): the member who wrote an entry, among the members the group has now
+    /// (AirGroupMembers.load), for the tap on the name over it; nil when the author is not in the group now.
+    ///
+    /// An entry that kept its author's key (authorKey(of:)) is the member with that key and nobody else,
+    /// whatever peer number they have now. An older entry that kept none is the member with its peer number,
+    /// but only while that member has the name the entry kept (authorName(of:)), if it kept one: toxcore gives
+    /// a freed number to the next member who comes, and the sheet that opens can remove a member.
+    static func author(key: String, peerId: Int32, name: String?, among members: [AirGroupMember]) -> AirGroupMember? {
+        let wanted = key.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if !wanted.isEmpty {
+            return members.first { !$0.publicKey.isEmpty && $0.publicKey.uppercased() == wanted }
+        }
+        // Without a number nothing names the author: toxcore numbers only incoming entries.
+        guard peerId != 0 else {
+            return nil
+        }
+        let number = UInt32(bitPattern: peerId)
+        guard let member = members.first(where: { $0.peerId == number }) else {
+            return nil
+        }
+        let kept = (name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return kept.isEmpty || kept == member.name.trimmingCharacters(in: .whitespacesAndNewlines) ? member : nil
+    }
 }
 
 /// A group key as people pass it around (E15): 64 hex characters, bare, after "khandaq:group:" (the QR

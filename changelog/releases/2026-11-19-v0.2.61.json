@@ -1,0 +1,36 @@
+{
+  "version": "0.2.61",
+  "date": "2026-11-19",
+  "title": "Files of any size open on iPhone; reactions look the same everywhere",
+  "summary": "On iPhone a big video or photo now shows in the chat like a small one, with its picture and, for a video, its length, and a file shown as a row opens with a tap. The desktop and iPhone show reactions as chips with the emoji and the count, as Android does, so a reaction set on a phone looks the same on the desktop.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "iPhone: big videos and photos show in the chat",
+      "description": "A video or photo over 20 MB came to an iPhone as a plain file row, and a tap on the row opened nothing. Now a video of any size shows its first frame and its length, a photo shows itself, and a tap opens them. A file that stays a row, such as a PDF, opens with a tap anywhere on the row once it has arrived. A big video you send shows the same way.",
+      "platforms": [
+        "ios"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Reactions look the same everywhere",
+      "description": "A reaction set on a phone, especially one from the full emoji keyboard, showed on the desktop as a small grey symbol under the message. The desktop and iPhone now show each reaction as a chip with the emoji and how many people chose it, as Android does. On iPhone your own reaction is highlighted.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "ios"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "iPhone: a video keeps its length",
+      "description": "The length in the corner of a video disappeared when its message was drawn again, for example after a reaction or a new message. It stays now.",
+      "platforms": [
+        "ios"
+      ]
+    }
+  ]
+}

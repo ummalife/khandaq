@@ -65,10 +65,12 @@
             android:layout_weight="1"
             android:orientation="vertical">
 
+            <!-- KHANDAQ (0.2.60): a little air under the author, so the name does not run into the text. -->
             <TextView
                 android:id="@+id/air_entry_author"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginBottom="@dimen/kq_space_2"
                 android:ellipsize="end"
                 android:importantForAccessibility="no"
                 android:maxLines="1"

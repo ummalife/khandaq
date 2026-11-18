@@ -156,6 +156,16 @@ final class AirTileView extends FrameLayout
         return photo;
     }
 
+    /**
+     * KHANDAQ (0.2.60): Khandaq Community's tile is the app's icon (the owner's rule, 2026-11-18), on every screen
+     * that shows the group, in place of its initials, as a photo is. Called after {@link #bind}.
+     */
+    void showCommunityLogo()
+    {
+        photo.setImageResource(R.drawable.kq_community_tile);
+        showPhoto(true);
+    }
+
     /** A loaded photo covers the initials; without one the initials come back. */
     void showPhoto(final boolean shown)
     {

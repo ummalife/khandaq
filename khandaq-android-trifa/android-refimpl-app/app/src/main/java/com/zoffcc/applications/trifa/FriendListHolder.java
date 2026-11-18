@@ -715,6 +715,11 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
                         v.getContext().startActivity(intent);
                         break;
 
+                    case R.id.item_rename:
+                        // KHANDAQ (0.2.60): the dossier's nickname dialog, from the row itself.
+                        AirChatPanel.renameContact(AirSheet.activityOf(v.getContext()), f2.tox_public_key_string);
+                        break;
+
                     case R.id.item_create_conference:
                         int res_conf_new = tox_conference_new();
                         if (res_conf_new >= 0)
@@ -876,6 +881,12 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
         // section; a consumer menu offered "add as Tox proxy" next to Information.
         final boolean developer_details = org.khandaq.messenger.BuildConfig.DEBUG && MainActivity.INSANE_TRACE_LOGGING;
         add_toxproxy_item.setVisible(developer_details && !have_own_relay());
+        // KHANDAQ (0.2.60): Saved Messages has no nickname to give.
+        final MenuItem renameItem = menu.getMenu().findItem(R.id.item_rename);
+        if (renameItem != null)
+        {
+            renameItem.setVisible(!FavoritesChatHelper.isFavoritesChat(f2.tox_public_key_string));
+        }
         final MenuItem favoriteItem = menu.getMenu().findItem(R.id.item_toggle_favorite);
         if (favoriteItem != null)
         {

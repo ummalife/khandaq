@@ -17,8 +17,11 @@
         <item name="android:alertDialogTheme">@style/KhandaqAlertDialog</item>
         <item name="drawerArrowStyle">@style/DrawerArrowStyle</item>
         <item name="patternViewStyle">@style/PatternView</item>
-        <!-- KHANDAQ (#4): selection action bar in brand teal (was off-brand md_orange_400). -->
-        <item name="android:actionModeBackground">@color/khandaq_teal</item>
+        <!-- KHANDAQ (0.2.60): the selection bar on the surface, as the chat bar it covers (was brand teal, #4).
+             The chats start it through AppCompat (startSupportActionMode), which reads actionModeBackground,
+             not the framework attribute: both are set. -->
+        <item name="android:actionModeBackground">@color/kq_surface</item>
+        <item name="actionModeBackground">@color/kq_surface</item>
         <item name="windowActionModeOverlay">true</item>
 
         <item name="material_drawer_background">@color/khandaq_surface</item>

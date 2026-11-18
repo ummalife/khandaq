@@ -391,6 +391,10 @@ final class AirGroupPanel
         shown = s;
         setText(name, s.title);
         tile.bind(AirTileView.Kind.GROUP, s.title, AirModel.Tone.index(s.groupId));
+        if (KhandaqCommunity.isCommunity(s.groupId))
+        {
+            tile.showCommunityLogo(); // KHANDAQ (0.2.60)
+        }
 
         final String header = headerText(activity, s.reach);
         setText(counts, header);

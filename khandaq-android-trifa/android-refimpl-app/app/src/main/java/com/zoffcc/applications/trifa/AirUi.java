@@ -53,6 +53,16 @@ final class AirUi
         return color(context, TONES[AirModel.Tone.wrap(tone)]);
     }
 
+    /**
+     * KHANDAQ (0.2.60): "You" over our own entries, in tone-5 as on the desktop and iOS. In ink-2, bold over the
+     * text, it read as a line of the message.
+     */
+    @ColorInt
+    static int youColor(final Context context)
+    {
+        return color(context, R.color.kq_tone_5);
+    }
+
     /** The system "remove animations" setting (developer options or accessibility). */
     static boolean reducedMotion()
     {
@@ -422,6 +432,13 @@ final class AirUi
             default:
                 return context.getString(R.string.air_delivery_sent);
         }
+    }
+
+    /** KHANDAQ (0.2.60): whether a row of the list is Khandaq Community, whose tile is the app's icon. */
+    static boolean isCommunity(final AirModel.Entry entry)
+    {
+        return entry.kind == AirModel.EntryKind.GROUP && entry.id.startsWith(AirRepository.GROUP_PREFIX)
+               && KhandaqCommunity.isCommunity(entry.id.substring(AirRepository.GROUP_PREFIX.length()));
     }
 
     static AirTileView.Kind tileKind(final AirModel.Entry entry)

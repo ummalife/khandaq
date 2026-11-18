@@ -400,13 +400,13 @@
     <string name="air_group_privacy_open">مفتوحة لكل من لديه مفتاح المجموعة</string>
     <string name="air_group_privacy_open_note">يمكن لأي شخص لديه مفتاح المجموعة الانضمام دون دعوة.</string>
     <string name="air_group_invite">دعوة</string>
-    <string name="air_new_group_invite_note">تُرسل الدعوات فورًا، لذا لا يمكن هنا دعوة إلا المتصلين. ادعُ الآخرين لاحقًا من ملف المجموعة.</string>
+    <string name="air_new_group_invite_note">تصل الدعوة فورًا إلى المتصلين، وتصل إلى الآخرين عند اتصالهم.</string>
     <string name="air_new_group_create">إنشاء المجموعة</string>
     <string name="air_new_group_create_invite_format">إنشاء ودعوة %1$d</string>
     <string name="air_new_group_name_first">سمِّ المجموعة لإنشائها</string>
     <string name="air_new_group_name_too_long">الاسم طويل جدًا لمجموعة: اختصره</string>
     <string name="air_invite_already_member">في المجموعة بالفعل</string>
-    <string name="air_invite_when_online">يمكن دعوته عند اتصاله</string>
+    <string name="air_invite_when_online">ستصله الدعوة عند اتصاله</string>
     <string name="air_invite_no_contacts">لا توجد جهات اتصال بعد: أضف شخصًا أولًا.</string>
     <string name="air_invite_search">ابحث عن جهة اتصال</string>
     <string name="air_invite_nobody_found">لا توجد جهة اتصال بهذا الاسم</string>

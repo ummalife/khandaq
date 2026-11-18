@@ -294,7 +294,7 @@ public class GroupMessageListHolder_text_outgoing_read extends RecyclerView.View
 
         final AirTranscript.GroupEntry entry = new AirTranscript.GroupEntry();
         entry.author = context.getString(R.string.air_you);
-        entry.authorColor = AirUi.color(context, R.color.kq_ink_2);
+        entry.authorColor = AirUi.youColor(context); // KHANDAQ (0.2.60): tone-5, as everywhere
         if (m.private_message == 1)
         {
             entry.privateNote = context.getString(R.string.air_group_private_to_format, privateRecipientName(m));

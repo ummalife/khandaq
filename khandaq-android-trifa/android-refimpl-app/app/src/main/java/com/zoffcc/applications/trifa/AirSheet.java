@@ -334,7 +334,7 @@ final class AirSheet
     }
 
     @Nullable
-    private static Activity activityOf(Context context)
+    static Activity activityOf(Context context)
     {
         while (context instanceof ContextWrapper)
         {

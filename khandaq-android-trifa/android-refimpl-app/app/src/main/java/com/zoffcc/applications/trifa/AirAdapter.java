@@ -187,6 +187,13 @@ final class AirAdapter extends ListAdapter<AirModel.Row, RecyclerView.ViewHolder
     private void bindTile(final AirTileView tile, final AirModel.Entry entry)
     {
         tile.bind(AirUi.tileKind(entry), entry.title, entry.tone);
+        if (AirUi.isCommunity(entry))
+        {
+            // KHANDAQ (0.2.60): the app's icon, never a photo loading into a recycled tile.
+            clearPhoto(tile);
+            tile.showCommunityLogo();
+            return;
+        }
         final ChatBubbleUiHelper.AvatarMeta photo = entry.photoKey == null ? null : photos.get(entry.photoKey);
         if (photo != null && photo.loadable)
         {

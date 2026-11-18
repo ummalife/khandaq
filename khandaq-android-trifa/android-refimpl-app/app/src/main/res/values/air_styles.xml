@@ -105,6 +105,8 @@
          the platform bar, so a 360dp phone still shows about ten characters of the name. -->
     <style name="ThemeOverlay.KQ.Air.ChatBar" parent="ThemeOverlay.AppCompat.DayNight.ActionBar">
         <item name="toolbarNavigationButtonStyle">@style/Widget.KQ.Air.ChatBarBack</item>
+        <!-- KHANDAQ (0.2.60): the selection bar takes the chat bar's theme: its icons and its close arrow in ink. -->
+        <item name="colorControlNormal">@color/kq_ink</item>
     </style>
 
     <style name="Widget.KQ.Air.ChatBarBack" parent="Widget.AppCompat.Toolbar.Button.Navigation">

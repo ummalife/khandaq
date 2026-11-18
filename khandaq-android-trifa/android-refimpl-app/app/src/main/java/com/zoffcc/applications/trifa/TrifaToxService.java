@@ -1031,6 +1031,8 @@ public class TrifaToxService extends Service
                 // KHANDAQ (QA live, F11): groups the app was leaving when it stopped go before anything can read the
                 // groups of this tox instance into the list or the database.
                 HelperGroup.leave_groups_pending_at_last_stop();
+                // KHANDAQ (0.2.60): the group invitations this profile kept for contacts who were offline.
+                HelperGroup.load_pending_manual_group_invites();
 
                 // KHANDAQ (0.2.56): a new session, also after a profile switch or a service restart in this
                 // process: what the last one queued to group peers went with it (NgcHistoryServeLedger).

@@ -537,12 +537,12 @@ final class AirGroupModel
         }
 
         /**
-         * tox_group_invite_friend goes over the friend connection, so only a contact online now can be
-         * invited; the others wait in the list.
+         * KHANDAQ (0.2.60): a contact offline can be chosen too. tox_group_invite_friend goes over the friend
+         * connection, so their invitation waits (GroupPendingInvites) and goes once they are online.
          */
         boolean canInvite()
         {
-            return online && !member && friendNumber >= 0;
+            return !member && friendNumber >= 0;
         }
     }
 

@@ -7,6 +7,12 @@
         android:title="@string/layout___info"
         android:visible="true"
         app:showAsAction="ifRoom|withText"/>
+    <!-- KHANDAQ (0.2.60): the contact's nickname, from its row (the dossier's dialog). -->
+    <item
+        android:id="@+id/item_rename"
+        android:title="@string/air_dossier_rename"
+        android:visible="true"
+        app:showAsAction="ifRoom|withText"/>
     <!-- Legacy Tox conferences (text/AV) are hidden: the app now has a single group concept
          (NGC private/public groups created via the toolbar menu). Keep the items/handlers so
          nothing else breaks, but never show them. -->

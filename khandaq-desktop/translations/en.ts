@@ -147,6 +147,14 @@
         </translation>
     </message>
     <message numerus="yes">
+        <source>%n invitation(s) will go once the contacts are online</source>
+        <comment>toast after inviting: invitations kept for contacts who are offline</comment>
+        <translation>
+            <numerusform>Invitation will go once the contact is online</numerusform>
+            <numerusform>%n invitations will go once the contacts are online</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>Create and invite %n</source>
         <comment>New group: the main button with contacts chosen</comment>
         <translation>

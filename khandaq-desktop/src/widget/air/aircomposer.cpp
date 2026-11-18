@@ -94,18 +94,23 @@ AirComposer::AirComposer(QTextEdit* field_, QWidget* parent)
     row->setSpacing(Space::s6);
     attach = new AirIconButton(QStringLiteral("paperclip"), frame);
     attach->setObjectName(QStringLiteral("composerAttach"));
+    // KHANDAQ (0.2.60): the emoji, at the end of the field, as in the phone apps.
+    emoji = new AirIconButton(QStringLiteral("smile"), frame);
+    emoji->setObjectName(QStringLiteral("composerEmoji"));
     send = new AirButton(AirButton::Kind::Ink, frame);
     field->setParent(frame);
     field->setFrameStyle(QFrame::NoFrame);
     field->installEventFilter(this);
     row->addWidget(attach, 0, Qt::AlignBottom);
     row->addWidget(field, 1, Qt::AlignBottom);
+    row->addWidget(emoji, 0, Qt::AlignBottom);
     row->addWidget(send, 0, Qt::AlignBottom);
     column->addWidget(frame);
     // The field joins the frame after the buttons were made, so Tab would reach Send before it:
     // the order is the one the row shows.
     QWidget::setTabOrder(attach, field);
-    QWidget::setTabOrder(field, send);
+    QWidget::setTabOrder(field, emoji);
+    QWidget::setTabOrder(emoji, send);
 
     hintLine = new QWidget(writing);
     auto* const hintRow = new QHBoxLayout(hintLine);
@@ -162,6 +167,8 @@ AirComposer::AirComposer(QTextEdit* field_, QWidget* parent)
     connect(send, &AirButton::clicked, this, &AirComposer::sendRequested);
     connect(attach, &AirIconButton::clicked, this,
             [this] { emit attachRequested(attach->mapToGlobal(QPoint(0, attach->height()))); });
+    connect(emoji, &AirIconButton::clicked, this,
+            [this] { emit emojiRequested(emoji->mapToGlobal(QPoint(emoji->width() / 2, 0))); });
     connect(&AirStyle::instance(), &AirStyle::changed, this, &AirComposer::restyle);
     restyle();
     setHint(QString(), Air::ComposeHint::Dot::None);
@@ -170,6 +177,11 @@ AirComposer::AirComposer(QTextEdit* field_, QWidget* parent)
 void AirComposer::setAttachVisible(bool visible)
 {
     attach->setVisible(visible);
+}
+
+void AirComposer::setEmojiVisible(bool visible)
+{
+    emoji->setVisible(visible);
 }
 
 void AirComposer::setAttachNote(const QString& note)
@@ -270,6 +282,9 @@ void AirComposer::restyle()
     attach->setToolTip(attachNote.isEmpty() ? attachName : attachName + QLatin1Char('\n') + attachNote);
     attach->setAccessibleName(attachName);
     attach->setAccessibleDescription(attachNote);
+    const QString emojiName = AirStrings::text(Text::ComposeEmoji);
+    emoji->setToolTip(emojiName);
+    emoji->setAccessibleName(emojiName);
     for (QLabel* label : {hint, counter}) {
         label->setFont(air().font(TextRole::Caption));
         AirPaint::textColor(label, air().color(Color::Ink2));

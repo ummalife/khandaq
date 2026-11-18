@@ -438,10 +438,15 @@ private:
      */
     void openJoinedGroup(const GroupId& groupId);
     /**
-     * KHANDAQ (0.2.57): joins Khandaq Community, muted, once per profile and never after it was
-     * left (Air::Community); it does not open.
+     * KHANDAQ (0.2.57): joins Khandaq Community once per profile and never after it was left
+     * (Air::Community); it does not open.
      */
     void joinCommunity();
+    /**
+     * KHANDAQ (0.2.60): sends the invitations kept for contacts who were offline, to those online
+     * now (AirLocal::outgoingInvites): when one comes online, and every outgoingInviteRetryMs.
+     */
+    void sendOutgoingInvites();
     /** KHANDAQ (0.2.57): Accept on a held file of Khandaq Community: written where the group's go. */
     void saveHeldGroupFile(const GroupId& groupId, const ToxFile& entry);
     /** Their entries say the download stopped: the files went to make room, or were too big. */
@@ -523,6 +528,7 @@ private:
     bool notify(QObject* receiver, QEvent* event);
     bool autoAwayActive = false;
     QTimer* timer;
+    QTimer* outgoingInviteTimer = nullptr;
     bool eventFlag;
     bool eventIcon;
     bool wasMaximized = false;

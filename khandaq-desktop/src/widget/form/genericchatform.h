@@ -25,6 +25,7 @@
 #include "src/widget/searchtypes.h"
 
 #include <QMenu>
+#include <QPixmap>
 #include <QWidget>
 
 /**
@@ -43,6 +44,7 @@ class ContentLayout;
 class CroppingLabel;
 class FlyoutOverlayWidget;
 class GenericNetCamView;
+class ImagePreviewButton;
 class MaskablePixmapWidget;
 class SearchForm;
 class Widget;
@@ -106,7 +108,16 @@ protected slots:
     void onSendTriggered();
     virtual void onAttachClicked() = 0;
     virtual void onPasteFiles(const QStringList& paths);
+    /**
+     * KHANDAQ (0.2.60): a picture pasted, or a screenshot, waits over the field until Enter or Send
+     * sends it as a file of the chat, or Esc or its cross puts it away; in a group as with a person.
+     */
+    void previewImage(const QPixmap& pixmap);
+    void cancelImagePreview();
+    void sendImageFromPreview();
     void onEmoteButtonClicked();
+    /** KHANDAQ (0.2.60): the emoji of the set, opened above anchor (a global point). */
+    void showEmoticons(const QPoint& anchor);
     void onEmoteInsertRequested(QString str);
     void onCopyLogClicked();
     void clearChatArea();
@@ -194,9 +205,19 @@ protected:
 
     QMenu menu;
 
+    /**
+     * The forms that send files take pasted pictures: the field offers them (ChatTextEdit sees the
+     * connection) and the preview sends them through sendPreparedFiles.
+     */
+    void takePastedImages();
+    /** Sends files of this computer into the chat, saying every refusal; nothing by default. */
+    virtual void sendPreparedFiles(const QStringList& paths);
+
     QVBoxLayout* contentLayout;
     /** The field with the paperclip and "Send", and the line about the next message. */
     AirComposer* composer;
+    QPixmap imagePreviewSource;
+    ImagePreviewButton* imagePreview;
     /** A group's file limit, said by the paperclip and the attach menu before a file is chosen. */
     void setAttachLimit(const QString& words);
     QString attachLimit;

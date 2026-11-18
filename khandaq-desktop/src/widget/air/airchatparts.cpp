@@ -19,6 +19,7 @@
 
 #include "airchatparts.h"
 
+#include "src/model/air/aircommunity.h"
 #include "src/model/air/airmodel.h"
 #include "src/widget/air/airstrings.h"
 #include "src/widget/air/airstyle.h"
@@ -30,6 +31,7 @@
 #include <QLabel>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPixmapCache>
 #include <QVariantAnimation>
 #include <QtMath>
 
@@ -95,6 +97,21 @@ void AirTile::setPhoto(const QPixmap& photo_)
     update();
 }
 
+QPixmap AirTile::communityLogo()
+{
+    const QString path = QStringLiteral(":/img/khandaq-community.png");
+    QPixmap logo;
+    if (!QPixmapCache::find(path, &logo) && logo.load(path)) {
+        QPixmapCache::insert(path, logo);
+    }
+    return logo;
+}
+
+AirTile::Kind AirTile::groupKind(const QByteArray& groupChatId)
+{
+    return Air::Community::isCommunity(groupChatId) ? Kind::Community : Kind::Group;
+}
+
 QSize AirTile::sizeHint() const
 {
     const int extra = kind == Kind::Group ? groupOffset : 0;
@@ -112,7 +129,9 @@ void AirTile::paintEvent(QPaintEvent*)
     // The tile sits at the bottom and the start; a group's second outline takes the rest.
     const QRect tile(rightToLeft ? extra : 0, extra, side, side);
 
-    if (!photo.isNull() && kind == Kind::Person) {
+    // Khandaq Community wears the logo as a person wears a photo; without it, its initials.
+    const QPixmap shown = kind == Kind::Community ? communityLogo() : photo;
+    if (!shown.isNull() && (kind == Kind::Person || kind == Kind::Community)) {
         const qreal dpr = devicePixelRatioF();
         const int pixels = qRound(side * dpr);
         QPixmap rounded(pixels, pixels);
@@ -126,7 +145,7 @@ void AirTile::paintEvent(QPaintEvent*)
                                 Radius::control * dpr);
             tilePainter.setClipPath(clip);
             tilePainter.drawPixmap(QRect(0, 0, pixels, pixels),
-                                   photo.scaled(pixels, pixels, Qt::KeepAspectRatioByExpanding,
+                                   shown.scaled(pixels, pixels, Qt::KeepAspectRatioByExpanding,
                                                 Qt::SmoothTransformation));
         }
         rounded.setDevicePixelRatio(dpr);

@@ -102,6 +102,12 @@ bool isCommunity(const QByteArray& groupChatId);
  */
 constexpr char name[] = "Khandaq Community";
 
+/**
+ * KHANDAQ (0.2.60): the photo key of its row (Air::Entry::photoKey): the app's logo stands on its
+ * tile instead of initials, on every platform (the owner, 2026-11-18). No public key is spelled so.
+ */
+constexpr char photoKey[] = "khandaq-community";
+
 /** The name a group shows: name for Khandaq Community, title as it is for any other group. */
 QString groupTitle(const QByteArray& groupChatId, const QString& title);
 
@@ -113,12 +119,21 @@ bool shouldAutoJoin(bool connected, bool autoJoinDone, bool left, bool alreadyIn
 
 /**
  * Joins it through join when shouldAutoJoin says so, with the marks store keeps. join says whether
- * the group now exists here, toxcore having taken the join. Only then is the group muted and the
- * join marked done in store; a join that failed leaves store as it was, so the next start or
- * connection tries again. True when it joined.
+ * the group now exists here, toxcore having taken the join. Only then is the join marked done in
+ * store; a join that failed leaves store as it was, so the next start or connection tries again.
+ * The group keeps its sound (0.2.60; the join of 0.2.57-0.2.59 muted it). True when it joined.
  */
 bool autoJoin(LocalStore& store, bool connected, bool alreadyInGroup,
               const std::function<bool()>& join);
+
+/**
+ * KHANDAQ (0.2.60): the owner turned the sound of the group on for everybody (2026-11-18). Once per
+ * profile the mute the auto-join of an earlier version put on it is lifted; a profile that left the
+ * group keeps what it has. A mute the person turned on again by hand cannot be told from the join's:
+ * it is lifted all the same, once, and the person may turn it on again for good. True when it
+ * lifted a mute; store then needs saving, as it does whenever the mark was new.
+ */
+bool restoreSound(LocalStore& store);
 
 /**
  * A group was left: when it is Khandaq Community it is never joined by itself again, however it

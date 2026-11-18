@@ -182,6 +182,17 @@ public:
     QByteArray getSelfDhtId() const;
     int getSelfUdpPort() const;
 
+    /** KHANDAQ (0.2.60): what became of an invitation to a group. */
+    enum class GroupInviteResult
+    {
+        Sent,
+        /** The contact is offline or the group disconnected: it may go once both are up. */
+        Later,
+        /** The group or the contact is gone. */
+        Refused,
+    };
+    GroupInviteResult inviteToGroup(uint32_t friendId, int groupId);
+
 public slots:
     void start();
 

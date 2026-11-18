@@ -51,12 +51,14 @@ private slots:
     void theChatIdIsTheGroupOfOurBot();
     void theCommunityIsAlwaysNamedKhandaqCommunity();
     void itJoinsOnlyWhenConnectedNeverJoinedNeverLeftAndNotInIt();
-    void anAutoJoinMutesTheGroupAndIsDone();
+    void anAutoJoinKeepsTheSoundAndIsDone();
+    void theMuteOfAnEarlierJoinIsLiftedOnce();
+    void theSoundOfAGroupLeftIsLeftAsItIs();
     void aGroupHereByAnyWayIsNeverJoinedByItself();
     void aJoinToxcoreRefusedLeavesNothingAndIsTriedAgain();
     void nothingIsJoinedWhileTheAnswerIsNo();
     void aGroupJoinedByHandKeepsItsSound();
-    void theJoinAndTheMuteLastAcrossARestart();
+    void theJoinLastsAcrossARestart();
     void leftItIsNeverJoinedAgainAcrossARestart();
     void leftAfterJoiningByHandItIsNeverJoinedEither();
     void leavingAnotherGroupChangesNothing();
@@ -130,7 +132,7 @@ void TestAirCommunity::itJoinsOnlyWhenConnectedNeverJoinedNeverLeftAndNotInIt()
     QVERIFY(Community::shouldAutoJoin(true, false, false, false));
 }
 
-void TestAirCommunity::anAutoJoinMutesTheGroupAndIsDone()
+void TestAirCommunity::anAutoJoinKeepsTheSoundAndIsDone()
 {
     LocalStore store;
     QVERIFY(!store.communityAutoJoinDone());
@@ -143,10 +145,9 @@ void TestAirCommunity::anAutoJoinMutesTheGroupAndIsDone()
     QCOMPARE(joins, 1);
     QVERIFY(store.communityAutoJoinDone());
     QVERIFY(!store.communityLeft());
-    // The switch of the dossier keys a group's mute by its chat id, in whatever case.
-    QVERIFY(store.isMuted(communityKey));
-    QVERIFY(store.isMuted(communityKey.toLower()));
-    QVERIFY(!store.isMuted(QString::fromLatin1(otherGroup.toHex())));
+    // 0.2.60: the group is heard as any other (the owner, 2026-11-18).
+    QVERIFY(!store.isMuted(communityKey));
+    QVERIFY(!store.isMuted(communityKey.toLower()));
 
     // Once is all: the next connection does not join again.
     QVERIFY(!Community::autoJoin(store, true, false, [&joins] {
@@ -182,15 +183,15 @@ void TestAirCommunity::aGroupHereByAnyWayIsNeverJoinedByItself()
     QVERIFY(!Community::noteGroupHere(other, otherGroup));
     QVERIFY(!other.communityAutoJoinDone());
 
-    // The join by itself: the group comes into the list during the join, and it is muted all the
-    // same.
+    // The join by itself: the group comes into the list during the join, and it is marked done all
+    // the same.
     LocalStore fresh;
     QVERIFY(Community::autoJoin(fresh, true, false, [&fresh] {
         Community::noteGroupHere(fresh, Community::chatId());
         return true;
     }));
     QVERIFY(fresh.communityAutoJoinDone());
-    QVERIFY(fresh.isMuted(communityKey));
+    QVERIFY(!fresh.isMuted(communityKey));
 }
 
 void TestAirCommunity::aJoinToxcoreRefusedLeavesNothingAndIsTriedAgain()
@@ -213,7 +214,7 @@ void TestAirCommunity::aJoinToxcoreRefusedLeavesNothingAndIsTriedAgain()
     }));
     QCOMPARE(joins, 2);
     QVERIFY(next.communityAutoJoinDone());
-    QVERIFY(next.isMuted(communityKey));
+    QVERIFY(!next.isMuted(communityKey));
 }
 
 void TestAirCommunity::nothingIsJoinedWhileTheAnswerIsNo()
@@ -249,22 +250,64 @@ void TestAirCommunity::aGroupJoinedByHandKeepsItsSound()
     QVERIFY(!Community::autoJoin(store, true, true, [] { return true; }));
     QVERIFY(!store.isMuted(communityKey));
     QVERIFY(!store.communityAutoJoinDone());
-    // Unmuted by the person after the join by itself, it stays so: nothing mutes it again.
+    // Muted by the person after the join by itself and the lift of 0.2.60, it stays so: nothing
+    // unmutes it again.
     LocalStore joined;
     QVERIFY(Community::autoJoin(joined, true, false, [] { return true; }));
-    QVERIFY(joined.setMuted(false, communityKey));
+    QVERIFY(!Community::restoreSound(joined));
+    QVERIFY(joined.setMuted(true, communityKey));
     QVERIFY(!Community::autoJoin(joined, true, true, [] { return true; }));
-    QVERIFY(!restarted(joined).isMuted(communityKey));
+    LocalStore later = restarted(joined);
+    QVERIFY(!Community::restoreSound(later));
+    QVERIFY(later.isMuted(communityKey));
 }
 
-void TestAirCommunity::theJoinAndTheMuteLastAcrossARestart()
+void TestAirCommunity::theMuteOfAnEarlierJoinIsLiftedOnce()
+{
+    // A profile the join of 0.2.57-0.2.59 muted, as its store keeps it.
+    LocalStore store;
+    QVERIFY(Community::autoJoin(store, true, false, [] { return true; }));
+    QVERIFY(store.setMuted(true, communityKey));
+    LocalStore updated = restarted(store);
+    QVERIFY(!updated.communitySoundRestored());
+
+    QVERIFY(Community::restoreSound(updated));
+    QVERIFY(!updated.isMuted(communityKey));
+    QVERIFY(updated.communitySoundRestored());
+
+    // Once: muted again by the person, across a restart, it stays muted.
+    QVERIFY(updated.setMuted(true, communityKey));
+    LocalStore next = restarted(updated);
+    QVERIFY(next.communitySoundRestored());
+    QVERIFY(!Community::restoreSound(next));
+    QVERIFY(next.isMuted(communityKey));
+    // Another group's mute is never touched.
+    LocalStore other;
+    QVERIFY(other.setMuted(true, QString::fromLatin1(otherGroup.toHex())));
+    QVERIFY(!Community::restoreSound(other));
+    QVERIFY(other.isMuted(QString::fromLatin1(otherGroup.toHex())));
+    QVERIFY(other.communitySoundRestored());
+}
+
+void TestAirCommunity::theSoundOfAGroupLeftIsLeftAsItIs()
+{
+    LocalStore store;
+    QVERIFY(Community::autoJoin(store, true, false, [] { return true; }));
+    QVERIFY(store.setMuted(true, communityKey));
+    QVERIFY(Community::noteGroupLeft(store, Community::chatId()));
+    QVERIFY(!Community::restoreSound(store));
+    QVERIFY(store.isMuted(communityKey));
+    QVERIFY(store.communitySoundRestored());
+}
+
+void TestAirCommunity::theJoinLastsAcrossARestart()
 {
     LocalStore store;
     QVERIFY(Community::autoJoin(store, true, false, [] { return true; }));
     LocalStore next = restarted(store);
     QVERIFY(next.communityAutoJoinDone());
     QVERIFY(!next.communityLeft());
-    QVERIFY(next.isMuted(communityKey));
+    QVERIFY(!next.isMuted(communityKey));
     // A group that synced after the start is in the list at the next one; one that had not is
     // joined again by the core (rejoinStoredGroups): neither is a second join by itself.
     int joins = 0;

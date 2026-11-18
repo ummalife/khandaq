@@ -216,8 +216,9 @@ Decided while building it in the iOS client (11.11.2026); Android and desktop fo
 
 - **A transcript, not bubbles.** Each entry: the time in a 38 pt column of tabular figures (wider
   with a large text size), the text, and at the far end the mark of our own texts. The author shows
-  only where a run starts (same author, same day, under five minutes apart): "You" in `ink-2`, the
-  other person by first name in their tone. The day ("Today", "Yesterday", a date) heads its first
+  only where a run starts (same author, same day, under five minutes apart), a step above the text: "You"
+  in `tone-5` (0.2.60: in `ink-2` it read as a line of the text), the other person by first name in
+  their tone. The day ("Today", "Yesterday", a date) heads its first
   entry at the text column. No wallpaper. A new entry rises 8 pt and fades in; with reduced motion it
   only fades.
 - **Marks:** amber clock in transit, faint clock while leaving, a check when sent, two checks when

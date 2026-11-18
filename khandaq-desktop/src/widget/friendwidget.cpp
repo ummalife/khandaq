@@ -44,11 +44,9 @@
 #include <QContextMenuEvent>
 #include <QDrag>
 #include <QFileDialog>
-#include <QInputDialog>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMimeData>
-#include <QRegularExpression>
 
 #include <cassert>
 
@@ -168,7 +166,7 @@ void FriendWidget::showContextMenu(const QPoint& globalPos, const QList<QAction*
         circleMenu->addAction(action);
     }
 
-    const auto setAlias = menu.addAction(tr("Set alias..."));
+    const auto setAlias = menu.addAction(AirStrings::text(AirStrings::Text::DossierRename));
     connect(setAlias, &QAction::triggered, this, &FriendWidget::editAlias);
 
     menu.addSeparator();
@@ -207,16 +205,9 @@ void FriendWidget::editAlias()
         return;
     }
 
-    Friend* frnd = chatroom->getFriend();
-    QString title = tr("Set alias...");
-    title.remove(QRegularExpression(QStringLiteral("[.\\x{2026}]+$")));
-    bool accepted = false;
-    const QString alias =
-        QInputDialog::getText(window(), title, AirStrings::text(AirStrings::Text::AliasPrompt),
-                              QLineEdit::Normal, frnd->getDisplayedName(), &accepted);
-    if (accepted) {
-        frnd->setAlias(alias.trimmed());
-    }
+    // KHANDAQ (0.2.60): the same field as Rename in the dossier, in the head of the chat, instead of a
+    // dialog of its own.
+    emit renameRequested(this);
 }
 
 void FriendWidget::removeChatWindow()

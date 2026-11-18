@@ -32,6 +32,7 @@
 #include "src/model/ichatlog.h"
 #include "src/persistence/profile.h"
 #include "src/persistence/settings.h"
+#include "src/widget/air/airchatparts.h"
 #include "src/widget/air/airlocal.h"
 #include "src/widget/air/airstrings.h"
 
@@ -326,8 +327,12 @@ Air::Entry AirSource::groupEntry(Group& group, const IChatLog* log, const QSet<Q
     // The peer list counts us too.
     entry.reach = Air::Reach::group(std::max(0, group.getPeersCount() - 1));
     entry.isFavorite = favorites.contains(entry.id);
-    // KHANDAQ (0.2.57): Khandaq Community stands first, however it was joined.
+    // KHANDAQ (0.2.57): Khandaq Community stands first, however it was joined; since 0.2.60 it wears
+    // the app's logo (avatar).
     entry.pinned = Air::Community::isCommunity(group.getPersistentId().getByteArray());
+    if (entry.pinned) {
+        entry.photoKey = QString::fromLatin1(Air::Community::photoKey);
+    }
 
     const Conversation conversation = log ? read(*log, true) : Conversation{};
     entry.transitCount = conversation.undelivered;
@@ -625,6 +630,9 @@ int AirSource::settlingLeft() const
 
 QPixmap AirSource::avatar(const QString& photoKey) const
 {
+    if (photoKey == QLatin1String(Air::Community::photoKey)) {
+        return AirTile::communityLogo();
+    }
     return avatars.value(photoKey);
 }
 

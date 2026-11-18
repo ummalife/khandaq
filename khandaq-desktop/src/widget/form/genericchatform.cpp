@@ -42,6 +42,7 @@
 #include "src/widget/emoticonswidget.h"
 #include "src/widget/form/chatform.h"
 #include "src/widget/form/loadhistorydialog.h"
+#include "src/widget/imagepreviewwidget.h"
 #include "src/widget/maskablepixmapwidget.h"
 #include "src/widget/searchform.h"
 #include "src/widget/style.h"
@@ -52,7 +53,11 @@
 #include "src/widget/widget.h"
 
 #include <QClipboard>
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QKeyEvent>
 #include <QPointer>
 #include <QRegularExpression>
@@ -239,9 +244,13 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
 
     setLayout(mainLayout);
 
-    // kq-composer: the paperclip, the field and "Send" in one frame. The emoji button is gone; the
-    // old buttons stay hidden and do what the composer asks of them, so their connections hold.
+    // kq-composer: the paperclip, the field, the emoji and "Send" in one frame. The old buttons stay
+    // hidden and do what the composer asks of them, so their connections hold.
     composer = new AirComposer(msgEdit, contentWidget);
+    // KHANDAQ (0.2.60): the emoji came back (users could not send any from the computer); a build
+    // without a set has nothing to offer.
+    composer->setEmojiVisible(!smileyPack.getEmoticons().empty());
+    connect(composer, &AirComposer::emojiRequested, this, &GenericChatForm::showEmoticons);
     composer->addAbove(quotePreview);
     for (QPushButton* button : {emoteButton, fileButton, sendButton}) {
         button->setParent(contentWidget);
@@ -276,6 +285,20 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
     contentLayout->addWidget(dateInfo);
     contentLayout->addWidget(chatWidget);
     contentLayout->addWidget(composer);
+
+    // A pasted picture or a screenshot waits here, right over the field (takePastedImages).
+    imagePreview = new ImagePreviewButton(this);
+    imagePreview->setFixedSize(100, 100);
+    imagePreview->setFlat(true);
+    imagePreview->setStyleSheet("QPushButton { border: 0px }");
+    imagePreview->hide();
+    auto* const cancelPreview = new QPushButton(imagePreview);
+    cancelPreview->setFixedSize(20, 20);
+    cancelPreview->move(QPoint(80, 0));
+    cancelPreview->setIcon(QIcon(style.getImagePath("rejectCall/rejectCall.svg", settings)));
+    cancelPreview->setFlat(true);
+    connect(cancelPreview, &QPushButton::pressed, this, &GenericChatForm::cancelImagePreview);
+    contentLayout->insertWidget(contentLayout->indexOf(composer), imagePreview);
 
     // KHANDAQ (0.2.58): Reply first, on the message or the file the menu is opened on.
     replyAction = menu.addAction(QString());
@@ -524,6 +547,60 @@ void GenericChatForm::onPasteFiles(const QStringList& paths)
     std::ignore = paths;
 }
 
+void GenericChatForm::sendPreparedFiles(const QStringList& paths)
+{
+    std::ignore = paths;
+}
+
+void GenericChatForm::takePastedImages()
+{
+    connect(msgEdit, &ChatTextEdit::pasteImage, this, &GenericChatForm::previewImage);
+    connect(sendButton, &QPushButton::pressed, this, &GenericChatForm::sendImageFromPreview);
+    connect(msgEdit, &ChatTextEdit::enterPressed, this, &GenericChatForm::sendImageFromPreview);
+    connect(msgEdit, &ChatTextEdit::escapePressed, this, &GenericChatForm::cancelImagePreview);
+}
+
+void GenericChatForm::previewImage(const QPixmap& pixmap)
+{
+    imagePreviewSource = pixmap;
+    imagePreview->setIconFromPixmap(pixmap);
+    imagePreview->show();
+}
+
+void GenericChatForm::cancelImagePreview()
+{
+    imagePreviewSource = QPixmap();
+    imagePreview->hide();
+}
+
+void GenericChatForm::sendImageFromPreview()
+{
+    if (!imagePreview->isVisible()) {
+        return;
+    }
+
+    QDir(settings.getPaths().getAppDataDirPath()).mkpath("images");
+
+    // ~ISO 8601 for the name, without the colons Windows does not take in a file name.
+    const QString filepath =
+        QString("%1images%2Khandaq_Image_%3.png")
+            .arg(settings.getPaths().getAppDataDirPath())
+            .arg(QDir::separator())
+            .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd HH-mm-ss.zzz"));
+    QFile file(filepath);
+    if (!file.open(QFile::WriteOnly) || !imagePreviewSource.save(&file, "PNG")) {
+        // The operation as the title, over the window (E21).
+        AirDialog::notice(this, AirStrings::text(AirStrings::Text::FileNotSentTitle),
+                          AirStrings::text(AirStrings::Text::ScreenshotNotSaved));
+        return;
+    }
+    file.close();
+    cancelImagePreview();
+    // KHANDAQ (0.2.60): the same way as a chosen file, with its checks and their words (the picture
+    // went past them before, straight to the core).
+    sendPreparedFiles({QFileInfo(file).filePath()});
+}
+
 QString GenericChatForm::outgoingText() const
 {
     QString msg = msgEdit->toPlainText();
@@ -645,6 +722,14 @@ void GenericChatForm::onSendTriggered()
 
 void GenericChatForm::onEmoteButtonClicked()
 {
+    QWidget* sender = qobject_cast<QWidget*>(QObject::sender());
+    if (sender) {
+        showEmoticons(sender->mapToGlobal(QPoint()));
+    }
+}
+
+void GenericChatForm::showEmoticons(const QPoint& anchor)
+{
     // don't show the smiley selection widget if there are no smileys available
     if (smileyPack.getEmoticons().empty())
         return;
@@ -653,12 +738,10 @@ void GenericChatForm::onEmoteButtonClicked()
     connect(&widget, SIGNAL(insertEmoticon(QString)), this, SLOT(onEmoteInsertRequested(QString)));
     widget.installEventFilter(this);
 
-    QWidget* sender = qobject_cast<QWidget*>(QObject::sender());
-    if (sender) {
-        QPoint pos =
-            -QPoint(widget.sizeHint().width() / 2, widget.sizeHint().height()) - QPoint(0, 10);
-        widget.exec(sender->mapToGlobal(pos));
-    }
+    // Centred over the anchor, 10 px above it; QMenu keeps it on the screen.
+    const QPoint pos =
+        -QPoint(widget.sizeHint().width() / 2, widget.sizeHint().height()) - QPoint(0, 10);
+    widget.exec(anchor + pos);
 }
 
 void GenericChatForm::onEmoteInsertRequested(QString str)

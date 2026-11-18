@@ -72,6 +72,8 @@ signals:
     void copyFriendIdToClipboard(const ToxPk& friendPk);
     /** "To new group": New group opens with this contact chosen for the invitations. */
     void newGroupRequested(const ToxPk& friendPk);
+    /** Rename from the menu of the list: the chat opens with its name being edited in its head. */
+    void renameRequested(FriendWidget* widget);
     void contextMenuCalled(QContextMenuEvent* event);
     void friendHistoryRemoved();
     void updateFriendActivity(Friend& frnd);

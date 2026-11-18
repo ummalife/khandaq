@@ -2995,11 +2995,28 @@ void Core::maintainGroups()
 
 bool Core::groupInviteFriend(uint32_t friendId, int groupId)
 {
+    return inviteToGroup(friendId, groupId) == GroupInviteResult::Sent;
+}
+
+Core::GroupInviteResult Core::inviteToGroup(uint32_t friendId, int groupId)
+{
     QMutexLocker ml{&coreLoopLock};
 
     Tox_Err_Group_Invite_Friend error;
     tox_group_invite_friend(tox.get(), groupId, friendId, &error);
-    return PARSE_ERR(error);
+    switch (error) {
+    case TOX_ERR_GROUP_INVITE_FRIEND_OK:
+        return GroupInviteResult::Sent;
+    case TOX_ERR_GROUP_INVITE_FRIEND_INVITE_FAIL:
+    case TOX_ERR_GROUP_INVITE_FRIEND_FAIL_SEND:
+    case TOX_ERR_GROUP_INVITE_FRIEND_DISCONNECTED:
+        // The packet goes over the link with the contact: offline, it did not go.
+        qDebug() << "Group invitation not sent now, error" << static_cast<int>(error);
+        return GroupInviteResult::Later;
+    default:
+        PARSE_ERR(error);
+        return GroupInviteResult::Refused;
+    }
 }
 
 /**

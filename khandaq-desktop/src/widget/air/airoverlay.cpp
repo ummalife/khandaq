@@ -855,6 +855,9 @@ AirBanner::AirBanner(QWidget* window, const Content& content)
     case Tile::Request:
         tile->setKind(AirTile::Kind::Request);
         break;
+    case Tile::Community:
+        tile->setKind(AirTile::Kind::Community);
+        break;
     }
     tile->setPerson(data.tileName, data.tone);
     tile->setPhoto(data.photo);

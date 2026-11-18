@@ -842,6 +842,11 @@
         <translation>Прикрепить файл</translation>
     </message>
     <message>
+        <source>Emoji</source>
+        <comment>button of the message field that opens the emoji</comment>
+        <translation>Эмодзи</translation>
+    </message>
+    <message>
         <source>Goes right away: %1 is online</source>
         <comment>line under the message field; %1 is the first name</comment>
         <translation>Уйдёт сразу: %1 в сети</translation>
@@ -1842,9 +1847,9 @@
         <translation>Выберите, кого пригласить</translation>
     </message>
     <message>
-        <source>can be invited once online</source>
-        <comment>invitation list: a contact who is offline</comment>
-        <translation>пригласить можно, когда будет в сети</translation>
+        <source>gets the invitation once online</source>
+        <comment>invitation list: a contact who is offline; the invitation waits for them</comment>
+        <translation>получит приглашение, когда будет в сети</translation>
     </message>
     <message>
         <source>No contacts yet: add someone first.</source>
@@ -2078,6 +2083,15 @@
             <numerusform>Отправлено %n приглашение</numerusform>
             <numerusform>Отправлено %n приглашения</numerusform>
             <numerusform>Отправлено %n приглашений</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n invitation(s) will go once the contacts are online</source>
+        <comment>toast after inviting: invitations kept for contacts who are offline</comment>
+        <translation>
+            <numerusform>%n приглашение уйдёт при появлении в сети</numerusform>
+            <numerusform>%n приглашения уйдут при появлении в сети</numerusform>
+            <numerusform>%n приглашений уйдут при появлении в сети</numerusform>
         </translation>
     </message>
     <message numerus="yes">

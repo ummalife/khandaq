@@ -303,7 +303,7 @@ int groupNameOverflow(const QString& text)
 
 bool InviteCandidate::canInvite() const
 {
-    return online && friendId >= 0;
+    return friendId >= 0;
 }
 
 bool InviteCandidate::operator==(const InviteCandidate& other) const
@@ -328,6 +328,9 @@ QVector<InviteCandidate> arrangedInvites(QVector<InviteCandidate> candidates, co
                      [](const InviteCandidate& left, const InviteCandidate& right) {
                          if (left.canInvite() != right.canInvite()) {
                              return left.canInvite();
+                         }
+                         if (left.online != right.online) {
+                             return left.online;
                          }
                          const int order = compareTitles(left.name, right.name);
                          if (order != 0) {

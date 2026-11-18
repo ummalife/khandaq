@@ -186,6 +186,14 @@ constexpr int leastSeparateWidth = 720;
  */
 constexpr int joinedGroupOpenWaitMs = 10000;
 
+/**
+ * KHANDAQ (0.2.60): how often the invitations kept for offline contacts are tried for those online
+ * (a group disconnected when the contact came online), and how long after a contact comes online
+ * theirs go: the link settles first.
+ */
+constexpr int outgoingInviteRetryMs = 60 * 1000;
+constexpr int outgoingInviteAfterOnlineMs = 3000;
+
 const QString activateHandlerKey("activate");
 const QString saveHandlerKey("save");
 /** The event another instance posts with a tox: link it was started with (AppManager::run). */
@@ -1009,14 +1017,14 @@ void Widget::joinCommunity()
     const QByteArray chatId = Air::Community::chatId();
     const bool alreadyInGroup = groupList->findGroup(GroupId(chatId)) != nullptr;
     const bool joined = airLocal->autoJoinCommunity(true, alreadyInGroup, [this, &chatId] {
-        // The group comes into the list during the join (Core::groupJoined, createGroup), muted
-        // and unasked for: it does not bring the window forward, which on Windows flashes the
-        // button of an app in the background.
+        // The group comes into the list during the join (Core::groupJoined, createGroup), unasked
+        // for: it does not bring the window forward, which on Windows flashes the button of an app
+        // in the background.
         const QScopedValueRollback<bool> unasked(groupComesByItself, true);
         return core->joinGroupByChatId(chatId) != std::numeric_limits<uint32_t>::max();
     });
     if (joined) {
-        qDebug() << "Khandaq Community joined by itself, muted";
+        qDebug() << "Khandaq Community joined by itself";
     }
 }
 
@@ -1670,6 +1678,11 @@ void Widget::addFriend(uint32_t friendId, const ToxPk& friendPk)
     connect(widget, &FriendWidget::copyFriendIdToClipboard, this, &Widget::copyFriendIdToClipboard);
     connect(widget, &FriendWidget::newGroupRequested, this,
             [this](const ToxPk& contactPk) { openNewGroup(contactPk.toString()); });
+    connect(widget, &FriendWidget::renameRequested, friendForm, [friendForm](FriendWidget* row) {
+        // The chat opens, its input taking the focus, and then the name takes it for the edit.
+        emit row->chatroomWidgetClicked(row);
+        friendForm->beginRename();
+    });
     connect(widget, &FriendWidget::contextMenuCalled, widget, &FriendWidget::onContextMenuCalled);
     connect(widget, SIGNAL(removeFriend(const ToxPk&)), this, SLOT(removeFriend(const ToxPk&)));
 
@@ -1753,9 +1766,41 @@ void Widget::onFriendStatusChanged(const ToxPk& friendPk, Status::Status status)
     }
 
     contentDialogManager->updateFriendStatus(friendPk);
-    // Only contacts online now can be invited: the list of New group follows them.
+    // New group says who is online now.
     if (newGroup) {
         newGroup->refreshCandidates();
+    }
+    if (Status::isOnline(status)) {
+        QTimer::singleShot(outgoingInviteAfterOnlineMs, this, &Widget::sendOutgoingInvites);
+    }
+}
+
+void Widget::sendOutgoingInvites()
+{
+    if (!airLocal || !core) {
+        return;
+    }
+    airLocal->pruneOutgoingInvites();
+    for (const Air::LocalStore::OutgoingInvite& invite : airLocal->outgoingInvites()) {
+        const Friend* const frnd = friendList->findFriend(ToxPk(invite.friendKey));
+        const Group* const group =
+            groupList->findGroup(GroupId(QByteArray::fromHex(invite.groupKey.toLatin1())));
+        // A contact removed or a group left takes its invitations along (AirLocal::forget,
+        // forgetGroup); one not in the lists yet, or offline, waits.
+        if (!frnd || !group || !Status::isOnline(frnd->getStatus())) {
+            continue;
+        }
+        switch (core->inviteToGroup(frnd->getId(), static_cast<int>(group->getId()))) {
+        case Core::GroupInviteResult::Sent:
+            qInfo() << "A group invitation kept for an offline contact went";
+            airLocal->dropOutgoingInvite(invite.friendKey, invite.groupKey);
+            break;
+        case Core::GroupInviteResult::Later:
+            break;
+        case Core::GroupInviteResult::Refused:
+            airLocal->dropOutgoingInvite(invite.friendKey, invite.groupKey);
+            break;
+        }
     }
 }
 
@@ -2199,7 +2244,8 @@ void Widget::showGroupBand(QWidget* front, const Group& g, const ToxPk& author, 
         const QString name = g.resolveToxPk(author);
         band.body = name.isEmpty() ? message : name + QStringLiteral(": ") + message;
     }
-    band.tile = AirBanner::Tile::Group;
+    band.tile = Air::Community::isCommunity(groupId.getByteArray()) ? AirBanner::Tile::Community
+                                                                    : AirBanner::Tile::Group;
     band.tileName = g.getDisplayedName();
     band.tone = Air::toneIndex(groupId.toString());
     band.hint = AirStrings::text(Text::BandOpensChat);
@@ -2925,7 +2971,8 @@ void Widget::onGroupPrivateMessageReceived(int groupnumber, const ToxPk& peerPk,
     AirBanner::Content band;
     band.title = AirStrings::text(Text::PrivateReceived).arg(name);
     band.body = settings.getNotifyHide() ? QString() : words;
-    band.tile = AirBanner::Tile::Group;
+    band.tile = Air::Community::isCommunity(groupId.getByteArray()) ? AirBanner::Tile::Community
+                                                                    : AirBanner::Tile::Group;
     band.tileName = group->getDisplayedName();
     band.tone = Air::toneIndex(groupId.toString());
     band.hint = AirStrings::text(Text::BandOpensChat);
@@ -4322,6 +4369,11 @@ void Widget::setupAir()
     airLocal = new AirLocal(settings, this);
     // Requests and invitations wait in the local store until they are answered (E12).
     airSource->setLocal(airLocal);
+    // KHANDAQ (0.2.60): and ours for contacts who were offline, until they are online.
+    outgoingInviteTimer = new QTimer(this);
+    outgoingInviteTimer->setInterval(outgoingInviteRetryMs);
+    connect(outgoingInviteTimer, &QTimer::timeout, this, &Widget::sendOutgoingInvites);
+    outgoingInviteTimer->start();
     // KHANDAQ (0.2.57): the read receipts we send; those still owed stay in the local store.
     seenReceipts = new Air::SeenReceipts(
         *airLocal,
@@ -4625,23 +4677,12 @@ void Widget::createAirGroup(const QString& name, Air::GroupPrivacy privacy,
     }
     // Core::emptyGroupCreated has put the group in the list already.
     const GroupId groupId = core->getGroupPersistentId(static_cast<uint32_t>(groupNumber));
-    int sent = 0;
-    for (const Air::InviteCandidate& candidate : invited) {
-        sent += candidate.friendId >= 0
-                && core->groupInviteFriend(static_cast<uint32_t>(candidate.friendId), groupNumber);
-    }
+    const Air::InviteTally tally = GroupChatForm::sendInvites(
+        *core, airLocal, static_cast<uint32_t>(groupNumber), groupId, invited);
     newGroup->close();
     openAirEntry(AirSource::groupEntryId(groupId));
     if (!invited.isEmpty()) {
-        using AirStrings::Text;
-        if (sent == invited.size()) {
-            AirToast::post(airList, AirStrings::text(Text::InviteSent, sent));
-        } else {
-            AirDialog::notice(this,
-                              AirStrings::text(sent == 0 ? Text::ErrorInviteTitle
-                                                         : Text::ErrorInviteSomeTitle),
-                              AirStrings::text(Text::InviteRetry));
-        }
+        GroupChatForm::tellInvites(airList, this, tally);
     }
 }
 

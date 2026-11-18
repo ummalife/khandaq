@@ -142,13 +142,12 @@ GroupChatForm::GroupChatForm(Core& core_, Group* chatGroup, IChatLog& chatLog_,
     }
 
     headWidget->setMode(mode);
-    // Tox groups carry no calls: where a conversation has its call buttons, the head says so.
-    headWidget->setNoCallsNote(mode == ChatFormHeader::Mode::None);
     setName(group->getName());
 
     const auto updateTile = [this] {
         headWidget->setTile(group->getDisplayedName(),
-                            Air::toneIndex(group->getPersistentId().toString()), AirTile::Kind::Group);
+                            Air::toneIndex(group->getPersistentId().toString()),
+                            AirTile::groupKind(group->getPersistentId().getByteArray()));
     };
     updateTile();
     connect(group, &Chat::displayedNameChanged, this, updateTile);
@@ -219,6 +218,8 @@ GroupChatForm::GroupChatForm(Core& core_, Group* chatGroup, IChatLog& chatLog_,
     connect(msgEdit, &ChatTextEdit::tabPressed, tabber, &TabCompleter::complete);
     connect(msgEdit, &ChatTextEdit::keyPressed, tabber, &TabCompleter::reset);
     connect(msgEdit, &ChatTextEdit::textChanged, this, &GroupChatForm::refreshCounter);
+    // KHANDAQ (0.2.60): a pasted picture is offered as in a chat with a person (it was not taken).
+    takePastedImages();
     connect(quotePreview, &ChatQuotePreview::changed, this, &GroupChatForm::refreshCounter);
     connect(headWidget, &ChatFormHeader::callTriggered, this, &GroupChatForm::onCallClicked);
     connect(headWidget, &ChatFormHeader::micMuteToggle, this, &GroupChatForm::onMicMuteToggle);
@@ -584,20 +585,67 @@ void GroupChatForm::setPrivacy(Air::GroupPrivacy privacy)
 
 void GroupChatForm::inviteContacts(const QVector<Air::InviteCandidate>& chosen)
 {
-    const int groupNumber = static_cast<int>(group->getId());
-    int sent = 0;
+    tellInvites(this, this,
+                sendInvites(core, airLocal, group->getId(), group->getPersistentId(), chosen));
+}
+
+Air::InviteTally GroupChatForm::sendInvites(Core& core, AirLocal* local, uint32_t groupNumber,
+                                            const GroupId& groupId,
+                                            const QVector<Air::InviteCandidate>& chosen)
+{
+    Air::InviteTally tally;
+    const QString groupKey = groupId.toString();
     for (const Air::InviteCandidate& candidate : chosen) {
-        sent += candidate.friendId >= 0
-                && core.groupInviteFriend(static_cast<uint32_t>(candidate.friendId), groupNumber);
+        if (!candidate.canInvite()) {
+            ++tally.refused;
+            continue;
+        }
+        switch (core.inviteToGroup(static_cast<uint32_t>(candidate.friendId),
+                                   static_cast<int>(groupNumber))) {
+        case Core::GroupInviteResult::Sent:
+            ++tally.sent;
+            if (local) {
+                // One kept from before goes too: it has just been sent.
+                local->dropOutgoingInvite(candidate.publicKey, groupKey);
+            }
+            break;
+        case Core::GroupInviteResult::Later:
+            if (local) {
+                local->keepOutgoingInvite(candidate.publicKey, groupKey);
+                ++tally.later;
+            } else {
+                ++tally.refused;
+            }
+            break;
+        case Core::GroupInviteResult::Refused:
+            ++tally.refused;
+            break;
+        }
     }
-    if (sent == chosen.size()) {
-        AirToast::post(this, AirStrings::text(AirText::InviteSent, sent));
+    return tally;
+}
+
+void GroupChatForm::tellInvites(QWidget* toastOn, QWidget* dialogOn, const Air::InviteTally& tally)
+{
+    if (tally.refused > 0) {
+        AirDialog::notice(dialogOn,
+                          AirStrings::text(tally.sent + tally.later == 0
+                                               ? AirText::ErrorInviteTitle
+                                               : AirText::ErrorInviteSomeTitle),
+                          AirStrings::text(AirText::InviteRetry));
         return;
     }
-    AirDialog::notice(this,
-                      AirStrings::text(sent == 0 ? AirText::ErrorInviteTitle
-                                                 : AirText::ErrorInviteSomeTitle),
-                      AirStrings::text(AirText::InviteRetry));
+    QStringList said;
+    if (tally.sent > 0) {
+        said.append(AirStrings::text(AirText::InviteSent, tally.sent));
+    }
+    if (tally.later > 0) {
+        said.append(AirStrings::text(AirText::InviteLater, tally.later));
+    }
+    if (!said.isEmpty()) {
+        // A line each, which reads the same in every language; the toast wraps.
+        AirToast::post(toastOn, said.join(QLatin1Char('\n')));
+    }
 }
 
 void GroupChatForm::askToWrite()
@@ -697,6 +745,16 @@ void GroupChatForm::onAttachClicked()
 {
     const QStringList paths = QFileDialog::getOpenFileNames(window(), tr("Send a file"),
                                                             QDir::homePath(), QString(), nullptr);
+    sendFilesToGroup(paths);
+}
+
+void GroupChatForm::onPasteFiles(const QStringList& paths)
+{
+    sendFilesToGroup(paths);
+}
+
+void GroupChatForm::sendPreparedFiles(const QStringList& paths)
+{
     sendFilesToGroup(paths);
 }
 
@@ -861,8 +919,8 @@ void GroupChatForm::dragEnterEvent(QDragEnterEvent* ev)
     }
     ToxPk toxPk{ev->mimeData()->data("toxPk")};
     Friend* frnd = friendList.findFriend(toxPk);
-    // An invitation goes over the link with the contact, so only one online now is taken.
-    if (frnd && Status::isOnline(frnd->getStatus()))
+    // KHANDAQ (0.2.60): a contact offline now is taken too; their invitation waits for them.
+    if (frnd)
         ev->acceptProposedAction();
 }
 
@@ -888,16 +946,13 @@ void GroupChatForm::dropEvent(QDropEvent* ev)
     if (!frnd)
         return;
 
-    // A contact dropped on the conversation is invited, and the toast says how it went. One who
-    // went offline since the drag began is not taken (dragEnterEvent takes only online ones).
-    if (!Status::isOnline(frnd->getStatus())) {
-        return;
-    }
+    // A contact dropped on the conversation is invited, and the toast says how it went: sent, or
+    // kept until they are online.
     Air::InviteCandidate candidate;
     candidate.friendId = static_cast<int>(frnd->getId());
     candidate.publicKey = frnd->getPublicKey().toString();
     candidate.name = frnd->getDisplayedName();
-    candidate.online = true;
+    candidate.online = Status::isOnline(frnd->getStatus());
     inviteContacts({candidate});
 }
 

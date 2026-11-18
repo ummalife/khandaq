@@ -281,6 +281,18 @@ void TestAirYouPage::copiesTheIdAndTheQrCode()
     AirYouPage page(info);
     page.resize(1100, 900);
     page.show();
+    // Copy ID stands right under the ID it copies; the buttons of the code under the code.
+    QWidget* const id = named<QWidget>(&page, "youId");
+    QWidget* const copyId = named<QWidget>(&page, "youCopyId");
+    QWidget* const qr = named<QWidget>(&page, "youQr");
+    QWidget* const copyQr = named<QWidget>(&page, "youCopyQr");
+    QCoreApplication::processEvents();
+    const auto at = [&page](QWidget* widget) { return widget->mapTo(&page, QPoint(0, 0)); };
+    QVERIFY(at(copyId).y() >= at(id).y() + id->height());
+    QVERIFY(at(copyId).y() - (at(id).y() + id->height()) <= 48);
+    QCOMPARE(at(copyId).x(), at(id).x());
+    QVERIFY(at(copyQr).y() >= at(qr).y() + qr->height());
+    QVERIFY(at(copyQr).x() < at(id).x());
     named<AirButton>(&page, "youCopyId")->click();
     QCOMPARE(info.idCopies, 1);
     QVERIFY(toasts(&page).contains(AirStrings::text(Text::YouIdCopied)));

@@ -863,6 +863,11 @@
         <translation>إرفاق ملف</translation>
     </message>
     <message>
+        <source>Emoji</source>
+        <comment>button of the message field that opens the emoji</comment>
+        <translation>الرموز التعبيرية</translation>
+    </message>
+    <message>
         <source>Goes right away: %1 is online</source>
         <comment>line under the message field; %1 is the first name</comment>
         <translation>ستُرسل فورًا: %1 متصل</translation>
@@ -1878,9 +1883,9 @@
         <translation>اختر من تريد دعوته</translation>
     </message>
     <message>
-        <source>can be invited once online</source>
-        <comment>invitation list: a contact who is offline</comment>
-        <translation>يمكن دعوته عند اتصاله</translation>
+        <source>gets the invitation once online</source>
+        <comment>invitation list: a contact who is offline; the invitation waits for them</comment>
+        <translation>سيتلقى الدعوة عند اتصاله</translation>
     </message>
     <message>
         <source>No contacts yet: add someone first.</source>
@@ -2132,6 +2137,18 @@
             <numerusform>أُرسلت %n دعوات</numerusform>
             <numerusform>أُرسلت %n دعوة</numerusform>
             <numerusform>أُرسلت %n دعوة</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n invitation(s) will go once the contacts are online</source>
+        <comment>toast after inviting: invitations kept for contacts who are offline</comment>
+        <translation>
+            <numerusform>ستُرسل %n دعوة عند اتصال المدعوين</numerusform>
+            <numerusform>ستُرسل الدعوة عند اتصال المدعو</numerusform>
+            <numerusform>ستُرسل الدعوتان عند اتصال المدعوَّين</numerusform>
+            <numerusform>ستُرسل %n دعوات عند اتصال المدعوين</numerusform>
+            <numerusform>ستُرسل %n دعوة عند اتصال المدعوين</numerusform>
+            <numerusform>ستُرسل %n دعوة عند اتصال المدعوين</numerusform>
         </translation>
     </message>
     <message numerus="yes">

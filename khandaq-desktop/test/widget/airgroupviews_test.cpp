@@ -152,10 +152,11 @@ class TestAirGroupViews : public QObject
     Q_OBJECT
 private slots:
     void newGroupStartsOpenToAnyoneWithTheKeyAndWaitsForAName();
-    void newGroupCreatesWithTheChoiceAndTheContactsOnline();
+    void newGroupCreatesWithTheChoiceAndOfflineContactsToo();
     void joiningTakesAWholeKeyAndKnowsTheGroupsInTheList();
-    void inviteListKeepsTheChoiceByKeyWhileTheContactIsOnline();
+    void inviteListKeepsTheChoiceByKey();
     void readOnlyBarTakesThePlaceOfTheField();
+    void composerOffersTheEmojiAtTheEndOfTheField();
     void dossierSaysTheRoleAndListsTheMembers();
     void memberMenuIsTheSameFromTheRowAndFromTheirName();
     void aGroupByInvitationOnlySharesNoKeyAndItsFounderOpensIt();
@@ -218,8 +219,8 @@ void TestAirGroupViews::newGroupStartsOpenToAnyoneWithTheKeyAndWaitsForAName()
     QVERIFY(!create->isEnabled());
 }
 
-/** Create hands over the name, the choice and the contacts chosen; only the online can be. */
-void TestAirGroupViews::newGroupCreatesWithTheChoiceAndTheContactsOnline()
+/** Create hands over the name, the choice and the contacts chosen, those offline too (0.2.60). */
+void TestAirGroupViews::newGroupCreatesWithTheChoiceAndOfflineContactsToo()
 {
     Window window;
     // "To new group" in Mariam's menu: she comes chosen.
@@ -227,7 +228,8 @@ void TestAirGroupViews::newGroupCreatesWithTheChoiceAndTheContactsOnline()
     auto* const create = part<AirButton>(window.panel.get(), "newGroupCreate");
     QCOMPARE(create->text(), AirStrings::text(Text::NewGroupCreateInvite, 1));
 
-    // Those who can be invited first, then by name; Yusuf is offline and cannot be chosen.
+    // Those online first, then by name. Yusuf is offline: he can be chosen, and his row says
+    // that the invitation waits for him.
     QList<QAbstractButton*> rows = window.inviteRows();
     QCOMPARE(rows.size(), 3);
     QCOMPARE(rows.at(0)->accessibleName(), QStringLiteral("Ibrahim Aliev"));
@@ -235,12 +237,16 @@ void TestAirGroupViews::newGroupCreatesWithTheChoiceAndTheContactsOnline()
     QCOMPARE(rows.at(2)->accessibleName(), QStringLiteral("Yusuf Karimov"));
     QVERIFY(!rows.at(0)->isChecked());
     QVERIFY(rows.at(1)->isChecked());
-    QVERIFY(!rows.at(2)->isEnabled());
+    QVERIFY(rows.at(2)->isEnabled());
+    QVERIFY(rows.at(1)->accessibleDescription().isEmpty());
+    QCOMPARE(rows.at(2)->accessibleDescription(), AirStrings::text(Text::InviteWhenOnline));
 
     rows.at(0)->click();
     QCOMPARE(create->text(), AirStrings::text(Text::NewGroupCreateInvite, 2));
     rows.at(0)->click();
     QCOMPARE(create->text(), AirStrings::text(Text::NewGroupCreateInvite, 1));
+    rows.at(2)->click();
+    QCOMPARE(create->text(), AirStrings::text(Text::NewGroupCreateInvite, 2));
 
     QString createdName;
     Air::GroupPrivacy createdPrivacy = Air::GroupPrivacy::Open;
@@ -263,8 +269,10 @@ void TestAirGroupViews::newGroupCreatesWithTheChoiceAndTheContactsOnline()
     QCOMPARE(requests, 1);
     QCOMPARE(createdName, QStringLiteral("Book club"));
     QCOMPARE(createdPrivacy, Air::GroupPrivacy::InviteOnly);
-    QCOMPARE(invited.size(), 1);
-    QCOMPARE(invited.first().name, QStringLiteral("Mariam Hasanova"));
+    QCOMPARE(invited.size(), 2);
+    QCOMPARE(invited.at(0).name, QStringLiteral("Mariam Hasanova"));
+    QCOMPARE(invited.at(1).name, QStringLiteral("Yusuf Karimov"));
+    QVERIFY(!invited.at(1).online);
 
     // toxcore refused it: the form stays as it was, with the reason.
     window.panel->createFailed();
@@ -272,14 +280,24 @@ void TestAirGroupViews::newGroupCreatesWithTheChoiceAndTheContactsOnline()
     QVERIFY(showsText(window.panel.get(), AirStrings::text(Text::NewGroupFailed)));
     QCOMPARE(name->text(), QStringLiteral("  Book  club "));
 
-    // Mariam goes offline before Create: she is no longer chosen.
+    // Mariam goes offline before Create: she stays chosen, her invitation will wait too.
     window.contacts[0].online = false;
     window.panel->refreshCandidates();
-    QCOMPARE(create->text(), AirStrings::text(Text::NewGroupCreate));
+    QCOMPARE(create->text(), AirStrings::text(Text::NewGroupCreateInvite, 2));
     rows = window.inviteRows();
     QCOMPARE(rows.size(), 3);
-    QVERIFY(!rows.at(1)->isEnabled());
-    QVERIFY(!rows.at(1)->isChecked());
+    QCOMPARE(rows.at(1)->accessibleName(), QStringLiteral("Mariam Hasanova"));
+    QVERIFY(rows.at(1)->isEnabled());
+    QVERIFY(rows.at(1)->isChecked());
+
+    // Yusuf is gone from toxcore, with no friend number: nothing to send it over, he is let go.
+    window.contacts[1].friendId = -1;
+    window.panel->refreshCandidates();
+    QCOMPARE(create->text(), AirStrings::text(Text::NewGroupCreateInvite, 1));
+    rows = window.inviteRows();
+    QCOMPARE(rows.at(2)->accessibleName(), QStringLiteral("Yusuf Karimov"));
+    QVERIFY(!rows.at(2)->isEnabled());
+    QVERIFY(rows.at(2)->accessibleDescription().isEmpty());
 }
 
 /** The key field takes a key in any usual shape; a group in the list opens instead of joining. */
@@ -327,7 +345,7 @@ void TestAirGroupViews::joiningTakesAWholeKeyAndKnowsTheGroupsInTheList()
 }
 
 /** A friend number is a slot of one session: the choice goes by key, and only while online. */
-void TestAirGroupViews::inviteListKeepsTheChoiceByKeyWhileTheContactIsOnline()
+void TestAirGroupViews::inviteListKeepsTheChoiceByKey()
 {
     QWidget host;
     host.resize(400, 600);
@@ -342,30 +360,40 @@ void TestAirGroupViews::inviteListKeepsTheChoiceByKeyWhileTheContactIsOnline()
     list->choose(contacts.at(1).publicKey);
     QCOMPARE(list->chosen().size(), 1);
     QCOMPARE(list->chosen().first().name, QStringLiteral("Bilal"));
-    // Yusuf is offline: choosing him does nothing.
+    // Yusuf is offline: he is chosen as well, his invitation waits for him (0.2.60). Twice is once.
     list->choose(contacts.at(2).publicKey);
-    QCOMPARE(list->chosen().size(), 1);
-    QCOMPARE(choices.count(), 1);
+    QCOMPARE(list->chosen().size(), 2);
+    QCOMPARE(list->chosen().last().name, QStringLiteral("Yusuf"));
+    QCOMPARE(choices.count(), 2);
+    list->choose(contacts.at(2).publicKey);
+    QCOMPARE(choices.count(), 2);
 
     // The same contacts again: nothing is rebuilt, the choice stays.
     const QList<QAbstractButton*> before =
         list->findChildren<QAbstractButton*>(QStringLiteral("inviteRow"));
     list->setCandidates(contacts);
     QCOMPARE(list->findChildren<QAbstractButton*>(QStringLiteral("inviteRow")), before);
-    QCOMPARE(choices.count(), 1);
+    QCOMPARE(choices.count(), 2);
 
     // A new session gives Bilal another friend number: the choice follows his key.
     contacts[1].friendId = 7;
     list->setCandidates(contacts);
-    QCOMPARE(list->chosen().size(), 1);
+    QCOMPARE(list->chosen().size(), 2);
     QCOMPARE(list->chosen().first().friendId, 7);
 
-    // Bilal goes offline: he is no longer chosen, as he cannot be invited now.
+    // Bilal goes offline: he stays chosen, his invitation will wait.
     contacts[1].online = false;
     list->setCandidates(contacts);
-    QVERIFY(list->chosen().isEmpty());
+    QCOMPARE(list->chosen().size(), 2);
     QCOMPARE(choices.count(), 2);
-    QCOMPARE(choices.last().at(0).toInt(), 0);
+
+    // Yusuf is gone from toxcore, with no friend number: the choice lets him go.
+    contacts[2].friendId = -1;
+    list->setCandidates(contacts);
+    QCOMPARE(list->chosen().size(), 1);
+    QCOMPARE(list->chosen().first().name, QStringLiteral("Bilal"));
+    QCOMPARE(choices.count(), 3);
+    QCOMPARE(choices.last().at(0).toInt(), 1);
 
     // From eight contacts on, a search by name.
     auto* const search = part<AirTextField>(list, "inviteSearch");
@@ -448,6 +476,51 @@ void TestAirGroupViews::readOnlyBarTakesThePlaceOfTheField()
     QVERIFY(!bar->isVisible());
     QVERIFY(field->isVisible());
     QVERIFY(paintsOnItsOwn(composer));
+}
+
+/**
+ * KHANDAQ (0.2.60): users could not send emoji from the computer. The button sits between the field
+ * and Send, in the Tab order too, and asks for the choice above itself; it goes with the field.
+ */
+void TestAirGroupViews::composerOffersTheEmojiAtTheEndOfTheField()
+{
+    QWidget host;
+    host.resize(700, 300);
+    auto* const field = new QTextEdit();
+    auto* const composer = new AirComposer(field, &host);
+    composer->setGeometry(0, 0, 700, 300);
+    host.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&host));
+    auto* const emoji = part<QAbstractButton>(composer, "composerEmoji");
+    auto* const attach = part<QAbstractButton>(composer, "composerAttach");
+    QVERIFY(emoji->isVisible());
+    QCOMPARE(emoji->accessibleName(), AirStrings::text(Text::ComposeEmoji));
+    QCOMPARE(emoji->toolTip(), AirStrings::text(Text::ComposeEmoji));
+    const QRect fieldBox(field->mapTo(composer, QPoint()), field->size());
+    const QRect emojiBox(emoji->mapTo(composer, QPoint()), emoji->size());
+    const QRect attachBox(attach->mapTo(composer, QPoint()), attach->size());
+    QVERIFY(attachBox.right() < fieldBox.left());
+    QVERIFY(fieldBox.right() < emojiBox.left());
+    // Tab goes from the field (past its own viewport) to the emoji: the order the row shows.
+    QWidget* next = field->nextInFocusChain();
+    while (next && field->isAncestorOf(next)) {
+        next = next->nextInFocusChain();
+    }
+    QCOMPARE(next, static_cast<QWidget*>(emoji));
+
+    QSignalSpy asks(composer, &AirComposer::emojiRequested);
+    emoji->click();
+    QCOMPARE(asks.count(), 1);
+    QCOMPARE(asks.first().at(0).toPoint(), emoji->mapToGlobal(QPoint(emoji->width() / 2, 0)));
+
+    // A read-only group hides the field and the emoji with it; a build without a set hides it.
+    composer->setReadOnly(AirStrings::groupReadOnlyText(Air::ComposeRight::Observer),
+                          AirStrings::groupAskText(Air::ComposeRight::Observer));
+    QVERIFY(!emoji->isVisible());
+    composer->setReadOnly(QString(), QString());
+    QVERIFY(emoji->isVisible());
+    composer->setEmojiVisible(false);
+    QVERIFY(!emoji->isVisible());
 }
 
 /** The dossier says your role in words and lists everyone, you included, by role. */

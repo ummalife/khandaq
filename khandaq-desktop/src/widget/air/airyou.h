@@ -168,6 +168,8 @@ private:
     AirQrCard* qrCard = nullptr;
     QLabel* qrHint = nullptr;
     QBoxLayout* qrActions = nullptr;
+    /** Copy ID and Change the antispam part, under the ID. */
+    QBoxLayout* idActions = nullptr;
     AirButton* copyIdButton = nullptr;
     AirButton* copyQrButton = nullptr;
     AirButton* saveQrButton = nullptr;

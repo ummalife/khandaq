@@ -363,8 +363,9 @@ bool ChatTextEdit::tryHandlePaste(const QMimeData* mimeData)
 
     const QString text = mimeData->hasText() ? mimeData->text() : QString();
     const QStringList paths = localFilePathsFromMimeData(mimeData, text);
-    // KHANDAQ (0.2.56): a picture counts only where it is taken, the chat with a person; in a
-    // group the text beside it is pasted instead of nothing.
+    // KHANDAQ (0.2.56): a picture counts only where it is taken, a chat with a person and, since
+    // 0.2.60, a group (GenericChatForm::takePastedImages); in notes the text beside it is pasted
+    // instead of nothing.
     const QMetaMethod imageSignal = QMetaMethod::fromSignal(&ChatTextEdit::pasteImage);
     const bool takesImage = mimeData->hasImage() && isSignalConnected(imageSignal);
     const QString html = takesImage && mimeData->hasHtml() ? mimeData->html() : QString();

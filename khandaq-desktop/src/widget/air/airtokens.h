@@ -328,6 +328,7 @@ constexpr const char* iconNames[] = {
     "scan",
     "search",
     "settings",
+    "smile",
     "trash",
     "user-plus",
     "users",

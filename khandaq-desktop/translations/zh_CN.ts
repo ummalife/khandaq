@@ -828,6 +828,11 @@
         <translation>附加文件</translation>
     </message>
     <message>
+        <source>Emoji</source>
+        <comment>button of the message field that opens the emoji</comment>
+        <translation>表情符号</translation>
+    </message>
+    <message>
         <source>Goes right away: %1 is online</source>
         <comment>line under the message field; %1 is the first name</comment>
         <translation>会立即发出：%1 在线</translation>
@@ -1818,9 +1823,9 @@
         <translation>请选择要邀请的人</translation>
     </message>
     <message>
-        <source>can be invited once online</source>
-        <comment>invitation list: a contact who is offline</comment>
-        <translation>上线后可邀请</translation>
+        <source>gets the invitation once online</source>
+        <comment>invitation list: a contact who is offline; the invitation waits for them</comment>
+        <translation>上线后会收到邀请</translation>
     </message>
     <message>
         <source>No contacts yet: add someone first.</source>
@@ -2042,6 +2047,13 @@
         <comment>toast after inviting</comment>
         <translation>
             <numerusform>已发送 %n 份邀请</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n invitation(s) will go once the contacts are online</source>
+        <comment>toast after inviting: invitations kept for contacts who are offline</comment>
+        <translation>
+            <numerusform>%n 份邀请将在对方上线后发出</numerusform>
         </translation>
     </message>
     <message numerus="yes">

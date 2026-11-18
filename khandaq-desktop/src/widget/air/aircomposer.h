@@ -32,10 +32,10 @@ class QVariantAnimation;
 class QVBoxLayout;
 
 /**
- * kq-composer: the framed field with the paperclip and "Send" of the same height, and one quiet
- * line under it about what happens to a message sent now ("Goes right away: Amina is online"),
- * with the room left once a tenth of a message remains. The field itself is the form's own text
- * edit, which keeps its keys and its paste handling.
+ * kq-composer: the framed field with the paperclip, the emoji and "Send" of the same height, and
+ * one quiet line under it about what happens to a message sent now ("Goes right away: Amina is
+ * online"), with the room left once a tenth of a message remains. The field itself is the form's
+ * own text edit, which keeps its keys and its paste handling.
  */
 class AirComposer : public QWidget
 {
@@ -47,6 +47,8 @@ public:
     void setAttachVisible(bool visible);
     /** What the paperclip says before a file is chosen: a group's limit. Empty for none. */
     void setAttachNote(const QString& note);
+    /** KHANDAQ (0.2.60): the emoji button, hidden when there is no set to choose from. */
+    void setEmojiVisible(bool visible);
     /** An empty text hides the line; the change cross-fades without moving anything. */
     void setHint(const QString& text, Air::ComposeHint::Dot dot);
     /** "120 bytes left"; empty hides it. */
@@ -67,6 +69,8 @@ public:
 signals:
     void sendRequested();
     void attachRequested(const QPoint& globalPos);
+    /** The emoji button, with the middle of its top edge: the choice opens above it. */
+    void emojiRequested(const QPoint& globalPos);
     /** The button of the read-only bar. */
     void readOnlyActionRequested();
 
@@ -83,6 +87,7 @@ private:
     QTextEdit* field;
     AirIconButton* attach = nullptr;
     QString attachNote;
+    AirIconButton* emoji = nullptr;
     AirButton* send = nullptr;
     QWidget* hintLine = nullptr;
     QWidget* dot = nullptr;

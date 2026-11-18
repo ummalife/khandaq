@@ -635,6 +635,12 @@ int toneIndex(const QString& key);
 int wrapTone(int index);
 
 /**
+ * KHANDAQ (0.2.60): the tone of "You" over our own entries, tone-5 (the teal next to the app's own) on
+ * every platform. In ink-2 it read as a line of the text under it, and users could not tell who wrote.
+ */
+constexpr int youTone = 4;
+
+/**
  * The first twelve characters of a key in groups of four: enough to compare with what the person
  * sent, never mistaken for a whole ID.
  */

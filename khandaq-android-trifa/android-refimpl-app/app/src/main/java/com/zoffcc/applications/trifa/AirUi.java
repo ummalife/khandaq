@@ -204,6 +204,15 @@ final class AirUi
     /** TalkBack announces a styled text or layout as a button, the way it does a real one. */
     static void markAsButton(final View view)
     {
+        markAsButton(view, null);
+    }
+
+    /**
+     * {@link #markAsButton(View)} with the words TalkBack reads after it, what a tap does ("Opens the
+     * member's profile"), as the member rows of the group dossier say theirs. No hint for null.
+     */
+    static void markAsButton(final View view, @Nullable final CharSequence hint)
+    {
         ViewCompat.setAccessibilityDelegate(view, new AccessibilityDelegateCompat()
         {
             @Override
@@ -211,6 +220,10 @@ final class AirUi
             {
                 super.onInitializeAccessibilityNodeInfo(host, info);
                 info.setClassName(Button.class.getName());
+                if (hint != null)
+                {
+                    info.setHintText(hint);
+                }
             }
         });
     }

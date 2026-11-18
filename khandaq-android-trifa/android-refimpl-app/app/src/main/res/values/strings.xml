@@ -1171,4 +1171,6 @@
     <string name="chat_edit_blocked_unsupported">This contact\'s app can\'t receive edits. Ask them to update Khandaq</string>
     <string name="chat_edit_blocked_reply">Replies can\'t be edited yet</string>
     <string name="chat_edit_blocked_too_old">Messages can be edited for 48 hours after sending</string>
+    <!-- KHANDAQ (0.2.58): what a tap on the author over a member's message in a group does, read by TalkBack -->
+    <string name="group_msg_author_hint">Opens the member\'s profile</string>
 </resources>

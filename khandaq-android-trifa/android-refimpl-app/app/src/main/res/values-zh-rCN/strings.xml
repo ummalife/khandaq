@@ -1059,4 +1059,6 @@
     <string name="plaintext_export_reauth_description">解锁以导出未加密的身份。</string>
     <string name="plaintext_export_typed_confirm_message">这台设备没有屏幕锁，所以无法用它解锁。输入 %1$s 以确认。</string>
     <string name="plaintext_export_typed_confirm_word">导出</string>
+    <!-- KHANDAQ (0.2.58): what a tap on the author over a member's message in a group does, read by TalkBack -->
+    <string name="group_msg_author_hint">打开该成员的个人资料</string>
 </resources>

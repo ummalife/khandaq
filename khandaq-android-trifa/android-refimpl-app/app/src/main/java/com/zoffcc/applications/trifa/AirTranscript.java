@@ -754,6 +754,44 @@ final class AirTranscript
         bindGroupState(views, m, position, selected, entry);
     }
 
+    /**
+     * KHANDAQ (0.2.58): the author over a member's entry in a group opens the member's profile with a tap,
+     * as the photo and the name over the old bubble did; {@code open} keeps the holder's rules. TalkBack
+     * reaches the name as a button of its own, as it reaches a link in the text. A long press on it is the
+     * entry's own (the message's actions), and the list takes a swipe to reply before the name sees it.
+     * With {@code open} null the author is words only, as over every other entry: our own, a service line,
+     * an author the group could not confirm. The rows of a conversation with one person never call this.
+     */
+    static void bindAuthorTap(@Nullable final TextView author, @Nullable final View row,
+                              @Nullable final View.OnClickListener open)
+    {
+        if (author == null)
+        {
+            return;
+        }
+        final boolean opens = open != null;
+        author.setOnClickListener(open);
+        // Always taken, as the text's own forwarder does: a long press that the row declines must not
+        // become a tap on the name when the finger lifts.
+        author.setOnLongClickListener(opens && row != null ? v -> {
+            row.performLongClick();
+            return true;
+        } : null);
+        // Null listeners leave the flags as they were: a recycled row that opened a profile must not stay a button.
+        author.setClickable(opens);
+        author.setLongClickable(opens && row != null);
+        author.setImportantForAccessibility(opens ? View.IMPORTANT_FOR_ACCESSIBILITY_YES
+                                                  : View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        if (opens)
+        {
+            AirUi.markAsButton(author, author.getContext().getString(R.string.group_msg_author_hint));
+        }
+        else
+        {
+            author.setAccessibilityDelegate(null);
+        }
+    }
+
     private static void bindGroupState(final Views views, final GroupMessage m, final int position,
                                        final boolean selected, final GroupEntry entry)
     {

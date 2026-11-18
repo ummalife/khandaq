@@ -102,8 +102,7 @@ public class MessageReplyHelperTest
     public void a_body_with_the_footer_words_in_it_keeps_them()
     {
         // Audit #18: the first footer ends the quote, so a body that says "[KQ/end]" keeps it. The form is
-        // encode()'s, which also takes the footer words out of a quote (encode itself needs Android's
-        // TextUtils, which these JVM tests do not have).
+        // encode()'s, which also takes the footer words out of a quote.
         final String body = "the footer is written [KQ/end] like this";
         final MessageReplyHelper.ParsedMessage parsed =
                 MessageReplyHelper.parse("[KQ|9|ABCDEF12|1731370000000|Demo]\na quote\n[KQ/end]\n" + body);

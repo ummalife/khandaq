@@ -1,0 +1,119 @@
+{
+  "version": "0.2.60",
+  "date": "2026-11-18",
+  "title": "Invitations wait for an offline contact; voice messages from the desktop",
+  "summary": "A contact who is offline can now be invited to a group: the invitation waits on your device and goes once they are online. The desktop apps send voice messages and emoji, paste pictures and files, and can make the whole interface larger. The author's name stands apart from the message, Khandaq Community keeps its sound and shows the Khandaq logo, and on Android the send button is visible again. Big group files keep going when a member's network changes or the sender's app restarts.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "Invite a contact who is offline",
+      "description": "A group invitation goes only while both of you are online, so a contact who was offline could not be invited. Khandaq now keeps the invitation on your device for up to 30 days and sends it as soon as the contact is online. New group and the contact's menu offer offline contacts, and the notice after inviting says how many invitations went and how many wait.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Desktop: voice messages and emoji",
+      "description": "The desktop apps could not send a voice message or an emoji. The microphone button next to the field records a voice message of up to five minutes, which the phones play like their own, and the list shows it as a voice message. The emoji button opens the emoji set.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Desktop: interface size",
+      "description": "Settings > Appearance > Interface size makes the whole window larger, from 100% to 200%, for screens where everything looked small. Khandaq offers to restart and comes back at the new size. A size the screen has no room for is not offered.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Paste pictures and files",
+      "description": "On the desktop, Ctrl+V pastes a picture into a group as it did in a chat, and a file copied in Finder or a Linux file manager is sent as the file instead of its name. On iPhone and Android, a pasted photo opens the send preview.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Big group files keep going",
+      "description": "A member whose network address changes, for example from Wi-Fi to mobile data, is reached again at once instead of after about a minute, so a big file sent to them goes on. When the desktop or iPhone app that sent the file is restarted, it still sends a member the parts they are missing.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "Who wrote it",
+      "description": "In chats and groups, the author's name now stands apart from the text under it, and You over your own messages takes the same colour as other names instead of reading as a line of the message.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "Khandaq Community keeps its sound",
+      "description": "Khandaq Community is no longer muted when you join it, and if an earlier version muted it, it is heard again once after this update. Its picture is the Khandaq logo.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "Android: the send button",
+      "description": "On Android 16 in the light theme, the send button was a black square with the arrow hardly visible. The arrow is back, and the bar that appears when you select messages matches the app.",
+      "platforms": [
+        "android"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "Rename a contact",
+      "description": "On the desktop, a contact is renamed in place in the chat header, with the whole name in view. On iPhone and Android, Rename is in the menu of a contact in the list.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "Desktop: profile and group header",
+      "description": "Copy ID sits right under your ID in the profile, where you look for it. The group header no longer says that groups have no calls.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ]
+    }
+  ]
+}

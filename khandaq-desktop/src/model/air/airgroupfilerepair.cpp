@@ -35,6 +35,10 @@ constexpr qint64 ResendBudget::cooldownMs;
 constexpr int ResendBudget::chunkShare;
 constexpr int ResendBudget::maxKept;
 constexpr qint64 ResendBudget::wholeGapMs;
+constexpr int SentFileLookups::maxRequests;
+constexpr int SentFileLookups::maxKept;
+constexpr qint64 SentFileLookups::answerWaitMs;
+constexpr qint64 SentFileLookups::notOursMs;
 
 namespace {
 uint32_t readU32(const uint8_t* p)
@@ -304,6 +308,87 @@ void ResendBudget::forget(const QByteArray& fileId)
 int ResendBudget::kept() const
 {
     return entries.size();
+}
+
+SentFileLookups::Step SentFileLookups::request(const QByteArray& fileId, uint32_t peer,
+                                               const QByteArray& packet, qint64 nowMs)
+{
+    auto it = entries.find(fileId);
+    if (it != entries.end()) {
+        Entry& entry = it.value();
+        if (entry.asked && nowMs - entry.sinceMs < answerWaitMs) {
+            // The newest request of each member waits, as it names what that member misses now.
+            for (Request& waiting : entry.requests) {
+                if (waiting.peer == peer) {
+                    waiting.packet = packet;
+                    return Step::Wait;
+                }
+            }
+            if (entry.requests.size() < maxRequests) {
+                Request waiting;
+                waiting.peer = peer;
+                waiting.packet = packet;
+                entry.requests.append(waiting);
+            }
+            return Step::Wait;
+        }
+        if (!entry.asked && nowMs - entry.sinceMs < notOursMs) {
+            return Step::Drop;
+        }
+        entries.erase(it);
+    }
+    while (entries.size() >= maxKept) {
+        auto oldest = entries.begin();
+        for (auto entry = entries.begin(); entry != entries.end(); ++entry) {
+            if (entry->order < oldest->order) {
+                oldest = entry;
+            }
+        }
+        entries.erase(oldest);
+    }
+    Entry entry;
+    entry.asked = true;
+    entry.sinceMs = nowMs;
+    entry.order = ++made;
+    Request first;
+    first.peer = peer;
+    first.packet = packet;
+    entry.requests.append(first);
+    entries.insert(fileId, entry);
+    return Step::Ask;
+}
+
+QList<SentFileLookups::Request> SentFileLookups::found(const QByteArray& fileId)
+{
+    const auto it = entries.constFind(fileId);
+    if (it == entries.constEnd()) {
+        return {};
+    }
+    const QList<Request> requests = it->requests;
+    entries.remove(fileId);
+    return requests;
+}
+
+void SentFileLookups::notFound(const QByteArray& fileId, qint64 nowMs)
+{
+    const auto it = entries.find(fileId);
+    if (it == entries.end()) {
+        return;
+    }
+    it->asked = false;
+    it->sinceMs = nowMs;
+    it->requests.clear();
+}
+
+int SentFileLookups::kept() const
+{
+    return entries.size();
+}
+
+bool sentFileServable(bool isFile, qint64 bytes, qint64 modifiedMs, qint64 size, qint64 sentMs)
+{
+    return isFile && size > 0 && bytes == size && sentMs >= 0 && modifiedMs >= 0
+           && modifiedMs <= sentMs + modifiedSlackMs;
 }
 
 } // namespace Air

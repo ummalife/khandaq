@@ -284,8 +284,10 @@ void ChatLine::layoutAir(QPointF scenePos)
     const qreal top = Space::s4;
     qreal y = top;
     if (authorShown) {
+        // KHANDAQ (0.2.60): the 4 px the comment above always promised: without them the name read as a
+        // line of the text.
         place(content[0], textStart, y, textWidth);
-        y += content[0]->boundingRect().height();
+        y += content[0]->boundingRect().height() + Space::s4;
     } else {
         content[0]->setVisible(false);
     }

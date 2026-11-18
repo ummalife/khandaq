@@ -98,8 +98,8 @@ class NotificationCoordinator: NSObject {
     // counted our own outgoing messages (badge stuck after you send) and "X joined" system notes.
     // For groups both incoming & outgoing have senderUniqueIdentifier == nil, so incoming is
     // distinguished by groupSenderPeerId > 0 (mirrors OCTMessageAbstract.isOutgoing).
-    // KHANDAQ (0.2.57): a group whose notifications are off, Khandaq Community from its join or any group
-    // muted by hand, adds nothing to the tab or the app icon; its row in the list keeps its own counter.
+    // KHANDAQ (0.2.57): a group whose notifications are off, muted by hand (Khandaq Community too: since 0.2.60
+    // its join no longer mutes it), adds nothing to the tab or the app icon; its row in the list keeps its own counter.
     static let unreadChatsPredicate = NSPredicate(format:
         "lastMessage.dateInterval > lastReadDateInterval"
         + " AND lastMessage.groupSystemMessage == NO"
@@ -511,8 +511,9 @@ private extension NotificationCoordinator {
         let isGroupPrivate = isGroup && message.groupPrivateMessage
         let groupName = NotificationCoordinator.groupName(of: chat)
         // The band shows the tile the Air screen shows for this chat (E22).
-        let groupTile = AirTileView.Style.group(initials: AirInitials.from(groupName),
-                                                tone: AirTone.index(for: message.chatUniqueIdentifier))
+        let groupTile: AirTileView.Style = KhandaqCommunity.isCommunity(chat)
+            ? .community
+            : .group(initials: AirInitials.from(groupName), tone: AirTone.index(for: message.chatUniqueIdentifier))
 
         // Sender display name for a group peer (used both for the private-message title and the
         // regular in-group peer prefix).

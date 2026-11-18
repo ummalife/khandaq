@@ -30,6 +30,12 @@
 /** Seconds since last direct UDP packet was sent before we can try again. Cheap NAT hole punch */
 #define GCC_UDP_DIRECT_RETRY 1
 
+/** KHANDAQ (0.2.60, group roaming): seconds the oldest message we hold for a peer may wait for its
+ * acknowledgement before we take it that what we send the peer does not reach it; up to a second less,
+ * as mono time counts whole seconds. The oldest message goes again every second meanwhile (#201).
+ */
+#define GCC_UNANSWERED_TIMEOUT 3
+
 /** Returns true if array entry does not contain an active packet. */
 non_null()
 static bool array_entry_is_empty(const GC_Message_Array_Entry *array_entry)
@@ -269,6 +275,23 @@ void gcc_set_ip_port(GC_Connection *gconn, const IP_Port *ipp)
     if (ipp != nullptr && ipport_isset(ipp)) {
         gconn->addr.ip_port = *ipp;
     }
+}
+
+bool gcc_message_is_new(const GC_Connection *gconn, uint64_t message_id)
+{
+    if (message_id <= gconn->received_message_id) {
+        return false;
+    }
+
+    const GC_Message_Array_Entry *kept = &gconn->recv_array[gcc_get_array_index(message_id)];
+    return array_entry_is_empty(kept) || kept->message_id != message_id;
+}
+
+bool gcc_sent_messages_unanswered(const Mono_Time *mono_time, const GC_Connection *gconn)
+{
+    const GC_Message_Array_Entry *oldest = &gconn->send_array[gconn->send_array_start];
+    return !array_entry_is_empty(oldest)
+           && mono_time_is_timeout(mono_time, oldest->time_added, GCC_UNANSWERED_TIMEOUT);
 }
 
 bool gcc_copy_tcp_relay(const Random *rng, Node_format *tcp_node, const GC_Connection *gconn)

@@ -57,8 +57,9 @@ private slots:
     void observersAndTheVoiceStateDecideWhoWrites();
     void founderAndModeratorsChangeRolesWithinTheirRights();
     void everyChangeIsAskedInOneSentenceAndToldOnceDone();
-    void invitationListPutsWhoCanBeInvitedFirst();
+    void invitationListPutsThoseOnlineFirst();
     void sentInvitationsAreCounted();
+    void invitationsForOfflineContactsWaitOnThisDevice();
     void privacyIsSaidWithItsConsequence();
     void nameIsOneLineAndFitsInFortyEightBytes();
     void counterShowsTheLastTenthOfAGroupMessage();
@@ -547,7 +548,7 @@ void TestAirGroup::everyChangeIsAskedInOneSentenceAndToldOnceDone()
                  "дать модератор."));
 }
 
-void TestAirGroup::invitationListPutsWhoCanBeInvitedFirst()
+void TestAirGroup::invitationListPutsThoseOnlineFirst()
 {
     const QVector<Air::InviteCandidate> candidates = {
         candidate(1, QStringLiteral("Yusuf"), false), candidate(2, QStringLiteral("Bilal"), true),
@@ -565,8 +566,9 @@ void TestAirGroup::invitationListPutsWhoCanBeInvitedFirst()
     QCOMPARE(found.first().name, QStringLiteral("Amina"));
 
     QVERIFY(candidate(3, QStringLiteral("Amina"), true).canInvite());
-    QVERIFY2(!candidate(1, QStringLiteral("Yusuf"), false).canInvite(),
-             "an invitation needs the contact online");
+    // KHANDAQ (0.2.60): the invitation of a contact offline waits for them on this device.
+    QVERIFY2(candidate(1, QStringLiteral("Yusuf"), false).canInvite(),
+             "a contact offline is invited too");
     QVERIFY2(!candidate(-1, QStringLiteral("Zaid"), true).canInvite(),
              "no friend number, nothing to send it over");
 }
@@ -580,6 +582,79 @@ void TestAirGroup::sentInvitationsAreCounted()
     QCOMPARE(AirStrings::text(Text::InviteSent, 1), QStringLiteral("Отправлено 1 приглашение"));
     QCOMPARE(AirStrings::text(Text::InviteSent, 3), QStringLiteral("Отправлено 3 приглашения"));
     QCOMPARE(AirStrings::text(Text::InviteSent, 5), QStringLiteral("Отправлено 5 приглашений"));
+    QCOMPARE(AirStrings::text(Text::InviteLater, 1),
+             QStringLiteral("1 приглашение уйдёт при появлении в сети"));
+    QCOMPARE(AirStrings::text(Text::InviteLater, 21),
+             QStringLiteral("21 приглашение уйдёт при появлении в сети"));
+    QCOMPARE(AirStrings::text(Text::InviteLater, 2),
+             QStringLiteral("2 приглашения уйдут при появлении в сети"));
+    QCOMPARE(AirStrings::text(Text::InviteWhenOnline),
+             QStringLiteral("получит приглашение, когда появится"));
+    use(QStringLiteral("en"));
+    QCOMPARE(AirStrings::text(Text::InviteLater, 1),
+             QStringLiteral("Invitation will go once the contact is online"));
+    QCOMPARE(AirStrings::text(Text::InviteLater, 2),
+             QStringLiteral("2 invitations will go once the contacts are online"));
+}
+
+void TestAirGroup::invitationsForOfflineContactsWaitOnThisDevice()
+{
+    using Air::LocalStore;
+    const QDateTime now = QDateTime::fromMSecsSinceEpoch(1800000000000);
+    const auto friendKey = [](int index) {
+        return QStringLiteral("%1").arg(index, 64, 16, QLatin1Char('0')).toUpper();
+    };
+    LocalStore store;
+    QVERIFY2(!store.save().contains("outgoingInvites"), "a store without any writes no field");
+
+    // Kept once, whatever the case of the keys; keys that are not keys are not kept.
+    QVERIFY(store.keepOutgoingInvite(peerKey.toLower(), groupKey.toLower(), now, now));
+    QVERIFY(!store.keepOutgoingInvite(peerKey, groupKey, now.addSecs(60), now.addSecs(60)));
+    QVERIFY(!store.keepOutgoingInvite(QStringLiteral("1B3D"), groupKey, now, now));
+    QVERIFY(!store.keepOutgoingInvite(peerKey, QString(), now, now));
+    QVERIFY(store.keepOutgoingInvite(otherPeerKey, groupKey, now.addSecs(60), now.addSecs(60)));
+    QCOMPARE(store.outgoingInvites().size(), 2);
+    QCOMPARE(store.outgoingInvites().first().friendKey, peerKey);
+    QCOMPARE(store.outgoingInvites().first().groupKey, groupKey);
+    QCOMPARE(store.outgoingInvites().first().date, now.toMSecsSinceEpoch());
+
+    // Kept with the profile; one asked for more than thirty days before the start goes.
+    LocalStore reloaded;
+    reloaded.load(store.save(), now.addDays(10));
+    QVERIFY(reloaded.outgoingInvites() == store.outgoingInvites());
+    LocalStore late;
+    late.load(store.save(), now.addDays(31));
+    QVERIFY(late.outgoingInvites().isEmpty());
+    // And while the app runs.
+    LocalStore running;
+    running.load(store.save(), now);
+    QVERIFY(!running.pruneOutgoingInvites(now.addDays(29)));
+    QVERIFY(running.pruneOutgoingInvites(now.addDays(30).addSecs(30)));
+    QCOMPARE(running.outgoingInvites().size(), 1);
+    QCOMPARE(running.outgoingInvites().first().friendKey, otherPeerKey);
+
+    // Sent: it goes, once.
+    QVERIFY(reloaded.dropOutgoingInvite(otherPeerKey.toLower(), groupKey));
+    QVERIFY(!reloaded.dropOutgoingInvite(otherPeerKey, groupKey));
+    QCOMPARE(reloaded.outgoingInvites().size(), 1);
+
+    // A contact removed takes theirs along; a group left takes its own.
+    LocalStore forgetting;
+    forgetting.load(store.save(), now);
+    QVERIFY(forgetting.forget(peerKey));
+    QCOMPARE(forgetting.outgoingInvites().size(), 1);
+    QCOMPARE(forgetting.outgoingInvites().first().friendKey, otherPeerKey);
+    QVERIFY(forgetting.forgetGroup(groupKey));
+    QVERIFY(forgetting.outgoingInvites().isEmpty());
+    QVERIFY(!forgetting.save().contains("outgoingInvites"));
+
+    // At most outgoingInviteLimit; the oldest make room.
+    LocalStore many;
+    for (int index = 0; index < LocalStore::outgoingInviteLimit + 3; ++index) {
+        QVERIFY(many.keepOutgoingInvite(friendKey(index), groupKey, now, now));
+    }
+    QCOMPARE(many.outgoingInvites().size(), LocalStore::outgoingInviteLimit);
+    QCOMPARE(many.outgoingInvites().first().friendKey, friendKey(3));
 }
 
 void TestAirGroup::privacyIsSaidWithItsConsequence()

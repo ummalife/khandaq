@@ -20,9 +20,10 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * KHANDAQ (0.2.57, SPEC-community part B, item 8): Khandaq Community is joined once by itself, muted, and never
- * again once the person left it. The rules (KhandaqCommunity) are held as the phone runs them, and the app's code
- * is checked to ask them where it connects, joins, leaves and takes files.
+ * KHANDAQ (0.2.57, SPEC-community part B, item 8): Khandaq Community is joined once by itself, and never again once
+ * the person left it. KHANDAQ (0.2.60): it keeps its sound; the mute an earlier auto-join left is lifted once. The
+ * rules (KhandaqCommunity) are held as the phone runs them, and the app's code is checked to ask them where it
+ * connects, joins, leaves and takes files.
  */
 public class KhandaqCommunityTest
 {
@@ -42,7 +43,8 @@ public class KhandaqCommunityTest
     {
         final Map<String, String> settings;
         final String toxId;
-        final List<String> muted = new ArrayList<>();
+        /** KHANDAQ (0.2.60): the groups whose switch the store turned on (restoreSoundOnce). */
+        final List<String> unmuted = new ArrayList<>();
 
         ProfileStore(final Map<String, String> settings, final String toxId)
         {
@@ -105,9 +107,21 @@ public class KhandaqCommunityTest
         }
 
         @Override
-        public void mute(final String chatId)
+        public boolean soundRestored()
         {
-            muted.add(chatId);
+            return "true".equals(settings.get(key(KhandaqCommunity.MARK_SOUND_RESTORED)));
+        }
+
+        @Override
+        public void setSoundRestored()
+        {
+            settings.put(key(KhandaqCommunity.MARK_SOUND_RESTORED), "true");
+        }
+
+        @Override
+        public void unmute(final String chatId)
+        {
+            unmuted.add(chatId);
         }
     }
 
@@ -165,23 +179,23 @@ public class KhandaqCommunityTest
     {
         final ProfileStore store = new ProfileStore(new HashMap<>(), TOX_ID);
         final Join join = new Join(true);
-        assertFalse(KhandaqCommunity.autoJoin(store, false, false, true, join));
-        assertFalse(KhandaqCommunity.autoJoin(store, true, true, true, join));
+        assertFalse(KhandaqCommunity.autoJoin(store, false, false, join));
+        assertFalse(KhandaqCommunity.autoJoin(store, true, true, join));
         assertEquals(0, join.calls);
         assertFalse(store.autoJoinDone());
-        assertTrue(store.muted.isEmpty());
+        assertFalse(store.keptMuted());
     }
 
-    // ---- muted only on the auto-join (SPEC Tests) ----
+    // ---- the auto-join leaves its sound on (KHANDAQ 0.2.60; it muted from 0.2.57) ----
 
     @Test
-    public void a_join_that_made_the_group_mutes_it_and_the_profile_is_marked_once_the_group_connected()
+    public void a_join_that_made_the_group_keeps_its_sound_and_the_profile_is_marked_once_the_group_connected()
     {
         final ProfileStore store = new ProfileStore(new HashMap<>(), TOX_ID);
         final Join join = new Join(true);
-        assertTrue(KhandaqCommunity.autoJoin(store, true, false, true, join));
+        assertTrue(KhandaqCommunity.autoJoin(store, true, false, join));
         assertEquals(1, join.calls);
-        assertEquals(Collections.singletonList(KhandaqCommunity.CHAT_ID), store.muted);
+        assertFalse("its sound stays on", store.keptMuted());
         // Toxcore saves the group only once it has connected: until then the join does not count.
         assertFalse(store.autoJoinDone());
         assertFalse(KhandaqCommunity.noteGroupKept(store, false));
@@ -191,7 +205,7 @@ public class KhandaqCommunityTest
         assertTrue(store.autoJoinDone());
         assertFalse(KhandaqCommunity.noteGroupKept(store, true));
         assertFalse(store.left());
-        assertEquals(1, store.muted.size());
+        assertFalse(store.keptMuted());
     }
 
     @Test
@@ -200,19 +214,19 @@ public class KhandaqCommunityTest
         // In it already (joined by hand by ID or by an invitation): no join, no mute, nothing marked.
         final ProfileStore store = new ProfileStore(new HashMap<>(), TOX_ID);
         final Join join = new Join(true);
-        assertFalse(KhandaqCommunity.autoJoin(store, true, true, false, join));
+        assertFalse(KhandaqCommunity.autoJoin(store, true, true, join));
         assertEquals(0, join.calls);
-        assertTrue(store.muted.isEmpty());
+        assertFalse(store.keptMuted());
         assertFalse(store.autoJoinDone());
 
         // Joined by hand and lost before it connected (toxcore did not save it): joined again, its switch as it was.
-        assertTrue(KhandaqCommunity.autoJoin(store, true, false, false, join));
+        assertTrue(KhandaqCommunity.autoJoin(store, true, false, join));
         assertEquals(1, join.calls);
-        assertTrue(store.muted.isEmpty());
+        assertFalse(store.keptMuted());
 
         // Once it connected it is the profile's for good, as one the app joined.
         assertTrue(KhandaqCommunity.noteGroupKept(store, true));
-        assertFalse(KhandaqCommunity.autoJoin(store, true, false, false, join));
+        assertFalse(KhandaqCommunity.autoJoin(store, true, false, join));
         assertEquals(1, join.calls);
     }
 
@@ -221,14 +235,14 @@ public class KhandaqCommunityTest
     {
         final ProfileStore store = new ProfileStore(new HashMap<>(), TOX_ID);
         final Join join = new Join(false);
-        assertFalse(KhandaqCommunity.autoJoin(store, true, false, true, join));
-        assertTrue(store.muted.isEmpty());
+        assertFalse(KhandaqCommunity.autoJoin(store, true, false, join));
+        assertFalse(store.keptMuted());
         assertFalse(store.autoJoinDone());
 
         join.takes = true;
-        assertTrue(KhandaqCommunity.autoJoin(store, true, false, true, join));
+        assertTrue(KhandaqCommunity.autoJoin(store, true, false, join));
         assertEquals(2, join.calls);
-        assertEquals(Collections.singletonList(KhandaqCommunity.CHAT_ID), store.muted);
+        assertFalse(store.keptMuted());
     }
 
     @Test
@@ -236,15 +250,15 @@ public class KhandaqCommunityTest
     {
         // Live QA 2026-11-16: toxcore saves a group only once it has connected, so a restart before that loses it.
         final Map<String, String> settings = new HashMap<>();
-        assertTrue(KhandaqCommunity.autoJoin(new ProfileStore(settings, TOX_ID), true, false, true, new Join(true)));
+        assertTrue(KhandaqCommunity.autoJoin(new ProfileStore(settings, TOX_ID), true, false, new Join(true)));
 
-        // Next start: the row is there, toxcore has no group. It is joined again; the switch stays as the person
-        // left it (muted by the first join, or turned on since).
+        // Next start: the row is there, toxcore has no group. It is joined again; the switch stays as it was (on, as
+        // the first join left it, or as the person turned it since).
         final ProfileStore restarted = new ProfileStore(settings, TOX_ID);
         final Join join = new Join(true);
-        assertTrue(KhandaqCommunity.autoJoin(restarted, true, false, false, join));
+        assertTrue(KhandaqCommunity.autoJoin(restarted, true, false, join));
         assertEquals(1, join.calls);
-        assertTrue(restarted.muted.isEmpty());
+        assertFalse(restarted.keptMuted());
         assertFalse(restarted.autoJoinDone());
     }
 
@@ -253,15 +267,15 @@ public class KhandaqCommunityTest
     {
         final Map<String, String> settings = new HashMap<>();
         final ProfileStore store = new ProfileStore(settings, TOX_ID);
-        assertTrue(KhandaqCommunity.autoJoin(store, true, false, true, new Join(true)));
+        assertTrue(KhandaqCommunity.autoJoin(store, true, false, new Join(true)));
         assertTrue(KhandaqCommunity.noteGroupKept(store, true));
 
         // Next start: the group is gone (kicked); it is not joined by itself again.
         final ProfileStore restarted = new ProfileStore(settings, TOX_ID);
         final Join join = new Join(true);
-        assertFalse(KhandaqCommunity.autoJoin(restarted, true, false, false, join));
+        assertFalse(KhandaqCommunity.autoJoin(restarted, true, false, join));
         assertEquals(0, join.calls);
-        assertTrue(restarted.muted.isEmpty());
+        assertFalse(restarted.keptMuted());
     }
 
     // ---- left: never again, across a restart (SPEC Tests) ----
@@ -271,7 +285,7 @@ public class KhandaqCommunityTest
     {
         final Map<String, String> settings = new HashMap<>();
         final ProfileStore store = new ProfileStore(settings, TOX_ID);
-        assertTrue(KhandaqCommunity.autoJoin(store, true, false, true, new Join(true)));
+        assertTrue(KhandaqCommunity.autoJoin(store, true, false, new Join(true)));
         // The person leaves it, by the id in the case the database keeps it in, before it ever connected.
         assertTrue(KhandaqCommunity.noteGroupLeft(store, KhandaqCommunity.CHAT_ID.toLowerCase(Locale.ROOT)));
         assertFalse(KhandaqCommunity.noteGroupLeft(store, KhandaqCommunity.CHAT_ID));
@@ -279,8 +293,8 @@ public class KhandaqCommunityTest
         final ProfileStore restarted = new ProfileStore(settings, TOX_ID);
         assertTrue(restarted.left());
         final Join join = new Join(true);
-        assertFalse(KhandaqCommunity.autoJoin(restarted, true, false, false, join));
-        assertFalse(KhandaqCommunity.autoJoin(restarted, true, false, true, join));
+        assertFalse(KhandaqCommunity.autoJoin(restarted, true, false, join));
+        assertFalse(KhandaqCommunity.autoJoin(restarted, true, false, join));
         assertEquals(0, join.calls);
     }
 
@@ -292,7 +306,7 @@ public class KhandaqCommunityTest
         assertTrue(KhandaqCommunity.noteGroupLeft(new ProfileStore(settings, TOX_ID), KhandaqCommunity.CHAT_ID));
         final ProfileStore restarted = new ProfileStore(settings, TOX_ID);
         final Join join = new Join(true);
-        assertFalse(KhandaqCommunity.autoJoin(restarted, true, false, true, join));
+        assertFalse(KhandaqCommunity.autoJoin(restarted, true, false, join));
         assertEquals(0, join.calls);
         assertFalse(restarted.autoJoinDone());
     }
@@ -329,18 +343,18 @@ public class KhandaqCommunityTest
     {
         final Map<String, String> settings = new HashMap<>();
         final ProfileStore first = new ProfileStore(settings, TOX_ID);
-        assertTrue(KhandaqCommunity.autoJoin(first, true, false, true, new Join(true)));
+        assertTrue(KhandaqCommunity.autoJoin(first, true, false, new Join(true)));
         assertTrue(KhandaqCommunity.noteGroupKept(first, true));
         assertTrue(KhandaqCommunity.noteGroupLeft(first, KhandaqCommunity.CHAT_ID));
 
         final ProfileStore imported = new ProfileStore(settings, OTHER_TOX_ID);
         assertFalse(imported.autoJoinDone());
         final Join join = new Join(true);
-        assertTrue(KhandaqCommunity.autoJoin(imported, true, false, true, join));
+        assertTrue(KhandaqCommunity.autoJoin(imported, true, false, join));
         assertEquals(1, join.calls);
 
         // The first profile, imported back, still has its leave.
-        assertFalse(KhandaqCommunity.autoJoin(new ProfileStore(settings, TOX_ID), true, false, true, new Join(true)));
+        assertFalse(KhandaqCommunity.autoJoin(new ProfileStore(settings, TOX_ID), true, false, new Join(true)));
     }
 
     // ---- the group ----
@@ -453,7 +467,8 @@ public class KhandaqCommunityTest
         assertTrue(joinIfDue.contains(
                 "KhandaqCommunity.noteGroupKept(store,(groupNumber>=0)&&connectedNow(groupNumber))"));
         assertTrue(joinIfDue.contains("finalbooleannewGroup=!hasRow();"));
-        assertTrue(joinIfDue.contains("KhandaqCommunity.autoJoin(store,connected,groupNumber>=0,newGroup,"));
+        assertTrue(joinIfDue.contains(
+                "KhandaqCommunity.autoJoin(store,connected,groupNumber>=0,newKhandaqCommunity.Join()"));
         assertTrue(bare(method(auto, "private static boolean connectedNow(final long groupNumber)")).contains(
                 "TOX_GROUP_CONNECTION_STATUS_CONNECTED.value"));
     }
@@ -466,8 +481,10 @@ public class KhandaqCommunityTest
                                        + "()->sessionGoesOn(session)&&!store.left())"));
         // A stand-in identity (#244) joins nothing.
         assertTrue(bare(method(auto, JOIN_IF_DUE)).contains("MainActivity.identity_load_blocked"));
-        // The mute is the group's own switch, the one its dossier turns.
-        assertTrue(bare(auto).contains("notification_silent(true).execute();"));
+        // KHANDAQ (0.2.60): the lift of an earlier mute turns the group's own switch, the one its dossier turns; the
+        // app no longer mutes it by itself.
+        assertTrue(bare(auto).contains("notification_silent(false).execute();"));
+        assertFalse(bare(auto).contains("notification_silent(true)"));
         final String join = method(read(JAVA + "HelperGroup.java"), JOIN_BY_ID);
         assertTrue(bare(join).contains("get_group_peer_join_name(),password);"));
     }
@@ -542,14 +559,17 @@ public class KhandaqCommunityTest
     // ---- a new row of it after an import or a restore (review, 2026-11-16) ----
 
     @Test
-    public void a_row_made_again_after_an_import_keeps_the_switch_the_auto_join_or_the_person_left_it_with()
+    public void a_row_made_again_after_an_import_keeps_the_switch_the_person_left_it_with()
     {
         final Map<String, String> settings = new HashMap<>();
         final ProfileStore store = new ProfileStore(settings, TOX_ID);
         assertFalse(KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, store));
-        // The auto-join mutes the row it makes, and the profile keeps that it did.
-        assertTrue(KhandaqCommunity.autoJoin(store, true, false, true, new Join(true)));
+        // KHANDAQ (0.2.60): the auto-join leaves its sound on, and so does the row made again after an import.
+        assertTrue(KhandaqCommunity.autoJoin(store, true, false, new Join(true)));
         assertTrue(KhandaqCommunity.noteGroupKept(store, true));
+        assertFalse(KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, new ProfileStore(settings, TOX_ID)));
+        // The person mutes it, and the profile keeps that they did.
+        assertTrue(KhandaqCommunity.noteSoundChoice(store, COMMUNITY_ROW_ID, true));
         final ProfileStore imported = new ProfileStore(settings, TOX_ID);
         assertTrue("its row made again after an import",
                    KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, imported));
@@ -581,11 +601,12 @@ public class KhandaqCommunityTest
         assertTrue(KhandaqCommunity.noteGroupKept(store, true));
         assertFalse(KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, new ProfileStore(settings, TOX_ID)));
 
-        // Muted by the auto-join, then left: a leave keeps the row, muted, and a join by hand takes that row again,
-        // so its switch stays kept: the row made after an import is muted as that row was.
+        // Muted, then left: a leave keeps the row, muted, and a join by hand takes that row again, so its switch
+        // stays kept: the row made after an import is muted as that row was.
         final Map<String, String> other = new HashMap<>();
         final ProfileStore auto = new ProfileStore(other, TOX_ID);
-        assertTrue(KhandaqCommunity.autoJoin(auto, true, false, true, new Join(true)));
+        assertTrue(KhandaqCommunity.autoJoin(auto, true, false, new Join(true)));
+        assertTrue(KhandaqCommunity.noteSoundChoice(auto, KhandaqCommunity.CHAT_ID, true));
         assertTrue(KhandaqCommunity.noteGroupLeft(auto, KhandaqCommunity.CHAT_ID));
         assertTrue(auto.keptMuted());
         assertTrue(KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, new ProfileStore(other, TOX_ID)));
@@ -604,6 +625,74 @@ public class KhandaqCommunityTest
         // The row of another group is not the Community's.
         assertFalse(KhandaqCommunity.noteRowDeleted(imported, OTHER_GROUP));
         assertTrue(imported.keptMuted());
+    }
+
+    // ---- the sound an earlier auto-join took (KHANDAQ 0.2.60, the owner's rule 2026-11-18) ----
+
+    @Test
+    public void the_mute_of_an_earlier_auto_join_is_lifted_once()
+    {
+        // A profile from 0.2.57-0.2.59: the auto-join muted the row it made, and the profile kept that it did.
+        final Map<String, String> settings = new HashMap<>();
+        final ProfileStore store = new ProfileStore(settings, TOX_ID);
+        store.setAutoJoinDone();
+        store.keepMuted(true);
+
+        assertTrue(KhandaqCommunity.restoreSoundOnce(store));
+        assertEquals(Collections.singletonList(KhandaqCommunity.CHAT_ID), store.unmuted);
+        assertFalse(store.keptMuted());
+        assertTrue(store.soundRestored());
+        assertFalse(KhandaqCommunity.mutesNewRow(KhandaqCommunity.CHAT_ID, new ProfileStore(settings, TOX_ID)));
+
+        // Once: the person mutes it afterwards, and that stays, after a restart too.
+        assertTrue(KhandaqCommunity.noteSoundChoice(store, KhandaqCommunity.CHAT_ID, true));
+        final ProfileStore restarted = new ProfileStore(settings, TOX_ID);
+        assertFalse(KhandaqCommunity.restoreSoundOnce(restarted));
+        assertTrue(restarted.unmuted.isEmpty());
+        assertTrue(restarted.keptMuted());
+
+        // The mark is the profile's: another profile imported over this one has its own.
+        assertFalse(new ProfileStore(settings, OTHER_TOX_ID).soundRestored());
+    }
+
+    @Test
+    public void a_community_with_its_sound_on_or_left_is_left_as_it_is_and_marked_done()
+    {
+        // Its sound on (joined by hand, or turned on by the person): nothing to lift, and a later mute stays.
+        final ProfileStore store = new ProfileStore(new HashMap<>(), TOX_ID);
+        assertFalse(KhandaqCommunity.restoreSoundOnce(store));
+        assertTrue(store.unmuted.isEmpty());
+        assertTrue(store.soundRestored());
+        assertTrue(KhandaqCommunity.noteSoundChoice(store, KhandaqCommunity.CHAT_ID, true));
+        assertFalse(KhandaqCommunity.restoreSoundOnce(store));
+        assertTrue(store.unmuted.isEmpty());
+        assertTrue(store.keptMuted());
+
+        // Left: its row and its switch stay as the person left them.
+        final ProfileStore leaver = new ProfileStore(new HashMap<>(), TOX_ID);
+        leaver.keepMuted(true);
+        assertTrue(KhandaqCommunity.noteGroupLeft(leaver, KhandaqCommunity.CHAT_ID));
+        assertFalse(KhandaqCommunity.restoreSoundOnce(leaver));
+        assertTrue(leaver.unmuted.isEmpty());
+        assertTrue(leaver.keptMuted());
+        assertTrue(leaver.soundRestored());
+    }
+
+    @Test
+    public void the_lift_runs_where_the_auto_join_runs_before_it_joins()
+    {
+        final String auto = read(JAVA + "CommunityAutoJoin.java");
+        final String joinIfDue = bare(method(auto, JOIN_IF_DUE));
+        final int store = joinIfDue.indexOf("finalKhandaqCommunity.Storestore=profileStore();");
+        final int left = joinIfDue.indexOf("KhandaqCommunity.noteGroupLeft(store,KhandaqCommunity.CHAT_ID);");
+        final int lift = joinIfDue.indexOf("if(KhandaqCommunity.restoreSoundOnce(store)){");
+        assertTrue(store > 0 && left > store);
+        assertTrue("after the leave is read, so a Community the person left is not touched", lift > left);
+        assertTrue("before a full Community returns early",
+                   lift < joinIfDue.indexOf("if(waitsForRoom(KhandaqCommunity.CHAT_ID)){return;}"));
+        assertTrue(lift < joinIfDue.indexOf("KhandaqCommunity.autoJoin("));
+        // The mark is kept under the profile, as the others are.
+        assertTrue(bare(auto).contains("KhandaqCommunity.markKey(KhandaqCommunity.MARK_SOUND_RESTORED,ownToxId);"));
     }
 
     @Test
@@ -628,6 +717,7 @@ public class KhandaqCommunityTest
         assertTrue(bare(method(auto, "static boolean mutesNewRow(final String groupId)")).contains(
                 "return(store!=null)&&KhandaqCommunity.mutesNewRow(groupId,store);"));
         assertTrue(bare(method(auto, "static void qaForgetMarks()")).contains("KhandaqCommunity.MARK_MUTED"));
+        assertTrue(bare(method(auto, "static void qaForgetMarks()")).contains("KhandaqCommunity.MARK_SOUND_RESTORED"));
     }
 
     // ---- a full Community (review, 2026-11-16) ----
@@ -685,9 +775,9 @@ public class KhandaqCommunityTest
         // The next try, or the next start, joins it again; its row was kept, so its switch stays as it was.
         final ProfileStore restarted = new ProfileStore(settings, TOX_ID);
         final Join join = new Join(true);
-        assertTrue(KhandaqCommunity.autoJoin(restarted, true, false, false, join));
+        assertTrue(KhandaqCommunity.autoJoin(restarted, true, false, join));
         assertEquals(1, join.calls);
-        assertTrue(restarted.muted.isEmpty());
+        assertFalse(restarted.keptMuted());
 
         // A Community the person left stays left.
         final ProfileStore leaver = new ProfileStore(new HashMap<>(), TOX_ID);
@@ -696,7 +786,7 @@ public class KhandaqCommunityTest
         KhandaqCommunity.noteGroupLetGo(leaver);
         assertTrue(leaver.left());
         final Join never = new Join(true);
-        assertFalse(KhandaqCommunity.autoJoin(leaver, true, false, false, never));
+        assertFalse(KhandaqCommunity.autoJoin(leaver, true, false, never));
         assertEquals(0, never.calls);
     }
 
@@ -928,25 +1018,25 @@ public class KhandaqCommunityTest
         final Join join = new Join(true);
         // The person leaves it from its row while the join runs; the leave marks itself first.
         join.meanwhile = () -> KhandaqCommunity.noteGroupLeft(store, KhandaqCommunity.CHAT_ID);
-        assertFalse(KhandaqCommunity.autoJoin(store, true, false, false, join));
+        assertFalse(KhandaqCommunity.autoJoin(store, true, false, join));
         assertEquals(1, join.leftAgain);
         assertTrue(store.left());
-        assertTrue("nothing of the join stays", store.muted.isEmpty());
+        assertFalse("nothing of the join stays", store.keptMuted());
         final Join later = new Join(true);
-        assertFalse(KhandaqCommunity.autoJoin(new ProfileStore(settings, TOX_ID), true, false, true, later));
+        assertFalse(KhandaqCommunity.autoJoin(new ProfileStore(settings, TOX_ID), true, false, later));
         assertEquals("never by itself again, after a restart too", 0, later.calls);
 
         // A join the leave stopped on its way leaves again too: the row's own mark is put back.
         final ProfileStore other = new ProfileStore(new HashMap<>(), TOX_ID);
         final Join stopped = new Join(false);
         stopped.meanwhile = () -> KhandaqCommunity.noteGroupLeft(other, KhandaqCommunity.CHAT_ID);
-        assertFalse(KhandaqCommunity.autoJoin(other, true, false, true, stopped));
+        assertFalse(KhandaqCommunity.autoJoin(other, true, false, stopped));
         assertEquals(1, stopped.leftAgain);
-        assertTrue(other.muted.isEmpty());
+        assertFalse(other.keptMuted());
 
         // Without a leave nothing is left again.
         final Join plain = new Join(true);
-        assertTrue(KhandaqCommunity.autoJoin(new ProfileStore(new HashMap<>(), TOX_ID), true, false, true, plain));
+        assertTrue(KhandaqCommunity.autoJoin(new ProfileStore(new HashMap<>(), TOX_ID), true, false, plain));
         assertEquals(0, plain.leftAgain);
     }
 

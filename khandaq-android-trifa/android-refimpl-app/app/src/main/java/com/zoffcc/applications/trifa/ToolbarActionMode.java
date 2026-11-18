@@ -21,11 +21,13 @@ package com.zoffcc.applications.trifa;
 
 import org.khandaq.messenger.R;
 
+import android.app.Activity;
 import android.content.Context;
 import android.os.Build;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 
 import androidx.appcompat.view.ActionMode;
 import androidx.core.view.MenuItemCompat;
@@ -59,6 +61,8 @@ public class ToolbarActionMode implements ActionMode.Callback
 
     private Context context;
     private boolean action_active = false;
+    // KHANDAQ (0.2.60): the chat bar, hidden while the selection bar lies over it.
+    private View hidden_toolbar = null;
 
     public ToolbarActionMode(Context context)
     {
@@ -71,7 +75,41 @@ public class ToolbarActionMode implements ActionMode.Callback
         Log.i(TAG, "onCreateActionMode");
         mode.getMenuInflater().inflate(R.menu.toolbar_message_activity, menu); // Inflate the menu over action mode
         action_active = false;
+        hide_chat_toolbar();
         return true;
+    }
+
+    /**
+     * KHANDAQ (0.2.60): the selection bar lies over the chat bar (windowActionModeOverlay), which can be taller than
+     * it: the chat bar's name and status showed under the selection. It is hidden while the selection bar is up and
+     * comes back with it; INVISIBLE, so the messages do not move.
+     */
+    private void hide_chat_toolbar()
+    {
+        try
+        {
+            final Activity activity = AirSheet.activityOf(context);
+            final View toolbar = activity == null ? null : activity.findViewById(R.id.toolbar);
+            if (toolbar != null && toolbar.getVisibility() == View.VISIBLE)
+            {
+                toolbar.setVisibility(View.INVISIBLE);
+                hidden_toolbar = toolbar;
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "hide_chat_toolbar:EE:" + e.getMessage());
+        }
+    }
+
+    private void show_chat_toolbar()
+    {
+        final View toolbar = hidden_toolbar;
+        hidden_toolbar = null;
+        if (toolbar != null)
+        {
+            toolbar.setVisibility(View.VISIBLE);
+        }
     }
 
     @Override
@@ -404,6 +442,7 @@ public class ToolbarActionMode implements ActionMode.Callback
     @Override
     public void onDestroyActionMode(ActionMode mode)
     {
+        show_chat_toolbar();
         try
         {
             // KHANDAQ: ALWAYS clear the selection + redraw when the action mode ends. This used to be

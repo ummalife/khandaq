@@ -540,6 +540,8 @@ public class GroupMessageListActivity extends AppCompatActivity
         ml_new_group_message = (com.vanniktech.emoji.EmojiEditText) findViewById(R.id.ml_new_message);
         HelperGeneric.apply_chat_input_field_style(ml_new_group_message);
         ChatReplyPreviewController.bind(this, ml_new_group_message);
+        // KHANDAQ (0.2.60): a photo or a video pasted into the field goes out through the send preview.
+        ComposerMediaPaste.attach(ml_new_group_message, this::sendPickedMediaToGroup);
         groupMentionInputController = new GroupMentionInputController();
         groupMentionInputController.bind(this, ml_new_group_message, findViewById(R.id.emoji_bar),
                 () -> group_id);

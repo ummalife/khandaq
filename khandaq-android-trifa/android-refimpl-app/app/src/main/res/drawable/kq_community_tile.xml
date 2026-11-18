@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (0.2.60): the tile of Khandaq Community is the app's icon (the owner's rule, 2026-11-18), as on iOS and
+     the desktop: the launcher icon's own two layers, square, so the tile rounds it as it rounds a photo (the
+     adaptive icon itself would come masked to the launcher's shape). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/ic_launcher4_background" />
+    <item android:drawable="@mipmap/ic_launcher4_foreground" />
+</layer-list>

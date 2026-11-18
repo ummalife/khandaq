@@ -828,6 +828,56 @@
         <translation>附加文件</translation>
     </message>
     <message>
+        <source>Emoji</source>
+        <comment>button of the message field that opens the emoji</comment>
+        <translation>表情符号</translation>
+    </message>
+    <message>
+        <source>Record a voice message</source>
+        <comment>microphone button of the message field</comment>
+        <translation>录制语音消息</translation>
+    </message>
+    <message>
+        <source>Cancel the voice message</source>
+        <comment>the cross in place of the paperclip while a voice message is recorded</comment>
+        <translation>取消语音消息</translation>
+    </message>
+    <message>
+        <source>Recording a voice message</source>
+        <comment>in place of the message field while a voice message is recorded</comment>
+        <translation>正在录制语音消息</translation>
+    </message>
+    <message>
+        <source>Too short: a voice message lasts at least a second</source>
+        <comment>toast when a voice message was shorter than a second</comment>
+        <translation>太短了：语音消息至少需要一秒</translation>
+    </message>
+    <message>
+        <source>No microphone: check that one is connected</source>
+        <comment>toast when no microphone could be opened for a voice message</comment>
+        <translation>没有麦克风：请检查是否已连接</translation>
+    </message>
+    <message>
+        <source>%1 is offline. A voice message goes only while you are both online.</source>
+        <comment>why a voice message cannot be recorded or sent now: %1 is the person</comment>
+        <translation>%1 不在线。只有双方都在线时语音消息才能发送。</translation>
+    </message>
+    <message>
+        <source>Without the microphone a voice message cannot be recorded. Allow it in System Settings: Privacy and Security, Microphone.</source>
+        <comment>dialog when macOS refuses the microphone for a voice message</comment>
+        <translation>没有麦克风就无法录制语音消息。请在系统设置中允许：隐私与安全性，麦克风。</translation>
+    </message>
+    <message>
+        <source>The voice message could not be saved</source>
+        <comment>dialog when a recorded voice message could not be written to disk</comment>
+        <translation>无法保存语音消息</translation>
+    </message>
+    <message>
+        <source>A voice message lasts up to 5 minutes: this one was sent</source>
+        <comment>toast when a voice message reached its longest length and went by itself</comment>
+        <translation>语音消息最长 5 分钟，录音已发送</translation>
+    </message>
+    <message>
         <source>Goes right away: %1 is online</source>
         <comment>line under the message field; %1 is the first name</comment>
         <translation>会立即发出：%1 在线</translation>
@@ -1808,9 +1858,9 @@
         <translation>邀请加入群组</translation>
     </message>
     <message>
-        <source>An invitation goes over your connection with the contact, so only contacts online now can be invited.</source>
+        <source>An invitation goes over your connection with the contact: a contact offline now gets it once they are online.</source>
         <comment>invitation list</comment>
-        <translation>邀请通过你与联系人的连接发送，因此只能邀请当前在线的联系人。</translation>
+        <translation>邀请通过你与联系人的连接发送：当前不在线的联系人会在上线后收到。</translation>
     </message>
     <message>
         <source>Choose whom to invite</source>
@@ -1818,9 +1868,9 @@
         <translation>请选择要邀请的人</translation>
     </message>
     <message>
-        <source>can be invited once online</source>
-        <comment>invitation list: a contact who is offline</comment>
-        <translation>上线后可邀请</translation>
+        <source>gets the invitation once online</source>
+        <comment>invitation list: a contact who is offline; the invitation waits for them</comment>
+        <translation>上线后会收到邀请</translation>
     </message>
     <message>
         <source>No contacts yet: add someone first.</source>
@@ -1883,9 +1933,9 @@
         <translation>任何持有群组密钥的人都可以加入，无需邀请。</translation>
     </message>
     <message>
-        <source>Invitations go at once, so only contacts online can be invited here. Invite the others later from the group dossier.</source>
+        <source>Contacts online get the invitation at once, the others once they come online.</source>
         <comment>New group: over the contacts to invite</comment>
-        <translation>邀请会立即发送，因此这里只能邀请在线的联系人。其他人可稍后在群组资料中邀请。</translation>
+        <translation>在线的联系人会立即收到邀请，其他人上线后会收到。</translation>
     </message>
     <message>
         <source>Create group</source>
@@ -2042,6 +2092,13 @@
         <comment>toast after inviting</comment>
         <translation>
             <numerusform>已发送 %n 份邀请</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n invitation(s) will go once the contacts are online</source>
+        <comment>toast after inviting: invitations kept for contacts who are offline</comment>
+        <translation>
+            <numerusform>%n 份邀请将在对方上线后发出</numerusform>
         </translation>
     </message>
     <message numerus="yes">

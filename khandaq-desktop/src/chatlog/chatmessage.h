@@ -68,7 +68,7 @@ public:
          * person and all of it in a group (Air::authorName).
          */
         QString who;
-        /** The author's tone; -1 signs the entry in ink-2, as our own messages are signed. */
+        /** The author's tone, Air::youTone for our own messages; -1 signs the entry in ink-2. */
         int tone = -1;
         /** Our own messages to a person and our texts in a group carry a state mark. */
         bool hasMark = false;

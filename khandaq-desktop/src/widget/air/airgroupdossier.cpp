@@ -342,6 +342,7 @@ void AirGroupDossier::setInfo(const AirGroupInfo& info_)
 {
     info = info_;
     tile->setPerson(info.name, info.tone);
+    tile->setKind(AirTile::groupKind(QByteArray::fromHex(info.groupKey.toLatin1())));
     nameLabel->setText(info.name);
     // KHANDAQ (0.2.57): Khandaq Community keeps its name (Air::Community::groupTitle), so it offers
     // no Rename, which here sets the topic of the group.

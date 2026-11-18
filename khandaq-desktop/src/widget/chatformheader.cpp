@@ -41,6 +41,7 @@ using AirStrings::Text;
 using AirTokens::Color;
 using AirTokens::TextRole;
 namespace Motion = AirTokens::Motion;
+namespace Radius = AirTokens::Radius;
 namespace Size = AirTokens::Size;
 namespace Space = AirTokens::Space;
 namespace Stroke = AirTokens::Stroke;
@@ -231,6 +232,14 @@ ChatFormHeader::ChatFormHeader(Settings& settings_, Style& style_, QWidget* pare
     nameLabel->setTextFormat(Qt::PlainText);
     nameLabel->setEditable(true);
     connect(nameLabel, &CroppingLabel::editFinished, this, &ChatFormHeader::nameChanged);
+    // The edit over, the label fits its name again and the chevron comes back after it.
+    connect(nameLabel, &CroppingLabel::editRemoved, this, [this] {
+        nameLabel->minimizeMaximumWidth();
+        nameLabel->setMinimumHeight(0);
+        nameLabel->setMaximumHeight(QWIDGETSIZE_MAX);
+        title->layout()->setSpacing(Space::s2);
+        title->setChevronVisible(dossierEnabled);
+    });
     title->nameWidget = nameLabel;
     // The label grows up to its name and no further, so the chevron follows the name; the
     // stretch after it takes the rest of the line.
@@ -283,22 +292,6 @@ ChatFormHeader::ChatFormHeader(Settings& settings_, Style& style_, QWidget* pare
     micButton->hide();
     volButton->hide();
 
-    // A group has no calls: where the buttons would be, the glyph and the words say so.
-    noCallsNote = new QWidget(this);
-    auto* const noCallsLayout = new QHBoxLayout(noCallsNote);
-    noCallsLayout->setContentsMargins(Space::s8, 0, Space::s4, 0);
-    noCallsLayout->setSpacing(Space::s6);
-    noCallsGlyph = new QLabel(noCallsNote);
-    noCallsGlyph->setFixedSize(Size::iconSmall, Size::iconSmall);
-    noCallsWords = new QLabel(noCallsNote);
-    noCallsWords->setTextFormat(Qt::PlainText);
-    // In a narrow window the words take two lines rather than run past the edge.
-    noCallsWords->setWordWrap(true);
-    noCallsLayout->addWidget(noCallsGlyph, 0, Qt::AlignVCenter);
-    noCallsLayout->addWidget(noCallsWords, 1, Qt::AlignVCenter);
-    noCallsNote->setFixedHeight(Size::control);
-    noCallsNote->hide();
-
     auto* const actions = new QHBoxLayout();
     actions->setContentsMargins(0, 0, 0, 0);
     actions->setSpacing(Space::s4);
@@ -307,7 +300,6 @@ ChatFormHeader::ChatFormHeader(Settings& settings_, Style& style_, QWidget* pare
     actions->addWidget(searchButton);
     actions->addWidget(videoButton);
     actions->addWidget(callButton);
-    actions->addWidget(noCallsNote);
 
     headLayout->addWidget(tile, 0, Qt::AlignTop);
     headLayout->addLayout(textColumn, 1);
@@ -365,11 +357,6 @@ void ChatFormHeader::setCallsBusy(bool busy)
 {
     callsBusy = busy;
     refreshCallButtons();
-}
-
-void ChatFormHeader::setNoCallsNote(bool shown)
-{
-    noCallsNote->setVisible(shown);
 }
 
 void ChatFormHeader::refreshCallButtons()
@@ -468,6 +455,15 @@ void ChatFormHeader::setDossierOpen(bool open)
 
 void ChatFormHeader::beginRename()
 {
+    // KHANDAQ (0.2.60): the field takes the whole line of the name. As wide as the name it was, it
+    // cut the name and hid what was typed (users found renaming awkward); the chevron waits.
+    title->setChevronVisible(false);
+    nameLabel->setMaximumWidth(QWIDGETSIZE_MAX);
+    // The frame of the field takes the 2 px between the name and the presence line, so the name
+    // stays whole inside it and nothing under it moves. The line is as high as the label's hint.
+    const int line = static_cast<const QLabel*>(nameLabel)->sizeHint().height();
+    nameLabel->setFixedHeight(line + Space::s2);
+    title->layout()->setSpacing(0);
     nameLabel->editBegin();
 }
 
@@ -486,11 +482,6 @@ void ChatFormHeader::retranslateUi()
     setToolTipAndName(volButton,
                       AirStrings::text(volState == ToolButtonState::On ? Text::CallSoundUnmute
                                                                        : Text::CallSoundMute));
-    const QString noCalls = AirStrings::text(Text::GroupNoCalls);
-    noCallsWords->setText(noCalls);
-    noCallsNote->setToolTip(AirStrings::text(Text::GroupNoCallsNote));
-    noCallsNote->setAccessibleName(noCalls);
-    noCallsNote->setAccessibleDescription(noCallsNote->toolTip());
     searchButton->setToolTip(AirStrings::text(Text::ChatSearch));
     searchButton->setAccessibleName(searchButton->toolTip());
     const Text openHint = groupDossier ? Text::GroupDossierHint : Text::ChatDossierHint;
@@ -590,13 +581,24 @@ void ChatFormHeader::reloadTheme()
 
 void ChatFormHeader::restyle()
 {
+    // The window's legacy sheet gives every QLineEdit 6 px of padding and white on the accent for a
+    // selection: the field of a rename cut the name and, the name selected as it opens, hid it. The
+    // label's own sheet is nearer to the field and wins over that one.
+    const QString ink = air().color(Color::Ink).name(QColor::HexArgb);
+    nameLabel->setStyleSheet(
+        QStringLiteral("QLineEdit { background: %1; color: %2; border: %3px solid %4;"
+                       " border-radius: %5px; padding: 0 %6px; margin: 0;"
+                       " selection-background-color: %7; selection-color: %2; }")
+            .arg(air().color(Color::Raised).name(QColor::HexArgb), ink)
+            .arg(Stroke::hairline)
+            .arg(air().color(Color::Focus).name(QColor::HexArgb))
+            .arg(Radius::small)
+            .arg(Space::s4)
+            .arg(air().color(Color::Selected).name(QColor::HexArgb)));
     setInk(nameLabel, TextRole::Heading, Color::Ink);
     nameLabel->minimizeMaximumWidth();
     setInk(presenceLabel, TextRole::Caption, Color::Ink2);
     setInk(dayHint, TextRole::Caption, Color::Ink2);
-    setInk(noCallsWords, TextRole::Caption, Color::Ink2);
-    noCallsGlyph->setPixmap(air().icon(QStringLiteral("phone"), air().color(Color::Ink3),
-                                       Size::iconSmall, devicePixelRatioF()));
     update();
 }
 

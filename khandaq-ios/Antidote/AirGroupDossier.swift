@@ -488,12 +488,14 @@ final class AirGroupDossierController: AirScrollController {
                                                   memberKeys: Set(members.map { $0.publicKey }.filter { !$0.isEmpty }),
                                                   submanagerGroups: submanagerGroups,
                                                   submanagerObjects: submanagerObjects)
-        controller.onInvited = { [weak self] count in
+        controller.onInvited = { [weak self] tally in
             guard let self = self else {
                 return
             }
             self.navigationController?.popToViewController(self, animated: true)
-            self.toast(String(localized: "air_invite_sent", count))
+            if let text = tally.toastText {
+                self.toast(text)
+            }
         }
         navigationController?.pushViewController(controller, animated: true)
     }
@@ -559,6 +561,8 @@ final class AirGroupDossierController: AirScrollController {
         do {
             try submanagerGroups.leaveGroup(withNumber: OCTToxGroupNumber(chat.groupNumber), partMessage: nil)
             KhandaqCommunity.willLeave(chat)
+            // KHANDAQ (0.2.60): our invitations to it that wait for their contacts go too.
+            AirLocalStore.shared.dropOutgoingInvites(groupKey: chat.groupChatIdHex ?? "")
             submanagerGroups.removeAllMessages(in: chat, removeChat: true, leaveGroup: false)
             navigationController?.popToRootViewController(animated: true)
         }
@@ -780,9 +784,11 @@ final class AirGroupMemberSheet {
 }
 
 /// "Invite" from the group dossier: the contacts, online first, and the button on a bar above the
-/// keyboard. Only a contact online now can be invited (the invitation goes over their connection).
+/// keyboard. The invitation goes over the connection with the contact: KHANDAQ (0.2.60) that of a contact
+/// offline now waits on this device and goes once they are online (AirOutgoingInvites).
 final class AirGroupInviteController: AirScrollController {
-    var onInvited: ((Int) -> Void)?
+    /// After a round in which some went or wait: the toast says how many of each.
+    var onInvited: ((AirInviteTally) -> Void)?
 
     private let chat: OCTChat
     private let memberKeys: Set<String>
@@ -862,24 +868,13 @@ final class AirGroupInviteController: AirScrollController {
         guard chat.groupNumber >= 0 else {
             return
         }
-        var sent = 0
-        var firstError: NSError?
-        for candidate in listView.chosen where candidate.canInvite {
-            do {
-                try submanagerGroups.inviteFriend(withNumber: OCTToxFriendNumber(candidate.friendNumber),
-                                                  toGroupNumber: OCTToxGroupNumber(chat.groupNumber))
-                sent += 1
-            }
-            catch let error as NSError {
-                firstError = firstError ?? error
-            }
-        }
-        if let error = firstError {
-            // One alert for the lot: the ones that went out are still reported by the toast.
+        let tally = AirOutgoingInvites.invite(listView.chosen, to: chat, submanagerGroups: submanagerGroups)
+        if let error = tally.firstRefusal {
+            // One alert for the lot: the ones that went out or wait are still reported by the toast.
             handleErrorWithType(.inviteFriendToGroup, error: error)
         }
-        if sent > 0 {
-            onInvited?(sent)
+        if tally.sent + tally.later > 0 {
+            onInvited?(tally)
         }
     }
 }

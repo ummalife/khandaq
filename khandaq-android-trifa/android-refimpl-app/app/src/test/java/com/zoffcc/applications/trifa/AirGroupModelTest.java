@@ -350,7 +350,9 @@ public class AirGroupModelTest
         {
             order.add(candidate.name);
         }
-        assertEquals(Arrays.asList("Bilal", "Yusuf", "Amina", "Huda", "Zaid"), order);
+        // KHANDAQ (0.2.60): a contact offline can be chosen too (the invitation waits for them), after those online.
+        assertEquals(Arrays.asList("Bilal", "Yusuf", "Zaid", "Amina", "Huda"), order);
+        assertTrue(candidates.get(0).canInvite());
         assertEquals(AirGroupModel.InviteNote.ALREADY_MEMBER, AirGroupModel.InviteNote.of(candidates.get(2)));
         assertEquals(AirGroupModel.InviteNote.WHEN_ONLINE, AirGroupModel.InviteNote.of(candidates.get(0)));
         assertEquals(AirGroupModel.InviteNote.NONE, AirGroupModel.InviteNote.of(candidates.get(1)));

@@ -956,7 +956,7 @@ void TestAirConversation::everyPluralTextAgreesWithItsNumberInEveryLanguage()
             plurals.append(text);
         }
     }
-    QCOMPARE(plurals.size(), 17);
+    QCOMPARE(plurals.size(), 18);
 
     using Pairs = QVector<QPair<int, int>>;
     struct Language
@@ -1007,11 +1007,12 @@ void TestAirConversation::everyPluralTextAgreesWithItsNumberInEveryLanguage()
                 const QString where =
                     QStringLiteral("%1 %2: %3 -> %4").arg(language.code).arg(number).arg(english, said);
                 // The Arabic singular and dual name the count by themselves ("رمزان", two
-                // characters), as does the English "Invitation sent", as on the phones; every
-                // other form shows the number.
+                // characters), as does the English "Invitation sent" (and "Invitation will go
+                // once the contact is online"), as on the phones; every other form shows the number.
                 const bool countInWords = (language.code == QStringLiteral("ar") && number <= 2)
                                           || (language.code == QStringLiteral("en") && number == 1
-                                              && text == AirStrings::Text::InviteSent);
+                                              && (text == AirStrings::Text::InviteSent
+                                                  || text == AirStrings::Text::InviteLater));
                 [&] {
                     QVERIFY2(countInWords || said.contains(QString::number(number)), qPrintable(where));
                     QVERIFY2(!said.contains(QStringLiteral("%n")), qPrintable(where));

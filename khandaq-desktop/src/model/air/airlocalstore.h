@@ -85,6 +85,27 @@ public:
     };
 
     /**
+     * KHANDAQ (0.2.60): an invitation of ours to a group for a contact who was offline. toxcore
+     * sends one only over the link with the contact, so it waits here and goes once both are
+     * online. It goes away once sent, with the contact or the group, or outgoingInviteKeepMs after
+     * it was asked for.
+     */
+    struct OutgoingInvite
+    {
+        /** 64 hexadecimal characters in upper case: the contact, and the chat id of the group. */
+        QString friendKey;
+        QString groupKey;
+        /** When it was asked for, in milliseconds since 1970. */
+        qint64 date = 0;
+
+        bool operator==(const OutgoingInvite& other) const;
+    };
+    /** Thirty days: a contact away for longer is invited again by hand. */
+    static constexpr qint64 outgoingInviteKeepMs = 30LL * 24 * 60 * 60 * 1000;
+    /** The most invitations kept; the oldest make room. */
+    static constexpr int outgoingInviteLimit = 256;
+
+    /**
      * A private message with a member of a group (E13): toxcore keeps none, so this device does,
      * the last privateLimit of each conversation.
      */
@@ -187,6 +208,18 @@ public:
                       const QDateTime& at);
     bool removeInvite(const QString& id);
 
+    /** Our invitations waiting for their contacts, oldest first. */
+    QVector<OutgoingInvite> outgoingInvites() const;
+    /**
+     * Keeps an invitation of ours until it can go; false for keys that are not keys, an invitation
+     * kept already (it keeps its date) or one older than outgoingInviteKeepMs at now.
+     */
+    bool keepOutgoingInvite(const QString& friendKey, const QString& groupKey, const QDateTime& at,
+                            const QDateTime& now);
+    bool dropOutgoingInvite(const QString& friendKey, const QString& groupKey);
+    /** Drops the invitations asked for more than outgoingInviteKeepMs before now. */
+    bool pruneOutgoingInvites(const QDateTime& now);
+
     /** The private messages with one member of a group, oldest first. */
     QVector<PrivateLine> privateLines(const QString& groupKey, const QString& peerKey) const;
     /** Keeps a private message; false for keys that are not keys or an empty text. */
@@ -261,6 +294,9 @@ public:
     bool setCommunityAutoJoinDone();
     bool communityLeft() const;
     bool setCommunityLeft();
+    /** KHANDAQ (0.2.60): the mute of an earlier auto-join is lifted (Air::Community::restoreSound). */
+    bool communitySoundRestored() const;
+    bool setCommunitySoundRestored();
 
 private:
     struct Contact
@@ -288,6 +324,7 @@ private:
     QStringList blocked;
     QVector<WaitingRequest> waitingRequests;
     QVector<WaitingInvite> waitingInvites;
+    QVector<OutgoingInvite> outgoingQueue;
     QVector<PrivateLine> privateMessages;
     /** Marks by entry key, and the keys from the oldest change to the newest. */
     QHash<QString, EntryMarks> entries;
@@ -300,6 +337,7 @@ private:
     QHash<QString, QStringList> relayedOrder;
     bool communityJoined = false;
     bool communityGone = false;
+    bool communitySoundOn = false;
 };
 
 } // namespace Air

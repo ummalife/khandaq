@@ -66,4 +66,12 @@ bool decode(const QString& path, Pcm* out);
 void appendMono(const uint8_t* const* planes, SampleKind kind, bool planar, int channels,
                 int frames, std::vector<int16_t>* out);
 
+/**
+ * AVERROR_EOF without the C cast inside its macro, which the warnings of the CI builds reject;
+ * AirVoiceEncoder reads the end of its encoder with it too.
+ */
+constexpr int endOfFile =
+    -static_cast<int>(static_cast<unsigned>('E') | (static_cast<unsigned>('O') << 8)
+                      | (static_cast<unsigned>('F') << 16) | (static_cast<unsigned>(' ') << 24));
+
 } // namespace AirVoiceDecoder

@@ -1088,6 +1088,8 @@ public class HelperFriend
                 {
                     e.printStackTrace();
                 }
+                // KHANDAQ (0.2.60): group invitations kept for the contact go with them.
+                HelperGroup.forget_manual_group_invites_for_friend(friend_pubkey);
         //    }
         //};
         //t.start();

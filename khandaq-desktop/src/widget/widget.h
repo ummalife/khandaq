@@ -253,6 +253,11 @@ public slots:
     void onGroupFileSendStarted(int groupnumber, const QString& fileName, const QString& localPath,
                                 qint64 fileSize, const QByteArray& fileId);
     void onGroupFileSendProgress(const QByteArray& fileId, qint64 bytesSent);
+    /**
+     * KHANDAQ (0.2.60): a member asks for chunks of a group file the node does not hold: the
+     * history says whether it is ours and may still go (Core::restoreSentGroupFile).
+     */
+    void onSentGroupFileWanted(int groupnumber, const QByteArray& chatId, const QByteArray& fileId);
     void onGroupFileSendWaiting(const QByteArray& fileId, bool waiting);
     void onGroupFileSendFailed(const QByteArray& fileId);
     /** 0.2.57: a file that comes into a group in chunks shows from its BEGIN, as under way. */
@@ -427,16 +432,26 @@ private:
                         const QVector<Air::InviteCandidate>& invited);
     void joinAirGroup(const QString& groupKey);
     /**
+     * Invites a contact to a group from the menu of the contact or a drop on the group's row: now,
+     * or once they are online (GroupChatForm::sendInvites), the toast saying which.
+     */
+    void inviteToGroup(const Group& group, const Friend& frnd);
+    /**
      * Opens the group the user just joined. A group they were still leaving is joined only after
      * toxcore let go of the old instance (Core::replaceLeavingGroup), once this has returned: it
      * opens when Core::groupJoined puts it in the list (onGroupJoined).
      */
     void openJoinedGroup(const GroupId& groupId);
     /**
-     * KHANDAQ (0.2.57): joins Khandaq Community, muted, once per profile and never after it was
-     * left (Air::Community); it does not open.
+     * KHANDAQ (0.2.57): joins Khandaq Community once per profile and never after it was left
+     * (Air::Community); it does not open.
      */
     void joinCommunity();
+    /**
+     * KHANDAQ (0.2.60): sends the invitations kept for contacts who were offline, to those online
+     * now (AirLocal::outgoingInvites): when one comes online, and every outgoingInviteRetryMs.
+     */
+    void sendOutgoingInvites();
     /** KHANDAQ (0.2.57): Accept on a held file of Khandaq Community: written where the group's go. */
     void saveHeldGroupFile(const GroupId& groupId, const ToxFile& entry);
     /** Their entries say the download stopped: the files went to make room, or were too big. */
@@ -518,6 +533,7 @@ private:
     bool notify(QObject* receiver, QEvent* event);
     bool autoAwayActive = false;
     QTimer* timer;
+    QTimer* outgoingInviteTimer = nullptr;
     bool eventFlag;
     bool eventIcon;
     bool wasMaximized = false;

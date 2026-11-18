@@ -48,6 +48,11 @@ class ChatGroupInputViewManager: NSObject {
         inputView.text = chat.enteredText ?? ""
         inputView.cameraButtonEnabled = true
         inputView.voiceButtonEnabled = true
+        // KHANDAQ (0.2.60): a pasted photo goes through the preview, as one from the library: one at a time, as
+        // the library gives a group.
+        inputView.onPasteImages = { [weak self] images in
+            self?.presentMediaPreview(items: images.prefix(1).map { .image($0, fileName: nil) })
+        }
     }
 }
 

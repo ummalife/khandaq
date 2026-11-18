@@ -2995,11 +2995,28 @@ void Core::maintainGroups()
 
 bool Core::groupInviteFriend(uint32_t friendId, int groupId)
 {
+    return inviteToGroup(friendId, groupId) == GroupInviteResult::Sent;
+}
+
+Core::GroupInviteResult Core::inviteToGroup(uint32_t friendId, int groupId)
+{
     QMutexLocker ml{&coreLoopLock};
 
     Tox_Err_Group_Invite_Friend error;
     tox_group_invite_friend(tox.get(), groupId, friendId, &error);
-    return PARSE_ERR(error);
+    switch (error) {
+    case TOX_ERR_GROUP_INVITE_FRIEND_OK:
+        return GroupInviteResult::Sent;
+    case TOX_ERR_GROUP_INVITE_FRIEND_INVITE_FAIL:
+    case TOX_ERR_GROUP_INVITE_FRIEND_FAIL_SEND:
+    case TOX_ERR_GROUP_INVITE_FRIEND_DISCONNECTED:
+        // The packet goes over the link with the contact: offline, it did not go.
+        qDebug() << "Group invitation not sent now, error" << static_cast<int>(error);
+        return GroupInviteResult::Later;
+    default:
+        PARSE_ERR(error);
+        return GroupInviteResult::Refused;
+    }
 }
 
 /**
@@ -3870,7 +3887,14 @@ void Core::answerGroupFileRequest(uint32_t groupId, uint32_t peerId, const uint8
     if (!going) {
         found = sentGroupFiles.constFind(fileId);
         if (found == sentGroupFiles.constEnd()) {
-            // Not a file of ours, or one gone from what we keep: its sender answers.
+            // 0.2.60: not a file of ours, whose sender answers, or one of ours we no longer hold
+            // (a restart, or kept too long): the history says, and the request waits for it.
+            const QByteArray packet(reinterpret_cast<const char*>(data), static_cast<int>(length));
+            if (sentGroupFileLookups.request(fileId, peerId, packet, monotonicMs())
+                == Air::SentFileLookups::Step::Ask) {
+                emit sentGroupFileWanted(static_cast<int>(groupId), groupChatId(tox.get(), groupId),
+                                         fileId);
+            }
             return;
         }
     }
@@ -3931,6 +3955,41 @@ void Core::answerGroupFileRequest(uint32_t groupId, uint32_t peerId, const uint8
     resend.size = known.size;
     resend.plan = plan;
     groupFileResends.append(resend);
+}
+
+void Core::restoreSentGroupFile(int groupnumber, const QByteArray& chatId, const QByteArray& fileId,
+                                const QString& fileName, const QString& localPath, qint64 size)
+{
+    QMutexLocker ml{&coreLoopLock};
+    const QList<Air::SentFileLookups::Request> requests = sentGroupFileLookups.found(fileId);
+    OutgoingGroupFile kept;
+    kept.group = groupnumber;
+    kept.chatId = chatId;
+    kept.fileName = fileName;
+    kept.localPath = localPath;
+    kept.size = size;
+    // Only a file that went in chunks: a member gets a file of one packet whole or not at all.
+    if (static_cast<uint64_t>(qMax(qint64{0}, size)) <= NGC_SINGLE_PKT_MAX_FILESIZE
+        || static_cast<uint64_t>(size) > KHANDAQ_MAX_FILE_TRANSFER_BYTES || chatId.isEmpty()
+        || !sendsGroupFileTo(kept) || outgoingGroupFiles.contains(fileId)) {
+        return;
+    }
+    if (!sentGroupFiles.contains(fileId)) {
+        keepSentGroupFile(fileId, kept, monotonicMs());
+        qDebug() << "NGC chunked file:" << fileName
+                 << "is ours, from the history; the members that ask for it get it again";
+    }
+    for (const Air::SentFileLookups::Request& request : requests) {
+        answerGroupFileRequest(static_cast<uint32_t>(groupnumber), request.peer,
+                               reinterpret_cast<const uint8_t*>(request.packet.constData()),
+                               static_cast<size_t>(request.packet.size()));
+    }
+}
+
+void Core::sentGroupFileUnknown(const QByteArray& fileId)
+{
+    QMutexLocker ml{&coreLoopLock};
+    sentGroupFileLookups.notFound(fileId, monotonicMs());
 }
 
 /** @brief 0.2.57: the index of the resend whose packet may go at nowMs; -1 when none may. */

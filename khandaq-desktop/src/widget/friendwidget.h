@@ -26,6 +26,7 @@
 #include <memory>
 
 class FriendChatroom;
+class Group;
 class QPixmap;
 class MaskablePixmapWidget;
 class CircleWidget;
@@ -72,6 +73,10 @@ signals:
     void copyFriendIdToClipboard(const ToxPk& friendPk);
     /** "To new group": New group opens with this contact chosen for the invitations. */
     void newGroupRequested(const ToxPk& friendPk);
+    /** A group chosen under "Invite to group": the invitation goes now or waits on this device. */
+    void groupInviteRequested(Group* group);
+    /** Rename from the menu of the list: the chat opens with its name being edited in its head. */
+    void renameRequested(FriendWidget* widget);
     void contextMenuCalled(QContextMenuEvent* event);
     void friendHistoryRemoved();
     void updateFriendActivity(Friend& frnd);

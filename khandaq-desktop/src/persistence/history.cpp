@@ -1123,6 +1123,31 @@ bool History::laterFileGoesTo(const ChatId& chatId, const QByteArray& fileId,
     return found;
 }
 
+History::SentFile History::sentFile(const ChatId& chatId, const QByteArray& fileId)
+{
+    SentFile sent;
+    if (historyAccessBlocked() || fileId.isEmpty() || erasedFiles.contains(fileId)) {
+        return sent;
+    }
+    QVector<QByteArray> boundParams{fileId};
+    QString queryString =
+        QStringLiteral("SELECT file_transfers.file_name, file_transfers.file_path, "
+                       "file_transfers.file_size, history.timestamp FROM file_transfers "
+                       "JOIN history ON history.id = file_transfers.id "
+                       "WHERE file_transfers.file_restart_id = ? "
+                       "AND file_transfers.direction = %1 AND history.chat_id = ")
+            .arg(static_cast<int>(ToxFile::SENDING));
+    addChatIdSubQuery(queryString, boundParams, chatId);
+    queryString += QStringLiteral(" ORDER BY file_transfers.id DESC LIMIT 1;");
+    db->execNow({queryString, boundParams, [&sent](const QVector<QVariant>& row) {
+                     sent.fileName = QString::fromUtf8(row[0].toByteArray().replace('\0', ""));
+                     sent.filePath = QString::fromUtf8(row[1].toByteArray().replace('\0', ""));
+                     sent.size = row[2].toLongLong();
+                     sent.sentMs = row[3].toLongLong();
+                 }});
+    return sent;
+}
+
 void History::eraseFileEntry(const ChatId& chatId, const QByteArray& fileId)
 {
     if (historyAccessBlocked()) {

@@ -65,6 +65,17 @@ QString cellHtml(const QString& address)
            + QStringLiteral("\">") + address
            + QStringLiteral("</a></td><!--EndFragment--></tr></table></body></html>");
 }
+
+/** Hands field what a paste would, without the clipboard: insertFromMimeData, where it ends. */
+void pasteWithoutClipboard(QTextEdit& field, const QMimeData& data)
+{
+    struct Opener : QTextEdit
+    {
+        using QTextEdit::insertFromMimeData;
+    };
+    void (QTextEdit::*const insert)(const QMimeData*) = &Opener::insertFromMimeData;
+    (field.*insert)(&data);
+}
 } // namespace
 
 class TestChatTextEdit : public QObject
@@ -80,6 +91,7 @@ private slots:
     void aCellWithOnlyALinkIsPastedAsItsText();
     void whereNoPictureIsTakenTheTextBesideItIsPasted();
     void aTextIsFilesOnlyWhenEveryLineNamesOne();
+    void aFileCopiedInAFileManagerIsSent();
     void aLongTextIsPastedWholeAndTypingOnStaysQuick();
 };
 
@@ -298,6 +310,46 @@ void TestChatTextEdit::aTextIsFilesOnlyWhenEveryLineNamesOne()
     edit.paste();
     QCOMPARE(files.count(), 1);
     QCOMPARE(edit.toPlainText(), note);
+}
+
+/**
+ * KHANDAQ (0.2.60): a file copied in Finder, in Explorer or in a file manager of Linux comes as its
+ * file:// address, its name beside it as the text, and is sent. On macOS and Linux it came in as
+ * its name: the path of the address passed only as a path of Windows. Spaces, # and % in a name,
+ * which the address encodes, come back as they were.
+ */
+void TestChatTextEdit::aFileCopiedInAFileManagerIsSent()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QStringList paths;
+    QList<QUrl> urls;
+    for (const QString& name :
+         {QStringLiteral("notes.txt"), QStringLiteral("May report #2 (100%).pdf")}) {
+        QFile file(dir.filePath(name));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("x");
+        paths.append(QFileInfo(file).absoluteFilePath());
+        urls.append(QUrl::fromLocalFile(paths.last()));
+    }
+
+    ChatTextEdit edit;
+    QSignalSpy files(&edit, &ChatTextEdit::pasteFiles);
+    QMimeData copied;
+    copied.setUrls(urls);
+    copied.setText(QStringLiteral("notes.txt\nMay report #2 (100%).pdf"));
+    pasteWithoutClipboard(edit, copied);
+    QCOMPARE(files.count(), 1);
+    QCOMPARE(files.first().first().toStringList(), paths);
+    QVERIFY(edit.toPlainText().isEmpty());
+
+    // A file gone since it was copied leaves the text, as typed.
+    QMimeData gone;
+    gone.setUrls({QUrl::fromLocalFile(dir.filePath(QStringLiteral("gone.txt")))});
+    gone.setText(QStringLiteral("gone.txt"));
+    pasteWithoutClipboard(edit, gone);
+    QCOMPARE(files.count(), 1);
+    QCOMPARE(edit.toPlainText(), QStringLiteral("gone.txt"));
 }
 
 /**

@@ -1108,12 +1108,13 @@
 "air_group_now_observer_format" = "%@ is an observer now";
 "air_group_kicked_format" = "%@ is no longer in the group";
 "air_group_invite_title" = "Invite to the group";
-"air_invite_online_note" = "An invitation goes over your connection with the contact, so only contacts online now can be invited.";
+"air_invite_online_note" = "An invitation goes over your connection with the contact: a contact offline now gets it once they are online.";
 "air_invite_choose_first" = "Choose whom to invite";
 "air_invite_send_format" = "Invite %d";
 "air_invite_sent" = "%d invitations sent";
+"air_invite_later" = "%d invitations will go once the contacts are online";
 "air_invite_already_member" = "already in the group";
-"air_invite_when_online" = "can be invited once online";
+"air_invite_when_online" = "gets the invitation once online";
 "air_invite_no_contacts" = "No contacts yet: add someone first.";
 "air_invite_nobody_found" = "No contact with that name";
 "air_invite_search" = "Find a contact";
@@ -1126,7 +1127,7 @@
 "air_group_privacy_invite_only_note" = "Only people invited by a member can join. The group key does not let anyone in.";
 "air_group_privacy_open" = "Open to anyone with the group key";
 "air_group_privacy_open_note" = "Anyone who has the group key can join, no invitation needed.";
-"air_new_group_invite_note" = "Invitations go at once, so only contacts online can be invited here. Invite the others later from the group dossier.";
+"air_new_group_invite_note" = "An invitation goes over your connection with the contact: a contact offline now gets it once they are online.";
 "air_new_group_create" = "Create group";
 "air_new_group_create_invite_format" = "Create and invite %d";
 "air_new_group_name_first" = "Name the group to create it";

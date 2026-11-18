@@ -328,6 +328,8 @@ set(${PROJECT_NAME}_SOURCES
   src/model/air/airstart.h
   src/model/air/airvoicedecoder.cpp
   src/model/air/airvoicedecoder.h
+  src/model/air/airvoiceencoder.cpp
+  src/model/air/airvoiceencoder.h
   src/model/air/airyou.cpp
   src/model/air/airyou.h
   src/model/chathistory.cpp
@@ -496,6 +498,8 @@ set(${PROJECT_NAME}_SOURCES
   src/widget/air/airtokens.h
   src/widget/air/airtray.cpp
   src/widget/air/airtray.h
+  src/widget/air/airvoicerecorder.cpp
+  src/widget/air/airvoicerecorder.h
   src/widget/air/airwidgets.cpp
   src/widget/air/airwidgets.h
   src/widget/air/airyou.cpp

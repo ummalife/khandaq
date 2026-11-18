@@ -79,6 +79,15 @@ public:
     void openPrivate(const QString& peerKey);
     /** Whether the private messages with this member are unfolded now. */
     bool isPrivateOpen(const QString& peerKey) const;
+    /**
+     * KHANDAQ (0.2.60): invites the chosen contacts to the group; the invitation of a contact
+     * offline now is kept in local, which sends it once they are online (Widget::sendOutgoingInvites).
+     */
+    static Air::InviteTally sendInvites(Core& core, AirLocal* local, uint32_t groupNumber,
+                                        const GroupId& groupId,
+                                        const QVector<Air::InviteCandidate>& chosen);
+    /** Says how the invitations went: a toast, or a notice over dialogOn when any was refused. */
+    static void tellInvites(QWidget* toastOn, QWidget* dialogOn, const Air::InviteTally& tally);
 #ifdef KHANDAQ_SCREENSHOT_HOOK
     /** Test builds only: asks about an action on the member with this name, as their menu does. */
     void askMemberActionForShots(const QString& name, Air::MemberAction action);
@@ -93,6 +102,8 @@ signals:
 private slots:
     void onScreenshotClicked() override;
     void onAttachClicked() override;
+    /** KHANDAQ (0.2.60): files pasted into the field go to the group (they were dropped). */
+    void onPasteFiles(const QStringList& paths) override;
     void onMicMuteToggle();
     void onVolMuteToggle();
     void onCallClicked();
@@ -102,6 +113,7 @@ private slots:
     void onTitleChanged(const QString& author, const QString& title);
 
 protected:
+    void sendPreparedFiles(const QStringList& paths) override;
     void keyPressEvent(QKeyEvent* ev) final;
     void keyReleaseEvent(QKeyEvent* ev) final;
     // drag & drop

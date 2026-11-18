@@ -247,14 +247,26 @@ struct InviteCandidate
     bool online = false;
 
     /**
-     * tox_group_invite_friend goes over the friend connection, so only a contact online now can be
-     * invited; the others wait in the list.
+     * Any contact with a friend number. tox_group_invite_friend goes over the friend connection,
+     * so the invitation of a contact offline now waits on this device and goes once they are
+     * online (KHANDAQ 0.2.60; before, only those online could be chosen).
      */
     bool canInvite() const;
     bool operator==(const InviteCandidate& other) const;
 };
 
-/** Those who can be invited first, then by name; a query keeps the names that hold it. */
+/** KHANDAQ (0.2.60): how a round of invitations went. */
+struct InviteTally
+{
+    /** Sent now. */
+    int sent = 0;
+    /** Kept until the contact is online (or the group connected again). */
+    int later = 0;
+    /** The group or the contact is gone. */
+    int refused = 0;
+};
+
+/** Those online first, then by name; a query keeps the names that hold it. */
 QVector<InviteCandidate> arrangedInvites(QVector<InviteCandidate> candidates, const QString& query);
 
 } // namespace Air

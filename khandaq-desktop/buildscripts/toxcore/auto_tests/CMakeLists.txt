@@ -48,6 +48,8 @@ auto_test(group_moderation)
 auto_test(group_recv_gap)
 # KHANDAQ (0.2.59, group files): a peer that comes back through a new handshake gets what is sent to it after.
 auto_test(group_rehandshake)
+# KHANDAQ (0.2.60, group roaming): a peer whose address changes gets what is sent to it at its new address.
+auto_test(group_roaming)
 auto_test(group_save)
 auto_test(group_state)
 #auto_test(group_sync) # Does timeout.

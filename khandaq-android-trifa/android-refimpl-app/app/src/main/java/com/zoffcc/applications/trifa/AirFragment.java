@@ -1848,6 +1848,10 @@ public class AirFragment extends Fragment
             if (member && key != null)
             {
                 holder.tile.bind(AirTileView.Kind.GROUP, title, AirModel.Tone.index(key));
+                if (KhandaqCommunity.isCommunity(key))
+                {
+                    holder.tile.showCommunityLogo(); // KHANDAQ (0.2.60)
+                }
             }
             else
             {

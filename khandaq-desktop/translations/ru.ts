@@ -842,6 +842,56 @@
         <translation>Прикрепить файл</translation>
     </message>
     <message>
+        <source>Emoji</source>
+        <comment>button of the message field that opens the emoji</comment>
+        <translation>Эмодзи</translation>
+    </message>
+    <message>
+        <source>Record a voice message</source>
+        <comment>microphone button of the message field</comment>
+        <translation>Записать голосовое сообщение</translation>
+    </message>
+    <message>
+        <source>Cancel the voice message</source>
+        <comment>the cross in place of the paperclip while a voice message is recorded</comment>
+        <translation>Отменить голосовое сообщение</translation>
+    </message>
+    <message>
+        <source>Recording a voice message</source>
+        <comment>in place of the message field while a voice message is recorded</comment>
+        <translation>Запись голосового</translation>
+    </message>
+    <message>
+        <source>Too short: a voice message lasts at least a second</source>
+        <comment>toast when a voice message was shorter than a second</comment>
+        <translation>Слишком коротко: голосовое сообщение длится хотя бы секунду</translation>
+    </message>
+    <message>
+        <source>No microphone: check that one is connected</source>
+        <comment>toast when no microphone could be opened for a voice message</comment>
+        <translation>Нет микрофона: проверьте, что он подключён</translation>
+    </message>
+    <message>
+        <source>%1 is offline. A voice message goes only while you are both online.</source>
+        <comment>why a voice message cannot be recorded or sent now: %1 is the person</comment>
+        <translation>%1 не в сети. Голосовое сообщение уходит, только пока вы оба в сети.</translation>
+    </message>
+    <message>
+        <source>Without the microphone a voice message cannot be recorded. Allow it in System Settings: Privacy and Security, Microphone.</source>
+        <comment>dialog when macOS refuses the microphone for a voice message</comment>
+        <translation>Без микрофона голосовое сообщение не записать. Разрешите его в Системных настройках: Конфиденциальность и безопасность, Микрофон.</translation>
+    </message>
+    <message>
+        <source>The voice message could not be saved</source>
+        <comment>dialog when a recorded voice message could not be written to disk</comment>
+        <translation>Не удалось сохранить голосовое сообщение</translation>
+    </message>
+    <message>
+        <source>A voice message lasts up to 5 minutes: this one was sent</source>
+        <comment>toast when a voice message reached its longest length and went by itself</comment>
+        <translation>Голосовое сообщение длится не больше 5 минут: запись отправлена</translation>
+    </message>
+    <message>
         <source>Goes right away: %1 is online</source>
         <comment>line under the message field; %1 is the first name</comment>
         <translation>Уйдёт сразу: %1 в сети</translation>
@@ -1832,9 +1882,9 @@
         <translation>Пригласить в группу</translation>
     </message>
     <message>
-        <source>An invitation goes over your connection with the contact, so only contacts online now can be invited.</source>
+        <source>An invitation goes over your connection with the contact: a contact offline now gets it once they are online.</source>
         <comment>invitation list</comment>
-        <translation>Приглашение уходит по связи с контактом, поэтому пригласить можно тех, кто сейчас в сети.</translation>
+        <translation>Приглашение уходит по связи с контактом: тот, кто сейчас не в сети, получит его, когда появится.</translation>
     </message>
     <message>
         <source>Choose whom to invite</source>
@@ -1842,9 +1892,9 @@
         <translation>Выберите, кого пригласить</translation>
     </message>
     <message>
-        <source>can be invited once online</source>
-        <comment>invitation list: a contact who is offline</comment>
-        <translation>пригласить можно, когда будет в сети</translation>
+        <source>gets the invitation once online</source>
+        <comment>invitation list: a contact who is offline; the invitation waits for them</comment>
+        <translation>получит приглашение, когда появится</translation>
     </message>
     <message>
         <source>No contacts yet: add someone first.</source>
@@ -1907,9 +1957,9 @@
         <translation>Войти может любой, у кого есть ключ группы, без приглашения.</translation>
     </message>
     <message>
-        <source>Invitations go at once, so only contacts online can be invited here. Invite the others later from the group dossier.</source>
+        <source>Contacts online get the invitation at once, the others once they come online.</source>
         <comment>New group: over the contacts to invite</comment>
-        <translation>Приглашения уходят сразу, поэтому здесь можно пригласить только тех, кто в сети. Остальных пригласите позже из досье группы.</translation>
+        <translation>Те, кто в сети, получат приглашение сразу, остальные получат, когда появятся в сети.</translation>
     </message>
     <message>
         <source>Create group</source>
@@ -2078,6 +2128,15 @@
             <numerusform>Отправлено %n приглашение</numerusform>
             <numerusform>Отправлено %n приглашения</numerusform>
             <numerusform>Отправлено %n приглашений</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n invitation(s) will go once the contacts are online</source>
+        <comment>toast after inviting: invitations kept for contacts who are offline</comment>
+        <translation>
+            <numerusform>%n приглашение уйдёт при появлении в сети</numerusform>
+            <numerusform>%n приглашения уйдут при появлении в сети</numerusform>
+            <numerusform>%n приглашений уйдут при появлении в сети</numerusform>
         </translation>
     </message>
     <message numerus="yes">

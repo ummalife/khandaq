@@ -352,13 +352,14 @@
     <string name="air_group_privacy_open">Open to anyone with the group key</string>
     <string name="air_group_privacy_open_note">Anyone who has the group key can join, no invitation needed.</string>
     <string name="air_group_invite">Invite</string>
-    <string name="air_new_group_invite_note">Invitations go at once, so only contacts online can be invited here. Invite the others later from the group dossier.</string>
+    <!-- KHANDAQ (0.2.60): a contact offline can be chosen too; their invitation waits until they are online. -->
+    <string name="air_new_group_invite_note">Contacts online get the invitation at once, the others once they come online.</string>
     <string name="air_new_group_create">Create group</string>
     <string name="air_new_group_create_invite_format">Create and invite %1$d</string>
     <string name="air_new_group_name_first">Name the group to create it</string>
     <string name="air_new_group_name_too_long">The name is too long for a group: shorten it</string>
     <string name="air_invite_already_member">already in the group</string>
-    <string name="air_invite_when_online">can be invited once online</string>
+    <string name="air_invite_when_online">gets the invitation once online</string>
     <string name="air_invite_no_contacts">No contacts yet: add someone first.</string>
     <string name="air_invite_search">Find a contact</string>
     <string name="air_invite_nobody_found">No contact with that name</string>

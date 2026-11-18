@@ -444,6 +444,7 @@ final class AirTranscript
             if (outgoing)
             {
                 fullAuthor = context.getString(R.string.air_you);
+                authorColor = AirUi.youColor(context); // KHANDAQ (0.2.60): tone-5, not ink-2
             }
             else
             {

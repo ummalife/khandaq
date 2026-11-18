@@ -87,9 +87,13 @@ LDFLAGS="${CROSS_LDFLAG}" \
           "${PLATFORM_FLAGS[@]}" \
           --enable-demuxer=h264,mjpeg,mov \
           --enable-parser=aac,h264,mjpeg \
-          --enable-decoder=aac,h264,mjpeg,rawvideo
+          --enable-decoder=aac,h264,mjpeg,rawvideo \
+          --enable-encoder=aac
 
-for define in HAVE_THREADS CONFIG_MOV_DEMUXER CONFIG_AAC_DECODER CONFIG_H264_DECODER \
+# KHANDAQ (0.2.60): the native AAC encoder codes the voice messages the desktop records; the app
+# writes their M4A boxes itself (src/model/air/airvoiceencoder.cpp), so no muxer is built.
+for define in HAVE_THREADS CONFIG_MOV_DEMUXER CONFIG_AAC_DECODER CONFIG_AAC_ENCODER \
+              CONFIG_H264_DECODER \
               CONFIG_MJPEG_DECODER CONFIG_RAWVIDEO_DECODER CONFIG_SWSCALE CONFIG_AVDEVICE \
               "${PLATFORM_DEFINES[@]}"; do
     if ! grep -qxF "#define ${define} 1" config.h config_components.h; then
@@ -103,6 +107,14 @@ for define in CONFIG_IAMFDEC CONFIG_NETWORK CONFIG_ZLIB CONFIG_AVFILTER; do
         exit 1
     fi
 done
+# The FFmpeg waivers in security-waivers.json say that no muxer is built and no encoder but AAC.
+unexpected="$(grep -E '^#define CONFIG_[A-Z0-9_]+_(MUXER|ENCODER) 1$' config_components.h \
+    | grep -vxF '#define CONFIG_AAC_ENCODER 1' || true)"
+if [ -n "${unexpected}" ]; then
+    echo "ERROR: FFmpeg configure put in what the waivers say is not built:" >&2
+    echo "${unexpected}" >&2
+    exit 1
+fi
 
 make -j "${MAKE_JOBS}"
 make install

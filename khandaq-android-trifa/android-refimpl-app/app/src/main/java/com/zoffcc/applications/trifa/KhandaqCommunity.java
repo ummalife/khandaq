@@ -5,7 +5,8 @@ import java.util.Locale;
 
 /**
  * KHANDAQ (0.2.57, SPEC-community part B): Khandaq Community, the official group of the app. Every profile joins
- * it once by itself, muted, and never again once the person has left it; otherwise it is a group like any other,
+ * it once by itself, with its sound on (KHANDAQ 0.2.60: muted before), and never again once the person has left it;
+ * otherwise it is a group like any other,
  * except that the files of others in it wait for a tap (item 6). Its founder is our bot on khandaq.org, whose
  * state keeps the chat id, so the id is compiled in. It is not the old TRIfA group that
  * HelperGroup.is_removed_legacy_public_community_group keeps away: that one has another id.
@@ -31,11 +32,16 @@ final class KhandaqCommunity
     /** The person left the group, or deleted it (SPEC item 3). */
     static final String MARK_LEFT = "community.left";
     /**
-     * The group's notification switch is off, as the app left it for the row it made (autoJoin) or the person turned
-     * it (noteSoundChoice); gone once they turn it on or delete the group's row (noteRowDeleted). A leave keeps the
-     * row, and its switch with it (mutesNewRow).
+     * The group's notification switch is off, as the person turned it (noteSoundChoice) or as an auto-join before
+     * 0.2.60 left the row it made (restoreSoundOnce); gone once they turn it on or delete the group's row
+     * (noteRowDeleted). A leave keeps the row, and its switch with it (mutesNewRow).
      */
     static final String MARK_MUTED = "community.muted";
+    /**
+     * KHANDAQ (0.2.60): the mute an earlier auto-join left was lifted, or there was none to lift (restoreSoundOnce):
+     * a mute the person makes from now on stays.
+     */
+    static final String MARK_SOUND_RESTORED = "community.soundRestored";
 
     /**
      * The pause before the app asks a full Community again (SPEC-community: "a client whose join fails because the
@@ -66,8 +72,13 @@ final class KhandaqCommunity
 
         void keepMuted(boolean muted);
 
-        /** Turns the notifications of the group with this chat id off, as its own switch does. */
-        void mute(String chatId);
+        /** KHANDAQ (0.2.60): whether restoreSoundOnce ran for the profile (MARK_SOUND_RESTORED). */
+        boolean soundRestored();
+
+        void setSoundRestored();
+
+        /** KHANDAQ (0.2.60): turns the notifications of the group with this chat id on, as its own switch does. */
+        void unmute(String chatId);
     }
 
     /** The app's join by chat id, and the leave that takes back what it did. */
@@ -167,8 +178,8 @@ final class KhandaqCommunity
     }
 
     /**
-     * Joins it through join when shouldAutoJoin says so, with the marks the store keeps. When the join made the
-     * group here ({@code newGroup}: the app had no row of it), it is muted; a group the app had already (an earlier
+     * Joins it through join when shouldAutoJoin says so, with the marks the store keeps. KHANDAQ (0.2.60): the group
+     * comes with its sound on, as every group (the owner's rule, 2026-11-18); a group the app had already (an earlier
      * join that toxcore did not keep, or one joined by hand) keeps its switch as the person left it. A failed join
      * changes nothing. The join is not marked done here: toxcore keeps the group only once it has connected
      * (noteGroupKept), and until then every start that finds it gone joins again. A group the profile is in
@@ -178,8 +189,7 @@ final class KhandaqCommunity
      * join then gave it back (its row, with the "we left" mark cleared), so it leaves again (leaveAgain), and
      * nothing of it stays. The leave marks itself before anything else (GroupListHolder), so it is seen here.
      */
-    static boolean autoJoin(final Store store, final boolean connected, final boolean alreadyInGroup,
-                            final boolean newGroup, final Join join)
+    static boolean autoJoin(final Store store, final boolean connected, final boolean alreadyInGroup, final Join join)
     {
         if (!shouldAutoJoin(connected, store.autoJoinDone(), store.left(), alreadyInGroup))
         {
@@ -191,17 +201,31 @@ final class KhandaqCommunity
             join.leaveAgain();
             return false;
         }
-        if (!joined)
+        return joined;
+    }
+
+    /**
+     * KHANDAQ (0.2.60): Khandaq Community keeps its sound (the owner's rule, 2026-11-18). From 0.2.57 the auto-join
+     * muted the row it made; once per profile, that switch is turned on again: when the group is muted (keptMuted)
+     * and the person did not leave it. The app cannot tell that mute from one the person made since (both keep
+     * MARK_MUTED), so it lifts either, once, as the desktop does; a mute the person makes after this stays
+     * (MARK_SOUND_RESTORED is set also when there was nothing to lift). True when it turned the sound on.
+     */
+    static boolean restoreSoundOnce(final Store store)
+    {
+        if (store.soundRestored())
         {
             return false;
         }
-        if (newGroup)
+        boolean unmuted = false;
+        if (!store.left() && store.keptMuted())
         {
-            // The group mutes as it comes: a person added without asking hears nothing of it until they turn it on.
-            store.mute(CHAT_ID);
-            store.keepMuted(true);
+            store.unmute(CHAT_ID);
+            store.keepMuted(false);
+            unmuted = true;
         }
-        return true;
+        store.setSoundRestored();
+        return unmuted;
     }
 
     /**
@@ -251,9 +275,9 @@ final class KhandaqCommunity
      * Whether a row of a group made now starts muted: it is Khandaq Community, and the profile keeps its switch off
      * (MARK_MUTED). A profile imported or restored again empties the list of groups and keeps its marks; toxcore still
      * has the group, so the start gives it a new row, which came unmuted. Its switch is kept, not guessed from how it
-     * was joined: the auto-join mutes the row it makes, a group joined by hand starts with its sound on, and the
-     * person may have turned either since. A row made after the person deleted the group starts as every group does:
-     * the delete forgets the switch (noteRowDeleted).
+     * was joined: an auto-join before 0.2.60 muted the row it made, a group joined by hand starts with its sound on,
+     * and the person may have turned either since. A row made after the person deleted the group starts as every
+     * group does: the delete forgets the switch (noteRowDeleted).
      */
     static boolean mutesNewRow(final String groupId, final Store store)
     {

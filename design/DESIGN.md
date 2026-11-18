@@ -216,8 +216,9 @@ Decided while building it in the iOS client (11.11.2026); Android and desktop fo
 
 - **A transcript, not bubbles.** Each entry: the time in a 38 pt column of tabular figures (wider
   with a large text size), the text, and at the far end the mark of our own texts. The author shows
-  only where a run starts (same author, same day, under five minutes apart): "You" in `ink-2`, the
-  other person by first name in their tone. The day ("Today", "Yesterday", a date) heads its first
+  only where a run starts (same author, same day, under five minutes apart), a step above the text: "You"
+  in `tone-5` (0.2.60: in `ink-2` it read as a line of the text), the other person by first name in
+  their tone. The day ("Today", "Yesterday", a date) heads its first
   entry at the text column. No wallpaper. A new entry rises 8 pt and fades in; with reduced motion it
   only fades.
 - **Marks:** amber clock in transit, faint clock while leaving, a check when sent, two checks when
@@ -487,6 +488,14 @@ Transfers stay Tox file transfers, and a voice note keeps the `.file.m4a` name t
 - **A voice note** is a player: a round Play button, Pause while it plays, as in Telegram (the screen
   reader says Listen and Pause), the wave, and the length in tabular figures (the time played while it
   plays). One not fetched yet shows its size and waits for Accept like any file.
+- **Recording a voice note on the desktop** (0.2.60, users asked for it): the microphone follows the
+  emoji in the row of the field. A click starts the note; the kq-progress bar takes the place of the
+  field (the microphone glyph, "Recording a voice message", the time in tabular figures and the share
+  of the longest note), the cross takes the place of the paperclip and cancels it (Esc too), and Send
+  sends it (Enter too). Nothing blinks. A note under a second is not sent; at five minutes, which keeps
+  it under the 4 MB iOS fetches by itself, the microphone closes and the note goes. It is written as
+  the phones write theirs: AAC-LC at 64 kbit/s, one channel, `voice_<8 hex>.file.m4a`. To a person
+  offline no note is started: the toast says that it goes only while both are online, as a file does.
 - **A group says its limit before a file is chosen:** the attach sheet reads "A group takes files up
   to 200 MB", the limit its refusal already used.
 - **In transit:** a file of ours that waits for a person who is offline lies in the tray with the

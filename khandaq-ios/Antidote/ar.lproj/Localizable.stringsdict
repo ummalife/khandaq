@@ -506,5 +506,29 @@
 			<string>أُرسلت %d دعوة</string>
 		</dict>
 	</dict>
+	<key>air_invite_later</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@later@</string>
+		<key>later</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>ستُرسل %d دعوة عند اتصال المدعوين</string>
+			<key>one</key>
+			<string>ستُرسل الدعوة عند اتصال المدعو</string>
+			<key>two</key>
+			<string>ستُرسل الدعوتان عند اتصال المدعوَّين</string>
+			<key>few</key>
+			<string>ستُرسل %d دعوات عند اتصال المدعوين</string>
+			<key>many</key>
+			<string>ستُرسل %d دعوة عند اتصال المدعوين</string>
+			<key>other</key>
+			<string>ستُرسل %d دعوة عند اتصال المدعوين</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

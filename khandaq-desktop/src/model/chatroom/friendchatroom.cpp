@@ -22,7 +22,6 @@
 #include "src/model/dialogs/idialogsmanager.h"
 #include "src/model/friend.h"
 #include "src/model/group.h"
-#include "src/model/status.h"
 #include "src/persistence/settings.h"
 #include "src/widget/contentdialog.h"
 
@@ -43,10 +42,9 @@ QString getShortName(const QString& name)
 }
 
 FriendChatroom::FriendChatroom(Friend* frnd_, IDialogsManager* dialogsManager_,
-    Core& core_, Settings& settings_, GroupList& groupList_)
+    Settings& settings_, GroupList& groupList_)
     : frnd{frnd_}
     , dialogsManager{dialogsManager_}
-    , core{core_}
     , settings{settings_}
     , groupList{groupList_}
 {
@@ -68,11 +66,6 @@ void FriendChatroom::setActive(bool _active)
         active = _active;
         emit activeChanged(active);
     }
-}
-
-bool FriendChatroom::canBeInvited() const
-{
-    return Status::isOnline(frnd->getStatus());
 }
 
 int FriendChatroom::getCircleId() const
@@ -106,13 +99,6 @@ void FriendChatroom::disableAutoAccept()
 bool FriendChatroom::autoAcceptEnabled() const
 {
     return getAutoAcceptDir().isEmpty();
-}
-
-void FriendChatroom::inviteFriend(const Group* group)
-{
-    const auto friendId = frnd->getId();
-    const auto groupId = group->getId();
-    core.groupInviteFriend(friendId, groupId);
 }
 
 QVector<GroupToDisplay> FriendChatroom::getGroups() const

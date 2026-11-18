@@ -87,6 +87,10 @@ final class AirBandView extends LinearLayout
             tile.showPhoto(true);
             ChatBubbleUiHelper.load_peer_photo(context, content.photo, tile.photoView());
         }
+        else if (content.opens == AirBand.Content.Opens.GROUP && KhandaqCommunity.isCommunity(content.chatKey))
+        {
+            tile.showCommunityLogo(); // KHANDAQ (0.2.60)
+        }
         final int side = res.getDimensionPixelSize(R.dimen.kq_size_tile_phone);
         addView(tile, new LayoutParams(side, side));
 

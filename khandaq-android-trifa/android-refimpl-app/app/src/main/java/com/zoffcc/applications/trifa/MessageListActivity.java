@@ -320,6 +320,8 @@ public class MessageListActivity extends AppCompatActivity
         ml_new_message = (com.vanniktech.emoji.EmojiEditText) findViewById(R.id.ml_new_message);
         HelperGeneric.apply_chat_input_field_style(ml_new_message);
         ChatReplyPreviewController.bind(this, ml_new_message);
+        // KHANDAQ (0.2.60): a photo or a video pasted into the field goes out through the send preview.
+        ComposerMediaPaste.attach(ml_new_message, this::sendPickedMediaToPreview);
 
         messageSearchView = (SearchView) findViewById(R.id.search_view_messages);
         messageSearchView.setQueryHint(getString(R.string.messages_search_default_text));

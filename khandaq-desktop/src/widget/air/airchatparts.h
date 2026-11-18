@@ -49,6 +49,8 @@ public:
         Saved,
         /** A request from someone who is not a contact yet: a dashed outline round "add contact". */
         Request,
+        /** KHANDAQ (0.2.60): Khandaq Community, the app's logo instead of initials. */
+        Community,
     };
 
     explicit AirTile(int side = AirTokens::Size::tileDesk, QWidget* parent = nullptr);
@@ -57,6 +59,10 @@ public:
     void setKind(Kind kind);
     /** A null pixmap goes back to the initials. */
     void setPhoto(const QPixmap& photo);
+    /** The logo on the tile of Khandaq Community; null where the resources are not built in. */
+    static QPixmap communityLogo();
+    /** Community for Khandaq Community, Group for any other group. */
+    static Kind groupKind(const QByteArray& groupChatId);
 
     QSize sizeHint() const override;
 

@@ -41,7 +41,7 @@ import org.khandaq.messenger.R;
 /**
  * KHANDAQ (redesign, E15): New group as one screen instead of two steps, as AirNewGroupController on iOS
  * and design/DESIGN.md "Groups on the phone". The name (one line, up to 48 bytes, not changeable later),
- * who can join with what each choice means, the contacts online to invite, and "Create group" on a bar
+ * who can join with what each choice means, the contacts to invite, and "Create group" on a bar
  * above the keyboard with the reason it waits. The group is named and closed as the founder chose before
  * it exists; a password stays in the group settings.
  */
@@ -102,7 +102,7 @@ public final class AirNewGroupActivity extends AirScreenActivity
             }
         }
         candidates = loadCandidates();
-        // Only those who can be invited now stay chosen: a contact may have gone offline meanwhile.
+        // Only those who can be invited stay chosen: a contact may have been removed meanwhile.
         final Set<String> invitable = new LinkedHashSet<>();
         for (final AirGroupModel.InviteCandidate candidate : candidates)
         {
@@ -363,7 +363,7 @@ public final class AirNewGroupActivity extends AirScreenActivity
         finish();
     }
 
-    /** The contacts that can be asked, as on iOS: online ones can be invited now, the rest wait. */
+    /** The contacts that can be asked: online ones are invited now, the others once online (KHANDAQ 0.2.60). */
     private List<AirGroupModel.InviteCandidate> loadCandidates()
     {
         final List<AirGroupModel.InviteCandidate> list = new ArrayList<>();

@@ -150,6 +150,10 @@ enum class Text
     ComposePlaceholder,
     ComposeSend,
     ComposeAttach,
+    ComposeEmoji,
+    ComposeVoice,
+    ComposeVoiceCancel,
+    ComposeRecording,
     ComposeHintLive,
     ComposeHintWait,
     ComposeHintSaved,
@@ -407,6 +411,7 @@ enum class Text
     GroupBytesOver,
     InviteSendCount,
     InviteSent,
+    InviteLater,
     NewGroupCreateInvite,
     GroupObserverNoPrivate,
     // Files, voice notes and calls in the transcript (E8, E9).
@@ -438,6 +443,12 @@ enum class Text
     FileNotWritable,
     FileGroupNotConnected,
     VoiceNote,
+    VoiceTooShort,
+    VoiceNoMicrophone,
+    VoiceOffline,
+    VoiceMicMessage,
+    VoiceNotSaved,
+    VoiceLimitSent,
     VoiceListen,
     VoicePause,
     VoiceFailedTitle,
@@ -477,8 +488,6 @@ enum class Text
     CallAnswerFailedTitle,
     CallAlreadyOn,
     CallNotCalling,
-    GroupNoCalls,
-    GroupNoCallsNote,
     YouQr,
     YouQrHint,
     YouCopyId,
@@ -873,6 +882,12 @@ QString trayHeadText(int count);
  * sentence that says so. The list, the notifications and the bands read a message through it.
  */
 QString messageWords(const QString& raw);
+/**
+ * KHANDAQ (0.2.60): a file where a person reads of it, in the list, the bands and the
+ * notifications: "File: plan.pdf"; a voice note is "Voice message", not the name of its file
+ * (voice_F5CD3544.file.m4a), as the phones show it.
+ */
+QString fileWords(const QString& fileName);
 /** Who wrote the message a reply quotes, as the quote names them: Unknown when it names nobody. */
 QString replyName(const QString& name);
 

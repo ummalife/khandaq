@@ -62,7 +62,7 @@ done
     --disable-everything --disable-avfilter --disable-swresample --disable-iamf \
     --enable-indev=v4l2,xcbgrab --enable-demuxer=mov \
     --enable-decoder=aac,h264,hevc,mjpeg,rawvideo --enable-parser=aac,h264,hevc,mjpeg \
-    --enable-encoder=libx264
+    --enable-encoder=aac,libx264
 
 make -j"$(nproc)"
 make install

@@ -26,15 +26,22 @@
 #include "src/core/core.h"
 #include "src/friendlist.h"
 #include "src/grouplist.h"
+#include "src/model/air/airmedia.h"
 #include "src/model/air/airmodel.h"
+#include "src/model/air/airvoiceencoder.h"
 #include "src/model/friend.h"
 #include "src/model/group.h"
 #include "src/model/notes.h"
+#include "src/persistence/paths.h"
 #include "src/persistence/settings.h"
 #include "src/persistence/smileypack.h"
+#include "src/platform/mediaaccess.h"
 #include "src/widget/air/aircomposer.h"
+#include "src/widget/air/airmediaparts.h"
 #include "src/widget/air/airoverlay.h"
 #include "src/widget/air/airstrings.h"
+#include "src/widget/air/airtokens.h"
+#include "src/widget/air/airvoicerecorder.h"
 #include "src/widget/chatformheader.h"
 #include "src/widget/contentdialog.h"
 #include "src/widget/contentdialogmanager.h"
@@ -42,6 +49,7 @@
 #include "src/widget/emoticonswidget.h"
 #include "src/widget/form/chatform.h"
 #include "src/widget/form/loadhistorydialog.h"
+#include "src/widget/imagepreviewwidget.h"
 #include "src/widget/maskablepixmapwidget.h"
 #include "src/widget/searchform.h"
 #include "src/widget/style.h"
@@ -52,12 +60,21 @@
 #include "src/widget/widget.h"
 
 #include <QClipboard>
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
+#include <QFutureWatcher>
+#include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QPointer>
 #include <QRegularExpression>
 #include <QStringBuilder>
+#include <QtConcurrent/QtConcurrentRun>
 #include <QtGlobal>
+
+#include <memory>
 
 #ifdef SPELL_CHECKING
 #include <KF5/SonnetUi/sonnet/spellcheckdecorator.h>
@@ -239,9 +256,45 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
 
     setLayout(mainLayout);
 
-    // kq-composer: the paperclip, the field and "Send" in one frame. The emoji button is gone; the
-    // old buttons stay hidden and do what the composer asks of them, so their connections hold.
+    // kq-composer: the paperclip, the field, the emoji and "Send" in one frame. The old buttons stay
+    // hidden and do what the composer asks of them, so their connections hold.
     composer = new AirComposer(msgEdit, contentWidget);
+    // KHANDAQ (0.2.60): the emoji came back (users could not send any from the computer); a build
+    // without a set has nothing to offer.
+    composer->setEmojiVisible(!smileyPack.getEmoticons().empty());
+    connect(composer, &AirComposer::emojiRequested, this, &GenericChatForm::showEmoticons);
+    // KHANDAQ (0.2.60): voice notes from the computer too; a build whose FFmpeg cannot write them
+    // offers no microphone.
+    composer->setVoiceVisible(AirVoiceEncoder::canEncode());
+    connect(composer, &AirComposer::voiceRequested, this, &GenericChatForm::startVoiceNote);
+    connect(composer, &AirComposer::voiceSendRequested, this, [this] { sendVoiceNote(false); });
+    connect(composer, &AirComposer::voiceCancelRequested, this, &GenericChatForm::cancelVoiceNote);
+    {
+        // One recorder for the app: every form listens and takes what is about its own note.
+        AirVoiceRecorder* const recorder = &AirVoiceRecorder::instance();
+        connect(recorder, &AirVoiceRecorder::elapsedChanged, this, [this, recorder](qint64 ms) {
+            if (recorder->isRecordingFor(this)) {
+                composer->setRecordingTime(ms, static_cast<double>(ms)
+                                                   / AirVoiceRecorder::longestMs);
+            }
+        });
+        connect(recorder, &AirVoiceRecorder::limitReached, this, [this, recorder] {
+            if (recorder->isRecordingFor(this)) {
+                composer->setRecordingTime(AirVoiceRecorder::longestMs, 1.0);
+                sendVoiceNote(true);
+            }
+        });
+        connect(recorder, &AirVoiceRecorder::lost, this, [this, recorder] {
+            if (recorder->isRecordingFor(this)) {
+                AirToast::post(this, AirStrings::text(AirStrings::Text::VoiceNoMicrophone));
+            }
+        });
+        connect(recorder, &AirVoiceRecorder::ended, this, [this, recorder] {
+            if (!recorder->isRecordingFor(this)) {
+                composer->setRecording(false);
+            }
+        });
+    }
     composer->addAbove(quotePreview);
     for (QPushButton* button : {emoteButton, fileButton, sendButton}) {
         button->setParent(contentWidget);
@@ -276,6 +329,27 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
     contentLayout->addWidget(dateInfo);
     contentLayout->addWidget(chatWidget);
     contentLayout->addWidget(composer);
+
+    // A pasted picture or a screenshot waits here, right over the field (takePastedImages).
+    // KHANDAQ (0.2.60): in line with the field, as far from the edge as the composer keeps it; it
+    // stood against the edge of the column. Hidden, its row takes no room.
+    imagePreview = new ImagePreviewButton(this);
+    imagePreview->setFixedSize(100, 100);
+    imagePreview->setFlat(true);
+    imagePreview->setStyleSheet("QPushButton { border: 0px }");
+    imagePreview->hide();
+    auto* const cancelPreview = new QPushButton(imagePreview);
+    cancelPreview->setFixedSize(20, 20);
+    cancelPreview->move(QPoint(80, 0));
+    cancelPreview->setIcon(QIcon(style.getImagePath("rejectCall/rejectCall.svg", settings)));
+    cancelPreview->setFlat(true);
+    connect(cancelPreview, &QPushButton::pressed, this, &GenericChatForm::cancelImagePreview);
+    auto* const previewRow = new QHBoxLayout();
+    previewRow->setContentsMargins(AirTokens::Space::s16, AirTokens::Space::s8,
+                                   AirTokens::Space::s16, 0);
+    previewRow->addWidget(imagePreview);
+    previewRow->addStretch(1);
+    contentLayout->insertLayout(contentLayout->indexOf(composer), previewRow);
 
     // KHANDAQ (0.2.58): Reply first, on the message or the file the menu is opened on.
     replyAction = menu.addAction(QString());
@@ -524,6 +598,168 @@ void GenericChatForm::onPasteFiles(const QStringList& paths)
     std::ignore = paths;
 }
 
+void GenericChatForm::sendPreparedFiles(const QStringList& paths)
+{
+    std::ignore = paths;
+}
+
+QString GenericChatForm::voiceRefusal() const
+{
+    return QString();
+}
+
+void GenericChatForm::startVoiceNote()
+{
+    AirVoiceRecorder& recorder = AirVoiceRecorder::instance();
+    if (recorder.isRecordingFor(this)) {
+        return;
+    }
+    const QString refusal = voiceRefusal();
+    if (!refusal.isEmpty()) {
+        AirToast::post(this, refusal);
+        return;
+    }
+    const QPointer<GenericChatForm> self(this);
+    MediaAccess::ask(MediaAccess::Device::Microphone, this, [self](bool granted) {
+        GenericChatForm* const form = self.data();
+        if (!form) {
+            return;
+        }
+        if (!granted) {
+            form->explainVoiceMicrophone();
+            return;
+        }
+        AirVoiceRecorder& voice = AirVoiceRecorder::instance();
+        // A note of another window (a chat of its own) gives way to this one, and a note that plays
+        // stops: the microphone would hear it, as in a call.
+        voice.cancel();
+        AirVoicePlayer::instance().stop();
+        if (!voice.start(form)) {
+            AirToast::post(form, AirStrings::text(AirStrings::Text::VoiceNoMicrophone));
+            return;
+        }
+        AirToast::dismiss(form);
+        form->composer->setRecording(true);
+    });
+}
+
+void GenericChatForm::sendVoiceNote(bool atLimit)
+{
+    AirVoiceRecorder& recorder = AirVoiceRecorder::instance();
+    if (!recorder.isRecordingFor(this) || !canSendNow()) {
+        // A group where nobody would get it: the note waits with Send, as a message does.
+        return;
+    }
+    const QString refusal = voiceRefusal();
+    if (!refusal.isEmpty()) {
+        // The person went offline while the note was recorded: it waits for them or the cross.
+        AirToast::post(this, refusal);
+        return;
+    }
+    if (recorder.elapsedMs() < AirVoiceRecorder::shortestMs) {
+        recorder.cancel();
+        AirToast::post(this, AirStrings::text(AirStrings::Text::VoiceTooShort));
+        return;
+    }
+    const QString folder = Air::voiceNoteFolder(settings.getPaths().getAppDataDirPath());
+    if (!QDir().mkpath(folder)) {
+        recorder.cancel();
+        AirDialog::notice(this, AirStrings::text(AirStrings::Text::FileNotSentTitle),
+                          AirStrings::text(AirStrings::Text::VoiceNotSaved));
+        return;
+    }
+    const QString path = QDir(folder).filePath(AirVoiceEncoder::newNoteName());
+    AirVoiceDecoder::Pcm pcm = recorder.finish();
+    // Minutes of sound take a moment to write: off the main thread, the field free meanwhile.
+    const auto samples = std::make_shared<std::vector<int16_t>>();
+    samples->swap(pcm.samples);
+    const int sampleRate = pcm.sampleRate;
+    auto* const writing = new QFutureWatcher<bool>(this);
+    connect(writing, &QFutureWatcher<bool>::finished, this, [this, writing, path, atLimit] {
+        const bool written = writing->result();
+        writing->deleteLater();
+        if (!written) {
+            AirDialog::notice(this, AirStrings::text(AirStrings::Text::FileNotSentTitle),
+                              AirStrings::text(AirStrings::Text::VoiceNotSaved));
+            return;
+        }
+        sendPreparedFiles(QStringList{path});
+        if (atLimit) {
+            AirToast::post(this, AirStrings::text(AirStrings::Text::VoiceLimitSent));
+        }
+    });
+    writing->setFuture(QtConcurrent::run([samples, sampleRate, path]() {
+        return AirVoiceEncoder::encode(*samples, sampleRate, path);
+    }));
+}
+
+void GenericChatForm::cancelVoiceNote()
+{
+    AirVoiceRecorder& recorder = AirVoiceRecorder::instance();
+    if (recorder.isRecordingFor(this)) {
+        recorder.cancel();
+    } else {
+        composer->setRecording(false);
+    }
+}
+
+void GenericChatForm::explainVoiceMicrophone()
+{
+    AirDialog::confirm(this, AirStrings::text(AirStrings::Text::CallMicTitle),
+                       AirStrings::text(AirStrings::Text::VoiceMicMessage),
+                       AirStrings::text(AirStrings::Text::CallOpenSettings), AirDialog::Verb::Ink,
+                       [] { MediaAccess::openSettings(MediaAccess::Device::Microphone); });
+}
+
+void GenericChatForm::takePastedImages()
+{
+    connect(msgEdit, &ChatTextEdit::pasteImage, this, &GenericChatForm::previewImage);
+    connect(sendButton, &QPushButton::pressed, this, &GenericChatForm::sendImageFromPreview);
+    connect(msgEdit, &ChatTextEdit::enterPressed, this, &GenericChatForm::sendImageFromPreview);
+    connect(msgEdit, &ChatTextEdit::escapePressed, this, &GenericChatForm::cancelImagePreview);
+}
+
+void GenericChatForm::previewImage(const QPixmap& pixmap)
+{
+    imagePreviewSource = pixmap;
+    imagePreview->setIconFromPixmap(pixmap);
+    imagePreview->show();
+}
+
+void GenericChatForm::cancelImagePreview()
+{
+    imagePreviewSource = QPixmap();
+    imagePreview->hide();
+}
+
+void GenericChatForm::sendImageFromPreview()
+{
+    if (!imagePreview->isVisible()) {
+        return;
+    }
+
+    QDir(settings.getPaths().getAppDataDirPath()).mkpath("images");
+
+    // ~ISO 8601 for the name, without the colons Windows does not take in a file name.
+    const QString filepath =
+        QString("%1images%2Khandaq_Image_%3.png")
+            .arg(settings.getPaths().getAppDataDirPath())
+            .arg(QDir::separator())
+            .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd HH-mm-ss.zzz"));
+    QFile file(filepath);
+    if (!file.open(QFile::WriteOnly) || !imagePreviewSource.save(&file, "PNG")) {
+        // The operation as the title, over the window (E21).
+        AirDialog::notice(this, AirStrings::text(AirStrings::Text::FileNotSentTitle),
+                          AirStrings::text(AirStrings::Text::ScreenshotNotSaved));
+        return;
+    }
+    file.close();
+    cancelImagePreview();
+    // KHANDAQ (0.2.60): the same way as a chosen file, with its checks and their words (the picture
+    // went past them before, straight to the core).
+    sendPreparedFiles({QFileInfo(file).filePath()});
+}
+
 QString GenericChatForm::outgoingText() const
 {
     QString msg = msgEdit->toPlainText();
@@ -645,6 +881,14 @@ void GenericChatForm::onSendTriggered()
 
 void GenericChatForm::onEmoteButtonClicked()
 {
+    QWidget* sender = qobject_cast<QWidget*>(QObject::sender());
+    if (sender) {
+        showEmoticons(sender->mapToGlobal(QPoint()));
+    }
+}
+
+void GenericChatForm::showEmoticons(const QPoint& anchor)
+{
     // don't show the smiley selection widget if there are no smileys available
     if (smileyPack.getEmoticons().empty())
         return;
@@ -653,12 +897,10 @@ void GenericChatForm::onEmoteButtonClicked()
     connect(&widget, SIGNAL(insertEmoticon(QString)), this, SLOT(onEmoteInsertRequested(QString)));
     widget.installEventFilter(this);
 
-    QWidget* sender = qobject_cast<QWidget*>(QObject::sender());
-    if (sender) {
-        QPoint pos =
-            -QPoint(widget.sizeHint().width() / 2, widget.sizeHint().height()) - QPoint(0, 10);
-        widget.exec(sender->mapToGlobal(pos));
-    }
+    // Centred over the anchor, 10 px above it; QMenu keeps it on the screen.
+    const QPoint pos =
+        -QPoint(widget.sizeHint().width() / 2, widget.sizeHint().height()) - QPoint(0, 10);
+    widget.exec(anchor + pos);
 }
 
 void GenericChatForm::onEmoteInsertRequested(QString str)
@@ -758,6 +1000,11 @@ void GenericChatForm::onSelectAllClicked()
 void GenericChatForm::hideEvent(QHideEvent* event)
 {
     hideFileMenu();
+    // A note is recorded for the chat on the screen: another chat opened cancels it. A window
+    // minimized (a hide of the system) does not.
+    if (!event->spontaneous() && AirVoiceRecorder::instance().isRecordingFor(this)) {
+        AirVoiceRecorder::instance().cancel();
+    }
     QWidget::hideEvent(event);
 }
 

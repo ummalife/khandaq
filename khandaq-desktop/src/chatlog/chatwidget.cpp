@@ -1743,7 +1743,7 @@ ChatMessage::AirLook ChatWidget::lookOf(const ChatLogItem& item) const
     const bool isSelf = item.getSender() == core.getSelfPublicKey();
     if (isSelf) {
         look.who = AirStrings::text(AirStrings::Text::You);
-        look.tone = -1;
+        look.tone = Air::youTone;
         // Notes are all yours: a screen reader says no author over them either.
         look.spokenWho = notesChat ? QString() : look.who;
     } else {

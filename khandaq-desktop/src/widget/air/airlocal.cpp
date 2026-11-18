@@ -25,6 +25,8 @@
 #include "src/model/status.h"
 #include "src/persistence/settings.h"
 
+#include <QDebug>
+
 namespace {
 /** An hour mark only changes when a new clock hour starts; a minute is close enough. */
 constexpr int tickMs = 60 * 1000;
@@ -36,6 +38,15 @@ AirLocal::AirLocal(Settings& settings_, QObject* parent)
     , settings{settings_}
 {
     store.load(settings.getAirLocalStore(), QDateTime::currentDateTime());
+    // KHANDAQ (0.2.60): once per profile, Khandaq Community is heard again where an earlier auto-join
+    // muted it; the mark is kept at once, so it is done once.
+    const bool soundMarkNew = !store.communitySoundRestored();
+    if (Air::Community::restoreSound(store)) {
+        qInfo() << "Community: its sound is on again; the join of an earlier version had muted it";
+    }
+    if (soundMarkNew) {
+        save();
+    }
 
     ticker.setInterval(tickMs);
     connect(&ticker, &QTimer::timeout, this, &AirLocal::markOnlineFriends);
@@ -238,6 +249,36 @@ void AirLocal::addPrivateLine(const QString& groupKey, const QString& peerKey, b
 void AirLocal::forgetGroup(const QString& groupKey)
 {
     if (store.forgetGroup(groupKey)) {
+        saveLater.stop();
+        save();
+    }
+}
+
+QVector<Air::LocalStore::OutgoingInvite> AirLocal::outgoingInvites() const
+{
+    return store.outgoingInvites();
+}
+
+void AirLocal::keepOutgoingInvite(const QString& friendKey, const QString& groupKey)
+{
+    const QDateTime now = QDateTime::currentDateTime();
+    if (store.keepOutgoingInvite(friendKey, groupKey, now, now)) {
+        saveLater.stop();
+        save();
+    }
+}
+
+void AirLocal::dropOutgoingInvite(const QString& friendKey, const QString& groupKey)
+{
+    if (store.dropOutgoingInvite(friendKey, groupKey)) {
+        saveLater.stop();
+        save();
+    }
+}
+
+void AirLocal::pruneOutgoingInvites()
+{
+    if (store.pruneOutgoingInvites(QDateTime::currentDateTime())) {
         saveLater.stop();
         save();
     }

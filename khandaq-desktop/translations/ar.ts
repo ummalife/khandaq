@@ -863,6 +863,56 @@
         <translation>إرفاق ملف</translation>
     </message>
     <message>
+        <source>Emoji</source>
+        <comment>button of the message field that opens the emoji</comment>
+        <translation>الرموز التعبيرية</translation>
+    </message>
+    <message>
+        <source>Record a voice message</source>
+        <comment>microphone button of the message field</comment>
+        <translation>تسجيل رسالة صوتية</translation>
+    </message>
+    <message>
+        <source>Cancel the voice message</source>
+        <comment>the cross in place of the paperclip while a voice message is recorded</comment>
+        <translation>إلغاء الرسالة الصوتية</translation>
+    </message>
+    <message>
+        <source>Recording a voice message</source>
+        <comment>in place of the message field while a voice message is recorded</comment>
+        <translation>جارٍ تسجيل رسالة صوتية</translation>
+    </message>
+    <message>
+        <source>Too short: a voice message lasts at least a second</source>
+        <comment>toast when a voice message was shorter than a second</comment>
+        <translation>قصيرة جدًا: تستمر الرسالة الصوتية ثانية على الأقل</translation>
+    </message>
+    <message>
+        <source>No microphone: check that one is connected</source>
+        <comment>toast when no microphone could be opened for a voice message</comment>
+        <translation>لا يوجد ميكروفون: تحقق من توصيله</translation>
+    </message>
+    <message>
+        <source>%1 is offline. A voice message goes only while you are both online.</source>
+        <comment>why a voice message cannot be recorded or sent now: %1 is the person</comment>
+        <translation>%1 غير متصل. لا تُرسل الرسالة الصوتية إلا وأنتما متصلان معًا.</translation>
+    </message>
+    <message>
+        <source>Without the microphone a voice message cannot be recorded. Allow it in System Settings: Privacy and Security, Microphone.</source>
+        <comment>dialog when macOS refuses the microphone for a voice message</comment>
+        <translation>من دون الميكروفون لا يمكن تسجيل رسالة صوتية. اسمح به في إعدادات النظام: الخصوصية والأمن، الميكروفون.</translation>
+    </message>
+    <message>
+        <source>The voice message could not be saved</source>
+        <comment>dialog when a recorded voice message could not be written to disk</comment>
+        <translation>تعذّر حفظ الرسالة الصوتية</translation>
+    </message>
+    <message>
+        <source>A voice message lasts up to 5 minutes: this one was sent</source>
+        <comment>toast when a voice message reached its longest length and went by itself</comment>
+        <translation>تستمر الرسالة الصوتية 5 دقائق كحد أقصى، وقد أُرسل التسجيل</translation>
+    </message>
+    <message>
         <source>Goes right away: %1 is online</source>
         <comment>line under the message field; %1 is the first name</comment>
         <translation>ستُرسل فورًا: %1 متصل</translation>
@@ -1868,9 +1918,9 @@
         <translation>دعوة إلى المجموعة</translation>
     </message>
     <message>
-        <source>An invitation goes over your connection with the contact, so only contacts online now can be invited.</source>
+        <source>An invitation goes over your connection with the contact: a contact offline now gets it once they are online.</source>
         <comment>invitation list</comment>
-        <translation>تُرسل الدعوة عبر اتصالك بجهة الاتصال، لذا لا يمكن دعوة إلا المتصلين الآن.</translation>
+        <translation>تُرسل الدعوة عبر اتصالك بجهة الاتصال: من ليس متصلًا الآن يتلقاها عند اتصاله.</translation>
     </message>
     <message>
         <source>Choose whom to invite</source>
@@ -1878,9 +1928,9 @@
         <translation>اختر من تريد دعوته</translation>
     </message>
     <message>
-        <source>can be invited once online</source>
-        <comment>invitation list: a contact who is offline</comment>
-        <translation>يمكن دعوته عند اتصاله</translation>
+        <source>gets the invitation once online</source>
+        <comment>invitation list: a contact who is offline; the invitation waits for them</comment>
+        <translation>سيتلقى الدعوة عند اتصاله</translation>
     </message>
     <message>
         <source>No contacts yet: add someone first.</source>
@@ -1943,9 +1993,9 @@
         <translation>يمكن لأي شخص لديه مفتاح المجموعة الانضمام دون دعوة.</translation>
     </message>
     <message>
-        <source>Invitations go at once, so only contacts online can be invited here. Invite the others later from the group dossier.</source>
+        <source>Contacts online get the invitation at once, the others once they come online.</source>
         <comment>New group: over the contacts to invite</comment>
-        <translation>تُرسل الدعوات فورًا، لذا لا يمكن هنا دعوة إلا المتصلين. ادعُ الآخرين لاحقًا من ملف المجموعة.</translation>
+        <translation>تصل الدعوة فورًا إلى المتصلين، وتصل إلى الآخرين عند اتصالهم.</translation>
     </message>
     <message>
         <source>Create group</source>
@@ -2132,6 +2182,18 @@
             <numerusform>أُرسلت %n دعوات</numerusform>
             <numerusform>أُرسلت %n دعوة</numerusform>
             <numerusform>أُرسلت %n دعوة</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n invitation(s) will go once the contacts are online</source>
+        <comment>toast after inviting: invitations kept for contacts who are offline</comment>
+        <translation>
+            <numerusform>ستُرسل %n دعوة عند اتصال المدعوين</numerusform>
+            <numerusform>ستُرسل الدعوة عند اتصال المدعو</numerusform>
+            <numerusform>ستُرسل الدعوتان عند اتصال المدعوَّين</numerusform>
+            <numerusform>ستُرسل %n دعوات عند اتصال المدعوين</numerusform>
+            <numerusform>ستُرسل %n دعوة عند اتصال المدعوين</numerusform>
+            <numerusform>ستُرسل %n دعوة عند اتصال المدعوين</numerusform>
         </translation>
     </message>
     <message numerus="yes">

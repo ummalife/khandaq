@@ -41,6 +41,10 @@ const QString askedField = QStringLiteral("askedAt");
 const QString blockedField = QStringLiteral("blocked");
 const QString requestsField = QStringLiteral("requests");
 const QString invitesField = QStringLiteral("invites");
+// KHANDAQ (0.2.60): our invitations waiting for an offline contact. Optional: a store without them
+// reads as before, and a desktop of 0.2.59 skips them.
+const QString outgoingInvitesField = QStringLiteral("outgoingInvites");
+const QString friendField = QStringLiteral("friend");
 const QString keyField = QStringLiteral("key");
 const QString messageField = QStringLiteral("message");
 const QString dateField = QStringLiteral("date");
@@ -70,6 +74,7 @@ constexpr int anchorFile = 2;
 const QString communityField = QStringLiteral("community");
 const QString autoJoinDoneField = QStringLiteral("autoJoinDone");
 const QString leftField = QStringLiteral("left");
+const QString soundRestoredField = QStringLiteral("soundRestored");
 // KHANDAQ (0.2.57, review): relayed files, optional too: the hash of each group, then its entries.
 const QString relayedField = QStringLiteral("relayed");
 
@@ -119,6 +124,8 @@ constexpr int LocalStore::privateLimit;
 constexpr int LocalStore::entryLimit;
 constexpr int LocalStore::wireLimit;
 constexpr int LocalStore::relayedLimit;
+constexpr qint64 LocalStore::outgoingInviteKeepMs;
+constexpr int LocalStore::outgoingInviteLimit;
 
 bool LocalStore::PrivateLine::operator==(const PrivateLine& other) const
 {
@@ -134,6 +141,11 @@ bool LocalStore::WaitingRequest::operator==(const WaitingRequest& other) const
 bool LocalStore::WaitingInvite::isNull() const
 {
     return id.isEmpty();
+}
+
+bool LocalStore::OutgoingInvite::operator==(const OutgoingInvite& other) const
+{
+    return friendKey == other.friendKey && groupKey == other.groupKey && date == other.date;
 }
 
 bool LocalStore::WaitingInvite::operator==(const WaitingInvite& other) const
@@ -162,6 +174,7 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
     blocked.clear();
     waitingRequests.clear();
     waitingInvites.clear();
+    outgoingQueue.clear();
     privateMessages.clear();
     entries.clear();
     entryOrder.clear();
@@ -171,6 +184,7 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
     relayedOrder.clear();
     communityJoined = false;
     communityGone = false;
+    communitySoundOn = false;
     if (data.isEmpty()) {
         return;
     }
@@ -181,6 +195,7 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
     const QJsonObject community = root.value(communityField).toObject();
     communityJoined = community.value(autoJoinDoneField).toBool();
     communityGone = community.value(leftField).toBool();
+    communitySoundOn = community.value(soundRestoredField).toBool();
     const QJsonObject stored = root.value(contactsField).toObject();
     for (auto it = stored.constBegin(); it != stored.constEnd(); ++it) {
         const QJsonObject fields = it.value().toObject();
@@ -222,6 +237,13 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
                   QByteArray::fromBase64(fields.value(dataField).toString().toLatin1()),
                   QDateTime::fromMSecsSinceEpoch(
                       static_cast<qint64>(fields.value(dateField).toDouble())));
+    }
+    for (const QJsonValue value : root.value(outgoingInvitesField).toArray()) {
+        const QJsonObject fields = value.toObject();
+        keepOutgoingInvite(fields.value(friendField).toString(), fields.value(groupField).toString(),
+                           QDateTime::fromMSecsSinceEpoch(
+                               static_cast<qint64>(fields.value(dateField).toDouble())),
+                           now);
     }
     for (const QJsonValue value : root.value(privateField).toArray()) {
         const QJsonObject fields = value.toObject();
@@ -329,6 +351,17 @@ QByteArray LocalStore::save() const
         }
         root.insert(invitesField, invites);
     }
+    if (!outgoingQueue.isEmpty()) {
+        QJsonArray outgoing;
+        for (const OutgoingInvite& invite : outgoingQueue) {
+            QJsonObject fields;
+            fields.insert(friendField, invite.friendKey);
+            fields.insert(groupField, invite.groupKey);
+            fields.insert(dateField, static_cast<double>(invite.date));
+            outgoing.append(fields);
+        }
+        root.insert(outgoingInvitesField, outgoing);
+    }
     if (!privateMessages.isEmpty()) {
         QJsonArray lines;
         for (const PrivateLine& line : privateMessages) {
@@ -386,10 +419,13 @@ QByteArray LocalStore::save() const
         }
         root.insert(relayedField, relayed);
     }
-    if (communityJoined || communityGone) {
+    if (communityJoined || communityGone || communitySoundOn) {
         QJsonObject community;
         community.insert(autoJoinDoneField, communityJoined);
         community.insert(leftField, communityGone);
+        if (communitySoundOn) {
+            community.insert(soundRestoredField, true);
+        }
         root.insert(communityField, community);
     }
     return QJsonDocument(root).toJson(QJsonDocument::Compact);
@@ -502,6 +538,15 @@ bool LocalStore::forget(const QString& publicKey)
                                         }),
                          waitingInvites.end());
     changed = changed || waitingInvites.size() != before;
+    // Our invitations for the contact, or to the group, go too (forgetGroup comes here).
+    const int outgoingBefore = outgoingQueue.size();
+    outgoingQueue.erase(std::remove_if(outgoingQueue.begin(), outgoingQueue.end(),
+                                       [&inviter](const OutgoingInvite& invite) {
+                                           return invite.friendKey == inviter
+                                                  || invite.groupKey == inviter;
+                                       }),
+                        outgoingQueue.end());
+    changed = changed || outgoingQueue.size() != outgoingBefore;
     // The marks of the conversation go with it; dropPrefix runs for both lists in any case.
     const QString conversation = entryKeyPrefix(publicKey);
     changed = dropPrefix(entries, entryOrder, conversation) || changed;
@@ -773,6 +818,60 @@ bool LocalStore::removeInvite(const QString& id)
     return waitingInvites.size() != before;
 }
 
+QVector<LocalStore::OutgoingInvite> LocalStore::outgoingInvites() const
+{
+    return outgoingQueue;
+}
+
+bool LocalStore::keepOutgoingInvite(const QString& friendKey, const QString& groupKey,
+                                    const QDateTime& at, const QDateTime& now)
+{
+    OutgoingInvite invite;
+    invite.friendKey = normalizedKey(friendKey);
+    invite.groupKey = normalizedKey(groupKey);
+    invite.date = at.toMSecsSinceEpoch();
+    if (!isPublicKey(invite.friendKey) || !isPublicKey(invite.groupKey) || !at.isValid()
+        || now.toMSecsSinceEpoch() - invite.date > outgoingInviteKeepMs) {
+        return false;
+    }
+    for (const OutgoingInvite& kept : outgoingQueue) {
+        if (kept.friendKey == invite.friendKey && kept.groupKey == invite.groupKey) {
+            return false;
+        }
+    }
+    outgoingQueue.append(invite);
+    while (outgoingQueue.size() > outgoingInviteLimit) {
+        outgoingQueue.removeFirst();
+    }
+    return true;
+}
+
+bool LocalStore::dropOutgoingInvite(const QString& friendKey, const QString& groupKey)
+{
+    const QString contact = normalizedKey(friendKey);
+    const QString group = normalizedKey(groupKey);
+    const int before = outgoingQueue.size();
+    outgoingQueue.erase(std::remove_if(outgoingQueue.begin(), outgoingQueue.end(),
+                                       [&contact, &group](const OutgoingInvite& invite) {
+                                           return invite.friendKey == contact
+                                                  && invite.groupKey == group;
+                                       }),
+                        outgoingQueue.end());
+    return outgoingQueue.size() != before;
+}
+
+bool LocalStore::pruneOutgoingInvites(const QDateTime& now)
+{
+    const qint64 oldest = now.toMSecsSinceEpoch() - outgoingInviteKeepMs;
+    const int before = outgoingQueue.size();
+    outgoingQueue.erase(std::remove_if(outgoingQueue.begin(), outgoingQueue.end(),
+                                       [oldest](const OutgoingInvite& invite) {
+                                           return invite.date < oldest;
+                                       }),
+                        outgoingQueue.end());
+    return outgoingQueue.size() != before;
+}
+
 QVector<LocalStore::PrivateLine> LocalStore::privateLines(const QString& groupKey,
                                                           const QString& peerKey) const
 {
@@ -930,6 +1029,18 @@ bool LocalStore::setCommunityLeft()
 {
     const bool changed = !communityGone;
     communityGone = true;
+    return changed;
+}
+
+bool LocalStore::communitySoundRestored() const
+{
+    return communitySoundOn;
+}
+
+bool LocalStore::setCommunitySoundRestored()
+{
+    const bool changed = !communitySoundOn;
+    communitySoundOn = true;
     return changed;
 }
 

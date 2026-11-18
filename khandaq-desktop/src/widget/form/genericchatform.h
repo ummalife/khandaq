@@ -25,6 +25,7 @@
 #include "src/widget/searchtypes.h"
 
 #include <QMenu>
+#include <QPixmap>
 #include <QWidget>
 
 /**
@@ -43,6 +44,7 @@ class ContentLayout;
 class CroppingLabel;
 class FlyoutOverlayWidget;
 class GenericNetCamView;
+class ImagePreviewButton;
 class MaskablePixmapWidget;
 class SearchForm;
 class Widget;
@@ -106,7 +108,16 @@ protected slots:
     void onSendTriggered();
     virtual void onAttachClicked() = 0;
     virtual void onPasteFiles(const QStringList& paths);
+    /**
+     * KHANDAQ (0.2.60): a picture pasted, or a screenshot, waits over the field until Enter or Send
+     * sends it as a file of the chat, or Esc or its cross puts it away; in a group as with a person.
+     */
+    void previewImage(const QPixmap& pixmap);
+    void cancelImagePreview();
+    void sendImageFromPreview();
     void onEmoteButtonClicked();
+    /** KHANDAQ (0.2.60): the emoji of the set, opened above anchor (a global point). */
+    void showEmoticons(const QPoint& anchor);
     void onEmoteInsertRequested(QString str);
     void onCopyLogClicked();
     void clearChatArea();
@@ -194,9 +205,24 @@ protected:
 
     QMenu menu;
 
+    /**
+     * The forms that send files take pasted pictures: the field offers them (ChatTextEdit sees the
+     * connection) and the preview sends them through sendPreparedFiles.
+     */
+    void takePastedImages();
+    /** Sends files of this computer into the chat, saying every refusal; nothing by default. */
+    virtual void sendPreparedFiles(const QStringList& paths);
+    /**
+     * KHANDAQ (0.2.60): why a voice note cannot go from here now (the person is offline), said at
+     * the microphone and again at Send; empty when it can.
+     */
+    virtual QString voiceRefusal() const;
+
     QVBoxLayout* contentLayout;
     /** The field with the paperclip and "Send", and the line about the next message. */
     AirComposer* composer;
+    QPixmap imagePreviewSource;
+    ImagePreviewButton* imagePreview;
     /** A group's file limit, said by the paperclip and the attach menu before a file is chosen. */
     void setAttachLimit(const QString& words);
     QString attachLimit;
@@ -230,6 +256,15 @@ protected:
     GroupList& groupList;
 
 private:
+    /**
+     * KHANDAQ (0.2.60): the voice note of this form (AirVoiceRecorder): the microphone asked for
+     * on macOS, the note written off the main thread into the voice folder, then sent as a file.
+     */
+    void startVoiceNote();
+    void sendVoiceNote(bool atLimit);
+    void cancelVoiceNote();
+    void explainVoiceMicrophone();
+
     /** Notes take no replies: they have no author to answer. */
     bool takesReplies = true;
     /** The entry the menu of the transcript was opened on, as Reply answers it. */

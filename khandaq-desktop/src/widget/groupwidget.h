@@ -24,6 +24,7 @@
 #include "src/model/chatroom/groupchatroom.h"
 #include "src/model/friendlist/ifriendlistitem.h"
 #include "src/core/groupid.h"
+#include "src/core/toxpk.h"
 
 #include <memory>
 
@@ -67,6 +68,8 @@ public:
 signals:
     void groupWidgetClicked(GroupWidget* widget);
     void removeGroup(const GroupId& groupId);
+    /** A contact dropped on the row: Widget invites them now, or once they are online. */
+    void inviteRequested(const ToxPk& friendPk);
 
 protected:
     void contextMenuEvent(QContextMenuEvent* event) final;

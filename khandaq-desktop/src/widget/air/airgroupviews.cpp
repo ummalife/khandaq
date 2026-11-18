@@ -615,7 +615,7 @@ AirInviteRow::AirInviteRow(const Air::InviteCandidate& candidate, QWidget* paren
     tile->setAttribute(Qt::WA_TransparentForMouseEvents);
     tile->setPerson(candidate.name, Air::toneIndex(candidate.publicKey));
     setAccessibleName(candidate.name);
-    if (!candidate.canInvite()) {
+    if (candidate.canInvite() && !candidate.online) {
         setAccessibleDescription(AirStrings::text(Text::InviteWhenOnline));
     }
     AirPaint::followTheme(this);
@@ -671,11 +671,13 @@ void AirInviteRow::paintEvent(QPaintEvent*)
     const int textWidth = std::max(0, width() - textStart - Space::s8);
     const int flags = startAlignment(this) | Qt::TextSingleLine;
     const int nameHeight = air().lineHeight(TextRole::Body);
-    const bool noted = !shown.canInvite();
+    // KHANDAQ (0.2.60): a contact offline now is a choice as any other, in ink; the note under the
+    // name says their invitation waits for them.
+    const bool noted = shown.canInvite() && !shown.online;
     const int noteHeight = noted ? air().lineHeight(TextRole::Caption) : 0;
     const int top = (height() - nameHeight - (noted ? Space::s2 + noteHeight : 0)) / 2;
     painter.setFont(air().font(TextRole::Body));
-    painter.setPen(noted ? air().color(Color::Ink2) : air().color(Color::Ink));
+    painter.setPen(isEnabled() ? air().color(Color::Ink) : air().color(Color::Ink2));
     const QString name = painter.fontMetrics().elidedText(shown.name, Qt::ElideRight, textWidth);
     AirPaint::ownText(painter, visual(this, QRect(textStart, top, textWidth, nameHeight)), flags, name);
     if (noted) {

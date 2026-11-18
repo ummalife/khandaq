@@ -84,11 +84,6 @@ public:
     void updateCallButtons(bool online, bool audio, bool video = false);
     /** A call band is up under the name: it holds the call's own buttons, so these step aside. */
     void setCallsBusy(bool busy);
-    /**
-     * Where the call buttons of a conversation stand, a group says that it has no calls: the phone
-     * glyph and the words, with the reason in the tooltip. It is not a button.
-     */
-    void setNoCallsNote(bool shown);
     void updateMuteMicButton(bool active, bool inputMuted);
     void updateMuteVolButton(bool active, bool outputMuted);
 
@@ -168,9 +163,6 @@ private:
     AirIconButton* videoButton;
     QPushButton* volButton;
     QPushButton* micButton;
-    QWidget* noCallsNote = nullptr;
-    QLabel* noCallsGlyph = nullptr;
-    QLabel* noCallsWords = nullptr;
     bool callsBusy = false;
 
     CallButtonState callState;

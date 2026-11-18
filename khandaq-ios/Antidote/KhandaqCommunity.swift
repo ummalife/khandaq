@@ -9,14 +9,18 @@ import Foundation
 protocol KhandaqCommunityMarks: AnyObject {
     var communityAutoJoinDone: Bool { get }
     var communityLeft: Bool { get }
+    /// KHANDAQ (0.2.60): the sound the auto-join of 0.2.57 turned off is on again (restoreSound).
+    var communitySoundRestored: Bool { get }
     func setCommunityAutoJoinDone()
+    func setCommunitySoundRestored()
     /// True when the mark was not set before.
     @discardableResult
     func setCommunityLeft() -> Bool
 }
 
 /// KHANDAQ (0.2.57): Khandaq Community, the official group of the app (SPEC-community, part B). Every profile
-/// joins it once by itself, muted, and never again once the person has left it. Wherever a group's name shows
+/// joins it once by itself, and never again once the person has left it. Since 0.2.60 the group is heard like
+/// any other (owner, 2026-11-18: people missed it); 0.2.57-0.2.59 muted it on the join. Wherever a group's name shows
 /// it is "Khandaq Community", and its row stands at the top of the chat list (owner, 2026-11-16); otherwise it
 /// is a group like any other: the dossier, the mute switch, leaving and moderation are those of every group.
 /// Its founder is our bot on khandaq.org, whose state keeps the chat id, so the id is compiled in. The join
@@ -65,16 +69,14 @@ enum KhandaqCommunity {
     }
 
     /// Joins it through `join` when shouldAutoJoin says so. `join` gives the group once it exists here,
-    /// toxcore having taken the join, and nil when it did not. Only then is the group muted through `mute`
-    /// (item 2: the person was added without being asked, and hears nothing of it until they turn it on) and
-    /// the join marked done; a join that failed marks nothing, so the next start or connection tries again.
+    /// toxcore having taken the join, and nil when it did not. Only then is the join marked done; a join that
+    /// failed marks nothing, so the next start or connection tries again. The group keeps its sound (0.2.60).
     /// Returns the group it joined.
     @discardableResult
     static func autoJoin<Group>(marks: KhandaqCommunityMarks,
                                 connected: Bool,
                                 alreadyInGroup: Bool,
-                                join: () -> Group?,
-                                mute: (Group) -> Void) -> Group? {
+                                join: () -> Group?) -> Group? {
         guard shouldAutoJoin(connected: connected,
                              autoJoinDone: marks.communityAutoJoinDone,
                              left: marks.communityLeft,
@@ -84,9 +86,55 @@ enum KhandaqCommunity {
         guard let group = join() else {
             return nil
         }
-        mute(group)
         marks.setCommunityAutoJoinDone()
         return group
+    }
+
+    /// KHANDAQ (0.2.60): the auto-join of 0.2.57-0.2.59 muted the group; the owner turned its sound on for
+    /// everybody (2026-11-18). Once per profile the group that join muted is heard again. A profile that never
+    /// joined it by itself, or left it, keeps what it has: a group joined by hand was muted by hand. A mute the
+    /// person turned on again after the join cannot be told from the join's own, and is lifted all the same.
+    /// `chat` gives the group's chat when it is in this profile, and nil while it is not here yet: then nothing
+    /// is marked, and the next start or connection looks again. True when it turned the sound on.
+    @discardableResult
+    static func restoreSound<Group>(marks: KhandaqCommunityMarks,
+                                    chat: () -> Group?,
+                                    isSilent: (Group) -> Bool,
+                                    unmute: (Group) -> Void) -> Bool {
+        guard !marks.communitySoundRestored else {
+            return false
+        }
+        var unmuted = false
+        if marks.communityAutoJoinDone && !marks.communityLeft {
+            guard let group = chat() else {
+                return false
+            }
+            if isSilent(group) {
+                unmute(group)
+                unmuted = true
+            }
+        }
+        marks.setCommunitySoundRestored()
+        return unmuted
+    }
+
+    /// restoreSound for this session's profile, at every start and connection until it is done.
+    @discardableResult
+    static func restoreSoundIfDue(manager: OCTManager, marks: KhandaqCommunityMarks = AirLocalStore.shared) -> Bool {
+        let unmuted = restoreSound(marks: marks,
+                                   chat: { () -> OCTChat? in
+                                       let chats = manager.objects.chats(predicate: NSPredicate(format: "isGroup == YES AND groupChatIdHex ==[c] %@", chatIdHex))
+                                       for index in 0..<chats.count where !chats[index].isInvalidated {
+                                           return chats[index]
+                                       }
+                                       return nil
+                                   },
+                                   isSilent: { $0.groupNotificationsSilent },
+                                   unmute: { manager.groups.setGroupNotificationsSilent(false, for: $0) })
+        if unmuted {
+            log("Community: its sound is on again; the join of an earlier version had turned it off")
+        }
+        return unmuted
     }
 
     /// A group was left (item 3): when it is Khandaq Community it is never joined by itself again, however it
@@ -141,12 +189,9 @@ enum KhandaqCommunity {
                                   }
                                   groups.refreshPeers(for: chat)
                                   return chat
-                              },
-                              mute: { chat in
-                                  groups.setGroupNotificationsSilent(true, for: chat)
                               })
         if joined != nil {
-            log("Community: joined by itself, muted")
+            log("Community: joined by itself")
         }
         return joined
     }

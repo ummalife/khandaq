@@ -346,15 +346,14 @@ AirYouPage::AirYouPage(IProfileInfo& profileInfo_, QWidget* parent)
     qrBox->addWidget(qrPlate);
     qrHint = makeLabel(TextRole::Caption, Color::Ink3, qrColumn);
     qrBox->addWidget(qrHint);
-    copyIdButton = new AirButton(AirButton::Kind::Ink, qrColumn);
-    copyIdButton->setObjectName(QStringLiteral("youCopyId"));
+    // The buttons of the code stand under the code; Copy ID stands under the ID it copies (0.2.60:
+    // under the code, far from the ID, the eye did not find it).
     copyQrButton = new AirButton(AirButton::Kind::Plain, qrColumn);
     copyQrButton->setObjectName(QStringLiteral("youCopyQr"));
-    qrActions = buttonRow({copyIdButton, copyQrButton});
-    qrBox->addLayout(qrActions);
     saveQrButton = new AirButton(AirButton::Kind::Quiet, qrColumn);
     saveQrButton->setObjectName(QStringLiteral("youSaveQr"));
-    qrBox->addWidget(saveQrButton, 0, Qt::AlignLeading);
+    qrActions = buttonRow({copyQrButton, saveQrButton});
+    qrBox->addLayout(qrActions);
     columns->addWidget(qrColumn, 0, Qt::AlignLeading | Qt::AlignTop);
 
     auto* const fields = new QVBoxLayout();
@@ -407,9 +406,12 @@ AirYouPage::AirYouPage(IProfileInfo& profileInfo_, QWidget* parent)
     }
     parts->addStretch(1);
     details->addWidget(idPlate);
+    copyIdButton = new AirButton(AirButton::Kind::Ink, content);
+    copyIdButton->setObjectName(QStringLiteral("youCopyId"));
     antispamButton = new AirButton(AirButton::Kind::Plain, content);
     antispamButton->setObjectName(QStringLiteral("youAntispam"));
-    details->addWidget(antispamButton, 0, Qt::AlignLeading);
+    idActions = buttonRow({copyIdButton, antispamButton});
+    details->addLayout(idActions);
     fields->addStretch(1);
 
     // The password the profile and its history are encrypted with.
@@ -595,6 +597,8 @@ void AirYouPage::arrange(int width)
     const bool sideBySide = room >= qrColumnWidth + columns->spacing() + Size::listColumn;
     columns->setDirection(sideBySide ? QBoxLayout::LeftToRight : QBoxLayout::TopToBottom);
     fitRow(qrActions, qrColumnWidth);
+    // The ID column is what is left beside the QR column, or all of the room under it.
+    fitRow(idActions, sideBySide ? room - qrColumnWidth - columns->spacing() : room);
     fitRow(passwordActions, room);
     fitRow(fileActions, room);
 }

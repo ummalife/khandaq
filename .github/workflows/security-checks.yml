@@ -434,6 +434,17 @@ jobs:
           set -euo pipefail
           python3 scripts/check-gc-recv-gap.py
           python3 scripts/check-gc-recv-gap.py --self-test
+      # KHANDAQ (0.2.60): a phone whose address changed (Wi-Fi to mobile data) got nothing of a group file for a
+      # minute: its packets from the new address kept the connection direct, so the sender sent it everything over
+      # UDP to the old address until the phone timed it out. Every copy of toxcore (and the Android build) must
+      # follow a group peer to the address its new messages come from, or to any address when what it sends goes
+      # unanswered, and ask a peer silent for a ping and a half for its info; each check must catch the mutant
+      # made for it.
+      - name: Every toxcore copy must follow a group peer whose address changes
+        run: |
+          set -euo pipefail
+          python3 scripts/check-gc-roaming.py
+          python3 scripts/check-gc-roaming.py --self-test
       # KHANDAQ (0.2.59): a desktop that joined a group by its key stayed out of it while a friend inside sent it
       # an invite every 30 s: the desktop copy of toxcore dropped the invite as "already added". Android and iOS
       # carried the fix; every copy of toxcore (and the Android build) must let a friend's invite finish a join

@@ -52,7 +52,6 @@
 #include "src/widget/chatformheader.h"
 #include "src/widget/contentdialogmanager.h"
 #include "src/widget/form/loadhistorydialog.h"
-#include "src/widget/imagepreviewwidget.h"
 #include "src/widget/maskablepixmapwidget.h"
 #include "src/widget/searchform.h"
 #include "src/widget/style.h"
@@ -220,23 +219,6 @@ ChatForm::ChatForm(Profile& profile_, Friend* chatFriend, IChatLog& chatLog_,
     connect(callBand, &AirCallBand::soundToggled, this, &ChatForm::onVolMuteToggle);
     connect(callBand, &AirCallBand::waitCancelled, this, &ChatForm::cancelWaiting);
 
-    imagePreview = new ImagePreviewButton(this);
-    imagePreview->setFixedSize(100, 100);
-    imagePreview->setFlat(true);
-    imagePreview->setStyleSheet("QPushButton { border: 0px }");
-    imagePreview->hide();
-
-    auto cancelIcon = QIcon(style.getImagePath("rejectCall/rejectCall.svg", settings));
-    QPushButton* cancelButton = new QPushButton(imagePreview);
-    cancelButton->setFixedSize(20, 20);
-    cancelButton->move(QPoint(80, 0));
-    cancelButton->setIcon(cancelIcon);
-    cancelButton->setFlat(true);
-
-    connect(cancelButton, &QPushButton::pressed, this, &ChatForm::cancelImagePreview);
-
-    contentLayout->insertWidget(3, imagePreview);
-
     // Between the transcript and the field: the messages the network gave up on, each in its own
     // row, then the tray of those waiting for the person.
     queueLog = qobject_cast<ChatHistory*>(&chatLog_);
@@ -259,10 +241,7 @@ ChatForm::ChatForm(Profile& profile_, Friend* chatFriend, IChatLog& chatLog_,
     dossier = new AirDossier(this);
     connect(headWidget, &ChatFormHeader::dossierToggled, this, &ChatForm::toggleDossier);
     connect(dossier, &AirDossier::openChanged, headWidget, &ChatFormHeader::setDossierOpen);
-    connect(dossier, &AirDossier::renameRequested, this, [this] {
-        dossier->close();
-        headWidget->beginRename();
-    });
+    connect(dossier, &AirDossier::renameRequested, this, &ChatForm::beginRename);
     connect(dossier, &AirDossier::muteChanged, this, [this](bool muted) {
         if (airLocal) {
             airLocal->setMuted(f->getPublicKey(), muted);
@@ -319,12 +298,9 @@ ChatForm::ChatForm(Profile& profile_, Friend* chatFriend, IChatLog& chatLog_,
     connect(headWidget, &ChatFormHeader::micMuteToggle, this, &ChatForm::onMicMuteToggle);
     connect(headWidget, &ChatFormHeader::volMuteToggle, this, &ChatForm::onVolMuteToggle);
     connect(sendButton, &QPushButton::pressed, this, &ChatForm::callUpdateFriendActivity);
-    connect(sendButton, &QPushButton::pressed, this, &ChatForm::sendImageFromPreview);
     connect(msgEdit, &ChatTextEdit::enterPressed, this, &ChatForm::callUpdateFriendActivity);
     connect(msgEdit, &ChatTextEdit::textChanged, this, &ChatForm::onTextEditChanged);
-    connect(msgEdit, &ChatTextEdit::pasteImage, this, &ChatForm::previewImage);
-    connect(msgEdit, &ChatTextEdit::enterPressed, this, &ChatForm::sendImageFromPreview);
-    connect(msgEdit, &ChatTextEdit::escapePressed, this, &ChatForm::cancelImagePreview);
+    takePastedImages();
 
     connect(&typingTimer, &QTimer::timeout, this, [&] {
         core.sendTyping(f->getId(), false);
@@ -699,6 +675,21 @@ void ChatForm::onAttachClicked()
 void ChatForm::onPasteFiles(const QStringList& paths)
 {
     sendLocalFiles(paths);
+}
+
+void ChatForm::sendPreparedFiles(const QStringList& paths)
+{
+    sendLocalFiles(paths);
+}
+
+QString ChatForm::voiceRefusal() const
+{
+    // A Tox file goes only while both are online (sendLocalFiles): a note is not recorded for
+    // nothing.
+    if (Status::isOnline(f->getStatus())) {
+        return QString();
+    }
+    return AirStrings::text(AirText::VoiceOffline).arg(Air::shortName(f->getDisplayedName()));
 }
 
 void ChatForm::sendLocalFiles(const QStringList& paths)
@@ -1193,6 +1184,14 @@ void ChatForm::dropEvent(QDropEvent* ev)
     sendLocalFiles(paths);
 }
 
+void ChatForm::beginRename()
+{
+    if (dossier) {
+        dossier->close();
+    }
+    headWidget->beginRename();
+}
+
 void ChatForm::clearChatArea()
 {
     GenericChatForm::clearChatArea(/* confirm = */ false, /* inform = */ true);
@@ -1211,53 +1210,6 @@ void ChatForm::doScreenshot()
     ScreenshotGrabber* grabber = new ScreenshotGrabber;
     connect(grabber, &ScreenshotGrabber::screenshotTaken, this, &ChatForm::previewImage);
     grabber->showGrabber();
-}
-
-void ChatForm::previewImage(const QPixmap& pixmap)
-{
-    imagePreviewSource = pixmap;
-    imagePreview->setIconFromPixmap(pixmap);
-    imagePreview->show();
-}
-
-void ChatForm::cancelImagePreview()
-{
-    imagePreviewSource = QPixmap();
-    imagePreview->hide();
-}
-
-void ChatForm::sendImageFromPreview()
-{
-    if (!imagePreview->isVisible()) {
-        return;
-    }
-
-    QDir(settings.getPaths().getAppDataDirPath()).mkpath("images");
-
-    // use ~ISO 8601 for screenshot timestamp, considering FS limitations
-    // https://en.wikipedia.org/wiki/ISO_8601
-    // Windows has to be supported, thus filename can't have `:` in it :/
-    // Format should be: `qTox_Screenshot_yyyy-MM-dd HH-mm-ss.zzz.png`
-    QString filepath = QString("%1images%2Khandaq_Image_%3.png")
-                           .arg(settings.getPaths().getAppDataDirPath())
-                           .arg(QDir::separator())
-                           .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd HH-mm-ss.zzz"));
-    QFile file(filepath);
-
-    if (file.open(QFile::ReadWrite)) {
-        imagePreviewSource.save(&file, "PNG");
-        qint64 filesize = file.size();
-        imagePreview->hide();
-        imagePreviewSource = QPixmap();
-        file.close();
-        QFileInfo fi(file);
-        CoreFile* coreFile = core.getCoreFile();
-        coreFile->sendFile(f->getId(), fi.fileName(), fi.filePath(), filesize);
-    } else {
-        // The operation as the title, over the window (E21).
-        AirDialog::notice(this, AirStrings::text(AirText::FileNotSentTitle),
-                          AirStrings::text(AirText::ScreenshotNotSaved));
-    }
 }
 
 void ChatForm::updateMuteMicButton()

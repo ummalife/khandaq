@@ -106,13 +106,23 @@ public:
     /** Keeps a private message, written by us or come from the member, and writes it at once. */
     void addPrivateLine(const QString& groupKey, const QString& peerKey, bool ours,
                         const QString& text);
-    /** The group was left: its mute and its private messages go. */
+    /** The group was left: its mute, its private messages and our invitations to it go. */
     void forgetGroup(const QString& groupKey);
 
     /**
-     * KHANDAQ (0.2.57): joins Khandaq Community through join, muted, when
-     * Air::Community::shouldAutoJoin says so (Air::Community::autoJoin), and then writes the store
-     * at once. True when it joined.
+     * KHANDAQ (0.2.60): our invitations to groups for contacts who were offline, written at once:
+     * they wait on this device until the contact is online (Widget::sendOutgoingInvites).
+     */
+    QVector<Air::LocalStore::OutgoingInvite> outgoingInvites() const;
+    void keepOutgoingInvite(const QString& friendKey, const QString& groupKey);
+    void dropOutgoingInvite(const QString& friendKey, const QString& groupKey);
+    /** Drops the invitations too old to go (LocalStore::outgoingInviteKeepMs). */
+    void pruneOutgoingInvites();
+
+    /**
+     * KHANDAQ (0.2.57): joins Khandaq Community through join when Air::Community::shouldAutoJoin
+     * says so (Air::Community::autoJoin), and then writes the store at once; since 0.2.60 the group
+     * keeps its sound. True when it joined.
      */
     bool autoJoinCommunity(bool connected, bool alreadyInGroup, const std::function<bool()>& join);
     /** A group was left: when it is Khandaq Community it is never joined by itself again. */

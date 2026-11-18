@@ -76,6 +76,7 @@ private slots:
     void testMixedSourceMessages();
     void testFileTransfer();
     void testFileTransferAfterMessage();
+    void testVoiceNoteTransfer();
     void testGroupInvitation();
     void testGroupInviteUncounted();
     void testFriendRequest();
@@ -250,6 +251,22 @@ void TestNotificationGenerator::testFileTransferAfterMessage()
 
     QVERIFY(notificationData.title == "2 message(s) from friend");
     QCOMPARE(notificationData.message, QStringLiteral("File: file"));
+}
+
+void TestNotificationGenerator::testVoiceNoteTransfer()
+{
+    Friend f(0, ToxPk());
+    f.setName("friend");
+
+    // A voice note says what it is, as the phones say it, not the name of its file.
+    auto notificationData = notificationGenerator->fileTransferNotification(
+        &f, QStringLiteral("voice_F5CD3544.file.m4a"), 43000);
+    QCOMPARE(notificationData.title, QStringLiteral("friend"));
+    QCOMPARE(notificationData.message, QStringLiteral("Voice message (43 KB)"));
+
+    notificationData = notificationGenerator->fileTransferNotification(
+        &f, QStringLiteral("voice_F5CD3545.file.m4a"), 43000);
+    QCOMPARE(notificationData.message, QStringLiteral("Voice message"));
 }
 
 void TestNotificationGenerator::testGroupInvitation()

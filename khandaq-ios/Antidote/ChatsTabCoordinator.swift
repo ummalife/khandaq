@@ -413,15 +413,18 @@ private extension ChatsTabCoordinator {
                 }
             }
 
-            // KHANDAQ (Figma): invite the contacts selected on step 1 (best-effort: an offline
-            // friend's one-shot invite can fail; they can be re-invited from the group later).
-            for friend in inviteFriends where friend.friendNumber >= 0 {
-                _ = try? self.submanagerGroups.inviteFriend(withNumber: friend.friendNumber,
-                                                            toGroupNumber: groupNumber)
-            }
+            // KHANDAQ (Figma): invite the contacts selected on step 1. KHANDAQ (0.2.60): the invitation of one
+            // offline now waits on this device and goes once they are online (AirOutgoingInviteSender); the
+            // toast over the new group says how many went and how many wait.
+            let tally = AirOutgoingInvites.invite(inviteFriends, to: chat, submanagerGroups: self.submanagerGroups)
 
             DispatchQueue.main.async {
                 self.showChat(chat, animated: true)
+                if let text = tally.toastText {
+                    // Over the new group, above its field; on the iPad the group opens beside the list.
+                    let group = self.navigationController.topViewController as? ChatGroupController
+                    AirToast.show(text, in: group?.view ?? self.navigationController.view, above: group?.groupToastAnchor)
+                }
             }
         }
 

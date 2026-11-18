@@ -182,6 +182,17 @@ public:
     QByteArray getSelfDhtId() const;
     int getSelfUdpPort() const;
 
+    /** KHANDAQ (0.2.60): what became of an invitation to a group. */
+    enum class GroupInviteResult
+    {
+        Sent,
+        /** The contact is offline or the group disconnected: it may go once both are up. */
+        Later,
+        /** The group or the contact is gone. */
+        Refused,
+    };
+    GroupInviteResult inviteToGroup(uint32_t friendId, int groupId);
+
 public slots:
     void start();
 
@@ -227,6 +238,15 @@ public slots:
      * there): nothing is sent then.
      */
     bool sendGroupFileFromPath(int groupId, const QString& fileName, const QString& localPath);
+    /**
+     * KHANDAQ (0.2.60): the answer of the history to sentGroupFileWanted. A file of ours that the
+     * group with that number and chat id has: kept again for the members that ask for chunks of
+     * it, and the requests that waited for it are answered.
+     */
+    void restoreSentGroupFile(int groupnumber, const QByteArray& chatId, const QByteArray& fileId,
+                              const QString& fileName, const QString& localPath, qint64 size);
+    /** KHANDAQ (0.2.60): the history keeps no file of ours with that id that can go again. */
+    void sentGroupFileUnknown(const QByteArray& fileId);
     void changeGroupTitle(int groupId, const QString& title);
     bool sendAction(uint32_t friendId, const QString& action, const QByteArray& msgV3Id,
                     quint32 msgV3Time, ReceiptNum& receipt) override;
@@ -378,6 +398,12 @@ signals:
     /** Every packet of the file went to toxcore. */
     void groupFileSent(int groupnumber, const QString& fileName, const QString& localPath,
                        qint64 fileSize, const QByteArray& fileId);
+    /**
+     * KHANDAQ (0.2.60): a member asks for chunks of a file of the group that we do not hold: one
+     * of ours from before a restart, maybe, or one kept too long. The window answers with
+     * restoreSentGroupFile or sentGroupFileUnknown.
+     */
+    void sentGroupFileWanted(int groupnumber, const QByteArray& chatId, const QByteArray& fileId);
     void actionSentResult(uint32_t friendId, const QString& action, int success);
 
     void receiptRecieved(int friedId, ReceiptNum receipt);
@@ -594,6 +620,9 @@ private:
     qint64 groupFileArrivalsCheckedMs = 0;
     // 0.2.57: whether the last packet of the pace was a resend, so that the two take turns.
     bool groupFileResendWent = false;
+    // 0.2.60: the requests for files we do not hold, while the history says whether they are ours
+    // (sentGroupFileWanted). Under coreLoopLock.
+    Air::SentFileLookups sentGroupFileLookups;
 
     std::unique_ptr<QThread> coreThread;
     const IBootstrapListGenerator& bootstrapListGenerator;

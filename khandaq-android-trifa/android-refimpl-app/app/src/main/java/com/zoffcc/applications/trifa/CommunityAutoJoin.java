@@ -101,6 +101,11 @@ final class CommunityAutoJoin
         {
             KhandaqCommunity.noteGroupLeft(store, KhandaqCommunity.CHAT_ID);
         }
+        // KHANDAQ (0.2.60): the Community keeps its sound; the mute an earlier auto-join left goes, once.
+        if (KhandaqCommunity.restoreSoundOnce(store))
+        {
+            NetworkDiagnosticsLog.log("community", "sound: on again, once (the auto-join no longer mutes)");
+        }
         final long groupNumber = HelperGroup.tox_group_by_groupid__wrapper(KhandaqCommunity.CHAT_ID);
         // Connected now means connected once: kept, also when it connected before this version marked it.
         if (KhandaqCommunity.noteGroupKept(store, (groupNumber >= 0) && connectedNow(groupNumber)))
@@ -116,7 +121,7 @@ final class CommunityAutoJoin
                                   != ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value;
         // A row without the group in toxcore: an earlier join that never connected, which toxcore did not save.
         final boolean newGroup = !hasRow();
-        final boolean joined = KhandaqCommunity.autoJoin(store, connected, groupNumber >= 0, newGroup,
+        final boolean joined = KhandaqCommunity.autoJoin(store, connected, groupNumber >= 0,
                                                          new KhandaqCommunity.Join()
         {
             @Override
@@ -145,7 +150,7 @@ final class CommunityAutoJoin
         if (joined)
         {
             // Its row was there: a join toxcore did not keep (it never connected), or one let go while full.
-            NetworkDiagnosticsLog.log("community", newGroup ? "auto_join: joined, muted"
+            NetworkDiagnosticsLog.log("community", newGroup ? "auto_join: joined"
                                                             : "auto_join: joined again, into its row as it was");
         }
     }
@@ -331,7 +336,7 @@ final class CommunityAutoJoin
     static void qaForgetMarks()
     {
         for (final String mark : new String[]{KhandaqCommunity.MARK_AUTO_JOIN_DONE, KhandaqCommunity.MARK_LEFT,
-                                              KhandaqCommunity.MARK_MUTED})
+                                              KhandaqCommunity.MARK_MUTED, KhandaqCommunity.MARK_SOUND_RESTORED})
         {
             final String key = KhandaqCommunity.markKey(mark, TRIFAGlobals.global_my_toxid);
             if (key != null)
@@ -419,7 +424,8 @@ final class CommunityAutoJoin
         final String doneKey = KhandaqCommunity.markKey(KhandaqCommunity.MARK_AUTO_JOIN_DONE, ownToxId);
         final String leftKey = KhandaqCommunity.markKey(KhandaqCommunity.MARK_LEFT, ownToxId);
         final String mutedKey = KhandaqCommunity.markKey(KhandaqCommunity.MARK_MUTED, ownToxId);
-        if ((doneKey == null) || (leftKey == null) || (mutedKey == null))
+        final String soundKey = KhandaqCommunity.markKey(KhandaqCommunity.MARK_SOUND_RESTORED, ownToxId);
+        if ((doneKey == null) || (leftKey == null) || (mutedKey == null) || (soundKey == null))
         {
             return null;
         }
@@ -475,11 +481,23 @@ final class CommunityAutoJoin
             }
 
             @Override
-            public void mute(final String chatId)
+            public boolean soundRestored()
+            {
+                return MARK_SET.equals(HelperGeneric.get_g_opts(soundKey));
+            }
+
+            @Override
+            public void setSoundRestored()
+            {
+                HelperGeneric.set_g_opts(soundKey, MARK_SET);
+            }
+
+            @Override
+            public void unmute(final String chatId)
             {
                 // The group's own notification switch, the one its dossier turns (AirGroupDossierActivity.setMuted).
                 TrifaToxService.orma.updateGroupDB().group_identifierEq(chatId.toLowerCase(Locale.ROOT)).
-                        notification_silent(true).execute();
+                        notification_silent(false).execute();
                 AirRepository.requestRefresh();
             }
         };

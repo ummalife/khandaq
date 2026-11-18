@@ -19,14 +19,18 @@
 
 #include "aircomposer.h"
 
+#include "src/model/air/airmedia.h"
+#include "src/widget/air/airmediaparts.h"
 #include "src/widget/air/airstrings.h"
 #include "src/widget/air/airstyle.h"
 #include "src/widget/air/airwidgets.h"
 
+#include <QApplication>
 #include <QEvent>
 #include <QGraphicsOpacityEffect>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QPainter>
 #include <QTextEdit>
@@ -94,18 +98,60 @@ AirComposer::AirComposer(QTextEdit* field_, QWidget* parent)
     row->setSpacing(Space::s6);
     attach = new AirIconButton(QStringLiteral("paperclip"), frame);
     attach->setObjectName(QStringLiteral("composerAttach"));
+    // KHANDAQ (0.2.60): the emoji, at the end of the field, as in the phone apps, then the
+    // microphone of the voice notes. While a note is recorded the cross stands where the paperclip
+    // was and the note's bar where the field was.
+    emoji = new AirIconButton(QStringLiteral("smile"), frame);
+    emoji->setObjectName(QStringLiteral("composerEmoji"));
+    voice = new AirIconButton(QStringLiteral("mic"), frame);
+    voice->setObjectName(QStringLiteral("composerVoice"));
+    cancelVoice = new AirIconButton(QStringLiteral("x"), frame);
+    cancelVoice->setObjectName(QStringLiteral("composerVoiceCancel"));
+    cancelVoice->hide();
+    recording = new QWidget(frame);
+    recording->setObjectName(QStringLiteral("composerRecording"));
+    recording->setFocusPolicy(Qt::NoFocus);
+    auto* const recordingColumn = new QVBoxLayout(recording);
+    recordingColumn->setContentsMargins(Space::s6, 0, Space::s6, 0);
+    recordingColumn->setSpacing(Space::s6);
+    auto* const recordingTop = new QHBoxLayout();
+    recordingTop->setContentsMargins(0, 0, 0, 0);
+    recordingTop->setSpacing(Space::s8);
+    recordingIcon = new QLabel(recording);
+    recordingIcon->setFixedSize(Size::iconSmall, Size::iconSmall);
+    recordingTitle = new QLabel(recording);
+    recordingTitle->setTextFormat(Qt::PlainText);
+    recordingTime = new QLabel(recording);
+    recordingTime->setObjectName(QStringLiteral("composerRecordingTime"));
+    recordingTime->setTextFormat(Qt::PlainText);
+    recordingTop->addWidget(recordingIcon, 0, Qt::AlignVCenter);
+    recordingTop->addWidget(recordingTitle, 1, Qt::AlignVCenter);
+    recordingTop->addWidget(recordingTime, 0, Qt::AlignVCenter);
+    recordingBar = new AirProgressBar(recording);
+    recordingBar->setObjectName(QStringLiteral("composerRecordingBar"));
+    recordingColumn->addLayout(recordingTop);
+    recordingColumn->addWidget(recordingBar);
+    recording->hide();
     send = new AirButton(AirButton::Kind::Ink, frame);
+    send->setObjectName(QStringLiteral("composerSend"));
     field->setParent(frame);
     field->setFrameStyle(QFrame::NoFrame);
     field->installEventFilter(this);
+    row->addWidget(cancelVoice, 0, Qt::AlignBottom);
     row->addWidget(attach, 0, Qt::AlignBottom);
     row->addWidget(field, 1, Qt::AlignBottom);
+    row->addWidget(recording, 1, Qt::AlignVCenter);
+    row->addWidget(emoji, 0, Qt::AlignBottom);
+    row->addWidget(voice, 0, Qt::AlignBottom);
     row->addWidget(send, 0, Qt::AlignBottom);
     column->addWidget(frame);
     // The field joins the frame after the buttons were made, so Tab would reach Send before it:
     // the order is the one the row shows.
+    QWidget::setTabOrder(cancelVoice, attach);
     QWidget::setTabOrder(attach, field);
-    QWidget::setTabOrder(field, send);
+    QWidget::setTabOrder(field, emoji);
+    QWidget::setTabOrder(emoji, voice);
+    QWidget::setTabOrder(voice, send);
 
     hintLine = new QWidget(writing);
     auto* const hintRow = new QHBoxLayout(hintLine);
@@ -159,9 +205,20 @@ AirComposer::AirComposer(QTextEdit* field_, QWidget* parent)
     readOnlyBar->hide();
 
     connect(readOnlyButton, &AirButton::clicked, this, &AirComposer::readOnlyActionRequested);
-    connect(send, &AirButton::clicked, this, &AirComposer::sendRequested);
+    // While a note is recorded, Send is for the note: the text in the field waits.
+    connect(send, &AirButton::clicked, this, [this] {
+        if (isRecording()) {
+            emit voiceSendRequested();
+        } else {
+            emit sendRequested();
+        }
+    });
+    connect(voice, &AirIconButton::clicked, this, &AirComposer::voiceRequested);
+    connect(cancelVoice, &AirIconButton::clicked, this, &AirComposer::voiceCancelRequested);
     connect(attach, &AirIconButton::clicked, this,
             [this] { emit attachRequested(attach->mapToGlobal(QPoint(0, attach->height()))); });
+    connect(emoji, &AirIconButton::clicked, this,
+            [this] { emit emojiRequested(emoji->mapToGlobal(QPoint(emoji->width() / 2, 0))); });
     connect(&AirStyle::instance(), &AirStyle::changed, this, &AirComposer::restyle);
     restyle();
     setHint(QString(), Air::ComposeHint::Dot::None);
@@ -169,7 +226,56 @@ AirComposer::AirComposer(QTextEdit* field_, QWidget* parent)
 
 void AirComposer::setAttachVisible(bool visible)
 {
-    attach->setVisible(visible);
+    attachShown = visible;
+    attach->setVisible(visible && !isRecording());
+}
+
+void AirComposer::setEmojiVisible(bool visible)
+{
+    emojiShown = visible;
+    emoji->setVisible(visible && !isRecording());
+}
+
+void AirComposer::setVoiceVisible(bool visible)
+{
+    voiceShown = visible;
+    voice->setVisible(visible && !isRecording());
+}
+
+void AirComposer::setRecording(bool on)
+{
+    if (on == isRecording()) {
+        return;
+    }
+    const bool hadFocus = frame->isAncestorOf(QApplication::focusWidget());
+    recording->setVisible(on);
+    cancelVoice->setVisible(on);
+    field->setVisible(!on);
+    attach->setVisible(attachShown && !on);
+    emoji->setVisible(emojiShown && !on);
+    voice->setVisible(voiceShown && !on);
+    if (on) {
+        setRecordingTime(0, 0);
+        // Enter sends the note and Esc cancels it from Send (keyPressEvent).
+        send->setFocus(Qt::OtherFocusReason);
+    } else if (hadFocus) {
+        field->setFocus(Qt::OtherFocusReason);
+    }
+    update();
+}
+
+bool AirComposer::isRecording() const
+{
+    return !recording->isHidden();
+}
+
+void AirComposer::setRecordingTime(qint64 ms, double share)
+{
+    recordedMs = std::max<qint64>(0, ms);
+    recordingTime->setText(Air::clockText(recordedMs / 1000));
+    recordingBar->setProgress(std::min(1.0, std::max(0.0, share)));
+    recording->setAccessibleName(AirStrings::text(Text::ComposeRecording) + QStringLiteral(", ")
+                                 + recordingTime->text());
 }
 
 void AirComposer::setAttachNote(const QString& note)
@@ -270,6 +376,23 @@ void AirComposer::restyle()
     attach->setToolTip(attachNote.isEmpty() ? attachName : attachName + QLatin1Char('\n') + attachNote);
     attach->setAccessibleName(attachName);
     attach->setAccessibleDescription(attachNote);
+    const QString emojiName = AirStrings::text(Text::ComposeEmoji);
+    emoji->setToolTip(emojiName);
+    emoji->setAccessibleName(emojiName);
+    const QString voiceName = AirStrings::text(Text::ComposeVoice);
+    voice->setToolTip(voiceName);
+    voice->setAccessibleName(voiceName);
+    const QString cancelName = AirStrings::text(Text::ComposeVoiceCancel);
+    cancelVoice->setToolTip(cancelName);
+    cancelVoice->setAccessibleName(cancelName);
+    recordingTitle->setText(AirStrings::text(Text::ComposeRecording));
+    recordingTitle->setFont(air().font(TextRole::Label));
+    AirPaint::textColor(recordingTitle, air().color(Color::Ink));
+    recordingTime->setFont(air().font(TextRole::Caption));
+    AirPaint::textColor(recordingTime, air().color(Color::Ink2));
+    recordingIcon->setPixmap(air().icon(QStringLiteral("mic"), air().color(Color::Ink2),
+                                        Size::iconSmall, devicePixelRatioF()));
+    setRecordingTime(recordedMs, recordingBar->progress());
     for (QLabel* label : {hint, counter}) {
         label->setFont(air().font(TextRole::Caption));
         AirPaint::textColor(label, air().color(Color::Ink2));
@@ -293,6 +416,29 @@ void AirComposer::restyle()
 QRect AirComposer::frameRect() const
 {
     return frame->geometry().translated(writing->pos());
+}
+
+void AirComposer::keyPressEvent(QKeyEvent* event)
+{
+    if (isRecording()) {
+        switch (event->key()) {
+        case Qt::Key_Escape:
+            event->accept();
+            emit voiceCancelRequested();
+            return;
+        case Qt::Key_Return:
+        case Qt::Key_Enter:
+            // As Send: not while it waits (a group where nobody would get the note).
+            event->accept();
+            if (send->isEnabled()) {
+                emit voiceSendRequested();
+            }
+            return;
+        default:
+            break;
+        }
+    }
+    QWidget::keyPressEvent(event);
 }
 
 bool AirComposer::eventFilter(QObject* watched, QEvent* event)

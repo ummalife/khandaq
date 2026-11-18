@@ -281,6 +281,21 @@ public:
      * fileId, in any chat, goes to filePath too.
      */
     bool laterFileGoesTo(const ChatId& chatId, const QByteArray& fileId, const QString& filePath);
+    /** KHANDAQ (0.2.60): a file we sent a chat, as the history keeps it (sentFile). */
+    struct SentFile
+    {
+        QString fileName;
+        /** Empty when the chat keeps no such file, or its sender deleted it (eraseFileEntry). */
+        QString filePath;
+        qint64 size = -1;
+        /** When it went, in ms since the epoch. */
+        qint64 sentMs = -1;
+    };
+    /**
+     * KHANDAQ (0.2.60): the newest file we sent chatId with fileId: what answers a member of a
+     * group that asks for chunks of it again once the app no longer holds it (a restart).
+     */
+    SentFile sentFile(const ChatId& chatId, const QByteArray& fileId);
     size_t getNumMessagesForChat(const ChatId& chatId);
     size_t getNumMessagesForChatBeforeDate(const ChatId& chatId, const QDateTime& date);
     QList<HistMessage> getMessagesForChat(const ChatId& chatId, size_t firstIdx, size_t lastIdx);

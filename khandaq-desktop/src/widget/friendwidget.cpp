@@ -44,11 +44,10 @@
 #include <QContextMenuEvent>
 #include <QDrag>
 #include <QFileDialog>
-#include <QInputDialog>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMimeData>
-#include <QRegularExpression>
+#include <QPointer>
 
 #include <cassert>
 
@@ -135,7 +134,6 @@ void FriendWidget::showContextMenu(const QPoint& globalPos, const QList<QAction*
     menu.addSeparator();
     QMenu* inviteMenu =
         menu.addMenu(tr("Invite to group", "Menu to invite a friend to a groupchat"));
-    inviteMenu->setEnabled(chatroom->canBeInvited());
     const auto newGroupAction = inviteMenu->addAction(tr("To new group"));
     connect(newGroupAction, &QAction::triggered, this,
             [this] { emit newGroupRequested(chatroom->getFriend()->getPublicKey()); });
@@ -143,7 +141,15 @@ void FriendWidget::showContextMenu(const QPoint& globalPos, const QList<QAction*
 
     for (const auto& group : chatroom->getGroups()) {
         const auto groupAction = inviteMenu->addAction(tr("Invite to group '%1'").arg(group.name));
-        connect(groupAction, &QAction::triggered, [=]() { chatroom->inviteFriend(group.group); });
+        // KHANDAQ (0.2.60): offline too, the way New group and the dossier invite (Widget): the
+        // invitation went past the queue for the contacts offline, and the menu was disabled then.
+        // The menu runs the events, so the group may be gone by the time it is chosen.
+        const QPointer<Group> chosen = group.group;
+        connect(groupAction, &QAction::triggered, this, [this, chosen] {
+            if (chosen) {
+                emit groupInviteRequested(chosen);
+            }
+        });
     }
 
     const auto circleId = chatroom->getCircleId();
@@ -168,7 +174,7 @@ void FriendWidget::showContextMenu(const QPoint& globalPos, const QList<QAction*
         circleMenu->addAction(action);
     }
 
-    const auto setAlias = menu.addAction(tr("Set alias..."));
+    const auto setAlias = menu.addAction(AirStrings::text(AirStrings::Text::DossierRename));
     connect(setAlias, &QAction::triggered, this, &FriendWidget::editAlias);
 
     menu.addSeparator();
@@ -207,16 +213,9 @@ void FriendWidget::editAlias()
         return;
     }
 
-    Friend* frnd = chatroom->getFriend();
-    QString title = tr("Set alias...");
-    title.remove(QRegularExpression(QStringLiteral("[.\\x{2026}]+$")));
-    bool accepted = false;
-    const QString alias =
-        QInputDialog::getText(window(), title, AirStrings::text(AirStrings::Text::AliasPrompt),
-                              QLineEdit::Normal, frnd->getDisplayedName(), &accepted);
-    if (accepted) {
-        frnd->setAlias(alias.trimmed());
-    }
+    // KHANDAQ (0.2.60): the same field as Rename in the dossier, in the head of the chat, instead of a
+    // dialog of its own.
+    emit renameRequested(this);
 }
 
 void FriendWidget::removeChatWindow()

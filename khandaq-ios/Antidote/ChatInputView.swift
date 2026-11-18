@@ -32,8 +32,53 @@ extension ChatInputViewDelegate {
     func chatInputViewVoiceButtonTapped(_ view: ChatInputView) {}
 }
 
+/// KHANDAQ (0.2.60): the field of a message takes a photo pasted into it (users pasted photos, as in other
+/// messengers, and nothing happened): it goes through onPasteImages, to the preview a photo from the library goes
+/// through. Text pastes as before, and so does a copy that holds text besides a picture. The pasteboard is read
+/// through the three blocks, which the tests replace.
+final class ChatInputTextView: UITextView {
+    var onPasteImages: (([UIImage]) -> Void)?
+    var pasteboardHasImages: () -> Bool = { UIPasteboard.general.hasImages }
+    var pasteboardHasStrings: () -> Bool = { UIPasteboard.general.hasStrings }
+    var pasteboardImages: () -> [UIImage] = { UIPasteboard.general.images ?? [] }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(paste(_:)), onPasteImages != nil, pasteboardHasImages() {
+            return true
+        }
+        return super.canPerformAction(action, withSender: sender)
+    }
+
+    /// Whether a paste now takes the pictures copied as photos: pictures alone, in a chat that sends photos.
+    var pastesPhotos: Bool {
+        return onPasteImages != nil && pasteboardHasImages() && !pasteboardHasStrings()
+    }
+
+    override func paste(_ sender: Any?) {
+        if pastesPhotos, let onPasteImages = onPasteImages {
+            let images = pasteboardImages()
+            if !images.isEmpty {
+                onPasteImages(images)
+                return
+            }
+        }
+        super.paste(sender)
+    }
+}
+
 class ChatInputView: UIView {
     weak var delegate: ChatInputViewDelegate?
+
+    /// KHANDAQ (0.2.60): photos pasted into the field (ChatInputTextView). Nil where a chat sends no photos: the
+    /// field then pastes text alone.
+    var onPasteImages: (([UIImage]) -> Void)? {
+        get {
+            return (textView as? ChatInputTextView)?.onPasteImages
+        }
+        set {
+            (textView as? ChatInputTextView)?.onPasteImages = newValue
+        }
+    }
 
     var text: String {
         get {
@@ -462,7 +507,7 @@ private extension ChatInputView {
         voiceHold = longPress
         addSubview(voiceButton)
 
-        textView = UITextView()
+        textView = ChatInputTextView()
         textView.delegate = self
         textView.font = UIFont.systemFont(ofSize: 16.0)
         textView.backgroundColor = theme.colorForType(.NormalBackground)

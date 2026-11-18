@@ -184,6 +184,7 @@ final class AirFileEntry
             if (outgoing)
             {
                 full = context.getString(R.string.air_you);
+                color = AirUi.youColor(context); // KHANDAQ (0.2.60): tone-5, as over a text
             }
             else
             {
@@ -407,6 +408,7 @@ final class AirFileEntry
         if (outgoing)
         {
             full = context.getString(R.string.air_you);
+            color = AirUi.youColor(context); // KHANDAQ (0.2.60): tone-5, as over a text
         }
         else
         {

@@ -28,6 +28,7 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QHash>
 #include <QInputDialog>
 #include <QMessageBox>
@@ -93,6 +94,7 @@
 #include "src/model/friend.h"
 #include "src/model/group.h"
 #include "src/model/air/aircommunity.h"
+#include "src/model/air/airgroupfilerepair.h"
 #include "src/model/air/airmedia.h"
 #include "src/model/air/airmessagemarks.h"
 #include "src/model/air/airpreferences.h"
@@ -123,6 +125,7 @@
 #include "src/widget/air/airstrings.h"
 #include "src/widget/air/airstyle.h"
 #include "src/widget/air/airtokens.h"
+#include "src/widget/air/airvoicerecorder.h"
 #include "src/widget/air/airwalk.h"
 #include "src/widget/air/airyou.h"
 #include "src/widget/contentdialogmanager.h"
@@ -141,6 +144,17 @@
 #include "src/ipc.h"
 
 namespace {
+
+/** A contact as the invitation lists and Core::inviteToGroup take it. */
+Air::InviteCandidate inviteCandidateOf(const Friend& frnd)
+{
+    Air::InviteCandidate candidate;
+    candidate.friendId = static_cast<int>(frnd.getId());
+    candidate.publicKey = frnd.getPublicKey().toString();
+    candidate.name = frnd.getDisplayedName();
+    candidate.online = Status::isOnline(frnd.getStatus());
+    return candidate;
+}
 
 /**
  * @brief Dangerous way to find out if a path is writable.
@@ -183,6 +197,14 @@ constexpr int leastSeparateWidth = 720;
  * within this even on a busy core.
  */
 constexpr int joinedGroupOpenWaitMs = 10000;
+
+/**
+ * KHANDAQ (0.2.60): how often the invitations kept for offline contacts are tried for those online
+ * (a group disconnected when the contact came online), and how long after a contact comes online
+ * theirs go: the link settles first.
+ */
+constexpr int outgoingInviteRetryMs = 60 * 1000;
+constexpr int outgoingInviteAfterOnlineMs = 3000;
 
 const QString activateHandlerKey("activate");
 const QString saveHandlerKey("save");
@@ -327,8 +349,9 @@ Widget::Widget(Profile& profile_, IAudioControl& audio_, CameraSource& cameraSou
 void Widget::init()
 {
     ui->setupUi(this);
-    // Voice notes play through the output of calls.
+    // Voice notes play through the output of calls, and are recorded from their microphone.
     AirVoicePlayer::instance().setAudio(&audio);
+    AirVoiceRecorder::instance().setAudio(&audio);
 
 #ifndef Q_OS_MAC
     // macOS Dock uses CFBundle icns; setWindowIcon() with tray SVGs causes a white frame.
@@ -816,8 +839,9 @@ void Widget::updateIcons()
 
 Widget::~Widget()
 {
-    // The output belongs to the session: a note that plays stops with it.
+    // The output belongs to the session: a note that plays stops with it, one recorded goes.
     AirVoicePlayer::instance().setAudio(nullptr);
+    AirVoiceRecorder::instance().setAudio(nullptr);
     ipc.unregisterEventHandler(activateHandlerKey);
     // No window, no New contact: while logged out a link stays with the instance it was given to.
     ipc.unregisterEventHandler(uriHandlerKey);
@@ -954,6 +978,7 @@ void Widget::onCoreChanged(Core& core_)
     connect(core, &Core::groupFileReceived, this, &Widget::onGroupFileReceived);
     connect(core, &Core::groupFileSent, this, &Widget::onGroupFileSent);
     connect(core, &Core::groupFileSendStarted, this, &Widget::onGroupFileSendStarted);
+    connect(core, &Core::sentGroupFileWanted, this, &Widget::onSentGroupFileWanted);
     connect(core, &Core::groupFileSendProgress, this, &Widget::onGroupFileSendProgress);
     connect(core, &Core::groupFileSendWaiting, this, &Widget::onGroupFileSendWaiting);
     connect(core, &Core::groupFileSendFailed, this, &Widget::onGroupFileSendFailed);
@@ -1006,14 +1031,14 @@ void Widget::joinCommunity()
     const QByteArray chatId = Air::Community::chatId();
     const bool alreadyInGroup = groupList->findGroup(GroupId(chatId)) != nullptr;
     const bool joined = airLocal->autoJoinCommunity(true, alreadyInGroup, [this, &chatId] {
-        // The group comes into the list during the join (Core::groupJoined, createGroup), muted
-        // and unasked for: it does not bring the window forward, which on Windows flashes the
-        // button of an app in the background.
+        // The group comes into the list during the join (Core::groupJoined, createGroup), unasked
+        // for: it does not bring the window forward, which on Windows flashes the button of an app
+        // in the background.
         const QScopedValueRollback<bool> unasked(groupComesByItself, true);
         return core->joinGroupByChatId(chatId) != std::numeric_limits<uint32_t>::max();
     });
     if (joined) {
-        qDebug() << "Khandaq Community joined by itself, muted";
+        qDebug() << "Khandaq Community joined by itself";
     }
 }
 
@@ -1579,7 +1604,8 @@ void Widget::addFriend(uint32_t friendId, const ToxPk& friendPk)
     }
 
     Friend* newfriend = friendList->addFriend(friendId, friendPk, settings);
-    auto rawChatroom = new FriendChatroom(newfriend, contentDialogManager.get(), *core, settings, *groupList);
+    auto rawChatroom =
+        new FriendChatroom(newfriend, contentDialogManager.get(), settings, *groupList);
     std::shared_ptr<FriendChatroom> chatroom(rawChatroom);
     const auto compact = settings.getCompactLayout();
     auto widget = new FriendWidget(chatroom, compact, settings, style, *messageBoxManager, profile);
@@ -1667,6 +1693,13 @@ void Widget::addFriend(uint32_t friendId, const ToxPk& friendPk)
     connect(widget, &FriendWidget::copyFriendIdToClipboard, this, &Widget::copyFriendIdToClipboard);
     connect(widget, &FriendWidget::newGroupRequested, this,
             [this](const ToxPk& contactPk) { openNewGroup(contactPk.toString()); });
+    connect(widget, &FriendWidget::groupInviteRequested, this,
+            [this, newfriend](Group* group) { inviteToGroup(*group, *newfriend); });
+    connect(widget, &FriendWidget::renameRequested, friendForm, [friendForm](FriendWidget* row) {
+        // The chat opens, its input taking the focus, and then the name takes it for the edit.
+        emit row->chatroomWidgetClicked(row);
+        friendForm->beginRename();
+    });
     connect(widget, &FriendWidget::contextMenuCalled, widget, &FriendWidget::onContextMenuCalled);
     connect(widget, SIGNAL(removeFriend(const ToxPk&)), this, SLOT(removeFriend(const ToxPk&)));
 
@@ -1750,9 +1783,41 @@ void Widget::onFriendStatusChanged(const ToxPk& friendPk, Status::Status status)
     }
 
     contentDialogManager->updateFriendStatus(friendPk);
-    // Only contacts online now can be invited: the list of New group follows them.
+    // New group says who is online now.
     if (newGroup) {
         newGroup->refreshCandidates();
+    }
+    if (Status::isOnline(status)) {
+        QTimer::singleShot(outgoingInviteAfterOnlineMs, this, &Widget::sendOutgoingInvites);
+    }
+}
+
+void Widget::sendOutgoingInvites()
+{
+    if (!airLocal || !core) {
+        return;
+    }
+    airLocal->pruneOutgoingInvites();
+    for (const Air::LocalStore::OutgoingInvite& invite : airLocal->outgoingInvites()) {
+        const Friend* const frnd = friendList->findFriend(ToxPk(invite.friendKey));
+        const Group* const group =
+            groupList->findGroup(GroupId(QByteArray::fromHex(invite.groupKey.toLatin1())));
+        // A contact removed or a group left takes its invitations along (AirLocal::forget,
+        // forgetGroup); one not in the lists yet, or offline, waits.
+        if (!frnd || !group || !Status::isOnline(frnd->getStatus())) {
+            continue;
+        }
+        switch (core->inviteToGroup(frnd->getId(), static_cast<int>(group->getId()))) {
+        case Core::GroupInviteResult::Sent:
+            qInfo() << "A group invitation kept for an offline contact went";
+            airLocal->dropOutgoingInvite(invite.friendKey, invite.groupKey);
+            break;
+        case Core::GroupInviteResult::Later:
+            break;
+        case Core::GroupInviteResult::Refused:
+            airLocal->dropOutgoingInvite(invite.friendKey, invite.groupKey);
+            break;
+        }
     }
 }
 
@@ -2026,6 +2091,8 @@ void Widget::addGroupDialog(const Group* group, ContentDialog* dialog)
             [=]() { dialog->removeGroup(groupId); });
     connect(groupWidget, &GroupWidget::chatroomWidgetClicked, chatForm, &ChatForm::focusInput);
     connect(groupWidget, &GroupWidget::newWindowOpened, this, &Widget::openNewDialog);
+    // A contact dropped on the row in the chat window is invited as on the row it stands for.
+    connect(groupWidget, &GroupWidget::inviteRequested, widget, &GroupWidget::inviteRequested);
 
     // Signal transmission from the created `groupWidget` (which shown in
     // ContentDialog) to the `widget` (which shown in main widget)
@@ -2172,7 +2239,7 @@ void Widget::showFriendBand(QWidget* front, const Friend& f, const QString& text
     if (filename.isEmpty()) {
         band.body = shown ? text : AirStrings::text(Text::NotifyNewMessage);
     } else {
-        band.body = shown ? AirStrings::text(Text::FileMessage).arg(filename)
+        band.body = shown ? AirStrings::fileWords(filename)
                           : AirStrings::text(Text::NotifyIncomingFile);
     }
     band.tile = AirBanner::Tile::Person;
@@ -2196,7 +2263,8 @@ void Widget::showGroupBand(QWidget* front, const Group& g, const ToxPk& author, 
         const QString name = g.resolveToxPk(author);
         band.body = name.isEmpty() ? message : name + QStringLiteral(": ") + message;
     }
-    band.tile = AirBanner::Tile::Group;
+    band.tile = Air::Community::isCommunity(groupId.getByteArray()) ? AirBanner::Tile::Community
+                                                                    : AirBanner::Tile::Group;
     band.tileName = g.getDisplayedName();
     band.tone = Air::toneIndex(groupId.toString());
     band.hint = AirStrings::text(Text::BandOpensChat);
@@ -2922,7 +2990,8 @@ void Widget::onGroupPrivateMessageReceived(int groupnumber, const ToxPk& peerPk,
     AirBanner::Content band;
     band.title = AirStrings::text(Text::PrivateReceived).arg(name);
     band.body = settings.getNotifyHide() ? QString() : words;
-    band.tile = AirBanner::Tile::Group;
+    band.tile = Air::Community::isCommunity(groupId.getByteArray()) ? AirBanner::Tile::Community
+                                                                    : AirBanner::Tile::Group;
     band.tileName = group->getDisplayedName();
     band.tone = Air::toneIndex(groupId.toString());
     band.hint = AirStrings::text(Text::BandOpensChat);
@@ -3253,6 +3322,29 @@ void Widget::onGroupFileSent(int groupnumber, const QString& fileName, const QSt
     file.resumeFileId = fileId;
 
     dispatchGroupFileToChatLog(groupId, core->getSelfPublicKey(), file);
+}
+
+void Widget::onSentGroupFileWanted(int groupnumber, const QByteArray& chatId,
+                                   const QByteArray& fileId)
+{
+    History* const history = profile.getHistory();
+    if (history != nullptr && chatId.size() == GroupId::size) {
+        const History::SentFile sent = history->sentFile(GroupId(chatId), fileId);
+        const QFileInfo file(sent.filePath);
+        if (!sent.filePath.isEmpty()
+            && Air::sentFileServable(file.isFile(), file.size(),
+                                     file.lastModified().toMSecsSinceEpoch(), sent.size,
+                                     sent.sentMs)) {
+            core->restoreSentGroupFile(groupnumber, chatId, fileId, sent.fileName, sent.filePath,
+                                       sent.size);
+            return;
+        }
+        if (!sent.filePath.isEmpty()) {
+            qDebug() << "A member asks for" << sent.fileName
+                     << "again, which is ours but no longer as it went";
+        }
+    }
+    core->sentGroupFileUnknown(fileId);
 }
 
 void Widget::onGroupFileSendStarted(int groupnumber, const QString& fileName,
@@ -3599,8 +3691,7 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
             av->invalidateGroupCallPeerSource(*newgroup, user);
         });
     }
-    auto rawChatroom = new GroupChatroom(newgroup, contentDialogManager.get(), *core,
-        *friendList);
+    auto rawChatroom = new GroupChatroom(newgroup, contentDialogManager.get(), *friendList);
     std::shared_ptr<GroupChatroom> chatroom(rawChatroom);
 
     const auto compact = settings.getCompactLayout();
@@ -3667,6 +3758,11 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
 #endif
     connect(widget, &GroupWidget::removeGroup, this, widgetRemoveGroup);
     connect(widget, &GroupWidget::middleMouseClicked, this, [=]() { removeGroup(groupId); });
+    connect(widget, &GroupWidget::inviteRequested, this, [this, newgroup](const ToxPk& friendPk) {
+        if (const Friend* frnd = friendList->findFriend(friendPk)) {
+            inviteToGroup(*newgroup, *frnd);
+        }
+    });
     connect(widget, &GroupWidget::chatroomWidgetClicked, form, &ChatForm::focusInput);
     connect(newgroup, &Group::titleChangedByUser, this, &Widget::titleChangedByUser);
     connect(core, &Core::usernameSet, newgroup, &Group::setSelfName);
@@ -4296,6 +4392,11 @@ void Widget::setupAir()
     airLocal = new AirLocal(settings, this);
     // Requests and invitations wait in the local store until they are answered (E12).
     airSource->setLocal(airLocal);
+    // KHANDAQ (0.2.60): and ours for contacts who were offline, until they are online.
+    outgoingInviteTimer = new QTimer(this);
+    outgoingInviteTimer->setInterval(outgoingInviteRetryMs);
+    connect(outgoingInviteTimer, &QTimer::timeout, this, &Widget::sendOutgoingInvites);
+    outgoingInviteTimer->start();
     // KHANDAQ (0.2.57): the read receipts we send; those still owed stay in the local store.
     seenReceipts = new Air::SeenReceipts(
         *airLocal,
@@ -4576,12 +4677,7 @@ QVector<Air::InviteCandidate> Widget::inviteCandidates() const
 {
     QVector<Air::InviteCandidate> candidates;
     for (Friend* const frnd : friendList->getAllFriends()) {
-        Air::InviteCandidate candidate;
-        candidate.friendId = static_cast<int>(frnd->getId());
-        candidate.publicKey = frnd->getPublicKey().toString();
-        candidate.name = frnd->getDisplayedName();
-        candidate.online = Status::isOnline(frnd->getStatus());
-        candidates.append(candidate);
+        candidates.append(inviteCandidateOf(*frnd));
     }
     return candidates;
 }
@@ -4599,24 +4695,20 @@ void Widget::createAirGroup(const QString& name, Air::GroupPrivacy privacy,
     }
     // Core::emptyGroupCreated has put the group in the list already.
     const GroupId groupId = core->getGroupPersistentId(static_cast<uint32_t>(groupNumber));
-    int sent = 0;
-    for (const Air::InviteCandidate& candidate : invited) {
-        sent += candidate.friendId >= 0
-                && core->groupInviteFriend(static_cast<uint32_t>(candidate.friendId), groupNumber);
-    }
+    const Air::InviteTally tally = GroupChatForm::sendInvites(
+        *core, airLocal, static_cast<uint32_t>(groupNumber), groupId, invited);
     newGroup->close();
     openAirEntry(AirSource::groupEntryId(groupId));
     if (!invited.isEmpty()) {
-        using AirStrings::Text;
-        if (sent == invited.size()) {
-            AirToast::post(airList, AirStrings::text(Text::InviteSent, sent));
-        } else {
-            AirDialog::notice(this,
-                              AirStrings::text(sent == 0 ? Text::ErrorInviteTitle
-                                                         : Text::ErrorInviteSomeTitle),
-                              AirStrings::text(Text::InviteRetry));
-        }
+        GroupChatForm::tellInvites(airList, this, tally);
     }
+}
+
+void Widget::inviteToGroup(const Group& group, const Friend& frnd)
+{
+    const Air::InviteTally tally = GroupChatForm::sendInvites(
+        *core, airLocal, group.getId(), group.getPersistentId(), {inviteCandidateOf(frnd)});
+    GroupChatForm::tellInvites(airList, this, tally);
 }
 
 void Widget::joinAirGroup(const QString& groupKey)
@@ -4904,14 +4996,17 @@ void Widget::showStatusMenu(const QPoint& globalPos)
  * newcontact [text] | toxlink <tox:...> | fill <object name>|<text> | key <key> | focuslist |
  * card accept|decline <words> | newgroup [contact] | joingroup [text] | private <member> |
  * groupask <member>|moderator|member|observer|remove | sendfile <title>|<path> |
- * access microphone|camera granted|undecided|denied | network offline|online|report <path> |
+ * access microphone|camera granted|undecided|denied | voicefile <path>|off |
+ * network offline|online|report <path> |
  * waitband <words>|<ms> | band hold|leave|open | minimize | restore | link <address> | clear |
  * quote <text> | spoken list|log | grab <file.png> | grabpopup <file.png> |
  * frames <count> <ms> <path prefix> | audit <label> | idle <ms> <label> |
  * least <name> <depth> <label> | quit
  * The title "saved" names the saved messages; the group commands act on the open group. access
- * sets what the system answers before a call, without asking it. A click lands once the line is
- * done, so a menu it opens does not hold the script; grabpopup saves that menu, and key goes to it.
+ * sets what the system answers before a call, without asking it; voicefile records the voice
+ * notes from a file of raw 16-bit samples at 48 kHz instead of the microphone. A click lands once
+ * the line is done, so a menu it opens does not hold the script; grabpopup saves that menu, and key
+ * goes to it.
  * waitband holds the script until news that comes over the network is up as the band. spoken writes
  * what a screen reader is offered in the list or the open transcript into the log, one line each.
  * frames, audit and idle are the ones of AirWalk: the window saved while a motion runs, the focus
@@ -5276,6 +5371,15 @@ void Widget::runShotScript(const QString& path)
                                               : what == QStringLiteral("undecided")
                                                   ? MediaAccess::State::Undecided
                                                   : MediaAccess::State::Granted);
+            } else if (command == QStringLiteral("voicefile")) {
+                // voicefile <path>|off: the sound of a voice note from a file, not the microphone.
+                if (rest == QStringLiteral("off")) {
+                    AirVoiceRecorder::instance().setTestMicrophone(nullptr);
+                } else {
+                    const QString soundPath = rest;
+                    AirVoiceRecorder::instance().setTestMicrophone(
+                        [soundPath] { return AirWalk::fileMicrophone(soundPath); });
+                }
             } else if (command == QStringLiteral("hours")) {
                 // hours <title>|<hours ago,...>: online marks for the day strip of a person.
                 const QString entryId = entryByTitle(rest.section('|', 0, 0).trimmed());

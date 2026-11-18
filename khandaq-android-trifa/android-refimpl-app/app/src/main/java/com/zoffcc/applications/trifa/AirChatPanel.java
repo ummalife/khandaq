@@ -10,6 +10,8 @@ import android.content.Context;
 import android.content.res.ColorStateList;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
@@ -2027,12 +2029,20 @@ final class AirChatPanel implements AirDossier.Listener, AirContactMarks.Listene
         final int side = context.getResources().getDimensionPixelSize(R.dimen.kq_size_field);
         final GradientDrawable plate = inkPlate(context);
         plate.setSize(side, side);
-        final Drawable arrow = DrawableCompat.wrap(
-                Objects.requireNonNull(ContextCompat.getDrawable(context, R.drawable.kq_ic_arrow_up)).mutate());
-        DrawableCompat.setTint(arrow, AirUi.color(context, R.color.kq_on_ink));
+        final Drawable arrow = Objects.requireNonNull(ContextCompat.getDrawable(context, R.drawable.kq_ic_arrow_up))
+                                      .mutate();
         final LayerDrawable layers = new LayerDrawable(new Drawable[]{plate, arrow});
         layers.setLayerSize(1, Math.min(side, arrow.getIntrinsicWidth()), Math.min(side, arrow.getIntrinsicHeight()));
         layers.setLayerGravity(1, Gravity.CENTER);
+        // KHANDAQ (0.2.60): the arrow drew in its own black, a black square on the ink plate. In send mode
+        // ChatInputBarHelper clears the button's image tint (setImageTintList(null)); the ImageView mutates the
+        // drawable and hands the cleared tint to every layer, so a tint on the arrow went. A colour filter outlives
+        // a cleared tint, but not the first mutate() of a LayerDrawable: that makes the layers again from their
+        // constant states, and a colour filter is not part of one. Mutated here first, the layers stay the ones the
+        // filter is set on (AirSendIconTest).
+        layers.mutate();
+        layers.getDrawable(1).setColorFilter(new PorterDuffColorFilter(AirUi.color(context, R.color.kq_on_ink),
+                                                                       PorterDuff.Mode.SRC_IN));
         return layers;
     }
 
@@ -2406,19 +2416,57 @@ final class AirChatPanel implements AirDossier.Listener, AirContactMarks.Listene
     {
         final Snapshot s = shown;
         final String key = publicKey;
-        if (s == null || key == null)
+        if (s == null || key == null || destroyed || activity.isFinishing())
         {
             return;
         }
-        final EditText input = dialogField(s.alias, false);
+        showRenameDialog(activity, key, s);
+    }
+
+    /**
+     * KHANDAQ (0.2.60): "Rename" in the menu of a contact's row (FriendListHolder.show_row_menu), with the dossier's
+     * dialog. Renaming took opening the chat and its dossier first; the row is where people look for it. The contact
+     * is read on the worker, the dialog shown on the main thread while the screen is still there.
+     */
+    static void renameContact(final Activity activity, final String key)
+    {
+        if (activity == null || TextUtils.isEmpty(key))
+        {
+            return;
+        }
+        final Context app = activity.getApplicationContext();
+        worker().post(() -> {
+            final Snapshot s;
+            try
+            {
+                s = read(app, key, false);
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "renameContact:EE:" + e.getMessage());
+                return;
+            }
+            MAIN.post(() -> {
+                if (s.exists && !activity.isFinishing() && !activity.isDestroyed())
+                {
+                    showRenameDialog(activity, key, s);
+                }
+            });
+        });
+    }
+
+    /** The nickname dialog of a contact, for its dossier and for the menu of its row. */
+    private static void showRenameDialog(final Activity activity, final String key, final Snapshot s)
+    {
+        final EditText input = dialogField(activity, s.alias, false);
         // The name an empty field brings back: theirs, under the nickname or in its place.
         input.setHint(s.alias.isEmpty() ? s.name : s.ownName);
         final AlertDialog dialog = new AlertDialog.Builder(activity)
                 .setTitle(R.string.air_dossier_rename_title)
-                .setView(dialogBox(input))
-                .setNegativeButton(R.string.cancel, (d, which) -> hideKeyboardFrom(input))
+                .setView(dialogBox(activity, input))
+                .setNegativeButton(R.string.cancel, (d, which) -> hideKeyboardFrom(activity, input))
                 .setPositiveButton(R.string.air_tray_save, (d, which) -> {
-                    hideKeyboardFrom(input);
+                    hideKeyboardFrom(activity, input);
                     // An empty nickname brings their own name back.
                     final String alias = String.valueOf(input.getText()).trim();
                     worker().post(() -> {
@@ -2441,7 +2489,7 @@ final class AirChatPanel implements AirDossier.Listener, AirContactMarks.Listene
                 })
                 .create();
         showKeyboardWith(dialog);
-        showDialog(dialog, false);
+        AirUi.showDialog(activity, dialog, false);
         input.requestFocus();
     }
 
@@ -2565,7 +2613,12 @@ final class AirChatPanel implements AirDossier.Listener, AirContactMarks.Listene
     /** Takes the keyboard down from the dialog field it serves, while that dialog is still showing. */
     private void hideKeyboardFrom(final View dialogField)
     {
-        final InputMethodManager input = (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+        hideKeyboardFrom(activity, dialogField);
+    }
+
+    private static void hideKeyboardFrom(final Context context, final View dialogField)
+    {
+        final InputMethodManager input = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
         if (input != null)
         {
             input.hideSoftInputFromWindow(dialogField.getWindowToken(), 0);
@@ -2584,11 +2637,16 @@ final class AirChatPanel implements AirDossier.Listener, AirContactMarks.Listene
 
     private EditText dialogField(final String text, final boolean multiLine)
     {
-        final Resources res = activity.getResources();
-        final EditText input = new EditText(activity);
+        return dialogField(activity, text, multiLine);
+    }
+
+    private static EditText dialogField(final Context context, final String text, final boolean multiLine)
+    {
+        final Resources res = context.getResources();
+        final EditText input = new EditText(context);
         TextViewCompat.setTextAppearance(input, R.style.TextAppearance_KQ_Body);
-        input.setTextColor(AirUi.color(activity, R.color.kq_ink));
-        input.setHintTextColor(AirUi.color(activity, R.color.kq_ink_3));
+        input.setTextColor(AirUi.color(context, R.color.kq_ink));
+        input.setHintTextColor(AirUi.color(context, R.color.kq_ink_3));
         input.setBackgroundResource(R.drawable.air_bg_field);
         final int side = res.getDimensionPixelSize(R.dimen.kq_space_12);
         final int top = res.getDimensionPixelSize(R.dimen.kq_space_8);
@@ -2623,8 +2681,13 @@ final class AirChatPanel implements AirDossier.Listener, AirContactMarks.Listene
     /** The dialog's own side margins around a custom view. */
     private View dialogBox(final View content)
     {
-        final Resources res = activity.getResources();
-        final FrameLayout box = new FrameLayout(activity);
+        return dialogBox(activity, content);
+    }
+
+    private static View dialogBox(final Context context, final View content)
+    {
+        final Resources res = context.getResources();
+        final FrameLayout box = new FrameLayout(context);
         final int side = res.getDimensionPixelSize(R.dimen.kq_space_24);
         box.setPaddingRelative(side, res.getDimensionPixelSize(R.dimen.kq_space_8), side, 0);
         box.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,

@@ -130,4 +130,10 @@ regexes = [
   # trip the rule). The pull-request scan of #148 stopped on it (GroupReportMailTest.java line 29, commit
   # 73c46c15). Nobody's key. Added by Claude (AI assistant), the value checked against the sources.
   '''(?i)ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789''',
+  # KHANDAQ (0.2.60): the made-up group chat id that the desktop's group tests share (airgroup_test,
+  # airmodel_test, airgroupviews_test). The iOS test of the invitations waiting for an offline contact
+  # (AirLocalStoreTests) holds it in `let groupKey`, and "Key" in the name makes `generic-api-key` read
+  # it as a credential. The pull-request scan of #161 stopped on it (AirLocalStoreTests.swift line 290,
+  # commit f6f48904). Nobody's group. Added by Claude (AI assistant), the value checked against the sources.
+  '''(?i)8F2A41C07D3B9E6152A4F0C8B7D3E9A1C2F4B6D8E0A1C3E5F7B9D1F3A5C7E9B1''',
 ]

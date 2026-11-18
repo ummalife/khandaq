@@ -322,5 +322,25 @@
 			<string>Отправлено %d приглашения</string>
 		</dict>
 	</dict>
+	<key>air_invite_later</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@later@</string>
+		<key>later</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d приглашение уйдёт при появлении в сети</string>
+			<key>few</key>
+			<string>%d приглашения уйдут при появлении в сети</string>
+			<key>many</key>
+			<string>%d приглашений уйдут при появлении в сети</string>
+			<key>other</key>
+			<string>%d приглашения уйдут при появлении в сети</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

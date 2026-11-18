@@ -856,6 +856,7 @@ public class HelperGroup
             e.printStackTrace();
             HelperGeneric.logI(TAG, "set_group_group_we_left:EE:" + e.getMessage());
         }
+        forget_manual_group_invites_for_group(group_identifier); // KHANDAQ (0.2.60)
     }
 
     static void clear_group_group_we_left(String group_identifier)
@@ -4811,6 +4812,7 @@ public class HelperGroup
             e.printStackTrace();
             HelperGeneric.logI(TAG, "delete_group:EE:" + e.getMessage());
         }
+        forget_manual_group_invites_for_group(group_identifier); // KHANDAQ (0.2.60)
     }
 
     static void update_group_in_friendlist(final String group_identifier)
@@ -9607,15 +9609,87 @@ public class HelperGroup
     // often races a momentary disconnect and the invite is silently lost — unlike text messages, which
     // are queued and retried on reconnect. We mirror that: queue (friend_pubkey -> set of group ids) and
     // re-fire on friend-online + a few timed retries until tox_group_invite_friend returns success.
-    private static final ConcurrentHashMap<String, java.util.Set<String>> pending_manual_group_invites =
-            new ConcurrentHashMap<>();
+    // KHANDAQ (0.2.60): the queue is GroupPendingInvites, kept with the profile's settings, so an invitation to a
+    // contact who is offline survives a restart of the app and waits for them up to 30 days.
+    private static final String PENDING_GROUP_INVITES_KEY = "kqngcpendinginvites";
+    private static final Object pending_group_invites_store_lock = new Object();
+
+    /**
+     * KHANDAQ (0.2.60): on the tox thread when a tox instance starts, next to leave_groups_pending_at_last_stop: the
+     * invitations this profile kept for contacts who were offline. Each goes when its contact comes online
+     * (schedule_manual_invite_resends).
+     */
+    static void load_pending_manual_group_invites()
+    {
+        synchronized (pending_group_invites_store_lock)
+        {
+            try
+            {
+                if (MainActivity.identity_load_blocked || orma == null)
+                {
+                    // Not the person's profile (#244), or no database: nothing is read, nothing is written over it.
+                    GroupPendingInvites.clear();
+                    return;
+                }
+                if (GroupPendingInvites.load(HelperGeneric.get_g_opts(PENDING_GROUP_INVITES_KEY),
+                                             System.currentTimeMillis()))
+                {
+                    save_pending_manual_group_invites();
+                }
+                HelperGeneric.logI(TAG, "load_pending_manual_group_invites:count=" + GroupPendingInvites.size());
+            }
+            catch (Throwable t)
+            {
+                Log.w(TAG, "load_pending_manual_group_invites:EE:" + t.getMessage());
+            }
+        }
+    }
+
+    /** The kept invitations to the database: only once they were read for this profile, never over another's. */
+    private static void save_pending_manual_group_invites()
+    {
+        synchronized (pending_group_invites_store_lock)
+        {
+            if (!GroupPendingInvites.isLoaded())
+            {
+                return;
+            }
+            final String stored = GroupPendingInvites.encode();
+            if (stored.isEmpty())
+            {
+                HelperGeneric.del_g_opts(PENDING_GROUP_INVITES_KEY);
+            }
+            else
+            {
+                HelperGeneric.set_g_opts(PENDING_GROUP_INVITES_KEY, stored);
+            }
+        }
+    }
+
+    /** KHANDAQ (0.2.60): the contact was removed: the invitations kept for them go too. */
+    static void forget_manual_group_invites_for_friend(final String friend_public_key)
+    {
+        if (GroupPendingInvites.forgetFriend(friend_public_key))
+        {
+            save_pending_manual_group_invites();
+        }
+    }
+
+    /** KHANDAQ (0.2.60): the group was left or deleted: the invitations kept for it go too. */
+    static void forget_manual_group_invites_for_group(final String group_identifier)
+    {
+        if (GroupPendingInvites.forgetGroup(group_identifier))
+        {
+            save_pending_manual_group_invites();
+        }
+    }
 
     private static void queue_manual_group_invite(final String group_identifier, final String friend_public_key)
     {
-        final String fk = friend_public_key.toLowerCase(Locale.ENGLISH);
-        pending_manual_group_invites
-                .computeIfAbsent(fk, k -> java.util.Collections.newSetFromMap(new ConcurrentHashMap<>()))
-                .add(group_identifier);
+        if (GroupPendingInvites.add(friend_public_key, group_identifier, System.currentTimeMillis()))
+        {
+            save_pending_manual_group_invites();
+        }
         HelperGeneric.logI(TAG, "queue_manual_group_invite:group=" + group_identifier + " friend=" + friend_public_key);
         // re-fire a few times in case the friend flaps back without a fresh connection-status callback
         for (final long delay_ms : new long[]{3_000L, 10_000L, 30_000L})
@@ -9638,37 +9712,44 @@ public class HelperGroup
         {
             return;
         }
-        final String fk = friend_public_key.toLowerCase(Locale.ENGLISH);
-        final java.util.Set<String> groups = pending_manual_group_invites.get(fk);
-        if (groups == null || groups.isEmpty())
+        // KHANDAQ (0.2.60): an invitation asked for more than 30 days ago goes unsent.
+        boolean changed = GroupPendingInvites.prune(System.currentTimeMillis());
+        final java.util.List<String> groups = GroupPendingInvites.groupsFor(friend_public_key);
+        final long friend_num = groups.isEmpty() ? -1 : tox_friend_by_public_key__wrapper(friend_public_key);
+        // friend not in tox right now — keep queued, try again later
+        if ((friend_num >= 0) && (friend_num < UINT32_MAX_JAVA))
         {
-            return;
-        }
-        final long friend_num = tox_friend_by_public_key__wrapper(friend_public_key);
-        if ((friend_num < 0) || (friend_num >= UINT32_MAX_JAVA))
-        {
-            return; // friend not in tox right now — keep queued, try again later
-        }
-        for (final String group_identifier : new java.util.ArrayList<>(groups))
-        {
-            final long group_num = ensure_group_in_tox(group_identifier);
-            if (group_num < 0)
+            for (final String group_identifier : groups)
             {
-                groups.remove(group_identifier); // group is gone — stop trying
-                continue;
-            }
-            final int res = tox_group_invite_friend(group_num, friend_num);
-            HelperGeneric.logI(TAG, "retry_pending_manual_group_invites:group=" + group_identifier +
-                                    " friend=" + friend_public_key + " res=" + res);
-            if (res == 1)
-            {
-                groups.remove(group_identifier);
-                update_savedata_file_wrapper();
+                if (is_group_we_left(group_identifier) || !group_db_row_exists(group_identifier))
+                {
+                    // group is gone — stop trying (and never join one the person left or deleted for it)
+                    changed |= GroupPendingInvites.remove(friend_public_key, group_identifier);
+                    continue;
+                }
+                final long group_num = ensure_group_in_tox(group_identifier);
+                if (group_num < 0)
+                {
+                    continue; // not in toxcore right now (starting, or a full Community): later
+                }
+                final int res = tox_group_invite_friend(group_num, friend_num);
+                HelperGeneric.logI(TAG, "retry_pending_manual_group_invites:group=" + group_identifier +
+                                        " friend=" + friend_public_key + " res=" + res);
+                // KHANDAQ (0.2.60): a failure of the link waits; a group or a contact toxcore lacks is refused.
+                final GroupPendingInvites.Outcome outcome = GroupPendingInvites.outcomeOf(res);
+                if (outcome == GroupPendingInvites.Outcome.SENT)
+                {
+                    update_savedata_file_wrapper();
+                }
+                if (outcome != GroupPendingInvites.Outcome.LATER)
+                {
+                    changed |= GroupPendingInvites.remove(friend_public_key, group_identifier);
+                }
             }
         }
-        if (groups.isEmpty())
+        if (changed)
         {
-            pending_manual_group_invites.remove(fk);
+            save_pending_manual_group_invites();
         }
     }
 
@@ -9680,13 +9761,7 @@ public class HelperGroup
      */
     static void schedule_manual_invite_resends(final String friend_public_key)
     {
-        if (friend_public_key == null)
-        {
-            return;
-        }
-        final java.util.Set<String> groups =
-                pending_manual_group_invites.get(friend_public_key.toLowerCase(Locale.ENGLISH));
-        if (groups == null || groups.isEmpty())
+        if (friend_public_key == null || !GroupPendingInvites.hasFor(friend_public_key))
         {
             return;
         }

@@ -193,6 +193,8 @@ public:
         Group,
         /** A request: the dashed tile with "add contact", as the row of a request. */
         Request,
+        /** KHANDAQ (0.2.60): Khandaq Community, with the app's logo. */
+        Community,
     };
 
     struct Content

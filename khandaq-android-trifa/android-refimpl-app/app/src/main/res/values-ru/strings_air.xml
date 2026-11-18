@@ -376,13 +376,13 @@
     <string name="air_group_privacy_open">Открыта по ключу группы</string>
     <string name="air_group_privacy_open_note">Войти может любой, у кого есть ключ группы, без приглашения.</string>
     <string name="air_group_invite">Пригласить</string>
-    <string name="air_new_group_invite_note">Приглашения уходят сразу, поэтому здесь можно пригласить только тех, кто в сети. Остальных пригласите позже из досье группы.</string>
+    <string name="air_new_group_invite_note">Те, кто в сети, получат приглашение сразу, остальные получат, когда появятся в сети.</string>
     <string name="air_new_group_create">Создать группу</string>
     <string name="air_new_group_create_invite_format">Создать и пригласить %1$d</string>
     <string name="air_new_group_name_first">Назовите группу, чтобы создать её</string>
     <string name="air_new_group_name_too_long">Название слишком длинное для группы: сократите его</string>
     <string name="air_invite_already_member">уже в группе</string>
-    <string name="air_invite_when_online">пригласить можно, когда будет в сети</string>
+    <string name="air_invite_when_online">получит приглашение, когда будет в сети</string>
     <string name="air_invite_no_contacts">Контактов пока нет: сначала добавьте человека.</string>
     <string name="air_invite_search">Найти контакт</string>
     <string name="air_invite_nobody_found">Нет контакта с таким именем</string>

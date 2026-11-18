@@ -105,11 +105,24 @@ bool autoJoin(LocalStore& store, bool connected, bool alreadyInGroup,
     if (!join()) {
         return false;
     }
-    // The group mutes as it comes: a person added without asking hears nothing of it until they
-    // turn it on. The key of a group's mute is its chat id, as the dossier's switch keeps it.
-    store.setMuted(true, QString::fromLatin1(chatIdHex));
     store.setCommunityAutoJoinDone();
     return true;
+}
+
+bool restoreSound(LocalStore& store)
+{
+    if (store.communitySoundRestored()) {
+        return false;
+    }
+    bool unmuted = false;
+    // The key of a group's mute is its chat id, as the dossier's switch keeps it.
+    const QString key = QString::fromLatin1(chatIdHex);
+    if (store.communityAutoJoinDone() && !store.communityLeft() && store.isMuted(key)) {
+        store.setMuted(false, key);
+        unmuted = true;
+    }
+    store.setCommunitySoundRestored();
+    return unmuted;
 }
 
 bool noteGroupLeft(LocalStore& store, const QByteArray& groupChatId)

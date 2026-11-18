@@ -52,7 +52,6 @@ class OfflineMsgEngine;
 class QPixmap;
 class QHideEvent;
 class QMoveEvent;
-class ImagePreviewButton;
 class DocumentCache;
 class SmileyPack;
 class Settings;
@@ -106,6 +105,8 @@ public slots:
     void onAvatarChanged(const ToxPk& friendPk, const QPixmap& pic);
     void onExtensionSupportChanged(ExtensionSet extensions);
     void clearChatArea();
+    /** The name of the person, edited in place in the head; the dossier folds first. */
+    void beginRename();
     void onShowMessagesClicked();
     void onSplitterMoved(int pos, int index);
     void reloadTheme() final;
@@ -129,9 +130,6 @@ private slots:
     void onStatusMessage(const QString& message);
     void onUpdateTime();
     void sendLocalFiles(const QStringList& paths);
-    void previewImage(const QPixmap& pixmap);
-    void cancelImagePreview();
-    void sendImageFromPreview();
     void doScreenshot();
 
     void callUpdateFriendActivity();
@@ -183,6 +181,8 @@ private:
 protected:
     /** KHANDAQ (0.2.58): the person by their own name and key, and us by ours. */
     ReplyAuthor replyAuthorOf(const ChatLogItem& item) const override;
+    void sendPreparedFiles(const QStringList& paths) override;
+    QString voiceRefusal() const override;
     std::unique_ptr<NetCamView> createNetcam();
     void dragEnterEvent(QDragEnterEvent* ev) final;
     void dropEvent(QDropEvent* ev) final;
@@ -201,8 +201,6 @@ private:
     QTimer* callDurationTimer;
     QTimer typingTimer;
     QElapsedTimer timeElapsed;
-    QPixmap imagePreviewSource;
-    ImagePreviewButton* imagePreview;
     bool isTyping;
     bool friendTyping = false;
     bool lastCallIsVideo;

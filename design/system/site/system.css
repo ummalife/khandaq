@@ -1637,7 +1637,7 @@ button {
 }
 
 .kq-entry.is-me .kq-entry-who {
-  color: var(--kq-ink-2);
+  color: var(--kq-tone-5);
 }
 
 .kq-entry-text {

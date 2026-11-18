@@ -108,6 +108,7 @@ private slots:
     void anInterruptedFileKeepsWhatTellsItsPartAfterARestart();
     void aLaterFileOfAPersonThatGoesToThePathIsKnown();
     void aFileOfOursKeepsWhatItWasWhenItWentAfterARestart();
+    void aFileWeSentTheGroupIsFoundAfterARestart();
 
 private:
     /** The one file of the chat, as a later start reads it. */
@@ -523,6 +524,39 @@ void TestHistory::aFileOfOursKeepsWhatItWasWhenItWentAfterARestart()
     QCOMPARE(storedFile(maryam).status, ToxFile::CANCELED);
     QCOMPARE(storedFile(maryam).direction, ToxFile::SENDING);
     QCOMPARE(storedFile(maryam).stamp, sent);
+}
+
+/**
+ * @brief KHANDAQ (0.2.60): a file we sent a group is found by its id after a restart, with where it
+ * went from, its length and when it went: what answers a member that asks for chunks of it again.
+ * Not a file of a member, not one of another chat, and not one we deleted.
+ */
+void TestHistory::aFileWeSentTheGroupIsFoundAfterARestart()
+{
+    const QDateTime sentAt = QDateTime::fromMSecsSinceEpoch(1700000000000);
+    history->addNewFileMessage(family, fileId, QStringLiteral("talk.mp4"), filePath, 5000, self,
+                               sentAt, QStringLiteral("Me"), ToxFile::SENDING);
+    const QByteArray theirs(32, 't');
+    history->addNewFileMessage(family, theirs, QStringLiteral("photo.jpg"), filePath, 1234, maryam,
+                               sentAt, QStringLiteral("Maryam"), ToxFile::RECEIVING);
+    letRowsIn();
+    history->setFileFinished(fileId, true, filePath, QByteArray("hash"));
+    restart();
+
+    const History::SentFile sent = history->sentFile(family, fileId);
+    QCOMPARE(sent.fileName, QStringLiteral("talk.mp4"));
+    QCOMPARE(sent.filePath, filePath);
+    QCOMPARE(sent.size, qint64{5000});
+    QCOMPARE(sent.sentMs, sentAt.toMSecsSinceEpoch());
+
+    QVERIFY(history->sentFile(family, theirs).filePath.isEmpty());
+    QVERIFY(history->sentFile(GroupId(QByteArray(GroupId::size, 'o')), fileId).filePath.isEmpty());
+    QVERIFY(history->sentFile(family, QByteArray(32, 'x')).filePath.isEmpty());
+
+    history->eraseFileEntry(family, fileId);
+    QVERIFY(history->sentFile(family, fileId).filePath.isEmpty());
+    restart();
+    QVERIFY(history->sentFile(family, fileId).filePath.isEmpty());
 }
 
 int main(int argc, char* argv[])

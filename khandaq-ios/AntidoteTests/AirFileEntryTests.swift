@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import ImageIO
 import XCTest
 @testable import Antidote
 
@@ -277,6 +278,104 @@ class ChatFileEntryActivationTests: CellSnapshotTest {
                       "a tap on the entry lands beside the photo: \(entry.accessibilityActivationPoint) outside \(previewOnScreen)")
         XCTAssertTrue(entry.accessibilityActivate(), "a double tap on the entry does nothing")
         XCTAssertEqual(opened, 1, "the photo did not open")
+    }
+
+    /// A file without a preview opens with a tap on its row once it is here (0.2.61). The row had only the
+    /// buttons of the transfer, so a received file that was here opened nothing at all.
+    func testATapOnTheRowOfAFileThatIsHereOpensIt() {
+        var opened = 0
+        let model = fileEntry(ChatIncomingFileCellModel(), state: .done, name: "VID_20251204_233311_545.mp4",
+                              bytes: 28_800_000, uti: "public.mpeg-4")
+        model.openHandle = {
+            opened += 1
+        }
+        let cell = ChatIncomingFileCell()
+        cell.setupWithTheme(theme, model: model)
+        layoutAsTheLogDoes(cell)
+
+        XCTAssertFalse(cell.fileRow.isHidden, "a file without a preview shows no row")
+        XCTAssertTrue(cell.fileRow.isUserInteractionEnabled, "the row takes no touch")
+        let taps = (cell.fileRow.gestureRecognizers ?? []).compactMap { $0 as? UITapGestureRecognizer }
+        XCTAssertEqual(taps.count, 1, "the row has no tap of its own")
+        XCTAssertEqual(taps.first?.isEnabled, true)
+
+        cell.fileRowTapped()
+        XCTAssertEqual(opened, 1, "a tap on the row of a file that is here opened nothing")
+    }
+
+    func testATapOnTheRowOfAFileNotHereYetOpensNothing() {
+        var opened = 0
+        let states: [ChatGenericFileCellModel.State] = [.waitingConfirmation, .waitingConnection, .loading, .paused, .cancelled]
+        for state in states {
+            let model = fileEntry(ChatIncomingFileCellModel(), state: state)
+            model.openHandle = {
+                opened += 1
+            }
+            let cell = ChatIncomingFileCell()
+            cell.setupWithTheme(theme, model: model)
+            cell.fileRowTapped()
+        }
+        XCTAssertEqual(opened, 0, "a file that is not here yet opened")
+    }
+}
+
+/**
+ The preview of a photo of any size (0.2.61): its size as it is seen, turned by its EXIF orientation, and a
+ picture read down to the side of the preview, so a large photo shows as a photo instead of a file row.
+ */
+class ChatFileMediaLoaderTests: XCTestCase {
+    private var directory: URL!
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: directory)
+        try super.tearDownWithError()
+    }
+
+    /// A JPEG of `width` × `height` stored pixels with the EXIF `orientation`.
+    private func jpeg(width: Int, height: Int, orientation: Int) throws -> String {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let size = CGSize(width: width, height: height)
+        let picture = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor.darkGray.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+        }
+        let url = directory.appendingPathComponent("photo-\(width)x\(height)-\(orientation).jpg")
+        guard let cgImage = picture.cgImage,
+              let destination = CGImageDestinationCreateWithURL(url as CFURL, "public.jpeg" as CFString, 1, nil) else {
+            throw XCTSkip("ImageIO cannot write a JPEG here")
+        }
+        CGImageDestinationAddImage(destination, cgImage, [kCGImagePropertyOrientation: orientation] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination), "the JPEG was not written")
+        return url.path
+    }
+
+    func testAPhotoTurnedByItsOrientationIsAsTallAsItIsShown() throws {
+        XCTAssertEqual(ChatFileMediaLoader.imagePixelSize(at: try jpeg(width: 400, height: 300, orientation: 1)),
+                       CGSize(width: 400, height: 300))
+        XCTAssertEqual(ChatFileMediaLoader.imagePixelSize(at: try jpeg(width: 400, height: 300, orientation: 6)),
+                       CGSize(width: 300, height: 400), "a portrait taken on its side is measured on its side")
+    }
+
+    func testALargePhotoIsReadDownToThePreviewSideAndTurned() throws {
+        let path = try jpeg(width: 2000, height: 1500, orientation: 6)
+        guard let preview = ChatFileMediaLoader.downsampledImage(at: path, maxPixelSide: 540) else {
+            return XCTFail("a large photo has no preview")
+        }
+        XCTAssertEqual(preview.size, CGSize(width: 405, height: 540), "the preview is not read down or not turned")
+    }
+
+    func testAFileThatIsNoPhotoHasNoSizeAndNoPreview() throws {
+        let url = directory.appendingPathComponent("notes.txt")
+        try Data("not a picture".utf8).write(to: url)
+        XCTAssertNil(ChatFileMediaLoader.imagePixelSize(at: url.path))
+        XCTAssertNil(ChatFileMediaLoader.downsampledImage(at: url.path, maxPixelSide: 540))
     }
 }
 

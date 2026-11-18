@@ -20,8 +20,8 @@ class BubbleView: UIView {
     fileprivate var mapImageView: UIImageView?
     fileprivate var locationTapRecognizer: UITapGestureRecognizer?
     let replyQuoteView = ChatReplyQuoteView()
-    // KHANDAQ (#192): reaction chips rendered as a compact line under the text ("❤️ 2  👍").
-    fileprivate let reactionsLabel = UILabel()
+    // KHANDAQ (#192, 0.2.61): the reactions under the text, as chips (AirReactionChipsView).
+    let reactionsView = AirReactionChipsView()
     // KHANDAQ (#iOS edited-marker): «изменено» rendered as its OWN bottom metadata sub-row (like the
     // reactions line) instead of being appended inline into the body — so it reads as a system note,
     // not as text the sender typed onto the end of their message.
@@ -92,11 +92,9 @@ class BubbleView: UIView {
         set {
             textView.textColor = newValue
             if isTranscript {
-                reactionsLabel.textColor = KQColor.ink2
                 editedLabel.textColor = KQColor.ink3
                 return
             }
-            reactionsLabel.textColor = newValue.withAlphaComponent(0.9)
             // subdued so «изменено» reads as metadata (mirrors the timestamp/status tint intent).
             editedLabel.textColor = newValue.withAlphaComponent(0.5)
         }
@@ -142,8 +140,6 @@ class BubbleView: UIView {
         textView.textContainer.lineFragmentPadding = 0
         textView.font = KQFont.font(.body)
         textView.adjustsFontForContentSizeCategory = true
-        reactionsLabel.font = KQFont.font(.label, weight: 400)
-        reactionsLabel.adjustsFontForContentSizeCategory = true
         editedLabel.font = KQFont.font(.caption)
         editedLabel.adjustsFontForContentSizeCategory = true
         unverifiedLabel.font = KQFont.font(.caption)
@@ -194,11 +190,10 @@ class BubbleView: UIView {
         updateTextConstraints(hasMap: mapImageView?.isHidden == false)
     }
 
-    // KHANDAQ (#192): show/hide the reaction chips line. nil/empty hides it.
-    func bindReactions(_ display: String?) {
-        let text = display ?? ""
-        reactionsLabel.text = text
-        reactionsLabel.isHidden = text.isEmpty
+    // KHANDAQ (#192): show/hide the reaction chips. None hides them.
+    func bindReactions(_ chips: [AirReactionChip]) {
+        reactionsView.bind(chips)
+        reactionsView.isHidden = chips.isEmpty
         updateTextConstraints(hasMap: mapImageView?.isHidden == false)
     }
 
@@ -280,9 +275,9 @@ class BubbleView: UIView {
             }
 
             // KHANDAQ (#iOS edited-marker): the bubble bottom is now the lowest visible of
-            // {textView, reactionsLabel, editedLabel, unverifiedLabel} — only pin textView to the
+            // {textView, reactionsView, editedLabel, unverifiedLabel} — only pin textView to the
             // bottom when every one of them is hidden.
-            if reactionsLabel.isHidden && editedLabel.isHidden && unverifiedLabel.isHidden {
+            if reactionsView.isHidden && editedLabel.isHidden && unverifiedLabel.isHidden {
                 $0.bottom.equalTo(self).offset(-verticalInset)
             }
             $0.leading.equalTo(self).offset(horizontalInset)
@@ -293,12 +288,13 @@ class BubbleView: UIView {
             $0.height.greaterThanOrEqualTo(Constants.TextViewMinHeight)
         }
 
-        reactionsLabel.snp.remakeConstraints {
-            $0.top.equalTo(textView.snp.bottom)
+        reactionsView.snp.remakeConstraints {
+            // The chips stand a little apart from the text, as on Android and the desktop.
+            $0.top.equalTo(textView.snp.bottom).offset(KQSpace.x4)
             $0.leading.equalTo(self).offset(noteInset)
             $0.trailing.lessThanOrEqualTo(self).offset(-horizontalInset)
             // pin to bottom only when it's the last visible row (nothing below it).
-            if !reactionsLabel.isHidden && editedLabel.isHidden && unverifiedLabel.isHidden {
+            if !reactionsView.isHidden && editedLabel.isHidden && unverifiedLabel.isHidden {
                 $0.bottom.equalTo(self).offset(-noteBottomInset)
             }
         }
@@ -306,11 +302,11 @@ class BubbleView: UIView {
         // KHANDAQ (#iOS edited-marker): «изменено» sits on its OWN row below the text (and below the
         // reactions line when present), left-aligned so it never collides with the outgoing checkmark.
         editedLabel.snp.remakeConstraints {
-            if reactionsLabel.isHidden {
+            if reactionsView.isHidden {
                 $0.top.equalTo(textView.snp.bottom).offset(1.0)
             }
             else {
-                $0.top.equalTo(reactionsLabel.snp.bottom).offset(1.0)
+                $0.top.equalTo(reactionsView.snp.bottom).offset(1.0)
             }
             $0.leading.equalTo(self).offset(noteInset)
             $0.trailing.lessThanOrEqualTo(self).offset(-horizontalInset)
@@ -325,8 +321,8 @@ class BubbleView: UIView {
             if !editedLabel.isHidden {
                 $0.top.equalTo(editedLabel.snp.bottom).offset(1.0)
             }
-            else if !reactionsLabel.isHidden {
-                $0.top.equalTo(reactionsLabel.snp.bottom).offset(1.0)
+            else if !reactionsView.isHidden {
+                $0.top.equalTo(reactionsView.snp.bottom).offset(1.0)
             }
             else {
                 $0.top.equalTo(textView.snp.bottom).offset(1.0)
@@ -360,10 +356,6 @@ class BubbleView: UIView {
         onLocationTap?()
     }
 
-    @objc fileprivate func handleReactionsTap() {
-        onReactionsTap?()
-    }
-
     override init(frame: CGRect) {
         super.init(frame: frame)
 
@@ -381,12 +373,11 @@ class BubbleView: UIView {
         addSubview(replyQuoteView)
         addSubview(textView)
 
-        reactionsLabel.font = UIFont.systemFont(ofSize: 13.0)
-        reactionsLabel.isHidden = true
-        reactionsLabel.isUserInteractionEnabled = true
-        reactionsLabel.addGestureRecognizer(
-            UITapGestureRecognizer(target: self, action: #selector(handleReactionsTap)))
-        addSubview(reactionsLabel)
+        reactionsView.isHidden = true
+        reactionsView.onTap = { [weak self] in
+            self?.onReactionsTap?()
+        }
+        addSubview(reactionsView)
 
         editedLabel.font = UIFont.italicSystemFont(ofSize: 11.0)
         editedLabel.isHidden = true
@@ -816,5 +807,138 @@ final class EmojiOnlyTextField: UITextField {
             return mode
         }
         return super.textInputMode
+    }
+}
+
+/// KHANDAQ (0.2.61): the reactions under an entry as chips, as Android draws them
+/// (AirTranscript.styleReactionChip) and the desktop paints them (AirEntryNotes): each emoji with its
+/// count once more than one person chose it, in the caption and ink, on the raised plate with a hairline
+/// and round ends; ours on the selected plate with the strong line. One line from the start edge: a chip
+/// that does not fit is left out, as on the desktop. They had been a line of label text in ink-2.
+final class AirReactionChipsView: UIView {
+    /// A chip as Android sizes it: at least 28 high, 8 of padding at either end and 3 above and below
+    /// the text, 4 between chips.
+    static let chipHeight = KQSize.controlSmall
+    static let padding = KQSpace.x8
+    static let verticalPadding: CGFloat = 3
+    static let gap = KQSpace.x4
+
+    /// A tap anywhere on the chips.
+    var onTap: (() -> Void)?
+
+    private(set) var chips: [AirReactionChip] = []
+    private var plates: [UIView] = []
+    private var labels: [UILabel] = []
+    private var fontCategory = UIApplication.shared.preferredContentSizeCategory
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isAccessibilityElement = true
+        accessibilityTraits = UIAccessibilityTraitButton
+        addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// The chips in words, as VoiceOver says them.
+    var spokenText: String {
+        return ChatReactionsFormat.display(of: chips) ?? ""
+    }
+
+    /// The plates of the chips that show, for the tests: those that fit in the width.
+    var shownPlates: [UIView] {
+        return plates.filter { !$0.isHidden }
+    }
+
+    func bind(_ newChips: [AirReactionChip]) {
+        if newChips != chips || plates.count != newChips.count {
+            plates.forEach { $0.removeFromSuperview() }
+            plates = []
+            labels = []
+            for chip in newChips {
+                let plate = UIView()
+                plate.isUserInteractionEnabled = false
+                plate.layer.borderWidth = KQStroke.hairline
+                let label = UILabel()
+                label.font = AirReactionChipsView.font
+                label.text = chip.text
+                label.isAccessibilityElement = false
+                plate.addSubview(label)
+                addSubview(plate)
+                plates.append(plate)
+                labels.append(label)
+            }
+            chips = newChips
+        }
+        applyColors()
+        accessibilityLabel = spokenText
+        invalidateIntrinsicContentSize()
+        setNeedsLayout()
+    }
+
+    override var intrinsicContentSize: CGSize {
+        let sizes = labels.map { plateSize(for: $0) }
+        guard !sizes.isEmpty else {
+            return .zero
+        }
+        let width = sizes.reduce(0) { $0 + $1.width } + AirReactionChipsView.gap * CGFloat(sizes.count - 1)
+        return CGSize(width: width, height: sizes.map { $0.height }.max() ?? AirReactionChipsView.chipHeight)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let rightToLeft = effectiveUserInterfaceLayoutDirection == .rightToLeft
+        var taken: CGFloat = 0
+        var full = false
+        for (plate, label) in zip(plates, labels) {
+            let size = plateSize(for: label)
+            full = full || taken + size.width > bounds.width + 0.5
+            plate.isHidden = full
+            guard !full else {
+                continue
+            }
+            let x = rightToLeft ? bounds.width - taken - size.width : taken
+            plate.frame = CGRect(x: x, y: 0, width: size.width, height: size.height)
+            plate.layer.cornerRadius = size.height / 2
+            label.frame = plate.bounds.insetBy(dx: AirReactionChipsView.padding, dy: 0)
+            taken += size.width + AirReactionChipsView.gap
+        }
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        // The tabular font is made again for a new text size: it does not follow the size by itself.
+        let category = UIApplication.shared.preferredContentSizeCategory
+        if category != fontCategory {
+            fontCategory = category
+            labels.forEach { $0.font = AirReactionChipsView.font }
+            invalidateIntrinsicContentSize()
+            setNeedsLayout()
+        }
+        applyColors()
+    }
+
+    private static var font: UIFont {
+        return KQFont.tabular(KQFont.font(.caption))
+    }
+
+    private func plateSize(for label: UILabel) -> CGSize {
+        let text = label.intrinsicContentSize
+        return CGSize(width: ceil(text.width) + 2 * AirReactionChipsView.padding,
+                      height: max(AirReactionChipsView.chipHeight, ceil(text.height) + 2 * AirReactionChipsView.verticalPadding))
+    }
+
+    private func applyColors() {
+        for (plate, chip) in zip(plates, chips) {
+            plate.backgroundColor = chip.own ? KQColor.selected : KQColor.raised
+            plate.layer.borderColor = airCGColor(chip.own ? KQColor.lineStrong : KQColor.line)
+        }
+        labels.forEach { $0.textColor = KQColor.ink }
+    }
+
+    @objc private func tapped() {
+        onTap?()
     }
 }

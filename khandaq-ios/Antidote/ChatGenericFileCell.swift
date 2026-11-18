@@ -19,8 +19,8 @@ class ChatGenericFileCell: ChatMovableDateCell {
     var voiceMessageView: ChatVoiceMessageView!
     // KHANDAQ: the caption sent with a photo, shown under it in the same entry.
     var captionLabel: UILabel!
-    // KHANDAQ (#192): the reactions line under the attachment.
-    var reactionsLabel: UILabel!
+    // KHANDAQ (#192, 0.2.61): the reactions under the attachment, as chips.
+    var reactionsView: AirReactionChipsView!
     var onReactionsTap: (() -> Void)?
 
     let entry = AirEntryFrame()
@@ -51,10 +51,6 @@ class ChatGenericFileCell: ChatMovableDateCell {
 
     static var captionFont: UIFont {
         return KQFont.font(.body)
-    }
-
-    static var reactionsFont: UIFont {
-        return KQFont.font(.label)
     }
 
     var progressObject: ChatProgressProtocol? {
@@ -184,7 +180,7 @@ class ChatGenericFileCell: ChatMovableDateCell {
         canBeCopied = false
         // KHANDAQ (#192): files, photos and voice notes take reactions too.
         canBeReacted = true
-        bindReactions(fileModel.reactionsDisplay)
+        bindReactions(fileModel.reactionChips)
         onReactionsTap = { [weak self] in
             guard let cell = self else {
                 return
@@ -237,6 +233,11 @@ class ChatGenericFileCell: ChatMovableDateCell {
         fileRow.onAction = { [weak self] action in
             self?.perform(action)
         }
+        // A file without a preview opens with a tap on its row, as a photo does with a tap on its preview
+        // (0.2.61): the row had only the buttons of the transfer, so a file that was here opened nothing.
+        // A button of the row keeps its own tap: UIKit gives it to the control, not to this recognizer.
+        fileRow.addGestureRecognizer(
+            UITapGestureRecognizer(target: self, action: #selector(ChatGenericFileCell.fileRowTapped)))
 
         voiceMessageView = ChatVoiceMessageView()
         voiceMessageView.isHidden = true
@@ -251,20 +252,18 @@ class ChatGenericFileCell: ChatMovableDateCell {
         captionLabel.isHidden = true
         captionLabel.isAccessibilityElement = false
 
-        reactionsLabel = UILabel()
-        reactionsLabel.font = ChatGenericFileCell.reactionsFont
-        reactionsLabel.adjustsFontForContentSizeCategory = true
-        reactionsLabel.numberOfLines = 1
-        reactionsLabel.isHidden = true
-        reactionsLabel.isUserInteractionEnabled = true
-        reactionsLabel.isAccessibilityElement = false
-        reactionsLabel.addGestureRecognizer(
-            UITapGestureRecognizer(target: self, action: #selector(ChatGenericFileCell.reactionsLabelTapped)))
+        reactionsView = AirReactionChipsView()
+        reactionsView.isHidden = true
+        // The entry says the reactions (refreshSpokenText).
+        reactionsView.isAccessibilityElement = false
+        reactionsView.onTap = { [weak self] in
+            self?.onReactionsTap?()
+        }
 
         body.axis = .vertical
         body.alignment = .fill
         body.spacing = KQSpace.x6
-        [previewHolder, voiceMessageView, fileRow, captionLabel, reactionsLabel].forEach {
+        [previewHolder, voiceMessageView, fileRow, captionLabel, reactionsView].forEach {
             body.addArrangedSubview($0)
         }
         movableContentView.addSubview(body)
@@ -325,16 +324,9 @@ class ChatGenericFileCell: ChatMovableDateCell {
     func updateBytesPerSecond(_ bytesPerSecond: OCTToxFileSize) {}
 
     // KHANDAQ (#192): the reactions under the attachment, or none.
-    func bindReactions(_ display: String?) {
-        let text = display ?? ""
-        reactionsLabel.font = ChatGenericFileCell.reactionsFont
-        reactionsLabel.textColor = KQColor.ink2
-        reactionsLabel.text = text
-        reactionsLabel.isHidden = text.isEmpty
-    }
-
-    @objc func reactionsLabelTapped() {
-        onReactionsTap?()
+    func bindReactions(_ chips: [AirReactionChip]) {
+        reactionsView.bind(chips)
+        reactionsView.isHidden = chips.isEmpty
     }
 
     /// A tap on the preview: open it once it is here.
@@ -343,6 +335,14 @@ class ChatGenericFileCell: ChatMovableDateCell {
             return
         }
         openHandle?()
+    }
+
+    /// A tap on the row of a file: open it once it is here; a voice note plays from its own button.
+    @objc func fileRowTapped() {
+        guard fileModel?.isVoiceMessage == false else {
+            return
+        }
+        loadingViewPressed()
     }
 
     func voicePlayTogglePressed() {
@@ -509,8 +509,8 @@ private extension ChatGenericFileCell {
         if let caption = captionLabel.text, !captionLabel.isHidden {
             value.append(caption)
         }
-        if let reactions = reactionsLabel.text, !reactionsLabel.isHidden {
-            value.append(reactions)
+        if !reactionsView.isHidden {
+            value.append(reactionsView.spokenText)
         }
         if !isIncoming, let spoken = entryStatus().spokenText {
             value.append(spoken)

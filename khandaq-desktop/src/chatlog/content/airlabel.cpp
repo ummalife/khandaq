@@ -43,6 +43,48 @@ AirStyle& air()
 {
     return AirStyle::instance();
 }
+
+/** A reaction's chip, as Android draws it: 28 px high, 8 px of padding at either end, 4 px apart. */
+constexpr int reactionChipHeight = AirTokens::Size::controlSmall;
+constexpr int reactionChipPadding = AirTokens::Space::s8;
+constexpr int reactionChipGap = AirTokens::Space::s4;
+/** The room between the text of the entry and its chips. */
+constexpr int reactionChipsTop = AirTokens::Space::s4;
+/** The emoji of a chip: a picture of the pack, or the emoji font at this size, as tall as a line of
+ * the caption the count is set in. */
+constexpr int reactionEmojiSide = AirTokens::Size::iconSmall;
+
+QFont reactionCountFont()
+{
+    return air().font(AirTokens::TextRole::Caption);
+}
+
+QFont reactionEmojiFont()
+{
+    QFont font(SmileyPack::emojiFontFamily());
+    font.setPixelSize(reactionEmojiSide);
+    return font;
+}
+
+/** The room of a reaction's emoji: the picture, or what the emoji font takes, at least as wide. */
+qreal reactionEmojiWidth(const QString& emoji, bool picture)
+{
+    if (picture) {
+        return reactionEmojiSide;
+    }
+    return qMax<qreal>(reactionEmojiSide,
+                       std::ceil(QFontMetricsF(reactionEmojiFont()).horizontalAdvance(emoji)));
+}
+
+/** The room of a reaction's count with the gap before it; none for a reaction of one person. */
+qreal reactionCountWidth(int count)
+{
+    if (count <= 1) {
+        return 0;
+    }
+    return AirTokens::Space::s4
+           + std::ceil(QFontMetricsF(reactionCountFont()).horizontalAdvance(QString::number(count)));
+}
 } // namespace
 
 AirLabel::AirLabel(const QString& text_, AirTokens::TextRole role_, Ink ink_, int weight_,
@@ -481,7 +523,7 @@ qreal AirEntryNotes::height() const
     using namespace AirTokens;
     qreal total = 0;
     if (!shown.isEmpty()) {
-        total += air().lineHeight(TextRole::Label);
+        total += reactionChipsTop + reactionChipHeight;
     }
     if (edited) {
         total += 1 + air().lineHeight(TextRole::Caption);
@@ -501,6 +543,24 @@ QRectF AirEntryNotes::boundingRect() const
     return total > 0 ? QRectF(0, 0, width, total) : QRectF();
 }
 
+QVector<QRectF> AirEntryNotes::plates() const
+{
+    QVector<QRectF> result;
+    const bool rightToLeft = QGuiApplication::layoutDirection() == Qt::RightToLeft;
+    qreal taken = 0;
+    for (const Shown& reaction : shown) {
+        const qreal plate = reactionChipPadding + reactionEmojiWidth(reaction.emoji, !reaction.picture.isNull())
+                            + reactionCountWidth(reaction.count) + reactionChipPadding;
+        if (taken + plate > width) {
+            break;
+        }
+        const qreal start = rightToLeft ? width - taken - plate : taken;
+        result.append(QRectF(start, reactionChipsTop, plate, reactionChipHeight));
+        taken += plate + reactionChipGap;
+    }
+    return result;
+}
+
 void AirEntryNotes::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget)
 {
     using namespace AirTokens;
@@ -510,48 +570,45 @@ void AirEntryNotes::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
     const int room = static_cast<int>(width);
     qreal y = 0;
     if (!shown.isEmpty()) {
-        QFont font = air().font(TextRole::Label);
-        font.setWeight(QFont::Normal);
-        painter->setFont(font);
-        painter->setPen(air().color(Color::Ink2));
-        const QFontMetricsF metrics(font);
-        const qreal line = air().lineHeight(TextRole::Label);
-        // A picture as tall as the text; the reactions follow each other from the start edge, the
-        // count after its emoji, and stop where the column ends. Every place is worked out here,
-        // so the text keeps to the left of its own place in both directions.
-        const int lineHeight = static_cast<int>(line);
-        const int side = qMin(lineHeight, static_cast<int>(std::round(metrics.height())));
         const bool rightToLeft = QGuiApplication::layoutDirection() == Qt::RightToLeft;
-        const int textFlags = Qt::AlignLeft | Qt::AlignAbsolute | Qt::AlignVCenter | Qt::TextSingleLine;
-        qreal taken = 0;
-        for (const Shown& reaction : shown) {
-            const QString count = reaction.count > 1 ? QString::number(reaction.count) : QString();
-            const qreal emojiWidth = reaction.picture.isNull()
-                                         ? std::ceil(metrics.horizontalAdvance(reaction.emoji))
-                                         : side;
-            const qreal countWidth =
-                count.isEmpty() ? 0 : Space::s4 + std::ceil(metrics.horizontalAdvance(count));
-            const qreal reactionWidth = emojiWidth + countWidth;
-            if (taken + reactionWidth > width) {
-                break;
-            }
-            const qreal start = rightToLeft ? width - taken - reactionWidth : taken;
-            const int emojiX = static_cast<int>(rightToLeft ? start + countWidth : start);
-            if (reaction.picture.isNull()) {
-                AirPaint::ownText(*painter, QRect(emojiX, 0, static_cast<int>(emojiWidth), lineHeight),
-                                  textFlags, reaction.emoji);
+        const QColor ink = air().color(Color::Ink);
+        const QVector<QRectF> rects = plates();
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing, true);
+        for (int i = 0; i < rects.size(); ++i) {
+            const Shown& reaction = shown.at(i);
+            const QRectF plate = rects.at(i);
+            AirPaint::box(*painter, plate, plate.height() / 2, air().color(Color::Raised),
+                          air().color(Color::Line));
+            // The emoji at the start edge of the plate, the count after it.
+            const qreal emojiWidth = reactionEmojiWidth(reaction.emoji, !reaction.picture.isNull());
+            const qreal countWidth = reactionCountWidth(reaction.count);
+            const qreal emojiX = rightToLeft ? plate.right() - reactionChipPadding - emojiWidth
+                                             : plate.left() + reactionChipPadding;
+            const QRectF emojiBox(emojiX, plate.top(), emojiWidth, plate.height());
+            if (!reaction.picture.isNull()) {
+                const QRect pictureBox(qRound(emojiBox.center().x() - reactionEmojiSide / 2.0),
+                                       qRound(plate.center().y() - reactionEmojiSide / 2.0),
+                                       reactionEmojiSide, reactionEmojiSide);
+                reaction.picture.paint(painter, pictureBox);
             } else {
-                reaction.picture.paint(painter, QRect(emojiX, (lineHeight - side) / 2, side, side));
+                // A colour glyph takes no pen; a font without one draws it in ink.
+                painter->setFont(reactionEmojiFont());
+                painter->setPen(ink);
+                painter->drawText(emojiBox, Qt::AlignCenter | Qt::TextSingleLine, reaction.emoji);
             }
-            if (!count.isEmpty()) {
-                const int countX =
-                    static_cast<int>(rightToLeft ? start : start + emojiWidth + Space::s4);
-                AirPaint::ownText(*painter, QRect(countX, 0, static_cast<int>(countWidth), lineHeight),
-                                  textFlags, count);
+            if (countWidth > 0) {
+                const qreal numberWidth = countWidth - Space::s4;
+                const qreal countX = rightToLeft ? emojiBox.left() - countWidth : emojiBox.right() + Space::s4;
+                painter->setFont(reactionCountFont());
+                painter->setPen(ink);
+                painter->drawText(QRectF(countX, plate.top(), numberWidth, plate.height()),
+                                  Qt::AlignAbsolute | Qt::AlignLeft | Qt::AlignVCenter | Qt::TextSingleLine,
+                                  QString::number(reaction.count));
             }
-            taken += reactionWidth + Space::s12;
         }
-        y += line;
+        painter->restore();
+        y += reactionChipsTop + reactionChipHeight;
     }
     if (edited) {
         const QFont font = air().font(TextRole::Caption);

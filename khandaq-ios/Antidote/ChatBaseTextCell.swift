@@ -36,7 +36,7 @@ class ChatBaseTextCell: ChatMovableDateCell {
         bubbleView.bindReplyQuote(textModel.replyMeta, theme: theme)
         bubbleView.onReplyQuoteTap = textModel.onReplyQuoteTap
         // KHANDAQ (#192): reaction chips + tap-to-toggle (opens the quick bar via the delegate)
-        bubbleView.bindReactions(textModel.reactionsDisplay)
+        bubbleView.bindReactions(textModel.reactionChips)
         bubbleView.onReactionsTap = { [weak self] in
             guard let cell = self else { return }
             cell.delegate?.chatMovableDateCellReactPressed(cell)

@@ -525,6 +525,10 @@ final class AirEntryTextCell: ChatBaseTextCell {
             value.append(marks)
         }
         value.append(entry.message)
+        // KHANDAQ (0.2.61): the reactions, as the entry of a file says them.
+        if let reactions = entry.reactionsDisplay {
+            value.append(reactions)
+        }
         if entry.edited {
             value.append(String(localized: "message_edited_marker"))
         }

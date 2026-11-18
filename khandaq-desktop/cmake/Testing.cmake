@@ -54,6 +54,7 @@ auto_test(chatlog textformatter "" "")
 auto_test(net bsu "${${PROJECT_NAME}_RESOURCES}" "") # needs nodes list
 auto_test(chatlog chatlinestorage "" "")
 auto_test(chatlog chatlinecontentproxy "" "")
+auto_test(chatlog airentrynotes "res/air.qrc" "") # the Plex faces
 auto_test(persistence paths "" "")
 auto_test(persistence dbschema "" "dbutility_library")
 auto_test(persistence/dbupgrade dbTo11 "" "dbutility_library")

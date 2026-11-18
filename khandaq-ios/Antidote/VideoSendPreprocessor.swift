@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import AVFoundation
+import ImageIO
 import MobileCoreServices
 import PhotosUI
 import UIKit
@@ -643,7 +644,8 @@ enum PickedMediaLoader {
     }
 }
 
-/// Background thumbnail + duration for inline video bubbles in chat.
+/// Background thumbnail + duration for inline video bubbles in chat, and the reading of a photo's size
+/// and preview. Neither depends on how large the file is.
 enum ChatFileMediaLoader {
     private static let queue = DispatchQueue(label: "khandaq.chat.filemedia", qos: .utility)
     private static let imageCache = NSCache<NSString, UIImage>()
@@ -673,6 +675,43 @@ enum ChatFileMediaLoader {
             default:
                 return false
         }
+    }
+
+    /// The pixel size of a photo as it is seen: a photo turned by its EXIF orientation (a portrait taken
+    /// with the phone on its side) is as tall as it is shown, not as it is stored. Reads the header only.
+    static func imagePixelSize(at path: String) -> CGSize? {
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, options),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, options) as? [CFString: Any],
+              let width = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
+              let height = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue,
+              width > 0, height > 0 else {
+            return nil
+        }
+        // Orientations 5 to 8 turn the picture by a quarter.
+        let orientation = (props[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+        return (5...8).contains(orientation) ? CGSize(width: height, height: width) : CGSize(width: width, height: height)
+    }
+
+    /// A photo of any size read down to `maxPixelSide` on its longer side and turned by its EXIF
+    /// orientation. ImageIO decodes only what the smaller picture needs, so a camera original of tens of
+    /// megabytes costs the memory of its preview, where UIImage(contentsOfFile:) decoded all of it.
+    static func downsampledImage(at path: String, maxPixelSide: CGFloat) -> UIImage? {
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard maxPixelSide >= 1,
+              let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, sourceOptions) else {
+            return nil
+        }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: Int(maxPixelSide.rounded(.up)),
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return UIImage(cgImage: image)
     }
 
     static func cachedPreview(for path: String) -> Preview? {

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-18T00:35:51Z",
+  "generated_at": "2026-11-18T08:27:23Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,57 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.59",
+      "date": "2026-11-18",
+      "title": "Big group files reach a member who lost the network",
+      "summary": "A big file sent to a group now reaches a member whose network dropped for a few seconds while it came, on every platform. On Android, a group you leave or delete with nobody else online no longer comes back when Khandaq is closed right after. On the desktop, a friend's invite brings you into a group you joined by its ID. Over a reply to your own message, the bar now says In reply to yourself.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "Big files in groups reach everyone",
+          "description": "A big file sent to a group stopped for a member who lost the network for a few seconds while it came, and the sender gave it up about a minute later. The Tox core library that all Khandaq apps share now keeps what arrives out of order, confirms what it got, and starts clean with a member who connects again. On Android, a file is no longer taken as downloaded while parts of it are missing, and it goes on when its sender is back. A member whose network address changes, for example from Wi-Fi to mobile data, is reached again after about a minute, and the file goes on from there.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux",
+            "android",
+            "ios"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Android: a group you leave stays left",
+          "description": "A group you left or deleted while no other member was online could come back if Khandaq was closed right after. It now stays gone.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Desktop: joining a group by its ID",
+          "description": "After you joined a group by its ID, an invite from a friend inside it did not bring you in, and you stayed out of the group. The invite now completes the join.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "In reply to yourself",
+          "description": "Over a reply to your own message, the bar above the field said In reply to You, which read wrong in Russian. It now says In reply to yourself.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux",
+            "android",
+            "ios"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.58",
       "date": "2026-11-18",

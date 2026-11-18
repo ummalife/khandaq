@@ -1,0 +1,4 @@
+{
+  "en-US": "• A big file sent to a group now reaches a member whose network dropped for a few seconds while it came.\n• A group you leave or delete stays gone, even if you close Khandaq right after.\n• Over a reply to your own message, the bar says \"In reply to yourself\".",
+  "ru-RU": "• Большой файл в группе теперь доходит до участника, у которого на несколько секунд пропадала сеть.\n• Группа, из которой вы вышли или которую удалили, не возвращается, даже если сразу закрыть Khandaq.\n• Над ответом на своё сообщение написано «В ответ себе»."
+}

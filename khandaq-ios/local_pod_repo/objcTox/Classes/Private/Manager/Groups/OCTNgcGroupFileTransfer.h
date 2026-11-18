@@ -86,6 +86,12 @@ typedef void (^OCTNgcGroupFileTransferIncomingDroppedBlock)(uint32_t groupNumber
 /// queues that send, never on the main one. Set it before the first request comes; without it such a request is not
 /// served.
 @property (atomic, copy, nullable) OCTNgcGroupFileTransferSendPrivatePacketBlock sendPrivatePacketBlock;
+/// KHANDAQ (0.2.60): where a file this device sent the group with `msgIdHex` is on the device, while it may go again;
+/// reply nil when the app keeps no such file. A member that missed chunks of a file of ours asks for them; after a
+/// restart, or once the file left what this transfer keeps (24 files), the request went unanswered and the member
+/// gave the file up a minute later. Called on the main thread, where the Realm lives; `reply` takes any thread.
+@property (atomic, copy, nullable) void (^sentFileLookupBlock)
+    (uint32_t groupNumber, NSString *msgIdHex, void (^reply)(NSString *_Nullable filePath));
 
 - (instancetype)initWithSendPacketBlock:(OCTNgcGroupFileTransferSendPacketBlock)sendPacketBlock
                 incomingFilesDirectory:(NSString *(^)(uint32_t groupNumber))incomingFilesDirectoryBlock
@@ -114,6 +120,10 @@ typedef void (^OCTNgcGroupFileTransferIncomingDroppedBlock)(uint32_t groupNumber
             completion:(void (^)(BOOL success, NSError *_Nullable error))completion;
 
 + (BOOL)shouldUseChunkedTransferForFileSize:(uint64_t)fileSize;
+/// KHANDAQ (0.2.60): whether a file this device sent a group, kept at `filePath`, may answer the members that ask for
+/// chunks of it again: a file there, `fileSize` bytes as it went, and not changed since it went (`sentAt`, seconds since
+/// 1970) give or take the 2 s steps of FAT. A file changed since would give a member chunks of two contents.
++ (BOOL)sentFileAtPath:(NSString *)filePath servableWithSize:(uint64_t)fileSize sentAt:(NSTimeInterval)sentAt;
 + (NSString *)generateMsgIdHex;
 
 - (void)cancelSendForMsgIdHex:(NSString *)msgIdHex;

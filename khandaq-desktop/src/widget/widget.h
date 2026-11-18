@@ -253,6 +253,11 @@ public slots:
     void onGroupFileSendStarted(int groupnumber, const QString& fileName, const QString& localPath,
                                 qint64 fileSize, const QByteArray& fileId);
     void onGroupFileSendProgress(const QByteArray& fileId, qint64 bytesSent);
+    /**
+     * KHANDAQ (0.2.60): a member asks for chunks of a group file the node does not hold: the
+     * history says whether it is ours and may still go (Core::restoreSentGroupFile).
+     */
+    void onSentGroupFileWanted(int groupnumber, const QByteArray& chatId, const QByteArray& fileId);
     void onGroupFileSendWaiting(const QByteArray& fileId, bool waiting);
     void onGroupFileSendFailed(const QByteArray& fileId);
     /** 0.2.57: a file that comes into a group in chunks shows from its BEGIN, as under way. */

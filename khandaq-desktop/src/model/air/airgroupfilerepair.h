@@ -21,6 +21,7 @@
 
 #include <QByteArray>
 #include <QHash>
+#include <QList>
 #include <QVector>
 #include <QtGlobal>
 
@@ -242,5 +243,71 @@ private:
     /** When each file last began to go whole again, while that is within wholeGapMs. */
     QHash<QByteArray, qint64> wholeBeganMs;
 };
+
+/**
+ * 0.2.60: the requests for files this client does not hold, while the history says whether they
+ * are files of ours. What a client sent a group it keeps a while in memory; after a restart, or
+ * once it kept the file too long, a member that missed chunks of it asked in vain and gave the
+ * file up a minute later (FileArrival::silenceLimitMs). A request for a file we do not hold now
+ * asks the history (Ask), and the requests that come meanwhile wait for its answer (Wait): a
+ * receiver asks again only some seconds later, so the ones that came are answered once the file
+ * is found. iOS asks the whole group, so most of these files are not ours: a file the history does
+ * not know is not looked up again for notOursMs (Drop).
+ */
+class SentFileLookups
+{
+public:
+    /** The most requests one file keeps while it is looked up: the newest of each member. */
+    static constexpr int maxRequests = 4;
+    /** The most files kept at once; past it the oldest is forgotten. */
+    static constexpr int maxKept = 256;
+    /** A lookup the history did not answer within this is asked again. */
+    static constexpr qint64 answerWaitMs = 30000;
+    static constexpr qint64 notOursMs = 30 * 60 * 1000;
+
+    enum class Step
+    {
+        Ask,
+        Wait,
+        Drop,
+    };
+    /** A request of a member for one of the files of a group. */
+    struct Request
+    {
+        uint32_t peer = 0;
+        QByteArray packet;
+    };
+
+    /** A request for fileId came from peer at nowMs (a steady clock): what to do with it. */
+    Step request(const QByteArray& fileId, uint32_t peer, const QByteArray& packet, qint64 nowMs);
+    /** The history found fileId ours: the requests that wait for it, to answer now. */
+    QList<Request> found(const QByteArray& fileId);
+    /** The history does not know fileId: its requests go, and it is dropped for notOursMs. */
+    void notFound(const QByteArray& fileId, qint64 nowMs);
+    int kept() const;
+
+private:
+    struct Entry
+    {
+        bool asked = false;
+        /** When the history was asked, or said the file is not ours. */
+        qint64 sinceMs = 0;
+        /** The order in which the entries were made: the lowest is the oldest. */
+        qint64 order = 0;
+        QList<Request> requests;
+    };
+    QHash<QByteArray, Entry> entries;
+    qint64 made = 0;
+};
+
+/**
+ * 0.2.60: whether a file we sent a group, as the history keeps it, may answer the members that ask
+ * for chunks of it again: a file where it went from (isFile), as long as it was (bytes == size), and
+ * not changed since it went (modifiedMs, the time it went sentMs, both ms since the epoch). A file
+ * changed since would give a member chunks of two contents in one file. modifiedSlackMs covers the
+ * file systems that keep the time of a change in steps of 2 s (FAT).
+ */
+bool sentFileServable(bool isFile, qint64 bytes, qint64 modifiedMs, qint64 size, qint64 sentMs);
+constexpr qint64 modifiedSlackMs = 2000;
 
 } // namespace Air

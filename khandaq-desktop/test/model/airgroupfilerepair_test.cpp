@@ -187,6 +187,12 @@ private slots:
     void aMemberThatHoldsNothingAnyMoreGetsTheWholeFileInstead();
     void whatDidNotGoYetIsNotSentAgain();
     void theWholeFileCountsAgainstTheShare();
+    void aFileWeDoNotHoldIsLookedUpOnce();
+    void theNewestRequestOfEachMemberWaitsForTheHistory();
+    void aFileNotOursIsDroppedForHalfAnHour();
+    void aLookupTheHistoryDidNotAnswerIsAskedAgain();
+    void theOldestLookupGoesFirst();
+    void aSentFileServesWhileItIsAsItWent();
 };
 
 void TestAirGroupFileRepair::aListIsReadAsIosWritesIt()
@@ -628,6 +634,126 @@ void TestAirGroupFileRepair::theWholeFileCountsAgainstTheShare()
     // Another member has a share of its own.
     QVERIFY(answers(budget, memberB, wholeFile(), fileChunks, false, resend,
                     ResendBudget::chunkShare * ResendBudget::wholeGapMs));
+}
+
+/**
+ * @brief 0.2.60: a request for a file we do not hold asks the history once; the others wait for it,
+ * and are answered once the history finds the file ours.
+ */
+void TestAirGroupFileRepair::aFileWeDoNotHoldIsLookedUpOnce()
+{
+    SentFileLookups lookups;
+    const QByteArray file(32, 'f');
+    QCOMPARE(lookups.request(file, 1, QByteArray("first"), 0), SentFileLookups::Step::Ask);
+    QCOMPARE(lookups.request(file, 2, QByteArray("second"), 1000), SentFileLookups::Step::Wait);
+    // Another file is a lookup of its own.
+    QCOMPARE(lookups.request(QByteArray(32, 'g'), 1, QByteArray("other"), 1000),
+             SentFileLookups::Step::Ask);
+
+    const QList<SentFileLookups::Request> requests = lookups.found(file);
+    QCOMPARE(requests.size(), 2);
+    QCOMPARE(requests.at(0).peer, uint32_t{1});
+    QCOMPARE(requests.at(0).packet, QByteArray("first"));
+    QCOMPARE(requests.at(1).peer, uint32_t{2});
+    QCOMPARE(requests.at(1).packet, QByteArray("second"));
+    // Found, the file is held again: the lookup is over.
+    QCOMPARE(lookups.kept(), 1);
+    QVERIFY(lookups.found(file).isEmpty());
+}
+
+/**
+ * @brief A member that asks again while the history is asked names what it misses now: its newest
+ * request replaces the one before. A few members wait at most.
+ */
+void TestAirGroupFileRepair::theNewestRequestOfEachMemberWaitsForTheHistory()
+{
+    SentFileLookups lookups;
+    const QByteArray file(32, 'f');
+    QCOMPARE(lookups.request(file, 1, QByteArray("old"), 0), SentFileLookups::Step::Ask);
+    QCOMPARE(lookups.request(file, 1, QByteArray("new"), 4000), SentFileLookups::Step::Wait);
+    for (uint32_t peer = 2; peer < 10; ++peer) {
+        QCOMPARE(lookups.request(file, peer, QByteArray("x"), 5000), SentFileLookups::Step::Wait);
+    }
+    const QList<SentFileLookups::Request> requests = lookups.found(file);
+    QCOMPARE(requests.size(), SentFileLookups::maxRequests);
+    QCOMPARE(requests.at(0).peer, uint32_t{1});
+    QCOMPARE(requests.at(0).packet, QByteArray("new"));
+}
+
+/**
+ * @brief iOS asks the whole group: a file the history does not know is another member's, and is
+ * not looked up again for half an hour.
+ */
+void TestAirGroupFileRepair::aFileNotOursIsDroppedForHalfAnHour()
+{
+    SentFileLookups lookups;
+    const QByteArray file(32, 'f');
+    QCOMPARE(lookups.request(file, 1, QByteArray("a"), 0), SentFileLookups::Step::Ask);
+    QCOMPARE(lookups.request(file, 2, QByteArray("b"), 100), SentFileLookups::Step::Wait);
+    lookups.notFound(file, 200);
+    QVERIFY(lookups.found(file).isEmpty());
+
+    QCOMPARE(lookups.request(file, 1, QByteArray("c"), 300), SentFileLookups::Step::Ask);
+    lookups.notFound(file, 400);
+    QCOMPARE(lookups.request(file, 1, QByteArray("d"), 400 + SentFileLookups::notOursMs - 1),
+             SentFileLookups::Step::Drop);
+    QCOMPARE(lookups.request(file, 1, QByteArray("e"), 400 + SentFileLookups::notOursMs),
+             SentFileLookups::Step::Ask);
+}
+
+/** @brief A lookup with no answer does not hold the file back for good: it is asked again. */
+void TestAirGroupFileRepair::aLookupTheHistoryDidNotAnswerIsAskedAgain()
+{
+    SentFileLookups lookups;
+    const QByteArray file(32, 'f');
+    QCOMPARE(lookups.request(file, 1, QByteArray("a"), 0), SentFileLookups::Step::Ask);
+    QCOMPARE(lookups.request(file, 1, QByteArray("b"), SentFileLookups::answerWaitMs - 1),
+             SentFileLookups::Step::Wait);
+    QCOMPARE(lookups.request(file, 1, QByteArray("c"), SentFileLookups::answerWaitMs),
+             SentFileLookups::Step::Ask);
+    const QList<SentFileLookups::Request> requests = lookups.found(file);
+    QCOMPARE(requests.size(), 1);
+    QCOMPARE(requests.at(0).packet, QByteArray("c"));
+}
+
+/** @brief Past the files it keeps, the oldest lookup is forgotten, not the new one. */
+void TestAirGroupFileRepair::theOldestLookupGoesFirst()
+{
+    SentFileLookups lookups;
+    for (int i = 0; i < SentFileLookups::maxKept; ++i) {
+        QByteArray file(32, 'f');
+        qToBigEndian<qint32>(i, file.data());
+        QCOMPARE(lookups.request(file, 1, QByteArray("a"), i), SentFileLookups::Step::Ask);
+    }
+    QCOMPARE(lookups.kept(), SentFileLookups::maxKept);
+    const QByteArray newest(32, 'n');
+    QCOMPARE(lookups.request(newest, 1, QByteArray("a"), SentFileLookups::maxKept),
+             SentFileLookups::Step::Ask);
+    QCOMPARE(lookups.kept(), SentFileLookups::maxKept);
+    QByteArray oldest(32, 'f');
+    qToBigEndian<qint32>(0, oldest.data());
+    QVERIFY(lookups.found(oldest).isEmpty());
+    QCOMPARE(lookups.found(newest).size(), 1);
+}
+
+/**
+ * @brief A file of ours from the history answers a member only as it went: there, as long, and
+ * not changed since, give or take the 2 s steps of FAT.
+ */
+void TestAirGroupFileRepair::aSentFileServesWhileItIsAsItWent()
+{
+    const qint64 sentMs = 1700000000000;
+    QVERIFY(sentFileServable(true, 5000, sentMs - 60000, 5000, sentMs));
+    QVERIFY(sentFileServable(true, 5000, sentMs + modifiedSlackMs, 5000, sentMs));
+    // Changed since it went.
+    QVERIFY(!sentFileServable(true, 5000, sentMs + modifiedSlackMs + 1, 5000, sentMs));
+    // Another length, gone, or a folder.
+    QVERIFY(!sentFileServable(true, 4999, sentMs - 60000, 5000, sentMs));
+    QVERIFY(!sentFileServable(false, 5000, sentMs - 60000, 5000, sentMs));
+    // What the history does not know.
+    QVERIFY(!sentFileServable(true, 0, sentMs - 60000, 0, sentMs));
+    QVERIFY(!sentFileServable(true, 5000, sentMs - 60000, 5000, -1));
+    QVERIFY(!sentFileServable(true, 5000, -1, 5000, sentMs));
 }
 
 QTEST_GUILESS_MAIN(TestAirGroupFileRepair)

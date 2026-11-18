@@ -33,6 +33,7 @@
 - (void)setupHskAnnounceIfNeeded;
 - (void)schedulePendingGroupMessagesFlushForChatUniqueIdentifier:(NSString *)chatUniqueIdentifier;
 - (BOOL)prepareChatForGroupActivity:(OCTChat *)chat peerName:(NSString *)peerName error:(NSError **)error;
+- (nullable NSString *)sentGroupFilePathForGroupNumber:(uint32_t)groupNumber msgIdHex:(NSString *)msgIdHex;
 
 @end
 
@@ -862,6 +863,81 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
     XCTAssertEqual(mocks.count, 3u);
 }
 
+#pragma mark - A file of ours after a restart
+
+// KHANDAQ (0.2.60): a member that missed a chunk of a file this device sent asks for it after a restart of the app,
+// when the transfer holds nothing of the file. It went unanswered, and the member gave the file up a minute later; the
+// file of our own row of the group's chat goes again now, read on the main thread, where the Realm lives.
+- (void)testAFileOfOursFromTheRealmAnswersAMemberAfterARestart
+{
+    OCTChat *chat = [self groupChat];
+    NSData *payload = [self generatedBytesOfLength:100000];
+    NSData *msgId = [self generatedBytesOfLength:32];
+    [self sentRowOfFile:payload named:@"talk.mp4" msgId:msgId inChat:chat];
+    NSDictionary *rig = [self restartedSenderRig];
+
+    // The member misses the second chunk and asks for it as iOS asks: a list of one.
+    [rig[@"transfer"] handleIncomingPacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                                   peerId:kGroupRealmTestsPeerId
+                                         peerPublicKeyHex:kGroupRealmTestsPeerKeyHex
+                                                     data:[self requestWithMsgId:msgId chunk:1]];
+
+    __block NSArray<NSData *> *chunks = nil;
+    [self waitUntil:^BOOL {
+        chunks = [self chunksSentByRig:rig];
+        return chunks.count > 0;
+    }];
+
+    XCTAssertEqualObjects(rig[@"offMain"], @[], @"the Realm was read off the main thread");
+    XCTAssertEqualObjects(rig[@"lookups"], @[[OCTTox binToHexString:(uint8_t *)msgId.bytes length:msgId.length].lowercaseString]);
+    XCTAssertEqual(chunks.count, 1u, @"the chunk the member asked for did not go again");
+
+    NSData *chunk = chunks.firstObject;
+    const NSUInteger chunkPayload = 37000 - 48;
+
+    if (chunk.length <= 48) {
+        return;  // the failure is told above; there are no bytes of a chunk to read
+    }
+
+    XCTAssertEqual(CFSwapInt32BigToHost(*(const uint32_t *)((const uint8_t *)chunk.bytes + 40)), 1u);
+    XCTAssertEqualObjects([chunk subdataWithRange:NSMakeRange(48, chunk.length - 48)],
+                          [payload subdataWithRange:NSMakeRange(chunkPayload, chunkPayload)]);
+}
+
+// KHANDAQ (0.2.60): this client asks the whole group, so most requests name another member's file: it is looked up
+// once, not for each request. A file of ours changed since it went never goes again: a member would get chunks of two
+// contents in one file.
+- (void)testAFileNotOursIsLookedUpOnceAndOneChangedSinceItWentNeverGoes
+{
+    OCTChat *chat = [self groupChat];
+    NSData *changedId = [self generatedBytesOfLength:32];
+    NSString *changedPath = [self sentRowOfFile:[self generatedBytesOfLength:100000] named:@"edited.mov" msgId:changedId inChat:chat];
+    NSDate *later = [NSDate dateWithTimeIntervalSinceNow:60];
+    XCTAssertTrue([[NSFileManager defaultManager] setAttributes:@{NSFileModificationDate: later}
+                                                   ofItemAtPath:changedPath
+                                                          error:nil]);
+    NSDictionary *rig = [self restartedSenderRig];
+    OCTNgcGroupFileTransfer *transfer = rig[@"transfer"];
+    NSData *othersId = [self generatedBytesOfLength:32];
+
+    for (int i = 0; i < 3; i++) {
+        for (NSData *msgId in @[othersId, changedId]) {
+            [transfer handleIncomingPacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                                   peerId:kGroupRealmTestsPeerId
+                                         peerPublicKeyHex:kGroupRealmTestsPeerKeyHex
+                                                     data:[self requestWithMsgId:msgId chunk:0]];
+        }
+        // Let the lookups come back between the rounds of requests.
+        [self waitUntil:^BOOL {
+            return [rig[@"lookups"] count] >= 2;
+        }];
+    }
+
+    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.3]];
+    XCTAssertEqual([rig[@"lookups"] count], 2u, @"%@", rig[@"lookups"]);
+    XCTAssertEqualObjects([self chunksSentByRig:rig], @[], @"a file not ours, or changed since it went, went again");
+}
+
 #pragma mark - Rig
 
 /** The saves of the profile `dataSource` is asked for, as they come; the tox queue of `tox` runs its blocks in place. */
@@ -1094,6 +1170,100 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
     } deliveryReceiptBlock:^(OCTChat *theChat, uint32_t messageId, uint32_t peerId) {
     } fileSyncConfirmationBlock:^(OCTChat *theChat, NSString *msgIdHashHex, uint32_t syncerPeerId) {
     }];
+}
+
+/** Our own row of a file we sent `chat`, kept at a path of its own; the path. */
+- (NSString *)sentRowOfFile:(NSData *)payload named:(NSString *)fileName msgId:(NSData *)msgId inChat:(OCTChat *)chat
+{
+    NSString *uploads = [self.root stringByAppendingPathComponent:@"Uploads"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:uploads withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *filePath = [uploads stringByAppendingPathComponent:fileName];
+    XCTAssertTrue([payload writeToFile:filePath atomically:YES]);
+
+    // A moment later than the file: our row is made when it goes.
+    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    [self.realmManager addGroupMessageWithFileName:fileName
+                                          fileSize:payload.length
+                                          filePath:filePath
+                                          fileType:OCTMessageFileTypeReady
+                                              chat:chat
+                                            peerId:0
+                                           fileUTI:nil
+                                 groupMsgIdHashHex:[OCTTox binToHexString:(uint8_t *)msgId.bytes length:msgId.length]
+                             groupTransferProgress:1.0f];
+    return filePath;
+}
+
+/**
+ * A file transfer as the app makes it after a restart: it holds no file of ours, and asks the submanager for them as
+ * the app does (sentGroupFilePathForGroupNumber:msgIdHex:). "sent" keeps what goes to the group, "lookups" the files
+ * asked for, "offMain" a lookup off the main thread, "submanager" and "dataSource" what must live as long as it.
+ */
+- (NSDictionary *)restartedSenderRig
+{
+    id dataSource = OCMProtocolMock(@protocol(OCTSubmanagerDataSource));
+    OCMStub([dataSource managerGetRealmManager]).andReturn(self.realmManager);
+    OCTSubmanagerGroupsImpl *submanager = [OCTSubmanagerGroupsImpl new];
+    submanager.dataSource = dataSource;
+
+    NSMutableArray<NSData *> *sent = [NSMutableArray new];
+    NSMutableArray<NSString *> *lookups = [NSMutableArray new];
+    NSMutableArray<NSString *> *offMain = [NSMutableArray new];
+
+    OCTNgcGroupFileTransfer *transfer = [[OCTNgcGroupFileTransfer alloc] initWithSendPacketBlock:^BOOL (uint32_t groupNumber, NSData *packet, NSError **error) {
+        @synchronized (sent) {
+            [sent addObject:packet];
+        }
+        return YES;
+    } incomingFilesDirectory:^NSString *(uint32_t groupNumber) {
+        return @"";
+    } incomingBeginBlock:nil
+      incomingCompleteBlock:^(uint32_t groupNumber, uint32_t peerId, NSString *senderPublicKeyHex,
+                              NSString *fileName, NSString *filePath, uint64_t fileSize, NSString *msgIdHex) {
+    } transferProgressBlock:nil];
+
+    transfer.sentFileLookupBlock = ^(uint32_t groupNumber, NSString *msgIdHex, void (^reply)(NSString *)) {
+        @synchronized (lookups) {
+            [lookups addObject:msgIdHex];
+            if (! [NSThread isMainThread]) {
+                [offMain addObject:msgIdHex];
+            }
+        }
+        reply([submanager sentGroupFilePathForGroupNumber:groupNumber msgIdHex:msgIdHex]);
+    };
+
+    return @{
+        @"transfer": transfer,
+        @"sent": sent,
+        @"lookups": lookups,
+        @"offMain": offMain,
+        @"submanager": submanager,
+        @"dataSource": dataSource,
+    };
+}
+
+/** A request for chunk `chunk` of the file `msgId`, as iOS sends it: a list of one. */
+- (NSData *)requestWithMsgId:(NSData *)msgId chunk:(uint32_t)chunk
+{
+    NSMutableData *request = [self packetOfType:0x14 msgId:msgId];
+    [self appendU32:1 toPacket:request];
+    [self appendU32:chunk toPacket:request];
+    return request;
+}
+
+/** The chunks (0x13) the rig sent the group so far. */
+- (NSArray<NSData *> *)chunksSentByRig:(NSDictionary *)rig
+{
+    NSMutableArray<NSData *> *sent = rig[@"sent"];
+    NSMutableArray<NSData *> *chunks = [NSMutableArray new];
+    @synchronized (sent) {
+        for (NSData *packet in sent) {
+            if (packet.length > 48 && ((const uint8_t *)packet.bytes)[7] == 0x13) {
+                [chunks addObject:packet];
+            }
+        }
+    }
+    return chunks;
 }
 
 - (OCTChat *)groupChat

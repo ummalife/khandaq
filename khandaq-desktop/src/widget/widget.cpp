@@ -28,6 +28,7 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QHash>
 #include <QInputDialog>
 #include <QMessageBox>
@@ -93,6 +94,7 @@
 #include "src/model/friend.h"
 #include "src/model/group.h"
 #include "src/model/air/aircommunity.h"
+#include "src/model/air/airgroupfilerepair.h"
 #include "src/model/air/airmedia.h"
 #include "src/model/air/airmessagemarks.h"
 #include "src/model/air/airpreferences.h"
@@ -954,6 +956,7 @@ void Widget::onCoreChanged(Core& core_)
     connect(core, &Core::groupFileReceived, this, &Widget::onGroupFileReceived);
     connect(core, &Core::groupFileSent, this, &Widget::onGroupFileSent);
     connect(core, &Core::groupFileSendStarted, this, &Widget::onGroupFileSendStarted);
+    connect(core, &Core::sentGroupFileWanted, this, &Widget::onSentGroupFileWanted);
     connect(core, &Core::groupFileSendProgress, this, &Widget::onGroupFileSendProgress);
     connect(core, &Core::groupFileSendWaiting, this, &Widget::onGroupFileSendWaiting);
     connect(core, &Core::groupFileSendFailed, this, &Widget::onGroupFileSendFailed);
@@ -3253,6 +3256,29 @@ void Widget::onGroupFileSent(int groupnumber, const QString& fileName, const QSt
     file.resumeFileId = fileId;
 
     dispatchGroupFileToChatLog(groupId, core->getSelfPublicKey(), file);
+}
+
+void Widget::onSentGroupFileWanted(int groupnumber, const QByteArray& chatId,
+                                   const QByteArray& fileId)
+{
+    History* const history = profile.getHistory();
+    if (history != nullptr && chatId.size() == GroupId::size) {
+        const History::SentFile sent = history->sentFile(GroupId(chatId), fileId);
+        const QFileInfo file(sent.filePath);
+        if (!sent.filePath.isEmpty()
+            && Air::sentFileServable(file.isFile(), file.size(),
+                                     file.lastModified().toMSecsSinceEpoch(), sent.size,
+                                     sent.sentMs)) {
+            core->restoreSentGroupFile(groupnumber, chatId, fileId, sent.fileName, sent.filePath,
+                                       sent.size);
+            return;
+        }
+        if (!sent.filePath.isEmpty()) {
+            qDebug() << "A member asks for" << sent.fileName
+                     << "again, which is ours but no longer as it went";
+        }
+    }
+    core->sentGroupFileUnknown(fileId);
 }
 
 void Widget::onGroupFileSendStarted(int groupnumber, const QString& fileName,

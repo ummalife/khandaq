@@ -496,7 +496,7 @@ ALL=(
     "xz 5.8.4" "jpeg 3.2.1" "tiff 4.7.2" "webp 1.6.0" "freetype 2.15.0"
     "sodium 1.0.22" "opus 1.6.1" "vpx 1.16.0" "x264 r3222" "ffmpeg 8.1.3+mov-hardening"
     "openal 1.25.2" "sqlcipher 4.16.0" "qrencode 4.1.1" "libexif 0.6.26"
-    "toxcore 2e7a0675+msgv3-cap+gc-search-key+ftv2-stale-accept+gc-ipv6-mtu+gc-recv-gap+join-by-id+gc-rehandshake" "toxext 0.0.3" "toxext_messages 0.0.3"
+    "toxcore 2e7a0675+msgv3-cap+gc-search-key+ftv2-stale-accept+gc-ipv6-mtu+gc-recv-gap+join-by-id+gc-rehandshake+gc-roaming" "toxext 0.0.3" "toxext_messages 0.0.3"
 )
 
 # wanted NAME REQUESTED... -> whether NAME is among the requested libraries

@@ -156,6 +156,38 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 @implementation OCTNgcSentChunkedFile
 @end
 
+// KHANDAQ (0.2.60): the requests for files of ours this transfer no longer holds, while the app looks them up
+// (sentFileLookupBlock); the desktop's Air::SentFileLookups, with its numbers. A request for such a file asks the app
+// once; those that come meanwhile wait for its answer, the newest of each member, a few at most, and are answered
+// once the file is found: a member asks again only some seconds later. This client asks the whole group, so most of
+// these files are another member's: one the app does not know is not looked up again for half an hour.
+static const NSUInteger kOCTNgcSentFileLookupMaxRequests = 4;
+static const NSUInteger kOCTNgcSentFileLookupMaxKept = 256;
+static const uint64_t kOCTNgcSentFileLookupAnswerWaitMs = 30000;
+static const uint64_t kOCTNgcSentFileLookupNotOursMs = 30ULL * 60ULL * 1000ULL;
+// The steps of 2 s in which FAT keeps the time of a change.
+static const NSTimeInterval kOCTNgcSentFileModifiedSlack = 2.0;
+
+typedef NS_ENUM(NSInteger, OCTNgcSentFileLookupStep) {
+    OCTNgcSentFileLookupStepAsk,
+    OCTNgcSentFileLookupStepWait,
+    OCTNgcSentFileLookupStepDrop,
+};
+
+@interface OCTNgcSentFileLookup : NSObject
+// Whether the app is asked now; NO once it said the file is not ours.
+@property (nonatomic, assign) BOOL asked;
+// When the app was asked, or said the file is not ours (nowMsBlock).
+@property (nonatomic, assign) uint64_t sinceMs;
+// The order in which the lookups were made: the lowest is the oldest.
+@property (nonatomic, assign) uint64_t order;
+// The requests that wait: each a peer id (NSNumber) and its packet (NSData).
+@property (nonatomic, strong) NSMutableArray<NSArray *> *requests;
+@end
+
+@implementation OCTNgcSentFileLookup
+@end
+
 /**
  * KHANDAQ (0.2.57): the pace of the group file packets this device sends: Android's NgcUploadPace and the desktop's
  * Air::UploadPace, with their numbers.
@@ -277,6 +309,10 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableArray<OCTNgcOrphanChunk *> *> *orphanChunks;
 @property (nonatomic, strong) NSMutableSet<NSString *> *cancelledMsgIdHexes;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, OCTNgcSentChunkedFile *> *sentChunkedFiles;
+// KHANDAQ (0.2.60): the files of ours looked up now or lately (sentFileLookupBlock), by msg id hex in lower case.
+// Guarded by the object.
+@property (nonatomic, strong) NSMutableDictionary<NSString *, OCTNgcSentFileLookup *> *sentFileLookups;
+@property (nonatomic, assign) uint64_t sentFileLookupsMade;
 // Incoming packets, and the requests for missing chunks this device sends. Never waits for the pace.
 @property (nonatomic, strong) dispatch_queue_t sendQueue;
 // KHANDAQ (0.2.57): the group files this device sends, one at a time, at the pace (uploadPace); and the chunks members
@@ -323,6 +359,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     _orphanChunks = [NSMutableDictionary new];
     _cancelledMsgIdHexes = [NSMutableSet set];
     _sentChunkedFiles = [NSMutableDictionary new];
+    _sentFileLookups = [NSMutableDictionary new];
     _sendQueue = dispatch_queue_create("ngc-group-file-send", DISPATCH_QUEUE_SERIAL);
     _uploadQueue = dispatch_queue_create("ngc-group-file-upload", DISPATCH_QUEUE_SERIAL);
     _resendQueue = dispatch_queue_create("ngc-group-file-resend", DISPATCH_QUEUE_SERIAL);
@@ -646,27 +683,16 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
                      progress:(void (^)(float))progressBlock
                         error:(NSError **)error
 {
-    int totalChunks = (int)((fileSize + kOCTNgcChunkPayloadMax - 1) / kOCTNgcChunkPayloadMax);
     NSString *msgIdHex = [OCTTox binToHexString:msgId.bytes length:msgId.length];
 
-    NSMutableData *beginPacket = [NSMutableData dataWithCapacity:kOCTNgcFileBeginHeader];
-    [self appendMagicToData:beginPacket];
-    [beginPacket appendBytes:&(uint8_t){kOCTNgcPktFileBegin} length:1];
-    [self appendMsgId:msgId toData:beginPacket];
-    [self appendCreateTimestampToData:beginPacket];
-    [self appendFilename:fileName toData:beginPacket];
-    [self appendU64BE:fileSize toData:beginPacket];
-    [self appendU32BE:(uint32_t)kOCTNgcChunkPayloadMax toData:beginPacket];
-    [self appendU32BE:(uint32_t)totalChunks toData:beginPacket];
-
     // KHANDAQ (#15): remember this send so we can re-serve chunks a receiver NACKs for.
-    OCTNgcSentChunkedFile *sentContext = [OCTNgcSentChunkedFile new];
-    sentContext.filePath = filePath;
-    sentContext.msgId = msgId;
-    sentContext.fileSize = fileSize;
-    sentContext.totalChunks = totalChunks;
-    sentContext.groupNumber = groupNumber;
-    sentContext.beginPacket = beginPacket;
+    OCTNgcSentChunkedFile *sentContext = [self sentContextOfFileAtPath:filePath
+                                                          groupNumber:groupNumber
+                                                                msgId:msgId
+                                                             fileSize:fileSize
+                                                             fileName:fileName];
+    const int totalChunks = sentContext.totalChunks;
+    NSData *beginPacket = sentContext.beginPacket;
     sentContext.uploadUnderWay = YES;
     BOOL (^endUpload)(BOOL) = ^BOOL (BOOL sent) {
         @synchronized (sentContext) {
@@ -674,12 +700,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         }
         return sent;
     };
-    @synchronized (self.sentChunkedFiles) {
-        self.sentChunkedFiles[msgIdHex.lowercaseString] = sentContext;
-        while (self.sentChunkedFiles.count > 24) {
-            [self.sentChunkedFiles removeObjectForKey:self.sentChunkedFiles.allKeys.firstObject];
-        }
-    }
+    [self keepSentContext:sentContext msgIdHex:msgIdHex];
 
     if (! [self sendPacedPacket:beginPacket groupNumber:groupNumber msgIdHex:msgIdHex error:error]) {
         return endUpload(NO);
@@ -1556,7 +1577,10 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     }
 
     if (! context) {
-        return;  // not the original sender of this file (or it has been forgotten)
+        // KHANDAQ (0.2.60): not a file of ours, whose sender answers, or one of ours this transfer no longer holds (a
+        // restart, or more than it keeps): the app says, and the request waits for it.
+        [self lookUpSentFileWithGroupNumber:groupNumber msgId:msgId msgIdHex:msgIdHex peerId:peerId data:data];
+        return;
     }
 
     // KHANDAQ (0.2.57): the count 0 and nothing after it asks for the whole file. Android 0.2.57 asks so when it has the
@@ -1617,6 +1641,217 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
             [self resendPendingChunksOfContext:context];
         });
     }
+}
+
+#pragma mark - KHANDAQ (0.2.60): files of ours from the app
+
+/// What this transfer keeps of a chunked file it sends: its BEGIN (the create timestamp is 0, so it is the same one
+/// whenever it is made) and what the requests of members need of it.
+- (OCTNgcSentChunkedFile *)sentContextOfFileAtPath:(NSString *)filePath
+                                       groupNumber:(uint32_t)groupNumber
+                                             msgId:(NSData *)msgId
+                                          fileSize:(uint64_t)fileSize
+                                          fileName:(NSString *)fileName
+{
+    const int totalChunks = (int)((fileSize + kOCTNgcChunkPayloadMax - 1) / kOCTNgcChunkPayloadMax);
+
+    NSMutableData *beginPacket = [NSMutableData dataWithCapacity:kOCTNgcFileBeginHeader];
+    [self appendMagicToData:beginPacket];
+    [beginPacket appendBytes:&(uint8_t){kOCTNgcPktFileBegin} length:1];
+    [self appendMsgId:msgId toData:beginPacket];
+    [self appendCreateTimestampToData:beginPacket];
+    [self appendFilename:fileName toData:beginPacket];
+    [self appendU64BE:fileSize toData:beginPacket];
+    [self appendU32BE:(uint32_t)kOCTNgcChunkPayloadMax toData:beginPacket];
+    [self appendU32BE:(uint32_t)totalChunks toData:beginPacket];
+
+    OCTNgcSentChunkedFile *context = [OCTNgcSentChunkedFile new];
+    context.filePath = filePath;
+    context.msgId = msgId;
+    context.fileSize = fileSize;
+    context.totalChunks = totalChunks;
+    context.groupNumber = groupNumber;
+    context.beginPacket = beginPacket;
+    return context;
+}
+
+- (void)keepSentContext:(OCTNgcSentChunkedFile *)context msgIdHex:(NSString *)msgIdHex
+{
+    @synchronized (self.sentChunkedFiles) {
+        self.sentChunkedFiles[msgIdHex.lowercaseString] = context;
+        while (self.sentChunkedFiles.count > 24) {
+            [self.sentChunkedFiles removeObjectForKey:self.sentChunkedFiles.allKeys.firstObject];
+        }
+    }
+}
+
+/// A request of `peerId` for `msgIdHex`, a file this transfer does not hold: whether to ask the app (Ask), to wait for
+/// the answer it is asked for already (Wait: the request waits with it), or to drop it (a file not ours, lately).
+- (OCTNgcSentFileLookupStep)sentFileLookupStepForMsgIdHex:(NSString *)msgIdHex
+                                                   peerId:(uint32_t)peerId
+                                                     data:(NSData *)data
+                                                    nowMs:(uint64_t)nowMs
+{
+    NSArray *request = @[@(peerId), data];
+
+    @synchronized (self.sentFileLookups) {
+        OCTNgcSentFileLookup *lookup = self.sentFileLookups[msgIdHex];
+
+        if (lookup) {
+            if (lookup.asked && nowMs - lookup.sinceMs < kOCTNgcSentFileLookupAnswerWaitMs) {
+                // The newest request of each member waits: it names what that member misses now.
+                for (NSUInteger i = 0; i < lookup.requests.count; i++) {
+                    if ([lookup.requests[i][0] unsignedIntValue] == peerId) {
+                        lookup.requests[i] = request;
+                        return OCTNgcSentFileLookupStepWait;
+                    }
+                }
+                if (lookup.requests.count < kOCTNgcSentFileLookupMaxRequests) {
+                    [lookup.requests addObject:request];
+                }
+                return OCTNgcSentFileLookupStepWait;
+            }
+            if (! lookup.asked && nowMs - lookup.sinceMs < kOCTNgcSentFileLookupNotOursMs) {
+                return OCTNgcSentFileLookupStepDrop;
+            }
+            [self.sentFileLookups removeObjectForKey:msgIdHex];
+        }
+
+        while (self.sentFileLookups.count >= kOCTNgcSentFileLookupMaxKept) {
+            NSString *oldestKey = nil;
+            uint64_t oldestOrder = UINT64_MAX;
+            for (NSString *key in self.sentFileLookups) {
+                if (self.sentFileLookups[key].order < oldestOrder) {
+                    oldestOrder = self.sentFileLookups[key].order;
+                    oldestKey = key;
+                }
+            }
+            [self.sentFileLookups removeObjectForKey:oldestKey];
+        }
+
+        lookup = [OCTNgcSentFileLookup new];
+        lookup.asked = YES;
+        lookup.sinceMs = nowMs;
+        lookup.order = ++self.sentFileLookupsMade;
+        lookup.requests = [NSMutableArray arrayWithObject:request];
+        self.sentFileLookups[msgIdHex] = lookup;
+        return OCTNgcSentFileLookupStepAsk;
+    }
+}
+
+/// The app found `msgIdHex` ours: the requests that waited for it, each a peer id and its packet.
+- (NSArray<NSArray *> *)takeSentFileLookupRequestsForMsgIdHex:(NSString *)msgIdHex
+{
+    @synchronized (self.sentFileLookups) {
+        NSArray<NSArray *> *requests = [self.sentFileLookups[msgIdHex].requests copy] ?: @[];
+        [self.sentFileLookups removeObjectForKey:msgIdHex];
+        return requests;
+    }
+}
+
+/// The app keeps no file of ours with `msgIdHex` that may go again: its requests go, and it is dropped a while.
+- (void)forgetSentFileLookupForMsgIdHex:(NSString *)msgIdHex nowMs:(uint64_t)nowMs
+{
+    @synchronized (self.sentFileLookups) {
+        OCTNgcSentFileLookup *lookup = self.sentFileLookups[msgIdHex];
+        lookup.asked = NO;
+        lookup.sinceMs = nowMs;
+        [lookup.requests removeAllObjects];
+    }
+}
+
+/// On sendQueue: a request for a file this transfer does not hold asks the app, on the main thread where the Realm
+/// lives, whether it is ours; the answer comes back here (restoreSentFileAtPath:...).
+- (void)lookUpSentFileWithGroupNumber:(uint32_t)groupNumber
+                                msgId:(NSData *)msgId
+                             msgIdHex:(NSString *)msgIdHex
+                               peerId:(uint32_t)peerId
+                                 data:(NSData *)data
+{
+    void (^lookupBlock)(uint32_t, NSString *, void (^)(NSString *)) = self.sentFileLookupBlock;
+
+    if (! lookupBlock || [self isSendCancelledForMsgIdHex:msgIdHex]) {
+        return;
+    }
+
+    if ([self sentFileLookupStepForMsgIdHex:msgIdHex peerId:peerId data:data nowMs:self.nowMsBlock()]
+        != OCTNgcSentFileLookupStepAsk) {
+        return;
+    }
+
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        lookupBlock(groupNumber, msgIdHex, ^(NSString *filePath) {
+            __strong typeof(weakSelf) self = weakSelf;
+
+            if (! self) {
+                return;
+            }
+
+            dispatch_async(self.sendQueue, ^{
+                [self restoreSentFileAtPath:filePath groupNumber:groupNumber msgId:msgId msgIdHex:msgIdHex];
+            });
+        });
+    });
+}
+
+/// On sendQueue: the answer of the app. A file of ours is kept again, as when it went, and the requests that waited
+/// for it are answered.
+- (void)restoreSentFileAtPath:(nullable NSString *)filePath
+                  groupNumber:(uint32_t)groupNumber
+                        msgId:(NSData *)msgId
+                     msgIdHex:(NSString *)msgIdHex
+{
+    NSDictionary *attributes = filePath.length > 0
+                               ? [[NSFileManager defaultManager] attributesOfItemAtPath:filePath error:nil]
+                               : nil;
+    const uint64_t fileSize = [attributes[NSFileSize] unsignedLongLongValue];
+
+    // Only a file that went in chunks: a member gets a file of one packet whole or not at all.
+    if (! attributes || fileSize > kOCTNgcMaxFileTransferBytes
+        || ! [self.class shouldUseChunkedTransferForFileSize:fileSize]
+        || [self isSendCancelledForMsgIdHex:msgIdHex]) {
+        [self forgetSentFileLookupForMsgIdHex:msgIdHex nowMs:self.nowMsBlock()];
+        return;
+    }
+
+    NSArray<NSArray *> *requests = [self takeSentFileLookupRequestsForMsgIdHex:msgIdHex];
+    BOOL held = NO;
+    @synchronized (self.sentChunkedFiles) {
+        held = self.sentChunkedFiles[msgIdHex] != nil;
+    }
+
+    if (! held) {
+        // As this device named it when it went (sendFileAtPath: takes the name of the file it sends).
+        OCTNgcSentChunkedFile *context = [self sentContextOfFileAtPath:filePath
+                                                           groupNumber:groupNumber
+                                                                 msgId:msgId
+                                                              fileSize:fileSize
+                                                              fileName:[filePath lastPathComponent]];
+        [self keepSentContext:context msgIdHex:msgIdHex];
+        OCTLogInfo(@"NGC group file %@ is ours, from the app: the members that ask for it get it again",
+                   OCTNgcShortMsgId(msgIdHex));
+    }
+
+    for (NSArray *request in requests) {
+        [self handleIncomingRequestWithGroupNumber:groupNumber peerId:[request[0] unsignedIntValue] data:request[1]];
+    }
+}
+
++ (BOOL)sentFileAtPath:(NSString *)filePath servableWithSize:(uint64_t)fileSize sentAt:(NSTimeInterval)sentAt
+{
+    BOOL isDirectory = NO;
+
+    if (filePath.length == 0 || fileSize == 0 || sentAt <= 0
+        || ! [[NSFileManager defaultManager] fileExistsAtPath:filePath isDirectory:&isDirectory] || isDirectory) {
+        return NO;
+    }
+
+    NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:filePath error:nil];
+    NSDate *modified = attributes[NSFileModificationDate];
+
+    return [attributes[NSFileSize] unsignedLongLongValue] == fileSize && modified != nil
+           && modified.timeIntervalSince1970 <= sentAt + kOCTNgcSentFileModifiedSlack;
 }
 
 /**

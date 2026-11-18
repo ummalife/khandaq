@@ -4353,6 +4353,39 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     return YES;
 }
 
+/// KHANDAQ (0.2.60): where the file this device sent the group with `msgIdHex` is, while it may go again to a member
+/// that missed chunks of it: our own row of the group's chat with that id, its file there, as long as it went and not
+/// changed since (OCTNgcGroupFileTransfer sentFileAtPath:servableWithSize:sentAt:); nil else. On the main thread: it
+/// reads the Realm.
+- (nullable NSString *)sentGroupFilePathForGroupNumber:(uint32_t)groupNumber msgIdHex:(NSString *)msgIdHex
+{
+    OCTChat *chat = [self chatForGroupNumber:groupNumber];
+
+    if (! chat || msgIdHex.length == 0) {
+        return nil;
+    }
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND messageFile.groupMsgIdHashHex ==[c] %@ "
+                              @"AND senderUniqueIdentifier == nil AND groupSenderPeerId == 0",
+                              chat.uniqueIdentifier, msgIdHex];
+    RLMResults *rows = [[[self.dataSource managerGetRealmManager] objectsWithClass:[OCTMessageAbstract class]
+                                                                         predicate:predicate]
+                        sortedResultsUsingKeyPath:@"dateInterval" ascending:NO];
+    OCTMessageAbstract *row = rows.firstObject;
+    OCTMessageFile *file = row.messageFile;
+    NSString *filePath = [file filePath];
+
+    if (filePath.length == 0
+        || ! [OCTNgcGroupFileTransfer sentFileAtPath:filePath
+                                    servableWithSize:(uint64_t)file.fileSize
+                                              sentAt:row.dateInterval]) {
+        return nil;
+    }
+
+    return filePath;
+}
+
 - (void)setupFileTransferIfNeeded
 {
     if (self.fileTransfer) {
@@ -4464,6 +4497,12 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         [self handleIncomingGroupFileDroppedWithGroupNumber:groupNumber
                                          senderPublicKeyHex:senderPublicKeyHex
                                                    msgIdHex:msgIdHex];
+    };
+    // KHANDAQ (0.2.60): a member asks for chunks of a group file the transfer does not hold: a file of ours from
+    // before a restart, maybe. On the main thread, where the Realm lives.
+    self.fileTransfer.sentFileLookupBlock = ^(uint32_t groupNumber, NSString *msgIdHex, void (^reply)(NSString *)) {
+        __strong typeof(weakSelf) self = weakSelf;
+        reply(self ? [self sentGroupFilePathForGroupNumber:groupNumber msgIdHex:msgIdHex] : nil);
     };
     // KHANDAQ (0.2.57): the members a group file packet goes to, for the pace of what this device sends: the confirmed
     // peers but this one (the count has this one in it).

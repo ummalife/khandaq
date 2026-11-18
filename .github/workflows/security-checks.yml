@@ -432,6 +432,15 @@ jobs:
           set -euo pipefail
           python3 scripts/check-gc-recv-gap.py
           python3 scripts/check-gc-recv-gap.py --self-test
+      # KHANDAQ (0.2.59): a desktop that joined a group by its key stayed out of it while a friend inside sent it
+      # an invite every 30 s: the desktop copy of toxcore dropped the invite as "already added". Android and iOS
+      # carried the fix; every copy of toxcore (and the Android build) must let a friend's invite finish a join
+      # by group ID, and each check must catch the mutant made for it.
+      - name: Every toxcore copy must let a friend's invite finish a join by group ID
+        run: |
+          set -euo pipefail
+          python3 scripts/check-join-by-id.py
+          python3 scripts/check-join-by-id.py --self-test
       # KHANDAQ (2026-08-23, CodeQL triage): a group file's name arrives unfiltered off the wire, and
       # it was stored as-is on the row. send_ngch_syncfile joins that name with the directory, reads the
       # file and sends the bytes to a peer — so ../ in a filename read a file outside the group and

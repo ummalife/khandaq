@@ -13314,6 +13314,19 @@ bool handle_gc_invite_accepted_packet(const GC_Session *c, int friend_number, co
 non_null()
 bool group_not_added(const GC_Session *c, const uint8_t *chat_id, uint32_t length);
 
+/** @brief Return true if `chat_id` belongs to a group we know only by its ID.
+ *
+ * KHANDAQ (join by ID): tox_group_join() adds the group before any peer has answered, so a friend's
+ * invite to it was dropped as "already added" and a join the DHT announce never completed could not
+ * be finished by a friend either. Such a group has no shared state yet (version 0) and no founder
+ * key, so taking an invite in its place loses nothing. A group with any shared state, or one we
+ * founded, is not matched and its invites stay filtered. Android: patches/apply_khandaq_join_by_id.py.
+ *
+ * `length` must be at least CHAT_ID_SIZE bytes in length.
+ */
+non_null()
+bool gc_group_known_only_by_id(const GC_Session *c, const uint8_t *chat_id, uint32_t length);
+
 /** @brief Handles an invite confirmed packet.
  *
  * Return 0 on success.
@@ -36780,6 +36793,33 @@ bool group_not_added(const GC_Session *c, const uint8_t *chat_id, uint32_t lengt
     return !group_exists(c, chat_id);
 }
 
+// KHANDAQ (join by ID): see the declaration in group_chats.h.
+bool gc_group_known_only_by_id(const GC_Session *c, const uint8_t *chat_id, uint32_t length)
+{
+    if (length < CHAT_ID_SIZE) {
+        return false;
+    }
+
+    static const uint8_t no_founder[EXT_PUBLIC_KEY_SIZE] = {0};
+
+    for (uint32_t i = 0; i < c->chats_index; ++i) {
+        const GC_Chat *chat = &c->chats[i];
+
+        if (chat->connection_state == CS_NONE) {
+            continue;
+        }
+
+        if (memcmp(get_chat_id(chat->chat_public_key), chat_id, CHAT_ID_SIZE) != 0) {
+            continue;
+        }
+
+        return chat->shared_state.version == 0
+               && memeq(chat->shared_state.founder_public_key, EXT_PUBLIC_KEY_SIZE, no_founder, EXT_PUBLIC_KEY_SIZE);
+    }
+
+    return false;
+}
+
 int gc_invite_friend(const GC_Session *c, GC_Chat *chat, int32_t friend_number,
                      gc_send_group_invite_packet_cb *callback)
 {
@@ -37114,6 +37154,16 @@ int gc_accept_invite(GC_Session *c, int32_t friend_number, const uint8_t *data, 
 
     const uint8_t *chat_id = data;
     const uint8_t *invite_chat_pk = data + CHAT_ID_SIZE;
+
+    // KHANDAQ (join by ID): packets for the group find their chat by its ID, and the first chat with
+    // that ID wins. A chat we just left is only deleted on the next do_gc(), and one we joined by its ID
+    // that no peer has answered yet stays; either would take the inviter's confirmation and drop it, so
+    // the join never completed. Neither has anything worth keeping. Android: apply_khandaq_join_by_id.py.
+    GC_Chat *stale_chat = gc_get_group_by_public_key(c, chat_id);
+
+    if (stale_chat != nullptr && (stale_chat->flag_exit || !gc_group_is_valid(stale_chat))) {
+        group_delete(c, stale_chat);
+    }
 
     const int group_number = create_new_group(c, nick, nick_length, false, GI_PUBLIC);
 
@@ -43616,7 +43666,10 @@ static int m_handle_packet(void *object, int i, const uint8_t *temp, uint16_t le
             const uint32_t join_data_len = data_length - 2;
 
             if (m->group_invite != nullptr && data[1] == GROUP_INVITE && data_length != 2 + GC_JOIN_DATA_LENGTH) {
-                if (group_not_added(m->group_handler, join_data, join_data_len)) {
+                // KHANDAQ (join by ID): also pass an invite to a group we know only by its ID, see
+                // gc_group_known_only_by_id().
+                if (group_not_added(m->group_handler, join_data, join_data_len)
+                        || gc_group_known_only_by_id(m->group_handler, join_data, join_data_len)) {
                     m->group_invite(m, i, join_data, GC_JOIN_DATA_LENGTH,
                                     join_data + GC_JOIN_DATA_LENGTH, join_data_len - GC_JOIN_DATA_LENGTH, userdata);
                 }

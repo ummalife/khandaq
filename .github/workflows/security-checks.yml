@@ -422,6 +422,16 @@ jobs:
           set -euo pipefail
           python3 scripts/check-gc-ipv6-mtu.py
           python3 scripts/check-gc-ipv6-mtu.py --self-test
+      # KHANDAQ (0.2.59): a group file never reached a member that lost its network for 10 s. toxcore dropped a
+      # fragment that came out of order, did not acknowledge one it took, handed on what it kept at one per
+      # iteration and acknowledged it as message 0, so its sender timed the member out. Every copy of toxcore
+      # (and the Android build) must keep, take and acknowledge it and resend the oldest packet every second,
+      # and each check must catch the mutant made for it.
+      - name: Every toxcore copy must catch up with a group peer after a gap
+        run: |
+          set -euo pipefail
+          python3 scripts/check-gc-recv-gap.py
+          python3 scripts/check-gc-recv-gap.py --self-test
       # KHANDAQ (2026-08-23, CodeQL triage): a group file's name arrives unfiltered off the wire, and
       # it was stored as-is on the row. send_ngch_syncfile joins that name with the directory, reads the
       # file and sends the bytes to a peer — so ../ in a filename read a file outside the group and

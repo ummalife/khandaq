@@ -35050,7 +35050,9 @@ static bool handle_gc_packet_fragment(const GC_Session *c, GC_Chat *chat, uint32
         return false;
     }
 
-    if (frag_ret == 0) {
+    // KHANDAQ (0.2.59, group files): a fragment kept for its sequence is acknowledged too. It was not: the sender
+    // sent each one again about 3 s later, and only that duplicate was acknowledged.
+    if (frag_ret == 0 || frag_ret == 1) {
         gc_send_message_ack(chat, gconn, message_id, GR_ACK_RECV);
     }
 
@@ -35147,6 +35149,14 @@ static bool handle_gc_lossless_packet(const GC_Session *c, GC_Chat *chat, const 
         LOGGER_TRACE(chat->log, "received out of order packet from peer %u. expected %llu, got %llu", peer_number,
                      (unsigned long long)gconn->received_message_id + 1, (unsigned long long)message_id);
         free(data);
+
+        // KHANDAQ (0.2.59, group files): a fragment with data, kept until the gap before it fills, is acknowledged
+        // now, so that its sender does not send it again: taking it later cannot fail. Any other packet kept is
+        // acknowledged once it was handled, as before, since its handler may fail and ask for it again.
+        if (packet_type == GP_FRAGMENT && len > 0) {
+            gc_send_message_ack(chat, gconn, message_id, GR_ACK_RECV);
+        }
+
         return gc_send_message_ack(chat, gconn, gconn->received_message_id + 1, GR_ACK_REQ);
     }
 
@@ -38065,17 +38075,32 @@ int gcc_handle_received_message(const Logger *log, const Mono_Time *mono_time, G
         return 0;
     }
 
-    if (packet_type == GP_FRAGMENT) { // we handle packet fragments as a special case
-        return 3;
-    }
+    GC_Message_Array_Entry *const kept = &gconn->recv_array[gcc_get_array_index(message_id)];
 
     /* we're missing an older message from this peer so we store it in recv_array */
     if (message_id > gconn->received_message_id + 1) {
+        // KHANDAQ (0.2.59, group files): a fragment is kept too. Dropped, it had to come again with every fragment
+        // behind it, at the resend times. A resend of a message kept already is not kept twice.
+        if (!array_entry_is_empty(kept) && kept->message_id == message_id) {
+            return 1;
+        }
+
         if (!store_in_recv_array(log, mono_time, gconn, data, length, packet_type, message_id)) {
             return -1;
         }
 
         return 1;
+    }
+
+    // KHANDAQ (0.2.59, group files): the message comes in order while a copy of it, kept when it came out of order,
+    // still waits in recv_array: this one is taken and the copy goes. Left there, 8192 messages later it would block
+    // the message of its slot, or be handed on in its place.
+    if (!array_entry_is_empty(kept)) {
+        clear_array_entry(kept);
+    }
+
+    if (packet_type == GP_FRAGMENT) { // we handle packet fragments as a special case
+        return 3;
     }
 
     gcc_set_recv_message_id(gconn, gconn->received_message_id + 1);
@@ -38096,6 +38121,10 @@ static bool process_recv_array_entry(const GC_Session *c, GC_Chat *chat, GC_Conn
     uint8_t sender_pk[ENC_PUBLIC_KEY_SIZE];
     memcpy(sender_pk, get_enc_key(gconn->addr.public_key), ENC_PUBLIC_KEY_SIZE);
 
+    // KHANDAQ (0.2.59, group files): read before the entry is cleared below. Read after it, it was 0: the message
+    // was acknowledged as message 0, and its sender kept it until a resend of it came back as a duplicate.
+    const uint64_t message_id = array_entry->message_id;
+
     const bool ret = handle_gc_lossless_helper(c, chat, peer_number, array_entry->data, array_entry->data_length,
                      array_entry->packet_type, userdata);
 
@@ -38110,29 +38139,105 @@ static bool process_recv_array_entry(const GC_Session *c, GC_Chat *chat, GC_Conn
     }
 
     if (!ret) {
-        gc_send_message_ack(chat, gconn, array_entry->message_id, GR_ACK_REQ);
+        gc_send_message_ack(chat, gconn, message_id, GR_ACK_REQ);
         return false;
     }
 
-    gc_send_message_ack(chat, gconn, array_entry->message_id, GR_ACK_RECV);
+    gc_send_message_ack(chat, gconn, message_id, GR_ACK_RECV);
 
     gcc_set_recv_message_id(gconn, gconn->received_message_id + 1);
 
     return true;
 }
 
+/** @brief KHANDAQ (0.2.59, group files): takes the fragment kept in `array_entry`, the next message expected from the
+ * peer. A fragment with data stays where it is, as gcc_handle_packet_fragment() keeps one that comes in order; the
+ * empty one that ends a sequence makes the packet whole and hands it on.
+ *
+ * Return true if the fragment was taken.
+ */
+non_null(1, 2, 3, 5) nullable(6)
+static bool take_recv_array_fragment(const GC_Session *c, GC_Chat *chat, GC_Connection *gconn, uint32_t peer_number,
+                                     GC_Message_Array_Entry *const array_entry, void *userdata)
+{
+    const uint64_t message_id = array_entry->message_id;
+
+    if (array_entry->data_length > 0) {
+        gcc_set_recv_message_id(gconn, message_id);
+        gconn->last_chunk_id = message_id;
+        gc_send_message_ack(chat, gconn, message_id, GR_ACK_RECV);
+        return true;
+    }
+
+    clear_array_entry(array_entry);
+
+    uint8_t sender_pk[ENC_PUBLIC_KEY_SIZE];
+    memcpy(sender_pk, get_enc_key(gconn->addr.public_key), ENC_PUBLIC_KEY_SIZE);
+
+    if (gcc_handle_packet_fragment(c, chat, peer_number, gconn, nullptr, 0, GP_FRAGMENT, message_id, userdata) != 0) {
+        return false;
+    }
+
+    /* peer number can change from peer add operations in packet handlers */
+    gconn = get_gc_connection(chat, get_peer_number_of_enc_pk(chat, sender_pk, false));
+
+    if (gconn != nullptr) {
+        gc_send_message_ack(chat, gconn, message_id, GR_ACK_RECV);
+    }
+
+    return true;
+}
+
+/** KHANDAQ (0.2.59, group files): the most messages kept in recv_array that one gcc_check_recv_array() call takes.
+ * It took one, so a peer that kept a few hundred messages behind a gap took them at one per tox_iterate while their
+ * sender went on, and the sender's oldest unacknowledged message passed GC_CONFIRMED_PEER_TIMEOUT: it timed us out
+ * ("Send array stuck"). Bounded, so that one tox_iterate does not hand the client thousands of packets at once.
+ */
+#define GCC_RECV_ARRAY_TAKE_MAX 512
+
 void gcc_check_recv_array(const GC_Session *c, GC_Chat *chat, GC_Connection *gconn, uint32_t peer_number,
                           void *userdata)
 {
-    if (gconn->last_chunk_id != 0) {  // dont check array if we have an unfinished fragment sequence
-        return;
-    }
+    uint8_t sender_pk[ENC_PUBLIC_KEY_SIZE];
+    memcpy(sender_pk, get_enc_key(gconn->addr.public_key), ENC_PUBLIC_KEY_SIZE);
 
-    const uint16_t idx = (gconn->received_message_id + 1) % GCC_BUFFER_SIZE;
-    GC_Message_Array_Entry *const array_entry = &gconn->recv_array[idx];
+    for (uint32_t taken = 0; taken < GCC_RECV_ARRAY_TAKE_MAX; ++taken) {
+        const uint64_t message_id = gconn->received_message_id + 1;
+        GC_Message_Array_Entry *const array_entry = &gconn->recv_array[gcc_get_array_index(message_id)];
 
-    if (!array_entry_is_empty(array_entry)) {
-        process_recv_array_entry(c, chat, gconn, peer_number, array_entry, userdata);
+        if (array_entry_is_empty(array_entry)) {
+            return;
+        }
+
+        if (array_entry->message_id != message_id) {
+            // left from a message long gone: never handed on as this one
+            clear_array_entry(array_entry);
+            return;
+        }
+
+        bool ok;
+
+        if (array_entry->packet_type == GP_FRAGMENT) {
+            ok = take_recv_array_fragment(c, chat, gconn, peer_number, array_entry, userdata);
+        } else if (gconn->last_chunk_id != 0) {  // dont hand on a packet in the middle of a fragment sequence
+            return;
+        } else {
+            ok = process_recv_array_entry(c, chat, gconn, peer_number, array_entry, userdata);
+        }
+
+        if (!ok) {
+            return;
+        }
+
+        /* peer number can change from peer add operations in packet handlers */
+        const int number = get_peer_number_of_enc_pk(chat, sender_pk, false);
+        gconn = get_gc_connection(chat, number);
+
+        if (gconn == nullptr || gconn->pending_delete) {
+            return;
+        }
+
+        peer_number = (uint32_t)number;
     }
 }
 
@@ -38168,8 +38273,13 @@ void gcc_resend_packets(const GC_Chat *chat, GC_Connection *gconn)
         const uint64_t delta = array_entry->last_send_try - array_entry->time_added;
         array_entry->last_send_try = tm;
 
+        /* Khandaq fix (#201): the oldest un-acked packet (i == send_array_start) head-of-line-
+         * blocks the whole strictly-ordered lossless stream, so one lost media fragment stalls the
+         * transfer for 2^n seconds under the power-of-2 backoff. Resend the HEAD every second so
+         * recovery isn't clamped to ~1 packet / 2^n s; the rest keep exponential backoff. */
+        const bool khq_is_head = (i == start);
         /* if this occurrs less than once per second this won't be reliable */
-        if (delta > 1 && is_power_of_2(delta)) {
+        if ((khq_is_head && delta >= 1) || (delta > 1 && is_power_of_2(delta))) {
             gcc_encrypt_and_send_lossless_packet(chat, gconn, array_entry->data, array_entry->data_length,
                                                  array_entry->message_id, array_entry->packet_type);
         }

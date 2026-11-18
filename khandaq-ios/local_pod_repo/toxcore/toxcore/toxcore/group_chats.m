@@ -6154,7 +6154,9 @@ static bool handle_gc_packet_fragment(const GC_Session *c, GC_Chat *chat, uint32
         return false;
     }
 
-    if (frag_ret == 0) {
+    // KHANDAQ (0.2.59, group files): a fragment kept for its sequence is acknowledged too. It was not: the sender
+    // sent each one again about 3 s later, and only that duplicate was acknowledged.
+    if (frag_ret == 0 || frag_ret == 1) {
         gc_send_message_ack(chat, gconn, message_id, GR_ACK_RECV);
     }
 
@@ -6251,6 +6253,14 @@ static bool handle_gc_lossless_packet(const GC_Session *c, GC_Chat *chat, const 
         LOGGER_TRACE(chat->log, "received out of order packet from peer %u. expected %llu, got %llu", peer_number,
                      (unsigned long long)gconn->received_message_id + 1, (unsigned long long)message_id);
         free(data);
+
+        // KHANDAQ (0.2.59, group files): a fragment with data, kept until the gap before it fills, is acknowledged
+        // now, so that its sender does not send it again: taking it later cannot fail. Any other packet kept is
+        // acknowledged once it was handled, as before, since its handler may fail and ask for it again.
+        if (packet_type == GP_FRAGMENT && len > 0) {
+            gc_send_message_ack(chat, gconn, message_id, GR_ACK_RECV);
+        }
+
         return gc_send_message_ack(chat, gconn, gconn->received_message_id + 1, GR_ACK_REQ);
     }
 

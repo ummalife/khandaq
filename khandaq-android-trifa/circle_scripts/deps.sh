@@ -559,6 +559,11 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_ftv2_stale_accep
 # chunks of up to 1372 bytes from a peer before this change are still accepted. The desktop and iOS
 # copies of toxcore carry the same change. Fail-fast, like the patches above.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_ipv6_mtu.py toxcore || exit 1 ; cd "$_s_"
+# KHANDAQ (0.2.59, group files): a group member behind a gap catches up with a file. A fragment that
+# comes out of order is kept and acknowledged, what is kept is taken in one go and acknowledged by its
+# own id, and a kept copy of what then comes in order goes. The sending side is apply_khandaq_media_resend.py
+# (#201) above. The desktop and iOS copies of toxcore carry the same change. Fail-fast, like the patches above.
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_recv_gap.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
@@ -1176,6 +1181,11 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_ftv2_stale_accep
 # chunks of up to 1372 bytes from a peer before this change are still accepted. The desktop and iOS
 # copies of toxcore carry the same change. Fail-fast, like the patches above.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_ipv6_mtu.py toxcore || exit 1 ; cd "$_s_"
+# KHANDAQ (0.2.59, group files): a group member behind a gap catches up with a file. A fragment that
+# comes out of order is kept and acknowledged, what is kept is taken in one go and acknowledged by its
+# own id, and a kept copy of what then comes in order goes. The sending side is apply_khandaq_media_resend.py
+# (#201) above. The desktop and iOS copies of toxcore carry the same change. Fail-fast, like the patches above.
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_recv_gap.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
@@ -1794,6 +1804,11 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_ftv2_stale_accep
 # chunks of up to 1372 bytes from a peer before this change are still accepted. The desktop and iOS
 # copies of toxcore carry the same change. Fail-fast, like the patches above.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_ipv6_mtu.py toxcore || exit 1 ; cd "$_s_"
+# KHANDAQ (0.2.59, group files): a group member behind a gap catches up with a file. A fragment that
+# comes out of order is kept and acknowledged, what is kept is taken in one go and acknowledged by its
+# own id, and a kept copy of what then comes in order goes. The sending side is apply_khandaq_media_resend.py
+# (#201) above. The desktop and iOS copies of toxcore carry the same change. Fail-fast, like the patches above.
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_recv_gap.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
@@ -2258,6 +2273,11 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_ftv2_stale_accep
 # chunks of up to 1372 bytes from a peer before this change are still accepted. The desktop and iOS
 # copies of toxcore carry the same change. Fail-fast, like the patches above.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_ipv6_mtu.py toxcore || exit 1 ; cd "$_s_"
+# KHANDAQ (0.2.59, group files): a group member behind a gap catches up with a file. A fragment that
+# comes out of order is kept and acknowledged, what is kept is taken in one go and acknowledged by its
+# own id, and a kept copy of what then comes in order goes. The sending side is apply_khandaq_media_resend.py
+# (#201) above. The desktop and iOS copies of toxcore carry the same change. Fail-fast, like the patches above.
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_recv_gap.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------

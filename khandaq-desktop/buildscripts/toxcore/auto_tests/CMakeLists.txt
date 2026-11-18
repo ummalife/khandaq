@@ -44,6 +44,8 @@ auto_test(group_invite)
 auto_test(group_ipv6_mtu)
 auto_test(group_message)
 auto_test(group_moderation)
+# KHANDAQ (0.2.59, group files): a peer behind a gap catches up; what it already holds is not sent to it again.
+auto_test(group_recv_gap)
 auto_test(group_save)
 auto_test(group_state)
 #auto_test(group_sync) # Does timeout.

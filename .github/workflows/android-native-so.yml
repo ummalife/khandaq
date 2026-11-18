@@ -88,6 +88,10 @@ jobs:
           mtu_sites=$(grep -c apply_khandaq_gc_ipv6_mtu.py /root/work/circle_scripts/deps.sh)
           echo "wired at $mtu_sites site(s)"
           [ "$mtu_sites" -eq 4 ]
+          echo "=== confirm the gc receive gap patch is wired into deps.sh (4 ABIs) ==="
+          gap_sites=$(grep -c apply_khandaq_gc_recv_gap.py /root/work/circle_scripts/deps.sh)
+          echo "wired at $gap_sites site(s)"
+          [ "$gap_sites" -eq 4 ]
 
       - name: build native deps + patched toxcore + libjni-c-toxcore.so (deps.sh)
         id: build
@@ -116,7 +120,7 @@ jobs:
           path: |
             /root/work/artefacts/android/libs/**/libjni-c-toxcore.so
 
-      - name: fail the job unless arm64 .so was produced AND the patched trees carry the audit-F2 guard, the join-by-ID patch, the group search key, the FTV2 stale accept fix and the gc IPv6 MTU fix
+      - name: fail the job unless arm64 .so was produced AND the patched trees carry the audit-F2 guard, the join-by-ID patch, the group search key, the FTV2 stale accept fix, the gc IPv6 MTU fix and the gc receive gap fix
         if: always()
         run: |
           rc=0
@@ -166,6 +170,14 @@ jobs:
                 echo "gc IPv6 MTU fix present in $tree/$g"
               else
                 echo "ERROR: gc IPv6 MTU fix MISSING in $tree/$g -- a full group chunk would go out as a 1502 byte IPv6 packet and be lost"
+                rc=1
+              fi
+            done
+            for g in toxcore/group_chats.c toxcore/group_connection.c; do
+              if grep -q 'KHANDAQ (0.2.59, group files)' "$tree/$g"; then
+                echo "gc receive gap fix present in $tree/$g"
+              else
+                echo "ERROR: gc receive gap fix MISSING in $tree/$g -- a group member behind a gap would never catch up with a file"
                 rc=1
               fi
             done

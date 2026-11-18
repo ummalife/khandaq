@@ -21,12 +21,15 @@
 
 #ifdef KHANDAQ_SCREENSHOT_HOOK
 
+#include "audio/iaudiosource.h"
+
 #include <QAbstractButton>
 #include <QAbstractScrollArea>
 #include <QAccessible>
 #include <QApplication>
 #include <QDebug>
 #include <QEvent>
+#include <QFile>
 #include <QImage>
 #include <QKeyEvent>
 #include <QLabel>
@@ -38,8 +41,10 @@
 #include <QScrollArea>
 #include <QTimer>
 #include <QWidget>
+#include <QtEndian>
 
 #include <algorithm>
+#include <array>
 #include <functional>
 #include <memory>
 
@@ -352,6 +357,45 @@ public:
     QMap<QString, int> counts;
 };
 
+/** The sound of a file said as a microphone says it: see AirWalk::fileMicrophone. */
+class FileMicrophone : public IAudioSource
+{
+public:
+    explicit FileMicrophone(QByteArray raw)
+        : sound(std::move(raw))
+    {
+        // 20 ms frames of 48 kHz, the frames of OpenAL, from the thread of the window: the
+        // recorder takes them on any thread.
+        clock.setInterval(20);
+        connect(&clock, &QTimer::timeout, this, [this] { say(); });
+        clock.start();
+    }
+
+    operator bool() const override
+    {
+        return true;
+    }
+
+private:
+    void say()
+    {
+        std::array<int16_t, 960> frame{};
+        const int bytes = sound.size();
+        for (int16_t& sample : frame) {
+            if (at + 2 > bytes) {
+                break;
+            }
+            sample = qFromLittleEndian<qint16>(sound.constData() + at);
+            at += 2;
+        }
+        emit frameAvailable(frame.data(), frame.size(), 1, 48000);
+    }
+
+    QByteArray sound;
+    int at = 0;
+    QTimer clock;
+};
+
 } // namespace
 
 namespace AirWalk {
@@ -436,6 +480,16 @@ void least(QWidget* root, int depth, const QString& label)
         }
     };
     walk(root, 0);
+}
+
+std::unique_ptr<IAudioSource> fileMicrophone(const QString& path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qWarning() << "Walk microphone: no sound in" << path;
+        return nullptr;
+    }
+    return std::unique_ptr<IAudioSource>(new FileMicrophone(file.readAll()));
 }
 
 } // namespace AirWalk

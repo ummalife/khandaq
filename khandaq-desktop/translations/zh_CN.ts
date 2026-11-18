@@ -833,6 +833,51 @@
         <translation>表情符号</translation>
     </message>
     <message>
+        <source>Record a voice message</source>
+        <comment>microphone button of the message field</comment>
+        <translation>录制语音消息</translation>
+    </message>
+    <message>
+        <source>Cancel the voice message</source>
+        <comment>the cross in place of the paperclip while a voice message is recorded</comment>
+        <translation>取消语音消息</translation>
+    </message>
+    <message>
+        <source>Recording a voice message</source>
+        <comment>in place of the message field while a voice message is recorded</comment>
+        <translation>正在录制语音消息</translation>
+    </message>
+    <message>
+        <source>Too short: a voice message lasts at least a second</source>
+        <comment>toast when a voice message was shorter than a second</comment>
+        <translation>太短了：语音消息至少需要一秒</translation>
+    </message>
+    <message>
+        <source>No microphone: check that one is connected</source>
+        <comment>toast when no microphone could be opened for a voice message</comment>
+        <translation>没有麦克风：请检查是否已连接</translation>
+    </message>
+    <message>
+        <source>%1 is offline. A voice message goes only while you are both online.</source>
+        <comment>why a voice message cannot be recorded or sent now: %1 is the person</comment>
+        <translation>%1 不在线。只有双方都在线时语音消息才能发送。</translation>
+    </message>
+    <message>
+        <source>Without the microphone a voice message cannot be recorded. Allow it in System Settings: Privacy and Security, Microphone.</source>
+        <comment>dialog when macOS refuses the microphone for a voice message</comment>
+        <translation>没有麦克风就无法录制语音消息。请在系统设置中允许：隐私与安全性，麦克风。</translation>
+    </message>
+    <message>
+        <source>The voice message could not be saved</source>
+        <comment>dialog when a recorded voice message could not be written to disk</comment>
+        <translation>无法保存语音消息</translation>
+    </message>
+    <message>
+        <source>A voice message lasts up to 5 minutes: this one was sent</source>
+        <comment>toast when a voice message reached its longest length and went by itself</comment>
+        <translation>语音消息最长 5 分钟，录音已发送</translation>
+    </message>
+    <message>
         <source>Goes right away: %1 is online</source>
         <comment>line under the message field; %1 is the first name</comment>
         <translation>会立即发出：%1 在线</translation>

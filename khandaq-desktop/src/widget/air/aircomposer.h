@@ -26,6 +26,7 @@
 
 class AirButton;
 class AirIconButton;
+class AirProgressBar;
 class QLabel;
 class QTextEdit;
 class QVariantAnimation;
@@ -49,6 +50,17 @@ public:
     void setAttachNote(const QString& note);
     /** KHANDAQ (0.2.60): the emoji button, hidden when there is no set to choose from. */
     void setEmojiVisible(bool visible);
+    /** KHANDAQ (0.2.60): the microphone, hidden where no note can go (notes) or be written. */
+    void setVoiceVisible(bool visible);
+    /**
+     * A voice note being recorded (kq-progress): in place of the field the microphone, "Recording a
+     * voice message", its time and how much of the longest note it takes; the cross in place of the
+     * paperclip cancels it (Esc too), Send sends it (Enter too). False brings the field back.
+     */
+    void setRecording(bool recording);
+    bool isRecording() const;
+    /** The time of the note being recorded, and its share of the longest note (0 to 1). */
+    void setRecordingTime(qint64 ms, double share);
     /** An empty text hides the line; the change cross-fades without moving anything. */
     void setHint(const QString& text, Air::ComposeHint::Dot dot);
     /** "120 bytes left"; empty hides it. */
@@ -71,12 +83,19 @@ signals:
     void attachRequested(const QPoint& globalPos);
     /** The emoji button, with the middle of its top edge: the choice opens above it. */
     void emojiRequested(const QPoint& globalPos);
+    /** The microphone: start a voice note. */
+    void voiceRequested();
+    /** The cross or Esc while a note is recorded. */
+    void voiceCancelRequested();
+    /** Send or Enter while a note is recorded. */
+    void voiceSendRequested();
     /** The button of the read-only bar. */
     void readOnlyActionRequested();
 
 protected:
     void paintEvent(QPaintEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
 
 private:
     void restyle();
@@ -88,6 +107,17 @@ private:
     AirIconButton* attach = nullptr;
     QString attachNote;
     AirIconButton* emoji = nullptr;
+    AirIconButton* voice = nullptr;
+    AirIconButton* cancelVoice = nullptr;
+    bool attachShown = true;
+    bool emojiShown = true;
+    bool voiceShown = true;
+    QWidget* recording = nullptr;
+    QLabel* recordingIcon = nullptr;
+    QLabel* recordingTitle = nullptr;
+    QLabel* recordingTime = nullptr;
+    AirProgressBar* recordingBar = nullptr;
+    qint64 recordedMs = 0;
     AirButton* send = nullptr;
     QWidget* hintLine = nullptr;
     QWidget* dot = nullptr;

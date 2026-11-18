@@ -868,6 +868,51 @@
         <translation>الرموز التعبيرية</translation>
     </message>
     <message>
+        <source>Record a voice message</source>
+        <comment>microphone button of the message field</comment>
+        <translation>تسجيل رسالة صوتية</translation>
+    </message>
+    <message>
+        <source>Cancel the voice message</source>
+        <comment>the cross in place of the paperclip while a voice message is recorded</comment>
+        <translation>إلغاء الرسالة الصوتية</translation>
+    </message>
+    <message>
+        <source>Recording a voice message</source>
+        <comment>in place of the message field while a voice message is recorded</comment>
+        <translation>جارٍ تسجيل رسالة صوتية</translation>
+    </message>
+    <message>
+        <source>Too short: a voice message lasts at least a second</source>
+        <comment>toast when a voice message was shorter than a second</comment>
+        <translation>قصيرة جدًا: تستمر الرسالة الصوتية ثانية على الأقل</translation>
+    </message>
+    <message>
+        <source>No microphone: check that one is connected</source>
+        <comment>toast when no microphone could be opened for a voice message</comment>
+        <translation>لا يوجد ميكروفون: تحقق من توصيله</translation>
+    </message>
+    <message>
+        <source>%1 is offline. A voice message goes only while you are both online.</source>
+        <comment>why a voice message cannot be recorded or sent now: %1 is the person</comment>
+        <translation>%1 غير متصل. لا تُرسل الرسالة الصوتية إلا وأنتما متصلان معًا.</translation>
+    </message>
+    <message>
+        <source>Without the microphone a voice message cannot be recorded. Allow it in System Settings: Privacy and Security, Microphone.</source>
+        <comment>dialog when macOS refuses the microphone for a voice message</comment>
+        <translation>من دون الميكروفون لا يمكن تسجيل رسالة صوتية. اسمح به في إعدادات النظام: الخصوصية والأمن، الميكروفون.</translation>
+    </message>
+    <message>
+        <source>The voice message could not be saved</source>
+        <comment>dialog when a recorded voice message could not be written to disk</comment>
+        <translation>تعذّر حفظ الرسالة الصوتية</translation>
+    </message>
+    <message>
+        <source>A voice message lasts up to 5 minutes: this one was sent</source>
+        <comment>toast when a voice message reached its longest length and went by itself</comment>
+        <translation>تستمر الرسالة الصوتية 5 دقائق كحد أقصى، وقد أُرسل التسجيل</translation>
+    </message>
+    <message>
         <source>Goes right away: %1 is online</source>
         <comment>line under the message field; %1 is the first name</comment>
         <translation>ستُرسل فورًا: %1 متصل</translation>

@@ -21,6 +21,8 @@
 
 #include <QObject>
 
+#include <atomic>
+
 /**
  * @fn void Audio::frameAvailable(const int16_t *pcm, size_t sample_count, uint8_t channels,
  * uint32_t sampling_rate);
@@ -37,9 +39,25 @@ public:
 
     virtual operator bool() const = 0;
 
+    /**
+     * KHANDAQ (0.2.60): a source that hears every frame, those under the voice threshold too: a
+     * voice note keeps its pauses. A call keeps the threshold.
+     */
+    void setEveryFrame(bool on)
+    {
+        everyFrame = on;
+    }
+    bool hearsEveryFrame() const
+    {
+        return everyFrame;
+    }
+
 signals:
     void frameAvailable(const int16_t* pcm, size_t sample_count, uint8_t channels,
                         uint32_t sampling_rate);
     void volumeAvailable(qreal value);
     void invalidated();
+
+private:
+    std::atomic<bool> everyFrame{false};
 };

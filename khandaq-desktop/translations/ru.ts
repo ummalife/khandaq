@@ -847,6 +847,51 @@
         <translation>Эмодзи</translation>
     </message>
     <message>
+        <source>Record a voice message</source>
+        <comment>microphone button of the message field</comment>
+        <translation>Записать голосовое сообщение</translation>
+    </message>
+    <message>
+        <source>Cancel the voice message</source>
+        <comment>the cross in place of the paperclip while a voice message is recorded</comment>
+        <translation>Отменить голосовое сообщение</translation>
+    </message>
+    <message>
+        <source>Recording a voice message</source>
+        <comment>in place of the message field while a voice message is recorded</comment>
+        <translation>Запись голосового</translation>
+    </message>
+    <message>
+        <source>Too short: a voice message lasts at least a second</source>
+        <comment>toast when a voice message was shorter than a second</comment>
+        <translation>Слишком коротко: голосовое сообщение длится хотя бы секунду</translation>
+    </message>
+    <message>
+        <source>No microphone: check that one is connected</source>
+        <comment>toast when no microphone could be opened for a voice message</comment>
+        <translation>Нет микрофона: проверьте, что он подключён</translation>
+    </message>
+    <message>
+        <source>%1 is offline. A voice message goes only while you are both online.</source>
+        <comment>why a voice message cannot be recorded or sent now: %1 is the person</comment>
+        <translation>%1 не в сети. Голосовое сообщение уходит, только пока вы оба в сети.</translation>
+    </message>
+    <message>
+        <source>Without the microphone a voice message cannot be recorded. Allow it in System Settings: Privacy and Security, Microphone.</source>
+        <comment>dialog when macOS refuses the microphone for a voice message</comment>
+        <translation>Без микрофона голосовое сообщение не записать. Разрешите его в Системных настройках: Конфиденциальность и безопасность, Микрофон.</translation>
+    </message>
+    <message>
+        <source>The voice message could not be saved</source>
+        <comment>dialog when a recorded voice message could not be written to disk</comment>
+        <translation>Не удалось сохранить голосовое сообщение</translation>
+    </message>
+    <message>
+        <source>A voice message lasts up to 5 minutes: this one was sent</source>
+        <comment>toast when a voice message reached its longest length and went by itself</comment>
+        <translation>Голосовое сообщение длится не больше 5 минут: запись отправлена</translation>
+    </message>
+    <message>
         <source>Goes right away: %1 is online</source>
         <comment>line under the message field; %1 is the first name</comment>
         <translation>Уйдёт сразу: %1 в сети</translation>

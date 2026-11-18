@@ -48,6 +48,8 @@ NotesForm::NotesForm(const Core& core_, NotesChat& chat_, IChatLog& chatLog_,
     headWidget->setTile(QString(), 0, AirTile::Kind::Saved);
     headWidget->setNameEditable(false);
     composer->setAttachVisible(false);
+    // KHANDAQ (0.2.60): notes are text; a voice note has nobody to go to.
+    composer->setVoiceVisible(false);
 
     retranslateUi();
     Translator::registerHandler(std::bind(&NotesForm::retranslateUi, this), this);

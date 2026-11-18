@@ -26,15 +26,21 @@
 #include "src/core/core.h"
 #include "src/friendlist.h"
 #include "src/grouplist.h"
+#include "src/model/air/airmedia.h"
 #include "src/model/air/airmodel.h"
+#include "src/model/air/airvoiceencoder.h"
 #include "src/model/friend.h"
 #include "src/model/group.h"
 #include "src/model/notes.h"
+#include "src/persistence/paths.h"
 #include "src/persistence/settings.h"
 #include "src/persistence/smileypack.h"
+#include "src/platform/mediaaccess.h"
 #include "src/widget/air/aircomposer.h"
+#include "src/widget/air/airmediaparts.h"
 #include "src/widget/air/airoverlay.h"
 #include "src/widget/air/airstrings.h"
+#include "src/widget/air/airvoicerecorder.h"
 #include "src/widget/chatformheader.h"
 #include "src/widget/contentdialog.h"
 #include "src/widget/contentdialogmanager.h"
@@ -58,11 +64,15 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFutureWatcher>
 #include <QKeyEvent>
 #include <QPointer>
 #include <QRegularExpression>
 #include <QStringBuilder>
+#include <QtConcurrent/QtConcurrentRun>
 #include <QtGlobal>
+
+#include <memory>
 
 #ifdef SPELL_CHECKING
 #include <KF5/SonnetUi/sonnet/spellcheckdecorator.h>
@@ -251,6 +261,38 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
     // without a set has nothing to offer.
     composer->setEmojiVisible(!smileyPack.getEmoticons().empty());
     connect(composer, &AirComposer::emojiRequested, this, &GenericChatForm::showEmoticons);
+    // KHANDAQ (0.2.60): voice notes from the computer too; a build whose FFmpeg cannot write them
+    // offers no microphone.
+    composer->setVoiceVisible(AirVoiceEncoder::canEncode());
+    connect(composer, &AirComposer::voiceRequested, this, &GenericChatForm::startVoiceNote);
+    connect(composer, &AirComposer::voiceSendRequested, this, [this] { sendVoiceNote(false); });
+    connect(composer, &AirComposer::voiceCancelRequested, this, &GenericChatForm::cancelVoiceNote);
+    {
+        // One recorder for the app: every form listens and takes what is about its own note.
+        AirVoiceRecorder* const recorder = &AirVoiceRecorder::instance();
+        connect(recorder, &AirVoiceRecorder::elapsedChanged, this, [this, recorder](qint64 ms) {
+            if (recorder->isRecordingFor(this)) {
+                composer->setRecordingTime(ms, static_cast<double>(ms)
+                                                   / AirVoiceRecorder::longestMs);
+            }
+        });
+        connect(recorder, &AirVoiceRecorder::limitReached, this, [this, recorder] {
+            if (recorder->isRecordingFor(this)) {
+                composer->setRecordingTime(AirVoiceRecorder::longestMs, 1.0);
+                sendVoiceNote(true);
+            }
+        });
+        connect(recorder, &AirVoiceRecorder::lost, this, [this, recorder] {
+            if (recorder->isRecordingFor(this)) {
+                AirToast::post(this, AirStrings::text(AirStrings::Text::VoiceNoMicrophone));
+            }
+        });
+        connect(recorder, &AirVoiceRecorder::ended, this, [this, recorder] {
+            if (!recorder->isRecordingFor(this)) {
+                composer->setRecording(false);
+            }
+        });
+    }
     composer->addAbove(quotePreview);
     for (QPushButton* button : {emoteButton, fileButton, sendButton}) {
         button->setParent(contentWidget);
@@ -552,6 +594,114 @@ void GenericChatForm::sendPreparedFiles(const QStringList& paths)
     std::ignore = paths;
 }
 
+QString GenericChatForm::voiceRefusal() const
+{
+    return QString();
+}
+
+void GenericChatForm::startVoiceNote()
+{
+    AirVoiceRecorder& recorder = AirVoiceRecorder::instance();
+    if (recorder.isRecordingFor(this)) {
+        return;
+    }
+    const QString refusal = voiceRefusal();
+    if (!refusal.isEmpty()) {
+        AirToast::post(this, refusal);
+        return;
+    }
+    const QPointer<GenericChatForm> self(this);
+    MediaAccess::ask(MediaAccess::Device::Microphone, this, [self](bool granted) {
+        GenericChatForm* const form = self.data();
+        if (!form) {
+            return;
+        }
+        if (!granted) {
+            form->explainVoiceMicrophone();
+            return;
+        }
+        AirVoiceRecorder& voice = AirVoiceRecorder::instance();
+        // A note of another window (a chat of its own) gives way to this one, and a note that plays
+        // stops: the microphone would hear it, as in a call.
+        voice.cancel();
+        AirVoicePlayer::instance().stop();
+        if (!voice.start(form)) {
+            AirToast::post(form, AirStrings::text(AirStrings::Text::VoiceNoMicrophone));
+            return;
+        }
+        AirToast::dismiss(form);
+        form->composer->setRecording(true);
+    });
+}
+
+void GenericChatForm::sendVoiceNote(bool atLimit)
+{
+    AirVoiceRecorder& recorder = AirVoiceRecorder::instance();
+    if (!recorder.isRecordingFor(this) || !canSendNow()) {
+        // A group where nobody would get it: the note waits with Send, as a message does.
+        return;
+    }
+    const QString refusal = voiceRefusal();
+    if (!refusal.isEmpty()) {
+        // The person went offline while the note was recorded: it waits for them or the cross.
+        AirToast::post(this, refusal);
+        return;
+    }
+    if (recorder.elapsedMs() < AirVoiceRecorder::shortestMs) {
+        recorder.cancel();
+        AirToast::post(this, AirStrings::text(AirStrings::Text::VoiceTooShort));
+        return;
+    }
+    const QString folder = Air::voiceNoteFolder(settings.getPaths().getAppDataDirPath());
+    if (!QDir().mkpath(folder)) {
+        recorder.cancel();
+        AirDialog::notice(this, AirStrings::text(AirStrings::Text::FileNotSentTitle),
+                          AirStrings::text(AirStrings::Text::VoiceNotSaved));
+        return;
+    }
+    const QString path = QDir(folder).filePath(AirVoiceEncoder::newNoteName());
+    AirVoiceDecoder::Pcm pcm = recorder.finish();
+    // Minutes of sound take a moment to write: off the main thread, the field free meanwhile.
+    const auto samples = std::make_shared<std::vector<int16_t>>();
+    samples->swap(pcm.samples);
+    const int sampleRate = pcm.sampleRate;
+    auto* const writing = new QFutureWatcher<bool>(this);
+    connect(writing, &QFutureWatcher<bool>::finished, this, [this, writing, path, atLimit] {
+        const bool written = writing->result();
+        writing->deleteLater();
+        if (!written) {
+            AirDialog::notice(this, AirStrings::text(AirStrings::Text::FileNotSentTitle),
+                              AirStrings::text(AirStrings::Text::VoiceNotSaved));
+            return;
+        }
+        sendPreparedFiles(QStringList{path});
+        if (atLimit) {
+            AirToast::post(this, AirStrings::text(AirStrings::Text::VoiceLimitSent));
+        }
+    });
+    writing->setFuture(QtConcurrent::run([samples, sampleRate, path]() {
+        return AirVoiceEncoder::encode(*samples, sampleRate, path);
+    }));
+}
+
+void GenericChatForm::cancelVoiceNote()
+{
+    AirVoiceRecorder& recorder = AirVoiceRecorder::instance();
+    if (recorder.isRecordingFor(this)) {
+        recorder.cancel();
+    } else {
+        composer->setRecording(false);
+    }
+}
+
+void GenericChatForm::explainVoiceMicrophone()
+{
+    AirDialog::confirm(this, AirStrings::text(AirStrings::Text::CallMicTitle),
+                       AirStrings::text(AirStrings::Text::VoiceMicMessage),
+                       AirStrings::text(AirStrings::Text::CallOpenSettings), AirDialog::Verb::Ink,
+                       [] { MediaAccess::openSettings(MediaAccess::Device::Microphone); });
+}
+
 void GenericChatForm::takePastedImages()
 {
     connect(msgEdit, &ChatTextEdit::pasteImage, this, &GenericChatForm::previewImage);
@@ -841,6 +991,11 @@ void GenericChatForm::onSelectAllClicked()
 void GenericChatForm::hideEvent(QHideEvent* event)
 {
     hideFileMenu();
+    // A note is recorded for the chat on the screen: another chat opened cancels it. A window
+    // minimized (a hide of the system) does not.
+    if (!event->spontaneous() && AirVoiceRecorder::instance().isRecordingFor(this)) {
+        AirVoiceRecorder::instance().cancel();
+    }
     QWidget::hideEvent(event);
 }
 

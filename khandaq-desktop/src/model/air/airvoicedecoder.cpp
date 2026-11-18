@@ -42,10 +42,6 @@ extern "C"
 namespace AirVoiceDecoder {
 
 namespace {
-// AVERROR_EOF without the C cast inside its macro, which the warnings of the CI builds reject.
-constexpr int endOfFile =
-    -static_cast<int>(static_cast<unsigned>('E') | (static_cast<unsigned>('O') << 8)
-                      | (static_cast<unsigned>('F') << 16) | (static_cast<unsigned>(' ') << 24));
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 static_assert(endOfFile == AVERROR_EOF, "the end of a file as FFmpeg says it");

@@ -212,6 +212,11 @@ protected:
     void takePastedImages();
     /** Sends files of this computer into the chat, saying every refusal; nothing by default. */
     virtual void sendPreparedFiles(const QStringList& paths);
+    /**
+     * KHANDAQ (0.2.60): why a voice note cannot go from here now (the person is offline), said at
+     * the microphone and again at Send; empty when it can.
+     */
+    virtual QString voiceRefusal() const;
 
     QVBoxLayout* contentLayout;
     /** The field with the paperclip and "Send", and the line about the next message. */
@@ -251,6 +256,15 @@ protected:
     GroupList& groupList;
 
 private:
+    /**
+     * KHANDAQ (0.2.60): the voice note of this form (AirVoiceRecorder): the microphone asked for
+     * on macOS, the note written off the main thread into the voice folder, then sent as a file.
+     */
+    void startVoiceNote();
+    void sendVoiceNote(bool atLimit);
+    void cancelVoiceNote();
+    void explainVoiceMicrophone();
+
     /** Notes take no replies: they have no author to answer. */
     bool takesReplies = true;
     /** The entry the menu of the transcript was opened on, as Reply answers it. */

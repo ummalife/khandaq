@@ -125,6 +125,7 @@
 #include "src/widget/air/airstrings.h"
 #include "src/widget/air/airstyle.h"
 #include "src/widget/air/airtokens.h"
+#include "src/widget/air/airvoicerecorder.h"
 #include "src/widget/air/airwalk.h"
 #include "src/widget/air/airyou.h"
 #include "src/widget/contentdialogmanager.h"
@@ -337,8 +338,9 @@ Widget::Widget(Profile& profile_, IAudioControl& audio_, CameraSource& cameraSou
 void Widget::init()
 {
     ui->setupUi(this);
-    // Voice notes play through the output of calls.
+    // Voice notes play through the output of calls, and are recorded from their microphone.
     AirVoicePlayer::instance().setAudio(&audio);
+    AirVoiceRecorder::instance().setAudio(&audio);
 
 #ifndef Q_OS_MAC
     // macOS Dock uses CFBundle icns; setWindowIcon() with tray SVGs causes a white frame.
@@ -826,8 +828,9 @@ void Widget::updateIcons()
 
 Widget::~Widget()
 {
-    // The output belongs to the session: a note that plays stops with it.
+    // The output belongs to the session: a note that plays stops with it, one recorded goes.
     AirVoicePlayer::instance().setAudio(nullptr);
+    AirVoiceRecorder::instance().setAudio(nullptr);
     ipc.unregisterEventHandler(activateHandlerKey);
     // No window, no New contact: while logged out a link stays with the instance it was given to.
     ipc.unregisterEventHandler(uriHandlerKey);
@@ -4971,14 +4974,17 @@ void Widget::showStatusMenu(const QPoint& globalPos)
  * newcontact [text] | toxlink <tox:...> | fill <object name>|<text> | key <key> | focuslist |
  * card accept|decline <words> | newgroup [contact] | joingroup [text] | private <member> |
  * groupask <member>|moderator|member|observer|remove | sendfile <title>|<path> |
- * access microphone|camera granted|undecided|denied | network offline|online|report <path> |
+ * access microphone|camera granted|undecided|denied | voicefile <path>|off |
+ * network offline|online|report <path> |
  * waitband <words>|<ms> | band hold|leave|open | minimize | restore | link <address> | clear |
  * quote <text> | spoken list|log | grab <file.png> | grabpopup <file.png> |
  * frames <count> <ms> <path prefix> | audit <label> | idle <ms> <label> |
  * least <name> <depth> <label> | quit
  * The title "saved" names the saved messages; the group commands act on the open group. access
- * sets what the system answers before a call, without asking it. A click lands once the line is
- * done, so a menu it opens does not hold the script; grabpopup saves that menu, and key goes to it.
+ * sets what the system answers before a call, without asking it; voicefile records the voice
+ * notes from a file of raw 16-bit samples at 48 kHz instead of the microphone. A click lands once
+ * the line is done, so a menu it opens does not hold the script; grabpopup saves that menu, and key
+ * goes to it.
  * waitband holds the script until news that comes over the network is up as the band. spoken writes
  * what a screen reader is offered in the list or the open transcript into the log, one line each.
  * frames, audit and idle are the ones of AirWalk: the window saved while a motion runs, the focus
@@ -5343,6 +5349,15 @@ void Widget::runShotScript(const QString& path)
                                               : what == QStringLiteral("undecided")
                                                   ? MediaAccess::State::Undecided
                                                   : MediaAccess::State::Granted);
+            } else if (command == QStringLiteral("voicefile")) {
+                // voicefile <path>|off: the sound of a voice note from a file, not the microphone.
+                if (rest == QStringLiteral("off")) {
+                    AirVoiceRecorder::instance().setTestMicrophone(nullptr);
+                } else {
+                    const QString soundPath = rest;
+                    AirVoiceRecorder::instance().setTestMicrophone(
+                        [soundPath] { return AirWalk::fileMicrophone(soundPath); });
+                }
             } else if (command == QStringLiteral("hours")) {
                 // hours <title>|<hours ago,...>: online marks for the day strip of a person.
                 const QString entryId = entryByTitle(rest.section('|', 0, 0).trimmed());

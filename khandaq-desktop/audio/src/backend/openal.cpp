@@ -639,12 +639,13 @@ void OpenAL::doInput()
     for (auto source : sources) {
         emit source->volumeAvailable(volume);
     }
-    if (!isActive) {
-        return;
-    }
 
     // NOTE(sudden6): this loop probably doesn't scale too well with many sources
     for (auto source : sources) {
+        // KHANDAQ (0.2.60): a voice note hears the quiet frames too (IAudioSource::setEveryFrame).
+        if (!isActive && !source->hearsEveryFrame()) {
+            continue;
+        }
         emit source->frameAvailable(inputBuffer, AUDIO_FRAME_SAMPLE_COUNT_PER_CHANNEL, inputChannels,
                                     AUDIO_SAMPLE_RATE);
     }

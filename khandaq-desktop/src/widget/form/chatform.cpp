@@ -682,6 +682,16 @@ void ChatForm::sendPreparedFiles(const QStringList& paths)
     sendLocalFiles(paths);
 }
 
+QString ChatForm::voiceRefusal() const
+{
+    // A Tox file goes only while both are online (sendLocalFiles): a note is not recorded for
+    // nothing.
+    if (Status::isOnline(f->getStatus())) {
+        return QString();
+    }
+    return AirStrings::text(AirText::VoiceOffline).arg(Air::shortName(f->getDisplayedName()));
+}
+
 void ChatForm::sendLocalFiles(const QStringList& paths)
 {
     if (paths.isEmpty()) {

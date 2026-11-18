@@ -488,6 +488,14 @@ Transfers stay Tox file transfers, and a voice note keeps the `.file.m4a` name t
 - **A voice note** is a player: a round Play button, Pause while it plays, as in Telegram (the screen
   reader says Listen and Pause), the wave, and the length in tabular figures (the time played while it
   plays). One not fetched yet shows its size and waits for Accept like any file.
+- **Recording a voice note on the desktop** (0.2.60, users asked for it): the microphone follows the
+  emoji in the row of the field. A click starts the note; the kq-progress bar takes the place of the
+  field (the microphone glyph, "Recording a voice message", the time in tabular figures and the share
+  of the longest note), the cross takes the place of the paperclip and cancels it (Esc too), and Send
+  sends it (Enter too). Nothing blinks. A note under a second is not sent; at five minutes, which keeps
+  it under the 4 MB iOS fetches by itself, the microphone closes and the note goes. It is written as
+  the phones write theirs: AAC-LC at 64 kbit/s, one channel, `voice_<8 hex>.file.m4a`. To a person
+  offline no note is started: the toast says that it goes only while both are online, as a file does.
 - **A group says its limit before a file is chosen:** the attach sheet reads "A group takes files up
   to 200 MB", the limit its refusal already used.
 - **In transit:** a file of ours that waits for a person who is offline lies in the tray with the

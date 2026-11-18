@@ -21,6 +21,9 @@
 
 #ifdef KHANDAQ_SCREENSHOT_HOOK
 
+#include <memory>
+
+class IAudioSource;
 class QString;
 class QWidget;
 
@@ -57,6 +60,13 @@ void idle(QWidget* window, int ms, const QString& label);
  * each, beside the size each has: where a window's least size comes from.
  */
 void least(QWidget* root, int depth, const QString& label);
+
+/**
+ * A microphone that says the sound of path instead: raw 16-bit little-endian samples of one channel
+ * at 48 kHz, in frames of 20 ms as OpenAL gives them, then silence. For the voice notes of the
+ * walks on a computer without a microphone; null when the file cannot be read.
+ */
+std::unique_ptr<IAudioSource> fileMicrophone(const QString& path);
 
 } // namespace AirWalk
 

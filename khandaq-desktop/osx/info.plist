@@ -99,7 +99,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Khandaq needs access to the camera for video calls.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Khandaq needs access to the microphone for audio calls.</string>
+	<string>Khandaq needs access to the microphone for audio calls and voice messages.</string>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>

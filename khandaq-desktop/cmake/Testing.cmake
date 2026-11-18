@@ -80,6 +80,7 @@ auto_test(model airreply "" "")
 auto_test(model airseenreceipts "" "")
 auto_test(model airstart "" "")
 auto_test(model airvoicedecoder "" "")
+auto_test(model airvoiceencoder "" "")
 auto_test(model airyou "" "")
 # The generated design files (airtokens.h, icons, fonts, palettes) must match design/system.
 find_package(Python3 COMPONENTS Interpreter QUIET)
@@ -105,6 +106,7 @@ auto_test(widget airoverlay "" "")
 auto_test(widget airwidgets "" "")
 auto_test(widget airtray "res/air.qrc" "") # the Plex faces
 auto_test(widget airmediaparts "" "")
+auto_test(widget airvoicerecorder "" "")
 auto_test(widget airyoupage "" "")
 auto_test(widget chatquotepreview "res/air.qrc" "") # the x icon
 auto_test(widget removechatdialog "" "mock_library")

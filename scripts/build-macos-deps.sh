@@ -371,8 +371,10 @@ build_x264() {
 
 build_ffmpeg() {
     # Only what the messenger uses: the AVFoundation camera, the mov demuxer and AAC decoder for
-    # voice messages from the phones (src/model/air/airvoicedecoder.cpp), the H.264/H.265 decoders
-    # and the libx264 encoder toxav uses for video calls, MJPEG/raw camera frames and swscale.
+    # voice messages from the phones (src/model/air/airvoicedecoder.cpp), the native AAC encoder
+    # for the voice messages the desktop records (airvoiceencoder.cpp writes their M4A boxes itself:
+    # no muxer, 0.2.60), the H.264/H.265 decoders and the libx264 encoder toxav uses for video
+    # calls, MJPEG/raw camera frames and swscale.
     # No network, no filters, no hardware codecs. Homebrew's build had all of FFmpeg plus x265,
     # SVT-AV1, dav1d, vmaf, LAME and OpenSSL, none of which the app calls.
     local v=8.1.3 d
@@ -402,7 +404,7 @@ build_ffmpeg() {
         --disable-everything --disable-avfilter --disable-swresample --disable-iamf \
         --enable-indev=avfoundation --enable-demuxer=mov \
         --enable-decoder=aac,h264,hevc,mjpeg,rawvideo --enable-parser=aac,h264,hevc,mjpeg \
-        --enable-encoder=libx264 \
+        --enable-encoder=aac,libx264 \
         --extra-cflags="$CFLAGS $CPPFLAGS" --extra-ldflags="$LDFLAGS" \
         && make -j"$JOBS" && make install)
 }
@@ -494,7 +496,7 @@ build_toxext_messages() {
 ALL=(
     "pcre2 10.49" "zstd 1.5.7" "gettext 1.0" "glib 2.88.2" "libpng 1.6.59" "md4c 0.5.3"
     "xz 5.8.4" "jpeg 3.2.1" "tiff 4.7.2" "webp 1.6.0" "freetype 2.15.0"
-    "sodium 1.0.22" "opus 1.6.1" "vpx 1.16.0" "x264 r3222" "ffmpeg 8.1.3+mov-hardening"
+    "sodium 1.0.22" "opus 1.6.1" "vpx 1.16.0" "x264 r3222" "ffmpeg 8.1.3+mov-hardening+aac-enc"
     "openal 1.25.2" "sqlcipher 4.16.0" "qrencode 4.1.1" "libexif 0.6.26"
     "toxcore 2e7a0675+msgv3-cap+gc-search-key+ftv2-stale-accept+gc-ipv6-mtu+gc-recv-gap+join-by-id+gc-rehandshake+gc-roaming" "toxext 0.0.3" "toxext_messages 0.0.3"
 )

@@ -22,6 +22,7 @@
 #include "src/widget/air/aircomposer.h"
 #include "src/widget/air/airgroupdossier.h"
 #include "src/widget/air/airgroupviews.h"
+#include "src/widget/air/airmediaparts.h"
 #include "src/widget/air/airnewcontact.h"
 #include "src/widget/air/airnewgroup.h"
 #include "src/widget/air/airoverlay.h"
@@ -157,6 +158,7 @@ private slots:
     void inviteListKeepsTheChoiceByKey();
     void readOnlyBarTakesThePlaceOfTheField();
     void composerOffersTheEmojiAtTheEndOfTheField();
+    void composerRecordsAVoiceNoteInPlaceOfTheField();
     void dossierSaysTheRoleAndListsTheMembers();
     void memberMenuIsTheSameFromTheRowAndFromTheirName();
     void aGroupByInvitationOnlySharesNoKeyAndItsFounderOpensIt();
@@ -521,6 +523,118 @@ void TestAirGroupViews::composerOffersTheEmojiAtTheEndOfTheField()
     QVERIFY(emoji->isVisible());
     composer->setEmojiVisible(false);
     QVERIFY(!emoji->isVisible());
+}
+
+/**
+ * The microphone follows the emoji (0.2.60). While a note is recorded its bar stands where the
+ * field was and the cross where the paperclip was; Send and Enter send the note, the cross and Esc
+ * cancel it, and the field comes back with its draft.
+ */
+void TestAirGroupViews::composerRecordsAVoiceNoteInPlaceOfTheField()
+{
+    QWidget host;
+    host.resize(700, 300);
+    auto* const field = new QTextEdit();
+    auto* const composer = new AirComposer(field, &host);
+    composer->setGeometry(0, 0, 700, 300);
+    host.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&host));
+    auto* const voice = part<QAbstractButton>(composer, "composerVoice");
+    auto* const emoji = part<QAbstractButton>(composer, "composerEmoji");
+    auto* const attach = part<QAbstractButton>(composer, "composerAttach");
+    auto* const cancel = part<QAbstractButton>(composer, "composerVoiceCancel");
+    auto* const send = part<QAbstractButton>(composer, "composerSend");
+    auto* const recording = part<QWidget>(composer, "composerRecording");
+    auto* const time = part<QLabel>(composer, "composerRecordingTime");
+    auto* const bar = part<AirProgressBar>(composer, "composerRecordingBar");
+    QVERIFY(voice->isVisible());
+    QVERIFY(!cancel->isVisible());
+    QVERIFY(!recording->isVisible());
+    QCOMPARE(voice->accessibleName(), AirStrings::text(Text::ComposeVoice));
+    QCOMPARE(voice->toolTip(), AirStrings::text(Text::ComposeVoice));
+    const QRect emojiBox(emoji->mapTo(composer, QPoint()), emoji->size());
+    const QRect voiceBox(voice->mapTo(composer, QPoint()), voice->size());
+    const QRect sendBox(send->mapTo(composer, QPoint()), send->size());
+    QVERIFY(emojiBox.right() < voiceBox.left());
+    QVERIFY(voiceBox.right() < sendBox.left());
+    // Tab: the emoji, the microphone, Send, as the row shows them.
+    host.activateWindow();
+    QVERIFY(QTest::qWaitForWindowActive(&host));
+    emoji->setFocus();
+    QVERIFY(emoji->hasFocus());
+    QTest::keyClick(emoji, Qt::Key_Tab);
+    QCOMPARE(QApplication::focusWidget(), static_cast<QWidget*>(voice));
+    QTest::keyClick(voice, Qt::Key_Tab);
+    QCOMPARE(QApplication::focusWidget(), static_cast<QWidget*>(send));
+
+    // The microphone asks; the form starts the note.
+    QSignalSpy asks(composer, &AirComposer::voiceRequested);
+    voice->click();
+    QCOMPARE(asks.count(), 1);
+    QVERIFY(!composer->isRecording());
+
+    field->setPlainText(QStringLiteral("a draft"));
+    field->setFocus();
+    composer->setRecording(true);
+    QVERIFY(composer->isRecording());
+    QVERIFY(recording->isVisible());
+    QVERIFY(cancel->isVisible());
+    QVERIFY(!field->isVisible());
+    QVERIFY(!attach->isVisible());
+    QVERIFY(!emoji->isVisible());
+    QVERIFY(!voice->isVisible());
+    QVERIFY(send->hasFocus());
+    QCOMPARE(time->text(), QStringLiteral("0:00"));
+    QCOMPARE(cancel->accessibleName(), AirStrings::text(Text::ComposeVoiceCancel));
+    const QRect cancelBox(cancel->mapTo(composer, QPoint()), cancel->size());
+    const QRect barBox(recording->mapTo(composer, QPoint()), recording->size());
+    QVERIFY(cancelBox.right() < barBox.left());
+    composer->setRecordingTime(83500, 0.25);
+    QCOMPARE(time->text(), QStringLiteral("1:23"));
+    QCOMPARE(bar->progress(), 0.25);
+    QVERIFY(recording->accessibleName().startsWith(AirStrings::text(Text::ComposeRecording)));
+    QVERIFY(recording->accessibleName().endsWith(QStringLiteral("1:23")));
+
+    QSignalSpy texts(composer, &AirComposer::sendRequested);
+    QSignalSpy notes(composer, &AirComposer::voiceSendRequested);
+    QSignalSpy cancels(composer, &AirComposer::voiceCancelRequested);
+    send->click();
+    QCOMPARE(notes.count(), 1);
+    QCOMPARE(texts.count(), 0);
+    QTest::keyClick(send, Qt::Key_Return);
+    QCOMPARE(notes.count(), 2);
+    QTest::keyClick(send, Qt::Key_Escape);
+    QCOMPARE(cancels.count(), 1);
+    cancel->click();
+    QCOMPARE(cancels.count(), 2);
+    // While Send waits (a group where nobody would get it), Enter does not send the note either.
+    composer->setSendBlocked(true);
+    QTest::keyClick(composer, Qt::Key_Return);
+    QCOMPARE(notes.count(), 2);
+    composer->setSendBlocked(false);
+
+    composer->setRecording(false);
+    QVERIFY(!composer->isRecording());
+    QVERIFY(field->isVisible());
+    QVERIFY(attach->isVisible());
+    QVERIFY(emoji->isVisible());
+    QVERIFY(voice->isVisible());
+    QVERIFY(!cancel->isVisible());
+    QVERIFY(!recording->isVisible());
+    QCOMPARE(field->toPlainText(), QStringLiteral("a draft"));
+    send->click();
+    QCOMPARE(texts.count(), 1);
+    QCOMPARE(notes.count(), 2);
+
+    // A form without the paperclip or the microphone (notes) keeps them hidden after a note.
+    composer->setAttachVisible(false);
+    composer->setVoiceVisible(false);
+    QVERIFY(!voice->isVisible());
+    composer->setRecording(true);
+    composer->setRecording(false);
+    QVERIFY(!attach->isVisible());
+    QVERIFY(!voice->isVisible());
+    QVERIFY(emoji->isVisible());
 }
 
 /** The dossier says your role in words and lists everyone, you included, by role. */

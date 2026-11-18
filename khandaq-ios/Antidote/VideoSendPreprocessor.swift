@@ -648,11 +648,23 @@ enum PickedMediaLoader {
 /// and preview. Neither depends on how large the file is.
 enum ChatFileMediaLoader {
     private static let queue = DispatchQueue(label: "khandaq.chat.filemedia", qos: .utility)
-    private static let imageCache = NSCache<NSString, UIImage>()
+    /// The preview of each video as loadPreview read it: its first frame and its length together. The
+    /// cache had kept the frame alone, so a video bound again from it (a reaction, a message coming in,
+    /// a scroll back) lost the length in its corner (0.2.61).
+    private static let previewCache = NSCache<NSString, CachedPreview>()
 
     struct Preview {
         let image: UIImage
         let durationText: String?
+    }
+
+    /// A preview as NSCache holds it: an object.
+    private final class CachedPreview {
+        let preview: Preview
+
+        init(_ preview: Preview) {
+            self.preview = preview
+        }
     }
 
     static func isVideoFile(uti: String?, fileName: String?) -> Bool {
@@ -715,16 +727,13 @@ enum ChatFileMediaLoader {
     }
 
     static func cachedPreview(for path: String) -> Preview? {
-        guard let image = imageCache.object(forKey: path as NSString) else {
-            return nil
-        }
-        return Preview(image: image, durationText: nil)
+        return previewCache.object(forKey: path as NSString)?.preview
     }
 
     static func loadPreview(at path: String, completion: @escaping (Preview?) -> Void) {
-        if let cached = imageCache.object(forKey: path as NSString) {
+        if let cached = cachedPreview(for: path) {
             DispatchQueue.main.async {
-                completion(Preview(image: cached, durationText: nil))
+                completion(cached)
             }
             return
         }
@@ -756,11 +765,10 @@ enum ChatFileMediaLoader {
                 return
             }
 
-            imageCache.setObject(image, forKey: path as NSString)
-
             let seconds = CMTimeGetSeconds(asset.duration)
             let durationText = seconds.isFinite && seconds > 0 ? String(timeInterval: seconds) : nil
             let preview = Preview(image: image, durationText: durationText)
+            previewCache.setObject(CachedPreview(preview), forKey: path as NSString)
 
             DispatchQueue.main.async {
                 completion(preview)

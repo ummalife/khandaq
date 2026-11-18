@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import AVFoundation
 import ImageIO
 import XCTest
 @testable import Antidote
@@ -322,6 +323,7 @@ class ChatFileEntryActivationTests: CellSnapshotTest {
 /**
  The preview of a photo of any size (0.2.61): its size as it is seen, turned by its EXIF orientation, and a
  picture read down to the side of the preview, so a large photo shows as a photo instead of a file row.
+ The preview of a video keeps its length: a video bound again from the cache lost it from its corner.
  */
 class ChatFileMediaLoaderTests: XCTestCase {
     private var directory: URL!
@@ -376,6 +378,81 @@ class ChatFileMediaLoaderTests: XCTestCase {
         try Data("not a picture".utf8).write(to: url)
         XCTAssertNil(ChatFileMediaLoader.imagePixelSize(at: url.path))
         XCTAssertNil(ChatFileMediaLoader.downsampledImage(at: url.path, maxPixelSide: 540))
+    }
+
+    /// An H.264 video of `seconds`, ten frames a second, each a shade of its own.
+    private func video(seconds: Int) throws -> String {
+        let url = directory.appendingPathComponent("clip.mp4")
+        let width = 128
+        let height = 96
+        let fps: Int32 = 10
+        let writer = try AVAssetWriter(outputURL: url, fileType: AVFileType.mp4)
+        let input = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height,
+        ])
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: width,
+            kCVPixelBufferHeightKey as String: height,
+        ])
+        writer.add(input)
+        XCTAssertTrue(writer.startWriting(), "the writer did not start: \(String(describing: writer.error))")
+        writer.startSession(atSourceTime: kCMTimeZero)
+        for frame in 0..<(seconds * Int(fps)) {
+            while !input.isReadyForMoreMediaData {
+                Thread.sleep(forTimeInterval: 0.01)
+            }
+            var buffer: CVPixelBuffer?
+            guard let pool = adaptor.pixelBufferPool,
+                  CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer) == kCVReturnSuccess,
+                  let pixels = buffer else {
+                XCTFail("no pixel buffer for frame \(frame)")
+                break
+            }
+            CVPixelBufferLockBaseAddress(pixels, [])
+            if let base = CVPixelBufferGetBaseAddress(pixels) {
+                memset(base, Int32(frame * 8 % 256), CVPixelBufferGetDataSize(pixels))
+            }
+            CVPixelBufferUnlockBaseAddress(pixels, [])
+            XCTAssertTrue(adaptor.append(pixels, withPresentationTime: CMTimeMake(Int64(frame), fps)))
+        }
+        input.markAsFinished()
+        writer.endSession(atSourceTime: CMTimeMake(Int64(seconds) * Int64(fps), fps))
+        let written = expectation(description: "the video is written")
+        writer.finishWriting {
+            written.fulfill()
+        }
+        wait(for: [written], timeout: 20)
+        XCTAssertEqual(writer.status, .completed, "\(String(describing: writer.error))")
+        return url.path
+    }
+
+    /// The preview of `path` as loadPreview gives it.
+    private func preview(of path: String) -> ChatFileMediaLoader.Preview? {
+        var result: ChatFileMediaLoader.Preview?
+        let loaded = expectation(description: "the preview of \(path)")
+        ChatFileMediaLoader.loadPreview(at: path) { preview in
+            result = preview
+            loaded.fulfill()
+        }
+        wait(for: [loaded], timeout: 20)
+        return result
+    }
+
+    func testAVideoBoundAgainFromTheCacheKeepsItsLength() throws {
+        let path = try video(seconds: 3)
+
+        let first = preview(of: path)
+        XCTAssertNotNil(first, "the video has no preview")
+        XCTAssertEqual(first?.durationText, String(timeInterval: 3))
+
+        // A row bound again (a reaction, a message coming in, a scroll back) reads the cache.
+        XCTAssertEqual(ChatFileMediaLoader.cachedPreview(for: path)?.durationText, String(timeInterval: 3),
+                       "the cached preview of a video has lost its length")
+        XCTAssertEqual(preview(of: path)?.durationText, String(timeInterval: 3),
+                       "a preview loaded again from the cache has lost its length")
     }
 }
 

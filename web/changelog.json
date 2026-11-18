@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-17T07:26:38Z",
+  "generated_at": "2026-11-18T00:35:51Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,55 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.58",
+      "date": "2026-11-18",
+      "title": "Reply on the desktop, and the author's name opens the member",
+      "summary": "On Windows, macOS and Linux you can now reply to a message or a file from its menu, and the reply reaches phones with its quote. In a group, the name over a message opens that member: write privately, mute and more. On Android, a reply to your own message shows the others your name instead of You.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "Reply on the desktop",
+          "description": "Right-click a message or a file and choose Reply, the first item of the menu. The bar above the field shows whom you answer and the start of their words, and the cross cancels it. The reply reaches Android and iPhone as a reply with its quote, and their replies show on the desktop as before. A reply to your own message carries your name to the others.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "The author's name opens the member",
+          "description": "In a group, click or tap the name over someone's message to open the same menu as their row in the member list: write privately, copy key, mute, and on phones add to contacts. Before, the name did nothing.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux",
+            "android",
+            "ios"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Android: your name in replies to your own message",
+          "description": "A reply to your own message showed the others the word You in its quote. It now shows your name, as iPhone does since 0.2.56.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "Right clicks no longer select text",
+          "description": "On the desktop, every third right click in a row selected the text of a message. Now only left clicks select.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.57",
       "date": "2026-11-17",

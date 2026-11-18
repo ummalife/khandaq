@@ -144,7 +144,10 @@ QStringList localFilePathsFromMimeData(const QMimeData* mimeData, const QString&
         QStringList candidates;
         for (const QUrl& url : mimeData->urls()) {
             if (url.isLocalFile()) {
-                candidates.append(url.toLocalFile());
+                // KHANDAQ (0.2.60): by its file:// address, which the test below reads on every
+                // system. The bare path passed only as a path of Windows: a file copied in Finder
+                // or in a file manager of Linux (/Users/..., /home/...) came in as its name.
+                candidates.append(url.toString(QUrl::FullyEncoded));
             } else {
                 candidates.append(url.toString());
             }

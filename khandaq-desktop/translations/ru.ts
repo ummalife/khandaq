@@ -1882,9 +1882,9 @@
         <translation>Пригласить в группу</translation>
     </message>
     <message>
-        <source>An invitation goes over your connection with the contact, so only contacts online now can be invited.</source>
+        <source>An invitation goes over your connection with the contact: a contact offline now gets it once they are online.</source>
         <comment>invitation list</comment>
-        <translation>Приглашение уходит по связи с контактом, поэтому пригласить можно тех, кто сейчас в сети.</translation>
+        <translation>Приглашение уходит по связи с контактом: тот, кто сейчас не в сети, получит его, когда появится.</translation>
     </message>
     <message>
         <source>Choose whom to invite</source>
@@ -1894,7 +1894,7 @@
     <message>
         <source>gets the invitation once online</source>
         <comment>invitation list: a contact who is offline; the invitation waits for them</comment>
-        <translation>получит приглашение, когда будет в сети</translation>
+        <translation>получит приглашение, когда появится</translation>
     </message>
     <message>
         <source>No contacts yet: add someone first.</source>
@@ -1957,9 +1957,9 @@
         <translation>Войти может любой, у кого есть ключ группы, без приглашения.</translation>
     </message>
     <message>
-        <source>Invitations go at once, so only contacts online can be invited here. Invite the others later from the group dossier.</source>
+        <source>Contacts online get the invitation at once, the others once they come online.</source>
         <comment>New group: over the contacts to invite</comment>
-        <translation>Приглашения уходят сразу, поэтому здесь можно пригласить только тех, кто в сети. Остальных пригласите позже из досье группы.</translation>
+        <translation>Те, кто в сети, получат приглашение сразу, остальные получат, когда появятся в сети.</translation>
     </message>
     <message>
         <source>Create group</source>

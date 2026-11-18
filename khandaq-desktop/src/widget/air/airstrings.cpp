@@ -392,7 +392,7 @@ const Source sources[] = {
     {Text::GroupOpenMessage, QT_TRANSLATE_NOOP3("Air", "Anyone who has the group key can then join without an invitation, and every member can see and share the key.", "question before opening a group to anyone with its key")},
     {Text::GroupOpenVerb, QT_TRANSLATE_NOOP3("Air", "Open the group", "the verb of the question of opening a group to anyone with its key")},
     {Text::GroupInviteTitle, QT_TRANSLATE_NOOP3("Air", "Invite to the group", "title of the invitation list")},
-    {Text::InviteOnlineNote, QT_TRANSLATE_NOOP3("Air", "An invitation goes over your connection with the contact, so only contacts online now can be invited.", "invitation list")},
+    {Text::InviteOnlineNote, QT_TRANSLATE_NOOP3("Air", "An invitation goes over your connection with the contact: a contact offline now gets it once they are online.", "invitation list")},
     {Text::InviteChooseFirst, QT_TRANSLATE_NOOP3("Air", "Choose whom to invite", "invitation list: why the button waits")},
     {Text::InviteWhenOnline, QT_TRANSLATE_NOOP3("Air", "gets the invitation once online", "invitation list: a contact who is offline; the invitation waits for them")},
     {Text::InviteNoContacts, QT_TRANSLATE_NOOP3("Air", "No contacts yet: add someone first.", "invitation list without contacts")},
@@ -407,7 +407,7 @@ const Source sources[] = {
     {Text::PrivacyInviteOnlyNote, QT_TRANSLATE_NOOP3("Air", "Only people invited by a member can join. The group key alone does not let anyone in.", "who can join a group: consequence")},
     {Text::PrivacyOpen, QT_TRANSLATE_NOOP3("Air", "Open to anyone with the group key", "who can join a group")},
     {Text::PrivacyOpenNote, QT_TRANSLATE_NOOP3("Air", "Anyone who has the group key can join, no invitation needed.", "who can join a group: consequence")},
-    {Text::NewGroupInviteNote, QT_TRANSLATE_NOOP3("Air", "Invitations go at once, so only contacts online can be invited here. Invite the others later from the group dossier.", "New group: over the contacts to invite")},
+    {Text::NewGroupInviteNote, QT_TRANSLATE_NOOP3("Air", "Contacts online get the invitation at once, the others once they come online.", "New group: over the contacts to invite")},
     {Text::NewGroupCreate, QT_TRANSLATE_NOOP3("Air", "Create group", "New group: the main button")},
     {Text::NewGroupNameFirst, QT_TRANSLATE_NOOP3("Air", "Name the group to create it", "New group: why the button waits")},
     {Text::NewGroupNameTooLong, QT_TRANSLATE_NOOP3("Air", "The name is too long for a group: shorten it", "New group: why the button waits")},
@@ -1299,6 +1299,12 @@ QString messageWords(const QString& raw)
         return text(Text::MessageUnknownFormat);
     }
     return read.marked ? read.body : raw;
+}
+
+QString fileWords(const QString& fileName)
+{
+    return Air::isVoiceNote(fileName) ? text(Text::VoiceNote)
+                                      : text(Text::FileMessage).arg(fileName);
 }
 
 QString replyName(const QString& name)

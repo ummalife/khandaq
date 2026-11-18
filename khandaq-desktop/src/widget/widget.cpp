@@ -145,6 +145,17 @@
 
 namespace {
 
+/** A contact as the invitation lists and Core::inviteToGroup take it. */
+Air::InviteCandidate inviteCandidateOf(const Friend& frnd)
+{
+    Air::InviteCandidate candidate;
+    candidate.friendId = static_cast<int>(frnd.getId());
+    candidate.publicKey = frnd.getPublicKey().toString();
+    candidate.name = frnd.getDisplayedName();
+    candidate.online = Status::isOnline(frnd.getStatus());
+    return candidate;
+}
+
 /**
  * @brief Dangerous way to find out if a path is writable.
  * @param filepath Path to file which should be deleted.
@@ -1593,7 +1604,8 @@ void Widget::addFriend(uint32_t friendId, const ToxPk& friendPk)
     }
 
     Friend* newfriend = friendList->addFriend(friendId, friendPk, settings);
-    auto rawChatroom = new FriendChatroom(newfriend, contentDialogManager.get(), *core, settings, *groupList);
+    auto rawChatroom =
+        new FriendChatroom(newfriend, contentDialogManager.get(), settings, *groupList);
     std::shared_ptr<FriendChatroom> chatroom(rawChatroom);
     const auto compact = settings.getCompactLayout();
     auto widget = new FriendWidget(chatroom, compact, settings, style, *messageBoxManager, profile);
@@ -1681,6 +1693,8 @@ void Widget::addFriend(uint32_t friendId, const ToxPk& friendPk)
     connect(widget, &FriendWidget::copyFriendIdToClipboard, this, &Widget::copyFriendIdToClipboard);
     connect(widget, &FriendWidget::newGroupRequested, this,
             [this](const ToxPk& contactPk) { openNewGroup(contactPk.toString()); });
+    connect(widget, &FriendWidget::groupInviteRequested, this,
+            [this, newfriend](Group* group) { inviteToGroup(*group, *newfriend); });
     connect(widget, &FriendWidget::renameRequested, friendForm, [friendForm](FriendWidget* row) {
         // The chat opens, its input taking the focus, and then the name takes it for the edit.
         emit row->chatroomWidgetClicked(row);
@@ -2077,6 +2091,8 @@ void Widget::addGroupDialog(const Group* group, ContentDialog* dialog)
             [=]() { dialog->removeGroup(groupId); });
     connect(groupWidget, &GroupWidget::chatroomWidgetClicked, chatForm, &ChatForm::focusInput);
     connect(groupWidget, &GroupWidget::newWindowOpened, this, &Widget::openNewDialog);
+    // A contact dropped on the row in the chat window is invited as on the row it stands for.
+    connect(groupWidget, &GroupWidget::inviteRequested, widget, &GroupWidget::inviteRequested);
 
     // Signal transmission from the created `groupWidget` (which shown in
     // ContentDialog) to the `widget` (which shown in main widget)
@@ -2223,7 +2239,7 @@ void Widget::showFriendBand(QWidget* front, const Friend& f, const QString& text
     if (filename.isEmpty()) {
         band.body = shown ? text : AirStrings::text(Text::NotifyNewMessage);
     } else {
-        band.body = shown ? AirStrings::text(Text::FileMessage).arg(filename)
+        band.body = shown ? AirStrings::fileWords(filename)
                           : AirStrings::text(Text::NotifyIncomingFile);
     }
     band.tile = AirBanner::Tile::Person;
@@ -3675,8 +3691,7 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
             av->invalidateGroupCallPeerSource(*newgroup, user);
         });
     }
-    auto rawChatroom = new GroupChatroom(newgroup, contentDialogManager.get(), *core,
-        *friendList);
+    auto rawChatroom = new GroupChatroom(newgroup, contentDialogManager.get(), *friendList);
     std::shared_ptr<GroupChatroom> chatroom(rawChatroom);
 
     const auto compact = settings.getCompactLayout();
@@ -3743,6 +3758,11 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
 #endif
     connect(widget, &GroupWidget::removeGroup, this, widgetRemoveGroup);
     connect(widget, &GroupWidget::middleMouseClicked, this, [=]() { removeGroup(groupId); });
+    connect(widget, &GroupWidget::inviteRequested, this, [this, newgroup](const ToxPk& friendPk) {
+        if (const Friend* frnd = friendList->findFriend(friendPk)) {
+            inviteToGroup(*newgroup, *frnd);
+        }
+    });
     connect(widget, &GroupWidget::chatroomWidgetClicked, form, &ChatForm::focusInput);
     connect(newgroup, &Group::titleChangedByUser, this, &Widget::titleChangedByUser);
     connect(core, &Core::usernameSet, newgroup, &Group::setSelfName);
@@ -4657,12 +4677,7 @@ QVector<Air::InviteCandidate> Widget::inviteCandidates() const
 {
     QVector<Air::InviteCandidate> candidates;
     for (Friend* const frnd : friendList->getAllFriends()) {
-        Air::InviteCandidate candidate;
-        candidate.friendId = static_cast<int>(frnd->getId());
-        candidate.publicKey = frnd->getPublicKey().toString();
-        candidate.name = frnd->getDisplayedName();
-        candidate.online = Status::isOnline(frnd->getStatus());
-        candidates.append(candidate);
+        candidates.append(inviteCandidateOf(*frnd));
     }
     return candidates;
 }
@@ -4687,6 +4702,13 @@ void Widget::createAirGroup(const QString& name, Air::GroupPrivacy privacy,
     if (!invited.isEmpty()) {
         GroupChatForm::tellInvites(airList, this, tally);
     }
+}
+
+void Widget::inviteToGroup(const Group& group, const Friend& frnd)
+{
+    const Air::InviteTally tally = GroupChatForm::sendInvites(
+        *core, airLocal, group.getId(), group.getPersistentId(), {inviteCandidateOf(frnd)});
+    GroupChatForm::tellInvites(airList, this, tally);
 }
 
 void Widget::joinAirGroup(const QString& groupKey)

@@ -212,22 +212,24 @@ NotificationData NotificationGenerator::fileTransferNotification(const Friend* f
 
     auto numChats = getNumChats(friendNotifications, groupNotifications);
     auto numMessages = getNumMessages(friendNotifications, groupNotifications);
-    const QString fileWords = AirStrings::text(AirStrings::Text::FileMessage);
-
     if (numChats > 1 || numMessages > 1)
     {
         ret.title = generateTitle(friendNotifications, groupNotifications, f);
         ret.message = generateContent(friendNotifications, groupNotifications,
-                                      fileWords.arg(filename), f->getPublicKey());
+                                      AirStrings::fileWords(filename), f->getPublicKey());
     }
     else
     {
-        // The person, then the file as the list says it, with its size: "File: plan.pdf (5.2 MB)".
+        // The person, then the file as the list says it, with its size: "File: plan.pdf (5.2 MB)",
+        // "Voice message (43 KB)".
         ret.title = f->getDisplayedName();
-        ret.message = fileWords.arg(
-            filename + QStringLiteral(" (")
-            + AirStrings::byteSizeText(static_cast<qint64>(fileSize), Translator::locale())
-            + QLatin1Char(')'));
+        const QString size = QStringLiteral(" (")
+                             + AirStrings::byteSizeText(static_cast<qint64>(fileSize),
+                                                        Translator::locale())
+                             + QLatin1Char(')');
+        ret.message = Air::isVoiceNote(filename)
+                          ? AirStrings::text(AirStrings::Text::VoiceNote) + size
+                          : AirStrings::text(AirStrings::Text::FileMessage).arg(filename + size);
     }
 
     ret.pixmap = getSenderAvatar(profile, f->getPublicKey());

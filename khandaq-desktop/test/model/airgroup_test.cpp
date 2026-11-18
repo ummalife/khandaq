@@ -589,7 +589,7 @@ void TestAirGroup::sentInvitationsAreCounted()
     QCOMPARE(AirStrings::text(Text::InviteLater, 2),
              QStringLiteral("2 приглашения уйдут при появлении в сети"));
     QCOMPARE(AirStrings::text(Text::InviteWhenOnline),
-             QStringLiteral("получит приглашение, когда будет в сети"));
+             QStringLiteral("получит приглашение, когда появится"));
     use(QStringLiteral("en"));
     QCOMPARE(AirStrings::text(Text::InviteLater, 1),
              QStringLiteral("Invitation will go once the contact is online"));

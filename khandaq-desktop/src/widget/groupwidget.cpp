@@ -312,7 +312,9 @@ void GroupWidget::dropEvent(QDropEvent* ev)
         return;
     }
 
-    chatroom->inviteFriend(pk);
+    // KHANDAQ (0.2.60): Widget invites them as the menu of a contact does, now or once they are
+    // online; GroupChatroom asked a contact online only and left the others out in silence.
+    emit inviteRequested(pk);
 
     if (!active) {
         setBackgroundRole(QPalette::Window);

@@ -432,6 +432,11 @@ private:
                         const QVector<Air::InviteCandidate>& invited);
     void joinAirGroup(const QString& groupKey);
     /**
+     * Invites a contact to a group from the menu of the contact or a drop on the group's row: now,
+     * or once they are online (GroupChatForm::sendInvites), the toast saying which.
+     */
+    void inviteToGroup(const Group& group, const Friend& frnd);
+    /**
      * Opens the group the user just joined. A group they were still leaving is joined only after
      * toxcore let go of the old instance (Core::replaceLeavingGroup), once this has returned: it
      * opens when Core::groupJoined puts it in the list (onGroupJoined).

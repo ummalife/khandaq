@@ -25,7 +25,6 @@
 #include <QString>
 #include <QVector>
 
-class Core;
 class IDialogsManager;
 class Friend;
 class Group;
@@ -48,8 +47,8 @@ class FriendChatroom : public QObject, public Chatroom
 {
     Q_OBJECT
 public:
-    FriendChatroom(Friend* frnd_, IDialogsManager* dialogsManager_, Core& core_,
-        Settings& settings_, GroupList& groupList);
+    FriendChatroom(Friend* frnd_, IDialogsManager* dialogsManager_, Settings& settings_,
+        GroupList& groupList);
 
     Chat* getChat() override;
 
@@ -59,12 +58,8 @@ public slots:
 
     void setActive(bool active);
 
-    bool canBeInvited() const;
-
     int getCircleId() const;
     QString getCircleName() const;
-
-    void inviteFriend(const Group* group);
 
     bool autoAcceptEnabled() const;
     QString getAutoAcceptDir() const;
@@ -88,7 +83,6 @@ private:
     bool active{false};
     Friend* frnd{nullptr};
     IDialogsManager* dialogsManager{nullptr};
-    Core& core;
     Settings& settings;
     GroupList& groupList;
 };

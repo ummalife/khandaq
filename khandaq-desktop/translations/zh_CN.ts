@@ -1858,9 +1858,9 @@
         <translation>邀请加入群组</translation>
     </message>
     <message>
-        <source>An invitation goes over your connection with the contact, so only contacts online now can be invited.</source>
+        <source>An invitation goes over your connection with the contact: a contact offline now gets it once they are online.</source>
         <comment>invitation list</comment>
-        <translation>邀请通过你与联系人的连接发送，因此只能邀请当前在线的联系人。</translation>
+        <translation>邀请通过你与联系人的连接发送：当前不在线的联系人会在上线后收到。</translation>
     </message>
     <message>
         <source>Choose whom to invite</source>
@@ -1933,9 +1933,9 @@
         <translation>任何持有群组密钥的人都可以加入，无需邀请。</translation>
     </message>
     <message>
-        <source>Invitations go at once, so only contacts online can be invited here. Invite the others later from the group dossier.</source>
+        <source>Contacts online get the invitation at once, the others once they come online.</source>
         <comment>New group: over the contacts to invite</comment>
-        <translation>邀请会立即发送，因此这里只能邀请在线的联系人。其他人可稍后在群组资料中邀请。</translation>
+        <translation>在线的联系人会立即收到邀请，其他人上线后会收到。</translation>
     </message>
     <message>
         <source>Create group</source>

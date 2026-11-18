@@ -882,6 +882,12 @@ QString trayHeadText(int count);
  * sentence that says so. The list, the notifications and the bands read a message through it.
  */
 QString messageWords(const QString& raw);
+/**
+ * KHANDAQ (0.2.60): a file where a person reads of it, in the list, the bands and the
+ * notifications: "File: plan.pdf"; a voice note is "Voice message", not the name of its file
+ * (voice_F5CD3544.file.m4a), as the phones show it.
+ */
+QString fileWords(const QString& fileName);
 /** Who wrote the message a reply quotes, as the quote names them: Unknown when it names nobody. */
 QString replyName(const QString& name);
 

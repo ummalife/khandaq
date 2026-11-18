@@ -40,6 +40,7 @@
 #include "src/widget/air/airmediaparts.h"
 #include "src/widget/air/airoverlay.h"
 #include "src/widget/air/airstrings.h"
+#include "src/widget/air/airtokens.h"
 #include "src/widget/air/airvoicerecorder.h"
 #include "src/widget/chatformheader.h"
 #include "src/widget/contentdialog.h"
@@ -65,6 +66,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFutureWatcher>
+#include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QPointer>
 #include <QRegularExpression>
@@ -329,6 +331,8 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
     contentLayout->addWidget(composer);
 
     // A pasted picture or a screenshot waits here, right over the field (takePastedImages).
+    // KHANDAQ (0.2.60): in line with the field, as far from the edge as the composer keeps it; it
+    // stood against the edge of the column. Hidden, its row takes no room.
     imagePreview = new ImagePreviewButton(this);
     imagePreview->setFixedSize(100, 100);
     imagePreview->setFlat(true);
@@ -340,7 +344,12 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
     cancelPreview->setIcon(QIcon(style.getImagePath("rejectCall/rejectCall.svg", settings)));
     cancelPreview->setFlat(true);
     connect(cancelPreview, &QPushButton::pressed, this, &GenericChatForm::cancelImagePreview);
-    contentLayout->insertWidget(contentLayout->indexOf(composer), imagePreview);
+    auto* const previewRow = new QHBoxLayout();
+    previewRow->setContentsMargins(AirTokens::Space::s16, AirTokens::Space::s8,
+                                   AirTokens::Space::s16, 0);
+    previewRow->addWidget(imagePreview);
+    previewRow->addStretch(1);
+    contentLayout->insertLayout(contentLayout->indexOf(composer), previewRow);
 
     // KHANDAQ (0.2.58): Reply first, on the message or the file the menu is opened on.
     replyAction = menu.addAction(QString());

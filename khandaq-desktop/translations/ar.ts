@@ -1918,9 +1918,9 @@
         <translation>دعوة إلى المجموعة</translation>
     </message>
     <message>
-        <source>An invitation goes over your connection with the contact, so only contacts online now can be invited.</source>
+        <source>An invitation goes over your connection with the contact: a contact offline now gets it once they are online.</source>
         <comment>invitation list</comment>
-        <translation>تُرسل الدعوة عبر اتصالك بجهة الاتصال، لذا لا يمكن دعوة إلا المتصلين الآن.</translation>
+        <translation>تُرسل الدعوة عبر اتصالك بجهة الاتصال: من ليس متصلًا الآن يتلقاها عند اتصاله.</translation>
     </message>
     <message>
         <source>Choose whom to invite</source>
@@ -1993,9 +1993,9 @@
         <translation>يمكن لأي شخص لديه مفتاح المجموعة الانضمام دون دعوة.</translation>
     </message>
     <message>
-        <source>Invitations go at once, so only contacts online can be invited here. Invite the others later from the group dossier.</source>
+        <source>Contacts online get the invitation at once, the others once they come online.</source>
         <comment>New group: over the contacts to invite</comment>
-        <translation>تُرسل الدعوات فورًا، لذا لا يمكن هنا دعوة إلا المتصلين. ادعُ الآخرين لاحقًا من ملف المجموعة.</translation>
+        <translation>تصل الدعوة فورًا إلى المتصلين، وتصل إلى الآخرين عند اتصالهم.</translation>
     </message>
     <message>
         <source>Create group</source>

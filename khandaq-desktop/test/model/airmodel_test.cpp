@@ -1223,6 +1223,12 @@ void TestAirModel::markupThisBuildCannotReadIsShownInWords()
     // A mention keeps its words.
     QCOMPARE(AirStrings::messageWords(QStringLiteral("[KQ|m|ABCDEF12:amina][KQ/m]Салам")),
              QStringLiteral("Салам"));
+
+    // A file by its name; a voice note as one, not by the name of its file (0.2.60).
+    QCOMPARE(AirStrings::fileWords(QStringLiteral("plan.pdf")), QStringLiteral("File: plan.pdf"));
+    QCOMPARE(AirStrings::fileWords(QStringLiteral("voice_F5CD3544.file.m4a")),
+             QStringLiteral("Voice message"));
+    QCOMPARE(AirStrings::fileWords(QStringLiteral("notes.m4a")), QStringLiteral("File: notes.m4a"));
 }
 
 void TestAirModel::anEntryShowsAPlainMessageAsItCame()

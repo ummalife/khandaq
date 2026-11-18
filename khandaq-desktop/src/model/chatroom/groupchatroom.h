@@ -23,7 +23,6 @@
 
 #include <QObject>
 
-class Core;
 class IDialogsManager;
 class Group;
 class ToxPk;
@@ -33,8 +32,7 @@ class GroupChatroom : public QObject, public Chatroom
 {
     Q_OBJECT
 public:
-    GroupChatroom(Group* group_, IDialogsManager* dialogsManager_, Core& core_,
-        FriendList& friendList);
+    GroupChatroom(Group* group_, IDialogsManager* dialogsManager_, FriendList& friendList);
 
     Chat* getChat() override;
 
@@ -44,7 +42,6 @@ public:
     void resetEventFlags();
 
     bool friendExists(const ToxPk& pk);
-    void inviteFriend(const ToxPk& pk);
 
     bool possibleToOpenInNewWindow() const;
     bool canBeRemovedFromWindow() const;
@@ -53,6 +50,5 @@ public:
 private:
     Group* group{nullptr};
     IDialogsManager* dialogsManager{nullptr};
-    Core& core;
     FriendList& friendList;
 };

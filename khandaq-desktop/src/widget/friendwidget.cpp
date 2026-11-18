@@ -47,6 +47,7 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QMimeData>
+#include <QPointer>
 
 #include <cassert>
 
@@ -133,7 +134,6 @@ void FriendWidget::showContextMenu(const QPoint& globalPos, const QList<QAction*
     menu.addSeparator();
     QMenu* inviteMenu =
         menu.addMenu(tr("Invite to group", "Menu to invite a friend to a groupchat"));
-    inviteMenu->setEnabled(chatroom->canBeInvited());
     const auto newGroupAction = inviteMenu->addAction(tr("To new group"));
     connect(newGroupAction, &QAction::triggered, this,
             [this] { emit newGroupRequested(chatroom->getFriend()->getPublicKey()); });
@@ -141,7 +141,15 @@ void FriendWidget::showContextMenu(const QPoint& globalPos, const QList<QAction*
 
     for (const auto& group : chatroom->getGroups()) {
         const auto groupAction = inviteMenu->addAction(tr("Invite to group '%1'").arg(group.name));
-        connect(groupAction, &QAction::triggered, [=]() { chatroom->inviteFriend(group.group); });
+        // KHANDAQ (0.2.60): offline too, the way New group and the dossier invite (Widget): the
+        // invitation went past the queue for the contacts offline, and the menu was disabled then.
+        // The menu runs the events, so the group may be gone by the time it is chosen.
+        const QPointer<Group> chosen = group.group;
+        connect(groupAction, &QAction::triggered, this, [this, chosen] {
+            if (chosen) {
+                emit groupInviteRequested(chosen);
+            }
+        });
     }
 
     const auto circleId = chatroom->getCircleId();

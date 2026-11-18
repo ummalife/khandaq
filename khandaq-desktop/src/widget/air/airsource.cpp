@@ -428,7 +428,7 @@ AirSource::Conversation AirSource::read(const IChatLog& log, bool group) const
                 const bool outgoing = file.file.direction == ToxFile::SENDING;
                 result.hasItem = true;
                 result.lastTime = file.timestamp;
-                result.preview = AirStrings::text(Text::FileMessage).arg(flat(file.file.fileName));
+                result.preview = AirStrings::fileWords(flat(file.file.fileName));
                 result.delivery = outgoing ? fileDelivery(file.file.status) : Air::Delivery::None;
                 result.lastFileMoving = result.delivery == Air::Delivery::Sent;
             }

@@ -396,6 +396,11 @@ private:
     void updateGroupFileInChatLog(const GroupId& groupId, const ToxPk& sender, const ToxFile& file);
     void saveWindowGeometry();
     void saveSplitterGeometry();
+    /**
+     * Restart in Settings (the interface size): the window keeps its place as on a close, and
+     * Khandaq starts again on this profile once this run has let go of it (AppRestart).
+     */
+    void restartApplication();
     void cycleChats(bool forward);
     void searchChats();
     void changeDisplayMode();

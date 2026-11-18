@@ -29,6 +29,7 @@
 #include "src/persistence/globalsettingsupgrader.h"
 #include "src/persistence/personalsettingsupgrader.h"
 #include "src/persistence/smileypack.h"
+#include "src/platform/interfacescale.h"
 #include "src/widget/style.h"
 #include "src/widget/tool/imessageboxmanager.h"
 #ifdef QTOX_PLATFORM_EXT
@@ -260,6 +261,7 @@ void Settings::loadGlobal()
                 style = "None";
         }
         nameColors = s.value("nameColors", false).toBool();
+        interfaceScale = InterfaceScale::normalized(s.value("interfaceScale", 100).toInt());
     }
     s.endGroup();
 
@@ -757,6 +759,7 @@ void Settings::saveGlobal()
         s.setValue("useEmoticons", useEmoticons);
         s.setValue("themeColor", themeColor);
         s.setValue("themeMode", static_cast<int>(themeMode));
+        s.setValue("interfaceScale", interfaceScale);
         s.setValue("style", style);
         s.setValue("nameColors", nameColors);
         s.setValue("statusChangeNotificationEnabled", statusChangeNotificationEnabled);
@@ -2256,6 +2259,19 @@ void Settings::setThemeMode(ThemeMode mode)
 {
     if (setVal(themeMode, mode)) {
         emit themeModeChanged(static_cast<int>(mode));
+    }
+}
+
+int Settings::getInterfaceScale() const
+{
+    QMutexLocker locker{&bigLock};
+    return interfaceScale;
+}
+
+void Settings::setInterfaceScale(int percent)
+{
+    if (setVal(interfaceScale, InterfaceScale::normalized(percent))) {
+        emit interfaceScaleChanged(InterfaceScale::normalized(percent));
     }
 }
 

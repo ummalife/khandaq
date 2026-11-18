@@ -696,6 +696,13 @@ set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
   src/platform/mediaaccess.h
   src/platform/traynotify.cpp
   src/platform/traynotify.h)
+
+# The interface size, read before the application object is made, and Restart for it.
+set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
+  src/platform/apprestart.cpp
+  src/platform/apprestart.h
+  src/platform/interfacescale.cpp
+  src/platform/interfacescale.h)
 if(APPLE)
   set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
     src/platform/mediaaccess_osx.mm)

@@ -112,6 +112,7 @@ auto_test(widget chatquotepreview "res/air.qrc" "") # the x icon
 auto_test(widget removechatdialog "" "mock_library")
 auto_test(widget chattextedit "" "")
 
+auto_test(platform interfacescale "" "")
 if (UNIX)
   auto_test(platform posixsignalnotifier "" "")
 endif()

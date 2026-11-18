@@ -2984,6 +2984,31 @@
         <translation>مضغوطة</translation>
     </message>
     <message>
+        <source>Interface size</source>
+        <comment>Settings, Appearance: how large the whole interface is drawn, as a percentage</comment>
+        <translation>حجم الواجهة</translation>
+    </message>
+    <message>
+        <source>Takes effect after Khandaq restarts.</source>
+        <comment>Settings, Appearance: under the interface size, chosen but not yet in force</comment>
+        <translation>يسري بعد إعادة تشغيل Khandaq.</translation>
+    </message>
+    <message>
+        <source>Restart Khandaq?</source>
+        <comment>Settings, Appearance: dialog after a new interface size is chosen</comment>
+        <translation>إعادة تشغيل Khandaq؟</translation>
+    </message>
+    <message>
+        <source>The interface takes its new size when Khandaq starts again.</source>
+        <comment>Settings, Appearance: dialog after a new interface size is chosen</comment>
+        <translation>تأخذ الواجهة حجمها الجديد عند تشغيل Khandaq من جديد.</translation>
+    </message>
+    <message>
+        <source>Restart</source>
+        <comment>Settings, Appearance: button of the dialog; closes Khandaq and starts it again</comment>
+        <translation>إعادة التشغيل</translation>
+    </message>
+    <message>
         <source>Conversations</source>
         <comment>Settings, Appearance: group of how messages look</comment>
         <translation>المحادثات</translation>

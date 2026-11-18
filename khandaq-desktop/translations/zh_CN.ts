@@ -2884,6 +2884,31 @@
         <translation>紧凑</translation>
     </message>
     <message>
+        <source>Interface size</source>
+        <comment>Settings, Appearance: how large the whole interface is drawn, as a percentage</comment>
+        <translation>界面大小</translation>
+    </message>
+    <message>
+        <source>Takes effect after Khandaq restarts.</source>
+        <comment>Settings, Appearance: under the interface size, chosen but not yet in force</comment>
+        <translation>重启 Khandaq 后生效。</translation>
+    </message>
+    <message>
+        <source>Restart Khandaq?</source>
+        <comment>Settings, Appearance: dialog after a new interface size is chosen</comment>
+        <translation>重启 Khandaq？</translation>
+    </message>
+    <message>
+        <source>The interface takes its new size when Khandaq starts again.</source>
+        <comment>Settings, Appearance: dialog after a new interface size is chosen</comment>
+        <translation>Khandaq 再次启动后，界面将使用新的大小。</translation>
+    </message>
+    <message>
+        <source>Restart</source>
+        <comment>Settings, Appearance: button of the dialog; closes Khandaq and starts it again</comment>
+        <translation>重启</translation>
+    </message>
+    <message>
         <source>Conversations</source>
         <comment>Settings, Appearance: group of how messages look</comment>
         <translation>对话</translation>

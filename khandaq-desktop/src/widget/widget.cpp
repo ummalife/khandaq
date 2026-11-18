@@ -109,6 +109,7 @@
 #include "src/persistence/offlinemsgengine.h"
 #include "src/persistence/profile.h"
 #include "src/persistence/settings.h"
+#include "src/platform/apprestart.h"
 #include "src/platform/timer.h"
 #include "src/widget/air/airband.h"
 #include "src/widget/air/airchatparts.h"
@@ -1323,6 +1324,8 @@ AirSettingsPage& Widget::settingsScreen()
         settingsPage = new AirSettingsPage(settings, profile, *profileInfo, *airLocal, callsForm,
                                            updateCheck.get());
         connect(settingsPage, &AirSettingsPage::trayIconChanged, this, &Widget::updateIcons);
+        connect(settingsPage, &AirSettingsPage::restartRequested, this,
+                &Widget::restartApplication);
         // Connect again goes to the thread the node runs on.
         const QPointer<Core> node(core);
         settingsPage->setNode(airSource, [node] {
@@ -4010,6 +4013,15 @@ void Widget::saveWindowGeometry()
 
     settings.setWindowGeometry(saveGeometry());
     settings.setWindowState(saveState());
+}
+
+void Widget::restartApplication()
+{
+    saveWindowGeometry();
+    saveSplitterGeometry();
+    // The same profile again: one without a password, or with its password kept, opens by itself;
+    // another stops at the sign-in with this profile chosen.
+    AppRestart::request({QStringLiteral("-p"), profile.getName()});
 }
 
 void Widget::saveSplitterGeometry()

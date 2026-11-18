@@ -30,6 +30,7 @@
 #include "src/persistence/profilefile.h"
 #include "src/persistence/settings.h"
 #include "src/persistence/smileypack.h"
+#include "src/platform/interfacescale.h"
 #if !DESKTOP_NOTIFICATIONS
 #include "src/platform/traynotify.h"
 #endif
@@ -66,6 +67,7 @@
 #include <QMenu>
 #include <QPainter>
 #include <QPointer>
+#include <QScreen>
 #include <QSaveFile>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -110,6 +112,12 @@ constexpr int awayMinutesMax = 2 * 24 * 60;
 std::function<QString()> words(Text text)
 {
     return [text] { return AirStrings::text(text); };
+}
+
+/** An interface size as the systems name theirs, alike in every language: "125%". */
+QString interfaceSizeName(int percent)
+{
+    return QString::number(percent) + QLatin1Char('%');
 }
 
 /** The names of the sections, in the order of AirSettingsPage::Section. */
@@ -985,10 +993,11 @@ AirSwitch* AirSettingsPage::switchRow(QVBoxLayout* rows, const Words& title, con
 }
 
 QWidget* AirSettingsPage::menuRow(QVBoxLayout* rows, const Words& title, const Words& value,
-                                  const std::function<void(QWidget* anchor)>& open)
+                                  const std::function<void(QWidget* anchor)>& open,
+                                  const Words& detail)
 {
     auto* const button = new MenuButton(this);
-    QWidget* const line = row(rows, title, nullptr, button);
+    QWidget* const line = row(rows, title, detail, button);
     readers.push_back([button, value] {
         button->setText(value());
         button->updateGeometry();
@@ -1089,6 +1098,16 @@ void AirSettingsPage::buildAppearance()
         look, words(Text::SettingsLanguage),
         [this] { return Air::languageName(settings.getTranslation()); },
         [this](QWidget* anchor) { openLanguageMenu(anchor); });
+    menuRow(
+        look, words(Text::SettingsInterfaceSize),
+        [this] { return interfaceSizeName(settings.getInterfaceScale()); },
+        [this](QWidget* anchor) { openInterfaceSizeMenu(anchor); },
+        [this] {
+            // Said while the size chosen is not the one this run started with.
+            return settings.getInterfaceScale() == InterfaceScale::inForce()
+                       ? QString()
+                       : AirStrings::text(Text::SettingsInterfaceSizeLater);
+        });
     segmentRow(
         look, words(Text::SettingsList),
         {words(Text::SettingsListRegular), words(Text::SettingsListCompact)},
@@ -1197,6 +1216,56 @@ void AirSettingsPage::openLanguageMenu(QWidget* anchor)
         Translator::translate(locale);
         refresh();
     });
+}
+
+void AirSettingsPage::openInterfaceSizeMenu(QWidget* anchor)
+{
+    QMenu menu(anchor);
+    QActionGroup* const choices = choiceGroup(menu);
+    const int current = settings.getInterfaceScale();
+    // A size the screen of the window has no room for is not offered: the window could not be
+    // made small enough to fit, and Settings might be left beyond the edge of the screen.
+    const QWidget* const top = window();
+    const QWindow* const handle = top->windowHandle();
+    const QScreen* const screen =
+        handle && handle->screen() ? handle->screen() : QGuiApplication::primaryScreen();
+    QSize room = screen ? screen->availableGeometry().size() : QSize();
+    room -= QSize(std::max(0, top->frameGeometry().width() - top->width()),
+                  std::max(0, top->frameGeometry().height() - top->height()));
+    for (const int percent : InterfaceScale::percents()) {
+        QAction* const action = choices->addAction(interfaceSizeName(percent));
+        action->setCheckable(true);
+        action->setChecked(percent == current);
+        action->setData(percent);
+        action->setEnabled(percent == current
+                           || InterfaceScale::fits(room, top->minimumSize(),
+                                                   InterfaceScale::inForce(), percent));
+    }
+    menu.addActions(choices->actions());
+    const QPointer<AirSettingsPage> self(this);
+    QAction* const chosen = menu.exec(menuPoint(anchor));
+    if (!self || !chosen) {
+        return;
+    }
+    const int percent = chosen->data().toInt();
+    if (percent == current) {
+        return;
+    }
+    // Stored at once: Khandaq reads it at its next start, however that start comes.
+    settings.setInterfaceScale(percent);
+    settings.saveGlobal();
+    refresh();
+    if (percent == InterfaceScale::inForce()) {
+        return;
+    }
+    AirDialog::confirm(this, AirStrings::text(Text::SettingsInterfaceSizeRestartTitle),
+                       AirStrings::text(Text::SettingsInterfaceSizeRestartMessage),
+                       AirStrings::text(Text::SettingsInterfaceSizeRestart), AirDialog::Verb::Ink,
+                       [self] {
+                           if (self) {
+                               emit self->restartRequested();
+                           }
+                       });
 }
 
 void AirSettingsPage::openFontMenu(QWidget* anchor)

@@ -38,6 +38,17 @@ public:
 
     bool setPortable(bool portable);
     bool isPortable() const;
+
+    /**
+     * Whether the khandaq.ini in applicationDir makes Khandaq portable, as Portable::Auto decides.
+     * Needs no application object.
+     */
+    static bool portableIn(const QString& applicationDir);
+    /**
+     * The directory of the settings files when Khandaq is not portable, ending with a directory
+     * separator. Needs no application object.
+     */
+    static QString systemSettingsDirPath();
 #if PATHS_VERSION_TCS_COMPLIANT
     QString getGlobalSettingsPath() const;
     QString getProfilesDir() const;

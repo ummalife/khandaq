@@ -18,6 +18,13 @@
 #   8192 messages later it would block the message of its slot, or be handed on in its place.
 # Nothing changes on the wire: an old peer sends and takes the same packets.
 #
+# QA live of 0.2.59: a phone whose network came back with another address timed its sender out a minute later and
+# came back through a new handshake, which the sender took on the connection it still had. A handshake starts the
+# message ids again at 2 and 3, and the connection kept what the old ids had left in its arrays: the next file reached
+# that phone only up to chunk 90 of 171, with no cut at all, since a packet whose slot an old one still held was not
+# queued for it. A peer that comes back through a new handshake leaves nothing of the old one in the arrays now;
+# khandaq-desktop/buildscripts/toxcore/auto_tests/group_rehandshake_test.c runs it on two local toxes.
+#
 # The sender side is apply_khandaq_media_resend.py (#201), which runs before this script: the oldest unacknowledged
 # packet goes again every second. The desktop copy of toxcore (khandaq-desktop/buildscripts/toxcore, both
 # amalgamations) and the iOS copy (khandaq-ios/local_pod_repo/toxcore) carry both changes;
@@ -349,9 +356,52 @@ REPL_KEPT_ACK = ("    /* request missing packet */\n"
                  "    }\n"
                  "\n")
 
+# --- group_chats.c: a peer that comes back through a new handshake leaves nothing of the old one in the arrays ---
+ORIG_CLEAR_ARRAYS = ("    return send_gc_handshake_packet(chat, gconn, GH_RESPONSE, gconn->pending_handshake_type, 0);\n"
+                     "}\n"
+                     "\n"
+                     "/** @brief Handles handshake request packets.\n")
+
+REPL_CLEAR_ARRAYS = ("    return send_gc_handshake_packet(chat, gconn, GH_RESPONSE, gconn->pending_handshake_type, 0);\n"
+                     "}\n"
+                     "\n"
+                     "/** KHANDAQ (0.2.59, group files): drops every packet held for the peer of `gconn` and every one kept from it. */\n"
+                     "non_null()\n"
+                     "static void clear_message_arrays(GC_Connection *gconn)\n"
+                     "{\n"
+                     "    for (uint16_t i = 0; i < GCC_BUFFER_SIZE; ++i) {\n"
+                     "        free(gconn->send_array[i].data);\n"
+                     "        free(gconn->recv_array[i].data);\n"
+                     "\n"
+                     "        gconn->send_array[i] = (GC_Message_Array_Entry) {\n"
+                     "            nullptr\n"
+                     "        };\n"
+                     "        gconn->recv_array[i] = (GC_Message_Array_Entry) {\n"
+                     "            nullptr\n"
+                     "        };\n"
+                     "    }\n"
+                     "}\n"
+                     "\n"
+                     "/** @brief Handles handshake request packets.\n")
+
+ORIG_REHANDSHAKE = ("        if (gconn->handshaked) {\n"
+                    "            gconn->handshaked = false;\n"
+                    "            LOGGER_DEBUG(chat->log, \"Handshaked peer sent a handshake request\");\n")
+
+REPL_REHANDSHAKE = ("        if (gconn->handshaked) {\n"
+                    "            gconn->handshaked = false;\n"
+                    "            // KHANDAQ (0.2.59, group files): the peer starts the connection again, and the new handshake starts the\n"
+                    "            // message ids again at 2 and 3. What the old ids left in the arrays goes with them: a packet still held\n"
+                    "            // for the peer took the slot of a new one, which was then not queued for it (\"Send array entry isn't\n"
+                    "            // empty\") while the same group packet went to the other members, and a packet kept from the peer would\n"
+                    "            // be handed on as the new message of its id.\n"
+                    "            clear_message_arrays(gconn);\n"
+                    "            LOGGER_DEBUG(chat->log, \"Handshaked peer sent a handshake request\");\n")
+
 PATCHES = (
     ("group_connection.c", ((ORIG_RECEIVE, REPL_RECEIVE),)),
-    ("group_chats.c", ((ORIG_FRAGMENT_ACK, REPL_FRAGMENT_ACK), (ORIG_KEPT_ACK, REPL_KEPT_ACK))),
+    ("group_chats.c", ((ORIG_FRAGMENT_ACK, REPL_FRAGMENT_ACK), (ORIG_KEPT_ACK, REPL_KEPT_ACK),
+                       (ORIG_CLEAR_ARRAYS, REPL_CLEAR_ARRAYS), (ORIG_REHANDSHAKE, REPL_REHANDSHAKE))),
 )
 
 

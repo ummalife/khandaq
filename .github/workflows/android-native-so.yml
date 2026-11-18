@@ -181,6 +181,12 @@ jobs:
                 rc=1
               fi
             done
+            if grep -q 'clear_message_arrays(gconn);' "$tree/toxcore/group_chats.c"; then
+              echo "gc re-handshake fix present in $tree/toxcore/group_chats.c"
+            else
+              echo "ERROR: gc re-handshake fix MISSING in $tree/toxcore/group_chats.c -- a member back through a new handshake would get a file only in part"
+              rc=1
+            fi
           done
           echo "checked $trees patched toxcore tree(s)"
           if [ "$trees" -eq 0 ]; then

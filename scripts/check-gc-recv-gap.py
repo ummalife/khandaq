@@ -8,16 +8,22 @@ dropped, a fragment taken was not acknowledged, a packet kept for later was hand
 acknowledged as message 0, and the copy of a kept packet that then came in order stayed in the receive array. The
 sending side is #201: the oldest packet a peer has not acknowledged goes again every second.
 
+QA live of 0.2.59: a phone whose network came back with another address timed its sender out and came back through a
+new handshake, which the sender took on the connection it still had; the next file reached the phone only up to chunk
+90 of 171, with no cut at all. A handshake starts the message ids again, and the connection kept what the old ids had
+left in its arrays, so a packet whose slot an old one still held was not queued for the phone. A peer that comes back
+through a new handshake leaves nothing of the old one in the arrays now.
+
 Every client receives group files, so every client has to carry both changes:
 - desktop: buildscripts/toxcore/toxcore/group_{chats,connection}.c and both amalgamations;
 - iOS: local_pod_repo/toxcore (group_chats.m, group_connection.m);
 - Android: patches/apply_khandaq_media_resend.py (#201) and patches/apply_khandaq_gc_recv_gap.py, run by
   circle_scripts/deps.sh on the cloned toxcore for each of the 4 ABIs.
 
-This check holds the text of both changes, as the Android scripts carry it, in every copy, and the lines that make
+This check holds the text of the changes, as the Android scripts carry it, in every copy, and the lines that make
 them work; proves that the two Android scripts turn the desktop files without the changes into exactly the desktop
-files; and keeps the toxcore test that runs them on two local toxes (auto_tests/group_recv_gap_test.c) in the
-desktop build.
+files; and keeps the toxcore tests that run them on two local toxes (auto_tests/group_recv_gap_test.c and
+auto_tests/group_rehandshake_test.c) in the desktop build.
 
     scripts/check-gc-recv-gap.py
     scripts/check-gc-recv-gap.py --self-test    # every check must catch the mutant made for it (CI)
@@ -58,9 +64,12 @@ ANDROID_RUNS = (
      "python3 /root/work/patches/apply_khandaq_media_resend.py toxcore/group_connection.c || exit 1"),
 )
 
-TEST = "khandaq-desktop/buildscripts/toxcore/auto_tests/group_recv_gap_test.c"
-TEST_LIST = "khandaq-desktop/buildscripts/toxcore/auto_tests/CMakeLists.txt"
-TEST_ENTRY = "auto_test(group_recv_gap)"
+TEST_DIR = "khandaq-desktop/buildscripts/toxcore/auto_tests"
+TEST_LIST = f"{TEST_DIR}/CMakeLists.txt"
+TESTS = (
+    (f"{TEST_DIR}/group_recv_gap_test.c", "auto_test(group_recv_gap)"),
+    (f"{TEST_DIR}/group_rehandshake_test.c", "auto_test(group_rehandshake)"),
+)
 
 # The lines the change works by, each once in every copy: were the Android scripts ever cut from a desktop file
 # without one of them, the text check below would hold the copies to that.
@@ -72,6 +81,8 @@ ESSENTIALS = (
     ("what the receive array keeps is taken in one go", "#define GCC_RECV_ARRAY_TAKE_MAX 512\n"),
     ("the oldest packet not acknowledged goes again every second",
      "        if ((khq_is_head && delta >= 1) || (delta > 1 && is_power_of_2(delta))) {\n"),
+    ("a peer that comes back through a new handshake leaves nothing of the old one in the arrays",
+     "            clear_message_arrays(gconn);\n"),
 )
 
 Read = Callable[[str], "str | None"]
@@ -100,13 +111,16 @@ def changes(read: Read) -> list[tuple[str, str, str]]:
         raise ValueError(f"{RESEND_SCRIPT} or {RECV_GAP_SCRIPT} is missing")
     resend = script_constants(resend_text, ("ORIG", "REPL"), RESEND_SCRIPT)
     gap = script_constants(gap_text, ("ORIG_RECEIVE", "REPL_RECEIVE", "ORIG_FRAGMENT_ACK", "REPL_FRAGMENT_ACK",
-                                      "ORIG_KEPT_ACK", "REPL_KEPT_ACK"), RECV_GAP_SCRIPT)
+                                      "ORIG_KEPT_ACK", "REPL_KEPT_ACK", "ORIG_CLEAR_ARRAYS", "REPL_CLEAR_ARRAYS",
+                                      "ORIG_REHANDSHAKE", "REPL_REHANDSHAKE"), RECV_GAP_SCRIPT)
     return [
         ("the oldest packet resent every second (#201)", resend["ORIG"], resend["REPL"]),
         ("the receive side", gap["ORIG_RECEIVE"], gap["REPL_RECEIVE"]),
         ("the acknowledgement of a fragment kept for its sequence", gap["ORIG_FRAGMENT_ACK"],
          gap["REPL_FRAGMENT_ACK"]),
         ("the acknowledgement of a fragment kept out of order", gap["ORIG_KEPT_ACK"], gap["REPL_KEPT_ACK"]),
+        ("the clearing of the message arrays", gap["ORIG_CLEAR_ARRAYS"], gap["REPL_CLEAR_ARRAYS"]),
+        ("a new handshake of a peer it holds", gap["ORIG_REHANDSHAKE"], gap["REPL_REHANDSHAKE"]),
     ]
 
 
@@ -156,11 +170,12 @@ def check_wiring(read: Read) -> list[str]:
 
 def check_test(read: Read) -> list[str]:
     problems = []
-    if read(TEST) is None:
-        problems.append(f"toxcore test: {TEST} is missing")
-    listed = (read(TEST_LIST) or "").splitlines()
-    if TEST_ENTRY not in (line.strip() for line in listed):
-        problems.append(f"toxcore test: {TEST_LIST} does not build and run {TEST_ENTRY}")
+    listed = [line.strip() for line in (read(TEST_LIST) or "").splitlines()]
+    for test, entry in TESTS:
+        if read(test) is None:
+            problems.append(f"toxcore test: {test} is missing")
+        if entry not in listed:
+            problems.append(f"toxcore test: {TEST_LIST} does not build and run {entry}")
     return problems
 
 
@@ -239,8 +254,13 @@ def self_test() -> int:
          "desktop:"),
         ("Android runs the receive gap patch for 3 ABIs",
          mutant(ANDROID_DEPS, gap_run, "true", ANDROID_ABIS), "Android:"),
-        ("the desktop build drops the toxcore test",
-         mutant(TEST_LIST, TEST_ENTRY, ""), "toxcore test:"),
+        ("iOS keeps what the old handshake of a peer left in the arrays",
+         mutant(f"{IOS_DIR}/group_chats.m", "            clear_message_arrays(gconn);\n", ""),
+         "iOS:"),
+        ("the desktop build drops the receive gap test",
+         mutant(TEST_LIST, TESTS[0][1], ""), "toxcore test:"),
+        ("the desktop build drops the re-handshake test",
+         mutant(TEST_LIST, TESTS[1][1], ""), "toxcore test:"),
     )
     failed = []
     for name, mutant_read, expected in mutants:
@@ -263,14 +283,14 @@ def main() -> int:
         problems += check_android_scripts(edits)
 
     if problems:
-        print("A copy of toxcore does not keep, take or acknowledge what a group peer sends out of order, or does not "
-              "resend the oldest packet every second:")
+        print("A copy of toxcore does not keep, take or acknowledge what a group peer sends out of order, does not "
+              "resend the oldest packet every second, or keeps what the old handshake of a peer left:")
         for problem in problems:
             print(f"  - {problem}")
         return 1
     print(f"gc receive gap: {len(COPIES)} toxcore copies keep, take and acknowledge what a group peer sends out of "
-          f"order and resend the oldest packet every second, as does the Android build ({ANDROID_ABIS} ABIs); the "
-          "toxcore test is in")
+          f"order, resend the oldest packet every second and start a peer's new handshake with empty arrays, as does "
+          f"the Android build ({ANDROID_ABIS} ABIs); the toxcore tests are in")
     return 0
 
 

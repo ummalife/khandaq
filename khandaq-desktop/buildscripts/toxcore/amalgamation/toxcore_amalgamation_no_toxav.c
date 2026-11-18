@@ -32228,6 +32228,23 @@ static bool send_gc_handshake_response(const GC_Chat *chat, GC_Connection *gconn
     return send_gc_handshake_packet(chat, gconn, GH_RESPONSE, gconn->pending_handshake_type, 0);
 }
 
+/** KHANDAQ (0.2.59, group files): drops every packet held for the peer of `gconn` and every one kept from it. */
+non_null()
+static void clear_message_arrays(GC_Connection *gconn)
+{
+    for (uint16_t i = 0; i < GCC_BUFFER_SIZE; ++i) {
+        free(gconn->send_array[i].data);
+        free(gconn->recv_array[i].data);
+
+        gconn->send_array[i] = (GC_Message_Array_Entry) {
+            nullptr
+        };
+        gconn->recv_array[i] = (GC_Message_Array_Entry) {
+            nullptr
+        };
+    }
+}
+
 /** @brief Handles handshake request packets.
  *
  * Peer is added to peerlist and a lossless connection is established.
@@ -32287,6 +32304,12 @@ static int handle_gc_handshake_request(GC_Chat *chat, const IP_Port *ipp, const 
 
         if (gconn->handshaked) {
             gconn->handshaked = false;
+            // KHANDAQ (0.2.59, group files): the peer starts the connection again, and the new handshake starts the
+            // message ids again at 2 and 3. What the old ids left in the arrays goes with them: a packet still held
+            // for the peer took the slot of a new one, which was then not queued for it ("Send array entry isn't
+            // empty") while the same group packet went to the other members, and a packet kept from the peer would
+            // be handed on as the new message of its id.
+            clear_message_arrays(gconn);
             LOGGER_DEBUG(chat->log, "Handshaked peer sent a handshake request");
             return -1;
         }

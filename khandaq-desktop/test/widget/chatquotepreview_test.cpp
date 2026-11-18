@@ -82,7 +82,7 @@ private slots:
     void closeIsAnIconWithAName();
     void closeStandsAtTheEndEdge();
     void showsAReplyOnOneLineUnderWhomItAnswers();
-    void aReplyToYourOwnSaysYouAndSendsYourName();
+    void aReplyToYourOwnSaysYourselfAndSendsYourName();
     void aReplyAndAQuoteTakeEachOthersPlace();
 };
 
@@ -246,14 +246,17 @@ void TestChatQuotePreview::showsAReplyOnOneLineUnderWhomItAnswers()
     QCOMPARE(close->toolTip(), QStringLiteral("Cancel quote"));
 }
 
-/** The bar says "You"; the header names you as the others know you, never "You" (iOS 0.2.56). */
-void TestChatQuotePreview::aReplyToYourOwnSaysYouAndSendsYourName()
+/**
+ * The bar says "In reply to yourself" (0.2.59: "In reply to" + "You" put "You" in the wrong grammatical
+ * case in Russian); the header names you as the others know you, never "You" (iOS 0.2.56).
+ */
+void TestChatQuotePreview::aReplyToYourOwnSaysYourselfAndSendsYourName()
 {
     Column column(480);
     column.preview->setReply(replyTo(QStringLiteral("Amina"),
                                      QStringLiteral("Материалы к четвергу")),
                              QStringLiteral("Amina"), true);
-    QCOMPARE(column.preview->accessibleName(), QStringLiteral("In reply to You"));
+    QCOMPARE(column.preview->accessibleName(), QStringLiteral("In reply to yourself"));
     const QString head = Air::replyHead(column.preview->reply());
     QVERIFY(head.startsWith(QStringLiteral("[KQ|42|89ABCDEF|1763380800123|Amina]\n")));
     QVERIFY(!head.contains(QStringLiteral("You")));

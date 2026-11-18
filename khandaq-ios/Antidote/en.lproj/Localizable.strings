@@ -615,6 +615,7 @@
 "chat_reply_cancel" = "Cancel reply";
 "chat_reply_header" = "In reply to %@";
 "chat_reply_self_name" = "You";
+"chat_reply_header_self" = "In reply to yourself";
 "chat_reply_unknown_sender" = "Unknown";
 "group_messages_select_action" = "Select messages";
 "group_messages_copy_action" = "Copy";

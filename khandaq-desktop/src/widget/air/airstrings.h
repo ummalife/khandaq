@@ -799,6 +799,7 @@ enum class Text
     MessageEdited,
     ReplyUnknownSender,
     SpokenReply,
+    ReplyToSelf,
     MessageReport,
     MessageReply,
     ReplyCancel,

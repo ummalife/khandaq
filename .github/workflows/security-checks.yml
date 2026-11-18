@@ -422,6 +422,27 @@ jobs:
           set -euo pipefail
           python3 scripts/check-gc-ipv6-mtu.py
           python3 scripts/check-gc-ipv6-mtu.py --self-test
+      # KHANDAQ (0.2.59): a group file never reached a member that lost its network for 10 s. toxcore dropped a
+      # fragment that came out of order, did not acknowledge one it took, handed on what it kept at one per
+      # iteration and acknowledged it as message 0, so its sender timed the member out. A member that came back
+      # through a new handshake got the next file only in part: the connection kept what the old message ids had
+      # left in its arrays. Every copy of toxcore (and the Android build) must keep, take and acknowledge what
+      # comes out of order, resend the oldest packet every second and start a new handshake with empty arrays,
+      # and each check must catch the mutant made for it.
+      - name: Every toxcore copy must catch up with a group peer after a gap
+        run: |
+          set -euo pipefail
+          python3 scripts/check-gc-recv-gap.py
+          python3 scripts/check-gc-recv-gap.py --self-test
+      # KHANDAQ (0.2.59): a desktop that joined a group by its key stayed out of it while a friend inside sent it
+      # an invite every 30 s: the desktop copy of toxcore dropped the invite as "already added". Android and iOS
+      # carried the fix; every copy of toxcore (and the Android build) must let a friend's invite finish a join
+      # by group ID, and each check must catch the mutant made for it.
+      - name: Every toxcore copy must let a friend's invite finish a join by group ID
+        run: |
+          set -euo pipefail
+          python3 scripts/check-join-by-id.py
+          python3 scripts/check-join-by-id.py --self-test
       # KHANDAQ (2026-08-23, CodeQL triage): a group file's name arrives unfiltered off the wire, and
       # it was stored as-is on the row. send_ngch_syncfile joins that name with the directory, reads the
       # file and sends the bytes to a peer — so ../ in a filename read a file outside the group and

@@ -5819,6 +5819,23 @@ static bool send_gc_handshake_response(const GC_Chat *chat, GC_Connection *gconn
     return send_gc_handshake_packet(chat, gconn, GH_RESPONSE, gconn->pending_handshake_type, 0);
 }
 
+/** KHANDAQ (0.2.59, group files): drops every packet held for the peer of `gconn` and every one kept from it. */
+non_null()
+static void clear_message_arrays(GC_Connection *gconn)
+{
+    for (uint16_t i = 0; i < GCC_BUFFER_SIZE; ++i) {
+        free(gconn->send_array[i].data);
+        free(gconn->recv_array[i].data);
+
+        gconn->send_array[i] = (GC_Message_Array_Entry) {
+            nullptr
+        };
+        gconn->recv_array[i] = (GC_Message_Array_Entry) {
+            nullptr
+        };
+    }
+}
+
 /** @brief Handles handshake request packets.
  *
  * Peer is added to peerlist and a lossless connection is established.
@@ -5878,6 +5895,12 @@ static int handle_gc_handshake_request(GC_Chat *chat, const IP_Port *ipp, const 
 
         if (gconn->handshaked) {
             gconn->handshaked = false;
+            // KHANDAQ (0.2.59, group files): the peer starts the connection again, and the new handshake starts the
+            // message ids again at 2 and 3. What the old ids left in the arrays goes with them: a packet still held
+            // for the peer took the slot of a new one, which was then not queued for it ("Send array entry isn't
+            // empty") while the same group packet went to the other members, and a packet kept from the peer would
+            // be handed on as the new message of its id.
+            clear_message_arrays(gconn);
             LOGGER_DEBUG(chat->log, "Handshaked peer sent a handshake request");
             return -1;
         }
@@ -6154,7 +6177,9 @@ static bool handle_gc_packet_fragment(const GC_Session *c, GC_Chat *chat, uint32
         return false;
     }
 
-    if (frag_ret == 0) {
+    // KHANDAQ (0.2.59, group files): a fragment kept for its sequence is acknowledged too. It was not: the sender
+    // sent each one again about 3 s later, and only that duplicate was acknowledged.
+    if (frag_ret == 0 || frag_ret == 1) {
         gc_send_message_ack(chat, gconn, message_id, GR_ACK_RECV);
     }
 
@@ -6251,6 +6276,14 @@ static bool handle_gc_lossless_packet(const GC_Session *c, GC_Chat *chat, const 
         LOGGER_TRACE(chat->log, "received out of order packet from peer %u. expected %llu, got %llu", peer_number,
                      (unsigned long long)gconn->received_message_id + 1, (unsigned long long)message_id);
         free(data);
+
+        // KHANDAQ (0.2.59, group files): a fragment with data, kept until the gap before it fills, is acknowledged
+        // now, so that its sender does not send it again: taking it later cannot fail. Any other packet kept is
+        // acknowledged once it was handled, as before, since its handler may fail and ask for it again.
+        if (packet_type == GP_FRAGMENT && len > 0) {
+            gc_send_message_ack(chat, gconn, message_id, GR_ACK_RECV);
+        }
+
         return gc_send_message_ack(chat, gconn, gconn->received_message_id + 1, GR_ACK_REQ);
     }
 

@@ -5819,6 +5819,23 @@ static bool send_gc_handshake_response(const GC_Chat *chat, GC_Connection *gconn
     return send_gc_handshake_packet(chat, gconn, GH_RESPONSE, gconn->pending_handshake_type, 0);
 }
 
+/** KHANDAQ (0.2.59, group files): drops every packet held for the peer of `gconn` and every one kept from it. */
+non_null()
+static void clear_message_arrays(GC_Connection *gconn)
+{
+    for (uint16_t i = 0; i < GCC_BUFFER_SIZE; ++i) {
+        free(gconn->send_array[i].data);
+        free(gconn->recv_array[i].data);
+
+        gconn->send_array[i] = (GC_Message_Array_Entry) {
+            nullptr
+        };
+        gconn->recv_array[i] = (GC_Message_Array_Entry) {
+            nullptr
+        };
+    }
+}
+
 /** @brief Handles handshake request packets.
  *
  * Peer is added to peerlist and a lossless connection is established.
@@ -5878,6 +5895,12 @@ static int handle_gc_handshake_request(GC_Chat *chat, const IP_Port *ipp, const 
 
         if (gconn->handshaked) {
             gconn->handshaked = false;
+            // KHANDAQ (0.2.59, group files): the peer starts the connection again, and the new handshake starts the
+            // message ids again at 2 and 3. What the old ids left in the arrays goes with them: a packet still held
+            // for the peer took the slot of a new one, which was then not queued for it ("Send array entry isn't
+            // empty") while the same group packet went to the other members, and a packet kept from the peer would
+            // be handed on as the new message of its id.
+            clear_message_arrays(gconn);
             LOGGER_DEBUG(chat->log, "Handshaked peer sent a handshake request");
             return -1;
         }
@@ -6154,7 +6177,9 @@ static bool handle_gc_packet_fragment(const GC_Session *c, GC_Chat *chat, uint32
         return false;
     }
 
-    if (frag_ret == 0) {
+    // KHANDAQ (0.2.59, group files): a fragment kept for its sequence is acknowledged too. It was not: the sender
+    // sent each one again about 3 s later, and only that duplicate was acknowledged.
+    if (frag_ret == 0 || frag_ret == 1) {
         gc_send_message_ack(chat, gconn, message_id, GR_ACK_RECV);
     }
 
@@ -6251,6 +6276,14 @@ static bool handle_gc_lossless_packet(const GC_Session *c, GC_Chat *chat, const 
         LOGGER_TRACE(chat->log, "received out of order packet from peer %u. expected %llu, got %llu", peer_number,
                      (unsigned long long)gconn->received_message_id + 1, (unsigned long long)message_id);
         free(data);
+
+        // KHANDAQ (0.2.59, group files): a fragment with data, kept until the gap before it fills, is acknowledged
+        // now, so that its sender does not send it again: taking it later cannot fail. Any other packet kept is
+        // acknowledged once it was handled, as before, since its handler may fail and ask for it again.
+        if (packet_type == GP_FRAGMENT && len > 0) {
+            gc_send_message_ack(chat, gconn, message_id, GR_ACK_RECV);
+        }
+
         return gc_send_message_ack(chat, gconn, gconn->received_message_id + 1, GR_ACK_REQ);
     }
 
@@ -7874,6 +7907,33 @@ bool group_not_added(const GC_Session *c, const uint8_t *chat_id, uint32_t lengt
     return !group_exists(c, chat_id);
 }
 
+// KHANDAQ (join by ID): see the declaration in group_chats.h.
+bool gc_group_known_only_by_id(const GC_Session *c, const uint8_t *chat_id, uint32_t length)
+{
+    if (length < CHAT_ID_SIZE) {
+        return false;
+    }
+
+    static const uint8_t no_founder[EXT_PUBLIC_KEY_SIZE] = {0};
+
+    for (uint32_t i = 0; i < c->chats_index; ++i) {
+        const GC_Chat *chat = &c->chats[i];
+
+        if (chat->connection_state == CS_NONE) {
+            continue;
+        }
+
+        if (memcmp(get_chat_id(chat->chat_public_key), chat_id, CHAT_ID_SIZE) != 0) {
+            continue;
+        }
+
+        return chat->shared_state.version == 0
+               && memeq(chat->shared_state.founder_public_key, EXT_PUBLIC_KEY_SIZE, no_founder, EXT_PUBLIC_KEY_SIZE);
+    }
+
+    return false;
+}
+
 int gc_invite_friend(const GC_Session *c, GC_Chat *chat, int32_t friend_number,
                      gc_send_group_invite_packet_cb *callback)
 {
@@ -8208,6 +8268,16 @@ int gc_accept_invite(GC_Session *c, int32_t friend_number, const uint8_t *data, 
 
     const uint8_t *chat_id = data;
     const uint8_t *invite_chat_pk = data + CHAT_ID_SIZE;
+
+    // KHANDAQ (join by ID): packets for the group find their chat by its ID, and the first chat with
+    // that ID wins. A chat we just left is only deleted on the next do_gc(), and one we joined by its ID
+    // that no peer has answered yet stays; either would take the inviter's confirmation and drop it, so
+    // the join never completed. Neither has anything worth keeping. Android: apply_khandaq_join_by_id.py.
+    GC_Chat *stale_chat = gc_get_group_by_public_key(c, chat_id);
+
+    if (stale_chat != nullptr && (stale_chat->flag_exit || !gc_group_is_valid(stale_chat))) {
+        group_delete(c, stale_chat);
+    }
 
     const int group_number = create_new_group(c, nick, nick_length, false, GI_PUBLIC);
 

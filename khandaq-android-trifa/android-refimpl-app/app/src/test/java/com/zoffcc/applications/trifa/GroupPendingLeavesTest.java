@@ -320,6 +320,56 @@ public class GroupPendingLeavesTest
     }
 
     @Test
+    public void a_leave_with_no_notice_to_wait_for_is_due_at_once_and_held_until_toxcore_deleted_the_group()
+    {
+        // KHANDAQ (0.2.59): no other member, or the notice was not sent. The leave is still made on the tox thread,
+        // which saves the profile only after the tox_iterate that deleted the group.
+        assertTrue(GroupPendingLeaves.record(3, GROUP, "bye", T0, 0L));
+        assertTrue(GroupPendingLeaves.holdsGroupNumber(3));
+        assertTrue(GroupPendingLeaves.holdsChatId(GROUP));
+        assertEquals(new TreeSet<>(Arrays.asList(lower(GROUP))), GroupPendingLeaves.chatIds());
+
+        final List<GroupPendingLeaves.Leave> due = GroupPendingLeaves.takeDue(T0);
+        assertEquals(1, due.size());
+        final FakeTox tox = new FakeTox();
+        tox.chatIdByNumber.put(3L, GROUP);
+        assertTrue(GroupPendingLeaves.leaveNow(due.get(0), tox));
+        assertEquals(Arrays.asList("3:bye"), tox.leaves);
+
+        // toxcore saves the group with the profile until its next tox_iterate: held, and persisted, until then.
+        assertTrue(GroupPendingLeaves.holdsGroupNumber(3));
+        assertEquals(new TreeSet<>(Arrays.asList(lower(GROUP))), GroupPendingLeaves.chatIds());
+        assertTrue(GroupPendingLeaves.dropLeft());
+        assertTrue(GroupPendingLeaves.isEmpty());
+        assertTrue(GroupPendingLeaves.chatIds().isEmpty());
+    }
+
+    @Test
+    public void a_leave_due_before_it_was_asked_for_is_not_recorded()
+    {
+        assertFalse(GroupPendingLeaves.record(3, GROUP, "bye", T0, -1L));
+        assertTrue(GroupPendingLeaves.isEmpty());
+    }
+
+    @Test
+    public void a_leave_without_a_notice_is_made_on_the_tox_thread_too() throws Exception
+    {
+        // KHANDAQ (0.2.59): left on the thread that drops the group from the app, the group was saved with the
+        // profile before the tox_iterate that deleted it (the leave and the delete save it at once), and an app
+        // killed before the next save had it back. Only a leave that cannot be held is made where it is asked for.
+        final String helper = source("HelperGroup.java");
+        final int start = helper.indexOf("static void leave_group_with_notice(");
+        assertTrue(start > 0);
+        final String body = helper.substring(start, helper.indexOf("\n    }\n", start));
+        final int record = body.indexOf("record_pending_group_leave(group_num, part_message, notice_queued ? "
+                                        + "GroupPendingLeaves.LEAVE_DELAY_MS : 0L)");
+        assertTrue(record > 0);
+        final int direct = body.indexOf("tox_group_leave(group_num, part_message);");
+        assertTrue(direct > record);
+        assertEquals(direct, body.lastIndexOf("tox_group_leave("));
+    }
+
+    @Test
     public void leaving_forgets_the_invitation_we_asked_friends_for() throws Exception
     {
         // An invitation that answers our own join by ID is taken at once (group_invite_cb). One that comes after the

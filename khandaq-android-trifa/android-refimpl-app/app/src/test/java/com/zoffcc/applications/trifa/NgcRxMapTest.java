@@ -7,7 +7,9 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 /**
  * KHANDAQ (0.2.56): the map of the chunks a group download has on disk (.rxmap), read again after a restart. Up to
@@ -71,5 +73,33 @@ public class NgcRxMapTest
         assertNull(NgcGroupFileTransfer.rxMapChunks(Arrays.copyOf(map, map.length - 1), CHUNKS, SIZE));
         assertNull(NgcGroupFileTransfer.rxMapChunks(Arrays.copyOf(map, 15), CHUNKS, SIZE));
         assertNull(NgcGroupFileTransfer.rxMapChunks(null, CHUNKS, SIZE));
+    }
+
+    /**
+     * KHANDAQ (0.2.59, group files): a download has its full length once its last chunk landed, missing chunks or
+     * not; after a restart only its map says whether it is whole (NgcGroupFileTransfer.isReceiveUnfinished).
+     */
+    @Test
+    public void a_map_says_whether_its_file_misses_chunks()
+    {
+        final boolean[] lastFirst = new boolean[CHUNKS];
+        lastFirst[CHUNKS - 1] = true;
+        assertTrue(NgcGroupFileTransfer.rxMapMissesChunks(NgcGroupFileTransfer.rxMapBytes(lastFirst, SIZE), SIZE));
+        assertTrue(NgcGroupFileTransfer.rxMapMissesChunks(NgcGroupFileTransfer.rxMapBytes(someOnDisk(), SIZE), SIZE));
+
+        final boolean[] whole = new boolean[CHUNKS];
+        Arrays.fill(whole, true);
+        assertFalse(NgcGroupFileTransfer.rxMapMissesChunks(NgcGroupFileTransfer.rxMapBytes(whole, SIZE), SIZE));
+    }
+
+    @Test
+    public void a_map_that_is_not_read_says_nothing_of_its_file()
+    {
+        final byte[] map = NgcGroupFileTransfer.rxMapBytes(someOnDisk(), SIZE);
+        assertFalse(NgcGroupFileTransfer.rxMapMissesChunks(map, SIZE + 1L));
+        assertFalse(NgcGroupFileTransfer.rxMapMissesChunks(mapOf0255(someOnDisk(), SIZE), SIZE));
+        assertFalse(NgcGroupFileTransfer.rxMapMissesChunks(Arrays.copyOf(map, map.length - 1), SIZE));
+        assertFalse(NgcGroupFileTransfer.rxMapMissesChunks(Arrays.copyOf(map, 15), SIZE));
+        assertFalse(NgcGroupFileTransfer.rxMapMissesChunks(null, SIZE));
     }
 }

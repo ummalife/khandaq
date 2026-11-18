@@ -616,6 +616,7 @@
 "chat_reply_cancel" = "Отменить ответ";
 "chat_reply_header" = "В ответ %@";
 "chat_reply_self_name" = "Вы";
+"chat_reply_header_self" = "В ответ себе";
 "chat_reply_unknown_sender" = "Неизвестно";
 "group_messages_select_action" = "Выбрать сообщения";
 "group_messages_copy_action" = "Копировать";

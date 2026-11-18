@@ -3334,6 +3334,12 @@ public class HelperFiletransfer
             {
                 return false;
             }
+            // KHANDAQ (0.2.59, group files): an incoming chunked file has its full length once its last chunk landed,
+            // even with chunks before it still missing.
+            if (NgcGroupFileTransfer.isReceiveUnfinished(message, mediaPath))
+            {
+                return false;
+            }
         }
 
         return true;

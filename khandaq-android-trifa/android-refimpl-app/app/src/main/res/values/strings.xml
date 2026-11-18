@@ -123,6 +123,7 @@
     <string name="chat_reply_cancel">Cancel reply</string>
     <string name="chat_reply_header">In reply to %1$s</string>
     <string name="chat_reply_self_name">You</string>
+    <string name="chat_reply_header_self">In reply to yourself</string>
     <string name="chat_reply_unknown_sender">Unknown</string>
     <string name="notification_app_title" translatable="false">Khandaq</string>
     <string name="notification_fgs_title" translatable="false">Khandaq</string>

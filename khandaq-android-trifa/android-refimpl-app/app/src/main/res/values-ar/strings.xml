@@ -599,6 +599,7 @@
     <string name="chat_reply_cancel">إلغاء الرد</string>
     <string name="chat_reply_header">ردا على %1$s</string>
     <string name="chat_reply_self_name">أنت</string>
+    <string name="chat_reply_header_self">ردا على نفسك</string>
     <string name="chat_reply_unknown_sender">غير معروف</string>
     <string name="notification_fgs_text">يعمل في الخلفية</string>
     <string name="notification_status_online">متصل</string>

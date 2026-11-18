@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static com.zoffcc.applications.trifa.HelperGeneric.bytebuffer_to_hexstring;
 import static com.zoffcc.applications.trifa.HelperGeneric.hex_to_bytes;
@@ -374,6 +375,48 @@ public final class NgcGroupFileTransfer
 
         final GroupMessage message = HelperGroup.find_group_message_by_msg_id_hash(groupId, msgIdHash);
         return (message != null) && isGroupMessageMediaReady(message, null);
+    }
+
+    /**
+     * KHANDAQ (0.2.59, group files): whether an incoming chunked file still misses chunks, whatever its length. Its
+     * chunks are written in place, each at its offset, so the file has its full length once its last chunk landed. QA
+     * live of 0.2.59: the last of 171 chunks came with 80 missing, the file read as downloaded
+     * (HelperFiletransfer.isGroupMessageMediaReady), and nothing asked for the rest. What a file misses is in its
+     * assembly, or in its .rxmap when no assembly holds it (after a restart); a file that came whole has neither.
+     *
+     * @param mediaPath the file the message shows (HelperFiletransfer.resolveGroupMessageMediaPath)
+     */
+    static boolean isReceiveUnfinished(final GroupMessage message, final String mediaPath)
+    {
+        if (message == null || message.direction == 1 || message.group_identifier == null
+                || message.msg_id_hash == null || !shouldUseChunkedTransfer(message.filesize))
+        {
+            return false;
+        }
+        if (isReceiveAlreadyComplete(message.group_identifier, message.msg_id_hash))
+        {
+            return false;
+        }
+        final IncomingAssembly asm = incomingAssemblyOf(message.group_identifier, message.msg_id_hash);
+        if (asm != null)
+        {
+            return asm.receivedCount < asm.totalChunks;
+        }
+        return mediaPath != null && rxMapMissesChunksAt(mediaPath, message.filesize);
+    }
+
+    /** The assembly that receives the file {@code msgIdHash} of the group {@code groupId}, or null. */
+    private static IncomingAssembly incomingAssemblyOf(final String groupId, final String msgIdHash)
+    {
+        for (final IncomingAssembly asm : assemblies.values())
+        {
+            if (asm.groupId != null && asm.msgId != null && asm.groupId.equalsIgnoreCase(groupId)
+                    && bytebuffer_to_hexstring(ByteBuffer.wrap(asm.msgId), true).equalsIgnoreCase(msgIdHash))
+            {
+                return asm;
+            }
+        }
+        return null;
     }
 
     static boolean hasIncomingAssemblyInProgress(final String groupId, final String msgIdHash)
@@ -1295,9 +1338,11 @@ public final class NgcGroupFileTransfer
             HelperGroup.clear_ngc_file_transfer_failed(asm.groupId, msgIdHex);
             HelperGroup.handle_incoming_group_file_complete(groupNumber, peerId, asm);
         }
-        else if ((asm.receivedCount % 16) == 0)
+        else if ((asm.receivedCount % 16) == 0 || chunkIndex + 1 >= asm.totalChunks)
         {
             // Snapshot progress so a restart resumes from here instead of re-downloading from scratch.
+            // KHANDAQ (0.2.59, group files): and once the last chunk landed before others: the file has its full
+            // length from now on, and after a restart only its map says what it misses (isReceiveUnfinished).
             persistReceivedBitmap(asm);
         }
     }
@@ -1445,6 +1490,9 @@ public final class NgcGroupFileTransfer
             // Flush the data buffer FIRST so the bitmap only ever marks chunks that are durably on disk.
             HelperGeneric.flush_vfs_write_cache(asm.outPath);
             writeRxMapFile(rxMapPath(asm.outPath), rxMapBytes(asm.received, asm.totalSize));
+            // KHANDAQ (0.2.59, group files): after the map is on disk, so that no path is held as having none while it
+            // has one (rxMapMissesChunksAt).
+            RXMAP_WRITES.incrementAndGet();
         }
         catch (Exception ignored)
         {
@@ -1502,6 +1550,59 @@ public final class NgcGroupFileTransfer
             onDisk[i] = (data[RXMAP_HEADER + (i >> 3)] & (1 << (i & 7))) != 0;
         }
         return onDisk;
+    }
+
+    /**
+     * KHANDAQ (0.2.59, group files): whether a .rxmap, as this version writes it, is the map of a file of
+     * {@code totalSize} bytes that misses chunks. A map of an earlier version or of another file, or cut short, says
+     * nothing (rxMapChunks).
+     */
+    static boolean rxMapMissesChunks(final byte[] data, final long totalSize)
+    {
+        if (data == null || data.length < RXMAP_HEADER)
+        {
+            return false;
+        }
+        final int totalChunks = ByteBuffer.wrap(data, 4, 4).order(ByteOrder.BIG_ENDIAN).getInt();
+        final boolean[] onDisk = rxMapChunks(data, totalChunks, totalSize);
+        if (onDisk == null)
+        {
+            return false;
+        }
+        for (final boolean chunk : onDisk)
+        {
+            if (!chunk)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * KHANDAQ (0.2.59, group files): the files whose .rxmap was looked for and not found, with the count of maps
+     * written then. A file that came whole has no map (the last chunk deletes it), and isGroupMessageMediaReady asks
+     * for each file it shows: such a file is looked for once, until a map is written somewhere again.
+     */
+    private static final Map<String, Long> RXMAP_ABSENT_AT = new ConcurrentHashMap<>();
+    private static final AtomicLong RXMAP_WRITES = new AtomicLong();
+
+    /** Whether the .rxmap of the file at {@code path} says it misses chunks (rxMapMissesChunks). */
+    private static boolean rxMapMissesChunksAt(final String path, final long totalSize)
+    {
+        final long writes = RXMAP_WRITES.get();
+        final Long absentAt = RXMAP_ABSENT_AT.get(path);
+        if (absentAt != null && absentAt == writes)
+        {
+            return false;
+        }
+        final byte[] map = readRxMapFile(rxMapPath(path));
+        if (map == null)
+        {
+            RXMAP_ABSENT_AT.put(path, writes);
+            return false;
+        }
+        return rxMapMissesChunks(map, totalSize);
     }
 
     private static void loadReceivedBitmap(final IncomingAssembly asm)

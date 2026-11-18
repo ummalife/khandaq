@@ -10,7 +10,7 @@
 # и в том же PR, где меняется circle_scripts/deps.sh.
 #
 # В поставку идут только arm-слайсы; x86/x86_64 существуют для эмуляторов.
-f1d39d025c1c38ebd4647923a3bd74999573623139866a18819f8168d95f73d8  arm64-v8a/libjni-c-toxcore.so
-06b0daff8c507ce88ccbf1dc4a76b7e3abb6cf5a2c76d29c122e429f3ec30c0f  armeabi-v7a/libjni-c-toxcore.so
-f2e8e9dcb3c94dd4495dd2a4bf6d6b79b21916743dcc3bb689a7a327287bff3c  x86/libjni-c-toxcore.so
-1fbd120192502130901c1e72b336351120ab1df2d48d8b6576ac7a7b61280e4a  x86_64/libjni-c-toxcore.so
+570e7ad5d348c34f135f4e5cb6e8b1acbb79eea8e669f64da3e328f4ae7e9bac  arm64-v8a/libjni-c-toxcore.so
+fb00cee3a3e925ca5230ed789366e8ef8cf7f47b50d354661024c27c21b2af49  armeabi-v7a/libjni-c-toxcore.so
+5382c4148f6c90471d480b8dc10f53cbd7d7d615b7c57eba892540f439fdd3f2  x86/libjni-c-toxcore.so
+0360b1dcca63e87cb77a9090c751b9896d034868dfc70bac265786b0d4f03588  x86_64/libjni-c-toxcore.so

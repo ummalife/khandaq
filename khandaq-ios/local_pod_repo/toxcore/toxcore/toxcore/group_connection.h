@@ -83,6 +83,19 @@ bool gcc_ip_port_is_set(const GC_Connection *gconn);
 non_null(1) nullable(2)
 void gcc_set_ip_port(GC_Connection *gconn, const IP_Port *ipp);
 
+/** @brief KHANDAQ (0.2.60, group roaming): Return true if the lossless message `message_id` of the peer
+ * of `gconn` is one we have not had yet: neither taken nor kept in the receive array.
+ */
+non_null()
+bool gcc_message_is_new(const GC_Connection *gconn, uint64_t message_id);
+
+/** @brief KHANDAQ (0.2.60, group roaming): Return true if the oldest lossless message we hold for the
+ * peer of `gconn` has waited GCC_UNANSWERED_TIMEOUT seconds for its acknowledgement: what we send that
+ * peer does not reach it.
+ */
+non_null()
+bool gcc_sent_messages_unanswered(const Mono_Time *mono_time, const GC_Connection *gconn);
+
 /** @brief Copies a random TCP relay node from gconn to tcp_node.
  *
  * Return true on success.

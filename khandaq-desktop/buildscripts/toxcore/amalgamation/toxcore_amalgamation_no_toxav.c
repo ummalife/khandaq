@@ -13438,6 +13438,19 @@ bool gcc_ip_port_is_set(const GC_Connection *gconn);
 non_null(1) nullable(2)
 void gcc_set_ip_port(GC_Connection *gconn, const IP_Port *ipp);
 
+/** @brief KHANDAQ (0.2.60, group roaming): Return true if the lossless message `message_id` of the peer
+ * of `gconn` is one we have not had yet: neither taken nor kept in the receive array.
+ */
+non_null()
+bool gcc_message_is_new(const GC_Connection *gconn, uint64_t message_id);
+
+/** @brief KHANDAQ (0.2.60, group roaming): Return true if the oldest lossless message we hold for the
+ * peer of `gconn` has waited GCC_UNANSWERED_TIMEOUT seconds for its acknowledgement: what we send that
+ * peer does not reach it.
+ */
+non_null()
+bool gcc_sent_messages_unanswered(const Mono_Time *mono_time, const GC_Connection *gconn);
+
 /** @brief Copies a random TCP relay node from gconn to tcp_node.
  *
  * Return true on success.
@@ -32597,15 +32610,50 @@ static bool handle_gc_packet_fragment(const GC_Session *c, GC_Chat *chat, uint32
     return true;
 }
 
+/** @brief KHANDAQ (0.2.60, group roaming): Follows a peer whose packets come from another address now.
+ *
+ * A peer whose network changes (Wi-Fi to mobile data, or a NAT that maps it anew) keeps its session with
+ * us and goes on sending from its new address. Its packets were taken and counted as direct, so its
+ * connection stayed direct, and what we sent it went over UDP to the old address alone, never over a
+ * relay: the peer heard nothing of us until it timed us out (GC_CONFIRMED_PEER_TIMEOUT) and came back
+ * through a new handshake.
+ *
+ * `ipp` is where the packet came from over UDP; it opened with the session key of the peer, so the peer
+ * sent it. We take that address when the packet is a message we have not had (`new_message`: a copy of
+ * an old one proves nothing, as anyone who saw it go by can send it again from elsewhere), or when what
+ * we send the peer goes unanswered (gcc_sent_messages_unanswered).
+ */
+non_null(1, 2) nullable(3)
+static void follow_moved_gc_peer(GC_Chat *chat, GC_Connection *gconn, const IP_Port *ipp, bool new_message)
+{
+    if (ipp == nullptr || !ipport_isset(ipp) || !gconn->confirmed || ipport_equal(ipp, &gconn->addr.ip_port)) {
+        return;
+    }
+
+    if (!new_message && !gcc_sent_messages_unanswered(chat->mono_time, gconn)) {
+        return;
+    }
+
+    Ip_Ntoa old_ip;
+    Ip_Ntoa new_ip;
+    LOGGER_INFO(chat->log, "Group peer moved from %s:%d to %s:%d", net_ip_ntoa(&gconn->addr.ip_port.ip, &old_ip),
+                net_ntohs(gconn->addr.ip_port.port), net_ip_ntoa(&ipp->ip, &new_ip), net_ntohs(ipp->port));
+
+    gcc_set_ip_port(gconn, ipp);
+    add_gc_saved_peers(chat, gconn);
+}
+
 /** @brief Handles lossless groupchat packets.
  *
- * This function assumes the length has already been validated.
+ * This function assumes the length has already been validated. KHANDAQ (0.2.60, group roaming): `ipp`
+ * is where a direct packet came from; null for one over TCP.
  *
  * Returns true if packet is successfully handled.
  */
-non_null(1, 2, 3, 4) nullable(7)
+non_null(1, 2, 3, 4) nullable(7, 8)
 static bool handle_gc_lossless_packet(const GC_Session *c, GC_Chat *chat, const uint8_t *sender_pk,
-                                      const uint8_t *packet, uint16_t length, bool direct_conn, void *userdata)
+                                      const uint8_t *packet, uint16_t length, bool direct_conn, const IP_Port *ipp,
+                                      void *userdata)
 {
     if (length < GC_MIN_LOSSLESS_PAYLOAD_SIZE) {
         return false;
@@ -32657,6 +32705,11 @@ static bool handle_gc_lossless_packet(const GC_Session *c, GC_Chat *chat, const 
         LOGGER_DEBUG(chat->log, "Missed handshake packet, type: 0x%02x", packet_type);
         free(data);
         return false;
+    }
+
+    // KHANDAQ (0.2.60, group roaming): a peer that sends from another address now gets what we send it there.
+    if (direct_conn) {
+        follow_moved_gc_peer(chat, gconn, ipp, gcc_message_is_new(gconn, message_id));
     }
 
     const int lossless_ret = gcc_handle_received_message(chat->log, chat->mono_time, gconn, data, (uint16_t) len,
@@ -32727,11 +32780,14 @@ static bool handle_gc_lossless_packet(const GC_Session *c, GC_Chat *chat, const 
  *
  * This function assumes the length has already been validated.
  *
+ * KHANDAQ (0.2.60, group roaming): `ipp` is where a direct packet came from; null for one over TCP.
+ *
  * Return true if packet is handled successfully.
  */
-non_null(1, 2, 3, 4) nullable(7)
+non_null(1, 2, 3, 4) nullable(7, 8)
 static bool handle_gc_lossy_packet(const GC_Session *c, GC_Chat *chat, const uint8_t *sender_pk,
-                                   const uint8_t *packet, uint16_t length, bool direct_conn, void *userdata)
+                                   const uint8_t *packet, uint16_t length, bool direct_conn, const IP_Port *ipp,
+                                   void *userdata)
 {
     if (length < GC_MIN_LOSSY_PAYLOAD_SIZE) {
         return false;
@@ -32769,6 +32825,12 @@ static bool handle_gc_lossy_packet(const GC_Session *c, GC_Chat *chat, const uin
                      net_ip_ntoa(&gconn->addr.ip_port.ip, &ip_str), net_ntohs(gconn->addr.ip_port.port), len);
         free(data);
         return false;
+    }
+
+    // KHANDAQ (0.2.60, group roaming): a lossy packet has no id, so a copy of an old one looks like a new one:
+    // it moves us to where it came from only when what we send its peer goes unanswered.
+    if (direct_conn) {
+        follow_moved_gc_peer(chat, gconn, ipp, false);
     }
 
     int ret = -1;
@@ -32890,7 +32952,7 @@ static int handle_gc_tcp_packet(void *object, int id, const uint8_t *packet, uin
 
     switch (packet_type) {
         case NET_PACKET_GC_LOSSLESS: {
-            if (!handle_gc_lossless_packet(c, chat, sender_pk, payload, payload_len, false, userdata)) {
+            if (!handle_gc_lossless_packet(c, chat, sender_pk, payload, payload_len, false, nullptr, userdata)) {
                 return -1;
             }
 
@@ -32898,7 +32960,7 @@ static int handle_gc_tcp_packet(void *object, int id, const uint8_t *packet, uin
         }
 
         case NET_PACKET_GC_LOSSY: {
-            if (!handle_gc_lossy_packet(c, chat, sender_pk, payload, payload_len, false, userdata)) {
+            if (!handle_gc_lossy_packet(c, chat, sender_pk, payload, payload_len, false, nullptr, userdata)) {
                 return -1;
             }
 
@@ -33033,12 +33095,12 @@ static int handle_gc_udp_packet(void *object, const IP_Port *ipp, const uint8_t 
 
     switch (packet_type) {
         case NET_PACKET_GC_LOSSLESS: {
-            ret = handle_gc_lossless_packet(c, chat, sender_pk, payload, payload_len, true, userdata);
+            ret = handle_gc_lossless_packet(c, chat, sender_pk, payload, payload_len, true, ipp, userdata);
             break;
         }
 
         case NET_PACKET_GC_LOSSY: {
-            ret = handle_gc_lossy_packet(c, chat, sender_pk, payload, payload_len, true, userdata);
+            ret = handle_gc_lossy_packet(c, chat, sender_pk, payload, payload_len, true, ipp, userdata);
             break;
         }
 
@@ -33590,6 +33652,10 @@ static bool ping_peer(const GC_Chat *chat, GC_Connection *gconn)
  * do not have a direct connection with.
  */
 #define GC_DO_PINGS_INTERVAL 2
+/** KHANDAQ (0.2.60, group roaming): seconds of silence of a peer after which a ping goes with a peer info
+ * request.
+ */
+#define GC_SILENT_PEER_PROBE_TIMEOUT (GC_PING_TIMEOUT + GC_PING_TIMEOUT / 2)
 non_null()
 static void do_gc_ping_and_key_rotation(GC_Chat *chat)
 {
@@ -33610,6 +33676,13 @@ static void do_gc_ping_and_key_rotation(GC_Chat *chat)
         if (mono_time_is_timeout(chat->mono_time, gconn->last_sent_ping_time, GC_PING_TIMEOUT)) {
             if (ping_peer(chat, gconn)) {
                 gconn->last_sent_ping_time = tm;
+            }
+
+            // KHANDAQ (0.2.60, group roaming): a peer we have heard nothing of for a ping and a half may be
+            // sending to an address we left, our network having changed. A lossless packet from where we are
+            // now moves it here (follow_moved_gc_peer); a peer that is gone ignores it and times out.
+            if (mono_time_is_timeout(chat->mono_time, gconn->last_received_packet_time, GC_SILENT_PEER_PROBE_TIMEOUT)) {
+                send_gc_peer_info_request(chat, gconn);
             }
         }
 
@@ -35197,6 +35270,12 @@ int gc_add_peers_from_announces(GC_Chat *chat, const GC_Announce *announces, uin
 /** Seconds since last direct UDP packet was sent before we can try again. Cheap NAT hole punch */
 #define GCC_UDP_DIRECT_RETRY 1
 
+/** KHANDAQ (0.2.60, group roaming): seconds the oldest message we hold for a peer may wait for its
+ * acknowledgement before we take it that what we send the peer does not reach it; up to a second less,
+ * as mono time counts whole seconds. The oldest message goes again every second meanwhile (#201).
+ */
+#define GCC_UNANSWERED_TIMEOUT 3
+
 /** Returns true if array entry does not contain an active packet. */
 non_null()
 static bool array_entry_is_empty(const GC_Message_Array_Entry *array_entry)
@@ -35436,6 +35515,23 @@ void gcc_set_ip_port(GC_Connection *gconn, const IP_Port *ipp)
     if (ipp != nullptr && ipport_isset(ipp)) {
         gconn->addr.ip_port = *ipp;
     }
+}
+
+bool gcc_message_is_new(const GC_Connection *gconn, uint64_t message_id)
+{
+    if (message_id <= gconn->received_message_id) {
+        return false;
+    }
+
+    const GC_Message_Array_Entry *kept = &gconn->recv_array[gcc_get_array_index(message_id)];
+    return array_entry_is_empty(kept) || kept->message_id != message_id;
+}
+
+bool gcc_sent_messages_unanswered(const Mono_Time *mono_time, const GC_Connection *gconn)
+{
+    const GC_Message_Array_Entry *oldest = &gconn->send_array[gconn->send_array_start];
+    return !array_entry_is_empty(oldest)
+           && mono_time_is_timeout(mono_time, oldest->time_added, GCC_UNANSWERED_TIMEOUT);
 }
 
 bool gcc_copy_tcp_relay(const Random *rng, Node_format *tcp_node, const GC_Connection *gconn)

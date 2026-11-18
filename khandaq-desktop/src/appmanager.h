@@ -42,7 +42,7 @@ public:
 private slots:
     void cleanup();
 private:
-    void preConstructionInitialization();
+    void preConstructionInitialization(const char* argv0);
     std::unique_ptr<QApplication> qapp;
     std::unique_ptr<MessageBoxManager> messageBoxManager;
     std::unique_ptr<Settings> settings;

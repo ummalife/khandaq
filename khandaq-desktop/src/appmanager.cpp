@@ -29,6 +29,8 @@
 #include "src/widget/air/airwidgets.h"
 #include "src/widget/translator.h"
 #include "src/nexus.h"
+#include "src/platform/apprestart.h"
+#include "src/platform/interfacescale.h"
 #include "src/widget/widget.h"
 #include "src/video/camerasource.h"
 
@@ -154,20 +156,24 @@ void logMessageHandler(QtMsgType type, const QMessageLogContext& ctxt, const QSt
 } // namespace
 
 AppManager::AppManager(int& argc, char** argv)
-    : qapp((preConstructionInitialization(), new QApplication(argc, argv)))
+    : qapp((preConstructionInitialization(argc > 0 ? argv[0] : nullptr),
+            new QApplication(argc, argv)))
     , messageBoxManager(new MessageBoxManager(nullptr))
     , settings(new Settings(*messageBoxManager))
     , ipc(new IPC(settings->getCurrentProfileId()))
 {
 }
 
-void AppManager::preConstructionInitialization()
+void AppManager::preConstructionInitialization(const char* argv0)
 {
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 6, 0))
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 #endif
     qInstallMessageHandler(logMessageHandler);
+    // The size of the interface chosen in Settings: Qt reads it from the environment when the
+    // application object is made, so it is set now, from khandaq.ini.
+    InterfaceScale::applyBeforeApplication(argv0);
 }
 
 int AppManager::run()
@@ -240,6 +246,16 @@ int AppManager::run()
                                         tr("Sets proxy settings. Default is NONE."),
                                         tr("(SOCKS5/HTTP/NONE):(ADDRESS):(PORT)")));
     parser.process(*qapp);
+    // KHANDAQ (0.2.60): Restart in Settings starts Khandaq again with the network options of this
+    // run, so that a proxy given here is not left out of the next.
+    QStringList restartArguments;
+    for (const QString& name : {QStringLiteral("IPv6"), QStringLiteral("UDP"),
+                                QStringLiteral("LAN"), QStringLiteral("proxy")}) {
+        if (parser.isSet(name)) {
+            restartArguments << QStringLiteral("--") + name << parser.value(name);
+        }
+    }
+    AppRestart::keep(restartArguments);
 
     if (ipc->isAttached()) {
         connect(settings.get(), &Settings::currentProfileIdChanged, ipc.get(), &IPC::setProfileId);

@@ -86,7 +86,6 @@ namespace {
         bool portable = false;
         const QString basePortable = qApp->applicationDirPath();
         const QString baseNonPortable = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-        const QString portableSettingsPath = basePortable % QDir::separator() % globalSettingsFile;
 
         switch (mode) {
         case Portable::Portable:
@@ -96,15 +95,7 @@ namespace {
             qDebug() << "Forcing non-portable";
             return false;
         case Portable::Auto:
-            if (QFile(portableSettingsPath).exists()) {
-                QSettings ps(portableSettingsPath, QSettings::IniFormat);
-                ps.setIniCodec("UTF-8");
-                ps.beginGroup("Advanced");
-                portable = ps.value("makeToxPortable", false).toBool();
-                ps.endGroup();
-            } else {
-                portable = false;
-            }
+            portable = Paths::portableIn(basePortable);
             qDebug()<< "Auto portable mode:" << portable;
             return portable;
         }
@@ -152,6 +143,40 @@ bool Paths::setPortable(bool newPortable)
 bool Paths::isPortable() const
 {
     return portable;
+}
+
+bool Paths::portableIn(const QString& applicationDir)
+{
+    const QString portableSettingsPath = applicationDir % QDir::separator() % globalSettingsFile;
+    if (!QFile(portableSettingsPath).exists()) {
+        return false;
+    }
+    QSettings ps(portableSettingsPath, QSettings::IniFormat);
+    ps.setIniCodec("UTF-8");
+    ps.beginGroup("Advanced");
+    const bool portable = ps.value("makeToxPortable", false).toBool();
+    ps.endGroup();
+    return portable;
+}
+
+QString Paths::systemSettingsDirPath()
+{
+// workaround for https://bugreports.qt-project.org/browse/QTBUG-38845
+#ifdef Q_OS_WIN
+    return QDir::cleanPath(QStandardPaths::writableLocation(QStandardPaths::HomeLocation)
+                           + QDir::separator() + "AppData" + QDir::separator() + "Roaming"
+                           + QDir::separator() + "khandaq")
+           + QDir::separator();
+#elif defined(Q_OS_OSX)
+    return QDir::cleanPath(QStandardPaths::writableLocation(QStandardPaths::HomeLocation)
+                           + QDir::separator() + "Library" + QDir::separator()
+                           + "Application Support" + QDir::separator() + "Khandaq")
+           + QDir::separator();
+#else
+    return QDir::cleanPath(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
+                           + QDir::separator() + "khandaq")
+           + QDir::separator();
+#endif
 }
 
 #if PATHS_VERSION_TCS_COMPLIANT
@@ -289,22 +314,7 @@ QString Paths::getSettingsDirPath() const
     if (portable)
         return qApp->applicationDirPath() + QDir::separator();
 
-// workaround for https://bugreports.qt-project.org/browse/QTBUG-38845
-#ifdef Q_OS_WIN
-    return QDir::cleanPath(QStandardPaths::writableLocation(QStandardPaths::HomeLocation)
-                           + QDir::separator() + "AppData" + QDir::separator() + "Roaming"
-                           + QDir::separator() + "khandaq")
-           + QDir::separator();
-#elif defined(Q_OS_OSX)
-    return QDir::cleanPath(QStandardPaths::writableLocation(QStandardPaths::HomeLocation)
-                           + QDir::separator() + "Library" + QDir::separator()
-                           + "Application Support" + QDir::separator() + "Khandaq")
-           + QDir::separator();
-#else
-    return QDir::cleanPath(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
-                           + QDir::separator() + "khandaq")
-           + QDir::separator();
-#endif
+    return systemSettingsDirPath();
 }
 
 /**

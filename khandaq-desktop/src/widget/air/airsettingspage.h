@@ -108,6 +108,8 @@ public:
 signals:
     /** The light or dark tray icon was chosen: the icons are drawn again. */
     void trayIconChanged();
+    /** Restart was chosen for a new interface size: Khandaq closes and starts again. */
+    void restartRequested();
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -138,9 +140,11 @@ private:
     AirSwitch* switchRow(QVBoxLayout* rows, const Words& title, const Words& detail,
                          const std::function<bool()>& read, const std::function<void(bool)>& write,
                          const std::function<bool()>& enabled = nullptr);
-    /** A row whose value opens a menu of choices under it. */
+    /** A row whose value opens a menu of choices under it; detail, when it says something, under
+     * the title. */
     QWidget* menuRow(QVBoxLayout* rows, const Words& title, const Words& value,
-                     const std::function<void(QWidget* anchor)>& open);
+                     const std::function<void(QWidget* anchor)>& open,
+                     const Words& detail = nullptr);
     /** Choices side by side under their title, one under another when they do not fit. */
     QWidget* segmentRow(QVBoxLayout* rows, const Words& title, const std::vector<Words>& choices,
                         const std::function<int()>& read, const std::function<void(int)>& write);
@@ -180,6 +184,8 @@ private:
     QPoint menuPoint(QWidget* anchor) const;
 
     void openLanguageMenu(QWidget* anchor);
+    /** The interface size: stored at once, in force after a restart, which it offers. */
+    void openInterfaceSizeMenu(QWidget* anchor);
     void openFontMenu(QWidget* anchor);
     void openSmileyMenu(QWidget* anchor);
     void chooseChatFont();

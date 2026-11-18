@@ -18,14 +18,21 @@
 */
 
 #include "appmanager.h"
+#include "src/platform/apprestart.h"
 
 #include <QDebug>
 #include <QGuiApplication>
 
 int main(int argc, char* argv[])
 {
-    AppManager appManager(argc, argv);
-    int errorcode = appManager.run();
+    int errorcode = 0;
+    {
+        AppManager appManager(argc, argv);
+        errorcode = appManager.run();
+    }
+    // KHANDAQ (0.2.60): Restart in Settings. The AppManager is gone, and with it the profile, its
+    // lock and the single-instance memory the new run would otherwise find taken.
+    AppRestart::startIfRequested();
 
     qDebug() << "Exit with status" << errorcode;
     return errorcode;

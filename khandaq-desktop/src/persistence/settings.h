@@ -226,6 +226,7 @@ signals:
     void styleChanged(const QString& style);
     void themeColorChanged(int color);
     void themeModeChanged(int mode);
+    void interfaceScaleChanged(int percent);
     void favoriteChatsChanged(const QStringList& chatIds);
     void compactLayoutChanged(bool enabled);
     void sortingModeChanged(FriendListSortingMode mode);
@@ -429,6 +430,13 @@ public:
 
     ThemeMode getThemeMode() const;
     void setThemeMode(ThemeMode mode);
+
+    /**
+     * KHANDAQ (0.2.60): the size of the interface in percent (InterfaceScale::percents), global
+     * because it is read before any profile, and in force from the next start of Khandaq.
+     */
+    int getInterfaceScale() const;
+    void setInterfaceScale(int percent);
 
     /** Chats starred for the Favorites filter, by Air entry id ("f:" + key, "c:" + group id). */
     QStringList getFavoriteChats() const;
@@ -753,6 +761,7 @@ private:
 
     int themeColor;
     ThemeMode themeMode = ThemeMode::System;
+    int interfaceScale = 100;
     QStringList favoriteChats;
     QByteArray airLocalStore;
     QString pendingGroupLeaves;

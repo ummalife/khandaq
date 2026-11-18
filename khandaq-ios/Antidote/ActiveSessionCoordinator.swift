@@ -120,6 +120,7 @@ class ActiveSessionCoordinator: NSObject {
     fileprivate var didReportConnectedPill = false
     fileprivate var presenceRecorder: AirPresenceRecorder?
     fileprivate var blockGuard: AirBlockGuard?
+    fileprivate var outgoingInviteSender: AirOutgoingInviteSender?
     fileprivate var communityFileKeeper: KhandaqCommunityFileKeeper?
     fileprivate var offlineWatchdog: OfflineReconnectWatchdog?
 
@@ -176,6 +177,13 @@ class ActiveSessionCoordinator: NSObject {
         let guardian = AirBlockGuard(submanagerObjects: toxManager.objects, submanagerFriends: toxManager.friends)
         guardian.start()
         blockGuard = guardian
+        // KHANDAQ (0.2.60): our invitations kept for contacts who were offline go once they are online. The demo
+        // world of the UI tests invites nobody.
+        if !(toxManager is OCTManagerMock) {
+            let sender = AirOutgoingInviteSender(submanagerObjects: toxManager.objects, submanagerGroups: toxManager.groups)
+            sender.start()
+            outgoingInviteSender = sender
+        }
         // KHANDAQ (0.2.57, SPEC-community item 6): the room of the files that wait in Khandaq Community.
         let keeper = KhandaqCommunityFileKeeper(submanagerObjects: toxManager.objects, submanagerGroups: toxManager.groups)
         keeper.start()
@@ -219,6 +227,7 @@ class ActiveSessionCoordinator: NSObject {
     deinit {
         presenceRecorder?.stop()
         blockGuard?.stop()
+        outgoingInviteSender?.stop()
         communityFileKeeper?.stop()
         offlineWatchdog?.stop()
         MessageDeliveryWatchdog.shared.stop()
@@ -280,11 +289,12 @@ class ActiveSessionCoordinator: NSObject {
 
     /// KHANDAQ (0.2.57, SPEC-community part B): Khandaq Community, joined once per profile by itself while
     /// the node is online, and tried again at every start and connection until the group is here. The demo
-    /// world of the UI tests joins nothing.
+    /// world of the UI tests joins nothing. KHANDAQ (0.2.60): the sound an earlier join turned off is on again.
     fileprivate func joinCommunityIfDue() {
         guard !(toxManager is OCTManagerMock) else {
             return
         }
+        KhandaqCommunity.restoreSoundIfDue(manager: toxManager)
         KhandaqCommunity.autoJoinIfDue(manager: toxManager)
     }
 
@@ -372,6 +382,8 @@ class ActiveSessionCoordinator: NSObject {
         presenceRecorder = nil
         blockGuard?.stop()
         blockGuard = nil
+        outgoingInviteSender?.stop()
+        outgoingInviteSender = nil
         communityFileKeeper?.stop()
         communityFileKeeper = nil
         AirLocalStore.shared.detach()
@@ -385,6 +397,8 @@ class ActiveSessionCoordinator: NSObject {
         presenceRecorder = nil
         blockGuard?.stop()
         blockGuard = nil
+        outgoingInviteSender?.stop()
+        outgoingInviteSender = nil
         communityFileKeeper?.stop()
         communityFileKeeper = nil
         offlineWatchdog?.stop()

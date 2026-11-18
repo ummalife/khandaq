@@ -274,5 +274,21 @@
 			<string>%d invitations sent</string>
 		</dict>
 	</dict>
+	<key>air_invite_later</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@later@</string>
+		<key>later</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>Invitation will go once the contact is online</string>
+			<key>other</key>
+			<string>%d invitations will go once the contacts are online</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

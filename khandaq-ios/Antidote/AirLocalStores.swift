@@ -40,6 +40,18 @@ struct AirGroupInvite: Equatable {
     let date: Date
 }
 
+/// KHANDAQ (0.2.60): an invitation of ours to a group for a contact who was offline. toxcore sends one only
+/// over the link with the contact, so it waits here, in the sealed part of air-local.json, and goes once both
+/// are online (AirOutgoingInviteSender). It goes away once sent or refused, with the contact or the group, and
+/// AirLocalStore.outgoingInviteKeepSeconds after it was asked for.
+struct AirOutgoingInvite: Equatable {
+    /// 64 hexadecimal characters in upper case: the contact, and the chat id of the group.
+    let friendKey: String
+    let groupKey: String
+    /// When it was asked for.
+    let date: Date
+}
+
 // MARK: - Sealing
 
 /// The history in Realm is encrypted with the profile, air-local.json is not. So the part of the file
@@ -134,6 +146,10 @@ final class AirLocalStore {
     static let shared = AirLocalStore()
     static let fileName = "air-local.json"
     static let keepSeconds: TimeInterval = 7 * 86400
+    /// KHANDAQ (0.2.60): thirty days: a contact away for longer is invited again by hand.
+    static let outgoingInviteKeepSeconds: TimeInterval = 30 * 86400
+    /// The most of our invitations kept; the oldest make room.
+    static let outgoingInviteLimit = 256
 
     private struct Contact: Codable {
         var hours: [Int] = []
@@ -157,11 +173,19 @@ final class AirLocalStore {
         let date: Double
     }
 
+    private struct OutgoingInviteRecord: Codable {
+        let friendKey: String
+        let groupKey: String
+        let date: Double
+    }
+
     /// The sealed part. Blocked keys are upper-case, 64 hex characters, in the order they were blocked.
     private struct Secrets: Codable {
         var failed: [String: [FailedRecord]] = [:]
         var blocked: [String] = []
         var invites: [InviteRecord] = []
+        /// KHANDAQ (0.2.60): ours, waiting for their contacts, oldest first.
+        var outgoingInvites: [OutgoingInviteRecord] = []
 
         init() {
         }
@@ -172,10 +196,11 @@ final class AirLocalStore {
             failed = try container.decodeIfPresent([String: [FailedRecord]].self, forKey: .failed) ?? [:]
             blocked = try container.decodeIfPresent([String].self, forKey: .blocked) ?? []
             invites = try container.decodeIfPresent([InviteRecord].self, forKey: .invites) ?? []
+            outgoingInvites = try container.decodeIfPresent([OutgoingInviteRecord].self, forKey: .outgoingInvites) ?? []
         }
 
         var isEmpty: Bool {
-            return failed.isEmpty && blocked.isEmpty && invites.isEmpty
+            return failed.isEmpty && blocked.isEmpty && invites.isEmpty && outgoingInvites.isEmpty
         }
     }
 
@@ -184,6 +209,8 @@ final class AirLocalStore {
     private struct CommunityMarks: Codable {
         var autoJoinDone = false
         var left = false
+        /// KHANDAQ (0.2.60): KhandaqCommunity.restoreSound is done.
+        var soundRestored = false
 
         init() {
         }
@@ -194,10 +221,11 @@ final class AirLocalStore {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             autoJoinDone = try container.decodeIfPresent(Bool.self, forKey: .autoJoinDone) ?? false
             left = try container.decodeIfPresent(Bool.self, forKey: .left) ?? false
+            soundRestored = try container.decodeIfPresent(Bool.self, forKey: .soundRestored) ?? false
         }
 
         var isEmpty: Bool {
-            return !autoJoinDone && !left
+            return !autoJoinDone && !left && !soundRestored
         }
     }
 
@@ -400,15 +428,22 @@ final class AirLocalStore {
     }
 
     /// Forgets the marks of a contact, when the contact itself is removed. A block stays: it is about
-    /// the key, not the contact.
+    /// the key, not the contact. KHANDAQ (0.2.60): our invitations waiting for the contact go too.
     func forget(publicKey: String) {
         let key = AirLocalStore.hashedKey(publicKey)
         onlineSince.removeValue(forKey: key)
-        guard contacts.removeValue(forKey: key) != nil else {
+        let friend = AirLocalStore.normalizedKey(publicKey)
+        let invitesBefore = secrets.outgoingInvites.count
+        secrets.outgoingInvites.removeAll { $0.friendKey == friend }
+        let droppedInvites = secrets.outgoingInvites.count != invitesBefore
+        let hadMarks = contacts.removeValue(forKey: key) != nil
+        guard hadMarks || droppedInvites else {
             return
         }
         save()
-        notify()
+        if hadMarks {
+            notify()
+        }
     }
 
     // MARK: Refused messages
@@ -488,6 +523,73 @@ final class AirLocalStore {
         return true
     }
 
+    // MARK: Our invitations waiting for a contact (KHANDAQ 0.2.60)
+
+    /// Oldest first.
+    var outgoingInvites: [AirOutgoingInvite] {
+        return secrets.outgoingInvites.map {
+            AirOutgoingInvite(friendKey: $0.friendKey, groupKey: $0.groupKey, date: Date(timeIntervalSince1970: $0.date))
+        }
+    }
+
+    /// Keeps an invitation of ours until it can go; false for keys that are not keys, an invitation kept
+    /// already (it keeps its date) or one asked for more than outgoingInviteKeepSeconds before `now`.
+    @discardableResult
+    func keepOutgoingInvite(friendKey: String, groupKey: String, at date: Date, now: Date = Date()) -> Bool {
+        let friend = AirLocalStore.normalizedKey(friendKey)
+        let group = AirLocalStore.normalizedKey(groupKey)
+        guard AirLocalStore.isPublicKey(friend), AirLocalStore.isPublicKey(group),
+              now.timeIntervalSince(date) <= AirLocalStore.outgoingInviteKeepSeconds,
+              !secrets.outgoingInvites.contains(where: { $0.friendKey == friend && $0.groupKey == group }) else {
+            return false
+        }
+        secrets.outgoingInvites.append(OutgoingInviteRecord(friendKey: friend, groupKey: group, date: date.timeIntervalSince1970))
+        let excess = secrets.outgoingInvites.count - AirLocalStore.outgoingInviteLimit
+        if excess > 0 {
+            secrets.outgoingInvites.removeFirst(excess)
+        }
+        save()
+        return true
+    }
+
+    func hasOutgoingInvite(friendKey: String, groupKey: String) -> Bool {
+        let friend = AirLocalStore.normalizedKey(friendKey)
+        let group = AirLocalStore.normalizedKey(groupKey)
+        return secrets.outgoingInvites.contains { $0.friendKey == friend && $0.groupKey == group }
+    }
+
+    /// Sent or refused: it goes.
+    @discardableResult
+    func dropOutgoingInvite(friendKey: String, groupKey: String) -> Bool {
+        let friend = AirLocalStore.normalizedKey(friendKey)
+        let group = AirLocalStore.normalizedKey(groupKey)
+        return dropOutgoingInvites { $0.friendKey == friend && $0.groupKey == group }
+    }
+
+    /// The group was left: our invitations to it go.
+    @discardableResult
+    func dropOutgoingInvites(groupKey: String) -> Bool {
+        let group = AirLocalStore.normalizedKey(groupKey)
+        return dropOutgoingInvites { $0.groupKey == group }
+    }
+
+    /// Drops the invitations asked for more than outgoingInviteKeepSeconds before `now`.
+    @discardableResult
+    func pruneOutgoingInvites(now: Date = Date()) -> Bool {
+        let oldest = now.timeIntervalSince1970 - AirLocalStore.outgoingInviteKeepSeconds
+        return dropOutgoingInvites { $0.date < oldest }
+    }
+
+    private func dropOutgoingInvites(where shouldDrop: (OutgoingInviteRecord) -> Bool) -> Bool {
+        let before = secrets.outgoingInvites.count
+        secrets.outgoingInvites.removeAll(where: shouldDrop)
+        guard secrets.outgoingInvites.count != before else {
+            return false
+        }
+        save()
+        return true
+    }
+
     // MARK: Block list
 
     /// Blocked keys, 64 hex characters in upper case, oldest first.
@@ -539,11 +641,24 @@ final class AirLocalStore {
         return community.left
     }
 
+    /// KHANDAQ (0.2.60): the sound the auto-join of 0.2.57 turned off is on again (KhandaqCommunity.restoreSound).
+    var communitySoundRestored: Bool {
+        return community.soundRestored
+    }
+
     func setCommunityAutoJoinDone() {
         guard !community.autoJoinDone else {
             return
         }
         community.autoJoinDone = true
+        save()
+    }
+
+    func setCommunitySoundRestored() {
+        guard !community.soundRestored else {
+            return
+        }
+        community.soundRestored = true
         save()
     }
 
@@ -894,6 +1009,248 @@ final class AirGroupInvites {
 
     private func notify() {
         NotificationCenter.default.post(name: .airGroupInvitesDidChange, object: self)
+    }
+}
+
+/// KHANDAQ (0.2.60): our invitations to groups (owner, 2026-11-18: a person is added to a group even when they
+/// are offline). tox_group_invite_friend sends one at once over the link with the contact and toxcore keeps
+/// none, so the invitation a contact offline now cannot take waits in the store and goes once both are online
+/// (AirOutgoingInviteSender).
+enum AirOutgoingInvites {
+    /// A contact as an invitation that waits sees them.
+    enum Contact: Equatable {
+        /// Removed: their invitations go.
+        case gone
+        case offline
+        case online(OCTToxFriendNumber)
+    }
+
+    /// A group as an invitation that waits sees it.
+    enum Group: Equatable {
+        /// Left: its invitations go.
+        case gone
+        /// Not with toxcore yet (no group number): its invitations wait.
+        case waiting
+        case ready(OCTToxGroupNumber)
+    }
+
+    /// "Invite" in the group dossier: the contacts chosen, to the group of `chat`.
+    static func invite(_ candidates: [AirInviteCandidate],
+                       to chat: OCTChat,
+                       submanagerGroups: OCTSubmanagerGroups,
+                       store: AirLocalStore = AirLocalStore.shared) -> AirInviteTally {
+        let friends = candidates.filter { $0.canInvite }.map { (number: OCTToxFriendNumber($0.friendNumber), key: $0.publicKey) }
+        return invite(friends: friends, to: chat, submanagerGroups: submanagerGroups, store: store)
+    }
+
+    /// "New group": the contacts chosen on its sheet, to the group just made.
+    static func invite(_ friends: [OCTFriend],
+                       to chat: OCTChat,
+                       submanagerGroups: OCTSubmanagerGroups,
+                       store: AirLocalStore = AirLocalStore.shared) -> AirInviteTally {
+        let numbers = friends.filter { !$0.isInvalidated }.map { (number: $0.friendNumber, key: $0.publicKey) }
+        return invite(friends: numbers, to: chat, submanagerGroups: submanagerGroups, store: store)
+    }
+
+    /// Invites `friends` (friend number and key) to the group `groupKey`, `groupNumber` in this session,
+    /// through `send`; the invitation of one offline now is kept in `store`, one sent or refused goes from it.
+    static func invite(friends: [(number: OCTToxFriendNumber, key: String)],
+                       groupNumber: OCTToxGroupNumber,
+                       groupKey: String,
+                       store: AirLocalStore,
+                       now: Date = Date(),
+                       send: (OCTToxFriendNumber, OCTToxGroupNumber) throws -> Void) -> AirInviteTally {
+        var tally = AirInviteTally()
+        for friend in friends {
+            guard friend.number >= 0 else {
+                tally.refused += 1
+                continue
+            }
+            var failure: NSError?
+            do {
+                try send(friend.number, groupNumber)
+            }
+            catch let error as NSError {
+                failure = error
+            }
+            switch AirInviteOutcome(error: failure) {
+                case .sent:
+                    tally.sent += 1
+                    // One kept from before goes too: it has just been sent.
+                    store.dropOutgoingInvite(friendKey: friend.key, groupKey: groupKey)
+                case .later:
+                    store.keepOutgoingInvite(friendKey: friend.key, groupKey: groupKey, at: now, now: now)
+                    if store.hasOutgoingInvite(friendKey: friend.key, groupKey: groupKey) {
+                        tally.later += 1
+                    }
+                    else {
+                        // Keys that are not keys cannot be kept: nothing would ever send it.
+                        tally.refused += 1
+                        tally.firstRefusal = tally.firstRefusal ?? failure
+                    }
+                case .refused:
+                    tally.refused += 1
+                    tally.firstRefusal = tally.firstRefusal ?? failure
+                    store.dropOutgoingInvite(friendKey: friend.key, groupKey: groupKey)
+            }
+        }
+        return tally
+    }
+
+    /// Sends the invitations kept in `store` whose contact is online now and whose group is with toxcore.
+    /// Those sent and those refused go, as do those of a contact or a group gone and those older than
+    /// AirLocalStore.outgoingInviteKeepSeconds; the others wait. Returns how many were sent.
+    @discardableResult
+    static func sendWaiting(store: AirLocalStore,
+                            now: Date = Date(),
+                            contact: (String) -> Contact,
+                            group: (String) -> Group,
+                            send: (OCTToxFriendNumber, OCTToxGroupNumber) throws -> Void) -> Int {
+        store.pruneOutgoingInvites(now: now)
+        var sent = 0
+        for invite in store.outgoingInvites {
+            let groupState = group(invite.groupKey)
+            let contactState = contact(invite.friendKey)
+            if groupState == .gone || contactState == .gone {
+                store.dropOutgoingInvite(friendKey: invite.friendKey, groupKey: invite.groupKey)
+                continue
+            }
+            guard case .ready(let groupNumber) = groupState, case .online(let friendNumber) = contactState else {
+                continue
+            }
+            var failure: Error?
+            do {
+                try send(friendNumber, groupNumber)
+            }
+            catch {
+                failure = error
+            }
+            switch AirInviteOutcome(error: failure) {
+                case .sent:
+                    sent += 1
+                    store.dropOutgoingInvite(friendKey: invite.friendKey, groupKey: invite.groupKey)
+                case .later:
+                    break
+                case .refused:
+                    log("AirOutgoingInvites: a kept group invitation was refused (\((failure as NSError?)?.code ?? -1)) and dropped")
+                    store.dropOutgoingInvite(friendKey: invite.friendKey, groupKey: invite.groupKey)
+            }
+        }
+        return sent
+    }
+
+    private static func invite(friends: [(number: OCTToxFriendNumber, key: String)],
+                               to chat: OCTChat,
+                               submanagerGroups: OCTSubmanagerGroups,
+                               store: AirLocalStore) -> AirInviteTally {
+        guard !chat.isInvalidated, chat.groupNumber >= 0 else {
+            var tally = AirInviteTally()
+            tally.refused = friends.count
+            return tally
+        }
+        return invite(friends: friends,
+                      groupNumber: OCTToxGroupNumber(chat.groupNumber),
+                      groupKey: chat.groupChatIdHex ?? "",
+                      store: store) { friendNumber, groupNumber in
+            try submanagerGroups.inviteFriend(withNumber: friendNumber, toGroupNumber: groupNumber)
+        }
+    }
+}
+
+/// KHANDAQ (0.2.60): sends our invitations kept for contacts who were offline (AirOutgoingInvites) while a
+/// profile runs: a little after the contacts change (one came online), and every retryInterval while any
+/// wait, as the group may have been disconnected when the contact came.
+final class AirOutgoingInviteSender {
+    static let retryInterval: TimeInterval = 60
+    /// After a change of the contacts: the link with one who has just come online settles first.
+    static let settleDelay: TimeInterval = 3
+
+    private let submanagerObjects: OCTSubmanagerObjects
+    private let submanagerGroups: OCTSubmanagerGroups
+    private let store: AirLocalStore
+    private let friends: Results<OCTFriend>
+    private var token: RLMNotificationToken?
+    private var timer: Timer?
+    private var scheduled = false
+
+    init(submanagerObjects: OCTSubmanagerObjects, submanagerGroups: OCTSubmanagerGroups, store: AirLocalStore = AirLocalStore.shared) {
+        self.submanagerObjects = submanagerObjects
+        self.submanagerGroups = submanagerGroups
+        self.store = store
+        self.friends = submanagerObjects.friends()
+    }
+
+    deinit {
+        stop()
+    }
+
+    func start() {
+        guard token == nil else {
+            return
+        }
+        token = friends.addNotificationBlock { [weak self] _ in
+            self?.schedule()
+        }
+        timer = Timer.scheduledTimer(withTimeInterval: AirOutgoingInviteSender.retryInterval, repeats: true) { [weak self] _ in
+            self?.sendWaiting()
+        }
+        schedule()
+    }
+
+    func stop() {
+        token?.invalidate()
+        token = nil
+        timer?.invalidate()
+        timer = nil
+    }
+
+    /// Out of the notification itself: sending an invitation may write to Realm (objcTox prepares the group,
+    /// joining it again if need be).
+    private func schedule() {
+        guard !scheduled, !store.outgoingInvites.isEmpty else {
+            return
+        }
+        scheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + AirOutgoingInviteSender.settleDelay) { [weak self] in
+            self?.scheduled = false
+            self?.sendWaiting()
+        }
+    }
+
+    private func sendWaiting() {
+        guard token != nil, !store.outgoingInvites.isEmpty else {
+            return
+        }
+        let objects = submanagerObjects
+        let groups = submanagerGroups
+        let sent = AirOutgoingInvites.sendWaiting(store: store,
+                                                  contact: { key in
+                                                      let found = objects.friends(predicate: NSPredicate(format: "publicKey ==[c] %@", key))
+                                                      guard let friend = found.object(at: 0), !friend.isInvalidated else {
+                                                          return .gone
+                                                      }
+                                                      return friend.isConnected ? .online(friend.friendNumber) : .offline
+                                                  },
+                                                  group: { key in
+                                                      let chats = objects.chats(predicate: NSPredicate(format: "isGroup == YES AND groupChatIdHex ==[c] %@", key))
+                                                      var waiting = false
+                                                      for index in 0..<chats.count {
+                                                          guard let chat = chats.object(at: index), !chat.isInvalidated else {
+                                                              continue
+                                                          }
+                                                          if chat.groupNumber >= 0 {
+                                                              return .ready(OCTToxGroupNumber(chat.groupNumber))
+                                                          }
+                                                          waiting = true
+                                                      }
+                                                      return waiting ? .waiting : .gone
+                                                  },
+                                                  send: { friendNumber, groupNumber in
+                                                      try groups.inviteFriend(withNumber: friendNumber, toGroupNumber: groupNumber)
+                                                  })
+        if sent > 0 {
+            log("AirOutgoingInvites: \(sent) group invitation(s) kept for offline contacts sent")
+        }
     }
 }
 

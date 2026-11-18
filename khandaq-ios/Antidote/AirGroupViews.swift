@@ -374,8 +374,8 @@ final class AirGroupMemberRow: UIControl {
 
 // MARK: - Invitation row
 
-/// A contact on an invitation list: the tile, the name, why they cannot be invited now if so, and a
-/// round mark that fills when chosen.
+/// A contact on an invitation list: the tile, the name, a note (already in the group, or the invitation
+/// waits until they are online), and a round mark that fills when chosen.
 final class AirInviteRow: UIControl {
     let candidate: AirInviteCandidate
     private let tile = AirTileView(side: KQSize.tilePhone)

@@ -315,18 +315,20 @@ class AirGroupModelTests: XCTestCase {
             candidate(5, "Aisha", online: false),
             candidate(-1, "Zaid", online: true),
         ]
+        // KHANDAQ (0.2.60): those offline come right after those online: their invitation waits for them.
         XCTAssertEqual(AirInviteList.arranged(candidates, query: "").map { $0.name },
-                       ["Amina", "Timur", "Bilal", "Zaid", "Aisha", "Yusuf"])
+                       ["Amina", "Timur", "Aisha", "Yusuf", "Bilal", "Zaid"])
         XCTAssertEqual(AirInviteList.arranged(candidates, query: "AMI").map { $0.name }, ["Amina"])
 
         XCTAssertTrue(candidate(3, "Amina", online: true).canInvite)
         XCTAssertFalse(candidate(2, "Bilal", online: true, member: true).canInvite, "already in the group")
-        XCTAssertFalse(candidate(1, "Yusuf", online: false).canInvite, "an invitation needs the contact online")
+        XCTAssertTrue(candidate(1, "Yusuf", online: false).canInvite, "a contact offline is invited too")
         XCTAssertFalse(candidate(-1, "Zaid", online: true).canInvite, "no friend number, nothing to send it over")
 
         XCTAssertNil(AirInviteList.note(for: candidate(3, "Amina", online: true)))
         XCTAssertEqual(AirInviteList.note(for: candidate(2, "Bilal", online: true, member: true)), "already in the group")
-        XCTAssertEqual(AirInviteList.note(for: candidate(1, "Yusuf", online: false)), "can be invited once online")
+        XCTAssertEqual(AirInviteList.note(for: candidate(1, "Yusuf", online: false)), "gets the invitation once online")
+        XCTAssertNil(AirInviteList.note(for: candidate(-1, "Zaid", online: false)), "nothing waits for a contact who cannot be invited")
     }
 
     func testInvitationListChoosesContactsByKey() {
@@ -343,18 +345,122 @@ class AirGroupModelTests: XCTestCase {
         rows[0].sendActions(for: .touchUpInside)
         XCTAssertEqual(list.chosen.map { $0.name }, ["Bilal"])
 
-        // Bilal goes offline: he is no longer chosen, as he cannot be invited now.
-        list.configure(candidates: [candidate(0, "Amina", online: true), candidate(0, "Bilal", online: false)])
-        XCTAssertTrue(list.chosen.isEmpty)
+        // Yusuf is offline: his row takes a choice and says that the invitation waits for him (0.2.60).
+        XCTAssertTrue(rows[2].isEnabled)
+        XCTAssertEqual(rows[2].accessibilityValue, "gets the invitation once online")
+        rows[2].sendActions(for: .touchUpInside)
+        XCTAssertEqual(list.chosen.map { $0.name }, ["Bilal", "Yusuf"])
+
+        // Bilal goes offline: he stays chosen, his invitation will wait. Yusuf joined in the meantime.
+        list.configure(candidates: [candidate(0, "Amina", online: true), candidate(0, "Bilal", online: false),
+                                    candidate(0, "Yusuf", online: true, member: true)])
+        XCTAssertEqual(list.chosen.map { $0.name }, ["Bilal"])
     }
 
     func testSentInvitationsAreCounted() {
         XCTAssertEqual(String(localized: "air_invite_sent", 1), "Invitation sent")
         XCTAssertEqual(String(localized: "air_invite_sent", 3), "3 invitations sent")
+        XCTAssertEqual(String(localized: "air_invite_later", 1), "Invitation will go once the contact is online")
+        XCTAssertEqual(String(localized: "air_invite_later", 2), "2 invitations will go once the contacts are online")
+        var tally = AirInviteTally()
+        XCTAssertNil(tally.toastText, "nothing went and nothing waits: no toast")
+        tally.sent = 1
+        tally.later = 2
+        XCTAssertEqual(tally.toastText, "Invitation sent\n2 invitations will go once the contacts are online")
         use("ru")
         XCTAssertEqual(String(localized: "air_invite_sent", 1), "Отправлено 1 приглашение")
         XCTAssertEqual(String(localized: "air_invite_sent", 3), "Отправлено 3 приглашения")
         XCTAssertEqual(String(localized: "air_invite_sent", 5), "Отправлено 5 приглашений")
+        XCTAssertEqual(String(localized: "air_invite_later", 1), "1 приглашение уйдёт при появлении в сети")
+        XCTAssertEqual(String(localized: "air_invite_later", 21), "21 приглашение уйдёт при появлении в сети")
+        XCTAssertEqual(String(localized: "air_invite_later", 3), "3 приглашения уйдут при появлении в сети")
+        XCTAssertEqual(String(localized: "air_invite_later", 5), "5 приглашений уйдут при появлении в сети")
+        XCTAssertEqual(String(localized: "air_invite_when_online"), "получит приглашение, когда будет в сети")
+    }
+
+    /// KHANDAQ (0.2.60): an invitation a contact offline now cannot take waits on this device; one sent or
+    /// refused does not, and only toxcore's "not sent now" counts as offline.
+    func testAnInvitationThatCannotGoNowWaitsOnThisDevice() {
+        let store = AirLocalStore()
+        let date = Date(timeIntervalSince1970: now)
+        let friends: [(number: OCTToxFriendNumber, key: String)] = [(1, key(1)), (2, key(2).lowercased()), (3, key(3)), (4, key(4)), (-1, key(5))]
+        let answers: [OCTToxFriendNumber: OCTToxErrorGroupInviteFriend] = [2: .inviteFail, 3: .disconnected, 4: .friendNotFound]
+        var asked: [OCTToxFriendNumber] = []
+        let tally = AirOutgoingInvites.invite(friends: friends, groupNumber: 7, groupKey: groupKey(1), store: store, now: date) { friend, group in
+            XCTAssertEqual(group, 7)
+            asked.append(friend)
+            if let code = answers[friend] {
+                throw toxError(code)
+            }
+        }
+        XCTAssertEqual(asked, [1, 2, 3, 4], "a contact without a friend number is not asked for")
+        XCTAssertEqual(tally.sent, 1)
+        XCTAssertEqual(tally.later, 2)
+        XCTAssertEqual(tally.refused, 2)
+        XCTAssertEqual(tally.firstRefusal?.code, OCTToxErrorGroupInviteFriend.friendNotFound.rawValue)
+        XCTAssertEqual(store.outgoingInvites, [AirOutgoingInvite(friendKey: key(2), groupKey: groupKey(1), date: date),
+                                               AirOutgoingInvite(friendKey: key(3), groupKey: groupKey(1), date: date)])
+        XCTAssertEqual(tally.toastText, "Invitation sent\n2 invitations will go once the contacts are online")
+
+        // Asked again while it waits: it goes now, and from the store too.
+        let again = AirOutgoingInvites.invite(friends: [(2, key(2))], groupNumber: 7, groupKey: groupKey(1), store: store, now: date) { _, _ in }
+        XCTAssertEqual(again.sent, 1)
+        XCTAssertEqual(store.outgoingInvites.map { $0.friendKey }, [key(3)])
+
+        // A group whose key is not known cannot keep one: it is a refusal, with the error said.
+        let unknownGroup = AirOutgoingInvites.invite(friends: [(4, key(4))], groupNumber: 7, groupKey: "", store: store, now: date) { _, _ in
+            throw toxError(.inviteFail)
+        }
+        XCTAssertEqual(unknownGroup.refused, 1)
+        XCTAssertEqual(unknownGroup.firstRefusal?.code, OCTToxErrorGroupInviteFriend.inviteFail.rawValue)
+
+        XCTAssertEqual(AirInviteOutcome(error: nil), .sent)
+        XCTAssertEqual(AirInviteOutcome(error: toxError(.failSend)), .later)
+        XCTAssertEqual(AirInviteOutcome(error: toxError(.groupNotFound)), .refused)
+        XCTAssertEqual(AirInviteOutcome(error: toxError(.unknown)), .refused)
+        XCTAssertEqual(AirInviteOutcome(error: NSError(domain: "other", code: OCTToxErrorGroupInviteFriend.inviteFail.rawValue)), .refused)
+    }
+
+    /// KHANDAQ (0.2.60): the invitations that wait go once the contact is online and the group is with toxcore;
+    /// those of a contact or a group gone, those refused and those older than thirty days go from the store.
+    func testWaitingInvitationsGoOnceTheContactIsOnline() {
+        let store = AirLocalStore()
+        let date = Date(timeIntervalSince1970: now)
+        let waiting = [(key(1), groupKey(1)), (key(2), groupKey(1)), (key(3), groupKey(1)), (key(1), groupKey(2)),
+                       (key(4), groupKey(3)), (key(5), groupKey(1)), (key(6), groupKey(1))]
+        for (friend, group) in waiting {
+            XCTAssertTrue(store.keepOutgoingInvite(friendKey: friend, groupKey: group, at: date, now: date))
+        }
+        let contacts: [String: AirOutgoingInvites.Contact] = [key(1): .online(1), key(2): .offline, key(3): .gone,
+                                                               key(4): .online(4), key(5): .online(5), key(6): .online(6)]
+        let groups: [String: AirOutgoingInvites.Group] = [groupKey(1): .ready(7), groupKey(2): .gone, groupKey(3): .waiting]
+        var asked: [OCTToxFriendNumber] = []
+        let sent = AirOutgoingInvites.sendWaiting(store: store, now: date.addingTimeInterval(3600),
+                                                  contact: { contacts[$0] ?? .gone },
+                                                  group: { groups[$0] ?? .gone }) { friend, group in
+            XCTAssertEqual(group, 7)
+            asked.append(friend)
+            if friend == 5 {
+                throw toxError(.failSend)
+            }
+            if friend == 6 {
+                throw toxError(.friendNotFound)
+            }
+        }
+        XCTAssertEqual(sent, 1)
+        XCTAssertEqual(asked, [1, 5, 6], "only a contact online now, in a group with toxcore, is asked for")
+        XCTAssertEqual(store.outgoingInvites.map { $0.friendKey }, [key(2), key(4), key(5)])
+
+        // Thirty days after they were asked for, those still waiting go without a word to toxcore.
+        asked = []
+        let late = AirOutgoingInvites.sendWaiting(store: store, now: date.addingTimeInterval(AirLocalStore.outgoingInviteKeepSeconds + 1),
+                                                  contact: { _ in .online(9) },
+                                                  group: { _ in .ready(7) }) { friend, _ in
+            asked.append(friend)
+        }
+        XCTAssertEqual(late, 0)
+        XCTAssertTrue(asked.isEmpty)
+        XCTAssertTrue(store.outgoingInvites.isEmpty)
     }
 
     // MARK: - New group
@@ -765,6 +871,19 @@ private extension AirGroupModelTests {
     func member(_ peerId: UInt32, _ name: String, _ role: OCTToxGroupRole, online: Bool = false, lastSeen: TimeInterval = 0,
                 isSelf: Bool = false, key: String = "") -> AirGroupMember {
         return AirGroupMember(peerId: peerId, name: name, publicKey: key, role: role, isOnline: online, lastSeen: lastSeen, isSelf: isSelf)
+    }
+
+    /// A contact's key or a group's chat id: 64 hexadecimal characters in upper case.
+    func key(_ index: Int) -> String {
+        return String(repeating: "A", count: 60) + String(format: "%04X", index)
+    }
+
+    func groupKey(_ index: Int) -> String {
+        return String(repeating: "C", count: 60) + String(format: "%04X", index)
+    }
+
+    func toxError(_ code: OCTToxErrorGroupInviteFriend) -> NSError {
+        return NSError(domain: kOCTToxErrorDomain, code: code.rawValue, userInfo: nil)
     }
 
     func candidate(_ number: Int32, _ name: String, online: Bool, member: Bool = false) -> AirInviteCandidate {

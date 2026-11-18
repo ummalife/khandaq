@@ -6,8 +6,9 @@ import XCTest
 @testable import Antidote
 
 /**
- Khandaq Community (SPEC-community, part B): every profile joins the official group once by itself, muted,
- and never again once the person left it, across restarts.
+ Khandaq Community (SPEC-community, part B): every profile joins the official group once by itself, and never
+ again once the person left it, across restarts. Since 0.2.60 the join keeps the group's sound, and the sound an
+ earlier join turned off is turned on once.
  */
 class KhandaqCommunityTests: XCTestCase {
     private var directories: [URL] = []
@@ -52,23 +53,20 @@ class KhandaqCommunityTests: XCTestCase {
         XCTAssertFalse(KhandaqCommunity.isCommunity(direct), "only a group is the Community")
     }
 
-    // MARK: Item 2, muted only on the auto-join
+    // MARK: Item 2, the join, and the sound
 
-    func testTheJoinItMakesMutesTheGroupOnceAndMarksItDone() {
+    func testTheJoinItMakesHappensOnceAndMarksItDone() {
         let marks = FakeMarks()
         var joins = 0
-        var muted: [String] = []
 
         let joined = KhandaqCommunity.autoJoin(marks: marks, connected: true, alreadyInGroup: false,
                                                join: { () -> String? in
                                                    joins += 1
                                                    return "community"
-                                               },
-                                               mute: { muted.append($0) })
+                                               })
 
         XCTAssertEqual(joined, "community")
         XCTAssertEqual(joins, 1)
-        XCTAssertEqual(muted, ["community"])
         XCTAssertTrue(marks.communityAutoJoinDone)
         XCTAssertFalse(marks.communityLeft)
 
@@ -77,14 +75,12 @@ class KhandaqCommunityTests: XCTestCase {
                                               join: { () -> String? in
                                                   joins += 1
                                                   return "community"
-                                              },
-                                              mute: { muted.append($0) })
+                                              })
         XCTAssertNil(again)
         XCTAssertEqual(joins, 1)
-        XCTAssertEqual(muted, ["community"])
     }
 
-    func testAGroupJoinedByHandIsNeitherJoinedAgainNorMuted() {
+    func testAGroupJoinedByHandIsNotJoinedAgain() {
         let marks = FakeMarks()
         var calls = 0
 
@@ -92,8 +88,7 @@ class KhandaqCommunityTests: XCTestCase {
                                                join: { () -> String? in
                                                    calls += 1
                                                    return "community"
-                                               },
-                                               mute: { _ in calls += 1 })
+                                               })
 
         XCTAssertNil(joined)
         XCTAssertEqual(calls, 0)
@@ -102,13 +97,10 @@ class KhandaqCommunityTests: XCTestCase {
 
     func testAJoinToxcoreDidNotTakeMarksNothingAndIsTriedAgain() {
         let marks = FakeMarks()
-        var muted = 0
 
         let failed = KhandaqCommunity.autoJoin(marks: marks, connected: true, alreadyInGroup: false,
-                                               join: { () -> String? in nil },
-                                               mute: { _ in muted += 1 })
+                                               join: { () -> String? in nil })
         XCTAssertNil(failed)
-        XCTAssertEqual(muted, 0)
         XCTAssertFalse(marks.communityAutoJoinDone)
 
         // Offline: not even tried.
@@ -117,21 +109,91 @@ class KhandaqCommunityTests: XCTestCase {
                                   join: { () -> String? in
                                       tried = true
                                       return "community"
-                                  },
-                                  mute: { _ in muted += 1 })
+                                  })
         XCTAssertFalse(tried)
 
-        // Back online: the retry joins and mutes.
+        // Back online: the retry joins.
         let joined = KhandaqCommunity.autoJoin(marks: marks, connected: true, alreadyInGroup: false,
-                                               join: { () -> String? in "community" },
-                                               mute: { _ in muted += 1 })
+                                               join: { () -> String? in "community" })
         XCTAssertEqual(joined, "community")
-        XCTAssertEqual(muted, 1)
         XCTAssertTrue(marks.communityAutoJoinDone)
     }
 
-    /// The join mutes the group: a muted group, this one or any other, adds nothing to the badge of the Chats tab
-    /// nor to the app icon's, and its row keeps its own counter.
+    /// 0.2.60: the group an earlier auto-join muted is heard again, once; the person may mute it again for good.
+    func testTheSoundAnEarlierJoinTurnedOffIsTurnedOnOnce() {
+        let marks = FakeMarks()
+        marks.setCommunityAutoJoinDone()
+        var silent = true
+        var unmutes = 0
+
+        func restore() -> Bool {
+            return KhandaqCommunity.restoreSound(marks: marks,
+                                                 chat: { () -> String? in "community" },
+                                                 isSilent: { _ in silent },
+                                                 unmute: { _ in
+                                                     unmutes += 1
+                                                     silent = false
+                                                 })
+        }
+
+        XCTAssertTrue(restore())
+        XCTAssertFalse(silent)
+        XCTAssertEqual(unmutes, 1)
+        XCTAssertTrue(marks.communitySoundRestored)
+
+        // The person mutes it again: it stays muted.
+        silent = true
+        XCTAssertFalse(restore())
+        XCTAssertTrue(silent)
+        XCTAssertEqual(unmutes, 1)
+    }
+
+    /// A group joined by hand was muted by hand, and a group left is not ours to touch: both are done at once,
+    /// so a join of 0.2.60, which keeps the sound, never finds a restore due afterwards.
+    func testTheSoundOfAGroupTheAppDidNotJoinOrThePersonLeftIsLeftAsItIs() {
+        for (autoJoinDone, left) in [(false, false), (true, true), (false, true)] {
+            let marks = FakeMarks()
+            if autoJoinDone {
+                marks.setCommunityAutoJoinDone()
+            }
+            if left {
+                marks.setCommunityLeft()
+            }
+            var unmutes = 0
+            let unmuted = KhandaqCommunity.restoreSound(marks: marks,
+                                                        chat: { () -> String? in "community" },
+                                                        isSilent: { _ in true },
+                                                        unmute: { _ in unmutes += 1 })
+            XCTAssertFalse(unmuted, "done \(autoJoinDone), left \(left)")
+            XCTAssertEqual(unmutes, 0, "done \(autoJoinDone), left \(left)")
+            XCTAssertTrue(marks.communitySoundRestored, "done \(autoJoinDone), left \(left)")
+        }
+    }
+
+    /// The group not here yet at a start (its row not yet read): nothing is marked, the next start looks again.
+    func testTheSoundIsTurnedOnOnceTheGroupIsHere() {
+        let marks = FakeMarks()
+        marks.setCommunityAutoJoinDone()
+        var here = false
+        var unmutes = 0
+
+        func restore() -> Bool {
+            return KhandaqCommunity.restoreSound(marks: marks,
+                                                 chat: { () -> String? in here ? "community" : nil },
+                                                 isSilent: { _ in true },
+                                                 unmute: { _ in unmutes += 1 })
+        }
+
+        XCTAssertFalse(restore())
+        XCTAssertFalse(marks.communitySoundRestored)
+        here = true
+        XCTAssertTrue(restore())
+        XCTAssertEqual(unmutes, 1)
+        XCTAssertTrue(marks.communitySoundRestored)
+    }
+
+    /// A muted group, this one or any other, adds nothing to the badge of the Chats tab nor to the app icon's,
+    /// and its row keeps its own counter.
     func testAMutedGroupAddsNothingToTheBadgesAndItsRowKeepsItsCounter() throws {
         let directory = makeDirectory()
         let realmManagerClass = try appClass("OCTRealmManager", as: OCTRealmManager.Type.self)
@@ -247,6 +309,31 @@ class KhandaqCommunityTests: XCTestCase {
         XCTAssertNil(ChatListTableManager.chat(atRow: 1, count: 1, chatAt: { _ in book }, matches: everything))
     }
 
+    /// KHANDAQ (0.2.60): its tile is the logo of the app, not the letters "KC" (owner, 2026-11-18), in the list
+    /// and on its banners; any other group keeps its letters.
+    func testTheCommunityTileIsTheLogoOfTheApp() {
+        XCTAssertNotNil(UIImage(named: "kq-community"), "the logo is in the app's assets")
+        let tile = AirTileView(side: KQSize.tilePhone)
+        tile.configure(style: .community, photo: nil)
+        XCTAssertEqual(tile.subviews.compactMap { $0 as? UIImageView }.filter { !$0.isHidden && $0.image != nil }.count, 1)
+        XCTAssertTrue(tile.subviews.compactMap { $0 as? UILabel }.allSatisfy { ($0.text ?? "").isEmpty }, "no letters over the logo")
+
+        tile.configure(style: .group(initials: "BC", tone: 2), photo: nil)
+        XCTAssertTrue(tile.subviews.compactMap { $0 as? UIImageView }.allSatisfy { $0.isHidden || $0.image == nil })
+        XCTAssertEqual(tile.subviews.compactMap { $0 as? UILabel }.first?.text, "BC")
+
+        let row = { (kind: AirEntry.Kind, pinned: Bool) -> AirEntry in
+            var entry = AirEntry(id: "c", kind: kind, title: "Khandaq Community", reach: .local, preview: "", previewStyle: .message,
+                                 lastDelivery: nil, timeText: "", activity: 1, transitCount: 0, unreadCount: 0,
+                                 isFavorite: false, avatarData: nil, tone: 0)
+            entry.isPinned = pinned
+            return entry
+        }
+        XCTAssertTrue(row(.group, true).isCommunity, "the one group pinned above the others")
+        XCTAssertFalse(row(.group, false).isCommunity)
+        XCTAssertFalse(row(.direct, true).isCommunity)
+    }
+
     // MARK: Item 3, left means never again, across a restart
 
     func testLeavingTheCommunityIsKeptAcrossARestartAndItIsNeverJoinedAgain() {
@@ -274,8 +361,7 @@ class KhandaqCommunityTests: XCTestCase {
                                                join: { () -> String? in
                                                    tried = true
                                                    return "community"
-                                               },
-                                               mute: { _ in })
+                                               })
         XCTAssertNil(joined)
         XCTAssertFalse(tried)
     }
@@ -285,14 +371,18 @@ class KhandaqCommunityTests: XCTestCase {
         let first = AirLocalStore(sealing: PlainSealing())
         first.attach(directory: directory)
         KhandaqCommunity.autoJoin(marks: first, connected: true, alreadyInGroup: false,
-                                  join: { () -> String? in "community" },
-                                  mute: { _ in })
+                                  join: { () -> String? in "community" })
+        KhandaqCommunity.restoreSound(marks: first,
+                                      chat: { () -> String? in "community" },
+                                      isSilent: { _ in false },
+                                      unmute: { _ in })
         first.flush()
 
         let second = AirLocalStore(sealing: PlainSealing())
         second.attach(directory: directory)
         XCTAssertTrue(second.communityAutoJoinDone)
         XCTAssertFalse(second.communityLeft)
+        XCTAssertTrue(second.communitySoundRestored, "the sound is turned on once, not at every start")
         // Each profile keeps its own: another profile's directory starts with nothing.
         let other = AirLocalStore(sealing: PlainSealing())
         other.attach(directory: makeDirectory())
@@ -437,9 +527,14 @@ class KhandaqCommunityTests: XCTestCase {
 private final class FakeMarks: KhandaqCommunityMarks {
     private(set) var communityAutoJoinDone = false
     private(set) var communityLeft = false
+    private(set) var communitySoundRestored = false
 
     func setCommunityAutoJoinDone() {
         communityAutoJoinDone = true
+    }
+
+    func setCommunitySoundRestored() {
+        communitySoundRestored = true
     }
 
     @discardableResult

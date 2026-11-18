@@ -1097,12 +1097,13 @@
 "air_group_now_observer_format" = "%@ مراقب الآن";
 "air_group_kicked_format" = "لم يعد %@ في المجموعة";
 "air_group_invite_title" = "دعوة إلى المجموعة";
-"air_invite_online_note" = "تُرسل الدعوة عبر اتصالك بجهة الاتصال، لذا لا يمكن دعوة إلا المتصلين الآن.";
+"air_invite_online_note" = "تُرسل الدعوة عبر اتصالك بجهة الاتصال: من ليس متصلًا الآن يتلقاها عند اتصاله.";
 "air_invite_choose_first" = "اختر من تريد دعوته";
 "air_invite_send_format" = "دعوة %d";
 "air_invite_sent" = "أُرسلت الدعوات: %d";
+"air_invite_later" = "ستُرسل الدعوات عند اتصال المدعوين: %d";
 "air_invite_already_member" = "في المجموعة بالفعل";
-"air_invite_when_online" = "يمكن دعوته عند اتصاله";
+"air_invite_when_online" = "سيتلقى الدعوة عند اتصاله";
 "air_invite_no_contacts" = "لا توجد جهات اتصال بعد: أضف شخصًا أولًا.";
 "air_invite_nobody_found" = "لا توجد جهة اتصال بهذا الاسم";
 "air_invite_search" = "ابحث عن جهة اتصال";
@@ -1115,7 +1116,7 @@
 "air_group_privacy_invite_only_note" = "لا ينضم إلا من يدعوه أحد الأعضاء. لا يمكن الانضمام بمفتاح المجموعة.";
 "air_group_privacy_open" = "مفتوحة لكل من لديه مفتاح المجموعة";
 "air_group_privacy_open_note" = "يمكن لأي شخص لديه مفتاح المجموعة الانضمام دون دعوة.";
-"air_new_group_invite_note" = "تُرسل الدعوات فورًا، لذا لا يمكن هنا دعوة إلا المتصلين. ادعُ الآخرين لاحقًا من ملف المجموعة.";
+"air_new_group_invite_note" = "تُرسل الدعوة عبر اتصالك بجهة الاتصال: من ليس متصلًا الآن يتلقاها عند اتصاله.";
 "air_new_group_create" = "إنشاء المجموعة";
 "air_new_group_create_invite_format" = "إنشاء ودعوة %d";
 "air_new_group_name_first" = "سمِّ المجموعة لإنشائها";

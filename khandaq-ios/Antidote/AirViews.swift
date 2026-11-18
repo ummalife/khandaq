@@ -106,6 +106,13 @@ enum AirTone {
     static func color(at index: Int) -> UIColor {
         return colors[((index % colors.count) + colors.count) % colors.count]
     }
+
+    /// KHANDAQ (0.2.60): "You" over your own entries, in a tone of the names as every author is: in the
+    /// secondary ink it read as a line of the text under it (users could not tell who wrote). The same
+    /// tone on every platform: tone-5, the teal next to the app's own.
+    static var you: UIColor {
+        return KQColor.tone5
+    }
 }
 
 extension UIView {
@@ -129,6 +136,9 @@ final class AirTileView: UIView {
         case pendingGroup
         case me(initials: String)
         case saved
+        /// KHANDAQ (0.2.60): Khandaq Community, the app's own group: the logo of the app instead of initials
+        /// (owner, 2026-11-18), the same on every device.
+        case community
     }
 
     private let side: CGFloat
@@ -206,6 +216,8 @@ final class AirTileView: UIView {
                 photoView.image = photo
             case .group, .pending, .pendingGroup, .saved:
                 photoView.image = nil
+            case .community:
+                photoView.image = UIImage(named: "kq-community")
         }
         apply()
     }
@@ -263,6 +275,8 @@ final class AirTileView: UIView {
             case .saved:
                 icon = "bookmark"
                 iconTint = KQColor.ink
+            case .community:
+                break
         }
 
         let showsPhoto = photoView.image != nil

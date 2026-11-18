@@ -212,7 +212,7 @@ final class AirRowCell: UITableViewCell {
             case .saved:
                 return .saved
             case .group:
-                return .group(initials: AirInitials.from(entry.title), tone: entry.tone)
+                return entry.isCommunity ? .community : .group(initials: AirInitials.from(entry.title), tone: entry.tone)
             case .direct, .contact:
                 return entry.reach == .pending ? .pending : .person(initials: AirInitials.from(entry.title), tone: entry.tone)
         }

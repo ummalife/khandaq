@@ -129,7 +129,9 @@ extension ChatGroupController {
         let name = stored.isEmpty ? String(localized: "group_chat_default_title") : stored
         title = name
         groupTitleView.configure(name: name,
-                                 style: .group(initials: AirInitials.from(name), tone: AirTone.index(for: chat.uniqueIdentifier)),
+                                 style: KhandaqCommunity.isCommunity(chat)
+                                     ? .community
+                                     : .group(initials: AirInitials.from(name), tone: AirTone.index(for: chat.uniqueIdentifier)),
                                  photo: nil)
         groupTitleView.spokenPresence = reach.headerText
 
@@ -241,7 +243,7 @@ extension ChatGroupController {
         var opensAuthor: String?
         if message.isOutgoing() {
             label = String(localized: "air_you")
-            entry.authorColor = KQColor.ink2
+            entry.authorColor = AirTone.you
             entry.spokenAuthor = label
         }
         else if !submanagerGroups.isGroupMessageAttributable(message, in: chat) {

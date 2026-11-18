@@ -24,7 +24,7 @@ class AirEntryTextCellSnapshotTest: CellSnapshotTest {
     func testOutgoingInTransit() {
         let model = entry("See you at the gate at 19:30.", time: "9:44", status: .transit)
         model.authorText = String(localized: "air_you")
-        model.authorColor = KQColor.ink2
+        model.authorColor = AirTone.you
         verify(model)
     }
 

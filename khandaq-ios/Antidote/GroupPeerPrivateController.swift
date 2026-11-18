@@ -420,7 +420,7 @@ extension GroupPeerPrivateController: UITableViewDataSource {
 
         let name = member?.name ?? (title ?? "")
         let fullName = outgoing ? String(localized: "air_you") : name
-        model.authorColor = outgoing ? KQColor.ink2 : AirTone.color(at: AirTone.index(for: member?.toneKey ?? name))
+        model.authorColor = outgoing ? AirTone.you : AirTone.color(at: AirTone.index(for: member?.toneKey ?? name))
         model.spokenAuthor = fullName
         let previous = indexPath.row > 0 ? runKey(forRow: indexPath.row - 1) : nil
         if AirTranscript.startsRun(runKey(forRow: indexPath.row), after: previous) || model.dateSeparator != nil {

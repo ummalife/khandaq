@@ -383,10 +383,62 @@ struct AirInviteCandidate: Equatable {
     /// Already in this group: shown, but not offered again.
     let isMember: Bool
 
-    /// tox_group_invite_friend goes over the friend connection, so only a contact online now can be
-    /// invited; the others wait in the list.
+    /// Any contact with a friend number who is not a member yet. tox_group_invite_friend goes over the
+    /// friend connection, so the invitation of a contact offline now waits on this device and goes once
+    /// they are online (KHANDAQ 0.2.60, AirOutgoingInviteSender; before, only those online could be chosen).
     var canInvite: Bool {
-        return isOnline && !isMember && friendNumber >= 0
+        return !isMember && friendNumber >= 0
+    }
+}
+
+/// KHANDAQ (0.2.60): what became of one invitation to a group, by toxcore's answer.
+enum AirInviteOutcome: Equatable {
+    case sent
+    /// The contact is offline or the group is disconnected: it may go once both are up.
+    case later
+    /// The group or the contact is gone, or toxcore refused it otherwise.
+    case refused
+
+    init(error: Error?) {
+        guard let error = error as NSError? else {
+            self = .sent
+            return
+        }
+        guard error.domain == kOCTToxErrorDomain, let code = OCTToxErrorGroupInviteFriend(rawValue: error.code) else {
+            self = .refused
+            return
+        }
+        switch code {
+            case .inviteFail, .failSend, .disconnected:
+                // The packet goes over the link with the contact: offline, it did not go.
+                self = .later
+            default:
+                self = .refused
+        }
+    }
+}
+
+/// KHANDAQ (0.2.60): how a round of invitations went.
+struct AirInviteTally: Equatable {
+    /// Sent now.
+    var sent = 0
+    /// Kept on this device until the contact is online (or the group connected again).
+    var later = 0
+    /// The group or the contact is gone, or toxcore refused it otherwise.
+    var refused = 0
+    /// The error of the first refusal, for the one alert of the round.
+    var firstRefusal: NSError?
+
+    /// The toast after inviting: a line for the invitations sent and one for those that wait; nil for neither.
+    var toastText: String? {
+        var lines: [String] = []
+        if sent > 0 {
+            lines.append(String(localized: "air_invite_sent", sent))
+        }
+        if later > 0 {
+            lines.append(String(localized: "air_invite_later", later))
+        }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
 }
 
@@ -412,12 +464,12 @@ enum AirInviteList {
         }
     }
 
-    /// The quiet line of a contact that cannot be invited now.
+    /// The quiet line of a contact already in the group, or offline, whose invitation then waits for them.
     static func note(for candidate: AirInviteCandidate) -> String? {
         if candidate.isMember {
             return String(localized: "air_invite_already_member")
         }
-        if !candidate.isOnline {
+        if !candidate.isOnline && candidate.canInvite {
             return String(localized: "air_invite_when_online")
         }
         return nil

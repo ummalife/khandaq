@@ -1097,12 +1097,13 @@
 "air_group_now_observer_format" = "%@ 现在是旁观者";
 "air_group_kicked_format" = "%@ 已不在群组中";
 "air_group_invite_title" = "邀请加入群组";
-"air_invite_online_note" = "邀请通过你与联系人的连接发送，因此只能邀请当前在线的联系人。";
+"air_invite_online_note" = "邀请通过你与联系人的连接发送：当前不在线的联系人会在上线后收到。";
 "air_invite_choose_first" = "请选择要邀请的人";
 "air_invite_send_format" = "邀请 %d 人";
 "air_invite_sent" = "已发送 %d 份邀请";
+"air_invite_later" = "%d 份邀请将在对方上线后发出";
 "air_invite_already_member" = "已在群组中";
-"air_invite_when_online" = "上线后可邀请";
+"air_invite_when_online" = "上线后会收到邀请";
 "air_invite_no_contacts" = "还没有联系人：请先添加联系人。";
 "air_invite_nobody_found" = "没有这个名字的联系人";
 "air_invite_search" = "查找联系人";
@@ -1115,7 +1116,7 @@
 "air_group_privacy_invite_only_note" = "只有成员邀请的人才能加入。凭群组密钥无法加入。";
 "air_group_privacy_open" = "持有群组密钥即可加入";
 "air_group_privacy_open_note" = "任何持有群组密钥的人都可以加入，无需邀请。";
-"air_new_group_invite_note" = "邀请会立即发送，因此这里只能邀请在线的联系人。其他人可稍后在群组资料中邀请。";
+"air_new_group_invite_note" = "邀请通过你与联系人的连接发送：当前不在线的联系人会在上线后收到。";
 "air_new_group_create" = "创建群组";
 "air_new_group_create_invite_format" = "创建并邀请 %d 人";
 "air_new_group_name_first" = "请先为群组命名";

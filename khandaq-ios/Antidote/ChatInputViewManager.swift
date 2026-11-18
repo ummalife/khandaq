@@ -78,6 +78,10 @@ class ChatInputViewManager: NSObject {
         inputView.text = chat.enteredText ?? ""
         // KHANDAQ (#15): 1:1 chats get the same input bar as groups (attach + hold-to-record voice).
         inputView.cameraButtonEnabled = true
+        // KHANDAQ (0.2.60): a pasted photo goes through the preview, as one from the library.
+        inputView.onPasteImages = { [weak self] images in
+            self?.presentMediaPreview(items: images.map { .image($0, fileName: nil) })
+        }
         inputView.voiceButtonEnabled = true
     }
 

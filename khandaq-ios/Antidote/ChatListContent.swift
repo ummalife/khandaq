@@ -214,6 +214,8 @@ enum ChatListContent {
     private static func leaveAndRemove(_ chat: OCTChat, submanagerGroups: OCTSubmanagerGroups) {
         // Read while the chat is still there: removing it below invalidates it.
         KhandaqCommunity.willLeave(chat)
+        // KHANDAQ (0.2.60): our invitations to it that wait for their contacts go too.
+        AirLocalStore.shared.dropOutgoingInvites(groupKey: chat.groupChatIdHex ?? "")
         if chat.groupNumber >= 0 {
             do {
                 try submanagerGroups.leaveGroup(withNumber: OCTToxGroupNumber(chat.groupNumber), partMessage: nil)

@@ -3524,7 +3524,7 @@ extension ChatPrivateController {
         let fullName: String
         if outgoing {
             fullName = String(localized: "air_you")
-            entry.authorColor = KQColor.ink2
+            entry.authorColor = AirTone.you
         }
         else if let friend = friend, !friend.isInvalidated {
             fullName = personName(friend)

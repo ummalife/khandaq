@@ -417,9 +417,11 @@ final class AirEntryTextCell: ChatBaseTextCell {
         authorLeadingToMargin.deactivate()
 
         bubbleView.snp.makeConstraints {
-            bubbleTopToAuthor = $0.top.equalTo(authorLabel.snp.bottom).constraint
+            // KHANDAQ (0.2.60): the name of the author stands apart from the text under it, as over a file or a call:
+            // users read the two as one block.
+            bubbleTopToAuthor = $0.top.equalTo(authorLabel.snp.bottom).offset(KQSpace.x2).constraint
             bubbleTopToContent = $0.top.equalTo(movableContentView).offset(AirEntryMetrics.entryInset).constraint
-            bubbleTopToTime = $0.top.equalTo(timeLabel.snp.bottom).constraint
+            bubbleTopToTime = $0.top.equalTo(timeLabel.snp.bottom).offset(KQSpace.x2).constraint
             $0.bottom.equalTo(movableContentView).offset(-AirEntryMetrics.entryInset)
             bubbleLeadingToTime = $0.leading.equalTo(timeLabel.snp.trailing).offset(KQSpace.x10).constraint
             bubbleLeadingToMargin = $0.leading.equalTo(contentView).offset(KQSpace.x16).constraint

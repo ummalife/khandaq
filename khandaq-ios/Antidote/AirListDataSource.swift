@@ -770,6 +770,9 @@ private extension AirListDataSource {
             return (.saved, nil)
         }
         if chat.isGroup {
+            if KhandaqCommunity.isCommunity(chat) {
+                return (.community, nil)
+            }
             return (.group(initials: AirInitials.from(title), tone: AirTone.index(for: chat.uniqueIdentifier)), nil)
         }
         let friend = chat.friends.lastObject() as? OCTFriend
@@ -936,6 +939,26 @@ private extension AirListDataSource {
             return nil
         }
         return chat.friends.lastObject() as? OCTFriend
+    }
+
+    /// KHANDAQ (0.2.60): "Rename" in the menu of a contact's row: users looked for it there, not in the dossier of
+    /// the chat. The dossier's own screen, as a sheet: Done, Return or swiping it away keeps what was typed.
+    func presentRename(of friend: OCTFriend) {
+        guard !friend.isInvalidated else {
+            return
+        }
+        weak var navigation: UINavigationController?
+        let controller = TextEditController(theme: theme, title: String(localized: "nickname"), defaultValue: friend.nickname, changeTextHandler: { [weak self] newValue in
+            guard let self = self, !friend.isInvalidated else {
+                return
+            }
+            self.submanagerObjects.change(friend, nickname: newValue)
+        }, userFinishedEditing: {
+            navigation?.dismiss(animated: true, completion: nil)
+        })
+        let sheet = PortraitNavigationController(rootViewController: controller)
+        navigation = sheet
+        delegate?.airList(self, present: sheet)
     }
 
     func toggleFavorite(_ chat: OCTChat) {
@@ -1221,6 +1244,9 @@ extension AirListDataSource: UITableViewDelegate {
             }
 
             if let friend = friend {
+                children.append(UIAction(title: String(localized: "air_dossier_rename"), image: UIImage(systemName: "pencil")) { [weak self] _ in
+                    self?.presentRename(of: friend)
+                })
                 children.append(UIAction(title: String(localized: "air_menu_remove_contact"),
                                          image: AirIcon.image("trash"),
                                          attributes: .destructive) { [weak self] _ in

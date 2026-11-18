@@ -277,6 +277,67 @@ class AirLocalStoreTests: XCTestCase {
         XCTAssertEqual(store.failedSends(chatId: "chat-amina").map { $0.text }, ["Hello"])
         XCTAssertEqual(store.blockedKeys, [yusufKey])
         XCTAssertTrue(AirGroupInvites(store: store).items.isEmpty)
+        XCTAssertTrue(store.outgoingInvites.isEmpty, "a part sealed before 0.2.60 has none of our invitations")
+    }
+
+    /// KHANDAQ (0.2.60): our invitations for contacts who were offline wait sealed across launches, once
+    /// each, thirty days at most and 256 at most; removing the contact or leaving the group takes theirs.
+    func testOurInvitationsForOfflineContactsWaitSealedAcrossLaunches() {
+        let directory = makeDirectory()
+        let sealing = FixedKeySealing()
+        let store = AirLocalStore(sealing: sealing)
+        store.attach(directory: directory)
+        let groupKey = "8F2A41C07D3B9E6152A4F0C8B7D3E9A1C2F4B6D8E0A1C3E5F7B9D1F3A5C7E9B1"
+        let date = Date(timeIntervalSince1970: 1_762_850_000)
+        let keep = AirLocalStore.outgoingInviteKeepSeconds
+        XCTAssertTrue(store.keepOutgoingInvite(friendKey: aminaKey.lowercased(), groupKey: groupKey.lowercased(), at: date, now: date))
+        // The same again keeps its first date; keys that are not keys, and one asked for too long ago, are not kept.
+        XCTAssertFalse(store.keepOutgoingInvite(friendKey: aminaKey, groupKey: groupKey, at: date.addingTimeInterval(60), now: date.addingTimeInterval(60)))
+        XCTAssertFalse(store.keepOutgoingInvite(friendKey: "1B3D", groupKey: groupKey, at: date, now: date))
+        XCTAssertFalse(store.keepOutgoingInvite(friendKey: yusufKey, groupKey: "", at: date, now: date))
+        XCTAssertFalse(store.keepOutgoingInvite(friendKey: yusufKey, groupKey: groupKey, at: date, now: date.addingTimeInterval(keep + 1)))
+        XCTAssertTrue(store.keepOutgoingInvite(friendKey: yusufKey, groupKey: groupKey, at: date.addingTimeInterval(60), now: date.addingTimeInterval(60)))
+        let kept = [AirOutgoingInvite(friendKey: aminaKey, groupKey: groupKey, date: date),
+                    AirOutgoingInvite(friendKey: yusufKey, groupKey: groupKey, date: date.addingTimeInterval(60))]
+        XCTAssertEqual(store.outgoingInvites, kept)
+        store.flush()
+        let json = fileText(directory)
+        XCTAssertFalse(json.contains(aminaKey), "whom we invite where is never in the clear")
+        XCTAssertFalse(json.contains(groupKey))
+
+        // A new launch: they still wait, oldest first.
+        let second = AirLocalStore(sealing: sealing)
+        second.attach(directory: directory)
+        XCTAssertEqual(second.outgoingInvites, kept)
+        // Thirty days on, Amina's is too old; Yusuf's, asked for a minute later, still waits.
+        XCTAssertFalse(second.pruneOutgoingInvites(now: date.addingTimeInterval(keep)))
+        XCTAssertTrue(second.pruneOutgoingInvites(now: date.addingTimeInterval(keep + 30)))
+        XCTAssertEqual(second.outgoingInvites.map { $0.friendKey }, [yusufKey])
+        // Sent: it goes, once.
+        XCTAssertTrue(second.dropOutgoingInvite(friendKey: yusufKey.lowercased(), groupKey: groupKey))
+        XCTAssertFalse(second.dropOutgoingInvite(friendKey: yusufKey, groupKey: groupKey))
+
+        // Removing a contact (AirContactRemoval forgets them) takes theirs; leaving the group takes the rest.
+        let third = AirLocalStore(sealing: sealing)
+        third.attach(directory: directory)
+        third.forget(publicKey: yusufKey.lowercased())
+        XCTAssertEqual(third.outgoingInvites.map { $0.friendKey }, [aminaKey])
+        XCTAssertFalse(third.dropOutgoingInvites(groupKey: yusufKey))
+        XCTAssertTrue(third.dropOutgoingInvites(groupKey: groupKey.lowercased()))
+        XCTAssertTrue(third.outgoingInvites.isEmpty)
+        third.flush()
+        let fourth = AirLocalStore(sealing: sealing)
+        fourth.attach(directory: directory)
+        XCTAssertTrue(fourth.outgoingInvites.isEmpty)
+
+        // At most outgoingInviteLimit; the oldest make room.
+        let many = AirLocalStore(sealing: sealing)
+        let friendKey = { (index: Int) in String(repeating: "0", count: 60) + String(format: "%04X", index) }
+        for index in 0..<(AirLocalStore.outgoingInviteLimit + 3) {
+            XCTAssertTrue(many.keepOutgoingInvite(friendKey: friendKey(index), groupKey: groupKey, at: date, now: date))
+        }
+        XCTAssertEqual(many.outgoingInvites.count, AirLocalStore.outgoingInviteLimit)
+        XCTAssertEqual(many.outgoingInvites.first?.friendKey, friendKey(3))
     }
 
     // MARK: - Helpers

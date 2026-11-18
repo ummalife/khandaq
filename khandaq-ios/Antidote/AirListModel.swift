@@ -397,6 +397,11 @@ struct AirEntry: Equatable {
     /// KHANDAQ (0.2.57): Khandaq Community, which stands above the other conversations.
     var isPinned = false
 
+    /// KHANDAQ (0.2.60): Khandaq Community, the one group pinned, whose tile is the logo of the app.
+    var isCommunity: Bool {
+        return kind == .group && isPinned
+    }
+
     var section: AirSectionKind {
         if kind == .saved {
             return .saved

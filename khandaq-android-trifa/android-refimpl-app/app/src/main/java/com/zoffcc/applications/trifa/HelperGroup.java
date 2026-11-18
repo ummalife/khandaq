@@ -2173,8 +2173,12 @@ public class HelperGroup
                 message.tox_group_peer_pubkey);
         if (peer_id < 0)
         {
-            return tox_group_is_connected(group_num) ==
-                   TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value;
+            // KHANDAQ (0.2.59, group files): a sender not in the group (it left, or timed out and comes back with a new
+            // join) is away, connected as the group may be: only the sender of a file sends its chunks. It counted as
+            // online, and the receive watchdog as silent: QA live of 0.2.59 saw a phone, back on another address, time
+            // its sender out and give the file up a second before the sender came back. Away, the silence starts
+            // again once the sender is back, and its return resumes the file (touch_group_peer_online).
+            return false;
         }
 
         final int conn = tox_group_peer_get_connection_status(group_num, peer_id);

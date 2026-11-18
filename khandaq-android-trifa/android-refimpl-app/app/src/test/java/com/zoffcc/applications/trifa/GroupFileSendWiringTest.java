@@ -510,6 +510,57 @@ public class GroupFileSendWiringTest
         assertTrue(stream.contains("super(path);"));
     }
 
+    /**
+     * KHANDAQ (0.2.59, group files): QA live of 0.2.59. The last of 171 chunks came with 80 missing, and the file read
+     * as downloaded: it is written in place, so it had its full length, and isGroupMessageMediaReady went by the
+     * length. The watchdog, the automatic retry and the start of a download all ask it, and none asked for the rest.
+     */
+    @Test
+    public void a_file_whose_last_chunk_came_first_is_not_ready() throws Exception
+    {
+        final String ready = body(code("HelperFiletransfer.java"), "static boolean isGroupMessageMediaReady(");
+        final int length = ready.indexOf("actualLength < message.filesize");
+        assertTrue(length > 0);
+        assertTrue(length < ready.indexOf("NgcGroupFileTransfer.isReceiveUnfinished(message, mediaPath)"));
+
+        final String ngc = code("NgcGroupFileTransfer.java");
+        final String unfinished = body(ngc, "static boolean isReceiveUnfinished(");
+        assertTrue(unfinished.contains("if (message == null || message.direction == 1"));
+        assertTrue(unfinished.contains("!shouldUseChunkedTransfer(message.filesize)"));
+        final int assembly = unfinished.indexOf("incomingAssemblyOf(message.group_identifier, message.msg_id_hash)");
+        assertTrue(assembly > 0);
+        assertTrue(unfinished.contains("return asm.receivedCount < asm.totalChunks;"));
+        assertTrue(assembly < unfinished.indexOf("rxMapMissesChunksAt(mediaPath, message.filesize)"));
+
+        // The map is written once the last chunk landed, missing chunks or not, and a map written is looked for
+        // again: the count of maps written goes up after the map is on disk.
+        final String chunk = body(ngc, "private static void applyChunk(");
+        assertTrue(chunk.contains("else if ((asm.receivedCount % 16) == 0 || chunkIndex + 1 >= asm.totalChunks)"));
+        final String persist = body(ngc, "private static void persistReceivedBitmap(");
+        final int write = persist.indexOf("writeRxMapFile(rxMapPath(asm.outPath),");
+        assertTrue(write > 0);
+        assertTrue(write < persist.indexOf("RXMAP_WRITES.incrementAndGet();"));
+        final String at = body(ngc, "private static boolean rxMapMissesChunksAt(");
+        assertTrue(at.indexOf("final long writes = RXMAP_WRITES.get();") < at.indexOf("readRxMapFile(rxMapPath(path))"));
+    }
+
+    /**
+     * KHANDAQ (0.2.59, group files): a sender not in the group is away. It counted as online while the group was
+     * connected: a phone back on another address timed its sender out, and its watchdog gave the file up as silent a
+     * second before the sender came back.
+     */
+    @Test
+    public void a_sender_not_in_the_group_is_away() throws Exception
+    {
+        final String online = body(code("HelperGroup.java"), "static boolean is_group_message_sender_online(");
+        final int lookup = online.indexOf("get_group_peernum_from_peer_pubkey(");
+        assertTrue(lookup > 0);
+        final int missing = online.indexOf("if (peer_id < 0)", lookup);
+        assertTrue(missing > lookup);
+        assertEquals("return false;", block(online, online.indexOf('{', missing)).trim());
+        assertFalse(online.contains("tox_group_is_connected("));
+    }
+
     private static String body(final String text, final String head)
     {
         final int at = text.indexOf(head);

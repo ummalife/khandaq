@@ -35,6 +35,10 @@ constexpr qint64 ResendBudget::cooldownMs;
 constexpr int ResendBudget::chunkShare;
 constexpr int ResendBudget::maxKept;
 constexpr qint64 ResendBudget::wholeGapMs;
+constexpr int SentFileLookups::maxRequests;
+constexpr int SentFileLookups::maxKept;
+constexpr qint64 SentFileLookups::answerWaitMs;
+constexpr qint64 SentFileLookups::notOursMs;
 
 namespace {
 uint32_t readU32(const uint8_t* p)

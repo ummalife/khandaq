@@ -124,6 +124,8 @@ constexpr int LocalStore::privateLimit;
 constexpr int LocalStore::entryLimit;
 constexpr int LocalStore::wireLimit;
 constexpr int LocalStore::relayedLimit;
+constexpr qint64 LocalStore::outgoingInviteKeepMs;
+constexpr int LocalStore::outgoingInviteLimit;
 
 bool LocalStore::PrivateLine::operator==(const PrivateLine& other) const
 {

@@ -20,32 +20,11 @@
 #include "aircommunity.h"
 
 #include "src/model/air/airlocalstore.h"
-
-#include <QTextBoundaryFinder>
+#include "src/model/air/airmodel.h"
 
 namespace Air {
 
 namespace {
-/**
- * Where the first characters of text end, up to limit of them, as a person counts them and as iOS
- * counts a String: a flag, an emoji joined of several, a letter with its marks is one character,
- * never cut in half (QTextBoundaryFinder::Grapheme). The nth end, in units of UTF-16, closes the
- * first n characters; the first is 0, for none.
- */
-QVector<int> characterEnds(const QString& text, int limit)
-{
-    QVector<int> ends{0};
-    QTextBoundaryFinder characters(QTextBoundaryFinder::Grapheme, text);
-    while (ends.size() <= limit) {
-        const int next = characters.toNextBoundary();
-        if (next < 0) {
-            break;
-        }
-        ends.append(next);
-    }
-    return ends;
-}
-
 /** Lines of a mail end with CRLF (RFC 6068), whatever ended them before. */
 QString mailLines(QString text)
 {

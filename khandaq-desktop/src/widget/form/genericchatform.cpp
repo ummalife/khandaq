@@ -26,6 +26,7 @@
 #include "src/core/core.h"
 #include "src/friendlist.h"
 #include "src/grouplist.h"
+#include "src/model/air/airmodel.h"
 #include "src/model/friend.h"
 #include "src/model/group.h"
 #include "src/model/notes.h"
@@ -80,6 +81,22 @@ QString formatQuoteForSend(const QString& quote)
         formatted.append(QLatin1Char('\n'));
     }
     return formatted;
+}
+
+/**
+ * The words of the field as Send hands them over: after the lines of a quote, or after the header
+ * of a reply (KHANDAQ 0.2.58). A /me action takes no reply: the header would stand in the line of
+ * the action on every reader, so the reply waits for the next message.
+ */
+QString withQuote(const ChatQuotePreview& preview, const QString& words, bool isAction)
+{
+    if (!preview.hasQuote()) {
+        return words;
+    }
+    if (preview.isReply()) {
+        return isAction ? words : Air::replyHead(preview.reply()) + words;
+    }
+    return formatQuoteForSend(preview.quoteText()) + words;
 }
 
 /**
@@ -182,6 +199,7 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
     connect(&settings, &Settings::emojiFontPointSizeChanged, chatWidget, &ChatWidget::forceRelayout);
     connect(&settings, &Settings::chatMessageFontChanged, this, &GenericChatForm::onChatMessageFontChanged);
 
+    takesReplies = chatWidgetKind(chat) != ChatWidget::Kind::Notes;
     quotePreview = new ChatQuotePreview(this);
     msgEdit = new ChatTextEdit();
 #ifdef SPELL_CHECKING
@@ -259,6 +277,9 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
     contentLayout->addWidget(chatWidget);
     contentLayout->addWidget(composer);
 
+    // KHANDAQ (0.2.58): Reply first, on the message or the file the menu is opened on.
+    replyAction = menu.addAction(QString());
+    connect(replyAction, &QAction::triggered, this, &GenericChatForm::replyToMenuEntry);
     quoteAction = menu.addAction(QIcon(), QString(), this, SLOT(quoteSelectedText()),
                                  QKeySequence(Qt::ALT + Qt::Key_Q));
     addAction(quoteAction);
@@ -484,6 +505,10 @@ void GenericChatForm::onChatContextMenuRequested(QPoint pos)
         }
     }
     copyLinkAction->setVisible(clickedOnLink);
+    ChatLogIdx entry{0};
+    const bool onEntry = chatWidget->entryAtGlobalPos(pos, entry);
+    menuEntry = entry;
+    replyAction->setVisible(onEntry && canReplyTo(entry));
     prepareChatMenu(pos);
 
     menu.exec(pos);
@@ -502,13 +527,79 @@ void GenericChatForm::onPasteFiles(const QStringList& paths)
 QString GenericChatForm::outgoingText() const
 {
     QString msg = msgEdit->toPlainText();
-    if (msg.startsWith(ChatForm::ACTION_PREFIX, Qt::CaseInsensitive)) {
+    const bool isAction = msg.startsWith(ChatForm::ACTION_PREFIX, Qt::CaseInsensitive);
+    if (isAction) {
         msg.remove(0, ChatForm::ACTION_PREFIX.length());
     }
-    if (quotePreview->hasQuote()) {
-        msg = formatQuoteForSend(quotePreview->quoteText()) + msg;
+    return withQuote(*quotePreview, msg, isAction);
+}
+
+GenericChatForm::ReplyAuthor GenericChatForm::replyAuthorOf(const ChatLogItem& item) const
+{
+    ReplyAuthor author;
+    author.key = item.getSender();
+    author.self = item.getSender() == core.getSelfPublicKey();
+    author.name = author.self ? core.getUsername() : item.getDisplayName();
+    return author;
+}
+
+bool GenericChatForm::canReplyTo(ChatLogIdx idx) const
+{
+    if (!takesReplies || composer->isReadOnly() || idx < chatLog.getFirstIdx()
+        || idx >= chatLog.getNextIdx()) {
+        return false;
     }
-    return msg;
+    const ChatLogItem& item = chatLog.at(idx);
+    switch (item.getContentType()) {
+    case ChatLogItem::ContentType::message:
+        return !Air::replyQuote(AirStrings::messageWords(item.getContentAsMessage().message.content))
+                    .isEmpty();
+    case ChatLogItem::ContentType::fileTransfer:
+        return !Air::replyQuote(item.getContentAsFile().file.fileName).isEmpty();
+    case ChatLogItem::ContentType::systemMessage:
+        // A line nobody wrote, a call among them, has nothing to answer.
+        return false;
+    }
+    return false;
+}
+
+bool GenericChatForm::startReply(ChatLogIdx idx, const QString& words)
+{
+    if (!canReplyTo(idx)) {
+        return false;
+    }
+    const ChatLogItem& item = chatLog.at(idx);
+    QString shown;
+    if (item.getContentType() == ChatLogItem::ContentType::fileTransfer) {
+        // A file is quoted by its name, as on the phones.
+        shown = item.getContentAsFile().file.fileName;
+    } else {
+        shown = AirStrings::messageWords(item.getContentAsMessage().message.content);
+    }
+
+    const ReplyAuthor author = replyAuthorOf(item);
+    Air::ReplyMeta meta;
+    meta.authorKey = author.key.isEmpty() ? QString() : author.key.toString();
+    meta.timeMs = item.getTimestamp().toMSecsSinceEpoch();
+    meta.authorName = author.name;
+    meta.words = words.trimmed().isEmpty() ? shown : words;
+    // The same entry gives the same id every time; the phones compare it with ids of their own only.
+    meta.localId = Air::stableLocalId(item.getSender().toString() + QLatin1Char('|')
+                                      + QString::number(meta.timeMs) + QLatin1Char('|') + shown);
+    if (Air::replyQuote(meta.words).isEmpty()) {
+        return false;
+    }
+    const QString name =
+        item.getDisplayName().trimmed().isEmpty() ? author.name : item.getDisplayName();
+    quotePreview->setReply(meta, name, author.self);
+    return true;
+}
+
+void GenericChatForm::replyToMenuEntry()
+{
+    if (startReply(menuEntry)) {
+        msgEdit->setFocus();
+    }
 }
 
 bool GenericChatForm::canSendNow() const
@@ -529,9 +620,14 @@ void GenericChatForm::onSendTriggered()
         msg.remove(0, ChatForm::ACTION_PREFIX.length());
     }
 
-    if (quotePreview->hasQuote()) {
-        msg = formatQuoteForSend(quotePreview->quoteText()) + msg;
+    // KHANDAQ (0.2.58): a reply needs words of its own; its header alone sends nothing. An action
+    // goes without it and leaves the reply waiting (withQuote).
+    const bool replying = quotePreview->hasQuote() && quotePreview->isReply();
+    if (replying && msg.trimmed().isEmpty()) {
+        return;
     }
+    const bool keepsQuote = replying && isAction;
+    msg = withQuote(*quotePreview, msg, isAction);
 
     if (msg.trimmed().isEmpty()) {
         return;
@@ -539,7 +635,9 @@ void GenericChatForm::onSendTriggered()
 
     msgEdit->setLastMessage(msgEdit->toPlainText());
     msgEdit->clear();
-    quotePreview->clearQuote();
+    if (!keepsQuote) {
+        quotePreview->clearQuote();
+    }
 
     messageDispatcher.sendMessage(isAction, msg);
 }
@@ -725,7 +823,12 @@ void GenericChatForm::quoteSelectedText()
         return;
     }
 
-    quotePreview->setQuoteText(selectedText);
+    // KHANDAQ (0.2.58): words chosen in one message answer it, with those words as its quote; a
+    // choice across several entries, or where a reply cannot go, stays a quote of the old kind.
+    ChatLogIdx idx{0};
+    if (!chatWidget->selectedEntry(idx) || !startReply(idx, selectedText)) {
+        quotePreview->setQuoteText(selectedText);
+    }
     msgEdit->setFocus();
 }
 
@@ -825,6 +928,7 @@ void GenericChatForm::retranslateUi()
     fileButton->setToolTip(tr("Send files"));
     screenshotButton->setToolTip(tr("Send a screenshot"));
     clearAction->setText(tr("Clear displayed messages"));
+    replyAction->setText(AirStrings::text(AirStrings::Text::MessageReply));
     quoteAction->setText(tr("Quote selected text"));
     copyLinkAction->setText(tr("Copy link address"));
     searchAction->setText(tr("Search in text"));

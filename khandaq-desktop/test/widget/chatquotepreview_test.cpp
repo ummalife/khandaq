@@ -81,6 +81,9 @@ private slots:
     void standsOnItsGroundWithoutFrameOrStripe();
     void closeIsAnIconWithAName();
     void closeStandsAtTheEndEdge();
+    void showsAReplyOnOneLineUnderWhomItAnswers();
+    void aReplyToYourOwnSaysYouAndSendsYourName();
+    void aReplyAndAQuoteTakeEachOthersPlace();
 };
 
 void TestChatQuotePreview::staysHiddenWithoutAQuote()
@@ -192,6 +195,104 @@ void TestChatQuotePreview::closeStandsAtTheEndEdge()
 
     column.host.setLayoutDirection(Qt::RightToLeft);
     QTRY_COMPARE(close->geometry().left(), Space::s4);
+}
+
+namespace {
+Air::ReplyMeta replyTo(const QString& name, const QString& words)
+{
+    Air::ReplyMeta meta;
+    meta.localId = 42;
+    meta.authorKey =
+        QStringLiteral("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF");
+    meta.timeMs = 1763380800123;
+    meta.authorName = name;
+    meta.words = words;
+    return meta;
+}
+} // namespace
+
+/** KHANDAQ (0.2.58): "In reply to Yusuf" over one line of the words, as on the phones. */
+void TestChatQuotePreview::showsAReplyOnOneLineUnderWhomItAnswers()
+{
+    Column column(480);
+    QSignalSpy changed(column.preview, &ChatQuotePreview::changed);
+    column.preview->setReply(replyTo(QStringLiteral("Yusuf"),
+                                     longQuote + QStringLiteral("\n") + longQuote),
+                             QStringLiteral("Yusuf"));
+    QVERIFY(column.preview->isVisible());
+    QVERIFY(column.preview->hasQuote());
+    QVERIFY(column.preview->isReply());
+    QCOMPARE(changed.count(), 1);
+    QCOMPARE(column.preview->accessibleName(), QStringLiteral("In reply to Yusuf"));
+    // The words it shows are the quote the header carries: on one line, cut at 200 characters.
+    const QString quote = Air::replyQuote(longQuote + QStringLiteral("\n") + longQuote);
+    QCOMPARE(column.preview->quoteText(), quote);
+    QCOMPARE(quote.size(), 200);
+    QCOMPARE(column.preview->accessibleDescription(), quote);
+    QCOMPARE(column.preview->shownLines(480).size(), 1);
+    QTRY_COMPARE(column.preview->height(), heightFor(1));
+
+    AirIconButton* const close = closeOf(column.preview);
+    QCOMPARE(close->toolTip(), QStringLiteral("Cancel reply"));
+    QCOMPARE(close->accessibleName(), QStringLiteral("Cancel reply"));
+    // Close takes the reply away.
+    QSignalSpy cleared(column.preview, &ChatQuotePreview::cleared);
+    close->click();
+    QVERIFY(!column.preview->hasQuote());
+    QVERIFY(!column.preview->isReply());
+    QVERIFY(!column.preview->isVisible());
+    QCOMPARE(cleared.count(), 1);
+    QCOMPARE(changed.count(), 2);
+    QCOMPARE(close->toolTip(), QStringLiteral("Cancel quote"));
+}
+
+/** The bar says "You"; the header names you as the others know you, never "You" (iOS 0.2.56). */
+void TestChatQuotePreview::aReplyToYourOwnSaysYouAndSendsYourName()
+{
+    Column column(480);
+    column.preview->setReply(replyTo(QStringLiteral("Amina"),
+                                     QStringLiteral("Материалы к четвергу")),
+                             QStringLiteral("Amina"), true);
+    QCOMPARE(column.preview->accessibleName(), QStringLiteral("In reply to You"));
+    const QString head = Air::replyHead(column.preview->reply());
+    QVERIFY(head.startsWith(QStringLiteral("[KQ|42|89ABCDEF|1763380800123|Amina]\n")));
+    QVERIFY(!head.contains(QStringLiteral("You")));
+    QCOMPARE(Air::readMessageText(head + QStringLiteral("ok")).replyName, QStringLiteral("Amina"));
+}
+
+/** One waits at a time: a reply takes the place of a quote, and a quote of a reply. */
+void TestChatQuotePreview::aReplyAndAQuoteTakeEachOthersPlace()
+{
+    Column column(480);
+    column.preview->setQuoteText(QStringLiteral("Материалы к четвергу"));
+    column.preview->setReply(replyTo(QStringLiteral("Yusuf"), QStringLiteral("at five")),
+                             QStringLiteral("Yusuf"));
+    QVERIFY(column.preview->isReply());
+    QCOMPARE(column.preview->quoteText(), QStringLiteral("at five"));
+    // A new reply replaces the one before it.
+    column.preview->setReply(replyTo(QStringLiteral("Mariam"), QStringLiteral("after the prayer")),
+                             QStringLiteral("Mariam"));
+    QCOMPARE(column.preview->accessibleName(), QStringLiteral("In reply to Mariam"));
+    QCOMPARE(column.preview->reply().authorName, QStringLiteral("Mariam"));
+
+    column.preview->setQuoteText(QStringLiteral("Материалы к четвергу"));
+    QVERIFY(!column.preview->isReply());
+    QCOMPARE(column.preview->accessibleName(), QStringLiteral("Quote"));
+    QCOMPARE(closeOf(column.preview)->toolTip(), QStringLiteral("Cancel quote"));
+
+    // A reply with no words to quote is no reply: what waited goes.
+    column.preview->setReply(replyTo(QStringLiteral("Yusuf"), QStringLiteral(" \n ")),
+                             QStringLiteral("Yusuf"));
+    QVERIFY(!column.preview->hasQuote());
+    QVERIFY(!column.preview->isVisible());
+
+    // Clearing from outside, as Escape does, takes a reply away as well.
+    column.preview->setReply(replyTo(QStringLiteral("Yusuf"), QStringLiteral("at five")),
+                             QStringLiteral("Yusuf"));
+    column.preview->clearQuote();
+    QVERIFY(!column.preview->hasQuote());
+    QVERIFY(!column.preview->isReply());
+    QCOMPARE(column.preview->accessibleName(), QStringLiteral("Quote"));
 }
 
 int main(int argc, char* argv[])

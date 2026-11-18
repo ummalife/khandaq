@@ -25,12 +25,14 @@
 #include "src/widget/air/airwidgets.h"
 
 #include <QFontMetricsF>
+#include <QGraphicsSceneHoverEvent>
 #include <QGuiApplication>
 #include <QPainter>
 #include <QStyle>
 #include <QStyleOptionGraphicsItem>
 #include <QWidget>
 
+#include <algorithm>
 #include <cmath>
 #include <tuple>
 
@@ -76,6 +78,48 @@ QFont AirLabel::font() const
 qreal AirLabel::naturalWidth() const
 {
     return QFontMetricsF(font()).horizontalAdvance(text);
+}
+
+QRectF AirLabel::textRect() const
+{
+    const QRectF box = boundingRect();
+    const qreal shown = std::min(naturalWidth(), box.width());
+    // At the start edge, as paint() aligns it.
+    const bool rightToLeft = QGuiApplication::layoutDirection() == Qt::RightToLeft;
+    return QRectF(rightToLeft ? box.right() - shown : box.left(), box.top(), shown, box.height());
+}
+
+void AirLabel::setOpensMenu(bool opens_)
+{
+    if (opens == opens_) {
+        return;
+    }
+    opens = opens_;
+    setAcceptHoverEvents(opens);
+    if (!opens) {
+        unsetCursor();
+    }
+}
+
+bool AirLabel::opensMenu() const
+{
+    return opens;
+}
+
+void AirLabel::hoverMoveEvent(QGraphicsSceneHoverEvent* event)
+{
+    // A hand over the words only: the rest of the line is the text's to select.
+    if (opens && textRect().contains(event->pos())) {
+        setCursor(Qt::PointingHandCursor);
+    } else {
+        unsetCursor();
+    }
+}
+
+void AirLabel::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
+{
+    std::ignore = event;
+    unsetCursor();
 }
 
 void AirLabel::setWidth(float width_)

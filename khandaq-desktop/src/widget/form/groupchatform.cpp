@@ -214,6 +214,7 @@ GroupChatForm::GroupChatForm(Core& core_, Group* chatGroup, IChatLog& chatLog_,
     connect(composer, &AirComposer::readOnlyActionRequested, this, &GroupChatForm::askToWrite);
     connect(chatWidget, &ChatWidget::heldFileAccepted, this,
             [this](const ToxFile& file) { emit heldFileAccepted(group->getPersistentId(), file); });
+    connect(chatWidget, &ChatWidget::authorClicked, this, &GroupChatForm::showAuthorMenu);
 
     connect(msgEdit, &ChatTextEdit::tabPressed, tabber, &TabCompleter::complete);
     connect(msgEdit, &ChatTextEdit::keyPressed, tabber, &TabCompleter::reset);
@@ -344,6 +345,9 @@ void GroupChatForm::refreshMembers()
     const int groupNumber = static_cast<int>(group->getId());
     const int connection = core.getGroupConnection(groupNumber);
     const uint32_t selfPeer = core.getGroupSelfPeerId(groupNumber);
+    // Our entries carry the key of the profile or the one the group knows us by; the name over
+    // them opens no menu.
+    chatWidget->setGroupSelfKey(core.getGroupSelfPublicKey(groupNumber));
     selfRole = airRole(core.getGroupSelfRole(groupNumber));
     voice = airVoice(core.getGroupVoiceState(groupNumber));
 
@@ -978,13 +982,78 @@ void GroupChatForm::prepareChatMenu(QPoint globalPos)
     reportAction->setVisible(chatWidget->entryAtGlobalPos(globalPos, idx) && prepareReport(idx));
 }
 
+bool GroupChatForm::isSelfKey(const ToxPk& key) const
+{
+    if (key.isEmpty()) {
+        return false;
+    }
+    // Our own entries carry the key of our profile; a group knows us by a key of its own too.
+    const ToxPk groupSelf = core.getGroupSelfPublicKey(static_cast<int>(group->getId()));
+    return key == core.getSelfPublicKey() || (!groupSelf.isEmpty() && key == groupSelf);
+}
+
+GenericChatForm::ReplyAuthor GroupChatForm::replyAuthorOf(const ChatLogItem& item) const
+{
+    const int groupNumber = static_cast<int>(group->getId());
+    ReplyAuthor author;
+    if (isSelfKey(item.getSender())) {
+        // The members know us by the key the group gave us and by our name in it (refreshMembers).
+        author.self = true;
+        author.key = core.getGroupSelfPublicKey(groupNumber);
+        Air::GroupMember self;
+        for (const Air::GroupMember& member : members) {
+            if (member.isSelf) {
+                self = member;
+                break;
+            }
+        }
+        author.name = self.name.trimmed().isEmpty() ? core.getUsername() : self.name;
+        return author;
+    }
+    author.key = item.getSender();
+    // Their name in the group, which every member knows, not the one this device gives a contact.
+    const int peerId = peerIdOf(author.key.toString());
+    const QString peerName = peerId >= 0 ? core.getGroupPeerName(groupNumber, peerId) : QString();
+    author.name = peerName.trimmed().isEmpty() ? item.getDisplayName() : peerName;
+    return author;
+}
+
+void GroupChatForm::showAuthorMenu(ChatLogIdx idx, const QPoint& globalPos)
+{
+    if (idx < chatLog.getFirstIdx() || idx >= chatLog.getNextIdx()) {
+        return;
+    }
+    const ChatLogItem& item = chatLog.at(idx);
+    const ToxPk sender = item.getSender();
+    if (sender.isEmpty() || isSelfKey(sender)
+        || item.getContentType() == ChatLogItem::ContentType::systemMessage) {
+        return;
+    }
+    Air::GroupMember member;
+    const bool present = Air::memberWithKey(members, sender.toString(), &member);
+    if (present && member.isSelf) {
+        return;
+    }
+    AirGroupInfo info = dossierInfo();
+    if (!present) {
+        // Gone from the group, or not listed yet: the key still takes a mute and a hide.
+        member.name = item.getDisplayName();
+        member.publicKey = sender.toString();
+        if (airLocal && airLocal->isMuted(sender)) {
+            info.mutedMembers.insert(member.publicKey);
+        }
+        if (settings.getBlackList().contains(member.publicKey)) {
+            info.hiddenMembers.insert(member.publicKey);
+        }
+    }
+    dossier->showMemberMenu(member, globalPos, info, present);
+}
+
 bool GroupChatForm::prepareReport(ChatLogIdx idx)
 {
     const ChatLogItem& item = chatLog.at(idx);
     const ToxPk& sender = item.getSender();
-    // Our own entries carry the key of our profile; a group knows us by a key of its own too.
-    const ToxPk groupSelf = core.getGroupSelfPublicKey(static_cast<int>(group->getId()));
-    if (!sender.isEmpty() && (sender == core.getSelfPublicKey() || sender == groupSelf)) {
+    if (isSelfKey(sender)) {
         return false;
     }
     // KHANDAQ (0.2.57, review): the mail names the author only when toxcore vouches for them. An

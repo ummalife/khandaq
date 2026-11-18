@@ -25,18 +25,35 @@
 #include <cassert>
 
 namespace {
+    /** The least room the first part keeps for the words of a reply: one UTF-8 character. */
+    constexpr uint64_t replyWordsRoom = 4;
+
     QStringList splitMessage(const QString& message, uint64_t maxLength)
     {
         QStringList splittedMsgs;
         QByteArray ba_message{message.toUtf8()};
+        // KHANDAQ (0.2.58): the head of a reply (Air::replyHead) stays whole at the start of the
+        // first part, with words after it: no part is cut inside the head or right after it, so
+        // the first part is the reply and the parts after it plain text. A head too long to leave
+        // room for words is cut as any text is; its quote takes 600 bytes at most
+        // (Air::replyQuote), so only a name of hundreds of bytes could make it so long.
+        const int headLength = Air::replyHeadLength(message);
+        uint64_t keep =
+            headLength > 0 ? static_cast<uint64_t>(message.left(headLength).toUtf8().size()) : 0;
+        if (keep + replyWordsRoom > maxLength) {
+            keep = 0;
+        }
+        const auto outsideHead = [&keep](int splitPos) {
+            return splitPos > 0 && static_cast<uint64_t>(splitPos) >= keep;
+        };
         while (static_cast<uint64_t>(ba_message.size()) > maxLength) {
             int splitPos = ba_message.lastIndexOf('\n', maxLength - 1);
 
-            if (splitPos <= 0) {
+            if (!outsideHead(splitPos)) {
                 splitPos = ba_message.lastIndexOf(' ', maxLength - 1);
             }
 
-            if (splitPos <= 0) {
+            if (!outsideHead(splitPos)) {
                 constexpr uint8_t firstOfMultiByteMask = 0xC0;
                 constexpr uint8_t multiByteMask = 0x80;
                 splitPos = maxLength;
@@ -50,6 +67,8 @@ namespace {
             }
             splittedMsgs.append(QString::fromUtf8(ba_message.left(splitPos + 1)));
             ba_message = ba_message.mid(splitPos + 1);
+            // The parts after the first are plain text.
+            keep = 0;
         }
 
         splittedMsgs.append(QString::fromUtf8(ba_message));

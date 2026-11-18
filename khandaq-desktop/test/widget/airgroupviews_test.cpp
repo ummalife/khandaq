@@ -32,11 +32,13 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QLabel>
+#include <QMenu>
 #include <QRegularExpression>
 #include <QSignalSpy>
 #include <QTextEdit>
 #include <QtTest/QtTest>
 
+#include <functional>
 #include <memory>
 
 using AirStrings::Text;
@@ -155,6 +157,7 @@ private slots:
     void inviteListKeepsTheChoiceByKeyWhileTheContactIsOnline();
     void readOnlyBarTakesThePlaceOfTheField();
     void dossierSaysTheRoleAndListsTheMembers();
+    void memberMenuIsTheSameFromTheRowAndFromTheirName();
     void aGroupByInvitationOnlySharesNoKeyAndItsFounderOpensIt();
     void privateThreadTellsAnObserverWhyItCannotAnswer();
     void getNowBandShowsWhoFitsAndCountsTheRest();
@@ -511,6 +514,109 @@ void TestAirGroupViews::dossierSaysTheRoleAndListsTheMembers()
     part<AirButton>(dialog, "dialogConfirm")->click();
     QCOMPARE(leaves.count(), 1);
     QVERIFY(!dossier->isOpen());
+}
+
+/**
+ * KHANDAQ (0.2.58): a member's row and their name over a message in the transcript open the same
+ * menu. Someone no longer in the group gets what a key still allows: Copy key, Mute and Hide.
+ */
+void TestAirGroupViews::memberMenuIsTheSameFromTheRowAndFromTheirName()
+{
+    QWidget host;
+    host.resize(1100, 800);
+    auto* const dossier = new AirGroupDossier(&host);
+    host.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&host));
+    AirGroupInfo info;
+    info.name = QStringLiteral("Study circle");
+    info.groupKey = groupKey;
+    info.selfRole = Air::GroupRole::Founder;
+    info.privacy = Air::GroupPrivacy::Open;
+    const Air::GroupMember liWei = member(3, QStringLiteral("Li Wei"), Air::GroupRole::Member, true);
+    info.members = Air::sortedRoster(
+        {member(1, QStringLiteral("Amina"), Air::GroupRole::Founder, true, true),
+         member(2, QStringLiteral("Mariam"), Air::GroupRole::Moderator, true), liWei});
+    info.mutedMembers.insert(liWei.publicKey);
+    info.reach = Air::GroupReach::make(3, 3, 2, true);
+    dossier->setInfo(info);
+    dossier->open();
+
+    // The texts of the menu that opens next, a separator as "-"; the menu is closed unchosen.
+    const auto menuOf = [](const std::function<void()>& open) {
+        QStringList texts;
+        QTimer::singleShot(0, [&texts] {
+            auto* const menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+            if (!menu) {
+                return;
+            }
+            for (const QAction* action : menu->actions()) {
+                texts.append(action->isSeparator() ? QStringLiteral("-") : action->text());
+            }
+            menu->close();
+        });
+        open();
+        return texts;
+    };
+
+    QStringList expected{AirStrings::text(Text::GroupWritePrivately),
+                         AirStrings::text(Text::DossierCopyKey),
+                         AirStrings::text(Text::GroupMemberUnmute),
+                         AirStrings::text(Text::GroupMemberHide), QStringLiteral("-")};
+    for (const Air::MemberAction action :
+         Air::memberActions(Air::GroupRole::Member, Air::GroupRole::Founder)) {
+        expected.append(AirStrings::memberActionText(action));
+    }
+    QVERIFY(expected.size() > 5);
+
+    // From the row of the member.
+    QAbstractButton* row = nullptr;
+    for (QAbstractButton* const candidate :
+         dossier->findChildren<QAbstractButton*>(QStringLiteral("groupMember"))) {
+        if (candidate->accessibleName().startsWith(QStringLiteral("Li Wei"))) {
+            row = candidate;
+        }
+    }
+    QVERIFY(row);
+    QCOMPARE(menuOf([row] { row->click(); }), expected);
+
+    // From their name in the transcript: the same menu.
+    const QPoint underName = host.mapToGlobal(QPoint(200, 300));
+    QCOMPARE(menuOf([&] { dossier->showMemberMenu(liWei, underName, info); }), expected);
+
+    // No longer in the group: what a key still allows, nothing that needs them in it.
+    info.hiddenMembers.insert(liWei.publicKey);
+    QCOMPARE(menuOf([&] { dossier->showMemberMenu(liWei, underName, info, false); }),
+             (QStringList{AirStrings::text(Text::DossierCopyKey),
+                          AirStrings::text(Text::GroupMemberUnmute),
+                          AirStrings::text(Text::GroupMemberShow)}));
+
+    // Mute from the name asks for the same change as from the row.
+    int mutes = 0;
+    QString mutedKey;
+    bool mutedTo = true;
+    QObject::connect(dossier, &AirGroupDossier::memberMuteRequested, dossier,
+                     [&](const Air::GroupMember& muted, bool on) {
+                         ++mutes;
+                         mutedKey = muted.publicKey;
+                         mutedTo = on;
+                     });
+    QTimer::singleShot(0, [] {
+        auto* const menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+        if (!menu) {
+            return;
+        }
+        // Chosen as a person chooses it: the action becomes the current one and Return takes it.
+        for (QAction* const action : menu->actions()) {
+            if (action->text() == AirStrings::text(Text::GroupMemberUnmute)) {
+                menu->setActiveAction(action);
+            }
+        }
+        QTest::keyClick(menu, Qt::Key_Return);
+    });
+    dossier->showMemberMenu(liWei, underName, info, false);
+    QCOMPARE(mutes, 1);
+    QCOMPARE(mutedKey, liWei.publicKey);
+    QVERIFY(!mutedTo);
 }
 
 /**

@@ -480,7 +480,12 @@ void AirGroupDossier::refreshMembers()
     for (const Air::GroupMember& member : shown) {
         auto* const row = new AirMemberRow(member, membersHolder);
         if (!member.isSelf) {
-            connect(row, &AirMemberRow::clicked, this, [this, row] { showMemberMenu(row); });
+            connect(row, &AirMemberRow::clicked, this, [this, row] {
+                // Under the row, from its start edge.
+                const QPoint start = layoutDirection() == Qt::RightToLeft ? row->rect().bottomRight()
+                                                                          : row->rect().bottomLeft();
+                showMemberMenu(row->member(), row->mapToGlobal(start), info);
+            });
         }
         membersList->addWidget(row);
         if (member.peerId == focusedPeer && !member.isSelf) {
@@ -503,24 +508,30 @@ void AirGroupDossier::refreshInvite()
     inviteWhy->setVisible(count == 0 && !info.candidates.isEmpty());
 }
 
-void AirGroupDossier::showMemberMenu(AirMemberRow* row)
+void AirGroupDossier::showMemberMenu(const Air::GroupMember& shown, const QPoint& globalPos,
+                                     const AirGroupInfo& groupInfo, bool present)
 {
-    const Air::GroupMember member = row->member();
+    // The menu runs its own loop: the rows and the info may be made afresh meanwhile, so only
+    // copies are used after it.
+    const Air::GroupMember member = shown;
     QMenu menu(this);
-    QAction* const write = menu.addAction(AirStrings::text(Text::GroupWritePrivately));
+    QAction* const write =
+        present ? menu.addAction(AirStrings::text(Text::GroupWritePrivately)) : nullptr;
     QAction* const copy =
         member.publicKey.isEmpty() ? nullptr : menu.addAction(AirStrings::text(Text::DossierCopyKey));
-    const bool muted = info.mutedMembers.contains(member.publicKey);
+    const bool muted = groupInfo.mutedMembers.contains(member.publicKey);
     QAction* const mute = member.publicKey.isEmpty()
                               ? nullptr
                               : menu.addAction(AirStrings::text(muted ? Text::GroupMemberUnmute
                                                                       : Text::GroupMemberMute));
-    const bool hidden = info.hiddenMembers.contains(member.publicKey);
+    const bool hidden = groupInfo.hiddenMembers.contains(member.publicKey);
     QAction* const hide =
         member.publicKey.isEmpty()
             ? nullptr
             : menu.addAction(AirStrings::text(hidden ? Text::GroupMemberShow : Text::GroupMemberHide));
-    const QVector<Air::MemberAction> actions = Air::memberActions(member.role, info.selfRole);
+    // A role is changed and a member removed only while they are in the group.
+    const QVector<Air::MemberAction> actions =
+        present ? Air::memberActions(member.role, groupInfo.selfRole) : QVector<Air::MemberAction>{};
     QVector<QAction*> roleActions;
     if (!actions.isEmpty()) {
         menu.addSeparator();
@@ -528,16 +539,15 @@ void AirGroupDossier::showMemberMenu(AirMemberRow* row)
     for (const Air::MemberAction action : actions) {
         roleActions.append(menu.addAction(AirStrings::memberActionText(action)));
     }
+    if (menu.isEmpty()) {
+        return;
+    }
 
-    // Under the row, from its start edge. The menu runs its own loop: the rows may be made afresh
-    // meanwhile, so only the copy of the member is used after it.
-    const QPoint start =
-        layoutDirection() == Qt::RightToLeft ? row->rect().bottomRight() : row->rect().bottomLeft();
-    QAction* const chosen = menu.exec(row->mapToGlobal(start));
+    QAction* const chosen = menu.exec(globalPos);
     if (!chosen) {
         return;
     }
-    if (chosen == write) {
+    if (write && chosen == write) {
         emit writePrivatelyRequested(member);
     } else if (copy && chosen == copy) {
         QApplication::clipboard()->setText(member.publicKey);

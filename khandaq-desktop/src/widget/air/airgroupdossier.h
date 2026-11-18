@@ -79,6 +79,15 @@ public:
 
     void setInfo(const AirGroupInfo& info);
     const AirGroupInfo& groupInfo() const;
+    /**
+     * The menu of one member at globalPos: under their row here, and under their name in the
+     * transcript (KHANDAQ 0.2.58). Write privately, Copy key, Mute or Unmute, Hide or Show, then
+     * what your role may do to theirs, each asked once. groupInfo says your role and whom you muted
+     * or hid. A member who is not in the group now (present false) gets what a key still allows:
+     * Copy key, Mute and Hide.
+     */
+    void showMemberMenu(const Air::GroupMember& member, const QPoint& globalPos,
+                        const AirGroupInfo& groupInfo, bool present = true);
 #ifdef KHANDAQ_SCREENSHOT_HOOK
     /** Test builds only: the question before an action on a member, as their menu asks it. */
     void askForShots(const Air::GroupMember& member, Air::MemberAction action);
@@ -108,7 +117,6 @@ private:
     void restyle();
     void refreshMembers();
     void refreshInvite();
-    void showMemberMenu(AirMemberRow* row);
     void confirm(const Air::GroupMember& member, Air::MemberAction action);
 
     AirGroupInfo info;

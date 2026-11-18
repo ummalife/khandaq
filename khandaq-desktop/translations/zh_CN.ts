@@ -3714,6 +3714,16 @@ Opening it can run a program on your computer. Links in messages come from other
         <translation>举报</translation>
     </message>
     <message>
+        <source>Reply</source>
+        <comment>menu action on a message or a file: the next message answers it, with its quote above the message field; as chat_reply_action on the phones</comment>
+        <translation>回复</translation>
+    </message>
+    <message>
+        <source>Cancel reply</source>
+        <comment>the button that takes away the reply above the message field; as chat_reply_cancel on the phones</comment>
+        <translation>取消回复</translation>
+    </message>
+    <message>
         <source>via a relay</source>
         <comment>contact reach mark: online, connected through a TCP relay; short, it shares the line with the name</comment>
         <translation>经中继</translation>

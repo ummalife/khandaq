@@ -112,11 +112,23 @@ protected:
     bool canSendNow() const override;
     /** Report shows on a message or a file someone else sent (SPEC-community, item 5). */
     void prepareChatMenu(QPoint globalPos) override;
+    /**
+     * KHANDAQ (0.2.58): a member by their name in the group and their key in it; us by ours, as
+     * the members know us.
+     */
+    ReplyAuthor replyAuthorOf(const ChatLogItem& item) const override;
 
 private:
     void retranslateUi();
     /** Whether the entry is someone else's message or file; if so it is the one Report mails. */
     bool prepareReport(ChatLogIdx idx);
+    /** Whether the key is ours: the key of our profile, or the one this group knows us by. */
+    bool isSelfKey(const ToxPk& key) const;
+    /**
+     * KHANDAQ (0.2.58): a click on the name over someone else's entry opens the menu their row in
+     * the dossier opens, under the name; for someone no longer in the group, what their key allows.
+     */
+    void showAuthorMenu(ChatLogIdx idx, const QPoint& globalPos);
     /** Opens the mail to support about menuReport in the person's mail app. */
     void report();
     /** Asks toxcore again who is in the group and what you may do, and shows it everywhere. */

@@ -684,6 +684,78 @@ QString plainMessageBody(const QString& raw);
  */
 int ownWordsStart(const QString& raw);
 
+/**
+ * KHANDAQ (0.2.58): a reply to an entry of the transcript, with what its header carries, as
+ * khandaq-ios and Android hold it (MessageReplyHelper.ReplyMeta).
+ */
+struct ReplyMeta
+{
+    /**
+     * Non-negative and the same for the entry every time (stableLocalId). The phones compare it
+     * with ids of their own only, so it never names one of their messages.
+     */
+    qint64 localId = 0;
+    /** The key of whoever wrote the entry, as the conversation knows them (keyTail goes on the wire). */
+    QString authorKey;
+    /**
+     * When the entry was written, in milliseconds since 1970: the phones look for it within five
+     * seconds of this, with the same key tail.
+     */
+    qint64 timeMs = 0;
+    /** The name the others know the author by: ours too, never "You" (iOS 0.2.56). */
+    QString authorName;
+    /** The words the entry shows (AirStrings::messageWords), or the name of a file. */
+    QString words;
+};
+
+/**
+ * What goes before the words of a reply, as MessageReplyHelper.encode writes it on iOS and Android:
+ * "[KQ|<id>|<TAIL>|<time>|<name>]\n<quote>\n[KQ/end]\n". readMessageText reads it back.
+ */
+QString replyHead(const ReplyMeta& meta);
+
+/**
+ * The quote a reply carries (MessageReplyHelper.truncatePreview): the words on one line, line
+ * breaks as spaces and other control characters left out, without the markers of a reply
+ * ("[KQ/end]", "[KQ|"), trimmed, and at most 200 characters as people count them; longer words
+ * keep 199 of them and an ellipsis. It also stays within 600 bytes of UTF-8, which only words of
+ * many-part characters such as emoji families reach first.
+ */
+QString replyQuote(const QString& words);
+
+/**
+ * A name as the header of a reply carries it (MessageReplyHelper.sanitizeField): on one line, "]"
+ * and "|" as spaces, without the markers of a reply, trimmed.
+ */
+QString replyHeaderName(const QString& name);
+
+/** The last eight characters of a key in upper case, a shorter key whole (MessageReplyHelper.pubkeyTail). */
+QString keyTail(const QString& key);
+
+/** djb2 over the UTF-8 bytes of an identifier, kept non-negative (iOS MessageReplyHelper.stableLocalId). */
+qint64 stableLocalId(const QString& uniqueIdentifier);
+
+/**
+ * How long the head of a reply in raw is, as replyHead writes it: the header, the quote, the footer
+ * and the line break after it, so that raw.mid() of it is the reply's own words. 0 for a text that
+ * does not open with a reply in this form.
+ */
+int replyHeadLength(const QString& raw);
+
+/**
+ * The head of a reply in the form replyHead writes, read back into meta: the tail of the key
+ * stands in authorKey, the name and the quote as they travel. False for any other text.
+ */
+bool readReplyHead(const QString& raw, ReplyMeta* meta);
+
+/**
+ * Where the first characters of text end, up to limit of them, as a person counts them and as iOS
+ * counts a String: a flag, an emoji joined of several, a letter with its marks is one character,
+ * never cut in half (QTextBoundaryFinder::Grapheme). The nth end, in units of UTF-16, closes the
+ * first n characters; the first is 0, for none.
+ */
+QVector<int> characterEnds(const QString& text, int limit);
+
 /** "Away" words for a row: which of the reach strings applies and the number it carries. */
 struct AwayWords
 {

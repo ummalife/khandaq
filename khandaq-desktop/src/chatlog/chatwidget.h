@@ -86,6 +86,16 @@ public:
     ChatLineContent* getContentFromGlobalPos(QPoint pos) const;
     /** Finds the log entry shown at pos (global); false when none of the log stands there. */
     bool entryAtGlobalPos(QPoint pos, ChatLogIdx& idx) const;
+    /**
+     * KHANDAQ (0.2.58): the entry whose text holds the selection, when the selection lies in the
+     * words of one entry; false for none or for a selection over several.
+     */
+    bool selectedEntry(ChatLogIdx& idx) const;
+    /**
+     * KHANDAQ (0.2.58): the key a group knows us by besides the key of our profile; our entries
+     * carry either, and the name over them opens no menu.
+     */
+    void setGroupSelfKey(const ToxPk& key);
     const uint repNameAfter = 5 * 60;
 
     void setColorizedNames(bool enable) { colorizeNames = enable; };
@@ -116,6 +126,11 @@ signals:
     void renderFinished();
     /** KHANDAQ (0.2.57): Accept on a group file that is held for a tap (FileTransferWidget). */
     void heldFileAccepted(const ToxFile& file);
+    /**
+     * KHANDAQ (0.2.58): a click, not a drag, on the name over someone else's message or file in a
+     * group. globalPos is under the name, at its start edge: where the member's menu opens.
+     */
+    void authorClicked(ChatLogIdx idx, QPoint globalPos);
 public slots:
     void forceRelayout();
     void reloadTheme();
@@ -211,6 +226,15 @@ private:
     void refreshEntries();
     bool shouldRenderMessage(ChatLogIdx idx) const;
     void disableSearchText();
+    /** The index of the entry a rendered line shows; false for a line of no entry (a day mark). */
+    bool idxOfLine(const ChatLine::Ptr& line, ChatLogIdx& idx) const;
+    /** Whether the name over an entry opens the author's menu: someone else's, in a group, with a key. */
+    bool opensAuthorMenu(const ChatLogItem& item) const;
+    /** The entry whose author's name, one that opens a menu, stands at scenePos; name is where. */
+    bool authorNameAt(QPointF scenePos, ChatLogIdx& idx, QRectF* name = nullptr) const;
+    /** The names that open a menu, set again: after our key in the group changed. */
+    void refreshAuthorNames();
+
 private:
     enum class SelectionMode
     {
@@ -272,6 +296,10 @@ private:
     bool personChat = false;
     bool groupChat = false;
     bool notesChat = false;
+    ToxPk groupSelfKey;
+    /** A left press landed on a name that opens a menu: a release on it, without a drag, opens it. */
+    bool authorPressed = false;
+    ChatLogIdx pressedAuthor{0};
     bool personOnline = true;
     qint64 seenUpToMs = -1;
     QString personName;

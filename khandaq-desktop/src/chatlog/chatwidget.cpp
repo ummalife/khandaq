@@ -410,6 +410,14 @@ void ChatWidget::mousePressEvent(QMouseEvent* ev)
     if (ev->button() == Qt::LeftButton) {
         clickPos = ev->pos();
         clearSelection();
+        authorPressed = authorNameAt(mapToScene(ev->pos()), pressedAuthor);
+    } else {
+        // KHANDAQ (0.2.58): only left clicks add up to a double or a triple click. A right click
+        // opens the chat menu, which takes the release, so the multi-click timer never restarted
+        // and every third right click (Reply among them) selected the text under the pointer.
+        clickCount = 0;
+        lastClickButton = ev->button();
+        return;
     }
 
     if (lastClickButton == ev->button()) {
@@ -433,6 +441,24 @@ void ChatWidget::mouseReleaseEvent(QMouseEvent* ev)
     selectionScrollDir = AutoScrollDirection::NoDirection;
 
     multiClickTimer->start();
+
+    // KHANDAQ (0.2.58): a press and a release on the same author's name, with no selection made
+    // between them, opens the member's menu under the name. It opens once this event is done: the
+    // menu runs a loop of its own.
+    if (ev->button() != Qt::LeftButton || !authorPressed) {
+        return;
+    }
+    authorPressed = false;
+    ChatLogIdx idx{0};
+    QRectF name;
+    if (selectionMode != SelectionMode::None || !authorNameAt(mapToScene(ev->pos()), idx, &name)
+        || idx != pressedAuthor) {
+        return;
+    }
+    const bool rightToLeft = QGuiApplication::layoutDirection() == Qt::RightToLeft;
+    const QPoint anchor =
+        viewport()->mapToGlobal(mapFromScene(rightToLeft ? name.bottomRight() : name.bottomLeft()));
+    QTimer::singleShot(0, this, [this, idx, anchor] { emit authorClicked(idx, anchor); });
 }
 
 void ChatWidget::mouseMoveEvent(QMouseEvent* ev)
@@ -785,6 +811,14 @@ bool ChatWidget::entryAtGlobalPos(QPoint pos, ChatLogIdx& idx) const
     if (scenePos.y() < bounds.top() || scenePos.y() > bounds.bottom()) {
         return false;
     }
+    return idxOfLine(line, idx);
+}
+
+bool ChatWidget::idxOfLine(const ChatLine::Ptr& line, ChatLogIdx& idx) const
+{
+    if (!line || !chatLineStorage->hasIndexedMessage()) {
+        return false;
+    }
     for (auto i = chatLineStorage->firstIdx(); i <= chatLineStorage->lastIdx(); ++i) {
         if (chatLineStorage->contains(i) && (*chatLineStorage)[i] == line) {
             idx = i;
@@ -792,6 +826,76 @@ bool ChatWidget::entryAtGlobalPos(QPoint pos, ChatLogIdx& idx) const
         }
     }
     return false;
+}
+
+bool ChatWidget::selectedEntry(ChatLogIdx& idx) const
+{
+    // The text of an entry is its content 1; a selection that spans entries is Multi.
+    if (selectionMode != SelectionMode::Precise || selClickedCol != 1 || !selClickedRow
+        || selClickedRow->isCollapsed()) {
+        return false;
+    }
+    return idxOfLine(selClickedRow, idx);
+}
+
+void ChatWidget::setGroupSelfKey(const ToxPk& key)
+{
+    if (groupSelfKey == key) {
+        return;
+    }
+    groupSelfKey = key;
+    refreshAuthorNames();
+}
+
+bool ChatWidget::opensAuthorMenu(const ChatLogItem& item) const
+{
+    if (!groupChat || item.getContentType() == ChatLogItem::ContentType::systemMessage) {
+        return false;
+    }
+    const ToxPk& sender = item.getSender();
+    return !sender.isEmpty() && sender != core.getSelfPublicKey()
+           && (groupSelfKey.isEmpty() || sender != groupSelfKey);
+}
+
+bool ChatWidget::authorNameAt(QPointF scenePos, ChatLogIdx& idx, QRectF* name) const
+{
+    if (!groupChat) {
+        return false;
+    }
+    const ChatLine::Ptr line = findLineByPosY(scenePos.y());
+    if (!line || line->isCollapsed() || line->getLayout() != ChatLine::Layout::AirEntry
+        || !line->isAuthorShown()) {
+        return false;
+    }
+    const auto* const author = qobject_cast<AirLabel*>(line->getContent(0));
+    if (!author || !author->opensMenu() || !author->isVisible()) {
+        return false;
+    }
+    const QRectF shown = author->mapRectToScene(author->textRect());
+    if (!shown.contains(scenePos) || !idxOfLine(line, idx)) {
+        return false;
+    }
+    if (name) {
+        *name = shown;
+    }
+    return true;
+}
+
+void ChatWidget::refreshAuthorNames()
+{
+    if (!chatLineStorage->hasIndexedMessage()) {
+        return;
+    }
+    for (auto i = chatLineStorage->firstIdx(); i <= chatLineStorage->lastIdx(); ++i) {
+        if (!chatLineStorage->contains(i)) {
+            continue;
+        }
+        const ChatLine::Ptr& line = (*chatLineStorage)[i];
+        if (auto* const author = qobject_cast<AirLabel*>(line->getContent(0))) {
+            author->setOpensMenu(line->getLayout() == ChatLine::Layout::AirEntry
+                                 && opensAuthorMenu(chatLog.at(i)));
+        }
+    }
 }
 
 void ChatWidget::clear()
@@ -1625,6 +1729,12 @@ void ChatWidget::renderItem(const ChatLogItem& item, bool hideName, bool coloriz
 
     // Notes are all yours: no author over any of them.
     chatMessage->setAuthorShown(!hideName && !notesChat);
+
+    // KHANDAQ (0.2.58): in a group the name over someone else's message or file opens their menu.
+    if (auto* const author = qobject_cast<AirLabel*>(chatMessage->getContent(0))) {
+        author->setOpensMenu(chatMessage->getLayout() == ChatLine::Layout::AirEntry
+                             && opensAuthorMenu(item));
+    }
 }
 
 ChatMessage::AirLook ChatWidget::lookOf(const ChatLogItem& item) const

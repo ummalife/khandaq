@@ -194,10 +194,11 @@ void ChatQuotePreview::retranslateUi()
 {
     using AirStrings::Text;
     if (replying) {
-        // As the phones name it: "In reply to Yusuf", or "In reply to You" over an entry of ours.
-        const QString name =
-            replyToSelf ? AirStrings::text(Text::You) : AirStrings::replyName(replyName);
-        title = AirStrings::text(Text::SpokenReply).arg(name);
+        // As the phones name it: "In reply to Yusuf", or "In reply to yourself" over an entry of ours
+        // (0.2.59: "In reply to" + "You" put "You" in the wrong grammatical case in Russian).
+        title = replyToSelf
+                    ? AirStrings::text(Text::ReplyToSelf)
+                    : AirStrings::text(Text::SpokenReply).arg(AirStrings::replyName(replyName));
     } else {
         title = tr("Quote");
     }

@@ -80,7 +80,12 @@ final class ChatReplyPreviewView: UIView {
 
     func show(meta: MessageReplyHelper.ReplyMeta, theme: Theme) {
         apply(theme: theme)
-        headerLabel.text = String(localized: "chat_reply_header", meta.localSenderName ?? meta.senderName)
+        // KHANDAQ (0.2.59): over a message of yours the bar says "In reply to yourself" ("In reply to" + "You" put
+        // "You" in the wrong grammatical case in Russian); only a message of yours has a local name
+        // (ChatReplyController).
+        headerLabel.text = meta.localSenderName != nil
+            ? String(localized: "chat_reply_header_self")
+            : String(localized: "chat_reply_header", meta.senderName)
         previewLabel.text = MessageReplyHelper.previewForDisplay(meta.previewText, maxLen: 120)
         isHidden = false
     }

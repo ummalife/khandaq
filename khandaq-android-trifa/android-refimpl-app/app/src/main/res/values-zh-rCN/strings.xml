@@ -633,6 +633,7 @@
     <string name="chat_reply_cancel">取消回复</string>
     <string name="chat_reply_header">回复 %1$s</string>
     <string name="chat_reply_self_name">你</string>
+    <string name="chat_reply_header_self">回复自己</string>
     <string name="chat_reply_unknown_sender">未知</string>
     <string name="notification_fgs_text">正在后台运行</string>
     <string name="notification_status_online">在线</string>

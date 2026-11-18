@@ -116,6 +116,7 @@
     <string name="chat_reply_cancel">Отменить ответ</string>
     <string name="chat_reply_header">В ответ %1$s</string>
     <string name="chat_reply_self_name">Вы</string>
+    <string name="chat_reply_header_self">В ответ себе</string>
     <string name="chat_reply_unknown_sender">Неизвестно</string>
     <string name="add_friend_activity_name">Добавить друга</string>
     <string name="message_list_activity_name">Разговор</string>

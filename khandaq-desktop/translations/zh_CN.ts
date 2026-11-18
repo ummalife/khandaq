@@ -3709,6 +3709,11 @@ Opening it can run a program on your computer. Links in messages come from other
         <translation>回复%1</translation>
     </message>
     <message>
+        <source>In reply to yourself</source>
+        <comment>the title above the message field when the message answers one of your own; as chat_reply_header_self on the phones</comment>
+        <translation>回复自己</translation>
+    </message>
+    <message>
         <source>Report</source>
         <comment>menu action on a message someone else wrote in a group: opens a mail to support about it, with the message</comment>
         <translation>举报</translation>

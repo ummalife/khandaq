@@ -94,6 +94,20 @@ public class ChatReplyOwnAuthorTest
     }
 
     @Test
+    public void the_bar_over_our_own_message_says_in_reply_to_yourself()
+    {
+        // KHANDAQ (0.2.59): "In reply to" + "You" put "You" in the wrong grammatical case in Russian; the bar has
+        // its own words for a message of ours (chat_reply_header_self).
+        assertTrue(ChatReplyPreviewController.barRepliesToSelf(own("QA Fresh 057")));
+        assertTrue(ChatReplyPreviewController.barRepliesToSelf(own()));
+        final MessageReplyHelper.ReplyMeta other = meta();
+        other.senderName = "Amina";
+        assertFalse(ChatReplyPreviewController.barRepliesToSelf(other));
+        other.localSenderName = "";
+        assertFalse(ChatReplyPreviewController.barRepliesToSelf(other));
+    }
+
+    @Test
     public void a_reply_to_someone_else_is_as_before()
     {
         final MessageReplyHelper.ReplyMeta meta = meta();
@@ -123,6 +137,7 @@ public class ChatReplyOwnAuthorTest
 
         final String show = bare(body(controller, "private static void show("));
         assertTrue(show.contains(bare("context.getString(R.string.chat_reply_header, barName(meta))")));
+        assertTrue(show.contains(bare("barRepliesToSelf(meta) ? context.getString(R.string.chat_reply_header_self)")));
 
         // The bar's word never reaches the wire.
         final String encode = body(AntispamOnRequestTest.code(read("MessageReplyHelper.java")), "static String encode(");

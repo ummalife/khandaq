@@ -629,6 +629,7 @@
 "chat_reply_cancel" = "取消回复";
 "chat_reply_header" = "回复%@";
 "chat_reply_self_name" = "你";
+"chat_reply_header_self" = "回复自己";
 "chat_reply_unknown_sender" = "未知";
 "group_messages_select_action" = "选择消息";
 "group_messages_copy_action" = "复制";

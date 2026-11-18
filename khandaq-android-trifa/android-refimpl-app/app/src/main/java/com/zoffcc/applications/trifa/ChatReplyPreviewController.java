@@ -344,6 +344,16 @@ final class ChatReplyPreviewController
         return (local == null || local.isEmpty()) ? meta.senderName : local;
     }
 
+    /**
+     * KHANDAQ (0.2.59): the bar answers a message of yours, and says "In reply to yourself" (chat_reply_header_self):
+     * "In reply to" + "You" put "You" in the wrong grammatical case in Russian.
+     */
+    static boolean barRepliesToSelf(final MessageReplyHelper.ReplyMeta meta)
+    {
+        final String local = meta.localSenderName;
+        return local != null && !local.isEmpty();
+    }
+
     /** Our name in this group as its members see it; null while toxcore has none for us or the group is not there. */
     @Nullable
     private static String groupSelfName(@Nullable final String groupIdentifier)
@@ -370,7 +380,8 @@ final class ChatReplyPreviewController
             return;
         }
         applyTheme(context);
-        headerView.setText(context.getString(R.string.chat_reply_header, barName(meta)));
+        headerView.setText(barRepliesToSelf(meta) ? context.getString(R.string.chat_reply_header_self)
+                                                  : context.getString(R.string.chat_reply_header, barName(meta)));
         previewView.setText(MessageReplyHelper.previewForDisplay(context, meta.previewText, 120));
         bar.setVisibility(View.VISIBLE);
         if (inputField != null)

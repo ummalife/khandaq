@@ -629,6 +629,7 @@
 "chat_reply_cancel" = "إلغاء الرد";
 "chat_reply_header" = "ردا على %@";
 "chat_reply_self_name" = "أنت";
+"chat_reply_header_self" = "ردا على نفسك";
 "chat_reply_unknown_sender" = "غير معروف";
 "group_messages_select_action" = "تحديد الرسائل";
 "group_messages_copy_action" = "نسخ";

@@ -708,6 +708,152 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
     XCTAssertEqual(mocks.count, 3u);
 }
 
+#pragma mark - The author of an entry the history serves
+
+// KHANDAQ (0.2.63): a member's entry is served under the key and the name it kept when it came live, not under
+// those of whoever holds its peer number now: NGC gives a freed number to the next member who comes, and in
+// QA-Live of 0.2.63 the founder came back with the old number of a member. historySyncForChat: answers every
+// number with kGroupRealmTestsPeerKeyHex and "member", the member who holds it now, and finds nobody by a key.
+static NSString *const kGroupRealmTestsGoneKeyHex = @"5D4C3B2A190807F6E5D4C3B2A1908070F1E2D3C4B5A69788796A5B4C3D2E1F00";
+
+- (void)testATextIsServedUnderTheKeyItKeptNotUnderThatOfItsNumberNow
+{
+    OCTChat *chat = [self groupChat];
+    OCTRealmManager *realmManager = self.realmManager;
+    OCTMessageAbstract *gone = [self liveTextFromPeerId:kGroupRealmTestsPeerId name:@"QA A" keyHex:kGroupRealmTestsGoneKeyHex
+                                                   text:@"written before leaving" messageId:81 inChat:chat];
+    OCTMessageAbstract *nameless = [self liveTextFromPeerId:kGroupRealmTestsPeerId name:nil keyHex:kGroupRealmTestsGoneKeyHex
+                                                       text:@"came with no name" messageId:82 inChat:chat];
+    OCTMessageAbstract *keyless = [self liveTextFromPeerId:kGroupRealmTestsPeerId name:@"QA A" keyHex:nil
+                                                      text:@"kept no key" messageId:83 inChat:chat];
+    OCTMessageAbstract *broken = [self liveTextFromPeerId:kGroupRealmTestsPeerId name:@"QA A" keyHex:@"5d4c"
+                                                     text:@"kept half a key" messageId:84 inChat:chat];
+    OCTMessageAbstract *ours = [realmManager addGroupMessageWithText:@"ours"
+                                                                type:OCTToxMessageTypeNormal
+                                                                chat:chat
+                                                              peerId:0
+                                                            peerName:nil
+                                                           messageId:85];
+    OCTNgcGroupHistSync *histSync = [self historySyncForChat:chat];
+
+    NSData *packet = [histSync buildSyncPacketForMessage:gone groupNumber:kGroupRealmTestsGroupNumber];
+    XCTAssertEqualObjects([self keyInHistoryPacket:packet atOffset:12], kGroupRealmTestsGoneKeyHex,
+                          @"the text was served under the key of whoever holds its number now");
+    XCTAssertEqualObjects([self nameInHistoryPacket:packet atOffset:48], @"QA A");
+
+    packet = [histSync buildSyncPacketForMessage:nameless groupNumber:kGroupRealmTestsGroupNumber];
+    XCTAssertEqualObjects([self keyInHistoryPacket:packet atOffset:12], kGroupRealmTestsGoneKeyHex);
+    XCTAssertEqualObjects([self nameInHistoryPacket:packet atOffset:48], @"peer",
+                          @"a text whose author is not in the group went under the name of whoever holds its number now");
+
+    packet = [histSync buildSyncPacketForMessage:keyless groupNumber:kGroupRealmTestsGroupNumber];
+    XCTAssertEqualObjects([self keyInHistoryPacket:packet atOffset:12], kGroupRealmTestsPeerKeyHex,
+                          @"a row from before the freeze goes by its number, as before");
+    XCTAssertEqualObjects([self nameInHistoryPacket:packet atOffset:48], @"QA A");
+
+    XCTAssertNil([histSync buildSyncPacketForMessage:broken groupNumber:kGroupRealmTestsGroupNumber],
+                 @"a text was served under a key that is not whole");
+
+    packet = [histSync buildSyncPacketForMessage:ours groupNumber:kGroupRealmTestsGroupNumber];
+    XCTAssertEqualObjects([self keyInHistoryPacket:packet atOffset:12], kGroupRealmTestsSelfKeyHex);
+    XCTAssertEqualObjects([self nameInHistoryPacket:packet atOffset:48], @"me");
+}
+
+// The same for a file (#170 kept its key already): it went under the name of whoever holds its number now.
+- (void)testAFileIsServedUnderTheNameItKeptNotUnderThatOfItsNumberNow
+{
+    OCTChat *chat = [self groupChat];
+    OCTMessageAbstract *gone = [self liveFileFromPeerId:kGroupRealmTestsPeerId name:@"QA A" keyHex:kGroupRealmTestsGoneKeyHex
+                                               hashSeed:@"a1" inChat:chat];
+    OCTMessageAbstract *nameless = [self liveFileFromPeerId:kGroupRealmTestsPeerId name:nil keyHex:kGroupRealmTestsGoneKeyHex
+                                                   hashSeed:@"b2" inChat:chat];
+    OCTMessageAbstract *ours = [self liveFileFromPeerId:0 name:nil keyHex:nil hashSeed:@"c3" inChat:chat];
+    OCTNgcGroupHistSync *histSync = [self historySyncForChat:chat];
+
+    NSData *packet = [histSync buildSyncPacketForMessage:gone groupNumber:kGroupRealmTestsGroupNumber];
+    XCTAssertEqualObjects([self keyInHistoryPacket:packet atOffset:40], kGroupRealmTestsGoneKeyHex);
+    XCTAssertEqualObjects([self nameInHistoryPacket:packet atOffset:76], @"QA A",
+                          @"the file went under the name of whoever holds its number now");
+
+    packet = [histSync buildSyncPacketForMessage:nameless groupNumber:kGroupRealmTestsGroupNumber];
+    XCTAssertEqualObjects([self keyInHistoryPacket:packet atOffset:40], kGroupRealmTestsGoneKeyHex);
+    XCTAssertEqualObjects([self nameInHistoryPacket:packet atOffset:76], @"peer");
+
+    packet = [histSync buildSyncPacketForMessage:ours groupNumber:kGroupRealmTestsGroupNumber];
+    XCTAssertEqualObjects([self keyInHistoryPacket:packet atOffset:40], kGroupRealmTestsSelfKeyHex);
+    XCTAssertEqualObjects([self nameInHistoryPacket:packet atOffset:76], @"me");
+}
+
+/** A text that came live from peerId, with the name and the key (kept in lower case, as the live path keeps it). */
+- (OCTMessageAbstract *)liveTextFromPeerId:(uint32_t)peerId
+                                      name:(NSString *)name
+                                    keyHex:(NSString *)keyHex
+                                      text:(NSString *)text
+                                 messageId:(OCTToxMessageId)messageId
+                                    inChat:(OCTChat *)chat
+{
+    OCTMessageAbstract *message = [self.realmManager addGroupMessageWithText:text
+                                                                        type:OCTToxMessageTypeNormal
+                                                                        chat:chat
+                                                                      peerId:peerId
+                                                                    peerName:name
+                                                                   messageId:messageId];
+    if (keyHex.length > 0) {
+        [self.realmManager updateObject:message withBlock:^(OCTMessageAbstract *theMessage) {
+            theMessage.groupPrivatePeerPubkey = keyHex.lowercaseString;
+        }];
+    }
+    return message;
+}
+
+/** A whole file from peerId on disk, with the name and the key it kept (freezeGroupFileSenderOnMessage). */
+- (OCTMessageAbstract *)liveFileFromPeerId:(uint32_t)peerId
+                                      name:(NSString *)name
+                                    keyHex:(NSString *)keyHex
+                                  hashSeed:(NSString *)hashSeed
+                                    inChat:(OCTChat *)chat
+{
+    NSString *directory = [self.root stringByAppendingPathComponent:@"ServedFiles"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *path = [directory stringByAppendingPathComponent:[hashSeed stringByAppendingString:@".jpg"]];
+    NSData *payload = [self generatedBytesOfLength:1024];
+    XCTAssertTrue([payload writeToFile:path atomically:YES]);
+
+    OCTMessageAbstract *message = [self.realmManager addGroupMessageWithFileName:path.lastPathComponent
+                                                                        fileSize:payload.length
+                                                                        filePath:path
+                                                                        fileType:OCTMessageFileTypeReady
+                                                                            chat:chat
+                                                                          peerId:peerId
+                                                                         fileUTI:nil
+                                                               groupMsgIdHashHex:[self hashFrom:hashSeed]
+                                                           groupTransferProgress:1.0f];
+    [self.realmManager updateObject:message.messageFile withBlock:^(OCTMessageFile *file) {
+        file.groupPeerName = name;
+        file.groupSenderPubkey = keyHex.lowercaseString;
+    }];
+    return message;
+}
+
+/** The 32-byte key at offset of a history packet, in upper case; nil when the packet is shorter. */
+- (NSString *)keyInHistoryPacket:(NSData *)packet atOffset:(NSUInteger)offset
+{
+    if (packet.length < offset + 32) {
+        return nil;
+    }
+    return [[OCTTox binToHexString:(uint8_t *)packet.bytes + offset length:32] uppercaseString];
+}
+
+/** The name at offset of a history packet: UTF-8 up to the first zero byte, 25 bytes at most. */
+- (NSString *)nameInHistoryPacket:(NSData *)packet atOffset:(NSUInteger)offset
+{
+    if (packet.length < offset + 25) {
+        return nil;
+    }
+    const char *bytes = (const char *)packet.bytes + offset;
+    return [[NSString alloc] initWithBytes:bytes length:strnlen(bytes, 25) encoding:NSUTF8StringEncoding];
+}
+
 #pragma mark - The order of a chat
 
 // KHANDAQ (0.2.56): Android sends a long text as parts, one right after another, and msgV3 stamps each with

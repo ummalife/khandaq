@@ -1,0 +1,4 @@
+{
+  "en-US": "• Groups keep relays of their own: members behind one router, or on a network that blocks UDP, now reach each other.\n• A reaction set on iPhone to a photo or file in a group now shows here too.\n• A message passed on from a group's history keeps its author's name.",
+  "ru-RU": "• У каждой группы теперь свои ретрансляторы: участники за одним роутером или в сети, где закрыт UDP, находят друг друга.\n• Реакция с iPhone на фото или файл в группе теперь видна и здесь.\n• Сообщение, пересланное из истории группы, сохраняет имя автора."
+}

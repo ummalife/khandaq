@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-18T22:06:24Z",
+  "generated_at": "2026-11-19T02:43:49Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,48 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.62",
+      "date": "2026-11-19",
+      "title": "Screen readers say what a reply answers",
+      "summary": "VoiceOver on iPhone and TalkBack on Android now say which message a reply answers before they read it, as the desktop does. On Android a group message that reached you after you came back online shows the time it was written. On iPhone a quote keeps the space where the quoted message had a line break.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "medium",
+          "title": "Screen readers: a reply says what it answers",
+          "description": "VoiceOver and TalkBack read a reply as if it were a message of its own. Now they say \"In reply to\", the name and the quoted words, then the reply.",
+          "platforms": [
+            "ios",
+            "android"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "Android: missed group messages show when they were written",
+          "description": "A group message that reached you after you came back online showed the time it arrived, not the time it was written, among messages sorted by the time they were written. It shows when it was written now.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "iPhone: a quote keeps the space between lines",
+          "description": "When the quoted message had a line break, the last word of one line and the first word of the next ran together in the quote, on the iPhone and in the quote it sent to others. They stay apart now.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "iPhone: VoiceOver names the connection once",
+          "description": "At the top of a chat VoiceOver said the kind of connection twice, for example \"direct link. direct link.\". It says it once now.",
+          "platforms": [
+            "ios"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.61",
       "date": "2026-11-19",

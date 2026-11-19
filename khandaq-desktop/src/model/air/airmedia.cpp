@@ -162,6 +162,31 @@ bool isVoiceNote(const QString& fileName)
     return fileName.size() > suffix.size() && fileName.endsWith(suffix, Qt::CaseInsensitive);
 }
 
+FileKind fileKindOf(const QString& fileName)
+{
+    if (isVoiceNote(fileName)) {
+        return FileKind::Voice;
+    }
+    // The extensions of the push previews, which the phones name the same way.
+    static const QStringList videos{QStringLiteral("mp4"),  QStringLiteral("mov"),
+                                    QStringLiteral("m4v"),  QStringLiteral("webm"),
+                                    QStringLiteral("mkv"),  QStringLiteral("3gp"),
+                                    QStringLiteral("avi")};
+    static const QStringList photos{QStringLiteral("jpg"),  QStringLiteral("jpeg"),
+                                    QStringLiteral("png"),  QStringLiteral("gif"),
+                                    QStringLiteral("heic"), QStringLiteral("heif"),
+                                    QStringLiteral("webp")};
+    const int dot = fileName.lastIndexOf(QLatin1Char('.'));
+    if (dot <= 0) {
+        return FileKind::File;
+    }
+    const QString extension = fileName.mid(dot + 1).toLower();
+    if (videos.contains(extension)) {
+        return FileKind::Video;
+    }
+    return photos.contains(extension) ? FileKind::Photo : FileKind::File;
+}
+
 QString voiceNoteFolder(const QString& appDataDir)
 {
     return QDir(appDataDir).filePath(QStringLiteral("voice"));

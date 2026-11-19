@@ -6,6 +6,7 @@
 #import "OCTToxOptions+Private.h"
 #import "OCTLogging.h"
 #import "OCTSeenReceipt.h"
+#import "OCTPushPreview.h"
 
 void (*_tox_self_get_public_key)(const Tox *tox, uint8_t *public_key);
 uint32_t (*_tox_file_send)(Tox *tox, uint32_t friend_number, uint32_t kind, uint64_t file_size, const uint8_t *file_id,
@@ -4400,6 +4401,31 @@ void friendLosslessPacketCallback(
                                                      anchorHex:receipt.anchorHex
                                                       seenTime:receipt.seenTime
                                                   friendNumber:friendNumber];
+            }
+        });
+
+        return;
+    }
+
+    if (pktType == 190) {
+        // KHANDAQ (0.2.64): push previews (docs/PUSH_PREVIEWS.md). 190/01 is the friend's preview key,
+        // 190/02 the friend's group presence; any other shape is dropped, as the other clients drop it.
+        NSData *packet = [NSData dataWithBytes:data length:length];
+        NSData *previewKey = [OCTPushPreview peerKeyFromPacket:packet];
+        NSArray<NSString *> *presence = previewKey ? nil : [OCTPushPreview groupPresenceHashesFromPacket:packet];
+        if (previewKey == nil && presence == nil) {
+            OCTLogCDebug(@"dropping a malformed packet 190 of %zu bytes from friend %u", tox, length, friendNumber);
+            return;
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (previewKey != nil) {
+                if ([tox.delegate respondsToSelector:@selector(tox:friendPushPreviewKey:friendNumber:)]) {
+                    [tox.delegate tox:tox friendPushPreviewKey:previewKey friendNumber:friendNumber];
+                }
+            }
+            else if ([tox.delegate respondsToSelector:@selector(tox:friendGroupPresence:friendNumber:)]) {
+                [tox.delegate tox:tox friendGroupPresence:presence friendNumber:friendNumber];
             }
         });
 

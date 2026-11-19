@@ -20,12 +20,15 @@
 
 #include "src/model/notificationgenerator.h"
 #include "src/friendlist.h"
+#include "src/widget/air/airstrings.h"
 
 #include "mock/mockcoreidhandler.h"
 #include "mock/mockgroupquery.h"
 
+#include <QCoreApplication>
 #include <QLocale>
 #include <QObject>
+#include <QTranslator>
 #include <QtTest/QtTest>
 
 namespace
@@ -87,6 +90,13 @@ private slots:
     void testSimpleFriendRequest();
     void testSimpleGroupInvite();
     void testSimpleMessageToggle();
+    void testVideoAndPhotoTransfer();
+    void testFriendReaction();
+    void testGroupReaction();
+    void testReactionUncounted();
+    void testSimpleReaction();
+    void testReactionWords();
+    void testReactionInRussian();
 
 private:
     std::unique_ptr<INotificationSettings> notificationSettings;
@@ -401,6 +411,199 @@ void TestNotificationGenerator::testSimpleMessageToggle()
 
     QVERIFY(notificationData.title == "2 message(s) from friend");
     QVERIFY(notificationData.message == "test2");
+}
+
+/**
+ * KHANDAQ (0.2.64): a video and a photo say what they are, as a voice note does, by the extension
+ * of the push previews of the phones; any other file keeps its name.
+ */
+void TestNotificationGenerator::testVideoAndPhotoTransfer()
+{
+    Friend f(0, ToxPk());
+    f.setName("friend");
+
+    auto notificationData = notificationGenerator->fileTransferNotification(
+        &f, QStringLiteral("clip.MP4"), 5 * 1024 * 1024);
+    QCOMPARE(notificationData.title, QStringLiteral("friend"));
+    QCOMPARE(notificationData.message, QStringLiteral("Video (5.2 MB)"));
+
+    notificationData = notificationGenerator->fileTransferNotification(
+        &f, QStringLiteral("IMG_0042.heic"), 1100000);
+    QCOMPARE(notificationData.message, QStringLiteral("Photo"));
+
+    notificationGenerator->onNotificationActivated();
+    notificationData = notificationGenerator->fileTransferNotification(
+        &f, QStringLiteral("IMG_0042.jpeg"), 1100000);
+    QCOMPARE(notificationData.message, QStringLiteral("Photo (1.1 MB)"));
+
+    QCOMPARE(AirStrings::fileKindWords(QStringLiteral("trip.webm")), QStringLiteral("Video"));
+    QCOMPARE(AirStrings::fileKindWords(QStringLiteral("voice_F5CD3544.file.m4a")),
+             QStringLiteral("Voice message"));
+    QVERIFY(AirStrings::fileKindWords(QStringLiteral("plan.pdf")).isEmpty());
+}
+
+/** KHANDAQ (0.2.64): the contact, then what they reacted with and to what of ours. */
+void TestNotificationGenerator::testFriendReaction()
+{
+    Friend f(0, ToxPk());
+    f.setName("friend");
+
+    const QString words = AirStrings::reactionWords(
+        QStringLiteral("❤️"), Air::MessageEffect::Anchor::Text, QStringLiteral("See you at five"));
+    QCOMPARE(words, QStringLiteral("Reacted ❤️ to “See you at five”"));
+    auto notificationData = notificationGenerator->friendReactionNotification(&f, words);
+    QCOMPARE(notificationData.title, QStringLiteral("friend"));
+    QCOMPARE(notificationData.message, words);
+}
+
+/** KHANDAQ (0.2.64): the group, then who reacted and the words, as a message of a group. */
+void TestNotificationGenerator::testGroupReaction()
+{
+    Group g(0, GroupId(0), "groupName", false, "selfName", *groupQuery, *coreIdHandler,
+            *friendList);
+    auto sender = groupQuery->getGroupPeerPk(0, 0);
+    g.updateUsername(sender, "sender1");
+
+    const QString words = AirStrings::reactionWords(
+        QStringLiteral("👍"), Air::MessageEffect::Anchor::File, QStringLiteral("IMG_0042.HEIC"));
+    QCOMPARE(words, QStringLiteral("Reacted 👍 to your photo"));
+    auto notificationData = notificationGenerator->groupReactionNotification(&g, sender, words);
+    QCOMPARE(notificationData.title, QStringLiteral("groupName"));
+    QCOMPARE(notificationData.message, QStringLiteral("sender1: Reacted 👍 to your photo"));
+
+    // A member the group has no name for: the words alone.
+    notificationData =
+        notificationGenerator->groupReactionNotification(&g, ToxPk(QByteArray(32, '\x7f')), words);
+    QCOMPARE(notificationData.title, QStringLiteral("groupName"));
+    QCOMPARE(notificationData.message, words);
+}
+
+/** KHANDAQ (0.2.64): a reaction is no message: it neither counts nor takes the count. */
+void TestNotificationGenerator::testReactionUncounted()
+{
+    Friend f(0, ToxPk());
+    f.setName("friend");
+    Group g(0, GroupId(0), "groupName", false, "selfName", *groupQuery, *coreIdHandler,
+            *friendList);
+    auto sender = groupQuery->getGroupPeerPk(0, 0);
+    g.updateUsername(sender, "sender1");
+    const QString words = QStringLiteral("Reacted 👍 to your file");
+
+    notificationGenerator->friendMessageNotification(&f, "test");
+    auto notificationData = notificationGenerator->friendReactionNotification(&f, words);
+    QCOMPARE(notificationData.title, QStringLiteral("friend"));
+    notificationData = notificationGenerator->groupReactionNotification(&g, sender, words);
+    QCOMPARE(notificationData.title, QStringLiteral("groupName"));
+
+    notificationData = notificationGenerator->friendMessageNotification(&f, "test2");
+    QCOMPARE(notificationData.title, QStringLiteral("2 message(s) from friend"));
+    QCOMPARE(notificationData.message, QStringLiteral("test2"));
+}
+
+/** KHANDAQ (0.2.64): with message text off only that a reaction came, from nobody. */
+void TestNotificationGenerator::testSimpleReaction()
+{
+    Friend f(0, ToxPk());
+    f.setName("friend");
+    Group g(0, GroupId(0), "groupName", false, "selfName", *groupQuery, *coreIdHandler,
+            *friendList);
+    auto sender = groupQuery->getGroupPeerPk(0, 0);
+    g.updateUsername(sender, "sender1");
+    const QString words = QStringLiteral("Reacted 👍 to “secret”");
+
+    notificationSettings->setNotifyHide(true);
+
+    auto notificationData = notificationGenerator->friendReactionNotification(&f, words);
+    QCOMPARE(notificationData.title, QStringLiteral("New reaction"));
+    QVERIFY(notificationData.message.isEmpty());
+    QVERIFY(notificationData.pixmap.isNull());
+    notificationData = notificationGenerator->groupReactionNotification(&g, sender, words);
+    QCOMPARE(notificationData.title, QStringLiteral("New reaction"));
+    QVERIFY(notificationData.message.isEmpty());
+}
+
+/**
+ * KHANDAQ (0.2.64): the words of a reaction by docs/PUSH_PREVIEWS.md: the first 80 characters of
+ * our text as a person counts them, nothing added, or what our file is.
+ */
+void TestNotificationGenerator::testReactionWords()
+{
+    using Anchor = Air::MessageEffect::Anchor;
+    const QString heart = QStringLiteral("❤️");
+    const QString open = QStringLiteral("Reacted ❤️ to “");
+    const QString close = QStringLiteral("”");
+    const QString a79(79, QLatin1Char('a'));
+
+    // Eighty characters and no more: a flag, or a letter with its mark, is one and stays whole.
+    const QString flag = QStringLiteral("🇸🇦");
+    QCOMPARE(AirStrings::reactionWords(heart, Anchor::Text, a79 + flag + QStringLiteral("bc")),
+             open + a79 + flag + close);
+    const QString accented = QStringLiteral("é");
+    QCOMPARE(AirStrings::reactionWords(heart, Anchor::Text, a79 + accented + QStringLiteral("z")),
+             open + a79 + accented + close);
+    QCOMPARE(AirStrings::reactionWords(heart, Anchor::Text, a79 + QStringLiteral("b")),
+             open + a79 + QStringLiteral("b") + close);
+    QCOMPARE(AirStrings::reactionWords(heart, Anchor::Text, QStringLiteral("  See you  ")),
+             open + QStringLiteral("See you") + close);
+
+    // A reply says its own words, not the quote; a form this build cannot read, none at all.
+    QCOMPARE(AirStrings::reactionWords(
+                 heart, Anchor::Text,
+                 QStringLiteral("[KQ|42|ABCDEF12|1700000000000|Amina]\nquote\n[KQ/end]\nСалам")),
+             open + QStringLiteral("Салам") + close);
+    for (const QString& wordless :
+         {QString(), QStringLiteral("   "), QStringLiteral("[KQ|poll|1|2|3]"),
+          QStringLiteral("[KQ|7|AB|1|Yusuf]\nquoted only")}) {
+        QCOMPARE(AirStrings::reactionWords(heart, Anchor::Text, wordless),
+                 QStringLiteral("Reacted ❤️ to your message"));
+    }
+
+    QCOMPARE(AirStrings::reactionWords(heart, Anchor::File, QStringLiteral("voice_3F9A.file.m4a")),
+             QStringLiteral("Reacted ❤️ to your voice message"));
+    QCOMPARE(AirStrings::reactionWords(heart, Anchor::File, QStringLiteral("clip.MOV")),
+             QStringLiteral("Reacted ❤️ to your video"));
+    QCOMPARE(AirStrings::reactionWords(heart, Anchor::File, QStringLiteral("IMG_1.webp")),
+             QStringLiteral("Reacted ❤️ to your photo"));
+    QCOMPARE(AirStrings::reactionWords(heart, Anchor::File, QStringLiteral("plan.pdf")),
+             QStringLiteral("Reacted ❤️ to your file"));
+
+    // What the emoji or the text holds is never read as an argument.
+    QCOMPARE(AirStrings::reactionWords(QStringLiteral("%2"), Anchor::Text, QStringLiteral("hi %1")),
+             QStringLiteral("Reacted %2 to “hi %1”"));
+}
+
+/** KHANDAQ (0.2.64): the same words in Russian, as the spec gives them. */
+void TestNotificationGenerator::testReactionInRussian()
+{
+    using Anchor = Air::MessageEffect::Anchor;
+    Q_INIT_RESOURCE(translations);
+    QTranslator translator;
+    QVERIFY(translator.load(QStringLiteral("ru"), QStringLiteral(":translations/")));
+    QCoreApplication::installTranslator(&translator);
+    const QString heart = QStringLiteral("❤️");
+
+    QCOMPARE(AirStrings::reactionWords(heart, Anchor::Text, QStringLiteral("Салам")),
+             QStringLiteral("Реакция ❤️ на «Салам»"));
+    QCOMPARE(AirStrings::reactionWords(heart, Anchor::File, QStringLiteral("voice_3F9A.file.m4a")),
+             QStringLiteral("Реакция ❤️ на ваше голосовое сообщение"));
+    QCOMPARE(AirStrings::reactionWords(heart, Anchor::File, QStringLiteral("clip.mp4")),
+             QStringLiteral("Реакция ❤️ на ваше видео"));
+    QCOMPARE(AirStrings::reactionWords(heart, Anchor::File, QStringLiteral("IMG_1.png")),
+             QStringLiteral("Реакция ❤️ на ваше фото"));
+    QCOMPARE(AirStrings::reactionWords(heart, Anchor::File, QStringLiteral("plan.pdf")),
+             QStringLiteral("Реакция ❤️ на ваш файл"));
+    QCOMPARE(AirStrings::reactionWords(heart, Anchor::Text, QString()),
+             QStringLiteral("Реакция ❤️ на ваше сообщение"));
+    QCOMPARE(AirStrings::fileKindWords(QStringLiteral("clip.mp4")), QStringLiteral("Видео"));
+    QCOMPARE(AirStrings::fileKindWords(QStringLiteral("IMG_1.png")), QStringLiteral("Фото"));
+
+    Friend f(0, ToxPk());
+    f.setName("friend");
+    notificationSettings->setNotifyHide(true);
+    QCOMPARE(notificationGenerator->friendReactionNotification(&f, heart).title,
+             QStringLiteral("Новая реакция"));
+
+    QCoreApplication::removeTranslator(&translator);
 }
 
 QTEST_GUILESS_MAIN(TestNotificationGenerator)

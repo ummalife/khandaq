@@ -3974,7 +3974,8 @@ public class MessageListActivity extends AppCompatActivity
                                     final String friend_pk = Callstate.friend_pubkey;
                                     if (call_res == 1)
                                     {
-                                        friend_call_push_url(friend_pk, System.currentTimeMillis());
+                                        // KHANDAQ (0.2.64): a call's wake carries no message preview.
+                                        friend_call_push_url(friend_pk, System.currentTimeMillis(), false);
                                         // KHANDAQ (redesign, E9): the entry is written as the call ends.
                                         HelperCall.callBegins(friend_pk, false);
                                     }

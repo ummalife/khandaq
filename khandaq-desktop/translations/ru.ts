@@ -3860,6 +3860,51 @@ Opening it can run a program on your computer. Links in messages come from other
         <translation>Реакция</translation>
     </message>
     <message>
+        <source>New reaction</source>
+        <comment>notification and band: someone reacted to your message, when message text is not shown</comment>
+        <translation>Новая реакция</translation>
+    </message>
+    <message>
+        <source>Reacted %1 to “%2”</source>
+        <comment>notification and band under who reacted to your message: %1 is the emoji, %2 the start of your message</comment>
+        <translation>Реакция %1 на «%2»</translation>
+    </message>
+    <message>
+        <source>Reacted %1 to your voice message</source>
+        <comment>notification and band under who reacted: %1 is the emoji</comment>
+        <translation>Реакция %1 на ваше голосовое сообщение</translation>
+    </message>
+    <message>
+        <source>Reacted %1 to your video</source>
+        <comment>notification and band under who reacted: %1 is the emoji</comment>
+        <translation>Реакция %1 на ваше видео</translation>
+    </message>
+    <message>
+        <source>Reacted %1 to your photo</source>
+        <comment>notification and band under who reacted: %1 is the emoji</comment>
+        <translation>Реакция %1 на ваше фото</translation>
+    </message>
+    <message>
+        <source>Reacted %1 to your file</source>
+        <comment>notification and band under who reacted: %1 is the emoji</comment>
+        <translation>Реакция %1 на ваш файл</translation>
+    </message>
+    <message>
+        <source>Reacted %1 to your message</source>
+        <comment>notification and band under who reacted: %1 is the emoji; the message has no words to show</comment>
+        <translation>Реакция %1 на ваше сообщение</translation>
+    </message>
+    <message>
+        <source>Video</source>
+        <comment>notification and band: a video came, in place of the name of its file</comment>
+        <translation>Видео</translation>
+    </message>
+    <message>
+        <source>Photo</source>
+        <comment>notification and band: a photo came, in place of the name of its file</comment>
+        <translation>Фото</translation>
+    </message>
+    <message>
         <source>via a relay</source>
         <comment>contact reach mark: online, connected through a TCP relay; short, it shares the line with the name</comment>
         <translation>через ретранслятор</translation>

@@ -498,6 +498,8 @@ final class CommunityAutoJoin
                 // The group's own notification switch, the one its dossier turns (AirGroupDossierActivity.setMuted).
                 TrifaToxService.orma.updateGroupDB().group_identifierEq(chatId.toLowerCase(Locale.ROOT)).
                         notification_silent(false).execute();
+                // KHANDAQ (0.2.64): and the copy of it the push preview handler reads.
+                PushPreviewPeers.refreshMutedChats();
                 AirRepository.requestRefresh();
             }
         };

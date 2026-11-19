@@ -191,6 +191,50 @@ final class MessageSplitter
                ? maxChars - 1 : maxChars;
     }
 
+    /**
+     * KHANDAQ (0.2.64): where the first maxCharacters user-perceived characters of text end, a grapheme cluster
+     * counting as one by the same rules as the cuts above. A push preview counts its text this way, as iOS
+     * counts a Character, so that both ends agree on what "the first 140 characters" are. text.length() when
+     * the text has no more than that.
+     */
+    static int wholeCharactersEnd(final String text, final int maxCharacters)
+    {
+        final int length = text.length();
+        if (maxCharacters <= 0)
+        {
+            return 0;
+        }
+        // A cluster is at least one char, so a text of no more chars than that has no more clusters either.
+        if (maxCharacters >= length)
+        {
+            return length;
+        }
+        final BreakIterator clusters = BreakIterator.getCharacterInstance(Locale.ROOT);
+        clusters.setText(text);
+        int counted = 0;
+        int regionalIndicators = 0;
+        int i = 0;
+        while (i < length)
+        {
+            final int before = text.codePointAt(i);
+            regionalIndicators = isRegionalIndicator(before) ? regionalIndicators + 1 : 0;
+            i += Character.charCount(before);
+            if (i >= length)
+            {
+                break;
+            }
+            if (!holdsTogether(text, i, before, regionalIndicators) && clusters.isBoundary(i))
+            {
+                counted++;
+                if (counted == maxCharacters)
+                {
+                    return i;
+                }
+            }
+        }
+        return length;
+    }
+
     /** The head, text[start, from), as a part of its own, unless there is none. */
     private static void addHead(final List<int[]> ranges, final String text, final int start, final int from)
     {

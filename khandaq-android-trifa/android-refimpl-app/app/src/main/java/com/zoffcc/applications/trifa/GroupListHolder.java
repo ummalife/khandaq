@@ -286,6 +286,8 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
                     orma.updateGroupDB().group_identifierEq(this.group.group_identifier.toLowerCase()).
                             notification_silent(this.group.notification_silent).execute();
                     CommunityAutoJoin.noteSoundChoice(this.group.group_identifier, true);
+                    // KHANDAQ (0.2.64): and the copy of it the push preview handler reads.
+                    PushPreviewPeers.refreshMutedChats();
 
                     final Drawable d_notification = new IconicsDrawable(context).
                             icon(GoogleMaterial.Icon.gmd_notifications_off).
@@ -302,6 +304,8 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
                             notification_silent(this.group.notification_silent).execute();
                     // KHANDAQ (0.2.57, review): as the dossier keeps it (AirGroupDossierActivity.setMuted).
                     CommunityAutoJoin.noteSoundChoice(this.group.group_identifier, false);
+                    // KHANDAQ (0.2.64): and the copy of it the push preview handler reads.
+                    PushPreviewPeers.refreshMutedChats();
 
                     final Drawable d_notification = new IconicsDrawable(context).
                             icon(GoogleMaterial.Icon.gmd_notifications_active).

@@ -4013,7 +4013,14 @@ public class HelperGeneric
 
             if (need_call_push_url)
             {
-                friend_call_push_url(f.tox_public_key_string, System.currentTimeMillis());
+                // KHANDAQ (0.2.64): this wake goes before the caller writes the message's row, so its preview is
+                // made from the text and its msgV3 hash here. The caller's own wake for the row then carries the
+                // same event id, and the relay sends the friend one push for the two (docs/PUSH_PREVIEWS.md).
+                final String wake_pubkey = f.tox_public_key_string;
+                final String wake_hash = result.msg_hash_v3_hex;
+                friend_call_push_url(wake_pubkey, System.currentTimeMillis(),
+                                     () -> PushPreviewSender.forSentText(wake_pubkey, message, wake_hash,
+                                                                         timestamp_unixtime_seconds));
             }
 
             return result;
@@ -4471,8 +4478,11 @@ public class HelperGeneric
 
             if (do_notification)
             {
+                // KHANDAQ (0.2.64): with the event, so that a text a push preview already told of does not sound again.
                 change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.tox_friendpubkey, friendname, m.text,
-                                        m.sent_timestamp, null);
+                                        m.sent_timestamp, null,
+                                        PushPreviewSeen.forText(m.tox_friendpubkey, m.msg_idv3_hash,
+                                                                PushPreviewSender.previewText(m.text), m.text));
             }
 
             if (msgV3hash_hex_string != null)
@@ -4616,8 +4626,11 @@ public class HelperGeneric
 
             if (do_notification)
             {
+                // KHANDAQ (0.2.64): with the event, so that a text a push preview already told of does not sound again.
                 change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.tox_friendpubkey, friendname, m.text,
-                                        m.sent_timestamp, null);
+                                        m.sent_timestamp, null,
+                                        PushPreviewSeen.forText(m.tox_friendpubkey, m.msg_idv3_hash,
+                                                                PushPreviewSender.previewText(m.text), m.text));
             }
         }
         else if (msg_type == 2)
@@ -4762,8 +4775,11 @@ public class HelperGeneric
 
             if (do_notification)
             {
+                // KHANDAQ (0.2.64): with the event, so that a text a push preview already told of does not sound again.
                 change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.tox_friendpubkey, friendname, m.text,
-                                        m.sent_timestamp, null);
+                                        m.sent_timestamp, null,
+                                        PushPreviewSeen.forText(m.tox_friendpubkey, m.msg_idv3_hash,
+                                                                PushPreviewSender.previewText(m.text), m.text));
             }
         }
     }

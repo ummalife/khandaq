@@ -22,6 +22,7 @@
 #include "src/model/air/airconversation.h"
 #include "src/model/air/airgroup.h"
 #include "src/model/air/airmedia.h"
+#include "src/model/air/airmessagemarks.h"
 #include "src/model/air/airmodel.h"
 #include "src/model/air/airnetwork.h"
 #include "src/model/air/airstart.h"
@@ -818,6 +819,17 @@ enum class Text
     MessageReply,
     ReplyCancel,
     MessageReact,
+    // KHANDAQ (0.2.64): a reaction to a message of yours, and a file by its kind, in the
+    // notifications and the bands (docs/PUSH_PREVIEWS.md, "Recipient").
+    NotifyNewReaction,
+    NotifyReactedText,
+    NotifyReactedVoice,
+    NotifyReactedVideo,
+    NotifyReactedPhoto,
+    NotifyReactedFile,
+    NotifyReactedMessage,
+    NotifyVideo,
+    NotifyPhoto,
 };
 
 /** The translation context of every Air string. */
@@ -894,6 +906,22 @@ QString messageWords(const QString& raw);
  * (voice_F5CD3544.file.m4a), as the phones show it.
  */
 QString fileWords(const QString& fileName);
+/**
+ * KHANDAQ (0.2.64): a file where a notification or a band tells of it by its kind
+ * (Air::fileKindOf): "Voice message", "Video" or "Photo"; empty for any other file, which they
+ * name as before.
+ */
+QString fileKindWords(const QString& fileName);
+/**
+ * KHANDAQ (0.2.64): what a notification or a band of a reaction to a message of yours says under
+ * who reacted (docs/PUSH_PREVIEWS.md, "Recipient"): "Reacted ❤️ to “See you at five”", with the
+ * first 80 characters of a text as its entry shows them, whole characters only and nothing added;
+ * "Reacted ❤️ to your voice message", your video, photo or file, by the kind of a file; "Reacted
+ * ❤️ to your message" for a text with no words to show.
+ * @param subject The text of the message as it came, or the name of the file.
+ */
+QString reactionWords(const QString& emoji, Air::MessageEffect::Anchor anchor,
+                      const QString& subject);
 /** Who wrote the message a reply quotes, as the quote names them: Unknown when it names nobody. */
 QString replyName(const QString& name);
 

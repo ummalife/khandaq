@@ -47,7 +47,10 @@ static uint32_t mocked_tox_file_send(Tox *tox, uint32_t friend_number, uint32_t 
 @interface OCTSubmanagerChatsImpl (TextPartsTests)
 
 + (UInt32)textStampAfterStamp:(UInt32)lastStamp now:(NSTimeInterval)now;
-- (void)wakeFriendWithPushToken:(NSString *)pushToken forMessageWithHash:(NSString *)msgv3HashHex inChat:(OCTChat *)chat;
+- (void)wakeFriendWithPushToken:(NSString *)pushToken
+             forMessageWithHash:(NSString *)msgv3HashHex
+                           text:(NSString *)text
+                         inChat:(OCTChat *)chat;
 
 @end
 
@@ -227,8 +230,12 @@ static const uint64_t kRelayTestsBurst = 64 * 1024 / 4;
     submanager.dataSource = dataSource;
     id partial = OCMPartialMock(submanager);
     __block NSUInteger wakes = 0;
-    OCMStub([partial wakeFriendWithPushToken:[OCMArg any] forMessageWithHash:[OCMArg any] inChat:[OCMArg any]]).andDo(^(NSInvocation *invocation) {
+    __block NSString *wakeText = nil;
+    OCMStub([partial wakeFriendWithPushToken:[OCMArg any] forMessageWithHash:[OCMArg any] text:[OCMArg any] inChat:[OCMArg any]]).andDo(^(NSInvocation *invocation) {
         wakes++;
+        __unsafe_unretained NSString *text = nil;
+        [invocation getArgument:&text atIndex:4];
+        wakeText = text;
     });
 
     NSArray<NSString *> *parts = @[@"first", @"second", @"third"];
@@ -250,6 +257,7 @@ static const uint64_t kRelayTestsBurst = 64 * 1024 / 4;
     XCTAssertEqualObjects(sentTexts, parts, @"the parts went out of order");
     XCTAssertEqualObjects(succeeded, (@[@0, @1, @2]));
     XCTAssertEqual(wakes, 1u, @"each part woke the friend: the relay counts every wake");
+    XCTAssertEqualObjects(wakeText, @"first", @"the wake's preview is the text the friend reads first");
 
     // Each part is stamped a second after the one before it, so whole-second stamps cannot tie at the
     // receiver.

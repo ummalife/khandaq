@@ -83,6 +83,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // KHANDAQ (#248): resolve the app language before a single view exists, so the first frame
         // is already in the right language and layout direction.
         AppLanguage.applyAtLaunch()
+        // KHANDAQ (0.2.64): a push preview carries a message as the chat shows it, without the reply and
+        // mention markup.
+        OCTPushPreview.previewTextSanitizer = { GroupMentionHelper.notificationPreviewText($0) }
 
         // KHANDAQ (App Review 2.1(a), 2026-10-21): iOS 27 terminates an app built with the current SDK
         // at launch unless it adopts the scene lifecycle (EXC_BREAKPOINT in

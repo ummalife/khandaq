@@ -236,6 +236,8 @@ extension AppCoordinator: RunningCoordinatorDelegate {
         do {
             try profileManager.deleteProfileWithName(name)
 
+            // KHANDAQ (0.2.64): the push previews go with the profile (LoginCoordinator.deleteProfile).
+            OCTPushPreview.resetAll()
             KeychainManager().deleteActiveAccountData()
             userDefaults.lastActiveProfile = nil
 

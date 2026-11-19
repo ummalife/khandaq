@@ -123,6 +123,9 @@ docs/**
 # retirement date, and the evidence file is the measured relay state a release actually shipped
 # against. Both are the answer to a finding, so both have to leave this machine.
 !docs/PUSH-COMPATIBILITY.md
+# KHANDAQ (0.2.64): the push preview format is the contract iOS, Android and the relay all implement,
+# with the test vectors each of them checks; it has to travel with the code.
+!docs/PUSH_PREVIEWS.md
 !docs/release-evidence/
 !docs/release-evidence/*.json
 

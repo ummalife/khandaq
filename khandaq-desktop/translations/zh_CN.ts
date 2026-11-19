@@ -3816,6 +3816,51 @@ Opening it can run a program on your computer. Links in messages come from other
         <translation>回应</translation>
     </message>
     <message>
+        <source>New reaction</source>
+        <comment>notification and band: someone reacted to your message, when message text is not shown</comment>
+        <translation>新回应</translation>
+    </message>
+    <message>
+        <source>Reacted %1 to “%2”</source>
+        <comment>notification and band under who reacted to your message: %1 is the emoji, %2 the start of your message</comment>
+        <translation>对“%2”回应了 %1</translation>
+    </message>
+    <message>
+        <source>Reacted %1 to your voice message</source>
+        <comment>notification and band under who reacted: %1 is the emoji</comment>
+        <translation>对你的语音消息回应了 %1</translation>
+    </message>
+    <message>
+        <source>Reacted %1 to your video</source>
+        <comment>notification and band under who reacted: %1 is the emoji</comment>
+        <translation>对你的视频回应了 %1</translation>
+    </message>
+    <message>
+        <source>Reacted %1 to your photo</source>
+        <comment>notification and band under who reacted: %1 is the emoji</comment>
+        <translation>对你的照片回应了 %1</translation>
+    </message>
+    <message>
+        <source>Reacted %1 to your file</source>
+        <comment>notification and band under who reacted: %1 is the emoji</comment>
+        <translation>对你的文件回应了 %1</translation>
+    </message>
+    <message>
+        <source>Reacted %1 to your message</source>
+        <comment>notification and band under who reacted: %1 is the emoji; the message has no words to show</comment>
+        <translation>对你的消息回应了 %1</translation>
+    </message>
+    <message>
+        <source>Video</source>
+        <comment>notification and band: a video came, in place of the name of its file</comment>
+        <translation>视频</translation>
+    </message>
+    <message>
+        <source>Photo</source>
+        <comment>notification and band: a photo came, in place of the name of its file</comment>
+        <translation>照片</translation>
+    </message>
+    <message>
         <source>via a relay</source>
         <comment>contact reach mark: online, connected through a TCP relay; short, it shares the line with the name</comment>
         <translation>经中继</translation>

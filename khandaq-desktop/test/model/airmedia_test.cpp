@@ -99,6 +99,7 @@ class TestAirMedia : public QObject
     Q_OBJECT
 private slots:
     void aVoiceNoteIsKnownByItsWholeSuffixInAnyCase();
+    void aFileIsKnownByItsKindFromItsName();
     void aFileTakenInWithoutAskingGetsAFreeName();
     void aNameFromTheSenderStaysInItsFolder();
     void aFileThatComesIsWrittenToItsPartUntilWhole();
@@ -138,6 +139,32 @@ void TestAirMedia::aVoiceNoteIsKnownByItsWholeSuffixInAnyCase()
     QVERIFY(!Air::isVoiceNote(QStringLiteral("voice.m4a")));
     QVERIFY(!Air::isVoiceNote(QStringLiteral("voice.file.m4a.exe")));
     QVERIFY(!Air::isVoiceNote(QString()));
+}
+
+/**
+ * KHANDAQ (0.2.64): a notification says a voice note, a video or a photo by its kind, as the push
+ * previews of the phones do (docs/PUSH_PREVIEWS.md), by the extension in any case; any other name
+ * is a file.
+ */
+void TestAirMedia::aFileIsKnownByItsKindFromItsName()
+{
+    using Air::FileKind;
+    QCOMPARE(Air::fileKindOf(QStringLiteral("voice_3F9A2C71.file.m4a")), FileKind::Voice);
+    for (const char* video : {"clip.mp4", "clip.mov", "clip.m4v", "clip.webm", "clip.mkv",
+                              "clip.3gp", "clip.avi", "CLIP.MP4", "my.trip.Mov"}) {
+        QCOMPARE(Air::fileKindOf(QString::fromLatin1(video)), FileKind::Video);
+    }
+    for (const char* photo : {"IMG_1.jpg", "IMG_1.jpeg", "IMG_1.png", "IMG_1.gif", "IMG_1.heic",
+                              "IMG_1.heif", "IMG_1.webp", "IMG_1.JPG", "scan.HEIC"}) {
+        QCOMPARE(Air::fileKindOf(QString::fromLatin1(photo)), FileKind::Photo);
+    }
+    // A song in m4a is no voice note, and a name that is only its extension is no photo.
+    for (const char* file : {"song.m4a", "plan.pdf", "archive.mp4.zip", "photo.jpg.exe", "mp4",
+                             ".jpg", "video.", "", ".file.m4a"}) {
+        QCOMPARE(Air::fileKindOf(QString::fromLatin1(file)), FileKind::File);
+    }
+    QCOMPARE(Air::fileKindOf(QStringLiteral("Видео.mp4")), FileKind::Video);
+    QCOMPARE(Air::fileKindOf(QStringLiteral("Фото.jpeg")), FileKind::Photo);
 }
 
 /**

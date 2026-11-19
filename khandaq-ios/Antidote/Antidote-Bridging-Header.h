@@ -31,6 +31,7 @@
 #import <objcTox/OCTToxEncryptSaveConstants.h>
 #import <objcTox/OCTToxConstants.h>
 #import <objcTox/OCTView.h>
+#import <objcTox/OCTPushPreview.h>
 
 #undef LOG_INFO
 #undef LOG_DEBUG

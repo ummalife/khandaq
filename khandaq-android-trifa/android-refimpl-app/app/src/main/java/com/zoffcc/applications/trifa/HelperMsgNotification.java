@@ -35,6 +35,7 @@ import android.media.Ringtone;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
@@ -42,7 +43,10 @@ import androidx.preference.PreferenceManager;
 
 import com.zoffcc.applications.sorm.FriendList;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -77,34 +81,163 @@ public class HelperMsgNotification
 
     static HashSet<String> global_active_notifications = new HashSet<String>();
 
-    // KHANDAQ #200: per-conversation notification ids so different chats no longer collapse into one
+    // KHANDAQ #200: per-conversation notifications so different chats no longer collapse into one
     // shared slot (which made every message look identical / "duplicated"), plus a per-chat rate limit
     // so a message in chat B is never dropped just because chat A notified within the window.
-    private static final java.util.concurrent.ConcurrentHashMap<String, Integer> notif_id_by_key =
-            new java.util.concurrent.ConcurrentHashMap<>();
     private static final java.util.concurrent.ConcurrentHashMap<String, Long> last_shown_by_key =
             new java.util.concurrent.ConcurrentHashMap<>();
-    private static final java.util.concurrent.atomic.AtomicInteger notif_id_counter =
-            new java.util.concurrent.atomic.AtomicInteger(0);
-    private static final int NOTIF_ID_BASE = 20100; // clear of Notification_new_message_ID (10023) and call ids
 
-    private static int notif_id_for_key(final String key)
+    /**
+     * KHANDAQ (0.2.64): a chat's notification goes under a tag made of its key and one fixed id, no longer under an
+     * id counted up in this process. The push handler posts a message's preview in a process that may be gone by
+     * the time the message itself arrives over Tox; under the same tag the message then updates that notification
+     * instead of stacking a second one, and no two chats can ever share a slot.
+     */
+    static final String MSG_NOTIFICATION_TAG_PREFIX = "khandaq_msg:";
+    static final int MSG_NOTIFICATION_ID = 20100; // clear of Notification_new_message_ID (10023) and call ids
+
+    /** The tag of a chat's notification: a friend key or a group id, in either case, gives the same one. */
+    static String msg_notification_tag(final String key)
     {
-        if (key == null || key.isEmpty())
+        return MSG_NOTIFICATION_TAG_PREFIX + key.toUpperCase(java.util.Locale.ROOT);
+    }
+
+    private static boolean is_chat_key(final String key)
+    {
+        return (key != null) && (key.length() > 1);
+    }
+
+    static void post_msg_notification(final NotificationManager nm, final String key, final Notification n)
+    {
+        if (is_chat_key(key))
         {
-            return Notification_new_message_ID;
+            nm.notify(msg_notification_tag(key), MSG_NOTIFICATION_ID, n);
         }
-        Integer id = notif_id_by_key.get(key);
-        if (id == null)
+        else
         {
-            id = NOTIF_ID_BASE + (notif_id_counter.getAndIncrement() & 0x3fff);
-            final Integer prev = notif_id_by_key.putIfAbsent(key, id);
-            if (prev != null)
+            nm.notify(Notification_new_message_ID, n);
+        }
+    }
+
+    /**
+     * KHANDAQ (0.2.64): the marks (PushPreviewSeen) of the push previews a chat's notification shows and Tox has not
+     * brought yet. They live on the notification itself: the push handler may have run in a process that is gone
+     * when the message comes, and a mark of what a text says is not written to disk.
+     */
+    static final String EXTRA_PUSH_PREVIEW_MARKS = "org.khandaq.messenger.push_preview_marks";
+    private static final int MAX_PUSH_PREVIEW_MARKS = 32;
+
+    /** The marks the notification of this chat holds, or null when no notification of the chat is up. */
+    @Nullable
+    static ArrayList<String> active_push_preview_marks(final NotificationManager nm, final String key)
+    {
+        if ((nm == null) || !is_chat_key(key))
+        {
+            return null;
+        }
+        try
+        {
+            final String tag = msg_notification_tag(key);
+            for (final android.service.notification.StatusBarNotification posted : nm.getActiveNotifications())
             {
-                id = prev;
+                if ((posted.getId() == MSG_NOTIFICATION_ID) && tag.equals(posted.getTag()))
+                {
+                    final ArrayList<String> held = posted.getNotification().extras.getStringArrayList(
+                            EXTRA_PUSH_PREVIEW_MARKS);
+                    return (held != null) ? new ArrayList<>(held) : new ArrayList<String>();
+                }
             }
         }
-        return id;
+        catch (Exception e)
+        {
+            Log.i(TAG, "active_push_preview_marks:EE:" + e.getMessage());
+        }
+        return null;
+    }
+
+    /** Puts the marks on a notification being built, the newest kept when there are too many. */
+    static void put_push_preview_marks(final NotificationCompat.Builder b, final List<String> marks)
+    {
+        if ((marks == null) || marks.isEmpty())
+        {
+            return;
+        }
+        final Bundle extras = new Bundle();
+        extras.putStringArrayList(EXTRA_PUSH_PREVIEW_MARKS, new ArrayList<>(
+                marks.subList(Math.max(0, marks.size() - MAX_PUSH_PREVIEW_MARKS), marks.size())));
+        b.addExtras(extras);
+    }
+
+    /** Every chat notification this app has up, posted by this process or by an earlier one. */
+    private static void cancel_all_chat_notifications(final NotificationManager nm)
+    {
+        try
+        {
+            for (final android.service.notification.StatusBarNotification posted : nm.getActiveNotifications())
+            {
+                final String tag = posted.getTag();
+                if ((posted.getId() == MSG_NOTIFICATION_ID) && (tag != null)
+                    && tag.startsWith(MSG_NOTIFICATION_TAG_PREFIX))
+                {
+                    nm.cancel(tag, MSG_NOTIFICATION_ID);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "cancel_all_chat_notifications:EE:" + e.getMessage());
+        }
+    }
+
+    /**
+     * KHANDAQ (0.2.64): the message channel for the sound and vibration settings, made when missing. The push
+     * handler takes it from here too, so that a preview rings as the message it stands for.
+     */
+    static String message_channel_id(final Context context, final NotificationManager nm, final boolean sound,
+                                      final boolean vibrate)
+    {
+        if ((MainActivity.channelId_newmessage_silent == null) || sound)
+        {
+            ensure_notification_channels(context, nm);
+        }
+        if (sound && vibrate)
+        {
+            return MainActivity.channelId_newmessage_sound_and_vibrate;
+        }
+        if (sound)
+        {
+            return MainActivity.channelId_newmessage_sound;
+        }
+        if (vibrate)
+        {
+            return MainActivity.channelId_newmessage_vibrate;
+        }
+        return MainActivity.channelId_newmessage_silent;
+    }
+
+    /** What a tap on a chat's notification opens: that chat, through the app's own start. */
+    static PendingIntent open_chat_pending_intent(final Context context, final String key)
+    {
+        Intent notificationIntent = new Intent(context, StartMainActivityWrapper.class);
+        notificationIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        notificationIntent.setAction("com.zoffcc.applications.trifa." + (long) (Math.random() * 100000));
+        notificationIntent.putExtra("CLEAR_NEW_MESSAGE_NOTIFICATION", "1");
+        if (key != null)
+        {
+            notificationIntent.putExtra(EXTRA_OPEN_CHAT_KEY, key);
+        }
+        final int pending_request_code = (key != null) ? key.hashCode() : 0;
+        return PendingIntent.getActivity(context, pending_request_code, notificationIntent,
+                                         PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    /** KHANDAQ (0.2.64): the push handler showed a notification for this chat (see change_msg_notification). */
+    static synchronized void note_chat_notification_shown(final String key)
+    {
+        if (is_chat_key(key))
+        {
+            global_active_notifications.add(key);
+        }
     }
 
     static String media_label_for_filename(final Context ctx, final String file_name)
@@ -113,23 +246,29 @@ public class HelperMsgNotification
         {
             if (ctx != null && file_name != null)
             {
-                final String lower = file_name.toLowerCase(java.util.Locale.ENGLISH);
-                if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png")
-                        || lower.endsWith(".gif") || lower.endsWith(".webp") || lower.endsWith(".heic")
-                        || lower.endsWith(".bmp"))
+                // KHANDAQ (0.2.64): the kind as a push preview gives it (PushPreviewPayload.fileKind, the rule of every
+                // client): a voice message is a ".file.m4a", any other audio a file with its name. Both paths name a
+                // file alike, so the message coming over Tox after its preview does not relabel it.
+                final String kind = PushPreviewPayload.fileKind(file_name, null);
+                if (PushPreviewPayload.KIND_PHOTO.equals(kind))
                 {
                     return ctx.getString(R.string.notification_media_photo);
                 }
-                if (lower.endsWith(".mp4") || lower.endsWith(".mov") || lower.endsWith(".mkv")
-                        || lower.endsWith(".webm") || lower.endsWith(".3gp") || lower.endsWith(".avi"))
+                if (PushPreviewPayload.KIND_VIDEO.equals(kind))
                 {
                     return ctx.getString(R.string.notification_media_video);
                 }
-                if (lower.endsWith(".mp3") || lower.endsWith(".ogg") || lower.endsWith(".oga")
-                        || lower.endsWith(".m4a") || lower.endsWith(".aac") || lower.endsWith(".wav")
-                        || lower.endsWith(".opus") || lower.endsWith(".amr"))
+                if (PushPreviewPayload.KIND_VOICE.equals(kind))
                 {
                     return ctx.getString(R.string.notification_media_voice);
+                }
+                // KHANDAQ (0.2.64): any other file by its name, as a push preview names it (docs/PUSH_PREVIEWS.md,
+                // the file row of the table), so that the message coming over Tox after its preview does not take
+                // the name away again. A name that is only a transfer id or a size stays the plain label.
+                final String shown = PushPreviewText.oneLine(file_name);
+                if (!shown.isEmpty() && !HelperFiletransfer.looksLikeInternalFtName(shown))
+                {
+                    return ctx.getString(R.string.push_preview_file_named, shown);
                 }
             }
         }
@@ -137,6 +276,24 @@ public class HelperMsgNotification
         {
         }
         return ctx != null ? ctx.getString(R.string.notification_media_file) : "File";
+    }
+
+    /**
+     * KHANDAQ (0.2.64): the event an incoming 1:1 file tells of, for push previews (PushPreviewSeen): its Tox file id,
+     * and its kind and name, as its sender put them into a preview.
+     */
+    static PushPreviewSeen.Event incoming_file_event(final String friend_pubkey, final String file_id_hex,
+                                                    final String file_name)
+    {
+        String kind = PushPreviewPayload.KIND_FILE;
+        try
+        {
+            kind = PushPreviewPayload.fileKind(file_name, HelperFiletransfer.guess_mime_type_from_filename(file_name));
+        }
+        catch (Exception ignored)
+        {
+        }
+        return PushPreviewSeen.forFile(friend_pubkey, file_id_hex, kind, file_name);
     }
 
     static Uri get_message_notification_sound_uri(final Context context)
@@ -264,6 +421,19 @@ public class HelperMsgNotification
                                                      final String notification_title, final String notification_text,
                                                      final long sent_at_ms, @Nullable final String group_peer_key)
     {
+        change_msg_notification(action, key, notification_title, notification_text, sent_at_ms, group_peer_key, null);
+    }
+
+    /**
+     * KHANDAQ (0.2.64): as above, with the event the notification tells of ({@code event}, null when unknown). An
+     * event a push preview already showed brings its notification up to date without a sound, a band or a second
+     * alert (docs/PUSH_PREVIEWS.md, "Recipient").
+     */
+    static synchronized void change_msg_notification(final int action, final String key,
+                                                     final String notification_title, final String notification_text,
+                                                     final long sent_at_ms, @Nullable final String group_peer_key,
+                                                     @Nullable final PushPreviewSeen.Event event)
+    {
         if (action == NOTIFICATION_EDIT_ACTION_CLEAR.value)
         {
             Log.i(TAG, "change_msg_notification:NOTIFICATION_EDIT_ACTION_CLEAR");
@@ -287,7 +457,7 @@ public class HelperMsgNotification
                     global_active_notifications.add(key);
                 }
             }
-            show_msg_notification(notification_title, notification_text, key, sent_at_ms, group_peer_key);
+            show_msg_notification(notification_title, notification_text, key, sent_at_ms, group_peer_key, event);
         }
         else if (action == NOTIFICATION_EDIT_ACTION_REMOVE.value)
         {
@@ -328,20 +498,15 @@ public class HelperMsgNotification
                 {
                     NotificationManager notificationManager = (NotificationManager) context_s.getSystemService(
                             Context.NOTIFICATION_SERVICE);
-                    if ((key == null) || (key.length() <= 1))
+                    if (!is_chat_key(key))
                     {
                         notificationManager.cancel(Notification_new_message_ID);
-                        for (final Integer id : notif_id_by_key.values())
-                        {
-                            try { notificationManager.cancel(id); } catch (Exception ignored) {}
-                        }
-                        notif_id_by_key.clear();
+                        cancel_all_chat_notifications(notificationManager);
                         last_shown_by_key.clear();
                     }
                     else
                     {
-                        notificationManager.cancel(notif_id_for_key(key));
-                        notif_id_by_key.remove(key);
+                        notificationManager.cancel(msg_notification_tag(key), MSG_NOTIFICATION_ID);
                         last_shown_by_key.remove(key);
                     }
                 }
@@ -494,12 +659,46 @@ public class HelperMsgNotification
     static void show_msg_notification(final String nf_title, final String nf_text, final String nf_key,
                                       final long sent_at_ms, @Nullable final String group_peer_key)
     {
+        show_msg_notification(nf_title, nf_text, nf_key, sent_at_ms, group_peer_key, null);
+    }
+
+    static void show_msg_notification(final String nf_title, final String nf_text, final String nf_key,
+                                      final long sent_at_ms, @Nullable final String group_peer_key,
+                                      @Nullable final PushPreviewSeen.Event event)
+    {
         Log.i(TAG, "noti_and_badge:show_notification:");
+        // KHANDAQ (0.2.64): a push preview already sounded for this event (PushPreviewReceiver), by its event key or,
+        // for a text or a file that went without one, by the marks the chat's notification holds. That notification
+        // may be brought up to date, silently, while it is up; nothing else: no band, no sound. The marks of the
+        // other previews it shows stay on it, so that their messages, when they come, are as quiet.
+        ArrayList<String> held_marks = null;
+        try
+        {
+            if (context_s != null)
+            {
+                held_marks = active_push_preview_marks(
+                        (NotificationManager) context_s.getSystemService(Context.NOTIFICATION_SERVICE), nf_key);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "show_msg_notification:marks:EE:" + e.getMessage());
+        }
+        final boolean shown_by_push = (event != null) && (held_marks != null)
+                                      && !Collections.disjoint(held_marks, event.marks);
+        final boolean event_key_shown = PushPreviewSeen.toxArrived(context_s, event);
+        final boolean already_alerted = shown_by_push || event_key_shown;
+        final ArrayList<String> carried_marks = (held_marks != null) ? held_marks : new ArrayList<String>();
+        if (event != null)
+        {
+            carried_marks.removeAll(event.marks);
+        }
+        final boolean reaction = (event != null) && event.reaction;
         // KHANDAQ (redesign, E22): while a screen of the app is in front the message may come as the
         // in-app band instead. What the band says reads the database, so it is put together here, before
         // the hop to the main thread, and only when a band could come down at all.
         AirBand.Content band_content = null;
-        if (PREF__notification && (context_s != null) && AirBand.mayShow())
+        if (!already_alerted && PREF__notification && (context_s != null) && AirBand.mayShow())
         {
             try
             {
@@ -555,10 +754,20 @@ public class HelperMsgNotification
                         // active. On entry the Tox backlog / offline-queue flushes and each flushed message
                         // runs this callback, which rang "on entry, nothing new". A message that genuinely
                         // arrives while already foregrounded (>3s after resume) still rings normally.
-                        if ((System.currentTimeMillis() - MainActivity.main_activity_resumed_ts) >= 3000L)
+                        if (!already_alerted
+                            && (System.currentTimeMillis() - MainActivity.main_activity_resumed_ts) >= 3000L)
                         {
                             play_message_sound_only();
                         }
+                        return;
+                    }
+
+                    final NotificationManager nm = (NotificationManager) context_s.getSystemService(
+                            Context.NOTIFICATION_SERVICE);
+                    // KHANDAQ (0.2.64): a notification the person already put away does not come back for an
+                    // event the push preview told of.
+                    if (already_alerted && (active_push_preview_marks(nm, nf_key) == null))
+                    {
                         return;
                     }
 
@@ -571,59 +780,14 @@ public class HelperMsgNotification
                     {
                         if (PREF__notification)
                         {
-                            if (PREF__notification_sound)
-                            {
-                                ensure_notification_channels(context_s,
-                                        (NotificationManager) context_s.getSystemService(
-                                                Context.NOTIFICATION_SERVICE));
-                            }
                             last_shown_by_key.put(rl_key, System.currentTimeMillis());
                             Notification_new_message_last_shown_timestamp = System.currentTimeMillis();
-                            Intent notificationIntent = new Intent(context_s, StartMainActivityWrapper.class);
-                            notificationIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                            notificationIntent.setAction(
-                                    "com.zoffcc.applications.trifa." + (long) (Math.random() * 100000));
-                            notificationIntent.putExtra("CLEAR_NEW_MESSAGE_NOTIFICATION", "1");
-                            if (nf_key != null)
-                            {
-                                notificationIntent.putExtra(EXTRA_OPEN_CHAT_KEY, nf_key);
-                            }
-                            final int pending_request_code = (nf_key != null) ? nf_key.hashCode() : 0;
-                            PendingIntent pendingIntent = PendingIntent.getActivity(context_s, pending_request_code,
-                                                                                    notificationIntent,
-                                                                                    PendingIntent.FLAG_UPDATE_CURRENT |
-                                                                                    PendingIntent.FLAG_IMMUTABLE);
+                            PendingIntent pendingIntent = open_chat_pending_intent(context_s, nf_key);
                             // -- notification ------------------
                             // -- notification -----------------
-                            NotificationCompat.Builder b;
-
-                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)
-                            {
-                                if ((PREF__notification_sound) && (PREF__notification_vibrate))
-                                {
-                                    b = new NotificationCompat.Builder(context_s,
-                                                                       MainActivity.channelId_newmessage_sound_and_vibrate);
-                                }
-                                else if ((PREF__notification_sound) && (!PREF__notification_vibrate))
-                                {
-                                    b = new NotificationCompat.Builder(context_s,
-                                                                       MainActivity.channelId_newmessage_sound);
-                                }
-                                else if ((!PREF__notification_sound) && (PREF__notification_vibrate))
-                                {
-                                    b = new NotificationCompat.Builder(context_s,
-                                                                       MainActivity.channelId_newmessage_vibrate);
-                                }
-                                else
-                                {
-                                    b = new NotificationCompat.Builder(context_s,
-                                                                       MainActivity.channelId_newmessage_silent);
-                                }
-                            }
-                            else
-                            {
-                                b = new NotificationCompat.Builder(context_s);
-                            }
+                            NotificationCompat.Builder b = new NotificationCompat.Builder(context_s,
+                                    message_channel_id(context_s, nm, PREF__notification_sound,
+                                                       PREF__notification_vibrate));
 
                             b.setContentIntent(pendingIntent);
                             b.setSmallIcon(R.drawable.circle_orange);
@@ -631,20 +795,23 @@ public class HelperMsgNotification
                             b.setCategory(NotificationCompat.CATEGORY_MESSAGE);
                             b.setLights(Color.parseColor("#ffce00"), 500, 500);
 
-                            if ((PREF__notification_sound) && (Build.VERSION.SDK_INT < Build.VERSION_CODES.O))
-                            {
-                                b.setSound(get_message_notification_sound_uri(context_s));
-                            }
-
                             if (PREF__notification_vibrate)
                             {
                                 long[] vibrate_pattern = {100, 300};
                                 b.setVibrate(vibrate_pattern);
                             }
 
+                            if (already_alerted)
+                            {
+                                b.setSilent(true);
+                                b.setOnlyAlertOnce(true);
+                            }
+                            put_push_preview_marks(b, carried_marks);
+
                             final String senderLabel = resolve_sender_label(nf_title, nf_key);
                             final String genericBody = context_s.getString(
-                                    R.string.MainActivity_notification_new_message2);
+                                    reaction ? R.string.push_preview_new_reaction
+                                             : R.string.MainActivity_notification_new_message2);
                             b.setContentTitle(senderLabel != null
                                     ? senderLabel
                                     : context_s.getString(R.string.notification_app_title));
@@ -686,12 +853,12 @@ public class HelperMsgNotification
                             Notification notification3 = b.build();
                             // KHANDAQ #200: post under a stable PER-CHAT id so different conversations
                             // no longer overwrite one shared notification slot.
-                            MainActivity.nmn3.notify(notif_id_for_key(nf_key), notification3);
+                            post_msg_notification(nm, nf_key, notification3);
                             // -- notification ------------------
                             // -- notification ------------------
                         }
                     }
-                    else if (PREF__notification_sound)
+                    else if (PREF__notification_sound && !already_alerted)
                     {
                         play_message_sound_only();
                     }

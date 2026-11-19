@@ -1,0 +1,130 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+#import <Foundation/Foundation.h>
+
+@class OCTTox;
+
+NS_ASSUME_NONNULL_BEGIN
+
+/// Kinds of a preview (`k`) and of a reacted message (`rk`), docs/PUSH_PREVIEWS.md.
+FOUNDATION_EXPORT NSString *const kOCTPushPreviewKindText;
+FOUNDATION_EXPORT NSString *const kOCTPushPreviewKindVoice;
+FOUNDATION_EXPORT NSString *const kOCTPushPreviewKindVideo;
+FOUNDATION_EXPORT NSString *const kOCTPushPreviewKindPhoto;
+FOUNDATION_EXPORT NSString *const kOCTPushPreviewKindFile;
+FOUNDATION_EXPORT NSString *const kOCTPushPreviewKindReaction;
+
+/// Keychain service of this device's own preview items: the master key (account `master`), the allowed
+/// senders (account `allow`), and the settings the notification service extension reads (accounts `show`
+/// and `lang`).
+FOUNDATION_EXPORT NSString *const kOCTPushPreviewKeychainService;
+
+/// The `/wake` body fields a sealed preview travels in.
+FOUNDATION_EXPORT NSString *const kOCTPushPreviewWakeFieldPreview;
+FOUNDATION_EXPORT NSString *const kOCTPushPreviewWakeFieldPid;
+
+/**
+ * KHANDAQ (0.2.64): end-to-end encrypted push previews (docs/PUSH_PREVIEWS.md).
+ *
+ * A wake push may carry what the event was (the text, or that it is a voice message, a video, a photo,
+ * a file or a reaction), sealed on the sender's device with a key only the recipient's device can
+ * derive. The relay, Google and Apple carry an opaque string.
+ *
+ * The recipient half: a random master key `M` per installation, kept in the Keychain where the
+ * notification service extension can read it, and the per-contact key `K = HMAC-SHA256(M, label || P)`
+ * handed to each contact in lossless packet 190/01. The sender half: the `K` a contact handed us, used
+ * to seal a preview for that contact's device.
+ */
+@interface OCTPushPreview : NSObject
+
+#pragma mark - Our own keys
+
+/// This installation's master key, created on first use. Nil when the Keychain cannot keep it (before
+/// the first unlock after a restart, for one): a key the extension could not read must not be published.
++ (nullable NSData *)masterKey;
+
+/// `K` for the contact with this Tox public key (64 hex), derived from `masterKey`.
++ (nullable NSData *)perContactKeyWithMasterKey:(NSData *)masterKey publicKeyHex:(NSString *)publicKeyHex;
+
+/// Packet 190/01 (`BE 01 01 K`) for that contact, or nil without a master key or with a malformed key. The
+/// contact goes on the list of allowed senders first; nil when it cannot.
++ (nullable NSData *)keyPacketForFriendPublicKey:(NSString *)publicKeyHex;
+
+/// The contacts this device handed its key to and still has: the only senders whose previews the notification
+/// service extension shows. `allowSenderPublicKey:` adds one (NO when the list cannot be written now);
+/// `forgetFriendPublicKey:` takes one off.
++ (BOOL)allowSenderPublicKey:(NSString *)publicKeyHex;
++ (BOOL)isAllowedSenderPublicKey:(NSString *)publicKeyHex;
+
+/// A profile was deleted: the master key goes, and with it every key its contacts were given, together with the
+/// allowed senders, the keys contacts sent and their group presence. A new master key is made the next time one
+/// is handed out.
++ (void)resetAll;
+
+#pragma mark - Group presence
+
+/// `SHA-256("khandaq group presence v1" || chat_id || peer_pk)[0:16]` as 32 lowercase hex.
++ (nullable NSString *)groupPresenceHashForChatIdHex:(NSString *)chatIdHex peerPublicKeyHex:(NSString *)peerPublicKeyHex;
+
+/// The presence hashes of every group this Tox instance is in and knows its own peer key for.
++ (NSArray<NSString *> *)ownGroupPresenceHashesWithTox:(OCTTox *)tox;
+
+/// Packet 190/02 listing `hashes` (the first 64 well-formed ones).
++ (NSData *)groupPresencePacketWithHashes:(NSArray<NSString *> *)hashes;
+
+#pragma mark - Incoming packet 190
+
+/// The `K` a contact sent in packet 190/01 (the whole packet, id byte included), or nil.
++ (nullable NSData *)peerKeyFromPacket:(NSData *)packet;
+
+/// The hashes a contact sent in packet 190/02 (the whole packet, id byte included), or nil.
++ (nullable NSArray<NSString *> *)groupPresenceHashesFromPacket:(NSData *)packet;
+
+#pragma mark - What contacts sent us
+
++ (void)storePeerKey:(NSData *)key forFriendPublicKey:(NSString *)publicKeyHex;
++ (nullable NSData *)peerKeyForFriendPublicKey:(NSString *)publicKeyHex;
++ (void)storeGroupPresence:(NSArray<NSString *> *)hashes forFriendPublicKey:(NSString *)publicKeyHex;
++ (BOOL)friendPublicKey:(NSString *)publicKeyHex hasGroupPresenceHash:(NSString *)hash;
+/// Drops the key and the group presence of a contact that was removed (or blocked), and takes it off the
+/// allowed senders.
++ (void)forgetFriendPublicKey:(NSString *)publicKeyHex;
+
+#pragma mark - Message text
+
+/// The app's reading of a message text for a notification, with reply and mention markup taken out
+/// (GroupMentionHelper.notificationPreviewText). Without one the text goes as it is.
+@property (class, nonatomic, copy, nullable) NSString * (^previewTextSanitizer)(NSString *text);
+
+/// `text` as the sanitizer reads it, trimmed; empty when nothing is left.
++ (NSString *)previewTextFromMessageText:(nullable NSString *)text;
+
+#pragma mark - Building a preview
+
+/// `voice`, `video`, `photo` or `file`, from a file name.
++ (NSString *)kindForFileName:(nullable NSString *)fileName;
+
+/// The first `limit` user-perceived characters of `text`, never splitting one.
++ (NSString *)prefixOfString:(nullable NSString *)text characters:(NSUInteger)limit;
+
+/// The compact JSON plaintext, fields in the order of the spec, at most 900 bytes (the text is
+/// shortened, then the names, then the text dropped, until it fits). Nil without `k`.
++ (nullable NSData *)plaintextWithFields:(NSDictionary<NSString *, id> *)fields;
+
+/// `base64url(0x01 || nonce || ciphertext || tag)`; a random nonce when `nonce` is nil.
++ (nullable NSString *)sealPlaintext:(NSData *)plaintext key:(NSData *)key nonce:(nullable NSData *)nonce;
+
+/// The relay's event id: `hex(HMAC-SHA256(K, "khandaq push event v1" || eventKey))[0:32]`, or 32
+/// random hex characters when there is no event key.
++ (NSString *)pidForEventKey:(nullable NSString *)eventKey key:(NSData *)key;
+
+/// `preview` and `pid` for a wake to the contact with this public key, or nil when the contact has not
+/// sent us a key (an older client: its wake stays the generic one).
++ (nullable NSDictionary<NSString *, NSString *> *)wakeFieldsForFriendPublicKey:(NSString *)publicKeyHex
+                                                                          fields:(NSDictionary<NSString *, id> *)fields;
+
+@end
+
+NS_ASSUME_NONNULL_END

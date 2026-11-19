@@ -99,6 +99,8 @@ private slots:
     void everyoneReactsOnceToAMessageOfEitherSide();
     void ourOwnEchoChangesNothing();
     void aGroupReactionNamesWhoseMessageItIs();
+    void onlyANewReactionOfAnotherToOursIsNews();
+    void aReactionToOursInAGroupIsNewsUnderEitherOfOurKeys();
     void aFileIsFoundByItsToxFileId();
     void aFileThatWaitsForItsFriendKeepsItsEntry();
     void aFileThatGoesOnMovesInTheEntryItHad();
@@ -348,6 +350,136 @@ void TestSessionChatLog::aGroupReactionNamesWhoseMessageItIs()
 
     reaction.author = keyOf(0x33).getByteArray();
     QCOMPARE(chatLog->applyEffect(ibrahim, reaction, groupSelf).change, Change::None);
+}
+
+/**
+ * @brief KHANDAQ (0.2.64): the window alerts on a reaction (EffectResult::reactedToOwn) only when
+ * someone else adds one to a message or a file of ours: never one on theirs, one taken back, or
+ * the same one again
+ */
+void TestSessionChatLog::onlyANewReactionOfAnotherToOursIsNews()
+{
+    using Change = SessionChatLog::EffectResult::Change;
+    const ToxPk self = idHandler.getSelfPublicKey();
+    const ToxPk maryam = keyOf(0x11);
+    /* ChatLogIdx(0) */ chatLog->onMessageSent(DispatchedMessageId(0),
+                                               wiredMessage("Salam", "00000001"));
+    /* ChatLogIdx(1) */ chatLog->onMessageReceived(maryam, wiredMessage("Wa alaykum", "00000002"));
+    ToxFile ours(1, 0, QStringLiteral("voice_3F9A.file.m4a"), QString(), 1000, ToxFile::SENDING);
+    ours.resumeFileId = QByteArray(32, '\x0b');
+    /* ChatLogIdx(2) */ chatLog->onFileUpdated(self, ours);
+    ToxFile hers(2, 0, QStringLiteral("photo.jpg"), QString(), 1000, ToxFile::RECEIVING);
+    hers.resumeFileId = QByteArray(32, '\x07');
+    /* ChatLogIdx(3) */ chatLog->onFileUpdated(maryam, hers);
+
+    Air::MessageEffect reaction = effectOn(Air::MessageEffect::Kind::Reaction, "00000001");
+    reaction.emoji = QStringLiteral("👍");
+    reaction.add = true;
+    const SessionChatLog::EffectResult first = chatLog->applyEffect(maryam, reaction, self);
+    QCOMPARE(first.change, Change::Reacted);
+    QVERIFY(first.reactedToOwn);
+    QCOMPARE(first.before.content, QStringLiteral("Salam"));
+    // The same packet again, as a client sends it once more, changes nothing and says nothing.
+    const SessionChatLog::EffectResult again = chatLog->applyEffect(maryam, reaction, self);
+    QCOMPARE(again.change, Change::None);
+    QVERIFY(!again.reactedToOwn);
+    // Another emoji in place of hers is news; taking it back is not.
+    reaction.emoji = QStringLiteral("❤️");
+    QVERIFY(chatLog->applyEffect(maryam, reaction, self).reactedToOwn);
+    reaction.add = false;
+    const SessionChatLog::EffectResult taken = chatLog->applyEffect(maryam, reaction, self);
+    QCOMPARE(taken.change, Change::Reacted);
+    QVERIFY(!taken.reactedToOwn);
+
+    // On her own message: shown, but no news for us.
+    reaction = effectOn(Air::MessageEffect::Kind::Reaction, "00000002");
+    reaction.emoji = QStringLiteral("👍");
+    reaction.add = true;
+    const SessionChatLog::EffectResult onHers = chatLog->applyEffect(maryam, reaction, self);
+    QCOMPARE(onHers.change, Change::Reacted);
+    QCOMPARE(onHers.idx, ChatLogIdx(1));
+    QVERIFY(!onHers.reactedToOwn);
+
+    // A file of ours is ours as a text is, and the result names it for the words.
+    reaction.anchor = Air::MessageEffect::Anchor::File;
+    reaction.anchorId = ours.resumeFileId;
+    const SessionChatLog::EffectResult onOurFile = chatLog->applyEffect(maryam, reaction, self);
+    QCOMPARE(onOurFile.change, Change::Reacted);
+    QCOMPARE(onOurFile.idx, ChatLogIdx(2));
+    QVERIFY(onOurFile.reactedToOwn);
+    QCOMPARE(onOurFile.file.fileName, QStringLiteral("voice_3F9A.file.m4a"));
+    reaction.anchorId = hers.resumeFileId;
+    const SessionChatLog::EffectResult onHerFile = chatLog->applyEffect(maryam, reaction, self);
+    QCOMPARE(onHerFile.change, Change::Reacted);
+    QVERIFY(!onHerFile.reactedToOwn);
+
+    // Our own reaction coming back is never taken, so never news.
+    reaction.anchorId = ours.resumeFileId;
+    reaction.emoji = QStringLiteral("🔥");
+    const SessionChatLog::EffectResult echo = chatLog->applyEffect(self, reaction, self);
+    QCOMPARE(echo.change, Change::None);
+    QVERIFY(!echo.reactedToOwn);
+}
+
+/**
+ * @brief KHANDAQ (0.2.64): in a group our message stands under the profile's key or our key in
+ * the group, and a reaction to either is news; the same emoji sent again after others reacted
+ * moves its place in the row but is no news, nor one that a full row of emoji leaves out
+ */
+void TestSessionChatLog::aReactionToOursInAGroupIsNewsUnderEitherOfOurKeys()
+{
+    using Change = SessionChatLog::EffectResult::Change;
+    const ToxPk groupSelf = keyOf(0x55);
+    const ToxPk maryam = keyOf(0x11);
+    const ToxPk ibrahim = keyOf(0x22);
+    /* ChatLogIdx(0) */ chatLog->onMessageSent(DispatchedMessageId(0),
+                                               wiredMessage("Our text", "00000009"));
+    /* ChatLogIdx(1) */ chatLog->onMessageReceived(maryam, wiredMessage("Her text", "00000009"));
+    /* ChatLogIdx(2) */ chatLog->onMessageReceived(groupSelf, wiredMessage("Ours too", "0000000c"));
+
+    Air::MessageEffect reaction = effectOn(Air::MessageEffect::Kind::Reaction, "00000009");
+    reaction.emoji = QStringLiteral("👍");
+    reaction.add = true;
+    reaction.author = groupSelf.getByteArray();
+    QVERIFY(chatLog->applyEffect(maryam, reaction, groupSelf).reactedToOwn);
+    QVERIFY(chatLog->applyEffect(ibrahim, reaction, groupSelf).reactedToOwn);
+    // Hers again after his: the row changes ("👍" by him, then her), the news does not.
+    const SessionChatLog::EffectResult resent = chatLog->applyEffect(maryam, reaction, groupSelf);
+    QCOMPARE(resent.change, Change::Reacted);
+    QVERIFY(!resent.reactedToOwn);
+
+    reaction.author = maryam.getByteArray();
+    const SessionChatLog::EffectResult onHers = chatLog->applyEffect(ibrahim, reaction, groupSelf);
+    QCOMPARE(onHers.idx, ChatLogIdx(1));
+    QVERIFY(!onHers.reactedToOwn);
+
+    Air::MessageEffect toGroupKey = effectOn(Air::MessageEffect::Kind::Reaction, "0000000c");
+    toGroupKey.emoji = QStringLiteral("👍");
+    toGroupKey.add = true;
+    toGroupKey.author = groupSelf.getByteArray();
+    const SessionChatLog::EffectResult underGroupKey =
+        chatLog->applyEffect(maryam, toGroupKey, groupSelf);
+    QCOMPARE(underGroupKey.idx, ChatLogIdx(2));
+    QVERIFY(underGroupKey.reactedToOwn);
+
+    // Eleven more people fill the row of our message to twelve emoji with "👍"; hers goes to a
+    // thirteenth, which the row leaves out, so only her old one went.
+    const QStringList eleven{QStringLiteral("😂"), QStringLiteral("😮"), QStringLiteral("😢"),
+                             QStringLiteral("🙏"), QStringLiteral("🔥"), QStringLiteral("👏"),
+                             QStringLiteral("🎉"), QStringLiteral("💯"), QStringLiteral("🤝"),
+                             QStringLiteral("🌙"), QStringLiteral("🌹")};
+    reaction.author = groupSelf.getByteArray();
+    for (int i = 0; i < eleven.size(); ++i) {
+        reaction.emoji = eleven.at(i);
+        QVERIFY(chatLog->applyEffect(keyOf(static_cast<uint8_t>(0x60 + i)), reaction, groupSelf)
+                    .reactedToOwn);
+    }
+    QCOMPARE(chatLog->at(ChatLogIdx(0)).getContentAsMessage().marks.reactions.size(), 12);
+    reaction.emoji = QStringLiteral("🙂");
+    const SessionChatLog::EffectResult leftOut = chatLog->applyEffect(maryam, reaction, groupSelf);
+    QCOMPARE(leftOut.change, Change::Reacted);
+    QVERIFY(!leftOut.reactedToOwn);
+    QVERIFY(leftOut.marks.emojiOf(Air::LocalStore::hashedKey(maryam.toString())).isEmpty());
 }
 
 /** @brief A file is anchored on its Tox file id; only who sent it deletes it */

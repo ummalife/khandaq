@@ -3560,8 +3560,10 @@ public class MainActivity extends AppCompatActivity
             {
                 last_res = tox_callback_friend_lossless_packet_per_pktid(pktid);
             }
+            // KHANDAQ (0.2.64): and the push preview keys and group presence (190, PushPreviewPeers).
+            last_res = tox_callback_friend_lossless_packet_per_pktid(PushPreviewCrypto.PKT_PUSH_PREVIEW);
             // plain android Log on purpose: this runs very early, before the app logger is up
-            android.util.Log.i("trifa.KQREG", "registered lossless pktids 184-189, last_res=" + last_res);
+            android.util.Log.i("trifa.KQREG", "registered lossless pktids 184-190, last_res=" + last_res);
         }
         catch (Throwable e)
         {
@@ -7162,6 +7164,11 @@ public class MainActivity extends AppCompatActivity
                 // KHANDAQ (0.2.57): the person has seen our 1:1 items up to the anchored one
                 HelperMessageSeen.handleIncomingFriendSeen(friend_number, data, (int) length);
             }
+            else if (data[0] == (byte) PushPreviewCrypto.PKT_PUSH_PREVIEW)
+            {
+                // KHANDAQ (0.2.64): the friend's push preview key (190/01) or group presence (190/02)
+                PushPreviewPeers.onPacket(friend_number, data, (int) length);
+            }
             else if (data[0] == (byte) CONTROL_PROXY_MESSAGE_TYPE_PUSH_URL_FOR_FRIEND.value)
             {
                 //HelperGeneric.logI(TAG,
@@ -8328,8 +8335,11 @@ public class MainActivity extends AppCompatActivity
             // --- notification ---
             if (do_notification)
             {
+                // KHANDAQ (0.2.64): with the event, so that a file a push preview already told of does not sound again.
                 change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.tox_friendpubkey, friendname,
-                        HelperMsgNotification.media_label_for_filename(context_s, f.file_name));
+                        HelperMsgNotification.media_label_for_filename(context_s, f.file_name), 0L, null,
+                        HelperMsgNotification.incoming_file_event(m.tox_friendpubkey, m.ft_id_anchor_hex,
+                                                                  f.file_name));
             }
             // --- notification ---
             // --- notification ---
@@ -8485,8 +8495,11 @@ public class MainActivity extends AppCompatActivity
             // --- notification ---
             if (do_notification)
             {
+                // KHANDAQ (0.2.64): with the event, so that a file a push preview already told of does not sound again.
                 change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.tox_friendpubkey, friendname,
-                        HelperMsgNotification.media_label_for_filename(context_s, f.file_name));
+                        HelperMsgNotification.media_label_for_filename(context_s, f.file_name), 0L, null,
+                        HelperMsgNotification.incoming_file_event(m.tox_friendpubkey, m.ft_id_anchor_hex,
+                                                                  f.file_name));
             }
             // --- notification ---
             // --- notification ---

@@ -366,6 +366,12 @@ def _stats_conn():
     conn.execute("CREATE TABLE IF NOT EXISTS pushpath ("
                  "day TEXT NOT NULL, path TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, "
                  "PRIMARY KEY (day, path))")
+    # KHANDAQ (0.2.64): preview pushes, de-duplicated per (token, event) instead of per token: see
+    # _claim_preview_slot. `ph` is a hash of the client's event id, for the same reason `th` is a
+    # hash of the token: nothing read out of this file names a device or an event.
+    conn.execute("CREATE TABLE IF NOT EXISTS pushpreview ("
+                 "th TEXT NOT NULL, ph TEXT NOT NULL, first_ts INTEGER NOT NULL, "
+                 "last_ts INTEGER NOT NULL, PRIMARY KEY (th, ph))")
     return conn
 
 
@@ -376,6 +382,20 @@ def _stats_conn():
 # banners. Last-SENT time is tracked separately from `recent` (which every request refreshes for the
 # online-now stat), so a continuous spam still re-wakes the device once per window, not never.
 COALESCE_SECONDS = int(os.environ.get("PUSH_COALESCE_SECONDS", "45"))
+
+# KHANDAQ (0.2.64): end-to-end encrypted previews (docs/PUSH_PREVIEWS.md).
+#
+# A wake may carry `preview`, a string the sender encrypted for the recipient's device, and `pid`, an
+# opaque id of the event behind it. The relay cannot read either and does not try to; it only decides
+# how often a preview is delivered. Coalescing per token, the rule above, would show the first of
+# three quick messages and swallow the other two, so a preview is de-duplicated per (token, pid): the
+# retries of one event collapse, different events each get their banner. A retry of an event that was
+# already shown goes out as a silent wake for up to PUSH_PREVIEW_REPEAT_SECONDS, so it still wakes the
+# app without a second banner, and PUSH_PREVIEW_PER_MIN bounds what one contact can put on a screen.
+PREVIEW_REPEAT_SECONDS = int(os.environ.get("PUSH_PREVIEW_REPEAT_SECONDS", str(6 * 3600)))
+PREVIEW_PER_MIN = int(os.environ.get("PUSH_PREVIEW_PER_MIN", "20"))
+_PREVIEW_RE = re.compile(r"^[A-Za-z0-9_-]{24,1400}$")   # base64url, no padding
+_PID_RE = re.compile(r"^[0-9a-f]{32}$")
 
 
 def _th(token: str) -> str:
@@ -558,6 +578,74 @@ def _release_coalesce_slot(token: str) -> None:
             conn = _stats_conn()
             try:
                 conn.execute("DELETE FROM pushsent WHERE th = ?", (_th(token),))
+                conn.commit()
+            finally:
+                conn.close()
+    except Exception:
+        pass
+
+
+def _claim_preview_slot(token: str, pid: str) -> tuple[str, int | None]:
+    """
+    KHANDAQ (0.2.64): decide, atomically and before the send, what a preview wake becomes.
+
+    Returns (decision, previous last_ts):
+      "coalesced"   - this event was delivered less than PUSH_COALESCE_SECONDS ago: send nothing
+      "repeat"      - this event was shown before (PUSH_PREVIEW_REPEAT_SECONDS): a silent wake
+      "first"       - a new event within the budget: the preview push
+      "over_budget" - a new event, but PUSH_PREVIEW_PER_MIN previews already went to this token in
+                      the last minute: the caller falls back to the ordinary coalesced wake
+
+    One BEGIN IMMEDIATE transaction for the same reason as _claim_coalesce_slot: two gunicorn workers
+    must not both see "first" for one event. A store that cannot be read fails toward delivery.
+    """
+    th, ph = _th(token), _th(pid)
+    now = int(time.time())
+    try:
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute("SELECT first_ts, last_ts FROM pushpreview WHERE th = ? AND ph = ?",
+                                   (th, ph)).fetchone()
+                if row and COALESCE_SECONDS > 0 and now - row[1] < COALESCE_SECONDS:
+                    conn.commit()
+                    return "coalesced", None
+                if row and PREVIEW_REPEAT_SECONDS > 0 and now - row[0] < PREVIEW_REPEAT_SECONDS:
+                    conn.execute("UPDATE pushpreview SET last_ts = ? WHERE th = ? AND ph = ?",
+                                 (now, th, ph))
+                    conn.commit()
+                    return "repeat", row[1]
+                recent = conn.execute("SELECT COUNT(*) FROM pushpreview WHERE th = ? AND first_ts > ?",
+                                      (th, now - 60)).fetchone()[0]
+                if PREVIEW_PER_MIN > 0 and recent >= PREVIEW_PER_MIN:
+                    conn.commit()
+                    return "over_budget", None
+                conn.execute("INSERT INTO pushpreview VALUES (?, ?, ?, ?) "
+                             "ON CONFLICT(th, ph) DO UPDATE SET first_ts = excluded.first_ts, "
+                             "last_ts = excluded.last_ts", (th, ph, now, now))
+                conn.execute("DELETE FROM pushpreview WHERE last_ts < ?",
+                             (now - max(PREVIEW_REPEAT_SECONDS, COALESCE_SECONDS, 60),))
+                conn.commit()
+                return "first", None
+            finally:
+                conn.close()
+    except Exception:
+        return "first", None
+
+
+def _release_preview_slot(token: str, pid: str, decision: str, previous_last_ts: int | None) -> None:
+    """Undo a claim whose send failed, so the client's retry is judged as if it never happened."""
+    th, ph = _th(token), _th(pid)
+    try:
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                if decision == "first":
+                    conn.execute("DELETE FROM pushpreview WHERE th = ? AND ph = ?", (th, ph))
+                elif decision == "repeat" and previous_last_ts is not None:
+                    conn.execute("UPDATE pushpreview SET last_ts = ? WHERE th = ? AND ph = ?",
+                                 (previous_last_ts, th, ph))
                 conn.commit()
             finally:
                 conn.close()
@@ -1067,14 +1155,7 @@ def _get_access_token() -> str:
 def _send_fcm_v1(token: str, sender_pubkey: str = "") -> tuple[bool, str]:
     if not FCM_SERVICE_ACCOUNT_FILE or not os.path.isfile(FCM_SERVICE_ACCOUNT_FILE):
         return False, "FCM_SERVICE_ACCOUNT_FILE not configured"
-    try:
-        access = _get_access_token()
-    except Exception as exc:
-        _token_cache["token"] = None
-        _token_cache["exp"] = 0.0
-        return False, f"auth failed: {exc}"
 
-    url = f"https://fcm.googleapis.com/v1/projects/{FCM_PROJECT_ID}/messages:send"
     # NB: "from" is a reserved FCM data key (HTTP 400 INVALID_ARGUMENT) — only sender_pubkey.
     data_payload: dict[str, str] = {"wake": "1"}
     if sender_pubkey:
@@ -1111,6 +1192,73 @@ def _send_fcm_v1(token: str, sender_pubkey: str = "") -> tuple[bool, str]:
             },
         }
     }
+    return _fcm_v1_post(token, payload)
+
+
+def _preview_payload(token: str, sender_pubkey: str, preview: str, pid: str,
+                     repeat: bool) -> dict:
+    """
+    KHANDAQ (0.2.64): the FCM v1 message for a wake that carries an encrypted preview.
+
+    Android gets a DATA-ONLY message. A notification message is drawn by the system while the app is
+    in the background and never reaches the app's FirebaseMessagingService, so the app could not put
+    the decrypted text on screen; a data-only HIGH message always reaches it, and the app draws the
+    notification itself (or the generic one, when it cannot decrypt).
+
+    iOS keeps the alert push of #163 (an alert is the only kind a force-quit app still shows), with
+    the generic text as the fallback that the notification service extension replaces.
+    apns-collapse-id is the event id, so a retry that does get through replaces the earlier banner
+    instead of stacking a copy. A repeat is a background push: it wakes the app and shows nothing.
+
+    The preview and the event id ride in `data`; FCM puts data keys into the APNs payload as well,
+    which is how the extension and the app read them on iOS.
+    """
+    data: dict[str, str] = {"wake": "1", "khq_pid": pid}
+    if sender_pubkey:
+        data["sender_pubkey"] = sender_pubkey
+    if repeat:
+        data["khq_rep"] = "1"
+        apns = {
+            "headers": {"apns-priority": "5", "apns-push-type": "background"},
+            "payload": {"aps": {"content-available": 1}},
+        }
+    else:
+        data["khq_pv"] = preview
+        apns = {
+            "headers": {"apns-priority": "10", "apns-push-type": "alert", "apns-collapse-id": pid},
+            "payload": {"aps": {
+                "alert": {
+                    "title": os.environ.get("PUSH_NOTIFY_TITLE", "Khandaq"),
+                    "body": os.environ.get("PUSH_NOTIFY_BODY", "New message"),
+                },
+                "sound": "default",
+                "mutable-content": 1,
+                "content-available": 1,
+            }},
+        }
+    return {"message": {"token": token, "data": data, "android": {"priority": "HIGH"}, "apns": apns}}
+
+
+def _send_preview(token: str, sender_pubkey: str, preview: str, pid: str,
+                  repeat: bool) -> tuple[bool, str]:
+    """KHANDAQ (0.2.64): deliver a preview wake (or its silent repeat)."""
+    if not FCM_SERVICE_ACCOUNT_FILE or not os.path.isfile(FCM_SERVICE_ACCOUNT_FILE):
+        # The legacy FCM API has no way to say "data-only for Android, an alert for iOS" in one
+        # message. A relay still on it gives the ordinary wake: no preview, nothing lost.
+        return _send_wake(token, sender_pubkey)
+    return _fcm_v1_post(token, _preview_payload(token, sender_pubkey, preview, pid, repeat))
+
+
+def _fcm_v1_post(token: str, payload: dict) -> tuple[bool, str]:
+    """POST one FCM v1 message, with one retry on a stale access token."""
+    try:
+        access = _get_access_token()
+    except Exception as exc:
+        _token_cache["token"] = None
+        _token_cache["exp"] = 0.0
+        return False, f"auth failed: {exc}"
+
+    url = f"https://fcm.googleapis.com/v1/projects/{FCM_PROJECT_ID}/messages:send"
     for attempt in (1, 2):
         try:
             resp = requests.post(
@@ -1528,12 +1676,17 @@ def _redact_token(detail: str, token: str) -> str:
     return detail.replace(token, "[REDACTED]")
 
 
-def _deliver_wake(token_raw: str, sender_raw: str, *, allow_query_auth: bool, cap: str = "", path: str = "wake"):
+def _deliver_wake(token_raw: str, sender_raw: str, *, allow_query_auth: bool, cap: str = "", path: str = "wake",
+                  preview: str = "", pid: str = ""):
     """
     The wake path, shared by the legacy query-string endpoint and the JSON one.
 
     `token_raw`/`sender_raw` are the values EXACTLY as they arrived, because that is what the client
     signed; the stripping/normalising below happens after authentication, never before it.
+
+    `preview`/`pid` (JSON endpoint only, docs/PUSH_PREVIEWS.md) are not part of the signature: the
+    preview is authenticated end to end, on the recipient's device, by the key only that device and
+    the sender hold. Malformed ones are dropped and the request is served as an ordinary wake.
     """
     # KHANDAQ (audit 2026-08-21, K-09): rate-limit BEFORE authenticating. The old order had two
     # concrete costs, both invisible from the outside:
@@ -1601,6 +1754,26 @@ def _deliver_wake(token_raw: str, sender_raw: str, *, allow_query_auth: bool, ca
     if sender_pubkey and (len(sender_pubkey) != 64 or not all(c in "0123456789ABCDEF" for c in sender_pubkey)):
         sender_pubkey = ""
 
+    # KHANDAQ (0.2.64): a wake with an encrypted preview. Without a sender the recipient cannot
+    # derive the key, so such a preview could never be opened; it is served as a plain wake.
+    if preview and pid and sender_pubkey and _PREVIEW_RE.match(preview) and _PID_RE.match(pid):
+        decision, previous_last_ts = _claim_preview_slot(token, pid)
+        if decision == "coalesced":
+            return jsonify({"success": 1, "coalesced": 1}), 200
+        if decision in ("first", "repeat"):
+            ok, detail = _send_preview(token, sender_pubkey, preview, pid, decision == "repeat")
+            if not ok:
+                _release_preview_slot(token, pid, decision, previous_last_ts)
+                for secret_value in (token, preview, pid):
+                    detail = _redact_token(detail, secret_value)
+                return _wake_send_failed(client_ip, detail)
+            if decision == "first":
+                # A plain wake right behind a preview would only add a "New message" banner to
+                # the one that already says what arrived.
+                _mark_push_sent(token)
+            return jsonify({"success": 1}), 200
+        # "over_budget": the ordinary wake below, coalesced per token as before.
+
     # Coalesce wake-push spam: if we already delivered a wake to this token within the window, skip
     # the FCM send (no redundant "New message" banner) but keep the stats/online-now accurate and
     # report success so the caller stops retrying this cycle. Messages still arrive on the prior wake.
@@ -1615,19 +1788,23 @@ def _deliver_wake(token_raw: str, sender_raw: str, *, allow_query_auth: bool, ca
         # bytes of FCM's own response text, which is then both logged and echoed back to the caller.
         # FCM does not normally quote the registration token back, but "normally" is not a property
         # worth betting a targeting secret on, and the redaction costs one string replace.
-        detail = _redact_token(detail, token)
-        log.warning("wake fail from %s: %s", client_ip, detail)
-        # KHANDAQ (audit round 3, F-11): log the detail, do NOT return it.
-        #
-        # `detail` carries up to 200 bytes of FCM's own response body, or str(exc) from google-auth.
-        # That path is reachable without authentication in soft mode, and when the service account
-        # existed but could not be read it answered a stranger with
-        # `auth failed: [Errno 13] Permission denied: '/run/secrets/firebase-sa.json'` — an internal
-        # path and the precise failure mode, handed out for free. Nothing about the upstream error
-        # belongs on the far side of this boundary; the operator reads it in the line above.
-        return jsonify({"error": "upstream send failed"}), 503 if "not configured" in detail else 502
+        return _wake_send_failed(client_ip, _redact_token(detail, token))
 
     return jsonify({"success": 1}), 200
+
+
+def _wake_send_failed(client_ip: str, detail: str):
+    """The answer to a wake whose send failed; `detail` must already be redacted."""
+    log.warning("wake fail from %s: %s", client_ip, detail)
+    # KHANDAQ (audit round 3, F-11): log the detail, do NOT return it.
+    #
+    # `detail` carries up to 200 bytes of FCM's own response body, or str(exc) from google-auth.
+    # That path is reachable without authentication in soft mode, and when the service account
+    # existed but could not be read it answered a stranger with
+    # `auth failed: [Errno 13] Permission denied: '/run/secrets/firebase-sa.json'`: an internal
+    # path and the precise failure mode, handed out for free. Nothing about the upstream error
+    # belongs on the far side of this boundary; the operator reads it in the line above.
+    return jsonify({"error": "upstream send failed"}), 503 if "not configured" in detail else 502
 
 
 @app.route("/toxfcm/fcm.php", methods=["GET", "POST"])
@@ -1673,6 +1850,9 @@ def wake_json():
 
       {"token": "<fcm registration token>", "sender": "<64-hex tox pubkey, optional>"}
 
+    Optional, since 0.2.64 (docs/PUSH_PREVIEWS.md): "cap", and "preview" + "pid": a preview
+    encrypted for the recipient's device and the opaque id of the event it describes.
+
     Neither the body nor the Authorization header is ever logged.
     """
     body = request.get_json(silent=True)
@@ -1696,7 +1876,15 @@ def wake_json():
     if not isinstance(cap, str):
         cap = ""
 
-    return _deliver_wake(token, sender or "", allow_query_auth=False, cap=cap or "", path="json_post")
+    # KHANDAQ (0.2.64): the encrypted preview and its event id (docs/PUSH_PREVIEWS.md). Same rule as
+    # the cap: a value of the wrong type is treated as absent, and the wake still goes out.
+    preview = body.get("preview", "")
+    pid = body.get("pid", "")
+    if not isinstance(preview, str) or not isinstance(pid, str):
+        preview, pid = "", ""
+
+    return _deliver_wake(token, sender or "", allow_query_auth=False, cap=cap or "", path="json_post",
+                         preview=preview, pid=pid)
 
 
 # ---------------------------------------------------------------------------

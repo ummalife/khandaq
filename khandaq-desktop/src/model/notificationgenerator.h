@@ -53,6 +53,15 @@ public:
     NotificationData groupInvitationNotification(const Friend* from,
                                                  const QString& groupName = QString());
     NotificationData friendRequestNotification(const ToxPk& sender, const QString& message);
+    /**
+     * KHANDAQ (0.2.64): f reacted to a message or a file of ours, as reaction says it
+     * (AirStrings::reactionWords): the contact's name over it, only "New reaction" with message
+     * text off. A reaction is no message: the counts in the titles of messages leave it out.
+     */
+    NotificationData friendReactionNotification(const Friend* f, const QString& reaction);
+    /** KHANDAQ (0.2.64): the same in a group: its name over who reacted and the words. */
+    NotificationData groupReactionNotification(const Group* g, const ToxPk& sender,
+                                               const QString& reaction);
 
 public slots:
     void onNotificationActivated();

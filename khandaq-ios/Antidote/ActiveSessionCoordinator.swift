@@ -555,6 +555,12 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
             return
         }
 
+        // KHANDAQ (0.2.64): a push about a group (a reaction in it) opens the group, not the chat with the
+        // contact who sent the wake.
+        if let groupId = userInfo["khq_gid"] as? String, openGroupChatWithChatIdHex(groupId) {
+            return
+        }
+
         if let sender = (userInfo["sender_pubkey"] as? String) ?? (userInfo["from"] as? String) {
             openChatWithSenderPublicKey(sender)
             return
@@ -1249,6 +1255,20 @@ private extension ActiveSessionCoordinator {
             return
         }
         showChat(chat)
+    }
+
+    /// Opens the group with this chat id when this profile is in it; false otherwise.
+    @discardableResult
+    func openGroupChatWithChatIdHex(_ chatIdHex: String) -> Bool {
+        guard chatIdHex.count == 64 else {
+            return false
+        }
+        let groups = toxManager.objects.chats(predicate: NSPredicate(format: "isGroup == YES AND groupChatIdHex ==[c] %@", chatIdHex))
+        guard groups.count > 0 else {
+            return false
+        }
+        showChat(groups[0])
+        return true
     }
 
     func openChatWithSenderPublicKey(_ publicKey: String) {

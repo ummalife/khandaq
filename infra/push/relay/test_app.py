@@ -62,6 +62,10 @@ def relay(tmp_path, monkeypatch):
         # Stub the send: these tests are about who is allowed in, not about FCM.
         module.sent = []
         module._send_wake = lambda token, sender="": (module.sent.append((token, sender)), (True, "ok"))[1]
+        # KHANDAQ (0.2.64): preview wakes leave by their own sender; record them separately.
+        module.sent_previews = []
+        module._send_preview = lambda token, sender, preview, pid, repeat: (
+            module.sent_previews.append((token, sender, preview, pid, repeat)), (True, "ok"))[1]
         module.app.config["TESTING"] = True
         return module
 
@@ -1385,6 +1389,218 @@ def test_a_failed_send_releases_the_coalesce_slot(relay):
     r = client.get(f"/toxfcm/fcm.php?id={TOKEN}&auth={sign(TOKEN, '', ts2)}&ts={ts2}")
     assert r.get_json().get("coalesced") is None, "the failed attempt must not have claimed the window"
     assert m.sent == [(TOKEN, "")]
+
+
+# --------------------------------------------------------------------------- 0.2.64: previews
+#
+# docs/PUSH_PREVIEWS.md. The relay carries an opaque, end-to-end encrypted preview and an opaque
+# event id; these tests pin what it does with them, never what is inside.
+
+PREVIEW = ("AQABAgMEBQYHCAkKC0cuZhE-761wu62F31CwYSNfERS9di10rfHn1Jnd2SQOJlEMElxEyACoX6lIA3nRn3Sl9GcJ"
+           "wRsv9OPSe7vzhOealnmCAJTD3uSj8rkONYeGSckX8WD6qi-WbLXRv9rUwHr2UexIOPXc-ua7_kVhtnjMbOHSMf4h1pS"
+           "NZa27AUhSAv9ipJnIDtdsoVdBinsLSmml2n6AJdWU5TGF3hQ")
+PID = "f7c7d2c8db7e2f187cad5b14889dfd07"
+PID2 = "0123456789abcdef0123456789abcdef"
+
+
+class _Clock:
+    """Hands out a fresh timestamp per request: a signature is single-use."""
+
+    def __init__(self):
+        self.ts = int(time.time()) - 30
+
+    def post(self, client, body):
+        self.ts += 1
+        token, sender = body.get("token", ""), body.get("sender", "")
+        return client.post("/wake", json=body, headers={
+            "Authorization": "Bearer " + sign(token, sender, self.ts), "X-Khandaq-Ts": str(self.ts)})
+
+
+def _age_previews(m, seconds):
+    """Move every stored preview delivery `seconds` into the past."""
+    conn = m._stats_conn()
+    try:
+        conn.execute("UPDATE pushpreview SET first_ts = first_ts - ?, last_ts = last_ts - ?",
+                     (seconds, seconds))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_a_wake_with_a_preview_goes_out_as_a_preview(relay):
+    m = relay(coalesce="45")
+    r = _Clock().post(m.app.test_client(),
+                      {"token": TOKEN, "sender": SENDER, "preview": PREVIEW, "pid": PID})
+    assert r.status_code == 200, r.get_data(as_text=True)
+    assert r.get_json().get("coalesced") is None
+    assert m.sent_previews == [(TOKEN, SENDER, PREVIEW, PID, False)]
+    assert m.sent == [], "a preview wake must not also send the generic one"
+
+
+def test_retries_of_one_event_collapse(relay):
+    m = relay(coalesce="45")
+    client, clock = m.app.test_client(), _Clock()
+    body = {"token": TOKEN, "sender": SENDER, "preview": PREVIEW, "pid": PID}
+    clock.post(client, body)
+    second = clock.post(client, body)
+    assert second.status_code == 200
+    assert second.get_json().get("coalesced") == 1
+    assert len(m.sent_previews) == 1
+
+
+def test_a_later_retry_of_a_shown_event_is_a_silent_repeat(relay):
+    """Past the coalescing window a retry still wakes the device, but never draws a second banner."""
+    m = relay(coalesce="45")
+    client, clock = m.app.test_client(), _Clock()
+    body = {"token": TOKEN, "sender": SENDER, "preview": PREVIEW, "pid": PID}
+    clock.post(client, body)
+    _age_previews(m, 50)
+    r = clock.post(client, body)
+    assert r.status_code == 200 and r.get_json().get("coalesced") is None
+    assert m.sent_previews == [(TOKEN, SENDER, PREVIEW, PID, False), (TOKEN, SENDER, PREVIEW, PID, True)]
+    # ... and the repeat restarted the coalescing window.
+    assert clock.post(client, body).get_json().get("coalesced") == 1
+
+
+def test_an_event_older_than_the_repeat_window_is_shown_again(relay):
+    m = relay(coalesce="45")
+    client, clock = m.app.test_client(), _Clock()
+    body = {"token": TOKEN, "sender": SENDER, "preview": PREVIEW, "pid": PID}
+    clock.post(client, body)
+    _age_previews(m, 6 * 3600 + 10)
+    clock.post(client, body)
+    assert [p[4] for p in m.sent_previews] == [False, False]
+
+
+def test_different_events_each_get_their_preview(relay):
+    """Coalescing per token would show the first of three quick messages and drop the rest."""
+    m = relay(coalesce="45")
+    client, clock = m.app.test_client(), _Clock()
+    for pid in (PID, PID2):
+        r = clock.post(client, {"token": TOKEN, "sender": SENDER, "preview": PREVIEW, "pid": pid})
+        assert r.get_json().get("coalesced") is None
+    assert [p[3] for p in m.sent_previews] == [PID, PID2]
+
+
+def test_a_preview_is_per_token(relay):
+    m = relay(coalesce="45")
+    client, clock = m.app.test_client(), _Clock()
+    other = "a-different-device-registration-token"
+    clock.post(client, {"token": TOKEN, "sender": SENDER, "preview": PREVIEW, "pid": PID})
+    r = clock.post(client, {"token": other, "sender": SENDER, "preview": PREVIEW, "pid": PID})
+    assert r.get_json().get("coalesced") is None
+    assert [p[0] for p in m.sent_previews] == [TOKEN, other]
+
+
+def test_a_plain_wake_right_behind_a_preview_is_coalesced(relay):
+    m = relay(coalesce="45")
+    client, clock = m.app.test_client(), _Clock()
+    clock.post(client, {"token": TOKEN, "sender": SENDER, "preview": PREVIEW, "pid": PID})
+    r = clock.post(client, {"token": TOKEN, "sender": SENDER})
+    assert r.get_json().get("coalesced") == 1
+    assert m.sent == []
+
+
+@pytest.mark.parametrize("extra", [
+    {"preview": "not base64url!" * 3, "pid": PID},
+    {"preview": "QUJD", "pid": PID},                       # shorter than any real preview
+    {"preview": "A" * 1401, "pid": PID},                   # longer than the documented maximum
+    {"preview": PREVIEW, "pid": PID.upper()},
+    {"preview": PREVIEW, "pid": PID[:31]},
+    {"preview": PREVIEW},
+    {"pid": PID},
+    {"preview": ["list"], "pid": PID},
+    {"preview": PREVIEW, "pid": 12345},
+])
+def test_a_malformed_preview_is_served_as_a_plain_wake(relay, extra):
+    """The relay fails toward delivery: a bad preview costs the preview, never the wake."""
+    m = relay()
+    body = {"token": TOKEN, "sender": SENDER}
+    body.update(extra)
+    r = _Clock().post(m.app.test_client(), body)
+    assert r.status_code == 200, r.get_data(as_text=True)
+    assert m.sent == [(TOKEN, SENDER)]
+    assert m.sent_previews == []
+
+
+def test_a_preview_without_a_sender_is_served_as_a_plain_wake(relay):
+    """The recipient derives the key from the sender; without one the preview could never open."""
+    m = relay()
+    r = _Clock().post(m.app.test_client(), {"token": TOKEN, "preview": PREVIEW, "pid": PID})
+    assert r.status_code == 200
+    assert m.sent == [(TOKEN, "")] and m.sent_previews == []
+
+
+def test_over_the_preview_budget_a_wake_falls_back_to_the_plain_one(relay, monkeypatch):
+    monkeypatch.setenv("PUSH_PREVIEW_PER_MIN", "2")
+    m = relay()
+    client, clock = m.app.test_client(), _Clock()
+    pids = [PID, PID2, "fedcba9876543210fedcba9876543210"]
+    for pid in pids:
+        assert clock.post(client, {"token": TOKEN, "sender": SENDER, "preview": PREVIEW,
+                                   "pid": pid}).status_code == 200
+    assert [p[3] for p in m.sent_previews] == pids[:2]
+    assert m.sent == [(TOKEN, SENDER)]
+
+
+def test_a_failed_preview_send_releases_its_slot(relay):
+    m = relay(coalesce="45")
+    client, clock = m.app.test_client(), _Clock()
+    body = {"token": TOKEN, "sender": SENDER, "preview": PREVIEW, "pid": PID}
+    m._send_preview = lambda *a: (False, "FCM v1 HTTP 503 []: unavailable")
+    assert clock.post(client, body).status_code == 502
+
+    m.sent_previews = []
+    m._send_preview = lambda token, sender, preview, pid, repeat: (
+        m.sent_previews.append((token, sender, preview, pid, repeat)), (True, "ok"))[1]
+    r = clock.post(client, body)
+    assert r.get_json().get("coalesced") is None
+    assert m.sent_previews == [(TOKEN, SENDER, PREVIEW, PID, False)], "still the first delivery"
+
+
+def test_neither_the_preview_nor_the_event_id_reaches_the_log(relay, caplog):
+    m = relay()
+    m._send_preview = lambda token, sender, preview, pid, repeat: (
+        False, f"FCM v1 HTTP 400 []: echo {token} {preview} {pid}")
+    with caplog.at_level("DEBUG"):
+        r = _Clock().post(m.app.test_client(),
+                          {"token": TOKEN, "sender": SENDER, "preview": PREVIEW, "pid": PID})
+    assert r.status_code == 502
+    for secret_value in (TOKEN, PREVIEW, PID):
+        assert secret_value not in caplog.text
+        assert secret_value not in r.get_data(as_text=True)
+
+
+def test_the_preview_message_is_data_only_for_android_and_an_alert_for_ios(relay):
+    m = relay()
+    msg = m._preview_payload(TOKEN, SENDER, PREVIEW, PID, False)["message"]
+    assert "notification" not in msg, "a notification message never reaches the Android app"
+    assert msg["android"] == {"priority": "HIGH"}
+    assert msg["data"] == {"wake": "1", "khq_pid": PID, "sender_pubkey": SENDER, "khq_pv": PREVIEW}
+    assert msg["apns"]["headers"] == {"apns-priority": "10", "apns-push-type": "alert",
+                                      "apns-collapse-id": PID}
+    aps = msg["apns"]["payload"]["aps"]
+    assert aps["mutable-content"] == 1 and aps["content-available"] == 1
+    assert aps["alert"] == {"title": "Khandaq", "body": "New message"}
+
+
+def test_a_repeat_message_is_silent_everywhere(relay):
+    m = relay()
+    msg = m._preview_payload(TOKEN, SENDER, PREVIEW, PID, True)["message"]
+    assert "notification" not in msg
+    assert msg["data"] == {"wake": "1", "khq_pid": PID, "sender_pubkey": SENDER, "khq_rep": "1"}
+    assert msg["apns"] == {"headers": {"apns-priority": "5", "apns-push-type": "background"},
+                           "payload": {"aps": {"content-available": 1}}}
+
+
+def test_the_legacy_endpoint_never_takes_a_preview(relay):
+    m = relay()
+    ts = int(time.time())
+    r = m.app.test_client().get(
+        f"/toxfcm/fcm.php?id={TOKEN}&from={SENDER}&auth={sign(TOKEN, SENDER, ts)}&ts={ts}"
+        f"&preview={PREVIEW}&pid={PID}")
+    assert r.status_code == 200
+    assert m.sent == [(TOKEN, SENDER)] and m.sent_previews == []
 
 
 # --- the public health endpoint must stay uninformative -------------------------------------------

@@ -312,6 +312,9 @@ private extension LoginCoordinator {
             handleErrorWithType(.deleteProfile, error: error)
             return
         }
+        // KHANDAQ (0.2.64): the push previews go with the profile (its contacts' keys stop opening anything here).
+        // Another profile's contacts get new keys the next time they connect.
+        OCTPushPreview.resetAll()
         let userDefaults = UserDefaultsManager()
         if userDefaults.lastActiveProfile == name {
             userDefaults.lastActiveProfile = nil

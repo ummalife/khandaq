@@ -14,6 +14,8 @@
 #import "OCTMessageText.h"
 #import "OCTMessageFile.h"
 #import "OCTSubmanagerDataSource.h"
+#import "OCTSubmanagerChatsImpl.h"
+#import "OCTPushPreview.h"
 #import "OCTFileStorageProtocol.h"
 #import "OCTFileTools.h"
 #import "OCTNgcGroupFileTransfer.h"
@@ -133,6 +135,9 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 @property (nonatomic, strong, readonly) NSCountedSet<NSNumber *> *pendingGroupLeaveDrains;
 // KHANDAQ (QA live, F11): each schedule of the due check bumps it, so only the latest one runs. Main queue.
 @property (nonatomic, assign) NSUInteger pendingGroupLeaveCheckGeneration;
+/// KHANDAQ (0.2.64): the latest scheduled broadcast of our group presence; an earlier one that fires late
+/// sees a newer number and stands down.
+@property (nonatomic, assign) NSUInteger groupPresenceBroadcastGeneration;
 // KHANDAQ (review 0.2.56): the transfer ids of the queued group files a flush is sending now, so that the
 // flushes that come meanwhile (peer joins, connection changes, maintenance) do not send them again. Main queue.
 @property (nonatomic, strong, readonly) NSMutableSet<NSString *> *groupFileSendsInFlight;
@@ -2656,6 +2661,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
             [self.histSync handleGroupConnectedWithGroupNumber:groupNumber];
             [self setupHskAnnounceIfNeeded];
             [self.hskAnnounce announceToGroupNumber:groupNumber force:NO];
+            [self scheduleGroupPresenceBroadcast];
         }
 
         [[self.dataSource managerGetNotificationCenter] postNotificationName:kOCTGroupConnectionStatusChangeNotification
@@ -3263,10 +3269,28 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     if (reactorHex.length == 0) {
         return YES;
     }
+    // KHANDAQ (0.2.64): the same reaction coming again (history sync, a resend) is not news.
+    BOOL isNewReaction = add && ! [emoji isEqualToString:kqGroupReactionsActorEmoji(found.reactionsJSON, reactorHex)];
     NSString *newJson = kqGroupReactionsApplyActor(found.reactionsJSON, reactorHex, emoji, add);
     [realmManager updateObject:found withBlock:^(OCTMessageAbstract *msg) {
         msg.reactionsJSON = newJson;
     }];
+
+    NSString *ownGroupKeyHex = [tox groupSelfPublicKeyHexForGroupNumber:groupNumber error:nil];
+    BOOL reactorIsUs = ownGroupKeyHex.length > 0 && [ownGroupKeyHex caseInsensitiveCompare:reactorHex] == NSOrderedSame;
+    if (isNewReaction && ! reactorIsUs && found.groupSenderPeerId == 0 && ! found.groupSystemMessage) {
+        id<OCTSubmanagerChats> chats = [self.dataSource managerGetChats];
+        if ([chats isKindOfClass:[OCTSubmanagerChatsImpl class]]) {
+            NSMutableString *anchorHex = [NSMutableString stringWithCapacity:64];
+            for (int i = 9; i < 41; i++) {
+                [anchorHex appendFormat:@"%02X", b[i]];
+            }
+            [(OCTSubmanagerChatsImpl *)chats postReactionOnOwnMessage:found
+                                                                emoji:emoji
+                                                          reactorName:[self groupPeerNameForPubkeyHex:reactorHex chat:chat]
+                                                             eventKey:[NSString stringWithFormat:@"r:%@:%@", anchorHex, emoji]];
+        }
+    }
     return YES;
 }
 
@@ -3311,6 +3335,9 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
         if (pkt) {
             [tox groupSendCustomPacket:pkt groupNumber:groupNumber lossless:YES error:nil];
         }
+        if (add && message.groupSenderPeerId != 0) {
+            [self wakeAuthorOfGroupMessage:message authorHex:fileAuthorHex anchorHex:hashHex emoji:emoji inChat:chat];
+        }
         return;
     }
 
@@ -3351,6 +3378,87 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     if (pkt) {
         [tox groupSendCustomPacket:pkt groupNumber:groupNumber lossless:YES error:nil];
     }
+    if (add && message.groupSenderPeerId != 0) {
+        // The anchor as it goes on the wire: the message id, big-endian, then zeros to 32 bytes.
+        NSString *anchorHex = [[NSString stringWithFormat:@"%08X", (uint32_t)messageId]
+                               stringByPaddingToLength:64 withString:@"0" startingAtIndex:0];
+        [self wakeAuthorOfGroupMessage:message authorHex:authorHex anchorHex:anchorHex emoji:emoji inChat:chat];
+    }
+}
+
+/// KHANDAQ (0.2.64): a reaction to a member's message wakes that member once, when the member is one of our
+/// contacts and is away (docs/PUSH_PREVIEWS.md, "Group presence"). The contact is the one whose presence
+/// holds the hash of this group and the author's key in it.
+- (void)wakeAuthorOfGroupMessage:(OCTMessageAbstract *)message
+                       authorHex:(NSString *)authorHex
+                       anchorHex:(NSString *)anchorHex
+                           emoji:(NSString *)emoji
+                          inChat:(OCTChat *)chat
+{
+    id<OCTSubmanagerChats> chats = [self.dataSource managerGetChats];
+    if (! [chats isKindOfClass:[OCTSubmanagerChatsImpl class]] || authorHex.length != 64 || anchorHex.length != 64) {
+        return;
+    }
+
+    NSString *chatIdHex = chat.groupChatIdHex;
+    if (chatIdHex.length != 64) {
+        chatIdHex = [[self.dataSource managerGetTox] groupChatIdHexForGroupNumber:(OCTToxGroupNumber)chat.groupNumber error:nil];
+    }
+    NSString *presenceHash = [OCTPushPreview groupPresenceHashForChatIdHex:chatIdHex peerPublicKeyHex:authorHex];
+    if (presenceHash == nil) {
+        return;
+    }
+
+    OCTFriend *author = nil;
+    RLMResults *friends = [[self.dataSource managerGetRealmManager] objectsWithClass:[OCTFriend class] predicate:nil];
+    for (OCTFriend *friend in friends) {
+        if ([OCTPushPreview friendPublicKey:friend.publicKey hasGroupPresenceHash:presenceHash]) {
+            author = friend;
+            break;
+        }
+    }
+    if (author == nil || author.isConnected) {
+        return;
+    }
+
+    OCTSubmanagerChatsImpl *chatsImpl = (OCTSubmanagerChatsImpl *)chats;
+    NSMutableDictionary<NSString *, id> *fields = [chatsImpl pushPreviewFieldsWithKind:kOCTPushPreviewKindReaction];
+    fields[@"e"] = emoji;
+    if (message.messageFile != nil) {
+        fields[@"rk"] = [OCTPushPreview kindForFileName:message.messageFile.fileName];
+    }
+    else {
+        fields[@"rk"] = kOCTPushPreviewKindText;
+        NSString *text = [OCTPushPreview previewTextFromMessageText:message.messageText.text];
+        if (text.length > 0) {
+            fields[@"b"] = text;
+        }
+    }
+    if (chat.groupName.length > 0) {
+        fields[@"g"] = chat.groupName;
+    }
+    fields[@"gid"] = chatIdHex.uppercaseString;
+    fields[@"h"] = [NSString stringWithFormat:@"r:%@:%@", anchorHex.uppercaseString, emoji];
+    [chatsImpl sendPreviewWakeToFriend:author fields:fields];
+}
+
+/// KHANDAQ (0.2.64): our group presence goes to the friends online a little after groups connect: every
+/// group connects at launch, and a new one when it is joined or created.
+- (void)scheduleGroupPresenceBroadcast
+{
+    self.groupPresenceBroadcastGeneration += 1;
+    NSUInteger generation = self.groupPresenceBroadcastGeneration;
+    __weak OCTSubmanagerGroupsImpl *weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        OCTSubmanagerGroupsImpl *strongSelf = weakSelf;
+        if (strongSelf == nil || strongSelf.groupPresenceBroadcastGeneration != generation) {
+            return;
+        }
+        id<OCTSubmanagerChats> chats = [strongSelf.dataSource managerGetChats];
+        if ([chats isKindOfClass:[OCTSubmanagerChatsImpl class]]) {
+            [(OCTSubmanagerChatsImpl *)chats broadcastGroupPresenceToConnectedFriends];
+        }
+    });
 }
 
 - (NSData *)kqGroupReactionPacketForMessageId:(int32_t)messageId

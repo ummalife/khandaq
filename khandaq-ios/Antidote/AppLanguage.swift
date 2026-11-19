@@ -93,6 +93,8 @@ import UIKit
         Bundle.setLanguageBundle(path.flatMap(Bundle.init(path:)))
         // The share extension speaks it too (stage 5).
         ShareInboxStorage.appLanguage = code
+        // And the push extension, which reads it, with the preview setting, from the Keychain (0.2.64).
+        PushPreviewStore.mirror(showContent: UserDefaultsManager().showNotificationPreview, language: code)
 
         // The search bar's Cancel is UIKit's own string, which follows the language the app was
         // launched in. The appearance proxy reaches the bar button item of every search bar built from

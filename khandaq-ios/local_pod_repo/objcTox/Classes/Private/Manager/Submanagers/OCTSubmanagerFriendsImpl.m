@@ -10,6 +10,7 @@
 #import "OCTFriendRequest.h"
 #import "OCTRealmManager.h"
 #import "OCTPushUrlValidator.h"
+#import "OCTPushPreview.h"
 #if __has_include(<Firebase/Firebase.h>)
 #import <Firebase/Firebase.h>
 #define OCTHasFirebase 1
@@ -67,6 +68,16 @@ static void OCTSendPushURLToFriend(OCTTox *tox, OCTToxFriendNumber friendNumber)
     if (! result) {
         NSLog(@"push URL send failed for friendNumber %d: %@", friendNumber, error);
     }
+
+    // KHANDAQ (0.2.64): wherever the wake URL goes, the preview key and the group presence go with it
+    // (packets 190/01 and 190/02, docs/PUSH_PREVIEWS.md), so the friend can seal what its wakes say for
+    // this device and knows which member we are in a group we share.
+    NSData *keyPacket = [OCTPushPreview keyPacketForFriendPublicKey:friendPublicKey];
+    if (keyPacket != nil) {
+        [tox sendLosslessPacketWithFriendNumber:friendNumber bytes:keyPacket error:nil];
+    }
+    NSData *presencePacket = [OCTPushPreview groupPresencePacketWithHashes:[OCTPushPreview ownGroupPresenceHashesWithTox:tox]];
+    [tox sendLosslessPacketWithFriendNumber:friendNumber bytes:presencePacket error:nil];
 #endif
 }
 
@@ -330,6 +341,9 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
 
     [self.dataSource managerSaveTox];
 
+    // KHANDAQ (0.2.64): the preview key and group presence that contact sent go with them.
+    [OCTPushPreview forgetFriendPublicKey:friend.publicKey];
+
     [[self.dataSource managerGetRealmManager] deleteObject:friend];
 
     return YES;
@@ -557,6 +571,24 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
     [realmManager updateObject:friend withBlock:^(OCTFriend *theFriend) {
         theFriend.pushToken = pushToken;
     }];
+}
+
+- (void)tox:(OCTTox *)tox friendPushPreviewKey:(NSData *)key friendNumber:(OCTToxFriendNumber)friendNumber
+{
+    NSString *publicKey = [[self.dataSource managerGetTox] publicKeyFromFriendNumber:friendNumber error:nil];
+    if ([[self.dataSource managerGetRealmManager] friendWithPublicKey:publicKey] == nil) {
+        return;
+    }
+    [OCTPushPreview storePeerKey:key forFriendPublicKey:publicKey];
+}
+
+- (void)tox:(OCTTox *)tox friendGroupPresence:(NSArray<NSString *> *)hashes friendNumber:(OCTToxFriendNumber)friendNumber
+{
+    NSString *publicKey = [[self.dataSource managerGetTox] publicKeyFromFriendNumber:friendNumber error:nil];
+    if ([[self.dataSource managerGetRealmManager] friendWithPublicKey:publicKey] == nil) {
+        return;
+    }
+    [OCTPushPreview storeGroupPresence:hashes forFriendPublicKey:publicKey];
 }
 
 - (void)tox:(OCTTox *)tox friendStatusMessageUpdate:(NSString *)statusMessage friendNumber:(OCTToxFriendNumber)friendNumber

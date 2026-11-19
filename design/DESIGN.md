@@ -254,7 +254,9 @@ Decided while building it in the iOS client (11.11.2026); Android and desktop fo
   (the strip with hours and "usually"); Notifications with Mute; Key verification; Key in groups of
   four with Copy key and QR code; Files; then Block and Remove, both behind a confirmation.
 - **Local only:** mute and the verification date stay on this device. Mute silences this device's
-  alerts; the push relay still sends its wake signal (no text in it). Block is local as well, below.
+  alerts; the push relay still sends its wake signal, and from 0.2.64 a wake that carries a sealed
+  preview shows it, since the notification extension cannot read the mute (docs/PUSH_PREVIEWS.md).
+  Block is local as well, below.
 - **For yourself** stays last in the list with the bookmark tile: no marks, no tray, no dossier, the
   hint says the note stays on this device, and the header keeps search and files.
 - **At the accessibility text sizes** (stage 5) the time leaves its column for the line above the

@@ -205,6 +205,8 @@ public class HelperGroup
 
         // save tox savedate file
         HelperGeneric.update_savedata_file_wrapper();
+        // KHANDAQ (0.2.64): a group joined or created: friends online learn our presence in it (190/02).
+        PushPreviewPeers.groupsChanged();
     }
 
     static void new_or_updated_group(long group_num, String who_invited_public_key, String group_identifier, int privacy_state)
@@ -1042,6 +1044,8 @@ public class HelperGroup
                 reconnect_group_if_disconnected(new_group_num, group_identifier);
                 sync_group_peers_from_tox_to_db(new_group_num);
                 update_savedata_file_wrapper();
+                // KHANDAQ (0.2.64): joined again: friends online learn our presence in it (190/02).
+                PushPreviewPeers.groupsChanged();
                 return new_group_num;
             }
         }
@@ -7977,8 +7981,10 @@ public class HelperGroup
                     catch (Exception ignored)
                     {
                     }
+                    // KHANDAQ (0.2.64): the file's kind in words, as for a file of one person (MainActivity).
                     change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, existing.group_identifier,
-                                            groupname, existing.text);
+                                            groupname,
+                                            HelperMsgNotification.media_label_for_filename(context_s, displayName));
                 }
 
                 HelperFriend.refresh_chat_list_group_row_wrapper(group_id);
@@ -8087,7 +8093,9 @@ public class HelperGroup
                 catch (Exception ignored)
                 {
                 }
-                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, m.text,
+                // KHANDAQ (0.2.64): the file's kind in words, as for a file of one person (MainActivity).
+                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname,
+                                        HelperMsgNotification.media_label_for_filename(context_s, displayName),
                                         m.sent_timestamp, m.tox_group_peer_pubkey);
             }
 
@@ -11221,7 +11229,9 @@ public class HelperGroup
 
             if (do_notification)
             {
-                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, m.text,
+                // KHANDAQ (0.2.64): the file's kind in words, as for a file of one person (MainActivity).
+                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname,
+                                        HelperMsgNotification.media_label_for_filename(context_s, filename_corrected),
                                         m.sent_timestamp, m.tox_group_peer_pubkey);
             }
         }

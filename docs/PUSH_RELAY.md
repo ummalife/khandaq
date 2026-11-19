@@ -28,6 +28,12 @@ The relay:
 - Receives **FCM device token** (or compatible push token) in the URL
 - Sends a generic notification to wake the app
 - Does **not** receive Tox message plaintext
+- From Android 0.2.64 / iOS 1.4.34 may receive an **encrypted preview** (`preview`) and an opaque
+  event id (`pid`) in the `/wake` body. The preview is sealed on the sender's device for the
+  recipient's device (ChaCha20-Poly1305, key derived from a secret that never leaves the recipient's
+  phone); the relay forwards it as FCM data `khq_pv`/`khq_pid`, de-duplicates by a hash of
+  (token, pid) for at most six hours, and never logs either. Format and test vectors:
+  [PUSH_PREVIEWS.md](PUSH_PREVIEWS.md)
 - Does **not** receive full Tox IDs (address + checksum/nospam)
 - May receive an optional **sender public key** (64 hex chars) via `&from=` — forwarded in FCM `data` as `sender_pubkey` / `from` so the app can open the right chat
 - Does **not** receive receiver Tox ID

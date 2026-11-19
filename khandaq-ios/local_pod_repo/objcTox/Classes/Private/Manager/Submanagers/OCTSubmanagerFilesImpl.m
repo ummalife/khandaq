@@ -4,6 +4,7 @@
 
 #import "OCTSubmanagerFilesImpl.h"
 #import "OCTSubmanagerChats.h"
+#import "OCTSubmanagerChatsImpl.h"
 #import "OCTSubmanagerFilesProgressSubscriber.h"
 #import "OCTTox.h"
 #import "OCTToxConstants.h"
@@ -25,6 +26,7 @@
 #import "OCTNgcGroupFileTransfer.h"
 #import "OCTSettingsStorageObject.h"
 #import "NSError+OCTFile.h"
+#import <Security/Security.h>
 
 #if TARGET_OS_IPHONE
 @import MobileCoreServices;
@@ -248,16 +250,20 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
             [self.dataSource managerUseFauxOfflineMessaging]) {
             OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
 
-            [realmManager addMessageWithFileNumber:kOCTToxFileNumberFailure
-                                          fileType:OCTMessageFileTypeWaitingConfirmation
-                                          fileSize:fileSize
-                                          fileName:fileName
-                                          filePath:filePath
-                                           fileUTI:[self fileUTIFromFileName:fileName]
-                                              chat:chat
-                                            sender:nil];
+            OCTMessageAbstract *queued = [realmManager addMessageWithFileNumber:kOCTToxFileNumberFailure
+                                                                       fileType:OCTMessageFileTypeWaitingConfirmation
+                                                                       fileSize:fileSize
+                                                                       fileName:fileName
+                                                                       filePath:filePath
+                                                                        fileUTI:[self fileUTIFromFileName:fileName]
+                                                                           chat:chat
+                                                                         sender:nil];
 
-            [[self.dataSource managerGetChats] triggerWakePushForChat:chat];
+            // KHANDAQ (0.2.64): the queued file takes its Tox file id now rather than at its first offer
+            // (which passes this id, retrySendingFile), so the wake names the event the friend's device later
+            // matches the arriving file to (docs/PUSH_PREVIEWS.md).
+            [self stampNewFileIdHexOnMessage:queued];
+            [self wakeFriendForQueuedFile:queued inChat:chat];
             return;
         }
 
@@ -581,7 +587,7 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
                 }];
             }
             OCTChat *messageChat = [[self.dataSource managerGetRealmManager] getOrCreateChatWithFriend:friend];
-            [[self.dataSource managerGetChats] triggerWakePushForChat:messageChat];
+            [self wakeFriendForQueuedFile:message inChat:messageChat];
             return;
         }
 
@@ -603,9 +609,9 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
             messageFile.transferredBytes = 0;
         }
     }];
-    // KHANDAQ (0.2.57): a file sent while they were offline leaves here without an id until this first offer
-    // makes one, and the friend knows the file by it alone: their read receipt, reaction or delete for it, and
-    // their side of a transfer that goes on after an interruption.
+    // KHANDAQ (0.2.57): the friend knows the file by its id alone: their read receipt, reaction or delete for
+    // it, and their side of a transfer that goes on after an interruption. A file queued from 0.2.64 on brought
+    // its id from the queue and keeps it; one queued before leaves here without an id until this offer makes one.
     [self stampFileIdHexOnMessage:message fileNumber:fileNumber friendNumber:friend.friendNumber];
 
     NSDictionary *userInfo = [self fileOperationUserInfoWithMessage:message];
@@ -1885,6 +1891,38 @@ static const NSTimeInterval kReofferGraceInterval = 120.0;
         [hex appendFormat:@"%02X", bytes[i]];
     }
     return hex;
+}
+
+/// KHANDAQ (0.2.64): a random Tox file id for a file that waits for the friend, unless it has one already.
+- (void)stampNewFileIdHexOnMessage:(OCTMessageAbstract *)message
+{
+    if (message.messageFile == nil || message.messageFile.fileIdHex.length == kOCTToxFileIdLength * 2) {
+        return;
+    }
+    uint8_t bytes[32];
+    if (kOCTToxFileIdLength != sizeof(bytes) || SecRandomCopyBytes(kSecRandomDefault, sizeof(bytes), bytes) != errSecSuccess) {
+        return; // the first offer makes one, as before
+    }
+    NSMutableString *hex = [NSMutableString stringWithCapacity:sizeof(bytes) * 2];
+    for (NSUInteger i = 0; i < sizeof(bytes); i++) {
+        [hex appendFormat:@"%02X", bytes[i]];
+    }
+    [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
+        file.fileIdHex = hex;
+    }];
+}
+
+/// The wake for a file that waits for the friend, with a preview of what it is when the chats submanager
+/// is ours (a stand-in, as in the tests, gets the plain wake).
+- (void)wakeFriendForQueuedFile:(OCTMessageAbstract *)message inChat:(OCTChat *)chat
+{
+    id<OCTSubmanagerChats> chats = [self.dataSource managerGetChats];
+    if ([chats isKindOfClass:[OCTSubmanagerChatsImpl class]]) {
+        [(OCTSubmanagerChatsImpl *)chats triggerWakePushForChat:chat fileMessage:message];
+    }
+    else {
+        [chats triggerWakePushForChat:chat];
+    }
 }
 
 /// The 32 bytes of a stored file id; nil for no id or one of another shape (the offer then makes a new one).

@@ -37,7 +37,8 @@ struct ToxFactory {
 /// and "Only you are in the group so far" under the founder's welcome. objcTox stays as it is.
 enum ToxNotificationBridge {
     /// The events the screens listen to on the default center.
-    static let names: [Notification.Name] = [.octGroupPeersUpdated, .octGroupConnectionStatusChange, .octGroupLiveVideoActivity]
+    static let names: [Notification.Name] = [.octGroupPeersUpdated, .octGroupConnectionStatusChange, .octGroupLiveVideoActivity,
+                                             .octMessageReaction]
 
     /// Passes the events of the manager's own center on to the default center. That center keeps the
     /// observers and goes away with the manager (logout, another profile). A manager without a center of

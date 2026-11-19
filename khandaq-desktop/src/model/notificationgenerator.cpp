@@ -210,26 +210,30 @@ NotificationData NotificationGenerator::fileTransferNotification(const Friend* f
         return ret;
     }
 
+    // KHANDAQ (0.2.64): a voice note, a video or a photo by its kind, as the push previews of the
+    // phones say it (Air::fileKindOf); any other file by its name.
+    const QString kind = AirStrings::fileKindWords(filename);
     auto numChats = getNumChats(friendNotifications, groupNotifications);
     auto numMessages = getNumMessages(friendNotifications, groupNotifications);
     if (numChats > 1 || numMessages > 1)
     {
         ret.title = generateTitle(friendNotifications, groupNotifications, f);
         ret.message = generateContent(friendNotifications, groupNotifications,
-                                      AirStrings::fileWords(filename), f->getPublicKey());
+                                      kind.isEmpty() ? AirStrings::fileWords(filename) : kind,
+                                      f->getPublicKey());
     }
     else
     {
-        // The person, then the file as the list says it, with its size: "File: plan.pdf (5.2 MB)",
-        // "Voice message (43 KB)".
+        // The person, then the file with its size: "File: plan.pdf (5.2 MB)", "Voice message
+        // (43 KB)", "Video (5.2 MB)", "Photo (1.1 MB)".
         ret.title = f->getDisplayedName();
         const QString size = QStringLiteral(" (")
                              + AirStrings::byteSizeText(static_cast<qint64>(fileSize),
                                                         Translator::locale())
                              + QLatin1Char(')');
-        ret.message = Air::isVoiceNote(filename)
-                          ? AirStrings::text(AirStrings::Text::VoiceNote) + size
-                          : AirStrings::text(AirStrings::Text::FileMessage).arg(filename + size);
+        ret.message = kind.isEmpty()
+                          ? AirStrings::text(AirStrings::Text::FileMessage).arg(filename + size)
+                          : kind + size;
     }
 
     ret.pixmap = getSenderAvatar(profile, f->getPublicKey());
@@ -270,6 +274,46 @@ NotificationData NotificationGenerator::friendRequestNotification(const ToxPk& s
     }
 
     ret.message = message;
+
+    return ret;
+}
+
+NotificationData NotificationGenerator::friendReactionNotification(const Friend* f,
+                                                                   const QString& reaction)
+{
+    // KHANDAQ (0.2.64): a reaction stands alone, as a request does: it is no message, so it takes
+    // no place in the counts of messages ("2 messages from Maryam"), and the next message counts
+    // as before. With message text off it says only that there is one, and from nobody.
+    NotificationData ret;
+
+    if (notificationSettings.getNotifyHide()) {
+        ret.title = AirStrings::text(AirStrings::Text::NotifyNewReaction);
+        return ret;
+    }
+
+    ret.title = f->getDisplayedName();
+    ret.message = reaction;
+    ret.pixmap = getSenderAvatar(profile, f->getPublicKey());
+
+    return ret;
+}
+
+NotificationData NotificationGenerator::groupReactionNotification(const Group* g,
+                                                                  const ToxPk& sender,
+                                                                  const QString& reaction)
+{
+    NotificationData ret;
+
+    if (notificationSettings.getNotifyHide()) {
+        ret.title = AirStrings::text(AirStrings::Text::NotifyNewReaction);
+        return ret;
+    }
+
+    // The group, then who reacted and the words, as a message of the group says it.
+    ret.title = g->getDisplayedName();
+    const QString name = g->resolveToxPk(sender);
+    ret.message = name.isEmpty() ? reaction : name + QStringLiteral(": ") + reaction;
+    ret.pixmap = getSenderAvatar(profile, sender);
 
     return ret;
 }

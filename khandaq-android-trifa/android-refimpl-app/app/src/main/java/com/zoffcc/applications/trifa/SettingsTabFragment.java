@@ -136,7 +136,8 @@ public class SettingsTabFragment extends Fragment
                                                      livingBeingEmojiRow(context, prefs)));
 
         final AirSettingRow preview = new AirSettingRow(context, getString(R.string.settings_notif_preview), false);
-        preview.withSwitch(prefs.getBoolean("notification_show_content", false),
+        // KHANDAQ (0.2.64): the switch shows the default the notifications use (on), not off.
+        preview.withSwitch(prefs.getBoolean("notification_show_content", true),
                            (button, checked) -> prefs.edit().putBoolean("notification_show_content", checked).apply());
         AirScreenKit.addSection(column, getString(R.string.air_settings_notifications), null,
                                 AirScreenKit.plateOf(context, preview));

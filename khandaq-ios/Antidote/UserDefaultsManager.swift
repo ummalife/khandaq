@@ -131,6 +131,8 @@ class UserDefaultsManager {
         }
         set {
             setBool(newValue, forKey: Keys.ShowNotificationsPreview)
+            // KHANDAQ (0.2.64): the push extension words previews by it too, and reads it from the Keychain.
+            PushPreviewStore.mirror(showContent: newValue, language: AppLanguage.current)
         }
     }
 

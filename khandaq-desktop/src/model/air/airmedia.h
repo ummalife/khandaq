@@ -56,6 +56,27 @@ constexpr qint64 fileLimitShownBytes = 200LL * 1000 * 1000;
 bool isVoiceNote(const QString& fileName);
 
 /**
+ * KHANDAQ (0.2.64): what a file is, as a notification says it on every client
+ * (docs/PUSH_PREVIEWS.md, "Kinds from a file"): a voice note (isVoiceNote), a video, a photo, or
+ * any other file.
+ */
+enum class FileKind
+{
+    File,
+    Voice,
+    Video,
+    Photo,
+};
+
+/**
+ * KHANDAQ (0.2.64): the kind of a file by its name alone, in any case: a video ends in mp4, mov,
+ * m4v, webm, mkv, 3gp or avi, a photo in jpg, jpeg, png, gif, heic, heif or webp. A name that is
+ * nothing but its extension is a file, as ".file.m4a" is no voice note. Nothing about the file is
+ * trusted from it.
+ */
+FileKind fileKindOf(const QString& fileName);
+
+/**
  * The folder voice notes go to, in the data folder of the app (appDataDir): they are listened to,
  * not kept as files, so they come there without the question where to save them.
  */

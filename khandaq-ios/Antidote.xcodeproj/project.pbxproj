@@ -280,6 +280,9 @@
 		A1NGCMOCK000003 /* OCTSubmanagerGroupsMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1NGCMOCK000001 /* OCTSubmanagerGroupsMock.swift */; };
 		A1NGCMOCK000004 /* OCTSubmanagerGroupsMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1NGCMOCK000001 /* OCTSubmanagerGroupsMock.swift */; };
 		AF2C929D279AB3F10094C08D /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2C929C279AB3F10094C08D /* NotificationService.swift */; };
+		B0C0FFEE0640000000000002 /* PushPreviewContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0C0FFEE0640000000000001 /* PushPreviewContent.swift */; };
+		B0C0FFEE0640000000000003 /* PushPreviewContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0C0FFEE0640000000000001 /* PushPreviewContent.swift */; };
+		B0C0FFEE0640000000000006 /* PushPreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0C0FFEE0640000000000005 /* PushPreviewTests.swift */; };
 		AF2C92A1279AB3F10094C08D /* pushextension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = AF2C929A279AB3F10094C08D /* pushextension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AFA023F4274C069100FBFCC0 /* ConnectionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFA023F3274C069100FBFCC0 /* ConnectionStatus.swift */; };
 		AFA024022753CC9000FBFCC0 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = AFA024012753CC9000FBFCC0 /* GoogleService-Info.plist */; };
@@ -830,6 +833,9 @@
 		A1NGCMOCK000001 /* OCTSubmanagerGroupsMock.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OCTSubmanagerGroupsMock.swift; sourceTree = "<group>"; };
 		AF2C929A279AB3F10094C08D /* pushextension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = pushextension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF2C929C279AB3F10094C08D /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		B0C0FFEE0640000000000001 /* PushPreviewContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushPreviewContent.swift; sourceTree = "<group>"; };
+		B0C0FFEE0640000000000004 /* pushextension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = pushextension.entitlements; sourceTree = "<group>"; };
+		B0C0FFEE0640000000000005 /* PushPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushPreviewTests.swift; sourceTree = "<group>"; };
 		AF2C929E279AB3F10094C08D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AF6AB23329156C5800019362 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		AF6AB23429156C6000019362 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/AppStoreLocalizable.strings; sourceTree = "<group>"; };
@@ -1091,6 +1097,7 @@
 				B2BAIR051111000000000002 /* AirEntryTextCellSnapshotTest.swift */,
 				KQLOCROW0000000000000002 /* ChatLocationRowLayoutTest.swift */,
 				KQMSGV3ACK00000000000002 /* MsgV3ReceiptTests.swift */,
+				B0C0FFEE0640000000000005 /* PushPreviewTests.swift */,
 				KHLOCTEST000000000000002 /* LocalizationTest.swift */,
 				KHLOCTEST000000000000004 /* MessageForwarderTest.swift */,
 				KHLOCTEST000000000000006 /* KhandaqBrandingTest.swift */,
@@ -1584,7 +1591,9 @@
 			isa = PBXGroup;
 			children = (
 				AF2C929C279AB3F10094C08D /* NotificationService.swift */,
+				B0C0FFEE0640000000000001 /* PushPreviewContent.swift */,
 				AF2C929E279AB3F10094C08D /* Info.plist */,
+				B0C0FFEE0640000000000004 /* pushextension.entitlements */,
 			);
 			path = pushextension;
 			sourceTree = "<group>";
@@ -2152,6 +2161,7 @@
 				B2SWIPEA00000000000001 /* ChatListSwipeNavigation.swift in Sources */,
 				B2ATTACH00000000000001 /* ChatAttachmentsController.swift in Sources */,
 				AA11BB22CC33DD44EE550003 /* AppLanguage.swift in Sources */,
+				B0C0FFEE0640000000000002 /* PushPreviewContent.swift in Sources */,
 				11628E721CA580ED008C097E /* ChatGenericFileCell.swift in Sources */,
 				116634AF1C6F40820072C980 /* ChatOutgoingCallCellModel.swift in Sources */,
 				116634B21C7087A80072C980 /* UIApplicationExtension.swift in Sources */,
@@ -2455,6 +2465,7 @@
 				B2BAIR061111000000000002 /* AirEntryTextCellSnapshotTest.swift in Sources */,
 				KQLOCROW0000000000000001 /* ChatLocationRowLayoutTest.swift in Sources */,
 				KQMSGV3ACK00000000000001 /* MsgV3ReceiptTests.swift in Sources */,
+				B0C0FFEE0640000000000006 /* PushPreviewTests.swift in Sources */,
 				KHLOCTEST000000000000001 /* LocalizationTest.swift in Sources */,
 				KHLOCTEST000000000000003 /* MessageForwarderTest.swift in Sources */,
 				KHLOCTEST000000000000005 /* KhandaqBrandingTest.swift in Sources */,
@@ -2468,6 +2479,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AF2C929D279AB3F10094C08D /* NotificationService.swift in Sources */,
+				B0C0FFEE0640000000000003 /* PushPreviewContent.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2889,6 +2901,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = DQRPWB97AB;
+				CODE_SIGN_ENTITLEMENTS = pushextension/pushextension.entitlements;
 				INFOPLIST_FILE = pushextension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
@@ -2916,6 +2929,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = DQRPWB97AB;
+				CODE_SIGN_ENTITLEMENTS = pushextension/pushextension.entitlements;
 				INFOPLIST_FILE = pushextension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";

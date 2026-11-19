@@ -11,11 +11,13 @@
   ],
   "privacy": {
     "payload_contains_message_content": false,
+    "payload_may_contain_encrypted_preview": true,
+    "encrypted_preview_spec": "docs/PUSH_PREVIEWS.md",
     "payload_contains_tox_id": false,
     "payload_contains_sender_public_key": true,
     "sender_public_key_format": "64_hex_chars_optional_query_param_from",
     "notification_title": "Khandaq",
     "notification_body": "New message",
-    "notes": "Wake relay may receive sender Tox public key (not full Tox ID with checksum) via optional &from= query param and FCM data fields sender_pubkey/from. Used by mobile clients to route the notification to the correct chat. Message plaintext is never sent."
+    "notes": "Wake relay may receive sender Tox public key (not full Tox ID with checksum) via optional &from= query param and FCM data fields sender_pubkey/from. Used by mobile clients to route the notification to the correct chat. Message plaintext is never sent. From Android 0.2.64 / iOS 1.4.34 a wake may carry `preview`, an end-to-end encrypted preview (ChaCha20-Poly1305 under a key only the recipient device can derive), and `pid`, an opaque event id; the relay forwards both as FCM data khq_pv/khq_pid and cannot read them."
   }
 }

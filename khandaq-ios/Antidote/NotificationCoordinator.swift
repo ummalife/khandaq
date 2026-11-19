@@ -10,6 +10,17 @@ private enum NotificationType {
     case newMessage(OCTMessageAbstract)
     case friendRequest(OCTFriendRequest)
     case groupInvite(AirGroupInvite)
+    case reaction(ReactionNotice)
+}
+
+/// KHANDAQ (0.2.64): somebody reacted to one of our messages (kOCTMessageReactionNotification).
+private struct ReactionNotice {
+    let message: OCTMessageAbstract
+    let emoji: String
+    /// The member who reacted, in a group.
+    let reactorName: String?
+    /// `r:<anchor>:<emoji>`: the same event a push preview names in `khq_ev`.
+    let eventKey: String?
 }
 
 private struct Constants {
@@ -121,6 +132,7 @@ class NotificationCoordinator: NSObject {
         addNotificationBlocks()
 
         NotificationCenter.default.addObserver(self, selector: #selector(NotificationCoordinator.applicationDidBecomeActive), name: NSNotification.Name.UIApplicationDidBecomeActive, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(NotificationCoordinator.messageReactionReceived(_:)), name: .octMessageReaction, object: nil)
     }
 
     deinit {
@@ -151,6 +163,8 @@ class NotificationCoordinator: NSObject {
             switch $0 {
                 case .newMessage(let messageAbstract):
                     return messageAbstract.chatUniqueIdentifier != chat.uniqueIdentifier
+                case .reaction(let notice):
+                    return notice.message.chatUniqueIdentifier != chat.uniqueIdentifier
                 case .friendRequest, .groupInvite:
                     return true
             }
@@ -233,6 +247,38 @@ extension NotificationCoordinator {
     @objc func applicationDidBecomeActive() {
         lastBecameActiveDate = Date()
         UIApplication.shared.cancelAllLocalNotifications()
+    }
+
+    /// KHANDAQ (0.2.64): a reaction to one of our messages notifies as a message does: a band and a sound
+    /// in another chat while the app is open, a notification while it is away. Muted chats and members,
+    /// and the chat already open, stay quiet; what Realm flushes on the way back in was notified while
+    /// away, by the push preview.
+    @objc func messageReactionReceived(_ notification: Notification) {
+        guard let info = notification.userInfo,
+              let messageIdentifier = info[kOCTMessageReactionMessageUniqueIdentifierKey] as? String,
+              let emoji = info[kOCTMessageReactionEmojiKey] as? String,
+              let message = submanagerObjects.object(withUniqueIdentifier: messageIdentifier, for: .messageAbstract) as? OCTMessageAbstract,
+              message.isOutgoing(),
+              !areNotificationsMuted(for: message) else {
+            return
+        }
+        if UIApplication.isActive && bannedChatIdentifiers.contains(message.chatUniqueIdentifier) {
+            return
+        }
+        if let chat = submanagerObjects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat,
+           !chat.isGroup,
+           let friend = chat.friends.lastObject() as? OCTFriend,
+           AirLocalStore.shared.isBlocked(publicKey: friend.publicKey) {
+            return
+        }
+
+        if UIApplication.isActive && isPastEntryGrace {
+            audioPlayer.playSound(.NewMessage)
+        }
+        enqueueNotification(.reaction(ReactionNotice(message: message,
+                                                     emoji: emoji,
+                                                     reactorName: info[kOCTMessageReactionReactorNameKey] as? String,
+                                                     eventKey: info[kOCTMessageReactionEventKeyKey] as? String)))
     }
 
     /// The name the notifications of a group give it: Khandaq Community by its own name, any other group by
@@ -393,6 +439,13 @@ private extension NotificationCoordinator {
                     else {
                         showNextNotification()
                     }
+                case .reaction(let notice):
+                    if isPastEntryGrace {
+                        showInAppNotificationObject(object, chatUniqueIdentifier: notice.message.chatUniqueIdentifier)
+                    }
+                    else {
+                        showNextNotification()
+                    }
                 case .friendRequest, .groupInvite:
                     if isPastEntryGrace {
                         showInAppNotificationObject(object, chatUniqueIdentifier: nil)
@@ -403,7 +456,30 @@ private extension NotificationCoordinator {
             }
         }
         else {
-            showLocalNotificationObject(object)
+            showLocalNotificationObject(object, eventKey: eventKey(of: notification))
+        }
+    }
+
+    /// The event a push preview names in `khq_ev` (docs/PUSH_PREVIEWS.md): a text by its msgV3 hash, a file
+    /// by its Tox file id, a reaction by its anchor and emoji. Group messages never come as previews.
+    func eventKey(of notification: NotificationType) -> String? {
+        switch notification {
+            case .newMessage(let message):
+                let chat = submanagerObjects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat
+                guard chat?.isGroup == false else {
+                    return nil
+                }
+                if let hash = message.messageText?.msgv3HashHex, hash.count == 64 {
+                    return "t:" + hash.uppercased()
+                }
+                if let fileId = message.messageFile?.fileIdHex, fileId.count == 64 {
+                    return "f:" + fileId.uppercased()
+                }
+                return nil
+            case .reaction(let notice):
+                return notice.eventKey
+            case .friendRequest, .groupInvite:
+                return nil
         }
     }
 
@@ -418,7 +494,7 @@ private extension NotificationCoordinator {
         showNextNotification()
     }
 
-    func showLocalNotificationObject(_ object: NotificationObject) {
+    func showLocalNotificationObject(_ object: NotificationObject, eventKey: String? = nil) {
         let body = "\(object.title): \(object.body)"
 
         // KHANDAQ (#G6): drop a duplicate of the SAME contentful notification fired within a short
@@ -431,6 +507,27 @@ private extension NotificationCoordinator {
         lastLocalNotificationBody = body
         lastLocalNotificationTime = now
 
+        guard let eventKey = eventKey else {
+            presentLocalNotification(object, body: body)
+            showNextNotification()
+            return
+        }
+
+        // KHANDAQ (0.2.64): the push extension may have shown this very event already, from the preview
+        // the sender's wake carried; its notification names the event in `khq_ev`, and this one would only
+        // repeat it.
+        UNUserNotificationCenter.current().getDeliveredNotifications { [weak self] delivered in
+            let shown = delivered.contains { ($0.request.content.userInfo["khq_ev"] as? String) == eventKey }
+            DispatchQueue.main.async {
+                if !shown {
+                    self?.presentLocalNotification(object, body: body)
+                }
+            }
+        }
+        showNextNotification()
+    }
+
+    func presentLocalNotification(_ object: NotificationObject, body: String) {
         let local = UILocalNotification()
         local.alertBody = body
         local.userInfo = object.action.archive()
@@ -442,8 +539,6 @@ private extension NotificationCoordinator {
         // "New activity" / empty) for this same message; clear those so the contentful one we just
         // posted isn't shadowed by a "New message" duplicate.
         removeGenericPushNotifications()
-
-        showNextNotification()
     }
 
     /// KHANDAQ (#G6): remove delivered generic wake-push banners from the notification-service
@@ -470,7 +565,64 @@ private extension NotificationCoordinator {
                 return notificationObjectFromMessage(message)
             case .groupInvite(let invite):
                 return notificationObjectFromGroupInvite(invite)
+            case .reaction(let notice):
+                return notificationObjectFromReaction(notice)
         }
+    }
+
+    /// The chat's name over who reacted with what to which message: "Amina", "Reacted ❤️ to "See you at
+    /// six""; in a group, "Book club", "Amina: Reacted ❤️ to your photo". Worded as the push preview is.
+    func notificationObjectFromReaction(_ notice: ReactionNotice) -> NotificationObject {
+        let message = notice.message
+        let language = AppLanguage.current
+        let chat = submanagerObjects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat
+        let action = NotificationAction.openChat(chatUniqueIdentifier: message.chatUniqueIdentifier)
+
+        let title: String
+        var icon: UIImage?
+        let tile: AirTileView.Style?
+        if chat?.isGroup == true {
+            let groupName = NotificationCoordinator.groupName(of: chat)
+            title = groupName
+            tile = KhandaqCommunity.isCommunity(chat)
+                ? .community
+                : .group(initials: AirInitials.from(groupName), tone: AirTone.index(for: message.chatUniqueIdentifier))
+        }
+        else if let friend = chat?.friends.lastObject() as? OCTFriend {
+            title = friend.nickname
+            icon = friend.avatarData.flatMap { UIImage(data: $0) }
+            tile = .person(initials: AirInitials.from(friend.nickname), tone: AirTone.index(for: friend.publicKey))
+        }
+        else {
+            title = ""
+            tile = nil
+        }
+
+        let body: String
+        if userDefaults.showNotificationPreview {
+            var reactedKind: PushPreview.Kind?
+            var reactedText: String?
+            if let file = message.messageFile {
+                reactedKind = PushPreview.Kind(rawValue: OCTPushPreview.kind(forFileName: file.fileName))
+            }
+            else {
+                reactedKind = .text
+                let text = GroupMentionHelper.notificationPreviewText(message.messageText?.text)
+                reactedText = text.isEmpty ? nil : String(text.prefix(80))
+            }
+            let line = PushPreviewText.reactionBody(emoji: notice.emoji, reactedKind: reactedKind, text: reactedText, language: language)
+            if chat?.isGroup == true, let reactor = notice.reactorName, !reactor.isEmpty {
+                body = reactor + ": " + line
+            }
+            else {
+                body = line
+            }
+        }
+        else {
+            body = PushPreviewText.strings(language).newReaction
+        }
+
+        return NotificationObject(title: title, body: body, action: action, soundName: "isotoxin_NewMessage.aac", icon: icon, tile: tile)
     }
 
     /// The contact who invites, then what they invite to: "Amina Safina", "Invites you to the group
@@ -573,7 +725,11 @@ private extension NotificationCoordinator {
             let defaultString = String(localized: "notification_incoming_file")
 
             if userDefaults.showNotificationPreview {
-                body = peerPrefix + (messageFile.fileName ?? defaultString)
+                // KHANDAQ (0.2.64): a voice message, a video and a photo are named for what they are, as the
+                // push preview names them; any other file by its name.
+                let kindName = OCTPushPreview.kind(forFileName: messageFile.fileName)
+                let kind = PushPreview.Kind(rawValue: kindName) ?? .file
+                body = peerPrefix + PushPreviewText.messageBody(kind: kind, text: messageFile.fileName, language: AppLanguage.current)
             }
             else {
                 body = defaultString

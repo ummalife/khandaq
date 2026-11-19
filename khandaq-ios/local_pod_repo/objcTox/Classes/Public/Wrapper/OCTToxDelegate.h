@@ -112,6 +112,18 @@
 - (void)tox:(OCTTox *)tox friendSeenWithAnchorType:(uint8_t)anchorType anchorHex:(NSString *)anchorHex seenTime:(uint32_t)seenTime friendNumber:(OCTToxFriendNumber)friendNumber;
 
 /**
+ * KHANDAQ (0.2.64): the friend's push preview key (lossless packet 190/01, docs/PUSH_PREVIEWS.md): what
+ * we seal the previews of our wakes to that friend with. 32 bytes.
+ */
+- (void)tox:(OCTTox *)tox friendPushPreviewKey:(NSData *)key friendNumber:(OCTToxFriendNumber)friendNumber;
+
+/**
+ * KHANDAQ (0.2.64): the friend's group presence (lossless packet 190/02): one 32-hex hash per group the
+ * friend is in, which tells which group member that friend is when we react to their message there.
+ */
+- (void)tox:(OCTTox *)tox friendGroupPresence:(NSArray<NSString *> *)hashes friendNumber:(OCTToxFriendNumber)friendNumber;
+
+/**
  * Friend's status message was updated.
  *
  * @param statusMessage Updated status message.

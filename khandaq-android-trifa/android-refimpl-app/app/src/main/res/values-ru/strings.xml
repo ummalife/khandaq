@@ -530,7 +530,14 @@
     <string name="notification_media_video">🎬 Видео</string>
     <string name="notification_media_voice">🎤 Голосовое сообщение</string>
     <string name="notification_media_generic">📎 Вложение</string>
-    <string name="reaction_notification_body">отреагировал(а) %1$s</string>
+    <string name="push_preview_new_message">Новое сообщение</string>
+    <string name="push_preview_new_reaction">Новая реакция</string>
+    <string name="push_preview_reaction_text">Реакция %1$s на «%2$s»</string>
+    <string name="push_preview_reaction_voice">Реакция %1$s на ваше голосовое сообщение</string>
+    <string name="push_preview_reaction_video">Реакция %1$s на ваше видео</string>
+    <string name="push_preview_reaction_photo">Реакция %1$s на ваше фото</string>
+    <string name="push_preview_reaction_file">Реакция %1$s на ваш файл</string>
+    <string name="push_preview_reaction_message">Реакция %1$s на ваше сообщение</string>
     <string name="chat_react_action">Реакция</string>
     <string name="chat_report_action">Пожаловаться</string>
     <!-- KHANDAQ (#205): delete scope choice -->

@@ -14,7 +14,11 @@ class NotificationService: UNNotificationServiceExtension {
         bestAttemptContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
 
         if let bestAttemptContent = bestAttemptContent {
-            // Khandaq wake push: keep relay title/body; only fill empty title.
+            // KHANDAQ (0.2.64): a wake from a contact on 0.2.64 or later carries what the event was, sealed
+            // for this device (docs/PUSH_PREVIEWS.md); it is opened here and shown in place of the relay's
+            // generic text. Anything that does not open keeps the relay's text, as before.
+            PushPreviewPresenter.apply(to: bestAttemptContent, userInfo: request.content.userInfo)
+
             if bestAttemptContent.title.isEmpty {
                 bestAttemptContent.title = "Khandaq"
             }

@@ -4,6 +4,7 @@
 
 #import "OCTSubmanagerChatsImpl.h"
 #import "OCTPushUrlValidator.h"
+#import "OCTPushPreview.h"
 #import "OCTSubmanagerFriends.h"
 #import "OCTSubmanagerFiles.h"
 #import "OCTTox.h"
@@ -32,8 +33,22 @@ static void triggerPush(NSString *used_pushToken,
                         NSString *msgv3HashHex,
                         OCTSubmanagerChatsImpl *strongSelf,
                         OCTChat *chat);
+static void triggerPushWithPreview(NSString *used_pushToken,
+                                   NSString *msgv3HashHex,
+                                   OCTSubmanagerChatsImpl *strongSelf,
+                                   OCTChat *chat,
+                                   NSDictionary<NSString *, NSString *> *previewFields,
+                                   int maxAttempts);
 static NSString *khandaqAppendRelayAuth(NSString *baseURL);
 static NSMutableURLRequest *khandaqBuildWakeRequest(NSString *pushToken);
+static void khandaqAddPreviewToWakeRequest(NSMutableURLRequest *request, NSDictionary<NSString *, NSString *> *previewFields);
+
+NSNotificationName const kOCTMessageReactionNotification = @"kOCTMessageReactionNotification";
+NSString *const kOCTMessageReactionChatUniqueIdentifierKey = @"chatUniqueIdentifier";
+NSString *const kOCTMessageReactionMessageUniqueIdentifierKey = @"messageUniqueIdentifier";
+NSString *const kOCTMessageReactionEmojiKey = @"emoji";
+NSString *const kOCTMessageReactionReactorNameKey = @"reactorName";
+NSString *const kOCTMessageReactionEventKeyKey = @"eventKey";
 int bin_to_hex(const char *bin_id, size_t bin_id_size, char *output);
 
 #pragma mark - KHANDAQ (audit A47) push.khandaq.org certificate pinning
@@ -310,6 +325,7 @@ static const NSTimeInterval kOCTSeenReportedMaxLeadSec = 300.0;
     OCTTox *tox = [self.dataSource managerGetTox];
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
     RLMResults *friends = [realmManager objectsWithClass:[OCTFriend class] predicate:nil];
+    NSData *presencePacket = [OCTPushPreview groupPresencePacketWithHashes:[OCTPushPreview ownGroupPresenceHashesWithTox:tox]];
     for (OCTFriend *friend in friends) {
         if (!friend.isConnected) {
             continue;
@@ -325,19 +341,134 @@ static const NSTimeInterval kOCTSeenReportedMaxLeadSec = 300.0;
                                           pktid:181
                                            data:data
                                           error:&error];
+
+        // KHANDAQ (0.2.64): the preview key and the group presence go with the wake URL (190/01, 190/02).
+        NSData *keyPacket = [OCTPushPreview keyPacketForFriendPublicKey:friend.publicKey];
+        if (keyPacket != nil) {
+            [tox sendLosslessPacketWithFriendNumber:friend.friendNumber bytes:keyPacket error:nil];
+        }
+        [tox sendLosslessPacketWithFriendNumber:friend.friendNumber bytes:presencePacket error:nil];
     }
 #else
     NSLog(@"PUSH:broadcastOwnPushURL:firebase not configured");
 #endif
 }
 
+- (void)broadcastGroupPresenceToConnectedFriends
+{
+#if OCTHasFirebase
+    if ([FIRApp defaultApp] == nil || [FIRMessaging messaging].FCMToken.length == 0) {
+        return; // no wake URL of ours is out there, so nobody could wake us for a reaction anyway
+    }
+
+    OCTTox *tox = [self.dataSource managerGetTox];
+    NSData *presencePacket = [OCTPushPreview groupPresencePacketWithHashes:[OCTPushPreview ownGroupPresenceHashesWithTox:tox]];
+    RLMResults *friends = [[self.dataSource managerGetRealmManager] objectsWithClass:[OCTFriend class] predicate:nil];
+    for (OCTFriend *friend in friends) {
+        if (friend.isConnected) {
+            [tox sendLosslessPacketWithFriendNumber:friend.friendNumber bytes:presencePacket error:nil];
+        }
+    }
+#endif
+}
+
+- (NSMutableDictionary<NSString *, id> *)pushPreviewFieldsWithKind:(NSString *)kind
+{
+    NSMutableDictionary<NSString *, id> *fields = [NSMutableDictionary dictionary];
+    fields[@"k"] = kind;
+    NSString *ownName = [[self.dataSource managerGetTox] userName];
+    if (ownName.length > 0) {
+        fields[@"n"] = ownName;
+    }
+    fields[@"ts"] = @((long long)[[NSDate date] timeIntervalSince1970]);
+    return fields;
+}
+
+- (void)sendPreviewWakeToFriend:(OCTFriend *)friend fields:(NSDictionary<NSString *, id> *)fields
+{
+    if (friend == nil || friend.isConnected || ! [OCTPushUrlValidator isAllowedPushURL:friend.pushToken]) {
+        return;
+    }
+    NSDictionary<NSString *, NSString *> *previewFields = [OCTPushPreview wakeFieldsForFriendPublicKey:friend.publicKey
+                                                                                                fields:fields];
+    if (previewFields == nil) {
+        return;
+    }
+    triggerPushWithPreview(friend.pushToken, nil, self, nil, previewFields, 1);
+}
+
+- (void)triggerWakePushForChat:(OCTChat *)chat fileMessage:(OCTMessageAbstract *)message
+{
+    NSParameterAssert(chat);
+
+    OCTFriend *friend = [chat.friends firstObject];
+    if (friend.pushToken.length == 0) {
+        return;
+    }
+
+    // KHANDAQ (0.2.64): the wake says whether it is a voice message, a video, a photo or a file (and its
+    // name), sealed for the friend's device.
+    NSDictionary<NSString *, NSString *> *previewFields = nil;
+    OCTMessageFile *file = message.messageFile;
+    if (file != nil && friend.publicKey.length > 0) {
+        NSString *kind = [OCTPushPreview kindForFileName:file.fileName];
+        NSMutableDictionary<NSString *, id> *fields = [self pushPreviewFieldsWithKind:kind];
+        if ([kind isEqualToString:kOCTPushPreviewKindFile] && file.fileName.length > 0) {
+            fields[@"b"] = file.fileName;
+        }
+        if (file.fileIdHex.length == 64) {
+            fields[@"h"] = [@"f:" stringByAppendingString:file.fileIdHex.uppercaseString];
+        }
+        previewFields = [OCTPushPreview wakeFieldsForFriendPublicKey:friend.publicKey fields:fields];
+    }
+
+    triggerPushWithPreview(friend.pushToken, nil, self, chat, previewFields, 0);
+}
+
+- (void)postReactionOnOwnMessage:(OCTMessageAbstract *)message
+                           emoji:(NSString *)emoji
+                     reactorName:(NSString *)reactorName
+                        eventKey:(NSString *)eventKey
+{
+    if (message.uniqueIdentifier.length == 0 || message.chatUniqueIdentifier.length == 0 || emoji.length == 0) {
+        return;
+    }
+    NSMutableDictionary *userInfo = [NSMutableDictionary dictionary];
+    userInfo[kOCTMessageReactionChatUniqueIdentifierKey] = message.chatUniqueIdentifier;
+    userInfo[kOCTMessageReactionMessageUniqueIdentifierKey] = message.uniqueIdentifier;
+    userInfo[kOCTMessageReactionEmojiKey] = emoji;
+    userInfo[kOCTMessageReactionEventKeyKey] = eventKey;
+    if (reactorName.length > 0) {
+        userInfo[kOCTMessageReactionReactorNameKey] = reactorName;
+    }
+    [[self.dataSource managerGetNotificationCenter] postNotificationName:kOCTMessageReactionNotification
+                                                                  object:nil
+                                                                userInfo:userInfo];
+}
+
 /**
  * Wakes a friend who is offline for a message sent to them, again and again until that message is
  * delivered (triggerPush).
  */
-- (void)wakeFriendWithPushToken:(NSString *)pushToken forMessageWithHash:(NSString *)msgv3HashHex inChat:(OCTChat *)chat
+- (void)wakeFriendWithPushToken:(NSString *)pushToken
+             forMessageWithHash:(NSString *)msgv3HashHex
+                           text:(NSString *)text
+                         inChat:(OCTChat *)chat
 {
-    triggerPush(pushToken, msgv3HashHex, self, chat);
+    // KHANDAQ (0.2.64): the wake says what was written, sealed for the friend's device
+    // (docs/PUSH_PREVIEWS.md). Every retry carries the same preview and event id, so it is shown once.
+    NSDictionary<NSString *, NSString *> *previewFields = nil;
+    OCTFriend *friend = [chat.friends firstObject];
+    NSString *previewText = [OCTPushPreview previewTextFromMessageText:text];
+    if (friend.publicKey.length > 0 && previewText.length > 0) {
+        NSMutableDictionary<NSString *, id> *fields = [self pushPreviewFieldsWithKind:kOCTPushPreviewKindText];
+        fields[@"b"] = previewText;
+        if (msgv3HashHex.length == 64) {
+            fields[@"h"] = [@"t:" stringByAppendingString:msgv3HashHex.uppercaseString];
+        }
+        previewFields = [OCTPushPreview wakeFieldsForFriendPublicKey:friend.publicKey fields:fields];
+    }
+    triggerPushWithPreview(pushToken, msgv3HashHex, self, chat, previewFields, 0);
 }
 
 - (void)triggerWakePushForChat:(OCTChat *)chat
@@ -508,6 +639,33 @@ static NSMutableURLRequest *khandaqBuildWakeRequest(NSString *pushToken)
     return req;
 }
 
+/// KHANDAQ (0.2.64): a sealed preview and its event id ride in the JSON body of a wake to our own relay
+/// (docs/PUSH_PREVIEWS.md). They are outside the signature, as the spec says: a preview someone altered
+/// fails to open on the recipient's device. A wake without a sender, or to any other relay, is left alone.
+static void khandaqAddPreviewToWakeRequest(NSMutableURLRequest *request, NSDictionary<NSString *, NSString *> *previewFields)
+{
+    NSString *preview = previewFields[kOCTPushPreviewWakeFieldPreview];
+    NSString *pid = previewFields[kOCTPushPreviewWakeFieldPid];
+    if (preview.length == 0 || pid.length == 0 || request.HTTPBody == nil
+        || ! [request.URL.absoluteString isEqualToString:@"https://push.khandaq.org/wake"]) {
+        return;
+    }
+    id body = [NSJSONSerialization JSONObjectWithData:request.HTTPBody options:NSJSONReadingMutableContainers error:nil];
+    if (! [body isKindOfClass:[NSMutableDictionary class]]) {
+        return;
+    }
+    NSString *sender = body[@"sender"];
+    if (! [sender isKindOfClass:[NSString class]] || sender.length == 0) {
+        return;
+    }
+    body[kOCTPushPreviewWakeFieldPreview] = preview;
+    body[kOCTPushPreviewWakeFieldPid] = pid;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
+    if (data != nil) {
+        [request setHTTPBody:data];
+    }
+}
+
 static NSString *khandaqAppendRelayAuth(NSString *baseURL)
 {
     if (baseURL == nil) {
@@ -555,6 +713,18 @@ static void triggerPush(NSString *used_pushToken,
                         OCTSubmanagerChatsImpl *strongSelf,
                         OCTChat *chat)
 {
+    triggerPushWithPreview(used_pushToken, msgv3HashHex, strongSelf, chat, nil, 0);
+}
+
+/// `previewFields`: the sealed `preview` and its `pid` for our own relay (docs/PUSH_PREVIEWS.md), or nil.
+/// `maxAttempts`: how many times to call the relay; 0 keeps the usual retries (9, 21 s apart).
+static void triggerPushWithPreview(NSString *used_pushToken,
+                                   NSString *msgv3HashHex,
+                                   OCTSubmanagerChatsImpl *strongSelf,
+                                   OCTChat *chat,
+                                   NSDictionary<NSString *, NSString *> *previewFields,
+                                   int maxAttempts)
+{
     // HINT: call push token (URL) here
     //       best in a background thread
     //
@@ -571,6 +741,8 @@ static void triggerPush(NSString *used_pushToken,
         ) {
 
             NSString *strong_pushToken = used_pushToken;
+            // Our own device (sendOwnPush) is the only wake without a sender; it stops once the app is open.
+            const BOOL isSelfWake = (chat == nil && strongSelf == nil);
             if ((strongSelf != nil) && ([strong_pushToken containsString:@"fcm.php?id="]) && (![strong_pushToken containsString:@"from="])) {
                 NSString *selfPublicKey = [[strongSelf.dataSource managerGetTox] publicKey];
                 if ((selfPublicKey != nil) && (selfPublicKey.length > 0)) {
@@ -583,12 +755,12 @@ static void triggerPush(NSString *used_pushToken,
 
             dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
                 // NSString *strong_pushToken = weak_pushToken;
-                int PUSH_URL_TRIGGER_AGAIN_MAX_COUNT = 8;
+                int PUSH_URL_TRIGGER_AGAIN_MAX_COUNT = (maxAttempts > 0) ? (maxAttempts - 1) : 8;
                 int PUSH_URL_TRIGGER_AGAIN_SECONDS = 21;
 
                 for (int i=0; i<(PUSH_URL_TRIGGER_AGAIN_MAX_COUNT + 1); i++)
                 {
-                    if (chat == nil) {
+                    if (isSelfWake) {
                         __block UIApplicationState as = UIApplicationStateBackground;
                         dispatch_sync(dispatch_get_main_queue(), ^{
                             as =[[UIApplication sharedApplication] applicationState];
@@ -618,6 +790,7 @@ static void triggerPush(NSString *used_pushToken,
                         NSLog(@"PUSH:push token is not a usable URL -> skipping wake");
                         break;
                     }
+                    khandaqAddPreviewToWakeRequest(urlRequest, previewFields);
                     [urlRequest setCachePolicy:NSURLRequestReloadIgnoringCacheData];
                     [urlRequest setTimeoutInterval:10]; // HINT: 10 seconds
                     NSString *userAgent = @"Mozilla/5.0 (Windows NT 6.1; rv:60.0) Gecko/20100101 Firefox/60.0";
@@ -648,7 +821,7 @@ static void triggerPush(NSString *used_pushToken,
                         NSLog(@"calling PUSH URL:WAIT:done");
                     }
 
-                    if (chat == nil) {
+                    if (isSelfWake) {
                         __block UIApplicationState as = UIApplicationStateBackground;
                         dispatch_sync(dispatch_get_main_queue(), ^{
                             as =[[UIApplication sharedApplication] applicationState];
@@ -826,7 +999,7 @@ static void triggerPush(NSString *used_pushToken,
         if ((error.code == OCTToxErrorFriendSendMessageFriendNotConnected) &&
             [strongSelf.dataSource managerUseFauxOfflineMessaging]) {
             if (wakeFriend) {
-                [strongSelf wakeFriendWithPushToken:friend.pushToken forMessageWithHash:msgv3HashHex inChat:chat];
+                [strongSelf wakeFriendWithPushToken:friend.pushToken forMessageWithHash:msgv3HashHex text:text inChat:chat];
             }
             successBlock(-1);
             return;
@@ -1481,6 +1654,25 @@ serialize:
     if (deliverable) {
         [self deliverReactionForMessage:message friend:friend];
     }
+
+    // KHANDAQ (0.2.64): a reaction to the friend's own message while they are away wakes them once, saying
+    // what it is (docs/PUSH_PREVIEWS.md). Taking a reaction back never wakes anybody.
+    if (deliverable && add && ! [message isOutgoing] && ! friend.isConnected) {
+        NSMutableDictionary<NSString *, id> *fields = [self pushPreviewFieldsWithKind:kOCTPushPreviewKindReaction];
+        fields[@"e"] = emoji;
+        if (message.messageFile != nil) {
+            fields[@"rk"] = [OCTPushPreview kindForFileName:message.messageFile.fileName];
+        }
+        else {
+            fields[@"rk"] = kOCTPushPreviewKindText;
+            NSString *previewText = [OCTPushPreview previewTextFromMessageText:message.messageText.text];
+            if (previewText.length > 0) {
+                fields[@"b"] = previewText;
+            }
+        }
+        fields[@"h"] = [NSString stringWithFormat:@"r:%@:%@", anchorHex.uppercaseString, emoji];
+        [self sendPreviewWakeToFriend:friend fields:fields];
+    }
 }
 
 - (void)deliverReactionForMessage:(OCTMessageAbstract *)message friend:(OCTFriend *)friend
@@ -1564,10 +1756,19 @@ serialize:
     }
 
     NSString *actor = [publicKey uppercaseString];
+    // KHANDAQ (0.2.64): the same reaction coming again (a resend after a reconnect) is not news.
+    BOOL isNewReaction = add && ! [emoji isEqualToString:kqReactionsActorEmoji(found.reactionsJSON, actor)];
     NSString *newJson = kqReactionsApplyActor(found.reactionsJSON, actor, emoji, add);
     [realmManager updateObject:found withBlock:^(OCTMessageAbstract *msg) {
         msg.reactionsJSON = newJson;
     }];
+
+    if (isNewReaction && [found isOutgoing]) {
+        [self postReactionOnOwnMessage:found
+                                 emoji:emoji
+                           reactorName:nil
+                              eventKey:[NSString stringWithFormat:@"r:%@:%@", msgv3HashHex.uppercaseString, emoji]];
+    }
 }
 
 // KHANDAQ (#192): the friend added/removed a reaction on a FILE/media/voice message in our 1:1 chat.
@@ -1595,10 +1796,19 @@ serialize:
     }
 
     NSString *actor = [publicKey uppercaseString];
+    // KHANDAQ (0.2.64): the same reaction coming again (a resend after a reconnect) is not news.
+    BOOL isNewReaction = add && ! [emoji isEqualToString:kqReactionsActorEmoji(found.reactionsJSON, actor)];
     NSString *newJson = kqReactionsApplyActor(found.reactionsJSON, actor, emoji, add);
     [realmManager updateObject:found withBlock:^(OCTMessageAbstract *msg) {
         msg.reactionsJSON = newJson;
     }];
+
+    if (isNewReaction && [found isOutgoing]) {
+        [self postReactionOnOwnMessage:found
+                                 emoji:emoji
+                           reactorName:nil
+                              eventKey:[NSString stringWithFormat:@"r:%@:%@", fileIdHex.uppercaseString, emoji]];
+    }
 }
 
 - (void)deleteMessageForBoth:(OCTMessageAbstract *)message

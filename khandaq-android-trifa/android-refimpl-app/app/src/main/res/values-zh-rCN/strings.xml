@@ -810,7 +810,14 @@
     <string name="notification_media_video">🎬 视频</string>
     <string name="notification_media_voice">🎤 语音消息</string>
     <string name="notification_media_generic">📎 附件</string>
-    <string name="reaction_notification_body">回应了 %1$s</string>
+    <string name="push_preview_new_message">新消息</string>
+    <string name="push_preview_new_reaction">新的表情回应</string>
+    <string name="push_preview_reaction_text">对“%2$s”回应了 %1$s</string>
+    <string name="push_preview_reaction_voice">对你的语音消息回应了 %1$s</string>
+    <string name="push_preview_reaction_video">对你的视频回应了 %1$s</string>
+    <string name="push_preview_reaction_photo">对你的照片回应了 %1$s</string>
+    <string name="push_preview_reaction_file">对你的文件回应了 %1$s</string>
+    <string name="push_preview_reaction_message">对你的消息回应了 %1$s</string>
     <string name="chat_react_action">回应</string>
     <string name="chat_report_action">举报</string>
     <string name="delete_for_me">仅删除我的</string>

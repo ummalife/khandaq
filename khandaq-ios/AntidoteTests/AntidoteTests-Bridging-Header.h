@@ -29,6 +29,7 @@
 #import <objcTox/OCTToxEncryptSave.h>
 #import <objcTox/OCTToxConstants.h>
 #import <objcTox/OCTView.h>
+#import <objcTox/OCTPushPreview.h>
 
 // The order of a 1:1 chat (QA-Live 14.11): objcTox's realm manager, declared here so the tests can keep
 // a chat in a Realm of their own, store a file message as sending a file does, and read the chat in the

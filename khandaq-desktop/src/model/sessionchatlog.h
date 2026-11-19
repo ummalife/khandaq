@@ -94,6 +94,13 @@ public:
         ToxFile file;
         /** The marks of the item after the change. */
         Air::EntryMarks marks;
+        /**
+         * KHANDAQ (0.2.64): someone else added a reaction to a message or a file of ours, under
+         * either of our keys, and their emoji stands on it now and did not before. Never for one
+         * taken back, the same one sent again, one on a message of someone else, or one of ours,
+         * which applyEffect never takes; the window alerts on it (Widget::friendReactionAlert).
+         */
+        bool reactedToOwn = false;
     };
 
     /**

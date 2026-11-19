@@ -848,6 +848,36 @@ const Source sources[] = {
     {Text::MessageReply, QT_TRANSLATE_NOOP3("Air", "Reply", "menu action on a message or a file: the next message answers it, with its quote above the message field; as chat_reply_action on the phones")},
     {Text::ReplyCancel, QT_TRANSLATE_NOOP3("Air", "Cancel reply", "the button that takes away the reply above the message field; as chat_reply_cancel on the phones")},
     {Text::MessageReact, QT_TRANSLATE_NOOP3("Air", "React", "menu of a message or a file: the emoji to react with, ours checked; choosing it again takes it back; as chat_react_action on the phones")},
+    {Text::NotifyNewReaction,
+     QT_TRANSLATE_NOOP3("Air", "New reaction",
+                        "notification and band: someone reacted to your message, when message "
+                        "text is not shown")},
+    {Text::NotifyReactedText,
+     QT_TRANSLATE_NOOP3("Air", "Reacted %1 to “%2”",
+                        "notification and band under who reacted to your message: %1 is the "
+                        "emoji, %2 the start of your message")},
+    {Text::NotifyReactedVoice,
+     QT_TRANSLATE_NOOP3("Air", "Reacted %1 to your voice message",
+                        "notification and band under who reacted: %1 is the emoji")},
+    {Text::NotifyReactedVideo,
+     QT_TRANSLATE_NOOP3("Air", "Reacted %1 to your video",
+                        "notification and band under who reacted: %1 is the emoji")},
+    {Text::NotifyReactedPhoto,
+     QT_TRANSLATE_NOOP3("Air", "Reacted %1 to your photo",
+                        "notification and band under who reacted: %1 is the emoji")},
+    {Text::NotifyReactedFile,
+     QT_TRANSLATE_NOOP3("Air", "Reacted %1 to your file",
+                        "notification and band under who reacted: %1 is the emoji")},
+    {Text::NotifyReactedMessage,
+     QT_TRANSLATE_NOOP3("Air", "Reacted %1 to your message",
+                        "notification and band under who reacted: %1 is the emoji; the message "
+                        "has no words to show")},
+    {Text::NotifyVideo,
+     QT_TRANSLATE_NOOP3("Air", "Video",
+                        "notification and band: a video came, in place of the name of its file")},
+    {Text::NotifyPhoto,
+     QT_TRANSLATE_NOOP3("Air", "Photo",
+                        "notification and band: a photo came, in place of the name of its file")},
 };
 // clang-format on
 
@@ -1311,6 +1341,49 @@ QString fileWords(const QString& fileName)
 {
     return Air::isVoiceNote(fileName) ? text(Text::VoiceNote)
                                       : text(Text::FileMessage).arg(fileName);
+}
+
+QString fileKindWords(const QString& fileName)
+{
+    switch (Air::fileKindOf(fileName)) {
+    case Air::FileKind::Voice:
+        return text(Text::VoiceNote);
+    case Air::FileKind::Video:
+        return text(Text::NotifyVideo);
+    case Air::FileKind::Photo:
+        return text(Text::NotifyPhoto);
+    case Air::FileKind::File:
+        break;
+    }
+    return QString();
+}
+
+QString reactionWords(const QString& emoji, Air::MessageEffect::Anchor anchor,
+                      const QString& subject)
+{
+    if (anchor == Air::MessageEffect::Anchor::File) {
+        switch (Air::fileKindOf(subject)) {
+        case Air::FileKind::Voice:
+            return text(Text::NotifyReactedVoice).arg(emoji);
+        case Air::FileKind::Video:
+            return text(Text::NotifyReactedVideo).arg(emoji);
+        case Air::FileKind::Photo:
+            return text(Text::NotifyReactedPhoto).arg(emoji);
+        case Air::FileKind::File:
+            break;
+        }
+        return text(Text::NotifyReactedFile).arg(emoji);
+    }
+    // KHANDAQ (0.2.64): the words the entry shows, a reply without its quote; none for a form this
+    // build cannot read. 80 characters as the push previews quote the message (PUSH_PREVIEWS.md).
+    constexpr int quotedCharacters = 80;
+    const QString words = Air::entryWords(subject).trimmed();
+    if (words.isEmpty()) {
+        return text(Text::NotifyReactedMessage).arg(emoji);
+    }
+    const QString quoted = words.left(Air::characterEnds(words, quotedCharacters).last()).trimmed();
+    // Both at once: an emoji that reads "%2" does not take the place of the quote.
+    return text(Text::NotifyReactedText).arg(emoji, quoted);
 }
 
 QString replyName(const QString& name)

@@ -246,6 +246,17 @@ void bringForward(QWidget* mainWindow)
 }
 
 /**
+ * KHANDAQ (0.2.64): what the alert of a reaction to a message of ours says
+ * (AirStrings::reactionWords), of the text of the entry it found or of its file by name.
+ */
+QString reactionWords(const Air::MessageEffect& effect, const SessionChatLog::EffectResult& result)
+{
+    const bool isFile = effect.anchor == Air::MessageEffect::Anchor::File;
+    return AirStrings::reactionWords(effect.emoji, effect.anchor,
+                                     isFile ? result.file.fileName : result.before.content);
+}
+
+/**
  * KHANDAQ (0.2.57): an offer of a file of the person whose entry the chat shows, ended, under the
  * same Tox file id: from before an interruption that outlasted the wait, a restart of either side,
  * or Send again (Air::fileResume). An entry that still moves is not one: CoreFile goes on with it.
@@ -2232,7 +2243,63 @@ bool Widget::newGroupMessageAlert(const GroupId& groupId, const ToxPk& authorPk,
     return true;
 }
 
-void Widget::showFriendBand(QWidget* front, const Friend& f, const QString& text, const QString& filename)
+bool Widget::friendReactionAlert(const ToxPk& friendPk, const QString& words)
+{
+    Friend* const f = friendList->findFriend(friendPk);
+    // "Mute" in the dossier keeps a reaction as quiet as a message.
+    if (f == nullptr || (airLocal && airLocal->isMuted(friendPk))) {
+        return false;
+    }
+    // KHANDAQ (0.2.64): where the chat is shown, as newFriendMessageAlert tells it, but no window
+    // of chats is made for a reaction, as none is for a message of a group: the window that shows
+    // the chat alerts, else the main window.
+    ContentDialog* const contentDialog = contentDialogManager->getFriendDialog(friendPk);
+    const FriendWidget* const widget = friendWidgets.value(friendPk);
+    QWidget* const currentWindow = contentDialog != nullptr ? contentDialog->window() : window();
+    const bool hasActive = contentDialog != nullptr
+                               ? contentDialogManager->isChatActive(friendPk)
+                               : widget != nullptr && widget == activeChatroomWidget;
+    if (!newMessageAlert(currentWindow, hasActive)) {
+        return false;
+    }
+    if (QWidget* const front = bandWindow(this, settings.getNotify())) {
+        showFriendBand(front, *f, words, QString(), true);
+    } else {
+        notifier.notifyMessage(notificationGenerator->friendReactionNotification(f, words));
+    }
+    return true;
+}
+
+bool Widget::groupReactionAlert(const GroupId& groupId, const ToxPk& reactor, const QString& words)
+{
+    Group* const g = groupList->findGroup(groupId);
+    // "Mute" in the group dossier, or on the row of the member who reacted, as for a message.
+    if (g == nullptr
+        || (airLocal
+            && (airLocal->isMuted(ToxPk(groupId.getByteArray())) || airLocal->isMuted(reactor)))) {
+        return false;
+    }
+    // KHANDAQ (0.2.64): a reaction to a message of ours is meant for us as a mention is, so Only
+    // when someone mentions you lets it through as it lets a mention.
+    ContentDialog* const contentDialog = contentDialogManager->getGroupDialog(groupId);
+    const GroupWidget* const widget = groupWidgets.value(groupId);
+    QWidget* const currentWindow = contentDialog != nullptr ? contentDialog->window() : window();
+    const bool hasActive = contentDialog != nullptr
+                               ? contentDialogManager->isChatActive(groupId)
+                               : widget != nullptr && widget == activeChatroomWidget;
+    if (!newMessageAlert(currentWindow, hasActive)) {
+        return false;
+    }
+    if (QWidget* const front = bandWindow(this, settings.getNotify())) {
+        showGroupBand(front, *g, reactor, words, true);
+    } else {
+        notifier.notifyMessage(notificationGenerator->groupReactionNotification(g, reactor, words));
+    }
+    return true;
+}
+
+void Widget::showFriendBand(QWidget* front, const Friend& f, const QString& text,
+                            const QString& filename, bool reaction)
 {
     using AirStrings::Text;
     const ToxPk key = f.getPublicKey();
@@ -2241,9 +2308,13 @@ void Widget::showFriendBand(QWidget* front, const Friend& f, const QString& text
     AirBanner::Content band;
     band.title = f.getDisplayedName();
     if (filename.isEmpty()) {
-        band.body = shown ? text : AirStrings::text(Text::NotifyNewMessage);
+        band.body = shown ? text
+                          : AirStrings::text(reaction ? Text::NotifyNewReaction
+                                                      : Text::NotifyNewMessage);
     } else {
-        band.body = shown ? AirStrings::fileWords(filename)
+        // KHANDAQ (0.2.64): a voice note, a video or a photo by its kind, any other file by name.
+        const QString kind = AirStrings::fileKindWords(filename);
+        band.body = shown ? (kind.isEmpty() ? AirStrings::fileWords(filename) : kind)
                           : AirStrings::text(Text::NotifyIncomingFile);
     }
     band.tile = AirBanner::Tile::Person;
@@ -2254,14 +2325,15 @@ void Widget::showFriendBand(QWidget* front, const Friend& f, const QString& text
     AirBanner::post(front, band, [this, key] { openAirEntry(AirSource::friendEntryId(key)); });
 }
 
-void Widget::showGroupBand(QWidget* front, const Group& g, const ToxPk& author, const QString& message)
+void Widget::showGroupBand(QWidget* front, const Group& g, const ToxPk& author,
+                           const QString& message, bool reaction)
 {
     using AirStrings::Text;
     const GroupId groupId = g.getPersistentId();
     AirBanner::Content band;
     band.title = g.getDisplayedName();
     if (settings.getNotifyHide()) {
-        band.body = AirStrings::text(Text::NotifyNewMessage);
+        band.body = AirStrings::text(reaction ? Text::NotifyNewReaction : Text::NotifyNewMessage);
     } else {
         // Who wrote, then the words, as the notification of a group says it.
         const QString name = g.resolveToxPk(author);
@@ -2920,6 +2992,13 @@ void Widget::onFriendMessageEffect(uint32_t friendnumber, const QByteArray& pack
         && file.direction == ToxFile::RECEIVING && live) {
         core->getCoreFile()->cancelFileRecv(friendnumber, file.fileNum);
     }
+    // KHANDAQ (0.2.64): a reaction of theirs to a message of ours alerts as a message would.
+    // Reactions come only live, from the packet of the friend; what the history loads takes its
+    // marks without applyEffect (ChatHistory::loadHistoryIntoSessionChatLog), so nothing from
+    // before alerts, and the same one sent again is no news (EffectResult::reactedToOwn).
+    if (result.reactedToOwn) {
+        friendReactionAlert(friendPk, reactionWords(effect, result));
+    }
 }
 
 void Widget::onFriendSeenReceived(uint32_t friendnumber, const QByteArray& packet)
@@ -2968,6 +3047,12 @@ void Widget::onGroupMessageEffect(int groupnumber, const ToxPk& sender, const QB
                             ->applyEffect(sender, effect, core->getGroupSelfPublicKey(groupnumber));
     if (result.change == SessionChatLog::EffectResult::Change::None) {
         qDebug() << "An edit, deletion or reaction in a group points at nothing shown here";
+    }
+    // KHANDAQ (0.2.64): as between two people. A reaction comes only live, from the packet of the
+    // member, whom toxcore vouches for; the history a member relays carries texts and files and
+    // never a reaction, and none of ours either (Core drops a record that names us).
+    if (result.reactedToOwn) {
+        groupReactionAlert(groupId, sender, reactionWords(effect, result));
     }
 }
 
@@ -3042,6 +3127,16 @@ QString sanitizeGroupFileName(const QString& fileName)
         name = QStringLiteral("file.bin");
     }
     return name;
+}
+
+/**
+ * KHANDAQ (0.2.64): what the alert of a file of a group says after who sent it: a voice note, a
+ * video or a photo by its kind (Air::fileKindOf), any other file by its name, as before.
+ */
+QString groupFileWords(const QString& fileName)
+{
+    const QString kind = AirStrings::fileKindWords(fileName);
+    return kind.isEmpty() ? fileName : kind;
 }
 
 // The number of a file we send into a group, as ToxFile wants one.
@@ -3182,7 +3277,8 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
                  << heldGroupFiles.bytes() << "bytes";
         // As below: a synced row's sender is unauthenticated, so it alerts nobody.
         if (!wasSynced) {
-            newGroupMessageAlert(groupId, sender, fileName, settings.getGroupAlwaysNotify());
+            newGroupMessageAlert(groupId, sender, groupFileWords(fileName),
+                                 settings.getGroupAlwaysNotify());
         }
         return;
     }
@@ -3256,7 +3352,8 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     //
     // Live rows are unaffected: toxcore authenticates their sender.
     if (!wasSynced) {
-        newGroupMessageAlert(groupId, sender, fileName, settings.getGroupAlwaysNotify());
+        newGroupMessageAlert(groupId, sender, groupFileWords(fileName),
+                             settings.getGroupAlwaysNotify());
     } else {
         qDebug() << "onGroupFileReceived: synced row, storing without a notification"
                  << "(attribution to" << sender.toString().left(8) << "is unauthenticated)";

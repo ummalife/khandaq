@@ -136,4 +136,13 @@ regexes = [
   # it as a credential. The pull-request scan of #161 stopped on it (AirLocalStoreTests.swift line 290,
   # commit f6f48904). Nobody's group. Added by Claude (AI assistant), the value checked against the sources.
   '''(?i)8F2A41C07D3B9E6152A4F0C8B7D3E9A1C2F4B6D8E0A1C3E5F7B9D1F3A5C7E9B1''',
+  # KHANDAQ (0.2.64): the push preview test vectors (docs/PUSH_PREVIEWS.md, "Test vectors"), which the
+  # Android, iOS and relay tests share. P, a made-up Tox public key, sits in `publicKey`
+  # (PushPreviewTests.swift); packet 190/01 for it sits in `KEY_PACKET` (PushPreviewCryptoTest.java): the bytes
+  # BE 01 01 and then the K that the published test master key 000102...1f gives P. Nobody's key, and a K
+  # that opens only the vector's own preview. The pull-request scan of #182 reported two findings, and these
+  # are the two values of that commit that `generic-api-key` reads as credentials (a keyword in the name,
+  # 64 or 70 hex characters, no stopword). Added by Claude (AI assistant), each value checked against the sources.
+  '''(?i)7E5A6B1C2D3E4F50617283940A1B2C3D4E5F60718293A4B5C6D7E8F901122334''',
+  '''(?i)BE010176437C9F9A1E86D7731AB94A0B7329C55129122BD40E4F05C71C22A7B3D88E75''',
 ]

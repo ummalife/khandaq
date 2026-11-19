@@ -7,8 +7,9 @@
         android:key="notifications_new_message"
         android:title="@string/pref_title_new_message_notifications"/>
 
+    <!-- KHANDAQ (0.2.64): on by default, as MainActivity reads it (PREF__notification_show_content). -->
     <SwitchPreference
-        android:defaultValue="false"
+        android:defaultValue="true"
         android:key="notification_show_content"
         android:summary="@string/pref_description_notification_show_content"
         android:title="@string/pref_title_notification_show_content" />

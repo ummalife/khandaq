@@ -354,11 +354,27 @@ private:
 
     bool newMessageAlert(QWidget* currentWindow, bool isActive, bool sound = true, bool notify = true);
     /**
+     * KHANDAQ (0.2.64): someone reacted to a message or a file of ours
+     * (SessionChatLog::EffectResult::reactedToOwn): the sound, the band or the system notification
+     * and the window's attention of a new message of that chat (newMessageAlert), on the same
+     * terms: nothing while the chat is in front, nothing while it, or in a group the member who
+     * reacted, is muted. A reaction is no message: nothing counts as unread, and no window of a
+     * chat is made for it. In a group it alerts as a mention does, whatever the group setting.
+     * @param words What it says (AirStrings::reactionWords).
+     * @return Whether it alerted.
+     */
+    bool friendReactionAlert(const ToxPk& friendPk, const QString& words);
+    bool groupReactionAlert(const GroupId& groupId, const ToxPk& reactor, const QString& words);
+    /**
      * The band in front for news while the app is in front (E22), in place of the system
      * notification: a message or a file of a contact, a message of a group, a request, an invitation.
+     * KHANDAQ (0.2.64): reaction: the text is a reaction to a message of ours, and the band says
+     * "New reaction" when message text is not shown.
      */
-    void showFriendBand(QWidget* front, const Friend& f, const QString& text, const QString& filename);
-    void showGroupBand(QWidget* front, const Group& g, const ToxPk& author, const QString& message);
+    void showFriendBand(QWidget* front, const Friend& f, const QString& text,
+                        const QString& filename, bool reaction = false);
+    void showGroupBand(QWidget* front, const Group& g, const ToxPk& author, const QString& message,
+                       bool reaction = false);
     void showRequestBand(QWidget* front, const QString& message);
     void showInviteBand(QWidget* front, const Friend& inviter, const QString& groupName);
     /** Whether a system notification shows for news now; the window is not alerted when it does. */

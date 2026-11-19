@@ -2297,6 +2297,8 @@ final class AirChatPanel implements AirDossier.Listener, AirContactMarks.Listene
             {
                 // The contact's own notification switch, which the notifications already obey.
                 TrifaToxService.orma.updateFriendList().tox_public_key_stringEq(key).notification_silent(muted).execute();
+                // KHANDAQ (0.2.64): and the copy of it the push preview handler reads.
+                PushPreviewPeers.refreshMutedChats();
                 final FriendListFragment list = MainActivity.friend_list_fragment;
                 if (list != null)
                 {

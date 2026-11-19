@@ -1363,7 +1363,9 @@ static NSData *OCTResumeTestsContent(void)
     OCTMessageAbstract *message = [self sendOurFile];
     XCTAssertEqual(message.messageFile.internalFileNumber, (int)kOCTToxFileNumberFailure);
     XCTAssertEqual(message.messageFile.fileType, OCTMessageFileTypeWaitingConfirmation);
-    XCTAssertNil(message.messageFile.fileIdHex, @"no offer made one yet");
+    // KHANDAQ (0.2.64): a queued file has its Tox file id from the start, so the wake can name it.
+    NSString *queuedId = message.messageFile.fileIdHex;
+    XCTAssertEqual(queuedId.length, 64u, @"the queue gave it no id");
 
     // Cancelled, then "Send again" while they are still away: queued as a new one is.
     XCTAssertTrue([self.files cancelFileTransfer:message error:nil]);
@@ -1374,7 +1376,12 @@ static NSData *OCTResumeTestsContent(void)
 
     [self setFriendConnected:YES notify:YES];
     XCTAssertEqual(message.messageFile.internalFileNumber, 0);
-    XCTAssertNotNil(message.messageFile.fileIdHex);
+    XCTAssertEqualObjects(message.messageFile.fileIdHex, queuedId, @"offered under another id than the queue gave it");
+    id offered = self.tox.offeredIds.lastObject;
+    XCTAssertTrue([offered isKindOfClass:[NSData class]], @"offered without an id");
+    if ([offered isKindOfClass:[NSData class]]) {
+        XCTAssertEqualObjects(OCTResumeTestsHex(offered), queuedId);
+    }
 }
 
 #pragma mark - A profile of schema 43

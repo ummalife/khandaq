@@ -766,7 +766,17 @@
     <string name="notification_media_video">🎬 Video</string>
     <string name="notification_media_voice">🎤 Voice message</string>
     <string name="notification_media_generic">📎 Attachment</string>
-    <string name="reaction_notification_body">reacted %1$s</string>
+    <!-- KHANDAQ (0.2.64): push previews and reaction notifications (docs/PUSH_PREVIEWS.md, "Recipient"). Other
+         languages fall back to these. -->
+    <string name="push_preview_new_message">New message</string>
+    <string name="push_preview_new_reaction">New reaction</string>
+    <string name="push_preview_file_named" translatable="false">📎 %1$s</string>
+    <string name="push_preview_reaction_text">Reacted %1$s to \"%2$s\"</string>
+    <string name="push_preview_reaction_voice">Reacted %1$s to your voice message</string>
+    <string name="push_preview_reaction_video">Reacted %1$s to your video</string>
+    <string name="push_preview_reaction_photo">Reacted %1$s to your photo</string>
+    <string name="push_preview_reaction_file">Reacted %1$s to your file</string>
+    <string name="push_preview_reaction_message">Reacted %1$s to your message</string>
     <string name="chat_react_action">React</string>
     <!-- KHANDAQ (0.2.57, SPEC-community item 5): a mail to support about a message someone wrote in a group -->
     <string name="chat_report_action">Report</string>

@@ -548,6 +548,15 @@ public final class DbSecretKeyStorage
         catch (Exception ignored)
         {
         }
+        // 2b) KHANDAQ (0.2.64): the push previews of the deleted profile: its master key, so that no K its contacts
+        // were given opens anything any more, the keys they gave it, and the rest of what previews keep.
+        try
+        {
+            PushPreviewStore.wipeAll(context);
+        }
+        catch (Exception ignored)
+        {
+        }
         // 3) drop the Android Keystore aliases used to wrap the DB key
         try
         {

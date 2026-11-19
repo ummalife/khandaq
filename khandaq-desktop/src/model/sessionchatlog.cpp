@@ -433,12 +433,22 @@ SessionChatLog::EffectResult SessionChatLog::applyEffect(const ToxPk& sender,
             hiddenItems.insert(it->first);
             result.change = Change::Deleted;
             break;
-        case Kind::Reaction:
-            if (!marks->react(Air::LocalStore::hashedKey(sender.toString()), effect.emoji, effect.add)) {
+        case Kind::Reaction: {
+            const QString actor = Air::LocalStore::hashedKey(sender.toString());
+            const QString emojiBefore = marks->emojiOf(actor);
+            if (!marks->react(actor, effect.emoji, effect.add)) {
                 return result;
             }
             result.change = Change::Reacted;
+            // KHANDAQ (0.2.64): only an emoji that is the actor's now and was not before is news.
+            // The same one sent again still changes the marks when others reacted after it (it
+            // goes to the end of its row), and one that a full row leaves out only took the old
+            // one away.
+            result.reactedToOwn = effect.add && emojiBefore != effect.emoji
+                                  && marks->emojiOf(actor) == effect.emoji && !author.isEmpty()
+                                  && (author == ownKey || author == selfKey);
             break;
+        }
         }
         result.marks = *marks;
         emit itemUpdated(it->first);

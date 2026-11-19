@@ -104,6 +104,20 @@ public final class KhandaqPush {
 
     public static WakeRequest buildWakeRequest(final String pushUrl, final String senderPubkeyHex)
     {
+        return buildWakeRequest(pushUrl, senderPubkeyHex, null, null);
+    }
+
+    /**
+     * KHANDAQ (0.2.64): the same wake, carrying a push preview (docs/PUSH_PREVIEWS.md, "The wake request").
+     * "preview" and "pid" go into the body together or not at all, only to our own relay, and only with a sender
+     * of 64 hex, since the recipient derives its key from it. Neither is signed: the pre-image stays
+     * id + "\n" + from + "\n" + ts, and a preview someone changed on the way fails authentication on the
+     * recipient's device. A preview or pid that is not what the relay accepts is left out, so that the request
+     * goes as the ordinary wake it was before.
+     */
+    public static WakeRequest buildWakeRequest(final String pushUrl, final String senderPubkeyHex,
+                                               final String preview, final String pid)
+    {
         if (!isOwnRelayWakeUrl(pushUrl))
         {
             // Unchanged behaviour for every URL that is not ours.
@@ -122,6 +136,11 @@ public final class KhandaqPush {
         if (!cap.isEmpty())
         {
             body.append(",\"cap\":").append(jsonString(cap));
+        }
+        if (isPreviewSender(from) && isPreview(preview) && isPreviewId(pid))
+        {
+            body.append(",\"preview\":").append(jsonString(preview));
+            body.append(",\"pid\":").append(jsonString(pid));
         }
         body.append('}');
 
@@ -176,6 +195,59 @@ public final class KhandaqPush {
         }
         out.append('"');
         return out.toString();
+    }
+
+    /** KHANDAQ (0.2.64): what the relay keeps as a preview: 24 to 1400 characters of [A-Za-z0-9_-]. */
+    public static boolean isPreview(final String preview)
+    {
+        if (preview == null || preview.length() < 24 || preview.length() > 1400)
+        {
+            return false;
+        }
+        for (int i = 0; i < preview.length(); i++)
+        {
+            final char c = preview.charAt(i);
+            if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_'))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** KHANDAQ (0.2.64): what the relay keeps as a pid: ^[0-9a-f]{32}$. */
+    public static boolean isPreviewId(final String pid)
+    {
+        if (pid == null || pid.length() != 32)
+        {
+            return false;
+        }
+        for (int i = 0; i < pid.length(); i++)
+        {
+            final char c = pid.charAt(i);
+            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** KHANDAQ (0.2.64): a sender a recipient can derive a preview key from: a public key of 64 hex. */
+    private static boolean isPreviewSender(final String sender)
+    {
+        if (sender == null || sender.length() != 64)
+        {
+            return false;
+        }
+        for (int i = 0; i < sender.length(); i++)
+        {
+            if (Character.digit(sender.charAt(i), 16) < 0)
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** Extract the URL-decoded value of a query parameter (to match the server's request.args view). */

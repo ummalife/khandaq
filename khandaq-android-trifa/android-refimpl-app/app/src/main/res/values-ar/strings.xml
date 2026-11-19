@@ -793,7 +793,14 @@
     <string name="notification_media_video">🎬 فيديو</string>
     <string name="notification_media_voice">🎤 رسالة صوتية</string>
     <string name="notification_media_generic">📎 مرفق</string>
-    <string name="reaction_notification_body">تفاعل %1$s</string>
+    <string name="push_preview_new_message">رسالة جديدة</string>
+    <string name="push_preview_new_reaction">تفاعل جديد</string>
+    <string name="push_preview_reaction_text">تفاعل %1$s مع «%2$s»</string>
+    <string name="push_preview_reaction_voice">تفاعل %1$s مع رسالتك الصوتية</string>
+    <string name="push_preview_reaction_video">تفاعل %1$s مع الفيديو الخاص بك</string>
+    <string name="push_preview_reaction_photo">تفاعل %1$s مع صورتك</string>
+    <string name="push_preview_reaction_file">تفاعل %1$s مع ملفك</string>
+    <string name="push_preview_reaction_message">تفاعل %1$s مع رسالتك</string>
     <string name="chat_react_action">تفاعل</string>
     <string name="chat_report_action">إبلاغ</string>
     <string name="delete_for_me">حذف لدي</string>

@@ -371,6 +371,8 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
             this.friendlist.notification_silent = true;
             orma.updateFriendList().tox_public_key_stringEq(this.friendlist.tox_public_key_string).
                     notification_silent(this.friendlist.notification_silent).execute();
+            // KHANDAQ (0.2.64): and the copy of it the push preview handler reads.
+            PushPreviewPeers.refreshMutedChats();
 
             final Drawable d_notification = new IconicsDrawable(context).
                     icon(GoogleMaterial.Icon.gmd_notifications_off).
@@ -408,6 +410,8 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
             this.friendlist.notification_silent = false;
             orma.updateFriendList().tox_public_key_stringEq(this.friendlist.tox_public_key_string).
                     notification_silent(this.friendlist.notification_silent).execute();
+            // KHANDAQ (0.2.64): and the copy of it the push preview handler reads.
+            PushPreviewPeers.refreshMutedChats();
 
             final Drawable d_notification = new IconicsDrawable(context).
                     icon(GoogleMaterial.Icon.gmd_notifications_active).

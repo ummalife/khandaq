@@ -1090,6 +1090,8 @@ public class HelperFriend
                 }
                 // KHANDAQ (0.2.60): group invitations kept for the contact go with them.
                 HelperGroup.forget_manual_group_invites_for_friend(friend_pubkey);
+                // KHANDAQ (0.2.64): and the key and the group presence they handed us for push previews.
+                PushPreviewPeers.forgetFriend(friend_pubkey);
         //    }
         //};
         //t.start();
@@ -2535,6 +2537,15 @@ public class HelperFriend
      */
     static boolean friend_do_actual_weburl_call(final String friend_pubkey, final String pushurl_for_friend, final long message_timestamp_circa, final boolean update_message_flag)
     {
+        return friend_do_actual_weburl_call(friend_pubkey, pushurl_for_friend, message_timestamp_circa,
+                                            update_message_flag, null);
+    }
+
+    /** KHANDAQ (0.2.64): the same, the wake carrying {@code preview} (null: none). */
+    static boolean friend_do_actual_weburl_call(final String friend_pubkey, final String pushurl_for_friend,
+                                                final long message_timestamp_circa, final boolean update_message_flag,
+                                                final PushPreviewSender.Preview preview)
+    {
         if (!update_message_flag)
         {
             if (get_message_in_db_sent_push_is_read(friend_pubkey, message_timestamp_circa))
@@ -2544,7 +2555,7 @@ public class HelperFriend
             }
         }
 
-        final int answer = send_wake_request(pushurl_for_friend);
+        final int answer = send_wake_request(pushurl_for_friend, preview);
         // KHANDAQ (0.2.56): a refusal is an attempt too, so the next one waits for its turn.
         if (update_message_flag && PushBackoffPolicy.wakeAttemptUsed(answer))
         {
@@ -2559,6 +2570,15 @@ public class HelperFriend
      * went out (inside a 429 backoff) or nothing came back.
      */
     static int send_wake_request(final String pushurl_for_friend)
+    {
+        return send_wake_request(pushurl_for_friend, null);
+    }
+
+    /**
+     * KHANDAQ (0.2.64): the same wake, carrying a push preview of the event it is for (PushPreviewSender) when there
+     * is one. KhandaqPush puts it only into a request to our own relay; any other request is what it was.
+     */
+    static int send_wake_request(final String pushurl_for_friend, final PushPreviewSender.Preview preview)
     {
         OkHttpClient client = null;
 
@@ -2615,7 +2635,9 @@ public class HelperFriend
         // For any other host the request is byte-for-byte what it was. A push URL we do not own is
         // not ours to reinterpret, and the legacy tox.zoff.xyz relay speaks only the old shape.
         final org.khandaq.messenger.KhandaqPush.WakeRequest wake =
-                org.khandaq.messenger.KhandaqPush.buildWakeRequest(pushurl_for_friend, sender_pubkey);
+                org.khandaq.messenger.KhandaqPush.buildWakeRequest(pushurl_for_friend, sender_pubkey,
+                                                                   (preview != null) ? preview.sealed : null,
+                                                                   (preview != null) ? preview.pid : null);
 
         final Request.Builder builder = new Request.Builder().
                 cacheControl(new CacheControl.Builder().noCache().build()).
@@ -2670,7 +2692,7 @@ public class HelperFriend
     }
 
     /** The push address a wake signal for this friend goes to, or null when none can go. */
-    private static String wake_url_for_friend(final String friend_pubkey)
+    static String wake_url_for_friend(final String friend_pubkey)
     {
         if (!PREF__use_push_service)
         {
@@ -2704,6 +2726,31 @@ public class HelperFriend
 
     static void friend_call_push_url(final String friend_pubkey, final long message_timestamp_circa)
     {
+        friend_call_push_url(friend_pubkey, message_timestamp_circa, true);
+    }
+
+    /**
+     * KHANDAQ (0.2.64): {@code with_preview}: the wake is for an outgoing message, the one sent at about
+     * message_timestamp_circa, and carries a preview of it (PushPreviewSender) when the friend handed us a key. A
+     * call's wake passes false: calls carry no preview (docs/PUSH_PREVIEWS.md).
+     */
+    static void friend_call_push_url(final String friend_pubkey, final long message_timestamp_circa,
+                                     final boolean with_preview)
+    {
+        friend_call_push_url(friend_pubkey, message_timestamp_circa,
+                             with_preview ? () -> PushPreviewSender.forMessageWake(friend_pubkey,
+                                                                                   message_timestamp_circa)
+                                          : null);
+    }
+
+    /**
+     * KHANDAQ (0.2.64): the same, the preview made on the wake's thread by {@code preview_source} (null: none), for a
+     * caller that knows the message better than its row does (HelperGeneric.tox_friend_send_message_wrapper wakes
+     * before the row is written).
+     */
+    static void friend_call_push_url(final String friend_pubkey, final long message_timestamp_circa,
+                                     @Nullable final java.util.function.Supplier<PushPreviewSender.Preview> preview_source)
+    {
         try
         {
             final String pushurl_for_friend = wake_url_for_friend(friend_pubkey);
@@ -2717,8 +2764,10 @@ public class HelperFriend
                     {
                         try
                         {
+                            final PushPreviewSender.Preview preview = (preview_source != null) ? preview_source.get()
+                                                                                                : null;
                             friend_do_actual_weburl_call(friend_pubkey, pushurl_for_friend,
-                                                         message_timestamp_circa, true);
+                                                         message_timestamp_circa, true, preview);
                         }
                         catch (Exception e)
                         {
@@ -2767,7 +2816,9 @@ public class HelperFriend
                 {
                     try
                     {
-                        if (PushBackoffPolicy.wakeAttemptUsed(send_wake_request(pushurl_for_friend)))
+                        // KHANDAQ (0.2.64): the one wake shows the newest of the messages it is for.
+                        final PushPreviewSender.Preview preview = PushPreviewSender.forDueWake(friend_pubkey, due_now);
+                        if (PushBackoffPolicy.wakeAttemptUsed(send_wake_request(pushurl_for_friend, preview)))
                         {
                             for (final PushBackoffPolicy.DueWake d : due_now)
                             {
@@ -2862,6 +2913,9 @@ public class HelperFriend
                                                                 data_bin, data_bin_len);
                 // Log.i(TAG, "send_pushurl_to_friend:" +
                 //           get_friend_name_from_pubkey(friend_pubkey) + ":send push url:RES=" + res);
+                // KHANDAQ (0.2.64): with the push URL go the key the friend seals our previews with (190/01)
+                // and our group presence (190/02), off this thread (docs/PUSH_PREVIEWS.md).
+                PushPreviewPeers.publishTo(friend_pubkey);
             }
         }
     }

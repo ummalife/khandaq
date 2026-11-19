@@ -9,7 +9,6 @@ import com.zoffcc.applications.sorm.Message;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
-import org.khandaq.messenger.R;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -61,6 +60,8 @@ public class HelperMessageReaction
     private static final int NGC_HEADER_LEN = 6 + 1 + 1 + 1 + 32 + 32 + 4 + 1 + 1; // 79
     /** Where the 32-byte author of the reacted message sits in the NGC packet. */
     private static final int NGC_AUTHOR_OFFSET = 6 + 1 + 1 + 1 + 32; // 41
+    /** KHANDAQ (0.2.64): where the 32-byte anchor sits in the NGC packet, the event key of a group reaction. */
+    private static final int NGC_ANCHOR_OFFSET = 6 + 1 + 1 + 1; // 9
 
     static final byte ANCHOR_MSGV3_HASH = 1;
     static final byte ANCHOR_MSG_ID_HASH = 2;
@@ -288,6 +289,14 @@ public class HelperMessageReaction
                     if (friend_number >= 0)
                     {
                         deliverFriendReaction(friend_number, m);
+                        // KHANDAQ (0.2.64): a reaction added to the friend's message that could not go now wakes
+                        // the friend once, with a preview of it, when they handed us their key (PushPreviewSender).
+                        // A removed one never wakes, and the message's own wakes (sent_push) are not touched.
+                        if (add && m.reactions_pending)
+                        {
+                            PushPreviewSender.wakeForFriendReaction(m, emoji, friendFileRow(m) ? m.ft_id_anchor_hex
+                                                                                               : m.msg_idv3_hash);
+                        }
                     }
                 }
             }
@@ -444,7 +453,7 @@ public class HelperMessageReaction
 
             if (add && changed)
             {
-                notifyFriendReaction(m, senderPubkey, emoji);
+                notifyFriendReaction(m, senderPubkey, emoji, hashHex);
             }
         }
         catch (Exception e)
@@ -453,10 +462,18 @@ public class HelperMessageReaction
         }
     }
 
-    private static void notifyFriendReaction(final Message m, final String senderPubkey, final String emoji)
+    /** {@code anchorHex}: the anchor of the packet, upper-case hex, the event key of the reaction. */
+    private static void notifyFriendReaction(final Message m, final String senderPubkey, final String emoji,
+                                             final String anchorHex)
     {
         try
         {
+            // KHANDAQ (0.2.64): only a reaction to a message of ours notifies (docs/PUSH_PREVIEWS.md): the friend
+            // reacting to their own message is shown on it, no more.
+            if (m.direction != 1)
+            {
+                return;
+            }
             String friendname = null;
             try
             {
@@ -471,15 +488,30 @@ public class HelperMessageReaction
             catch (Exception ignored)
             {
             }
-            final String body = String.format(
-                    MainActivity.context_s.getString(R.string.reaction_notification_body), emoji);
+            // KHANDAQ (0.2.64): the words of a push preview of the same reaction (PushPreviewText), and its event
+            // key, so that a reaction a push already told of does not sound again.
+            final String body = reactionNotificationBody(emoji, PushPreviewSender.messageKind(m), m.text);
             HelperMsgNotification.change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value,
-                                                          m.tox_friendpubkey, friendname, body);
+                                                          m.tox_friendpubkey, friendname, body, 0L, null,
+                                                          PushPreviewSeen.forReaction(anchorHex, emoji));
         }
         catch (Exception e)
         {
             Log.i(TAG, "notifyFriendReaction:EE:" + e.getMessage());
         }
+    }
+
+    /**
+     * KHANDAQ (0.2.64): the body of the notification of a reaction to our message of this kind (text, voice, video,
+     * photo or file, null when unknown), as the table of docs/PUSH_PREVIEWS.md has it.
+     */
+    private static String reactionNotificationBody(final String emoji, final String reactedKind,
+                                                   final String reactedText)
+    {
+        final PushPreviewPayload p = PushPreviewPayload.reaction(emoji, reactedKind,
+                                                                 PushPreviewSender.previewText(reactedText), null,
+                                                                 null, 0L);
+        return PushPreviewText.reactionBody(p, PushPreviewReceiver.labels(MainActivity.context_s));
     }
 
     // =============================================================================================
@@ -631,6 +663,13 @@ public class HelperMessageReaction
                     orma.updateGroupMessage().idEq(gm.id).reactions_pending(false).execute();
                     gm.reactions_pending = false;
                 }
+                // KHANDAQ (0.2.64): the broadcast misses an author who is offline. When the author is a friend who
+                // told us their presence in this group and handed us their key, an added reaction wakes them once,
+                // with a preview (PushPreviewSender). The event key is the anchor as it went out.
+                if (add && (gm.direction == 0))
+                {
+                    PushPreviewSender.wakeForGroupReaction(gm, emoji, bytesToHexUpper(pkt, NGC_ANCHOR_OFFSET, 32));
+                }
             }
             catch (Exception e)
             {
@@ -665,9 +704,10 @@ public class HelperMessageReaction
                 return;
             }
             // drop own echoes (history relays may bounce our own packet back)
+            String self = null;
             try
             {
-                final String self = MainActivity.tox_group_self_get_public_key(group_number);
+                self = MainActivity.tox_group_self_get_public_key(group_number);
                 if (self != null && self.equalsIgnoreCase(senderPubkey))
                 {
                     return;
@@ -743,9 +783,14 @@ public class HelperMessageReaction
                 updateGroupMessageInUi(gm);
             }
 
-            if (add && changed)
+            // KHANDAQ (0.2.64): only a reaction to a message of ours notifies (docs/PUSH_PREVIEWS.md): one we
+            // sent, or one under our own key in this group (a row that came back from the group's history).
+            final boolean ours = (gm.direction == 1)
+                                 || (self != null && self.equalsIgnoreCase(gm.tox_group_peer_pubkey));
+            if (add && changed && ours)
             {
-                notifyGroupReaction(groupIdentifier, senderPubkey, emoji);
+                notifyGroupReaction(groupIdentifier, senderPubkey, emoji, gm,
+                                    bytesToHexUpper(data, NGC_ANCHOR_OFFSET, 32));
             }
         }
         catch (Exception e)
@@ -754,8 +799,9 @@ public class HelperMessageReaction
         }
     }
 
+    /** {@code anchorHex}: the anchor of the packet, upper-case hex, the event key of the reaction. */
     private static void notifyGroupReaction(final String groupIdentifier, final String senderPubkey,
-                                            final String emoji)
+                                            final String emoji, final GroupMessage gm, final String anchorHex)
     {
         try
         {
@@ -799,14 +845,17 @@ public class HelperMessageReaction
             catch (Exception ignored)
             {
             }
-            String body = String.format(
-                    MainActivity.context_s.getString(R.string.reaction_notification_body), emoji);
+            // KHANDAQ (0.2.64): the words of a push preview of the same reaction, "name: body" as the table of
+            // docs/PUSH_PREVIEWS.md has it for a group, and its event key, so that a reaction a push already told
+            // of does not sound again.
+            String body = reactionNotificationBody(emoji, PushPreviewSender.messageKind(gm), gm.text);
             if (peername != null && peername.length() > 0)
             {
-                body = peername + " " + body;
+                body = peername + ": " + body;
             }
             HelperMsgNotification.change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value,
-                                                          groupIdentifier, groupname, body);
+                                                          groupIdentifier, groupname, body, 0L, null,
+                                                          PushPreviewSeen.forReaction(anchorHex, emoji));
         }
         catch (Exception e)
         {

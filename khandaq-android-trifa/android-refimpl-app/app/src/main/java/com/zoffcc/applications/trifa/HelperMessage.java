@@ -1445,6 +1445,29 @@ public class HelperMessage
     }
 
     /**
+     * KHANDAQ (0.2.64): the outgoing message a wake sent at about sent_timestamp is for, found as
+     * update_message_in_db_sent_push_set finds the one it counts the wake for; null when there is none.
+     */
+    static Message outgoing_message_for_wake(final String friend_pubkey, final long sent_timestamp)
+    {
+        try
+        {
+            final List<Message> found = orma.selectFromMessage().
+                    tox_friendpubkeyEq(friend_pubkey).
+                    sent_timestampBetween(sent_timestamp - PUSH_URL_TRIGGER_GET_MESSAGE_FOR_delta_ms_prev,
+                                          sent_timestamp + PUSH_URL_TRIGGER_GET_MESSAGE_FOR_delta_ms_after).
+                    directionEq(1).
+                    orderBySent_timestampAsc().
+                    limit(1).toList();
+            return ((found == null) || found.isEmpty()) ? null : found.get(0);
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
+    }
+
+    /**
      * KHANDAQ (0.2.56): after the wake for its slot (PushBackoffPolicy.slotToSend), a message waits for the slot
      * after it. Never moves a message back: another wake may have moved it further meanwhile.
      */

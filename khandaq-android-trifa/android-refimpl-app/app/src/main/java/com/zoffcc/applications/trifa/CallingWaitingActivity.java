@@ -153,7 +153,8 @@ public class CallingWaitingActivity extends AppCompatActivity
                             {
                                 if (!sent_ping_message)
                                 {
-                                    friend_call_push_url(calling_friend_pk, System.currentTimeMillis());
+                                    // KHANDAQ (0.2.64): a call's wake carries no message preview.
+                                    friend_call_push_url(calling_friend_pk, System.currentTimeMillis(), false);
                                     Log.i(TAG, "sent ping to push url");
                                     sent_ping_message = true;
                                 }

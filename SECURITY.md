@@ -41,11 +41,12 @@ We aim to acknowledge reports within **72 hours**.
 
 - Your Tox message plaintext (E2E encrypted)
 - Your Tox private keys (stored locally, encrypted with your password)
-- Message content on `push.khandaq.org` (wake notifications only)
+- Readable message content on `push.khandaq.org` (wake notifications only; a preview a wake carries
+  is end-to-end encrypted for the recipient's device, see [docs/PUSH_PREVIEWS.md](docs/PUSH_PREVIEWS.md))
 
 ## Push relay transparency
 
-`push.khandaq.org` is a **wake-only** relay. It does not receive message bodies.
+`push.khandaq.org` is a **wake-only** relay. It does not receive message bodies it can read.
 
 It may receive:
 
@@ -56,6 +57,11 @@ It may receive:
   [docs/PUSH-COMPATIBILITY.md](docs/PUSH-COMPATIBILITY.md).
 - Optional sender **public key** (64 hex chars) — not a full Tox ID — so the mobile app can
   route the notification to the correct chat. Same two carriers as the token.
+- From Android 0.2.64 / iOS 1.4.34, an **encrypted preview** of the event and an opaque event id.
+  The preview is sealed on the sender's device with ChaCha20-Poly1305 under a key only the
+  recipient's device can derive; the relay forwards it unread and keeps only a hash of
+  (token, event id) for up to six hours to de-duplicate retries.
+  [docs/PUSH_PREVIEWS.md](docs/PUSH_PREVIEWS.md).
 - A per-contact capability, when the sending device has registered one. The shared build-time
   HMAC is replay and rate-abuse hardening, **not** client identity: it is a fleet-wide key
   embedded in public binaries, so possession of it proves nothing about who is calling.

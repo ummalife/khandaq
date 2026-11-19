@@ -10,6 +10,21 @@
 @class OCTFriend;
 @class OCTMessageAbstract;
 
+/**
+ * KHANDAQ (0.2.64): someone added a reaction to one of OUR messages, in a 1:1 chat or in a group. Posted
+ * on the manager's notification center, on the main thread, with the keys below.
+ */
+FOUNDATION_EXPORT NSNotificationName const kOCTMessageReactionNotification;
+/// The chat of the reacted message.
+FOUNDATION_EXPORT NSString *const kOCTMessageReactionChatUniqueIdentifierKey;
+/// The reacted message (ours).
+FOUNDATION_EXPORT NSString *const kOCTMessageReactionMessageUniqueIdentifierKey;
+FOUNDATION_EXPORT NSString *const kOCTMessageReactionEmojiKey;
+/// The group member who reacted, as the group knows them; absent in a 1:1 chat.
+FOUNDATION_EXPORT NSString *const kOCTMessageReactionReactorNameKey;
+/// The event key of docs/PUSH_PREVIEWS.md (`r:<anchor>:<emoji>`), to match a push already shown for it.
+FOUNDATION_EXPORT NSString *const kOCTMessageReactionEventKeyKey;
+
 @protocol OCTSubmanagerChats <NSObject>
 
 /**

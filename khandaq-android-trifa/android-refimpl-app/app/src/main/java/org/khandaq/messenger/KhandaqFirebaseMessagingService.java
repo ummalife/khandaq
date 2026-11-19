@@ -35,6 +35,11 @@ public class KhandaqFirebaseMessagingService extends FirebaseMessagingService {
         }
 
         Log.i(TAG, "wake push received");
+        // KHANDAQ (0.2.64): a wake that carries a preview shows it on the chat's notification and nudges Tox, and the
+        // relay's silent repeat of one only nudges. Anything it cannot read goes on as every wake went before.
+        if (data != null && com.zoffcc.applications.trifa.PushPreviewReceiver.onWake(this, data)) {
+            return;
+        }
         // KHANDAQ (0.2.56): a data-only wake reaches this in the background too; see WakePush for what it does.
         // A notification message reaches it only in the foreground and wakes Tox, as before.
         com.zoffcc.applications.trifa.WakePush.onWake(this, message.getNotification() == null);

@@ -192,7 +192,7 @@ extension ChatsTabCoordinator: ChatPrivateControllerDelegate {
         controller.dataSourceStorage = dataSource
         controller.currentPreviewItemIndex = selectedIndex
 
-        navigationController.present(controller, animated: true, completion: nil)
+        QuickLookPreviewController.present(controller, from: navigationController)
     }
 
     // KHANDAQ (user request 17.08): the chat's attachments, split into files / audio / voice.

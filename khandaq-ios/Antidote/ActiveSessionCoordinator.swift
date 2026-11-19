@@ -1081,7 +1081,7 @@ extension ActiveSessionCoordinator: ChatPrivateControllerDelegate {
         controller.dataSourceStorage = dataSource
         controller.currentPreviewItemIndex = selectedIndex
 
-        iPad.splitController.present(controller, animated: true, completion: nil)
+        QuickLookPreviewController.present(controller, from: iPad.splitController)
     }
 
     // KHANDAQ (user request 17.08): the chat's attachments, split into files / audio / voice.

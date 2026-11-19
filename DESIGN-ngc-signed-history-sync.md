@@ -135,7 +135,7 @@ This was step 1 of §8 and it is **done**. Every shipped parser gates on the ver
 | Android | every branch requires `data[6] == 0x1`; unknown version falls to the `else` and is ignored | `MainActivity.android_tox_callback_group_custom_packet_cb_method` |
 | iOS — history sync | `if (bytes[6] != kOCTNgcHistLayer) return;`, `kOCTNgcHistLayer = 0x01` | `OCTNgcGroupHistSync.m:143` |
 | iOS — edit/delete/reaction | `b[6] != 0x01 → return NO` | `OCTSubmanagerGroupsImpl.m:2534, 2708` |
-| desktop | `data[6] != NGC_VERSION → return`, `NGC_VERSION = 0x01` | `core/core.cpp:1880` |
+| desktop | `data[6] != NGC_VERSION → return`, `NGC_VERSION = 0x01`; since 0.2.63 the text `0x02` is taken only with `data[6] == 0x01` (`Air::isSyncTextPacket`), so `02 02` still meets the first check and is dropped | `core/core.cpp:3228`, `model/air/airhistorysync.cpp:69` |
 
 So a shipped client receiving `version=0x02` does nothing at all — no mis-parse, no crash, no half-message. The version byte is a usable upgrade lever, and the design can rely on it.
 
@@ -172,7 +172,7 @@ Dual-emitting `0x01` and `0x02` for the same message would keep old clients fed,
 1. **Late joiners — DECIDED: periodic re-announce, plus on join.** No new packet type; the announcement (§4.2) is simply re-sent on a long timer and whenever we join a group. Cost is a little bandwidth in large groups, which is the cheapest of the three options and the only one that needs no new attack surface. Implementation note: the timer must be jittered per client, or every member of a large group re-announces in lockstep.
 2. **Key rotation / reinstall — DECIDED: immediate replacement, but only while the peer is connected in the group.** The binding argument is the same one that makes the whole scheme work: a live packet is authenticated by the transport, so a currently-connected peer announcing a new key has already proved it is that Tox identity. An announcement from a peer NOT currently in the group's peer list does not replace anything. Every replacement is logged. This keeps reinstall from degrading the UX while giving an attacker no window in which the real owner is absent.
 3. **Quarantine display before the protocol — DONE.** Shipped ahead of the protocol; see §8 step 2.
-4. **Platform order — DECIDED: desktop first.** It is a history-sync **consumer only** (`core.cpp:1600` — it never emits a request), so it needs verification but not signing: the smallest change, and it proves the verification path before either mobile client starts emitting signatures. Then Android, then iOS. The version gate is settled for all three (§5).
+4. **Platform order — DECIDED: desktop first.** It is a history-sync **consumer only** — it never serves history: no `0x02`/`0x03` out and no answer to a `0x01` (`core/core.cpp`, the NGC comment above `NGC_VERSION`). Since 0.2.63 it does send the request: `0x01` to a member of a public group a moment after they join or after we do, at most once in 20 s per member (`Core::requestGroupHistory`, `Air::HistoryRequestPace`), and it shows the version-1 texts that come (`Air::readSyncText`). Serving nothing, it still needs verification but not signing: the smallest change, and it proves the verification path before either mobile client starts emitting signatures. Then Android, then iOS. The version gate is settled for all three (§5).
 
 ---
 

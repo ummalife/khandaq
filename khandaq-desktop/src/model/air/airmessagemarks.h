@@ -229,6 +229,13 @@ public:
     virtual QByteArray wireId(const QString& key) const = 0;
     /** Keeps the id a group gave a message; an empty id forgets it. */
     virtual void setWireId(const QString& key, const QByteArray& wireId) = 0;
+    /**
+     * KHANDAQ (0.2.63): whether the entry kept under key came relayed from the history of its
+     * group instead of from its author: nothing vouches for the author it names.
+     */
+    virtual bool isRelayed(const QString& key) const = 0;
+    /** Keeps the mark of an entry that came relayed. */
+    virtual void markRelayed(const QString& key) = 0;
 };
 
 } // namespace Air

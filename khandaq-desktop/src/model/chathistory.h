@@ -121,6 +121,12 @@ public slots:
 
 private slots:
     void onMessageReceived(const ToxPk& sender, const Message& message);
+    /**
+     * KHANDAQ (0.2.63): a text a member relayed from the history of the group
+     * (IMessageDispatcher::messageSynced): kept under its own time and marked relayed, unless the
+     * history has the author's words from that while already.
+     */
+    void onMessageSynced(const ToxPk& sender, const Message& message);
     void onMessageSent(DispatchedMessageId id, const Message& message);
     void onMessageComplete(DispatchedMessageId id);
     void onMessageBroken(DispatchedMessageId id, BrokenMessageReason reason);

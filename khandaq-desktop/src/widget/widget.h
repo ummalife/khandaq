@@ -244,6 +244,12 @@ public slots:
     void onGroupJoinByIdPrompt();
     void onGroupMessageReceived(int groupnumber, const ToxPk& author, const QString& message,
                                 bool isAction, uint32_t messageId);
+    /**
+     * KHANDAQ (0.2.63): a text a member relayed from the history of the group
+     * (Core::groupSyncedMessageReceived): shown under the time it was written, alerting nobody.
+     */
+    void onGroupSyncedMessageReceived(int groupnumber, const ToxPk& author, const QString& message,
+                                      uint32_t messageId, const QDateTime& sentAt);
     void onGroupFileReceived(int groupnumber, const ToxPk& sender, const QString& fileName,
                              const QByteArray& fileData, const QDateTime& timestamp, bool wasSynced,
                              const QByteArray& fileId);

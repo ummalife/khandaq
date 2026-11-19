@@ -20,8 +20,11 @@
 #include "chathistory.h"
 #include "src/persistence/settings.h"
 #include "src/core/chatid.h"
+#include "src/model/air/airhistorysync.h"
 #include "src/model/friend.h"
 #include "src/widget/form/chatform.h"
+
+#include <QDateTime>
 
 #include <algorithm>
 
@@ -98,6 +101,8 @@ ChatHistory::ChatHistory(Chat& chat_, History* history_, const ICoreIdHandler& c
             &ChatHistory::onMessageComplete);
     connect(&messageDispatcher, &IMessageDispatcher::messageReceived, this,
             &ChatHistory::onMessageReceived);
+    connect(&messageDispatcher, &IMessageDispatcher::messageSynced, this,
+            &ChatHistory::onMessageSynced);
     connect(&messageDispatcher, &IMessageDispatcher::messageBroken, this,
             &ChatHistory::onMessageBroken);
     connect(&messageDispatcher, &IMessageDispatcher::messageWireIdAssigned, this,
@@ -338,6 +343,32 @@ void ChatHistory::onMessageReceived(const ToxPk& sender, const Message& message)
         history->addNewMessage(chatId, content, sender, message.timestamp, true,
                                message.extensionSet, displayName, {}, msgV3IdOf(message));
         keepWireId(sender, message);
+    }
+
+    sessionChatLog.onMessageReceived(sender, message);
+}
+
+void ChatHistory::onMessageSynced(const ToxPk& sender, const Message& message)
+{
+    // Core drops a copy of what came in this session (Air::SyncedTextLedger). The history knows
+    // a group's text by its author and words only: it keeps no id of it.
+    const QString content = storedText(message);
+    if (canUseHistory()) {
+        const ChatId& chatId = chat.getPersistentId();
+        const qint64 since = QDateTime::currentMSecsSinceEpoch() - Air::syncedTextKnownMs;
+        if (history->hasGroupText(chatId, sender, content, since)) {
+            qDebug() << "A text relayed from the history of a group is kept here already";
+            return;
+        }
+        history->addNewMessage(chatId, content, sender, message.timestamp, true,
+                               message.extensionSet, chat.getDisplayedName(sender), {},
+                               msgV3IdOf(message));
+        keepWireId(sender, message);
+    }
+    // Nothing vouches for the author it names: a Report on it names nobody, later too.
+    if (entryStore) {
+        entryStore->markRelayed(Air::textEntryKey(chatKey(), sender.toString(),
+                                                  message.timestamp.toMSecsSinceEpoch()));
     }
 
     sessionChatLog.onMessageReceived(sender, message);

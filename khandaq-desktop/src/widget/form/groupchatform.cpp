@@ -1150,11 +1150,18 @@ bool GroupChatForm::prepareReport(ChatLogIdx idx)
     // KHANDAQ (0.2.57, review): the mail names the author only when toxcore vouches for them. An
     // entry without a key, or a file a member relayed, in this launch (ToxFile::relayed) or an
     // earlier one (AirLocal::isRelayed), is still reported, by nobody's name (Air::reportMailUrl).
+    // 0.2.63: so is a relayed text, by the mark ChatHistory::onMessageSynced keeps.
     bool vouched = !sender.isEmpty();
     QString text;
     switch (item.getContentType()) {
     case ChatLogItem::ContentType::message:
         text = item.getContentAsMessage().message.content;
+        // KHANDAQ (0.2.63): nor a text a member relayed from the history (ChatHistory marks it).
+        if (airLocal
+            && airLocal->isRelayed(Air::textEntryKey(groupKey(), sender.toString(),
+                                                     item.getTimestamp().toMSecsSinceEpoch()))) {
+            vouched = false;
+        }
         break;
     case ChatLogItem::ContentType::fileTransfer: {
         // A file says what it is by its name; what is in it stays on this computer.

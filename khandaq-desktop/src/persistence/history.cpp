@@ -1261,6 +1261,32 @@ bool History::hasText(const ChatId& chatId, const ToxPk& author, const QByteArra
     return count > 0;
 }
 
+bool History::hasGroupText(const ChatId& chatId, const ToxPk& author, const QString& text,
+                           qint64 sinceMs)
+{
+    if (historyAccessBlocked() || text.isEmpty()) {
+        return false;
+    }
+
+    // The words as generateNewTextMessageQueries writes them: a blob, which no text equals.
+    QVector<QByteArray> boundParams{text.toUtf8()};
+    QString queryString = QStringLiteral("SELECT 1 FROM text_messages "
+                                         "JOIN history ON history.id = text_messages.id "
+                                         "JOIN aliases ON aliases.id = text_messages.sender_alias "
+                                         "WHERE text_messages.message = ? "
+                                         "AND history.timestamp >= %1 AND history.chat_id = ")
+                              .arg(sinceMs);
+    addChatIdSubQuery(queryString, boundParams, chatId);
+    queryString += QStringLiteral(" AND aliases.owner = ");
+    addAuthorIdSubQuery(queryString, boundParams, author);
+    queryString += QStringLiteral(" LIMIT 1;");
+
+    bool found = false;
+    db->execNow(
+        {queryString, boundParams, [&found](const QVector<QVariant>&) { found = true; }});
+    return found;
+}
+
 void History::markAsBroken(RowId messageId, BrokenMessageReason reason)
 {
     if (!isValid()) {

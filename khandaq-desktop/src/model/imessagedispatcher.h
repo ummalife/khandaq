@@ -92,6 +92,13 @@ signals:
     void messageReceived(const ToxPk& sender, const Message& message);
 
     /**
+     * @brief KHANDAQ (0.2.63): a message of the history of a group that a member relayed instead
+     * of its author, processed, with the time it was written. Nothing vouches for the author it
+     * names (K-01), so it alerts nobody: nothing that alerts listens here.
+     */
+    void messageSynced(const ToxPk& sender, const Message& message);
+
+    /**
      * @brief Emitted when a message is processed and sent
      * @param id message id for completion
      * @param message sent message

@@ -71,6 +71,14 @@ public:
     void onMessageReceived(ToxPk const& sender, bool isAction, QString const& content,
                            uint32_t wireId = 0);
     /**
+     * KHANDAQ (0.2.63): a text a member relayed from the history of the group
+     * (Core::groupSyncedMessageReceived): as a received one, but with the time it was written, and
+     * told as messageSynced. Its author is told it arrived (a delivery receipt), so that their
+     * phone stops relaying it here.
+     */
+    void onSyncedMessageReceived(const ToxPk& author, const QString& content, uint32_t wireId,
+                                 const QDateTime& sentAt);
+    /**
      * The group leaves this window (Widget::discardGroup): the texts that wait go no more, and a
      * grace that runs sends nothing. broken: they fail as well, for a group left or deleted whose
      * history stays, so that no later start or join of the group sends them. Otherwise they stay

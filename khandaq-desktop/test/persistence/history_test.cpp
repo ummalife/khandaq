@@ -109,6 +109,7 @@ private slots:
     void aLaterFileOfAPersonThatGoesToThePathIsKnown();
     void aFileOfOursKeepsWhatItWasWhenItWentAfterARestart();
     void aFileWeSentTheGroupIsFoundAfterARestart();
+    void aRelayedGroupTextIsKnownByItsAuthorAndWords();
 
 private:
     /** The one file of the chat, as a later start reads it. */
@@ -557,6 +558,36 @@ void TestHistory::aFileWeSentTheGroupIsFoundAfterARestart()
     QVERIFY(history->sentFile(family, fileId).filePath.isEmpty());
     restart();
     QVERIFY(history->sentFile(family, fileId).filePath.isEmpty());
+}
+
+/**
+ * @brief KHANDAQ (0.2.63): a text a member relays from the history of a group is one kept already
+ * when its author's same words are there since the time given, in that group, after a restart too
+ */
+void TestHistory::aRelayedGroupTextIsKnownByItsAuthorAndWords()
+{
+    const QString words = QStringLiteral("Salam \u00e9 \U0001F44D");
+    const QDateTime start = QDateTime::fromMSecsSinceEpoch(1700000000000);
+    history->addNewMessage(family, words, maryam, start, true, ExtensionSet(),
+                           QStringLiteral("Maryam"));
+    history->addNewMessage(family, QStringLiteral("Wa alaykum"), self, start.addSecs(1), true,
+                           ExtensionSet(), QStringLiteral("Me"));
+    const qint64 since = start.toMSecsSinceEpoch() - 1000;
+
+    QVERIFY(history->hasGroupText(family, maryam, words, since));
+    QVERIFY(history->hasGroupText(family, maryam, words, start.toMSecsSinceEpoch()));
+    QVERIFY(history->hasGroupText(family, self, QStringLiteral("Wa alaykum"), since));
+    // Kept before that time, it is not looked at.
+    QVERIFY(!history->hasGroupText(family, maryam, words, start.toMSecsSinceEpoch() + 1));
+    // Other words, another author, another chat, or no words.
+    QVERIFY(!history->hasGroupText(family, maryam, words.toLower(), since));
+    QVERIFY(!history->hasGroupText(family, maryam, words + QStringLiteral("!"), since));
+    QVERIFY(!history->hasGroupText(family, self, words, since));
+    QVERIFY(!history->hasGroupText(GroupId{QByteArray(GroupId::size, 'h')}, maryam, words, since));
+    QVERIFY(!history->hasGroupText(family, maryam, QString(), since));
+
+    restart();
+    QVERIFY(history->hasGroupText(family, maryam, words, since));
 }
 
 int main(int argc, char* argv[])

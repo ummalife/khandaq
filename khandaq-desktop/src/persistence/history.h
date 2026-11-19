@@ -335,6 +335,14 @@ public:
     Air::SeenAnchor newestIncomingAnchor(const ChatId& chatId, const ToxPk& self);
     /** Whether author's text with this msgV3 id is in the chat already: one that came again. */
     bool hasText(const ChatId& chatId, const ToxPk& author, const QByteArray& msgV3Id);
+    /**
+     * KHANDAQ (0.2.63): whether author's text with these words was kept in the chat since sinceMs
+     * (milliseconds since 1970): a text a member relays from the history of a group that came
+     * here before, live or relayed. The history keeps no id of a group's text, so the words stand
+     * for it: the same words of the author twice in that while are taken for one.
+     */
+    bool hasGroupText(const ChatId& chatId, const ToxPk& author, const QString& text,
+                      qint64 sinceMs);
 
 signals:
     void fileInserted(RowId dbId, QByteArray fileId);

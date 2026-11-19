@@ -536,15 +536,25 @@ static const NSUInteger kOCTNgcHistBudgetMaxBytesPerGroupPerSession = 8 * 1024 *
         return nil;
     }
 
-    NSString *senderPubkeyHex = senderPeerId == 0
-        ? self.selfPublicKeyBlock(groupNumber)
-        : self.peerPublicKeyBlock(groupNumber, senderPeerId);
+    // KHANDAQ (0.2.63): a member's text goes under the key frozen on its row when it came live
+    // (freezeGroupTextSenderPubkeyOnMessage), as a file goes under its own (#170). The peer number on the row
+    // is volatile: NGC gives a freed number to the next member who comes, so resolving it here served the text
+    // of a member who had gone under the key of whoever holds that number now (in QA-Live of 0.2.63 the
+    // founder came back with the old number of a member). Only a row with no key of its own goes by its
+    // number: ours (0) under our key, one from before the freeze under the key of the number's holder.
+    NSString *keptPubkeyHex = message.groupPrivatePeerPubkey;
+    NSString *senderPubkeyHex = keptPubkeyHex.length > 0
+        ? keptPubkeyHex.uppercaseString
+        : (senderPeerId == 0 ? self.selfPublicKeyBlock(groupNumber) : self.peerPublicKeyBlock(groupNumber, senderPeerId));
 
-    if (senderPubkeyHex.length == 0) {
+    // A whole key or nothing: 32 bytes of it are copied into the packet.
+    if (senderPubkeyHex.length != 2 * TOX_GROUP_PEER_PUBLIC_KEY_SIZE) {
         return nil;
     }
 
-    NSString *peerName = messageText.groupPeerName.length > 0 ? messageText.groupPeerName : [self peerNameForSenderPeerId:senderPeerId groupNumber:groupNumber];
+    NSString *peerName = messageText.groupPeerName.length > 0
+        ? messageText.groupPeerName
+        : [self peerNameForKeptPubkeyHex:keptPubkeyHex senderPeerId:senderPeerId groupNumber:groupNumber];
 
     return [self buildSyncMessagePacketForMessageText:messageText
                                        senderPubkeyHex:senderPubkeyHex
@@ -694,7 +704,8 @@ static const NSUInteger kOCTNgcHistBudgetMaxBytesPerGroupPerSession = 8 * 1024 *
 
     OCTLogInfo(@"NGC sync-file serve hash=%@ name=%@ senderPeerId=%u", messageFile.groupMsgIdHashHex, messageFile.fileName, senderPeerId);
 
-    if (senderPubkeyHex.length == 0) {
+    // KHANDAQ (0.2.63): a whole key or nothing: 32 bytes of it are copied into the packet.
+    if (senderPubkeyHex.length != 2 * TOX_GROUP_PEER_PUBLIC_KEY_SIZE) {
         return nil;
     }
 
@@ -735,7 +746,11 @@ static const NSUInteger kOCTNgcHistBudgetMaxBytesPerGroupPerSession = 8 * 1024 *
     bytes[74] = (uint8_t)((timestamp >> 8) & 0xFF);
     bytes[75] = (uint8_t)(timestamp & 0xFF);
 
-    NSString *peerName = [self peerNameForSenderPeerId:senderPeerId groupNumber:groupNumber];
+    // KHANDAQ (0.2.63): under the name frozen on the row when it came (#82), as a text goes; it was the name of
+    // whoever holds the row's peer number now, the author's own only until NGC gave that number to another.
+    NSString *peerName = messageFile.groupPeerName.length > 0
+        ? messageFile.groupPeerName
+        : [self peerNameForKeptPubkeyHex:messageFile.groupSenderPubkey senderPeerId:senderPeerId groupNumber:groupNumber];
     [self writePaddedUTF8String:peerName
                          maxBytes:kOCTNgcHistMaxPeerNameBytes
                           atOffset:76
@@ -1025,6 +1040,27 @@ static const NSUInteger kOCTNgcHistBudgetMaxBytesPerGroupPerSession = 8 * 1024 *
     }
 
     NSString *name = self.peerNameForPeerIdBlock(groupNumber, senderPeerId);
+
+    return name.length > 0 ? name : @"peer";
+}
+
+/**
+ * KHANDAQ (0.2.63): the name an entry of the history goes under when its row kept no name. An entry that kept
+ * its author's key goes by that key: the name the author has now while in the group, "peer" when not (the
+ * lookup answers 0 then, and 0 alone would name us). The peer number on the row names whoever NGC gave it to
+ * since the entry came, so only a row with no key of its own goes by it: ours (0), and one from before the
+ * key was frozen.
+ */
+- (NSString *)peerNameForKeptPubkeyHex:(nullable NSString *)keptPubkeyHex
+                          senderPeerId:(uint32_t)senderPeerId
+                           groupNumber:(uint32_t)groupNumber
+{
+    if (keptPubkeyHex.length == 0) {
+        return [self peerNameForSenderPeerId:senderPeerId groupNumber:groupNumber];
+    }
+
+    uint32_t peerIdNow = self.peerIdForPublicKeyBlock ? self.peerIdForPublicKeyBlock(groupNumber, keptPubkeyHex.uppercaseString) : 0;
+    NSString *name = peerIdNow != 0 ? self.peerNameForPeerIdBlock(groupNumber, peerIdNow) : nil;
 
     return name.length > 0 ? name : @"peer";
 }

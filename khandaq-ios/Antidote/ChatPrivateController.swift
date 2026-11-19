@@ -3429,7 +3429,8 @@ extension ChatPrivateController {
                        strip: strip,
                        nowOnline: reach.isLive,
                        stripHint: dayStripHint(hours: hours, strip: strip, now: now),
-                       stripSpoken: strip.spokenText(locale: AppLanguage.locale, nowOnline: reach.isLive))
+                       stripSpoken: strip.spokenText(locale: AppLanguage.locale, nowOnline: reach.isLive),
+                       speaksLink: !AirPresenceLine.namesLink(reach: reach, isTyping: friend.isTyping))
     }
 
     /// Beside the strip: when the person is usually online, or the hours of the last day, or why it is empty.

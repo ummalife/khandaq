@@ -137,8 +137,11 @@ enum MessageReplyHelper {
         }.map(Character.init))
     }
 
+    /// One line: a line break becomes a space, as on Android. The control characters went first and took the
+    /// breaks with them, so the words on each side of a break ran together ("on\nfor" read "onfor"), in the
+    /// quote on screen and in the preview `encode` sends (QA live 0.2.61).
     static func previewForDisplay(_ text: String?, maxLen: Int) -> String {
-        let single = stripControlChars(text ?? "")
+        let single = stripControlChars(text ?? "", keepNewlines: true)
             .replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\r", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -146,6 +149,21 @@ enum MessageReplyHelper {
             return single
         }
         return String(single.prefix(maxLen - 1)).trimmingCharacters(in: .whitespacesAndNewlines) + "…"
+    }
+
+    /// What VoiceOver says of the quote over a reply: "In reply to Amina, the quoted words", as the quote
+    /// shows them (ChatReplyQuoteView). Nil when the entry shows no quote. The entry is read as one element,
+    /// so without this a reply was read as a message of its own (QA live 0.2.61).
+    static func spokenQuote(_ meta: ReplyMeta?) -> String? {
+        guard let meta = meta else {
+            return nil
+        }
+        let preview = previewForDisplay(meta.previewText, maxLen: 160)
+        guard !preview.isEmpty else {
+            return nil
+        }
+        let name = meta.senderName.isEmpty ? String(localized: "chat_reply_unknown_sender") : meta.senderName
+        return String(localized: "chat_reply_header", name) + ", " + preview
     }
 
     static func pubkeyTail(_ pubkey: String?) -> String {

@@ -220,6 +220,22 @@ enum AirPresenceLine {
         }
     }
 
+    /// Whether `text(reach:onlineSince:isTyping:time:)` already says how the person is reached: how the link
+    /// runs while they are online, or offline, connecting or waiting, where there is no link. Only the typing
+    /// line and the empty one of a group leave it out. The band reads the link after the line, and read it
+    /// twice, "online since 3:20, direct link. direct link." (QA live 0.2.61).
+    static func namesLink(reach: AirReach, isTyping: Bool) -> Bool {
+        if isTyping && reach.isLive {
+            return false
+        }
+        switch reach {
+            case .direct, .relay, .pending, .connecting, .away:
+                return true
+            case .group, .local:
+                return false
+        }
+    }
+
     static func awayText(seconds: TimeInterval) -> String {
         if seconds < 60 {
             return String(localized: "air_presence_away_just_now")

@@ -423,13 +423,15 @@ final class AirPresenceBandView: UIControl {
         stripRow.isHidden = folded
     }
 
-    func configure(link: AirLinkState, presence: String, strip dayStrip: AirDayStrip, nowOnline: Bool, stripHint: String, stripSpoken: String) {
+    /// `speaksLink` false when the presence line already names the link (`AirPresenceLine.namesLink`).
+    func configure(link: AirLinkState, presence: String, strip dayStrip: AirDayStrip, nowOnline: Bool, stripHint: String,
+                   stripSpoken: String, speaksLink: Bool = true) {
         linkMark.configure(link)
         presenceLabel.text = presence
         strip.configure(strip: dayStrip, nowOnline: nowOnline)
         stripHintLabel.text = stripHint
         self.stripSpoken = stripSpoken
-        accessibilityLabel = [presence, link.spokenText, String(localized: "air_day_title") + ": " + stripSpoken]
+        accessibilityLabel = [presence, speaksLink ? link.spokenText : "", String(localized: "air_day_title") + ": " + stripSpoken]
             .filter { !$0.isEmpty }
             .joined(separator: ". ")
         accessibilityHint = String(localized: "air_chat_dossier_hint")

@@ -637,6 +637,37 @@ public class HelperGroup
         return sanitized;
     }
 
+    /**
+     * KHANDAQ (0.2.63): the name a text or a file of the group's history goes out under (send_ngch_syncmsg,
+     * send_ngch_syncfile). It was the name the author has now only, and for an author the group does not know now
+     * (not in the group, no row in the peer table, no friend) that is the end of the key (peer_pubkey_short_id),
+     * while the entry kept the name the author had when it came (tox_group_peername). QA-Live of 0.2.63: the
+     * iPhone took a text of Windows again from this history as "0F2652", next to its live copy as "QA A".
+     */
+    static String history_sync_author_name(final GroupMessage m)
+    {
+        return pick_history_sync_author_name(tox_group_peer_get_name__wrapper(m.group_identifier, m.tox_group_peer_pubkey),
+                                             m.tox_group_peername, m.tox_group_peer_pubkey);
+    }
+
+    /** The name now, unless it is empty or the end of the key only; then the name the entry kept, if that is a name. */
+    static String pick_history_sync_author_name(final String now, final String kept, final String peer_pubkey)
+    {
+        if ((now != null) && !now.trim().isEmpty() && !is_short_hex_peer_id(now.trim(), peer_pubkey))
+        {
+            return now;
+        }
+        if ((kept != null) && !kept.trim().isEmpty() && !"-1".equals(kept.trim()))
+        {
+            final String sanitized = sanitize_group_peer_name(kept);
+            if (!is_short_hex_peer_id(sanitized, peer_pubkey))
+            {
+                return sanitized;
+            }
+        }
+        return (now != null) ? now : "";
+    }
+
     public static String tox_group_peer_get_name__wrapper(final String group_identifier, final String group_peer_pubkey,
                                                           final long peer_id_hint)
     {
@@ -11751,7 +11782,7 @@ public class HelperGroup
             byte[] fn = "peer".getBytes(StandardCharsets.UTF_8);
             try
             {
-                final String peer_name = tox_group_peer_get_name__wrapper(m.group_identifier, m.tox_group_peer_pubkey);
+                final String peer_name = history_sync_author_name(m);
                 if (peer_name.getBytes(StandardCharsets.UTF_8).length > TOX_NGC_HISTORY_SYNC_MAX_PEERNAME_BYTES)
                 {
                     fn = Arrays.copyOfRange(peer_name.getBytes(StandardCharsets.UTF_8),0,TOX_NGC_HISTORY_SYNC_MAX_PEERNAME_BYTES);
@@ -11909,7 +11940,7 @@ public class HelperGroup
             byte[] fn = "peer".getBytes(StandardCharsets.UTF_8);
             try
             {
-                final String peer_name = tox_group_peer_get_name__wrapper(m.group_identifier, m.tox_group_peer_pubkey);
+                final String peer_name = history_sync_author_name(m);
                 if (peer_name.getBytes(StandardCharsets.UTF_8).length > TOX_NGC_HISTORY_SYNC_MAX_PEERNAME_BYTES)
                 {
                     fn = Arrays.copyOfRange(peer_name.getBytes(StandardCharsets.UTF_8),0,TOX_NGC_HISTORY_SYNC_MAX_PEERNAME_BYTES);

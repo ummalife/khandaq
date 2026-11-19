@@ -263,7 +263,7 @@ extension ChatAttachmentsController: UITableViewDataSource, UITableViewDelegate 
 
         previewDataSource = dataSource
         previewController = controller
-        present(controller, animated: true, completion: nil)
+        QuickLookPreviewController.present(controller, from: self)
     }
 }
 

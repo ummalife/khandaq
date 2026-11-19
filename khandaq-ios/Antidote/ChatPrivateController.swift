@@ -720,7 +720,7 @@ extension ChatPrivateController {
         {
             let alert = UIAlertController(title: messageTitle, message: messageAlert, preferredStyle: messageBoxStyle)
 
-            let okAction = UIAlertAction(title: "Cancel", style: alertActionStyle) { _ in
+            let okAction = UIAlertAction(title: String(localized: "alert_cancel"), style: alertActionStyle) { _ in
                 completionHandler() // This will only get called after okay is tapped in the alert
             }
 
@@ -765,7 +765,7 @@ extension ChatPrivateController {
         })))
 
         alert.addAction(
-            UIAlertAction(title: "Cancel", style: .cancel, handler: { (action) -> Void in
+            UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: { (action) -> Void in
                 alert.dismiss(animated: true, completion: nil)
             }))
 

@@ -1588,7 +1588,7 @@ private extension ChatGroupController {
         preview.dataSource = qlDataSource
         preview.dataSourceStorage = qlDataSource
         preview.currentPreviewItemIndex = index
-        present(preview, animated: true, completion: nil)
+        QuickLookPreviewController.present(preview, from: self)
     }
 
     func handleVoicePlayerStateChange(_ notification: Notification) {

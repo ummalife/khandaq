@@ -77,6 +77,20 @@ web/downloads/*.zip
 web/downloads/*.tar.gz
 web/downloads/*.deb
 
+# Local copies of large generated files and test fixtures that builds and test runs leave behind
+# (contributed in #42). The copies the build and the tests need are tracked, and the `!` lines keep
+# them visible to git: without them a renamed or newly added one would silently stay out of a commit,
+# the way a bare `assets/` once swallowed the site's fonts (see below).
+**/rnnoise_data*.c
+**/rnnoise_data*.h
+!/khandaq-android-trifa/android-refimpl-app/native-audio-jni/src/main/cpp/rnnoise1/src/rnnoise_data*.c
+!/khandaq-android-trifa/android-refimpl-app/native-audio-jni/src/main/cpp/rnnoise1/src/rnnoise_data*.h
+**/*.realm
+!/khandaq-ios/local_pod_repo/objcTox/Tests/*.realm
+**/sqlite-jdbc-*.jar
+**/sorma2/test/*.jar
+!/khandaq-android-trifa/sorma2/test/sqlite-jdbc-*.jar
+
 # Local QA screenshots (not for repo).
 #
 # KHANDAQ (re-audit 2026-08-22, W-02): anchored to the repository root. A bare `assets/` matches

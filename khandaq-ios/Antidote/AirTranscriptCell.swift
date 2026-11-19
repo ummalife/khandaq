@@ -524,6 +524,10 @@ final class AirEntryTextCell: ChatBaseTextCell {
         if let marks = transcriptMarksSpoken {
             value.append(marks)
         }
+        // A reply says whom and what it answers before its own words, as the desktop reads it.
+        if let quote = MessageReplyHelper.spokenQuote(entry.replyMeta) {
+            value.append(quote)
+        }
         value.append(entry.message)
         // KHANDAQ (0.2.61): the reactions, as the entry of a file says them.
         if let reactions = entry.reactionsDisplay {

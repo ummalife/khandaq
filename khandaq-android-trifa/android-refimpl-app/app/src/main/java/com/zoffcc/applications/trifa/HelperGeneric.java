@@ -3218,17 +3218,22 @@ public class HelperGeneric
             return "";
         }
 
-        long ts;
-        if (outgoing)
-        {
-            ts = m.sent_timestamp > 0 ? m.sent_timestamp : m.rcvd_timestamp;
-        }
-        else
-        {
-            ts = m.rcvd_timestamp > 0 ? m.rcvd_timestamp : m.sent_timestamp;
-        }
+        return short_time_format(group_message_time_ms(m, outgoing));
+    }
 
-        return short_time_format(ts);
+    /**
+     * The time an entry of a group shows: ours when we sent it, a member's when it reached us. A message a member
+     * synced to us later was written before it reached us, and the transcript already places it by the time it was
+     * sent (orderBySent_timestampAsc): it shows that time, not its arrival ("04:44" on a line written at 04:42 among
+     * its neighbours, QA live 0.2.61).
+     */
+    static long group_message_time_ms(final com.zoffcc.applications.sorm.GroupMessage m, final boolean outgoing)
+    {
+        if (outgoing || (m.was_synced && m.sent_timestamp > 0))
+        {
+            return m.sent_timestamp > 0 ? m.sent_timestamp : m.rcvd_timestamp;
+        }
+        return m.rcvd_timestamp > 0 ? m.rcvd_timestamp : m.sent_timestamp;
     }
 
     static String format_chat_message_time(final com.zoffcc.applications.sorm.Message m, final boolean outgoing)

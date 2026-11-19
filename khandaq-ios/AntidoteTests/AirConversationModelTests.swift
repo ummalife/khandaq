@@ -188,6 +188,50 @@ class AirConversationModelTests: XCTestCase {
         XCTAssertEqual(AirPresenceLine.text(reach: .direct, onlineSince: since, isTyping: false, time: time), "в сети с 9:40, связь напрямую")
     }
 
+    /// QA live 0.2.61: the band read the link after a presence line that had already named it.
+    func testTheBandSaysTheLinkOnlyWhenThePresenceLineDoesNot() {
+        XCTAssertTrue(AirPresenceLine.namesLink(reach: .direct, isTyping: false))
+        XCTAssertTrue(AirPresenceLine.namesLink(reach: .relay, isTyping: false))
+        XCTAssertTrue(AirPresenceLine.namesLink(reach: .away(secondsAgo: 25 * 60), isTyping: false))
+        XCTAssertTrue(AirPresenceLine.namesLink(reach: .pending, isTyping: false))
+        XCTAssertFalse(AirPresenceLine.namesLink(reach: .direct, isTyping: true), "the typing line names no link")
+        XCTAssertTrue(AirPresenceLine.namesLink(reach: .away(secondsAgo: 60), isTyping: true), "typing counts only while online")
+
+        let strip = AirDayStrip.make(hours: [], now: Date())
+        let band = AirPresenceBandView()
+        band.configure(link: .direct, presence: "online since 9:40, direct link", strip: strip, nowOnline: true,
+                       stripHint: "", stripSpoken: "no marks",
+                       speaksLink: !AirPresenceLine.namesLink(reach: .direct, isTyping: false))
+        XCTAssertEqual(band.accessibilityLabel, "online since 9:40, direct link. Last 24 hours: no marks")
+        band.configure(link: .relay, presence: "typing", strip: strip, nowOnline: true, stripHint: "", stripSpoken: "no marks",
+                       speaksLink: !AirPresenceLine.namesLink(reach: .relay, isTyping: true))
+        XCTAssertEqual(band.accessibilityLabel, "typing. link via a relay. Last 24 hours: no marks")
+    }
+
+    func testTheQuoteOverAReplyIsSpokenAsItIsShown() {
+        var meta = MessageReplyHelper.ReplyMeta()
+        meta.senderName = "QA A"
+        meta.previewText = "hello\nfrom Windows "
+        XCTAssertEqual(MessageReplyHelper.spokenQuote(meta), "In reply to QA A, hello from Windows")
+        meta.senderName = ""
+        XCTAssertEqual(MessageReplyHelper.spokenQuote(meta), "In reply to Unknown, hello from Windows")
+        meta.previewText = " \n "
+        XCTAssertNil(MessageReplyHelper.spokenQuote(meta), "no quote is shown, none is spoken")
+        XCTAssertNil(MessageReplyHelper.spokenQuote(nil))
+
+        // The words on each side of a line break stay apart in the preview a reply sends, NUL still goes.
+        var multiline = MessageReplyHelper.ReplyMeta()
+        multiline.senderName = "QA Droid B"
+        multiline.previewText = "Are we still on\nfor tonight?\u{0}"
+        let sent = MessageReplyHelper.parse(MessageReplyHelper.encode(multiline, bodyText: "Yes")).reply
+        XCTAssertEqual(sent?.previewText, "Are we still on for tonight?")
+
+        use("ru")
+        meta.senderName = "QA A"
+        meta.previewText = "привет"
+        XCTAssertEqual(MessageReplyHelper.spokenQuote(meta), "В ответ QA A, привет")
+    }
+
     func testAwayTextCountsInWordsThatAgreeWithTheNumber() {
         XCTAssertEqual(AirPresenceLine.awayText(seconds: 30), "offline for under a minute")
         XCTAssertEqual(AirPresenceLine.awayText(seconds: 60), "offline for 1 minute")

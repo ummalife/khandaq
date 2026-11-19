@@ -277,3 +277,26 @@ private extension AirAuthorTapTests {
         return CGFloat(first)...CGFloat(last + 1)
     }
 }
+
+/// QA live 0.2.61: VoiceOver reads a transcript entry as one element, so the quote over a reply has to be
+/// in what the entry says, or a reply is heard as a message of its own.
+class AirEntrySpokenReplyTests: CellSnapshotTest {
+    func testAReplySaysWhomAndWhatItAnswersBeforeItsOwnWords() {
+        let model = AirEntryTextCellModel()
+        model.message = "See you at the gate"
+        model.timeText = "9:41"
+        model.spokenAuthor = "Amina"
+        var meta = MessageReplyHelper.ReplyMeta()
+        meta.senderName = "Yusuf"
+        meta.previewText = "Are we still on\nfor tonight?"
+        model.replyMeta = meta
+        let cell = AirEntryTextCell()
+        cell.setupWithTheme(theme, model: model)
+        XCTAssertEqual(cell.accessibilityLabel, "Amina, 9:41")
+        XCTAssertEqual(cell.accessibilityValue, "In reply to Yusuf, Are we still on for tonight?, See you at the gate")
+
+        model.replyMeta = nil
+        cell.setupWithTheme(theme, model: model)
+        XCTAssertEqual(cell.accessibilityValue, "See you at the gate", "a message that answers nothing names no quote")
+    }
+}

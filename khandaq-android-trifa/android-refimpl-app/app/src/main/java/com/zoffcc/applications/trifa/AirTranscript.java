@@ -235,6 +235,8 @@ final class AirTranscript
         /** Group entries only: the private-message line over the text and the unverified-sender line. */
         final TextView note;
         final TextView unverified;
+        /** What TalkBack says of the quote over a reply ({@link #spokenQuote}), kept for {@link #refreshState}. */
+        String spokenQuote = "";
 
         Views(final View itemView)
         {
@@ -364,6 +366,7 @@ final class AirTranscript
                                                 meta -> HelperReply.scrollToReplyTargetInDirectChat(meta));
             styleQuote(views.group);
         }
+        views.spokenQuote = spokenQuote(context, parsed == null ? null : parsed.reply);
 
         if (views.edited != null)
         {
@@ -496,8 +499,8 @@ final class AirTranscript
 
         if (views.container != null)
         {
-            views.container.setContentDescription(spoken(context, fullAuthor, views.time.getText(), views.text.getText(),
-                                                         m.edited, status));
+            views.container.setContentDescription(spoken(context, fullAuthor, views.time.getText(), views.spokenQuote,
+                                                         views.text.getText(), m.edited, status));
         }
         // The container speaks for the entry; the text is reached on its own only for its links.
         final CharSequence shown = views.text.getText();
@@ -649,14 +652,14 @@ final class AirTranscript
         }).start();
     }
 
-    /** One sentence in reading order: who, when, what, edited, and the mark of our own. */
-    private static String spoken(final Context context, final String author, final CharSequence time,
-                                 final CharSequence text, final boolean edited,
-                                 final AirConversationModel.EntryStatus status)
+    /** One sentence in reading order: who, when, what it answers, what, edited, and the mark of our own. */
+    static String spoken(final Context context, final String author, final CharSequence time, final String quote,
+                         final CharSequence text, final boolean edited, final AirConversationModel.EntryStatus status)
     {
         final StringBuilder sentence = new StringBuilder();
         append(sentence, author);
         append(sentence, time == null ? "" : time.toString());
+        append(sentence, quote);
         append(sentence, text == null ? "" : text.toString());
         if (edited)
         {
@@ -664,6 +667,24 @@ final class AirTranscript
         }
         append(sentence, statusWord(context, status));
         return sentence.toString();
+    }
+
+    /**
+     * What TalkBack says of the quote over a reply, "In reply to Amina, the quoted words", as
+     * {@link ChatBubbleUiHelper#bind_reply_quote} shows it; "" for an entry that shows none. The container speaks
+     * for the entry and TalkBack does not reach the quote under it, so a reply was heard as a message of its own
+     * (QA live 0.2.61).
+     */
+    static String spokenQuote(final Context context, @Nullable final MessageReplyHelper.ReplyMeta reply)
+    {
+        if (reply == null || reply.previewText == null || reply.previewText.trim().isEmpty())
+        {
+            return "";
+        }
+        final String name = reply.senderName == null || reply.senderName.isEmpty()
+                            ? context.getString(R.string.chat_reply_unknown_sender) : reply.senderName;
+        return context.getString(R.string.chat_reply_header, name) + ", "
+               + MessageReplyHelper.previewForDisplay(context, reply.previewText, 160);
     }
 
     private static void append(final StringBuilder sentence, final String part)
@@ -752,6 +773,7 @@ final class AirTranscript
             views.retry.setOnClickListener(null);
             views.retry.setClickable(false);
         }
+        views.spokenQuote = spokenQuote(context, parsed == null ? null : parsed.reply);
         bindGroupState(views, m, position, selected, entry);
     }
 
@@ -850,8 +872,8 @@ final class AirTranscript
                 views.container.setBackgroundColor(android.graphics.Color.TRANSPARENT);
             }
             final StringBuilder spokenText = new StringBuilder(
-                    spoken(context, entry.author, views.time.getText(), views.text.getText(), m.edited,
-                           outgoingStatus(m, entry)));
+                    spoken(context, entry.author, views.time.getText(), views.spokenQuote, views.text.getText(),
+                           m.edited, outgoingStatus(m, entry)));
             if (!TextUtils.isEmpty(entry.privateNote))
             {
                 append(spokenText, entry.privateNote);

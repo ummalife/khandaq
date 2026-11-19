@@ -775,6 +775,58 @@ class AirGroupModelTests: XCTestCase {
         XCTAssertEqual(AirGroupTranscript.authorKey(of: ours), "", "the key of the member it went to")
     }
 
+    /// KHANDAQ (0.2.63): a member is one tone wherever their entry came from, the tone of their tile. QA-Live of
+    /// 0.2.63: the live texts of QA Mac went by the name and the text the history brought of them by the key, two
+    /// tones for one member. The runs go by the key too, and an entry of the history keeps a run of its own.
+    func testAMemberIsOneToneWhereverTheirEntryCameFrom() throws {
+        let key = String(repeating: "5E", count: 32)
+        let tile = member(3, "QA Mac", .user, key: key)
+
+        let live = try groupEntry(peerId: 3)
+        live.groupPrivatePeerPubkey = key.lowercased()
+        let liveText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        liveText.groupPeerName = "QA Mac"
+        live.messageText = liveText
+
+        let relayed = try groupEntry(peerId: 0)
+        relayed.groupHistorySync = true
+        let relayedText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        relayedText.groupSenderPubkey = key
+        relayedText.groupPeerName = "QA Mac"
+        relayed.messageText = relayedText
+
+        let file = try groupEntry(peerId: 3)
+        let liveFile = try appClass("OCTMessageFile", as: OCTMessageFile.Type.self).init()
+        liveFile.groupSenderPubkey = key.lowercased()
+        file.messageFile = liveFile
+
+        let tone = AirTone.index(for: tile.toneKey)
+        for (entry, what) in [(live, "a live text"), (relayed, "a text of the history"), (file, "a live file")] {
+            XCTAssertEqual(AirGroupTranscript.toneKey(of: entry, name: "QA Mac"), key, what)
+            XCTAssertEqual(AirTone.index(for: AirGroupTranscript.toneKey(of: entry, name: "QA Mac")), tone,
+                           "\(what) is not in the tone of the member's tile")
+        }
+
+        let keyless = try groupEntry(peerId: 3)
+        XCTAssertEqual(AirGroupTranscript.toneKey(of: keyless, name: "Omar"), "Omar", "an entry that kept no key")
+
+        // The runs: by the key, so two members of one name are two runs; the history apart, and its unattributed
+        // entries apart again.
+        XCTAssertEqual(AirGroupTranscript.runAuthor(of: live, attributed: true, name: "QA Mac"), key)
+        XCTAssertEqual(AirGroupTranscript.runAuthor(of: file, attributed: true, name: "QA Mac"), key)
+        let namesake = try groupEntry(peerId: 4)
+        namesake.groupPrivatePeerPubkey = String(repeating: "A7", count: 32).lowercased()
+        XCTAssertNotEqual(AirGroupTranscript.runAuthor(of: namesake, attributed: true, name: "QA Mac"),
+                          AirGroupTranscript.runAuthor(of: live, attributed: true, name: "QA Mac"),
+                          "two members of one name made one run")
+        let fromHistory = AirGroupTranscript.runAuthor(of: relayed, attributed: true, name: "QA Mac")
+        let unattributed = AirGroupTranscript.runAuthor(of: relayed, attributed: false, name: "QA Mac")
+        XCTAssertNotEqual(fromHistory, key, "an entry of the history joined the live run")
+        XCTAssertNotEqual(unattributed, fromHistory, "an unattributed entry joined an attributed run")
+        XCTAssertNotEqual(unattributed, key)
+        XCTAssertEqual(AirGroupTranscript.runAuthor(of: keyless, attributed: true, name: "Omar"), "Omar")
+    }
+
     // MARK: - Joining by key, the group settings
 
     func testJoinKeyFieldSaysWhatItHolds() {

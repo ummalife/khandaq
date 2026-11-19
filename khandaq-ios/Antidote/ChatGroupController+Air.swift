@@ -324,8 +324,7 @@ extension ChatGroupController {
     /// The member's tone comes from their key in the group, as on their tile in the band and the
     /// dossier; from the name when an older row has no key.
     private func groupToneKey(for message: OCTMessageAbstract, name: String) -> String {
-        let key = (message.messageText?.groupSenderPubkey ?? "").uppercased()
-        return key.isEmpty ? name : key
+        return AirGroupTranscript.toneKey(of: message, name: name)
     }
 
     private func groupRunKey(forDisplayIndex row: Int) -> AirRunKey {
@@ -335,11 +334,12 @@ extension ChatGroupController {
         if message.isOutgoing() {
             author = ""
         }
-        else if let key = message.messageText?.groupSenderPubkey, !key.isEmpty {
-            author = key.uppercased()
-        }
         else {
-            author = peerName(for: message) ?? "peer\(message.groupSenderPeerId)"
+            // KHANDAQ (0.2.63): by the key the entry kept, as its tone (AirGroupTranscript.runAuthor).
+            let attributed = !message.groupHistorySync || submanagerGroups.isGroupMessageAttributable(message, in: chat)
+            author = AirGroupTranscript.runAuthor(of: message,
+                                                  attributed: attributed,
+                                                  name: peerName(for: message) ?? "peer\(message.groupSenderPeerId)")
         }
         // A caption drawn inside its photo is not a text entry of its own.
         let merged = messageSearchQuery.isEmpty && isMergedCaptionRow(storageIndex: entry.storageIndex)

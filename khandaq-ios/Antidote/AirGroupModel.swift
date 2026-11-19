@@ -624,6 +624,14 @@ enum AirGroupTranscript {
         let kept = (name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return kept.isEmpty || kept == member.name.trimmingCharacters(in: .whitespacesAndNewlines) ? member : nil
     }
+
+    /// KHANDAQ (0.2.63): the role named over an entry ("Amina, moderator") is the role of the member who
+    /// wrote it, found as author(key:peerId:name:among:) finds them; nil when the group does not have them now.
+    /// The peer number the entry kept alone named whoever toxcore gave that number to since: QA-Live of 0.2.63
+    /// showed an entry of a member as "founder" once the founder had come back with the member's old number.
+    static func authorRole(key: String, peerId: Int32, name: String?, among members: [AirGroupMember]) -> OCTToxGroupRole? {
+        return author(key: key, peerId: peerId, name: name, among: members)?.role
+    }
 }
 
 /// A group key as people pass it around (E15): 64 hex characters, bare, after "khandaq:group:" (the QR

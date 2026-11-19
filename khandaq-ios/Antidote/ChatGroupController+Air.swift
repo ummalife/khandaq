@@ -257,9 +257,12 @@ extension ChatGroupController {
             // peerName names an unknown peer number itself; nil is a relayed row with neither a number
             // nor a name frozen on it.
             let name = peerName(for: message) ?? String(localized: "air_group_author_unknown")
-            let role: OCTToxGroupRole? = message.groupSenderPeerId > 0
-                ? submanagerGroups.peerRole(withId: UInt32(bitPattern: message.groupSenderPeerId), in: chat)
-                : nil
+            // KHANDAQ (0.2.63): the role of the member who wrote it, by the key it kept, not of whoever has
+            // its peer number now.
+            let role = AirGroupTranscript.authorRole(key: AirGroupTranscript.authorKey(of: message),
+                                                     peerId: message.groupSenderPeerId,
+                                                     name: AirGroupTranscript.authorName(of: message),
+                                                     among: groupMembers)
             label = AirGroupTranscript.authorLabel(name: name, role: role)
             entry.authorColor = AirTone.color(at: AirTone.index(for: groupToneKey(for: message, name: name)))
             entry.spokenAuthor = label

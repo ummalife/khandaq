@@ -700,6 +700,31 @@ class AirGroupModelTests: XCTestCase {
         XCTAssertNil(AirGroupTranscript.author(key: aminaKey, peerId: 9, name: "Amina", among: []))
     }
 
+    /// KHANDAQ (0.2.63): the role over an entry is its author's. QA-Live of 0.2.63: the founder came back with
+    /// the old peer number of a member, and that member's entry was labeled "founder".
+    func testTheRoleOverAnEntryIsItsAuthorsNotThatOfItsOldNumber() {
+        let memberKey = String(repeating: "C3", count: 32)
+        let founderKey = String(repeating: "D4", count: 32)
+        let founder = member(2, "Droid", .founder, key: founderKey)
+        let windows = member(7, "QA A", .user, key: memberKey)
+
+        XCTAssertNil(AirGroupTranscript.authorRole(key: memberKey, peerId: 2, name: "QA A", among: [founder]),
+                     "the founder has the member's old number now, not the member's entry")
+        XCTAssertEqual(AirGroupTranscript.authorLabel(name: "QA A",
+                                                      role: AirGroupTranscript.authorRole(key: memberKey, peerId: 2, name: "QA A",
+                                                                                          among: [founder])),
+                       "QA A")
+        XCTAssertEqual(AirGroupTranscript.authorRole(key: memberKey, peerId: 2, name: "QA A", among: [founder, windows]), .user,
+                       "the member came back with another number")
+        XCTAssertEqual(AirGroupTranscript.authorRole(key: founderKey.lowercased(), peerId: 7, name: nil, among: [founder, windows]),
+                       .founder, "the founder's own entry, with a number someone else has now")
+        XCTAssertNil(AirGroupTranscript.authorRole(key: "", peerId: 2, name: "QA A", among: [founder]),
+                     "an entry without a key whose number went to someone else")
+        XCTAssertEqual(AirGroupTranscript.authorRole(key: "", peerId: 2, name: "Droid", among: [founder]), .founder,
+                       "an older entry without a key, while its number still has its author")
+        XCTAssertNil(AirGroupTranscript.authorRole(key: "", peerId: 0, name: "Droid", among: [member(0, "Droid", .founder)]))
+    }
+
     /// An older entry kept no key: its author is the member with its number, while that member has the name
     /// the entry kept; an entry without a number names nobody.
     func testAnEntryWithoutAKeyGoesByItsNumberWhileTheNameItKeptAgrees() {

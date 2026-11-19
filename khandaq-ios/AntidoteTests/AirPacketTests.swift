@@ -187,6 +187,27 @@ class AirPacketTests: XCTestCase {
         XCTAssertFalse(groups.handleIncomingGroupReactionPacket(withGroupNumber: 0, peerId: 1, data: Data(foreign)))
     }
 
+    /// KHANDAQ (0.2.63): a reaction on a group file names the file's author. Android finds a file anchor by
+    /// the author together with the hash, and up to 0.2.62 the author went out zero, so Android dropped every
+    /// reaction an iPhone set on a group file. An author that is not known leaves the slot zero, as before.
+    func testAReactionOnAGroupFileNamesItsAuthor() throws {
+        let author = String(repeating: "c1", count: 32)
+        let named = try XCTUnwrap(groups.kqGroupReactionPacket(forMsgIdHash: anchorHex, authorHex: author,
+                                                               emoji: thumbsUp, add: true))
+        let emoji = Array(thumbsUp.utf8)
+        XCTAssertEqual([UInt8](named), bytes(groupMagic, [0x43, 0x02], anchor, [UInt8](repeating: 0xC1, count: 32),
+                                             Array([UInt8](named)[73..<77]), [1, UInt8(emoji.count)], emoji))
+        XCTAssertTrue(groups.handleIncomingGroupReactionPacket(withGroupNumber: 0, peerId: 1, data: named),
+                      "the receive path no longer takes it for a reaction")
+
+        for unknown in [nil, "", "c1c1", String(repeating: "zz", count: 32), String(repeating: "c1", count: 33)] {
+            let packet = try XCTUnwrap(groups.kqGroupReactionPacket(forMsgIdHash: anchorHex, authorHex: unknown,
+                                                                    emoji: thumbsUp, add: true))
+            XCTAssertEqual(Array([UInt8](packet)[41..<73]), [UInt8](repeating: 0, count: 32),
+                           "author \(unknown ?? "nil") was not left zero")
+        }
+    }
+
     // MARK: A readable stand-in
 
     func testMarkupThisBuildCannotReadIsShownInWords() {

@@ -570,6 +570,7 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_recv_gap.py t
 # changes on the wire. The desktop and iOS copies of toxcore carry the same change. Fail-fast, like the
 # patches above.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_roaming.py toxcore || exit 1 ; cd "$_s_"
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_tcp_relays.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
@@ -1198,6 +1199,7 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_recv_gap.py t
 # changes on the wire. The desktop and iOS copies of toxcore carry the same change. Fail-fast, like the
 # patches above.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_roaming.py toxcore || exit 1 ; cd "$_s_"
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_tcp_relays.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
@@ -1827,6 +1829,7 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_recv_gap.py t
 # changes on the wire. The desktop and iOS copies of toxcore carry the same change. Fail-fast, like the
 # patches above.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_roaming.py toxcore || exit 1 ; cd "$_s_"
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_tcp_relays.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
@@ -2302,6 +2305,7 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_recv_gap.py t
 # changes on the wire. The desktop and iOS copies of toxcore carry the same change. Fail-fast, like the
 # patches above.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_roaming.py toxcore || exit 1 ; cd "$_s_"
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_gc_tcp_relays.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------

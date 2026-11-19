@@ -7295,6 +7295,17 @@ static void do_new_connection_cooldown(GC_Chat *chat)
 }
 
 #define TCP_RELAYS_CHECK_INTERVAL 10
+
+/* KHANDAQ (F9, group TCP relays): the group keeps at least this many relays connected under its own
+ * key: as many as an invite confirm carries, and no more than kill_nonused_tcp() leaves standing. */
+#define GC_MIN_CONNECTED_TCP_RELAYS GCC_MAX_TCP_SHARED_RELAYS
+
+/* KHANDAQ (F9, group TCP relays): how long after our last sync request every TCP connection of the group
+ * stays awake. Longer than the 24 s between the requests of a peer whose peer list stays out of step (a
+ * ping every GC_PING_TIMEOUT, at most one request per GC_SYNC_REQUEST_LIMIT), so it holds while we
+ * re-sync. */
+#define GC_TCP_AWAKE_AFTER_SYNC_REQUEST (GC_PING_TIMEOUT * 3)
+
 non_null(1, 2) nullable(3)
 static void do_gc_tcp(const GC_Session *c, GC_Chat *chat, void *userdata)
 {
@@ -7304,16 +7315,41 @@ static void do_gc_tcp(const GC_Session *c, GC_Chat *chat, void *userdata)
 
     do_tcp_connections(chat->log, chat->tcp_conn, userdata);
 
+    /* KHANDAQ (F9, group TCP relays): a peer announces us on relays tied to our connection with it, and
+     * that connection going direct (UDP) puts them to sleep. A peer that can reach us only over TCP -- one
+     * behind our NAT, which gets our public address from the announce and cannot hairpin -- then sends its
+     * first handshake to a relay we are no longer on, and the relay drops it. While we re-sync the peer
+     * list (someone has peers we lack), keep every connection awake so that we stay on those relays. */
+    const bool resyncing = !mono_time_is_timeout(chat->mono_time, chat->last_sync_request,
+                           GC_TCP_AWAKE_AFTER_SYNC_REQUEST);
+    uint32_t num_woken = 0;
+
     for (uint32_t i = 1; i < chat->numpeers; ++i) {
         const GC_Connection *gconn = get_gc_connection(chat, i);
         assert(gconn != nullptr);
 
-        const bool tcp_set = !gcc_conn_is_direct(chat->mono_time, gconn);
-        set_tcp_connection_to_status(chat->tcp_conn, gconn->tcp_connection_num, tcp_set);
+        const bool direct = gcc_conn_is_direct(chat->mono_time, gconn);
+        const bool tcp_set = !direct || resyncing;
+
+        // 0 only when the status changed, so this counts the direct peers woken now
+        if (set_tcp_connection_to_status(chat->tcp_conn, gconn->tcp_connection_num, tcp_set) == 0
+                && direct && tcp_set) {
+            ++num_woken;
+        }
     }
 
+    if (num_woken > 0) {
+        LOGGER_INFO(chat->log, "KHANDAQ F9: group %d re-syncing, TCP kept awake for %u direct peer(s)",
+                    chat->group_number, num_woken);
+    }
+
+    /* KHANDAQ (F9, group TCP relays): also top the group up while it has fewer than
+     * GC_MIN_CONNECTED_TCP_RELAYS connected relays. The old test alone (the count changed) never fires for
+     * a pool that started empty -- every group loaded at tox_new() and every group created before the
+     * first relay was up -- so such a group never had a relay to hand anyone. */
     if (mono_time_is_timeout(chat->mono_time, chat->last_checked_tcp_relays, TCP_RELAYS_CHECK_INTERVAL)
-            && tcp_connected_relays_count(chat->tcp_conn) != chat->connected_tcp_relays) {
+            && (tcp_connected_relays_count(chat->tcp_conn) != chat->connected_tcp_relays
+                || tcp_connected_relays_count(chat->tcp_conn) < GC_MIN_CONNECTED_TCP_RELAYS)) {
         add_tcp_relays_to_chat(c, chat);
         chat->connected_tcp_relays = tcp_connected_relays_count(chat->tcp_conn);
         chat->last_checked_tcp_relays = mono_time_get(chat->mono_time);
@@ -7491,12 +7527,106 @@ static int get_new_group_index(GC_Session *c)
     return new_index;
 }
 
+/** KHANDAQ (F9, group TCP relays): appends `relay` to `tcp_relays` unless it is full or holds a relay
+ * with that key. */
+non_null()
+static void append_unique_tcp_relay(Node_format *tcp_relays, uint32_t *num, uint32_t max_num,
+                                    const Node_format *relay)
+{
+    if (*num >= max_num) {
+        return;
+    }
+
+    for (uint32_t i = 0; i < *num; ++i) {
+        if (pk_equal(tcp_relays[i].public_key, relay->public_key)) {
+            return;
+        }
+    }
+
+    tcp_relays[*num] = *relay;
+    ++*num;
+}
+
+/** @brief KHANDAQ (F9, group TCP relays): appends the relays of `tcp_c` whose status is `status`
+ * (TCP_CONN_CONNECTED or TCP_CONN_SLEEPING) to `tcp_relays`, up to `max_num` in all, skipping keys already
+ * there.
+ *
+ * A sleeping relay keeps its address and key in its TCP_con, and tying it to a connection that is awake
+ * (add_tcp_relay_connection) wakes it. The family is set to TCP_INET/TCP_INET6, as
+ * tcp_copy_connected_relays() does.
+ */
+non_null()
+static void append_tcp_relays_with_status(const TCP_Connections *tcp_c, uint8_t status, Node_format *tcp_relays,
+        uint32_t *num, uint32_t max_num)
+{
+    const uint32_t count = tcp_connections_count(tcp_c);
+
+    for (uint32_t i = 0; i < count && *num < max_num; ++i) {
+        const TCP_con *tcp_con = get_tcp_connection(tcp_c, i);
+
+        if (tcp_con == nullptr || tcp_con->status != status) {
+            continue;
+        }
+
+        Node_format relay;
+        memset(&relay, 0, sizeof(relay));
+
+        if (status == TCP_CONN_CONNECTED) {
+            if (tcp_con->connection == nullptr) {
+                continue;
+            }
+
+            memcpy(relay.public_key, tcp_con_public_key(tcp_con->connection), CRYPTO_PUBLIC_KEY_SIZE);
+            relay.ip_port = tcp_con_ip_port(tcp_con->connection);
+        } else {
+            memcpy(relay.public_key, tcp_con->relay_pk, CRYPTO_PUBLIC_KEY_SIZE);
+            relay.ip_port = tcp_con->ip_port;
+        }
+
+        if (net_family_is_ipv4(relay.ip_port.ip.family)) {
+            relay.ip_port.ip.family = net_family_tcp_ipv4();
+        } else if (net_family_is_ipv6(relay.ip_port.ip.family)) {
+            relay.ip_port.ip.family = net_family_tcp_ipv6();
+        } else {
+            continue;
+        }
+
+        append_unique_tcp_relay(tcp_relays, num, max_num, &relay);
+    }
+}
+
+/** @brief KHANDAQ (F9, group TCP relays): puts up to `max_num` relays to hand a peer that joins through
+ * us in `tcp_relays`.
+ *
+ * Connected group relays first, then the group's sleeping relays, then the messenger's (connected, then
+ * sleeping). add_gc_tcp_relays() ties each to the peer's connection, which wakes a sleeping one and joins a
+ * messenger one under the group key. Before this an inviter whose group relays were all asleep, or had
+ * never been seeded, confirmed the invite with no relay -- or not at all, when it had no UDP address for
+ * the friend either.
+ *
+ * @return the number of relays put in `tcp_relays`.
+ */
+non_null()
+static uint32_t copy_gc_shareable_tcp_relays(const GC_Session *c, const GC_Chat *chat, Node_format *tcp_relays,
+        uint32_t max_num)
+{
+    const TCP_Connections *m_tcp_c = nc_get_tcp_c(c->messenger->net_crypto);
+
+    uint32_t num = tcp_copy_connected_relays(chat->tcp_conn, tcp_relays, (uint16_t)max_num);
+    append_tcp_relays_with_status(chat->tcp_conn, TCP_CONN_SLEEPING, tcp_relays, &num, max_num);
+    append_tcp_relays_with_status(m_tcp_c, TCP_CONN_CONNECTED, tcp_relays, &num, max_num);
+    append_tcp_relays_with_status(m_tcp_c, TCP_CONN_SLEEPING, tcp_relays, &num, max_num);
+
+    return num;
+}
+
 /** Attempts to associate new TCP relays with our group connection. */
 static void add_tcp_relays_to_chat(const GC_Session *c, GC_Chat *chat)
 {
     const Messenger *m = c->messenger;
+    const TCP_Connections *m_tcp_c = nc_get_tcp_c(m->net_crypto);
 
-    const uint32_t num_relays = tcp_connections_count(nc_get_tcp_c(m->net_crypto));
+    const uint32_t num_relays = tcp_connections_count(m_tcp_c);
 
     if (num_relays == 0) {
         return;
@@ -7508,10 +7638,27 @@ static void add_tcp_relays_to_chat(const GC_Session *c, GC_Chat *chat)
         return;
     }
 
-    const uint32_t num_copied = tcp_copy_connected_relays(nc_get_tcp_c(m->net_crypto), tcp_relays, (uint16_t)num_relays);
+    /* KHANDAQ (F9, group TCP relays): the messenger's sleeping relays too, connected ones first. On a
+     * client whose friends are all direct the messenger's relays sleep, and a group seeded from connected
+     * relays alone started (and, see do_gc_tcp, stayed) empty. New ones only while the group has fewer
+     * than GC_MIN_CONNECTED_TCP_RELAYS connected: kill_nonused_tcp() closes unused ones above three
+     * anyway. */
+    uint32_t num_copied = 0;
+    append_tcp_relays_with_status(m_tcp_c, TCP_CONN_CONNECTED, tcp_relays, &num_copied, num_relays);
+    append_tcp_relays_with_status(m_tcp_c, TCP_CONN_SLEEPING, tcp_relays, &num_copied, num_relays);
 
-    for (uint32_t i = 0; i < num_copied; ++i) {
-        add_tcp_relay_global(chat->tcp_conn, &tcp_relays[i].ip_port, tcp_relays[i].public_key);
+    const uint32_t num_connected = tcp_connected_relays_count(chat->tcp_conn);
+    uint32_t num_added = 0;
+
+    for (uint32_t i = 0; i < num_copied && num_connected + num_added < GC_MIN_CONNECTED_TCP_RELAYS; ++i) {
+        if (add_tcp_relay_global(chat->tcp_conn, &tcp_relays[i].ip_port, tcp_relays[i].public_key) == 0) {
+            ++num_added;
+        }
+    }
+
+    if (num_added > 0) {
+        LOGGER_INFO(chat->log, "KHANDAQ F9: group %d joined %u relay(s) under its key (%u connected before)",
+                    chat->group_number, num_added, num_connected);
     }
 
     free(tcp_relays);
@@ -8272,9 +8419,14 @@ bool handle_gc_invite_accepted_packet(const GC_Session *c, int friend_number, co
     }
 
     Node_format tcp_relays[GCC_MAX_TCP_SHARED_RELAYS];
-    const uint32_t num_tcp_relays = tcp_copy_connected_relays(chat->tcp_conn, tcp_relays, GCC_MAX_TCP_SHARED_RELAYS);
+    // KHANDAQ (F9, group TCP relays): not only the connected group relays, see copy_gc_shareable_tcp_relays().
+    const uint32_t num_tcp_relays = copy_gc_shareable_tcp_relays(c, chat, tcp_relays, GCC_MAX_TCP_SHARED_RELAYS);
 
     const bool copy_ip_port_result = copy_friend_ip_port_to_gconn(m, friend_number, gconn);
+
+    LOGGER_INFO(chat->log, "KHANDAQ F9: invite confirm to friend %d: %u TCP relay(s) (%u connected in group %d), "
+                "friend address %s", friend_number, num_tcp_relays, tcp_connected_relays_count(chat->tcp_conn),
+                chat->group_number, copy_ip_port_result ? "known" : "unknown");
 
     if (num_tcp_relays == 0 && !copy_ip_port_result) {
         return false;
@@ -8301,7 +8453,9 @@ bool handle_gc_invite_accepted_packet(const GC_Session *c, int friend_number, co
             return false;
         }
 
-        len += nodes_len;
+        if (nodes_len > 0) {  // KHANDAQ (F9, group TCP relays): a failed pack must not cut the join data short
+            len += nodes_len;
+        }
     }
 
     return send_gc_invite_confirmed_packet(m, chat, friend_number, out_data, len);

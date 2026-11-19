@@ -775,6 +775,120 @@ class AirGroupModelTests: XCTestCase {
         XCTAssertEqual(AirGroupTranscript.authorKey(of: ours), "", "the key of the member it went to")
     }
 
+    /// KHANDAQ (0.2.63): a member is one tone wherever their entry came from, the tone of their tile. QA-Live of
+    /// 0.2.63: the live texts of QA Mac went by the name and the text the history brought of them by the key, two
+    /// tones for one member. The runs go by the key too, and an entry of the history keeps a run of its own.
+    func testAMemberIsOneToneWhereverTheirEntryCameFrom() throws {
+        let key = String(repeating: "5E", count: 32)
+        let tile = member(3, "QA Mac", .user, key: key)
+
+        let live = try groupEntry(peerId: 3)
+        live.groupPrivatePeerPubkey = key.lowercased()
+        let liveText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        liveText.groupPeerName = "QA Mac"
+        live.messageText = liveText
+
+        let relayed = try groupEntry(peerId: 0)
+        relayed.groupHistorySync = true
+        let relayedText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        relayedText.groupSenderPubkey = key
+        relayedText.groupPeerName = "QA Mac"
+        relayed.messageText = relayedText
+
+        let file = try groupEntry(peerId: 3)
+        let liveFile = try appClass("OCTMessageFile", as: OCTMessageFile.Type.self).init()
+        liveFile.groupSenderPubkey = key.lowercased()
+        file.messageFile = liveFile
+
+        let tone = AirTone.index(for: tile.toneKey)
+        for (entry, what) in [(live, "a live text"), (relayed, "a text of the history"), (file, "a live file")] {
+            XCTAssertEqual(AirGroupTranscript.toneKey(of: entry, name: "QA Mac"), key, what)
+            XCTAssertEqual(AirTone.index(for: AirGroupTranscript.toneKey(of: entry, name: "QA Mac")), tone,
+                           "\(what) is not in the tone of the member's tile")
+        }
+
+        let keyless = try groupEntry(peerId: 3)
+        XCTAssertEqual(AirGroupTranscript.toneKey(of: keyless, name: "Omar"), "Omar", "an entry that kept no key")
+
+        // The runs: by the key, so two members of one name are two runs; the history apart, and its unattributed
+        // entries apart again.
+        XCTAssertEqual(AirGroupTranscript.runAuthor(of: live, attributed: true, name: "QA Mac"), key)
+        XCTAssertEqual(AirGroupTranscript.runAuthor(of: file, attributed: true, name: "QA Mac"), key)
+        let namesake = try groupEntry(peerId: 4)
+        namesake.groupPrivatePeerPubkey = String(repeating: "A7", count: 32).lowercased()
+        XCTAssertNotEqual(AirGroupTranscript.runAuthor(of: namesake, attributed: true, name: "QA Mac"),
+                          AirGroupTranscript.runAuthor(of: live, attributed: true, name: "QA Mac"),
+                          "two members of one name made one run")
+        let fromHistory = AirGroupTranscript.runAuthor(of: relayed, attributed: true, name: "QA Mac")
+        let unattributed = AirGroupTranscript.runAuthor(of: relayed, attributed: false, name: "QA Mac")
+        XCTAssertNotEqual(fromHistory, key, "an entry of the history joined the live run")
+        XCTAssertNotEqual(unattributed, fromHistory, "an unattributed entry joined an attributed run")
+        XCTAssertNotEqual(unattributed, key)
+        XCTAssertEqual(AirGroupTranscript.runAuthor(of: keyless, attributed: true, name: "Omar"), "Omar")
+    }
+
+    /// KHANDAQ (0.2.63): the rows are drawn again when what their labels take from the members changes, and only
+    /// then. QA-Live of 0.2.63: a chat opened before the group connected kept the founder's entries without
+    /// "founder" once the members came.
+    func testTheLabelsAreDrawnAgainWhenWhoHasWhichRoleChanges() {
+        let founderKey = String(repeating: "D4", count: 32)
+        let founder = member(1, "QA Droid B", .founder, online: true, lastSeen: 10, key: founderKey)
+        let mac = member(2, "QA Mac", .user, key: String(repeating: "5E", count: 32))
+        let facts = AirGroupTranscript.authorFacts(of: [founder, mac])
+
+        XCTAssertNotEqual(AirGroupTranscript.authorFacts(of: []), facts, "the members the group got once it connected")
+        XCTAssertEqual(AirGroupTranscript.authorFacts(of: [mac, founder]), facts, "the same members in another order")
+        XCTAssertEqual(AirGroupTranscript.authorFacts(of: [member(1, "QA Droid B", .founder, online: false, lastSeen: 99,
+                                                                  key: founderKey.lowercased()), mac]),
+                       facts, "who is online and when they were seen is not over the entries")
+        XCTAssertNotEqual(AirGroupTranscript.authorFacts(of: [member(1, "QA Droid B", .moderator, key: founderKey), mac]),
+                          facts, "a role changed")
+        XCTAssertNotEqual(AirGroupTranscript.authorFacts(of: [member(1, "Droid", .founder, key: founderKey), mac]),
+                          facts, "a name changed")
+        XCTAssertNotEqual(AirGroupTranscript.authorFacts(of: [member(3, "QA Droid B", .founder, key: founderKey), mac]),
+                          facts, "a peer number went to another member")
+
+        // The label names no role but these two: a member without one comes and goes unseen over the entries.
+        XCTAssertEqual(AirGroupTranscript.authorFacts(of: [founder]), facts, "a member without a role left")
+        XCTAssertEqual(AirGroupTranscript.authorFacts(of: [founder, mac, member(4, "Guest", .observer, key: "AB")]), facts,
+                       "an observer came")
+        XCTAssertNotEqual(AirGroupTranscript.authorFacts(of: [founder, member(2, "QA Mac", .moderator,
+                                                                              key: String(repeating: "5E", count: 32))]),
+                          facts, "a member became a moderator")
+    }
+
+    /// KHANDAQ (0.2.63): the rows drawn again keep the messages you picked for Delete or Copy picked. reloadRows
+    /// alone takes the selection off every row it reloads (rows 1 and 3 picked, none after it).
+    func testTheRowsDrawnAgainKeepWhatYouPicked() {
+        let rows = PlainRows(count: 30)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let table = UITableView(frame: window.bounds, style: .plain)
+        table.register(UITableViewCell.self, forCellReuseIdentifier: PlainRows.identifier)
+        table.dataSource = rows
+        table.allowsMultipleSelectionDuringEditing = true
+        window.addSubview(table)
+        window.isHidden = false
+        table.reloadData()
+        table.layoutIfNeeded()
+        table.setEditing(true, animated: false)
+        let picked = [IndexPath(row: 1, section: 0), IndexPath(row: 3, section: 0)]
+        picked.forEach { table.selectRow(at: $0, animated: false, scrollPosition: .none) }
+        let offscreen = IndexPath(row: 29, section: 0)
+        table.selectRow(at: offscreen, animated: false, scrollPosition: .none)
+        table.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: false)
+        table.layoutIfNeeded()
+        XCTAssertFalse(table.indexPathsForVisibleRows?.contains(offscreen) ?? true, "row 29 is off the screen")
+
+        table.reloadVisibleRowsKeepingSelection()
+        table.layoutIfNeeded()
+
+        XCTAssertEqual(Set(table.indexPathsForSelectedRows ?? []), Set(picked + [offscreen]))
+        for indexPath in picked {
+            XCTAssertTrue(table.cellForRow(at: indexPath)?.isSelected ?? false, "row \(indexPath.row) is drawn picked")
+        }
+        window.isHidden = true
+    }
+
     // MARK: - Joining by key, the group settings
 
     func testJoinKeyFieldSaysWhatItHolds() {
@@ -1095,4 +1209,24 @@ private struct DossierWorld {
     let realmManager: OCTRealmManager
     let chat: OCTChat
     let dossier: AirGroupDossierController
+}
+
+/// Rows of plain cells, for what a table does with its rows whatever they hold.
+private final class PlainRows: NSObject, UITableViewDataSource {
+    static let identifier = "plain"
+    let count: Int
+
+    init(count: Int) {
+        self.count = count
+    }
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return count
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: PlainRows.identifier, for: indexPath)
+        cell.textLabel?.text = "\(indexPath.row)"
+        return cell
+    }
 }

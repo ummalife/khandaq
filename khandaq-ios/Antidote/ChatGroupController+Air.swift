@@ -113,6 +113,7 @@ extension ChatGroupController {
         }
         let members = AirGroupMembers.load(chat: chat, submanagerGroups: submanagerGroups)
         let mentionsBefore = (AirGroupMembers.selfKey(in: groupMembers), selfGroupName)
+        let authorsBefore = AirGroupTranscript.authorFacts(of: groupMembers)
         groupMembers = members
 
         let connected = submanagerGroups.isGroupConnected(for: chat)
@@ -155,8 +156,12 @@ extension ChatGroupController {
         updateGroupTitleWidth()
 
         // Your key or name arrived after the rows were drawn: the mentions of you are tinted now.
-        if mentionsBefore.0 != AirGroupMembers.selfKey(in: members) || mentionsBefore.1 != selfGroupName {
-            tableView?.reloadRows(at: tableView?.indexPathsForVisibleRows ?? [], with: .none)
+        // KHANDAQ (0.2.63): and the role over an entry is its author's among the members now, so the rows are drawn
+        // again when who the founders and moderators are changes, the members a group gets once it connects among
+        // them.
+        if mentionsBefore.0 != AirGroupMembers.selfKey(in: members) || mentionsBefore.1 != selfGroupName
+            || authorsBefore != AirGroupTranscript.authorFacts(of: members) {
+            tableView?.reloadVisibleRowsKeepingSelection()
         }
     }
 
@@ -324,8 +329,7 @@ extension ChatGroupController {
     /// The member's tone comes from their key in the group, as on their tile in the band and the
     /// dossier; from the name when an older row has no key.
     private func groupToneKey(for message: OCTMessageAbstract, name: String) -> String {
-        let key = (message.messageText?.groupSenderPubkey ?? "").uppercased()
-        return key.isEmpty ? name : key
+        return AirGroupTranscript.toneKey(of: message, name: name)
     }
 
     private func groupRunKey(forDisplayIndex row: Int) -> AirRunKey {
@@ -335,15 +339,34 @@ extension ChatGroupController {
         if message.isOutgoing() {
             author = ""
         }
-        else if let key = message.messageText?.groupSenderPubkey, !key.isEmpty {
-            author = key.uppercased()
-        }
         else {
-            author = peerName(for: message) ?? "peer\(message.groupSenderPeerId)"
+            // KHANDAQ (0.2.63): by the key the entry kept, as its tone (AirGroupTranscript.runAuthor).
+            let attributed = !message.groupHistorySync || submanagerGroups.isGroupMessageAttributable(message, in: chat)
+            author = AirGroupTranscript.runAuthor(of: message,
+                                                  attributed: attributed,
+                                                  name: peerName(for: message) ?? "peer\(message.groupSenderPeerId)")
         }
         // A caption drawn inside its photo is not a text entry of its own.
         let merged = messageSearchQuery.isEmpty && isMergedCaptionRow(storageIndex: entry.storageIndex)
         let isText = message.messageText != nil && !message.groupSystemMessage && !merged
         return AirRunKey(author: author, date: message.date(), isText: isText)
+    }
+}
+
+extension UITableView {
+    /// KHANDAQ (0.2.63): the visible rows drawn again with what they say now, and the ones you had picked still
+    /// picked. reloadRows takes the selection off every row it reloads, and the selection is all that Delete and
+    /// Copy act on: the messages picked for them came unpicked whenever a verdict on the history, a member or your
+    /// key arrived meanwhile.
+    func reloadVisibleRowsKeepingSelection() {
+        let visible = indexPathsForVisibleRows ?? []
+        guard !visible.isEmpty else {
+            return
+        }
+        let picked = Set(indexPathsForSelectedRows ?? []).intersection(visible)
+        reloadRows(at: visible, with: .none)
+        for indexPath in picked {
+            selectRow(at: indexPath, animated: false, scrollPosition: .none)
+        }
     }
 }

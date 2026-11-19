@@ -601,6 +601,45 @@ enum AirGroupTranscript {
         return nil
     }
 
+    /// KHANDAQ (0.2.63): what the tone of an entry's author goes by: the key of its author the entry kept
+    /// (authorKey(of:)), the key the member's tile goes by too (AirGroupMember.toneKey), so a member reads as one
+    /// member wherever their words came from; the name only for an entry that kept no key. It went by the key a
+    /// text relayed from the history keeps, and so by the name for a live entry, which keeps its author's key
+    /// elsewhere: in QA-Live of 0.2.63 a member's live texts and the text the history brought of them came in two
+    /// tones, and only the second in the tone of their tile.
+    static func toneKey(of message: OCTMessageAbstract, name: String) -> String {
+        let key = authorKey(of: message).uppercased()
+        return key.isEmpty ? name : key
+    }
+
+    /// The author an entry's run goes by, which decides where a name is written over the entries: the key it kept,
+    /// as for its tone, so two members of one name are two runs. An entry the history brought is a run apart from
+    /// live ones, and one not attributed to its key (isGroupMessageAttributable) apart again, so it keeps the
+    /// header that says what is known of its author. An entry that kept no key goes by its name.
+    static func runAuthor(of message: OCTMessageAbstract, attributed: Bool, name: @autoclosure () -> String) -> String {
+        let key = authorKey(of: message).uppercased()
+        if key.isEmpty {
+            return name()
+        }
+        if !message.groupHistorySync {
+            return key
+        }
+        return (attributed ? "history:" : "unattributed:") + key
+    }
+
+    /// KHANDAQ (0.2.63): what the label over an entry takes from the members (authorRole, authorLabel): who the
+    /// founders and moderators are, by number, key and name, in no order, and not who is online. The rows drawn
+    /// before it changed carry a role that is no longer their author's, or none at all when they were drawn before
+    /// the group had its members: in QA-Live of 0.2.63 a chat opened while the group connected kept the founder's
+    /// entries without "founder". The label names no other role, so a member without one coming or going, which a
+    /// large group sees all the time, changes nothing over the entries.
+    static func authorFacts(of members: [AirGroupMember]) -> [String] {
+        return members
+            .filter { $0.role == .founder || $0.role == .moderator }
+            .map { "\($0.peerId)\u{1F}\($0.publicKey.uppercased())\u{1F}\($0.name)\u{1F}\($0.role.rawValue)" }
+            .sorted()
+    }
+
     /// KHANDAQ (0.2.58): the member who wrote an entry, among the members the group has now
     /// (AirGroupMembers.load), for the tap on the name over it; nil when the author is not in the group now.
     ///

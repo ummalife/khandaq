@@ -627,6 +627,15 @@ enum AirGroupTranscript {
         return (attributed ? "history:" : "unattributed:") + key
     }
 
+    /// KHANDAQ (0.2.63): what the label over an entry takes from the members (author(key:peerId:name:among:) and
+    /// authorRole): who has which number, key, name and role, in no order, and not who is online. The rows drawn
+    /// before it changed carry a role that is no longer their author's, or none at all when they were drawn before
+    /// the group had its members: in QA-Live of 0.2.63 a chat opened while the group connected kept the founder's
+    /// entries without "founder".
+    static func authorFacts(of members: [AirGroupMember]) -> [String] {
+        return members.map { "\($0.peerId)\u{1F}\($0.publicKey.uppercased())\u{1F}\($0.name)\u{1F}\($0.role.rawValue)" }.sorted()
+    }
+
     /// KHANDAQ (0.2.58): the member who wrote an entry, among the members the group has now
     /// (AirGroupMembers.load), for the tap on the name over it; nil when the author is not in the group now.
     ///

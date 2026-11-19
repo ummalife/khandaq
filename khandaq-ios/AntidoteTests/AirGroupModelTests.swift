@@ -827,6 +827,28 @@ class AirGroupModelTests: XCTestCase {
         XCTAssertEqual(AirGroupTranscript.runAuthor(of: keyless, attributed: true, name: "Omar"), "Omar")
     }
 
+    /// KHANDAQ (0.2.63): the rows are drawn again when what their labels take from the members changes, and only
+    /// then. QA-Live of 0.2.63: a chat opened before the group connected kept the founder's entries without
+    /// "founder" once the members came.
+    func testTheLabelsAreDrawnAgainWhenWhoHasWhichRoleChanges() {
+        let founderKey = String(repeating: "D4", count: 32)
+        let founder = member(1, "QA Droid B", .founder, online: true, lastSeen: 10, key: founderKey)
+        let mac = member(2, "QA Mac", .user, key: String(repeating: "5E", count: 32))
+        let facts = AirGroupTranscript.authorFacts(of: [founder, mac])
+
+        XCTAssertNotEqual(AirGroupTranscript.authorFacts(of: []), facts, "the members the group got once it connected")
+        XCTAssertEqual(AirGroupTranscript.authorFacts(of: [mac, founder]), facts, "the same members in another order")
+        XCTAssertEqual(AirGroupTranscript.authorFacts(of: [member(1, "QA Droid B", .founder, online: false, lastSeen: 99,
+                                                                  key: founderKey.lowercased()), mac]),
+                       facts, "who is online and when they were seen is not over the entries")
+        XCTAssertNotEqual(AirGroupTranscript.authorFacts(of: [member(1, "QA Droid B", .moderator, key: founderKey), mac]),
+                          facts, "a role changed")
+        XCTAssertNotEqual(AirGroupTranscript.authorFacts(of: [member(1, "Droid", .founder, key: founderKey), mac]),
+                          facts, "a name changed")
+        XCTAssertNotEqual(AirGroupTranscript.authorFacts(of: [member(3, "QA Droid B", .founder, key: founderKey), mac]),
+                          facts, "a peer number went to another member")
+    }
+
     // MARK: - Joining by key, the group settings
 
     func testJoinKeyFieldSaysWhatItHolds() {

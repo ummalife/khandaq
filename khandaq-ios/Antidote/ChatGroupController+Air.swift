@@ -113,6 +113,7 @@ extension ChatGroupController {
         }
         let members = AirGroupMembers.load(chat: chat, submanagerGroups: submanagerGroups)
         let mentionsBefore = (AirGroupMembers.selfKey(in: groupMembers), selfGroupName)
+        let authorsBefore = AirGroupTranscript.authorFacts(of: groupMembers)
         groupMembers = members
 
         let connected = submanagerGroups.isGroupConnected(for: chat)
@@ -155,7 +156,10 @@ extension ChatGroupController {
         updateGroupTitleWidth()
 
         // Your key or name arrived after the rows were drawn: the mentions of you are tinted now.
-        if mentionsBefore.0 != AirGroupMembers.selfKey(in: members) || mentionsBefore.1 != selfGroupName {
+        // KHANDAQ (0.2.63): and the role over an entry is its author's among the members now, so the rows are drawn
+        // again when who has which role changes, the members a group gets once it connects among them.
+        if mentionsBefore.0 != AirGroupMembers.selfKey(in: members) || mentionsBefore.1 != selfGroupName
+            || authorsBefore != AirGroupTranscript.authorFacts(of: members) {
             tableView?.reloadRows(at: tableView?.indexPathsForVisibleRows ?? [], with: .none)
         }
     }

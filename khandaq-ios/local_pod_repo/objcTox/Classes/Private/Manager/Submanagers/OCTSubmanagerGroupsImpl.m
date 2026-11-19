@@ -3290,14 +3290,22 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)chat.groupNumber;
     NSString *own = kqGroupReactionsActorEmoji(message.reactionsJSON, kKQGroupOwnReactionMarker);
 
-    // FILE / media / voice: anchor on the globally-unique groupMsgIdHashHex (type 2). No author
-    // resolution needed — the hash identifies the transfer for every peer.
+    // FILE / media / voice: anchor on the globally-unique groupMsgIdHashHex (type 2).
+    // KHANDAQ (0.2.63): the author of the file goes along, as Android sends it. Up to 0.2.62 it went out
+    // zero, and Android matches a file anchor by the author together with the hash, so it dropped every
+    // reaction an iPhone set on a group file. Our own file: our key in the group; a peer's file: the key
+    // frozen at receipt. A row from before that key was kept goes out zero, as before (the receivers of
+    // 0.2.63 find a zero-author file anchor by its hash alone).
     if (message.messageFile) {
         NSString *hashHex = message.messageFile.groupMsgIdHashHex;
         if (hashHex.length != 64) {
             return; // no shared file anchor yet (reaction still stored locally above)
         }
+        NSString *fileAuthorHex = (message.groupSenderPeerId == 0)
+            ? [tox groupSelfPublicKeyHexForGroupNumber:groupNumber error:nil]
+            : message.messageFile.groupSenderPubkey;
         NSData *pkt = [self kqGroupReactionPacketForMsgIdHash:hashHex
+                                                    authorHex:fileAuthorHex
                                                         emoji:(own ?: @"*")
                                                           add:(own != nil)];
         if (pkt) {
@@ -3388,15 +3396,31 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
 }
 
 // KHANDAQ (#192): file/media/voice reaction packet — anchor_type 2, the full 32-byte
-// groupMsgIdHashHex sits in bytes[9..40]; the author-pubkey slot [41..72] is unused (the hash is
-// globally unique) so it stays zero. Layout otherwise identical to the message-id variant.
+// groupMsgIdHashHex sits in bytes[9..40]. Layout otherwise identical to the message-id variant.
+// KHANDAQ (0.2.63): the author slot [41..72] carries the file's author (authorHex, 64 hex digits):
+// Android finds a file anchor by the author together with the hash. Any other authorHex (nil, a row
+// that never kept its author) leaves the slot zero, which the receivers of 0.2.63 take as "the hash
+// alone".
 - (NSData *)kqGroupReactionPacketForMsgIdHash:(NSString *)msgIdHashHex
+                                    authorHex:(NSString *)authorHex
                                         emoji:(NSString *)emoji
                                           add:(BOOL)add
 {
     NSData *em = [emoji dataUsingEncoding:NSUTF8StringEncoding];
     if (msgIdHashHex.length != 64 || em.length < 1 || em.length > 16) {
         return nil;
+    }
+    uint8_t author[32] = {0};
+    if (authorHex.length == 64) {
+        for (int i = 0; i < 32; i++) {
+            unsigned int v = 0;
+            NSScanner *scanner = [NSScanner scannerWithString:[authorHex substringWithRange:NSMakeRange(2 * i, 2)]];
+            if (! [scanner scanHexInt:&v] || ! scanner.isAtEnd) {
+                memset(author, 0, sizeof(author));
+                break;
+            }
+            author[i] = (uint8_t)v;
+        }
     }
     NSMutableData *pkt = [NSMutableData dataWithCapacity:79 + em.length];
     const uint8_t header[9] = { 0x66, 0x77, 0x88, 0x11, 0x34, 0x35, 0x01, 0x43, 0x02 }; // anchor_type 2
@@ -3408,9 +3432,8 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
         uint8_t byte = (uint8_t)v;
         [pkt appendBytes:&byte length:1];
     }
-    // author pubkey slot [41..72] — unused for file anchors, left zeroed
-    const uint8_t zeros[32] = {0};
-    [pkt appendBytes:zeros length:32];
+    // author pubkey slot [41..72]: the file's author, or zero when it is not known
+    [pkt appendBytes:author length:32];
     uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970];
     const uint8_t tsbe[4] = {
         (uint8_t)((ts >> 24) & 0xFF), (uint8_t)((ts >> 16) & 0xFF),

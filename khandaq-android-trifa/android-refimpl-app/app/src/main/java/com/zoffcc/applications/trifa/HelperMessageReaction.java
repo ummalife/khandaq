@@ -59,9 +59,11 @@ public class HelperMessageReaction
     // NGC custom packet id inside the standard NGC header (0x41 = edits, 0x42 = deletes)
     static final byte NGC_PKT_MSG_REACTION = 0x43;
     private static final int NGC_HEADER_LEN = 6 + 1 + 1 + 1 + 32 + 32 + 4 + 1 + 1; // 79
+    /** Where the 32-byte author of the reacted message sits in the NGC packet. */
+    private static final int NGC_AUTHOR_OFFSET = 6 + 1 + 1 + 1 + 32; // 41
 
-    private static final byte ANCHOR_MSGV3_HASH = 1;
-    private static final byte ANCHOR_MSG_ID_HASH = 2;
+    static final byte ANCHOR_MSGV3_HASH = 1;
+    static final byte ANCHOR_MSG_ID_HASH = 2;
 
     static final int MAX_EMOJI_BYTES = 16;
     private static final String REMOVE_PLACEHOLDER = "*";
@@ -527,6 +529,37 @@ public class HelperMessageReaction
         }
     }
 
+    /**
+     * KHANDAQ (0.2.63): the author a group reaction packet names for its anchor, upper-case hex, or null when the
+     * anchor stands on its own and the packet names nobody.
+     *
+     * A file anchor (type 2) is the 32-byte hash of the transfer, unique on its own. iOS up to 0.2.62 leaves the
+     * author of such an anchor zero, so a reaction from an iPhone on a group file matched no row here and was
+     * dropped: the hash alone has to find it. A text anchor (type 1) is a 4-byte toxcore message id, unique only
+     * together with its author, so its author is returned as it is, zero or not, and a zero one matches nothing.
+     */
+    static String groupReactionAuthor(final byte anchorType, final byte[] data)
+    {
+        if (data == null || data.length < NGC_AUTHOR_OFFSET + 32)
+        {
+            return null;
+        }
+        boolean zero = true;
+        for (int i = NGC_AUTHOR_OFFSET; i < NGC_AUTHOR_OFFSET + 32; i++)
+        {
+            if (data[i] != 0)
+            {
+                zero = false;
+                break;
+            }
+        }
+        if (zero && anchorType == ANCHOR_MSG_ID_HASH)
+        {
+            return null;
+        }
+        return bytesToHexUpper(data, NGC_AUTHOR_OFFSET, 32);
+    }
+
     /** Shared anchor for a group row: text → message_id_tox (type 1), file → msg_id_hash (type 2). */
     private static byte groupAnchorType(final GroupMessage gm)
     {
@@ -643,8 +676,8 @@ public class HelperMessageReaction
             catch (Exception ignored)
             {
             }
-            final String authorPubkey =
-                    HelperGeneric.bytesToHex(data, 41, 32).toUpperCase(Locale.ENGLISH);
+            // null only for a file anchor with a zero author (iOS up to 0.2.62): the hash finds it alone
+            final String authorPubkey = groupReactionAuthor(anchorType, data);
 
             GroupMessage gm = null;
             try
@@ -672,12 +705,14 @@ public class HelperMessageReaction
                 {
                     final String msgIdHashHex =
                             HelperGeneric.bytesToHex(data, 9, 32).toUpperCase(Locale.ENGLISH);
-                    final List<GroupMessage> list = orma.selectFromGroupMessage().
+                    GroupMessage query = orma.selectFromGroupMessage().
                             group_identifierEq(groupIdentifier).
-                            tox_group_peer_pubkeyEq(authorPubkey).
-                            msg_id_hashEq(msgIdHashHex).
-                            orderByIdDesc().
-                            toList();
+                            msg_id_hashEq(msgIdHashHex);
+                    if (authorPubkey != null)
+                    {
+                        query = query.tox_group_peer_pubkeyEq(authorPubkey);
+                    }
+                    final List<GroupMessage> list = query.orderByIdDesc().toList();
                     if (list != null && !list.isEmpty())
                     {
                         gm = list.get(0);
@@ -989,6 +1024,24 @@ public class HelperMessageReaction
         out.write((int) ((v >> 16) & 0xff));
         out.write((int) ((v >> 8) & 0xff));
         out.write((int) (v & 0xff));
+    }
+
+    private static final char[] HEX_UPPER = "0123456789ABCDEF".toCharArray();
+
+    /**
+     * Upper-case hex of len bytes from start. HelperGeneric.bytesToHex does the same through MainActivity, whose
+     * static setup needs a device, so the JVM tests could not call a parser built on it.
+     */
+    private static String bytesToHexUpper(final byte[] data, final int start, final int len)
+    {
+        final char[] out = new char[len * 2];
+        for (int i = 0; i < len; i++)
+        {
+            final int v = data[start + i] & 0xFF;
+            out[i * 2] = HEX_UPPER[v >>> 4];
+            out[i * 2 + 1] = HEX_UPPER[v & 0x0F];
+        }
+        return new String(out);
     }
 
     private static byte[] hexToBytes(final String hex)

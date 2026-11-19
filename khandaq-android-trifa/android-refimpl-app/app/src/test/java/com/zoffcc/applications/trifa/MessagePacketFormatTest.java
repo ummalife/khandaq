@@ -173,6 +173,35 @@ public class MessagePacketFormatTest
                                                                   "*", true));
     }
 
+    /**
+     * iOS up to 0.2.62 sends a reaction on a group file with a zero author: the hash of the transfer names the
+     * file alone. Such a reaction must find its file by the hash, while a text anchor, a 4-byte id that only its
+     * author makes unique, keeps requiring the author.
+     */
+    @Test
+    public void a_file_anchor_with_a_zero_author_names_nobody_and_a_text_anchor_keeps_its_author()
+    {
+        final byte[] named = HelperMessageReaction.buildGroupReactionPacket((byte) 2, HASH, AUTHOR, TS, "👍", true);
+        assertNotNull(named);
+        assertEquals(AUTHOR, HelperMessageReaction.groupReactionAuthor(HelperMessageReaction.ANCHOR_MSG_ID_HASH,
+                                                                       named));
+
+        final byte[] zero = named.clone();
+        Arrays.fill(zero, 41, 73, (byte) 0);
+        assertNull(HelperMessageReaction.groupReactionAuthor(HelperMessageReaction.ANCHOR_MSG_ID_HASH, zero));
+        assertEquals(repeat('0', 64),
+                     HelperMessageReaction.groupReactionAuthor(HelperMessageReaction.ANCHOR_MSGV3_HASH, zero));
+
+        final byte[] lowerCase = HelperMessageReaction.buildGroupReactionPacket((byte) 1, MESSAGE_ID,
+                                                                                AUTHOR.toLowerCase(), TS, "👍",
+                                                                                true);
+        assertNotNull(lowerCase);
+        assertEquals(AUTHOR, HelperMessageReaction.groupReactionAuthor(HelperMessageReaction.ANCHOR_MSGV3_HASH,
+                                                                       lowerCase));
+        assertNull(HelperMessageReaction.groupReactionAuthor(HelperMessageReaction.ANCHOR_MSG_ID_HASH,
+                                                             new byte[72]));
+    }
+
     @Test
     public void the_time_is_four_bytes_big_endian()
     {

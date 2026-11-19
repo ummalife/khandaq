@@ -93,6 +93,8 @@ void friendLosslessPacketCallback(void *cTox, uint32_t friendNumber, const uint8
 - (BOOL)handleIncomingGroupEditPacketWithGroupNumber:(OCTToxGroupNumber)groupNumber peerId:(uint32_t)peerId data:(NSData *)data;
 - (BOOL)handleIncomingGroupDeletePacketWithGroupNumber:(OCTToxGroupNumber)groupNumber peerId:(uint32_t)peerId data:(NSData *)data;
 - (BOOL)handleIncomingGroupReactionPacketWithGroupNumber:(OCTToxGroupNumber)groupNumber peerId:(uint32_t)peerId data:(NSData *)data;
+// 0.2.63: the reaction packet on a group file names the file's author (nil or not 64 hex digits: zero).
+- (NSData *)kqGroupReactionPacketForMsgIdHash:(NSString *)msgIdHashHex authorHex:(NSString *)authorHex emoji:(NSString *)emoji add:(BOOL)add;
 // QA live F11: the leave notice that tells a member who leaves from an app that closes.
 + (NSData *)groupLeaveNoticePacket;
 + (BOOL)isGroupLeaveNoticePacket:(NSData *)data;

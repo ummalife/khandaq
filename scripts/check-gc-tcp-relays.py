@@ -23,11 +23,14 @@ Every client is in groups, so every client has to carry the change:
 - desktop: buildscripts/toxcore/toxcore/{group_chats.c,TCP_connection.c} and both amalgamations;
 - iOS: local_pod_repo/toxcore (group_chats.m, TCP_connection.m);
 - Android: patches/apply_khandaq_gc_tcp_relays.py, run by circle_scripts/deps.sh on the cloned toxcore for each of
-  the 4 ABIs, after the roaming patch.
+  the 4 ABIs, after the roaming patch;
+- macOS builds toxcore once into a prefix it keeps, and rebuilds it only for a new version in
+  scripts/build-macos-deps.sh: that version must name the change, or a Mac built on a kept prefix ships without it.
 
 This check holds the text of the change, as the Android script carries it, in every copy, and the lines that make it
 work; proves that the Android script turns the desktop files without the change into exactly the desktop files; and
-keeps the toxcore test that runs it on local toxes (auto_tests/group_tcp_relays_test.c) in the desktop build.
+keeps the toxcore test that runs it on local toxes (auto_tests/group_tcp_relays_test.c) in the desktop build, and the
+name of the change in the version the macOS build stamps its toxcore with.
 
     scripts/check-gc-tcp-relays.py
     scripts/check-gc-tcp-relays.py --self-test    # every check must catch the mutant made for it (CI)
@@ -35,6 +38,7 @@ keeps the toxcore test that runs it on local toxes (auto_tests/group_tcp_relays_
 from __future__ import annotations
 
 import ast
+import re
 import subprocess
 import sys
 import tempfile
@@ -62,6 +66,9 @@ ANDROID_DEPS = "khandaq-android-trifa/circle_scripts/deps.sh"
 ANDROID_ABIS = 4
 RELAYS_RUN = "python3 /root/work/patches/apply_khandaq_gc_tcp_relays.py toxcore || exit 1"
 ROAMING_RUN = "python3 /root/work/patches/apply_khandaq_gc_roaming.py toxcore || exit 1"
+
+MACOS_DEPS = "scripts/build-macos-deps.sh"
+MACOS_STAMP = "gc-tcp-relays"
 
 TEST_DIR = "khandaq-desktop/buildscripts/toxcore/auto_tests"
 TEST_LIST = f"{TEST_DIR}/CMakeLists.txt"
@@ -172,6 +179,20 @@ def check_wiring(read: Read) -> list[str]:
     return problems
 
 
+def check_macos_stamp(read: Read) -> list[str]:
+    """The version the macOS build stamps its toxcore with names the change, so a kept prefix is rebuilt."""
+    deps = read(MACOS_DEPS)
+    if deps is None:
+        return [f"macOS: {MACOS_DEPS} is missing"]
+    versions = re.findall(r'"toxcore ([^" ]+)"', deps)
+    if len(versions) != 1:
+        return [f"macOS: {MACOS_DEPS} names toxcore {len(versions)} time(s), expected once"]
+    if MACOS_STAMP not in versions[0].split("+"):
+        return [f"macOS: the toxcore version in {MACOS_DEPS} ({versions[0]}) does not name {MACOS_STAMP}, so a Mac "
+                "built on a kept prefix keeps its old toxcore"]
+    return []
+
+
 def check_test(read: Read) -> list[str]:
     problems = []
     test, entry = TEST
@@ -215,7 +236,7 @@ def read_from(root: Path) -> Read:
 def problems_of(read: Read) -> tuple[list[str], list[tuple[str, str, str, str]], bool]:
     edits = changes(read)
     problems, desktop_ok = check_copies(read, edits)
-    return problems + check_wiring(read) + check_test(read), edits, desktop_ok
+    return problems + check_wiring(read) + check_macos_stamp(read) + check_test(read), edits, desktop_ok
 
 
 def self_test() -> int:
@@ -275,6 +296,8 @@ def self_test() -> int:
          moved_run(ANDROID_DEPS), "Android:"),
         ("the desktop build drops the TCP relays test",
          mutant(TEST_LIST, TEST[1], ""), "toxcore test:"),
+        ("macOS keeps a toxcore built before the change",
+         mutant(MACOS_DEPS, "+gc-roaming+gc-tcp-relays\"", "+gc-roaming\""), "macOS:"),
     )
     failed = []
     for name, mutant_read, expected in mutants:
@@ -302,8 +325,8 @@ def main() -> int:
             print(f"  - {problem}")
         return 1
     print(f"gc tcp relays: {len(COPIES)} toxcore copies keep relays for their groups, hand them out in an invite "
-          f"confirm and stay on them while they re-sync, as does the Android build ({ANDROID_ABIS} ABIs); the "
-          "toxcore test is in")
+          f"confirm and stay on them while they re-sync, as does the Android build ({ANDROID_ABIS} ABIs); macOS "
+          "rebuilds its toxcore for it; the toxcore test is in")
     return 0
 
 

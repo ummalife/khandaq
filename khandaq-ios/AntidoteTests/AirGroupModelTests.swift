@@ -847,6 +847,14 @@ class AirGroupModelTests: XCTestCase {
                           facts, "a name changed")
         XCTAssertNotEqual(AirGroupTranscript.authorFacts(of: [member(3, "QA Droid B", .founder, key: founderKey), mac]),
                           facts, "a peer number went to another member")
+
+        // The label names no role but these two: a member without one comes and goes unseen over the entries.
+        XCTAssertEqual(AirGroupTranscript.authorFacts(of: [founder]), facts, "a member without a role left")
+        XCTAssertEqual(AirGroupTranscript.authorFacts(of: [founder, mac, member(4, "Guest", .observer, key: "AB")]), facts,
+                       "an observer came")
+        XCTAssertNotEqual(AirGroupTranscript.authorFacts(of: [founder, member(2, "QA Mac", .moderator,
+                                                                              key: String(repeating: "5E", count: 32))]),
+                          facts, "a member became a moderator")
     }
 
     /// KHANDAQ (0.2.63): the rows drawn again keep the messages you picked for Delete or Copy picked. reloadRows

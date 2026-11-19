@@ -157,7 +157,8 @@ extension ChatGroupController {
 
         // Your key or name arrived after the rows were drawn: the mentions of you are tinted now.
         // KHANDAQ (0.2.63): and the role over an entry is its author's among the members now, so the rows are drawn
-        // again when who has which role changes, the members a group gets once it connects among them.
+        // again when who the founders and moderators are changes, the members a group gets once it connects among
+        // them.
         if mentionsBefore.0 != AirGroupMembers.selfKey(in: members) || mentionsBefore.1 != selfGroupName
             || authorsBefore != AirGroupTranscript.authorFacts(of: members) {
             tableView?.reloadVisibleRowsKeepingSelection()

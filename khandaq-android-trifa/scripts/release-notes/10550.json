@@ -1,0 +1,4 @@
+{
+  "en-US": "• A reaction to your message, in a chat or a group, now wakes your phone as a new message does.\n• A notification says what came: the text, a voice message, a video, a photo, a file or the reaction. It is end-to-end encrypted: only your phone can read it, not the push service.\n• Both phones need this update.\n• Fixed: the app could close in the background when the phone was woken twice within 20 seconds.",
+  "ru-RU": "• Реакция на ваше сообщение в чате или группе теперь будит телефон, как новое сообщение.\n• В уведомлении видно, что пришло: текст, голосовое, видео, фото, файл или реакция. Оно зашифровано сквозным шифрованием: прочитать его может только ваш телефон, а не сервис уведомлений.\n• Нужно обновить оба телефона.\n• Исправлено: приложение могло закрыться в фоне, если телефон будили дважды за 20 секунд."
+}

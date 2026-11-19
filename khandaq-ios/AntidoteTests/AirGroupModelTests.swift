@@ -849,6 +849,38 @@ class AirGroupModelTests: XCTestCase {
                           facts, "a peer number went to another member")
     }
 
+    /// KHANDAQ (0.2.63): the rows drawn again keep the messages you picked for Delete or Copy picked. reloadRows
+    /// alone takes the selection off every row it reloads (rows 1 and 3 picked, none after it).
+    func testTheRowsDrawnAgainKeepWhatYouPicked() {
+        let rows = PlainRows(count: 30)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let table = UITableView(frame: window.bounds, style: .plain)
+        table.register(UITableViewCell.self, forCellReuseIdentifier: PlainRows.identifier)
+        table.dataSource = rows
+        table.allowsMultipleSelectionDuringEditing = true
+        window.addSubview(table)
+        window.isHidden = false
+        table.reloadData()
+        table.layoutIfNeeded()
+        table.setEditing(true, animated: false)
+        let picked = [IndexPath(row: 1, section: 0), IndexPath(row: 3, section: 0)]
+        picked.forEach { table.selectRow(at: $0, animated: false, scrollPosition: .none) }
+        let offscreen = IndexPath(row: 29, section: 0)
+        table.selectRow(at: offscreen, animated: false, scrollPosition: .none)
+        table.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: false)
+        table.layoutIfNeeded()
+        XCTAssertFalse(table.indexPathsForVisibleRows?.contains(offscreen) ?? true, "row 29 is off the screen")
+
+        table.reloadVisibleRowsKeepingSelection()
+        table.layoutIfNeeded()
+
+        XCTAssertEqual(Set(table.indexPathsForSelectedRows ?? []), Set(picked + [offscreen]))
+        for indexPath in picked {
+            XCTAssertTrue(table.cellForRow(at: indexPath)?.isSelected ?? false, "row \(indexPath.row) is drawn picked")
+        }
+        window.isHidden = true
+    }
+
     // MARK: - Joining by key, the group settings
 
     func testJoinKeyFieldSaysWhatItHolds() {
@@ -1169,4 +1201,24 @@ private struct DossierWorld {
     let realmManager: OCTRealmManager
     let chat: OCTChat
     let dossier: AirGroupDossierController
+}
+
+/// Rows of plain cells, for what a table does with its rows whatever they hold.
+private final class PlainRows: NSObject, UITableViewDataSource {
+    static let identifier = "plain"
+    let count: Int
+
+    init(count: Int) {
+        self.count = count
+    }
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return count
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: PlainRows.identifier, for: indexPath)
+        cell.textLabel?.text = "\(indexPath.row)"
+        return cell
+    }
 }

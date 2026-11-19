@@ -390,7 +390,7 @@ class ChatGroupController: PortraitChatController {
             }
             // Only the visible rows, and only their decoration: reloading the whole table here would
             // fight the scroll position every time a sync burst lands.
-            self.tableView.reloadRows(at: self.tableView.indexPathsForVisibleRows ?? [], with: .none)
+            self.tableView.reloadVisibleRowsKeepingSelection()
         }
 
         startAirGroup()
@@ -1551,7 +1551,7 @@ private extension ChatGroupController {
             return
         }
         KhandaqCommunity.take(message)
-        tableView.reloadRows(at: tableView.indexPathsForVisibleRows ?? [], with: .none)
+        tableView.reloadVisibleRowsKeepingSelection()
     }
 
     func presentFilePreview(for message: OCTMessageAbstract) {

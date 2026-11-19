@@ -160,7 +160,7 @@ extension ChatGroupController {
         // again when who has which role changes, the members a group gets once it connects among them.
         if mentionsBefore.0 != AirGroupMembers.selfKey(in: members) || mentionsBefore.1 != selfGroupName
             || authorsBefore != AirGroupTranscript.authorFacts(of: members) {
-            tableView?.reloadRows(at: tableView?.indexPathsForVisibleRows ?? [], with: .none)
+            tableView?.reloadVisibleRowsKeepingSelection()
         }
     }
 
@@ -349,5 +349,23 @@ extension ChatGroupController {
         let merged = messageSearchQuery.isEmpty && isMergedCaptionRow(storageIndex: entry.storageIndex)
         let isText = message.messageText != nil && !message.groupSystemMessage && !merged
         return AirRunKey(author: author, date: message.date(), isText: isText)
+    }
+}
+
+extension UITableView {
+    /// KHANDAQ (0.2.63): the visible rows drawn again with what they say now, and the ones you had picked still
+    /// picked. reloadRows takes the selection off every row it reloads, and the selection is all that Delete and
+    /// Copy act on: the messages picked for them came unpicked whenever a verdict on the history, a member or your
+    /// key arrived meanwhile.
+    func reloadVisibleRowsKeepingSelection() {
+        let visible = indexPathsForVisibleRows ?? []
+        guard !visible.isEmpty else {
+            return
+        }
+        let picked = Set(indexPathsForSelectedRows ?? []).intersection(visible)
+        reloadRows(at: visible, with: .none)
+        for indexPath in picked {
+            selectRow(at: indexPath, animated: false, scrollPosition: .none)
+        }
     }
 }

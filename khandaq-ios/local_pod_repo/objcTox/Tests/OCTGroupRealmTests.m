@@ -627,6 +627,87 @@ static NSString *const kGroupRealmTestsSelfKeyHex = @"1A2B3C4D5E6F708192A3B4C5D6
     }
 }
 
+#pragma mark - The id of a group text
+
+// KHANDAQ (0.2.63): toxcore draws the id of a group text at random from all 32 bits, and a row keeps it as an
+// OCTToxMessageId, an int, so every id from 0x80000000 on is kept negative. The lookups by id passed it unsigned
+// and found none of those texts. QA-Live of 0.2.63 had a text from Windows twice on the iPhone: live, and again as
+// Android relayed it from the group's history under the short key Android names an author it does not know by.
+- (void)testAGroupTextIsFoundByItsIdFromEitherHalf
+{
+    OCTChat *chat = [self groupChat];
+    OCTRealmManager *realmManager = self.realmManager;
+    const uint32_t upper = 0x9A3C5E71u;
+    const uint32_t lower = 0x0B0C0D0Eu;
+    [realmManager addGroupMessageWithText:@"Windows by invitation"
+                                     type:OCTToxMessageTypeNormal
+                                     chat:chat
+                                   peerId:kGroupRealmTestsPeerId
+                                 peerName:@"QA A"
+                                messageId:(OCTToxMessageId)upper];
+    [realmManager addGroupMessageWithText:@"from the lower half"
+                                     type:OCTToxMessageTypeNormal
+                                     chat:chat
+                                   peerId:kGroupRealmTestsPeerId
+                                 peerName:@"QA A"
+                                messageId:(OCTToxMessageId)lower];
+
+    XCTAssertTrue([realmManager groupTextMessageExistsInChat:chat messageId:upper text:@"Windows by invitation"],
+                  @"a text with an id from the upper half was not found by it");
+    XCTAssertTrue([realmManager groupTextMessageExistsInChat:chat
+                                                   messageId:upper
+                                                      peerId:kGroupRealmTestsPeerId
+                                                        text:@"Windows by invitation"]);
+    XCTAssertTrue([realmManager groupTextMessageExistsInChat:chat messageId:lower text:@"from the lower half"]);
+    XCTAssertFalse([realmManager groupTextMessageExistsInChat:chat messageId:(upper ^ 0x80000000u) text:@"Windows by invitation"],
+                   @"an id that differs in its top bit only is another text");
+    XCTAssertFalse([realmManager groupTextMessageExistsInChat:chat messageId:upper + 1 text:@"Windows by invitation"]);
+    XCTAssertFalse([realmManager groupTextMessageExistsInChat:chat messageId:upper text:@"from the lower half"]);
+}
+
+// The same through the history sync of the submanager of groups, as it went on the iPhone. The live copy keeps the
+// author's name and the time it came; the copy a member relays carries the author's key, the id and the text, with
+// the name that member gave the author and its own time for it. The id alone tells them for one text.
+- (void)testARelayedCopyOfALiveGroupTextWithAnIdFromTheUpperHalfAddsNothing
+{
+    NSArray *mocks = [self groupFileMocksWithDownloads:[self.root stringByAppendingPathComponent:@"Downloads"]];
+    OCTSubmanagerGroupsImpl *submanager = [self startedSubmanagerWithDataSource:mocks[0]];
+    [submanager setupHistSyncIfNeeded];
+    OCTNgcGroupHistSync *histSync = [submanager valueForKey:@"histSync"];
+    XCTAssertNotNil(histSync);
+
+    OCTChat *chat = [self groupChat];
+    NSString *text = @"QA61 group Android: Windows by invitation";
+    const uint32_t upper = 0x9A3C5E71u;
+    OCTMessageAbstract *live = [self.realmManager addGroupMessageWithText:text
+                                                                     type:OCTToxMessageTypeNormal
+                                                                     chat:chat
+                                                                   peerId:kGroupRealmTestsPeerId
+                                                                 peerName:@"QA A"
+                                                                messageId:(OCTToxMessageId)upper];
+    const uint32_t relayedTime = (uint32_t)live.dateInterval - 40;
+
+    [histSync handleIncomingPrivatePacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                                  peerId:kGroupRealmTestsPeerId + 1
+                                                    data:[self historyTextRecordWithMessageId:upper
+                                                                                 authorKeyHex:kGroupRealmTestsPeerKeyHex
+                                                                                         time:relayedTime
+                                                                                         text:text]];
+
+    XCTAssertEqual([self rowsOfChat:chat].count, 1u, @"the relayed copy of a text that came live was added");
+
+    // A text of its own with the next id goes in: the id keeps the two apart.
+    [histSync handleIncomingPrivatePacketWithGroupNumber:kGroupRealmTestsGroupNumber
+                                                  peerId:kGroupRealmTestsPeerId + 1
+                                                    data:[self historyTextRecordWithMessageId:upper + 1
+                                                                                 authorKeyHex:kGroupRealmTestsPeerKeyHex
+                                                                                         time:relayedTime + 20
+                                                                                         text:@"a text the iPhone missed"]];
+
+    XCTAssertEqual([self rowsOfChat:chat].count, 2u, @"a text the iPhone did not have was not taken from the history");
+    XCTAssertEqual(mocks.count, 3u);
+}
+
 #pragma mark - The order of a chat
 
 // KHANDAQ (0.2.56): Android sends a long text as parts, one right after another, and msgV3 stamps each with

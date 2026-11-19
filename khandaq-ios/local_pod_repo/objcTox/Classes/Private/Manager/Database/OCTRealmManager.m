@@ -1347,9 +1347,10 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     // KHANDAQ (audit F-6): "ours" is peerId 0 AND not history-synced — a synced row whose author was
     // unresolvable at insert time also carries peerId 0, so a foreign ack could land on it and our own
     // message never went ticked. groupHistorySync is @NO on every pre-existing row (migration 20).
+    // KHANDAQ (0.2.63): the id as the row keeps it, an int (groupTextMessageExistsInChat:messageId:peerId:text:).
     NSPredicate *predicate = [NSPredicate predicateWithFormat:
-                              @"chatUniqueIdentifier == %@ AND groupSenderPeerId == 0 AND groupHistorySync == NO AND messageText != nil AND messageText.messageId == %u",
-                              chat.uniqueIdentifier, messageId];
+                              @"chatUniqueIdentifier == %@ AND groupSenderPeerId == 0 AND groupHistorySync == NO AND messageText != nil AND messageText.messageId == %d",
+                              chat.uniqueIdentifier, (OCTToxMessageId)messageId];
     OCTMessageAbstract *message = [OCTMessageAbstract objectsWithPredicate:predicate].firstObject;
 
     if (! message || ! message.messageText) {
@@ -1597,9 +1598,17 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     // this group message"; a private thread is a different conversation, so matching one there both
     // swallowed an honest public message and — because a match makes history sync answer with a
     // delivery receipt — let a peer probe whether a given text exists in someone's private DMs.
+    //
+    // KHANDAQ (0.2.63): the id goes in as the row keeps it. toxcore draws the id of a group text at random
+    // from all 32 bits, and messageText.messageId is an OCTToxMessageId, an int, so every id from 0x80000000
+    // on is kept negative; passed unsigned (%u) it never equalled the kept one, and half of the texts were
+    // never found by their id. A text relayed from the group's history then came in a second time next to
+    // its live copy whenever its name and time differed too (QA-Live of 0.2.63: a text from Windows twice
+    // on the iPhone, once under the short key Android named its author by). The retraction, reaction and
+    // edit lookups in OCTSubmanagerGroupsImpl already pass the id this way.
     NSPredicate *predicate = [NSPredicate predicateWithFormat:
-                              @"chatUniqueIdentifier == %@ AND groupPrivateMessage == NO AND messageText != nil AND messageText.messageId == %u AND messageText.text == %@",
-                              chat.uniqueIdentifier, messageId, text];
+                              @"chatUniqueIdentifier == %@ AND groupPrivateMessage == NO AND messageText != nil AND messageText.messageId == %d AND messageText.text == %@",
+                              chat.uniqueIdentifier, (OCTToxMessageId)messageId, text];
     RLMResults *results = [self objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
 
     return results.count > 0;
@@ -1616,10 +1625,11 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         return NO;
     }
 
-    // KHANDAQ (audit): public-timeline scope, see the peerId variant above.
+    // KHANDAQ (audit): public-timeline scope, see the peerId variant above; the id as the row keeps it (0.2.63),
+    // see there too.
     NSPredicate *predicate = [NSPredicate predicateWithFormat:
-                              @"chatUniqueIdentifier == %@ AND groupPrivateMessage == NO AND messageText != nil AND messageText.messageId == %u AND messageText.text == %@",
-                              chat.uniqueIdentifier, messageId, text];
+                              @"chatUniqueIdentifier == %@ AND groupPrivateMessage == NO AND messageText != nil AND messageText.messageId == %d AND messageText.text == %@",
+                              chat.uniqueIdentifier, (OCTToxMessageId)messageId, text];
     RLMResults *results = [self objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
 
     return results.count > 0;

@@ -335,6 +335,27 @@ public:
     Air::SeenAnchor newestIncomingAnchor(const ChatId& chatId, const ToxPk& self);
     /** Whether author's text with this msgV3 id is in the chat already: one that came again. */
     bool hasText(const ChatId& chatId, const ToxPk& author, const QByteArray& msgV3Id);
+    /**
+     * KHANDAQ (0.2.63): whether author's text with these words was kept in the chat since sinceMs
+     * (milliseconds since 1970): a text a member relays from the history of a group that came
+     * here before, live or relayed. The history keeps no id of a group's text, so the words stand
+     * for it: the same words of the author twice in that while are taken for one.
+     */
+    bool hasGroupText(const ChatId& chatId, const ToxPk& author, const QString& text,
+                      qint64 sinceMs);
+    /**
+     * KHANDAQ (0.2.63): the name the history last kept for author, empty when it kept none
+     * (Air::authorUnnamed): what a text a member relays from the history of a group shows while
+     * the group does not know its author. A member has a key of their own in each group, so the
+     * names kept for it are their names in that group.
+     */
+    QString lastAuthorName(const ToxPk& author);
+    /**
+     * KHANDAQ (0.2.63): author's texts and files in the chat that were kept without a name
+     * (Air::authorUnnamed) take name: those a member relayed from the history of a group before the
+     * group knew their author. The others keep the name they were kept with.
+     */
+    void nameUnnamedEntries(const ChatId& chatId, const ToxPk& author, const QString& name);
 
 signals:
     void fileInserted(RowId dbId, QByteArray fileId);

@@ -175,6 +175,22 @@ protected:
      * shows when words is empty. False, and nothing changes, when it may not be answered.
      */
     bool startReply(ChatLogIdx idx, const QString& words = QString());
+    /**
+     * KHANDAQ (0.2.63): whether React shows on the entry at idx: a form that sends reactions
+     * says so. Nowhere by default.
+     */
+    virtual bool canReactTo(ChatLogIdx idx) const;
+    /**
+     * KHANDAQ (0.2.63): our reaction with emoji to the entry at idx, as React chose it: the same
+     * emoji again takes it back. Nothing by default.
+     */
+    virtual void reactTo(ChatLogIdx idx, const QString& emoji);
+    /**
+     * KHANDAQ (0.2.63): what a reaction to the entry at idx points at: a text by the id it went
+     * or came with (Message::wireId), a file by its Tox file id. False for anything else, an
+     * entry not shown, or an id that is empty or zeros.
+     */
+    bool reactionAnchorOf(ChatLogIdx idx, Air::MessageEffect::Anchor* anchor, QByteArray* id) const;
     /** Whether Send may hand the text over now; a form that limits it says why under the field. */
     virtual bool canSendNow() const;
     ChatMessage::Ptr createMessage(const ToxPk& author, const QString& message,
@@ -196,6 +212,8 @@ protected:
 
     QAction* clearAction;
     QAction* replyAction;
+    /** KHANDAQ (0.2.63): the emoji of Air::quickReactions, ours checked. */
+    QMenu* reactMenu;
     QAction* quoteAction;
     QAction* copyLinkAction;
     QAction* searchAction;

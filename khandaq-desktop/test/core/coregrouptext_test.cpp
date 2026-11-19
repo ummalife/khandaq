@@ -28,6 +28,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <vector>
 
 // 0.2.56: toxcore takes a group text while it has confirmed nobody else in the group, and says it
 // went. Core hands it over only while the group is not disconnected and has someone else in it
@@ -42,6 +43,7 @@ private slots:
     void aGroupConnectingWithNobodyTakesNoText();
     void aTextTooLongFailsWhetherTheGroupTakesTextsOrNot();
     void aGroupThatIsNotThereTakesNoText();
+    void aTextRelayedFromTheHistoryIsToldOnce();
 
 private:
     ToxCorePtr makeCore(const QByteArray& savedata = QByteArray());
@@ -51,6 +53,35 @@ private:
 };
 
 using SendResult = ICoreGroupMessageSender::SendResult;
+
+namespace {
+/**
+ * KHANDAQ (0.2.63): a text of the history as a member relays it (0x02): the magic, the version,
+ * 02, the id 0x0A0B0C0D, the author, the time, a name of 25 bytes and the words.
+ */
+QByteArray syncText(const QByteArray& author, quint32 time, const QString& words,
+                    char version = '\x01')
+{
+    QByteArray packet = QByteArray::fromHex("667788113435");
+    packet.append(version);
+    packet.append('\x02');
+    packet.append(QByteArray::fromHex("0A0B0C0D"));
+    packet.append(author);
+    for (int shift = 24; shift >= 0; shift -= 8) {
+        packet.append(static_cast<char>((time >> shift) & 0xFF));
+    }
+    packet.append(QByteArray(25, '\0'));
+    packet.append(words.toUtf8());
+    return packet;
+}
+
+void handText(Core& core, int group, const QByteArray& packet)
+{
+    core.handleSyncedGroupText(static_cast<uint32_t>(group), 1,
+                               reinterpret_cast<const uint8_t*>(packet.constData()),
+                               static_cast<size_t>(packet.size()));
+}
+} // namespace
 
 ToxCorePtr TestCoreGroupText::makeCore(const QByteArray& savedata)
 {
@@ -145,6 +176,60 @@ void TestCoreGroupText::aGroupThatIsNotThereTakesNoText()
     uint32_t wireId = 1;
     QCOMPARE(core->sendGroupMessage(41, QStringLiteral("Hello"), wireId), SendResult::NotReady);
     QCOMPARE(wireId, uint32_t{0});
+}
+
+/**
+ * KHANDAQ (0.2.63): a text a member relays from the history of a group is told once, with the
+ * time its author wrote it: not again, not out of the window of time (and then it keeps out no
+ * real one), not of version 2, not naming us, and not for a group that is not there.
+ */
+void TestCoreGroupText::aTextRelayedFromTheHistoryIsToldOnce()
+{
+    ToxCorePtr core = makeCore();
+    QVERIFY(core);
+    const int group = core->createGroup(QStringLiteral("History"), TOX_GROUP_PRIVACY_STATE_PUBLIC);
+    QVERIFY(group >= 0);
+    struct Told
+    {
+        int group;
+        ToxPk author;
+        QString text;
+        uint32_t id;
+        QDateTime sentAt;
+    };
+    std::vector<Told> told;
+    connect(core.get(), &Core::groupSyncedMessageReceived,
+            [&told](int groupnumber, const ToxPk& author, const QString& message,
+                    uint32_t messageId, const QDateTime& sentAt) {
+                told.push_back({groupnumber, author, message, messageId, sentAt});
+            });
+
+    const QByteArray maryam(ToxPk::size, 'm');
+    const quint32 now = static_cast<quint32>(QDateTime::currentSecsSinceEpoch());
+    handText(*core, group, syncText(maryam, now, QStringLiteral("Salam")));
+    QCOMPARE(told.size(), size_t{1});
+    QCOMPARE(told[0].group, group);
+    QCOMPARE(told[0].author, ToxPk(maryam));
+    QCOMPARE(told[0].text, QStringLiteral("Salam"));
+    QCOMPARE(told[0].id, uint32_t{0x0A0B0C0D});
+    // The milliseconds are the last three digits of the id (Air::syncedTextTimeMs).
+    QCOMPARE(told[0].sentAt.toMSecsSinceEpoch(), qint64{now} * 1000 + 0x0A0B0C0D % 1000);
+
+    handText(*core, group, syncText(maryam, now, QStringLiteral("Salam")));
+    QCOMPARE(told.size(), size_t{1});
+
+    handText(*core, group, syncText(maryam, now - 200 * 60 - 60, QStringLiteral("Later")));
+    QCOMPARE(told.size(), size_t{1});
+    handText(*core, group, syncText(maryam, now, QStringLiteral("Later")));
+    QCOMPARE(told.size(), size_t{2});
+
+    const QByteArray groupSelf = core->getGroupSelfPublicKey(group).getByteArray();
+    const QByteArray profileSelf = core->getSelfPublicKey().getByteArray();
+    handText(*core, group, syncText(maryam, now, QStringLiteral("Signed"), '\x02'));
+    handText(*core, group, syncText(groupSelf, now, QStringLiteral("Ours")));
+    handText(*core, group, syncText(profileSelf, now, QStringLiteral("Ours too")));
+    handText(*core, group + 1, syncText(maryam, now, QStringLiteral("Nowhere")));
+    QCOMPARE(told.size(), size_t{2});
 }
 
 QTEST_GUILESS_MAIN(TestCoreGroupText)

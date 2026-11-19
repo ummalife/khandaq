@@ -34,6 +34,7 @@
 #include "src/core/khandaqlimits.h"
 #include "src/model/air/airgroup.h"
 #include "src/model/air/airgroupleave.h"
+#include "src/model/air/airhistorysync.h"
 #include "src/model/air/airmessagemarks.h"
 #include "src/model/groupinvite.h"
 #include "src/model/status.h"
@@ -65,6 +66,7 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <limits>
 #include <memory>
 #include <random>
 #include <unordered_map>
@@ -844,7 +846,6 @@ void Core::onGroupInvite(Tox* tox, uint32_t friendId, const uint8_t* inviteData,
 void Core::onGroupMessage(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Message_Type type,
                           const uint8_t* cMessage, size_t length, uint32_t messageId, void* vCore)
 {
-    std::ignore = tox;
     Core* core = static_cast<Core*>(vCore);
     if (core->ignoresGroup(groupId)) {
         return;
@@ -857,6 +858,15 @@ void Core::onGroupMessage(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Messa
     // in a Report (as files keep the key their BEGIN came with, audit F-5).
     const ToxPk author =
         core->getGroupPeerPk(static_cast<int>(groupId), static_cast<int>(peerId));
+    // KHANDAQ (0.2.63): a text a member relayed to us from the history before it came live is
+    // shown once; and a relayed copy of this one, later, is not shown (handleSyncedGroupText).
+    const QByteArray chatId = groupChatId(tox, groupId);
+    if (messageId != 0 && !author.isEmpty() && !chatId.isEmpty()
+        && core->syncedGroupTexts.seen(chatId, author.getByteArray(), messageId, message)) {
+        qDebug() << "Group" << groupId << "text" << messageId
+                 << "came live after its copy from the history; dropped";
+        return;
+    }
     emit core->groupMessageReceived(groupId, author, message, isAction, messageId);
 }
 
@@ -872,6 +882,9 @@ void Core::onGroupPeerJoin(Tox* tox, uint32_t groupId, uint32_t peerId, void* vC
     const ToxPk joined = core->getGroupPeerPk(static_cast<int>(groupId), static_cast<int>(peerId));
     if (!joined.isEmpty()) {
         core->groupLeaveNotices.joined(static_cast<int>(groupId), joined.getByteArray());
+        // KHANDAQ (0.2.63): and the history of a public group is asked of them, as the phones
+        // ask it of a member who joins.
+        core->requestGroupHistoryLater(groupId, joined);
     }
     emit core->groupPeerlistChanged(groupId);
     // first peers bring the synced shared state — refresh the real group name
@@ -922,6 +935,8 @@ void Core::onGroupSelfJoin(Tox* tox, uint32_t groupId, void* vCore)
     // Do NOT kickstart here: we just successfully joined; a reconnect would
     // tear the fresh connection down again and loop join/rejoin forever.
     emit core->groupPeerlistChanged(groupId);
+    // KHANDAQ (0.2.63): what was written while we were away is asked of the members.
+    core->requestGroupHistoryLater(groupId, ToxPk());
     // shared state (incl. the real group name) has just been synced
     const QString groupName = core->getGroupName(static_cast<int>(groupId));
     if (!groupName.isEmpty()) {
@@ -1054,6 +1069,12 @@ void Core::onGroupCustomPrivatePacket(Tox* tox, uint32_t groupId, uint32_t peerI
     std::ignore = tox;
     auto core = static_cast<Core*>(vCore);
     if (core->ignoresGroup(groupId)) {
+        return;
+    }
+    // KHANDAQ (0.2.63): a text of the history, version 1 only: the signed text of version 2 has
+    // the same packet id (02 02) and is dropped with the files' version check below.
+    if (Air::isSyncTextPacket(data, length)) {
+        core->handleSyncedGroupText(groupId, peerId, data, length);
         return;
     }
     core->handleNgcFileTransferPacket(groupId, peerId, data, length, true);
@@ -1308,6 +1329,11 @@ void Core::sendHighLevelAck(uint32_t friendId, const QByteArray& msgV3Id)
 
 bool Core::sendSeenReceipt(uint32_t friendId, const QByteArray& packet)
 {
+    return sendFriendLosslessPacket(friendId, packet);
+}
+
+bool Core::sendFriendLosslessPacket(uint32_t friendId, const QByteArray& packet)
+{
     QMutexLocker ml{&coreLoopLock};
     Tox_Err_Friend_Custom_Packet error;
     const bool sent =
@@ -1315,7 +1341,8 @@ bool Core::sendSeenReceipt(uint32_t friendId, const QByteArray& packet)
                                         reinterpret_cast<const uint8_t*>(packet.constData()),
                                         static_cast<size_t>(packet.size()), &error);
     if (!sent) {
-        qDebug() << "Core: the read receipt did not go to friend" << friendId << "error" << error;
+        qDebug() << "Core: a lossless packet of" << packet.size() << "bytes did not go to friend"
+                 << friendId << "error" << error;
     }
     return sent;
 }
@@ -1472,6 +1499,21 @@ bool Core::sendGroupLeaveNotice(int groupId) const
                                                    reinterpret_cast<const uint8_t*>(notice.constData()),
                                                    static_cast<size_t>(notice.size()), &error);
     qDebug() << "Group" << groupId << "leave notice sent:" << sent << "error:" << static_cast<int>(error);
+    return sent;
+}
+
+bool Core::sendGroupCustomPacket(int groupId, const QByteArray& packet)
+{
+    QMutexLocker ml{&coreLoopLock};
+    Tox_Err_Group_Send_Custom_Packet error;
+    const bool sent =
+        tox_group_send_custom_packet(tox.get(), static_cast<uint32_t>(groupId), true,
+                                     reinterpret_cast<const uint8_t*>(packet.constData()),
+                                     static_cast<size_t>(packet.size()), &error);
+    if (!sent) {
+        qDebug() << "Core: a custom packet of" << packet.size() << "bytes did not go to group"
+                 << groupId << "error" << static_cast<int>(error);
+    }
     return sent;
 }
 
@@ -2639,14 +2681,18 @@ uint32_t chatIdHash32(const uint8_t* chatId)
 //     files, to the member that asks alone, and sent for the files that come here.
 //   pkt 0x03 (history-sync file, private): msg_id(32) orig_sender_pk(32) ts(4)
 //                                          peer_name(25) filename(255) data[1..36701]
-// KHANDAQ (audit F-6): this client is a history-sync CONSUMER only — it never emits 0x01 (request),
-// 0x02 (sync text) or 0x03, so a row it received via sync is never re-served to anyone, under our key
-// or any other. Keep it that way: a sender here would have to carry the original author's identity,
+// KHANDAQ (audit F-6): this client is a history-sync CONSUMER only — it never serves 0x02 (sync
+// text) or 0x03, so a row it received via sync is never re-served to anyone, under our key or any
+// other. Keep it that way: a sender here would have to carry the original author's identity,
 // which the local history DB does not record (it has no "was synced" column, unlike Android/iOS).
 // Re-verified round 5: every tox_group_send_custom_packet call site below emits 0x11/0x12/0x13 as a
-// BROADCAST of a file this device is sending itself, and 0x02 is not even parsed on the receive side.
+// BROADCAST of a file this device is sending itself.
 // 0.2.57: so do the private 0x12/0x13 of a resend (sendGroupFileResend), and 0x14 asks only for
 // the chunks of a file that comes to us.
+// KHANDAQ (0.2.63): 0x02 of version 1 is parsed now (handleSyncedGroupText, Air::readSyncText;
+// the signed 02 02 still dies at the version gate), and this client ASKS for the history: the
+// 8-byte 0x01 to the members of a public group (requestGroupHistory). It still answers no 0x01,
+// and the reactions it sends (0x43, sendGroupCustomPacket) carry no record of anyone's.
 const uint8_t NGC_MAGIC[6] = {0x66, 0x77, 0x88, 0x11, 0x34, 0x35};
 constexpr uint8_t NGC_VERSION = 0x01;
 // pkt 0x04 (delivery receipt, private): msg_id(4, big-endian) of the group message that arrived
@@ -3057,6 +3103,112 @@ void Core::sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t m
         qDebug() << "sendGroupDeliveryReceipt: not sent to peer" << peerId << "of group" << groupId
                  << "error" << static_cast<int>(error);
     }
+}
+
+void Core::handleSyncedGroupText(uint32_t groupId, uint32_t peerId, const uint8_t* data,
+                                 size_t length)
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    Air::SyncedText synced;
+    if (length > static_cast<size_t>(std::numeric_limits<int>::max())
+        || !Air::readSyncText(
+            QByteArray(reinterpret_cast<const char*>(data), static_cast<int>(length)), &synced)) {
+        qDebug() << "Dropped a text of the history of group" << groupId << "of" << length
+                 << "bytes";
+        return;
+    }
+    // As for a file of the history (0x03): the window first, so that a record dropped for its
+    // time does not take the place of the real one in the ledger below.
+    if (!Air::syncTimeAccepted(synced.time, QDateTime::currentSecsSinceEpoch())) {
+        return;
+    }
+    // A record that names us is our own text come back, or a forgery: every member sees our key.
+    const ToxPk author(synced.author);
+    if (author == getSelfPublicKey()
+        || author == getGroupSelfPublicKey(static_cast<int>(groupId))) {
+        return;
+    }
+    const QByteArray chatId = groupChatId(tox.get(), groupId);
+    if (chatId.isEmpty()
+        || syncedGroupTexts.seen(chatId, synced.author, synced.messageId, synced.text)) {
+        return;
+    }
+    if (!syncedGroupBudget.take(chatId, synced.text.toUtf8().size())) {
+        // Said once: a flood past the budget would fill the log as well.
+        if (syncedGroupBudget.refused(chatId) == 1) {
+            qWarning() << "Group" << groupId
+                       << "relayed more of its history than one run takes; the rest is dropped";
+        }
+        return;
+    }
+    // KHANDAQ (K-01): the author is what the member who relayed it says; the member is logged
+    // next to it, the only trace when the two disagree. The name in the packet is never read.
+    const ToxPk via = getGroupPeerPk(static_cast<int>(groupId), static_cast<int>(peerId));
+    qDebug() << "NGC sync text received: group" << groupId << "author" << author.toString().left(8)
+             << "via peer" << via.toString().left(8) << synced.text.size() << "characters";
+    emit groupSyncedMessageReceived(static_cast<int>(groupId), author, synced.text,
+                                    synced.messageId,
+                                    QDateTime::fromMSecsSinceEpoch(Air::syncedTextTimeMs(synced)));
+}
+
+void Core::requestGroupHistory(uint32_t groupId, const ToxPk& peerPk)
+{
+    const int group = static_cast<int>(groupId);
+    // As the phones: the history of a private group is neither asked nor served.
+    if (peerPk.isEmpty() || getGroupPrivacyState(group) != TOX_GROUP_PRIVACY_STATE_PUBLIC
+        || getGroupSelfRole(group) == TOX_GROUP_ROLE_OBSERVER) {
+        return;
+    }
+    Tox_Err_Group_Peer_Query queryError;
+    const uint32_t peerId =
+        tox_group_peer_by_public_key(tox.get(), groupId, peerPk.getData(), &queryError);
+    if (queryError != TOX_ERR_GROUP_PEER_QUERY_OK || peerId == getGroupSelfPeerId(group)
+        || getGroupPeerRole(group, static_cast<int>(peerId)) == TOX_GROUP_ROLE_OBSERVER) {
+        return;
+    }
+    const QByteArray chatId = groupChatId(tox.get(), groupId);
+    const qint64 now = monotonicMs();
+    if (chatId.isEmpty() || !groupHistoryRequests.mayAsk(chatId, peerPk.getByteArray(), now)) {
+        return;
+    }
+
+    const QByteArray request = Air::historyRequestPacket();
+    Tox_Err_Group_Send_Custom_Private_Packet error;
+    tox_group_send_custom_private_packet(tox.get(), groupId, peerId, true,
+                                         reinterpret_cast<const uint8_t*>(request.constData()),
+                                         static_cast<size_t>(request.size()), &error);
+    if (error != TOX_ERR_GROUP_SEND_CUSTOM_PRIVATE_PACKET_OK) {
+        qDebug() << "requestGroupHistory: not sent to peer" << peerId << "of group" << groupId
+                 << "error" << static_cast<int>(error);
+        return;
+    }
+    groupHistoryRequests.asked(chatId, peerPk.getByteArray(), now);
+    qDebug() << "Group" << groupId << "history asked of peer" << peerPk.toString().left(8);
+}
+
+void Core::requestGroupHistoryLater(uint32_t groupId, const ToxPk& peerPk)
+{
+    const QByteArray chatId = groupChatId(tox.get(), groupId);
+    if (chatId.isEmpty()) {
+        return;
+    }
+    const int delayMs = static_cast<int>(QRandomGenerator::global()->bounded(
+        Air::HistoryRequestPace::minDelayMs, Air::HistoryRequestPace::maxDelayMs + 1));
+    QTimer::singleShot(delayMs, this, [this, groupId, chatId, peerPk] {
+        QMutexLocker ml{&coreLoopLock};
+        if (ignoresGroup(groupId) || groupChatId(tox.get(), groupId) != chatId) {
+            return;
+        }
+        if (!peerPk.isEmpty()) {
+            requestGroupHistory(groupId, peerPk);
+            return;
+        }
+        for (const uint32_t peerId : getGroupPeerList(static_cast<int>(groupId))) {
+            requestGroupHistory(groupId, getGroupPeerPk(static_cast<int>(groupId),
+                                                        static_cast<int>(peerId)));
+        }
+    });
 }
 
 /**

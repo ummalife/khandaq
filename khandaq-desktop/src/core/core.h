@@ -35,6 +35,7 @@
 #include "src/model/air/airgroupfilequeue.h"
 #include "src/model/air/airgroupfilerepair.h"
 #include "src/model/air/airgroupleave.h"
+#include "src/model/air/airhistorysync.h"
 #include "src/model/status.h"
 #include <tox/tox.h>
 
@@ -167,6 +168,16 @@ public:
     void handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const uint8_t* data,
                                      size_t length, bool isPrivate);
     /**
+     * KHANDAQ (0.2.63): a text a member relays to us from the history of the group, the private
+     * packet 0x02 of version 1 (Air::readSyncText), as toxcore's callback hands it over on the
+     * thread of the node. It is told once (groupSyncedMessageReceived): not when it names us, its
+     * time is out of the window (Air::syncTimeAccepted), it came in this session already, live or
+     * relayed (Air::SyncedTextLedger), or the group relayed more than one run takes
+     * (Air::SyncedTextBudget). Public so that the tests can hand packets over without a network.
+     */
+    void handleSyncedGroupText(uint32_t groupId, uint32_t peerId, const uint8_t* data,
+                               size_t length);
+    /**
      * 0.2.57: the files of more than one packet that come, at nowMs of a steady clock: one whose
      * chunks stopped asks its sender for those it misses, and one that does not come is given up
      * (Air::FileArrival). process() calls it; public so that the tests can move the clock.
@@ -256,6 +267,18 @@ public slots:
      * builds it. False when toxcore refused it, the friend being offline, say.
      */
     bool sendSeenReceipt(uint32_t friendId, const QByteArray& packet);
+    /**
+     * KHANDAQ (0.2.63): sends a friend a lossless packet as it is: a reaction
+     * (Air::friendReactionPacket) or a read receipt. False when toxcore refused it, the friend
+     * being offline, say.
+     */
+    bool sendFriendLosslessPacket(uint32_t friendId, const QByteArray& packet);
+    /**
+     * KHANDAQ (0.2.63): sends every member of a group a lossless custom packet as it is: a
+     * reaction (Air::groupReactionPacket). False when toxcore refused it: the group is gone or not
+     * connected, or we only observe there.
+     */
+    bool sendGroupCustomPacket(int groupId, const QByteArray& packet);
 
     void setNospam(uint32_t nospam);
 
@@ -328,6 +351,13 @@ signals:
      */
     void groupMessageReceived(int groupnumber, const ToxPk& author, const QString& message,
                               bool isAction, uint32_t messageId);
+    /**
+     * KHANDAQ (0.2.63): a text a member relayed from the history of the group (0x02,
+     * handleSyncedGroupText). author: the key that member names, which nothing proves (K-01);
+     * sentAt: the time it was written (Air::syncedTextTimeMs). Never an alert.
+     */
+    void groupSyncedMessageReceived(int groupnumber, const ToxPk& author, const QString& message,
+                                    uint32_t messageId, const QDateTime& sentAt);
     /** An edit, a deletion or a reaction a friend sent: lossless packet 186, 187 or 188, as it came. */
     void friendMessageEffect(uint32_t friendId, const QByteArray& packet);
     /** KHANDAQ (0.2.57): a read receipt a friend sent, lossless packet 189, as it came. */
@@ -454,6 +484,18 @@ private:
     static void onGroupCustomPrivatePacket(Tox* tox, uint32_t groupId, uint32_t peerId,
                                            const uint8_t* data, size_t length, void* vCore);
     bool sendGroupLeaveNotice(int groupId) const;
+    /**
+     * KHANDAQ (0.2.63): asks the member with this key for the history of a public group (0x01),
+     * at the pace of Air::HistoryRequestPace; the phones serve it as texts (0x02) and files
+     * (0x03). Not while we, or they, only observe: toxcore carries no custom packet of an
+     * observer. Called with coreLoopLock held.
+     */
+    void requestGroupHistory(uint32_t groupId, const ToxPk& peerPk);
+    /**
+     * KHANDAQ (0.2.63): the same a moment from now, of the member with this key, or of every
+     * member for an empty key; nothing when the group number is another group's by then.
+     */
+    void requestGroupHistoryLater(uint32_t groupId, const ToxPk& peerPk);
     void leaveGroupAfterNotice(int groupId);
     void leaveRecordedGroup(const Air::PendingGroupLeaves::Leave& leave, const char* event);
     uint32_t replaceLeavingGroup(const QByteArray& chatId, std::function<void()> join);
@@ -623,6 +665,12 @@ private:
     // 0.2.60: the requests for files we do not hold, while the history says whether they are ours
     // (sentGroupFileWanted). Under coreLoopLock.
     Air::SentFileLookups sentGroupFileLookups;
+    // KHANDAQ (0.2.63): the texts of groups seen in this session, live or relayed from a history,
+    // what the relayed ones of each group took of their budget, and when the history of a group was
+    // last asked of each member. Under coreLoopLock.
+    Air::SyncedTextLedger syncedGroupTexts;
+    Air::SyncedTextBudget syncedGroupBudget;
+    Air::HistoryRequestPace groupHistoryRequests;
 
     std::unique_ptr<QThread> coreThread;
     const IBootstrapListGenerator& bootstrapListGenerator;

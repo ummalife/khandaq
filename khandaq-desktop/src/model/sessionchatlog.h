@@ -53,6 +53,7 @@ public:
     void addSystemMessage(const SystemMessage& message) override;
     bool isShown(ChatLogIdx idx) const override;
     bool isCancelled(ChatLogIdx idx) const override;
+    bool toggleOwnReaction(ChatLogIdx idx, const QString& emoji, QString* ownAfter) override;
 
     void hideItem(ChatLogIdx idx);
     /** Leaves out an item as it is loaded, one the history keeps erased; nothing is signalled. */
@@ -120,6 +121,19 @@ public:
      * @return The message, or nullptr when the log does not hold it
      */
     const Message* onMessageWireIdAssigned(DispatchedMessageId id, const QByteArray& wireId);
+
+    /**
+     * KHANDAQ (0.2.63): a message a member relayed from the history of a group, under the name the
+     * chat knows its author by; none when the group does not know them yet (Air::authorUnnamed).
+     */
+    void onRelayedMessageReceived(const ToxPk& sender, const QString& senderName,
+                                  const Message& message);
+    /**
+     * KHANDAQ (0.2.63): the items of sender kept without a name (Air::authorUnnamed) take name, once
+     * the group knows them; each one that does is updated (itemUpdated).
+     * @return How many items took it
+     */
+    int nameAuthor(const ToxPk& sender, const QString& name);
 
 public slots:
     void onMessageReceived(const ToxPk& sender, const Message& message);

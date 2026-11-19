@@ -593,6 +593,45 @@ void ChatForm::retryQueued(qint64 id)
     }
 }
 
+bool ChatForm::canReactTo(ChatLogIdx idx) const
+{
+    // A msgV3 id, or a Tox file id.
+    constexpr int anchorBytes = 32;
+    Air::MessageEffect::Anchor anchor = Air::MessageEffect::Anchor::Text;
+    QByteArray id;
+    return reactionAnchorOf(idx, &anchor, &id) && id.size() == anchorBytes;
+}
+
+void ChatForm::reactTo(ChatLogIdx idx, const QString& emoji)
+{
+    Air::MessageEffect::Anchor anchor = Air::MessageEffect::Anchor::Text;
+    QByteArray id;
+    QString own;
+    if (!canReactTo(idx) || !reactionAnchorOf(idx, &anchor, &id)
+        || !chatLog.toggleOwnReaction(idx, emoji, &own)) {
+        return;
+    }
+    // The state goes, not the change: an older state of the same entry that waits goes no more.
+    QByteArray key = id;
+    key.prepend(static_cast<char>(anchor == Air::MessageEffect::Anchor::Text ? 1 : 2));
+    pendingReactions.insert(key, PendingReaction{anchor, id, own});
+    sendPendingReactions();
+}
+
+void ChatForm::sendPendingReactions()
+{
+    const quint32 now = static_cast<quint32>(QDateTime::currentSecsSinceEpoch());
+    for (auto it = pendingReactions.begin(); it != pendingReactions.end();) {
+        const QByteArray packet =
+            Air::friendReactionPacket(it->anchor, it->id, now, it->emoji, !it->emoji.isEmpty());
+        if (!packet.isEmpty() && !core.sendFriendLosslessPacket(f->getId(), packet)) {
+            // Offline: the others would not go either.
+            return;
+        }
+        it = pendingReactions.erase(it);
+    }
+}
+
 GenericChatForm::ReplyAuthor ChatForm::replyAuthorOf(const ChatLogItem& item) const
 {
     ReplyAuthor author;
@@ -1088,6 +1127,11 @@ void ChatForm::onFriendStatusChanged(const ToxPk& friendPk, Status::Status statu
     chatWidget->setPersonOnline(online);
     refreshQueue();
     refreshHead();
+
+    // KHANDAQ (0.2.63): our reactions that waited for them go.
+    if (online) {
+        sendPendingReactions();
+    }
 
     // Wait and call: the call starts by itself once they are online.
     if (online && waitingToCall) {

@@ -33,7 +33,8 @@ namespace Air {
  * An edit, a deletion or a reaction (redesign stage 3, item 10), as Android sends them: the
  * lossless packets 186, 187 and 188 between two people and the NGC custom packets 0x41, 0x42 and
  * 0x43 in a group, byte for byte as khandaq-android-trifa HelperMessageEdit, HelperMessageDelete
- * and HelperMessageReaction build them (MessagePacketFormatTest). Nothing here sends one.
+ * and HelperMessageReaction build them (MessagePacketFormatTest). KHANDAQ (0.2.63): reactions are
+ * sent from here too (friendReactionPacket, groupReactionPacket); edits and deletions only come.
  */
 struct MessageEffect
 {
@@ -58,7 +59,11 @@ struct MessageEffect
      * id of a file.
      */
     QByteArray anchorId;
-    /** A reaction in a group names the 32-byte key of who wrote the message; empty otherwise. */
+    /**
+     * A reaction in a group names the 32-byte key of who wrote the message; empty otherwise.
+     * KHANDAQ (0.2.63): empty too for a file named by 32 zero bytes, as iOS sends it: a file is
+     * known by its 32-byte id alone.
+     */
     QByteArray author;
     /** When it was done, by the sender's clock, in seconds since 1970. */
     quint32 time = 0;
@@ -84,6 +89,37 @@ bool isFriendMarkPacket(const uint8_t* data, size_t length);
 bool isGroupMarkPacket(const uint8_t* data, size_t length);
 /** The id toxcore gave a group message as the packets of the group carry it: 4 bytes, big-endian. */
 QByteArray groupWireId(quint32 messageId);
+
+/**
+ * KHANDAQ (0.2.63): the emoji a message or a file is reacted with from the menu, in the order and
+ * the bytes of the phones (HelperMessageReaction.QUICK_REACTIONS, BubbleView): the heart keeps its
+ * variation selector U+FE0F.
+ */
+QStringList quickReactions();
+/**
+ * KHANDAQ (0.2.63): who our own reaction is kept under in EntryMarks, the marker the phones keep
+ * theirs under. Nobody else's key gives it (LocalStore::hashedKey is hexadecimal).
+ */
+QString ownReactionActor();
+/**
+ * KHANDAQ (0.2.63): our reaction to a message or a file of a conversation between two people,
+ * packet 188 as HelperMessageReaction builds it. It carries the state, not the change: the emoji
+ * we chose (add), or that we chose none any more (add false, sent with "*" as its emoji).
+ * anchorId: the 32-byte msgV3 id of a text, or the Tox file id of a file; time: now, in seconds
+ * since 1970, which only informs. Empty when the id is not 32 bytes, or an emoji added is one
+ * readFriendPacket would drop.
+ */
+QByteArray friendReactionPacket(MessageEffect::Anchor anchor, const QByteArray& anchorId,
+                                quint32 time, const QString& emoji, bool add);
+/**
+ * KHANDAQ (0.2.63): the same in a group, packet 0x43 to every member. anchorId: the 4-byte id
+ * toxcore gave a text (groupWireId), or the 32-byte id of a file; author: the 32-byte key in the
+ * group of who wrote it, ours for one of ours. Empty for other lengths, a text id 0 (a message
+ * still on its way), an author of zeros, or an emoji added that readGroupPacket would drop.
+ */
+QByteArray groupReactionPacket(MessageEffect::Anchor anchor, const QByteArray& anchorId,
+                               const QByteArray& author, quint32 time, const QString& emoji,
+                               bool add);
 
 /**
  * KHANDAQ (0.2.57): a read receipt between two people, the friend's lossless packet 189 of
@@ -157,6 +193,8 @@ struct EntryMarks
     bool operator!=(const EntryMarks& other) const;
     /** Applies one reaction of actor; returns whether anything changed. */
     bool react(const QString& actor, const QString& emoji, bool add);
+    /** KHANDAQ (0.2.63): the emoji actor reacted with; empty for none. */
+    QString emojiOf(const QString& actor) const;
     /**
      * Applies an edit of its author made at time; false for one older than the edit shown, or the
      * same edit again.
@@ -191,6 +229,13 @@ public:
     virtual QByteArray wireId(const QString& key) const = 0;
     /** Keeps the id a group gave a message; an empty id forgets it. */
     virtual void setWireId(const QString& key, const QByteArray& wireId) = 0;
+    /**
+     * KHANDAQ (0.2.63): whether the entry kept under key came relayed from the history of its
+     * group instead of from its author: nothing vouches for the author it names.
+     */
+    virtual bool isRelayed(const QString& key) const = 0;
+    /** Keeps the mark of an entry that came relayed. */
+    virtual void markRelayed(const QString& key) = 0;
 };
 
 } // namespace Air

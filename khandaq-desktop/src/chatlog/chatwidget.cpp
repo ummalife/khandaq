@@ -117,8 +117,10 @@ bool renderMessageRaw(const ChatMessage::AirLook& look, const QString& displayNa
 
     if (chatMessage) {
         chatMessage->setStatus(look.status);
-        return chatMessage->updateMessage(chatLogMessage.message.content, chatLogMessage.marks,
-                                          smileyPack);
+        const bool authorChanged = chatMessage->updateAuthor(look);
+        const bool bodyChanged = chatMessage->updateMessage(chatLogMessage.message.content,
+                                                            chatLogMessage.marks, smileyPack);
+        return authorChanged || bodyChanged;
     }
     chatLine =
         createMessage(look, displayName, chatLogMessage, documentCache, smileyPack, settings, style);
@@ -1747,9 +1749,15 @@ ChatMessage::AirLook ChatWidget::lookOf(const ChatLogItem& item) const
         // Notes are all yours: a screen reader says no author over them either.
         look.spokenWho = notesChat ? QString() : look.who;
     } else {
-        look.who = Air::authorName(item.getDisplayName(), personChat);
-        look.tone = Air::toneIndex(item.getSender().toString());
-        look.spokenWho = item.getDisplayName();
+        // KHANDAQ (0.2.63): an author a group relayed an entry of before it knew them has no name
+        // yet: the start of their key stands for them until it does (ChatHistory::nameUnnamedAuthors).
+        const QString key = item.getSender().toString();
+        const QString name = groupChat && Air::authorUnnamed(item.getDisplayName(), key)
+                                 ? Air::unnamedAuthorName(key)
+                                 : item.getDisplayName();
+        look.who = Air::authorName(name, personChat);
+        look.tone = Air::toneIndex(key);
+        look.spokenWho = name;
     }
     const ChatLogItem::ContentType type = item.getContentType();
     look.hasMark = isSelf
@@ -1995,7 +2003,8 @@ void ChatWidget::renderFile(const ChatMessage::AirLook& look, ToxFile file, QDat
         entry->onFileTransferUpdate(file);
         auto* const line = static_cast<ChatMessage*>(chatMessage.get());
         line->setStatus(look.status);
-        if (line->updateMarks(marks)) {
+        const bool authorChanged = line->updateAuthor(look);
+        if (line->updateMarks(marks) || authorChanged) {
             resizedLines.push_back(chatMessage);
             resizedLater->start();
         }

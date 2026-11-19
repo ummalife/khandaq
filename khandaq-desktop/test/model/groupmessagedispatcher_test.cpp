@@ -157,6 +157,7 @@ private slots:
     void testBlacklist();
     void messagesCarryTheIdsToxcoreGaveThem();
     void aShownMessageIsConfirmedToItsAuthor();
+    void aRelayedTextKeepsItsTimeAndAlertsNobody();
     void aLongTextGoesInPartsWithinTheGroupLimit();
     void whatWaitedGoesInOrderAGraceAfterAMemberJoins();
     void whatWaitedGoesOnceTheGroupConnects();
@@ -431,6 +432,49 @@ void TestGroupMessageDispatcher::aShownMessageIsConfirmedToItsAuthor()
     groupMessageDispatcher->onMessageReceived(author, false, "Blocked", 0x0BADF00D);
     QCOMPARE(messageSender->receipts.size(), size_t{2});
     QCOMPARE(receivedMessages.size(), size_t{3});
+}
+
+/**
+ * @brief KHANDAQ (0.2.63): a text a member relays from the history of the group comes as
+ * messageSynced, never messageReceived (nothing that alerts listens there), with the time it was
+ * written and the id it had, and its author is told it arrived. One that names us, has no id or
+ * time, or comes from a blocked author is neither shown nor confirmed.
+ */
+void TestGroupMessageDispatcher::aRelayedTextKeepsItsTimeAndAlertsNobody()
+{
+    std::vector<std::pair<ToxPk, Message>> synced;
+    connect(groupMessageDispatcher.get(), &GroupMessageDispatcher::messageSynced, this,
+            [&synced](const ToxPk& sender, const Message& message) {
+                synced.emplace_back(sender, message);
+            });
+    uint8_t id[ToxPk::size] = {1};
+    const ToxPk author(id);
+    const QDateTime written = QDateTime::fromMSecsSinceEpoch(1700000000123);
+    groupMessageDispatcher->onSyncedMessageReceived(author, QStringLiteral("Relayed"), 0xDEADBEEF,
+                                                    written);
+    QVERIFY(receivedMessages.empty());
+    QCOMPARE(synced.size(), size_t{1});
+    QCOMPARE(synced[0].first, author);
+    QCOMPARE(synced[0].second.content, QStringLiteral("Relayed"));
+    QVERIFY(!synced[0].second.isAction);
+    QCOMPARE(synced[0].second.timestamp, written);
+    QCOMPARE(synced[0].second.wireId, QByteArray::fromHex("deadbeef"));
+    QCOMPARE(messageSender->receipts.size(), size_t{1});
+    QCOMPARE(messageSender->receipts[0].groupId, static_cast<int>(g->getId()));
+    QCOMPARE(messageSender->receipts[0].author, author);
+    QCOMPARE(messageSender->receipts[0].messageId, uint32_t{0xDEADBEEF});
+
+    uint8_t selfId[ToxPk::size] = {0};
+    groupMessageDispatcher->onSyncedMessageReceived(ToxPk(selfId), QStringLiteral("Ours"), 7,
+                                                    written);
+    groupMessageDispatcher->onSyncedMessageReceived(author, QStringLiteral("No id"), 0, written);
+    groupMessageDispatcher->onSyncedMessageReceived(author, QStringLiteral("No time"), 8,
+                                                    QDateTime());
+    groupSettings->setBlackList({author.toString()});
+    groupMessageDispatcher->onSyncedMessageReceived(author, QStringLiteral("Blocked"), 9, written);
+    QCOMPARE(synced.size(), size_t{1});
+    QCOMPARE(messageSender->receipts.size(), size_t{1});
+    QVERIFY(receivedMessages.empty());
 }
 
 /**

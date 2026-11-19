@@ -104,6 +104,10 @@ private slots:
     void aFileThatGoesOnMovesInTheEntryItHad();
     void aMessageWithoutAnIdIsNeverAnchored();
     void aMessageThatWaitedIsFoundByTheIdItWentWith();
+    void ourReactionComesGoesAndChangesUnderOwn();
+    void onlyAShownMessageOrFileTakesOurReaction();
+    void aFileReactionFromIosIsShown();
+    void aRelayedAuthorTakesTheNameTheGroupGivesThem();
 
 private:
     MockCoreIdHandler idHandler;
@@ -519,6 +523,144 @@ void TestSessionChatLog::aMessageThatWaitedIsFoundByTheIdItWentWith()
     const SessionChatLog::EffectResult reacted = chatLog->applyEffect(maryam, reaction, groupSelf);
     QCOMPARE(reacted.change, Change::Reacted);
     QCOMPARE(reacted.idx, ChatLogIdx(0));
+}
+
+/**
+ * @brief KHANDAQ (0.2.63): our reaction from the menu is kept under "-OWN-", beside the others':
+ * one emoji, another one takes its place, and the same one again takes it back.
+ */
+void TestSessionChatLog::ourReactionComesGoesAndChangesUnderOwn()
+{
+    const ToxPk maryam = keyOf(0x11);
+    /* ChatLogIdx(0) */ chatLog->onMessageReceived(maryam, wiredMessage("Her text", "00000009"));
+    Air::MessageEffect theirs = effectOn(Air::MessageEffect::Kind::Reaction, "00000009");
+    const QString heart = Air::quickReactions().at(0);
+    const QString fire = Air::quickReactions().at(6);
+    theirs.emoji = heart;
+    theirs.add = true;
+    QCOMPARE(chatLog->applyEffect(keyOf(0x22), theirs, idHandler.getSelfPublicKey()).change,
+             SessionChatLog::EffectResult::Change::Reacted);
+    const auto marks = [this] {
+        return chatLog->at(ChatLogIdx(0)).getContentAsMessage().marks;
+    };
+
+    qRegisterMetaType<ChatLogIdx>();
+    QSignalSpy updated(chatLog.get(), &SessionChatLog::itemUpdated);
+    QString own = QStringLiteral("unset");
+    QVERIFY(chatLog->toggleOwnReaction(ChatLogIdx(0), heart, &own));
+    QCOMPARE(own, heart);
+    QCOMPARE(marks().emojiOf(Air::ownReactionActor()), heart);
+    QCOMPARE(marks().reactionsText(), heart + QStringLiteral(" 2"));
+
+    QVERIFY(chatLog->toggleOwnReaction(ChatLogIdx(0), fire, &own));
+    QCOMPARE(own, fire);
+    QCOMPARE(marks().emojiOf(Air::ownReactionActor()), fire);
+
+    QVERIFY(chatLog->toggleOwnReaction(ChatLogIdx(0), fire, &own));
+    QVERIFY(own.isEmpty());
+    QVERIFY(marks().emojiOf(Air::ownReactionActor()).isEmpty());
+    // The other person's stays.
+    QCOMPARE(marks().reactionsText(), heart);
+    QCOMPARE(updated.count(), 3);
+    QCOMPARE(qvariant_cast<ChatLogIdx>(updated.at(0).at(0)), ChatLogIdx(0));
+}
+
+/**
+ * @brief KHANDAQ (0.2.63): nothing to react to in a deleted entry, a system message, an entry
+ * that is not there, or with no emoji
+ */
+void TestSessionChatLog::onlyAShownMessageOrFileTakesOurReaction()
+{
+    const ToxPk maryam = keyOf(0x11);
+    const QString heart = Air::quickReactions().at(0);
+    /* ChatLogIdx(0) */ chatLog->onMessageReceived(maryam, wiredMessage("Deleted", "00000009"));
+    SystemMessage joined;
+    joined.messageType = SystemMessageType::userJoinedGroup;
+    joined.timestamp = QDateTime::currentDateTime();
+    /* ChatLogIdx(1) */ chatLog->addSystemMessage(joined);
+    ToxFile file(0, 0, QStringLiteral("photo.jpg"), QString(), 1000, ToxFile::RECEIVING);
+    file.resumeFileId = QByteArray(32, '\x07');
+    /* ChatLogIdx(2) */ chatLog->onFileUpdated(maryam, file);
+
+    const Air::MessageEffect deletion = effectOn(Air::MessageEffect::Kind::Delete, "00000009");
+    QCOMPARE(chatLog->applyEffect(maryam, deletion, idHandler.getSelfPublicKey()).change,
+             SessionChatLog::EffectResult::Change::Deleted);
+    QString own = QStringLiteral("unset");
+    QVERIFY(!chatLog->toggleOwnReaction(ChatLogIdx(0), heart, &own));
+    QVERIFY(!chatLog->toggleOwnReaction(ChatLogIdx(1), heart, &own));
+    QVERIFY(!chatLog->toggleOwnReaction(ChatLogIdx(3), heart, &own));
+    QVERIFY(!chatLog->toggleOwnReaction(ChatLogIdx(2), QString(), &own));
+    QCOMPARE(own, QStringLiteral("unset"));
+
+    // A file takes it as a message does.
+    QVERIFY(chatLog->toggleOwnReaction(ChatLogIdx(2), heart, nullptr));
+    QCOMPARE(chatLog->at(ChatLogIdx(2)).getContentAsFile().marks.emojiOf(Air::ownReactionActor()),
+             heart);
+}
+
+/**
+ * @brief KHANDAQ (0.2.63): iOS names nobody as the author of a file it reacts to in a group (32
+ * zero bytes): the reaction shows on the file with that id, whoever sent it
+ */
+void TestSessionChatLog::aFileReactionFromIosIsShown()
+{
+    using Change = SessionChatLog::EffectResult::Change;
+    const ToxPk groupSelf = keyOf(0x55);
+    const ToxPk maryam = keyOf(0x11);
+    ToxFile file(0, 0, QStringLiteral("photo.jpg"), QString(), 1000, ToxFile::RECEIVING);
+    file.resumeFileId = QByteArray(32, '\x07');
+    /* ChatLogIdx(0) */ chatLog->onFileUpdated(maryam, file);
+
+    const QByteArray emoji = Air::quickReactions().at(1).toUtf8();
+    // 0x43 on a file: its id, 32 zero bytes for the author, the time, the action and the emoji.
+    QByteArray packet = QByteArray::fromHex("667788113435014302") + file.resumeFileId;
+    packet += QByteArray(32, '\0') + QByteArray::fromHex("6553F100") + QByteArray(1, '\x01');
+    packet += static_cast<char>(emoji.size());
+    packet += emoji;
+    Air::MessageEffect reaction;
+    QVERIFY(Air::readGroupPacket(packet, &reaction));
+    const SessionChatLog::EffectResult reacted =
+        chatLog->applyEffect(keyOf(0x22), reaction, groupSelf);
+    QCOMPARE(reacted.change, Change::Reacted);
+    QCOMPARE(reacted.idx, ChatLogIdx(0));
+    QCOMPARE(chatLog->at(ChatLogIdx(0)).getContentAsFile().marks.reactionsText(),
+             Air::quickReactions().at(1));
+}
+
+/**
+ * @brief KHANDAQ (0.2.63): a member relays texts of an author the group does not know yet; they
+ * are kept without a name and take the one the group gives the author later: those, and no other.
+ */
+void TestSessionChatLog::aRelayedAuthorTakesTheNameTheGroupGivesThem()
+{
+    const ToxPk author = keyOf(0x2f);
+    const ToxPk other = keyOf(0x3a);
+    /* ChatLogIdx(0) */ chatLog->onRelayedMessageReceived(author, QString(), createMessage("salam"));
+    /* ChatLogIdx(1) */ chatLog->onRelayedMessageReceived(author, author.toString(),
+                                                          createMessage("again"));
+    /* ChatLogIdx(2) */ chatLog->onRelayedMessageReceived(author, QStringLiteral("Maryam"),
+                                                          createMessage("named already"));
+    /* ChatLogIdx(3) */ chatLog->onRelayedMessageReceived(other, QString(), createMessage("other"));
+    QCOMPARE(chatLog->at(ChatLogIdx(0)).getDisplayName(), QString());
+    QCOMPARE(chatLog->at(ChatLogIdx(0)).getSender(), author);
+
+    QSignalSpy updated(chatLog.get(), &SessionChatLog::itemUpdated);
+    // No name, or the key, names nobody.
+    QCOMPARE(chatLog->nameAuthor(author, QString()), 0);
+    QCOMPARE(chatLog->nameAuthor(author, author.toString()), 0);
+    QCOMPARE(updated.count(), 0);
+
+    QCOMPARE(chatLog->nameAuthor(author, QStringLiteral("Maryam B")), 2);
+    QCOMPARE(updated.count(), 2);
+    QCOMPARE(updated.at(0).at(0).value<ChatLogIdx>(), ChatLogIdx(0));
+    QCOMPARE(updated.at(1).at(0).value<ChatLogIdx>(), ChatLogIdx(1));
+    QCOMPARE(chatLog->at(ChatLogIdx(0)).getDisplayName(), QStringLiteral("Maryam B"));
+    QCOMPARE(chatLog->at(ChatLogIdx(1)).getDisplayName(), QStringLiteral("Maryam B"));
+    QCOMPARE(chatLog->at(ChatLogIdx(2)).getDisplayName(), QStringLiteral("Maryam"));
+    QCOMPARE(chatLog->at(ChatLogIdx(3)).getDisplayName(), QString());
+    // Named once, they keep it.
+    QCOMPARE(chatLog->nameAuthor(author, QStringLiteral("Maryam C")), 0);
+    QCOMPARE(chatLog->at(ChatLogIdx(0)).getDisplayName(), QStringLiteral("Maryam B"));
 }
 
 QTEST_GUILESS_MAIN(TestSessionChatLog)

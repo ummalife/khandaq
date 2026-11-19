@@ -847,6 +847,7 @@ const Source sources[] = {
     {Text::MessageReport, QT_TRANSLATE_NOOP3("Air", "Report", "menu action on a message someone else wrote in a group: opens a mail to support about it, with the message")},
     {Text::MessageReply, QT_TRANSLATE_NOOP3("Air", "Reply", "menu action on a message or a file: the next message answers it, with its quote above the message field; as chat_reply_action on the phones")},
     {Text::ReplyCancel, QT_TRANSLATE_NOOP3("Air", "Cancel reply", "the button that takes away the reply above the message field; as chat_reply_cancel on the phones")},
+    {Text::MessageReact, QT_TRANSLATE_NOOP3("Air", "React", "menu of a message or a file: the emoji to react with, ours checked; choosing it again takes it back; as chat_react_action on the phones")},
 };
 // clang-format on
 

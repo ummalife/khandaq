@@ -50,6 +50,7 @@ private slots:
     void aRunGoesOnForTheSameAuthorWithinFiveMinutesOfTheSameDay();
     void shortNameIsTheFirstWord();
     void aGroupNamesTheAuthorInFull();
+    void anAuthorWithoutANameIsShownByTheStartOfTheirKey();
     void dayMarksSayTodayAndYesterdayThenTheDate();
     void linkFollowsTheReach();
     void presenceLineNamesTheLinkAndWhenThePersonCameOnline();
@@ -244,6 +245,24 @@ void TestAirConversation::aGroupNamesTheAuthorInFull()
     QCOMPARE(Air::authorName(QStringLiteral("مريم عبد الله"), false), QStringLiteral("مريم عبد الله"));
     QCOMPARE(Air::authorName(QStringLiteral("Yusuf Karimov"), true), QStringLiteral("Yusuf"));
     QCOMPARE(Air::authorName(QString(), false), QString());
+}
+
+/**
+ * @brief 0.2.63: a member relays a text of an author the group does not know yet: no name, or the
+ * key as the name of a member who set none, is none, and the start of the key stands for them.
+ */
+void TestAirConversation::anAuthorWithoutANameIsShownByTheStartOfTheirKey()
+{
+    const QString key = QStringLiteral(
+        "7F3A91C05D2E8B4416A9C3E07D5F2B8164E0A3C9D7B25F1E8A4C6D0B3F9E2A71");
+    QVERIFY(Air::authorUnnamed(QString(), key));
+    QVERIFY(Air::authorUnnamed(QStringLiteral("  "), key));
+    QVERIFY(Air::authorUnnamed(key, key));
+    QVERIFY(Air::authorUnnamed(key.toLower(), key));
+    QVERIFY(!Air::authorUnnamed(QStringLiteral("QA Droid B"), key));
+    QVERIFY(!Air::authorUnnamed(key.left(8), key));
+    QCOMPARE(Air::unnamedAuthorName(key), QStringLiteral("7F3A91C0"));
+    QCOMPARE(Air::unnamedAuthorName(key.toLower()), QStringLiteral("7F3A91C0"));
 }
 
 void TestAirConversation::dayMarksSayTodayAndYesterdayThenTheDate()

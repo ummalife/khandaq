@@ -200,3 +200,23 @@ void GroupMessageDispatcher::onMessageReceived(const ToxPk& sender, bool isActio
     }
     emit messageReceived(sender, message);
 }
+
+void GroupMessageDispatcher::onSyncedMessageReceived(const ToxPk& author, const QString& content,
+                                                     uint32_t wireId, const QDateTime& sentAt)
+{
+    // Core drops a record that names us, or one without an id; as a live one, a blocked author's
+    // is not shown, nor confirmed.
+    if (author == idHandler.getSelfPublicKey() || wireId == 0 || !sentAt.isValid()) {
+        return;
+    }
+    if (groupSettings.getBlackList().contains(author.toString())) {
+        qDebug() << "onSyncedMessageReceived: Filtered:" << author.toString();
+        return;
+    }
+
+    Message message = processor.processIncomingCoreMessage(false, content);
+    message.timestamp = sentAt;
+    message.wireId = Air::groupWireId(wireId);
+    messageSender.sendGroupDeliveryReceipt(static_cast<int>(group.getId()), author, wireId);
+    emit messageSynced(author, message);
+}

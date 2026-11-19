@@ -973,6 +973,7 @@ void Widget::onCoreChanged(Core& core_)
     connect(core, &Core::receiptRecieved, this, &Widget::onReceiptReceived);
     connect(core, &Core::groupInviteReceived, this, &Widget::onGroupInviteReceived);
     connect(core, &Core::groupMessageReceived, this, &Widget::onGroupMessageReceived);
+    connect(core, &Core::groupSyncedMessageReceived, this, &Widget::onGroupSyncedMessageReceived);
     connect(core, &Core::friendMessageEffect, this, &Widget::onFriendMessageEffect);
     connect(core, &Core::friendSeenReceived, this, &Widget::onFriendSeenReceived);
     connect(core, &Core::groupMessageEffect, this, &Widget::onGroupMessageEffect);
@@ -2872,6 +2873,19 @@ void Widget::onGroupMessageReceived(int groupnumber, const ToxPk& author, const 
     }
 
     dispatcher->onMessageReceived(author, isAction, message, messageId);
+}
+
+void Widget::onGroupSyncedMessageReceived(int groupnumber, const ToxPk& author,
+                                          const QString& message, uint32_t messageId,
+                                          const QDateTime& sentAt)
+{
+    const GroupId& groupId = groupList->id2Key(groupnumber);
+    const auto dispatcher = groupMessageDispatchers.value(groupId);
+    if (!dispatcher) {
+        return;
+    }
+
+    dispatcher->onSyncedMessageReceived(author, message, messageId, sentAt);
 }
 
 void Widget::onFriendMessageEffect(uint32_t friendnumber, const QByteArray& packet)

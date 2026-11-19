@@ -20,8 +20,13 @@
 #include "chathistory.h"
 #include "src/persistence/settings.h"
 #include "src/core/chatid.h"
+#include "src/model/air/airconversation.h"
+#include "src/model/air/airhistorysync.h"
 #include "src/model/friend.h"
+#include "src/model/group.h"
 #include "src/widget/form/chatform.h"
+
+#include <QDateTime>
 
 #include <algorithm>
 
@@ -98,10 +103,20 @@ ChatHistory::ChatHistory(Chat& chat_, History* history_, const ICoreIdHandler& c
             &ChatHistory::onMessageComplete);
     connect(&messageDispatcher, &IMessageDispatcher::messageReceived, this,
             &ChatHistory::onMessageReceived);
+    connect(&messageDispatcher, &IMessageDispatcher::messageSynced, this,
+            &ChatHistory::onMessageSynced);
     connect(&messageDispatcher, &IMessageDispatcher::messageBroken, this,
             &ChatHistory::onMessageBroken);
     connect(&messageDispatcher, &IMessageDispatcher::messageWireIdAssigned, this,
             &ChatHistory::onMessageWireIdAssigned);
+    // KHANDAQ (0.2.63): a member relays the texts and files of others from the history of a group,
+    // whose authors may join after them, or name themselves later; each change of the members
+    // names the entries the group knows the author of by now.
+    if (auto* const group = qobject_cast<Group*>(&chat_)) {
+        connect(group, &Group::peerListRefreshed, this, &ChatHistory::nameUnnamedAuthors);
+        connect(group, &Group::numPeersChanged, this, &ChatHistory::nameUnnamedAuthors);
+        connect(group, &Group::peerNameChanged, this, &ChatHistory::nameUnnamedAuthors);
+    }
 
     // Defer messageSent callback until we finish firing off all our unsent messages.
     // If it was connected all our unsent messages would be re-added ot history again
@@ -343,6 +358,80 @@ void ChatHistory::onMessageReceived(const ToxPk& sender, const Message& message)
     sessionChatLog.onMessageReceived(sender, message);
 }
 
+void ChatHistory::onMessageSynced(const ToxPk& sender, const Message& message)
+{
+    // Core drops a copy of what came in this session (Air::SyncedTextLedger). The history knows
+    // a group's text by its author and words only: it keeps no id of it.
+    const QString content = storedText(message);
+    if (canUseHistory()) {
+        const ChatId& chatId = chat.getPersistentId();
+        const qint64 since = QDateTime::currentMSecsSinceEpoch() - Air::syncedTextKnownMs;
+        if (history->hasGroupText(chatId, sender, content, since)) {
+            qDebug() << "A text relayed from the history of a group is kept here already";
+            return;
+        }
+    }
+    // The member who relays it is often not its author, and the author may join after them.
+    const QString authorName = relayedAuthorName(sender);
+    if (canUseHistory()) {
+        history->addNewMessage(chat.getPersistentId(), content, sender, message.timestamp, true,
+                               message.extensionSet, authorName, {}, msgV3IdOf(message));
+        keepWireId(sender, message);
+    }
+    if (Air::authorUnnamed(authorName, sender.toString())) {
+        unnamedAuthors.insert(sender);
+    }
+    // Nothing vouches for the author it names: a Report on it names nobody, later too.
+    if (entryStore) {
+        entryStore->markRelayed(Air::textEntryKey(chatKey(), sender.toString(),
+                                                  message.timestamp.toMSecsSinceEpoch()));
+    }
+
+    sessionChatLog.onRelayedMessageReceived(sender, authorName, message);
+}
+
+QString ChatHistory::relayedAuthorName(const ToxPk& author) const
+{
+    const QString known = chat.getDisplayedName(author);
+    if (!Air::authorUnnamed(known, author.toString()) || !canUseHistory()) {
+        return known;
+    }
+    return history->lastAuthorName(author);
+}
+
+QString ChatHistory::loadedAuthorName(const ToxPk& author, const QString& keptName) const
+{
+    // Our own entries are signed "You" whatever name they were kept with.
+    if (friendChat || author == coreIdHandler.getSelfPublicKey()
+        || !Air::authorUnnamed(keptName, author.toString())) {
+        return keptName;
+    }
+    // Remembered even when the group names them now: nameUnnamedAuthors then names the rows of
+    // the history too, at the next change of the members.
+    unnamedAuthors.insert(author);
+    const QString known = chat.getDisplayedName(author);
+    return Air::authorUnnamed(known, author.toString()) ? keptName : known;
+}
+
+void ChatHistory::nameUnnamedAuthors()
+{
+    for (auto it = unnamedAuthors.begin(); it != unnamedAuthors.end();) {
+        const ToxPk author = *it;
+        const QString name = chat.getDisplayedName(author);
+        if (Air::authorUnnamed(name, author.toString())) {
+            ++it;
+            continue;
+        }
+        const int named = sessionChatLog.nameAuthor(author, name);
+        if (canUseHistory()) {
+            history->nameUnnamedEntries(chat.getPersistentId(), author, name);
+        }
+        qDebug() << "Entries of" << author.toString().left(8) << "kept without a name took it:"
+                 << named << "in this session";
+        it = unnamedAuthors.erase(it);
+    }
+}
+
 void ChatHistory::onMessageSent(DispatchedMessageId id, const Message& message)
 {
     if (outbox) {
@@ -439,6 +528,27 @@ bool ChatHistory::isShown(ChatLogIdx idx) const
 bool ChatHistory::isCancelled(ChatLogIdx idx) const
 {
     return cancelledIdx.contains(idx.get()) || sessionChatLog.isCancelled(idx);
+}
+
+bool ChatHistory::toggleOwnReaction(ChatLogIdx idx, const QString& emoji, QString* ownAfter)
+{
+    if (!isShown(idx) || !sessionChatLog.toggleOwnReaction(idx, emoji, ownAfter)) {
+        return false;
+    }
+    if (!entryStore || !canUseHistory()) {
+        return true;
+    }
+    // Under the key applyEffect keeps the reactions of the others under.
+    const ChatLogItem& item = sessionChatLog.at(idx);
+    if (item.getContentType() == ChatLogItem::ContentType::fileTransfer) {
+        const ChatLogFile& file = item.getContentAsFile();
+        entryStore->setEntryMarks(Air::fileEntryKey(chatKey(), file.file.resumeFileId), file.marks);
+    } else {
+        entryStore->setEntryMarks(Air::textEntryKey(chatKey(), item.getSender().toString(),
+                                                    item.getTimestamp().toMSecsSinceEpoch()),
+                                  item.getContentAsMessage().marks);
+    }
+    return true;
 }
 
 SessionChatLog::EffectResult ChatHistory::applyEffect(const ToxPk& sender,
@@ -808,6 +918,9 @@ void ChatHistory::loadHistoryIntoSessionChatLog(ChatLogIdx start) const
         // Note that message.id is _not_ a valid conversion here since it is a
         // global id not a per-chat id like the ChatLogIdx
         auto currentIdx = nextIdx++;
+        // KHANDAQ (0.2.63): an entry a member relayed before the group knew its author was kept
+        // without a name; the group may know them by now.
+        const QString senderName = loadedAuthorName(message.sender, message.dispName);
         switch (message.content.getType()) {
         case HistMessageContentType::file: {
             const auto date = message.timestamp;
@@ -822,7 +935,7 @@ void ChatHistory::loadHistoryIntoSessionChatLog(ChatLogIdx start) const
                 entryStore ? entryStore->entryMarks(Air::fileEntryKey(chatKey(), file.resumeFileId))
                            : Air::EntryMarks();
             const auto chatLogFile = ChatLogFile{date, file, marks};
-            sessionChatLog.insertFileAtIdx(currentIdx, message.sender, message.dispName, chatLogFile);
+            sessionChatLog.insertFileAtIdx(currentIdx, message.sender, senderName, chatLogFile);
             // Its sender deleted it: the history keeps neither its name nor its place.
             if (file.fileName.isEmpty() && file.filePath.isEmpty()) {
                 sessionChatLog.markHidden(currentIdx);
@@ -864,12 +977,12 @@ void ChatHistory::loadHistoryIntoSessionChatLog(ChatLogIdx start) const
                     const auto queued = queuedHistoryRows.find(message.id);
                     if (queued != queuedHistoryRows.end()) {
                         sessionChatLog.insertIncompleteMessageAtIdx(currentIdx, message.sender,
-                                                                    message.dispName,
+                                                                    senderName,
                                                                     chatLogMessage, queued.value());
                     } else {
                         // Nothing will ever complete a pending row the queue does not hold.
                         sessionChatLog.insertBrokenMessageAtIdx(currentIdx, message.sender,
-                                                                message.dispName, chatLogMessage);
+                                                                senderName, chatLogMessage);
                     }
                     break;
                 }
@@ -887,15 +1000,15 @@ void ChatHistory::loadHistoryIntoSessionChatLog(ChatLogIdx start) const
 
             switch (message.state) {
                 case MessageState::complete:
-                    sessionChatLog.insertCompleteMessageAtIdx(currentIdx, message.sender, message.dispName,
+                    sessionChatLog.insertCompleteMessageAtIdx(currentIdx, message.sender, senderName,
                                                               chatLogMessage);
                     break;
                 case MessageState::pending:
-                    sessionChatLog.insertIncompleteMessageAtIdx(currentIdx, message.sender, message.dispName,
+                    sessionChatLog.insertIncompleteMessageAtIdx(currentIdx, message.sender, senderName,
                                                                 chatLogMessage, dispatchedMessageIt.key());
                     break;
                 case MessageState::broken:
-                    sessionChatLog.insertBrokenMessageAtIdx(currentIdx, message.sender, message.dispName,
+                    sessionChatLog.insertBrokenMessageAtIdx(currentIdx, message.sender, senderName,
                                                             chatLogMessage);
                     break;
             }

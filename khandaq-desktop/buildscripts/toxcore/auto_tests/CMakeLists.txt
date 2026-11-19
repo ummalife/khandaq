@@ -54,6 +54,9 @@ auto_test(group_save)
 auto_test(group_state)
 #auto_test(group_sync) # Does timeout.
 auto_test(group_tcp)
+# KHANDAQ (0.2.63, F9, group TCP relays): a group made before the first relay is up, or loaded in tox_new(), still
+# joins a relay under its own key.
+auto_test(group_tcp_relays)
 #auto_test(group_topic) # Does timeout.
 auto_test(invalid_tcp_proxy)
 auto_test(invalid_udp_proxy)

@@ -744,6 +744,15 @@ int set_tcp_connection_to_status(const TCP_Connections *tcp_c, int connections_n
                 if (tcp_con->status == TCP_CONN_SLEEPING) {
                     tcp_con->unsleep = 1;
                 }
+
+                /* KHANDAQ (F9, group TCP relays), as TokTok PR #3081: going to sleep counted this
+                 * connection's online slots as sleepers on the relay; waking must take them back, or every
+                 * sleep-wake-sleep cycle leaves a phantom sleeper behind, `lock_count == sleep_count` holds
+                 * while an awake connection is still online on the relay, and do_tcp_conns() puts the relay
+                 * to sleep under it. */
+                if (con_to->connections[i].status == TCP_CONNECTIONS_STATUS_ONLINE && tcp_con->sleep_count > 0) {
+                    --tcp_con->sleep_count;
+                }
             }
         }
 

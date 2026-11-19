@@ -445,6 +445,17 @@ jobs:
           set -euo pipefail
           python3 scripts/check-gc-roaming.py
           python3 scripts/check-gc-roaming.py --self-test
+      # KHANDAQ (0.2.63, F9): members of a group behind one NAT never met, and a desktop founder's invite could die
+      # without a word: a group took TCP relays only from the messenger's connected ones and only when its own count
+      # changed, so a group loaded at start, or made before the first relay, kept none, and a relay it shared slept
+      # while its peers were direct. Every copy of toxcore (and the Android build) must top each group up with relays,
+      # sleeping ones too, confirm an invite with them and keep them awake while it re-syncs; each check must catch the
+      # mutant made for it.
+      - name: Every toxcore copy must keep TCP relays of its own for each group
+        run: |
+          set -euo pipefail
+          python3 scripts/check-gc-tcp-relays.py
+          python3 scripts/check-gc-tcp-relays.py --self-test
       # KHANDAQ (0.2.59): a desktop that joined a group by its key stayed out of it while a friend inside sent it
       # an invite every 30 s: the desktop copy of toxcore dropped the invite as "already added". Android and iOS
       # carried the fix; every copy of toxcore (and the Android build) must let a friend's invite finish a join

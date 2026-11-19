@@ -1156,14 +1156,19 @@ bool GroupChatForm::prepareReport(ChatLogIdx idx)
     // earlier one (AirLocal::isRelayed), is still reported, by nobody's name (Air::reportMailUrl).
     // 0.2.63: so is a relayed text, by the mark ChatHistory::onMessageSynced keeps.
     bool vouched = !sender.isEmpty();
+    // KHANDAQ (0.2.63): the store is read once, as a plain pointer. A QPointer is read again on
+    // each use, and GCC does not carry the check over to the second read; isRelayed is virtual
+    // since #174, so the call loads through that read and the Windows build stopped here
+    // (-Werror=null-dereference). Nothing below can delete the store: it lives as long as Widget.
+    const AirLocal* const marks = airLocal.data();
     QString text;
     switch (item.getContentType()) {
     case ChatLogItem::ContentType::message:
         text = item.getContentAsMessage().message.content;
         // KHANDAQ (0.2.63): nor a text a member relayed from the history (ChatHistory marks it).
-        if (airLocal
-            && airLocal->isRelayed(Air::textEntryKey(groupKey(), sender.toString(),
-                                                     item.getTimestamp().toMSecsSinceEpoch()))) {
+        if (marks
+            && marks->isRelayed(Air::textEntryKey(groupKey(), sender.toString(),
+                                                  item.getTimestamp().toMSecsSinceEpoch()))) {
             vouched = false;
         }
         break;
@@ -1173,8 +1178,8 @@ bool GroupChatForm::prepareReport(ChatLogIdx idx)
         text = file.fileName;
         const bool relayed =
             file.relayed
-            || (airLocal && !file.resumeFileId.isEmpty()
-                && airLocal->isRelayed(Air::fileEntryKey(groupKey(), file.resumeFileId)));
+            || (marks && !file.resumeFileId.isEmpty()
+                && marks->isRelayed(Air::fileEntryKey(groupKey(), file.resumeFileId)));
         vouched = vouched && !relayed;
         break;
     }

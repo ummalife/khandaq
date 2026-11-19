@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-19T15:46:18Z",
+  "generated_at": "2026-11-19T21:37:03Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,59 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.64",
+      "date": "2026-11-20",
+      "title": "A reaction wakes the phone; the notification says what came",
+      "summary": "A reaction to your message now wakes your phone the way a new message does, in a chat with a person and in a group. The notification of either says what came: the text, a voice message, a video, a photo, a file, or which reaction to which message. It is sealed on the sender's phone with a key only your phone can work out, so the push relay, Google and Apple carry it unread. The desktop tells you when someone reacts to your message.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "A reaction wakes the phone",
+          "description": "A reaction to your message did not wake your phone: you saw it only the next time the app was open. Now a reaction to a contact's message wakes their phone when they are offline, as a new message does: in a chat with a person, and in a group when the author of the message is one of your contacts. It works once both phones have this update. Taking a reaction back never wakes anyone.",
+          "platforms": [
+            "android",
+            "ios"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "The notification says what came",
+          "description": "A push said only \"New message\". It now shows the text, or that a voice message, a video, a photo or a file came, or which reaction was set to which of your messages, in chats with a person and in groups. The preview is sealed on the sender's phone with a key that only the receiving phone can work out, and only a contact you still have can send one; the push relay, Google and Apple carry it unread. With message text turned off in the settings, a notification says only who it is from and \"New message\" or \"New reaction\". A voice message is one recorded in the app; another sound file is a file with its name.",
+          "platforms": [
+            "android",
+            "ios"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Android: two wakeups close together no longer close the app",
+          "description": "When the phone was woken twice within 20 seconds, by two pushes or by a push and the app's own timer, the app closed in the background 20 seconds after the second. With a push for every message and reaction since this release, that would have been common. Each wakeup now keeps the phone awake and lets it sleep again on its own.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Desktop: notifications of reactions",
+          "description": "When someone reacts to your message, in a chat with a person or in a group, the desktop says who it was, which reaction and to what: \"Reacted 👍 to “See you at six”\", or to your voice message, video, photo or file. A muted chat stays quiet, and in a group that notifies only of mentions, a reaction to your message counts as one. With message text hidden in the notification settings, it says only that a reaction came. A notification of a file names a voice message, a video or a photo as such, with its size, and any other file by its name.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "Push relay: sealed previews",
+          "description": "The relay passes a sealed preview on as it came: to Android as data, to iPhone as an alert the phone opens before it shows it. Each event gives one alert, a repeat of it stays silent, and past the per-device limit a wake goes out plain. Older apps and their wakes are unchanged. A failed send is written to the log as one line.",
+          "platforms": [
+            "infra"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.63",
       "date": "2026-11-19",

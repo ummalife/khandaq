@@ -1287,6 +1287,73 @@ bool History::hasGroupText(const ChatId& chatId, const ToxPk& author, const QStr
     return found;
 }
 
+QString History::lastAuthorName(const ToxPk& author)
+{
+    if (historyAccessBlocked()) {
+        return QString();
+    }
+
+    // The newest name first; a name kept as the key is none (Air::authorUnnamed).
+    QVector<QByteArray> boundParams;
+    QString queryString = QStringLiteral("SELECT display_name FROM aliases WHERE owner = ");
+    addAuthorIdSubQuery(queryString, boundParams, author);
+    // The names are kept as blobs, which only a blob equals: the key in both cases it is written in.
+    queryString += QStringLiteral(" AND length(display_name) > 0 AND display_name NOT IN (?, ?) "
+                                  "ORDER BY id DESC LIMIT 1;");
+    boundParams.append(author.toString().toUpper().toUtf8());
+    boundParams.append(author.toString().toLower().toUtf8());
+
+    QString name;
+    db->execNow({queryString, boundParams, [&name](const QVector<QVariant>& row) {
+                     name = QString::fromUtf8(row[0].toByteArray());
+                 }});
+    return name;
+}
+
+void History::nameUnnamedEntries(const ChatId& chatId, const ToxPk& author, const QString& name)
+{
+    if (name.trimmed().isEmpty() || name.compare(author.toString(), Qt::CaseInsensitive) == 0
+        || historyAccessBlocked()) {
+        return;
+    }
+
+    // The aliases of the author with no name in them: an empty one, or the key, which a member who
+    // set no name is kept with (FriendList::decideNickname). Most authors have none: nothing to do.
+    QVector<QByteArray> findParams;
+    QString findQuery = QStringLiteral("SELECT id FROM aliases WHERE owner = ");
+    addAuthorIdSubQuery(findQuery, findParams, author);
+    findQuery += QStringLiteral(" AND (length(display_name) = 0 OR display_name IN (?, ?));");
+    findParams.append(author.toString().toUpper().toUtf8());
+    findParams.append(author.toString().toLower().toUtf8());
+    QStringList unnamed;
+    db->execNow({findQuery, findParams, [&unnamed](const QVector<QVariant>& row) {
+                     unnamed.append(QString::number(row[0].toLongLong()));
+                 }});
+    if (unnamed.isEmpty()) {
+        return;
+    }
+
+    QVector<RawDatabase::Query> queries;
+    queries += generateUpdateAlias(author, name);
+    for (const QString& table : {QStringLiteral("text_messages"), QStringLiteral("file_transfers")}) {
+        QVector<QByteArray> boundParams;
+        QString queryString =
+            QStringLiteral("UPDATE %1 SET sender_alias = (SELECT id FROM aliases WHERE owner = ")
+                .arg(table);
+        addAuthorIdSubQuery(queryString, boundParams, author);
+        queryString += QStringLiteral(" AND display_name = ?) ");
+        boundParams.append(name.toUtf8());
+        // The ids are numbers the database gave: nothing of the author's own goes in here.
+        queryString += QStringLiteral("WHERE sender_alias IN (%1) AND id IN "
+                                      "(SELECT id FROM history WHERE chat_id = ")
+                           .arg(unnamed.join(QLatin1Char(',')));
+        addChatIdSubQuery(queryString, boundParams, chatId);
+        queryString += QStringLiteral(");");
+        queries += RawDatabase::Query{queryString, boundParams};
+    }
+    db->execLater(queries);
+}
+
 void History::markAsBroken(RowId messageId, BrokenMessageReason reason)
 {
     if (!isValid()) {

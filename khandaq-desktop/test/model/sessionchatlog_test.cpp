@@ -107,6 +107,7 @@ private slots:
     void ourReactionComesGoesAndChangesUnderOwn();
     void onlyAShownMessageOrFileTakesOurReaction();
     void aFileReactionFromIosIsShown();
+    void aRelayedAuthorTakesTheNameTheGroupGivesThem();
 
 private:
     MockCoreIdHandler idHandler;
@@ -624,6 +625,42 @@ void TestSessionChatLog::aFileReactionFromIosIsShown()
     QCOMPARE(reacted.idx, ChatLogIdx(0));
     QCOMPARE(chatLog->at(ChatLogIdx(0)).getContentAsFile().marks.reactionsText(),
              Air::quickReactions().at(1));
+}
+
+/**
+ * @brief KHANDAQ (0.2.63): a member relays texts of an author the group does not know yet; they
+ * are kept without a name and take the one the group gives the author later: those, and no other.
+ */
+void TestSessionChatLog::aRelayedAuthorTakesTheNameTheGroupGivesThem()
+{
+    const ToxPk author = keyOf(0x2f);
+    const ToxPk other = keyOf(0x3a);
+    /* ChatLogIdx(0) */ chatLog->onRelayedMessageReceived(author, QString(), createMessage("salam"));
+    /* ChatLogIdx(1) */ chatLog->onRelayedMessageReceived(author, author.toString(),
+                                                          createMessage("again"));
+    /* ChatLogIdx(2) */ chatLog->onRelayedMessageReceived(author, QStringLiteral("Maryam"),
+                                                          createMessage("named already"));
+    /* ChatLogIdx(3) */ chatLog->onRelayedMessageReceived(other, QString(), createMessage("other"));
+    QCOMPARE(chatLog->at(ChatLogIdx(0)).getDisplayName(), QString());
+    QCOMPARE(chatLog->at(ChatLogIdx(0)).getSender(), author);
+
+    QSignalSpy updated(chatLog.get(), &SessionChatLog::itemUpdated);
+    // No name, or the key, names nobody.
+    QCOMPARE(chatLog->nameAuthor(author, QString()), 0);
+    QCOMPARE(chatLog->nameAuthor(author, author.toString()), 0);
+    QCOMPARE(updated.count(), 0);
+
+    QCOMPARE(chatLog->nameAuthor(author, QStringLiteral("Maryam B")), 2);
+    QCOMPARE(updated.count(), 2);
+    QCOMPARE(updated.at(0).at(0).value<ChatLogIdx>(), ChatLogIdx(0));
+    QCOMPARE(updated.at(1).at(0).value<ChatLogIdx>(), ChatLogIdx(1));
+    QCOMPARE(chatLog->at(ChatLogIdx(0)).getDisplayName(), QStringLiteral("Maryam B"));
+    QCOMPARE(chatLog->at(ChatLogIdx(1)).getDisplayName(), QStringLiteral("Maryam B"));
+    QCOMPARE(chatLog->at(ChatLogIdx(2)).getDisplayName(), QStringLiteral("Maryam"));
+    QCOMPARE(chatLog->at(ChatLogIdx(3)).getDisplayName(), QString());
+    // Named once, they keep it.
+    QCOMPARE(chatLog->nameAuthor(author, QStringLiteral("Maryam C")), 0);
+    QCOMPARE(chatLog->at(ChatLogIdx(0)).getDisplayName(), QStringLiteral("Maryam B"));
 }
 
 QTEST_GUILESS_MAIN(TestSessionChatLog)

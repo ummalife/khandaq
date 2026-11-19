@@ -336,6 +336,17 @@ bool ChatMessage::updateMarks(const Air::EntryMarks& marks)
     return notes && notes->setNotes(marks);
 }
 
+bool ChatMessage::updateAuthor(const AirLook& look)
+{
+    spokenWho = look.spokenWho;
+    auto* const author = qobject_cast<AirLabel*>(getContent(0));
+    if (!author || author->getText() == look.who) {
+        return false;
+    }
+    author->setText(look.who);
+    return true;
+}
+
 QString ChatMessage::spokenText() const
 {
     const auto spoken = [this](int column) {

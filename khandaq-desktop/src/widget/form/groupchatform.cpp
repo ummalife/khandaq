@@ -29,6 +29,7 @@
 #include "src/friendlist.h"
 #include "src/model/group.h"
 #include "src/model/status.h"
+#include "src/model/air/airconversation.h"
 #include "src/model/air/airmessagemarks.h"
 #include "src/model/air/airmodel.h"
 #include "src/widget/air/aircomposer.h"
@@ -1128,8 +1129,11 @@ void GroupChatForm::showAuthorMenu(ChatLogIdx idx, const QPoint& globalPos)
     AirGroupInfo info = dossierInfo();
     if (!present) {
         // Gone from the group, or not listed yet: the key still takes a mute and a hide.
-        member.name = item.getDisplayName();
         member.publicKey = sender.toString();
+        // KHANDAQ (0.2.63): named as the transcript names them, a relayed author with no name too.
+        member.name = Air::authorUnnamed(item.getDisplayName(), member.publicKey)
+                          ? Air::unnamedAuthorName(member.publicKey)
+                          : item.getDisplayName();
         if (airLocal && airLocal->isMuted(sender)) {
             info.mutedMembers.insert(member.publicKey);
         }

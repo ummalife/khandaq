@@ -140,6 +140,18 @@ QString shortName(const QString& name);
  */
 QString authorName(const QString& name, bool personChat);
 
+/**
+ * KHANDAQ (0.2.63): whether the name an entry of a group keeps for its author is none. A member
+ * relays the texts and files of others from the history of the group, and their author may not be
+ * in the group yet: the entry is kept without a name (or with the key, as the name of a member who
+ * set none), until the group knows them (ChatHistory::nameUnnamedAuthors).
+ * @param key The author's key, as ToxPk::toString writes it
+ */
+bool authorUnnamed(const QString& name, const QString& key);
+
+/** The author of an entry with no name, as the transcript shows them: the start of their key. */
+QString unnamedAuthorName(const QString& key);
+
 /** The day mark above the first entry of a day. */
 enum class DayMarkKind
 {

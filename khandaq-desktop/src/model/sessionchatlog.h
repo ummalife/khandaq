@@ -122,6 +122,19 @@ public:
      */
     const Message* onMessageWireIdAssigned(DispatchedMessageId id, const QByteArray& wireId);
 
+    /**
+     * KHANDAQ (0.2.63): a message a member relayed from the history of a group, under the name the
+     * chat knows its author by; none when the group does not know them yet (Air::authorUnnamed).
+     */
+    void onRelayedMessageReceived(const ToxPk& sender, const QString& senderName,
+                                  const Message& message);
+    /**
+     * KHANDAQ (0.2.63): the items of sender kept without a name (Air::authorUnnamed) take name, once
+     * the group knows them; each one that does is updated (itemUpdated).
+     * @return How many items took it
+     */
+    int nameAuthor(const ToxPk& sender, const QString& name);
+
 public slots:
     void onMessageReceived(const ToxPk& sender, const Message& message);
     void onMessageSent(DispatchedMessageId id, const Message& message);

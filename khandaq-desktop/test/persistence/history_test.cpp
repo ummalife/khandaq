@@ -110,6 +110,7 @@ private slots:
     void aFileOfOursKeepsWhatItWasWhenItWentAfterARestart();
     void aFileWeSentTheGroupIsFoundAfterARestart();
     void aRelayedGroupTextIsKnownByItsAuthorAndWords();
+    void entriesKeptWithoutANameTakeTheNameTheGroupGivesTheirAuthor();
 
 private:
     /** The one file of the chat, as a later start reads it. */
@@ -588,6 +589,57 @@ void TestHistory::aRelayedGroupTextIsKnownByItsAuthorAndWords()
 
     restart();
     QVERIFY(history->hasGroupText(family, maryam, words, since));
+}
+
+/**
+ * @brief KHANDAQ (0.2.63): texts and files a member relayed before the group knew their author
+ * were kept without a name (none, or the key); in that chat they take the name the group gives
+ * the author later, after a restart too. Others keep theirs, and the history answers the name it
+ * kept last for the author.
+ */
+void TestHistory::entriesKeptWithoutANameTakeTheNameTheGroupGivesTheirAuthor()
+{
+    const ToxPk author{QByteArray(ToxPk::size, 'r')};
+    const GroupId elsewhere{QByteArray(GroupId::size, 'e')};
+    const QDateTime start = QDateTime::fromMSecsSinceEpoch(1700000000000);
+    history->addNewMessage(family, QStringLiteral("relayed"), author, start, true, ExtensionSet(),
+                           QString());
+    history->addNewMessage(family, QStringLiteral("relayed again"), author, start.addSecs(1), true,
+                           ExtensionSet(), author.toString());
+    history->addNewFileMessage(family, fileId, QStringLiteral("photo.jpg"), filePath, 1234, author,
+                               start.addSecs(2), QString(), ToxFile::RECEIVING);
+    history->addNewMessage(family, QStringLiteral("Salam"), maryam, start.addSecs(3), true,
+                           ExtensionSet(), QString());
+    history->addNewMessage(elsewhere, QStringLiteral("in another group"), author, start.addSecs(4),
+                           true, ExtensionSet(), QString());
+    letRowsIn();
+    QCOMPARE(history->lastAuthorName(author), QString());
+
+    // No name, or the key, names nobody.
+    history->nameUnnamedEntries(family, author, QString());
+    history->nameUnnamedEntries(family, author, author.toString());
+    history->nameUnnamedEntries(family, author, QStringLiteral("Maryam B"));
+    restart();
+
+    const auto names = [this](const ChatId& chat) {
+        QStringList kept;
+        for (const auto& message : history->getMessagesForChat(chat, 0,
+                                                               history->getNumMessagesForChat(chat))) {
+            kept.append(message.dispName);
+        }
+        return kept;
+    };
+    QCOMPARE(names(family), (QStringList{QStringLiteral("Maryam B"), QStringLiteral("Maryam B"),
+                                         QStringLiteral("Maryam B"), QString()}));
+    QCOMPARE(names(elsewhere), QStringList{QString()});
+    QCOMPARE(history->lastAuthorName(author), QStringLiteral("Maryam B"));
+    QCOMPARE(history->lastAuthorName(maryam), QString());
+
+    // Named once, they keep it; the other group's text takes the name given there.
+    history->nameUnnamedEntries(family, author, QStringLiteral("Maryam C"));
+    history->nameUnnamedEntries(elsewhere, author, QStringLiteral("Maryam E"));
+    QCOMPARE(names(family).first(), QStringLiteral("Maryam B"));
+    QCOMPARE(names(elsewhere), QStringList{QStringLiteral("Maryam E")});
 }
 
 int main(int argc, char* argv[])

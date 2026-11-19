@@ -181,6 +181,19 @@ QString authorName(const QString& name, bool personChat)
     return personChat ? shortName(name) : name.trimmed();
 }
 
+bool authorUnnamed(const QString& name, const QString& key)
+{
+    const QString trimmed = name.trimmed();
+    return trimmed.isEmpty() || trimmed.compare(key, Qt::CaseInsensitive) == 0;
+}
+
+QString unnamedAuthorName(const QString& key)
+{
+    // As the logs write a member: eight characters tell the members of a group apart.
+    constexpr int shownKeyLength = 8;
+    return key.left(shownKeyLength).toUpper();
+}
+
 DayMarkKind dayMarkKind(const QDate& date, const QDate& today)
 {
     if (date == today) {

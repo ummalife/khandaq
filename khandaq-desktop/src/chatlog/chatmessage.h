@@ -116,6 +116,12 @@ public:
     /** Shows the marks of an entry anew; returns whether it may have changed its height. */
     bool updateMarks(const Air::EntryMarks& marks);
     /**
+     * KHANDAQ (0.2.63): the author over the entry as look has them now: a member a group relayed an
+     * entry of before it knew them takes their name once it does (ChatHistory::nameUnnamedAuthors).
+     * @return Whether it changed, and the line may with it
+     */
+    bool updateAuthor(const AirLook& look);
+    /**
      * An entry as iOS says it: who wrote it and when, its words, that it mentions you, the state
      * of a message of ours; a day mark says its day.
      */

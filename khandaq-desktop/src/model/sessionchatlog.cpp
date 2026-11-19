@@ -20,6 +20,7 @@
 #include "sessionchatlog.h"
 #include "src/friendlist.h"
 #include "src/grouplist.h"
+#include "src/model/air/airconversation.h"
 #include "src/model/air/airlocalstore.h"
 #include "src/model/air/airmodel.h"
 
@@ -545,14 +546,39 @@ void SessionChatLog::insertSystemMessageAtIdx(ChatLogIdx idx, SystemMessage mess
  */
 void SessionChatLog::onMessageReceived(const ToxPk& sender, const Message& message)
 {
+    onRelayedMessageReceived(sender, resolveSenderNameFromSender(sender), message);
+}
+
+void SessionChatLog::onRelayedMessageReceived(const ToxPk& sender, const QString& senderName,
+                                              const Message& message)
+{
     auto messageIdx = nextIdx++;
 
     ChatLogMessage chatLogMessage;
     chatLogMessage.state = MessageState::complete;
     chatLogMessage.message = message;
-    items.emplace(messageIdx, ChatLogItem(sender, resolveSenderNameFromSender(sender), chatLogMessage));
+    items.emplace(messageIdx, ChatLogItem(sender, senderName, chatLogMessage));
 
     emit itemUpdated(messageIdx);
+}
+
+int SessionChatLog::nameAuthor(const ToxPk& sender, const QString& name)
+{
+    const QString key = sender.toString();
+    if (Air::authorUnnamed(name, key)) {
+        return 0;
+    }
+    int named = 0;
+    for (auto it = items.begin(); it != items.end(); ++it) {
+        ChatLogItem& item = it->second;
+        if (item.getSender() != sender || !Air::authorUnnamed(item.getDisplayName(), key)) {
+            continue;
+        }
+        item.setDisplayName(name);
+        ++named;
+        emit itemUpdated(it->first);
+    }
+    return named;
 }
 
 /**

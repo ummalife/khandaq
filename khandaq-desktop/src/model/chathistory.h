@@ -131,6 +131,11 @@ private slots:
     void onMessageComplete(DispatchedMessageId id);
     void onMessageBroken(DispatchedMessageId id, BrokenMessageReason reason);
     void onMessageWireIdAssigned(DispatchedMessageId id, const QByteArray& wireId);
+    /**
+     * KHANDAQ (0.2.63): the authors of entries kept without a name (Air::authorUnnamed) that the
+     * group knows by now: their entries take the name, here and in the history.
+     */
+    void nameUnnamedAuthors();
 
 private:
     void ensureIdxInSessionChatLog(ChatLogIdx idx) const;
@@ -149,6 +154,17 @@ private:
     QByteArray msgV3IdOf(const Message& message) const;
     /** The time of our message a read receipt names, among those the log holds; -1 for none. */
     qint64 loggedItemTime(const ToxPk& selfPk, const Air::SeenAnchor& anchor) const;
+    /**
+     * KHANDAQ (0.2.63): the name of the author of a text relayed from the history of the group: as
+     * the group knows them, else as the history last kept them; none when neither knows them.
+     */
+    QString relayedAuthorName(const ToxPk& author) const;
+    /**
+     * KHANDAQ (0.2.63): the name an entry loaded from the history is shown under: the one it was
+     * kept with, or, kept without one, the author's name in the group now; an author the group
+     * does not know yet is remembered for nameUnnamedAuthors.
+     */
+    QString loadedAuthorName(const ToxPk& author, const QString& keptName) const;
 
     struct QueueEntry
     {
@@ -198,6 +214,11 @@ private:
     Air::EntryMarksStore* entryStore = nullptr;
     /** A conversation between two people, not a group. */
     bool friendChat = false;
+    /**
+     * KHANDAQ (0.2.63): authors of entries here kept without a name, which the group may come to
+     * know (nameUnnamedAuthors). Filled by the loading of the history too, hence mutable.
+     */
+    mutable QSet<ToxPk> unnamedAuthors;
     /**
      * KHANDAQ (0.2.57): files of the person accepted in this run, whose row says so already, with
      * the path and the stamp it has.

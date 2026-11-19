@@ -1571,6 +1571,20 @@ def test_neither_the_preview_nor_the_event_id_reaches_the_log(relay, caplog):
         assert secret_value not in r.get_data(as_text=True)
 
 
+def test_a_failed_send_is_one_line_in_the_log(relay, caplog):
+    # CodeQL py/log-injection: a line break in the upstream detail must not start a log line of its own.
+    m = relay()
+    m._send_preview = lambda *a: (False, "FCM v1 HTTP 400 []: bad\r\nINFO forged line")
+    with caplog.at_level("WARNING"):
+        r = _Clock().post(m.app.test_client(),
+                          {"token": TOKEN, "sender": SENDER, "preview": PREVIEW, "pid": PID})
+    assert r.status_code == 502
+    failed = [rec.getMessage() for rec in caplog.records if "wake fail from" in rec.getMessage()]
+    assert len(failed) == 1
+    assert "\n" not in failed[0] and "\r" not in failed[0]
+    assert "bad\\r\\nINFO forged line" in failed[0], "the operator still reads what came back"
+
+
 def test_the_preview_message_is_data_only_for_android_and_an_alert_for_ios(relay):
     m = relay()
     msg = m._preview_payload(TOKEN, SENDER, PREVIEW, PID, False)["message"]

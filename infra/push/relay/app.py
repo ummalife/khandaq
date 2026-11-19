@@ -1793,9 +1793,17 @@ def _deliver_wake(token_raw: str, sender_raw: str, *, allow_query_auth: bool, ca
     return jsonify({"success": 1}), 200
 
 
+def _one_log_line(text: str) -> str:
+    """`text` as part of one log line: its line breaks shown as \\r and \\n, never starting a line of their own."""
+    return (text or "").replace("\r", "\\r").replace("\n", "\\n")
+
+
 def _wake_send_failed(client_ip: str, detail: str):
     """The answer to a wake whose send failed; `detail` must already be redacted."""
-    log.warning("wake fail from %s: %s", client_ip, detail)
+    # KHANDAQ (0.2.64, CodeQL py/log-injection): `detail` is FCM's response or an exception text, and the
+    # preview path builds it around what the caller sent; a line break in it would start a log line that
+    # reads like one of the relay's own.
+    log.warning("wake fail from %s: %s", _one_log_line(client_ip), _one_log_line(detail))
     # KHANDAQ (audit round 3, F-11): log the detail, do NOT return it.
     #
     # `detail` carries up to 200 bytes of FCM's own response body, or str(exc) from google-auth.

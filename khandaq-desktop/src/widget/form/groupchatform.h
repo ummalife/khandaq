@@ -129,6 +129,16 @@ protected:
      * the members know us.
      */
     ReplyAuthor replyAuthorOf(const ChatLogItem& item) const override;
+    /**
+     * KHANDAQ (0.2.63): a message or a file with its id and a known author, while we are more
+     * than an observer: toxcore carries no custom packet of an observer.
+     */
+    bool canReactTo(ChatLogIdx idx) const override;
+    /**
+     * KHANDAQ (0.2.63): the entry shows it, and it goes to the group once (packet 0x43), naming
+     * whose the entry is (replyAuthorOf): one that does not go is not sent again, as on Android.
+     */
+    void reactTo(ChatLogIdx idx, const QString& emoji) override;
 
 private:
     void retranslateUi();

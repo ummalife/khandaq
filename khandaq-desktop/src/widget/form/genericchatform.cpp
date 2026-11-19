@@ -134,6 +134,20 @@ ChatWidget::Kind chatWidgetKind(const Chat* chat)
     }
     return ChatWidget::Kind::Group;
 }
+
+/** KHANDAQ (0.2.63): the emoji we reacted with to a message or a file; empty for none. */
+QString ownReactionOn(const ChatLogItem& item)
+{
+    switch (item.getContentType()) {
+    case ChatLogItem::ContentType::message:
+        return item.getContentAsMessage().marks.emojiOf(Air::ownReactionActor());
+    case ChatLogItem::ContentType::fileTransfer:
+        return item.getContentAsFile().marks.emojiOf(Air::ownReactionActor());
+    case ChatLogItem::ContentType::systemMessage:
+        break;
+    }
+    return QString();
+}
 } // namespace
 
 /**
@@ -354,6 +368,14 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
     // KHANDAQ (0.2.58): Reply first, on the message or the file the menu is opened on.
     replyAction = menu.addAction(QString());
     connect(replyAction, &QAction::triggered, this, &GenericChatForm::replyToMenuEntry);
+    // KHANDAQ (0.2.63): then React, with the emoji the phones offer, on that entry too.
+    reactMenu = menu.addMenu(QString());
+    for (const QString& emoji : Air::quickReactions()) {
+        QAction* const reaction = reactMenu->addAction(emoji);
+        reaction->setCheckable(true);
+        reaction->setData(emoji);
+        connect(reaction, &QAction::triggered, this, [this, emoji] { reactTo(menuEntry, emoji); });
+    }
     quoteAction = menu.addAction(QIcon(), QString(), this, SLOT(quoteSelectedText()),
                                  QKeySequence(Qt::ALT + Qt::Key_Q));
     addAction(quoteAction);
@@ -583,6 +605,15 @@ void GenericChatForm::onChatContextMenuRequested(QPoint pos)
     const bool onEntry = chatWidget->entryAtGlobalPos(pos, entry);
     menuEntry = entry;
     replyAction->setVisible(onEntry && canReplyTo(entry));
+    const bool reacts = onEntry && canReactTo(entry);
+    reactMenu->menuAction()->setVisible(reacts);
+    if (reacts) {
+        // Ours is checked: choosing it again takes it back.
+        const QString own = ownReactionOn(chatLog.at(entry));
+        for (QAction* const reaction : reactMenu->actions()) {
+            reaction->setChecked(reaction->data().toString() == own);
+        }
+    }
     prepareChatMenu(pos);
 
     menu.exec(pos);
@@ -836,6 +867,44 @@ void GenericChatForm::replyToMenuEntry()
     if (startReply(menuEntry)) {
         msgEdit->setFocus();
     }
+}
+
+bool GenericChatForm::canReactTo(ChatLogIdx idx) const
+{
+    std::ignore = idx;
+    return false;
+}
+
+void GenericChatForm::reactTo(ChatLogIdx idx, const QString& emoji)
+{
+    std::ignore = idx;
+    std::ignore = emoji;
+}
+
+bool GenericChatForm::reactionAnchorOf(ChatLogIdx idx, Air::MessageEffect::Anchor* anchor,
+                                       QByteArray* id) const
+{
+    if (idx < chatLog.getFirstIdx() || idx >= chatLog.getNextIdx() || !chatLog.isShown(idx)) {
+        return false;
+    }
+    const ChatLogItem& item = chatLog.at(idx);
+    Air::MessageEffect::Anchor found = Air::MessageEffect::Anchor::Text;
+    QByteArray foundId;
+    if (item.getContentType() == ChatLogItem::ContentType::message) {
+        foundId = item.getContentAsMessage().message.wireId;
+    } else if (item.getContentType() == ChatLogItem::ContentType::fileTransfer) {
+        found = Air::MessageEffect::Anchor::File;
+        foundId = item.getContentAsFile().file.resumeFileId;
+    } else {
+        return false;
+    }
+    // A group's text still on its way has the id 0, and the receivers drop a reaction to it.
+    if (foundId.isEmpty() || foundId.count('\0') == foundId.size()) {
+        return false;
+    }
+    *anchor = found;
+    *id = foundId;
+    return true;
 }
 
 bool GenericChatForm::canSendNow() const
@@ -1176,6 +1245,7 @@ void GenericChatForm::retranslateUi()
     screenshotButton->setToolTip(tr("Send a screenshot"));
     clearAction->setText(tr("Clear displayed messages"));
     replyAction->setText(AirStrings::text(AirStrings::Text::MessageReply));
+    reactMenu->setTitle(AirStrings::text(AirStrings::Text::MessageReact));
     quoteAction->setText(tr("Quote selected text"));
     copyLinkAction->setText(tr("Copy link address"));
     searchAction->setText(tr("Search in text"));

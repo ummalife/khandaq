@@ -817,6 +817,7 @@ enum class Text
     MessageReport,
     MessageReply,
     ReplyCancel,
+    MessageReact,
 };
 
 /** The translation context of every Air string. */

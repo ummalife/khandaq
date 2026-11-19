@@ -3811,6 +3811,11 @@ Opening it can run a program on your computer. Links in messages come from other
         <translation>取消回复</translation>
     </message>
     <message>
+        <source>React</source>
+        <comment>menu of a message or a file: the emoji to react with, ours checked; choosing it again takes it back; as chat_react_action on the phones</comment>
+        <translation>回应</translation>
+    </message>
+    <message>
         <source>via a relay</source>
         <comment>contact reach mark: online, connected through a TCP relay; short, it shares the line with the name</comment>
         <translation>经中继</translation>

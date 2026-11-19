@@ -166,6 +166,24 @@ public:
         return false;
     }
 
+    /**
+     * @brief KHANDAQ (0.2.63): our own reaction to the message or the file at idx, one per entry,
+     * as on the phones: the same emoji again takes it back, another takes its place. It is kept
+     * under Air::ownReactionActor, and the entry shows it (itemUpdated).
+     * @param[in] idx index of an item of this log
+     * @param[in] emoji the emoji chosen
+     * @param[out] ownAfter takes our reaction after the change: its emoji, or empty when there is
+     * none; may be null
+     * @return Whether the reactions of the entry changed; false for a log that keeps none
+     */
+    virtual bool toggleOwnReaction(ChatLogIdx idx, const QString& emoji, QString* ownAfter)
+    {
+        std::ignore = idx;
+        std::ignore = emoji;
+        std::ignore = ownAfter;
+        return false;
+    }
+
 signals:
     void itemUpdated(ChatLogIdx idx);
 };

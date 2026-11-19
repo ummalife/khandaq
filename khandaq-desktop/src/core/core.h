@@ -256,6 +256,18 @@ public slots:
      * builds it. False when toxcore refused it, the friend being offline, say.
      */
     bool sendSeenReceipt(uint32_t friendId, const QByteArray& packet);
+    /**
+     * KHANDAQ (0.2.63): sends a friend a lossless packet as it is: a reaction
+     * (Air::friendReactionPacket) or a read receipt. False when toxcore refused it, the friend
+     * being offline, say.
+     */
+    bool sendFriendLosslessPacket(uint32_t friendId, const QByteArray& packet);
+    /**
+     * KHANDAQ (0.2.63): sends every member of a group a lossless custom packet as it is: a
+     * reaction (Air::groupReactionPacket). False when toxcore refused it: the group is gone or not
+     * connected, or we only observe there.
+     */
+    bool sendGroupCustomPacket(int groupId, const QByteArray& packet);
 
     void setNospam(uint32_t nospam);
 

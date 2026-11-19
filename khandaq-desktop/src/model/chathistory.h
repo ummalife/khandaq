@@ -70,6 +70,8 @@ public:
     void addSystemMessage(const SystemMessage& message) override;
     bool isShown(ChatLogIdx idx) const override;
     bool isCancelled(ChatLogIdx idx) const override;
+    /** KHANDAQ (0.2.63): and keeps our reaction in the entry store, as the others' are kept. */
+    bool toggleOwnReaction(ChatLogIdx idx, const QString& emoji, QString* ownAfter) override;
 
     /** The messages to one person that have not reached them, oldest first; none for a group. */
     QVector<QueuedMessage> queuedMessages() const;

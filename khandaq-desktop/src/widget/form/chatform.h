@@ -22,6 +22,7 @@
 #include <QElapsedTimer>
 #include <QLabel>
 #include <QLocale>
+#include <QMap>
 #include <QPointer>
 #include <QSet>
 #include <QTimer>
@@ -177,10 +178,22 @@ private:
     void cancelQueued(qint64 id);
     void retryQueued(qint64 id);
     bool editLastQueued();
+    /** KHANDAQ (0.2.63): our reactions that have not gone yet go now, while toxcore takes them. */
+    void sendPendingReactions();
 
 protected:
     /** KHANDAQ (0.2.58): the person by their own name and key, and us by ours. */
     ReplyAuthor replyAuthorOf(const ChatLogItem& item) const override;
+    /**
+     * KHANDAQ (0.2.63): a message or a file with the 32-byte id a reaction between two people
+     * points at (packet 188); a text of an old client has none.
+     */
+    bool canReactTo(ChatLogIdx idx) const override;
+    /**
+     * KHANDAQ (0.2.63): the entry shows it at once; while the person is offline it waits, the
+     * newest state for each entry, and goes once they are online (sendPendingReactions).
+     */
+    void reactTo(ChatLogIdx idx, const QString& emoji) override;
     void sendPreparedFiles(const QStringList& paths) override;
     QString voiceRefusal() const override;
     std::unique_ptr<NetCamView> createNetcam();
@@ -213,6 +226,18 @@ private:
     AirDossier* dossier;
     /** "offline for 25 minutes" ages while nothing happens; the head reads it again now and then. */
     QTimer headTicker;
+    /** KHANDAQ (0.2.63): our reaction to an entry, as it goes: its emoji, empty for none. */
+    struct PendingReaction
+    {
+        Air::MessageEffect::Anchor anchor;
+        QByteArray id;
+        QString emoji;
+    };
+    /**
+     * KHANDAQ (0.2.63): our reactions that did not go, by their anchor; in memory only, as the
+     * phones keep theirs until the person is online.
+     */
+    QMap<QByteArray, PendingReaction> pendingReactions;
     /** Many changes come in bursts; the head is read once after them. */
     QTimer headLater;
     QPixmap photo;

@@ -1073,6 +1073,42 @@ GenericChatForm::ReplyAuthor GroupChatForm::replyAuthorOf(const ChatLogItem& ite
     return author;
 }
 
+bool GroupChatForm::canReactTo(ChatLogIdx idx) const
+{
+    // A text by the 4-byte id toxcore gave it, a file by its 32-byte id.
+    constexpr int textIdBytes = 4;
+    constexpr int fileIdBytes = 32;
+    Air::MessageEffect::Anchor anchor = Air::MessageEffect::Anchor::Text;
+    QByteArray id;
+    if (selfRole == Air::GroupRole::Observer || !reactionAnchorOf(idx, &anchor, &id)
+        || id.size() != (anchor == Air::MessageEffect::Anchor::Text ? textIdBytes : fileIdBytes)) {
+        return false;
+    }
+    return !replyAuthorOf(chatLog.at(idx)).key.isEmpty();
+}
+
+void GroupChatForm::reactTo(ChatLogIdx idx, const QString& emoji)
+{
+    Air::MessageEffect::Anchor anchor = Air::MessageEffect::Anchor::Text;
+    QByteArray id;
+    if (!canReactTo(idx) || !reactionAnchorOf(idx, &anchor, &id)) {
+        return;
+    }
+    // The members know whose it is by its key in the group, ours too.
+    const QByteArray author = replyAuthorOf(chatLog.at(idx)).key.getByteArray();
+    QString own;
+    if (!chatLog.toggleOwnReaction(idx, emoji, &own)) {
+        return;
+    }
+    const QByteArray packet =
+        Air::groupReactionPacket(anchor, id, author,
+                                 static_cast<quint32>(QDateTime::currentSecsSinceEpoch()), own,
+                                 !own.isEmpty());
+    if (packet.isEmpty() || !core.sendGroupCustomPacket(static_cast<int>(group->getId()), packet)) {
+        qDebug() << "Our reaction did not go to group" << group->getId();
+    }
+}
+
 void GroupChatForm::showAuthorMenu(ChatLogIdx idx, const QPoint& globalPos)
 {
     if (idx < chatLog.getFirstIdx() || idx >= chatLog.getNextIdx()) {

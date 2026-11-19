@@ -1308,6 +1308,11 @@ void Core::sendHighLevelAck(uint32_t friendId, const QByteArray& msgV3Id)
 
 bool Core::sendSeenReceipt(uint32_t friendId, const QByteArray& packet)
 {
+    return sendFriendLosslessPacket(friendId, packet);
+}
+
+bool Core::sendFriendLosslessPacket(uint32_t friendId, const QByteArray& packet)
+{
     QMutexLocker ml{&coreLoopLock};
     Tox_Err_Friend_Custom_Packet error;
     const bool sent =
@@ -1315,7 +1320,8 @@ bool Core::sendSeenReceipt(uint32_t friendId, const QByteArray& packet)
                                         reinterpret_cast<const uint8_t*>(packet.constData()),
                                         static_cast<size_t>(packet.size()), &error);
     if (!sent) {
-        qDebug() << "Core: the read receipt did not go to friend" << friendId << "error" << error;
+        qDebug() << "Core: a lossless packet of" << packet.size() << "bytes did not go to friend"
+                 << friendId << "error" << error;
     }
     return sent;
 }
@@ -1472,6 +1478,21 @@ bool Core::sendGroupLeaveNotice(int groupId) const
                                                    reinterpret_cast<const uint8_t*>(notice.constData()),
                                                    static_cast<size_t>(notice.size()), &error);
     qDebug() << "Group" << groupId << "leave notice sent:" << sent << "error:" << static_cast<int>(error);
+    return sent;
+}
+
+bool Core::sendGroupCustomPacket(int groupId, const QByteArray& packet)
+{
+    QMutexLocker ml{&coreLoopLock};
+    Tox_Err_Group_Send_Custom_Packet error;
+    const bool sent =
+        tox_group_send_custom_packet(tox.get(), static_cast<uint32_t>(groupId), true,
+                                     reinterpret_cast<const uint8_t*>(packet.constData()),
+                                     static_cast<size_t>(packet.size()), &error);
+    if (!sent) {
+        qDebug() << "Core: a custom packet of" << packet.size() << "bytes did not go to group"
+                 << groupId << "error" << static_cast<int>(error);
+    }
     return sent;
 }
 

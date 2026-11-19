@@ -441,6 +441,27 @@ bool ChatHistory::isCancelled(ChatLogIdx idx) const
     return cancelledIdx.contains(idx.get()) || sessionChatLog.isCancelled(idx);
 }
 
+bool ChatHistory::toggleOwnReaction(ChatLogIdx idx, const QString& emoji, QString* ownAfter)
+{
+    if (!isShown(idx) || !sessionChatLog.toggleOwnReaction(idx, emoji, ownAfter)) {
+        return false;
+    }
+    if (!entryStore || !canUseHistory()) {
+        return true;
+    }
+    // Under the key applyEffect keeps the reactions of the others under.
+    const ChatLogItem& item = sessionChatLog.at(idx);
+    if (item.getContentType() == ChatLogItem::ContentType::fileTransfer) {
+        const ChatLogFile& file = item.getContentAsFile();
+        entryStore->setEntryMarks(Air::fileEntryKey(chatKey(), file.file.resumeFileId), file.marks);
+    } else {
+        entryStore->setEntryMarks(Air::textEntryKey(chatKey(), item.getSender().toString(),
+                                                    item.getTimestamp().toMSecsSinceEpoch()),
+                                  item.getContentAsMessage().marks);
+    }
+    return true;
+}
+
 SessionChatLog::EffectResult ChatHistory::applyEffect(const ToxPk& sender,
                                                       const Air::MessageEffect& effect,
                                                       const ToxPk& selfKey)

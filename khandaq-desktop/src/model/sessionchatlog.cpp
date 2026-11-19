@@ -456,6 +456,34 @@ bool SessionChatLog::isCancelled(ChatLogIdx idx) const
     return hiddenItems.count(idx) != 0;
 }
 
+bool SessionChatLog::toggleOwnReaction(ChatLogIdx idx, const QString& emoji, QString* ownAfter)
+{
+    // Our reaction never comes back through applyEffect, which drops what our keys did.
+    const auto it = items.find(idx);
+    if (it == items.end() || hiddenItems.count(idx) != 0 || emoji.isEmpty()) {
+        return false;
+    }
+    ChatLogItem& item = it->second;
+    Air::EntryMarks* marks = nullptr;
+    if (item.getContentType() == ChatLogItem::ContentType::message) {
+        marks = &item.getContentAsMessage().marks;
+    } else if (item.getContentType() == ChatLogItem::ContentType::fileTransfer) {
+        marks = &item.getContentAsFile().marks;
+    } else {
+        return false;
+    }
+    const QString own = Air::ownReactionActor();
+    if (!marks->react(own, emoji, marks->emojiOf(own) != emoji)) {
+        return false;
+    }
+    if (ownAfter) {
+        // What the entry keeps, which is what goes: a new emoji past EntryMarks::maxEmoji is not.
+        *ownAfter = marks->emojiOf(own);
+    }
+    emit itemUpdated(idx);
+    return true;
+}
+
 void SessionChatLog::addSystemMessage(const SystemMessage& message)
 {
     auto messageIdx = nextIdx++;

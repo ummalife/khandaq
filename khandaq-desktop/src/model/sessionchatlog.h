@@ -53,6 +53,7 @@ public:
     void addSystemMessage(const SystemMessage& message) override;
     bool isShown(ChatLogIdx idx) const override;
     bool isCancelled(ChatLogIdx idx) const override;
+    bool toggleOwnReaction(ChatLogIdx idx, const QString& emoji, QString* ownAfter) override;
 
     void hideItem(ChatLogIdx idx);
     /** Leaves out an item as it is loaded, one the history keeps erased; nothing is signalled. */

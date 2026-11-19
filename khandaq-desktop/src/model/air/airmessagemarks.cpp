@@ -64,6 +64,8 @@ constexpr uint8_t anchorText = 1;
 constexpr uint8_t anchorFile = 2;
 constexpr int maxEditBytes = 1300;
 constexpr int maxEmojiBytes = 16;
+// KHANDAQ (0.2.63): the emoji of a reaction taken back, as Android sends it.
+constexpr char removedEmoji = '*';
 
 quint32 bigEndian(const uint8_t* bytes)
 {
@@ -85,6 +87,12 @@ QString utf8(const uint8_t* bytes, int length)
 bool isNamedMessage(const QByteArray& wireId)
 {
     return wireId.count('\0') != wireId.size();
+}
+
+/** KHANDAQ (0.2.63): a key of zeros names nobody. */
+bool isZeroKey(const QByteArray& key)
+{
+    return key.count('\0') == key.size();
 }
 
 /**
@@ -123,6 +131,23 @@ bool readReaction(const uint8_t* bytes, int length, int actionAt, MessageEffect*
     effect->add = action == 1;
     effect->emoji = utf8(bytes + actionAt + 2, emojiLength);
     return !effect->add || isReadableEmoji(effect->emoji);
+}
+
+/**
+ * KHANDAQ (0.2.63): the reaction part of 188 and 0x43 as readReaction takes it: the action, the
+ * length of the emoji and the emoji, "*" for one taken back. False, and nothing appended, for an
+ * emoji readReaction would drop.
+ */
+bool appendReaction(QByteArray* packet, const QString& emoji, bool add)
+{
+    const QByteArray bytes = add ? emoji.toUtf8() : QByteArray(1, removedEmoji);
+    if (bytes.isEmpty() || bytes.size() > maxEmojiBytes || (add && !isReadableEmoji(emoji))) {
+        return false;
+    }
+    packet->append(static_cast<char>(add ? 1 : 0));
+    packet->append(static_cast<char>(bytes.size()));
+    packet->append(bytes);
+    return true;
 }
 
 QString digest(const QString& text)
@@ -252,6 +277,12 @@ bool readGroupPacket(const QByteArray& packet, MessageEffect* effect)
         read.anchor = type == anchorText ? MessageEffect::Anchor::Text : MessageEffect::Anchor::File;
         read.anchorId = packet.mid(ngcHeader + 1, type == anchorText ? messageIdLength : anchorLength);
         read.author = packet.mid(ngcHeader + 1 + anchorLength, anchorLength);
+        // KHANDAQ (0.2.63): iOS names nobody as the author of a file (32 zero bytes,
+        // OCTSubmanagerGroupsImpl), and a file is known by its 32-byte id alone. A text keeps the
+        // author it names, zeros too: its 4-byte id is told apart only by whose message it is.
+        if (type == anchorFile && isZeroKey(read.author)) {
+            read.author.clear();
+        }
         read.time = bigEndian(bytes + ngcHeader + 1 + 2 * anchorLength);
         if (!readReaction(bytes, length, groupReactionBase - 2, &read)) {
             return false;
@@ -292,6 +323,68 @@ QByteArray groupWireId(quint32 messageId)
     bytes[2] = static_cast<char>((messageId >> 8) & 0xFF);
     bytes[3] = static_cast<char>(messageId & 0xFF);
     return bytes;
+}
+
+QStringList quickReactions()
+{
+    // U+2764 U+FE0F, U+1F44D, U+1F44E, U+1F602, U+1F62E, U+1F622, U+1F525.
+    return {QString::fromUtf8("\xE2\x9D\xA4\xEF\xB8\x8F"), QString::fromUtf8("\xF0\x9F\x91\x8D"),
+            QString::fromUtf8("\xF0\x9F\x91\x8E"),         QString::fromUtf8("\xF0\x9F\x98\x82"),
+            QString::fromUtf8("\xF0\x9F\x98\xAE"),         QString::fromUtf8("\xF0\x9F\x98\xA2"),
+            QString::fromUtf8("\xF0\x9F\x94\xA5")};
+}
+
+QString ownReactionActor()
+{
+    return QStringLiteral("-OWN-");
+}
+
+QByteArray friendReactionPacket(MessageEffect::Anchor anchor, const QByteArray& anchorId,
+                                quint32 time, const QString& emoji, bool add)
+{
+    if (anchorId.size() != anchorLength) {
+        return QByteArray();
+    }
+    QByteArray packet;
+    packet.reserve(friendReactionBase + maxEmojiBytes);
+    packet.append(static_cast<char>(friendReactionId));
+    packet.append('K');
+    packet.append('Q');
+    packet.append(static_cast<char>(kqVersion));
+    packet.append(
+        static_cast<char>(anchor == MessageEffect::Anchor::Text ? anchorText : anchorFile));
+    packet.append(anchorId);
+    // The same four big-endian bytes as a group's message id.
+    packet.append(groupWireId(time));
+    if (!appendReaction(&packet, emoji, add)) {
+        return QByteArray();
+    }
+    return packet;
+}
+
+QByteArray groupReactionPacket(MessageEffect::Anchor anchor, const QByteArray& anchorId,
+                               const QByteArray& author, quint32 time, const QString& emoji,
+                               bool add)
+{
+    const bool text = anchor == MessageEffect::Anchor::Text;
+    if (anchorId.size() != (text ? messageIdLength : anchorLength) || author.size() != anchorLength
+        || isZeroKey(author) || (text && !isNamedMessage(anchorId))) {
+        return QByteArray();
+    }
+    QByteArray packet(reinterpret_cast<const char*>(ngcMagic), static_cast<int>(sizeof(ngcMagic)));
+    packet.reserve(groupReactionBase + maxEmojiBytes);
+    packet.append(static_cast<char>(ngcVersion));
+    packet.append(static_cast<char>(groupReactionId));
+    packet.append(static_cast<char>(text ? anchorText : anchorFile));
+    // A text's 4-byte id is padded with zeros to the 32 bytes of the field.
+    packet.append(anchorId);
+    packet.append(QByteArray(anchorLength - anchorId.size(), '\0'));
+    packet.append(author);
+    packet.append(groupWireId(time));
+    if (!appendReaction(&packet, emoji, add)) {
+        return QByteArray();
+    }
+    return packet;
 }
 
 QByteArray seenPacket(const SeenReceipt& receipt)
@@ -394,6 +487,16 @@ bool EntryMarks::react(const QString& actor, const QString& emoji, bool add)
     }
     reactions = next;
     return true;
+}
+
+QString EntryMarks::emojiOf(const QString& actor) const
+{
+    for (const Reaction& reaction : reactions) {
+        if (reaction.actors.contains(actor)) {
+            return reaction.emoji;
+        }
+    }
+    return QString();
 }
 
 bool EntryMarks::acceptsEdit(quint32 time, const QString& newText, const QString& shownText) const

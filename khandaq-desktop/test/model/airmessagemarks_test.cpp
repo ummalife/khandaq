@@ -124,6 +124,12 @@ private slots:
     void theReactionsReadAsEmojiWithTheirCounts();
     void theLatestEditWins();
     void entriesAreKeptUnderTheirConversation();
+    void theQuickReactionsAreTheSevenOfThePhones();
+    void ourReaction188IsWhatTheDemoContactSends();
+    void ourReaction0x43PadsTheIdAndNamesTheAuthor();
+    void aReactionTheOthersWouldDropIsNotBuilt();
+    void aFileReactionFromIosNamesNoAuthor();
+    void ourReactionIsKeptUnderOwn();
 };
 
 void TestAirMessageMarks::friendEdit186IsIdMagicVersionHashTimeAndTheNewText()
@@ -552,6 +558,172 @@ void TestAirMessageMarks::entriesAreKeptUnderTheirConversation()
     QVERIFY(textEntryKey(chat, sender, 1700000000124) != text);
     QVERIFY(fileEntryKey(chat, authorKey) != file);
     QVERIFY(text != file);
+}
+
+void TestAirMessageMarks::theQuickReactionsAreTheSevenOfThePhones()
+{
+    const QStringList quick = quickReactions();
+    QCOMPARE(quick.size(), 7);
+    // The heart keeps its variation selector.
+    QCOMPARE(utf8(quick.at(0)), QByteArray::fromHex("E29DA4EFB88F"));
+    QCOMPARE(utf8(quick.at(1)), QByteArray::fromHex("F09F918D"));
+    QCOMPARE(utf8(quick.at(2)), QByteArray::fromHex("F09F918E"));
+    QCOMPARE(utf8(quick.at(3)), QByteArray::fromHex("F09F9882"));
+    QCOMPARE(utf8(quick.at(4)), QByteArray::fromHex("F09F98AE"));
+    QCOMPARE(utf8(quick.at(5)), QByteArray::fromHex("F09F98A2"));
+    QCOMPARE(utf8(quick.at(6)), QByteArray::fromHex("F09F94A5"));
+    // Each one goes, and comes back as it went.
+    using Anchor = MessageEffect::Anchor;
+    for (const QString& emoji : quick) {
+        const QByteArray friendPacket =
+            friendReactionPacket(Anchor::Text, anchorHash, stamp, emoji, true);
+        const MessageEffect sent = readPacket(friendPacket, false);
+        QCOMPARE(sent.kind, MessageEffect::Kind::Reaction);
+        QCOMPARE(sent.emoji, emoji);
+        const QByteArray groupPacket =
+            groupReactionPacket(Anchor::Text, wireMessageId, authorKey, stamp, emoji, true);
+        const MessageEffect inGroup = readPacket(groupPacket, true);
+        QCOMPARE(inGroup.kind, MessageEffect::Kind::Reaction);
+        QCOMPARE(inGroup.emoji, emoji);
+    }
+}
+
+void TestAirMessageMarks::ourReaction188IsWhatTheDemoContactSends()
+{
+    // infra/demo-contact/khandaq_demo.c send_reaction: 188 'K' 'Q' 1, the kind of anchor, its id,
+    // the time, the action, the length of the emoji and the emoji.
+    const QString heart = quickReactions().at(0);
+    const QByteArray emoji = utf8(heart);
+    const QByteArray add =
+        friendReactionPacket(MessageEffect::Anchor::Text, anchorHash, stamp, heart, true);
+    QCOMPARE(add, friendHead(188) + bytes({1}) + anchorHash + stampBytes
+                      + bytes({1, emoji.size()}) + emoji);
+    QCOMPARE(add.size(), 43 + emoji.size());
+    const MessageEffect reaction = readPacket(add, false);
+    QCOMPARE(reaction.kind, MessageEffect::Kind::Reaction);
+    QCOMPARE(reaction.anchor, MessageEffect::Anchor::Text);
+    QCOMPARE(reaction.anchorId, anchorHash);
+    QCOMPARE(reaction.time, stamp);
+    QCOMPARE(reaction.emoji, heart);
+    QVERIFY(reaction.add);
+
+    // Taken back from a file: action 0 and "*", whichever emoji it was.
+    const QByteArray removal =
+        friendReactionPacket(MessageEffect::Anchor::File, anchorHash, stamp, heart, false);
+    QCOMPARE(removal, friendHead(188) + bytes({2}) + anchorHash + stampBytes + bytes({0, 1, '*'}));
+    QCOMPARE(friendReactionPacket(MessageEffect::Anchor::File, anchorHash, stamp, QString(), false),
+             removal);
+    const MessageEffect taken = readPacket(removal, false);
+    QCOMPARE(taken.kind, MessageEffect::Kind::Reaction);
+    QCOMPARE(taken.anchor, MessageEffect::Anchor::File);
+    QVERIFY(!taken.add);
+}
+
+void TestAirMessageMarks::ourReaction0x43PadsTheIdAndNamesTheAuthor()
+{
+    const QString thumb = quickReactions().at(1);
+    const QByteArray emoji = utf8(thumb);
+    QByteArray padded = wireMessageId;
+    padded.append(QByteArray(28, '\0'));
+    const QByteArray add = groupReactionPacket(MessageEffect::Anchor::Text, wireMessageId,
+                                               authorKey, stamp, thumb, true);
+    QCOMPARE(add, groupHead(0x43) + bytes({1}) + padded + authorKey + stampBytes
+                      + bytes({1, emoji.size()}) + emoji);
+    QCOMPARE(add.size(), 79 + emoji.size());
+    const MessageEffect reaction = readPacket(add, true);
+    QCOMPARE(reaction.kind, MessageEffect::Kind::Reaction);
+    QCOMPARE(reaction.anchorId, wireMessageId);
+    QCOMPARE(reaction.author, authorKey);
+    QCOMPARE(reaction.time, stamp);
+    QCOMPARE(reaction.emoji, thumb);
+    QVERIFY(reaction.add);
+
+    const QByteArray file = groupReactionPacket(MessageEffect::Anchor::File, anchorHash, authorKey,
+                                                stamp, thumb, false);
+    QCOMPARE(file, groupHead(0x43) + bytes({2}) + anchorHash + authorKey + stampBytes
+                       + bytes({0, 1, '*'}));
+    const MessageEffect taken = readPacket(file, true);
+    QCOMPARE(taken.kind, MessageEffect::Kind::Reaction);
+    QCOMPARE(taken.anchor, MessageEffect::Anchor::File);
+    QCOMPARE(taken.anchorId, anchorHash);
+    QCOMPARE(taken.author, authorKey);
+    QVERIFY(!taken.add);
+}
+
+void TestAirMessageMarks::aReactionTheOthersWouldDropIsNotBuilt()
+{
+    using Anchor = MessageEffect::Anchor;
+    const QString heart = quickReactions().at(0);
+    const auto toFriend = [](const QByteArray& id, const QString& emoji) {
+        return friendReactionPacket(Anchor::Text, id, stamp, emoji, true);
+    };
+    // Between two people: a 32-byte id, and 1 to 16 bytes of a readable emoji.
+    QVERIFY(toFriend(anchorHash.left(31), heart).isEmpty());
+    QVERIFY(toFriend(wireMessageId, heart).isEmpty());
+    QVERIFY(toFriend(anchorHash, QString()).isEmpty());
+    QVERIFY(toFriend(anchorHash, QString(17, QLatin1Char('a'))).isEmpty());
+    QVERIFY(toFriend(anchorHash, QStringLiteral("a\nb")).isEmpty());
+    QVERIFY(!toFriend(anchorHash, QString(16, QLatin1Char('a'))).isEmpty());
+    // In a group: a text by its 4-byte id but 0, a file by its 32-byte one, and an author.
+    const auto toGroup = [](Anchor anchor, const QByteArray& id, const QByteArray& author,
+                            const QString& emoji) {
+        return groupReactionPacket(anchor, id, author, stamp, emoji, true);
+    };
+    QVERIFY(toGroup(Anchor::Text, anchorHash, authorKey, heart).isEmpty());
+    QVERIFY(toGroup(Anchor::Text, QByteArray(4, '\0'), authorKey, heart).isEmpty());
+    QVERIFY(toGroup(Anchor::File, wireMessageId, authorKey, heart).isEmpty());
+    QVERIFY(toGroup(Anchor::Text, wireMessageId, authorKey.left(31), heart).isEmpty());
+    QVERIFY(toGroup(Anchor::Text, wireMessageId, QByteArray(32, '\0'), heart).isEmpty());
+    QVERIFY(toGroup(Anchor::Text, wireMessageId, authorKey, QString()).isEmpty());
+    QVERIFY(!toGroup(Anchor::Text, wireMessageId, authorKey, heart).isEmpty());
+}
+
+void TestAirMessageMarks::aFileReactionFromIosNamesNoAuthor()
+{
+    // iOS puts 32 zero bytes where the author of a file goes (OCTSubmanagerGroupsImpl): the
+    // reaction is taken, by the file's id alone.
+    const QByteArray emoji = utf8(quickReactions().at(1));
+    const QByteArray zeros(32, '\0');
+    const MessageEffect file = readPacket(groupHead(0x43) + bytes({2}) + anchorHash + zeros
+                                              + stampBytes + bytes({1, emoji.size()}) + emoji,
+                                          true);
+    QCOMPARE(file.kind, MessageEffect::Kind::Reaction);
+    QCOMPARE(file.anchor, MessageEffect::Anchor::File);
+    QCOMPARE(file.anchorId, anchorHash);
+    QVERIFY(file.author.isEmpty());
+    QVERIFY(file.add);
+
+    // A text is told apart by whose it is: its zeros stay, and match no message.
+    QByteArray padded = wireMessageId;
+    padded.append(QByteArray(28, '\0'));
+    const MessageEffect text = readPacket(groupHead(0x43) + bytes({1}) + padded + zeros + stampBytes
+                                              + bytes({1, emoji.size()}) + emoji,
+                                          true);
+    QCOMPARE(text.kind, MessageEffect::Kind::Reaction);
+    QCOMPARE(text.author, zeros);
+}
+
+void TestAirMessageMarks::ourReactionIsKeptUnderOwn()
+{
+    const QString own = ownReactionActor();
+    QCOMPARE(own, QStringLiteral("-OWN-"));
+    // No hashed key of a person (LocalStore::hashedKey) gives it.
+    QVERIFY(!QRegularExpression(QStringLiteral("^[0-9a-f]*$")).match(own).hasMatch());
+    const QString heart = quickReactions().at(0);
+    const QString fire = quickReactions().at(6);
+    EntryMarks marks;
+    QVERIFY(marks.emojiOf(own).isEmpty());
+    QVERIFY(marks.react(QStringLiteral("abc"), heart, true));
+    QVERIFY(marks.emojiOf(own).isEmpty());
+    QCOMPARE(marks.emojiOf(QStringLiteral("abc")), heart);
+    QVERIFY(marks.react(own, fire, true));
+    QCOMPARE(marks.emojiOf(own), fire);
+    // Another emoji takes the place of ours; the person's stays.
+    QVERIFY(marks.react(own, heart, true));
+    QCOMPARE(marks.emojiOf(own), heart);
+    QCOMPARE(marks.emojiOf(QStringLiteral("abc")), heart);
+    QVERIFY(marks.react(own, heart, false));
+    QVERIFY(marks.emojiOf(own).isEmpty());
 }
 
 QTEST_GUILESS_MAIN(TestAirMessageMarks)

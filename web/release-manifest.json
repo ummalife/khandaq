@@ -7,17 +7,17 @@
     "minSdk": 26,
     "namespace": "org.khandaq.messenger",
     "targetSdk": 36,
-    "versionCode": 10530,
-    "versionName": "0.2.62"
+    "versionCode": 10540,
+    "versionName": "0.2.63"
   },
   "desktop": {
     "_comment": "The GitHub release the desktop .zip/.deb URLs are built from. NOT the Android versionName: there is no v0.2.38 tag, and aligning them breaks every download link.",
-    "releaseTag": "v0.2.61"
+    "releaseTag": "v0.2.63"
   },
   "ios": {
-    "buildNumber": "143006",
+    "buildNumber": "143007",
     "bundleId": "org.khandaq.messenger",
-    "marketingVersion": "1.4.33"
+    "marketingVersion": "1.4.34"
   },
   "site": {
     "_comment": "Android's minimum is no longer stated twice. minSdkVersion 26 = Android 8, which is what the site has always claimed, so the published claim is checked against the value derived from the build files rather than against a copy kept here.",

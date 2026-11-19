@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-19T02:43:49Z",
+  "generated_at": "2026-11-19T15:46:18Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,92 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.63",
+      "date": "2026-11-19",
+      "title": "React from the desktop; groups keep relays of their own",
+      "summary": "The desktop can react to a message, as the phones do, and when it comes back online it gets the messages a public group posted while it was away. Every group now keeps relays of its own, so members behind one router, or on a network that blocks UDP, can still reach each other. A message passed on from a group's history shows once, under its author's name. On iPhone a file shows that it is opening, and a reaction on a group file now reaches Android and the desktop.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "Groups keep relays of their own",
+          "description": "Two members behind one router, or on a network that blocks UDP, could stay apart in a group while both were online: a group used only the relays the app was already connected to, and often had none, above all in a group made or opened before the app was connected. Each group now keeps up to three relays of its own, and an invitation brings them to the new member, so members who cannot reach each other directly meet through a relay. It works best once everyone in the group has this update.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux",
+            "android",
+            "ios"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Desktop: react to a message",
+          "description": "The message menu has React, with the seven emoji of the phones, in chats with a person and in groups, on texts and on files. The same emoji again takes your reaction back, another one replaces it. A person who is offline gets it when they connect.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Desktop: group messages posted while you were away",
+          "description": "A message posted in a public group while the desktop was offline never reached it. When the desktop comes back, members who have the message pass it on, and it shows with the time it was written, without a notification. Until the group knows its author, the message is signed with the start of their key, then with their name.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Group history comes once, under its author's name",
+          "description": "A message that members pass on from a group's history could show a second time on iPhone, signed with the end of a key instead of a name, when it had already come live. iPhone now knows every passed-on copy of a message it has, Android passes a message on under the name its author had, and iPhone passes on the message of a member who left under that member's own key and name, not under those of whoever joined after.",
+          "platforms": [
+            "ios",
+            "android"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "Reactions on group files reach everyone",
+          "description": "A reaction set on iPhone to a photo or file in a group did not show on Android or on the desktop. iPhone now says who reacted, and Android and the desktop accept such a reaction from an older iPhone too.",
+          "platforms": [
+            "ios",
+            "android",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "iPhone: the name and the role over a message in a group",
+          "description": "A member's message could show \"founder\" or another role that was not theirs, once someone else had come back to the group in their old place, and a chat opened before the group connected showed no role at all. The role next to a name is now always that member's own and shows as soon as the group knows its members. A member's name is also one colour on all their messages, the ones passed on from the group's history too.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "iPhone: the messages you pick in a group stay picked",
+          "description": "In a group, the messages you picked to delete or copy could come unpicked when a member came or left or the group's history arrived, and Delete then did nothing. They now stay picked.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "iPhone: a file shows that it is opening",
+          "description": "A PDF or another file took a few seconds to open with nothing on the screen. A spinner now shows until it opens, and its Cancel button is in the language of the app.",
+          "platforms": [
+            "ios"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.62",
       "date": "2026-11-19",

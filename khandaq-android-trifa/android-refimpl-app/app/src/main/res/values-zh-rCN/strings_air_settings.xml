@@ -103,4 +103,8 @@
         <item>高清</item>
         <item>全高清</item>
     </string-array>
+    <!-- Testers' ideas (0.2.67): Settings > Privacy, what this phone tells others; the desktop's words for typing -->
+    <string name="air_privacy_read_receipts">发送已读回执</string>
+    <string name="air_privacy_read_receipts_note">关闭后，其他人不会看到你已读他们的消息。</string>
+    <string name="air_privacy_typing">显示我正在输入</string>
 </resources>

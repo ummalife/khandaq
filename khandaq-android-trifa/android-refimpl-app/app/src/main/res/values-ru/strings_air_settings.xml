@@ -106,4 +106,8 @@
         <item>HD</item>
         <item>Full HD</item>
     </string-array>
+    <!-- Testers' ideas (0.2.67): Settings > Privacy, what this phone tells others; the desktop's words for typing -->
+    <string name="air_privacy_read_receipts">Отправлять отчёты о прочтении</string>
+    <string name="air_privacy_read_receipts_note">Если выключить, собеседники не увидят, что вы прочитали их сообщения.</string>
+    <string name="air_privacy_typing">Показывать, что я печатаю</string>
 </resources>

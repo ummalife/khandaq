@@ -142,11 +142,20 @@ public class SettingsTabFragment extends Fragment
         AirScreenKit.addSection(column, getString(R.string.air_settings_notifications), null,
                                 AirScreenKit.plateOf(context, preview));
 
-        // Privacy: the keys blocked on this device (design/DESIGN.md, "Block, on every client").
+        // Privacy: what this phone tells others (PrivacyPreference), then the keys blocked on this device
+        // (design/DESIGN.md, "Block, on every client"), whose note closes the section under their plate.
+        final AirSettingRow readReceipts = new AirSettingRow(context, getString(R.string.air_privacy_read_receipts), false);
+        readReceipts.detail(getString(R.string.air_privacy_read_receipts_note));
+        readReceipts.withSwitch(PrivacyPreference.sendsSeenReceipts,
+                                (button, checked) -> PrivacyPreference.setSeenReceipts(prefs, checked));
+        final AirSettingRow typing = new AirSettingRow(context, getString(R.string.air_privacy_typing), false);
+        typing.withSwitch(PrivacyPreference.sendsTyping, (button, checked) -> PrivacyPreference.setTyping(prefs, checked));
         blockedRow = new AirSettingRow(context, getString(R.string.air_blocked_title), true);
         blockedRow.setOnClickListener(v -> startActivity(new Intent(context, AirBlockedActivity.class)));
         AirScreenKit.addSection(column, getString(R.string.air_privacy_title),
-                                getString(R.string.air_blocked_section_note), AirScreenKit.plateOf(context, blockedRow));
+                                getString(R.string.air_blocked_section_note),
+                                AirScreenKit.plateOf(context, readReceipts, typing),
+                                AirScreenKit.plateOf(context, blockedRow));
 
         transferPlate = AirScreenKit.plateOf(context,
                                              navigationRow(context, R.string.settings_export_profile,

@@ -620,6 +620,12 @@ public class MessageListActivity extends AppCompatActivity
         {
             public void afterTextChanged(Editable s)
             {
+                // KHANDAQ (testers' ideas, 0.2.67): with Show that I'm typing off, global_typing never turns
+                // to 1, so neither the start nor the end of typing is sent (both stops check it first).
+                if (!PrivacyPreference.sendsTyping)
+                {
+                    return;
+                }
                 // TODO bad hack!
                 // HelperGeneric.logI(TAG, "TextWatcher:afterTextChanged");
                 if (global_typing == 0)

@@ -87,6 +87,8 @@ public class MainApplication extends Application
         try
         {
             SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this.getApplicationContext());
+            // KHANDAQ (testers' ideas, 0.2.67): the privacy switches count before any screen or service runs.
+            PrivacyPreference.load(sp);
             updateTheme(sp);
             sp.registerOnSharedPreferenceChangeListener(sp_change_listener);
         }
@@ -608,6 +610,10 @@ public class MainApplication extends Application
         else if (AutoDownloadPreference.KEY_ALL_FILES.equals(key))
         {
             MainActivity.PREF__auto_accept_all_upto = autoDownloadSwitch(sharedPreferences, key);
+        }
+        if (PrivacyPreference.concerns(key))
+        {
+            PrivacyPreference.load(sharedPreferences);
         }
     };
 

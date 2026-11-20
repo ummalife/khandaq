@@ -39,8 +39,10 @@ fi
 # the monorepo, so CMake's own `git describe` found nothing and Settings > About said "Nightly", with
 # "build without git" for the commit. What git says here goes in instead.
 GIT_VERSION="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
-GIT_DESCRIBE="$(git -C "$ROOT" describe --tags 2>/dev/null || true)"
-GIT_DESCRIBE_EXACT="$(git -C "$ROOT" describe --exact-match --tags HEAD 2>/dev/null || true)"
+# KHANDAQ (0.2.66): --dirty, as in cmake/Dependencies.cmake: a build from a tree with changes nobody
+# committed is no release of its tag, and the update manifest generator refuses it.
+GIT_DESCRIBE="$(git -C "$ROOT" describe --tags --dirty 2>/dev/null || true)"
+GIT_DESCRIBE_EXACT="$(git -C "$ROOT" describe --exact-match --tags --dirty 2>/dev/null || true)"
 for value in "$GIT_VERSION" "$GIT_DESCRIBE" "$GIT_DESCRIBE_EXACT"; do
   if [[ -n "$value" && ! "$value" =~ ^[A-Za-z0-9._-]+$ ]]; then
     echo "unexpected output of git: $value" >&2
@@ -101,7 +103,8 @@ docker run --rm --platform "$PLATFORM" \
     done
     cmake /build/src \
       -DCMAKE_BUILD_TYPE=Release \
-      -DUPDATE_CHECK=OFF \
+      -DUPDATE_CHECK=ON \
+      -DUPDATE_CHECK_QA=OFF \
       -DSPELL_CHECK=OFF \
       -DDESKTOP_NOTIFICATIONS=OFF \
       "${version_args[@]}"

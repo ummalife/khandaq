@@ -362,6 +362,91 @@
         <translation>已恢复联网</translation>
     </message>
     <message>
+        <source>Khandaq %1 is available</source>
+        <comment>update band at the top of the window: a newer version is out; %1 is its number</comment>
+        <translation>Khandaq %1 已发布</translation>
+    </message>
+    <message>
+        <source>Khandaq %1 is downloaded</source>
+        <comment>update band at the top of the window: the checked file waits to be installed by hand; %1 is the version</comment>
+        <translation>Khandaq %1 已下载</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <comment>update band at the top of the window and Settings, About: button that downloads and installs the new version</comment>
+        <translation>更新</translation>
+    </message>
+    <message>
+        <source>What&apos;s new</source>
+        <comment>update band at the top of the window: button that opens the release notes</comment>
+        <translation>更新内容</translation>
+    </message>
+    <message>
+        <source>Hide until the next start</source>
+        <comment>update band at the top of the window: tooltip of the cross</comment>
+        <translation>下次启动前不再显示</translation>
+    </message>
+    <message>
+        <source>Downloading: %1%</source>
+        <comment>update band at the top of the window: %1 is how much has come, in percent</comment>
+        <translation>正在下载：%1%</translation>
+    </message>
+    <message>
+        <source>Preparing the update</source>
+        <comment>update band at the top of the window: the download is checked and being unpacked</comment>
+        <translation>正在准备更新</translation>
+    </message>
+    <message>
+        <source>Restarting</source>
+        <comment>update band at the top of the window: Khandaq quits so the new version takes its place</comment>
+        <translation>正在重启</translation>
+    </message>
+    <message>
+        <source>The download did not finish</source>
+        <comment>update band at the top of the window: error</comment>
+        <translation>下载未完成</translation>
+    </message>
+    <message>
+        <source>The file did not pass the check and was deleted</source>
+        <comment>update band at the top of the window: error, the download is not the signed release</comment>
+        <translation>文件未通过校验，已删除</translation>
+    </message>
+    <message>
+        <source>The update could not be unpacked</source>
+        <comment>update band at the top of the window: error</comment>
+        <translation>无法解压更新</translation>
+    </message>
+    <message>
+        <source>Not installed: permission was not given</source>
+        <comment>update band at the top of the window: Windows asked for permission to install and it was refused</comment>
+        <translation>未安装：未获得许可</translation>
+    </message>
+    <message>
+        <source>The update could not start</source>
+        <comment>update band at the top of the window: error</comment>
+        <translation>无法启动更新</translation>
+    </message>
+    <message>
+        <source>Install it with this command: %1</source>
+        <comment>update band at the top of the window: Linux package; %1 is the command</comment>
+        <translation>请用此命令安装：%1</translation>
+    </message>
+    <message>
+        <source>Quit Khandaq and put the new version in place of this one</source>
+        <comment>update band at the top of the window: this copy cannot be replaced by Khandaq itself</comment>
+        <translation>请退出 Khandaq，用新版本替换当前版本</translation>
+    </message>
+    <message>
+        <source>Khandaq could not finish the update. Nothing was deleted, but some of your files may not be back in place: your settings (khandaq.ini) and the profiles folder, which holds your profiles. Look for them in these folders:</source>
+        <comment>text file Khandaq opens when an update of a portable Windows folder could not put everything back; the folders follow, one a line</comment>
+        <translation>Khandaq 未能完成更新。没有删除任何内容，但你的部分文件可能不在原处：设置文件（khandaq.ini）以及保存你个人资料的 profiles 文件夹。请在以下文件夹中查找：</translation>
+    </message>
+    <message>
+        <source>Close Khandaq, move them into the folder you start Khandaq from, and start it again.</source>
+        <comment>text file Khandaq opens when an update of a portable Windows folder could not put everything back: the last line, after the folders</comment>
+        <translation>请关闭 Khandaq，把它们移到你启动 Khandaq 的那个文件夹，然后重新启动 Khandaq。</translation>
+    </message>
+    <message>
         <source>Find a chat or paste an ID</source>
         <comment>placeholder of the command line</comment>
         <translation>查找聊天或粘贴 ID</translation>
@@ -3399,9 +3484,34 @@
         <translation>检查更新</translation>
     </message>
     <message>
-        <source>Download the update</source>
-        <comment>Settings, About: button once a newer version is out</comment>
-        <translation>下载更新</translation>
+        <source>Check now</source>
+        <comment>Settings, About: button that checks for a newer version at once</comment>
+        <translation>立即检查</translation>
+    </message>
+    <message>
+        <source>Checking</source>
+        <comment>Settings, About: beside Check now, while it checks</comment>
+        <translation>正在检查</translation>
+    </message>
+    <message>
+        <source>You have the latest version</source>
+        <comment>Settings, About: beside Check now</comment>
+        <translation>已是最新版本</translation>
+    </message>
+    <message>
+        <source>Version %1 is available</source>
+        <comment>Settings, About: beside Check now; %1 is the version</comment>
+        <translation>有新版本 %1</translation>
+    </message>
+    <message>
+        <source>Could not check</source>
+        <comment>Settings, About: beside Check now, when khandaq.org could not be reached or its answer was refused</comment>
+        <translation>无法检查</translation>
+    </message>
+    <message>
+        <source>This build does not update itself</source>
+        <comment>Settings, About: beside Check now, in development builds and copies a package manager keeps</comment>
+        <translation>此版本不会自动更新</translation>
     </message>
     <message>
         <source>Owner and developer: Isa Dagestani</source>

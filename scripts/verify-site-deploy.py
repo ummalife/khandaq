@@ -19,6 +19,8 @@ So this runs against the public HTTPS endpoint, never against localhost, and fai
     the committed bytes;
   * the IndexNow key file at the site root is 200, text/plain, with no redirect and the committed
     bytes;
+  * the desktop update manifest verifies against the release key from this repository, in its own
+    namespace, and every SHA-256 and size it gives is the one published for that download;
   * TLS 1.0/1.1 are refused and 1.2/1.3 negotiate.
 
     scripts/verify-site-deploy.py                      # expect this checkout's HEAD
@@ -39,6 +41,7 @@ import ssl
 import sys as _sys
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -47,6 +50,7 @@ from pathlib import Path
 # py/insecure-protocol в CodeQL относилось к одному файлу, а не ко всему репозиторию.
 _sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tls_probe  # noqa: E402
+import desktop_update_manifest as update_manifest  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_BASE = "https://khandaq.org"
@@ -285,11 +289,89 @@ def check_ownership_files(base: str, published: str | None, pattern: re.Pattern[
             ok(f"/{name}: 200, {ctype}, no redirect, the {len(body)} committed bytes")
 
 
+def check_update_manifest(base: str, sums_body: bytes | None, exact: bool, kept: bool = False) -> None:
+    """KHANDAQ (0.2.66): the manifest the desktop app updates from (scripts/generate-desktop-update-
+    manifest.py), as the app gets it: the release key's signature must verify with the key from this
+    repository, never one the site serves, and the manifest must name exactly the bytes the site
+    publishes, by SHA256SUMS.txt and by size. kept: the deploy left the live manifest as it was (it
+    staged no desktop download, or it is a rollback), so it need not be the copy in this checkout."""
+    downloads = ROOT / "web" / "downloads"
+    local = downloads / update_manifest.MANIFEST_NAME
+    status, _, served = get(f"{base}/downloads/{update_manifest.MANIFEST_NAME}")
+    if status == 404 and not local.is_file():
+        print("  note: no desktop update manifest is published, and this checkout has none yet")
+        return
+    if status != 200 or not served:
+        fail(f"/downloads/{update_manifest.MANIFEST_NAME} returned {status} with {len(served)} bytes")
+        return
+    status, _, signature = get(f"{base}/downloads/{update_manifest.SIGNATURE_NAME}")
+    if status != 200:
+        fail(f"/downloads/{update_manifest.SIGNATURE_NAME} returned {status}: the apps refuse an "
+             f"unsigned manifest, so no update reaches anyone")
+        return
+    tampered = bytearray(served)
+    tampered[len(tampered) // 2] ^= 0x01
+    try:
+        with tempfile.TemporaryDirectory(prefix="khandaq-update-manifest-") as work:
+            signature_path = Path(work) / update_manifest.SIGNATURE_NAME
+            signature_path.write_bytes(signature)
+            good, detail = update_manifest.verify_signature(downloads / "allowed_signers", signature_path, served)
+            forged, _ = update_manifest.verify_signature(downloads / "allowed_signers", signature_path,
+                                                         bytes(tampered))
+    except (OSError, subprocess.SubprocessError) as exc:
+        fail(f"the update manifest's signature could not be checked ({exc})")
+        return
+    if not good:
+        fail(f"the update manifest's signature does not verify with the release key ({detail})")
+        return
+    if forged:
+        fail("a copy of the update manifest with one bit flipped verified too: this check proves nothing")
+        return
+    ok(f"update manifest: the release key's signature verifies (namespace {update_manifest.NAMESPACE})")
+    try:
+        manifest = json.loads(served)
+    except ValueError as exc:
+        fail(f"the update manifest does not parse ({exc})")
+        return
+    errors = update_manifest.validate(manifest)
+    if errors:
+        fail("the update manifest would be refused: " + "; ".join(errors))
+        return
+    if sums_body is None:
+        fail("the update manifest cannot be compared: SHA256SUMS.txt is not published")
+    else:
+        errors = update_manifest.against_sums(manifest, update_manifest.parse_sums(
+            sums_body.decode("utf-8", "replace")))
+        if errors:
+            fail("the update manifest disagrees with SHA256SUMS.txt: " + "; ".join(errors))
+        else:
+            ok(f"update manifest: all {len(manifest['platforms'])} SHA-256 values match SHA256SUMS.txt")
+    sizes = []
+    for platform, entry in sorted(manifest["platforms"].items()):
+        status, headers, _ = get(f"{base}/downloads/{entry['file']}", method="HEAD")
+        if status != 200 or headers.get("content-length") != str(entry["size"]):
+            sizes.append(f"{entry['file']} ({status}, {headers.get('content-length')} bytes, the "
+                         f"manifest says {entry['size']})")
+    if sizes:
+        fail("update manifest: downloads that are not the size it gives: " + ", ".join(sizes))
+    else:
+        ok("update manifest: every download it names is served at the size it gives")
+    if exact and local.is_file() and local.read_bytes() != served:
+        if kept:
+            print("  note: the served update manifest is not the one in this checkout; this deploy "
+                  "left it as it was")
+        else:
+            fail("the served update manifest is not the one in this checkout")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default=DEFAULT_BASE)
     ap.add_argument("--sha", default=None, help="ожидаемый git SHA (по умолчанию — HEAD этого checkout)")
     ap.add_argument("--skip-tls", action="store_true", help="пропустить проверку версий TLS")
+    ap.add_argument("--kept-update-manifest", action="store_true",
+                    help="the deploy left the live desktop update manifest as it was (it staged no "
+                         "desktop download, or it is a rollback): it need not be this checkout's")
     ap.add_argument("--any-sha", action="store_true",
                     help="не требовать конкретный коммит: проверить, что опубликованный SHA вообще "
                          "существует в репозитории, и сообщить, насколько сайт отстал. Режим для "
@@ -437,6 +519,7 @@ def main() -> int:
     # 5. every published artifact must have a published signature beside it
     print("-- подписи артефактов")
     status, _, body = get(f"{base}/downloads/SHA256SUMS.txt")
+    sums_body = body if status == 200 else None
     if status != 200:
         fail(f"/downloads/SHA256SUMS.txt вернул {status}")
     else:
@@ -464,6 +547,10 @@ def main() -> int:
             fail("/downloads/allowed_signers недоступен — проверить подпись нечем")
         else:
             ok("allowed_signers опубликован")
+
+    # 5a. the manifest the desktop app updates from
+    print("-- desktop update manifest")
+    check_update_manifest(base, sums_body, exact=expected_sha is not None, kept=args.kept_update_manifest)
 
     # 5b. the push relay, from outside
     #

@@ -114,6 +114,23 @@ std::function<QString()> words(Text text)
     return [text] { return AirStrings::text(text); };
 }
 
+#if UPDATE_CHECK_ENABLED
+/** What the last update check found, kept on the label under Check now to be said again in
+ * another language. */
+const char updateTextProperty[] = "airUpdateText";
+const char updateVersionProperty[] = "airUpdateVersion";
+
+void sayUpdateResult(QLabel* result, Text text, const QString& version)
+{
+    result->setProperty(updateTextProperty, static_cast<int>(text));
+    result->setProperty(updateVersionProperty, version);
+    result->setText(text == Text::SettingsUpdateAvailable ? AirStrings::text(text).arg(version)
+                                                          : AirStrings::text(text));
+    // Hidden until there is something to say, so that it leaves no gap under the buttons.
+    result->show();
+}
+#endif
+
 /** An interface size as the systems name theirs, alike in every language: "125%". */
 QString interfaceSizeName(int percent)
 {
@@ -2047,18 +2064,60 @@ void AirSettingsPage::buildAbout(UpdateCheck* updateCheck)
         updates, words(Text::SettingsCheckUpdates), nullptr,
         [this] { return settings.getCheckUpdates(); },
         [this](bool on) { settings.setCheckUpdates(on); });
-    auto* const download = new AirButton(AirButton::Kind::Ink, page.content);
-    download->setObjectName(QStringLiteral("settingsUpdate"));
-    download->hide();
-    updates->addWidget(download, 0, Qt::AlignLeading);
-    wordings.push_back(
-        [download] { download->setText(AirStrings::text(Text::SettingsUpdateDownload)); });
-    if (updateCheck) {
-        connect(updateCheck, &UpdateCheck::updateAvailable, download, [download](QString, QUrl link) {
-            download->show();
-            QObject::disconnect(download, &AirButton::clicked, nullptr, nullptr);
-            QObject::connect(download, &AirButton::clicked, download,
-                             [link] { QDesktopServices::openUrl(link); });
+    // KHANDAQ (0.2.66): Check now, Update once a newer version is out (as the band of a new version
+    // does), and what the check found.
+    auto* const checkNow = new AirButton(AirButton::Kind::Plain, page.content);
+    checkNow->setObjectName(QStringLiteral("settingsCheckNow"));
+    auto* const install = new AirButton(AirButton::Kind::Ink, page.content);
+    install->setObjectName(QStringLiteral("settingsUpdate"));
+    install->hide();
+    QLabel* const result = label(TextRole::Caption, Color::Ink2, page.content, nullptr);
+    result->setObjectName(QStringLiteral("settingsUpdateResult"));
+    result->hide();
+    // The buttons side by side while the pane has room for them, one under the other when it has
+    // not; what the check found under them, as the notes under the buttons of the other sections.
+    auto* const line = new FitLayout(FitLayout::Kind::Buttons, Space::s8, Space::s8);
+    line->addWidget(checkNow);
+    line->addWidget(install);
+    updates->addLayout(line);
+    updates->addWidget(result);
+    wordings.push_back([checkNow, install, result] {
+        checkNow->setText(AirStrings::text(Text::SettingsCheckNow));
+        install->setText(AirStrings::text(Text::UpdateInstall));
+        const QVariant said = result->property(updateTextProperty);
+        if (said.isValid()) {
+            sayUpdateResult(result, static_cast<Text>(said.toInt()),
+                            result->property(updateVersionProperty).toString());
+        }
+    });
+    if (!updateCheck || !updateCheck->supported()) {
+        checkNow->setEnabled(false);
+        sayUpdateResult(result, Text::SettingsUpdateNotInBuild, QString());
+    } else {
+        connect(checkNow, &AirButton::clicked, this, [this, updateCheck] {
+            emit updateCheckRequested();
+            updateCheck->checkForUpdate();
+        });
+        connect(install, &AirButton::clicked, this, &AirSettingsPage::updateInstallRequested);
+        connect(updateCheck, &UpdateCheck::checkStarted, result, [checkNow, result] {
+            checkNow->setEnabled(false);
+            sayUpdateResult(result, Text::SettingsUpdateChecking, QString());
+        });
+        connect(updateCheck, &UpdateCheck::upToDate, result, [checkNow, install, result] {
+            checkNow->setEnabled(true);
+            install->hide();
+            sayUpdateResult(result, Text::SettingsUpdateLatest, QString());
+        });
+        connect(updateCheck, &UpdateCheck::updateAvailable, result,
+                [checkNow, install, result](const QString& version) {
+                    checkNow->setEnabled(true);
+                    install->show();
+                    sayUpdateResult(result, Text::SettingsUpdateAvailable, version);
+                });
+        // A version found before stays on offer when a later check fails.
+        connect(updateCheck, &UpdateCheck::updateCheckFailed, result, [checkNow, result] {
+            checkNow->setEnabled(true);
+            sayUpdateResult(result, Text::SettingsUpdateFailed, QString());
         });
     }
 #else

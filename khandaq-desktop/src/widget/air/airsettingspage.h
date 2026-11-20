@@ -110,6 +110,10 @@ signals:
     void trayIconChanged();
     /** Restart was chosen for a new interface size: Khandaq closes and starts again. */
     void restartRequested();
+    /** Check now in About: the band of a new version comes back for what the check finds. */
+    void updateCheckRequested();
+    /** Update in About: the newer version the check found is downloaded and put in place. */
+    void updateInstallRequested();
 
 protected:
     void paintEvent(QPaintEvent* event) override;

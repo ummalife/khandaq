@@ -28,6 +28,7 @@
 #include "src/persistence/ifriendsettings.h"
 #include "src/persistence/igroupsettings.h"
 #include "src/persistence/inotificationsettings.h"
+#include "src/persistence/iupdatesettings.h"
 #include "src/persistence/ismileysettings.h"
 #include "src/video/ivideosettings.h"
 
@@ -37,6 +38,7 @@
 #include <QFlags>
 #include <QFont>
 #include <QHash>
+#include <QMap>
 #include <QMutex>
 #include <QNetworkProxy>
 #include <QObject>
@@ -57,7 +59,8 @@ class Settings : public QObject,
                  public IAudioSettings,
                  public IVideoSettings,
                  public INotificationSettings,
-                 public ISmileySettings
+                 public ISmileySettings,
+                 public IUpdateSettings
 {
     Q_OBJECT
 
@@ -181,7 +184,7 @@ public:
     };
 
 public slots:
-    void saveGlobal();
+    void saveGlobal() override;
     void sync();
     void setAutoLogin(bool state);
     void updateProfileData(Profile* profile, const QCommandLineParser* parser, bool newProfile);
@@ -326,8 +329,14 @@ public:
     int getAutoAwayTime() const;
     void setAutoAwayTime(int newValue);
 
-    bool getCheckUpdates() const;
+    bool getCheckUpdates() const override;
     void setCheckUpdates(bool newValue);
+    qint64 getUpdateLastCheck() const override;
+    void setUpdateLastCheck(qint64 secondsSinceEpoch) override;
+    QString getUpdateHighestSeen(const QString& platform) const override;
+    void setUpdateHighestSeen(const QString& platform, const QString& version) override;
+    qint64 getUpdateManifestSerial() const override;
+    void setUpdateManifestSerial(qint64 serial) override;
 
     bool getNotify() const override;
     void setNotify(bool newValue) override;
@@ -655,6 +664,13 @@ private:
     bool lightTrayIcon;
     bool useEmoticons;
     bool checkUpdates;
+    qint64 updateLastCheck = 0;
+    /** By the platform key of the manifest. */
+    QMap<QString, QString> updateHighestSeen;
+    /** General/updateHighestSeen, the one version 0.2.65 builds before the review kept for every
+     * platform: it goes to the first platform a check concludes for. */
+    QString updateHighestSeenLegacy;
+    qint64 updateManifestSerial = 0;
     bool notify;
     bool desktopNotify;
     bool showWindow;

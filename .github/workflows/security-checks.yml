@@ -141,6 +141,17 @@ jobs:
       # a release signature on the next ordinary deploy. This proves the signer refuses.
       - name: The release key must refuse bytes from the download channel
         run: python3 scripts/check-signing-refuses-untrusted.py
+      # KHANDAQ (0.2.66): the desktop app installs what a manifest signed by the release key names.
+      # The app must trust that key and no other, agree with the release scripts on what it reads,
+      # and every release build must have the update on and the QA mode off. The generator reads each
+      # version from the program in the artifact and must refuse every build that may not be offered.
+      - name: The desktop update must trust the release key alone and offer only release builds
+        run: |
+          set -euo pipefail
+          python3 scripts/check-desktop-update-key.py
+          python3 scripts/check-desktop-update-key.py --self-test
+          python3 scripts/generate-desktop-update-manifest.py --self-test
+          python3 scripts/generate-desktop-update-manifest.py --check
 
   website:
     # KHANDAQ (re-audit 2026-08-22, W-01/W-03). The site's security posture used to live in a

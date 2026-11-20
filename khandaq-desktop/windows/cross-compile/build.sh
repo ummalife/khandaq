@@ -97,7 +97,8 @@ then
         -DCMAKE_BUILD_TYPE=Release \
         -DSPELL_CHECK=OFF \
         -DDESKTOP_NOTIFICATIONS=ON \
-        -DUPDATE_CHECK=OFF \
+        -DUPDATE_CHECK=ON \
+        -DUPDATE_CHECK_QA=OFF \
         -DSTRICT_OPTIONS=ON \
         -DTEST_CROSSCOMPILING_EMULATOR=wine \
         ${VERSION_ARGS[@]+"${VERSION_ARGS[@]}"} \
@@ -109,7 +110,8 @@ then
         -DCMAKE_BUILD_TYPE=Debug \
         -DSPELL_CHECK=OFF \
         -DDESKTOP_NOTIFICATIONS=ON \
-        -DUPDATE_CHECK=OFF \
+        -DUPDATE_CHECK=ON \
+        -DUPDATE_CHECK_QA=OFF \
         -DSTRICT_OPTIONS=ON \
         -DTEST_CROSSCOMPILING_EMULATOR=wine \
         ${VERSION_ARGS[@]+"${VERSION_ARGS[@]}"} \

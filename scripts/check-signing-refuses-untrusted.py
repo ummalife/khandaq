@@ -140,6 +140,35 @@ def main() -> int:
                             "ротации не должен ослаблять правило H-01")
         else:
             print("  ок: --rotate не подписывает байты с сервера раздачи")
+
+        # --- 7. KHANDAQ (0.2.66): the manifest the desktop app updates from is signed in a namespace
+        # of its own, the one the app verifies. A signature over a download must not pass for one over
+        # the manifest, nor the other way round, or a signed artifact could be served as a manifest.
+        dl7, keydir7 = fresh(tmp, "update-manifest")
+        shutil.copy2(keydir / "khandaq-release-ed25519", keydir7 / "khandaq-release-ed25519")
+        shutil.copy2(keydir / "khandaq-release-ed25519.pub", keydir7 / "khandaq-release-ed25519.pub")
+        manifest = dl7 / "khandaq-desktop-update.json"
+        manifest.write_bytes(b'{"schema": "khandaq-desktop-update/1"}\n')
+        r = run(dl7, keydir7)
+
+        def verifies(path: Path, namespace: str) -> bool:
+            with path.open("rb") as data:
+                return subprocess.run(
+                    ["ssh-keygen", "-Y", "verify", "-f", str(dl7 / "allowed_signers"),
+                     "-I", "releases@khandaq.org", "-n", namespace, "-s", f"{path}.sig"],
+                    stdin=data, capture_output=True, timeout=60).returncode == 0
+
+        installer = dl7 / "khandaq-windows-installer.exe"
+        if r.returncode != 0 or not (dl7 / "khandaq-desktop-update.json.sig").is_file():
+            failures.append(f"the update manifest was not signed: {(r.stderr or r.stdout).strip()[:200]}")
+        elif not verifies(manifest, "khandaq-desktop-update"):
+            failures.append("the update manifest is not signed in the namespace the app verifies")
+        elif verifies(manifest, "khandaq-release"):
+            failures.append("the update manifest's signature also passes as a download's")
+        elif verifies(installer, "khandaq-desktop-update"):
+            failures.append("a download's signature passes as the update manifest's")
+        else:
+            print("  ok: the update manifest is signed in its own namespace, and no signature crosses")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

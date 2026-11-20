@@ -47,6 +47,21 @@ ALLOWED="$DL/allowed_signers"
 # what allowed_signers matches on.
 IDENTITY="releases@khandaq.org"
 NAMESPACE="khandaq-release"
+# KHANDAQ (0.2.66): the manifest the desktop app updates from (scripts/generate-desktop-update-manifest.py)
+# is signed by the same key in a namespace of its own, the one the app verifies
+# (khandaq-desktop/src/net/updatemanifest.cpp). No signature over a download can then pass for a
+# signature over the manifest, nor the other way round. scripts/check-desktop-update-key.py holds
+# these two names to the app's.
+UPDATE_MANIFEST="khandaq-desktop-update.json"
+UPDATE_NAMESPACE="khandaq-desktop-update"
+
+namespace_for() {
+  if [ "$(basename "$1")" = "$UPDATE_MANIFEST" ]; then
+    echo "$UPDATE_NAMESPACE"
+  else
+    echo "$NAMESPACE"
+  fi
+}
 
 command -v ssh-keygen >/dev/null 2>&1 || {
   echo "ОШИБКА: нет ssh-keygen — без него ни подписать, ни проверить" >&2
@@ -66,7 +81,7 @@ verify_all() {
       bad=$((bad + 1))
       continue
     fi
-    if ssh-keygen -Y verify -f "$ALLOWED" -I "$IDENTITY" -n "$NAMESPACE" \
+    if ssh-keygen -Y verify -f "$ALLOWED" -I "$IDENTITY" -n "$(namespace_for "$f")" \
                   -s "$f.sig" < "$f" >/dev/null 2>&1; then
       echo "  ок: $(basename "$f")"
       n=$((n + 1))
@@ -114,7 +129,8 @@ for f in "$DL"/*; do
   # nothing. The verify is the check: a file that changed, or a signature that does not match it,
   # fails here and gets re-signed.
   base="$(basename "$f")"
-  if [ -f "$f.sig" ] && ssh-keygen -Y verify -f "$ALLOWED" -I "$IDENTITY" -n "$NAMESPACE" \
+  ns="$(namespace_for "$f")"
+  if [ -f "$f.sig" ] && ssh-keygen -Y verify -f "$ALLOWED" -I "$IDENTITY" -n "$ns" \
                                    -s "$f.sig" < "$f" >/dev/null 2>&1; then
     echo "  уже подписан: $base"
     continue
@@ -168,11 +184,11 @@ for f in "$DL"/*; do
   # So: remove the stale signature first, close stdin so a prompt can never block, and verify that a
   # signature actually appeared and that it verifies. A signing step that cannot fail is decoration.
   rm -f "$f.sig"
-  if ! ssh-keygen -Y sign -f "$KEY" -n "$NAMESPACE" "$f" </dev/null >/dev/null 2>&1; then
+  if ! ssh-keygen -Y sign -f "$KEY" -n "$ns" "$f" </dev/null >/dev/null 2>&1; then
     echo "ОШИБКА: ssh-keygen не смог подписать $base" >&2
     exit 1
   fi
-  if [ ! -f "$f.sig" ] || ! ssh-keygen -Y verify -f "$ALLOWED" -I "$IDENTITY" -n "$NAMESPACE" \
+  if [ ! -f "$f.sig" ] || ! ssh-keygen -Y verify -f "$ALLOWED" -I "$IDENTITY" -n "$ns" \
                                         -s "$f.sig" < "$f" >/dev/null 2>&1; then
     echo "ОШИБКА: подпись для $base не создана или не проходит собственную проверку" >&2
     exit 1

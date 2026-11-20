@@ -52,8 +52,9 @@ These URLs are embedded in client builds and configuration files:
 | Bootstrap | _public Tox DHT_ | Clients bootstrap from the public Tox DHT (nodes.tox.chat — tox.abilinski.com, mf-net.eu, tox.initramfs.io, …). The self-hosted `bootstrap*.khandaq.org` nodes have been retired. |
 | Push wake relay | https://push.khandaq.org/toxfcm/fcm.php | FCM/APNs wake only (no message body; see PUSH_RELAY.md) |
 | Main site | https://khandaq.org | Project website |
+| Desktop update | https://khandaq.org/downloads/khandaq-desktop-update.json | Desktop app only: the signed manifest of the latest release, fetched by an anonymous GET a few minutes after start and then daily; the download only on Update. Off in Settings, About (see docs/DESKTOP-SIGNING.md) |
 
-Source of truth: [`config/khandaq_bootstrap_nodes.json`](config/khandaq_bootstrap_nodes.json), [`config/khandaq_push.json`](config/khandaq_push.json).
+Source of truth: [`config/khandaq_bootstrap_nodes.json`](config/khandaq_bootstrap_nodes.json), [`config/khandaq_push.json`](config/khandaq_push.json), [`khandaq-desktop/src/net/updatemanifest.cpp`](khandaq-desktop/src/net/updatemanifest.cpp).
 
 See [docs/NETWORK.md](docs/NETWORK.md).
 

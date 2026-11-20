@@ -370,6 +370,91 @@
         <translation>Снова в сети</translation>
     </message>
     <message>
+        <source>Khandaq %1 is available</source>
+        <comment>update band at the top of the window: a newer version is out; %1 is its number</comment>
+        <translation>Вышел Khandaq %1</translation>
+    </message>
+    <message>
+        <source>Khandaq %1 is downloaded</source>
+        <comment>update band at the top of the window: the checked file waits to be installed by hand; %1 is the version</comment>
+        <translation>Khandaq %1 скачан</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <comment>update band at the top of the window and Settings, About: button that downloads and installs the new version</comment>
+        <translation>Обновить</translation>
+    </message>
+    <message>
+        <source>What&apos;s new</source>
+        <comment>update band at the top of the window: button that opens the release notes</comment>
+        <translation>Что нового</translation>
+    </message>
+    <message>
+        <source>Hide until the next start</source>
+        <comment>update band at the top of the window: tooltip of the cross</comment>
+        <translation>Скрыть до следующего запуска</translation>
+    </message>
+    <message>
+        <source>Downloading: %1%</source>
+        <comment>update band at the top of the window: %1 is how much has come, in percent</comment>
+        <translation>Скачиваем: %1%</translation>
+    </message>
+    <message>
+        <source>Preparing the update</source>
+        <comment>update band at the top of the window: the download is checked and being unpacked</comment>
+        <translation>Готовим обновление</translation>
+    </message>
+    <message>
+        <source>Restarting</source>
+        <comment>update band at the top of the window: Khandaq quits so the new version takes its place</comment>
+        <translation>Перезапускаем</translation>
+    </message>
+    <message>
+        <source>The download did not finish</source>
+        <comment>update band at the top of the window: error</comment>
+        <translation>Скачивание прервалось</translation>
+    </message>
+    <message>
+        <source>The file did not pass the check and was deleted</source>
+        <comment>update band at the top of the window: error, the download is not the signed release</comment>
+        <translation>Файл не прошёл проверку и удалён</translation>
+    </message>
+    <message>
+        <source>The update could not be unpacked</source>
+        <comment>update band at the top of the window: error</comment>
+        <translation>Не удалось распаковать обновление</translation>
+    </message>
+    <message>
+        <source>Not installed: permission was not given</source>
+        <comment>update band at the top of the window: Windows asked for permission to install and it was refused</comment>
+        <translation>Не установлено: нет разрешения</translation>
+    </message>
+    <message>
+        <source>The update could not start</source>
+        <comment>update band at the top of the window: error</comment>
+        <translation>Не удалось запустить обновление</translation>
+    </message>
+    <message>
+        <source>Install it with this command: %1</source>
+        <comment>update band at the top of the window: Linux package; %1 is the command</comment>
+        <translation>Установите командой: %1</translation>
+    </message>
+    <message>
+        <source>Quit Khandaq and put the new version in place of this one</source>
+        <comment>update band at the top of the window: this copy cannot be replaced by Khandaq itself</comment>
+        <translation>Закройте Khandaq и замените эту версию новой</translation>
+    </message>
+    <message>
+        <source>Khandaq could not finish the update. Nothing was deleted, but some of your files may not be back in place: your settings (khandaq.ini) and the profiles folder, which holds your profiles. Look for them in these folders:</source>
+        <comment>text file Khandaq opens when an update of a portable Windows folder could not put everything back; the folders follow, one a line</comment>
+        <translation>Khandaq не удалось завершить обновление. Ничего не удалено, но часть ваших файлов может оказаться не на месте: настройки (khandaq.ini) и папка profiles, в которой хранятся ваши профили. Поищите их в этих папках:</translation>
+    </message>
+    <message>
+        <source>Close Khandaq, move them into the folder you start Khandaq from, and start it again.</source>
+        <comment>text file Khandaq opens when an update of a portable Windows folder could not put everything back: the last line, after the folders</comment>
+        <translation>Закройте Khandaq, перенесите их в папку, из которой вы запускаете Khandaq, и запустите его снова.</translation>
+    </message>
+    <message>
         <source>Find a chat or paste an ID</source>
         <comment>placeholder of the command line</comment>
         <translation>Найти чат или вставить ID</translation>
@@ -3439,9 +3524,34 @@
         <translation>Проверять обновления</translation>
     </message>
     <message>
-        <source>Download the update</source>
-        <comment>Settings, About: button once a newer version is out</comment>
-        <translation>Скачать обновление</translation>
+        <source>Check now</source>
+        <comment>Settings, About: button that checks for a newer version at once</comment>
+        <translation>Проверить сейчас</translation>
+    </message>
+    <message>
+        <source>Checking</source>
+        <comment>Settings, About: beside Check now, while it checks</comment>
+        <translation>Проверяем</translation>
+    </message>
+    <message>
+        <source>You have the latest version</source>
+        <comment>Settings, About: beside Check now</comment>
+        <translation>У вас последняя версия</translation>
+    </message>
+    <message>
+        <source>Version %1 is available</source>
+        <comment>Settings, About: beside Check now; %1 is the version</comment>
+        <translation>Доступна версия %1</translation>
+    </message>
+    <message>
+        <source>Could not check</source>
+        <comment>Settings, About: beside Check now, when khandaq.org could not be reached or its answer was refused</comment>
+        <translation>Не удалось проверить</translation>
+    </message>
+    <message>
+        <source>This build does not update itself</source>
+        <comment>Settings, About: beside Check now, in development builds and copies a package manager keeps</comment>
+        <translation>Эта сборка не обновляется сама</translation>
     </message>
     <message>
         <source>Owner and developer: Isa Dagestani</source>

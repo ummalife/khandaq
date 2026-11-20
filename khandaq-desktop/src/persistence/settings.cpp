@@ -174,6 +174,9 @@ void Settings::loadGlobal()
         }
         autoAwayTime = s.value("autoAwayTime", 10).toInt();
         checkUpdates = s.value("checkUpdates", true).toBool();
+        updateLastCheck = s.value("updateLastCheck", 0).toLongLong();
+        updateHighestSeenLegacy = s.value("updateHighestSeen", QString()).toString();
+        updateManifestSerial = s.value("updateManifestSerial", 0).toLongLong();
         // note: notifySound and busySound UI elements are now under UI settings
         // page, but kept under General in settings file to be backwards compatible
         notifySound = s.value("notifySound", true).toBool();
@@ -195,6 +198,16 @@ void Settings::loadGlobal()
             autoAcceptMaxSize = static_cast<size_t>(rule.maxSize);
         }
         stylePreference = static_cast<StyleType>(s.value("stylePreference", 1).toInt());
+    }
+    s.endGroup();
+
+    // KHANDAQ (0.2.66): the highest version a verified manifest has shown, for each platform.
+    s.beginGroup("UpdateHighestSeen");
+    {
+        updateHighestSeen.clear();
+        for (const QString& platform : s.childKeys()) {
+            updateHighestSeen.insert(platform, s.value(platform).toString());
+        }
     }
     s.endGroup();
 
@@ -707,6 +720,11 @@ void Settings::saveGlobal()
         s.setValue("currentProfile", currentProfile);
         s.setValue("autoAwayTime", autoAwayTime);
         s.setValue("checkUpdates", checkUpdates);
+        s.setValue("updateLastCheck", updateLastCheck);
+        if (!updateHighestSeenLegacy.isEmpty()) {
+            s.setValue("updateHighestSeen", updateHighestSeenLegacy);
+        }
+        s.setValue("updateManifestSerial", updateManifestSerial);
         s.setValue("notifySound", notifySound);
         s.setValue("notifyHide", notifyHide);
         s.setValue("busySound", busySound);
@@ -715,6 +733,14 @@ void Settings::saveGlobal()
         s.setValue(autoDownloadAppliedKey, true);
         s.setValue("globalAutoAcceptDir", globalAutoAcceptDir);
         s.setValue("stylePreference", static_cast<int>(stylePreference));
+    }
+    s.endGroup();
+
+    s.beginGroup("UpdateHighestSeen");
+    {
+        for (auto seen = updateHighestSeen.constBegin(); seen != updateHighestSeen.constEnd(); ++seen) {
+            s.setValue(seen.key(), seen.value());
+        }
     }
     s.endGroup();
 
@@ -1664,6 +1690,41 @@ void Settings::setCheckUpdates(bool newValue)
     if (setVal(checkUpdates, newValue)) {
         emit checkUpdatesChanged(newValue);
     }
+}
+
+qint64 Settings::getUpdateLastCheck() const
+{
+    QMutexLocker locker{&bigLock};
+    return updateLastCheck;
+}
+
+void Settings::setUpdateLastCheck(qint64 secondsSinceEpoch)
+{
+    setVal(updateLastCheck, secondsSinceEpoch);
+}
+
+QString Settings::getUpdateHighestSeen(const QString& platform) const
+{
+    QMutexLocker locker{&bigLock};
+    return updateHighestSeen.value(platform, updateHighestSeenLegacy);
+}
+
+void Settings::setUpdateHighestSeen(const QString& platform, const QString& version)
+{
+    QMutexLocker locker{&bigLock};
+    updateHighestSeen.insert(platform, version);
+    updateHighestSeenLegacy.clear();
+}
+
+qint64 Settings::getUpdateManifestSerial() const
+{
+    QMutexLocker locker{&bigLock};
+    return updateManifestSerial;
+}
+
+void Settings::setUpdateManifestSerial(qint64 serial)
+{
+    setVal(updateManifestSerial, serial);
 }
 
 bool Settings::getNotify() const

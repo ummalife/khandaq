@@ -52,6 +52,11 @@ auto_test(core networkdiagnostics "" "")
 auto_test(core fileprogress "" "")
 auto_test(chatlog textformatter "" "")
 auto_test(net bsu "${${PROJECT_NAME}_RESOURCES}" "") # needs nodes list
+# KHANDAQ (0.2.66): the update, with a manifest signed by a throwaway test key.
+auto_test(net sshsig "test/net/update/fixtures.qrc" "")
+auto_test(net updatemanifest "test/net/update/fixtures.qrc" "")
+auto_test(net updateplatform "" "")
+auto_test(net updatecheck "test/net/update/fixtures.qrc" "")
 auto_test(chatlog chatlinestorage "" "")
 auto_test(chatlog chatlinecontentproxy "" "")
 auto_test(chatlog airentrynotes "res/air.qrc" "") # the Plex faces

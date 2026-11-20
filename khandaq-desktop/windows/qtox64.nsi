@@ -1,4 +1,6 @@
 Unicode True
+!include "FileFunc.nsh"
+!include "LogicLib.nsh"
 ###################
 #META
 ###################
@@ -15,6 +17,9 @@ Unicode True
 !define UNINSTALL_PATH "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 !define REG_START_MENU "Start Menu Folder"
 var SM_Folder
+; KHANDAQ (0.2.66): 1 when the app runs this installer to update itself:
+; /S /UPDATE /WAITPID=<the app's process> /D=<the install folder>
+var UpdateMode
 
 Name "${APP_NAME}"
 Caption "${APP_NAME}"
@@ -189,6 +194,86 @@ FunctionEnd
 Function Launch_Khandaq_without_Admin
    SetOutPath $INSTDIR
    ShellExecAsUser::ShellExecAsUser "" "$INSTDIR\${MAIN_APP_EXE}" ""
+FunctionEnd
+
+; KHANDAQ (0.2.66): the update the app starts. /WAITPID waits up to two minutes for the app to quit
+; before anything is written, and gives up without touching the install if it has not. /UPDATE with
+; /S starts the updated app as the person once the files are in place, as the Finish page does, and
+; starts what is in place again when the update fails or gives up after the app has quit for it.
+; Without these options the installer runs exactly as before.
+Function .onInit
+  StrCpy $UpdateMode 0
+  ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "/UPDATE" $R1
+  ${IfNot} ${Errors}
+  ${AndIf} ${Silent}
+    StrCpy $UpdateMode 1
+  ${EndIf}
+  ClearErrors
+  ${GetOptions} $R0 "/WAITPID=" $R1
+  ${IfNot} ${Errors}
+    IntOp $R1 $R1 + 0
+    ; SYNCHRONIZE: enough to wait for the process, nothing more.
+    System::Call "kernel32::OpenProcess(i 0x00100000, i 0, i $R1) p .R2"
+    ${If} $R2 != 0
+      System::Call "kernel32::WaitForSingleObject(p $R2, i 120000) i .R3"
+      System::Call "kernel32::CloseHandle(p $R2)"
+      ${If} $R3 <> 0
+        Abort
+      ${EndIf}
+    ${Else}
+      ; Gone already, or not this account's to open: elevated with another account's password
+      ; (over the shoulder), the installer runs as that account. Wait for the program file instead.
+      Call WaitForTheProgramFile
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
+
+; KHANDAQ (0.2.66): while Khandaq runs, Windows keeps its program file from being opened for writing,
+; whoever asks. Tried every half second for two minutes; a program that is not there has nothing to
+; wait for. Still held after that, the update gives up before anything is written and starts Khandaq
+; again for the person, who quit it for the update: an Abort here calls no .onInstFailed.
+Function WaitForTheProgramFile
+  StrCpy $R6 "$INSTDIR\${MAIN_APP_EXE}"
+  StrCpy $R9 0
+  ${Do}
+    ; GENERIC_WRITE, no sharing, OPEN_EXISTING; the path from $R6, whatever it holds.
+    System::Call "kernel32::CreateFileW(w R6, i 0x40000000, i 0, p 0, i 3, i 0x80, p 0) p .R7 ?e"
+    Pop $R8
+    ${If} $R7 != -1
+      System::Call "kernel32::CloseHandle(p $R7)"
+      Return
+    ${EndIf}
+    ; ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND
+    ${If} $R8 == 2
+    ${OrIf} $R8 == 3
+      Return
+    ${EndIf}
+    IntOp $R9 $R9 + 1
+    ${If} $R9 >= 240
+      ${ExitDo}
+    ${EndIf}
+    Sleep 500
+  ${Loop}
+  ${If} $UpdateMode == 1
+    Call Launch_Khandaq_without_Admin
+  ${EndIf}
+  Abort
+FunctionEnd
+
+Function .onInstSuccess
+  ${If} $UpdateMode == 1
+    Call Launch_Khandaq_without_Admin
+  ${EndIf}
+FunctionEnd
+
+; KHANDAQ (0.2.66): an update that fails once it has begun, on a file it could not write, would leave
+; the person without Khandaq, which they quit for it: what is in place is started again.
+Function .onInstFailed
+  ${If} $UpdateMode == 1
+    Call Launch_Khandaq_without_Admin
+  ${EndIf}
 FunctionEnd
 
 !define MUI_UNABORTWARNING

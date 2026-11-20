@@ -57,4 +57,6 @@
     <string name="air_import_failed_title">档案没有转移成功</string>
     <!-- Stage 4: how a moved-in profile opens on Android -->
     <string name="air_import_device_key">在这部手机上，档案无需密码即可打开，密钥保存在这里。之后可以在“个人资料”的“密码和 PIN 码”中设置密码。</string>
+    <!-- KHANDAQ (testers' ideas, 0.2.67): what a tap on the empty photo tile beside the name does; the photo can be skipped. -->
+    <string name="air_first_photo_add">添加头像（可选）</string>
 </resources>

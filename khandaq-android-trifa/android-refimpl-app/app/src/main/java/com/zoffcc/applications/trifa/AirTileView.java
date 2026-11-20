@@ -39,7 +39,12 @@ final class AirTileView extends FrameLayout
         /** A group not joined yet, as the command line's "Join the group with this key": dashed, with the group glyph. */
         PENDING_GROUP,
         ME,
-        SAVED
+        SAVED,
+        /**
+         * KHANDAQ (testers' ideas, 0.2.67): the place of our photo where it may stay empty (the first launch): a
+         * plus on the sunken ground in place of the initials, as the desktop draws it.
+         */
+        ADD_PHOTO
     }
 
     private final ImageView photo;
@@ -133,6 +138,13 @@ final class AirTileView extends FrameLayout
                 ImageViewCompat.setImageTintList(icon, android.content.res.ColorStateList.valueOf(
                         AirUi.color(context, R.color.kq_ink)));
                 break;
+            case ADD_PHOTO:
+                initials.setVisibility(View.GONE);
+                icon.setVisibility(View.VISIBLE);
+                icon.setImageResource(R.drawable.kq_ic_plus);
+                ImageViewCompat.setImageTintList(icon, android.content.res.ColorStateList.valueOf(
+                        AirUi.color(context, R.color.kq_ink_2)));
+                break;
             case ME:
                 icon.setVisibility(View.GONE);
                 initials.setVisibility(View.VISIBLE);
@@ -169,9 +181,9 @@ final class AirTileView extends FrameLayout
     /** A loaded photo covers the initials; without one the initials come back. */
     void showPhoto(final boolean shown)
     {
-        photoShown = shown && !pending() && kind != Kind.SAVED;
+        photoShown = shown && !glyphOnly();
         photo.setVisibility(photoShown ? View.VISIBLE : View.GONE);
-        if (!pending() && kind != Kind.SAVED)
+        if (!glyphOnly())
         {
             initials.setVisibility(photoShown ? View.GONE : View.VISIBLE);
         }
@@ -187,6 +199,12 @@ final class AirTileView extends FrameLayout
     private boolean pending()
     {
         return kind == Kind.PENDING || kind == Kind.PENDING_GROUP;
+    }
+
+    /** A tile that shows its glyph, never a photo or initials. */
+    private boolean glyphOnly()
+    {
+        return pending() || kind == Kind.SAVED || kind == Kind.ADD_PHOTO;
     }
 
     @Override

@@ -1286,6 +1286,9 @@ public class TrifaToxService extends Service
                 }
                 // KHANDAQ (redesign stage 4, E20): the sign-in page shows this name before the profile is open.
                 DbSecretKeyStorage.rememberProfileName(context_s, global_my_name);
+                // KHANDAQ (testers' ideas, 0.2.67): the photo picked with the name on the first launch becomes ours
+                // now that the profile is open; it waits for the next start when it could not (AirFirstPhoto).
+                AirFirstPhoto.applySoon(context_s);
 
                 if (tox_self_get_status_message_size() > 0)
                 {

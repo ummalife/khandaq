@@ -497,6 +497,8 @@ public final class DbSecretKeyStorage
         {
         }
         deleteToxSaves(context.getFilesDir());
+        // KHANDAQ (testers' ideas, 0.2.67): a photo of the first launch still waiting for the profile.
+        deleteRecursive(AirFirstPhoto.file(context));
         deleteChildren(context.getCacheDir());
         try
         {
@@ -534,6 +536,7 @@ public final class DbSecretKeyStorage
                     .remove("kq_identity_block_count")
                     .remove(MainActivity.PREF_IDENTITY_REANCHOR_ONCE)
                     .remove(CreateProfileActivity.PREF_ONBOARDING_DISPLAY_NAME)
+                    .remove(AirFirstPhoto.PREF_PENDING)
                     .remove(PREFS_PROFILE_NAME)
                     // The app lock guarded the deleted profile. Kept, it locked the new profile behind a
                     // PIN that whoever made it may not know, and the PIN screen has no way out.

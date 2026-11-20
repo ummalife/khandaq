@@ -3,6 +3,7 @@ package com.zoffcc.applications.trifa;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -23,14 +24,18 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 import androidx.appcompat.app.ActionBar;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.view.ViewCompat;
 import androidx.preference.PreferenceManager;
+
+import com.yalantis.ucrop.UCrop;
 
 import org.khandaq.messenger.R;
 
@@ -73,10 +78,17 @@ public class AirFirstLaunchActivity extends AirScreenActivity implements AirBand
     /** The new-password autofill hint (androidx.autofill HintConstants.AUTOFILL_HINT_NEW_PASSWORD). */
     private static final String AUTOFILL_HINT_NEW_PASSWORD = "newPassword";
     private static final String IMPORT_STAGING = "import_savedata.tox";
+    /** Where uCrop writes the photo of the first page before it joins the name (AirFirstPhoto). */
+    private static final String PHOTO_CROP = "first_launch_photo_crop.jpg";
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ActivityResultLauncher<String[]> pickProfile =
             registerForActivityResult(new ActivityResultContracts.OpenDocument(), this::onProfilePicked);
+    // KHANDAQ (testers' ideas, 0.2.67): the photo that can come with the name, picked and cropped as on You.
+    private final ActivityResultLauncher<Intent> pickPhoto =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::onPhotoPicked);
+    private final ActivityResultLauncher<Intent> cropPhoto =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::onPhotoCropped);
 
     private AirStepKit.Progress progress;
     private AirStepKit.MainBar bar;
@@ -84,6 +96,9 @@ public class AirFirstLaunchActivity extends AirScreenActivity implements AirBand
     private View[] pages;
 
     private AirStepKit.LineField nameField;
+    private FrameLayout photoButton;
+    private AirTileView photoTile;
+    private TextView photoNote;
     private TextView moveButton;
     private TextView moveNote;
 
@@ -130,6 +145,12 @@ public class AirFirstLaunchActivity extends AirScreenActivity implements AirBand
             startActivity(new Intent(this, CheckPasswordActivity.class));
             finish();
             return;
+        }
+
+        if (savedInstanceState == null)
+        {
+            // A photo picked on a first launch that was left: this one starts without it. A recreation keeps it.
+            AirFirstPhoto.forget(this);
         }
 
         final Toolbar toolbar = findViewById(R.id.air_screen_toolbar);
@@ -249,7 +270,31 @@ public class AirFirstLaunchActivity extends AirScreenActivity implements AirBand
             }
             return false;
         });
-        page.addView(nameField, spaced(R.dimen.kq_space_24));
+        // KHANDAQ (testers' ideas, 0.2.67): a photo can come with the name, at its start as on You, both standing
+        // on the foot of the field. Empty, the tile is a quiet plus; nothing waits on it (AirFirstPhoto).
+        photoTile = new AirTileView(this);
+        photoButton = new FrameLayout(this);
+        final int photoSide = getResources().getDimensionPixelSize(R.dimen.kq_space_64);
+        photoButton.addView(photoTile, new FrameLayout.LayoutParams(photoSide, photoSide));
+        photoButton.setForeground(getDrawable(R.drawable.air_fg_press_veil));
+        photoButton.setClickable(true);
+        photoButton.setFocusable(true);
+        AirUi.markAsButton(photoButton);
+        photoButton.setOnClickListener(v -> offerPhoto());
+        final LinearLayout nameRow = new LinearLayout(this);
+        nameRow.setOrientation(LinearLayout.HORIZONTAL);
+        nameRow.setGravity(Gravity.BOTTOM);
+        nameRow.addView(photoButton, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                                                                   ViewGroup.LayoutParams.WRAP_CONTENT));
+        final LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        nameParams.setMarginStart(getResources().getDimensionPixelSize(R.dimen.kq_space_12));
+        nameRow.addView(nameField, nameParams);
+        page.addView(nameRow, spaced(R.dimen.kq_space_24));
+        // E21: a photo that could not be taken is said under it, until the next try.
+        photoNote = AirScreenKit.note(this, "");
+        photoNote.setVisibility(View.GONE);
+        page.addView(photoNote, spaced(R.dimen.kq_space_6));
+        showPhoto();
 
         moveButton = AirStepKit.quietButton(this, getString(R.string.air_first_move_profile));
         moveButton.setOnClickListener(v -> pickFile());
@@ -262,6 +307,141 @@ public class AirFirstLaunchActivity extends AirScreenActivity implements AirBand
     private String cleanName()
     {
         return nameField.text().trim();
+    }
+
+    // ---- the photo with the name ----
+
+    /** As on You: without a photo the picker; with one, another one or none. */
+    private void offerPhoto()
+    {
+        if (busy)
+        {
+            return;
+        }
+        endPhotoNote();
+        if (!AirFirstPhoto.has(this))
+        {
+            choosePhoto();
+            return;
+        }
+        hideKeyboard();
+        final CharSequence[] choices = {getString(R.string.air_you_photo_choose),
+                                        getString(R.string.air_you_photo_remove)};
+        final AlertDialog dialog = new AlertDialog.Builder(this).setItems(choices, (d, which) -> {
+            if (which == 0)
+            {
+                choosePhoto();
+            }
+            else
+            {
+                AirFirstPhoto.forget(this);
+                showPhoto();
+            }
+        }).setNegativeButton(R.string.cancel, null).create();
+        AirUi.showDialog(this, dialog, false);
+    }
+
+    private void choosePhoto()
+    {
+        if (busy)
+        {
+            return;
+        }
+        try
+        {
+            pickPhoto.launch(ProfileContentFragment.avatar_picker_intent());
+        }
+        catch (android.content.ActivityNotFoundException e)
+        {
+            Log.i(TAG, "photo:pick:EE:" + e.getMessage());
+            sayPhotoFailure(R.string.profile_avatar_error_generic);
+        }
+    }
+
+    private void onPhotoPicked(final ActivityResult result)
+    {
+        final Intent data = result.getData();
+        final Uri picked = result.getResultCode() == RESULT_OK && data != null ? data.getData() : null;
+        if (picked == null || destroyed)
+        {
+            return;
+        }
+        if (!ProfileContentFragment.picked_avatar_is_image(this, picked))
+        {
+            sayPhotoFailure(R.string.profile_avatar_error_unsupported);
+            return;
+        }
+        final File crop = new File(getCacheDir(), PHOTO_CROP);
+        //noinspection ResultOfMethodCallIgnored
+        crop.delete();
+        try
+        {
+            cropPhoto.launch(ProfileContentFragment.avatar_crop_intent(this, picked, Uri.fromFile(crop)));
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "photo:crop:EE:" + e.getMessage());
+            sayPhotoFailure(R.string.profile_avatar_error_generic);
+        }
+    }
+
+    private void onPhotoCropped(final ActivityResult result)
+    {
+        final File crop = new File(getCacheDir(), PHOTO_CROP);
+        if (result.getResultCode() != RESULT_OK)
+        {
+            //noinspection ResultOfMethodCallIgnored
+            crop.delete();
+            if (result.getResultCode() == UCrop.RESULT_ERROR && !destroyed)
+            {
+                Log.i(TAG, "photo:crop failed");
+                sayPhotoFailure(R.string.profile_avatar_error_generic);
+            }
+            return;
+        }
+        // The crop is read from the file this screen named, whatever the result says.
+        final boolean kept = AirFirstPhoto.moveInto(crop, AirFirstPhoto.file(this));
+        if (destroyed)
+        {
+            return;
+        }
+        if (!kept)
+        {
+            Log.i(TAG, "photo:not kept");
+            sayPhotoFailure(R.string.profile_avatar_error_generic);
+        }
+        showPhoto();
+    }
+
+    /** The tile shows the photo that waits, or offers one; TalkBack hears which. */
+    private void showPhoto()
+    {
+        final Bitmap kept = AirFirstPhoto.preview(this, getResources().getDimensionPixelSize(R.dimen.kq_space_64));
+        if (kept == null)
+        {
+            photoTile.bind(AirTileView.Kind.ADD_PHOTO, "", 0);
+            photoTile.photoView().setImageDrawable(null);
+        }
+        else
+        {
+            photoTile.bind(AirTileView.Kind.ME, cleanName(), 0);
+            photoTile.photoView().setImageBitmap(kept);
+            photoTile.showPhoto(true);
+        }
+        photoButton.setContentDescription(getString(R.string.air_you_photo) + ". "
+                                          + getString(kept == null ? R.string.air_first_photo_add
+                                                                   : R.string.air_you_photo_hint));
+    }
+
+    /** E21: why the photo was not taken, under it in the danger colour. */
+    private void sayPhotoFailure(@StringRes final int text)
+    {
+        AirUi.sayOnLine(photoNote, getString(text), true);
+    }
+
+    private void endPhotoNote()
+    {
+        AirUi.endLine(photoNote);
     }
 
     // ---- page 2: the password ----
@@ -592,6 +772,8 @@ public class AirFirstLaunchActivity extends AirScreenActivity implements AirBand
                 PreferenceManager.getDefaultSharedPreferences(app).edit().putBoolean("PW_SET_SCREEN_DONE", true).commit();
                 DbSecretKeyStorage.setSessionLoggedIn(app, true);
                 DbSecretKeyStorage.rememberProfileName(app, summary.name);
+                // A photo picked on the first page was for a new profile, not for the one moved in.
+                AirFirstPhoto.forget(app);
                 ok = true;
             }
             catch (Exception e)
@@ -724,6 +906,9 @@ public class AirFirstLaunchActivity extends AirScreenActivity implements AirBand
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
         prefs.edit()
              .putString(CreateProfileActivity.PREF_ONBOARDING_DISPLAY_NAME, name)
+             // KHANDAQ (testers' ideas, 0.2.67): the photo picked with the name becomes ours once Tox runs with
+             // the new profile (AirFirstPhoto.applySoon).
+             .putBoolean(AirFirstPhoto.PREF_PENDING, AirFirstPhoto.has(this))
              .putBoolean(PREF_ID_PENDING, true)
              .putBoolean("PW_SET_SCREEN_DONE", true)
              .commit();
@@ -757,6 +942,7 @@ public class AirFirstLaunchActivity extends AirScreenActivity implements AirBand
         passwordField.edit.setEnabled(!busy);
         repeatField.edit.setEnabled(!busy);
         nameField.edit.setEnabled(!busy);
+        photoButton.setEnabled(!busy);
         setPickerEnabled(!busy);
         final ActionBar actionBar = getSupportActionBar();
         if (actionBar != null)

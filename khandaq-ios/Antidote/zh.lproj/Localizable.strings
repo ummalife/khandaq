@@ -537,6 +537,7 @@
 "delete_for_everyone" = "为所有人删除";
 "chat_edit_action" = "编辑";
 "message_edit_save" = "保存";
+"chat_edit_too_long" = "太长，无法修改：请缩短文字，或作为新消息发送。";
 "message_edited_marker" = "已编辑";
 "group_msg_sender_unverified" = "来自历史转发，发送者未验证";
 "alert_ok" = "确定";
@@ -942,6 +943,9 @@
 "air_dossier_block_message" = "联系人和对话将从此设备删除，此密钥发来的新请求也不会再显示。";
 "air_dossier_block_hint" = "会先确认，然后删除联系人并隐藏此密钥的请求";
 "air_privacy_title" = "隐私";
+"air_privacy_read_receipts" = "发送已读回执";
+"air_privacy_read_receipts_detail" = "关闭后，对方看不到你已读过他们的消息。";
+"air_privacy_typing" = "显示我正在输入";
 "air_blocked_title" = "已屏蔽";
 "air_blocked_none" = "无";
 "air_blocked_count_format" = "%d";
@@ -1153,6 +1157,8 @@
 "air_voice_listen" = "收听";
 "air_voice_pause" = "暂停";
 "air_voice_spoken" = "语音消息";
+"air_voice_speed" = "播放速度";
+"air_voice_speed_format" = "%@x";
 "air_tray_file_format" = "%1$@，%2$@";
 
 /* Redesign stage 3: calls, their screens and their entries in the transcript (E9) */
@@ -1324,6 +1330,9 @@
 "air_first_name_first" = "请先填写名字。";
 "air_first_next" = "下一步";
 "air_first_move_profile" = "从其他设备转移档案";
+"air_first_photo_add" = "添加头像";
+"air_first_photo_remove" = "移除头像";
+"air_first_photo_hint" = "从图片库选择头像";
 "air_first_default_folder" = "档案";
 "air_first_password_title" = "档案密码";
 "air_first_password_body" = "密码无法找回：没有服务器。档案只保存在这台设备上。";

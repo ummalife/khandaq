@@ -66,6 +66,14 @@
 				<string>khandaq</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>org.khandaq.messenger.tox</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>tox</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>

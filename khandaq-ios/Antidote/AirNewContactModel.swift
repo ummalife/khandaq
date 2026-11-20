@@ -114,6 +114,60 @@ enum AirToxId {
     }
 }
 
+/// KHANDAQ (ideas 1): a link that adds someone, opened in Khandaq from another app: tox:<ID> (what the QR
+/// code of the desktop holds), tox://<ID>, or khandaq://add?id=<ID>. New contact opens with the ID and
+/// checks it there, as it does for an ID from the command line.
+enum AirContactLink {
+    /// Whether `url` is such a link, whatever it holds: one with no ID in it is still not a file to share.
+    static func matches(_ url: URL) -> Bool {
+        switch url.scheme?.lowercased() {
+            case "tox"?:
+                return true
+            case "khandaq"?:
+                return url.host?.lowercased() == "add"
+            default:
+                return false
+        }
+    }
+
+    /// The ID the link holds, read as the command line reads one (AirToxId.commandCandidate): 12 to 76 hex
+    /// characters, upper case, so a link cut short opens New contact saying what is missing. Nil for a link
+    /// that holds anything else, and for any other link.
+    static func address(from url: URL) -> String? {
+        guard matches(url) else {
+            return nil
+        }
+        let payload: String?
+        if url.scheme?.lowercased() == "tox" {
+            payload = toxPayload(url)
+        }
+        else {
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            payload = items.first { $0.name.lowercased() == "id" }?.value
+        }
+        return payload.flatMap { AirToxId.commandCandidate($0) }
+    }
+
+    /// What follows "tox:" or "tox://", up to a query or a fragment, without a closing slash.
+    private static func toxPayload(_ url: URL) -> String? {
+        let text = url.absoluteString
+        guard let colon = text.firstIndex(of: ":") else {
+            return nil
+        }
+        var payload = String(text[text.index(after: colon)...])
+        if payload.hasPrefix("//") {
+            payload.removeFirst(2)
+        }
+        if let end = payload.firstIndex(where: { $0 == "?" || $0 == "#" }) {
+            payload = String(payload[..<end])
+        }
+        while payload.hasSuffix("/") {
+            payload.removeLast()
+        }
+        return payload.removingPercentEncoding ?? payload
+    }
+}
+
 /// The verdict under the ID field, in the order it is decided.
 enum AirIdVerdict: Equatable {
     case empty

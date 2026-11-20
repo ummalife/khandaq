@@ -18,6 +18,8 @@ class OCTSubmanagerFilesMock: NSObject, OCTSubmanagerFiles {
     private var progressTimer: Timer?
 
     var reofferAutoAcceptPolicy: ((OCTMessageAbstract) -> Bool)?
+    /// The files the conversation asked to send, by path, in order (nothing goes anywhere).
+    private(set) var sentFilePaths: [String] = []
 
     deinit {
         progressTimer?.invalidate()
@@ -28,7 +30,7 @@ class OCTSubmanagerFilesMock: NSObject, OCTSubmanagerFiles {
     }
     
     func sendFile(atPath filePath: String, moveToUploads: Bool, to chat: OCTChat, failureBlock: ((Error) -> Void)? = nil) {
-        // nop
+        sentFilePaths.append(filePath)
     }
     
     func acceptFileTransfer(_ message: OCTMessageAbstract, failureBlock: ((Error) -> Void)? = nil) {

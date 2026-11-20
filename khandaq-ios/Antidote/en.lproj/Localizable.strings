@@ -402,6 +402,7 @@
 "nav_edit_start" = "Edit";
 "nav_edit_done" = "Done";
 "message_edit_save" = "Save";
+"chat_edit_too_long" = "Too long to change: shorten the text, or send it as a new message.";
 "message_edited_marker" = "edited";
 "group_msg_sender_unverified" = "Relayed from history, sender not verified";
 /* Delete button */
@@ -953,6 +954,9 @@
 "air_dossier_block_message" = "The contact and the conversation are deleted from this device, and new requests from this key will not be shown.";
 "air_dossier_block_hint" = "Asks first, then deletes the contact and hides requests from this key";
 "air_privacy_title" = "Privacy";
+"air_privacy_read_receipts" = "Send read receipts";
+"air_privacy_read_receipts_detail" = "Turned off, others don't see that you have read their messages.";
+"air_privacy_typing" = "Show that I'm typing";
 "air_blocked_title" = "Blocked";
 "air_blocked_none" = "None";
 "air_blocked_count_format" = "%d";
@@ -1164,6 +1168,8 @@
 "air_voice_listen" = "Listen";
 "air_voice_pause" = "Pause";
 "air_voice_spoken" = "Voice message";
+"air_voice_speed" = "Playback speed";
+"air_voice_speed_format" = "%@x";
 "air_tray_file_format" = "%1$@, %2$@";
 
 /* Redesign stage 3: calls, their screens and their entries in the transcript (E9) */
@@ -1335,6 +1341,9 @@
 "air_first_name_first" = "Type a name first.";
 "air_first_next" = "Next";
 "air_first_move_profile" = "Move a profile from another device";
+"air_first_photo_add" = "Add a photo";
+"air_first_photo_remove" = "Remove the photo";
+"air_first_photo_hint" = "Chooses a photo from the library";
 "air_first_default_folder" = "Profile";
 "air_first_password_title" = "Profile password";
 "air_first_password_body" = "A password cannot be recovered: there are no servers. The profile is kept only on this device.";

@@ -7,17 +7,23 @@ import SnapKit
 
 /// A voice note in the transcript (redesign stage 3, E8): the round play button (0.2.56, as in Telegram),
 /// the wave that fills as it plays, and the length in tabular figures, so the line keeps its width while
-/// the seconds run. A tap or a drag on the wave moves to that point.
+/// the seconds run. A tap or a drag on the wave moves to that point. While the note plays, its speed
+/// stands after the length (ideas 1).
 final class ChatVoiceMessageView: UIView {
     var onPlayTapped: (() -> Void)?
     // KHANDAQ (Android parity): scrub, a drag or a tap on the wave seeks; reports the share 0 to 1.
     var onSeek: ((Float) -> Void)?
+    /// KHANDAQ (ideas 1): a tap on the speed, which goes on to the next one.
+    var onSpeedTapped: (() -> Void)?
     /// Said instead of "0:00" while the length is not known, as for a note that is not here yet: its size.
     var unknownLengthText: String?
 
     private let playButton = AirPlayButton()
     private let waveformView = VoiceWaveformView()
     private let durationLabel = UILabel()
+    private let speedButton = VoiceSpeedButton()
+    /// The length and, while the note plays, its speed: a hidden speed takes no room.
+    private let trailingStack = UIStackView()
     private var fontCategory = UIApplication.shared.preferredContentSizeCategory
     private var isPlaying = false
 
@@ -68,6 +74,26 @@ final class ChatVoiceMessageView: UIView {
         return durationLabel.text ?? ""
     }
 
+    /// KHANDAQ (ideas 1): the speed of the note while it plays or waits paused (ChatVoiceMessagePlayer
+    /// .speedShown); nil hides it.
+    func showSpeed(_ speed: Float?) {
+        let text = speed.map { VoicePlaybackSpeed.text(for: $0) }
+        guard text != shownSpeedText else {
+            return
+        }
+        if let text = text {
+            speedButton.text = text
+        }
+        speedButton.isHidden = text == nil
+        // The wave gives the speed its room, or takes it back, on the next pass.
+        setNeedsLayout()
+    }
+
+    /// The speed as it shows, nil while it is hidden.
+    var shownSpeedText: String? {
+        return speedButton.isHidden ? nil : speedButton.text
+    }
+
     static func formatTime(_ seconds: TimeInterval) -> String {
         guard seconds.isFinite, seconds >= 0 else {
             return "0:00"
@@ -91,6 +117,10 @@ final class ChatVoiceMessageView: UIView {
         onPlayTapped?()
     }
 
+    @objc private func speedButtonTapped() {
+        onSpeedTapped?()
+    }
+
     private func createViews() {
         playButton.accessibilityIdentifier = "air.voice.play"
         playButton.accessibilityLabel = String(localized: "air_voice_listen")
@@ -110,7 +140,16 @@ final class ChatVoiceMessageView: UIView {
         durationLabel.isAccessibilityElement = false
         durationLabel.setContentHuggingPriority(.required, for: .horizontal)
         durationLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-        addSubview(durationLabel)
+
+        speedButton.addTarget(self, action: #selector(speedButtonTapped), for: .touchUpInside)
+
+        trailingStack.axis = .horizontal
+        trailingStack.alignment = .center
+        trailingStack.spacing = KQSpace.x8
+        trailingStack.addArrangedSubview(durationLabel)
+        trailingStack.addArrangedSubview(speedButton)
+        addSubview(trailingStack)
+        speedButton.isHidden = true
     }
 
     @objc private func waveformScrubbed(_ recognizer: UIGestureRecognizer) {
@@ -140,14 +179,97 @@ final class ChatVoiceMessageView: UIView {
         waveformView.snp.makeConstraints {
             // The target reaches past the disc; the wave keeps its distance from the disc itself.
             $0.leading.equalTo(playButton.snp.trailing).offset(KQSpace.x10 - (KQSize.targetIos - KQSize.control))
-            $0.trailing.equalTo(durationLabel.snp.leading).offset(-KQSpace.x10)
+            $0.trailing.equalTo(trailingStack.snp.leading).offset(-KQSpace.x10)
             $0.centerY.equalTo(playButton)
             $0.height.equalTo(KQSize.controlSmall)
         }
-        durationLabel.snp.makeConstraints {
+        trailingStack.snp.makeConstraints {
             $0.trailing.equalToSuperview()
             $0.centerY.equalTo(playButton)
         }
+    }
+}
+
+/// KHANDAQ (ideas 1): the speed of the note that plays, "1.5x" in tabular figures on a small raised pill,
+/// as the filter pills are drawn. It is drawn 28 high and takes a touch over 44.
+private final class VoiceSpeedButton: UIControl {
+    private let label = UILabel()
+    private var fontCategory = UIApplication.shared.preferredContentSizeCategory
+
+    var text: String? {
+        get {
+            return label.text
+        }
+        set {
+            label.text = newValue
+            accessibilityValue = newValue
+            invalidateIntrinsicContentSize()
+        }
+    }
+
+    /// The words and 6 on each side, at least as wide as high: what the stack beside the length gives it.
+    override var intrinsicContentSize: CGSize {
+        let words = label.intrinsicContentSize
+        let height = max(KQSize.controlSmall, words.height + KQSpace.x2 * 2)
+        return CGSize(width: max(height, words.width + KQSpace.x6 * 2), height: height)
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isAccessibilityElement = true
+        accessibilityTraits = UIAccessibilityTraitButton
+        accessibilityLabel = String(localized: "air_voice_speed")
+        accessibilityIdentifier = "air.voice.speed"
+        layer.borderWidth = KQStroke.hairline
+
+        label.font = KQFont.tabular(KQFont.font(.caption))
+        label.isUserInteractionEnabled = false
+        addSubview(label)
+        label.snp.makeConstraints {
+            $0.center.equalToSuperview()
+        }
+        setContentHuggingPriority(.required, for: .horizontal)
+        setContentCompressionResistancePriority(.required, for: .horizontal)
+        apply()
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var isHighlighted: Bool {
+        didSet {
+            alpha = isHighlighted ? 0.7 : 1
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layer.cornerRadius = bounds.height / 2
+    }
+
+    /// The pill is drawn 28 high; the area that takes a touch is 44, so a thumb never aims at 28.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        let growX = max(0, (KQSize.targetIos - bounds.width) / 2)
+        let growY = max(0, (KQSize.targetIos - bounds.height) / 2)
+        return bounds.insetBy(dx: -growX, dy: -growY).contains(point)
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        let category = UIApplication.shared.preferredContentSizeCategory
+        if category != fontCategory {
+            fontCategory = category
+            label.font = KQFont.tabular(KQFont.font(.caption))
+            invalidateIntrinsicContentSize()
+        }
+        apply()
+    }
+
+    private func apply() {
+        backgroundColor = KQColor.raised
+        layer.borderColor = airCGColor(KQColor.lineStrong)
+        label.textColor = KQColor.ink2
     }
 }
 

@@ -186,6 +186,29 @@ enum AirFileLimits {
     }
 }
 
+/// KHANDAQ (ideas 1): a file picked with File or Audio leaves once the person has seen which one it is and
+/// tapped Send: its name over its size, from below (AirConfirm). It used to leave the moment it was
+/// picked, so a tap on the wrong row of the Files browser sent that file.
+enum AirPickedFile {
+    /// The question for the file at `url`, read while the picker's access to it holds; `send` runs on Send.
+    static func confirmation(for url: URL, source: UIView, send: @escaping () -> Void) -> UIAlertController {
+        return AirConfirm.sheet(title: url.lastPathComponent,
+                                message: sizeText(of: url),
+                                verb: String(localized: "air_compose_send"),
+                                style: .default,
+                                source: source,
+                                perform: send)
+    }
+
+    /// The size of the file at `url` as a file entry says it; nil when it cannot be read.
+    static func sizeText(of url: URL) -> String? {
+        guard let bytes = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize else {
+            return nil
+        }
+        return AirByteSize.text(Int64(bytes))
+    }
+}
+
 /// The bar of a transfer in design/system's terms (.kq-bar): a round track on the sunken ground and the
 /// part done in ink. A new value slides there smoothly; with Reduce Motion it jumps.
 final class AirProgressBar: UIView {

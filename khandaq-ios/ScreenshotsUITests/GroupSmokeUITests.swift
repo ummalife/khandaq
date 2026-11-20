@@ -13,6 +13,8 @@ class GroupSmokeUITests: XCTestCase {
 
     func testCreateGroupAndSendMessage() {
         let app = XCUIApplication()
+        // The real messenger, with a profile of its own: it must not join the real Khandaq Community.
+        app.launchArguments.append("UI_TESTING_REAL")
         app.launch()
 
         dismissSystemAlerts(in: app)

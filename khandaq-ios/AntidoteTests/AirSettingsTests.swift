@@ -28,15 +28,59 @@ class AirSettingsTests: XCTestCase {
         let settings = SettingsMainController(theme: ThemeAppearance.resolvedTheme(), submanagerObjects: nil)
         settings.loadViewIfNeeded()
         let rows = settings.view.allSubviews.compactMap { $0 as? AirSettingRow }.map { $0.accessibilityIdentifier ?? "" }
-        XCTAssertEqual(Array(rows.prefix(7)), ["settings.appearance", "settings.notifications", "settings.privacy",
-                                               "settings.transfer", "settings.network", "settings.faq", "settings.about"])
+        XCTAssertEqual(Array(rows.prefix(8)), ["settings.appearance", "settings.main.language", "settings.notifications",
+                                               "settings.privacy", "settings.transfer", "settings.network", "settings.faq",
+                                               "settings.about"])
         // Debugging is the one more row, last, and only in a debug build.
-        XCTAssertTrue(rows.count == 7 || (rows.count == 8 && rows.last == "settings.debug"), "\(rows)")
+        XCTAssertTrue(rows.count == 8 || (rows.count == 9 && rows.last == "settings.debug"), "\(rows)")
 
         let transfer = AirTransferController()
         transfer.loadViewIfNeeded()
         let transferRows = transfer.view.allSubviews.compactMap { $0 as? AirSettingRow }.map { $0.accessibilityIdentifier ?? "" }
         XCTAssertEqual(transferRows, ["settings.export", "settings.import"])
+    }
+
+    /// KHANDAQ (ideas 1): the language on the first screen of Settings, the one in effect beside it, and
+    /// the sheet of Appearance behind it: each language in its own words, the current one named.
+    func testSettingsHasTheLanguageWithItsSheet() throws {
+        let settings = SettingsMainController(theme: ThemeAppearance.resolvedTheme(), submanagerObjects: nil)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = settings
+        window.isHidden = false
+        defer {
+            settings.presentedViewController?.dismiss(animated: false, completion: nil)
+            window.isHidden = true
+        }
+        settings.loadViewIfNeeded()
+        settings.viewWillAppear(false)
+        let row = try XCTUnwrap(settings.view.allSubviews.compactMap { $0 as? AirSettingRow }
+                                    .first { $0.accessibilityIdentifier == "settings.main.language" })
+        let current = AppLanguage.nativeName(for: AppLanguage.current)
+        XCTAssertEqual(row.accessibilityLabel, String(localized: "settings_language"))
+        XCTAssertEqual(row.accessibilityValue, current)
+
+        row.sendActions(for: .touchUpInside)
+        let sheet = try XCTUnwrap(settings.presentedViewController as? UIAlertController, "the row opened no sheet")
+        XCTAssertEqual(sheet.preferredStyle, .actionSheet)
+        XCTAssertEqual(sheet.title, String(localized: "settings_language_title"))
+        XCTAssertEqual(sheet.message, String(localized: "settings_choice_current", current))
+        XCTAssertEqual(sheet.actions.map { $0.title ?? "" },
+                       AppLanguage.supportedCodes.map { AppLanguage.nativeName(for: $0) } + [String(localized: "alert_cancel")])
+        XCTAssertEqual(sheet.actions.last?.style, .cancel)
+    }
+
+    /// KHANDAQ (ideas 1): the app ships the tables of the languages it speaks, and its Info.plist names
+    /// those four; the old Antidote translations are no longer in the build.
+    func testEveryLanguageOfTheSheetShipsItsTables() {
+        for language in AppLanguage.supportedCodes {
+            for table in ["Localizable", "InfoPlist"] {
+                XCTAssertNotNil(Bundle.main.path(forResource: table, ofType: "strings", inDirectory: nil, forLocalization: language),
+                                "\(language) has no \(table).strings")
+            }
+        }
+        let declared = Bundle.main.object(forInfoDictionaryKey: "CFBundleLocalizations") as? [String]
+        XCTAssertEqual(declared.map { Set($0) }, Set(AppLanguage.supportedCodes))
     }
 
     func testTheThemeIsASegmentWithTheSystemFirstShowingTheStoredChoice() {
@@ -126,6 +170,69 @@ class AirSettingsTests: XCTestCase {
         XCTAssertEqual(mark.frame.midY, titleFrame.midY, accuracy: 1.5, "the mark is not level with the words")
         XCTAssertEqual(row.bounds.height, KQSize.rowDesk, accuracy: 0.5, "a one-line choice is not one row high")
         XCTAssertEqual(titleFrame.height, ceil(title.intrinsicContentSize.height), accuracy: 1, "the title is stretched")
+    }
+
+    // MARK: - Privacy switches (ideas 1)
+
+    private static let receiptsKey = "user-info/send-read-receipts"
+    private static let typingKey = "user-info/send-typing-indicator"
+
+    func testReadReceiptsAndTypingAreOnUntilTurnedOff() {
+        withStoredPrivacy(receipts: nil, typing: nil) {
+            XCTAssertTrue(UserDefaultsManager().sendReadReceipts)
+            XCTAssertTrue(UserDefaultsManager().sendTypingIndicator)
+        }
+        withStoredPrivacy(receipts: false, typing: false) {
+            XCTAssertFalse(UserDefaultsManager().sendReadReceipts)
+            XCTAssertFalse(UserDefaultsManager().sendTypingIndicator)
+        }
+    }
+
+    func testPrivacyHasBothSwitchesAboveBlockedAndAppliesThem() throws {
+        try withStoredPrivacy(receipts: nil, typing: nil) {
+            let privacy = AirPrivacyController()
+            var applied: [Bool] = []
+            privacy.onReadReceiptsChange = { applied.append($0) }
+            privacy.loadViewIfNeeded()
+            let switches = privacy.view.allSubviews.compactMap { $0 as? UISwitch }
+            XCTAssertEqual(switches.map { $0.accessibilityIdentifier ?? "" }, ["settings.read-receipts", "settings.typing"])
+            XCTAssertEqual(switches.map { $0.isOn }, [true, true])
+            let blocked = try XCTUnwrap(privacy.view.allSubviews.first { $0.accessibilityIdentifier == "air.settings.privacy.blocked" })
+            privacy.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+            privacy.view.layoutIfNeeded()
+            XCTAssertLessThan(switches[1].convert(switches[1].bounds, to: privacy.view).minY,
+                              blocked.convert(blocked.bounds, to: privacy.view).minY, "the switches are not above Blocked")
+
+            switches[0].isOn = false
+            switches[0].sendActions(for: .valueChanged)
+            XCTAssertFalse(UserDefaultsManager().sendReadReceipts)
+            XCTAssertEqual(applied, [false], "the running session was not told")
+
+            switches[1].isOn = false
+            switches[1].sendActions(for: .valueChanged)
+            XCTAssertFalse(UserDefaultsManager().sendTypingIndicator)
+            XCTAssertEqual(applied, [false], "typing is not a receipts change")
+        }
+    }
+
+    func testThePrivacyWordsAreInEveryLanguage() {
+        assertTranslated(["air_privacy_read_receipts", "air_privacy_read_receipts_detail", "air_privacy_typing"])
+    }
+
+    /// Runs `body` over the stored privacy switches as given (nil: nothing stored), then puts back what
+    /// was stored.
+    private func withStoredPrivacy(receipts: Bool?, typing: Bool?, _ body: () throws -> Void) rethrows {
+        let defaults = UserDefaults.standard
+        let keys = [AirSettingsTests.receiptsKey, AirSettingsTests.typingKey]
+        let saved = keys.map { defaults.object(forKey: $0) }
+        defer {
+            for (key, value) in zip(keys, saved) {
+                defaults.set(value, forKey: key)
+            }
+        }
+        defaults.set(receipts, forKey: AirSettingsTests.receiptsKey)
+        defaults.set(typing, forKey: AirSettingsTests.typingKey)
+        try body()
     }
 
     /// Lays `row` out at `width` the way a column does: pinned at the top and the sides, as tall as it
@@ -263,5 +370,24 @@ private extension UIView {
     /// Every view under this one, depth first, in the order they were added.
     var allSubviews: [UIView] {
         return subviews.flatMap { [$0] + $0.allSubviews }
+    }
+}
+
+extension XCTestCase {
+    /// KHANDAQ (ideas 1): every one of `keys` has its own words in each language the app ships, read from
+    /// that language's table rather than through the app's language switch.
+    func assertTranslated(_ keys: [String], file: StaticString = #file, line: UInt = #line) {
+        for language in AppLanguage.supportedCodes {
+            guard let path = Bundle.main.path(forResource: "Localizable", ofType: "strings", inDirectory: nil, forLocalization: language),
+                  let table = NSDictionary(contentsOfFile: path) as? [String: String] else {
+                XCTFail("no Localizable.strings for \(language)", file: file, line: line)
+                continue
+            }
+            for key in keys {
+                let words = table[key] ?? ""
+                XCTAssertFalse(words.isEmpty, "\(language): no \(key)", file: file, line: line)
+                XCTAssertNotEqual(words, key, "\(language): \(key) is its own key", file: file, line: line)
+            }
+        }
     }
 }

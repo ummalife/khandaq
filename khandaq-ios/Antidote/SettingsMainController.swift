@@ -28,6 +28,9 @@ class SettingsMainController: AirScrollController {
     fileprivate weak var submanagerObjects: OCTSubmanagerObjects?
 
     private let appearanceRow = AirSettingRow(title: String(localized: "air_settings_appearance"))
+    /// KHANDAQ (ideas 1): the language on the first screen of Settings, where it is looked for first, with
+    /// the one in effect beside it; it opens the same sheet as the row in Appearance.
+    private let languageRow = AirSettingRow(title: String(localized: "settings_language"))
 
     init(theme: Theme, submanagerObjects: OCTSubmanagerObjects?) {
         self.submanagerObjects = submanagerObjects
@@ -44,8 +47,13 @@ class SettingsMainController: AirScrollController {
         view.accessibilityIdentifier = "settings.root"
         appearanceRow.accessibilityIdentifier = "settings.appearance"
         opens(appearanceRow) { $0.settingsMainControllerShowAppearance($1) }
+        languageRow.accessibilityIdentifier = "settings.main.language"
+        languageRow.onTap { [weak self] in
+            self?.chooseLanguage()
+        }
         let tasks = [
             appearanceRow,
+            languageRow,
             row("air_settings_notifications", "settings.notifications") { $0.settingsMainControllerShowNotifications($1) },
             row("air_privacy_title", "settings.privacy") { $0.settingsMainControllerShowPrivacy($1) },
             row("air_settings_transfer", "settings.transfer") { $0.settingsMainControllerShowTransfer($1) },
@@ -66,6 +74,13 @@ class SettingsMainController: AirScrollController {
         // The switch lives in the defaults; the database reads its own copy of it.
         submanagerObjects?.setGroupShowSystemMessages(userDefaults.groupShowSystemMessages)
         appearanceRow.setValue(ThemeAppearance.preference.localizedName)
+        languageRow.setValue(AppLanguage.nativeName(for: AppLanguage.current))
+    }
+
+    private func chooseLanguage() {
+        AirLanguageSheet.present(from: self, row: languageRow) { [weak self] in
+            self?.languageRow.setValue(AppLanguage.nativeName(for: AppLanguage.current))
+        }
     }
 }
 

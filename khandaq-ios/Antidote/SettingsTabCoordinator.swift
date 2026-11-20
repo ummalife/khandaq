@@ -104,6 +104,9 @@ extension SettingsTabCoordinator: SettingsMainControllerDelegate {
         privacy.onShowBlocked = { [weak self] in
             self?.navigationController.pushViewController(AirBlockedKeysController(), animated: true)
         }
+        privacy.onReadReceiptsChange = { [weak self] on in
+            self?.toxManager?.chats.setSendsSeenReceipts(on)
+        }
         navigationController.pushViewController(privacy, animated: true)
     }
 

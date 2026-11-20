@@ -180,6 +180,10 @@ class OCTSubmanagerChatsMock: NSObject, OCTSubmanagerChats {
         // nop: the people of the mock profile take no read receipts.
     }
 
+    func setSendsSeenReceipts(_ sends: Bool) {
+        // nop: nothing is sent from the mock profile.
+    }
+
     /// A message from the demo contact with `key`, arriving now as objcTox stores one.
     private func receiveDemoMessage(from key: String, text: String) {
         guard let realm = realm,

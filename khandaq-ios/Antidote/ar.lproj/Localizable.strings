@@ -537,6 +537,7 @@
 "delete_for_everyone" = "حذف لدى الجميع";
 "chat_edit_action" = "تعديل";
 "message_edit_save" = "حفظ";
+"chat_edit_too_long" = "النص أطول من أن يُعدَّل: اختصره أو أرسله رسالة جديدة.";
 "message_edited_marker" = "معدلة";
 "group_msg_sender_unverified" = "مُعاد من السجل، لم يتم التحقق من المرسل";
 "alert_ok" = "موافق";
@@ -942,6 +943,9 @@
 "air_dossier_block_message" = "ستُحذف جهة الاتصال والمحادثة من هذا الجهاز، ولن تظهر الطلبات الجديدة من هذا المفتاح.";
 "air_dossier_block_hint" = "يسأل أولًا، ثم يحذف جهة الاتصال ويخفي الطلبات من هذا المفتاح";
 "air_privacy_title" = "الخصوصية";
+"air_privacy_read_receipts" = "إرسال إشعارات القراءة";
+"air_privacy_read_receipts_detail" = "عند الإيقاف لن يرى الآخرون أنك قرأت رسائلهم.";
+"air_privacy_typing" = "إظهار أنني أكتب";
 "air_blocked_title" = "المحظورون";
 "air_blocked_none" = "لا أحد";
 "air_blocked_count_format" = "%d";
@@ -1153,6 +1157,8 @@
 "air_voice_listen" = "استماع";
 "air_voice_pause" = "إيقاف مؤقت";
 "air_voice_spoken" = "رسالة صوتية";
+"air_voice_speed" = "سرعة التشغيل";
+"air_voice_speed_format" = "%@x";
 "air_tray_file_format" = "%1$@، %2$@";
 
 /* Redesign stage 3: calls, their screens and their entries in the transcript (E9) */
@@ -1324,6 +1330,9 @@
 "air_first_name_first" = "اكتب اسمًا أولًا.";
 "air_first_next" = "التالي";
 "air_first_move_profile" = "نقل ملف شخصي من جهاز آخر";
+"air_first_photo_add" = "إضافة صورة";
+"air_first_photo_remove" = "إزالة الصورة";
+"air_first_photo_hint" = "يختار صورة من مكتبة الصور";
 "air_first_default_folder" = "الملف الشخصي";
 "air_first_password_title" = "كلمة مرور الملف الشخصي";
 "air_first_password_body" = "لا يمكن استعادة كلمة المرور: لا توجد خوادم. يُحفظ الملف الشخصي على هذا الجهاز فقط.";

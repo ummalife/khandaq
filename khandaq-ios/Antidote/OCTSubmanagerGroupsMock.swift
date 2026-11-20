@@ -6,6 +6,8 @@ import Foundation
 
 class OCTSubmanagerGroupsMock: NSObject, OCTSubmanagerGroups {
     weak var delegate: OCTSubmanagerGroupsDelegate?
+    /// The files the group asked to send, by path, in order (nothing goes anywhere).
+    private(set) var sentFilePaths: [String] = []
     /// The demo world's store: with it, accepting an invitation adds the group as a real profile would.
     var realm: RLMRealm?
     /// Your peer id in every demo group (the members of a group are seeded in OCTManagerMock).
@@ -192,7 +194,7 @@ class OCTSubmanagerGroupsMock: NSObject, OCTSubmanagerGroups {
     }
 
     func sendFile(atPath filePath: String!, to chat: OCTChat!, moveToUploads: Bool, successBlock: ((OCTMessageAbstract?) -> Void)!, failureBlock: ((Error?) -> Void)!) {
-        // nop
+        sentFilePaths.append(filePath ?? "")
     }
 
     func removeAllMessages(in chat: OCTChat!, removeChat: Bool, leaveGroup: Bool) {

@@ -99,10 +99,22 @@ enum AirEntryStatus: Equatable {
 /// screen, with the app and its scene active and the app's own PIN lock not over it. Active is the
 /// foreground with the device unlocked: iOS resigns the app before the lock screen comes up. Never for
 /// the Saved chat. A list preview, a notification or the background never ask; a group has a controller
-/// of its own that never asks.
+/// of its own that never asks. KHANDAQ (ideas 1): never while Settings > Privacy > Send read receipts is
+/// off (`receiptsOn`).
 enum AirSeenGate {
-    static func allowsReport(onScreen: Bool, appActive: Bool, sceneActive: Bool, lockScreenShown: Bool, isSaved: Bool) -> Bool {
-        return onScreen && appActive && sceneActive && !lockScreenShown && !isSaved
+    static func allowsReport(onScreen: Bool, appActive: Bool, sceneActive: Bool, lockScreenShown: Bool, isSaved: Bool,
+                             receiptsOn: Bool) -> Bool {
+        return receiptsOn && onScreen && appActive && sceneActive && !lockScreenShown && !isSaved
+    }
+}
+
+/// KHANDAQ (ideas 1): whether the field may tell the person of a conversation that something is being
+/// typed. Never while Settings > Privacy > Show that I'm typing is off, and never from the Saved chat:
+/// it has no friend, and objcTox took friend number 0 for it, so typing a note showed "typing" to the
+/// first contact of the profile. Groups never announce it (NGC has no typing notification).
+enum AirTypingGate {
+    static func mayAnnounce(typingOn: Bool, isSaved: Bool) -> Bool {
+        return typingOn && !isSaved
     }
 }
 
@@ -139,6 +151,74 @@ enum AirTranscript {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let first = trimmed.components(separatedBy: .whitespacesAndNewlines).first(where: { !$0.isEmpty }) ?? ""
         return first.isEmpty ? trimmed : first
+    }
+}
+
+/// KHANDAQ (ideas 1): the "Unread messages" band and the jump to it when a conversation opens, for the
+/// conversation with one person and for a group (Figma; first in ChatPrivateController, which alone had
+/// it). Taken when the screen loads, before its appearance marks everything read.
+struct AirUnreadBand {
+    /// The read date is taken this much earlier: a new chat stamps its read date as it is made,
+    /// microseconds after the message that made it, and a strict compare took that message for read.
+    static let creationLead: TimeInterval = 2.0
+
+    /// The message the band sits on.
+    let messageId: String?
+    /// Its storage index (newest first) until the conversation has jumped there or given the jump up.
+    private(set) var jumpIndex: Int?
+
+    /// No band and no jump.
+    static let none = AirUnreadBand(messageId: nil, jumpIndex: nil)
+
+    private init(messageId: String?, jumpIndex: Int?) {
+        self.messageId = messageId
+        self.jumpIndex = jumpIndex
+    }
+
+    /// Over `count` messages, newest first: `arrival(i)` is when message i came to this device,
+    /// `countsAsUnread(i)` whether it is one the unread count counts, `id(i)` its id.
+    init(count: Int,
+         lastRead: TimeInterval,
+         arrival: (Int) -> TimeInterval,
+         countsAsUnread: (Int) -> Bool,
+         id: (Int) -> String?) {
+        let index = AirUnreadBand.index(count: count, lastRead: lastRead, arrival: arrival, countsAsUnread: countsAsUnread)
+        self.init(messageId: index.flatMap(id), jumpIndex: index)
+    }
+
+    /// The band goes on the oldest message that counts as unread among those that came after `lastRead`,
+    /// looking no further back than the first message that came before it: everything under the band is
+    /// new. Nil when nothing new counts.
+    static func index(count: Int,
+                      lastRead: TimeInterval,
+                      arrival: (Int) -> TimeInterval,
+                      countsAsUnread: (Int) -> Bool) -> Int? {
+        let readUntil = lastRead - creationLead
+        var found: Int?
+        for index in 0..<max(count, 0) {
+            if arrival(index) <= readUntil {
+                break
+            }
+            if countsAsUnread(index) {
+                found = index
+            }
+        }
+        return found
+    }
+
+    /// Whether the band sits on the message with `id`.
+    func marks(_ id: String?) -> Bool {
+        return messageId != nil && id == messageId
+    }
+
+    /// The storage index to jump to, once: nil after the first call. A jump of its own (to a search hit)
+    /// takes it to give it up.
+    @discardableResult
+    mutating func takeJump() -> Int? {
+        defer {
+            jumpIndex = nil
+        }
+        return jumpIndex
     }
 }
 

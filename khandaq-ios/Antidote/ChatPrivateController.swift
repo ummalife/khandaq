@@ -66,10 +66,8 @@ class ChatPrivateController: PortraitChatController {
     }
     // KHANDAQ (Figma): first unread incoming message captured on open (before updateLastReadDate
     // marks everything read) — its cell shows the "Непрочитанные сообщения" band and the chat opens
-    // scrolled to it.
-    fileprivate var unreadSeparatorMessageId: String?
-    fileprivate var pendingFirstUnreadScrollIndex: Int?
-    fileprivate var didScrollToFirstUnread: Bool = false
+    // scrolled to it. Shared with groups since ideas 1 (AirUnreadBand).
+    fileprivate var unreadBand = AirUnreadBand.none
     // KHANDAQ: message search in 1:1 chats (parity with groups) — filters the list to matches.
     fileprivate var messageSearchQuery = ""
     fileprivate var messageSearchController: UISearchController?
@@ -347,20 +345,8 @@ class ChatPrivateController: PortraitChatController {
         super.viewDidLoad()
 
         // KHANDAQ (Figma): capture the first unread incoming message BEFORE viewWillAppear's
-        // updateLastReadDate marks the chat read. messages are sorted newest-first. The 2s epsilon
-        // covers the chat-creation race: a brand-new chat stamps lastReadDateInterval at creation,
-        // which lands microseconds AFTER the very first message — a strict compare then skipped it.
-        let lastRead = chat.lastReadDateInterval - 2.0
-        for i in 0..<messages.count {
-            let message = messages[i]
-            if message.dateInterval <= lastRead {
-                break
-            }
-            if !message.isOutgoing() {
-                unreadSeparatorMessageId = message.uniqueIdentifier
-                pendingFirstUnreadScrollIndex = i
-            }
-        }
+        // updateLastReadDate marks the chat read (AirUnreadBand, with the 2 s lead for a new chat).
+        unreadBand = AirUnreadBand(messages: messages, lastRead: chat.lastReadDateInterval)
 
         replyController.restorePending(forChatId: chat.uniqueIdentifier, theme: theme)
         addMessagesNotification()
@@ -525,11 +511,9 @@ class ChatPrivateController: PortraitChatController {
     /// KHANDAQ (Figma): on open, jump to the first unread incoming message (its cell carries the
     /// "Непрочитанные сообщения" band). One-shot per controller; a global-search jump wins.
     func scrollToFirstUnreadIfNeeded() {
-        guard !didScrollToFirstUnread, let index = pendingFirstUnreadScrollIndex, let tableView = tableView else {
+        guard let tableView = tableView, let index = unreadBand.takeJump() else {
             return
         }
-
-        didScrollToFirstUnread = true
 
         if index >= visibleMessages {
             visibleMessages = min(messages.count, index + Constants.MessagesPortionSize)
@@ -556,7 +540,7 @@ class ChatPrivateController: PortraitChatController {
         }
 
         // KHANDAQ (Figma): the search jump takes priority over the first-unread jump.
-        didScrollToFirstUnread = true
+        unreadBand.takeJump()
 
         // KHANDAQ (#7): the target may be older than the currently loaded window — the chat paginates
         // and only `visibleMessages` rows are loaded. Find its storage index and expand the window to
@@ -1643,16 +1627,17 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         presentMessageEditor(for: messageEntry(atDisplayIndex: indexPath.row).message)
     }
 
-    /// The inline editor of an own text, for the log and for a message waiting in the tray.
-    fileprivate func presentMessageEditor(for message: OCTMessageAbstract) {
+    /// The inline editor of an own text, for the log and for a message waiting in the tray. `draft` and
+    /// `notice` bring it back with the words typed and why they were not saved.
+    fileprivate func presentMessageEditor(for message: OCTMessageAbstract, draft: String? = nil, notice: String? = nil) {
         guard !message.isInvalidated, message.messageText != nil else {
             return
         }
         let current = message.messageText?.text ?? ""
 
-        let alert = UIAlertController(title: String(localized: "chat_edit_action"), message: nil, preferredStyle: .alert)
+        let alert = UIAlertController(title: String(localized: "chat_edit_action"), message: notice, preferredStyle: .alert)
         alert.addTextField { textField in
-            textField.text = current
+            textField.text = draft ?? current
             textField.autocapitalizationType = .sentences
             textField.clearButtonMode = .whileEditing
         }
@@ -1668,6 +1653,11 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
             // KHANDAQ (audit #11): message may have been retracted by the peer while the edit alert was
             // open — an invalidated Realm object throws an uncatchable RLMException on use.
             guard !message.isInvalidated else { return }
+            // KHANDAQ (ideas 1): longer than an edit can carry: the editor comes back with the words, to shorten.
+            if trimmed.utf8.count > Int(kOCTMaxEditTextBytes) {
+                self.presentMessageEditor(for: message, draft: newText, notice: String(localized: "chat_edit_too_long"))
+                return
+            }
             self.submanagerChats.editMessage(message, newText: trimmed)
         })
         present(alert, animated: true, completion: nil)
@@ -3226,7 +3216,8 @@ extension ChatPrivateController {
                                        appActive: UIApplication.shared.applicationState == .active,
                                        sceneActive: sceneActive,
                                        lockScreenShown: PinAuthorizationCoordinator.isLockScreenShown,
-                                       isSaved: chat.isSavedMessages) else {
+                                       isSaved: chat.isSavedMessages,
+                                       receiptsOn: UserDefaultsManager().sendReadReceipts) else {
             return
         }
         submanagerChats.reportSeen(in: chat)
@@ -3501,7 +3492,7 @@ extension ChatPrivateController {
         // KHANDAQ (#99): tag the row with a day separator when it begins a new calendar day.
         model.dateSeparator = daySeparatorString(forDisplayIndex: row)
         // KHANDAQ (Figma): the "Unread messages" band on the first unread incoming message.
-        model.unreadSeparator = (unreadSeparatorMessageId != nil && message.uniqueIdentifier == unreadSeparatorMessageId)
+        model.unreadSeparator = unreadBand.marks(message.uniqueIdentifier)
         // KHANDAQ (redesign stage 2): day and unread marks as transcript marks, the author over the
         // first entry of each run.
         model.transcriptMarks = true

@@ -63,6 +63,9 @@ final class SwipeAndLanguageUITests: XCTestCase {
         // Any test about real behaviour (reactions, sending) must run WITHOUT it.
         if useMockBackend {
             app.launchArguments.append("UI_TESTING")
+        } else {
+            // A real profile on a simulator with a network: it must not join the real Khandaq Community.
+            app.launchArguments.append("UI_TESTING_REAL")
         }
         // Start from a known system language so the onboarding buttons are predictable; the in-app
         // language (what this test is about) is switched from Settings later on.
@@ -3522,6 +3525,150 @@ final class SwipeAndLanguageUITests: XCTestCase {
         // The shared assets are template images; their buttons keep the accessibility labels, so
         // assert the header still exposes its actions rather than pixel-matching here.
         XCTAssertGreaterThan(header.buttons.count, 1, "group header lost its action buttons")
+    }
+
+    // MARK: - Links that add someone (ideas 1)
+
+    /// KHANDAQ (ideas 1): a tox: link opened before there is a profile waits for one, and New contact opens
+    /// with its ID once the profile is made; a khandaq://add link opens New contact at once. The name has
+    /// "FirstLaunch" in it so setUp leaves the first launch to the test, which goes through it without the
+    /// pasteboard: digits for the name and no password.
+    func testFirstLaunchKeepsAContactLinkForNewContact() throws {
+        guard #available(iOS 16.4, *) else {
+            throw XCTSkip("XCUIApplication.open(_:) needs iOS 16.4")
+        }
+        // An ID with a correct check (AirNewContactModelTests), and one New contact only has to show.
+        let first = "56A1ADE4B65B86BCD51CC73E2CD4E542179F47959FE3E0E21B4B0ACDADE51855D34D34D37CB5"
+        let second = "7F3A91C05D2E8B4416A9C3E07D5F2B8164E0A3C9D7B25F1E8A4C6D0B3F9E2A71000000007F3A"
+        let name = app.textFields["air.first.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 30), "the first launch did not start:\n\(app.debugDescription)")
+
+        app.open(try XCTUnwrap(URL(string: "tox:" + first.lowercased())))
+        XCTAssertTrue(name.waitForExistence(timeout: 10), "the link left the first launch")
+        XCTAssertFalse(app.textViews["air.newContact.id"].exists, "New contact opened without a profile")
+        signUpWithoutThePasteboard()
+
+        let field = app.textViews["air.newContact.id"]
+        XCTAssertTrue(field.waitForExistence(timeout: 30), "New contact did not open with the profile:\n\(app.debugDescription)")
+        XCTAssertEqual(field.value as? String, groupedById(first))
+        XCTAssertTrue(app.buttons["air.newContact.send"].isEnabled, "the ID of the link was not taken as good")
+        try? XCUIScreen.main.screenshot().pngRepresentation
+                .write(to: URL(fileURLWithPath: Self.artifactsDir + "contact-link-first-launch.png"))
+
+        XCTAssertTrue(app.returnToAir(), "could not come back to Air")
+        app.open(try XCTUnwrap(URL(string: "khandaq://add?id=" + second)))
+        XCTAssertTrue(field.waitForExistence(timeout: 15), "khandaq://add did not open New contact")
+        XCTAssertEqual(field.value as? String, groupedById(second))
+    }
+
+    /// KHANDAQ (ideas 1): the language is on the first screen of Settings too, with the one in effect beside
+    /// it; another one rebuilds the interface and comes back to Settings, in the new language.
+    func testFirstLaunchThenTheLanguageFromTheFirstScreenOfSettings() {
+        signUpWithoutThePasteboard()
+        app.leaveCommandLine()
+        let settings = app.buttons["air.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 30), "no settings button on the Air screen")
+        settings.tap()
+        let row = app.buttons["settings.main.language"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "no Language on the first screen of Settings")
+        XCTAssertEqual(row.label, Expected.englishLanguageRow)
+        XCTAssertEqual(row.value as? String, "English")
+
+        row.tap()
+        let russian = app.buttons["Русский"]
+        XCTAssertTrue(russian.waitForExistence(timeout: 5), "the language sheet did not open")
+        russian.tap()
+        // Only the words are looked at from here: the launch argument -khandaq_app_language keeps the stored
+        // choice English for the whole run, so the row goes on naming English while the interface is Russian.
+        let rebuilt = app.buttons.matching(NSPredicate(format: "identifier == 'settings.main.language' AND label == 'Язык'")).firstMatch
+        XCTAssertTrue(rebuilt.waitForExistence(timeout: 15), "Settings did not come back in Russian:\n\(app.debugDescription)")
+        XCTAssertTrue(app.buttons["settings.appearance"].exists, "the rebuild did not come back to the first screen of Settings")
+        try? XCUIScreen.main.screenshot().pngRepresentation
+                .write(to: URL(fileURLWithPath: Self.artifactsDir + "settings-language-ru.png"))
+    }
+
+    /// KHANDAQ (ideas 1): the first page takes a photo from the library, with the square crop of You, and
+    /// the profile made from it has that photo: the tile on You shows it instead of the initials. "Real"
+    /// runs the real messenger, whose profile keeps an avatar (the mock drops it); "FirstLaunch" leaves the
+    /// first launch to the test.
+    func testRealFirstLaunchTakesAPhotoFromTheLibrary() {
+        let name = app.textFields["air.first.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 30), "the first launch did not start:\n\(app.debugDescription)")
+        XCTAssertTrue(app.buttons["air.first.photo"].exists, "no photo tile beside the name")
+        let action = app.buttons["air.first.photo.action"]
+        XCTAssertEqual(action.label, "Add a photo")
+
+        action.tap()
+        // The library of the system (in the simulator's own language): its first photo, then Choose under
+        // the square crop.
+        let photo = app.images.matching(identifier: "PXGGridLayout-Info").firstMatch
+        XCTAssertTrue(photo.waitForExistence(timeout: 30), "the library did not open:\n\(app.debugDescription)")
+        // The grid lives in another process: its cells are seen but not hittable, so the tap goes to the point.
+        photo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let choose = app.buttons.matching(NSPredicate(format: "label IN {'Choose', 'Выбрать'}")).firstMatch
+        XCTAssertTrue(choose.waitForExistence(timeout: 15), "no square crop after the photo:\n\(app.debugDescription)")
+        choose.tap()
+        let taken = app.buttons.matching(NSPredicate(format: "identifier == 'air.first.photo.action' AND label == 'Remove the photo'")).firstMatch
+        XCTAssertTrue(taken.waitForExistence(timeout: 15), "the photo was not taken:\n\(app.debugDescription)")
+        XCTAssertTrue(hasColour(app.buttons["air.first.photo"].screenshot().image), "the tile does not show the photo")
+        try? XCUIScreen.main.screenshot().pngRepresentation
+                .write(to: URL(fileURLWithPath: Self.artifactsDir + "first-launch-photo.png"))
+
+        signUpWithoutThePasteboard()
+        app.leaveCommandLine()
+        let you = app.buttons["air.you"]
+        XCTAssertTrue(you.waitForExistence(timeout: 30), "no Air screen after the first launch")
+        you.tap()
+        let youPhoto = app.buttons["air.you.photo"]
+        XCTAssertTrue(youPhoto.waitForExistence(timeout: 10), "You did not open")
+        XCTAssertTrue(hasColour(youPhoto.screenshot().image), "the profile has no photo: You shows the initials")
+        try? XCUIScreen.main.screenshot().pngRepresentation
+                .write(to: URL(fileURLWithPath: Self.artifactsDir + "first-launch-photo-on-you.png"))
+    }
+
+    /// Whether a picture has colour in it: the ink tile with its initials is grey, a photo is not.
+    private func hasColour(_ image: UIImage) -> Bool {
+        guard let cgImage = image.cgImage else {
+            return false
+        }
+        let side = 32
+        var bytes = [UInt8](repeating: 0, count: side * side * 4)
+        bytes.withUnsafeMutableBytes { buffer in
+            let context = CGContext(data: buffer.baseAddress, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
+                                    space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            context?.draw(cgImage, in: CGRect(x: 0, y: 0, width: side, height: side))
+        }
+        return stride(from: 0, to: bytes.count, by: 4).contains { index in
+            let channels = [Int(bytes[index]), Int(bytes[index + 1]), Int(bytes[index + 2])]
+            return (channels.max() ?? 0) - (channels.min() ?? 0) > 40
+        }
+    }
+
+    /// The first launch without the pasteboard (`fill` pastes): digits for the name, which every keyboard
+    /// has, and no password.
+    private func signUpWithoutThePasteboard() {
+        let name = app.textFields["air.first.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 30), "the first launch did not start:\n\(app.debugDescription)")
+        name.tap()
+        name.typeText("9001")
+        app.buttons["air.step.main"].tap()
+        let skip = app.descendants(matching: .any)["air.first.password.skip"]
+        XCTAssertTrue(skip.waitForExistence(timeout: 10), "no password page")
+        skip.tap()
+        app.buttons["air.step.main"].tap()
+        XCTAssertTrue(app.buttons["air.first.share"].waitForExistence(timeout: 45), "no ID page")
+        app.buttons["air.step.main"].tap()
+    }
+
+    /// An ID in groups of four, as the ID field shows it.
+    private func groupedById(_ hex: String) -> String {
+        var groups: [String] = []
+        var rest = Substring(hex)
+        while !rest.isEmpty {
+            groups.append(String(rest.prefix(4)))
+            rest = rest.dropFirst(4)
+        }
+        return groups.joined(separator: " ")
     }
 
     // MARK: - Swipe to reply

@@ -161,6 +161,9 @@ class ActiveSessionCoordinator: NSObject {
         toxManager.groups.delegate = self
 
         toxManager.objects.setGroupShowSystemMessages(UserDefaultsManager().groupShowSystemMessages)
+        // KHANDAQ (ideas 1): before any friend connects, so a receipt kept from before the switch went
+        // off (in this profile or another) does not leave.
+        toxManager.chats.setSendsSeenReceipts(UserDefaultsManager().sendReadReceipts)
 
         // KHANDAQ: ensure the local-only "Saved Messages" chat exists so it's always reachable.
         _ = toxManager.objects.getOrCreateSavedMessagesChat()
@@ -290,8 +293,10 @@ class ActiveSessionCoordinator: NSObject {
     /// KHANDAQ (0.2.57, SPEC-community part B): Khandaq Community, joined once per profile by itself while
     /// the node is online, and tried again at every start and connection until the group is here. The demo
     /// world of the UI tests joins nothing. KHANDAQ (0.2.60): the sound an earlier join turned off is on again.
+    /// KHANDAQ (ideas 1): neither does a UI test of the real messenger (UI_TESTING_REAL): its first launch
+    /// makes a real profile on a simulator with a network, which would otherwise join the real Community.
     fileprivate func joinCommunityIfDue() {
-        guard !(toxManager is OCTManagerMock) else {
+        guard !(toxManager is OCTManagerMock), !ProcessInfo.processInfo.arguments.contains("UI_TESTING_REAL") else {
             return
         }
         KhandaqCommunity.restoreSoundIfDue(manager: toxManager)
@@ -572,6 +577,18 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
     }
 
     func handleInboxURL(_ url: URL) {
+        // KHANDAQ (ideas 1): tox:<ID>, tox://<ID> and khandaq://add?id=<ID> open New contact with the ID. While
+        // the profile is closed or locked, AppCoordinator keeps the link until it is open in front of the person.
+        if AirContactLink.matches(url) {
+            if let address = AirContactLink.address(from: url) {
+                showNewContact(prefilledAddress: address)
+            }
+            else {
+                NSLog("Khandaq: ignored a contact link with no ID in it")
+            }
+            return
+        }
+
         guard url.scheme?.lowercased() == "khandaq" else {
             handleNonKhandaqInboxURL(url)
             return
@@ -783,6 +800,19 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
             case .iPad:
                 iPad.chatsCoordinator.joinGroupFromExternal(chatIdHex: chatIdHex)
         }
+    }
+
+    /// KHANDAQ (ideas 1): New contact with the ID of a link from another app, right over the Air list (the
+    /// contacts on the iPad), as a chat opened from a notification is over the list.
+    func showNewContact(prefilledAddress address: String) {
+        switch InterfaceIdiom.current() {
+            case .iPhone:
+                iPhone.navigationController.popToRootViewController(animated: false)
+            case .iPad:
+                primaryIpadControllerShowFriends(iPad.primaryController)
+                friendsCoordinator.navigationController.popToRootViewController(animated: false)
+        }
+        friendsCoordinator.showAddFriend(prefilledAddress: address, animated: false)
     }
 }
 

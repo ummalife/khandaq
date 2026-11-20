@@ -3652,6 +3652,11 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     if (trimmed.length == 0) {
         return;
     }
+    // KHANDAQ (ideas 1): a text longer than the packet can carry is refused before the row changes; the
+    // send failed silently and the text differed between this device and the group.
+    if ([trimmed lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > kOCTMaxEditTextBytes) {
+        return;
+    }
     uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970];
 
     // apply locally first (Realm notification refreshes the row)

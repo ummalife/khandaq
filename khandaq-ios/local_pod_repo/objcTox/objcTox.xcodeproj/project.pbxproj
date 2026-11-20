@@ -272,6 +272,7 @@
 		B2GRPRLM0000002 /* OCTGroupRealmTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2GRPRLM0000001 /* OCTGroupRealmTests.m */; };
 		B2SEENTST000002 /* OCTSeenReceiptTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2SEENTST000001 /* OCTSeenReceiptTests.m */; };
 		B2RESUMTST00002 /* OCTFileResumeTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2RESUMTST00001 /* OCTFileResumeTests.m */; };
+		B2EDITLIM000002 /* OCTMessageEditLimitTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2EDITLIM000001 /* OCTMessageEditLimitTests.m */; };
 		E1A2B3C4D5E6789012340004 /* OCTSubmanagerGroupsImpl.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */; };
 		E1A2B3C4D5E6789012340005 /* OCTSubmanagerGroupsImpl.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */; };
 		E1A2B3C4D5E6789012340006 /* OCTSubmanagerGroupsImpl.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */; };
@@ -570,6 +571,7 @@
 		B2GRPRLM0000001 /* OCTGroupRealmTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTGroupRealmTests.m; sourceTree = "<group>"; };
 		B2SEENTST000001 /* OCTSeenReceiptTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTSeenReceiptTests.m; sourceTree = "<group>"; };
 		B2RESUMTST00001 /* OCTFileResumeTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTFileResumeTests.m; sourceTree = "<group>"; };
+		B2EDITLIM000001 /* OCTMessageEditLimitTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTMessageEditLimitTests.m; sourceTree = "<group>"; };
 		B6D6D28CCB11A29144A37A53 /* libPods-iOSDemo.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-iOSDemo.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2F358725E9EF3F392D73A1ABBDD3DAB /* OCTSubmanagerUserImpl.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTSubmanagerUserImpl.m; sourceTree = "<group>"; };
 		CE5DBC12869590BEAD637C9DF06567EF /* OCTManagerConstants.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTManagerConstants.m; sourceTree = "<group>"; };
@@ -1055,6 +1057,7 @@
 				B2GRPRLM0000001 /* OCTGroupRealmTests.m */,
 				B2SEENTST000001 /* OCTSeenReceiptTests.m */,
 				B2RESUMTST00001 /* OCTFileResumeTests.m */,
+				B2EDITLIM000001 /* OCTMessageEditLimitTests.m */,
 				11D6512E1B89238F00C3DD23 /* OCTVideoEngineTests.m */,
 				F5BC99BC1C2A171D00425CE3 /* YUVPlanes */,
 			);
@@ -1509,6 +1512,7 @@
 				B2GRPRLM0000002 /* OCTGroupRealmTests.m in Sources */,
 				B2SEENTST000002 /* OCTSeenReceiptTests.m in Sources */,
 				B2RESUMTST00002 /* OCTFileResumeTests.m in Sources */,
+				B2EDITLIM000002 /* OCTMessageEditLimitTests.m in Sources */,
 				11D650E71B89227300C3DD23 /* OCTMessageCall.m in Sources */,
 				11BB6EAF1CC3930A00A531A8 /* OCTFileTools.m in Sources */,
 				9CB44C131B84DBA3007FA7B6 /* OCTRealmManager.m in Sources */,

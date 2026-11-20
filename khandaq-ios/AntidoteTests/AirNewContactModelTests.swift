@@ -168,3 +168,58 @@ class AirNewContactModelTests: XCTestCase {
         return String(format: "%02X%02X", check[0], check[1])
     }
 }
+
+/// KHANDAQ (ideas 1): a link from another app that adds someone, tox:<ID>, tox://<ID> or khandaq://add?id=<ID>,
+/// opens New contact with its ID, and New contact checks it there.
+final class AirContactLinkTests: XCTestCase {
+    private let address = "56A1ADE4B65B86BCD51CC73E2CD4E542179F47959FE3E0E21B4B0ACDADE51855D34D34D37CB5"
+
+    func testEveryShapeOfTheLinkGivesTheId() throws {
+        let links = ["tox:" + address, "tox://" + address, "TOX:" + address.lowercased(), "tox://" + address + "/",
+                     "tox:" + address + "?message=hello", "khandaq://add?id=" + address,
+                     "khandaq://ADD?ID=" + address.lowercased(), "khandaq://add?from=qr&id=" + address]
+        for link in links {
+            let url = try XCTUnwrap(URL(string: link), link)
+            XCTAssertTrue(AirContactLink.matches(url), link)
+            XCTAssertEqual(AirContactLink.address(from: url), address, link)
+        }
+    }
+
+    /// New contact says what is wrong, as for an ID typed on the command line.
+    func testALinkCutShortOrWithATypoStillOpensNewContact() throws {
+        let start = String(address.prefix(40))
+        XCTAssertEqual(AirContactLink.address(from: try XCTUnwrap(URL(string: "tox:" + start))), start)
+        let typo = String(address.dropLast()) + (address.hasSuffix("5") ? "6" : "5")
+        XCTAssertFalse(AirToxId.checkMatches(typo))
+        XCTAssertEqual(AirContactLink.address(from: try XCTUnwrap(URL(string: "khandaq://add?id=" + typo))), typo)
+    }
+
+    /// A link with no ID in it opens nothing, and is not taken for a file to send either.
+    func testALinkWithNoIdInItGivesNothing() throws {
+        let links = ["tox:", "tox:hello", "tox:" + address + "00", "tox://ABC", "khandaq://add", "khandaq://add?id=",
+                     "khandaq://add?name=" + address]
+        for link in links {
+            let url = try XCTUnwrap(URL(string: link), link)
+            XCTAssertTrue(AirContactLink.matches(url), link)
+            XCTAssertNil(AirContactLink.address(from: url), link)
+        }
+    }
+
+    func testOtherLinksAreNotContactLinks() throws {
+        let links = ["khandaq://share", "khandaq://group/" + String(address.prefix(64)), "khandaq://qa/net_notice",
+                     "https://khandaq.org/add?id=" + address, "file:///tmp/" + address + ".tox"]
+        for link in links {
+            let url = try XCTUnwrap(URL(string: link), link)
+            XCTAssertFalse(AirContactLink.matches(url), link)
+            XCTAssertNil(AirContactLink.address(from: url), link)
+        }
+    }
+
+    /// iOS hands Khandaq a tox: link only when the app says it takes them.
+    func testTheAppTakesToxAndKhandaqLinks() {
+        let types = Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]] ?? []
+        let schemes = types.flatMap { $0["CFBundleURLSchemes"] as? [String] ?? [] }
+        XCTAssertTrue(schemes.contains("tox"), "\(schemes)")
+        XCTAssertTrue(schemes.contains("khandaq"), "\(schemes)")
+    }
+}

@@ -399,6 +399,7 @@
 /* KHANDAQ (#208): edit sent message */
 "chat_edit_action" = "Изменить";
 "message_edit_save" = "Сохранить";
+"chat_edit_too_long" = "Слишком длинно для правки: сократите текст или отправьте его новым сообщением.";
 "message_edited_marker" = "изменено";
 "group_msg_sender_unverified" = "Получено из истории, отправитель не подтверждён";
 /* Delete button */
@@ -955,6 +956,9 @@
 "air_dossier_block_message" = "Контакт и переписка удалятся с этого устройства, а новые запросы с этого ключа показываться не будут.";
 "air_dossier_block_hint" = "Сначала спросит, потом удалит контакт и скроет запросы с этого ключа";
 "air_privacy_title" = "Приватность";
+"air_privacy_read_receipts" = "Отправлять отчёты о прочтении";
+"air_privacy_read_receipts_detail" = "Если выключить, собеседники не увидят, что вы прочитали их сообщения.";
+"air_privacy_typing" = "Показывать, что я печатаю";
 "air_blocked_title" = "Заблокированные";
 "air_blocked_none" = "Нет";
 "air_blocked_count_format" = "%d";
@@ -1166,6 +1170,8 @@
 "air_voice_listen" = "Слушать";
 "air_voice_pause" = "Пауза";
 "air_voice_spoken" = "Голосовое сообщение";
+"air_voice_speed" = "Скорость воспроизведения";
+"air_voice_speed_format" = "%@x";
 "air_tray_file_format" = "%1$@, %2$@";
 
 /* Redesign stage 3: calls, their screens and their entries in the transcript (E9) */
@@ -1337,6 +1343,9 @@
 "air_first_name_first" = "Сначала впишите имя.";
 "air_first_next" = "Дальше";
 "air_first_move_profile" = "Перенести профиль с другого устройства";
+"air_first_photo_add" = "Добавить фото";
+"air_first_photo_remove" = "Убрать фото";
+"air_first_photo_hint" = "Выбирает фото из медиатеки";
 "air_first_default_folder" = "Профиль";
 "air_first_password_title" = "Пароль профиля";
 "air_first_password_body" = "Восстановить пароль нельзя: серверов нет. Профиль хранится только на этом устройстве.";

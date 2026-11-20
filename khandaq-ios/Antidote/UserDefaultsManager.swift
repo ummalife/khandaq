@@ -145,6 +145,40 @@ class UserDefaultsManager {
         }
     }
 
+    /// KHANDAQ (ideas 1): Settings > Privacy > Send read receipts, on until the person turns it off. Off,
+    /// no read receipt leaves this device (AirSeenGate, and objcTox drops one that waited); the receipts
+    /// of other people still show.
+    var sendReadReceipts: Bool {
+        get {
+            return boolForKey(Keys.SendReadReceipts, defaultValue: true)
+        }
+        set {
+            setBool(newValue, forKey: Keys.SendReadReceipts)
+        }
+    }
+
+    /// KHANDAQ (ideas 1): Settings > Privacy > Show that I'm typing, on until the person turns it off.
+    /// Off, the field never tells the other side that something is being typed (AirTypingGate).
+    var sendTypingIndicator: Bool {
+        get {
+            return boolForKey(Keys.SendTypingIndicator, defaultValue: true)
+        }
+        set {
+            setBool(newValue, forKey: Keys.SendTypingIndicator)
+        }
+    }
+
+    /// KHANDAQ (ideas 1): how fast voice notes play, 1, 1.5 or 2 times (VoicePlaybackSpeed); one choice for
+    /// the whole app, changed with a tap on the speed of the note that plays.
+    var voicePlaybackSpeed: Float {
+        get {
+            return (UserDefaults.standard.object(forKey: Keys.VoicePlaybackSpeed) as? NSNumber)?.floatValue ?? 1
+        }
+        set {
+            setObject(NSNumber(value: newValue), forKey: Keys.VoicePlaybackSpeed)
+        }
+    }
+
     var darkModeEnabled: Bool {
         get {
             return boolForKey(Keys.DarkModeEnabled, defaultValue: false)
@@ -257,6 +291,9 @@ private extension UserDefaultsManager {
         static let AutodownloadImages = "user-info/autodownload-images"
         static let AutoDownloadDefaultApplied = "user-info/auto_download_default_v0257_applied"
         static let GroupShowSystemMessages = "user-info/group-show-system-messages"
+        static let SendReadReceipts = "user-info/send-read-receipts"
+        static let SendTypingIndicator = "user-info/send-typing-indicator"
+        static let VoicePlaybackSpeed = "user-info/voice-playback-speed"
         static let DarkModeEnabled = "user-info/dark-mode-enabled"
         static let ThemePreference = "user-info/theme-preference"
         static let ChatListFilterTab = "user-info/chat-list-filter-tab"

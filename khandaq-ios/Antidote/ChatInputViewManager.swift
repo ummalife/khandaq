@@ -244,7 +244,11 @@ extension ChatInputViewManager: ChatInputViewDelegate {
     }
 
     func chatInputViewTextDidChange(_ view: ChatInputView) {
-        try? submanagerChats.setIsTyping(true, in: chat)
+        // KHANDAQ (ideas 1): Settings > Privacy > Show that I'm typing; never from the Saved chat. The
+        // "not typing" of endUserInteraction still goes: toxcore sends it only after a "typing" left.
+        if AirTypingGate.mayAnnounce(typingOn: UserDefaultsManager().sendTypingIndicator, isSaved: chat.isSavedMessages) {
+            try? submanagerChats.setIsTyping(true, in: chat)
+        }
         inactivityTimer?.invalidate()
 
         inactivityTimer = Timer.scheduledTimer(timeInterval: Constants.inactivityTimeout, closure: {[weak self] _ -> Void in
@@ -420,6 +424,29 @@ extension ChatInputViewManager: UIDocumentPickerDelegate {
             return
         }
 
+        // KHANDAQ (ideas 1): it leaves on Send under its name and size (AirPickedFile). Saved Messages
+        // above keeps it on this device, so nothing is sent by mistake there.
+        guard let source = (inputView as UIView?) ?? presentingViewController?.view else {
+            return
+        }
+        let sheet = AirPickedFile.confirmation(for: url, source: source) { [weak self] in
+            self?.sendPickedFile(at: url)
+        }
+        presentingViewController.present(sheet, animated: true, completion: nil)
+    }
+
+    /// The file picked with File or Audio, once Send was tapped under its name.
+    private func sendPickedFile(at url: URL) {
+        // The contact may have been removed while the question was up.
+        guard !chat.isInvalidated else {
+            return
+        }
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer {
+            if accessed {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
         submanagerFiles.sendFile(atPath: url.path, moveToUploads: true, to: chat) { error in
             handleErrorWithType(.sendFileToFriend, error: error as NSError)
         }

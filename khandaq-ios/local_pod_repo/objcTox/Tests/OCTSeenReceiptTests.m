@@ -557,6 +557,41 @@ static NSString *const kSeenTestsFileVector = @"BD 4B 51 01 02 FF FF FF FF FF FF
     XCTAssertNil(friend.seenPendingPacket);
 }
 
+// KHANDAQ (ideas 1): Settings > Privacy > Send read receipts.
+- (void)testNoReceiptLeavesOrWaitsWhileReceiptsAreSwitchedOff
+{
+    // One waits for them from before the switch went off.
+    self.friendReachable = NO;
+    OCTFriend *friend = [self addFriendConnected:NO];
+    OCTChat *chat = [self.realmManager getOrCreateChatWithFriend:friend];
+    [self addTextInChat:chat from:friend hash:OCTSeenTestsHex(0x10) arrived:100 sent:100];
+    [self.chats reportSeenInChat:chat];
+    XCTAssertNotNil(friend.seenPendingPacket);
+
+    [self.chats setSendsSeenReceipts:NO];
+    XCTAssertNil(friend.seenPendingPacket, @"the waiting receipt would leave when they connect");
+
+    // They connect, and something new of theirs is read: nothing leaves and nothing waits.
+    self.friendReachable = YES;
+    self.dataSource.toxConnected = YES;
+    [self.realmManager updateObject:friend withBlock:^(OCTFriend *theFriend) {
+        theFriend.isConnected = YES;
+        theFriend.connectionStatus = OCTToxConnectionStatusUDP;
+    }];
+    [self.notificationCenter postNotificationName:kOCTFriendConnectionStatusChangeNotification object:friend];
+    [self addTextInChat:chat from:friend hash:OCTSeenTestsHex(0x20) arrived:200 sent:200];
+    [self.chats reportSeenInChat:chat];
+    [self.chats tickDeliveryWatchdog];
+    XCTAssertEqual(self.sentPackets.count, 0u);
+    XCTAssertNil(friend.seenPendingPacket);
+
+    // Back on: the newest of theirs leaves.
+    [self.chats setSendsSeenReceipts:YES];
+    [self.chats reportSeenInChat:chat];
+    XCTAssertEqual(self.sentPackets.count, 1u);
+    XCTAssertEqualObjects([OCTSeenReceipt receiptWithPacket:self.sentPackets.firstObject].anchorHex, OCTSeenTestsHex(0x20));
+}
+
 - (void)testAReportedTimeFromAClockSetBackIsLetGo
 {
     self.friendReachable = YES;

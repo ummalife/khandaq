@@ -244,6 +244,10 @@ class ChatGenericFileCell: ChatMovableDateCell {
         voiceMessageView.onPlayTapped = { [weak self] in
             self?.voicePlayTogglePressed()
         }
+        // KHANDAQ (ideas 1): the speed is the app's, not the note's: the player keeps it and applies it.
+        voiceMessageView.onSpeedTapped = {
+            ChatVoiceMessagePlayer.shared.cycleSpeed()
+        }
 
         captionLabel = UILabel()
         captionLabel.font = ChatGenericFileCell.captionFont
@@ -385,6 +389,7 @@ class ChatGenericFileCell: ChatMovableDateCell {
                                     duration: fileModel.voiceDuration,
                                     enabled: enabled)
         }
+        voiceMessageView.showSpeed(fileModel.voiceMessageId.flatMap { ChatVoiceMessagePlayer.shared.speedShown(for: $0) })
     }
 
     func refreshVoiceMessagePresentation(theme: Theme, fileModel: ChatGenericFileCellModel) {
@@ -417,6 +422,7 @@ class ChatGenericFileCell: ChatMovableDateCell {
                                     duration: voicePlaybackDuration,
                                     enabled: voicePlaybackEnabled)
         }
+        voiceMessageView.showSpeed(ChatVoiceMessagePlayer.shared.speedShown(for: messageId))
         refreshSpokenText()
     }
 

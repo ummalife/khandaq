@@ -108,8 +108,8 @@ private extension LoginCoordinator {
 
     func makeNameController() -> AirFirstNameController {
         let controller = AirFirstNameController()
-        controller.onNext = { [weak self] name in
-            self?.showPasswordStep(name: name)
+        controller.onNext = { [weak self] name, photo in
+            self?.showPasswordStep(name: name, photo: photo)
         }
         controller.onMoveProfile = { [weak self, weak controller] in
             self?.pickProfileFile(from: controller)
@@ -117,20 +117,20 @@ private extension LoginCoordinator {
         return controller
     }
 
-    func showPasswordStep(name: String) {
+    func showPasswordStep(name: String, photo: Data?) {
         let controller = AirPasswordChoiceController(step: 2, mainTitle: String(localized: "air_first_create"))
         controller.onChoose = { [weak self, weak controller] choice in
             guard let self = self, let controller = controller else {
                 return
             }
-            self.createProfile(name: name, choice: choice, page: controller)
+            self.createProfile(name: name, photo: photo, choice: choice, page: controller)
         }
         navigationController.pushViewController(controller, animated: true)
     }
 
     /// Makes the profile, opens it and shows its ID. A profile that did not open is removed again: it
-    /// was new and empty, nothing is lost.
-    func createProfile(name: String, choice: AirPasswordChoiceController.Choice, page: AirPasswordChoiceController) {
+    /// was new and empty, nothing is lost. The photo chosen on the first page becomes its avatar.
+    func createProfile(name: String, photo: Data?, choice: AirPasswordChoiceController.Choice, page: AirPasswordChoiceController) {
         page.setBusy(String(localized: "air_first_creating"))
         let profiles = ProfileManager()
         let folder = ProfileFolderName.make(from: name, existing: profiles.allProfileNames, fallback: String(localized: "air_first_default_folder"))
@@ -161,7 +161,7 @@ private extension LoginCoordinator {
             }
             switch result {
                 case .opened(let manager):
-                    _ = try? manager.user.setUserName(name)
+                    AirFirstNameController.keep(name: name, photo: photo, in: manager.user)
                     // Kept at once: if the app is closed on the last step, the profile opens by itself.
                     UserDefaultsManager().lastActiveProfile = folder
                     KeychainManager().toxPasswordForActiveAccount = secret

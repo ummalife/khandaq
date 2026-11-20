@@ -561,11 +561,24 @@ final class AirFieldNote: UIView {
 
 /// "What should we call you": one field, who sees the name, and the quieter way in for a profile that
 /// already exists on another device.
-final class AirFirstNameController: AirStepController {
-    var onNext: ((String) -> Void)?
+///
+/// KHANDAQ (ideas 1): beside the field stands the person's own tile as You shows it, with the initials
+/// of the name being typed, and "Add a photo" under it: a tap on either opens the photo library with
+/// the square crop of You, and the photo becomes the avatar once the profile exists. It is optional:
+/// Next waits only for the name. The library asks for no permission; the camera, which would ask
+/// during first launch, stays on You.
+final class AirFirstNameController: AirStepController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    /// The name, and the photo chosen for the profile (nil when none was).
+    var onNext: ((String, Data?) -> Void)?
     var onMoveProfile: (() -> Void)?
 
     let nameField = AirLineField(placeholder: String(localized: "air_first_name_placeholder"), secret: false)
+    /// The photo chosen for the profile, already the avatar Tox carries (AirAvatarImage); nil skips it.
+    private(set) var photo: Data?
+    /// The same photo as the tile shows it: what the people added will see.
+    private var photoImage: UIImage?
+    private let photoButton = AirYouPhotoButton()
+    private let photoAction = AirQuietButton(title: String(localized: "air_first_photo_add"))
     private let moveButton = AirQuietButton(title: String(localized: "air_first_move_profile"))
 
     init(name: String? = nil) {
@@ -595,9 +608,21 @@ final class AirFirstNameController: AirStepController {
         nameField.onReturn = { [weak self] in
             self?.mainTapped()
         }
+        photoButton.accessibilityIdentifier = "air.first.photo"
+        photoButton.accessibilityHint = String(localized: "air_first_photo_hint")
+        photoButton.addTarget(self, action: #selector(choosePhoto), for: .touchUpInside)
+        photoAction.accessibilityIdentifier = "air.first.photo.action"
+        photoAction.addTarget(self, action: #selector(photoActionTapped), for: .touchUpInside)
         moveButton.accessibilityIdentifier = "air.first.move"
         moveButton.addTarget(self, action: #selector(moveTapped), for: .touchUpInside)
-        column.addArrangedSubview(nameField)
+        // The tile and the field in one row, as on You.
+        let nameRow = UIStackView(arrangedSubviews: [photoButton, nameField])
+        nameRow.axis = .horizontal
+        nameRow.alignment = .center
+        nameRow.spacing = KQSpace.x12
+        column.addArrangedSubview(nameRow)
+        column.addArrangedSubview(AirKit.leading(photoAction))
+        column.setCustomSpacing(KQSpace.x8, after: nameRow)
         column.addArrangedSubview(AirKit.leading(moveButton))
         update()
     }
@@ -614,7 +639,10 @@ final class AirFirstNameController: AirStepController {
     }
 
     private func update() {
-        setWaiting(cleanName.isEmpty ? String(localized: "air_first_name_first") : nil)
+        let name = cleanName
+        setWaiting(name.isEmpty ? String(localized: "air_first_name_first") : nil)
+        photoButton.configure(initials: AirInitials.from(name.isEmpty ? String(localized: "air_you") : name), photo: photoImage)
+        photoAction.setTitle(String(localized: photo == nil ? "air_first_photo_add" : "air_first_photo_remove"))
     }
 
     override func mainTapped() {
@@ -623,12 +651,85 @@ final class AirFirstNameController: AirStepController {
             update()
             return
         }
-        onNext?(name)
+        onNext?(name, photo)
     }
 
     @objc private func moveTapped() {
         view.endEditing(true)
         onMoveProfile?()
+    }
+
+    // MARK: The photo
+
+    @objc private func choosePhoto() {
+        guard let picker = AirAvatarImage.libraryPicker(delegate: self) else {
+            return
+        }
+        view.endEditing(true)
+        present(picker, animated: true, completion: nil)
+    }
+
+    /// "Add a photo" opens the library; once there is a photo, "Remove the photo" takes it away.
+    @objc private func photoActionTapped() {
+        guard photo != nil else {
+            choosePhoto()
+            return
+        }
+        photo = nil
+        photoImage = nil
+        update()
+    }
+
+    /// Made into the avatar here, so a photo that cannot be one is known on this page: false then.
+    @discardableResult
+    func takePhoto(_ image: UIImage) -> Bool {
+        guard let data = try? AirAvatarImage.pngData(AirAvatarImage.square(image)) else {
+            return false
+        }
+        photo = data
+        photoImage = UIImage(data: data)
+        update()
+        return true
+    }
+
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [String : Any]) {
+        let taken = AirAvatarImage.picked(info).map { takePhoto($0) } ?? true
+        // A photo that cannot be the avatar is said once the library has gone: an alert does not come up
+        // over a screen on its way out.
+        dismiss(animated: true) { [weak self] in
+            if !taken {
+                handleErrorWithType(.convertImageToPNG, error: nil)
+            }
+            self?.raiseKeyboardForName()
+        }
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        dismiss(animated: true) { [weak self] in
+            self?.raiseKeyboardForName()
+        }
+    }
+
+    /// Back from the library with no name yet, the field takes the keyboard again, as when the page came in.
+    private func raiseKeyboardForName() {
+        if nameField.text.isEmpty {
+            nameField.field.becomeFirstResponder()
+        }
+    }
+
+    /// What this page asked for, kept in the profile made from it: the name, and the photo as the avatar
+    /// when one was chosen.
+    static func keep(name: String, photo: Data?, in user: OCTSubmanagerUser) {
+        _ = try? user.setUserName(name)
+        guard let photo = photo else {
+            return
+        }
+        do {
+            try user.setUserAvatar(photo)
+        }
+        catch {
+            NSLog("Khandaq: the photo chosen on first launch was not kept as the avatar: %@", "\(error)")
+        }
     }
 }
 

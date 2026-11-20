@@ -13,6 +13,7 @@ import static com.zoffcc.applications.trifa.NgcHistoryDowngradePolicy.KEY_STALE_
 import static com.zoffcc.applications.trifa.NgcHistoryDowngradePolicy.allowsNotification;
 import static com.zoffcc.applications.trifa.NgcHistoryDowngradePolicy.claimsOwnKey;
 import static com.zoffcc.applications.trifa.NgcHistoryDowngradePolicy.decide;
+import static com.zoffcc.applications.trifa.NgcHistoryDowngradePolicy.isRecentEnoughToNotify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -151,6 +152,67 @@ public class NgcHistoryDowngradePolicyTest
     public void anUnverifiedRowRelayedByAThirdPartyDoesNotNotify()
     {
         assertFalse(allowsNotification(false, false));
+    }
+
+    // ------------------------------------------------------------------ the age of a row (0.2.65)
+
+    /**
+     * The tester's report: rows of the backlog that every reconnect hands over notified one by one, an hour after
+     * they were written. They are stored without a notification now.
+     */
+    @Test
+    public void theBacklogOfAReconnectDoesNotNotify()
+    {
+        assertFalse(isRecentEnoughToNotify(NOW - 2L * 60L * 60L * 1000L, NOW));
+        assertFalse(isRecentEnoughToNotify(NOW - 5L * 60L * 1000L, NOW));
+        assertFalse(isRecentEnoughToNotify(NOW - AirBandRule.LATE_DELIVERY_MS - 1L, NOW));
+    }
+
+    /** History that only caught up with a message being sent right now notifies, like a late live message. */
+    @Test
+    public void aRowAsFreshAsALateLiveMessageNotifies()
+    {
+        assertTrue(isRecentEnoughToNotify(NOW, NOW));
+        assertTrue(isRecentEnoughToNotify(NOW - 2_000L, NOW));
+        assertTrue(isRecentEnoughToNotify(NOW - AirBandRule.LATE_DELIVERY_MS, NOW));
+    }
+
+    /** The sender's clock may run ahead of ours; the receive window already bounds by how much. */
+    @Test
+    public void aSendTimeAheadOfOurClockCountsAsFresh()
+    {
+        assertTrue(isRecentEnoughToNotify(NOW + 60_000L, NOW));
+    }
+
+    /** Without a send time the age is unknown, and an unknown age does not interrupt anyone. */
+    @Test
+    public void aRowWithoutASendTimeDoesNotNotify()
+    {
+        assertFalse(isRecentEnoughToNotify(0L, NOW));
+        assertFalse(isRecentEnoughToNotify(-1L, NOW));
+    }
+
+    /**
+     * Both paths from history to a notification, text and file, ask the age first: before the rate limit, so the
+     * backlog does not spend the budget of what is fresh, and before the notification itself. A live message does
+     * not ask: it comes as it is sent.
+     */
+    @Test
+    public void bothHistoryPathsAskTheAgeBeforeTheBudgetAndTheNotification()
+    {
+        final String helper = AntispamOnRequestTest.code(read(JAVA + "HelperGroup.java"));
+        final String ask = "NgcHistoryDowngradePolicy.isRecentEnoughToNotify(m.sent_timestamp, System.currentTimeMillis())";
+        for (final String path : new String[]{"static void group_message_add_from_sync(",
+                                              "private static void group_file_add_from_sync("})
+        {
+            final String body = method(helper, path);
+            assertBefore(body, ask, "NgcHistorySyncBudget.allowNotification(");
+            assertBefore(body, ask, "change_msg_notification(");
+            assertTrue(path, body.indexOf(ask) > body.indexOf("m.sent_timestamp = "));
+        }
+        assertFalse(method(helper, "static void android_tox_callback_group_message_cb_method_wrapper(")
+                            .contains("isRecentEnoughToNotify("));
+        assertFalse(method(helper, "static void handle_incoming_group_file(").contains("isRecentEnoughToNotify("));
     }
 
     private static final String OWN = "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789";

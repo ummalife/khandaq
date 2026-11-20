@@ -225,7 +225,9 @@ public class AirModelTest
         assertNull(AirModel.neighbourFilter(Filter.FAVORITES, 1));
         assertNull(AirModel.neighbourFilter(Filter.ALL, -1));
         assertEquals(Filter.TRANSIT, AirModel.neighbourFilter(Filter.FAVORITES, -1));
-        assertEquals(Arrays.asList(Filter.REQUESTS, Filter.TRANSIT, Filter.FAVORITES), Filter.PILLS);
+        // KHANDAQ (0.2.65): everything has a pill of its own, first, and the swipe walks exactly the pills.
+        assertEquals(Arrays.asList(Filter.ALL, Filter.REQUESTS, Filter.TRANSIT, Filter.FAVORITES), Filter.PILLS);
+        assertEquals(Filter.PILLS, Filter.SWIPE_ORDER);
         assertEquals(Filter.TRANSIT, Filter.fromName("transit"));
         assertEquals(Filter.ALL, Filter.fromName("nonsense"));
     }

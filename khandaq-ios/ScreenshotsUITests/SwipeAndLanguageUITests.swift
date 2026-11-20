@@ -37,12 +37,12 @@ final class SwipeAndLanguageUITests: XCTestCase {
     }
 
     private enum Expected {
-        static let english = AirTexts(pills: ["Requests", "In transit", "Favorites"],
+        static let english = AirTexts(pills: ["All", "Requests", "In transit", "Favorites"],
                                       settings: "Settings",
                                       create: "Create",
                                       command: "Find a chat or paste an ID",
                                       you: "You")
-        static let arabic = AirTexts(pills: ["الطلبات", "في الطريق", "المفضلة"],
+        static let arabic = AirTexts(pills: ["الكل", "الطلبات", "في الطريق", "المفضلة"],
                                      settings: "الإعدادات",
                                      create: "إنشاء",
                                      command: "ابحث عن محادثة أو الصق معرّفًا",
@@ -74,9 +74,10 @@ final class SwipeAndLanguageUITests: XCTestCase {
         // The swipe to reply right to left runs in Arabic: the app lays itself out by the language chosen
         // in it (AppLanguage), so forcing the system's direction alone leaves an English interface left to
         // right.
-        let replySwipeRightToLeft = name.contains("ReplySwipeRightToLeft")
-        let uiLang = replySwipeRightToLeft ? "ar" : (env["KHANDAQ_UITEST_LANG"] ?? "en")
-        if replySwipeRightToLeft {
+        // So does the flick that leaves a conversation (0.2.65).
+        let walkRightToLeft = name.contains("ReplySwipeRightToLeft") || name.contains("LeaveAndPinRightToLeft")
+        let uiLang = walkRightToLeft ? "ar" : (env["KHANDAQ_UITEST_LANG"] ?? "en")
+        if walkRightToLeft {
             app.launchArguments += ["-AppleTextDirection", "YES", "-NSForceRightToLeftWritingDirection", "YES"]
         }
         // The swipe to reply is looked at in the light and the dark theme, chosen in the app: a headless
@@ -3604,6 +3605,176 @@ final class SwipeAndLanguageUITests: XCTestCase {
         app.returnToAir()
     }
 
+    /// KHANDAQ (0.2.65, tester feedback): everything has a pill of its own, first, chosen at rest; the menu of
+    /// a chat's row offers Delete (only looked at, never pressed); a flick toward the end edge from the middle
+    /// of the messages leaves a conversation and a group, while a slow drag the same way that stops short
+    /// stays; and the menu of a pinned message offers Unpin in place of Pin, which takes the strip away, in a
+    /// conversation and in a group. Saves the frames to $KHANDAQ_UITEST_ARTIFACTS/leave-and-pin-<lang>[-rtl]/.
+    func testLeaveAndPinWalkScreens() {
+        walkLeaveAndPin(rightToLeft: false)
+    }
+
+    /// The same in Arabic with the system's direction forced right to left (setUp): the end edge is the left
+    /// one, so the flick that leaves goes left.
+    func testLeaveAndPinRightToLeftWalkScreens() {
+        walkLeaveAndPin(rightToLeft: true)
+    }
+
+    private func walkLeaveAndPin(rightToLeft: Bool) {
+        let lang = rightToLeft ? "ar" : (ProcessInfo.processInfo.environment["KHANDAQ_UITEST_LANG"] ?? "en")
+        auditDir = Self.artifactsDir + "leave-and-pin-\(lang)" + (rightToLeft ? "-rtl" : "") + "/"
+        try? FileManager.default.createDirectory(atPath: auditDir, withIntermediateDirectories: true)
+        guard let people = Self.demoPeople[lang], let groups = Self.groupWalkTexts[lang] else {
+            XCTFail("no demo names for \(lang)")
+            return
+        }
+        openAir()
+        let all = app.airPill(FilterName.all.rawValue)
+        XCTAssertTrue(all.waitForExistence(timeout: 5), "no pill for everything")
+        XCTAssertTrue(all.isSelected, "the pill for everything is not the chosen one at rest")
+        auditShot("air-all")
+
+        // The sideways swipe walks the pills from All: forward on a chat's row, back on a request card.
+        let aminaRow = app.cells.matching(NSPredicate(format: "identifier == 'air.row.direct' AND label CONTAINS %@",
+                                                      people.amina)).element(boundBy: 0)
+        if let found = scrollToRow(aminaRow) {
+            swipeSideways(on: found, forward: true, rightToLeft: rightToLeft)
+            assertSelectedFilter(.requests, after: "a swipe forward on a chat's row")
+            auditShot("swiped-to-requests")
+            swipeSideways(on: app.tables["air.list"].cells.element(boundBy: 0), forward: false, rightToLeft: rightToLeft)
+            assertSelectedFilter(.all, after: "a swipe back on a request card")
+        }
+        else {
+            XCTFail("no row for \(people.amina)")
+        }
+
+        checkRowMenuOffersDelete(for: people.amina, lang)
+
+        XCTAssertTrue(openConversation(with: people.amina), "no conversation with \(people.amina)")
+        let title = app.buttons["air.chat.title"]
+        dragAcrossMessages(rightToLeft: rightToLeft, quick: false)
+        XCTAssertTrue(title.exists && !app.isOnAir, "a slow drag that stopped short left the conversation")
+        auditShot("direct-slow-drag-stays")
+        dragAcrossMessages(rightToLeft: rightToLeft, quick: true)
+        XCTAssertTrue(backOnAir(), "a flick did not leave the conversation")
+        auditShot("direct-flicked-back")
+
+        XCTAssertTrue(openGroup(named: groups.founderGroup), "no group \(groups.founderGroup)")
+        dragAcrossMessages(rightToLeft: rightToLeft, quick: true)
+        XCTAssertTrue(backOnAir(), "a flick did not leave the group")
+        auditShot("group-flicked-back")
+
+        XCTAssertTrue(openConversation(with: people.amina), "no conversation with \(people.amina)")
+        checkPinThenUnpin(lang, shot: "direct")
+        XCTAssertTrue(openGroup(named: groups.founderGroup), "no group \(groups.founderGroup)")
+        checkPinThenUnpin(lang, shot: "group")
+        app.returnToAir()
+    }
+
+    /// A press held on the chat's row opens its menu, which offers Delete; the menu closes without it.
+    private func checkRowMenuOffersDelete(for person: String, _ lang: String) {
+        let row = app.cells.matching(NSPredicate(format: "identifier == 'air.row.direct' AND label CONTAINS %@", person))
+                .element(boundBy: 0)
+        guard let found = scrollToRow(row) else {
+            XCTFail("no row for \(person)")
+            return
+        }
+        found.press(forDuration: 1.2)
+        let delete = app.buttons[appString("alert_delete", lang)].firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 3), "the menu of a chat's row offers no Delete")
+        auditShot("row-menu-delete")
+        // Away from the menu, above it or else below it (not on the status bar, which keeps the tap): the menu
+        // closes and nothing is deleted.
+        for spot in [CGVector(dx: 0.5, dy: 0.1), CGVector(dx: 0.5, dy: 0.97)] where delete.exists {
+            app.coordinate(withNormalizedOffset: spot).tap()
+            _ = delete.waitForNonExistence(timeout: 2)
+        }
+        XCTAssertTrue(backOnAir(), "the menu of a chat's row did not close")
+        XCTAssertTrue(row.exists, "the chat is gone after its menu closed")
+    }
+
+    /// A thumb's sideways swipe across `element`: forward goes to the next pill (to the left, or to the right
+    /// when right to left), back to the one before. It starts away from the edges.
+    private func swipeSideways(on element: XCUIElement, forward: Bool, rightToLeft: Bool) {
+        let leftward = forward != rightToLeft
+        let start = element.coordinate(withNormalizedOffset: CGVector(dx: leftward ? 0.85 : 0.2, dy: 0.5))
+        let end = element.coordinate(withNormalizedOffset: CGVector(dx: leftward ? 0.15 : 0.9, dy: 0.5))
+        start.press(forDuration: 0.02, thenDragTo: end)
+    }
+
+    /// Across the middle of the messages toward the end edge (right, left when right to left): quick and let
+    /// go at once, shorter than half the screen so only the speed can leave; or slow, held still at the end
+    /// before letting go. The quick one moves at 1200 points a second, a thumb's flick; XCUITest's own "fast"
+    /// slows to about 400 before it lets go (ChatFlickBackTest.testTheMeasuredReleasesOfTheUITest).
+    private func dragAcrossMessages(rightToLeft: Bool, quick: Bool) {
+        let window = app.windows.element(boundBy: 0)
+        let toward: CGFloat = rightToLeft ? -1 : 1
+        let start = window.coordinate(withNormalizedOffset: CGVector(dx: rightToLeft ? 0.7 : 0.3, dy: 0.45))
+        if quick {
+            start.press(forDuration: 0.02, thenDragTo: start.withOffset(CGVector(dx: 140 * toward, dy: 0)),
+                        withVelocity: XCUIGestureVelocity(1200), thenHoldForDuration: 0)
+        }
+        else {
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 120 * toward, dy: 0)),
+                        withVelocity: .slow, thenHoldForDuration: 0.3)
+            usleep(800_000)
+        }
+    }
+
+    /// Whether the Air screen is on top again within `timeout`.
+    private func backOnAir(timeout: TimeInterval = 5) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !app.isOnAir {
+            guard Date() < deadline else {
+                return false
+            }
+            usleep(250_000)
+        }
+        return true
+    }
+
+    /// In the open conversation: Pin from the menu of its lowest message shows the strip; the same menu then
+    /// offers Unpin and no Pin, and its Unpin takes the strip away. The strip's own cross carries the same
+    /// words, so the menu's Unpin is the one outside the strip.
+    private func checkPinThenUnpin(_ lang: String, shot: String) {
+        let strip = app.descendants(matching: .any)["air.chat.pinned"]
+        let pinTitle = appString("chat_pin_action", lang)
+        let unpinTitle = appString("air_pin_remove", lang)
+        XCTAssertFalse(strip.exists, "a message was pinned before the walk in \(shot)")
+        guard let message = lowestTranscriptEntry() else {
+            XCTFail("no message to pin in \(shot)")
+            return
+        }
+        message.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.75)).press(forDuration: 1.2)
+        let pin = app.buttons[pinTitle].firstMatch
+        XCTAssertTrue(pin.waitForExistence(timeout: 3), "the menu of a message offers no Pin in \(shot)")
+        guard pin.exists else {
+            return
+        }
+        pin.tap()
+        XCTAssertTrue(strip.waitForExistence(timeout: 3), "no pinned strip after Pin in \(shot)")
+        auditShot("\(shot)-pinned")
+
+        guard let pinned = lowestTranscriptEntry() else {
+            XCTFail("the pinned message is gone in \(shot)")
+            return
+        }
+        pinned.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.75)).press(forDuration: 1.2)
+        let stripFrame = strip.frame
+        let unpin = app.buttons.matching(NSPredicate(format: "label == %@", unpinTitle)).allElementsBoundByIndex
+            .first { $0.isHittable && !stripFrame.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }
+        XCTAssertNotNil(unpin, "the menu of the pinned message offers no Unpin in \(shot)")
+        XCTAssertFalse(app.buttons[pinTitle].exists, "the menu of the pinned message still offers Pin in \(shot)")
+        auditShot("\(shot)-pinned-menu")
+        guard let unpinButton = unpin else {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).tap()
+            return
+        }
+        unpinButton.tap()
+        XCTAssertTrue(strip.waitForNonExistence(timeout: 3), "the strip stayed after Unpin in \(shot)")
+        auditShot("\(shot)-unpinned")
+    }
+
     private func walkReplySwipe(rightToLeft: Bool, dark: Bool) {
         let lang = rightToLeft ? "ar" : (ProcessInfo.processInfo.environment["KHANDAQ_UITEST_LANG"] ?? "en")
         auditDir = Self.artifactsDir + "reply-swipe-\(lang)" + (rightToLeft ? "-rtl" : "") + (dark ? "-dark" : "") + "/"
@@ -3793,11 +3964,11 @@ private extension SwipeAndLanguageUITests {
         start.press(forDuration: 0.02, thenDragTo: end)
     }
 
-    /// The filters of the Air screen. `all` has no pill: it is what shows with no pill selected.
+    /// The filters of the Air screen, each with its pill; `all` first (0.2.65: it used to have none).
     enum FilterName: String {
         case all, requests, transit, favorites
 
-        static let pills: [FilterName] = [.requests, .transit, .favorites]
+        static let pills: [FilterName] = [.all, .requests, .transit, .favorites]
     }
 
     func assertSelectedFilter(_ expected: FilterName, after action: String) {
@@ -3819,15 +3990,13 @@ private extension SwipeAndLanguageUITests {
                       "could not get to the Air screen. Screen was:\n\(app.debugDescription)")
     }
 
-    /// Selects a filter through its pill. The active pill pressed again returns to everything, so a
-    /// pill is pressed only when its state has to change.
+    /// Selects a filter through its pill, which every filter has. The active pill pressed again returns to
+    /// everything, so a pill is pressed only when it is not the active one already.
     func selectFilter(_ filter: FilterName) {
-        for name in FilterName.pills {
-            let pill = app.airPill(name.rawValue)
-            XCTAssertTrue(pill.waitForExistence(timeout: 10), "filter pills not visible")
-            if (name == filter) != pill.isSelected {
-                pill.tap()
-            }
+        let pill = app.airPill(filter.rawValue)
+        XCTAssertTrue(pill.waitForExistence(timeout: 10), "filter pills not visible")
+        if !pill.isSelected {
+            pill.tap()
         }
     }
 

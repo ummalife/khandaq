@@ -17,11 +17,12 @@ enum AirFilter: Int {
     case transit
     case favorites
 
-    /// The pills, in the order they stand on screen.
-    static let pills: [AirFilter] = [.requests, .transit, .favorites]
+    /// The pills, in the order they stand on screen. KHANDAQ (0.2.65, tester feedback): everything has a pill
+    /// of its own, first; without it the list a swipe or a second tap led to was a folder nobody could see.
+    static let pills: [AirFilter] = [.all, .requests, .transit, .favorites]
 
-    /// Order for the sideways swipe on the list: everything first, then the pills from left to right.
-    static let swipeOrder: [AirFilter] = [.all, .requests, .transit, .favorites]
+    /// Order for the sideways swipe on the list: the pills from left to right.
+    static let swipeOrder: [AirFilter] = pills
 
     /// Kept for the life of the process: a theme or language rebuild keeps the filter, a cold start
     /// always opens on everything.

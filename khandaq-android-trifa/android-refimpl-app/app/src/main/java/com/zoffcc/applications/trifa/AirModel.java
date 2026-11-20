@@ -35,13 +35,15 @@ final class AirModel
         TRANSIT("transit"),
         FAVORITES("favorites");
 
-        /** The pills, in the order they stand on screen. */
+        /**
+         * The pills, in the order they stand on screen. KHANDAQ (0.2.65, tester feedback): everything has a pill of
+         * its own, first; without it the list a swipe or a second tap led to was a folder nobody could see.
+         */
         static final List<Filter> PILLS = Collections.unmodifiableList(
-                java.util.Arrays.asList(REQUESTS, TRANSIT, FAVORITES));
-
-        /** Order for the sideways swipe on the list: everything first, then the pills left to right. */
-        static final List<Filter> SWIPE_ORDER = Collections.unmodifiableList(
                 java.util.Arrays.asList(ALL, REQUESTS, TRANSIT, FAVORITES));
+
+        /** Order for the sideways swipe on the list: the pills from left to right. */
+        static final List<Filter> SWIPE_ORDER = PILLS;
 
         /** Stable name for test tags and content descriptions the UI tests look for. */
         final String accessibilityName;

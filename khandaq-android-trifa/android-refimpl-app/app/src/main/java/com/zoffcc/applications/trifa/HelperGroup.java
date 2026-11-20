@@ -6290,10 +6290,20 @@ public class HelperGroup
         HelperFriend.refresh_chat_list_group_row_wrapper(group_identifier);
         HelperFriend.add_all_friends_clear_wrapper(0);
 
-        // KHANDAQ (audit2 #1, notification half): rate-limited rather than suppressed. A message that
-        // genuinely arrived while we were offline still deserves to notify; it just must not be able to
-        // notify a hundred times. Rows past the limit are still stored and still update the unread badge
-        // (do_badge_update above is untouched) — only the notification is dropped.
+        // KHANDAQ (0.2.65): the backlog of a reconnect does not notify, only a row about as fresh as a live
+        // message does. The row is stored and counted unread either way. Asked before the rate limit below, so
+        // the backlog does not spend the budget of what is fresh.
+        if (do_notification
+            && !NgcHistoryDowngradePolicy.isRecentEnoughToNotify(m.sent_timestamp, System.currentTimeMillis()))
+        {
+            HelperGeneric.logI(TAG, "group_message_add_from_sync: old row from history, storing without a notification");
+            do_notification = false;
+        }
+
+        // KHANDAQ (audit2 #1, notification half): rate-limited rather than suppressed. A fresh row from
+        // history still deserves to notify; it just must not be able to notify a hundred times. Rows past
+        // the limit are still stored and still update the unread badge (do_badge_update above is
+        // untouched) — only the notification is dropped.
         if (do_notification && !NgcHistorySyncBudget.allowNotification(sync_budget, System.currentTimeMillis()))
         {
             HelperGeneric.logI(TAG, "group_message_add_from_sync: notification rate limit hit, storing silently");
@@ -12772,9 +12782,18 @@ public class HelperGroup
             HelperFriend.refresh_chat_list_group_row_wrapper(group_id);
         HelperFriend.add_all_friends_clear_wrapper(0);
 
+            // KHANDAQ (0.2.65): as for synced text, the backlog of a reconnect does not notify, only a
+            // file about as fresh as a live message does; asked before the budget below.
+            if (do_notification
+                && !NgcHistoryDowngradePolicy.isRecentEnoughToNotify(m.sent_timestamp, System.currentTimeMillis()))
+            {
+                do_notification = false;
+                HelperGeneric.logI(TAG, "group_file_add_from_sync: old file from history, storing without a notification");
+            }
+
             // KHANDAQ (audit 2026-08-20): the same attention budget the synced-text path uses. A
-            // synced row is history, not a live message, so it may notify — but it may not notify a
-            // hundred times. The row is stored and still updates the unread badge either way.
+            // fresh synced row may notify — but it may not notify a hundred times. The row is stored
+            // and still updates the unread badge either way.
             if (do_notification && !NgcHistorySyncBudget.allowNotification(sync_budget, System.currentTimeMillis()))
             {
                 do_notification = false;

@@ -13,7 +13,7 @@ import Foundation
  what the user sees.
  */
 enum ChatListSwipeNavigation {
-    /// Everything first, then the pills left to right, in a left-to-right layout.
+    /// The pills left to right, everything first, in a left-to-right layout.
     static let order: [AirFilter] = AirFilter.swipeOrder
 
     /**

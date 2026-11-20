@@ -588,6 +588,16 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
 
     synchronized public void refresh_file_progress_by_hash(final String msgIdHash)
     {
+        refresh_file_progress_by_hash(msgIdHash, false);
+    }
+
+    /**
+     * progressOnly: a step of a transfer under way (HelperGroup.post_group_file_progress_refresh), drawn by the
+     * PROGRESS payload alone (ChatTransferProgressHelper.applyGroup in onBindViewHolder), as update_item does
+     * since #181. A whole bind puts the picture of a photo or a video back, which showed as a blink.
+     */
+    synchronized public void refresh_file_progress_by_hash(final String msgIdHash, final boolean progressOnly)
+    {
         if (msgIdHash == null)
         {
             return;
@@ -600,7 +610,14 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
                 final GroupMessage m2 = this.messagelistitems.get(pos);
                 if (msgIdHash.equalsIgnoreCase(m2.msg_id_hash))
                 {
-                    this.notifyItemChanged(pos);
+                    if (progressOnly)
+                    {
+                        this.notifyItemChanged(pos, MessagelistAdapter.PAYLOAD_TRANSFER_PROGRESS);
+                    }
+                    else
+                    {
+                        this.notifyItemChanged(pos);
+                    }
                     return;
                 }
             }

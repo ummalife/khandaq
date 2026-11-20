@@ -7560,7 +7560,7 @@ public class HelperGroup
         }
         touch_ngc_transfer_progress(groupId, msgIdHash);
         ngc_file_transfer_progress.put(ngc_file_progress_key(groupId, msgIdHash), percent);
-        post_group_file_progress_refresh(groupId, msgIdHash);
+        post_group_file_progress_refresh(groupId, msgIdHash, percent < 100);
     }
 
     static void record_ngc_transfer_started(final String groupId, final String msgIdHash)
@@ -7733,6 +7733,8 @@ public class HelperGroup
 
     private static final ConcurrentHashMap<String, Long> ngc_progress_refresh_ts = new ConcurrentHashMap<>();
     private static final long PROGRESS_REFRESH_MIN_INTERVAL_MS = 300L;
+    /** Appended to the key of a file in ngc_progress_refresh_ts for its progress steps (post_group_file_progress_refresh). */
+    private static final String PROGRESS_STEP_KEY = "#step";
 
     /**
      * KHANDAQ (0.2.56): draws the row of a group file again now: its state changed (it waits for a member, or goes
@@ -7750,12 +7752,26 @@ public class HelperGroup
 
     private static void post_group_file_progress_refresh(final String groupId, final String msgIdHash)
     {
+        post_group_file_progress_refresh(groupId, msgIdHash, false);
+    }
+
+    /**
+     * KHANDAQ (beta 2026-11-20): progressOnly is a step of a transfer under way, which redraws the progress of
+     * the row alone (MessagelistAdapter.PAYLOAD_TRANSFER_PROGRESS), as a 1:1 transfer does since #181. Every step
+     * used to draw the whole row, and the whole row puts the picture of a photo or a video back: the preview of
+     * a video being sent went blank and came back about twice a second (Khandaq Testers, Android, 8240).
+     * Anything else (it went, it waits, it failed, it goes again) is drawn whole. The two are throttled apart,
+     * so that a step cannot eat the change of state that comes right after it.
+     */
+    private static void post_group_file_progress_refresh(final String groupId, final String msgIdHash,
+                                                         final boolean progressOnly)
+    {
         if (main_handler_s == null)
         {
             return;
         }
         // Throttle per-chunk UI refreshes — rebinding the row on every chunk reloads the thumbnail and flickers.
-        final String refreshKey = ngc_file_progress_key(groupId, msgIdHash);
+        final String refreshKey = ngc_file_progress_key(groupId, msgIdHash) + (progressOnly ? PROGRESS_STEP_KEY : "");
         final long nowRefresh = System.currentTimeMillis();
         final Long lastRefresh = ngc_progress_refresh_ts.get(refreshKey);
         if (lastRefresh != null && (nowRefresh - lastRefresh) < PROGRESS_REFRESH_MIN_INTERVAL_MS)
@@ -7775,7 +7791,7 @@ public class HelperGroup
                 {
                     return;
                 }
-                MainActivity.group_message_list_fragment.refresh_file_progress_by_hash(msgIdHash);
+                MainActivity.group_message_list_fragment.refresh_file_progress_by_hash(msgIdHash, progressOnly);
             }
             catch (Exception ignored)
             {
@@ -7852,7 +7868,7 @@ public class HelperGroup
         {
             clear_ngc_file_transfer_progress(groupId, msgIdHash);
         }
-        post_group_file_progress_refresh(groupId, msgIdHash);
+        post_group_file_progress_refresh(groupId, msgIdHash, percent < 100);
     }
 
     static boolean group_incoming_file_exists(final String groupId, final String msgIdHash)

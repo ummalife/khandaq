@@ -24,7 +24,7 @@
 #include <QStringList>
 
 /**
- * KHANDAQ (0.2.65): how this copy of Khandaq was installed, and how a new one takes its place.
+ * KHANDAQ (0.2.66): how this copy of Khandaq was installed, and how a new one takes its place.
  *
  * The Windows installer is run again, silently and elevated, over the installed copy. A portable
  * Windows folder and a macOS bundle are swapped by a small script that waits for Khandaq to quit,

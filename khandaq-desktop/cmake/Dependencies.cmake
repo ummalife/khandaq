@@ -181,7 +181,7 @@ if(WIN32)
   search_dependency(OPENSSL           PACKAGE openssl)
 endif()
 
-# KHANDAQ (0.2.65): --dirty marks a build from a tree with changes nobody committed, so that it is
+# KHANDAQ (0.2.66): --dirty marks a build from a tree with changes nobody committed, so that it is
 # never taken for the release of its tag: the update check runs only in a build of the exact tag
 # (UpdateManifest::running), and the manifest generator refuses any other. --dirty takes no
 # commit-ish, so the exact describe names none either; it is HEAD all the same.

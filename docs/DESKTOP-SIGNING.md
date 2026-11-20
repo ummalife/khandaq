@@ -90,7 +90,7 @@ needs sections 2 and 3.
 
 ## 5. The desktop update manifest
 
-KHANDAQ (0.2.65). The desktop app checks for a newer release by itself and installs one when the
+KHANDAQ (0.2.66). The desktop app checks for a newer release by itself and installs one when the
 person presses Update. What it trusts is `https://khandaq.org/downloads/khandaq-desktop-update.json`,
 and only once the release key's signature over it, `khandaq-desktop-update.json.sig`, verifies with
 the key compiled into the app. TLS carries it; it is not what the app trusts.

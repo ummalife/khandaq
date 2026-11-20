@@ -201,7 +201,7 @@ void Settings::loadGlobal()
     }
     s.endGroup();
 
-    // KHANDAQ (0.2.65): the highest version a verified manifest has shown, for each platform.
+    // KHANDAQ (0.2.66): the highest version a verified manifest has shown, for each platform.
     s.beginGroup("UpdateHighestSeen");
     {
         updateHighestSeen.clear();

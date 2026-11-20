@@ -29,7 +29,7 @@ class UpdateCheck;
 class UpdateInstaller;
 
 /**
- * KHANDAQ (0.2.65): the band of a new version, under the band of no network. It comes when the update
+ * KHANDAQ (0.2.66): the band of a new version, under the band of no network. It comes when the update
  * check finds a newer release for this copy: "Khandaq 0.2.65 is available", What's new (the release
  * notes in the language of the interface), Update, and a cross that hides it until Khandaq starts
  * again or Check now in About finds the version once more. Update downloads and checks the file and

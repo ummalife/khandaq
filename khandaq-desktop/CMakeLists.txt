@@ -25,7 +25,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 option(PLATFORM_EXTENSIONS "Enable platform specific extensions, requires extra dependencies" ON)
 option(UPDATE_CHECK "Enable the update check and the update band" ON)
-# KHANDAQ (0.2.65): for testing the update from end to end on one machine, never for a release:
+# KHANDAQ (0.2.66): for testing the update from end to end on one machine, never for a release:
 # KHANDAQ_UPDATE_MANIFEST_URL may point the check at another manifest (http only to 127.0.0.1),
 # and the key in UPDATE_CHECK_QA_KEY may sign it as well as the release key.
 option(UPDATE_CHECK_QA "QA builds only, never a release: a test manifest address and key" OFF)

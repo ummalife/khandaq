@@ -68,7 +68,7 @@ def fetch(url: str, dest: Path | None = None):
 
 def check_update_manifest(base: str, work: Path, signers_path: Path, published_sums: dict[str, str],
                           downloaded: dict[str, tuple[str, int]]) -> None:
-    """KHANDAQ (0.2.65): the manifest the desktop app updates from must verify with the repository's
+    """KHANDAQ (0.2.66): the manifest the desktop app updates from must verify with the repository's
     key in its own namespace, fail with one bit flipped, and give for every download exactly the
     SHA-256 and size of the bytes downloaded above."""
     global checked

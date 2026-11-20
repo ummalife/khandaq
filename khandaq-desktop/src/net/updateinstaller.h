@@ -37,7 +37,7 @@ class QNetworkReply;
 class QProcess;
 
 /**
- * KHANDAQ (0.2.65): downloads the release the update check offers and puts it in place, and only
+ * KHANDAQ (0.2.66): downloads the release the update check offers and puts it in place, and only
  * ever because the person pressed Update.
  *
  * The download goes beside the other caches of the app, through the proxy of the profile, and is

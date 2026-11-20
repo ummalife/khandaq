@@ -17,7 +17,7 @@ Unicode True
 !define UNINSTALL_PATH "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 !define REG_START_MENU "Start Menu Folder"
 var SM_Folder
-; KHANDAQ (0.2.65): 1 when the app runs this installer to update itself:
+; KHANDAQ (0.2.66): 1 when the app runs this installer to update itself:
 ; /S /UPDATE /WAITPID=<the app's process> /D=<the install folder>
 var UpdateMode
 
@@ -196,7 +196,7 @@ Function Launch_Khandaq_without_Admin
    ShellExecAsUser::ShellExecAsUser "" "$INSTDIR\${MAIN_APP_EXE}" ""
 FunctionEnd
 
-; KHANDAQ (0.2.65): the update the app starts. /WAITPID waits up to two minutes for the app to quit
+; KHANDAQ (0.2.66): the update the app starts. /WAITPID waits up to two minutes for the app to quit
 ; before anything is written, and gives up without touching the install if it has not. /UPDATE with
 ; /S starts the updated app as the person once the files are in place, as the Finish page does, and
 ; starts what is in place again when the update fails or gives up after the app has quit for it.
@@ -230,7 +230,7 @@ Function .onInit
   ${EndIf}
 FunctionEnd
 
-; KHANDAQ (0.2.65): while Khandaq runs, Windows keeps its program file from being opened for writing,
+; KHANDAQ (0.2.66): while Khandaq runs, Windows keeps its program file from being opened for writing,
 ; whoever asks. Tried every half second for two minutes; a program that is not there has nothing to
 ; wait for. Still held after that, the update gives up before anything is written and starts Khandaq
 ; again for the person, who quit it for the update: an Abort here calls no .onInstFailed.
@@ -268,7 +268,7 @@ Function .onInstSuccess
   ${EndIf}
 FunctionEnd
 
-; KHANDAQ (0.2.65): an update that fails once it has begun, on a file it could not write, would leave
+; KHANDAQ (0.2.66): an update that fails once it has begun, on a file it could not write, would leave
 ; the person without Khandaq, which they quit for it: what is in place is started again.
 Function .onInstFailed
   ${If} $UpdateMode == 1

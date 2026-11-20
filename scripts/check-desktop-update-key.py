@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KHANDAQ (0.2.65): the desktop app trusts the key the releases are signed with, and nothing else.
+"""KHANDAQ (0.2.66): the desktop app trusts the key the releases are signed with, and nothing else.
 
 The app updates itself only from a manifest the release key has signed (src/net/updatemanifest.cpp),
 and that key is compiled into it. If the key in the app and the key that signs the releases ever

@@ -27,7 +27,7 @@
 #include <QVector>
 
 /**
- * KHANDAQ (0.2.65): the signed list of desktop releases the app updates from.
+ * KHANDAQ (0.2.66): the signed list of desktop releases the app updates from.
  *
  * scripts/generate-desktop-update-manifest.py writes https://khandaq.org/downloads/
  * khandaq-desktop-update.json from the artifacts built on the release machine, and the release key

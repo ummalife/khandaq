@@ -1,4 +1,4 @@
-"""KHANDAQ (0.2.65): the desktop update manifest, as the release scripts and the app both read it.
+"""KHANDAQ (0.2.66): the desktop update manifest, as the release scripts and the app both read it.
 
 The desktop app (khandaq-desktop/src/net/updatemanifest.cpp) learns from
 https://khandaq.org/downloads/khandaq-desktop-update.json whether a newer release is out, and believes

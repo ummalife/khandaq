@@ -24,7 +24,7 @@
 #include <QtTest/QtTest>
 
 /**
- * KHANDAQ (0.2.65): the app checks the manifest signature `ssh-keygen -Y sign` makes, and nothing
+ * KHANDAQ (0.2.66): the app checks the manifest signature `ssh-keygen -Y sign` makes, and nothing
  * that only looks like one. The fixtures in test/net/update were signed with a throwaway key whose
  * private half was never kept: the manifest in the update namespace with SHA-512 (the genuine one),
  * with SHA-256, and in the namespace of the release artifacts.

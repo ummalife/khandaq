@@ -290,7 +290,7 @@ def check_ownership_files(base: str, published: str | None, pattern: re.Pattern[
 
 
 def check_update_manifest(base: str, sums_body: bytes | None, exact: bool, kept: bool = False) -> None:
-    """KHANDAQ (0.2.65): the manifest the desktop app updates from (scripts/generate-desktop-update-
+    """KHANDAQ (0.2.66): the manifest the desktop app updates from (scripts/generate-desktop-update-
     manifest.py), as the app gets it: the release key's signature must verify with the key from this
     repository, never one the site serves, and the manifest must name exactly the bytes the site
     publishes, by SHA256SUMS.txt and by size. kept: the deploy left the live manifest as it was (it

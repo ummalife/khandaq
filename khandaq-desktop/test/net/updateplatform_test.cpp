@@ -28,7 +28,7 @@
 #include <QtTest/QtTest>
 
 /**
- * KHANDAQ (0.2.65): how a copy of Khandaq is found and replaced. The helper scripts are checked for
+ * KHANDAQ (0.2.66): how a copy of Khandaq is found and replaced. The helper scripts are checked for
  * what makes them safe with any folder name (paths only from the environment or the arguments, and
  * only ever quoted) and for their rollback; on a Unix system the macOS helper is also run on bundles
  * in a folder whose name has spaces, quotes and letters of other languages.

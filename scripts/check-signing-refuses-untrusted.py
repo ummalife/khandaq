@@ -141,7 +141,7 @@ def main() -> int:
         else:
             print("  ок: --rotate не подписывает байты с сервера раздачи")
 
-        # --- 7. KHANDAQ (0.2.65): the manifest the desktop app updates from is signed in a namespace
+        # --- 7. KHANDAQ (0.2.66): the manifest the desktop app updates from is signed in a namespace
         # of its own, the one the app verifies. A signature over a download must not pass for one over
         # the manifest, nor the other way round, or a signed artifact could be served as a manifest.
         dl7, keydir7 = fresh(tmp, "update-manifest")

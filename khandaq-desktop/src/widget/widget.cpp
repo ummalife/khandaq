@@ -209,7 +209,7 @@ constexpr int joinedGroupOpenWaitMs = 10000;
 constexpr int outgoingInviteRetryMs = 60 * 1000;
 constexpr int outgoingInviteAfterOnlineMs = 3000;
 
-/** KHANDAQ (0.2.65): how long after the start what an earlier update left goes; the first update
+/** KHANDAQ (0.2.66): how long after the start what an earlier update left goes; the first update
  * check comes a minute later at the soonest. */
 constexpr int updateCleanUpDelayMs = 10 * 1000;
 
@@ -4559,7 +4559,7 @@ void Widget::setupAir()
     // KHANDAQ (0.2.57): over the list and the conversation, which it pushes down.
     topLayout->addWidget(new AirNetworkBand(*airSource, top));
 #if UPDATE_CHECK_ENABLED
-    // KHANDAQ (0.2.65): and under it, the band of a new version.
+    // KHANDAQ (0.2.66): and under it, the band of a new version.
     updateBand = new AirUpdateBand(*updateCheck, *updateInstaller, top);
     topLayout->addWidget(updateBand);
 #endif

@@ -39,7 +39,7 @@ fi
 # the monorepo, so CMake's own `git describe` found nothing and Settings > About said "Nightly", with
 # "build without git" for the commit. What git says here goes in instead.
 GIT_VERSION="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
-# KHANDAQ (0.2.65): --dirty, as in cmake/Dependencies.cmake: a build from a tree with changes nobody
+# KHANDAQ (0.2.66): --dirty, as in cmake/Dependencies.cmake: a build from a tree with changes nobody
 # committed is no release of its tag, and the update manifest generator refuses it.
 GIT_DESCRIBE="$(git -C "$ROOT" describe --tags --dirty 2>/dev/null || true)"
 GIT_DESCRIBE_EXACT="$(git -C "$ROOT" describe --exact-match --tags --dirty 2>/dev/null || true)"

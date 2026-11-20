@@ -47,7 +47,7 @@ ALLOWED="$DL/allowed_signers"
 # what allowed_signers matches on.
 IDENTITY="releases@khandaq.org"
 NAMESPACE="khandaq-release"
-# KHANDAQ (0.2.65): the manifest the desktop app updates from (scripts/generate-desktop-update-manifest.py)
+# KHANDAQ (0.2.66): the manifest the desktop app updates from (scripts/generate-desktop-update-manifest.py)
 # is signed by the same key in a namespace of its own, the one the app verifies
 # (khandaq-desktop/src/net/updatemanifest.cpp). No signature over a download can then pass for a
 # signature over the manifest, nor the other way round. scripts/check-desktop-update-key.py holds

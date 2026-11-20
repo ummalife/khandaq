@@ -2064,7 +2064,7 @@ void AirSettingsPage::buildAbout(UpdateCheck* updateCheck)
         updates, words(Text::SettingsCheckUpdates), nullptr,
         [this] { return settings.getCheckUpdates(); },
         [this](bool on) { settings.setCheckUpdates(on); });
-    // KHANDAQ (0.2.65): Check now, Update once a newer version is out (as the band of a new version
+    // KHANDAQ (0.2.66): Check now, Update once a newer version is out (as the band of a new version
     // does), and what the check found.
     auto* const checkNow = new AirButton(AirButton::Kind::Plain, page.content);
     checkNow->setObjectName(QStringLiteral("settingsCheckNow"));

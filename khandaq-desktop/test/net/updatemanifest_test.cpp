@@ -26,7 +26,7 @@
 #include <QtTest/QtTest>
 
 /**
- * KHANDAQ (0.2.65): what a verified manifest may say and what the app makes of it. Versions are
+ * KHANDAQ (0.2.66): what a verified manifest may say and what the app makes of it. Versions are
  * three plain numbers compared as numbers; a manifest is read strictly, each platform names only its
  * own download; and a version is offered only when it is newer than the running one and not older
  * than the newest one a verified manifest has shown.

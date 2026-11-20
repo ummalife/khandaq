@@ -55,7 +55,7 @@ bool route(const QNetworkProxy& configured, QNetworkProxy& out);
 } // namespace UpdateNetwork
 
 /**
- * KHANDAQ (0.2.65): asks khandaq.org whether a newer desktop release is out, and believes the answer
+ * KHANDAQ (0.2.66): asks khandaq.org whether a newer desktop release is out, and believes the answer
  * only once the release key's signature over it verifies.
  *
  * A release build (one made from an exact tag) of a platform that has downloads checks 60 to 180 s

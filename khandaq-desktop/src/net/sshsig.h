@@ -22,7 +22,7 @@
 #include <QByteArray>
 
 /**
- * KHANDAQ (0.2.65): the signatures the release tooling makes, checked in the app.
+ * KHANDAQ (0.2.66): the signatures the release tooling makes, checked in the app.
  *
  * scripts/sign-desktop-artifacts.sh signs with `ssh-keygen -Y sign`: an Ed25519 key, SHA-512 and a
  * namespace that says what the signature is for (OpenSSH PROTOCOL.sshsig). Only that shape passes:

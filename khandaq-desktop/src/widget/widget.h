@@ -425,7 +425,7 @@ private:
      * Khandaq starts again on this profile once this run has let go of it (AppRestart).
      */
     void restartApplication();
-    /** KHANDAQ (0.2.65): the update installer or helper waits for Khandaq to quit, as Quit does. */
+    /** KHANDAQ (0.2.66): the update installer or helper waits for Khandaq to quit, as Quit does. */
     void quitForUpdate();
     void cycleChats(bool forward);
     void searchChats();
@@ -556,7 +556,7 @@ private:
     /** Settings (E18), in the content column like You. */
     QPointer<AirSettingsPage> settingsPage;
     std::unique_ptr<UpdateCheck> updateCheck; // ownership should be moved outside Widget once non-singleton
-    /** KHANDAQ (0.2.65): downloads and puts in place the version the check found, when asked. */
+    /** KHANDAQ (0.2.66): downloads and puts in place the version the check found, when asked. */
     std::unique_ptr<UpdateInstaller> updateInstaller;
     QPointer<AirUpdateBand> updateBand;
     FilesForm* filesForm;

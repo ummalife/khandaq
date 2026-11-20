@@ -187,7 +187,7 @@ private:
 };
 
 /**
- * KHANDAQ (0.2.65): the update check and the download against a server on this machine, with the
+ * KHANDAQ (0.2.66): the update check and the download against a server on this machine, with the
  * manifest signed by the throwaway test key: what is offered, what is refused before a byte of it
  * is read as JSON, what the requests say about who asks, and that a download is kept only when it
  * is the file the signed manifest describes.

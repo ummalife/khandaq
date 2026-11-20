@@ -22,7 +22,7 @@
 #include <QNetworkProxy>
 #include <QString>
 
-/** KHANDAQ (0.2.65): what the update check reads and keeps (General and UpdateHighestSeen in
+/** KHANDAQ (0.2.66): what the update check reads and keeps (General and UpdateHighestSeen in
  * khandaq.ini). */
 class IUpdateSettings
 {

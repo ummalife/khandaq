@@ -77,7 +77,7 @@ if [[ "${1:-}" == "--rollback" ]]; then
     exit 1
   fi
   echo "    восстановленный сайт собран из $RB_SHA"
-  # KHANDAQ (0.2.65): the desktop update manifest served now is the snapshot's, not this checkout's.
+  # KHANDAQ (0.2.66): the desktop update manifest served now is the snapshot's, not this checkout's.
   # Apps that verified a newer one refuse it (its serial is lower) until a release publishes a
   # manifest with a higher serial; the rest are offered what the snapshot offers.
   echo "    desktop update manifest: the snapshot's; apps that saw a newer one wait for the next release"
@@ -133,7 +133,7 @@ drop_stale_sig() {
   done
 }
 
-# KHANDAQ (0.2.65): the downloads the desktop app updates from that this run staged from dist/. The
+# KHANDAQ (0.2.66): the downloads the desktop app updates from that this run staged from dist/. The
 # update manifest is written from these files and nothing else, and above all never from a file
 # fetched from the server further down: the manifest tells every app which bytes to install.
 UPDATE_STAGED=()
@@ -195,7 +195,7 @@ if [[ -f "$WIN_ZIP" ]]; then
   UPDATE_STAGED+=("$DL/khandaq-windows-x86_64.zip")
 fi
 
-# KHANDAQ (0.2.65): the manifest the desktop app updates from, made from what was staged above. The
+# KHANDAQ (0.2.66): the manifest the desktop app updates from, made from what was staged above. The
 # generator reads each version from the program inside the artifact and refuses a build that is not
 # the exact release tag, a QA build, and a platform going back to an older version. Platforms not
 # staged in this run keep their entry while SHA256SUMS.txt still lists the same bytes for them. A
@@ -222,7 +222,7 @@ fi
 # Entries computed now win; entries for artifacts not staged this run are carried over.
 ( cd "$DL" && {
     fresh="$(mktemp)"
-    # KHANDAQ (0.2.65): the update manifest is not a download and has its own signature namespace;
+    # KHANDAQ (0.2.66): the update manifest is not a download and has its own signature namespace;
     # the checksum list and verify-desktop-signatures.py treat every line here as a release artifact.
     for name in khandaq-*; do
       case "$name" in
@@ -277,7 +277,7 @@ for name in $REMOTE_FILES; do
   esac
   case "$name" in
     *.sig|*.pub) continue ;;
-    # KHANDAQ (0.2.65): the update manifest is committed with its signature and written only from
+    # KHANDAQ (0.2.66): the update manifest is committed with its signature and written only from
     # artifacts built here; a copy from the server is never taken.
     khandaq-desktop-update.json) continue ;;
   esac

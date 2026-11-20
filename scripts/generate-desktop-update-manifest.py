@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KHANDAQ (0.2.65): write the signed manifest the desktop app updates from.
+"""KHANDAQ (0.2.66): write the signed manifest the desktop app updates from.
 
 The desktop app asks https://khandaq.org/downloads/khandaq-desktop-update.json once a day whether a
 newer release is out (khandaq-desktop/src/net/updatecheck.cpp) and believes the answer only when the

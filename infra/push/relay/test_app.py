@@ -678,9 +678,10 @@ EPOCH_B = "epoch-b-secret-value"
 
 
 def _signed(client, secret, endpoint="/wake", age=0):
-    # `age` shifts the timestamp by a second or two so repeated calls in one test produce DIFFERENT
-    # signatures. Without it the second call within the same second is a genuine replay and is
-    # refused — correct behaviour, but not what these tests are probing.
+    # `age` shifts the timestamp so repeated calls in one test produce DIFFERENT signatures. Without
+    # it the second call within the same second is a genuine replay and is refused — correct
+    # behaviour, but not what these tests are probing. One second is not enough: when the clock
+    # passes a second between two calls, now-1 of the later call is the ts of the earlier one.
     ts = int(time.time()) - age
     return client.post(endpoint, json={"token": TOKEN},
                        headers={"Authorization": "Bearer " + sign(TOKEN, "", ts, secret=secret),
@@ -719,7 +720,9 @@ def test_adoption_is_broken_down_by_epoch(relay):
     m = relay(secret="", secrets=f"2:{EPOCH_A},3:{EPOCH_B}")
     _signed(m.app.test_client(), EPOCH_A)
     _signed(m.app.test_client(), EPOCH_B)
-    _signed(m.app.test_client(), EPOCH_B, age=1)   # distinct ts => distinct signature, not a replay
+    # distinct ts => distinct signature, not a replay, even when a second passes between the calls;
+    # a minute is well inside AUTH_MAX_SKEW_SEC
+    _signed(m.app.test_client(), EPOCH_B, age=60)
     adoption = m.app.test_client().get("/health/detail").get_json()["auth_adoption"]
     assert adoption["by_epoch"] == {"2": 1, "3": 2}
     assert adoption["window_signed"] == 3

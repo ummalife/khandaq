@@ -765,6 +765,10 @@ void FileTransferWidget::tellHeight()
 
 // ---- OutgoingFileList ----
 
+// The initialiser in the class declares it; C++11 also wants a definition once a reference binds to
+// it, as QCOMPARE's does, or the Windows build of the tests fails to link.
+constexpr int OutgoingFileList::linesMax;
+
 int OutgoingFileList::shownOf(int count)
 {
     return count <= linesMax ? count : linesMax - 1;

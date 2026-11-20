@@ -716,23 +716,18 @@ private extension AirConversationModelTests {
  KHANDAQ (ideas 1): the "Unread messages" band and the jump to it when a conversation opens (AirUnreadBand),
  kept by the conversation with one person and now by a group too.
  */
-final class UnreadBandTests: XCTestCase {
-    private let lastRead: TimeInterval = 1_800_000_000
-    private var directories: [URL] = []
+final class UnreadBandTests: XCTestCase, GroupScreenTesting {
+    fileprivate let lastRead: TimeInterval = 1_800_000_000
+    fileprivate var directories: [URL] = []
     /// The group screen and its window, let go before what the screen holds weakly.
-    private var window: UIWindow?
-    private var screen: ChatGroupController?
+    fileprivate var window: UIWindow?
+    fileprivate var screen: ChatGroupController?
     /// What the screen holds weakly: the profile, the submanagers and its delegate.
-    private var kept: [AnyObject] = []
+    fileprivate var kept: [AnyObject] = []
 
     override func tearDown() {
         GlobalSearchScrollTarget.pending = nil
-        window?.isHidden = true
-        window = nil
-        screen = nil
-        kept = []
-        directories.forEach { try? FileManager.default.removeItem(at: $0) }
-        directories = []
+        closeGroupScreen()
         super.tearDown()
     }
 
@@ -871,7 +866,19 @@ private extension UnreadBandTests {
                                    arrival: { rows[$0].0 },
                                    countsAsUnread: { rows[$0].1 })
     }
+}
 
+/// What a test of the group screen keeps, for the fixtures below (the unread band, and Edit in the menu of
+/// a group): the profiles it made, the screen and its window, and what the screen holds weakly.
+private protocol GroupScreenTesting: AnyObject {
+    var lastRead: TimeInterval { get }
+    var directories: [URL] { get set }
+    var window: UIWindow? { get set }
+    var screen: ChatGroupController? { get set }
+    var kept: [AnyObject] { get set }
+}
+
+extension GroupScreenTesting {
     /// A group read up to `lastRead`, in a profile of the test's own, made from the app's classes: this
     /// bundle has copies of its own, which do not mix with them (OwnCaptionOrderTests).
     func group() throws -> (OCTChat, OCTRealmManager) {
@@ -894,7 +901,8 @@ private extension UnreadBandTests {
     }
 
     /// A text of the group as objcTox stores it: yours with no peer, someone else's with `peer`, a notice
-    /// of the group, or a row a member synced whose author was not known.
+    /// of the group, or a row a member synced whose author was not known; `messageId` is the group's ID of
+    /// a text that went out (0 while it waits).
     @discardableResult
     func store(_ text: String,
                at date: TimeInterval,
@@ -902,10 +910,12 @@ private extension UnreadBandTests {
                _ realmManager: OCTRealmManager,
                peer: Int32 = 0,
                notice: Bool = false,
-               synced: Bool = false) throws -> OCTMessageAbstract {
+               synced: Bool = false,
+               messageId: OCTToxMessageId = 0) throws -> OCTMessageAbstract {
         let messageText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
         messageText.text = text
         messageText.isDelivered = true
+        messageText.messageId = messageId
         let message = try appClass("OCTMessageAbstract", as: OCTMessageAbstract.Type.self).init()
         message.chatUniqueIdentifier = chat.uniqueIdentifier
         message.dateInterval = date
@@ -972,6 +982,23 @@ private extension UnreadBandTests {
         return screen
     }
 
+    func appClass<T>(_ name: String, as type: T.Type) throws -> T {
+        let cls: AnyClass = try XCTUnwrap(NSClassFromString(name), "no class \(name)")
+        return unsafeBitCast(cls, to: type)
+    }
+
+    /// Lets everything go: the screen and its window before what the screen holds weakly, then the profiles.
+    func closeGroupScreen() {
+        window?.isHidden = true
+        window = nil
+        screen = nil
+        kept = []
+        directories.forEach { try? FileManager.default.removeItem(at: $0) }
+        directories = []
+    }
+}
+
+extension GroupScreenTesting where Self: XCTestCase {
     /// Lets the main loop run for `seconds`: the screen appears, jumps, and hears from its list.
     func settle(for seconds: TimeInterval) {
         let settled = expectation(description: "the main loop ran")
@@ -980,10 +1007,108 @@ private extension UnreadBandTests {
         }
         wait(for: [settled], timeout: seconds + 5)
     }
+}
 
-    func appClass<T>(_ name: String, as type: T.Type) throws -> T {
-        let cls: AnyClass = try XCTUnwrap(NSClassFromString(name), "no class \(name)")
-        return unsafeBitCast(cls, to: type)
+/**
+ KHANDAQ (ideas 1): Edit in the long-press menu of a group, on the terms of a chat with one person: a text
+ of your own that went out with the group's message ID, not one still waiting, someone else's, a reply or
+ a location; it opens the editor with the text of the message the menu was opened on.
+ */
+final class GroupEditMenuTests: XCTestCase, GroupScreenTesting {
+    fileprivate let lastRead: TimeInterval = 1_800_000_000
+    fileprivate var directories: [URL] = []
+    fileprivate var window: UIWindow?
+    fileprivate var screen: ChatGroupController?
+    fileprivate var kept: [AnyObject] = []
+
+    override func tearDown() {
+        closeGroupScreen()
+        super.tearDown()
+    }
+
+    func testEditIsInTheMenuOfYourOwnSentTextAlone() throws {
+        let (chat, realmManager) = try group()
+        var quoted = MessageReplyHelper.ReplyMeta()
+        quoted.localMessageId = 3
+        quoted.senderName = "Amina"
+        quoted.previewText = "Where?"
+        let location = LocationMessage.payload(latitude: 41.0082, longitude: 28.9784)
+        try inOneWrite(realmManager) {
+            try store("See you at six", at: lastRead - 10, in: chat, realmManager, messageId: 41)
+            try store("On my way", at: lastRead - 20, in: chat, realmManager)
+            try store("Fine by me", at: lastRead - 30, in: chat, realmManager, peer: 7, messageId: 42)
+            try store(MessageReplyHelper.encode(quoted, bodyText: "At the library"), at: lastRead - 40, in: chat, realmManager, messageId: 43)
+            try store(location, at: lastRead - 50, in: chat, realmManager, messageId: 44)
+        }
+        let screen = try open(chat, realmManager)
+        settle(for: 0.6)
+
+        let edit = String(localized: "chat_edit_action")
+        var offered: [String: Bool] = [:]
+        for (text, actions) in try menus(of: screen) {
+            offered[text] = actions.contains { $0.title == edit }
+        }
+        XCTAssertEqual(offered.count, 5, "not every message has its menu: \(offered)")
+        XCTAssertEqual(offered["See you at six"], true, "no Edit on your own text")
+        XCTAssertEqual(offered["On my way"], false, "Edit on a text still waiting for its ID")
+        XCTAssertEqual(offered["Fine by me"], false, "Edit on someone else's text")
+        XCTAssertEqual(offered["At the library"], false, "Edit on a reply")
+        XCTAssertEqual(offered[location], false, "Edit on a location")
+    }
+
+    func testEditOpensTheEditorWithTheText() throws {
+        let (chat, realmManager) = try group()
+        try store("See you at six", at: lastRead - 10, in: chat, realmManager, messageId: 41)
+        let screen = try open(chat, realmManager)
+        settle(for: 0.6)
+
+        let edit = try XCTUnwrap(try menus(of: screen).first?.actions.first { $0.title == String(localized: "chat_edit_action") })
+        edit.handler()
+
+        let editor = try XCTUnwrap(screen.navigationController?.presentedViewController as? UIAlertController, "Edit opened nothing")
+        XCTAssertEqual(editor.title, String(localized: "chat_edit_action"))
+        XCTAssertEqual(editor.textFields?.first?.text, "See you at six")
+        XCTAssertEqual(editor.actions.map { $0.title ?? "" }, [String(localized: "alert_cancel"), String(localized: "message_edit_save")])
+
+        // The editor comes up and goes within the test, while the screen still has what it holds weakly: a
+        // dismissal cut into the presentation was dropped, and the screen, left behind, read its released
+        // submanagers in the next test.
+        settle(for: 0.5)
+        let gone = expectation(description: "the editor went away")
+        editor.dismiss(animated: false) {
+            gone.fulfill()
+        }
+        wait(for: [gone], timeout: 5)
+    }
+
+    /// A message gone while its menu was open opens no editor, and nothing reads the gone message.
+    func testAMessageGoneWhileTheMenuWasOpenIsLeftAlone() throws {
+        let (chat, realmManager) = try group()
+        let mine = try store("See you at six", at: lastRead - 10, in: chat, realmManager, messageId: 41)
+        let screen = try open(chat, realmManager)
+        settle(for: 0.6)
+        let edit = try XCTUnwrap(try menus(of: screen).first?.actions.first { $0.title == String(localized: "chat_edit_action") })
+
+        let realm: RLMRealm = realmManager.realm
+        realm.beginWriteTransaction()
+        realm.delete(mine)
+        try realm.commitWriteTransaction()
+        XCTAssertTrue(mine.isInvalidated)
+        edit.handler()
+
+        XCTAssertNil(screen.navigationController?.presentedViewController, "an editor opened for a message that is gone")
+    }
+
+    /// The menu of each message on the screen, by its words.
+    private func menus(of screen: ChatGroupController) throws -> [(text: String, actions: [ChatContextMenuAction])] {
+        let table = try XCTUnwrap(screen.tableView)
+        return try (0..<table.numberOfRows(inSection: 0)).map { row in
+            let indexPath = IndexPath(row: row, section: 0)
+            let cell = try XCTUnwrap(screen.tableView(table, cellForRowAt: indexPath) as? ChatMovableDateCell, "row \(row) is no message")
+            let message = screen.messageEntry(atDisplayIndex: row).message
+            let text = MessageReplyHelper.plainBody(for: message) ?? ""
+            return (text, screen.groupContextActions(for: cell, message: message, indexPath: indexPath))
+        }
     }
 }
 

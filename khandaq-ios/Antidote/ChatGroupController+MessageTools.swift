@@ -329,8 +329,14 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
         guard let indexPath = tableView.indexPath(for: cell) else {
             return
         }
-        let message = messageEntry(atDisplayIndex: indexPath.row).message
-        guard message.messageText != nil, message.groupSenderPeerId == 0 else {
+        presentGroupMessageEditor(for: messageEntry(atDisplayIndex: indexPath.row).message)
+    }
+
+    /// The inline editor of an own group text. KHANDAQ (ideas 1): the long-press menu opens it with the
+    /// message it was opened on, as its other actions take theirs; a message gone in the meantime is left
+    /// alone, as in a chat with one person (audit #11: an invalidated Realm object throws on use).
+    func presentGroupMessageEditor(for message: OCTMessageAbstract) {
+        guard !message.isInvalidated, message.messageText != nil, message.groupSenderPeerId == 0 else {
             return
         }
         let current = message.messageText?.text ?? ""
@@ -348,6 +354,9 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
             }
             let trimmed = newText.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty || trimmed == current {
+                return
+            }
+            guard !message.isInvalidated else {
                 return
             }
             self.submanagerGroups.editGroupMessage(message, in: self.chat, newText: trimmed)
@@ -396,9 +405,37 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
         if #available(iOS 10.0, *) {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
+        let actions = groupContextActions(for: cell, message: message, indexPath: indexPath)
+
+        let editable = cell as? ChatEditable
+        let bubbleRectInCell = editable?.menuTargetRect() ?? cell.bounds
+        let rect = cell.convert(bubbleRectInCell, to: view)
+        // KHANDAQ (#G5): lifted-bubble snapshot (Telegram-style), nil-safe.
+        let snapshot = cell.resizableSnapshotView(from: bubbleRectInCell, afterScreenUpdates: false, withCapInsets: .zero)
+        editable?.willShowMenu()
+        reactionPopup.presentMenu(in: view, aroundRect: rect,
+                                  currentEmoji: ChatReactionsFormat.ownEmoji(from: message.reactionsJSON),
+                                  dark: ThemeAppearance.isDarkMode, actions: actions,
+                                  bubbleSnapshot: snapshot,
+                                  onPick: { [weak self] emoji in
+                                      guard let self = self else { return }
+                                      self.submanagerGroups.toggleReaction(onGroupMessage: message, emoji: emoji, in: self.chat)
+                                  },
+                                  onDismiss: { editable?.willHideMenu() })
+    }
+
+    /// The actions of the long-press menu of a message, under its reaction bar.
+    func groupContextActions(for cell: ChatMovableDateCell, message: OCTMessageAbstract, indexPath: IndexPath) -> [ChatContextMenuAction] {
         var actions: [ChatContextMenuAction] = []
         if quoteText(for: message) != nil {
             actions.append(ChatContextMenuAction(title: String(localized: "chat_reply_action"), systemImageName: "arrowshape.turn.up.left") { [weak self] in self?.startReply(to: message) })
+        }
+        // KHANDAQ (ideas 1): Edit, on the terms of a chat with one person: the cell offers it for a text of
+        // your own that went out with the group's message ID, not for a reply or a location (#208).
+        if cell.isMenuActionSupportedByCell(#selector(ChatMovableDateCell.editMessageAction)) {
+            actions.append(ChatContextMenuAction(title: String(localized: "chat_edit_action"), systemImageName: "pencil") { [weak self] in
+                self?.presentGroupMessageEditor(for: message)
+            })
         }
         // KHANDAQ (0.2.57, SPEC-community item 6): a file of Khandaq Community that waits for Accept is not
         // the person's to pass on.
@@ -429,22 +466,7 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
                 self?.report(message)
             })
         }
-
-        let editable = cell as? ChatEditable
-        let bubbleRectInCell = editable?.menuTargetRect() ?? cell.bounds
-        let rect = cell.convert(bubbleRectInCell, to: view)
-        // KHANDAQ (#G5): lifted-bubble snapshot (Telegram-style), nil-safe.
-        let snapshot = cell.resizableSnapshotView(from: bubbleRectInCell, afterScreenUpdates: false, withCapInsets: .zero)
-        editable?.willShowMenu()
-        reactionPopup.presentMenu(in: view, aroundRect: rect,
-                                  currentEmoji: ChatReactionsFormat.ownEmoji(from: message.reactionsJSON),
-                                  dark: ThemeAppearance.isDarkMode, actions: actions,
-                                  bubbleSnapshot: snapshot,
-                                  onPick: { [weak self] emoji in
-                                      guard let self = self else { return }
-                                      self.submanagerGroups.toggleReaction(onGroupMessage: message, emoji: emoji, in: self.chat)
-                                  },
-                                  onDismiss: { editable?.willHideMenu() })
+        return actions
     }
 
     // MARK: Report

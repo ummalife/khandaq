@@ -30,10 +30,10 @@ def sha(data: bytes) -> str:
 
 
 def merge_function(script: str) -> str:
-    match = re.search(r"^merge_checksums\(\) \{\n.*?^\}\n", script, re.S | re.M)
-    if not match:
+    found = re.search(r"^merge_checksums\(\) \{\n.*?^\}\n", script, re.S | re.M)
+    if not found:
         raise SystemExit("FAIL: scripts/deploy-site.sh has no merge_checksums function")
-    return match.group(0)
+    return found.group(0)
 
 
 def merge(function: str, downloads: Path) -> None:
@@ -44,9 +44,9 @@ def merge(function: str, downloads: Path) -> None:
 def listed(path: Path) -> dict[str, str]:
     lines = {}
     for line in path.read_text(encoding="utf-8").splitlines():
-        match = LINE.match(line)
-        if match:
-            lines[match.group(2)] = match.group(1)
+        found = LINE.match(line)
+        if found:
+            lines[found.group(2)] = found.group(1)
     return lines
 
 
@@ -109,7 +109,7 @@ def check_sequence(function: str, failures: list[str]) -> None:
 
 def check_order(script: str, failures: list[str]) -> None:
     sign = script.find('bash "$ROOT/scripts/sign-desktop-artifacts.sh"')
-    calls = [match.start() for match in re.finditer(r"^merge_checksums$", script, re.M)]
+    calls = [found.start() for found in re.finditer(r"^merge_checksums$", script, re.M)]
     held = script.find("shasum -a 256 -c --quiet SHA256SUMS.txt")
     upload = script.find('echo "==> Upload Khandaq site')
     if min(sign, held, upload) < 0 or len(calls) != 2:

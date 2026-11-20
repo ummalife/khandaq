@@ -216,7 +216,7 @@ static NSString *OCTPushPreviewJSONString(NSString *value)
 /// compare them).
 static NSData *OCTPushPreviewSerialize(NSDictionary<NSString *, id> *fields)
 {
-    NSArray<NSString *> *order = @[@"v", @"k", @"b", @"rk", @"e", @"n", @"g", @"gid", @"ts", @"h"];
+    NSArray<NSString *> *order = @[@"v", @"k", @"b", @"rk", @"e", @"n", @"g", @"gid", @"gp", @"ts", @"h"];
     NSMutableString *json = [NSMutableString stringWithString:@"{"];
     BOOL first = YES;
     for (NSString *name in order) {
@@ -591,6 +591,39 @@ static NSArray<NSString *> *OCTPushPreviewStoredHashList(NSString *prefix, NSStr
         return nil;
     }
     return [@"gf:" stringByAppendingString:msgIdHex.uppercaseString];
+}
+
++ (NSDictionary<NSString *, id> *)groupWakeFieldsWithFields:(NSDictionary<NSString *, id> *)fields
+                                                       body:(NSString *)body
+                                                  groupName:(NSString *)groupName
+                                                  chatIdHex:(NSString *)chatIdHex
+                                                   eventKey:(NSString *)eventKey
+                                           senderPeerKeyHex:(NSString *)senderPeerKeyHex
+{
+    if (OCTPushPreviewDataFromHex(chatIdHex, kOCTPushPreviewChatIdLength) == nil) {
+        return nil;
+    }
+    NSMutableDictionary<NSString *, id> *group = [fields mutableCopy] ?: [NSMutableDictionary dictionary];
+    [group removeObjectsForKeys:@[@"h", @"gp"]];
+    if (body.length > 0) {
+        group[@"b"] = body;
+    }
+    if (groupName.length > 0) {
+        group[@"g"] = groupName;
+    }
+    group[@"gid"] = chatIdHex.uppercaseString;
+
+    if (eventKey.length > 0) {
+        group[@"h"] = eventKey;
+        return group;
+    }
+    // A text that waits: the recipient tells it by its sender's key in the group and what it says.
+    NSString *senderKey = OCTPushPreviewAccount(senderPeerKeyHex);
+    if (senderKey == nil || ! [group[@"k"] isEqual:kOCTPushPreviewKindText]) {
+        return nil;
+    }
+    group[@"gp"] = senderKey;
+    return group;
 }
 
 #pragma mark - Incoming packet 190

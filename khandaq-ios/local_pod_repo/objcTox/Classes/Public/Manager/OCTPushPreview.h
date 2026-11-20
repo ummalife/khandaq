@@ -112,6 +112,20 @@ FOUNDATION_EXPORT NSString *const kOCTPushPreviewWakeFieldPid;
 /// hex); nil without one.
 + (nullable NSString *)groupFileEventKeyWithMsgIdHex:(nullable NSString *)msgIdHex;
 
+/**
+ * KHANDAQ (0.2.69, group message wakes): the preview fields of a wake for a message of ours to a group: `fields` (the
+ * kind, our name, our clock) with the body `b` and the group's name `g` when there are any, its chat id `gid` and the
+ * event key `h`. A text that waits has no event key, since toxcore gives a text its id only when it goes: it carries
+ * `gp`, our key in the group (`senderPeerKeyHex`), instead, and the recipient knows it by that key and what it says.
+ * Nil for a chat id that is not 64 hex, and without an event key for anything but a text with a 64-hex sender key.
+ */
++ (nullable NSDictionary<NSString *, id> *)groupWakeFieldsWithFields:(NSDictionary<NSString *, id> *)fields
+                                                                body:(nullable NSString *)body
+                                                           groupName:(nullable NSString *)groupName
+                                                           chatIdHex:(nullable NSString *)chatIdHex
+                                                            eventKey:(nullable NSString *)eventKey
+                                                    senderPeerKeyHex:(nullable NSString *)senderPeerKeyHex;
+
 #pragma mark - Incoming packet 190
 
 /// The `K` a contact sent in packet 190/01 (the whole packet, id byte included), or nil.

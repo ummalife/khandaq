@@ -1181,6 +1181,9 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                                                                          type:type
                                                                                          chat:chat];
             OCTLogInfo(@"NGC group message queued until the group is connected chat=%@", chat.uniqueIdentifier);
+            // KHANDAQ (0.2.69, group message wakes): the usual case of a small group whose members are away. Its wake
+            // goes as it begins to wait, not when it finally goes (-flushPendingGroupTextMessage:...).
+            [self wakeAwayContactsForWaitingGroupText:text groupNumber:groupNumber];
 
             if (successBlock) {
                 successBlock(pendingMessage);
@@ -3520,6 +3523,22 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     });
 }
 
+/// KHANDAQ (0.2.69, group message wakes): a text of ours has to wait for the group, because nobody else is connected
+/// in it, it is not connected, or older texts wait before it. It wakes the away contacts now: toxcore gives a text its
+/// id only when it goes, so the preview has no event key and carries our key in the group (`gp`). When it goes later,
+/// nobody is woken for it again. Any queue.
+- (void)wakeAwayContactsForWaitingGroupText:(NSString *)text groupNumber:(OCTToxGroupNumber)groupNumber
+{
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSString *body = [OCTPushPreview previewTextFromMessageText:text];
+        [weakSelf wakeAwayContactsInGroupNumber:groupNumber
+                                           kind:kOCTPushPreviewKindText
+                                           body:(body.length > 0 ? body : nil)
+                                  eventKeyBlock:nil];
+    });
+}
+
 /// KHANDAQ (0.2.69, group message wakes): the first offer of a file of ours went to the group. Once per file: a file
 /// whose sending starts again offers itself again. Main queue.
 - (void)wakeAwayContactsForGroupFileWithMsgIdHex:(NSString *)msgIdHex
@@ -3543,16 +3562,18 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
 }
 
 /**
- * KHANDAQ (0.2.69, group message wakes): a text or a file of ours went to the group (docs/PUSH_PREVIEWS.md, "Group
- * message wakes"). A member of it, there now or saved and not gone, that is not connected wakes the one contact whose
- * 190/03 set claims it, when that contact is offline and we have its K and push address; three seconds later, if the
- * member is still not connected and the contact still offline, one wake goes with the preview. No retries: the
- * contact's app brings the message by the group's history sync when it connects. Main queue.
+ * KHANDAQ (0.2.69, group message wakes): a text or a file of ours went to the group, or a text of ours began to wait
+ * for it (docs/PUSH_PREVIEWS.md, "Group message wakes"). A member of it, there now or saved and not gone, that is not
+ * connected wakes the one contact whose 190/03 set claims it, when that contact is offline and we have its K and push
+ * address; three seconds later, if the member is still not connected and the contact still offline, one wake goes with
+ * the preview. No retries: the contact's app brings the message by the group's history sync when it connects.
+ * `eventKeyBlock` gives the event key from our own key in the group; it is nil for a text that waits, whose preview
+ * carries that key as `gp` instead. Main queue.
  */
 - (void)wakeAwayContactsInGroupNumber:(OCTToxGroupNumber)groupNumber
                                  kind:(NSString *)kind
                                  body:(nullable NSString *)body
-                        eventKeyBlock:(NSString *_Nullable (^)(NSString *ownKey))eventKeyBlock
+                        eventKeyBlock:(nullable NSString *_Nullable (^)(NSString *ownKey))eventKeyBlock
 {
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
     if (! [[self.dataSource managerGetChats] isKindOfClass:[OCTSubmanagerChatsImpl class]]
@@ -3583,8 +3604,8 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
                                             members:members
                                           connected:connected
                                                left:left];
-    NSString *eventKey = ownKey ? eventKeyBlock(ownKey) : nil;
-    if (chatIdHex == nil || eventKey == nil) {
+    NSString *eventKey = (ownKey != nil && eventKeyBlock != nil) ? eventKeyBlock(ownKey) : nil;
+    if (chatIdHex == nil || ownKey == nil || (eventKeyBlock != nil && eventKey == nil)) {
         return;
     }
 
@@ -3606,16 +3627,16 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
         return;
     }
 
-    NSMutableDictionary<NSString *, id> *fields =
-        [(OCTSubmanagerChatsImpl *)[self.dataSource managerGetChats] pushPreviewFieldsWithKind:kind];
-    if (body.length > 0) {
-        fields[@"b"] = body;
+    NSDictionary<NSString *, id> *fields =
+        [OCTPushPreview groupWakeFieldsWithFields:[(OCTSubmanagerChatsImpl *)[self.dataSource managerGetChats] pushPreviewFieldsWithKind:kind]
+                                             body:body
+                                        groupName:chat.groupName
+                                        chatIdHex:chatIdHex
+                                         eventKey:eventKey
+                                 senderPeerKeyHex:ownKey];
+    if (fields == nil) {
+        return;
     }
-    if (chat.groupName.length > 0) {
-        fields[@"g"] = chat.groupName;
-    }
-    fields[@"gid"] = chatIdHex.uppercaseString;
-    fields[@"h"] = eventKey;
 
     NSString *chatUniqueIdentifier = chat.uniqueIdentifier;
     __weak typeof(self) weakSelf = self;
@@ -6349,8 +6370,8 @@ static id OCTGroupRegularFileIdentifier(NSString *path)
 
     [realmManager markGroupPendingMessageSent:pendingMessage messageId:messageId];
     [self scheduleHistSyncBroadcastForGroupNumber:groupNumber];
-    // KHANDAQ (0.2.69, group message wakes): a queued text wakes when it is actually sent, now.
-    [self wakeAwayContactsForGroupTextWithMessageId:messageId text:text groupNumber:groupNumber];
+    // KHANDAQ (0.2.69, group message wakes): nobody is woken now. The text woke the away contacts when it began to
+    // wait (-sendMessageToChat:...), and one queued before 0.2.69 wakes nobody.
     return YES;
 }
 

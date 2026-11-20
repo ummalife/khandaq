@@ -67,9 +67,20 @@ final class AirAppearanceController: AirScrollController {
         ThemeAppearance.preference = choice
     }
 
-    // KHANDAQ (#248): each language is written in its own language, and the whole interface is rebuilt
-    // right after, so the change shows without restarting the app.
     @objc private func languageTapped() {
+        AirLanguageSheet.present(from: self, row: languageRow) { [weak self] in
+            self?.languageRow.setValue(AppLanguage.nativeName(for: AppLanguage.current))
+        }
+    }
+}
+
+/// The language sheet of Settings and of Settings > Appearance (ideas 1: the same sheet from both rows).
+/// KHANDAQ (#248): each language is written in its own language, and the whole interface is rebuilt right
+/// after, so the change shows without restarting the app.
+enum AirLanguageSheet {
+    /// The sheet over `controller`, coming from `row` on the iPad. `chosen` runs once another language is
+    /// set, before the interface is rebuilt.
+    static func present(from controller: UIViewController, row: UIView, chosen: @escaping () -> Void) {
         // The current language is named in the message rather than ticked: a check glyph in the title
         // is read aloud as part of the name and is one of the characters the product text avoids.
         let sheet = UIAlertController(title: String(localized: "settings_language_title"),
@@ -77,28 +88,28 @@ final class AirAppearanceController: AirScrollController {
                                                       AppLanguage.nativeName(for: AppLanguage.current)),
                                       preferredStyle: .actionSheet)
         for code in AppLanguage.supportedCodes {
-            sheet.addAction(UIAlertAction(title: AppLanguage.nativeName(for: code), style: .default) { [weak self] _ in
+            sheet.addAction(UIAlertAction(title: AppLanguage.nativeName(for: code), style: .default) { [weak controller] _ in
                 guard code != AppLanguage.current else {
                     return
                 }
                 AppLanguage.set(code)
-                self?.reloadAfterLanguageChange()
+                chosen()
+                rebuildInterface(window: controller?.view.window)
             })
         }
         sheet.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
         // An iPad needs an anchor for an action sheet.
         if let popover = sheet.popoverPresentationController {
-            popover.sourceView = languageRow
-            popover.sourceRect = languageRow.bounds
+            popover.sourceView = row
+            popover.sourceRect = row.bounds
         }
-        present(sheet, animated: true, completion: nil)
+        controller.present(sheet, animated: true, completion: nil)
     }
 
-    private func reloadAfterLanguageChange() {
-        // Titles, the bars and the layout direction are decided when views are made, so the whole
-        // session is rebuilt (AppCoordinator listens for this) rather than this screen alone.
-        languageRow.setValue(AppLanguage.nativeName(for: AppLanguage.current))
-        let window = view.window
+    /// Titles, the bars and the layout direction are decided when views are made, so the whole session
+    /// is rebuilt (AppCoordinator listens for this) rather than one screen alone. `window` is read before
+    /// the rebuild takes the screen out of it.
+    private static func rebuildInterface(window: UIWindow?) {
         NotificationCenter.default.post(name: Notification.Name("KhandaqAppLanguageChanged"), object: nil)
         guard let window = window else {
             return

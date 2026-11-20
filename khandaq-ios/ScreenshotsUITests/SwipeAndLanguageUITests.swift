@@ -3543,16 +3543,7 @@ final class SwipeAndLanguageUITests: XCTestCase {
         app.open(try XCTUnwrap(URL(string: "tox:" + first.lowercased())))
         XCTAssertTrue(name.waitForExistence(timeout: 10), "the link left the first launch")
         XCTAssertFalse(app.textViews["air.newContact.id"].exists, "New contact opened without a profile")
-
-        name.tap()
-        name.typeText("9001")
-        app.buttons["air.step.main"].tap()
-        let skip = app.descendants(matching: .any)["air.first.password.skip"]
-        XCTAssertTrue(skip.waitForExistence(timeout: 10), "no password page")
-        skip.tap()
-        app.buttons["air.step.main"].tap()
-        XCTAssertTrue(app.buttons["air.first.share"].waitForExistence(timeout: 45), "no ID page")
-        app.buttons["air.step.main"].tap()
+        signUpWithoutThePasteboard()
 
         let field = app.textViews["air.newContact.id"]
         XCTAssertTrue(field.waitForExistence(timeout: 30), "New contact did not open with the profile:\n\(app.debugDescription)")
@@ -3565,6 +3556,48 @@ final class SwipeAndLanguageUITests: XCTestCase {
         app.open(try XCTUnwrap(URL(string: "khandaq://add?id=" + second)))
         XCTAssertTrue(field.waitForExistence(timeout: 15), "khandaq://add did not open New contact")
         XCTAssertEqual(field.value as? String, groupedById(second))
+    }
+
+    /// KHANDAQ (ideas 1): the language is on the first screen of Settings too, with the one in effect beside
+    /// it; another one rebuilds the interface and comes back to Settings, in the new language.
+    func testFirstLaunchThenTheLanguageFromTheFirstScreenOfSettings() {
+        signUpWithoutThePasteboard()
+        app.leaveCommandLine()
+        let settings = app.buttons["air.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 30), "no settings button on the Air screen")
+        settings.tap()
+        let row = app.buttons["settings.main.language"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "no Language on the first screen of Settings")
+        XCTAssertEqual(row.label, Expected.englishLanguageRow)
+        XCTAssertEqual(row.value as? String, "English")
+
+        row.tap()
+        let russian = app.buttons["Русский"]
+        XCTAssertTrue(russian.waitForExistence(timeout: 5), "the language sheet did not open")
+        russian.tap()
+        // Only the words are looked at from here: the launch argument -khandaq_app_language keeps the stored
+        // choice English for the whole run, so the row goes on naming English while the interface is Russian.
+        let rebuilt = app.buttons.matching(NSPredicate(format: "identifier == 'settings.main.language' AND label == 'Язык'")).firstMatch
+        XCTAssertTrue(rebuilt.waitForExistence(timeout: 15), "Settings did not come back in Russian:\n\(app.debugDescription)")
+        XCTAssertTrue(app.buttons["settings.appearance"].exists, "the rebuild did not come back to the first screen of Settings")
+        try? XCUIScreen.main.screenshot().pngRepresentation
+                .write(to: URL(fileURLWithPath: Self.artifactsDir + "settings-language-ru.png"))
+    }
+
+    /// The first launch without the pasteboard (`fill` pastes): digits for the name, which every keyboard
+    /// has, and no password.
+    private func signUpWithoutThePasteboard() {
+        let name = app.textFields["air.first.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 30), "the first launch did not start:\n\(app.debugDescription)")
+        name.tap()
+        name.typeText("9001")
+        app.buttons["air.step.main"].tap()
+        let skip = app.descendants(matching: .any)["air.first.password.skip"]
+        XCTAssertTrue(skip.waitForExistence(timeout: 10), "no password page")
+        skip.tap()
+        app.buttons["air.step.main"].tap()
+        XCTAssertTrue(app.buttons["air.first.share"].waitForExistence(timeout: 45), "no ID page")
+        app.buttons["air.step.main"].tap()
     }
 
     /// An ID in groups of four, as the ID field shows it.

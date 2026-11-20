@@ -28,15 +28,59 @@ class AirSettingsTests: XCTestCase {
         let settings = SettingsMainController(theme: ThemeAppearance.resolvedTheme(), submanagerObjects: nil)
         settings.loadViewIfNeeded()
         let rows = settings.view.allSubviews.compactMap { $0 as? AirSettingRow }.map { $0.accessibilityIdentifier ?? "" }
-        XCTAssertEqual(Array(rows.prefix(7)), ["settings.appearance", "settings.notifications", "settings.privacy",
-                                               "settings.transfer", "settings.network", "settings.faq", "settings.about"])
+        XCTAssertEqual(Array(rows.prefix(8)), ["settings.appearance", "settings.main.language", "settings.notifications",
+                                               "settings.privacy", "settings.transfer", "settings.network", "settings.faq",
+                                               "settings.about"])
         // Debugging is the one more row, last, and only in a debug build.
-        XCTAssertTrue(rows.count == 7 || (rows.count == 8 && rows.last == "settings.debug"), "\(rows)")
+        XCTAssertTrue(rows.count == 8 || (rows.count == 9 && rows.last == "settings.debug"), "\(rows)")
 
         let transfer = AirTransferController()
         transfer.loadViewIfNeeded()
         let transferRows = transfer.view.allSubviews.compactMap { $0 as? AirSettingRow }.map { $0.accessibilityIdentifier ?? "" }
         XCTAssertEqual(transferRows, ["settings.export", "settings.import"])
+    }
+
+    /// KHANDAQ (ideas 1): the language on the first screen of Settings, the one in effect beside it, and
+    /// the sheet of Appearance behind it: each language in its own words, the current one named.
+    func testSettingsHasTheLanguageWithItsSheet() throws {
+        let settings = SettingsMainController(theme: ThemeAppearance.resolvedTheme(), submanagerObjects: nil)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = settings
+        window.isHidden = false
+        defer {
+            settings.presentedViewController?.dismiss(animated: false, completion: nil)
+            window.isHidden = true
+        }
+        settings.loadViewIfNeeded()
+        settings.viewWillAppear(false)
+        let row = try XCTUnwrap(settings.view.allSubviews.compactMap { $0 as? AirSettingRow }
+                                    .first { $0.accessibilityIdentifier == "settings.main.language" })
+        let current = AppLanguage.nativeName(for: AppLanguage.current)
+        XCTAssertEqual(row.accessibilityLabel, String(localized: "settings_language"))
+        XCTAssertEqual(row.accessibilityValue, current)
+
+        row.sendActions(for: .touchUpInside)
+        let sheet = try XCTUnwrap(settings.presentedViewController as? UIAlertController, "the row opened no sheet")
+        XCTAssertEqual(sheet.preferredStyle, .actionSheet)
+        XCTAssertEqual(sheet.title, String(localized: "settings_language_title"))
+        XCTAssertEqual(sheet.message, String(localized: "settings_choice_current", current))
+        XCTAssertEqual(sheet.actions.map { $0.title ?? "" },
+                       AppLanguage.supportedCodes.map { AppLanguage.nativeName(for: $0) } + [String(localized: "alert_cancel")])
+        XCTAssertEqual(sheet.actions.last?.style, .cancel)
+    }
+
+    /// KHANDAQ (ideas 1): the app ships the tables of the languages it speaks, and its Info.plist names
+    /// those four; the old Antidote translations are no longer in the build.
+    func testEveryLanguageOfTheSheetShipsItsTables() {
+        for language in AppLanguage.supportedCodes {
+            for table in ["Localizable", "InfoPlist"] {
+                XCTAssertNotNil(Bundle.main.path(forResource: table, ofType: "strings", inDirectory: nil, forLocalization: language),
+                                "\(language) has no \(table).strings")
+            }
+        }
+        let declared = Bundle.main.object(forInfoDictionaryKey: "CFBundleLocalizations") as? [String]
+        XCTAssertEqual(declared.map { Set($0) }, Set(AppLanguage.supportedCodes))
     }
 
     func testTheThemeIsASegmentWithTheSystemFirstShowingTheStoredChoice() {

@@ -66,14 +66,18 @@ bool matches(const QString& path, const UpdateManifest::Entry& entry)
 }
 
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
-bool writeScript(const QString& path, const QString& script)
+bool writeFile(const QString& path, const QByteArray& bytes)
 {
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly)) {
         return false;
     }
-    const QByteArray bytes = script.toLatin1();
     return file.write(bytes) == bytes.size() && file.commit();
+}
+
+bool writeScript(const QString& path, const QString& script)
+{
+    return writeFile(path, script.toLatin1());
 }
 #endif
 
@@ -387,8 +391,12 @@ void UpdateInstaller::manual()
 void UpdateInstaller::runInstaller()
 {
 #if defined(Q_OS_WIN)
-    // Opened so that nothing else can write the file, then checked again through the same handle:
-    // the bytes Windows runs elevated are the bytes that were verified.
+    // Opened without write or delete sharing and checked again through that handle: while it is
+    // open, nothing can write, replace or rename this file. ShellExecuteEx opens the installer by
+    // its path once more, though, so a process of the same person that controls a folder on that
+    // path (a junction it put there before the download, say) can point the path at another file
+    // between this check and the start, and have Windows run that one elevated. Before elevation
+    // no folder is out of that person's reach to copy the file into; SECURITY.md has the limit.
     const std::wstring file = QDir::toNativeSeparators(path).toStdWString();
     HANDLE held = CreateFileW(file.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                               FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -533,6 +541,13 @@ void UpdateInstaller::startHelper()
     bool started = false;
 #if defined(Q_OS_WIN)
     const QString script = QDir(temp).filePath(QStringLiteral("khandaq-update.cmd"));
+    // Written now, in the language of the interface, for the helper to open if a rollback cannot
+    // put everything back; without it the helper keeps the folders all the same, and says nothing.
+    QString note = QDir(temp).filePath(QStringLiteral("khandaq-update-note.txt"));
+    if (!writeFile(note, UpdatePlatform::windowsNote(swap, setup.noteIntro, setup.noteAction))) {
+        qWarning() << "Update: cannot write the note of the helper";
+        note.clear();
+    }
     if (writeScript(script, UpdatePlatform::windowsScript())) {
         QString shell = qEnvironmentVariable("ComSpec");
         if (shell.isEmpty()) {
@@ -544,7 +559,7 @@ void UpdateInstaller::startHelper()
         // split; the path itself comes from the environment.
         helper.setNativeArguments(QStringLiteral("/d /s /c \"\"%KHQ_SCRIPT%\"\""));
         QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
-        for (const QString& variable : UpdatePlatform::windowsEnvironment(swap, pid)) {
+        for (const QString& variable : UpdatePlatform::windowsEnvironment(swap, pid, note)) {
             const int equals = variable.indexOf(QLatin1Char('='));
             environment.insert(variable.left(equals), variable.mid(equals + 1));
         }

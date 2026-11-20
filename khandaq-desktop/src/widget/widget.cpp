@@ -516,6 +516,8 @@ void Widget::init()
         installSetup.running = updateCheck->runningVersion();
         installSetup.portable = settings.getPaths().isPortable();
         installSetup.downloads = UpdateInstaller::downloadsFolder(installSetup.portable);
+        installSetup.noteIntro = AirStrings::text(AirStrings::Text::UpdateNoteIntro);
+        installSetup.noteAction = AirStrings::text(AirStrings::Text::UpdateNoteAction);
         updateInstaller =
             std::unique_ptr<UpdateInstaller>(new UpdateInstaller(settings, installSetup));
         connect(updateInstaller.get(), &UpdateInstaller::quitRequested, this,

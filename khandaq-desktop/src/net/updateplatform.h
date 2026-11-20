@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <QByteArray>
 #include <QString>
 #include <QStringList>
 
@@ -88,7 +89,8 @@ Swap plan(Kind kind, const QString& root, qint64 stamp);
 /**
  * The names in root that a swap carries into the new copy: everything the new copy (staged) has no
  * entry of the same name for, hidden entries included, except programs and libraries (.exe and
- * .dll), which belong to the old copy.
+ * .dll), which belong to the old copy, and the locks of profiles (.lock), which Khandaq removes as it
+ * quits.
  */
 QStringList carriedNames(const QString& root, const QString& staged);
 
@@ -98,8 +100,15 @@ constexpr char oldMarker[] = "khandaq-update-old";
 /** The Windows helper (cmd.exe). Pure ASCII with CRLF line ends; the paths reach it only through
  * the environment (windowsEnvironment). */
 QString windowsScript();
-/** "NAME=value" for each variable the Windows helper reads. */
-QStringList windowsEnvironment(const Swap& swap, qint64 pid);
+/** "NAME=value" for each variable the Windows helper reads; note is the text file it opens when the
+ * person's files may not all be back in place (windowsNote), none when empty. */
+QStringList windowsEnvironment(const Swap& swap, qint64 pid, const QString& note = QString());
+/**
+ * The text file the Windows helper opens when a rollback could not put everything of the person's
+ * back, or the old copy had to stay under another name: intro, the three folders of the swap, one
+ * a line, and action. UTF-8 with a byte order mark and CRLF line ends, which every Notepad reads.
+ */
+QByteArray windowsNote(const Swap& swap, const QString& intro, const QString& action);
 /** The macOS helper (/bin/sh). The paths reach it only as arguments (macArguments). */
 QString macScript();
 /** The arguments of /bin/sh: the script, then what it reads; opener is /usr/bin/open but in tests. */
@@ -109,7 +118,9 @@ QStringList macArguments(const QString& scriptPath, const Swap& swap, qint64 pid
 /**
  * What earlier swaps of root left next to it and can go: old copies the helper marked once the new
  * one was in place, and unpacked copies a helper never used. An old Windows folder that still holds
- * anything but programs, libraries and names the current folder has too is kept.
+ * anything but programs, libraries, locks and names the current folder has too is kept, and so is
+ * an unpacked Windows folder that holds anything but programs, libraries and locks: a rollback that
+ * could not put the person's files back leaves them there.
  */
 QStringList leftovers(Kind kind, const QString& root);
 

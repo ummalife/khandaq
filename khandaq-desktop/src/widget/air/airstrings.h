@@ -70,6 +70,8 @@ enum class Text
     UpdateFailedStart,
     UpdateManualDeb,
     UpdateManualFile,
+    UpdateNoteIntro,
+    UpdateNoteAction,
     CommandPlaceholder,
     CommandKeyHint,
     NewContact,

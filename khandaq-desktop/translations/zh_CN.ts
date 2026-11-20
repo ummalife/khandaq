@@ -437,6 +437,16 @@
         <translation>请退出 Khandaq，用新版本替换当前版本</translation>
     </message>
     <message>
+        <source>Khandaq could not finish the update. Nothing was deleted, but some of your files may not be back in place: your settings (khandaq.ini) and the profiles folder, which holds your profiles. Look for them in these folders:</source>
+        <comment>text file Khandaq opens when an update of a portable Windows folder could not put everything back; the folders follow, one a line</comment>
+        <translation>Khandaq 未能完成更新。没有删除任何内容，但你的部分文件可能不在原处：设置文件（khandaq.ini）以及保存你个人资料的 profiles 文件夹。请在以下文件夹中查找：</translation>
+    </message>
+    <message>
+        <source>Close Khandaq, move them into the folder you start Khandaq from, and start it again.</source>
+        <comment>text file Khandaq opens when an update of a portable Windows folder could not put everything back: the last line, after the folders</comment>
+        <translation>请关闭 Khandaq，把它们移到你启动 Khandaq 的那个文件夹，然后重新启动 Khandaq。</translation>
+    </message>
+    <message>
         <source>Find a chat or paste an ID</source>
         <comment>placeholder of the command line</comment>
         <translation>查找聊天或粘贴 ID</translation>

@@ -91,6 +91,11 @@ public:
         bool portable = false;
         /** How long a download may go without a byte before it is given up. */
         int stallMs = 60 * 1000;
+        /** A portable Windows folder: the words before and after the folders in the note the helper
+         * opens when the person's files may not all be back in place (UpdatePlatform::windowsNote),
+         * in the language of the interface. */
+        QString noteIntro;
+        QString noteAction;
     };
 
     UpdateInstaller(IUpdateSettings& settings, Setup setup, QObject* parent = nullptr);

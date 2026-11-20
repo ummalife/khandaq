@@ -43,7 +43,9 @@ private slots:
     void plansEverythingBesideTheCopy();
     void windowsScriptTakesPathsOnlyFromTheEnvironment();
     void windowsScriptRollsBack();
+    void windowsScriptKeepsWhatItCannotPutBack();
     void windowsEnvironmentKeepsNamesAsTheyAre();
+    void windowsNoteNamesTheFolders();
     void macScriptTakesPathsOnlyAsQuotedArguments();
     void carriesWhatTheNewFolderDoesNotHave();
     void leftoversAreOnlyWhatTheHelperIsDoneWith();
@@ -184,12 +186,12 @@ void TestUpdatePlatform::windowsScriptTakesPathsOnlyFromTheEnvironment()
     QVERIFY(script.contains(QStringLiteral("setlocal EnableExtensions EnableDelayedExpansion")));
     // A path is read only with delayed expansion, whose value is never parsed again, and only
     // inside quotes; %NAME% is left to numbers.
-    for (const char* name : {"KHQ_ROOT", "KHQ_STAGING", "KHQ_OLD", "KHQ_EXE"}) {
+    for (const char* name : {"KHQ_ROOT", "KHQ_STAGING", "KHQ_OLD", "KHQ_EXE", "KHQ_NOTE"}) {
         QVERIFY2(!script.contains(QStringLiteral("%%1%").arg(QLatin1String(name))), name);
         QVERIFY2(script.contains(QStringLiteral("!%1!").arg(QLatin1String(name))), name);
     }
     QVERIFY(!script.contains(QRegularExpression(QStringLiteral("%KHQ_CARRY_(?!COUNT%)"))));
-    const QRegularExpression unquoted(QStringLiteral("(^|[^\"\\\\])!KHQ_(ROOT|STAGING|OLD)!"),
+    const QRegularExpression unquoted(QStringLiteral("(^|[^\"\\\\])!KHQ_(ROOT|STAGING|OLD|NOTE)!"),
                                       QRegularExpression::MultilineOption);
     QVERIFY(!unquoted.match(script).hasMatch());
     // The tools by their full path.
@@ -201,11 +203,15 @@ void TestUpdatePlatform::windowsScriptTakesPathsOnlyFromTheEnvironment()
 void TestUpdatePlatform::windowsScriptRollsBack()
 {
     const QString script = UpdatePlatform::windowsScript();
-    for (const char* label : {":give_up", ":keep_old", ":carry_back", ":remove_new", ":restore_old",
-                              ":old_elsewhere", ":done"}) {
+    for (const char* label : {":give_up", ":keep_old", ":carry_again", ":carry_back",
+                              ":carry_back_again", ":check_back", ":remove_new",
+                              ":remove_new_again", ":restore_old", ":keep_new", ":old_elsewhere",
+                              ":done"}) {
         QVERIFY2(script.contains(QLatin1String(label) + QStringLiteral("\r\n")), label);
         // Each one is gone to.
-        QVERIFY2(script.contains(QStringLiteral("goto ") + QLatin1String(label).mid(1)), label);
+        QVERIFY2(script.contains(QStringLiteral("goto ") + QLatin1String(label).mid(1)
+                                 + QStringLiteral("\r\n")),
+                 label);
     }
     // A failed move of what is carried puts it back and the old folder in place, which starts.
     const int carryBack = script.indexOf(QStringLiteral(":carry_back\r\n"));
@@ -217,6 +223,61 @@ void TestUpdatePlatform::windowsScriptRollsBack()
     QVERIFY(script.indexOf(QStringLiteral("khandaq-update-old"))
             > script.indexOf(QStringLiteral(":done\r\n")));
     QCOMPARE(QString::fromLatin1(UpdatePlatform::oldMarker), QStringLiteral("khandaq-update-old"));
+}
+
+/** The paragraph of the script that starts at label, up to the next label. */
+static QString paragraph(const QString& script, const char* label)
+{
+    const QString start = QLatin1String(label) + QStringLiteral("\r\n");
+    const int from = script.indexOf(start);
+    if (from < 0) {
+        return {};
+    }
+    const int to = script.indexOf(QStringLiteral("\r\n:"), from + start.size());
+    return script.mid(from, to < 0 ? -1 : to - from);
+}
+
+void TestUpdatePlatform::windowsScriptKeepsWhatItCannotPutBack()
+{
+    const QString script = UpdatePlatform::windowsScript();
+    // What is gone since Khandaq listed it (the lock it removes as it quits) is passed over, not
+    // taken for a failure that rolls the update back.
+    const QString carry = paragraph(script, ":carry");
+    QVERIFY(carry.contains(
+        QStringLiteral("if not exist \"!KHQ_OLD!\\!KHQ_CARRY_%carried%!\" goto carry\r\n")));
+    QVERIFY(paragraph(script, ":carry_again")
+                .contains(QStringLiteral("move \"!KHQ_OLD!\\!KHQ_CARRY_%carried%!\" ")));
+    // A move held for a moment is tried again, both ways.
+    QVERIFY(paragraph(script, ":carry_again").contains(QStringLiteral("goto carry_again\r\n")));
+    QVERIFY(paragraph(script, ":carry_back_again").contains(QStringLiteral("goto carry_back_again\r\n")));
+    QVERIFY(paragraph(script, ":remove_new_again").contains(QStringLiteral("goto remove_new_again\r\n")));
+
+    // Whatever carried is still in the new folder keeps that folder.
+    const int initial = script.indexOf(QStringLiteral("set /a kept=0\r\n"));
+    QVERIFY(initial > 0 && initial < script.indexOf(QStringLiteral(":wait_for_quit\r\n")));
+    QVERIFY(paragraph(script, ":check_back_next")
+                .contains(QStringLiteral("if exist \"!KHQ_ROOT!\\!KHQ_CARRY_%back%!\" set /a kept=1\r\n")));
+    const QString restore = paragraph(script, ":restore_old");
+    // A folder still under the name of the copy would take the old one inside it.
+    const int guard = restore.indexOf(QStringLiteral("if exist \"!KHQ_ROOT!\" goto old_elsewhere\r\n"));
+    QVERIFY(guard > 0 && guard < restore.indexOf(QStringLiteral("move \"!KHQ_OLD!\" \"!KHQ_ROOT!\"")));
+    const int keep = restore.indexOf(QStringLiteral("if !kept! neq 0 goto keep_new\r\n"));
+    QVERIFY(keep > 0 && keep < restore.indexOf(QStringLiteral("rd /s /q")));
+    // The unpacked folder is removed only where it holds nothing but the download: before anything
+    // is carried, and once everything carried is back.
+    QCOMPARE(script.count(QStringLiteral("rd /s /q \"!KHQ_STAGING!\"")), 3);
+    QCOMPARE(script.count(QStringLiteral("rd ")), 3);
+    for (const char* label : {":give_up", ":keep_old", ":restore_old"}) {
+        QVERIFY2(paragraph(script, label).contains(QStringLiteral("rd /s /q \"!KHQ_STAGING!\"")), label);
+    }
+    // Where the person's files may be elsewhere, the note says where, and nothing is removed.
+    for (const char* label : {":keep_new", ":old_elsewhere"}) {
+        const QString end = paragraph(script, label);
+        QVERIFY2(end.contains(QStringLiteral("if defined KHQ_NOTE start \"\" \"!KHQ_NOTE!\"\r\n")), label);
+        QVERIFY2(!end.contains(QStringLiteral("rd ")) && !end.contains(QStringLiteral("del ")), label);
+        QVERIFY2(end.contains(QStringLiteral("exit /b 1")), label);
+    }
+    QCOMPARE(script.count(QStringLiteral("!KHQ_NOTE!")), 2);
 }
 
 void TestUpdatePlatform::windowsEnvironmentKeepsNamesAsTheyAre()
@@ -234,6 +295,27 @@ void TestUpdatePlatform::windowsEnvironmentKeepsNamesAsTheyAre()
     QVERIFY(variables.contains(QStringLiteral("KHQ_CARRY_COUNT=2")));
     QVERIFY(variables.contains(QStringLiteral("KHQ_CARRY_1=khandaq.ini")));
     QVERIFY(variables.contains(QStringLiteral("KHQ_CARRY_2=100% & !done! ^x")));
+    QVERIFY(!variables.join(QLatin1Char('\n')).contains(QStringLiteral("KHQ_NOTE")));
+    const QString note = QStringLiteral("C:/Temp/") + awkwardName + QStringLiteral("/khandaq-update-note.txt");
+    QVERIFY(UpdatePlatform::windowsEnvironment(swap, 4242, note)
+                .contains(QStringLiteral("KHQ_NOTE=") + QDir::toNativeSeparators(note)));
+}
+
+void TestUpdatePlatform::windowsNoteNamesTheFolders()
+{
+    const UpdatePlatform::Swap swap = UpdatePlatform::plan(
+        UpdatePlatform::Kind::WindowsZip, QStringLiteral("C:/") + awkwardName + QStringLiteral("/Khandaq"), 5);
+    const QString intro = QStringLiteral("\u041d\u0435 \u0432\u0441\u0451 \u043d\u0430 \u043c\u0435\u0441\u0442\u0435:");
+    const QString action = QStringLiteral("\u0417\u0430\u043a\u0440\u043e\u0439\u0442\u0435 Khandaq.");
+    const QByteArray note = UpdatePlatform::windowsNote(swap, intro, action);
+    // A byte order mark, so that Notepad reads UTF-8 on every Windows.
+    QVERIFY(note.startsWith("\xEF\xBB\xBF"));
+    const QString text = QString::fromUtf8(note.mid(3));
+    QVERIFY(!text.contains(QRegularExpression(QStringLiteral("[^\\r]\\n"))));
+    QCOMPARE(text.split(QStringLiteral("\r\n")),
+             (QStringList{intro, QString(), QDir::toNativeSeparators(swap.root),
+                          QDir::toNativeSeparators(swap.old), QDir::toNativeSeparators(swap.staging),
+                          QString(), action, QString()}));
 }
 
 void TestUpdatePlatform::macScriptTakesPathsOnlyAsQuotedArguments()
@@ -280,9 +362,11 @@ void TestUpdatePlatform::carriesWhatTheNewFolderDoesNotHave()
     QVERIFY(temp.isValid());
     const QString root = temp.filePath(awkwardName + QStringLiteral("/Khandaq"));
     const QString staged = temp.filePath(awkwardName + QStringLiteral("/Khandaq.update-1"));
+    // me.lock: the lock of the profile in use, which Khandaq removes as it quits, so that the helper
+    // would find nothing to move.
     for (const char* name : {"Khandaq.exe", "Qt5Core.dll", "old-plugin.dll", "khandaq.ini",
                              ".hidden", "notes.txt", "profiles/me.tox", "platforms/qwindows.dll",
-                             "updates/0.2.65/khandaq-windows-x86_64.zip"}) {
+                             "updates/0.2.65/khandaq-windows-x86_64.zip", "me.lock", "me.tox"}) {
         QVERIFY(write(root + QLatin1Char('/') + QLatin1String(name), "old"));
     }
     for (const char* name : {"Khandaq.exe", "Qt5Core.dll", "platforms/qwindows.dll"}) {
@@ -291,8 +375,8 @@ void TestUpdatePlatform::carriesWhatTheNewFolderDoesNotHave()
     QStringList carried = UpdatePlatform::carriedNames(root, staged);
     carried.sort();
     QCOMPARE(carried, (QStringList{QStringLiteral(".hidden"), QStringLiteral("khandaq.ini"),
-                                   QStringLiteral("notes.txt"), QStringLiteral("profiles"),
-                                   QStringLiteral("updates")}));
+                                   QStringLiteral("me.tox"), QStringLiteral("notes.txt"),
+                                   QStringLiteral("profiles"), QStringLiteral("updates")}));
 }
 
 void TestUpdatePlatform::leftoversAreOnlyWhatTheHelperIsDoneWith()
@@ -314,15 +398,36 @@ void TestUpdatePlatform::leftoversAreOnlyWhatTheHelperIsDoneWith()
     QVERIFY(write(parent + QStringLiteral("/Khandaq.old-2/khandaq-update-old"), ""));
     // Not marked: the helper never finished with it.
     QVERIFY(write(parent + QStringLiteral("/Khandaq.old-3/Khandaq.exe"), "old"));
-    // An unpacked copy no helper took.
+    // An unpacked copy no helper took: programs and libraries, in folders of their own.
     QVERIFY(write(parent + QStringLiteral("/Khandaq.update-4/Khandaq.exe"), "new"));
+    QVERIFY(write(parent + QStringLiteral("/Khandaq.update-4/platforms/qwindows.dll"), "new"));
     // Not ours.
     QVERIFY(write(parent + QStringLiteral("/Khandaq.old-x/khandaq-update-old"), ""));
     QVERIFY(write(parent + QStringLiteral("/Other.old-5/khandaq-update-old"), ""));
+    // Unpacked copies a rollback could not empty of the person's files: kept, even where the copy
+    // has a file of that name by now (a new profile of the same name).
+    QVERIFY(write(parent + QStringLiteral("/Khandaq.update-6/Khandaq.exe"), "new"));
+    QVERIFY(write(parent + QStringLiteral("/Khandaq.update-6/me.tox"), "the only key to an account"));
+    QVERIFY(write(root + QStringLiteral("/me.tox"), "a profile made since"));
+    QVERIFY(write(parent + QStringLiteral("/Khandaq.update-7/avatars/friend.png"), "photo"));
+    QVERIFY(write(parent + QStringLiteral("/Khandaq.update-8/khandaq.ini"), "settings"));
+    // Marked, with a lock a crash left behind: nothing of the person's.
+    QVERIFY(write(parent + QStringLiteral("/Khandaq.old-9/Khandaq.exe"), "old"));
+    QVERIFY(write(parent + QStringLiteral("/Khandaq.old-9/other profile.lock"), "4242"));
+    QVERIFY(write(parent + QStringLiteral("/Khandaq.old-9/khandaq-update-old"), ""));
     QStringList found = UpdatePlatform::leftovers(Kind::WindowsZip, root);
     found.sort();
     QCOMPARE(found, (QStringList{parent + QStringLiteral("/Khandaq.old-1"),
+                                 parent + QStringLiteral("/Khandaq.old-9"),
                                  parent + QStringLiteral("/Khandaq.update-4")}));
+#if defined(Q_OS_UNIX)
+    // A link is never followed into: the folder stays.
+    QVERIFY(QDir().mkpath(parent + QStringLiteral("/Khandaq.update-10")));
+    QVERIFY(QFile::link(parent + QStringLiteral("/Khandaq.old-2"),
+                        parent + QStringLiteral("/Khandaq.update-10/linked")));
+    QVERIFY(!UpdatePlatform::leftovers(Kind::WindowsZip, root)
+                 .contains(parent + QStringLiteral("/Khandaq.update-10")));
+#endif
     QVERIFY(UpdatePlatform::leftovers(Kind::WindowsInstaller, root).isEmpty());
     QVERIFY(UpdatePlatform::leftovers(Kind::LinuxPortable, root).isEmpty());
 

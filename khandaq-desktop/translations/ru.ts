@@ -445,6 +445,16 @@
         <translation>Закройте Khandaq и замените эту версию новой</translation>
     </message>
     <message>
+        <source>Khandaq could not finish the update. Nothing was deleted, but some of your files may not be back in place: your settings (khandaq.ini) and the profiles folder, which holds your profiles. Look for them in these folders:</source>
+        <comment>text file Khandaq opens when an update of a portable Windows folder could not put everything back; the folders follow, one a line</comment>
+        <translation>Khandaq не удалось завершить обновление. Ничего не удалено, но часть ваших файлов может оказаться не на месте: настройки (khandaq.ini) и папка profiles, в которой хранятся ваши профили. Поищите их в этих папках:</translation>
+    </message>
+    <message>
+        <source>Close Khandaq, move them into the folder you start Khandaq from, and start it again.</source>
+        <comment>text file Khandaq opens when an update of a portable Windows folder could not put everything back: the last line, after the folders</comment>
+        <translation>Закройте Khandaq, перенесите их в папку, из которой вы запускаете Khandaq, и запустите его снова.</translation>
+    </message>
+    <message>
         <source>Find a chat or paste an ID</source>
         <comment>placeholder of the command line</comment>
         <translation>Найти чат или вставить ID</translation>

@@ -31,9 +31,12 @@ constexpr char windowsExecutable[] = "Khandaq.exe";
 /**
  * Waits for Khandaq to quit, moves the folder aside, moves the new one in and carries the user's
  * things (a portable copy keeps its settings and profiles in its folder) across by name. Any failure
- * puts everything back and starts the old copy. Delayed expansion is on and paths are only ever
- * written !NAME! inside quotes: the value of a variable is not parsed again, so a folder name with
- * &, ^, %, ! or letters of any language is only ever a name. Numbers alone use %NAME%.
+ * puts everything back and starts the old copy. A folder that may still hold anything of the
+ * person's is never removed: when something carried cannot be moved back, the new folder stays
+ * beside the copy and the note Khandaq wrote (KHQ_NOTE) is opened. Delayed expansion is on and paths
+ * are only ever written !NAME! inside quotes: the value of a variable is not parsed again, so a
+ * folder name with &, ^, %, ! or letters of any language is only ever a name. Numbers alone use
+ * %NAME%.
  */
 constexpr char windowsHelper[] = R"script(@echo off
 rem Khandaq update helper for a portable copy. Khandaq writes this file, sets the KHQ_ variables
@@ -41,6 +44,7 @@ rem and starts it as it quits. Every path comes from those variables. The tools 
 rem full path, so that another find or ping earlier on PATH is never run.
 setlocal EnableExtensions EnableDelayedExpansion
 set /a waited=0
+set /a kept=0
 :wait_for_quit
 "%SystemRoot%\System32\tasklist.exe" /FI "PID eq %KHQ_PID%" /NH 2>nul | "%SystemRoot%\System32\find.exe" " %KHQ_PID% " >nul
 if errorlevel 1 goto move_old
@@ -80,31 +84,76 @@ set /a carried=0
 :carry
 if !carried! geq %KHQ_CARRY_COUNT% goto done
 set /a carried+=1
+rem Gone since Khandaq listed it, as a lock it removes when it quits: there is nothing to carry.
+if not exist "!KHQ_OLD!\!KHQ_CARRY_%carried%!" goto carry
+set /a tries=0
+:carry_again
 move "!KHQ_OLD!\!KHQ_CARRY_%carried%!" "!KHQ_ROOT!\!KHQ_CARRY_%carried%!" >nul 2>nul
-if errorlevel 1 goto carry_back
-goto carry
+if not errorlevel 1 goto carry
+rem Held for a moment, by a virus scanner or a sync client: tried again for ten seconds.
+set /a tries+=1
+if !tries! geq 10 goto carry_back
+"%SystemRoot%\System32\PING.EXE" -n 2 127.0.0.1 >nul
+goto carry_again
 
 :carry_back
 rem Rollback: what was carried goes back, then the old folder takes its place again.
 set /a back=0
 :carry_back_next
+if !back! geq %KHQ_CARRY_COUNT% goto check_back
+set /a back+=1
+set /a tries=0
+:carry_back_again
+if not exist "!KHQ_ROOT!\!KHQ_CARRY_%back%!" goto carry_back_next
+if exist "!KHQ_OLD!\!KHQ_CARRY_%back%!" goto carry_back_next
+move "!KHQ_ROOT!\!KHQ_CARRY_%back%!" "!KHQ_OLD!\!KHQ_CARRY_%back%!" >nul 2>nul
+if not errorlevel 1 goto carry_back_next
+set /a tries+=1
+if !tries! geq 10 goto carry_back_next
+"%SystemRoot%\System32\PING.EXE" -n 2 127.0.0.1 >nul
+goto carry_back_again
+
+:check_back
+rem Anything carried that is still in the new folder is the person's: that folder is kept.
+set /a back=0
+:check_back_next
 if !back! geq %KHQ_CARRY_COUNT% goto remove_new
 set /a back+=1
-if exist "!KHQ_ROOT!\!KHQ_CARRY_%back%!" if not exist "!KHQ_OLD!\!KHQ_CARRY_%back%!" move "!KHQ_ROOT!\!KHQ_CARRY_%back%!" "!KHQ_OLD!\!KHQ_CARRY_%back%!" >nul 2>nul
-goto carry_back_next
+if exist "!KHQ_ROOT!\!KHQ_CARRY_%back%!" set /a kept=1
+goto check_back_next
 
 :remove_new
+set /a tries=0
+:remove_new_again
 move "!KHQ_ROOT!" "!KHQ_STAGING!" >nul 2>nul
+if not errorlevel 1 goto restore_old
+set /a tries+=1
+if !tries! geq 10 goto old_elsewhere
+"%SystemRoot%\System32\PING.EXE" -n 2 127.0.0.1 >nul
+goto remove_new_again
+
 :restore_old
-rem Rollback: the old folder takes its place again and starts.
+rem Rollback: the old folder takes its place again and starts. A folder still under that name would
+rem take the old one inside it rather than give it the name.
+if exist "!KHQ_ROOT!" goto old_elsewhere
 move "!KHQ_OLD!" "!KHQ_ROOT!" >nul 2>nul
 if errorlevel 1 goto old_elsewhere
+if !kept! neq 0 goto keep_new
 rd /s /q "!KHQ_STAGING!" >nul 2>nul
 start "" /D "!KHQ_ROOT!" "!KHQ_ROOT!\!KHQ_EXE!"
 exit /b 1
 
+:keep_new
+rem Something of the person's could not leave the new folder: it stays beside the copy, and the
+rem note says where to look.
+if defined KHQ_NOTE start "" "!KHQ_NOTE!"
+start "" /D "!KHQ_ROOT!" "!KHQ_ROOT!\!KHQ_EXE!"
+exit /b 1
+
 :old_elsewhere
-rem The old copy could not go back under its name; it still works where it is.
+rem The old copy could not go back under its name; it still works where it is. Nothing is removed,
+rem and the note says where everything is.
+if defined KHQ_NOTE start "" "!KHQ_NOTE!"
 start "" /D "!KHQ_OLD!" "!KHQ_OLD!\!KHQ_EXE!"
 exit /b 1
 
@@ -165,6 +214,13 @@ bool isProgram(const QFileInfo& entry)
                || suffix.compare(QLatin1String("dll"), Qt::CaseInsensitive) == 0);
 }
 
+/** The lock of a profile (ProfileLocker): there while Khandaq runs, removed as it quits, and of no
+ * use to anyone once it has. */
+bool isLock(const QFileInfo& entry)
+{
+    return entry.isFile() && entry.suffix().compare(QLatin1String("lock"), Qt::CaseInsensitive) == 0;
+}
+
 QFileInfoList everything(const QString& dir)
 {
     return QDir(dir).entryInfoList(QDir::AllEntries | QDir::Hidden | QDir::System
@@ -178,17 +234,46 @@ bool present(const QString& dir, const QString& name)
     return entry.exists() || entry.isSymLink();
 }
 
-/** Nothing of the person's is left in an old Windows folder: only programs, libraries, the marker
- * and names the current folder has as well. */
+/** Nothing of the person's is left in an old Windows folder: only programs, libraries, locks, the
+ * marker and names the current folder has as well. */
 bool onlyProgramsLeft(const QString& old, const QString& root)
 {
     for (const QFileInfo& entry : everything(old)) {
         const QString name = entry.fileName();
-        if (name == QLatin1String(UpdatePlatform::oldMarker) || isProgram(entry)
+        if (name == QLatin1String(UpdatePlatform::oldMarker) || isProgram(entry) || isLock(entry)
             || present(root, name)) {
             continue;
         }
         return false;
+    }
+    return true;
+}
+
+/**
+ * An unpacked Windows folder holds what came out of the release zip and nothing else: programs and
+ * libraries, in folders of their own. A rollback that could not move something of the person's back
+ * leaves it in there, so the names of the current folder say nothing here: the person may have made
+ * a new profile of the same name since. A link of any kind is not followed and keeps the folder.
+ */
+bool onlyProgramFiles(const QString& dir, int depth)
+{
+    constexpr int deepest = 8;
+    if (depth > deepest) {
+        return false;
+    }
+    for (const QFileInfo& entry : everything(dir)) {
+        if (entry.isSymLink()) {
+            return false;
+        }
+        if (entry.isDir()) {
+            if (!onlyProgramFiles(entry.absoluteFilePath(), depth + 1)) {
+                return false;
+            }
+            continue;
+        }
+        if (!isProgram(entry) && !isLock(entry)) {
+            return false;
+        }
     }
     return true;
 }
@@ -296,7 +381,8 @@ QStringList carriedNames(const QString& root, const QString& staged)
     QStringList names;
     for (const QFileInfo& entry : everything(root)) {
         const QString name = entry.fileName();
-        if (present(staged, name) || isProgram(entry)) {
+        // A lock listed now, while Khandaq runs, is gone by the time the helper would move it.
+        if (present(staged, name) || isProgram(entry) || isLock(entry)) {
             continue;
         }
         names.append(name);
@@ -311,7 +397,7 @@ QString windowsScript()
     return script;
 }
 
-QStringList windowsEnvironment(const Swap& swap, qint64 pid)
+QStringList windowsEnvironment(const Swap& swap, qint64 pid, const QString& note)
 {
     QStringList variables{
         QStringLiteral("KHQ_PID=") + QString::number(pid),
@@ -324,7 +410,20 @@ QStringList windowsEnvironment(const Swap& swap, qint64 pid)
     for (int i = 0; i < swap.carried.size(); ++i) {
         variables.append(QStringLiteral("KHQ_CARRY_%1=").arg(i + 1) + swap.carried.at(i));
     }
+    if (!note.isEmpty()) {
+        variables.append(QStringLiteral("KHQ_NOTE=") + QDir::toNativeSeparators(note));
+    }
     return variables;
+}
+
+QByteArray windowsNote(const Swap& swap, const QString& intro, const QString& action)
+{
+    const QString lineEnd = QStringLiteral("\r\n");
+    const QString text = intro + lineEnd + lineEnd + QDir::toNativeSeparators(swap.root) + lineEnd
+                         + QDir::toNativeSeparators(swap.old) + lineEnd
+                         + QDir::toNativeSeparators(swap.staging) + lineEnd + lineEnd + action
+                         + lineEnd;
+    return QByteArray("\xEF\xBB\xBF") + text.toUtf8();
 }
 
 QString macScript()
@@ -361,11 +460,15 @@ QStringList leftovers(Kind kind, const QString& root)
             continue;
         }
         const QString path = sibling.absoluteFilePath();
-        // An unpacked copy holds only what came out of the download.
-        const bool unpacked = match.captured(1) == QLatin1String("update");
-        const bool marked = present(path, QLatin1String(oldMarker));
-        if (unpacked
-            || (marked && (kind == Kind::MacZip || onlyProgramsLeft(path, copy.absoluteFilePath())))) {
+        const bool mac = kind == Kind::MacZip;
+        if (match.captured(1) == QLatin1String("update")) {
+            // Nothing of the person's is ever moved into an unpacked bundle; an unpacked Windows
+            // folder is kept when a rollback left something of theirs in it.
+            if (mac || onlyProgramFiles(path, 0)) {
+                found.append(path);
+            }
+        } else if (present(path, QLatin1String(oldMarker))
+                   && (mac || onlyProgramsLeft(path, copy.absoluteFilePath()))) {
             found.append(path);
         }
     }

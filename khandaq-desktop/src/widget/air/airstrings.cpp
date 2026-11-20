@@ -98,6 +98,20 @@ const Source sources[] = {
     {Text::UpdateFailedStart, QT_TRANSLATE_NOOP3("Air", "The update could not start", "update band at the top of the window: error")},
     {Text::UpdateManualDeb, QT_TRANSLATE_NOOP3("Air", "Install it with this command: %1", "update band at the top of the window: Linux package; %1 is the command")},
     {Text::UpdateManualFile, QT_TRANSLATE_NOOP3("Air", "Quit Khandaq and put the new version in place of this one", "update band at the top of the window: this copy cannot be replaced by Khandaq itself")},
+    {Text::UpdateNoteIntro,
+     QT_TRANSLATE_NOOP3("Air",
+                        "Khandaq could not finish the update. Nothing was deleted, but some of "
+                        "your files may not be back in place: your settings (khandaq.ini) and "
+                        "the profiles folder, which holds your profiles. Look for them in these "
+                        "folders:",
+                        "text file Khandaq opens when an update of a portable Windows folder "
+                        "could not put everything back; the folders follow, one a line")},
+    {Text::UpdateNoteAction,
+     QT_TRANSLATE_NOOP3("Air",
+                        "Close Khandaq, move them into the folder you start Khandaq from, and "
+                        "start it again.",
+                        "text file Khandaq opens when an update of a portable Windows folder "
+                        "could not put everything back: the last line, after the folders")},
     {Text::CommandPlaceholder, QT_TRANSLATE_NOOP3("Air", "Find a chat or paste an ID", "placeholder of the command line")},
     {Text::CommandKeyHint, QT_TRANSLATE_NOOP3("Air", "Press / to search", "tooltip of the key hint in the command line")},
     {Text::NewContact, QT_TRANSLATE_NOOP3("Air", "New contact", "button and empty state action")},

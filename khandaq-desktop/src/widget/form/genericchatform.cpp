@@ -806,9 +806,11 @@ void GenericChatForm::offerFiles(const QStringList& paths)
     AirDialog* const dialog = AirDialog::confirm(
         this, AirStrings::text(AirStrings::Text::FilesSendTitle, paths.size()), QString(),
         AirStrings::text(AirStrings::Text::ComposeSend), AirDialog::Verb::Ink, [self, paths] {
-            // The chat may have gone while the question was open: then nothing goes.
-            if (self) {
-                self->sendPreparedFiles(paths);
+            // The chat may have gone while the question was open: then nothing goes. Read once
+            // into a plain pointer: GCC's -Wnull-dereference, an error in the Windows build,
+            // cannot tell that a QPointer checked a line above is still set when read again.
+            if (GenericChatForm* const form = self.data()) {
+                form->sendPreparedFiles(paths);
             }
         });
     if (!dialog) {

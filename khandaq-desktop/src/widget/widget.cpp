@@ -1965,6 +1965,11 @@ void Widget::openDialog(GenericChatroomWidget* widget, bool newWindow)
         chatFormIsSet = contentDialogManager->chatWidgetExists(frnd->getPersistentId());
     } else {
         form = groupChatForms[group->getPersistentId()].data();
+        // A group's form lives as long as the group. The check keeps GCC's -Wnull-dereference, an
+        // error in the Windows build, from seeing QPointer::data() give null right before the read.
+        if (!form) {
+            return;
+        }
         wasShown = form->isVisible();
         contentDialogManager->focusChat(group->getPersistentId());
         chatFormIsSet = contentDialogManager->chatWidgetExists(group->getPersistentId());

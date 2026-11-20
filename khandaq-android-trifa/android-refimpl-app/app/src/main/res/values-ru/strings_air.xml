@@ -483,4 +483,6 @@
     <!-- E21 (stage 3b): deleting a group from the list asks from below, with its consequence. -->
     <string name="air_group_delete_title_format">Удалить %1$s?</string>
     <string name="air_group_delete_message">Группа, её сообщения и файлы удалятся с этого устройства. Если вы ещё в группе, вы из неё выйдете.</string>
+    <!-- Testers' ideas (0.2.67): over the first message that came while the chat was closed (AirUnreadMark); iOS unread_messages_separator -->
+    <string name="air_unread_mark">Непрочитанные сообщения</string>
 </resources>

@@ -70,6 +70,8 @@ public class GroupMessageListFragment extends Fragment
     static boolean group_show_only_files = false;
     static int group_attachment_filter_kind = MessageListFragment.ATTACH_ALL;
     FloatingActionButton unread_messages_notice_button = null;
+    // KHANDAQ (testers' ideas, 0.2.67): "Unread messages" over the first message that came while the group was closed.
+    AirUnreadMark unread_mark = null;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
@@ -94,11 +96,21 @@ public class GroupMessageListFragment extends Fragment
         is_at_bottom = true;
         faded_in = false;
 
+        // KHANDAQ (testers' ideas, 0.2.67): the group opens at its first unread message, under "Unread messages"
+        // (AirUnreadMark); what was unread is read before the reset below clears it.
+        unread_mark = new AirUnreadMark(position -> {
+            final GroupMessagelistAdapter shown = adapter;
+            final GroupMessage m = (shown == null) ? null : shown.getMessageAtPosition(position);
+            return (m == null) ? AirUnreadMark.NONE : m.id;
+        });
+        unread_mark.restore(savedInstanceState, current_group_id);
+
         try
         {
             // reset "new" flags for messages -------
             if (orma != null)
             {
+                capture_unread();
                 orma.updateGroupMessage().
                         group_identifierEq(current_group_id.toLowerCase()).
                         is_new(false).execute();
@@ -145,6 +157,7 @@ public class GroupMessageListFragment extends Fragment
         itemAnimator.setSupportsChangeAnimations(false);
         listingsView.setItemAnimator(itemAnimator);
         listingsView.setHasFixedSize(false);
+        listingsView.addItemDecoration(unread_mark);
 
         listingsView.setFastScrollListener(new FastScroller.FastScrollListener()
         {
@@ -281,6 +294,8 @@ public class GroupMessageListFragment extends Fragment
 
         listingsView.addOnScrollListener(mScrollListener);
         listingsView.setAdapter(adapter);
+        // KHANDAQ (testers' ideas, 0.2.67): the log is loaded above; opened with unread messages, it opens at the first.
+        unread_mark.place(listingsView, null);
         // --------------
         // --------------
 
@@ -326,6 +341,30 @@ public class GroupMessageListFragment extends Fragment
         is_data_loaded = false;
 
         return view;
+    }
+
+    /**
+     * KHANDAQ (testers' ideas, 0.2.67): what is unread in this group, read before it is cleared, for the mark over
+     * the first of it. The plain log only: not the files of the group, not a search in it.
+     */
+    private void capture_unread()
+    {
+        if ((unread_mark != null) && !group_show_only_files
+            && ((group_search_messages_text == null) || group_search_messages_text.isEmpty()))
+        {
+            unread_mark.capture(AirUnreadMark.unreadOfGroup(current_group_id));
+        }
+    }
+
+    @Override
+    public void onSaveInstanceState(@androidx.annotation.NonNull Bundle outState)
+    {
+        super.onSaveInstanceState(outState);
+        // KHANDAQ (testers' ideas, 0.2.67): the mark stays when the screen is made again (a new theme or text size).
+        if (unread_mark != null)
+        {
+            unread_mark.save(outState, current_group_id);
+        }
     }
 
     @Override
@@ -374,6 +413,8 @@ public class GroupMessageListFragment extends Fragment
             // reset "new" flags for messages -------
             if (orma != null)
             {
+                // KHANDAQ (testers' ideas, 0.2.67): back in a group that has no mark yet, what came meanwhile.
+                capture_unread();
                 orma.updateGroupMessage().
                         group_identifierEq(current_group_id.toLowerCase()).
                         is_new(false).execute();
@@ -739,6 +780,11 @@ public class GroupMessageListFragment extends Fragment
                         {
                             // no early clear — shared list, see add_list_clear unchanged-skip
                             adapter.add_list_clear(loaded);
+                            // KHANDAQ (testers' ideas, 0.2.67): back with unread messages and no mark yet.
+                            if (unread_mark != null)
+                            {
+                                unread_mark.place(listingsView, null);
+                            }
                         }
                         catch (Exception e)
                         {

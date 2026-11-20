@@ -444,4 +444,6 @@
     <!-- E21 (stage 3b): deleting a group from the list asks from below, with its consequence. -->
     <string name="air_group_delete_title_format">删除 %1$s？</string>
     <string name="air_group_delete_message">群组及其消息和文件会从本设备删除。如果你仍在群组中，就会退出该群组。</string>
+    <!-- Testers' ideas (0.2.67): over the first message that came while the chat was closed (AirUnreadMark); iOS unread_messages_separator -->
+    <string name="air_unread_mark">未读消息</string>
 </resources>

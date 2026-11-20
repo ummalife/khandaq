@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    KHANDAQ (testers' ideas, 0.2.67): "Unread messages" over the first message that came while the chat was
+    closed; AirUnreadMark draws it above that entry. The transcript's unread mark on iOS: the words in ink
+    where the text starts, as the day mark stands there in grey (air_entry_text.xml, message_text_date).
+    The start is the row's own text column, set when it is drawn.
+-->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingStart="@dimen/air_entry_text_start"
+    android:paddingTop="@dimen/kq_space_12"
+    android:paddingEnd="@dimen/kq_space_16"
+    android:paddingBottom="@dimen/kq_space_4"
+    android:text="@string/air_unread_mark"
+    android:textAlignment="viewStart"
+    android:textAppearance="@style/TextAppearance.KQ.Air.CaptionStrong"
+    android:textColor="@color/kq_ink" />

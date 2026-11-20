@@ -113,6 +113,8 @@ public class MessageListFragment extends Fragment
     static int attachment_filter_kind = ATTACH_ALL;
     static String search_messages_text = null;
     FloatingActionButton unread_messages_notice_button = null;
+    // KHANDAQ (testers' ideas, 0.2.67): "Unread messages" over the first message that came while the chat was closed.
+    AirUnreadMark unread_mark = null;
 
     /**
      * KHANDAQ (user request 17.08): keep only the attachments of the selected kind.
@@ -215,6 +217,15 @@ public class MessageListFragment extends Fragment
         is_at_bottom = true;
         faded_in = false;
 
+        // KHANDAQ (testers' ideas, 0.2.67): the chat opens at its first unread message, under "Unread messages"
+        // (AirUnreadMark); what was unread is read before the reset below clears it.
+        unread_mark = new AirUnreadMark(position -> {
+            final MessagelistAdapter shown = adapter;
+            final com.zoffcc.applications.sorm.Message m = (shown == null) ? null : shown.getMessageAtPosition(position);
+            return (m == null) ? AirUnreadMark.NONE : m.id;
+        });
+        unread_mark.restore(savedInstanceState, query_friend_pubkey());
+
         try
         {
             // reset "new" flags for messages -------
@@ -223,6 +234,7 @@ public class MessageListFragment extends Fragment
                 final String fpk = query_friend_pubkey();
                 if (fpk != null)
                 {
+                    capture_unread(fpk);
                     orma.updateMessage().
                             tox_friendpubkeyEq(fpk).
                             is_new(false).
@@ -340,6 +352,7 @@ public class MessageListFragment extends Fragment
         item_animator.setSupportsChangeAnimations(false);
         listingsView.setItemAnimator(item_animator);
         listingsView.setHasFixedSize(false);
+        listingsView.addItemDecoration(unread_mark);
 
         listingsView.setFastScrollListener(new FastScroller.FastScrollListener()
         {
@@ -521,6 +534,30 @@ public class MessageListFragment extends Fragment
         return view;
     }
 
+    /**
+     * KHANDAQ (testers' ideas, 0.2.67): what is unread in this chat, read before it is cleared, for the mark over
+     * the first of it. The plain log only: not the files of the chat, not a search in it.
+     */
+    private void capture_unread(final String fpk)
+    {
+        if ((unread_mark != null) && !show_only_files
+            && ((search_messages_text == null) || search_messages_text.isEmpty()))
+        {
+            unread_mark.capture(AirUnreadMark.unreadOfFriend(fpk));
+        }
+    }
+
+    @Override
+    public void onSaveInstanceState(@androidx.annotation.NonNull Bundle outState)
+    {
+        super.onSaveInstanceState(outState);
+        // KHANDAQ (testers' ideas, 0.2.67): the mark stays when the screen is made again (a new theme or text size).
+        if (unread_mark != null)
+        {
+            unread_mark.save(outState, query_friend_pubkey());
+        }
+    }
+
     @Override
     public void onActivityCreated(Bundle savedInstanceState)
     {
@@ -564,6 +601,8 @@ public class MessageListFragment extends Fragment
                 final String fpk = query_friend_pubkey();
                 if (fpk != null)
                 {
+                    // KHANDAQ (testers' ideas, 0.2.67): back in a chat that has no mark yet, what came meanwhile.
+                    capture_unread(fpk);
                     orma.updateMessage().tox_friendpubkeyEq(fpk).is_new(
                             false).execute();
                 }
@@ -802,6 +841,17 @@ public class MessageListFragment extends Fragment
                                 && (adapter.getItemCount() > 0))
                             {
                                 listingsView.scrollToPosition(adapter.getItemCount() - 1);
+                            }
+                            // KHANDAQ (testers' ideas, 0.2.67): opened with unread messages, the chat opens at the
+                            // first of them; the jump button turns ink, as for messages that came in under the view.
+                            if (unread_mark != null)
+                            {
+                                unread_mark.place(listingsView, () -> {
+                                    if (!is_at_bottom)
+                                    {
+                                        tint_jump_button(true);
+                                    }
+                                });
                             }
 
                             if (from_resume_fragment && (number_of_items_old > 0) &&

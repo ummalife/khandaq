@@ -25,6 +25,7 @@
 #include "src/widget/air/airnewcontact.h"
 #include "src/widget/air/airoverlay.h"
 #include "src/widget/air/airstrings.h"
+#include "src/widget/air/airstyle.h"
 #include "src/widget/air/airwidgets.h"
 
 #include <QApplication>
@@ -255,6 +256,7 @@ private slots:
     void renameSaysWhatHappened();
     void exportAndSaveSayWhatHappened();
     void aPhotoThatCannotBeReadIsSaid();
+    void theFirstLaunchTileOffersAPhoto();
     void logoutSaysWhatItMeans();
     void deletingAsksWithTheProfileName();
     void columnsStandSideBySideWhenThereIsRoom();
@@ -538,6 +540,33 @@ void TestAirYouPage::aPhotoThatCannotBeReadIsSaid()
     info.avatarResult = IProfileInfo::SetAvatarResult::TooLarge;
     page.applyPhoto(QStringLiteral("/photos/huge.png"));
     QVERIFY(dialogSays(openDialog(&page), AirStrings::text(Text::YouPhotoTooLarge)));
+}
+
+/**
+ * @brief KHANDAQ (beta ideas 2026-11-20): at first launch the tile offers a photo on the sunken
+ * ground where You shows the initials on ink; a photo chosen fills it in both.
+ */
+void TestAirYouPage::theFirstLaunchTileOffersAPhoto()
+{
+    AirYouPhoto tile;
+    tile.resize(tile.sizeHint());
+    tile.setPerson(QStringLiteral("Amina Yusuf"), QPixmap());
+    // Inside the tile, clear of its edge, its corners and what stands in its middle.
+    const QPoint ground(8, tile.height() / 2);
+    const auto colorAt = [&tile, &ground] {
+        return QColor(tile.grab().toImage().pixel(ground * tile.devicePixelRatioF()));
+    };
+    QCOMPARE(colorAt(), AirStyle::instance().color(AirTokens::Color::Ink));
+
+    tile.setOffersPhoto(true);
+    QVERIFY(!tile.hasPhoto());
+    QCOMPARE(colorAt(), AirStyle::instance().color(AirTokens::Color::Sunken));
+
+    QPixmap photo(256, 256);
+    photo.fill(QColor(200, 40, 40));
+    tile.setPerson(QString(), photo);
+    QVERIFY(tile.hasPhoto());
+    QCOMPARE(colorAt(), QColor(200, 40, 40));
 }
 
 void TestAirYouPage::logoutSaysWhatItMeans()

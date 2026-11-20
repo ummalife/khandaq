@@ -271,6 +271,20 @@ Delivery seenDelivery(Delivery delivery, bool seen)
                                                                                    : delivery;
 }
 
+QString draftWords(const QString& draft)
+{
+    // Lines and runs of spaces become one space, as in a message's preview.
+    QString words = draft.simplified();
+    if (words.size() > draftWordsLimit) {
+        int end = draftWordsLimit;
+        if (words.at(end - 1).isHighSurrogate()) {
+            --end;
+        }
+        words.truncate(end);
+    }
+    return words;
+}
+
 bool Reach::operator==(const Reach& other) const
 {
     return kind == other.kind && secondsAgo == other.secondsAgo && online == other.online;

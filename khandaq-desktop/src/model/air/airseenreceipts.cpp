@@ -48,6 +48,10 @@ SeenReceipts::SeenReceipts(ReadMarkStore& store_, Send send_, IsOnline isOnline_
 
 void SeenReceipts::seen(const ToxPk& friendPk, const SeenAnchor& anchor)
 {
+    if (!enabled) {
+        // Not noted either: turned on again, nothing read meanwhile is told.
+        return;
+    }
     store.noteRead(friendPk, anchor);
     flush(friendPk);
 }
@@ -57,10 +61,21 @@ void SeenReceipts::friendOnline(const ToxPk& friendPk)
     flush(friendPk);
 }
 
+void SeenReceipts::setEnabled(bool on)
+{
+    enabled = on;
+}
+
+bool SeenReceipts::isEnabled() const
+{
+    return enabled;
+}
+
 void SeenReceipts::flush(const ToxPk& friendPk)
 {
     const QByteArray key = friendPk.getByteArray();
-    if (waiting.contains(key) || !store.isReadPending(friendPk) || !isOnline(friendPk)) {
+    if (!enabled || waiting.contains(key) || !store.isReadPending(friendPk)
+        || !isOnline(friendPk)) {
         return;
     }
 

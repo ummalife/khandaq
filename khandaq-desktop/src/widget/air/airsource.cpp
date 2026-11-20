@@ -215,6 +215,8 @@ void AirSource::forget(const QString& entryId)
         }
     }
     unread.remove(entryId);
+    unreadSince.remove(entryId);
+    drafts.remove(entryId);
     watched.erase(it);
     emit changed();
 }
@@ -303,6 +305,7 @@ Air::Entry AirSource::friendEntry(Friend& frnd, const IChatLog* log, qint64 nowS
             entry.previewStyle = Air::PreviewStyle::Hint;
         }
     }
+    showDraft(entry);
     if (typing.contains(key)) {
         entry.preview = AirStrings::text(Text::Typing);
         entry.previewStyle = Air::PreviewStyle::Typing;
@@ -346,6 +349,7 @@ Air::Entry AirSource::groupEntry(Group& group, const IChatLog* log, const QSet<Q
         entry.preview = AirStrings::text(Text::HintNoMessages);
         entry.previewStyle = Air::PreviewStyle::Hint;
     }
+    showDraft(entry);
     entry.mentioned = group.getMentionedFlag();
     entry.unreadCount = unreadFor(entry.id, group.getEventFlag());
     return entry;
@@ -376,15 +380,39 @@ Air::Entry AirSource::savedEntry(const QSet<QString>& favorites) const
     return entry;
 }
 
+void AirSource::showDraft(Air::Entry& entry) const
+{
+    const QString words = drafts.value(entry.id);
+    if (words.isEmpty()) {
+        return;
+    }
+    entry.preview = AirStrings::text(Text::DraftPreview).arg(words);
+    entry.previewStyle = Air::PreviewStyle::Draft;
+    // A draft has no mark in front of it: nothing of it went anywhere.
+    entry.lastDelivery = Air::Delivery::None;
+}
+
 int AirSource::unreadFor(const QString& entryId, bool hasEvent)
 {
     // The event flag is what every way of opening a conversation clears, so it decides; the count
     // only says how many arrived since it went up.
     if (!hasEvent) {
         unread.remove(entryId);
+        unreadSince.remove(entryId);
         return 0;
     }
     return std::max(1, unread.value(entryId, 0));
+}
+
+int AirSource::takeUnread(const QString& entryId, bool hasEvent, QDateTime* since)
+{
+    const int count = hasEvent ? std::max(1, unread.value(entryId, 0)) : 0;
+    if (since) {
+        *since = hasEvent ? unreadSince.value(entryId) : QDateTime();
+    }
+    unread.remove(entryId);
+    unreadSince.remove(entryId);
+    return count;
 }
 
 AirSource::Conversation AirSource::read(const IChatLog& log, bool group) const
@@ -643,8 +671,25 @@ QPixmap AirSource::selfAvatar() const
 
 void AirSource::noteUnread(const QString& entryId)
 {
+    if (!unread.contains(entryId)) {
+        unreadSince.insert(entryId, QDateTime::currentDateTime());
+    }
     unread[entryId] = unread.value(entryId, 0) + 1;
     emit changed();
+}
+
+void AirSource::setDraft(const QString& entryId, const QString& text)
+{
+    const QString words = Air::draftWords(text);
+    if (words == drafts.value(entryId)) {
+        return;
+    }
+    if (words.isEmpty()) {
+        drafts.remove(entryId);
+    } else {
+        drafts.insert(entryId, words);
+    }
+    emit draftChanged(entryId);
 }
 
 void AirSource::setTyping(const ToxPk& publicKey, bool isTyping)

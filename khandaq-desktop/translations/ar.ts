@@ -652,6 +652,11 @@
         <translation>يكتب</translation>
     </message>
     <message>
+        <source>Draft: %1</source>
+        <comment>row preview of words typed in the conversation and not sent; %1 is the words</comment>
+        <translation>مسودة: %1</translation>
+    </message>
+    <message>
         <source>File: %1</source>
         <comment>row preview of a file, %1 is the file name</comment>
         <translation>ملف: %1</translation>
@@ -2443,6 +2448,30 @@
         <comment>why a file was not sent to a group</comment>
         <translation>لا اتصال بالمجموعة الآن. حاول مرة أخرى عند عودة الاتصال.</translation>
     </message>
+    <message numerus="yes">
+        <source>Send %n file(s)?</source>
+        <comment>dialog before files go: the title; the files are listed under it, then Cancel and Send</comment>
+        <translation>
+            <numerusform>إرسال %n ملف؟</numerusform>
+            <numerusform>إرسال ملف واحد؟</numerusform>
+            <numerusform>إرسال ملفين؟</numerusform>
+            <numerusform>إرسال %n ملفات؟</numerusform>
+            <numerusform>إرسال %n ملفًا؟</numerusform>
+            <numerusform>إرسال %n ملف؟</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n more file(s)</source>
+        <comment>dialog before files go: under the files listed, how many more go with them</comment>
+        <translation>
+            <numerusform>%n ملف آخر</numerusform>
+            <numerusform>ملف آخر</numerusform>
+            <numerusform>ملفان آخران</numerusform>
+            <numerusform>%n ملفات أخرى</numerusform>
+            <numerusform>%n ملفًا آخر</numerusform>
+            <numerusform>%n ملف آخر</numerusform>
+        </translation>
+    </message>
     <message>
         <source>Voice message</source>
         <comment>the name a voice note shows and a screen reader says</comment>
@@ -3249,6 +3278,16 @@
         <translation>إظهار أنني أكتب</translation>
     </message>
     <message>
+        <source>Send read receipts</source>
+        <comment>Settings, Privacy: switch; the second check of a message turns teal once it is read</comment>
+        <translation>إرسال إشعارات القراءة</translation>
+    </message>
+    <message>
+        <source>Turned off, others do not see that you have read their messages.</source>
+        <comment>Settings, Privacy: under Send read receipts</comment>
+        <translation>عند الإيقاف لا يرى الآخرون أنك قرأت رسائلهم.</translation>
+    </message>
+    <message>
         <source>Keep chat history</source>
         <comment>Settings, Privacy: switch</comment>
         <translation>حفظ سجل المحادثات</translation>
@@ -3981,6 +4020,11 @@ Opening it can run a program on your computer. Links in messages come from other
         <translation>الرسائل</translation>
     </message>
     <message>
+        <source>Unread messages</source>
+        <comment>conversation: the line over the first message that came while it was not open; it opens there</comment>
+        <translation>رسائل غير مقروءة</translation>
+    </message>
+    <message>
         <source>Remove %1 from contacts?</source>
         <comment>title of the remove confirmation; %1 is the contact&apos;s name</comment>
         <translation>حذف %1 من جهات الاتصال؟</translation>
@@ -4124,6 +4168,16 @@ Opening it can run a program on your computer. Links in messages come from other
         <source>Move a profile from another device</source>
         <comment>start window: quiet button that moves a profile file in</comment>
         <translation>نقل ملف شخصي من جهاز آخر</translation>
+    </message>
+    <message>
+        <source>Add a photo (optional)</source>
+        <comment>first launch, step 1: what a click on the photo tile at the start of the name does; the photo can be skipped</comment>
+        <translation>إضافة صورة (اختياري)</translation>
+    </message>
+    <message>
+        <source>The photo wasn&apos;t added</source>
+        <comment>first launch, step 1: title of the error when the chosen picture could not be read</comment>
+        <translation>لم تُضَف الصورة</translation>
     </message>
     <message>
         <source>Profile</source>

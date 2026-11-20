@@ -142,6 +142,12 @@ private:
     void startCounter();
     void stopCounter();
     void updateCallButtons();
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): files chosen, pasted or dropped are listed in a dialog and
+     * go on Send (offerFiles); while the person is offline nothing could go, and that is said at
+     * once instead.
+     */
+    void askToSendFiles(const QStringList& paths);
 
     // A call (E9): access is asked first, someone offline can be waited for, every failure is said.
     /** A call or a video call from the head: asks for access, then calls or offers to wait. */

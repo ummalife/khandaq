@@ -81,6 +81,11 @@ public:
         AirEntry,
         /** A day mark, set where the text of the entries starts: content 0. */
         AirDay,
+        /**
+         * KHANDAQ (beta ideas 2026-11-20): "Unread messages" over the first entry that came while
+         * the conversation was not in front, set where the text of the entries starts: content 0.
+         */
+        AirUnread,
     };
 
     ChatLine();

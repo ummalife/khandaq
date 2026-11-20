@@ -92,6 +92,12 @@ public:
                               SystemMessage::Args messageArgs);
     QString resolveToxPk(const ToxPk& pk);
     QDateTime getLatestTime() const;
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): the conversation came to the front with count entries that
+     * came while it was not there, the first at since: the transcript opens on the first of them
+     * (ChatWidget::markUnread).
+     */
+    void markUnread(int count, const QDateTime& since);
 
 signals:
     void messageInserted();
@@ -230,6 +236,17 @@ protected:
     void takePastedImages();
     /** Sends files of this computer into the chat, saying every refusal; nothing by default. */
     virtual void sendPreparedFiles(const QStringList& paths);
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): files chosen with the paperclip, pasted or dropped go only
+     * once Send is pressed in a dialog that lists them (Enter; Cancel and Esc keep them back); then
+     * sendPreparedFiles takes them, with its checks. A picture pasted waits over the field instead.
+     */
+    void offerFiles(const QStringList& paths);
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): web addresses dropped on the conversation go into the field
+     * at its cursor, to be sent with Enter like anything typed there.
+     */
+    void putAddressesInField(const QStringList& addresses);
     /**
      * KHANDAQ (0.2.60): why a voice note cannot go from here now (the person is offline), said at
      * the microphone and again at Send; empty when it can.

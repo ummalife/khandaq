@@ -60,6 +60,8 @@ auto_test(net updatecheck "test/net/update/fixtures.qrc" "")
 auto_test(chatlog chatlinestorage "" "")
 auto_test(chatlog chatlinecontentproxy "" "")
 auto_test(chatlog airentrynotes "res/air.qrc" "") # the Plex faces
+# KHANDAQ (beta ideas 2026-11-20): where "Unread messages" stands as a conversation opens.
+auto_test(chatlog unreadmark "" "")
 auto_test(persistence paths "" "")
 auto_test(persistence dbschema "" "dbutility_library")
 auto_test(persistence/dbupgrade dbTo11 "" "dbutility_library")
@@ -89,6 +91,8 @@ auto_test(model airstart "" "")
 auto_test(model airvoicedecoder "" "")
 auto_test(model airvoiceencoder "" "")
 auto_test(model airyou "" "")
+# KHANDAQ (beta ideas 2026-11-20): a photo made as You makes it, also the one chosen at first launch.
+auto_test(model profileinfo "" "")
 # The generated design files (airtokens.h, icons, fonts, palettes) must match design/system.
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/../design/system/tokens.json")
@@ -120,6 +124,8 @@ auto_test(widget removechatdialog "" "mock_library")
 auto_test(widget chattextedit "" "")
 
 auto_test(platform interfacescale "" "")
+# KHANDAQ (beta ideas 2026-11-20): the tox: links and profile files macOS asks the app to open.
+auto_test(platform fileopenrouter "" "")
 if (UNIX)
   auto_test(platform posixsignalnotifier "" "")
 endif()

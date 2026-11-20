@@ -361,6 +361,14 @@ void ChatForm::setAir(AirSource* source, AirLocal* local)
     airLocal = local;
     if (airSource) {
         connect(airSource, &AirSource::changed, &headLater, QOverload<>::of(&QTimer::start));
+        // KHANDAQ (beta ideas 2026-11-20): what the field holds, typed and not sent, shows in the
+        // row as a draft; sending empties the field and with it the draft.
+        connect(msgEdit, &ChatTextEdit::textChanged, this, [this] {
+            if (airSource) {
+                airSource->setDraft(AirSource::friendEntryId(f->getPublicKey()),
+                                    msgEdit->toPlainText());
+            }
+        });
     }
     if (airLocal) {
         connect(airLocal, &AirLocal::changed, this, [this](const ToxPk& friendPk) {
@@ -708,12 +716,22 @@ void ChatForm::onAttachClicked()
 {
     const QStringList paths = QFileDialog::getOpenFileNames(window(), tr("Send a file"),
                                                             QDir::homePath(), QString(), nullptr);
-    sendLocalFiles(paths);
+    askToSendFiles(paths);
 }
 
 void ChatForm::onPasteFiles(const QStringList& paths)
 {
-    sendLocalFiles(paths);
+    askToSendFiles(paths);
+}
+
+void ChatForm::askToSendFiles(const QStringList& paths)
+{
+    if (!Status::isOnline(f->getStatus())) {
+        // Nothing would go: sendLocalFiles says why for all of them, and sends none.
+        sendLocalFiles(paths);
+        return;
+    }
+    offerFiles(paths);
 }
 
 void ChatForm::sendPreparedFiles(const QStringList& paths)
@@ -1208,12 +1226,12 @@ void ChatForm::dropEvent(QDropEvent* ev)
     }
 
     QStringList paths;
+    QStringList addresses;
     for (const QUrl& url : ev->mimeData()->urls()) {
-        QString urlString = url.toString();
-        if (url.isValid() && !url.isLocalFile()
-            && urlString.length() < static_cast<int>(tox_max_message_length())) {
-            messageDispatcher.sendMessage(false, urlString);
-
+        if (url.isValid() && !url.isLocalFile()) {
+            // KHANDAQ (beta ideas 2026-11-20): a web address goes into the field, sent with Enter
+            // like anything typed there; it used to go at once, as a message of its own.
+            addresses.append(url.toString());
             continue;
         }
 
@@ -1224,8 +1242,11 @@ void ChatForm::dropEvent(QDropEvent* ev)
         }
         paths.append(path);
     }
-    // A dropped file goes the way of a chosen one, with the same refusals in words.
-    sendLocalFiles(paths);
+    putAddressesInField(addresses);
+    // A dropped file goes the way of a chosen one: listed first, with the same refusals in words.
+    if (!paths.isEmpty()) {
+        askToSendFiles(paths);
+    }
 }
 
 void ChatForm::beginRename()

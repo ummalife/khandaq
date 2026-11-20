@@ -17,10 +17,13 @@
     along with Khandaq.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "src/chatlog/content/filetransferwidget.h"
 #include "src/widget/air/airoverlay.h"
+#include "src/widget/air/airstrings.h"
 #include "src/widget/air/airstyle.h"
 #include "src/widget/air/airtokens.h"
 #include "src/widget/air/airwidgets.h"
+#include "src/widget/translator.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -30,6 +33,7 @@
 #include <QMouseEvent>
 #include <QPointer>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QtTest/QtTest>
 
 namespace {
@@ -220,6 +224,9 @@ private slots:
     void aToastLeavesInOnePiece();
     void aNoticeFromAnEntryOfATranscriptCoversTheWindow();
     void aToastFromAnEntryOfATranscriptStandsInTheWindow();
+    void aQuestionShowsWhatItIsAboutUnderItsWords();
+    void manyFilesShowTheFirstOnesAndHowManyMore();
+    void filesBeforeSendingShowTheirNamesSizesAndPictures();
 };
 
 void TestAirOverlay::aShortToastKeepsItsWordsOnOneLine()
@@ -626,6 +633,120 @@ void TestAirOverlay::aToastFromAnEntryOfATranscriptStandsInTheWindow()
     // The entry finds the toast of its window, as any widget of the window does.
     AirToast::dismiss(host.entry);
     QTRY_VERIFY(toast.isNull());
+}
+
+/**
+ * The dialog before files are sent: the files stand under the title, where the message would, and
+ * Enter sends them; an empty message takes no line.
+ */
+void TestAirOverlay::aQuestionShowsWhatItIsAboutUnderItsWords()
+{
+    QWidget window;
+    window.resize(1440, 900);
+    window.show();
+    QApplication::setActiveWindow(&window);
+    bool confirmed = false;
+    AirDialog* const dialog =
+        AirDialog::confirm(&window, QStringLiteral("Send 2 files?"), QString(),
+                           QStringLiteral("Send"), AirDialog::Verb::Ink,
+                           [&confirmed] { confirmed = true; });
+    QVERIFY(dialog);
+    auto* const content = new QWidget;
+    content->setFixedHeight(80);
+    dialog->setContent(content);
+    QCoreApplication::processEvents();
+
+    QVERIFY(content->isVisible());
+    QVERIFY(dialog->isAncestorOf(content));
+    QLabel* title = nullptr;
+    for (QLabel* const label : dialog->findChildren<QLabel*>()) {
+        if (label->text() == QStringLiteral("Send 2 files?")) {
+            title = label;
+        }
+        // No line stands empty for the message there is not.
+        QVERIFY(!label->isVisible() || !label->text().isEmpty());
+    }
+    QVERIFY(title);
+    const int titleBottom = title->mapTo(dialog, QPoint(0, title->height())).y();
+    const int contentTop = content->mapTo(dialog, QPoint()).y();
+    const int contentBottom = content->mapTo(dialog, QPoint(0, content->height())).y();
+    AirButton* const verb = buttonOf(dialog, "dialogConfirm");
+    QVERIFY(titleBottom <= contentTop);
+    QVERIFY(contentBottom <= verb->mapTo(dialog, QPoint()).y());
+    // The card is as tall as all of it.
+    QVERIFY(content->parentWidget()->height() >= content->height() + title->height());
+
+    // Send is where the keyboard is: Enter sends.
+    QVERIFY(verb->hasFocus());
+    QTest::keyClick(verb, Qt::Key_Return);
+    QVERIFY(confirmed);
+    QVERIFY(dialog->isHidden());
+}
+
+void TestAirOverlay::manyFilesShowTheFirstOnesAndHowManyMore()
+{
+    QCOMPARE(OutgoingFileList::shownOf(0), 0);
+    QCOMPARE(OutgoingFileList::shownOf(1), 1);
+    QCOMPARE(OutgoingFileList::shownOf(OutgoingFileList::linesMax), OutgoingFileList::linesMax);
+    // Never "1 more": one line less, so that at least two are counted.
+    QCOMPARE(OutgoingFileList::shownOf(OutgoingFileList::linesMax + 1),
+             OutgoingFileList::linesMax - 1);
+    QCOMPARE(OutgoingFileList::shownOf(40), OutgoingFileList::linesMax - 1);
+}
+
+void TestAirOverlay::filesBeforeSendingShowTheirNamesSizesAndPictures()
+{
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    const QString photo = folder.filePath(QStringLiteral("photo.png"));
+    QImage image(64, 48, QImage::Format_RGB32);
+    image.fill(Qt::darkCyan);
+    QVERIFY(image.save(photo, "PNG"));
+    // Named as a picture, but none: its line falls back to the glyph of a file.
+    const QString fake = folder.filePath(QStringLiteral("not a picture.png"));
+    QStringList paths{photo, fake};
+    for (int i = 0; i < 5; ++i) {
+        const QString path = folder.filePath(QStringLiteral("notes %1.txt").arg(i));
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(QByteArray(1500, 'x'));
+        paths.append(path);
+    }
+    {
+        QFile file(fake);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("text");
+    }
+
+    QWidget window;
+    window.resize(420, 400);
+    auto* const list = new OutgoingFileList(paths, &window);
+    list->setGeometry(0, 0, 380, 300);
+    window.show();
+    QCoreApplication::processEvents();
+
+    // Seven files: the first four on lines of their own, then how many more.
+    const int shown = OutgoingFileList::shownOf(paths.size());
+    QCOMPARE(shown, 4);
+    QCOMPARE(list->findChildren<QLabel*>(QStringLiteral("fileGlyph")).size(), shown);
+    auto* const more = list->findChild<QLabel*>(QStringLiteral("filesMore"));
+    QVERIFY(more);
+    QCOMPARE(more->text(), AirStrings::text(AirStrings::Text::FilesSendMore, 3));
+    // Each line says its size; a screen reader hears every file, those counted too.
+    QVERIFY(showsText(list, AirStrings::byteSizeText(1500, Translator::locale())));
+    for (const QString& path : paths) {
+        QVERIFY2(list->spokenText().contains(QFileInfo(path).fileName()), qPrintable(path));
+    }
+
+    const QList<QWidget*> pictures = list->findChildren<QWidget*>(QStringLiteral("filePicture"));
+    QCOMPARE(pictures.size(), 2);
+    // The photo keeps its picture; the other one gives way to the glyph once it is read.
+    QTRY_VERIFY(pictures.at(0)->isVisible() != pictures.at(1)->isVisible());
+    QVERIFY(pictures.at(0)->isVisible());
+    QVERIFY(!pictures.at(1)->isVisible());
+    const QList<QLabel*> glyphs = list->findChildren<QLabel*>(QStringLiteral("fileGlyph"));
+    QVERIFY(!glyphs.at(0)->isVisible());
+    QVERIFY(glyphs.at(1)->isVisible());
 }
 
 int main(int argc, char* argv[])

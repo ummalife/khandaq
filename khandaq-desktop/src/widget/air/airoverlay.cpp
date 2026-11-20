@@ -169,6 +169,7 @@ AirDialog* AirDialog::confirm(QWidget* anchor, const QString& title, const QStri
     auto* const dialog = new AirDialog(window, kind);
     dialog->titleLabel->setText(title);
     dialog->messageLabel->setText(message);
+    dialog->messageLabel->setVisible(!message.isEmpty());
     dialog->verbButton->setText(verb);
     dialog->cancelButton->setText(AirStrings::text(Text::Cancel));
     dialog->onConfirm = std::move(onConfirm);
@@ -231,6 +232,17 @@ void AirDialog::addChoice(const QString& text, std::function<void()> onChoice)
             onChoice();
         }
     });
+    place();
+}
+
+void AirDialog::setContent(QWidget* content)
+{
+    auto* const layout = static_cast<QVBoxLayout*>(card->layout());
+    content->setParent(card);
+    // Under the words, above a code for support and the buttons.
+    layout->insertWidget(layout->indexOf(messageLabel) + 1, content);
+    // The dialog is up already: a child made now shows only when told to.
+    content->show();
     place();
 }
 

@@ -101,6 +101,12 @@ public:
     /** "Today", "Yesterday" or the date, above the first entry of a day. */
     static ChatMessage::Ptr createDayMark(const QString& text, DocumentCache& documentCache,
                                           Settings& settings, Style& style);
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): "Unread messages", above the first entry that came while the
+     * conversation was not in front (ChatWidget::markUnread).
+     */
+    static ChatMessage::Ptr createUnreadMark(const QString& text, DocumentCache& documentCache,
+                                             Settings& settings, Style& style);
     /** The text font of the transcript: the design's body text, unless the user chose a font. */
     static QFont bodyFont(Settings& settings);
     static ChatMessage::Ptr createTypingNotification(DocumentCache& documentCache, Settings& settings, Style& style);

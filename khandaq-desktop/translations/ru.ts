@@ -640,6 +640,11 @@
         <translation>печатает</translation>
     </message>
     <message>
+        <source>Draft: %1</source>
+        <comment>row preview of words typed in the conversation and not sent; %1 is the words</comment>
+        <translation>Черновик: %1</translation>
+    </message>
+    <message>
         <source>File: %1</source>
         <comment>row preview of a file, %1 is the file name</comment>
         <translation>Файл: %1</translation>
@@ -2383,6 +2388,24 @@
         <comment>why a file was not sent to a group</comment>
         <translation>Сейчас нет связи с группой. Попробуйте ещё раз, когда связь появится.</translation>
     </message>
+    <message numerus="yes">
+        <source>Send %n file(s)?</source>
+        <comment>dialog before files go: the title; the files are listed under it, then Cancel and Send</comment>
+        <translation>
+            <numerusform>Отправить %n файл?</numerusform>
+            <numerusform>Отправить %n файла?</numerusform>
+            <numerusform>Отправить %n файлов?</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n more file(s)</source>
+        <comment>dialog before files go: under the files listed, how many more go with them</comment>
+        <translation>
+            <numerusform>Ещё %n файл</numerusform>
+            <numerusform>Ещё %n файла</numerusform>
+            <numerusform>Ещё %n файлов</numerusform>
+        </translation>
+    </message>
     <message>
         <source>Voice message</source>
         <comment>the name a voice note shows and a screen reader says</comment>
@@ -3189,6 +3212,16 @@
         <translation>Показывать, что я печатаю</translation>
     </message>
     <message>
+        <source>Send read receipts</source>
+        <comment>Settings, Privacy: switch; the second check of a message turns teal once it is read</comment>
+        <translation>Отправлять отчёты о прочтении</translation>
+    </message>
+    <message>
+        <source>Turned off, others do not see that you have read their messages.</source>
+        <comment>Settings, Privacy: under Send read receipts</comment>
+        <translation>Если выключить, собеседники не увидят, что вы прочитали их сообщения.</translation>
+    </message>
+    <message>
         <source>Keep chat history</source>
         <comment>Settings, Privacy: switch</comment>
         <translation>Хранить историю чатов</translation>
@@ -3915,6 +3948,11 @@ Opening it can run a program on your computer. Links in messages come from other
         <translation>Сообщения</translation>
     </message>
     <message>
+        <source>Unread messages</source>
+        <comment>conversation: the line over the first message that came while it was not open; it opens there</comment>
+        <translation>Непрочитанные сообщения</translation>
+    </message>
+    <message>
         <source>Remove %1 from contacts?</source>
         <comment>title of the remove confirmation; %1 is the contact&apos;s name</comment>
         <translation>Удалить контакт %1?</translation>
@@ -4058,6 +4096,16 @@ Opening it can run a program on your computer. Links in messages come from other
         <source>Move a profile from another device</source>
         <comment>start window: quiet button that moves a profile file in</comment>
         <translation>Перенести профиль с другого устройства</translation>
+    </message>
+    <message>
+        <source>Add a photo (optional)</source>
+        <comment>first launch, step 1: what a click on the photo tile at the start of the name does; the photo can be skipped</comment>
+        <translation>Добавить фото (необязательно)</translation>
+    </message>
+    <message>
+        <source>The photo wasn&apos;t added</source>
+        <comment>first launch, step 1: title of the error when the chosen picture could not be read</comment>
+        <translation>Фото не добавилось</translation>
     </message>
     <message>
         <source>Profile</source>

@@ -41,6 +41,7 @@ class AirSecretField;
 class AirStepProgress;
 class AirSwitch;
 class AirTextField;
+class AirYouPhoto;
 class QLabel;
 class QScrollArea;
 class QVBoxLayout;
@@ -70,8 +71,12 @@ public:
 
     /** The profile set to open at start did not: its sign-in says why under the field. */
     void showFailure(const QString& profileName, const Air::OpenFailure& failure);
-    /** Starts moving in the profile file at path: from Settings, or a file opened with the app. */
-    void moveIn(const QString& path);
+    /**
+     * Starts moving in the profile file at path: from Settings, or a file opened with the app.
+     * KHANDAQ (beta ideas 2026-11-20): false, and nothing changes, while the window grows into the
+     * main window or a page is busy.
+     */
+    bool moveIn(const QString& path);
     /** Files of a profile deleted from You that stayed on disk, named over the window once it shows. */
     void tellLeftovers(const QStringList& files);
     /**
@@ -88,9 +93,11 @@ signals:
     /**
      * fileName names the files of the new profile; selfName is what its contacts see. The password
      * is empty for a profile without one; autoLogin keeps it in the system credential store.
+     * KHANDAQ (beta ideas 2026-11-20): photo is the one chosen with the name, ready to set
+     * (ProfileInfo::readAvatar); empty when it was skipped.
      */
     void createNewProfile(const QString& fileName, const QString& selfName, const QString& pass,
-                          bool autoLogin);
+                          bool autoLogin, const QByteArray& photo);
     void loadProfile(const QString& name, const QString& pass, bool withoutProxy);
     /**
      * The profile is open and the window can give way to the main window: at once after sign-in,
@@ -146,6 +153,13 @@ private:
     void refreshSignIn();
     void refreshPasswordChoice();
     void keepNameWithin();
+    /** A click on the photo of step 1: a picture to choose, or, once there is one, a menu. */
+    void offerPhoto();
+    /** The picture dialog of You; what it gives is made a photo as You makes it. */
+    void choosePhoto();
+    void keepPhoto(const QByteArray& photo);
+    /** The photo of step 1 and its words, from chosenPhoto. */
+    void refreshPhoto();
     void create();
     void signIn(bool withoutProxy);
     void showOpenFailure(const Air::OpenFailure& failure, bool shake);
@@ -180,6 +194,10 @@ private:
     AirTextField* nameField = nullptr;
     AirButton* nameMoveButton = nullptr;
     QString typedName;
+    /** KHANDAQ (beta ideas 2026-11-20): the photo that can come with the name. */
+    AirYouPhoto* namePhoto = nullptr;
+    /** The photo chosen, a PNG ready to set; empty while none is. */
+    QByteArray chosenPhoto;
 
     Page* passwordPage = nullptr;
     AirRadioRow* setRow = nullptr;

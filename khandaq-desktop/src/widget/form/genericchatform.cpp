@@ -71,6 +71,7 @@
 #include <QPointer>
 #include <QRegularExpression>
 #include <QStringBuilder>
+#include <QTextDocument>
 #include <QtConcurrent/QtConcurrentRun>
 #include <QtGlobal>
 
@@ -553,6 +554,11 @@ void GenericChatForm::show(ContentLayout* contentLayout_)
 #endif
 }
 
+void GenericChatForm::markUnread(int count, const QDateTime& since)
+{
+    chatWidget->markUnread(count, since);
+}
+
 void GenericChatForm::setAttachLimit(const QString& words)
 {
     attachLimit = words;
@@ -789,6 +795,43 @@ void GenericChatForm::sendImageFromPreview()
     // KHANDAQ (0.2.60): the same way as a chosen file, with its checks and their words (the picture
     // went past them before, straight to the core).
     sendPreparedFiles({QFileInfo(file).filePath()});
+}
+
+void GenericChatForm::offerFiles(const QStringList& paths)
+{
+    if (paths.isEmpty()) {
+        return;
+    }
+    const QPointer<GenericChatForm> self(this);
+    AirDialog* const dialog = AirDialog::confirm(
+        this, AirStrings::text(AirStrings::Text::FilesSendTitle, paths.size()), QString(),
+        AirStrings::text(AirStrings::Text::ComposeSend), AirDialog::Verb::Ink, [self, paths] {
+            // The chat may have gone while the question was open: then nothing goes.
+            if (self) {
+                self->sendPreparedFiles(paths);
+            }
+        });
+    if (!dialog) {
+        return;
+    }
+    auto* const list = new OutgoingFileList(paths);
+    dialog->setContent(list);
+    dialog->setAccessibleDescription(list->spokenText());
+}
+
+void GenericChatForm::putAddressesInField(const QStringList& addresses)
+{
+    if (addresses.isEmpty()) {
+        return;
+    }
+    QString text = addresses.join(QLatin1Char(' '));
+    // Apart from a word right before the cursor.
+    const QChar before = msgEdit->document()->characterAt(msgEdit->textCursor().position() - 1);
+    if (!before.isNull() && !before.isSpace()) {
+        text.prepend(QLatin1Char(' '));
+    }
+    msgEdit->insertPlainText(text);
+    msgEdit->setFocus(Qt::OtherFocusReason);
 }
 
 QString GenericChatForm::outgoingText() const

@@ -63,6 +63,11 @@ public:
     /** A null photo shows the initials of name. */
     void setPerson(const QString& name, const QPixmap& photo);
     bool hasPhoto() const;
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): with no photo the tile offers one, a plus on the sunken
+     * ground in place of the initials: at first launch, where the photo can be skipped.
+     */
+    void setOffersPhoto(bool offers);
 
     QSize sizeHint() const override;
 
@@ -75,6 +80,7 @@ private:
     QString name;
     QPixmap photo;
     bool hovered = false;
+    bool offersPhoto = false;
 };
 
 /**

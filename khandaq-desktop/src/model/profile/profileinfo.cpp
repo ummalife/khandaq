@@ -394,6 +394,22 @@ IProfileInfo::SaveResult ProfileInfo::saveQr(const QImage& image, const QString&
  */
 IProfileInfo::SetAvatarResult ProfileInfo::setAvatar(const QString& path)
 {
+    QByteArray avatar;
+    const auto err = readAvatar(path, avatar);
+    if (err == SetAvatarResult::OK) {
+        profile->setAvatar(avatar);
+    }
+    return err;
+}
+
+/**
+ * @brief Make a profile photo from an image file, without setting it.
+ * @param path Path to the image.
+ * @param avatar Output avatar of correct file type and size.
+ * @return Code of the operation.
+ */
+IProfileInfo::SetAvatarResult ProfileInfo::readAvatar(const QString& path, QByteArray& avatar)
+{
     if (path.isEmpty()) {
         return SetAvatarResult::EmptyPath;
     }
@@ -403,12 +419,7 @@ IProfileInfo::SetAvatarResult ProfileInfo::setAvatar(const QString& path)
     if (!file.isOpen()) {
         return SetAvatarResult::CanNotOpen;
     }
-    QByteArray avatar;
-    const auto err = createAvatarFromFile(file, avatar);
-    if (err == SetAvatarResult::OK) {
-        profile->setAvatar(avatar);
-    }
-    return err;
+    return createAvatarFromFile(file, avatar);
 }
 
 /**

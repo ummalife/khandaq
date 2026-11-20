@@ -63,6 +63,12 @@ public:
 
     SetAvatarResult setAvatar(const QString& path) override;
     void removeAvatar() override;
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): the picture at path made a profile photo as setAvatar makes
+     * it (a PNG, scaled to 256 px and down until Tox can send it), without setting it: the photo
+     * chosen at first launch is read before there is a profile to take it.
+     */
+    static SetAvatarResult readAvatar(const QString& path, QByteArray& avatar);
 
     SIGNAL_IMPL(ProfileInfo, idChanged, const ToxId& id)
     SIGNAL_IMPL(ProfileInfo, usernameChanged, const QString& name)
@@ -70,9 +76,9 @@ public:
 
 private:
     void storePassword(const QString& password);
-    IProfileInfo::SetAvatarResult createAvatarFromFile(QFile& file, QByteArray& avatar);
-    IProfileInfo::SetAvatarResult byteArrayToPng(QByteArray inData, QByteArray& outPng);
-    IProfileInfo::SetAvatarResult scalePngToAvatar(QByteArray& avatar);
+    static IProfileInfo::SetAvatarResult createAvatarFromFile(QFile& file, QByteArray& avatar);
+    static IProfileInfo::SetAvatarResult byteArrayToPng(QByteArray inData, QByteArray& outPng);
+    static IProfileInfo::SetAvatarResult scalePngToAvatar(QByteArray& avatar);
     Profile* const profile;
     Core* const core;
     Settings& settings;

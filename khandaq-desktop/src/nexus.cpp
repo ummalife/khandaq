@@ -173,6 +173,7 @@ void Nexus::setPendingImport(const QString& path)
  */
 int Nexus::showLogin(const QString& profileName)
 {
+    windowReady = false;
     delete widget;
     widget = nullptr;
 
@@ -217,7 +218,11 @@ int Nexus::showLogin(const QString& profileName)
                          });
                      });
     holdWindow = true;
+    // KHANDAQ (beta ideas 2026-11-20): a profile file the system asked to open meanwhile moves in.
+    startWindow = &loginScreen;
+    emit openRequestsReady();
     int returnval = loginScreen.exec();
+    startWindow = nullptr;
     holdWindow = false;
     if (returnval == QDialog::Rejected) {
         // Kriby: This will terminate the main application loop, necessary until we refactor
@@ -225,6 +230,10 @@ int Nexus::showLogin(const QString& profileName)
         qApp->quit();
     }
     disconnect(this, &Nexus::currentProfileChanged, this, &Nexus::bootstrapWithProfile);
+    if (returnval == QDialog::Accepted) {
+        // What waited for the main window goes to it now.
+        emit openRequestsReady();
+    }
     return returnval;
 }
 
@@ -325,6 +334,12 @@ void Nexus::showMainGUI()
     if (ipc.isAttached()) {
         registerIpcHandlers();
     }
+
+    // KHANDAQ (beta ideas 2026-11-20): so does the system, once the start window is gone.
+    windowReady = true;
+    if (!holdWindow) {
+        emit openRequestsReady();
+    }
 }
 
 /**
@@ -340,9 +355,10 @@ Profile* Nexus::getProfile()
  * @brief Creates a new profile and replaces the current one.
  * @param name New username
  * @param pass New password
+ * @param photo The photo chosen at first launch, ready to set; empty for none.
  */
 void Nexus::onCreateNewProfile(const QString& fileName, const QString& selfName,
-                               const QString& pass, bool autoLogin)
+                               const QString& pass, bool autoLogin, const QByteArray& photo)
 {
     Air::OpenFailure failure;
     Profile* p = Profile::createProfile(fileName, pass, settings, parser, cameraSource,
@@ -365,6 +381,11 @@ void Nexus::onCreateNewProfile(const QString& fileName, const QString& selfName,
         clearLoggedOut();
     }
     setProfile(p, failure, true);
+    // KHANDAQ (beta ideas 2026-11-20): the photo chosen with the name, set as You sets one now that
+    // the profile and its core are there: kept with the profile, encrypted when it has a password.
+    if (p && !photo.isEmpty()) {
+        p->setAvatar(photo);
+    }
     parser = nullptr; // only apply cmdline proxy settings once
 }
 
@@ -433,6 +454,23 @@ bool Nexus::handleToxUri(const QString& uri)
 {
     assert(widget);
     return widget->handleToxUri(uri);
+}
+
+bool Nexus::takeOpenRequest(bool profileFile, const QString& target)
+{
+    if (widget && windowReady && !holdWindow) {
+        // Taken, whatever comes of it: a file that holds no profile says so, as at start.
+        if (profileFile) {
+            widget->handleToxSave(target);
+        } else {
+            widget->handleToxUri(target);
+        }
+        return true;
+    }
+    if (startWindow && !widget && profileFile) {
+        return startWindow->moveIn(target);
+    }
+    return false;
 }
 
 #ifdef Q_OS_MAC

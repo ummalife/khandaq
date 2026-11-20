@@ -31,12 +31,13 @@ public class GroupNotificationParityWiringTest
         assertTrue(body(notifications, "static String with_group_member(").contains(
                 "R.string.air_band_sender_text_format"));
 
-        // Every notification of a group message hands over the member it came from.
+        // Every notification of a group message hands over the member it came from (and, since 0.2.69, the event a
+        // push preview may have shown: GroupMessageWakeWiringTest).
         final String group = code("HelperGroup.java");
         assertTrue(body(group, "static void android_tox_callback_group_message_cb_method_wrapper(").contains(
-                "m.sent_timestamp, peer_pubkey);"));
+                "m.sent_timestamp, peer_pubkey, event);"));
         assertTrue(body(group, "private static void notify_incoming_group_file(").contains(
-                "m.sent_timestamp, m.tox_group_peer_pubkey);"));
+                "m.sent_timestamp, m.tox_group_peer_pubkey, PushPreviewSeen.forGroupFile(m.msg_id_hash));"));
     }
 
     @Test

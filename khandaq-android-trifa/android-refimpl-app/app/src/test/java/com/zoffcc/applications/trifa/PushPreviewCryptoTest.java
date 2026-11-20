@@ -41,6 +41,7 @@ public class PushPreviewCryptoTest
     static final String PEER_PK = "A1A2A3A4A5A6A7A8A9AAABACADAEAFB0B1B2B3B4B5B6B7B8B9BABBBCBDBEBFC0";
     static final String PRESENCE_HASH = "9f033743ff83e9574563245fe61fac74";
     static final String PRESENCE_PACKET = "BE0201019F033743FF83E9574563245FE61FAC74";
+    static final String WAKE_PACKET = "BE0301019F033743FF83E9574563245FE61FAC74";
 
     // ---- K and packet 190/01 ----
 
@@ -235,6 +236,74 @@ public class PushPreviewCryptoTest
         final byte[] hash = bytes(PRESENCE_HASH, 16);
         final byte[] packet = PushPreviewCrypto.presencePacket(Arrays.asList(hash, hash));
         assertEquals(Collections.singletonList(PRESENCE_HASH), PushPreviewCrypto.presenceFromPacket(packet, 36));
+    }
+
+    // ---- group message wakes, packet 190/03 ----
+
+    @Test
+    public void the_wake_packet_is_the_vector_and_reads_back()
+    {
+        // KHANDAQ (0.2.69, group message wakes): the presence hash of the vector, under subtype 0x03.
+        final byte[] hash = PushPreviewCrypto.presenceHash(bytes(CHAT_ID, 32), bytes(PEER_PK, 32));
+        final byte[] packet = PushPreviewCrypto.wakePacket(Collections.singletonList(hash));
+        assertEquals(WAKE_PACKET, upper(packet));
+        assertEquals(Collections.singletonList(PRESENCE_HASH), PushPreviewCrypto.wakeFromPacket(packet, packet.length));
+        // The same layout as 190/02, only the subtype differs; neither reads as the other.
+        assertNull(PushPreviewCrypto.presenceFromPacket(packet, packet.length));
+        assertNull(PushPreviewCrypto.wakeFromPacket(bytes(PRESENCE_PACKET, 20), 20));
+
+        // None: no group of ours may wake the friend, and what it kept goes.
+        final byte[] none = PushPreviewCrypto.wakePacket(Collections.<byte[]>emptyList());
+        assertEquals("BE030100", upper(none));
+        assertEquals(Collections.<String>emptyList(), PushPreviewCrypto.wakeFromPacket(none, none.length));
+        assertEquals("BE030100", upper(PushPreviewCrypto.wakePacket(null)));
+    }
+
+    @Test
+    public void a_wake_packet_carries_the_first_64_well_formed_hashes_once()
+    {
+        final List<byte[]> hashes = new ArrayList<>();
+        hashes.add(new byte[17]);
+        hashes.add(null);
+        for (int i = 0; i < 70; i++)
+        {
+            final byte[] hash = new byte[16];
+            hash[15] = (byte) i;
+            hashes.add(hash);
+        }
+        final byte[] packet = PushPreviewCrypto.wakePacket(hashes);
+        assertEquals(4 + 64 * 16, packet.length);
+        assertEquals(64, packet[3] & 0xFF);
+        final List<String> read = PushPreviewCrypto.wakeFromPacket(packet, packet.length);
+        assertEquals(64, read.size());
+        assertEquals(repeat("0", 30) + "00", read.get(0));
+        assertEquals(repeat("0", 30) + "3f", read.get(63));
+
+        final byte[] hash = bytes(PRESENCE_HASH, 16);
+        final byte[] twice = PushPreviewCrypto.wakePacket(Arrays.asList(hash, hash));
+        assertEquals(Collections.singletonList(PRESENCE_HASH), PushPreviewCrypto.wakeFromPacket(twice, twice.length));
+    }
+
+    @Test
+    public void a_malformed_wake_packet_says_nothing()
+    {
+        final byte[] packet = bytes(WAKE_PACKET, 20);
+        assertNull(PushPreviewCrypto.wakeFromPacket(null, 20));
+        assertNull(PushPreviewCrypto.wakeFromPacket(packet, 19));
+        assertNull(PushPreviewCrypto.wakeFromPacket(packet, 21));
+        assertNull(PushPreviewCrypto.wakeFromPacket(Arrays.copyOf(packet, 21), 21));
+        assertNull(PushPreviewCrypto.wakeFromPacket(changed(packet, 0, (byte) 0xBD), 20));
+        assertNull(PushPreviewCrypto.wakeFromPacket(changed(packet, 1, (byte) 0x04), 20));
+        assertNull(PushPreviewCrypto.wakeFromPacket(changed(packet, 2, (byte) 0x02), 20));
+        assertNull(PushPreviewCrypto.wakeFromPacket(changed(packet, 3, (byte) 0x00), 20));
+        assertNull(PushPreviewCrypto.wakeFromPacket(changed(packet, 3, (byte) 0x02), 20));
+        assertNull(PushPreviewCrypto.wakeFromPacket(new byte[]{(byte) 0xBE, 0x03, 0x01}, 3));
+        final byte[] tooMany = new byte[4 + 65 * 16];
+        tooMany[0] = (byte) 0xBE;
+        tooMany[1] = 0x03;
+        tooMany[2] = 0x01;
+        tooMany[3] = 65;
+        assertNull(PushPreviewCrypto.wakeFromPacket(tooMany, tooMany.length));
     }
 
     @Test

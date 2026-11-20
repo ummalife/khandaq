@@ -7,6 +7,7 @@ import android.os.Build;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -15,7 +16,8 @@ import java.util.Set;
 
 /**
  * KHANDAQ (0.2.64): where push previews keep what they know (docs/PUSH_PREVIEWS.md): this installation's master key
- * M, the K each contact handed us, the group presence each contact announced, and the chats muted on this device.
+ * M, the K each contact handed us, the group presence and group wake set each contact announced, and the chats muted
+ * on this device.
  * All of it is in app-private SharedPreferences, which the push handler can read in a process that has not opened
  * the database. The logic takes the SharedPreferences, so that the unit tests run it on memory.
  */
@@ -25,6 +27,11 @@ final class PushPreviewStore
     static final String KEY_MASTER = "master";
     static final String PREFS_PEERS = "khandaq_push_preview_peers";
     static final String PREFS_PRESENCE = "khandaq_group_presence";
+    /**
+     * KHANDAQ (0.2.69, group message wakes): the 190/03 set each contact sent, the groups whose messages may wake it,
+     * kept as its 190/02 set is (key = its public key, value = comma-joined 32-hex).
+     */
+    static final String PREFS_WAKE = "khandaq_group_wake";
     /**
      * The chats whose notifications are off on this device (FriendList and GroupDB notification_silent), copied
      * out of the database for the push handler, which must not open it.
@@ -39,8 +46,8 @@ final class PushPreviewStore
     static final String PREFS_ALLOWED = "khandaq_push_preview_allowed";
     static final String KEY_ALLOWED = "senders";
     /** Every file this store and PushPreviewSeen write, for a profile that is wiped. */
-    private static final String[] ALL_PREFS = {PREFS_MASTER, PREFS_PEERS, PREFS_PRESENCE, PREFS_MUTED, PREFS_ALLOWED,
-                                               PushPreviewSeen.PREFS_SEEN};
+    private static final String[] ALL_PREFS = {PREFS_MASTER, PREFS_PEERS, PREFS_PRESENCE, PREFS_WAKE, PREFS_MUTED,
+                                               PREFS_ALLOWED, PushPreviewSeen.PREFS_SEEN};
     private static final Object ALLOWED_LOCK = new Object();
 
     private static final Object MASTER_LOCK = new Object();
@@ -156,6 +163,26 @@ final class PushPreviewStore
     /** Each packet replaces the set kept for that contact; an empty one removes it. */
     static void storePresence(final SharedPreferences prefs, final String friendPublicKey, final List<String> hashes)
     {
+        storeHashes(prefs, friendPublicKey, hashes);
+    }
+
+    /** The set a contact announced in its 190/02 (32 lowercase hex each); empty when none. */
+    static Set<String> presenceOf(final Context context, final String friendPublicKey)
+    {
+        return context == null ? Collections.<String>emptySet()
+                               : presenceOf(prefs(context, PREFS_PRESENCE), friendPublicKey);
+    }
+
+    static Set<String> presenceOf(final SharedPreferences prefs, final String friendPublicKey)
+    {
+        final String friend = friendKey(friendPublicKey);
+        return friend == null ? Collections.<String>emptySet() : hashesOf(prefs.getString(friend, null));
+    }
+
+    /** A 190/02 or 190/03 set, kept under the contact's key: each packet replaces it, an empty one removes it. */
+    private static void storeHashes(final SharedPreferences prefs, final String friendPublicKey,
+                                    final List<String> hashes)
+    {
         final String friend = friendKey(friendPublicKey);
         if (friend == null || hashes == null)
         {
@@ -225,6 +252,67 @@ final class PushPreviewStore
         return PushPreviewCrypto.unhex(hash, PushPreviewCrypto.PRESENCE_HASH_BYTES) != null;
     }
 
+    /** The well-formed hashes of a kept set, 32 lowercase hex each. */
+    private static Set<String> hashesOf(final String stored)
+    {
+        final Set<String> hashes = new HashSet<>();
+        if (stored != null)
+        {
+            for (final String hash : stored.split(","))
+            {
+                if (isPresenceHash(hash))
+                {
+                    hashes.add(hash.toLowerCase(Locale.ROOT));
+                }
+            }
+        }
+        return hashes;
+    }
+
+    // ---- group message wakes ----
+
+    static void storeWakeSet(final Context context, final String friendPublicKey, final List<String> hashes)
+    {
+        if (context != null)
+        {
+            storeWakeSet(prefs(context, PREFS_WAKE), friendPublicKey, hashes);
+        }
+    }
+
+    /** KHANDAQ (0.2.69, group message wakes): as 190/02, each 190/03 replaces the set kept for that contact. */
+    static void storeWakeSet(final SharedPreferences prefs, final String friendPublicKey, final List<String> hashes)
+    {
+        storeHashes(prefs, friendPublicKey, hashes);
+    }
+
+    /**
+     * Every contact's 190/03 set: its public key (64 uppercase hex) -> its hashes (32 lowercase hex). Read once per
+     * message to a group, which compares each member against all of them.
+     */
+    static Map<String, Set<String>> wakeSets(final Context context)
+    {
+        return context == null ? Collections.<String, Set<String>>emptyMap() : wakeSets(prefs(context, PREFS_WAKE));
+    }
+
+    static Map<String, Set<String>> wakeSets(final SharedPreferences prefs)
+    {
+        final Map<String, Set<String>> sets = new HashMap<>();
+        for (final Map.Entry<String, ?> entry : prefs.getAll().entrySet())
+        {
+            final String friend = friendKey(entry.getKey());
+            if ((friend == null) || !(entry.getValue() instanceof String))
+            {
+                continue;
+            }
+            final Set<String> hashes = hashesOf((String) entry.getValue());
+            if (!hashes.isEmpty())
+            {
+                sets.put(friend, hashes);
+            }
+        }
+        return sets;
+    }
+
     // ---- the senders whose previews are shown ----
 
     /**
@@ -272,20 +360,21 @@ final class PushPreviewStore
     // ---- a contact removed ----
 
     /**
-     * Deleting a friend (blocking one deletes them too) deletes their K and their group presence, and their previews
-     * are not shown any more.
+     * Deleting a friend (blocking one deletes them too) deletes their K, their group presence and their group wake set,
+     * and their previews are not shown any more.
      */
     static void forgetFriend(final Context context, final String friendPublicKey)
     {
         if (context != null)
         {
-            forgetFriend(prefs(context, PREFS_PEERS), prefs(context, PREFS_PRESENCE), prefs(context, PREFS_ALLOWED),
-                         friendPublicKey);
+            forgetFriend(prefs(context, PREFS_PEERS), prefs(context, PREFS_PRESENCE), prefs(context, PREFS_WAKE),
+                         prefs(context, PREFS_ALLOWED), friendPublicKey);
         }
     }
 
     static void forgetFriend(final SharedPreferences peers, final SharedPreferences presence,
-                             final SharedPreferences allowed, final String friendPublicKey)
+                             final SharedPreferences wake, final SharedPreferences allowed,
+                             final String friendPublicKey)
     {
         final String friend = friendKey(friendPublicKey);
         if (friend == null)
@@ -299,6 +388,11 @@ final class PushPreviewStore
         if (presence.contains(friend))
         {
             presence.edit().remove(friend).apply();
+        }
+        // KHANDAQ (0.2.69, group message wakes): its 190/03 set goes with its presence: no group message wakes it.
+        if (wake.contains(friend))
+        {
+            wake.edit().remove(friend).apply();
         }
         synchronized (ALLOWED_LOCK)
         {

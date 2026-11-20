@@ -103,6 +103,11 @@ qint64 syncedTextTimeMs(const SyncedText& text)
     return static_cast<qint64>(text.time) * 1000 + static_cast<qint64>(text.messageId % 1000);
 }
 
+bool groupEntryNotifies(bool relayed, bool mentionsUs, bool alwaysNotify)
+{
+    return !relayed && (mentionsUs || alwaysNotify);
+}
+
 QByteArray historyRequestPacket()
 {
     QByteArray packet(reinterpret_cast<const char*>(ngcMagic), static_cast<int>(sizeof(ngcMagic)));

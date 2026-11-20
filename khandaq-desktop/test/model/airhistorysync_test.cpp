@@ -78,6 +78,7 @@ private slots:
     void aGroupRelaysAtMost5000TextsInOneRun();
     void aGroupRelaysAtMost8MiBOfWordsInOneRun();
     void aMemberIsAskedOnceInTwentySeconds();
+    void aRelayedRowCountsButNeverNotifies();
 };
 
 void TestAirHistorySync::aTextOfTheHistoryIsReadAsThePhonesLayItOut()
@@ -246,6 +247,21 @@ void TestAirHistorySync::aMemberIsAskedOnceInTwentySeconds()
     QVERIFY(pace.mayAsk(QByteArray(32, 'h'), member, 1000));
     // A request that did not go is no request: only asked() counts.
     QVERIFY(pace.mayAsk(chatId, other, 2000));
+}
+
+/**
+ * KHANDAQ (group notify parity, 2026-11-20): a row relayed from the history only counts as unread,
+ * whatever it says and however the group tells of its messages; a live one makes a sound and a
+ * notification when it mentions us, or when the group tells of every message.
+ */
+void TestAirHistorySync::aRelayedRowCountsButNeverNotifies()
+{
+    for (const bool mentionsUs : {false, true}) {
+        for (const bool alwaysNotify : {false, true}) {
+            QVERIFY(!groupEntryNotifies(true, mentionsUs, alwaysNotify));
+            QCOMPARE(groupEntryNotifies(false, mentionsUs, alwaysNotify), mentionsUs || alwaysNotify);
+        }
+    }
 }
 
 QTEST_GUILESS_MAIN(TestAirHistorySync)

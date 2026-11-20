@@ -141,7 +141,11 @@ namespace
         }
         else {
             if (groupNotifications.size() == 1) {
-                return groupNotifications.begin().key()->getPeerList()[sender] + ": " + lastMessage;
+                // KHANDAQ (group notify parity, 2026-11-20): a member who left is in the peer list
+                // no more, and the line began with ": ". The words alone then, as the band in the
+                // window says them (Widget::showGroupBand).
+                const QString name = groupNotifications.begin().key()->resolveToxPk(sender);
+                return name.isEmpty() ? lastMessage : name + QStringLiteral(": ") + lastMessage;
             }
 
             return lastMessage;

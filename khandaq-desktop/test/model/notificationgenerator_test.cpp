@@ -73,6 +73,7 @@ private slots:
     void testMultipleFriendMessages();
     void testNotificationClear();
     void testGroupMessage();
+    void testGroupMessageOfMemberWhoLeft();
     void testMultipleGroupMessages();
     void testMultipleFriendSourceMessages();
     void testMultipleGroupSourceMessages();
@@ -169,6 +170,28 @@ void TestNotificationGenerator::testGroupMessage()
     auto notificationData = notificationGenerator->groupMessageNotification(&g, sender, "test");
     QVERIFY(notificationData.title == "groupName");
     QVERIFY(notificationData.message == "sender1: test");
+}
+
+/**
+ * KHANDAQ (group notify parity, 2026-11-20): the author left before the notification of their
+ * message: the words alone, as the band in the window says them, never ": test2".
+ */
+void TestNotificationGenerator::testGroupMessageOfMemberWhoLeft()
+{
+    Group g(0, GroupId(0), "groupName", false, "selfName", *groupQuery, *coreIdHandler, *friendList);
+    g.regeneratePeerList();
+    const ToxPk sender = groupQuery->getGroupPeerPk(0, 1);
+    g.updateUsername(sender, "sender1");
+    QCOMPARE(notificationGenerator->groupMessageNotification(&g, sender, "test").message,
+             QStringLiteral("sender1: test"));
+
+    // Only we are in the group now.
+    groupQuery->setAsEmptyGroup();
+    g.regeneratePeerList();
+    QVERIFY(g.resolveToxPk(sender).isEmpty());
+    auto notificationData = notificationGenerator->groupMessageNotification(&g, sender, "test2");
+    QCOMPARE(notificationData.title, QStringLiteral("2 message(s) from groupName"));
+    QCOMPARE(notificationData.message, QStringLiteral("test2"));
 }
 
 void TestNotificationGenerator::testMultipleGroupMessages()

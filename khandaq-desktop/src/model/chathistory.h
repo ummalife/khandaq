@@ -112,6 +112,13 @@ public:
 signals:
     /** A message joined the queue, left it, or failed. */
     void queueChanged();
+    /**
+     * KHANDAQ (group notify parity, 2026-11-20): a text a member relayed from the history of the
+     * group joined the conversation (onMessageSynced); one the history kept already does not. The
+     * window counts it as unread as it counts a live one, with no sound and no notification
+     * (Widget::createGroup).
+     */
+    void syncedMessageAdded(const ToxPk& sender, const Message& message);
 
 public slots:
     void onFileUpdated(const ToxPk& sender, const ToxFile& file);

@@ -388,6 +388,7 @@ void ChatHistory::onMessageSynced(const ToxPk& sender, const Message& message)
     }
 
     sessionChatLog.onRelayedMessageReceived(sender, authorName, message);
+    emit syncedMessageAdded(sender, message);
 }
 
 QString ChatHistory::relayedAuthorName(const ToxPk& author) const

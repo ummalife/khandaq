@@ -1,0 +1,29 @@
+{
+  "version": "0.2.66",
+  "date": "2026-11-20",
+  "title": "The desktop updates itself",
+  "summary": "The desktop app for Windows, macOS and Linux now finds a new version by itself, and on Windows and macOS puts it in place when you press Update. It checks khandaq.org a few minutes after it starts and then once a day, and believes only a description of the release signed with the Khandaq release key built into the app. Nothing is downloaded until you ask. Settings › About has the switch.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "Desktop: the app updates itself",
+      "description": "A few minutes after it starts, and then once a day, the desktop app asks khandaq.org whether a newer version is out. When one is, a band says so and links to what is new. Press Update and the app downloads that version, checks it and puts it in place. On Windows the installer runs by itself and starts Khandaq again; a portable copy swaps its folder and keeps your profiles and settings, and if anything goes wrong it puts the old copy back without removing anything of yours. On macOS the new app takes the place of the old one and starts. On Linux the band leads to the download, which you install as before. The app believes only a description signed with the Khandaq release key built into it, the download must have the size and SHA-256 that description gives, and it never offers an older version. This is the first version with the check: from 0.2.64 or older, download this one by hand.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Desktop: the check is yours to turn off",
+      "description": "Settings › About has the switch “Check for updates” and the button “Check now”, which checks at once even with the switch off. A check is two small downloads from khandaq.org, through your profile's proxy if one is set, with no cookies and no version number in them; khandaq.org sees the address it comes from, as with any visit to the site, and nothing about your contacts or messages. Test builds do not check.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ]
+    }
+  ]
+}

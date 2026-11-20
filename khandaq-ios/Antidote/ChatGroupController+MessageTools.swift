@@ -334,16 +334,17 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
 
     /// The inline editor of an own group text. KHANDAQ (ideas 1): the long-press menu opens it with the
     /// message it was opened on, as its other actions take theirs; a message gone in the meantime is left
-    /// alone, as in a chat with one person (audit #11: an invalidated Realm object throws on use).
-    func presentGroupMessageEditor(for message: OCTMessageAbstract) {
+    /// alone, as in a chat with one person (audit #11: an invalidated Realm object throws on use). `draft`
+    /// and `notice` bring it back with the words typed and why they were not saved.
+    func presentGroupMessageEditor(for message: OCTMessageAbstract, draft: String? = nil, notice: String? = nil) {
         guard !message.isInvalidated, message.messageText != nil, message.groupSenderPeerId == 0 else {
             return
         }
         let current = message.messageText?.text ?? ""
 
-        let alert = UIAlertController(title: String(localized: "chat_edit_action"), message: nil, preferredStyle: .alert)
+        let alert = UIAlertController(title: String(localized: "chat_edit_action"), message: notice, preferredStyle: .alert)
         alert.addTextField { textField in
-            textField.text = current
+            textField.text = draft ?? current
             textField.autocapitalizationType = .sentences
             textField.clearButtonMode = .whileEditing
         }
@@ -357,6 +358,12 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
                 return
             }
             guard !message.isInvalidated else {
+                return
+            }
+            // KHANDAQ (ideas 1): longer than an edit can carry, it would change here only: the editor comes
+            // back with the words, to shorten.
+            if trimmed.utf8.count > Int(kOCTMaxEditTextBytes) {
+                self.presentGroupMessageEditor(for: message, draft: newText, notice: String(localized: "chat_edit_too_long"))
                 return
             }
             self.submanagerGroups.editGroupMessage(message, in: self.chat, newText: trimmed)

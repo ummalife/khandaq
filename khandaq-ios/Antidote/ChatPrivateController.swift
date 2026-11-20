@@ -1627,16 +1627,17 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         presentMessageEditor(for: messageEntry(atDisplayIndex: indexPath.row).message)
     }
 
-    /// The inline editor of an own text, for the log and for a message waiting in the tray.
-    fileprivate func presentMessageEditor(for message: OCTMessageAbstract) {
+    /// The inline editor of an own text, for the log and for a message waiting in the tray. `draft` and
+    /// `notice` bring it back with the words typed and why they were not saved.
+    fileprivate func presentMessageEditor(for message: OCTMessageAbstract, draft: String? = nil, notice: String? = nil) {
         guard !message.isInvalidated, message.messageText != nil else {
             return
         }
         let current = message.messageText?.text ?? ""
 
-        let alert = UIAlertController(title: String(localized: "chat_edit_action"), message: nil, preferredStyle: .alert)
+        let alert = UIAlertController(title: String(localized: "chat_edit_action"), message: notice, preferredStyle: .alert)
         alert.addTextField { textField in
-            textField.text = current
+            textField.text = draft ?? current
             textField.autocapitalizationType = .sentences
             textField.clearButtonMode = .whileEditing
         }
@@ -1652,6 +1653,11 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
             // KHANDAQ (audit #11): message may have been retracted by the peer while the edit alert was
             // open — an invalidated Realm object throws an uncatchable RLMException on use.
             guard !message.isInvalidated else { return }
+            // KHANDAQ (ideas 1): longer than an edit can carry: the editor comes back with the words, to shorten.
+            if trimmed.utf8.count > Int(kOCTMaxEditTextBytes) {
+                self.presentMessageEditor(for: message, draft: newText, notice: String(localized: "chat_edit_too_long"))
+                return
+            }
             self.submanagerChats.editMessage(message, newText: trimmed)
         })
         present(alert, animated: true, completion: nil)

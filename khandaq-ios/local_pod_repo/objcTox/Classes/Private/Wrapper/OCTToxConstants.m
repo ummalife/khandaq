@@ -19,6 +19,7 @@ const NSUInteger kOCTToxMaxStatusMessageLength = TOX_MAX_STATUS_MESSAGE_LENGTH;
 const NSUInteger kOCTToxMaxFriendRequestLength = TOX_MAX_FRIEND_REQUEST_LENGTH;
 const NSUInteger kOCTToxMaxMessageLength = TOX_MAX_MESSAGE_LENGTH;
 const NSUInteger kOCTToxMaxCustomPacketSize = TOX_MAX_CUSTOM_PACKET_SIZE;
+const NSUInteger kOCTMaxEditTextBytes = 1300;
 const NSUInteger kOCTToxMaxFileNameLength = TOX_MAX_FILENAME_LENGTH;
 
 const NSUInteger kOCTToxHashLength = TOX_HASH_LENGTH;

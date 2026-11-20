@@ -537,6 +537,7 @@
 "delete_for_everyone" = "为所有人删除";
 "chat_edit_action" = "编辑";
 "message_edit_save" = "保存";
+"chat_edit_too_long" = "太长，无法修改：请缩短文字，或作为新消息发送。";
 "message_edited_marker" = "已编辑";
 "group_msg_sender_unverified" = "来自历史转发，发送者未验证";
 "alert_ok" = "确定";

@@ -1933,6 +1933,11 @@ serialize:
     if (trimmed.length == 0) {
         return;
     }
+    // KHANDAQ (ideas 1): a text longer than the packet can carry is refused before the row changes; it
+    // used to change here, stay pending and fail again on every reconnect.
+    if ([trimmed lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > kOCTMaxEditTextBytes) {
+        return;
+    }
     uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970];
 
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];

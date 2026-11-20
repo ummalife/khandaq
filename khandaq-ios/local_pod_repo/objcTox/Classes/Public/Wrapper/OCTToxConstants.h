@@ -38,6 +38,14 @@ extern const NSUInteger kOCTToxMaxStatusMessageLength;
 extern const NSUInteger kOCTToxMaxFriendRequestLength;
 extern const NSUInteger kOCTToxMaxMessageLength;
 extern const NSUInteger kOCTToxMaxCustomPacketSize;
+
+/**
+ * KHANDAQ (ideas 1): the longest new text of an edit, in UTF-8 bytes, in a chat with one person and in a
+ * group alike. It is Android's budget (HelperMessageEdit.MAX_EDIT_TEXT_BYTES), below both packets that
+ * carry an edit within kOCTToxMaxCustomPacketSize: the 1:1 one has a 40-byte header, the group one 16.
+ * A longer edit could not go, and would change the text on this device only.
+ */
+extern const NSUInteger kOCTMaxEditTextBytes;
 extern const NSUInteger kOCTToxMaxFileNameLength;
 
 extern const NSUInteger kOCTToxHashLength;

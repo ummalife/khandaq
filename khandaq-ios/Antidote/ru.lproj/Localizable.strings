@@ -399,6 +399,7 @@
 /* KHANDAQ (#208): edit sent message */
 "chat_edit_action" = "Изменить";
 "message_edit_save" = "Сохранить";
+"chat_edit_too_long" = "Слишком длинно для правки: сократите текст или отправьте его новым сообщением.";
 "message_edited_marker" = "изменено";
 "group_msg_sender_unverified" = "Получено из истории, отправитель не подтверждён";
 /* Delete button */

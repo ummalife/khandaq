@@ -402,6 +402,7 @@
 "nav_edit_start" = "Edit";
 "nav_edit_done" = "Done";
 "message_edit_save" = "Save";
+"chat_edit_too_long" = "Too long to change: shorten the text, or send it as a new message.";
 "message_edited_marker" = "edited";
 "group_msg_sender_unverified" = "Relayed from history, sender not verified";
 /* Delete button */

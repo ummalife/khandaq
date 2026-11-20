@@ -537,6 +537,7 @@
 "delete_for_everyone" = "حذف لدى الجميع";
 "chat_edit_action" = "تعديل";
 "message_edit_save" = "حفظ";
+"chat_edit_too_long" = "النص أطول من أن يُعدَّل: اختصره أو أرسله رسالة جديدة.";
 "message_edited_marker" = "معدلة";
 "group_msg_sender_unverified" = "مُعاد من السجل، لم يتم التحقق من المرسل";
 "alert_ok" = "موافق";

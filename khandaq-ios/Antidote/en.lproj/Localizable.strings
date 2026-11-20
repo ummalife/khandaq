@@ -1340,6 +1340,9 @@
 "air_first_name_first" = "Type a name first.";
 "air_first_next" = "Next";
 "air_first_move_profile" = "Move a profile from another device";
+"air_first_photo_add" = "Add a photo";
+"air_first_photo_remove" = "Remove the photo";
+"air_first_photo_hint" = "Chooses a photo from the library";
 "air_first_default_folder" = "Profile";
 "air_first_password_title" = "Profile password";
 "air_first_password_body" = "A password cannot be recovered: there are no servers. The profile is kept only on this device.";

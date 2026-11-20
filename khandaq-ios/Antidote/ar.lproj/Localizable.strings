@@ -1329,6 +1329,9 @@
 "air_first_name_first" = "اكتب اسمًا أولًا.";
 "air_first_next" = "التالي";
 "air_first_move_profile" = "نقل ملف شخصي من جهاز آخر";
+"air_first_photo_add" = "إضافة صورة";
+"air_first_photo_remove" = "إزالة الصورة";
+"air_first_photo_hint" = "يختار صورة من مكتبة الصور";
 "air_first_default_folder" = "الملف الشخصي";
 "air_first_password_title" = "كلمة مرور الملف الشخصي";
 "air_first_password_body" = "لا يمكن استعادة كلمة المرور: لا توجد خوادم. يُحفظ الملف الشخصي على هذا الجهاز فقط.";

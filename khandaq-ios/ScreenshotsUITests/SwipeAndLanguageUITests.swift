@@ -3584,6 +3584,63 @@ final class SwipeAndLanguageUITests: XCTestCase {
                 .write(to: URL(fileURLWithPath: Self.artifactsDir + "settings-language-ru.png"))
     }
 
+    /// KHANDAQ (ideas 1): the first page takes a photo from the library, with the square crop of You, and
+    /// the profile made from it has that photo: the tile on You shows it instead of the initials. "Real"
+    /// runs the real messenger, whose profile keeps an avatar (the mock drops it); "FirstLaunch" leaves the
+    /// first launch to the test.
+    func testRealFirstLaunchTakesAPhotoFromTheLibrary() {
+        let name = app.textFields["air.first.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 30), "the first launch did not start:\n\(app.debugDescription)")
+        XCTAssertTrue(app.buttons["air.first.photo"].exists, "no photo tile beside the name")
+        let action = app.buttons["air.first.photo.action"]
+        XCTAssertEqual(action.label, "Add a photo")
+
+        action.tap()
+        // The library of the system (in the simulator's own language): its first photo, then Choose under
+        // the square crop.
+        let photo = app.images.matching(identifier: "PXGGridLayout-Info").firstMatch
+        XCTAssertTrue(photo.waitForExistence(timeout: 30), "the library did not open:\n\(app.debugDescription)")
+        // The grid lives in another process: its cells are seen but not hittable, so the tap goes to the point.
+        photo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let choose = app.buttons.matching(NSPredicate(format: "label IN {'Choose', 'Выбрать'}")).firstMatch
+        XCTAssertTrue(choose.waitForExistence(timeout: 15), "no square crop after the photo:\n\(app.debugDescription)")
+        choose.tap()
+        let taken = app.buttons.matching(NSPredicate(format: "identifier == 'air.first.photo.action' AND label == 'Remove the photo'")).firstMatch
+        XCTAssertTrue(taken.waitForExistence(timeout: 15), "the photo was not taken:\n\(app.debugDescription)")
+        XCTAssertTrue(hasColour(app.buttons["air.first.photo"].screenshot().image), "the tile does not show the photo")
+        try? XCUIScreen.main.screenshot().pngRepresentation
+                .write(to: URL(fileURLWithPath: Self.artifactsDir + "first-launch-photo.png"))
+
+        signUpWithoutThePasteboard()
+        app.leaveCommandLine()
+        let you = app.buttons["air.you"]
+        XCTAssertTrue(you.waitForExistence(timeout: 30), "no Air screen after the first launch")
+        you.tap()
+        let youPhoto = app.buttons["air.you.photo"]
+        XCTAssertTrue(youPhoto.waitForExistence(timeout: 10), "You did not open")
+        XCTAssertTrue(hasColour(youPhoto.screenshot().image), "the profile has no photo: You shows the initials")
+        try? XCUIScreen.main.screenshot().pngRepresentation
+                .write(to: URL(fileURLWithPath: Self.artifactsDir + "first-launch-photo-on-you.png"))
+    }
+
+    /// Whether a picture has colour in it: the ink tile with its initials is grey, a photo is not.
+    private func hasColour(_ image: UIImage) -> Bool {
+        guard let cgImage = image.cgImage else {
+            return false
+        }
+        let side = 32
+        var bytes = [UInt8](repeating: 0, count: side * side * 4)
+        bytes.withUnsafeMutableBytes { buffer in
+            let context = CGContext(data: buffer.baseAddress, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
+                                    space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            context?.draw(cgImage, in: CGRect(x: 0, y: 0, width: side, height: side))
+        }
+        return stride(from: 0, to: bytes.count, by: 4).contains { index in
+            let channels = [Int(bytes[index]), Int(bytes[index + 1]), Int(bytes[index + 2])]
+            return (channels.max() ?? 0) - (channels.min() ?? 0) > 40
+        }
+    }
+
     /// The first launch without the pasteboard (`fill` pastes): digits for the name, which every keyboard
     /// has, and no password.
     private func signUpWithoutThePasteboard() {

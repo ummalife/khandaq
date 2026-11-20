@@ -1342,6 +1342,9 @@
 "air_first_name_first" = "Сначала впишите имя.";
 "air_first_next" = "Дальше";
 "air_first_move_profile" = "Перенести профиль с другого устройства";
+"air_first_photo_add" = "Добавить фото";
+"air_first_photo_remove" = "Убрать фото";
+"air_first_photo_hint" = "Выбирает фото из медиатеки";
 "air_first_default_folder" = "Профиль";
 "air_first_password_title" = "Пароль профиля";
 "air_first_password_body" = "Восстановить пароль нельзя: серверов нет. Профиль хранится только на этом устройстве.";

@@ -1329,6 +1329,9 @@
 "air_first_name_first" = "请先填写名字。";
 "air_first_next" = "下一步";
 "air_first_move_profile" = "从其他设备转移档案";
+"air_first_photo_add" = "添加头像";
+"air_first_photo_remove" = "移除头像";
+"air_first_photo_hint" = "从图片库选择头像";
 "air_first_default_folder" = "档案";
 "air_first_password_title" = "档案密码";
 "air_first_password_body" = "密码无法找回：没有服务器。档案只保存在这台设备上。";

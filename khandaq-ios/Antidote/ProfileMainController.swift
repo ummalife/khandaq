@@ -270,8 +270,7 @@ extension ProfileMainController: UIImagePickerControllerDelegate, UINavigationCo
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [String : Any]) {
         dismiss(animated: true, completion: nil)
 
-        // KHANDAQ (#8): the picker runs with allowsEditing, so prefer the user's crop/zoom result.
-        guard let image = (info[UIImagePickerControllerEditedImage] ?? info[UIImagePickerControllerOriginalImage]) as? UIImage else {
+        guard let image = AirAvatarImage.picked(info) else {
             return
         }
 
@@ -284,8 +283,6 @@ extension ProfileMainController: UIImagePickerControllerDelegate, UINavigationCo
 }
 
 private extension ProfileMainController {
-    struct PNGFromDataError: Error {}
-
     @objc func photoTapped() {
         let alert = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
         alert.popoverPresentationController?.sourceView = photoButton
@@ -312,14 +309,7 @@ private extension ProfileMainController {
         }
 
         alert.addAction(UIAlertAction(title: String(localized: "photo_from_photo_library"), style: .default) { [unowned self] _ -> Void in
-            // KHANDAQ (#8): PHPicker has no crop step, so the avatar was auto-center-cropped with no
-            // way to zoom/reposition. UIImagePickerController with allowsEditing gives the native
-            // move-and-scale square crop (and needs no photo permission since iOS 11).
-            if UIImagePickerController.isSourceTypeAvailable(.photoLibrary) {
-                let controller = UIImagePickerController()
-                controller.sourceType = .photoLibrary
-                controller.delegate = self
-                controller.allowsEditing = true
+            if let controller = AirAvatarImage.libraryPicker(delegate: self) {
                 self.present(controller, animated: true, completion: nil)
             }
         })
@@ -347,18 +337,9 @@ private extension ProfileMainController {
     }
 
     func applyAvatarImage(_ image: UIImage) {
-        var croppedImage = image
-        if croppedImage.size.width != croppedImage.size.height {
-            let side = min(croppedImage.size.width, croppedImage.size.height)
-            let x = (croppedImage.size.width - side) / 2
-            let y = (croppedImage.size.height - side) / 2
-            let rect = CGRect(x: x, y: y, width: side, height: side)
-            croppedImage = croppedImage.cropWithRect(rect)
-        }
-
         let data: Data
         do {
-            data = try pngDataFromImage(croppedImage)
+            data = try AirAvatarImage.pngData(AirAvatarImage.square(image))
         }
         catch {
             handleErrorWithType(.convertImageToPNG, error: nil)
@@ -374,8 +355,49 @@ private extension ProfileMainController {
             handleErrorWithType(.changeAvatar, error: error)
         }
     }
+}
 
-    func pngDataFromImage(_ image: UIImage) throws -> Data {
+// MARK: - The avatar
+
+/// KHANDAQ (ideas 1): a photo made into the avatar Tox carries, the same on "You" and on the first page of
+/// the first launch: the square the person chose in the picker (the middle square of anything else), as
+/// PNG within kOCTManagerMaxAvatarSize.
+enum AirAvatarImage {
+    struct PNGFromDataError: Error {}
+
+    /// The photo library with the system's square crop; nil where there is no library.
+    /// KHANDAQ (#8): PHPicker has no crop step, so the avatar was auto-center-cropped with no
+    /// way to zoom/reposition. UIImagePickerController with allowsEditing gives the native
+    /// move-and-scale square crop (and needs no photo permission since iOS 11).
+    static func libraryPicker(delegate: UIImagePickerControllerDelegate & UINavigationControllerDelegate) -> UIImagePickerController? {
+        guard UIImagePickerController.isSourceTypeAvailable(.photoLibrary) else {
+            return nil
+        }
+        let controller = UIImagePickerController()
+        controller.sourceType = .photoLibrary
+        controller.delegate = delegate
+        controller.allowsEditing = true
+        return controller
+    }
+
+    /// What the picker hands back. KHANDAQ (#8): the picker runs with allowsEditing, so prefer the user's
+    /// crop/zoom result.
+    static func picked(_ info: [String: Any]) -> UIImage? {
+        return (info[UIImagePickerControllerEditedImage] ?? info[UIImagePickerControllerOriginalImage]) as? UIImage
+    }
+
+    /// The middle square of a photo that is not square already.
+    static func square(_ image: UIImage) -> UIImage {
+        guard image.size.width != image.size.height else {
+            return image
+        }
+        let side = min(image.size.width, image.size.height)
+        let x = (image.size.width - side) / 2
+        let y = (image.size.height - side) / 2
+        return image.cropWithRect(CGRect(x: x, y: y, width: side, height: side))
+    }
+
+    static func pngData(_ image: UIImage) throws -> Data {
         var imageSize = image.size
 
         // Maximum png size will be (4 * width * height)

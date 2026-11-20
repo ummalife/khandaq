@@ -227,3 +227,16 @@ enum ChatListContent {
         submanagerGroups.removeAllMessages(in: chat, removeChat: true, leaveGroup: false)
     }
 }
+
+extension AirUnreadBand {
+    /// KHANDAQ (ideas 1): the band over a conversation's messages, newest first, by the rule the unread
+    /// count keeps: a message's dateInterval against the read date, and only what countsAsUnread counts
+    /// (not your own messages, not the notices of a group, not a synced row nobody can be named for).
+    init(messages: Results<OCTMessageAbstract>, lastRead: TimeInterval) {
+        self.init(count: messages.count,
+                  lastRead: lastRead,
+                  arrival: { messages[$0].dateInterval },
+                  countsAsUnread: { ChatListContent.countsAsUnread(messages[$0]) },
+                  id: { messages[$0].uniqueIdentifier })
+    }
+}

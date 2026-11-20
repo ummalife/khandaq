@@ -711,3 +711,286 @@ private extension AirConversationModelTests {
         }
     }
 }
+
+/**
+ KHANDAQ (ideas 1): the "Unread messages" band and the jump to it when a conversation opens (AirUnreadBand),
+ kept by the conversation with one person and now by a group too.
+ */
+final class UnreadBandTests: XCTestCase {
+    private let lastRead: TimeInterval = 1_800_000_000
+    private var directories: [URL] = []
+    /// The group screen and its window, let go before what the screen holds weakly.
+    private var window: UIWindow?
+    private var screen: ChatGroupController?
+    /// What the screen holds weakly: the profile, the submanagers and its delegate.
+    private var kept: [AnyObject] = []
+
+    override func tearDown() {
+        GlobalSearchScrollTarget.pending = nil
+        window?.isHidden = true
+        window = nil
+        screen = nil
+        kept = []
+        directories.forEach { try? FileManager.default.removeItem(at: $0) }
+        directories = []
+        super.tearDown()
+    }
+
+    // MARK: - Where the band goes
+
+    func testTheBandGoesOnTheOldestNewMessageOfSomeoneElse() {
+        // Newest first: yours, theirs, a notice, theirs (the band), then two read before.
+        XCTAssertEqual(bandIndex([(lastRead + 40, false), (lastRead + 30, true), (lastRead + 20, false),
+                                  (lastRead + 10, true), (lastRead - 60, true), (lastRead - 120, true)]), 3)
+    }
+
+    func testNothingNewFromSomeoneElseHasNoBand() {
+        XCTAssertNil(bandIndex([]), "no messages")
+        XCTAssertNil(bandIndex([(lastRead - 10, true), (lastRead - 20, true)]), "all read")
+        XCTAssertNil(bandIndex([(lastRead + 10, false), (lastRead + 5, false), (lastRead - 20, true)]), "only yours is new")
+    }
+
+    /// Under the first message read already nothing is new, not even a row sorted there with a later date.
+    func testTheBandNeverGoesPastAMessageReadAlready() {
+        XCTAssertEqual(bandIndex([(lastRead + 10, true), (lastRead - 10, true), (lastRead + 20, true)]), 0)
+    }
+
+    /// A new chat stamps its read date as it is made, a moment after the message that made it.
+    func testTheMessageThatMadeTheChatIsNew() {
+        XCTAssertEqual(bandIndex([(lastRead - 1, true)]), 0)
+        XCTAssertNil(bandIndex([(lastRead - AirUnreadBand.creationLead - 1, true)]))
+    }
+
+    func testTheJumpIsTakenOnceAndTheBandStays() {
+        let start = lastRead + 10
+        var band = AirUnreadBand(count: 3,
+                                 lastRead: lastRead,
+                                 arrival: { start - TimeInterval($0) },
+                                 countsAsUnread: { _ in true },
+                                 id: { "m\($0)" })
+        XCTAssertEqual(band.messageId, "m2")
+        XCTAssertEqual(band.takeJump(), 2)
+        XCTAssertNil(band.takeJump(), "the jump came back")
+        XCTAssertTrue(band.marks("m2"))
+        XCTAssertFalse(band.marks("m1"))
+        XCTAssertFalse(band.marks(nil))
+
+        var none = AirUnreadBand.none
+        XCTAssertFalse(none.marks(nil))
+        XCTAssertNil(none.takeJump())
+    }
+
+    /// In a group the band follows the unread count: a notice and a synced row nobody can be named for are
+    /// not unread, so it is never on them.
+    func testInAGroupTheBandSkipsNoticesAndUnnamedSyncedRows() throws {
+        let (chat, realmManager) = try group()
+        try store("On my way", at: lastRead + 50, in: chat, realmManager)
+        let theirs = try store("See you at six", at: lastRead + 40, in: chat, realmManager, peer: 7)
+        try store("Amina joined", at: lastRead + 30, in: chat, realmManager, notice: true)
+        try store("An old line", at: lastRead + 20, in: chat, realmManager, synced: true)
+        try store("Read before", at: lastRead - 60, in: chat, realmManager, peer: 7)
+        let objects = OCTSubmanagerObjectsMock(realm: realmManager.realm)
+        kept.append(objects)
+        // Newest first, as the group's log lists them (the dates differ, so sortTimestamp alone orders them).
+        let messages = objects.messages(predicate: NSPredicate(format: "chatUniqueIdentifier == %@", chat.uniqueIdentifier))
+            .sortedResultsUsingProperty("sortTimestamp", ascending: false)
+
+        let band = AirUnreadBand(messages: messages, lastRead: lastRead)
+
+        XCTAssertEqual(band.messageId, theirs.uniqueIdentifier)
+        XCTAssertEqual(band.jumpIndex, 1)
+    }
+
+    // MARK: - The group screen
+
+    /// A group opens at its first unread message, under the band: past the 50 rows the log loads first, and
+    /// with your own message the newest, which the first notification of the list used to scroll to.
+    func testAGroupOpensAtItsFirstUnreadMessageUnderTheBand() throws {
+        let (chat, realmManager) = try group()
+        try inOneWrite(realmManager) {
+            for minute in 0..<5 {
+                try store("Read \(minute)", at: lastRead - 600 + TimeInterval(minute * 60), in: chat, realmManager, peer: 7)
+            }
+            for minute in 0..<54 {
+                try store("New \(minute)", at: lastRead + 60 + TimeInterval(minute * 60), in: chat, realmManager, peer: 7)
+            }
+            try store("Coming", at: lastRead + 3_600, in: chat, realmManager)
+        }
+        // Newest first: yours at 0, the new ones at 1 to 54, the ones read before at 55 to 59.
+        let bandRow = IndexPath(row: 54, section: 0)
+
+        let screen = try open(chat, realmManager)
+        // As while the screen slides in: the layout settles and the list is first heard from.
+        settle(for: 0.6)
+        screen.viewDidAppear(false)
+        settle(for: 1.0)
+
+        let table = try XCTUnwrap(screen.tableView)
+        XCTAssertEqual(table.numberOfRows(inSection: 0), 60, "the log did not load past its first 50 rows")
+        XCTAssertTrue(table.indexPathsForVisibleRows?.contains(bandRow) == true,
+                      "the log does not stand at the first unread message")
+        let unread = String(localized: "unread_messages_separator")
+        let banded = table.indexPathsForVisibleRows?.filter { indexPath in
+            (table.cellForRow(at: indexPath) as? ChatMovableDateCell)?.transcriptMarksSpoken?.contains(unread) == true
+        }
+        XCTAssertEqual(banded, [bandRow], "the band is not over the first unread message alone")
+    }
+
+    /// A jump to a search hit goes first, and the log does not jump on to the band after it.
+    func testASearchHitWinsOverTheFirstUnreadMessage() throws {
+        let (chat, realmManager) = try group()
+        var stored: [OCTMessageAbstract] = []
+        try inOneWrite(realmManager) {
+            for minute in 0..<40 {
+                stored.append(try store("New \(minute)", at: lastRead + 60 + TimeInterval(minute * 60), in: chat, realmManager, peer: 7))
+            }
+        }
+        // Newest first: the hit at row 20, the band at row 39.
+        GlobalSearchScrollTarget.pending = (chatId: chat.uniqueIdentifier, messageId: stored[19].uniqueIdentifier)
+
+        let screen = try open(chat, realmManager)
+        settle(for: 0.6)
+        screen.viewDidAppear(false)
+        settle(for: 1.0)
+
+        let table = try XCTUnwrap(screen.tableView)
+        XCTAssertTrue(table.indexPathsForVisibleRows?.contains(IndexPath(row: 20, section: 0)) == true,
+                      "the search hit is not on screen")
+        XCTAssertFalse(table.indexPathsForVisibleRows?.contains(IndexPath(row: 39, section: 0)) == true,
+                       "the log went on to the first unread message")
+    }
+}
+
+// MARK: - Fixtures
+
+private extension UnreadBandTests {
+    /// The band's index over messages given newest first as (the date they came, whether they count).
+    func bandIndex(_ rows: [(TimeInterval, Bool)]) -> Int? {
+        return AirUnreadBand.index(count: rows.count,
+                                   lastRead: lastRead,
+                                   arrival: { rows[$0].0 },
+                                   countsAsUnread: { rows[$0].1 })
+    }
+
+    /// A group read up to `lastRead`, in a profile of the test's own, made from the app's classes: this
+    /// bundle has copies of its own, which do not mix with them (OwnCaptionOrderTests).
+    func group() throws -> (OCTChat, OCTRealmManager) {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("unread-band-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
+        directories.append(directory)
+        let realmManagerClass = try appClass("OCTRealmManager", as: OCTRealmManager.Type.self)
+        let realmManager = try XCTUnwrap(realmManagerClass.init(databaseFileURL: directory.appendingPathComponent("profile.realm"),
+                                                                encryptionKey: nil))
+        let chat = try appClass("OCTChat", as: OCTChat.Type.self).init()
+        chat.isGroup = true
+        chat.groupNumber = 12
+        chat.groupName = "Book club"
+        chat.groupPeerCount = 2
+        chat.lastReadDateInterval = lastRead
+        realmManager.add(chat)
+        kept.append(realmManager)
+        return (chat, realmManager)
+    }
+
+    /// A text of the group as objcTox stores it: yours with no peer, someone else's with `peer`, a notice
+    /// of the group, or a row a member synced whose author was not known.
+    @discardableResult
+    func store(_ text: String,
+               at date: TimeInterval,
+               in chat: OCTChat,
+               _ realmManager: OCTRealmManager,
+               peer: Int32 = 0,
+               notice: Bool = false,
+               synced: Bool = false) throws -> OCTMessageAbstract {
+        let messageText = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        messageText.text = text
+        messageText.isDelivered = true
+        let message = try appClass("OCTMessageAbstract", as: OCTMessageAbstract.Type.self).init()
+        message.chatUniqueIdentifier = chat.uniqueIdentifier
+        message.dateInterval = date
+        message.sortTimestamp = date
+        message.groupSenderPeerId = peer
+        message.groupSystemMessage = notice
+        message.groupHistorySync = synced
+        message.messageText = messageText
+        let realm: RLMRealm = realmManager.realm
+        if realm.inWriteTransaction {
+            realm.add(message)
+        }
+        else {
+            realmManager.add(message)
+        }
+        return message
+    }
+
+    /// Runs `body` in one write of the profile: a write of its own for each of 60 messages takes seconds.
+    func inOneWrite(_ realmManager: OCTRealmManager, _ body: () throws -> Void) throws {
+        let realm: RLMRealm = realmManager.realm
+        realm.beginWriteTransaction()
+        do {
+            try body()
+        }
+        catch {
+            realm.cancelWriteTransaction()
+            throw error
+        }
+        try realm.commitWriteTransaction()
+    }
+
+    /// The group's screen in a navigation stack, as the app pushes it, in a window of its own, loaded and
+    /// laid out. UIKit says viewDidAppear once such a window is up, but not always in a whole run, after the
+    /// windows other tests leave behind, so the tests say it themselves.
+    func open(_ chat: OCTChat, _ realmManager: OCTRealmManager) throws -> ChatGroupController {
+        let realm: RLMRealm = realmManager.realm
+        let groups = OCTSubmanagerGroupsMock()
+        groups.realm = realm
+        let objects = OCTSubmanagerObjectsMock(realm: realm)
+        let friends = OCTSubmanagerFriendsMock()
+        let chats = OCTSubmanagerChatsMock(realm: realm)
+        let user = OCTSubmanagerUserMock()
+        let delegate = QuietGroupScreenDelegate()
+        kept += [groups, objects, friends, chats, user, delegate]
+        let screen = ChatGroupController(theme: ThemeAppearance.resolvedTheme(),
+                                         chat: chat,
+                                         submanagerGroups: groups,
+                                         submanagerObjects: objects,
+                                         submanagerFriends: friends,
+                                         submanagerChats: chats,
+                                         submanagerUser: user,
+                                         delegate: delegate)
+        // In the app's scene: a window of no scene never shows, and its screens never appear.
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
+                                  "the app has no scene")
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        window.rootViewController = UINavigationController(rootViewController: screen)
+        window.isHidden = false
+        window.layoutIfNeeded()
+        self.window = window
+        self.screen = screen
+        return screen
+    }
+
+    /// Lets the main loop run for `seconds`: the screen appears, jumps, and hears from its list.
+    func settle(for seconds: TimeInterval) {
+        let settled = expectation(description: "the main loop ran")
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+            settled.fulfill()
+        }
+        wait(for: [settled], timeout: seconds + 5)
+    }
+
+    func appClass<T>(_ name: String, as type: T.Type) throws -> T {
+        let cls: AnyClass = try XCTUnwrap(NSClassFromString(name), "no class \(name)")
+        return unsafeBitCast(cls, to: type)
+    }
+}
+
+/// The group screen's delegate in a test: nothing to open.
+private final class QuietGroupScreenDelegate: ChatGroupControllerDelegate {
+    func chatGroupControllerWillAppear(_ controller: ChatGroupController) {}
+    func chatGroupControllerWillDisappear(_ controller: ChatGroupController) {}
+    func chatGroupControllerDidRequestGroupInfo(_ controller: ChatGroupController) {}
+    func chatGroupController(_ controller: ChatGroupController, didRequestOpenFriend friend: OCTFriend) {}
+}

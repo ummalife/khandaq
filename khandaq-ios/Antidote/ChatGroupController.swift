@@ -39,6 +39,9 @@ class ChatGroupController: PortraitChatController {
     // KHANDAQ (#119): id of the newest own-outgoing message we already auto-scrolled to (so status-only
     // updates don't re-scroll the list).
     fileprivate var lastAutoScrolledOutgoingId: String?
+    /// KHANDAQ (ideas 1): the "Unread messages" band and the jump to it on open, as in the conversation with
+    /// one person (AirUnreadBand); taken in viewDidLoad, before viewWillAppear marks the group read.
+    fileprivate var unreadBand = AirUnreadBand.none
     var visibleMessages: Int
     fileprivate var showsSystemMessages: Bool
 
@@ -315,6 +318,14 @@ class ChatGroupController: PortraitChatController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        // KHANDAQ (ideas 1): the band, before viewWillAppear's updateLastReadDate marks the group read. When
+        // the newest message is ours it counts as scrolled to already: the first notification of the list
+        // would otherwise take the log from the band back down to it (scrollToNewestIfOwnOutgoing).
+        unreadBand = AirUnreadBand(messages: messages, lastRead: chat.lastReadDateInterval)
+        if unreadBand.jumpIndex != nil, let newest = messages.object(at: 0), newest.isOutgoing() {
+            lastAutoScrolledOutgoingId = newest.uniqueIdentifier
+        }
+
         replyController.restorePending(forChatId: chat.uniqueIdentifier, theme: theme)
         inputViewManager = ChatGroupInputViewManager(inputView: chatInputView,
                                                      chat: chat,
@@ -427,7 +438,35 @@ class ChatGroupController: PortraitChatController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         scrollToGlobalSearchTargetIfNeeded()
+        scrollToFirstUnreadIfNeeded()
         refreshPinnedBanner()   // KHANDAQ (#G5): restore the pinned-message banner if any.
+    }
+
+    /// KHANDAQ (ideas 1): on open, the log stands at the first unread message, the one under the band, as in
+    /// the conversation with one person. Once per screen; a jump to a search hit goes first and cancels it.
+    func scrollToFirstUnreadIfNeeded() {
+        guard let tableView = tableView, let index = unreadBand.takeJump() else {
+            return
+        }
+
+        if index >= visibleMessages {
+            visibleMessages = min(messages.count, index + Constants.MessagesPortionSize)
+            tableView.reloadData()
+        }
+        tableView.layoutIfNeeded()
+
+        // The index is a storage index: it is the row only while no search filters the log.
+        guard messageSearchQuery.isEmpty else {
+            return
+        }
+        // After the layout pass of viewDidAppear, as the search jump does (#126). A message that came in
+        // meanwhile moves the rows by one; the check keeps a list that shrank from a row it no longer has.
+        DispatchQueue.main.async {
+            guard index < tableView.numberOfRows(inSection: 0) else {
+                return
+            }
+            tableView.scrollToRow(at: IndexPath(row: index, section: 0), at: .middle, animated: false)
+        }
     }
 
     // KHANDAQ (#G5): the pinned message of the group (mirrors ChatPrivateController).
@@ -509,6 +548,9 @@ class ChatGroupController: PortraitChatController {
               let tableView = tableView else {
             return
         }
+
+        // KHANDAQ (ideas 1): the search jump takes priority over the first-unread jump.
+        unreadBand.takeJump()
 
         // KHANDAQ (#7): the target may be older than the loaded window — expand `visibleMessages` to
         // include its storage index before looking up the display row, otherwise the scroll no-ops.
@@ -1037,6 +1079,8 @@ extension ChatGroupController: UITableViewDataSource {
         model.dateString = dateText
         model.dateSeparator = daySeparatorString(forDisplayIndex: indexPath.row)
         model.transcriptMarks = true
+        // KHANDAQ (ideas 1): the "Unread messages" band over the first unread message.
+        model.unreadSeparator = unreadBand.marks(message.uniqueIdentifier)
         model.reactionChips = ChatReactionsFormat.chips(from: message.reactionsJSON)
         // KHANDAQ (#208/#H2): «edited» is a small dim suffix drawn by the cell, not appended text.
         model.edited = message.edited
@@ -1406,6 +1450,7 @@ private extension ChatGroupController {
         model.timeText = dateText
         model.dateSeparator = daySeparatorString(forDisplayIndex: indexPath.row)
         model.transcriptMarks = true
+        model.unreadSeparator = unreadBand.marks(message.uniqueIdentifier)
         configureGroupEntry(model, message: message, row: indexPath.row)
 
         cell.setupWithTheme(theme, model: model)

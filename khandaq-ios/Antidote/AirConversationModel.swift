@@ -154,6 +154,74 @@ enum AirTranscript {
     }
 }
 
+/// KHANDAQ (ideas 1): the "Unread messages" band and the jump to it when a conversation opens, for the
+/// conversation with one person and for a group (Figma; first in ChatPrivateController, which alone had
+/// it). Taken when the screen loads, before its appearance marks everything read.
+struct AirUnreadBand {
+    /// The read date is taken this much earlier: a new chat stamps its read date as it is made,
+    /// microseconds after the message that made it, and a strict compare took that message for read.
+    static let creationLead: TimeInterval = 2.0
+
+    /// The message the band sits on.
+    let messageId: String?
+    /// Its storage index (newest first) until the conversation has jumped there or given the jump up.
+    private(set) var jumpIndex: Int?
+
+    /// No band and no jump.
+    static let none = AirUnreadBand(messageId: nil, jumpIndex: nil)
+
+    private init(messageId: String?, jumpIndex: Int?) {
+        self.messageId = messageId
+        self.jumpIndex = jumpIndex
+    }
+
+    /// Over `count` messages, newest first: `arrival(i)` is when message i came to this device,
+    /// `countsAsUnread(i)` whether it is one the unread count counts, `id(i)` its id.
+    init(count: Int,
+         lastRead: TimeInterval,
+         arrival: (Int) -> TimeInterval,
+         countsAsUnread: (Int) -> Bool,
+         id: (Int) -> String?) {
+        let index = AirUnreadBand.index(count: count, lastRead: lastRead, arrival: arrival, countsAsUnread: countsAsUnread)
+        self.init(messageId: index.flatMap(id), jumpIndex: index)
+    }
+
+    /// The band goes on the oldest message that counts as unread among those that came after `lastRead`,
+    /// looking no further back than the first message that came before it: everything under the band is
+    /// new. Nil when nothing new counts.
+    static func index(count: Int,
+                      lastRead: TimeInterval,
+                      arrival: (Int) -> TimeInterval,
+                      countsAsUnread: (Int) -> Bool) -> Int? {
+        let readUntil = lastRead - creationLead
+        var found: Int?
+        for index in 0..<max(count, 0) {
+            if arrival(index) <= readUntil {
+                break
+            }
+            if countsAsUnread(index) {
+                found = index
+            }
+        }
+        return found
+    }
+
+    /// Whether the band sits on the message with `id`.
+    func marks(_ id: String?) -> Bool {
+        return messageId != nil && id == messageId
+    }
+
+    /// The storage index to jump to, once: nil after the first call. A jump of its own (to a search hit)
+    /// takes it to give it up.
+    @discardableResult
+    mutating func takeJump() -> Int? {
+        defer {
+            jumpIndex = nil
+        }
+        return jumpIndex
+    }
+}
+
 /// The day mark above the first entry of a day: "Today", "Yesterday", or the date.
 enum AirDayMark {
     static func text(for date: Date, now: Date = Date(), locale: Locale, calendar: Calendar = Calendar.current) -> String {

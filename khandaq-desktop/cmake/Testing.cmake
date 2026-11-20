@@ -105,6 +105,8 @@ auto_test(model friendmessagedispatcher "" "")
 auto_test(model groupmessagedispatcher "" "mock_library")
 auto_test(model messageprocessor "" "")
 auto_test(model sessionchatlog "" "")
+# KHANDAQ (group notify parity, 2026-11-20): which texts relayed from a group's history count unread.
+auto_test(model chathistory "" "mock_library")
 auto_test(model notes "" "")
 auto_test(model exiftransform "" "")
 auto_test(model notificationgenerator "" "mock_library")

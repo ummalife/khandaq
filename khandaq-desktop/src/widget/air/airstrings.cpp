@@ -150,6 +150,7 @@ const Source sources[] = {
     {Text::Mentioned, QT_TRANSLATE_NOOP3("Air", "You were mentioned", "accessible text of the @ flag")},
     {Text::MentionsYou, QT_TRANSLATE_NOOP3("Air", "Mentions you", "what a screen reader says of a group message that mentions you")},
     {Text::TranscriptName, QT_TRANSLATE_NOOP3("Air", "Messages", "what a screen reader calls the list of messages of a conversation")},
+    {Text::TranscriptUnread, QT_TRANSLATE_NOOP3("Air", "Unread messages", "conversation: the line over the first message that came while it was not open; it opens there")},
     {Text::HintRequestSent, QT_TRANSLATE_NOOP3("Air", "request sent", "row hint of a contact who has not answered yet")},
     {Text::HintNoMessages, QT_TRANSLATE_NOOP3("Air", "no messages yet", "row hint of a conversation without messages")},
     {Text::Typing, QT_TRANSLATE_NOOP3("Air", "typing", "row preview while the contact types")},

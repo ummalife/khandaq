@@ -216,7 +216,42 @@ ChatLogIdx clampedAdd(ChatLogIdx idx, int val, IChatLog& chatLog)
     }
 }
 
+/** A text or a file of ours, under either of our keys; groupSelf may be empty. */
+bool isOwnEntry(const ChatLogItem& item, const ToxPk& self, const ToxPk& groupSelf)
+{
+    const ToxPk& sender = item.getSender();
+    return item.getContentType() != ChatLogItem::ContentType::systemMessage
+           && (sender == self || (!groupSelf.isEmpty() && sender == groupSelf));
+}
+
+/**
+ * KHANDAQ (beta ideas 2026-11-20): an entry of the kinds a conversation counts as unread while it
+ * is not in front (Widget::newFriendMessageAlert, Widget::newGroupMessageAlert): a text or a file
+ * of someone else, or a call of theirs.
+ */
+bool countsAsUnread(const ChatLogItem& item, const ToxPk& self, const ToxPk& groupSelf)
+{
+    switch (item.getContentType()) {
+    case ChatLogItem::ContentType::message:
+    case ChatLogItem::ContentType::fileTransfer:
+        return !isOwnEntry(item, self, groupSelf);
+    case ChatLogItem::ContentType::systemMessage: {
+        Air::CallEntry call;
+        return Air::callEntryOf(item.getContentAsSystemMessage(), &call)
+               && (call.outcome == Air::CallOutcome::Missed
+                   || call.outcome == Air::CallOutcome::Incoming);
+    }
+    }
+    return false;
+}
+
+/** How many entries the history reads at once while firstUnreadIdx goes back. */
+constexpr size_t unreadReadAhead = 100;
+
 } // namespace
+
+constexpr size_t ChatWidget::unreadLookBack;
+constexpr int ChatWidget::unreadSlackSecs;
 
 
 ChatWidget::ChatWidget(IChatLog& chatLog_, const Core& core_, DocumentCache& documentCache_,
@@ -328,6 +363,10 @@ ChatWidget::ChatWidget(IChatLog& chatLog_, const Core& core_, DocumentCache& doc
     connect(this, &ChatWidget::renderFinished, this, &ChatWidget::onRenderFinished);
     connect(&chatLog_, &IChatLog::itemUpdated, this, &ChatWidget::onMessageUpdated);
     connect(verticalScrollBar(), &QScrollBar::valueChanged, this, &ChatWidget::onScrollValueChanged);
+    // KHANDAQ (beta ideas 2026-11-20): a scroll of the person's own (the wheel, the keys, the bar)
+    // ends the rest on "Unread messages".
+    connect(verticalScrollBar(), &QScrollBar::actionTriggered, this,
+            [this]() { restsOnUnread = false; });
 
     auto firstChatLogIdx = clampedAdd(chatLog_.getNextIdx(), -100, chatLog_);
     renderMessages(firstChatLogIdx, chatLog_.getNextIdx());
@@ -346,6 +385,9 @@ ChatWidget::~ChatWidget()
 
     if (typingNotification)
         typingNotification->removeFromScene();
+
+    if (unreadMark)
+        unreadMark->removeFromScene();
 }
 
 void ChatWidget::clearSelection()
@@ -395,9 +437,15 @@ void ChatWidget::layout(int start, int end, qreal width)
     start = clamp<int>(start, 0, chatLineStorage->size());
     end = clamp<int>(end + 1, 0, chatLineStorage->size());
 
+    // KHANDAQ (beta ideas 2026-11-20): "Unread messages" takes its room over its entry.
+    const ChatLine* const unreadEntry = unreadEntryLine();
     for (int i = start; i < end; ++i) {
         ChatLine* l = (*chatLineStorage)[i].get();
 
+        if (l == unreadEntry) {
+            unreadMark->layout(width, QPointF(0.0, h));
+            h += unreadMark->sceneBoundingRect().height() + lineSpacing;
+        }
         l->layout(width, QPointF(0.0, h));
         if (!l->isCollapsed()) {
             h += l->sceneBoundingRect().height() + lineSpacing;
@@ -666,6 +714,7 @@ bool ChatWidget::stickToBottom() const
 
 void ChatWidget::scrollToBottom()
 {
+    restsOnUnread = false;
     updateSceneRect();
     verticalScrollBar()->setValue(verticalScrollBar()->maximum());
 }
@@ -764,9 +813,14 @@ QString ChatWidget::getSelectedText() const
 std::vector<ChatLine::Ptr> ChatWidget::spokenLines() const
 {
     std::vector<ChatLine::Ptr> spoken;
-    spoken.reserve(chatLineStorage->size());
+    spoken.reserve(chatLineStorage->size() + 1);
+    const ChatLine* const unreadEntry = unreadEntryLine();
     for (size_t i = 0; i < chatLineStorage->size(); ++i) {
         const ChatLine::Ptr& line = (*chatLineStorage)[i];
+        // KHANDAQ (beta ideas 2026-11-20): "Unread messages" is said before its entry.
+        if (line && line.get() == unreadEntry) {
+            spoken.push_back(unreadMark);
+        }
         if (line && !line->isCollapsed()) {
             spoken.push_back(line);
         }
@@ -903,6 +957,8 @@ void ChatWidget::refreshAuthorNames()
 void ChatWidget::clear()
 {
     clearSelection();
+    // KHANDAQ (beta ideas 2026-11-20): "Unread messages" goes with the entries.
+    dropUnreadMark();
 
     QVector<ChatLine::Ptr> savedLines;
 
@@ -958,6 +1014,7 @@ void ChatWidget::scrollToLine(ChatLine::Ptr line)
     if (!line.get())
         return;
 
+    restsOnUnread = false;
     updateSceneRect();
     verticalScrollBar()->setValue(line->sceneBoundingRect().top());
 }
@@ -982,6 +1039,9 @@ void ChatWidget::fontChanged(const QFont& font)
     for (ChatLine::Ptr l : *chatLineStorage) {
         l->fontChanged(font);
     }
+    if (unreadMark) {
+        unreadMark->fontChanged(font);
+    }
 }
 
 void ChatWidget::reloadTheme()
@@ -995,6 +1055,9 @@ void ChatWidget::reloadTheme()
 
     for (ChatLine::Ptr l : *chatLineStorage) {
         l->reloadTheme();
+    }
+    if (unreadMark) {
+        unreadMark->reloadTheme();
     }
 }
 
@@ -1153,8 +1216,14 @@ void ChatWidget::resizeEvent(QResizeEvent* ev)
 
     QGraphicsView::resizeEvent(ev);
 
-    if (stb)
+    // KHANDAQ (beta ideas 2026-11-20): a view that starts at "Unread messages" keeps it at the top;
+    // a layout under way goes back there as it ends.
+    if (restsOnUnread) {
+        if (!workerTimer->isActive())
+            restOnUnread();
+    } else if (stb) {
         scrollToBottom();
+    }
 
     updateBusyNotification();
 }
@@ -1223,6 +1292,11 @@ void ChatWidget::removeLines(ChatLogIdx begin, ChatLogIdx end)
         (*it)->removeFromScene();
         it = chatLineStorage->erase(it);
     }
+    // KHANDAQ (beta ideas 2026-11-20): "Unread messages" goes out of sight with its entry, until
+    // the entry is drawn again.
+    if (unreadMark && !chatLineStorage->contains(unreadIdx)) {
+        unreadMark->setVisible(false);
+    }
 
     // We need to re-layout anything that is after any line we removed. We could
     // probably be smarter and try to only re-render anything under what we
@@ -1281,8 +1355,11 @@ void ChatWidget::onWorkerTimeout()
         updateTypingNotification();
         updateMultiSelectionRect();
 
-        // scroll
-        if (workerStb)
+        // scroll; KHANDAQ (beta ideas 2026-11-20): a view that starts at "Unread messages" goes
+        // back there
+        if (restsOnUnread)
+            restOnUnread();
+        else if (workerStb)
             scrollToBottom();
         else
             scrollToLine(workerAnchorLine);
@@ -1515,7 +1592,11 @@ void ChatWidget::showEvent(QShowEvent* event)
 
 void ChatWidget::hideEvent(QHideEvent* event)
 {
-    std::ignore = event;
+    // KHANDAQ (beta ideas 2026-11-20): "Unread messages" stays while the conversation is open:
+    // another one opening takes it away; a window minimized is hidden by the system and keeps it.
+    if (!event->spontaneous()) {
+        dropUnreadMark();
+    }
     // Purge accumulated lines from the chatlog. We do not purge messages while
     // the chatlog is open because it causes flickers. When a user leaves the
     // chat we take the opportunity to remove old messages. If a user only has
@@ -1618,6 +1699,12 @@ void ChatWidget::retranslateUi()
     for (const auto& day : chatLineStorage->dateLines()) {
         if (auto* const label = qobject_cast<AirLabel*>(day.first->getContent(0))) {
             label->setText(AirStrings::dayMarkText(day.second.date(), today, locale));
+            renamed = true;
+        }
+    }
+    if (unreadMark) {
+        if (auto* const label = qobject_cast<AirLabel*>(unreadMark->getContent(0))) {
+            label->setText(AirStrings::text(AirStrings::Text::TranscriptUnread));
             renamed = true;
         }
     }
@@ -1871,7 +1958,12 @@ size_t ChatWidget::applyEntryFlags()
         const Air::RunKey key(isSelf ? QString() : item.getSender().toString(), item.getTimestamp(),
                               type == ChatLogItem::ContentType::message);
         if (type != ChatLogItem::ContentType::systemMessage) {
-            const bool shown = !notesChat && Air::startsRun(key, hasPrevious ? &previous : nullptr);
+            // KHANDAQ (beta ideas 2026-11-20): the entry under "Unread messages" names its author,
+            // as on iOS.
+            const bool underUnread = unreadMark && idx == unreadIdx;
+            const bool shown = !notesChat
+                               && (underUnread
+                                   || Air::startsRun(key, hasPrevious ? &previous : nullptr));
             if (line->setAuthorShown(shown)) {
                 moved(position);
             }
@@ -1897,7 +1989,10 @@ void ChatWidget::refreshEntries()
     const bool stickToBtm = stickToBottom();
     layout(static_cast<int>(firstMoved), static_cast<int>(chatLineStorage->size()), useableWidth());
     updateSceneRect();
-    if (stickToBtm) {
+    // KHANDAQ (beta ideas 2026-11-20): as for a photo that grew (layoutResizedLines).
+    if (restsOnUnread) {
+        restOnUnread();
+    } else if (stickToBtm) {
         scrollToBottom();
     }
     checkVisibility();
@@ -1971,7 +2066,11 @@ void ChatWidget::layoutResizedLines()
     const bool stickToBtm = stickToBottom();
     layout(static_cast<int>(first), static_cast<int>(chatLineStorage->size()), useableWidth());
     updateSceneRect();
-    if (stickToBtm) {
+    // KHANDAQ (beta ideas 2026-11-20): a photo above "Unread messages" that grew keeps the line at
+    // the top of a view that starts there.
+    if (restsOnUnread) {
+        restOnUnread();
+    } else if (stickToBtm) {
         scrollToBottom();
     }
     checkVisibility();
@@ -2097,4 +2196,113 @@ void ChatWidget::jumpToIdx(ChatLogIdx idx)
     else {
         setRenderedWindowStart(clampedAdd(idx, -windowChunkSize, chatLog));
     }
+}
+
+void ChatWidget::markUnread(int count, const QDateTime& since)
+{
+    dropUnreadMark();
+    ChatLogIdx idx{0};
+    if (!firstUnreadIdx(chatLog, core.getSelfPublicKey(), groupSelfKey, count, since, &idx)) {
+        return;
+    }
+    unreadIdx = idx;
+    unreadMark = ChatMessage::createUnreadMark(AirStrings::text(AirStrings::Text::TranscriptUnread),
+                                               documentCache, settings, style);
+    unreadMark->addToScene(scene);
+    unreadMark->visibilityChanged(true);
+    restsOnUnread = true;
+
+    if (chatLineStorage->contains(idx)) {
+        relayoutFromEntry(idx);
+        restOnUnread();
+        return;
+    }
+
+    // Drawn first, as a jump to an entry is (jumpToIdx); layout() sets the line over it.
+    unreadMark->setVisible(false);
+    renderCompletionFns.push_back([this] { restOnUnread(); });
+    if (chatLineStorage->hasIndexedMessage() && idx > chatLineStorage->lastIdx()) {
+        setRenderedWindowEnd(clampedAdd(idx, windowChunkSize, chatLog));
+    } else {
+        setRenderedWindowStart(clampedAdd(idx, -windowChunkSize, chatLog));
+    }
+}
+
+bool ChatWidget::firstUnreadIdx(const IChatLog& log, const ToxPk& self, const ToxPk& groupSelf,
+                                int count, const QDateTime& since, ChatLogIdx* idx)
+{
+    const QDateTime from = since.isValid() ? since.addSecs(-unreadSlackSecs) : QDateTime();
+    const ChatLogIdx first = log.getFirstIdx();
+    ChatLogIdx at = log.getNextIdx();
+    // The history reads what it does not hold yet from the index asked down to what it holds, so
+    // ahead in steps rather than one entry at a time.
+    ChatLogIdx readFrom = at;
+    bool found = false;
+    for (size_t looked = 0; count > 0 && at > first && looked < unreadLookBack; ++looked) {
+        at = at - 1;
+        if (at < readFrom) {
+            readFrom = at - first > unreadReadAhead ? at - unreadReadAhead : first;
+            std::ignore = log.at(readFrom);
+        }
+        if (!log.isShown(at)) {
+            continue;
+        }
+        const ChatLogItem& item = log.at(at);
+        if (from.isValid() && item.getTimestamp() < from) {
+            if (isOwnEntry(item, self, groupSelf)) {
+                // Ours come in the order they were written, and nobody relays them to us.
+                break;
+            }
+            continue;
+        }
+        if (!countsAsUnread(item, self, groupSelf)) {
+            continue;
+        }
+        *idx = at;
+        found = true;
+        --count;
+    }
+    return found;
+}
+
+ChatLine* ChatWidget::unreadEntryLine() const
+{
+    return unreadMark && chatLineStorage->contains(unreadIdx) ? (*chatLineStorage)[unreadIdx].get()
+                                                              : nullptr;
+}
+
+void ChatWidget::restOnUnread()
+{
+    restsOnUnread = unreadEntryLine() != nullptr;
+    if (!restsOnUnread) {
+        return;
+    }
+    updateSceneRect();
+    verticalScrollBar()->setValue(qRound(unreadMark->sceneBoundingRect().top()));
+}
+
+void ChatWidget::dropUnreadMark()
+{
+    restsOnUnread = false;
+    if (!unreadMark) {
+        return;
+    }
+    unreadMark->removeFromScene();
+    unreadMark.reset();
+    if (chatLineStorage->contains(unreadIdx)) {
+        relayoutFromEntry(unreadIdx);
+    }
+}
+
+void ChatWidget::relayoutFromEntry(ChatLogIdx idx)
+{
+    // Its entry names its author for the line, or by the run again once the line goes.
+    const auto entry = chatLineStorage->find(idx);
+    const size_t position = static_cast<size_t>(std::distance(chatLineStorage->begin(), entry));
+    const size_t from = std::min(applyEntryFlags(), position);
+    layout(static_cast<int>(from), static_cast<int>(chatLineStorage->size()), useableWidth());
+    updateSceneRect();
+    checkVisibility();
+    updateTypingNotification();
+    updateMultiSelectionRect();
 }

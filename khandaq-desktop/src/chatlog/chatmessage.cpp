@@ -260,6 +260,23 @@ ChatMessage::Ptr ChatMessage::createDayMark(const QString& text, DocumentCache& 
     return msg;
 }
 
+ChatMessage::Ptr ChatMessage::createUnreadMark(const QString& text, DocumentCache& documentCache,
+                                               Settings& settings, Style& style)
+{
+    ChatMessage::Ptr msg = ChatMessage::Ptr(new ChatMessage(documentCache, settings, style));
+    msg->setLayout(Layout::AirUnread);
+    // The caption of iOS in ink at weight 600; three contents, as a day mark has.
+    msg->addColumn(new AirLabel(text, AirTokens::TextRole::Caption, AirLabel::Ink::Ink,
+                                QFont::DemiBold, false),
+                   ColumnFormat());
+    for (int i = 0; i < 2; ++i) {
+        msg->addColumn(new AirLabel(QString(), AirTokens::TextRole::Caption, AirLabel::Ink::Ink3,
+                                    -1, false),
+                       ColumnFormat());
+    }
+    return msg;
+}
+
 ChatMessage::Ptr ChatMessage::createTypingNotification(DocumentCache& documentCache,
         Settings& settings, Style& style)
 {
@@ -358,6 +375,7 @@ QString ChatMessage::spokenText() const
     };
     switch (getLayout()) {
     case Layout::AirDay:
+    case Layout::AirUnread:
         return spoken(0);
     case Layout::AirEntry: {
         const auto* const mark = qobject_cast<const AirMark*>(getContent(3));

@@ -1941,24 +1941,40 @@ void Widget::openNewDialog(GenericChatroomWidget* widget)
 
 void Widget::openDialog(GenericChatroomWidget* widget, bool newWindow)
 {
+    const Friend* frnd = widget->getFriend();
+    const Group* group = widget->getGroup();
+    // KHANDAQ (beta ideas 2026-11-20): what came while the conversation was not in front, taken
+    // before its flag goes down: it opens on the first of that, under "Unread messages".
+    int unread = 0;
+    QDateTime unreadSince;
+    if (airSource) {
+        const QString entryId = frnd ? AirSource::friendEntryId(frnd->getPublicKey())
+                                     : AirSource::groupEntryId(group->getPersistentId());
+        unread = airSource->takeUnread(entryId, widget->getChat()->getEventFlag(), &unreadSince);
+    }
     widget->resetEventFlags();
     widget->updateStatusLight();
 
     GenericChatForm* form;
-    const Friend* frnd = widget->getFriend();
-    const Group* group = widget->getGroup();
     bool chatFormIsSet;
+    bool wasShown;
     if (frnd) {
         form = chatForms[frnd->getPublicKey()];
+        wasShown = form->isVisible();
         contentDialogManager->focusChat(frnd->getPersistentId());
         chatFormIsSet = contentDialogManager->chatWidgetExists(frnd->getPersistentId());
     } else {
         form = groupChatForms[group->getPersistentId()].data();
+        wasShown = form->isVisible();
         contentDialogManager->focusChat(group->getPersistentId());
         chatFormIsSet = contentDialogManager->chatWidgetExists(group->getPersistentId());
     }
 
     if ((chatFormIsSet || form->isVisible()) && !newWindow) {
+        // Its window brought it to the front.
+        if (!wasShown) {
+            form->markUnread(unread, unreadSince);
+        }
         return;
     }
 
@@ -1992,6 +2008,9 @@ void Widget::openDialog(GenericChatroomWidget* widget, bool newWindow)
         }
         widget->setAsActiveChatroom();
         setWindowTitle(widget->getTitle());
+    }
+    if (!wasShown) {
+        form->markUnread(unread, unreadSince);
     }
 }
 

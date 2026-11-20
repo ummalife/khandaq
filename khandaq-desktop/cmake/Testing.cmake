@@ -60,6 +60,8 @@ auto_test(net updatecheck "test/net/update/fixtures.qrc" "")
 auto_test(chatlog chatlinestorage "" "")
 auto_test(chatlog chatlinecontentproxy "" "")
 auto_test(chatlog airentrynotes "res/air.qrc" "") # the Plex faces
+# KHANDAQ (beta ideas 2026-11-20): where "Unread messages" stands as a conversation opens.
+auto_test(chatlog unreadmark "" "")
 auto_test(persistence paths "" "")
 auto_test(persistence dbschema "" "dbutility_library")
 auto_test(persistence/dbupgrade dbTo11 "" "dbutility_library")

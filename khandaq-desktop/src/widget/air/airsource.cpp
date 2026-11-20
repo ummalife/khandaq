@@ -215,6 +215,7 @@ void AirSource::forget(const QString& entryId)
         }
     }
     unread.remove(entryId);
+    unreadSince.remove(entryId);
     watched.erase(it);
     emit changed();
 }
@@ -382,9 +383,21 @@ int AirSource::unreadFor(const QString& entryId, bool hasEvent)
     // only says how many arrived since it went up.
     if (!hasEvent) {
         unread.remove(entryId);
+        unreadSince.remove(entryId);
         return 0;
     }
     return std::max(1, unread.value(entryId, 0));
+}
+
+int AirSource::takeUnread(const QString& entryId, bool hasEvent, QDateTime* since)
+{
+    const int count = hasEvent ? std::max(1, unread.value(entryId, 0)) : 0;
+    if (since) {
+        *since = hasEvent ? unreadSince.value(entryId) : QDateTime();
+    }
+    unread.remove(entryId);
+    unreadSince.remove(entryId);
+    return count;
 }
 
 AirSource::Conversation AirSource::read(const IChatLog& log, bool group) const
@@ -643,6 +656,9 @@ QPixmap AirSource::selfAvatar() const
 
 void AirSource::noteUnread(const QString& entryId)
 {
+    if (!unread.contains(entryId)) {
+        unreadSince.insert(entryId, QDateTime::currentDateTime());
+    }
     unread[entryId] = unread.value(entryId, 0) + 1;
     emit changed();
 }

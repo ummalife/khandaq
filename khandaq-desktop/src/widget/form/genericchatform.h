@@ -92,6 +92,12 @@ public:
                               SystemMessage::Args messageArgs);
     QString resolveToxPk(const ToxPk& pk);
     QDateTime getLatestTime() const;
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): the conversation came to the front with count entries that
+     * came while it was not there, the first at since: the transcript opens on the first of them
+     * (ChatWidget::markUnread).
+     */
+    void markUnread(int count, const QDateTime& since);
 
 signals:
     void messageInserted();

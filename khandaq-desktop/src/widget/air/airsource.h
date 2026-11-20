@@ -116,6 +116,13 @@ public:
 
     /** A message or a file arrived in a conversation that is not in front of the user. */
     void noteUnread(const QString& entryId);
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): what arrived while a conversation was not in front, as its
+     * row counts it, taken as it opens (Widget::openDialog): the count starts again from none.
+     * hasEvent is its event flag, which opening it clears: none while it is down. since, when
+     * given, takes when the first of them came.
+     */
+    int takeUnread(const QString& entryId, bool hasEvent, QDateTime* since = nullptr);
     void setTyping(const ToxPk& publicKey, bool typing);
 
 signals:
@@ -186,6 +193,8 @@ private:
     QHash<uint32_t, int> friendLinks;
     QHash<uint32_t, qint64> lastSeen;
     QHash<QString, int> unread;
+    /** KHANDAQ (beta ideas 2026-11-20): when the first of what unread counts came. */
+    QHash<QString, QDateTime> unreadSince;
     QSet<QString> typing;
     QHash<QString, QPixmap> avatars;
     QPixmap ownAvatar;

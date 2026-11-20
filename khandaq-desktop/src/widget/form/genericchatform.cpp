@@ -554,6 +554,11 @@ void GenericChatForm::show(ContentLayout* contentLayout_)
 #endif
 }
 
+void GenericChatForm::markUnread(int count, const QDateTime& since)
+{
+    chatWidget->markUnread(count, since);
+}
+
 void GenericChatForm::setAttachLimit(const QString& words)
 {
     attachLimit = words;

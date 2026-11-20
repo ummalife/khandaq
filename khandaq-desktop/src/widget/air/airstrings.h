@@ -110,6 +110,7 @@ enum class Text
     Mentioned,
     MentionsYou,
     TranscriptName,
+    TranscriptUnread,
     HintRequestSent,
     HintNoMessages,
     Typing,

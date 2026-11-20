@@ -281,6 +281,17 @@ void ChatLine::layoutAir(QPointF scenePos)
         return;
     }
 
+    // KHANDAQ (beta ideas 2026-11-20): the room iOS keeps over the entry for its unread mark, 8
+    // above the words and 4 below.
+    if (lineLayout == Layout::AirUnread) {
+        place(content[0], textStart, Space::s8, textWidth);
+        for (int i = 1; i < content.size(); ++i) {
+            content[i]->setVisible(false);
+        }
+        bbox.setHeight(Space::s8 + air.lineHeight(TextRole::Caption) + Space::s4);
+        return;
+    }
+
     const qreal top = Space::s4;
     qreal y = top;
     if (authorShown) {

@@ -4015,6 +4015,11 @@ Opening it can run a program on your computer. Links in messages come from other
         <translation>الرسائل</translation>
     </message>
     <message>
+        <source>Unread messages</source>
+        <comment>conversation: the line over the first message that came while it was not open; it opens there</comment>
+        <translation>رسائل غير مقروءة</translation>
+    </message>
+    <message>
         <source>Remove %1 from contacts?</source>
         <comment>title of the remove confirmation; %1 is the contact&apos;s name</comment>
         <translation>حذف %1 من جهات الاتصال؟</translation>

@@ -101,6 +101,29 @@ public:
     void setColorizedNames(bool enable) { colorizeNames = enable; };
     void jumpToDate(QDate date);
     void jumpToIdx(ChatLogIdx idx);
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): the conversation comes to the front with count entries that
+     * came while it was not there, the first of them at since (AirSource::takeUnread): "Unread
+     * messages" stands over the first of them and the view starts at that line rather than at the
+     * bottom, until something moves it. The line stays while the conversation is open; another one
+     * opening takes it away (hideEvent), as does a count of none.
+     */
+    void markUnread(int count, const QDateTime& since);
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): the entry "Unread messages" stands over: the count-th one
+     * back from the newest of the entries the log shows that count as unread, a text or a file of
+     * someone else or a call of theirs, and that are not older than since (by unreadSlackSecs; an
+     * invalid since leaves none out); the oldest of them when the log holds fewer. A row a member
+     * of a group relays from its history keeps the time it was sent, so it is left out, wherever it
+     * stands. Our entries carry self or, in a group, groupSelf: one of ours older than since ends
+     * the search, as does the start of the log or unreadLookBack entries read.
+     * @return Whether there is one; false for a count of none
+     */
+    static bool firstUnreadIdx(const IChatLog& log, const ToxPk& self, const ToxPk& groupSelf,
+                               int count, const QDateTime& since, ChatLogIdx* idx);
+    static constexpr size_t unreadLookBack = 1000;
+    /** An entry is written a moment before the alert that counts it notes the time. */
+    static constexpr int unreadSlackSecs = 2;
 
     /** Whether the person of a conversation with one person is online now. */
     void setPersonOnline(bool online);
@@ -234,6 +257,17 @@ private:
     bool authorNameAt(QPointF scenePos, ChatLogIdx& idx, QRectF* name = nullptr) const;
     /** The names that open a menu, set again: after our key in the group changed. */
     void refreshAuthorNames();
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): the line of the entry under "Unread messages", while it is
+     * drawn.
+     */
+    ChatLine* unreadEntryLine() const;
+    /** Puts "Unread messages" at the top of the view, as far as the log goes down. */
+    void restOnUnread();
+    /** Takes "Unread messages" away; the lines after it close up. */
+    void dropUnreadMark();
+    /** Lays out again from the entry at idx on, as its line "Unread messages" comes or goes. */
+    void relayoutFromEntry(ChatLogIdx idx);
 
 private:
     enum class SelectionMode
@@ -304,6 +338,15 @@ private:
     qint64 seenUpToMs = -1;
     QString personName;
     bool typingShown = false;
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): "Unread messages" over the entry at unreadIdx (markUnread);
+     * null when there is none. It is no line of chatLineStorage: layout() sets it over its entry
+     * whenever that one is drawn.
+     */
+    ChatLine::Ptr unreadMark;
+    ChatLogIdx unreadIdx{0};
+    /** The view starts at unreadMark until something else moves it; a layout goes back there. */
+    bool restsOnUnread = false;
     /** Lines whose file entry changed its height: laid out again on the next turn of the loop. */
     std::vector<std::weak_ptr<ChatLine>> resizedLines;
     QTimer* resizedLater = nullptr;

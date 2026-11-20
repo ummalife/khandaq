@@ -119,6 +119,23 @@ final class NgcHistoryDowngradePolicy
     }
 
     /**
+     * KHANDAQ (0.2.65, tester report "notifications for old messages") — whether a row from history is fresh enough
+     * to notify.
+     *
+     * <p>History is the backlog of a reconnect: every time the phone comes back (Doze, a change of network, a
+     * wakeup), the members hand over what it missed of the last hours, and each of those rows used to raise a
+     * notification of its own, an hour after it was written. iOS and the desktop never notify a row from history.
+     * Here a row still notifies while it is as fresh as a late live message ({@link AirBandRule#LATE_DELIVERY_MS}):
+     * history then only caught up with a message that is being sent right now. An older row is stored and counted
+     * unread without a notification, and so is a row without a send time. A send time ahead of our clock counts as
+     * fresh: the sender's clock may run ahead, and the receive window already bounds how far.
+     */
+    static boolean isRecentEnoughToNotify(final long sentAtMs, final long nowMs)
+    {
+        return sentAtMs > 0L && nowMs - sentAtMs <= AirBandRule.LATE_DELIVERY_MS;
+    }
+
+    /**
      * KHANDAQ (0.2.57, review of the desktop's Community code) — whether a history record names our own key in the
      * group as its author, so that it is dropped on every path that brings history here.
      *

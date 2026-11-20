@@ -409,11 +409,19 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
                 MessageForwarder.presentForwardPicker(for: message, from: self, sourceView: source)
             })
         }
-        actions.append(ChatContextMenuAction(title: String(localized: "chat_pin_action"), systemImageName: "pin") { [weak self] in
-            guard let self = self, let id = message.uniqueIdentifier else { return }
-            ChatPinStore.setPinned(messageId: id, forChat: self.chat.uniqueIdentifier)
-            self.refreshPinnedBanner()
-        })
+        // KHANDAQ (0.2.65, tester feedback): the pinned message offers to unpin it, as the cross on the strip does.
+        if ChatPinStore.isPinned(messageId: message.uniqueIdentifier, inChat: chat.uniqueIdentifier) {
+            actions.append(ChatContextMenuAction(title: String(localized: "air_pin_remove"), systemImageName: "pin.slash") { [weak self] in
+                self?.pinnedBannerClosePressed()
+            })
+        }
+        else {
+            actions.append(ChatContextMenuAction(title: String(localized: "chat_pin_action"), systemImageName: "pin") { [weak self] in
+                guard let self = self, let id = message.uniqueIdentifier else { return }
+                ChatPinStore.setPinned(messageId: id, forChat: self.chat.uniqueIdentifier)
+                self.refreshPinnedBanner()
+            })
+        }
         actions.append(ChatContextMenuAction(title: String(localized: "group_messages_select_action"), systemImageName: "checkmark.circle") { [weak self] in self?.chatMovableDateCellMorePressed(cell) })
         // KHANDAQ (0.2.57, SPEC-community item 5): a message or a file someone else sent can be reported.
         if !message.isOutgoing() {

@@ -1079,6 +1079,8 @@ public class AirFragment extends Fragment
     {
         switch (pillFilter)
         {
+            case ALL:
+                return R.string.air_filter_all;
             case REQUESTS:
                 return R.string.air_filter_requests;
             case TRANSIT:

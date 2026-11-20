@@ -39,8 +39,11 @@ class ChatListSwipeNavigationTest: XCTestCase {
         XCTAssertNil(ChatListSwipeNavigation.nextFilter(from: .favorites, swipingLeft: false, isRightToLeft: true))
     }
 
+    /// KHANDAQ (0.2.65, tester feedback): everything has a pill of its own, first, so the swipe walks exactly
+    /// the pills the user sees.
     func testOrderMatchesTheVisiblePills() {
         XCTAssertEqual(ChatListSwipeNavigation.order, [.all, .requests, .transit, .favorites])
-        XCTAssertEqual(Array(ChatListSwipeNavigation.order.dropFirst()), AirFilter.pills)
+        XCTAssertEqual(ChatListSwipeNavigation.order, AirFilter.pills)
+        XCTAssertEqual(AirFilter.pills.first, .all)
     }
 }

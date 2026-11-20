@@ -84,6 +84,8 @@ class ChatGroupController: PortraitChatController {
     fileprivate var incomingVideoPollTimer: Timer?
     fileprivate var incomingVideoActivityObserver: NSObjectProtocol?
     let replyController = ChatReplyController()
+    /// KHANDAQ (0.2.65): the flick toward the end edge that leaves the conversation from anywhere on it.
+    fileprivate var flickBack: ChatFlickBack?
 
     // KHANDAQ (redesign stage 3, E13): the header with the group's name, the band under it with who gets
     // a message now, the pinned strip, and the bar that takes the field's place when you may only read.
@@ -343,6 +345,7 @@ class ChatGroupController: PortraitChatController {
         // opened from the header; search waits behind its button.
         updateGroupInfoBarButton()
         installMessageToolsUI()
+        flickBack = ChatFlickBack(controller: self, view: tableView)
         chatInputView.onTextChanged = { [weak self] _ in
             self?.updateGroupComposeLimit()
         }

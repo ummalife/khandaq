@@ -177,6 +177,8 @@ class ChatPrivateController: PortraitChatController {
     fileprivate let replyController = ChatReplyController()
 
     fileprivate var tableViewTapGestureRecognizer: UITapGestureRecognizer!
+    /// KHANDAQ (0.2.65): the flick toward the end edge that leaves the conversation from anywhere on it.
+    fileprivate var flickBack: ChatFlickBack?
 
     fileprivate var tableViewToChatInputConstraint: Constraint!
     fileprivate var typingViewToChatInputConstraint: Constraint!
@@ -366,6 +368,9 @@ class ChatPrivateController: PortraitChatController {
 
         createNavigationViews()
         addFriendNotification()
+        if let tableView = tableView {
+            flickBack = ChatFlickBack(controller: self, view: tableView)
+        }
         // KHANDAQ (redesign stage 2): search waits behind the button in the header (searchButtonPressed).
         startAirConversation()
     }
@@ -1859,7 +1864,13 @@ private extension ChatPrivateController {
         if supports(#selector(ChatMovableDateCell.editMessageAction)) {
             actions.append(ChatContextMenuAction(title: String(localized: "chat_edit_action"), systemImageName: "pencil") { [weak self] in self?.chatMovableDateCellEditPressed(cell) })
         }
-        actions.append(ChatContextMenuAction(title: String(localized: "chat_pin_action"), systemImageName: "pin") { [weak self] in self?.chatMovableDateCellPinPressed(cell) })
+        // KHANDAQ (0.2.65, tester feedback): the pinned message offers to unpin it, as the cross on the strip does.
+        if ChatPinStore.isPinned(messageId: message.uniqueIdentifier, inChat: chat.uniqueIdentifier) {
+            actions.append(ChatContextMenuAction(title: String(localized: "air_pin_remove"), systemImageName: "pin.slash") { [weak self] in self?.pinnedBannerClosePressed() })
+        }
+        else {
+            actions.append(ChatContextMenuAction(title: String(localized: "chat_pin_action"), systemImageName: "pin") { [weak self] in self?.chatMovableDateCellPinPressed(cell) })
+        }
         actions.append(ChatContextMenuAction(title: String(localized: "chat_forward_action"), systemImageName: "arrowshape.turn.up.right") { [weak self] in self?.chatMovableDateCellForwardPressed(cell) })
         actions.append(ChatContextMenuAction(title: String(localized: "chat_select_action"), systemImageName: "checkmark.circle") { [weak self] in self?.chatMovableDateCellMorePressed(cell) })
         actions.append(ChatContextMenuAction(title: String(localized: "alert_delete"), systemImageName: "trash", destructive: true) { [weak self] in self?.chatMovableDateCellDeletePressed(cell) })
@@ -4193,6 +4204,14 @@ enum ChatPinStore {
 
     static func setPinned(messageId: String, forChat chatId: String) {
         UserDefaults.standard.set(messageId, forKey: key(chatId))
+    }
+
+    /// Whether this message is the one pinned in its chat: its menu then offers "Unpin" instead of "Pin".
+    static func isPinned(messageId: String?, inChat chatId: String) -> Bool {
+        guard let messageId = messageId else {
+            return false
+        }
+        return pinnedMessageId(forChat: chatId) == messageId
     }
 
     static func clearPin(forChat chatId: String) {

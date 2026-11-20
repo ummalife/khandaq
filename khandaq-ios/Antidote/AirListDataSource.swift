@@ -1219,6 +1219,8 @@ extension AirListDataSource: UITableViewDelegate {
                 return nil
             }
             var children: [UIMenuElement] = []
+            // What cannot be undone stands last: Delete, then Remove contact.
+            var destructive: [UIMenuElement] = []
 
             if let chat = chat {
                 if !chat.isSavedMessages {
@@ -1241,19 +1243,26 @@ extension AirListDataSource: UITableViewDelegate {
                     }
                     self.delegate?.airList(self, didRequestSelectionStartingAt: path)
                 })
+                // KHANDAQ (0.2.65, tester feedback): a sideways swipe on the list changes the folder, which also
+                // closes the row's swipe actions it opened, so deleting a chat has a place in this menu too.
+                destructive.append(UIAction(title: String(localized: "alert_delete"),
+                                            image: AirIcon.image("trash"),
+                                            attributes: .destructive) { [weak self] _ in
+                    self?.confirmDeleteChat(chat)
+                })
             }
 
             if let friend = friend {
                 children.append(UIAction(title: String(localized: "air_dossier_rename"), image: UIImage(systemName: "pencil")) { [weak self] _ in
                     self?.presentRename(of: friend)
                 })
-                children.append(UIAction(title: String(localized: "air_menu_remove_contact"),
-                                         image: AirIcon.image("trash"),
-                                         attributes: .destructive) { [weak self] _ in
+                destructive.append(UIAction(title: String(localized: "air_menu_remove_contact"),
+                                            image: AirIcon.image("trash"),
+                                            attributes: .destructive) { [weak self] _ in
                     self?.confirmRemoveContact(friend)
                 })
             }
-            return UIMenu(children: children)
+            return UIMenu(children: children + destructive)
         }
     }
 

@@ -101,7 +101,8 @@ Rules on top of the generated palette below:
 
 - **Phone.** No tab bar. Air on top: the "you" block (your name and how your node reaches the
   network) with Settings and Create, the command line "Find a chat or paste an ID", the pills
-  Requests, In transit, Favorites with their counts. The list: Requests, Online now, Offline, Just
+  All, Requests, In transit, Favorites with their counts (All has a pill of its own since 0.2.65:
+  without one, the list a swipe led to was a folder nobody could see). The list: Requests, Online now, Offline, Just
   for you; while searching, Messages. The conversation is a transcript without bubbles: time in its own left
   column (`time-column`), delivery marks on the right, the On its way tray above the composer. New
   contact is a bottom sheet with the ID field and its ruler. Touch targets are at least 44 pt; small
@@ -189,8 +190,13 @@ Decided while building it in the iOS client (11.11.2026); Android and desktop fo
   (below, New contact and requests).
 - **Select** is in the row menu, not in a header Edit button: the header stays the same on every
   visit. While selecting, the navigation bar shows the count and Delete.
-- **Sideways swipe on the list** moves between the filters: everything, Requests, In transit,
-  Favorites. The active pill pressed again returns to everything.
+- **Sideways swipe on the list** moves between the pills: All, Requests, In transit, Favorites.
+  The active pill pressed again returns to All. A swipe on a row also opens the row's actions, which
+  the change of filter closes again, so Delete is in the row menu as well (iOS, 0.2.65).
+- **Leaving a conversation** (iOS, 0.2.65): besides the system swipe from the edge, a flick toward
+  the end edge from anywhere on the messages goes back, as in Telegram; the other way answers a
+  message. Where the system goes back on a swipe from anywhere itself (iOS 26 and later, in its
+  design), its transition runs and the flick does nothing.
 - **At the accessibility text sizes** (stage 5) your name and the line under it stand under your tile
   at the full width of the header, with Settings and Create on the tile's row; the letters of a tile
   stop growing at the largest regular size, as the tile itself does. The pills grow with their words

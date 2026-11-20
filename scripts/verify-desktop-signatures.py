@@ -14,7 +14,9 @@ cross-checks three independent statements about the same bytes:
   * the OpenSSH signature (the trust anchor: the key that made it is published in the git
     repository, a different channel from this web server);
   * the SHA-256 in the published SHA256SUMS.txt;
-  * the SHA-256 recorded in /release-manifest.json by the deploy.
+  * the SHA-256 recorded in /release-manifest.json by the deploy;
+  * the SHA-256 and the size the signed desktop update manifest gives (the bytes every desktop app
+    installs on its own), whose signature is checked in its own namespace.
 
 Any disagreement between those three is the interesting case, and none of them can be checked by
 looking at a configuration file.
@@ -39,6 +41,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import desktop_update_manifest as update_manifest  # noqa: E402
+
 DEFAULT_BASE = "https://khandaq.org"
 IDENTITY = "releases@khandaq.org"
 NAMESPACE = "khandaq-release"
@@ -59,6 +64,76 @@ def fetch(url: str, dest: Path | None = None):
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as exc:
         failures.append(f"{url}: не скачивается ({exc})")
         return None
+
+
+def check_update_manifest(base: str, work: Path, signers_path: Path, published_sums: dict[str, str],
+                          downloaded: dict[str, tuple[str, int]]) -> None:
+    """KHANDAQ (0.2.65): the manifest the desktop app updates from must verify with the repository's
+    key in its own namespace, fail with one bit flipped, and give for every download exactly the
+    SHA-256 and size of the bytes downloaded above."""
+    global checked
+    print(f"\n  -- {update_manifest.MANIFEST_NAME}")
+    repo_manifest = Path(__file__).resolve().parent.parent / "web" / "downloads" / update_manifest.MANIFEST_NAME
+    manifest_path = work / update_manifest.MANIFEST_NAME
+    signature_path = work / update_manifest.SIGNATURE_NAME
+    request = urllib.request.Request(f"{base}/downloads/{update_manifest.MANIFEST_NAME}",
+                                     headers={"User-Agent": "khandaq-verify/1"})
+    try:
+        with urllib.request.urlopen(request, timeout=60) as resp:  # noqa: S310 - fixed https host
+            served = resp.read()
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404 and not repo_manifest.is_file():
+            print("     note: no update manifest is published, and the repository has none yet")
+            return
+        failures.append(f"{update_manifest.MANIFEST_NAME}: HTTP {exc.code}")
+        return
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        failures.append(f"{update_manifest.MANIFEST_NAME}: not downloadable ({exc})")
+        return
+    if not served:
+        failures.append(f"{update_manifest.MANIFEST_NAME}: served empty")
+        return
+    manifest_path.write_bytes(served)
+    if fetch(f"{base}/downloads/{update_manifest.SIGNATURE_NAME}", signature_path) is None:
+        failures.append(f"{update_manifest.MANIFEST_NAME}: its signature is not published")
+        return
+    good, detail = update_manifest.verify_signature(signers_path, signature_path, served)
+    if not good:
+        failures.append(f"{update_manifest.MANIFEST_NAME}: the signature does NOT verify "
+                        f"(namespace {update_manifest.NAMESPACE}): {detail or 'no detail'}")
+        return
+    print(f"     ok: {detail or 'signature verifies'} (namespace {update_manifest.NAMESPACE})")
+    checked += 1
+    tampered = bytearray(served)
+    tampered[len(tampered) // 2] ^= 0x01
+    forged, _ = update_manifest.verify_signature(signers_path, signature_path, bytes(tampered))
+    if forged:
+        failures.append(f"{update_manifest.MANIFEST_NAME}: ONE FLIPPED BIT verified, so the check "
+                        f"proves nothing")
+    else:
+        print("     ok: one flipped bit is refused")
+    try:
+        manifest = json.loads(served)
+    except ValueError as exc:
+        failures.append(f"{update_manifest.MANIFEST_NAME}: does not parse ({exc})")
+        return
+    errors = update_manifest.validate(manifest)
+    errors += update_manifest.against_sums(manifest, published_sums) if not errors else []
+    for platform, entry in sorted((manifest.get("platforms") or {}).items()):
+        got = downloaded.get(entry.get("file"))
+        if got is None:
+            errors.append(f"{platform}: {entry.get('file')} was not downloaded and checked above")
+        elif got != (entry.get("sha256"), entry.get("size")):
+            errors.append(f"{platform}: the manifest gives {str(entry.get('sha256'))[:16]}... and "
+                          f"{entry.get('size')} bytes, the download is {got[0][:16]}... and {got[1]} bytes")
+    if errors:
+        failures.extend(f"{update_manifest.MANIFEST_NAME}: {error}" for error in errors)
+    else:
+        print(f"     ok: all {len(manifest['platforms'])} entries are the downloaded bytes, "
+              f"and SHA256SUMS.txt agrees")
+        checked += 1
+    manifest_path.unlink(missing_ok=True)
+    signature_path.unlink(missing_ok=True)
 
 
 def main() -> int:
@@ -128,6 +203,7 @@ def main() -> int:
             failures.append("/release-manifest.json не разбирается как JSON")
 
     names = sorted(n for n in published_sums if not n.endswith(".sig"))
+    downloaded: dict[str, tuple[str, int]] = {}
     if not names:
         failures.append("в SHA256SUMS.txt нет ни одного артефакта")
     print(f"    артефактов к проверке: {len(names)}")
@@ -147,6 +223,7 @@ def main() -> int:
             for chunk in iter(lambda: fh.read(1 << 20), b""):
                 digest.update(chunk)
         actual = digest.hexdigest()
+        downloaded[name] = (actual, art.stat().st_size)
         size_mb = art.stat().st_size / (1 << 20)
         print(f"     {size_mb:.1f} МиБ, sha256 {actual[:16]}…")
 
@@ -202,6 +279,8 @@ def main() -> int:
         if not args.keep:
             art.unlink(missing_ok=True)
             sig.unlink(missing_ok=True)
+
+    check_update_manifest(base, work, signers_path, published_sums, downloaded)
 
     if not args.keep:
         shutil.rmtree(work, ignore_errors=True)

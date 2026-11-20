@@ -129,11 +129,17 @@ drop_stale_sig() {
   done
 }
 
+# KHANDAQ (0.2.65): the downloads the desktop app updates from that this run staged from dist/. The
+# update manifest is written from these files and nothing else, and above all never from a file
+# fetched from the server further down: the manifest tells every app which bytes to install.
+UPDATE_STAGED=()
+
 echo "==> Package desktop/mobile mirrors (optional — skip missing)"
 if [[ -d "$ROOT/dist/macos/khandaq.app" ]]; then
   rm -f "$DL/khandaq-macos.zip"
   ditto -c -k --keepParent "$ROOT/dist/macos/khandaq.app" "$DL/khandaq-macos.zip"
   drop_stale_sig khandaq-macos.zip
+  UPDATE_STAGED+=("$DL/khandaq-macos.zip")
 fi
 if [[ -f "$ROOT/dist/linux/khandaq" && -f "$ROOT/dist/linux/khandaq.bin" && -d "$ROOT/dist/linux/lib" ]]; then
   # Only ship the -portable name; the bare khandaq-linux-x86_64.tar.gz was an
@@ -143,6 +149,7 @@ if [[ -f "$ROOT/dist/linux/khandaq" && -f "$ROOT/dist/linux/khandaq.bin" && -d "
     khandaq khandaq.bin lib plugins khandaq.desktop org.khandaq.messenger.appdata.xml INSTALL.txt 2>/dev/null \
     || tar -C "$ROOT/dist/linux" -czf "$DL/khandaq-linux-x86_64-portable.tar.gz" khandaq khandaq.bin lib INSTALL.txt
   drop_stale_sig khandaq-linux-x86_64-portable.tar.gz khandaq-linux-x86_64.tar.gz
+  UPDATE_STAGED+=("$DL/khandaq-linux-x86_64-portable.tar.gz")
 fi
 # KHANDAQ (re-audit 2026-08-22, W-02 — root cause): this line used to end the deploy.
 #
@@ -159,6 +166,7 @@ if [[ -n "$DEB" && -f "$DEB" ]]; then
   DEB_VER="$(basename "$DEB" | sed -n 's/khandaq-messenger_\(.*\)_amd64\.deb/\1/p')"
   cp -f "$DEB" "$DL/khandaq-messenger_amd64.deb"
   drop_stale_sig khandaq-messenger_amd64.deb
+  UPDATE_STAGED+=("$DL/khandaq-messenger_amd64.deb")
   if [[ -n "$DEB_VER" ]]; then
     cp -f "$DEB" "$DL/khandaq-messenger_${DEB_VER}_amd64.deb"
     drop_stale_sig "khandaq-messenger_${DEB_VER}_amd64.deb"
@@ -166,7 +174,11 @@ if [[ -n "$DEB" && -f "$DEB" ]]; then
 fi
 WIN_EXE="$ROOT/dist/windows/x86_64/khandaq-windows-installer.exe"
 [[ -f "$WIN_EXE" ]] || WIN_EXE="$ROOT/dist/windows/x86_64/Khandaq-installer.exe"
-[[ -f "$WIN_EXE" ]] && { cp -f "$WIN_EXE" "$DL/khandaq-windows-installer.exe"; drop_stale_sig khandaq-windows-installer.exe; }
+if [[ -f "$WIN_EXE" ]]; then
+  cp -f "$WIN_EXE" "$DL/khandaq-windows-installer.exe"
+  drop_stale_sig khandaq-windows-installer.exe
+  UPDATE_STAGED+=("$DL/khandaq-windows-installer.exe")
+fi
 # KHANDAQ (desktop release v0.2.47): the portable zip is the Windows download the site leads with, and
 # nothing staged it: every deploy carried over the zip it found on the server, so a new Windows build
 # would have gone out as a new installer beside the old zip. CI names it khandaq-<arch>-Release.zip
@@ -176,6 +188,17 @@ WIN_ZIP="$ROOT/dist/windows/x86_64/khandaq-windows-x86_64.zip"
 if [[ -f "$WIN_ZIP" ]]; then
   cp -f "$WIN_ZIP" "$DL/khandaq-windows-x86_64.zip"
   drop_stale_sig khandaq-windows-x86_64.zip
+  UPDATE_STAGED+=("$DL/khandaq-windows-x86_64.zip")
+fi
+
+# KHANDAQ (0.2.65): the manifest the desktop app updates from, made from what was staged above. The
+# generator reads each version from the program inside the artifact and refuses a build that is not
+# the exact release tag, a QA build, and a platform going back to an older version. Platforms not
+# staged in this run keep their entry while SHA256SUMS.txt still lists the same bytes for them. A
+# manifest that changes loses its old signature, so the signer below signs it in its own namespace.
+if [[ ${#UPDATE_STAGED[@]} -gt 0 ]]; then
+  echo "==> Desktop update manifest"
+  python3 "$ROOT/scripts/generate-desktop-update-manifest.py" "${UPDATE_STAGED[@]}"
 fi
 
 # KHANDAQ (audit 2026-08-20): MERGE the checksum list, never blindly overwrite it.
@@ -194,7 +217,14 @@ fi
 # Entries computed now win; entries for artifacts not staged this run are carried over.
 ( cd "$DL" && {
     fresh="$(mktemp)"
-    shasum -a 256 khandaq-* 2>/dev/null | sort -u > "$fresh" || true
+    # KHANDAQ (0.2.65): the update manifest is not a download and has its own signature namespace;
+    # the checksum list and verify-desktop-signatures.py treat every line here as a release artifact.
+    for name in khandaq-*; do
+      case "$name" in
+        khandaq-desktop-update.json|khandaq-desktop-update.json.sig) continue ;;
+      esac
+      [[ -f "$name" ]] && shasum -a 256 "$name"
+    done 2>/dev/null | sort -u > "$fresh" || true
 
     if [[ ! -s "$fresh" && -s SHA256SUMS.txt ]]; then
       echo "    WARNING: no artifacts staged; leaving the existing SHA256SUMS.txt untouched" >&2
@@ -210,6 +240,7 @@ fi
         awk '
           function fname(s) { sub(/^[0-9a-fA-F]+[ \t]+\*?/, "", s); return s }
           NR == FNR { republished[fname($0)] = 1; next }
+          fname($0) ~ /^khandaq-desktop-update\.json/ { next }
           !(fname($0) in republished)
         ' "$fresh" SHA256SUMS.txt >> "$fresh" || true
       fi
@@ -220,6 +251,9 @@ fi
     rm -f "$fresh"
   } )
 echo "    SHA256SUMS.txt: $(wc -l < "$DL/SHA256SUMS.txt" 2>/dev/null || echo 0) entries"
+# Every SHA-256 the update manifest gives must be the one the checksum list publishes, before either
+# leaves this machine. verify-site-deploy.py checks the same over public HTTPS after the upload.
+python3 "$ROOT/scripts/generate-desktop-update-manifest.py" --check
 
 # KHANDAQ (re-audit 2026-08-22, K-05): bring down anything already published that this checkout does
 # not hold, so it is signed too.
@@ -241,6 +275,9 @@ for name in $REMOTE_FILES; do
   esac
   case "$name" in
     *.sig|*.pub) continue ;;
+    # KHANDAQ (0.2.65): the update manifest is committed with its signature and written only from
+    # artifacts built here; a copy from the server is never taken.
+    khandaq-desktop-update.json) continue ;;
   esac
   if [[ ! -f "$DL/$name" ]]; then
     echo "    fetching $name"

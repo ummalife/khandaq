@@ -216,6 +216,7 @@ void AirSource::forget(const QString& entryId)
     }
     unread.remove(entryId);
     unreadSince.remove(entryId);
+    drafts.remove(entryId);
     watched.erase(it);
     emit changed();
 }
@@ -304,6 +305,7 @@ Air::Entry AirSource::friendEntry(Friend& frnd, const IChatLog* log, qint64 nowS
             entry.previewStyle = Air::PreviewStyle::Hint;
         }
     }
+    showDraft(entry);
     if (typing.contains(key)) {
         entry.preview = AirStrings::text(Text::Typing);
         entry.previewStyle = Air::PreviewStyle::Typing;
@@ -347,6 +349,7 @@ Air::Entry AirSource::groupEntry(Group& group, const IChatLog* log, const QSet<Q
         entry.preview = AirStrings::text(Text::HintNoMessages);
         entry.previewStyle = Air::PreviewStyle::Hint;
     }
+    showDraft(entry);
     entry.mentioned = group.getMentionedFlag();
     entry.unreadCount = unreadFor(entry.id, group.getEventFlag());
     return entry;
@@ -375,6 +378,18 @@ Air::Entry AirSource::savedEntry(const QSet<QString>& favorites) const
     // A note goes nowhere, so it has no delivery to mark.
     entry.lastDelivery = Air::Delivery::None;
     return entry;
+}
+
+void AirSource::showDraft(Air::Entry& entry) const
+{
+    const QString words = drafts.value(entry.id);
+    if (words.isEmpty()) {
+        return;
+    }
+    entry.preview = AirStrings::text(Text::DraftPreview).arg(words);
+    entry.previewStyle = Air::PreviewStyle::Draft;
+    // A draft has no mark in front of it: nothing of it went anywhere.
+    entry.lastDelivery = Air::Delivery::None;
 }
 
 int AirSource::unreadFor(const QString& entryId, bool hasEvent)
@@ -661,6 +676,20 @@ void AirSource::noteUnread(const QString& entryId)
     }
     unread[entryId] = unread.value(entryId, 0) + 1;
     emit changed();
+}
+
+void AirSource::setDraft(const QString& entryId, const QString& text)
+{
+    const QString words = Air::draftWords(text);
+    if (words == drafts.value(entryId)) {
+        return;
+    }
+    if (words.isEmpty()) {
+        drafts.remove(entryId);
+    } else {
+        drafts.insert(entryId, words);
+    }
+    emit draftChanged(entryId);
 }
 
 void AirSource::setTyping(const ToxPk& publicKey, bool isTyping)

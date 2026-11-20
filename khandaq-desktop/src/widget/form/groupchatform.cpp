@@ -276,6 +276,14 @@ void GroupChatForm::setAir(AirLocal* local, AirSource* source)
     airSource = source;
     if (airSource) {
         connect(airSource, &AirSource::networkChanged, &refreshLater, QOverload<>::of(&QTimer::start));
+        // KHANDAQ (beta ideas 2026-11-20): what the field holds, typed and not sent, shows in the
+        // row as a draft; sending empties the field and with it the draft.
+        connect(msgEdit, &ChatTextEdit::textChanged, this, [this] {
+            if (airSource) {
+                airSource->setDraft(AirSource::groupEntryId(group->getPersistentId()),
+                                    msgEdit->toPlainText());
+            }
+        });
     }
     if (airLocal) {
         connect(airLocal, &AirLocal::privateLinesChanged, this,

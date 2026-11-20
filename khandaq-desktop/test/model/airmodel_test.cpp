@@ -355,6 +355,7 @@ private slots:
     void initialsTakeTheFirstLettersOfTwoWords();
     void everyAirStringExistsInEveryLanguageWithTheSameArguments();
     void aScreenReaderHearsWhatARowShows();
+    void aDraftShowsOnOneLine();
     void aScreenReaderHearsACardAMessageAndAnEntry();
 };
 
@@ -1471,6 +1472,30 @@ void TestAirModel::aScreenReaderHearsWhatARowShows()
     entry.timeText.clear();
     QCOMPARE(AirStrings::spokenRow(entry),
              QStringLiteral("Марьям Хасанова, online, Напиши, когда освободишься"));
+}
+
+/**
+ * @brief KHANDAQ (beta ideas 2026-11-20): what a row shows of a draft: its words on one line, none
+ * for a field of spaces, and no more than the row can take, never half a character.
+ */
+void TestAirModel::aDraftShowsOnOneLine()
+{
+    QCOMPARE(Air::draftWords(QString()), QString());
+    QCOMPARE(Air::draftWords(QStringLiteral(" \n\t \r\n ")), QString());
+    QCOMPARE(Air::draftWords(QStringLiteral("  Напиши,\n когда\r\n\n освободишься ")),
+             QStringLiteral("Напиши, когда освободишься"));
+
+    const QString longDraft(Air::draftWordsLimit + 50, QLatin1Char('a'));
+    QCOMPARE(Air::draftWords(longDraft), QString(Air::draftWordsLimit, QLatin1Char('a')));
+
+    // A face beyond the plane of most characters takes two code units; it is not cut between them.
+    const QString face = QString::fromUtf8("\xF0\x9F\x98\x80");
+    QCOMPARE(face.size(), 2);
+    const QString before(Air::draftWordsLimit - 1, QLatin1Char('a'));
+    const QString shown = Air::draftWords(before + face + QStringLiteral(" and more"));
+    QCOMPARE(shown, before);
+    QCOMPARE(Air::draftWords(before.left(Air::draftWordsLimit - 2) + face),
+             before.left(Air::draftWordsLimit - 2) + face);
 }
 
 void TestAirModel::aScreenReaderHearsACardAMessageAndAnEntry()

@@ -57,6 +57,8 @@ AirController::AirController(AirSource& source_, AirBand& band_, AirListView& li
     connect(settleEnd, &QTimer::timeout, this, &AirController::refresh);
 
     connect(&source, &AirSource::changed, this, &AirController::refresh);
+    // KHANDAQ (beta ideas 2026-11-20): a draft changes its row as it is typed.
+    connect(&source, &AirSource::draftChanged, this, &AirController::refresh);
     connect(&source, &AirSource::avatarChanged, &list, &AirListView::forgetAvatar);
     connect(&source, &AirSource::selfAvatarChanged, this, &AirController::updateSelf);
 

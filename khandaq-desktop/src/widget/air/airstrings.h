@@ -114,6 +114,8 @@ enum class Text
     HintRequestSent,
     HintNoMessages,
     Typing,
+    // KHANDAQ (beta ideas 2026-11-20): words typed in a conversation and not sent.
+    DraftPreview,
     FileMessage,
     RowActions,
     AddFavorite,

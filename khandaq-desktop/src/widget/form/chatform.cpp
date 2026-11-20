@@ -361,6 +361,14 @@ void ChatForm::setAir(AirSource* source, AirLocal* local)
     airLocal = local;
     if (airSource) {
         connect(airSource, &AirSource::changed, &headLater, QOverload<>::of(&QTimer::start));
+        // KHANDAQ (beta ideas 2026-11-20): what the field holds, typed and not sent, shows in the
+        // row as a draft; sending empties the field and with it the draft.
+        connect(msgEdit, &ChatTextEdit::textChanged, this, [this] {
+            if (airSource) {
+                airSource->setDraft(AirSource::friendEntryId(f->getPublicKey()),
+                                    msgEdit->toPlainText());
+            }
+        });
     }
     if (airLocal) {
         connect(airLocal, &AirLocal::changed, this, [this](const ToxPk& friendPk) {

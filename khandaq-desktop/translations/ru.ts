@@ -640,6 +640,11 @@
         <translation>печатает</translation>
     </message>
     <message>
+        <source>Draft: %1</source>
+        <comment>row preview of words typed in the conversation and not sent; %1 is the words</comment>
+        <translation>Черновик: %1</translation>
+    </message>
+    <message>
         <source>File: %1</source>
         <comment>row preview of a file, %1 is the file name</comment>
         <translation>Файл: %1</translation>

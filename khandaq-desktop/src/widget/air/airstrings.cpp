@@ -154,6 +154,7 @@ const Source sources[] = {
     {Text::HintRequestSent, QT_TRANSLATE_NOOP3("Air", "request sent", "row hint of a contact who has not answered yet")},
     {Text::HintNoMessages, QT_TRANSLATE_NOOP3("Air", "no messages yet", "row hint of a conversation without messages")},
     {Text::Typing, QT_TRANSLATE_NOOP3("Air", "typing", "row preview while the contact types")},
+    {Text::DraftPreview, QT_TRANSLATE_NOOP3("Air", "Draft: %1", "row preview of words typed in the conversation and not sent; %1 is the words")},
     {Text::FileMessage, QT_TRANSLATE_NOOP3("Air", "File: %1", "row preview of a file, %1 is the file name")},
     {Text::RowActions, QT_TRANSLATE_NOOP3("Air", "Actions", "button that opens the menu of a row")},
     {Text::AddFavorite, QT_TRANSLATE_NOOP3("Air", "Add to favorites", "row action")},

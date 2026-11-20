@@ -124,9 +124,17 @@ public:
      */
     int takeUnread(const QString& entryId, bool hasEvent, QDateTime* since = nullptr);
     void setTyping(const ToxPk& publicKey, bool typing);
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): the words in the message field of a conversation, typed and
+     * not sent. Its row shows them as a draft while there are any; they are kept in memory only,
+     * as long as the profile is open, as the field keeps them.
+     */
+    void setDraft(const QString& entryId, const QString& text);
 
 signals:
     void changed();
+    /** KHANDAQ (beta ideas 2026-11-20): the draft a row shows changed; only the list reads it. */
+    void draftChanged(const QString& entryId);
     /** The state of the node, the computer's network or the count of nodes moved. */
     void networkChanged();
     void avatarChanged(const QString& photoKey);
@@ -167,6 +175,8 @@ private:
                            const QSet<QString>& favorites);
     Air::Entry groupEntry(Group& group, const IChatLog* log, const QSet<QString>& favorites);
     Air::Entry savedEntry(const QSet<QString>& favorites) const;
+    /** A draft comes before what was said last; the person typing to us comes before it. */
+    void showDraft(Air::Entry& entry) const;
     int unreadFor(const QString& entryId, bool hasEvent);
     QString timeText(const QDateTime& when) const;
     bool networkReachable() const;
@@ -196,6 +206,8 @@ private:
     /** KHANDAQ (beta ideas 2026-11-20): when the first of what unread counts came. */
     QHash<QString, QDateTime> unreadSince;
     QSet<QString> typing;
+    /** KHANDAQ (beta ideas 2026-11-20): the words of each draft, as its row shows them. */
+    QHash<QString, QString> drafts;
     QHash<QString, QPixmap> avatars;
     QPixmap ownAvatar;
 

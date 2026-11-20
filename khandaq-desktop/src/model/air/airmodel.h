@@ -233,6 +233,16 @@ struct Entry
     bool operator!=(const Entry& other) const;
 };
 
+/** KHANDAQ (beta ideas 2026-11-20): the most of a draft a row takes; it elides by its width. */
+constexpr int draftWordsLimit = 200;
+
+/**
+ * KHANDAQ (beta ideas 2026-11-20): the words of a draft, typed in a conversation and not sent, as
+ * its row shows them after "Draft:": on one line, at most draftWordsLimit characters, no character
+ * cut in two; empty for a draft of nothing but spaces.
+ */
+QString draftWords(const QString& draft);
+
 /**
  * An incoming friend request or an invitation to a group, drawn as a card above the sections until
  * it is answered (E12).

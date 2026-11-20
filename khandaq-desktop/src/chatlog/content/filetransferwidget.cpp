@@ -132,6 +132,28 @@ QImage readPicture(const QString& path, const QSize& pixels)
     reader.setScaledSize(turned ? pixels.transposed() : pixels);
     return reader.read();
 }
+
+/**
+ * The picture at path as a square of side pixels cut from its middle, as a list shows a photo
+ * beside its name (OutgoingFileList); null when it is not to be read. Off the main thread.
+ */
+QImage squarePicture(const QString& path, int side)
+{
+    QImageReader reader(path);
+    reader.setAutoTransform(true);
+    const QSize upright = uprightSize(reader);
+    if (!upright.isValid() || upright.isEmpty()) {
+        return QImage();
+    }
+    const QImage image =
+        readPicture(path, upright.scaled(side, side, Qt::KeepAspectRatioByExpanding));
+    if (image.isNull()) {
+        return QImage();
+    }
+    const int width = qMin(side, image.width());
+    const int height = qMin(side, image.height());
+    return image.copy((image.width() - width) / 2, (image.height() - height) / 2, width, height);
+}
 } // namespace
 
 namespace FileEntryParts {
@@ -738,5 +760,124 @@ void FileTransferWidget::tellHeight()
     if (FileTransferWidget::heightForWidth(width()) != height()) {
         updateGeometry();
         emit heightChanged();
+    }
+}
+
+// ---- OutgoingFileList ----
+
+int OutgoingFileList::shownOf(int count)
+{
+    return count <= linesMax ? count : linesMax - 1;
+}
+
+OutgoingFileList::OutgoingFileList(const QStringList& paths, QWidget* parent)
+    : QWidget(parent)
+{
+    setAttribute(Qt::WA_TranslucentBackground, true);
+    auto* const column = new QVBoxLayout(this);
+    column->setContentsMargins(0, 0, 0, 0);
+    column->setSpacing(Space::s8);
+
+    const QLocale locale = Translator::locale();
+    const int shown = shownOf(paths.size());
+    // A photo is read at twice the size of its square at least, so it stays sharp on any screen.
+    const int side = qRound(Size::tileDesk * qMax<qreal>(2.0, devicePixelRatioF()));
+    QStringList said;
+    for (int i = 0; i < paths.size(); ++i) {
+        const QString path = paths.at(i);
+        const QFileInfo info(path);
+        // A file that is not there has no size to say; Send says why it does not go.
+        const QString sizeText =
+            info.isFile() ? AirStrings::byteSizeText(info.size(), locale) : QString();
+        said.append(sizeText.isEmpty()
+                        ? info.fileName()
+                        : AirStrings::text(Text::FileNameAndSize).arg(info.fileName(), sizeText));
+        if (i >= shown) {
+            continue;
+        }
+
+        // The glyph, the name and the size on one line, as a file entry has them; the square of a
+        // photo takes the place of the glyph, and every line is as tall as it, so the names align.
+        auto* const row = new QWidget(this);
+        row->setFixedHeight(Size::tileDesk);
+        auto* const rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        rowLayout->setSpacing(Space::s10);
+        Line line;
+        line.glyph = new QLabel(row);
+        line.glyph->setObjectName(QStringLiteral("fileGlyph"));
+        line.glyph->setFixedSize(Size::tileDesk, Size::tileDesk);
+        line.glyph->setAlignment(Qt::AlignCenter);
+        rowLayout->addWidget(line.glyph, 0, Qt::AlignVCenter);
+        if (previewFormat(path)) {
+            line.glyph->hide();
+            line.picture = new Preview(row);
+            line.picture->setObjectName(QStringLiteral("filePicture"));
+            line.picture->setFixedSize(Size::tileDesk, Size::tileDesk);
+            // Nothing opens from here.
+            line.picture->setCursor(Qt::ArrowCursor);
+            rowLayout->addWidget(line.picture, 0, Qt::AlignVCenter);
+
+            auto* const loading = new QFutureWatcher<QImage>(this);
+            Preview* const picture = line.picture;
+            QLabel* const glyph = line.glyph;
+            connect(loading, &QFutureWatcher<QImage>::finished, this, [loading, picture, glyph] {
+                const QImage image = loading->result();
+                loading->deleteLater();
+                if (image.isNull()) {
+                    // Not a picture after all: the glyph of a file stands in its place.
+                    picture->hide();
+                    glyph->show();
+                    return;
+                }
+                picture->setPicture(image);
+            });
+            loading->setFuture(
+                QtConcurrent::run([path, side]() { return squarePicture(path, side); }));
+        }
+        auto* const name = new Name(row);
+        name->setText(info.fileName());
+        rowLayout->addWidget(name, 1, Qt::AlignVCenter);
+        line.size = new QLabel(row);
+        line.size->setTextFormat(Qt::PlainText);
+        line.size->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+        line.size->setText(sizeText);
+        rowLayout->addWidget(line.size, 0, Qt::AlignVCenter);
+        column->addWidget(row);
+        lines.append(line);
+    }
+    if (shown < paths.size()) {
+        more = new QLabel(this);
+        more->setObjectName(QStringLiteral("filesMore"));
+        more->setTextFormat(Qt::PlainText);
+        more->setText(AirStrings::text(Text::FilesSendMore, paths.size() - shown));
+        column->addWidget(more);
+    }
+    spoken = said.join(QLatin1Char('\n'));
+    setAccessibleName(spoken);
+
+    connect(&AirStyle::instance(), &AirStyle::changed, this, &OutgoingFileList::restyle);
+    restyle();
+}
+
+OutgoingFileList::~OutgoingFileList() = default;
+
+QString OutgoingFileList::spokenText() const
+{
+    return spoken;
+}
+
+void OutgoingFileList::restyle()
+{
+    const QPixmap glyph = air().icon(QStringLiteral("file"), air().color(Color::Ink2), Size::icon,
+                                     devicePixelRatioF());
+    for (const Line& line : lines) {
+        line.glyph->setPixmap(glyph);
+        line.size->setFont(air().font(TextRole::Caption));
+        AirPaint::textColor(line.size, air().color(Color::Ink3));
+    }
+    if (more) {
+        more->setFont(air().font(TextRole::Caption));
+        AirPaint::textColor(more, air().color(Color::Ink3));
     }
 }

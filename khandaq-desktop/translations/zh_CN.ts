@@ -2343,6 +2343,20 @@
         <comment>why a file was not sent to a group</comment>
         <translation>当前未连接到群组，连接后请重试。</translation>
     </message>
+    <message numerus="yes">
+        <source>Send %n file(s)?</source>
+        <comment>dialog before files go: the title; the files are listed under it, then Cancel and Send</comment>
+        <translation>
+            <numerusform>发送 %n 个文件？</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n more file(s)</source>
+        <comment>dialog before files go: under the files listed, how many more go with them</comment>
+        <translation>
+            <numerusform>还有 %n 个文件</numerusform>
+        </translation>
+    </message>
     <message>
         <source>Voice message</source>
         <comment>the name a voice note shows and a screen reader says</comment>

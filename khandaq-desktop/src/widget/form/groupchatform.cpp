@@ -746,12 +746,20 @@ void GroupChatForm::onAttachClicked()
 {
     const QStringList paths = QFileDialog::getOpenFileNames(window(), tr("Send a file"),
                                                             QDir::homePath(), QString(), nullptr);
-    sendFilesToGroup(paths);
+    askToSendFiles(paths);
 }
 
 void GroupChatForm::onPasteFiles(const QStringList& paths)
 {
-    sendFilesToGroup(paths);
+    askToSendFiles(paths);
+}
+
+void GroupChatForm::askToSendFiles(const QStringList& paths)
+{
+    if (right != Air::ComposeRight::Write) {
+        return;
+    }
+    offerFiles(paths);
 }
 
 void GroupChatForm::sendPreparedFiles(const QStringList& paths)
@@ -909,7 +917,8 @@ void GroupChatForm::dragEnterEvent(QDragEnterEvent* ev)
             return;
         }
         for (const QUrl& url : ev->mimeData()->urls()) {
-            if (url.isLocalFile()) {
+            // A file, or a web address for the field (beta ideas 2026-11-20).
+            if (url.isValid()) {
                 ev->acceptProposedAction();
                 return;
             }
@@ -929,13 +938,21 @@ void GroupChatForm::dropEvent(QDropEvent* ev)
 {
     if (ev->mimeData()->hasUrls()) {
         QStringList paths;
+        QStringList addresses;
         for (const QUrl& url : ev->mimeData()->urls()) {
             if (url.isLocalFile()) {
                 paths.append(url.toLocalFile());
+            } else if (url.isValid()) {
+                // KHANDAQ (beta ideas 2026-11-20): a web address goes into the field, as in a
+                // chat with a person.
+                addresses.append(url.toString());
             }
         }
-        if (!paths.isEmpty()) {
-            sendFilesToGroup(paths);
+        if (!paths.isEmpty() || !addresses.isEmpty()) {
+            if (right == Air::ComposeRight::Write) {
+                putAddressesInField(addresses);
+            }
+            askToSendFiles(paths);
             return;
         }
     }

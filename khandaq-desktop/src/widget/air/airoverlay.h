@@ -53,7 +53,7 @@ public:
 
     /**
      * Asks over the window of anchor. The verb runs onConfirm and closes; Cancel, Esc or a click on
-     * the dimmed window close without it.
+     * the dimmed window close without it. An empty message takes no line.
      */
     static AirDialog* confirm(QWidget* anchor, const QString& title, const QString& message,
                               const QString& verb, Verb kind, std::function<void()> onConfirm);
@@ -71,6 +71,12 @@ public:
      * onChoice and closes the dialog.
      */
     void addChoice(const QString& text, std::function<void()> onChoice);
+
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): what the question is about, under its words: the files a
+     * dialog lists before they are sent. The dialog takes content.
+     */
+    void setContent(QWidget* content);
 
     ~AirDialog() override;
 

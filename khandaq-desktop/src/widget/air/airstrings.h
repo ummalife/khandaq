@@ -461,6 +461,9 @@ enum class Text
     FileUnreadable,
     FileNotWritable,
     FileGroupNotConnected,
+    // The dialog before files are sent (beta ideas 2026-11-20).
+    FilesSendTitle,
+    FilesSendMore,
     VoiceNote,
     VoiceTooShort,
     VoiceNoMicrophone,

@@ -23,6 +23,7 @@
 #include <QElapsedTimer>
 #include <QFutureWatcher>
 #include <QImage>
+#include <QStringList>
 #include <QVector>
 #include <QWidget>
 
@@ -148,4 +149,41 @@ private:
     QString voicePath;
     /** Listen was pressed for the voice note before it was here: it plays when it comes. */
     bool playWhenHere = false;
+};
+
+/**
+ * KHANDAQ (beta ideas 2026-11-20): the files a dialog lists before they are sent
+ * (GenericChatForm::offerFiles), each on the line of a file entry: the glyph, or the picture of a
+ * photo, then the name and the size. Of many files the first ones show, then how many more.
+ */
+class OutgoingFileList final : public QWidget
+{
+    Q_OBJECT
+
+public:
+    /** The lines the list takes at most, the one that counts the rest included. */
+    static constexpr int linesMax = 5;
+    /** How many of count files show on a line of their own: never one alone counted. */
+    static int shownOf(int count);
+
+    explicit OutgoingFileList(const QStringList& paths, QWidget* parent = nullptr);
+    ~OutgoingFileList() override;
+
+    /** What a screen reader says for the list: the name and the size of every file. */
+    QString spokenText() const;
+
+private:
+    void restyle();
+
+    struct Line
+    {
+        /** The glyph of a file; also of a photo whose picture does not come. */
+        QLabel* glyph = nullptr;
+        /** The picture of a photo, read off the main thread; none for other files. */
+        FileEntryParts::Preview* picture = nullptr;
+        QLabel* size = nullptr;
+    };
+    QVector<Line> lines;
+    QLabel* more = nullptr;
+    QString spoken;
 };

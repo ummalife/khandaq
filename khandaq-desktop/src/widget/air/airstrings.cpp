@@ -501,6 +501,8 @@ const Source sources[] = {
     {Text::FileUnreadable, QT_TRANSLATE_NOOP3("Air", "%1 could not be read. Check that the file is still there and can be opened.", "why a file was not sent: %1 the file name")},
     {Text::FileNotWritable, QT_TRANSLATE_NOOP3("Air", "This folder cannot be written to. Choose another one.", "why a received file could not be saved")},
     {Text::FileGroupNotConnected, QT_TRANSLATE_NOOP3("Air", "The group is not connected right now. Try again once it is.", "why a file was not sent to a group")},
+    {Text::FilesSendTitle, QT_TRANSLATE_N_NOOP3("Air", "Send %n file(s)?", "dialog before files go: the title; the files are listed under it, then Cancel and Send"), true},
+    {Text::FilesSendMore, QT_TRANSLATE_N_NOOP3("Air", "%n more file(s)", "dialog before files go: under the files listed, how many more go with them"), true},
     {Text::VoiceNote, QT_TRANSLATE_NOOP3("Air", "Voice message", "the name a voice note shows and a screen reader says")},
     {Text::VoiceTooShort, QT_TRANSLATE_NOOP3("Air", "Too short: a voice message lasts at least a second", "toast when a voice message was shorter than a second")},
     {Text::VoiceNoMicrophone, QT_TRANSLATE_NOOP3("Air", "No microphone: check that one is connected", "toast when no microphone could be opened for a voice message")},

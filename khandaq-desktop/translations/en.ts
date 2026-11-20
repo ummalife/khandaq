@@ -178,6 +178,22 @@
             <numerusform>%n messages from %1</numerusform>
         </translation>
     </message>
+    <message numerus="yes">
+        <source>Send %n file(s)?</source>
+        <comment>dialog before files go: the title; the files are listed under it, then Cancel and Send</comment>
+        <translation>
+            <numerusform>Send %n file?</numerusform>
+            <numerusform>Send %n files?</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n more file(s)</source>
+        <comment>dialog before files go: under the files listed, how many more go with them</comment>
+        <translation>
+            <numerusform>%n more file</numerusform>
+            <numerusform>%n more files</numerusform>
+        </translation>
+    </message>
 </context>
 <context>
     <name>GroupWidget</name>

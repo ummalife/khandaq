@@ -102,7 +102,10 @@ signals:
 private slots:
     void onScreenshotClicked() override;
     void onAttachClicked() override;
-    /** KHANDAQ (0.2.60): files pasted into the field go to the group (they were dropped). */
+    /**
+     * KHANDAQ (0.2.60): files pasted into the field go to the group (they were dropped), once
+     * Send is pressed over their list (beta ideas 2026-11-20).
+     */
     void onPasteFiles(const QStringList& paths) override;
     void onMicMuteToggle();
     void onVolMuteToggle();
@@ -175,6 +178,11 @@ private:
     void joinGroupCall();
     void leaveGroupCall();
     void sendFilesToGroup(const QStringList& paths);
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): files chosen, pasted or dropped are listed in a dialog and
+     * go on Send (offerFiles); who may not write is not asked, as no file of theirs goes.
+     */
+    void askToSendFiles(const QStringList& paths);
     QByteArray compressImageForGroup(const QString& path, QString* sendName) const;
 
 private:

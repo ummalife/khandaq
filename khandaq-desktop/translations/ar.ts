@@ -2443,6 +2443,30 @@
         <comment>why a file was not sent to a group</comment>
         <translation>لا اتصال بالمجموعة الآن. حاول مرة أخرى عند عودة الاتصال.</translation>
     </message>
+    <message numerus="yes">
+        <source>Send %n file(s)?</source>
+        <comment>dialog before files go: the title; the files are listed under it, then Cancel and Send</comment>
+        <translation>
+            <numerusform>إرسال %n ملف؟</numerusform>
+            <numerusform>إرسال ملف واحد؟</numerusform>
+            <numerusform>إرسال ملفين؟</numerusform>
+            <numerusform>إرسال %n ملفات؟</numerusform>
+            <numerusform>إرسال %n ملفًا؟</numerusform>
+            <numerusform>إرسال %n ملف؟</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n more file(s)</source>
+        <comment>dialog before files go: under the files listed, how many more go with them</comment>
+        <translation>
+            <numerusform>%n ملف آخر</numerusform>
+            <numerusform>ملف آخر</numerusform>
+            <numerusform>ملفان آخران</numerusform>
+            <numerusform>%n ملفات أخرى</numerusform>
+            <numerusform>%n ملفًا آخر</numerusform>
+            <numerusform>%n ملف آخر</numerusform>
+        </translation>
+    </message>
     <message>
         <source>Voice message</source>
         <comment>the name a voice note shows and a screen reader says</comment>

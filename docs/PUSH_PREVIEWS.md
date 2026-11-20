@@ -261,7 +261,7 @@ The set goes with the friend (deleted or blocked), as the presence set does. A f
 from another, and it has not said it handles a group message preview.
 
 **Who is woken.** When this device sends a message to group G (a text when `tox_group_send_message`
-returns its id, or at once when it has to wait, below; a file when its first offer goes out), it
+returns its id, a file when its first offer goes out, either one at once when it has to wait, below), it
 takes each member key it knows in G (the members there now and the saved ones, not a key that has
 left), computes the presence hash of G and that key, and wakes contact C when all of these hold:
 
@@ -293,13 +293,22 @@ sender's key in G. When the text goes later, nobody is woken for it again. A wak
 that moment (the sender's device has no internet) is not tried again: the text reaches the members by
 Tox when one is there together with the sender, as before 0.2.69.
 
+**A file that waits.** A file that has nobody to go to (nobody else connected in G, or G not
+connected) waits on the sender's device the same way (Android `NgcGroupFileTransfer.waitForMember`,
+iOS the pending branch of `-sendFileAtPath:toChat:moveToUploads:successBlock:failureBlock:`), and wakes
+as it begins to wait. Its hash is known from the start, so its preview carries `h` = `gf:` as at a
+first offer. A file wakes once per run of the app: its first offer, when a member is there, wakes
+nobody again. A file that waited across a restart of the app may wake again at its first offer, and
+the recipient knows it by its event key.
+
 No wake goes for:
 
 * a private message to one member;
 * an edit;
 * a row brought by history sync;
 * a text that waited, when it finally goes: it woke when it began to wait. A text queued by a client
-  before 0.2.69 wakes nobody.
+  before 0.2.69 wakes nobody;
+* a file that waited, at its first offer in the same run: it woke when it began to wait.
 
 **The recipient** shows it as any group preview: title `g`, body `n: ` + the body. Android drops it, as
 it drops any preview, when the group is muted, notifications are off or the group is on screen. A group

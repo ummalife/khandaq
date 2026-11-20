@@ -80,14 +80,40 @@ presses Update. What it rests on (details in [docs/DESKTOP-SIGNING.md](docs/DESK
   not what the app trusts: a forged certificate or a taken-over web server yields a manifest the app
   refuses.
 - A download is used only if its size and SHA-256 are the signed ones. A version is offered only if
-  it is newer than the running one and not lower than the highest verified version seen before, so
-  an old signed manifest served again takes nobody back.
+  it is newer than the running one and not lower than the highest verified version seen before for
+  that kind of download. Each manifest carries a serial, higher in every one the release writes, and
+  the app refuses a manifest with a lower serial than the highest it has verified: an old signed
+  manifest served again takes nobody back, and is refused even where it names a version offered
+  before with other bytes.
 - No new version is downloaded or run without that click. The Windows installer asks for elevation;
   a portable Windows folder and a macOS bundle are swapped by a script that puts the old copy back
-  if any step fails; Linux keeps the verified file and shows what to do with it.
+  if any step fails; Linux keeps the verified file and shows what to do with it. When a portable
+  Windows folder cannot be put back whole (a file held by a virus scanner or a sync client), the
+  script deletes nothing: it leaves the folders beside the copy and opens a note that names them.
 
 A way around any of these (a signature that should fail and passes, a downgrade, the app running a
 file it has not verified) is in scope.
+
+Known limits, out of scope as they stand:
+
+- **No expiry.** A manifest has no date after which the app stops believing it; one would mean
+  signing it again on a schedule, without a release. Whoever controls what an app receives from
+  khandaq.org (the web server, a stale cache) can go on serving the newest manifest that app has
+  verified, and the app then hears of no release published since. It installs nothing unsigned, and
+  a manifest older than one it has verified is refused. An app that has never verified one takes the
+  first signed manifest it gets, an old one included, and is offered only versions newer than its
+  own.
+- **A site rollback** (`deploy-site.sh --rollback`) brings back an older manifest. Apps that
+  verified a newer one refuse it until the next release publishes a higher serial.
+- **Between the check and the start of the Windows installer.** The app verifies the installer's
+  SHA-256 through a handle that keeps it from being written, replaced or renamed, but Windows opens
+  it by its path again to run it elevated. A process that already runs as the person and controls a
+  folder on that path (a junction in the app's cache folder, where the download goes, put there
+  before it) can point the path at another file between the check and the start, and have that file run elevated once the
+  person approves the prompt they expect for the update. Before elevation there is no folder the
+  person can write and such a process cannot, so the app has nowhere safer to put the file. UAC is
+  no boundary against a process of the same person, and the installer is not Authenticode-signed
+  yet, so the prompt names no publisher to tell the two files apart.
 
 ## Firebase client keys (Android)
 

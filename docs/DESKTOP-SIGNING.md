@@ -97,33 +97,56 @@ the key compiled into the app. TLS carries it; it is not what the app trusts.
 
 **What it says.** For each desktop download (`windows-x86_64-installer`, `windows-x86_64-zip`,
 `macos-zip`, `linux-deb-amd64`, `linux-portable-x86_64`): the version inside it, the file, its size
-and its SHA-256, plus the changelog pages in English and Russian. The app downloads the file only
-after the click, refuses anything larger than the size or with another SHA-256, and never offers a
-version lower than one a verified manifest has already shown it, so an old signed manifest served
-again takes nobody back.
+and its SHA-256, plus the changelog pages in English and Russian, and a `serial`: the UTC time the
+generator wrote it, in seconds, always above the serial of the manifest before. The app downloads
+the file only after the click, refuses anything larger than the size or with another SHA-256, never
+offers a version lower than one a verified manifest has already shown it for that kind of download,
+and refuses a manifest with a lower serial than the highest it has verified. So an old signed
+manifest served again takes nobody back, and is refused outright, even where it names a version
+offered before with other bytes. What the serial cannot do is tell the newest manifest an app has
+seen from one published since: there is no expiry date, which would mean signing the manifest again
+on a schedule, without a release ([SECURITY.md](../SECURITY.md) has the limit).
 
 **How it is made.** `scripts/deploy-site.sh` runs `scripts/generate-desktop-update-manifest.py` on
 the downloads it has just staged from `dist/`, never on a file fetched from the server. The version
 of each entry is read from the program inside the artifact (the `GIT_DESCRIBE` string the build
-compiled in), so a build that is not the exact release tag (`v0.2.65-3-gabc1234` or `Nightly`) and a QA
-build are refused. The installer's version resource (`VERSION` in `qtox64.nsi`) is believed only
-when the zip of the same build is staged too and agrees. A platform not staged in that run keeps its
-entry while `SHA256SUMS.txt` still lists the same bytes, and no platform goes back to an older
-version. A changed manifest loses its old signature, and `scripts/sign-desktop-artifacts.sh` signs
-it with the release key in the namespace `khandaq-desktop-update`, which the app verifies and no
-artifact signature (`khandaq-release`) can pass for. The manifest and its signature are committed
+compiled in), so a build that is not the exact release tag (`v0.2.65-3-gabc1234` or `Nightly`), one
+from a tree with changes nobody committed (`v0.2.65-dirty`: every build describes itself with
+`git describe --dirty`) and a QA build are refused. The installer is unpacked with 7-Zip (`7zz` or
+`7z`, held to the NSIS format), and the `bin/Khandaq.exe` it would install must be byte for byte the
+`Khandaq.exe` of the zip staged with it, so that both come from one build; its version resource
+(`VERSION` in `qtox64.nsi`) must agree too. Without 7-Zip on the release machine the installer is
+refused. A platform not staged in that run keeps its entry while `SHA256SUMS.txt` still lists the
+same bytes, and no platform goes back to an older version. A changed manifest gets a higher serial
+and loses its old signature, and `scripts/sign-desktop-artifacts.sh` signs it with the release key in
+the namespace `khandaq-desktop-update`, which the app verifies and no artifact signature
+(`khandaq-release`) can pass for; written again with nothing changed, it keeps its serial, its bytes
+and its signature. The manifest and its signature are committed
 with the other `.sig` files and `SHA256SUMS.txt` in the post-release site PR; the manifest is not
 listed in `SHA256SUMS.txt`, which lists downloads.
 
+**How it goes up.** Only a deploy that staged a desktop download from `dist/`, and so wrote the
+manifest, uploads it. Any other deploy leaves the live manifest as it is: the copy committed in the
+checkout can be older than the one live, and putting it back would hold the apps on an older
+release. The downloads go up first, and an error in any of them stops the deploy; the manifest goes
+up last, its signature and then itself, each renamed into place. A rollback
+(`deploy-site.sh --rollback`) brings back the snapshot's manifest, which apps that verified a newer
+one refuse until the next release publishes a higher serial.
+
 **How it is checked.**
 
-- Before the upload, `generate-desktop-update-manifest.py --check`: every SHA-256 in it is the one
-  `SHA256SUMS.txt` gives for that file, and the file is in the form the generator writes.
+- Before the upload, once the deploy has fetched from the server the downloads it did not stage,
+  `generate-desktop-update-manifest.py --check --with-downloads`: every SHA-256 in it is the one
+  `SHA256SUMS.txt` gives for that file, every download it names is there as those bytes, and the
+  file is in the form the generator writes. Then `--against-live`, with the live manifest copied
+  over ssh for this comparison and nothing else: a lower serial than the live one, a platform at a
+  lower version or missing, or the live serial with other content stop the deploy.
 - After the upload, `scripts/verify-site-deploy.py` over public HTTPS: the signature verifies with
   `allowed_signers` from this repository (not from the site), a copy with one bit flipped does not,
   every SHA-256 matches the published `SHA256SUMS.txt`, and every download is served at the size
-  the manifest gives. `scripts/verify-desktop-signatures.py` downloads everything and compares the
-  manifest with the bytes themselves.
+  the manifest gives; after a deploy that left the manifest as it was, `--kept-update-manifest`
+  lets it differ from the checkout's copy. `scripts/verify-desktop-signatures.py` downloads
+  everything and compares the manifest with the bytes themselves.
 - On every pull request: `scripts/check-desktop-update-key.py` (the key in the app is
   `KHANDAQ-RELEASE-SIGNING.pub`, the app and the scripts agree on names, schema, namespace and
   files, every release build script has `UPDATE_CHECK=ON` and `UPDATE_CHECK_QA=OFF`), the generator's
@@ -161,7 +184,8 @@ its name, and the generator refuses any program that does.
 ```
 ssh-keygen -t ed25519 -N "" -f /tmp/qa/key            # throwaway, never the release key
 # /tmp/qa/site/: the download to offer, and a manifest written for it (its size and
-# `shasum -a 256`, a version above the build's own)
+# `shasum -a 256`, a version above the build's own, and a serial above any this copy has
+# verified, such as `date -u +%s`)
 ssh-keygen -Y sign -f /tmp/qa/key -n khandaq-desktop-update /tmp/qa/site/khandaq-desktop-update.json
 python3 -m http.server 8123 --bind 127.0.0.1 --directory /tmp/qa/site
 KHANDAQ_UPDATE_MANIFEST_URL=http://127.0.0.1:8123/khandaq-desktop-update.json ./khandaq

@@ -276,7 +276,9 @@ Three seconds later conditions 2 and 3 are checked again, then **one** wake goes
 * `gid` the group's chat id;
 * `h` the group text or group file event key.
 
-No retries: C's app brings the message by the group's history sync when it connects.
+No retries: C's app brings the message by the group's history sync when it connects. Each toxcore
+message is one message here: a long text that goes in several parts wakes once per part, each part
+with its own event key.
 
 No wake goes for:
 
@@ -288,7 +290,9 @@ No wake goes for:
 **The recipient** shows it as any group preview: title `g`, body `n: ` + the body. Android drops it, as
 it drops any preview, when the group is muted, notifications are off or the group is on screen. A group
 message that arrives over Tox computes the same event key, and the app skips its own alert when a push
-already showed that key, as for a direct message. A row from history sync stays silent (0.2.65).
+already showed that key, as for a direct message. That holds for a row the history sync brings as well,
+where a client still alerts for one that is recent enough (Android); the others keep such rows silent
+(0.2.65).
 
 **Khandaq Community** follows the same rules: a contact who writes there wakes the contacts who have the
 Community's notifications on. A member who is not a contact of the writer is not woken.

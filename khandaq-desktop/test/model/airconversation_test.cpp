@@ -979,7 +979,7 @@ void TestAirConversation::everyPluralTextAgreesWithItsNumberInEveryLanguage()
             plurals.append(text);
         }
     }
-    QCOMPARE(plurals.size(), 18);
+    QCOMPARE(plurals.size(), 20);
 
     using Pairs = QVector<QPair<int, int>>;
     struct Language

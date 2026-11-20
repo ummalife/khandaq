@@ -1,0 +1,77 @@
+{
+  "version": "0.2.68",
+  "date": "2026-11-20",
+  "title": "Ideas from the testers on the desktop: read receipts off, files that wait for Send",
+  "summary": "The desktop part of the first batch of ideas from the testers' group; the phones got theirs in 0.2.67. Read receipts can be turned off. Files you pick, paste or drop wait for Send. A chat opens at the first message you have not read, under the line “Unread messages”. A chat with words typed and not sent shows them as a draft in the list, a new profile can take a photo on its first screen, and on a Mac tox: links and .tox profile files reach the app.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "Read receipts can be turned off",
+      "description": "Settings › Privacy has “Send read receipts” under “Show that I'm typing”. It is on until you turn it off. With it off, your contacts don't see that you have read their messages; you still see that they have read yours.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Files wait for Send",
+      "description": "Files you pick with the paperclip, paste or drop are listed first, with a thumbnail for photos, the name and the size. Enter sends them, Esc or Cancel keeps them back, in chats and in groups. A web address dropped on a conversation goes into the field instead of being sent.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Chats open at “Unread messages”",
+      "description": "A chat or a group that got messages while it was not in front opens at the first of them, under the line “Unread messages”. The line stays while the conversation is open.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "A photo for a new profile",
+      "description": "The first screen of a new profile, where you choose your name, has an optional photo tile, with the same picker as You › photo.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "tox: links on macOS",
+      "description": "A tox: link or a .tox profile file opened on a Mac now reaches the app, also the one it is started with.",
+      "platforms": [
+        "macos"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "Drafts in the list",
+      "description": "A chat with words typed and not sent shows “Draft:” and the words in the list, until you send them, clear the field or close the app.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "The day strip says its hours are hours online",
+      "description": "The hint beside a contact's day strip now says what its hours are: “online in the past day: 7:00 to 9:00”, “usually online 19:00 to 22:00”.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ]
+    }
+  ]
+}

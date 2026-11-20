@@ -689,6 +689,13 @@
 - (uint32_t)groupOfflinePeerCountForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
 
 /**
+ * KHANDAQ (0.2.69, group message wakes): the keys (64 uppercase hex) of the members toxcore saved for the group and
+ * does not list as peers now. A member stays saved after it leaves.
+ */
+- (nonnull NSArray<NSString *> *)groupSavedPeerPublicKeyHexesForGroupNumber:(OCTToxGroupNumber)groupNumber
+                                                                       error:(NSError *_Nullable *_Nullable)error;
+
+/**
  * Returns array of dictionaries with keys @"peerId" (NSNumber), @"name" (NSString), @"role" (NSNumber/OCTToxGroupRole).
  */
 - (NSArray<NSDictionary *> *)groupPeersForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;

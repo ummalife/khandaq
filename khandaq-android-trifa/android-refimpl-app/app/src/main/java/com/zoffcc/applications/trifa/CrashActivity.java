@@ -22,8 +22,6 @@ package com.zoffcc.applications.trifa;
 import org.khandaq.messenger.KhandaqSupport;
 import org.khandaq.messenger.R;
 
-import android.app.AlarmManager;
-import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -284,11 +282,13 @@ public class CrashActivity extends AppCompatActivity implements Logging.AsyncRes
 
     public void restart_app()
     {
-        PendingIntent intent = PendingIntent.getActivity(getBaseContext(), 0, new Intent(getApplicationContext(),
-                                                                                         com.zoffcc.applications.trifa.StartMainActivityWrapper.class),
-                                                         PendingIntent.FLAG_CANCEL_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-        AlarmManager mgr = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
-        mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 300, intent); // restart app after n seconds delay
+        // KHANDAQ (beta 2026-11-20): started from this screen while it is in front. It was an alarm 300 ms later,
+        // which fired after finish(), when the app had no window left: Android 14 and later refuse such a start
+        // from the background ("Abort background activity starts"), so the tap closed this screen and the app
+        // did not come back.
+        final Intent intent = new Intent(getApplicationContext(), StartMainActivityWrapper.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
     }
 
     @Override

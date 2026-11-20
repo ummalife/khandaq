@@ -22,7 +22,6 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import android.util.Log;
 import android.widget.TextView;
@@ -31,18 +30,19 @@ import com.zoffcc.applications.logging.Logging;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
+import androidx.core.content.FileProvider;
 import androidx.core.text.BidiFormatter;
 import androidx.core.text.TextDirectionHeuristicsCompat;
 import androidx.core.view.ViewCompat;
 
 import static com.zoffcc.applications.trifa.HelperGeneric.display_toast_with_context;
 import static com.zoffcc.applications.trifa.HelperGeneric.get_trifa_build_str;
-import static com.zoffcc.applications.trifa.MainActivity.main_activity_s;
 
 /**
  * Settings > About (E18). Since redesign stage 5 it is drawn as the other sections of Settings, in the
@@ -333,16 +333,27 @@ public class Aboutpage extends AirScreenActivity implements Logging.AsyncRespons
                         MainApplication.last_stack_trace_as_string;
         MainApplication.last_stack_trace_as_string = "";
 
-        String DATA_DEBUG_DIR = new File(Environment.getExternalStorageDirectory().getAbsolutePath() +
-                                         "/trifa/crashes").toString();
-
-        String date = new SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.GERMAN).format(new Date());
-        String full_file_name = DATA_DEBUG_DIR + "/crash_" + date + ".txt";
-        String full_file_name_suppl = DATA_DEBUG_DIR + "/crash_single.txt";
-        String feedback_text = "If there is no file attached, please attach:\n" + full_file_name +
-                               "\nto this email.";
-
-        Logging.writeToFile(output, Aboutpage.this, full_file_name);
+        // KHANDAQ (beta 2026-11-20): the report is written where the handler of a crash writes the stack trace
+        // (CrashReportFiles), and goes with the newest crash file. It was written to /sdcard/trifa/crashes, which the
+        // app cannot write to since Android 10, and handed over as file:// paths, so no report had the crash in it.
+        final ArrayList<File> files = new ArrayList<>();
+        final File folder = CrashReportFiles.dir(this);
+        if (folder.isDirectory() || folder.mkdirs())
+        {
+            CrashReportFiles.dropReports(folder);
+            final String date = new SimpleDateFormat("yyyy-MM-dd_HH_mm_ss", Locale.US).format(new Date());
+            final File report = new File(folder, CrashReportFiles.reportName(date));
+            Logging.writeToFile(output, Aboutpage.this, report.getAbsolutePath());
+            if (report.isFile() && report.length() > 0)
+            {
+                files.add(report);
+            }
+        }
+        final File crash = CrashReportFiles.newestCrash(CrashReportFiles.dirs(this));
+        if (crash != null)
+        {
+            files.add(crash);
+        }
 
         try
         {
@@ -362,30 +373,64 @@ public class Aboutpage extends AirScreenActivity implements Logging.AsyncRespons
         {
         }
 
-        try
+        if (!shareCrashReport(files))
         {
-            if (main_activity_s != null)
+            // E21: the refusal stands under the row that was tapped, a toast only without one.
+            final String words = getString(R.string.about_crash_report_unavailable);
+            if (!AirUi.sayUnder(crashRow, words, false))
             {
-                main_activity_s.sendEmailWithAttachment(this,
-                        KhandaqSupport.FEEDBACK_EMAIL,
-                        getString(R.string.Aboutpage_0) + " (a:" + Build.VERSION.SDK_INT + ")",
-                        feedback_text,
-                        full_file_name,
-                        full_file_name_suppl);
-            }
-            else
-            {
-                // E21: the refusal stands under the row that was tapped, a toast only without one.
-                final String words = getString(R.string.about_crash_report_unavailable);
-                if (!AirUi.sayUnder(crashRow, words, false))
-                {
-                    display_toast_with_context(this, words, true, 0);
-                }
+                display_toast_with_context(this, words, true, 0);
             }
         }
-        catch (Exception ee3)
+    }
+
+    /**
+     * Hands the report to the app the person picks: mail, with the feedback address filled in, or a messenger. The
+     * files go as content: links of the app's FileProvider that only the picked app may read; the device and the
+     * version go in the text too, for an app that drops the files.
+     */
+    private boolean shareCrashReport(final ArrayList<File> files)
+    {
+        try
         {
-            Log.i(TAG, "processFinish:EE1:" + ee3.getMessage());
+            final ArrayList<Uri> uris = new ArrayList<>();
+            final StringBuilder names = new StringBuilder();
+            for (final File file : files)
+            {
+                uris.add(FileProvider.getUriForFile(this, KhandaqProviders.STD_FILE_PROVIDER, file));
+                names.append(' ').append(file.getName());
+            }
+            final Intent send = new Intent(uris.size() > 1 ? Intent.ACTION_SEND_MULTIPLE : Intent.ACTION_SEND);
+            send.setType("text/plain");
+            send.putExtra(Intent.EXTRA_EMAIL, new String[]{KhandaqSupport.FEEDBACK_EMAIL});
+            send.putExtra(Intent.EXTRA_SUBJECT, getString(R.string.Aboutpage_0) + " (a:" + Build.VERSION.SDK_INT + ")");
+            send.putExtra(Intent.EXTRA_TEXT, buildDiagnosticsText(true));
+            if (uris.size() > 1)
+            {
+                send.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
+            }
+            else if (uris.size() == 1)
+            {
+                send.putExtra(Intent.EXTRA_STREAM, uris.get(0));
+            }
+            if (!uris.isEmpty())
+            {
+                final ClipData clip = ClipData.newRawUri("Khandaq crash report", uris.get(0));
+                for (int i = 1; i < uris.size(); i++)
+                {
+                    clip.addItem(new ClipData.Item(uris.get(i)));
+                }
+                send.setClipData(clip);
+                send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            }
+            Log.i(TAG, "shareCrashReport:files:" + names);
+            startActivity(Intent.createChooser(send, getString(R.string.Aboutpage_2)));
+            return true;
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "shareCrashReport:EE1:" + e.getMessage());
+            return false;
         }
     }
 }

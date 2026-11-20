@@ -29,4 +29,7 @@
     <dimen name="air_toast_elevation">@dimen/kq_space_10</dimen>
     <!-- You: the QR card is as wide as the phone, and no wider than this. -->
     <dimen name="air_you_qr_max">400dp</dimen>
+    <!-- Testers' ideas (0.2.67): an emoji of the reaction bar over a held message, in its 48dp target; a glyph,
+         so it keeps its size while the text grows. -->
+    <dimen name="air_reaction_bar_emoji">24dp</dimen>
 </resources>

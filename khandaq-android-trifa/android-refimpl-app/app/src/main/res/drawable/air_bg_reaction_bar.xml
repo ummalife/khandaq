@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Testers' ideas (0.2.67): the reaction bar over a message held down (AirReactionBar): a raised pill with the
+     strong line, so it stands apart from the log under it without a shadow. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/kq_raised" />
+    <stroke android:width="@dimen/kq_stroke_hairline" android:color="@color/kq_line_strong" />
+    <corners android:radius="@dimen/kq_radius_round" />
+</shape>

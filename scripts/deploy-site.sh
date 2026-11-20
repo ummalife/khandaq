@@ -220,42 +220,49 @@ fi
 # never offering it, because a missing entry reads as "nothing to check" rather than as a failure.
 #
 # Entries computed now win; entries for artifacts not staged this run are carried over.
-( cd "$DL" && {
-    fresh="$(mktemp)"
-    # KHANDAQ (0.2.66): the update manifest is not a download and has its own signature namespace;
-    # the checksum list and verify-desktop-signatures.py treat every line here as a release artifact.
-    for name in khandaq-*; do
-      case "$name" in
-        khandaq-desktop-update.json|khandaq-desktop-update.json.sig) continue ;;
-      esac
-      [[ -f "$name" ]] && shasum -a 256 "$name"
-    done 2>/dev/null | sort -u > "$fresh" || true
+#
+# KHANDAQ (0.2.66, review of the first deploy from dist/): a function, because the list is made twice.
+# Here the downloads need their lines, which the update manifest is checked against below; after the
+# signing step, the signatures need theirs (see there).
+merge_checksums() {
+  ( cd "$DL" && {
+      fresh="$(mktemp)"
+      # KHANDAQ (0.2.66): the update manifest is not a download and has its own signature namespace;
+      # the checksum list and verify-desktop-signatures.py treat every line here as a release artifact.
+      for name in khandaq-*; do
+        case "$name" in
+          khandaq-desktop-update.json|khandaq-desktop-update.json.sig) continue ;;
+        esac
+        [[ -f "$name" ]] && shasum -a 256 "$name"
+      done 2>/dev/null | sort -u > "$fresh" || true
 
-    if [[ ! -s "$fresh" && -s SHA256SUMS.txt ]]; then
-      echo "    WARNING: no artifacts staged; leaving the existing SHA256SUMS.txt untouched" >&2
-    else
-      if [[ -s SHA256SUMS.txt ]]; then
-        # Carry over any entry whose FILE is not being republished in this run.
-        #
-        # The filename is extracted by stripping the hash rather than taken as $2, because the two
-        # tools that produce these lines disagree about the separator: macOS `shasum` writes
-        # "HASH  name" while GNU `sha256sum` in binary mode writes "HASH *name". Keying on $2 works
-        # under one and silently duplicates every entry under the other — which is exactly the kind
-        # of difference that shows up only on someone else's machine.
-        awk '
-          function fname(s) { sub(/^[0-9a-fA-F]+[ \t]+\*?/, "", s); return s }
-          NR == FNR { republished[fname($0)] = 1; next }
-          fname($0) ~ /^khandaq-desktop-update\.json/ { next }
-          !(fname($0) in republished)
-        ' "$fresh" SHA256SUMS.txt >> "$fresh" || true
+      if [[ ! -s "$fresh" && -s SHA256SUMS.txt ]]; then
+        echo "    WARNING: no artifacts staged; leaving the existing SHA256SUMS.txt untouched" >&2
+      else
+        if [[ -s SHA256SUMS.txt ]]; then
+          # Carry over any entry whose FILE is not being republished in this run.
+          #
+          # The filename is extracted by stripping the hash rather than taken as $2, because the two
+          # tools that produce these lines disagree about the separator: macOS `shasum` writes
+          # "HASH  name" while GNU `sha256sum` in binary mode writes "HASH *name". Keying on $2 works
+          # under one and silently duplicates every entry under the other — which is exactly the kind
+          # of difference that shows up only on someone else's machine.
+          awk '
+            function fname(s) { sub(/^[0-9a-fA-F]+[ \t]+\*?/, "", s); return s }
+            NR == FNR { republished[fname($0)] = 1; next }
+            fname($0) ~ /^khandaq-desktop-update\.json/ { next }
+            !(fname($0) in republished)
+          ' "$fresh" SHA256SUMS.txt >> "$fresh" || true
+        fi
+        # Sorted by filename for a readable published file; correctness comes from the dedup above.
+        awk '{ n = $0; sub(/^[0-9a-fA-F]+[ \t]+\*?/, "", n); print n "\t" $0 }' "$fresh" \
+          | sort -f | cut -f2- > SHA256SUMS.txt
       fi
-      # Sorted by filename for a readable published file; correctness comes from the dedup above.
-      awk '{ n = $0; sub(/^[0-9a-fA-F]+[ \t]+\*?/, "", n); print n "\t" $0 }' "$fresh" \
-        | sort -f | cut -f2- > SHA256SUMS.txt
-    fi
-    rm -f "$fresh"
-  } )
-echo "    SHA256SUMS.txt: $(wc -l < "$DL/SHA256SUMS.txt" 2>/dev/null || echo 0) entries"
+      rm -f "$fresh"
+    } )
+  echo "    SHA256SUMS.txt: $(wc -l < "$DL/SHA256SUMS.txt" 2>/dev/null || echo 0) entries"
+}
+merge_checksums
 
 # KHANDAQ (re-audit 2026-08-22, K-05): bring down anything already published that this checkout does
 # not hold, so it is signed too.
@@ -331,6 +338,20 @@ fi
 # verifies. Authenticode and Developer ID close the rest; see docs/DESKTOP-SIGNING.md.
 echo "==> Sign desktop artifacts"
 bash "$ROOT/scripts/sign-desktop-artifacts.sh"
+
+# KHANDAQ (0.2.66, review of the first deploy from dist/): the checksum list lists the signatures too,
+# and it was made above, before they were. Staging a download drops its old signature, so the list
+# carried over the line of that old signature and had none for a new one: v0.2.66 went out with five
+# lines that did not match and one missing, and `shasum -a 256 -c SHA256SUMS.txt`, which the site
+# tells people to run, failed. Made again now that every signature is beside its artifact, then held
+# to the bytes: every line must match a file here, and every file the server serves is here by now
+# (staged, committed or fetched above), so a line that does not is a list that would go out wrong.
+echo "==> Checksum list, now that every signature is made"
+merge_checksums
+if ! ( cd "$DL" && shasum -a 256 -c --quiet SHA256SUMS.txt ); then
+  echo "ERROR: SHA256SUMS.txt does not match the files in $DL; the deploy stops before the upload" >&2
+  exit 1
+fi
 
 echo "==> Backup Element/Matrix static site on server"
 ssh "$REMOTE" "mkdir -p '$REMOTE_BACKUP_ROOT' && \

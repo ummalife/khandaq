@@ -3226,7 +3226,8 @@ extension ChatPrivateController {
                                        appActive: UIApplication.shared.applicationState == .active,
                                        sceneActive: sceneActive,
                                        lockScreenShown: PinAuthorizationCoordinator.isLockScreenShown,
-                                       isSaved: chat.isSavedMessages) else {
+                                       isSaved: chat.isSavedMessages,
+                                       receiptsOn: UserDefaultsManager().sendReadReceipts) else {
             return
         }
         submanagerChats.reportSeen(in: chat)

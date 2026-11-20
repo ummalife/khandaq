@@ -942,6 +942,9 @@
 "air_dossier_block_message" = "联系人和对话将从此设备删除，此密钥发来的新请求也不会再显示。";
 "air_dossier_block_hint" = "会先确认，然后删除联系人并隐藏此密钥的请求";
 "air_privacy_title" = "隐私";
+"air_privacy_read_receipts" = "发送已读回执";
+"air_privacy_read_receipts_detail" = "关闭后，对方看不到你已读过他们的消息。";
+"air_privacy_typing" = "显示我正在输入";
 "air_blocked_title" = "已屏蔽";
 "air_blocked_none" = "无";
 "air_blocked_count_format" = "%d";

@@ -161,6 +161,9 @@ class ActiveSessionCoordinator: NSObject {
         toxManager.groups.delegate = self
 
         toxManager.objects.setGroupShowSystemMessages(UserDefaultsManager().groupShowSystemMessages)
+        // KHANDAQ (ideas 1): before any friend connects, so a receipt kept from before the switch went
+        // off (in this profile or another) does not leave.
+        toxManager.chats.setSendsSeenReceipts(UserDefaultsManager().sendReadReceipts)
 
         // KHANDAQ: ensure the local-only "Saved Messages" chat exists so it's always reachable.
         _ = toxManager.objects.getOrCreateSavedMessagesChat()

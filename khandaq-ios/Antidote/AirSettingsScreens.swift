@@ -216,16 +216,35 @@ extension AirSettingRow {
     }
 }
 
-/// Settings > Privacy.
+/// Settings > Privacy: whether read receipts leave and whether the other side sees that you type (both on
+/// until turned off; the receipts of other people show either way), then the blocked keys.
 final class AirPrivacyController: AirScrollController {
     var onShowBlocked: (() -> Void)?
+    /// KHANDAQ (ideas 1): the running session applies a new receipts choice at once (objcTox drops a
+    /// receipt that waited for a friend who was offline).
+    var onReadReceiptsChange: ((Bool) -> Void)?
 
+    private let userDefaults = UserDefaultsManager()
     private let blockedRow = AirSettingRow(title: String(localized: "air_blocked_title"))
     private var observer: NSObjectProtocol?
 
     override func viewDidLoad() {
         super.viewDidLoad()
         title = String(localized: "air_privacy_title")
+        view.accessibilityIdentifier = "settings.privacy.screen"
+        let receipts = AirSettingRow.toggle(title: String(localized: "air_privacy_read_receipts"),
+                                            detail: String(localized: "air_privacy_read_receipts_detail"),
+                                            isOn: userDefaults.sendReadReceipts,
+                                            identifier: "settings.read-receipts") { [weak self] on in
+            self?.userDefaults.sendReadReceipts = on
+            self?.onReadReceiptsChange?(on)
+        }
+        let typing = AirSettingRow.toggle(title: String(localized: "air_privacy_typing"),
+                                          isOn: userDefaults.sendTypingIndicator,
+                                          identifier: "settings.typing") { [weak self] on in
+            self?.userDefaults.sendTypingIndicator = on
+        }
+        addSection(nil, rows: [receipts, typing])
         blockedRow.accessibilityIdentifier = "air.settings.privacy.blocked"
         blockedRow.addTarget(self, action: #selector(blockedTapped), for: .touchUpInside)
         addSection(String(localized: "air_blocked_title"), rows: [blockedRow], note: String(localized: "air_blocked_section_note"))

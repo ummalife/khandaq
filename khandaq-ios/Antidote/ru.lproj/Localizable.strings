@@ -955,6 +955,9 @@
 "air_dossier_block_message" = "Контакт и переписка удалятся с этого устройства, а новые запросы с этого ключа показываться не будут.";
 "air_dossier_block_hint" = "Сначала спросит, потом удалит контакт и скроет запросы с этого ключа";
 "air_privacy_title" = "Приватность";
+"air_privacy_read_receipts" = "Отправлять отчёты о прочтении";
+"air_privacy_read_receipts_detail" = "Если выключить, собеседники не увидят, что вы прочитали их сообщения.";
+"air_privacy_typing" = "Показывать, что я печатаю";
 "air_blocked_title" = "Заблокированные";
 "air_blocked_none" = "Нет";
 "air_blocked_count_format" = "%d";

@@ -124,13 +124,29 @@ class AirConversationModelTests: XCTestCase {
     }
 
     func testAReceiptLeavesOnlyFromAConversationInFrontOfThePerson() {
-        XCTAssertTrue(AirSeenGate.allowsReport(onScreen: true, appActive: true, sceneActive: true, lockScreenShown: false, isSaved: false))
+        XCTAssertTrue(AirSeenGate.allowsReport(onScreen: true, appActive: true, sceneActive: true, lockScreenShown: false, isSaved: false, receiptsOn: true))
         // Another screen, the background or a locked device, the app's own lock over it, or the Saved chat.
-        XCTAssertFalse(AirSeenGate.allowsReport(onScreen: false, appActive: true, sceneActive: true, lockScreenShown: false, isSaved: false))
-        XCTAssertFalse(AirSeenGate.allowsReport(onScreen: true, appActive: false, sceneActive: true, lockScreenShown: false, isSaved: false))
-        XCTAssertFalse(AirSeenGate.allowsReport(onScreen: true, appActive: true, sceneActive: false, lockScreenShown: false, isSaved: false))
-        XCTAssertFalse(AirSeenGate.allowsReport(onScreen: true, appActive: true, sceneActive: true, lockScreenShown: true, isSaved: false))
-        XCTAssertFalse(AirSeenGate.allowsReport(onScreen: true, appActive: true, sceneActive: true, lockScreenShown: false, isSaved: true))
+        XCTAssertFalse(AirSeenGate.allowsReport(onScreen: false, appActive: true, sceneActive: true, lockScreenShown: false, isSaved: false, receiptsOn: true))
+        XCTAssertFalse(AirSeenGate.allowsReport(onScreen: true, appActive: false, sceneActive: true, lockScreenShown: false, isSaved: false, receiptsOn: true))
+        XCTAssertFalse(AirSeenGate.allowsReport(onScreen: true, appActive: true, sceneActive: false, lockScreenShown: false, isSaved: false, receiptsOn: true))
+        XCTAssertFalse(AirSeenGate.allowsReport(onScreen: true, appActive: true, sceneActive: true, lockScreenShown: true, isSaved: false, receiptsOn: true))
+        XCTAssertFalse(AirSeenGate.allowsReport(onScreen: true, appActive: true, sceneActive: true, lockScreenShown: false, isSaved: true, receiptsOn: true))
+    }
+
+    /// KHANDAQ (ideas 1): Settings > Privacy > Send read receipts off: not even a conversation in front of
+    /// the person reports what they have seen.
+    func testNoReceiptLeavesWhileReadReceiptsAreOff() {
+        XCTAssertFalse(AirSeenGate.allowsReport(onScreen: true, appActive: true, sceneActive: true, lockScreenShown: false, isSaved: false,
+                                                receiptsOn: false))
+    }
+
+    /// KHANDAQ (ideas 1): typing is announced only while the switch is on, and never from the Saved chat,
+    /// which has no friend to tell (objcTox took friend number 0 for it).
+    func testTypingIsAnnouncedOnlyWhileTheSwitchIsOnAndNeverFromSaved() {
+        XCTAssertTrue(AirTypingGate.mayAnnounce(typingOn: true, isSaved: false))
+        XCTAssertFalse(AirTypingGate.mayAnnounce(typingOn: false, isSaved: false))
+        XCTAssertFalse(AirTypingGate.mayAnnounce(typingOn: true, isSaved: true))
+        XCTAssertFalse(AirTypingGate.mayAnnounce(typingOn: false, isSaved: true))
     }
 
     // MARK: - Transcript

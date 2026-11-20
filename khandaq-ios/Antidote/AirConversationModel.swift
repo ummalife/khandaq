@@ -99,10 +99,22 @@ enum AirEntryStatus: Equatable {
 /// screen, with the app and its scene active and the app's own PIN lock not over it. Active is the
 /// foreground with the device unlocked: iOS resigns the app before the lock screen comes up. Never for
 /// the Saved chat. A list preview, a notification or the background never ask; a group has a controller
-/// of its own that never asks.
+/// of its own that never asks. KHANDAQ (ideas 1): never while Settings > Privacy > Send read receipts is
+/// off (`receiptsOn`).
 enum AirSeenGate {
-    static func allowsReport(onScreen: Bool, appActive: Bool, sceneActive: Bool, lockScreenShown: Bool, isSaved: Bool) -> Bool {
-        return onScreen && appActive && sceneActive && !lockScreenShown && !isSaved
+    static func allowsReport(onScreen: Bool, appActive: Bool, sceneActive: Bool, lockScreenShown: Bool, isSaved: Bool,
+                             receiptsOn: Bool) -> Bool {
+        return receiptsOn && onScreen && appActive && sceneActive && !lockScreenShown && !isSaved
+    }
+}
+
+/// KHANDAQ (ideas 1): whether the field may tell the person of a conversation that something is being
+/// typed. Never while Settings > Privacy > Show that I'm typing is off, and never from the Saved chat:
+/// it has no friend, and objcTox took friend number 0 for it, so typing a note showed "typing" to the
+/// first contact of the profile. Groups never announce it (NGC has no typing notification).
+enum AirTypingGate {
+    static func mayAnnounce(typingOn: Bool, isSaved: Bool) -> Bool {
+        return typingOn && !isSaved
     }
 }
 

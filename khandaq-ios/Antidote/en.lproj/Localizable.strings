@@ -953,6 +953,9 @@
 "air_dossier_block_message" = "The contact and the conversation are deleted from this device, and new requests from this key will not be shown.";
 "air_dossier_block_hint" = "Asks first, then deletes the contact and hides requests from this key";
 "air_privacy_title" = "Privacy";
+"air_privacy_read_receipts" = "Send read receipts";
+"air_privacy_read_receipts_detail" = "Turned off, others don't see that you have read their messages.";
+"air_privacy_typing" = "Show that I'm typing";
 "air_blocked_title" = "Blocked";
 "air_blocked_none" = "None";
 "air_blocked_count_format" = "%d";

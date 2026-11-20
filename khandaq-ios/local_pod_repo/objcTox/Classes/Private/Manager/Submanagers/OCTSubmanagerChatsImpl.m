@@ -199,6 +199,8 @@ static const NSTimeInterval kOCTSeenReportedMaxLeadSec = 300.0;
 @property (strong, nonatomic, readonly) NSMutableDictionary<NSString *, NSNumber *> *seenLastSendTimes;
 // KHANDAQ (0.2.57): the friends whose waiting read receipt leaves once their second is over (public keys).
 @property (strong, nonatomic, readonly) NSMutableSet<NSString *> *seenSendsScheduled;
+// KHANDAQ (ideas 1): NO once the person turned read receipts off (setSendsSeenReceipts:).
+@property (assign, nonatomic) BOOL sendsSeenReceipts;
 
 @end
 
@@ -218,6 +220,7 @@ static const NSTimeInterval kOCTSeenReportedMaxLeadSec = 300.0;
     _lastTextStamps = [NSMutableDictionary new];
     _seenLastSendTimes = [NSMutableDictionary new];
     _seenSendsScheduled = [NSMutableSet new];
+    _sendsSeenReceipts = YES;
 
     return self;
 }
@@ -1031,8 +1034,35 @@ static void triggerPushWithPreview(NSString *used_pushToken,
     return [tox setUserIsTyping:isTyping forFriendNumber:friend.friendNumber error:error];
 }
 
+- (void)setSendsSeenReceipts:(BOOL)sends
+{
+    _sendsSeenReceipts = sends;
+    if (sends) {
+        return;
+    }
+
+    // KHANDAQ (ideas 1): a receipt kept for a friend who was offline would still leave when they connect
+    // (friendConnectionStatusChangeNotification:, tickDeliveryWatchdog): it is dropped with the switch.
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    NSMutableArray<OCTFriend *> *waiting = [NSMutableArray new];
+    for (OCTFriend *friend in [OCTFriend allObjectsInRealm:realmManager.realm]) {
+        if (friend.seenPendingPacket.length > 0) {
+            [waiting addObject:friend];
+        }
+    }
+    for (OCTFriend *friend in waiting) {
+        [realmManager updateObject:friend withBlock:^(OCTFriend *theFriend) {
+            theFriend.seenPendingPacket = nil;
+        }];
+    }
+}
+
 - (void)reportSeenInChat:(OCTChat *)chat
 {
+    if (! self.sendsSeenReceipts) {
+        return;
+    }
+
     if (chat == nil || chat.isInvalidated || chat.isGroup || chat.isSavedMessages) {
         return;
     }
@@ -1145,6 +1175,10 @@ static void triggerPushWithPreview(NSString *used_pushToken,
  */
 - (void)sendPendingSeenToFriend:(OCTFriend *)friend
 {
+    if (! self.sendsSeenReceipts) {
+        return;
+    }
+
     if (friend.isInvalidated || friend.seenPendingPacket.length == 0 || friend.publicKey.length == 0) {
         return;
     }

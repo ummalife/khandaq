@@ -244,7 +244,11 @@ extension ChatInputViewManager: ChatInputViewDelegate {
     }
 
     func chatInputViewTextDidChange(_ view: ChatInputView) {
-        try? submanagerChats.setIsTyping(true, in: chat)
+        // KHANDAQ (ideas 1): Settings > Privacy > Show that I'm typing; never from the Saved chat. The
+        // "not typing" of endUserInteraction still goes: toxcore sends it only after a "typing" left.
+        if AirTypingGate.mayAnnounce(typingOn: UserDefaultsManager().sendTypingIndicator, isSaved: chat.isSavedMessages) {
+            try? submanagerChats.setIsTyping(true, in: chat)
+        }
         inactivityTimer?.invalidate()
 
         inactivityTimer = Timer.scheduledTimer(timeInterval: Constants.inactivityTimeout, closure: {[weak self] _ -> Void in

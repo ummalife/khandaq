@@ -942,6 +942,9 @@
 "air_dossier_block_message" = "ستُحذف جهة الاتصال والمحادثة من هذا الجهاز، ولن تظهر الطلبات الجديدة من هذا المفتاح.";
 "air_dossier_block_hint" = "يسأل أولًا، ثم يحذف جهة الاتصال ويخفي الطلبات من هذا المفتاح";
 "air_privacy_title" = "الخصوصية";
+"air_privacy_read_receipts" = "إرسال إشعارات القراءة";
+"air_privacy_read_receipts_detail" = "عند الإيقاف لن يرى الآخرون أنك قرأت رسائلهم.";
+"air_privacy_typing" = "إظهار أنني أكتب";
 "air_blocked_title" = "المحظورون";
 "air_blocked_none" = "لا أحد";
 "air_blocked_count_format" = "%d";

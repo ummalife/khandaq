@@ -165,6 +165,16 @@ FOUNDATION_EXPORT NSString *const kOCTMessageReactionEventKeyKey;
 - (void)reportSeenInChat:(OCTChat *)chat;
 
 /**
+ * KHANDAQ (ideas 1): whether read receipts leave this device at all (the app's Settings > Privacy > Send
+ * read receipts; YES until set). With NO, reportSeenInChat: does nothing and a receipt that waits for a
+ * friend who was offline is dropped instead of leaving when they connect. Set it again for every new
+ * manager: it is not stored in the profile.
+ *
+ * @param sends YES to send read receipts, NO never to send one.
+ */
+- (void)setSendsSeenReceipts:(BOOL)sends;
+
+/**
  * Retry stale undelivered direct messages (watchdog tick, ~5s cadence).
  */
 - (void)tickDeliveryWatchdog;

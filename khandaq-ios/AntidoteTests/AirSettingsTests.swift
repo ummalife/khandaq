@@ -128,6 +128,69 @@ class AirSettingsTests: XCTestCase {
         XCTAssertEqual(titleFrame.height, ceil(title.intrinsicContentSize.height), accuracy: 1, "the title is stretched")
     }
 
+    // MARK: - Privacy switches (ideas 1)
+
+    private static let receiptsKey = "user-info/send-read-receipts"
+    private static let typingKey = "user-info/send-typing-indicator"
+
+    func testReadReceiptsAndTypingAreOnUntilTurnedOff() {
+        withStoredPrivacy(receipts: nil, typing: nil) {
+            XCTAssertTrue(UserDefaultsManager().sendReadReceipts)
+            XCTAssertTrue(UserDefaultsManager().sendTypingIndicator)
+        }
+        withStoredPrivacy(receipts: false, typing: false) {
+            XCTAssertFalse(UserDefaultsManager().sendReadReceipts)
+            XCTAssertFalse(UserDefaultsManager().sendTypingIndicator)
+        }
+    }
+
+    func testPrivacyHasBothSwitchesAboveBlockedAndAppliesThem() throws {
+        try withStoredPrivacy(receipts: nil, typing: nil) {
+            let privacy = AirPrivacyController()
+            var applied: [Bool] = []
+            privacy.onReadReceiptsChange = { applied.append($0) }
+            privacy.loadViewIfNeeded()
+            let switches = privacy.view.allSubviews.compactMap { $0 as? UISwitch }
+            XCTAssertEqual(switches.map { $0.accessibilityIdentifier ?? "" }, ["settings.read-receipts", "settings.typing"])
+            XCTAssertEqual(switches.map { $0.isOn }, [true, true])
+            let blocked = try XCTUnwrap(privacy.view.allSubviews.first { $0.accessibilityIdentifier == "air.settings.privacy.blocked" })
+            privacy.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+            privacy.view.layoutIfNeeded()
+            XCTAssertLessThan(switches[1].convert(switches[1].bounds, to: privacy.view).minY,
+                              blocked.convert(blocked.bounds, to: privacy.view).minY, "the switches are not above Blocked")
+
+            switches[0].isOn = false
+            switches[0].sendActions(for: .valueChanged)
+            XCTAssertFalse(UserDefaultsManager().sendReadReceipts)
+            XCTAssertEqual(applied, [false], "the running session was not told")
+
+            switches[1].isOn = false
+            switches[1].sendActions(for: .valueChanged)
+            XCTAssertFalse(UserDefaultsManager().sendTypingIndicator)
+            XCTAssertEqual(applied, [false], "typing is not a receipts change")
+        }
+    }
+
+    func testThePrivacyWordsAreInEveryLanguage() {
+        assertTranslated(["air_privacy_read_receipts", "air_privacy_read_receipts_detail", "air_privacy_typing"])
+    }
+
+    /// Runs `body` over the stored privacy switches as given (nil: nothing stored), then puts back what
+    /// was stored.
+    private func withStoredPrivacy(receipts: Bool?, typing: Bool?, _ body: () throws -> Void) rethrows {
+        let defaults = UserDefaults.standard
+        let keys = [AirSettingsTests.receiptsKey, AirSettingsTests.typingKey]
+        let saved = keys.map { defaults.object(forKey: $0) }
+        defer {
+            for (key, value) in zip(keys, saved) {
+                defaults.set(value, forKey: key)
+            }
+        }
+        defaults.set(receipts, forKey: AirSettingsTests.receiptsKey)
+        defaults.set(typing, forKey: AirSettingsTests.typingKey)
+        try body()
+    }
+
     /// Lays `row` out at `width` the way a column does: pinned at the top and the sides, as tall as it
     /// asks to be. The second pass is the one a label that wraps gets in the app on the next frame.
     // MARK: - Files download by themselves (0.2.57)
@@ -263,5 +326,24 @@ private extension UIView {
     /// Every view under this one, depth first, in the order they were added.
     var allSubviews: [UIView] {
         return subviews.flatMap { [$0] + $0.allSubviews }
+    }
+}
+
+extension XCTestCase {
+    /// KHANDAQ (ideas 1): every one of `keys` has its own words in each language the app ships, read from
+    /// that language's table rather than through the app's language switch.
+    func assertTranslated(_ keys: [String], file: StaticString = #file, line: UInt = #line) {
+        for language in AppLanguage.supportedCodes {
+            guard let path = Bundle.main.path(forResource: "Localizable", ofType: "strings", inDirectory: nil, forLocalization: language),
+                  let table = NSDictionary(contentsOfFile: path) as? [String: String] else {
+                XCTFail("no Localizable.strings for \(language)", file: file, line: line)
+                continue
+            }
+            for key in keys {
+                let words = table[key] ?? ""
+                XCTAssertFalse(words.isEmpty, "\(language): no \(key)", file: file, line: line)
+                XCTAssertNotEqual(words, key, "\(language): \(key) is its own key", file: file, line: line)
+            }
+        }
     }
 }

@@ -535,13 +535,17 @@ void TestAirConversation::dayHintTriesTheBestHoursThenTheRuns()
     QCOMPARE(Air::dayHint(false, Air::DayStrip::make({}, now)), Air::DayHint::Empty);
 
     QCOMPARE(AirStrings::dayHintText(strip, true, 19, 22),
-             QStringLiteral("usually 19:00 to 22:00"));
+             QStringLiteral("usually online 19:00 to 22:00"));
     QCOMPARE(AirStrings::dayHintText(strip, false, 0, 0),
-             QStringLiteral("past day: 7:00 to 9:00, 21:00 to 22:00"));
+             QStringLiteral("online in the past day: 7:00 to 9:00, 21:00 to 22:00"));
     QCOMPARE(AirStrings::dayHintText(Air::DayStrip::make({}, now), false, 0, 0),
              QStringLiteral("no marks yet"));
     use(QStringLiteral("ru"));
-    QCOMPARE(AirStrings::dayHintText(strip, true, 19, 22), QStringLiteral("обычно с 19 до 22"));
+    QCOMPARE(AirStrings::dayHintText(strip, true, 19, 22), QStringLiteral("обычно в сети с 19 до 22"));
+    // The Russian hint read only "past day: from 14 to 15" and left a tester asking what the hours
+    // were (0.2.65).
+    QCOMPARE(AirStrings::dayHintText(strip, false, 0, 0),
+             QStringLiteral("в сети за сутки: с 7 до 9, с 21 до 22"));
 }
 
 void TestAirConversation::localStoreFilesContactsUnderAHashAndKeepsMarksAcrossLaunches()

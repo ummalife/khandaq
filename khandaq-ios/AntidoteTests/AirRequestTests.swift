@@ -257,12 +257,12 @@ class AirLargeTextLayoutTests: XCTestCase {
                 let band = AirPresenceBandView()
                 let window = host(band, width: width, category: category)
                 band.configure(link: .relay, presence: "в сети с 9:24, через ретранслятор", strip: strip, nowOnline: true,
-                               stripHint: "за сутки: с 8 до 10, с 21 до 23", stripSpoken: "")
+                               stripHint: "в сети за сутки: с 8 до 10, с 21 до 23", stripSpoken: "")
                 window.layoutIfNeeded()
                 assertWholeWords(in: band, context)
                 assertNothingCut(in: band, context)
                 // At these sizes the band keeps the presence line; the hours are in the dossier.
-                XCTAssertTrue(labels(in: band).contains { $0.text == "за сутки: с 8 до 10, с 21 до 23" && !$0.isVisible },
+                XCTAssertTrue(labels(in: band).contains { $0.text == "в сети за сутки: с 8 до 10, с 21 до 23" && !$0.isVisible },
                               "the hours stayed on the band (\(context))")
                 XCTAssertTrue(band.accessibilityLabel?.contains("Сутки") ?? false, "VoiceOver lost the day (\(context))")
                 window.isHidden = true

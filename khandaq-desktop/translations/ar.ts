@@ -898,14 +898,14 @@
         <translation>لا علامات بعد</translation>
     </message>
     <message>
-        <source>usually %1:00 to %2:00</source>
+        <source>usually online %1:00 to %2:00</source>
         <comment>beside the day strip; %1 and %2 are hours of the clock</comment>
-        <translation>عادةً من %1:00 إلى %2:00</translation>
+        <translation>متصل عادةً من %1:00 إلى %2:00</translation>
     </message>
     <message>
-        <source>past day: %1</source>
+        <source>online in the past day: %1</source>
         <comment>beside the day strip; %1 lists runs of hours like 7:00 to 9:00</comment>
-        <translation>آخر 24 ساعة: %1</translation>
+        <translation>متصل خلال آخر 24 ساعة: %1</translation>
     </message>
     <message>
         <source>%1:00 to %2:00</source>

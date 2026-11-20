@@ -119,9 +119,9 @@
     <string name="air_day_a11y_format">在线时段：%1$s</string>
     <string name="air_day_a11y_none">没有记录</string>
     <string name="air_day_now_online">现在在线</string>
-    <string name="air_day_best_format">通常 %1$d:00 至 %2$d:00</string>
+    <string name="air_day_best_format">通常在线 %1$d:00 至 %2$d:00</string>
     <string name="air_day_empty">暂无记录</string>
-    <string name="air_day_hint_ranges_format">过去 24 小时：%1$s</string>
+    <string name="air_day_hint_ranges_format">过去 24 小时在线：%1$s</string>
     <string name="air_day_note">此手机会记下看到对方在线的小时。记录只保存在这里，保留七天。</string>
     <string name="air_delivery_sending">发送中</string>
     <string name="air_delivery_failed">未发送</string>

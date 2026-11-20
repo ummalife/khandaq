@@ -864,9 +864,9 @@
 "air_compose_voice" = "رسالة صوتية";
 "air_day_a11y_format" = "متصل %@";
 "air_day_a11y_none" = "لا توجد علامات";
-"air_day_best_format" = "عادةً من %d:00 إلى %d:00";
+"air_day_best_format" = "متصل عادةً من %d:00 إلى %d:00";
 "air_day_empty" = "لا علامات بعد";
-"air_day_hint_ranges_format" = "آخر 24 ساعة: %@";
+"air_day_hint_ranges_format" = "متصل خلال آخر 24 ساعة: %@";
 "air_day_note" = "يسجّل هذا الهاتف الساعات التي يرى فيها الشخص متصلًا. تبقى العلامات هنا فقط لمدة سبعة أيام.";
 "air_day_now_online" = "متصل الآن";
 "air_day_range_format" = "من %d:00 إلى %d:00";

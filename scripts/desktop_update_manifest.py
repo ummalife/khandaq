@@ -36,12 +36,16 @@ PLATFORM_FILES = {
 }
 # The largest download the app takes (UpdateManifest::artifactLimit).
 ARTIFACT_LIMIT = 1 << 30
+# The largest serial the app reads (UpdateManifest::serialLimit): the largest whole number a JSON
+# number holds exactly. Each manifest the generator writes has a higher serial than the one before,
+# and the app refuses one lower than the highest it has verified.
+SERIAL_LIMIT = (1 << 53) - 1
 # \A and \Z: Python's $ would let a final newline through, as PCRE's does in the app.
 VERSION = re.compile(r"\A(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\Z")
 SHA256 = re.compile(r"\A[0-9a-f]{64}\Z")
 SUMS_LINE = re.compile(r"^([0-9a-fA-F]{64})\s+\*?(.+?)\s*$")
 ENTRY_FIELDS = {"file", "sha256", "size", "version"}
-TOP_FIELDS = {"notesUrl", "platforms", "schema"}
+TOP_FIELDS = {"notesUrl", "platforms", "schema", "serial"}
 
 
 def version_key(text: str) -> tuple[int, int, int]:
@@ -81,6 +85,9 @@ def validate(manifest) -> list[str]:
         errors.append(f"fields the writer does not know: {', '.join(unknown)}")
     if manifest.get("schema") != SCHEMA:
         errors.append(f"schema is {manifest.get('schema')!r}, not {SCHEMA!r}")
+    serial = manifest.get("serial")
+    if isinstance(serial, bool) or not isinstance(serial, int) or not 1 <= serial <= SERIAL_LIMIT:
+        errors.append(f"serial {serial!r} is not a whole number from 1 to {SERIAL_LIMIT}")
     notes = manifest.get("notesUrl")
     if not isinstance(notes, dict) or not all(_notes_ok(notes.get(lang)) for lang in ("en", "ru")):
         errors.append("notesUrl must give en and ru pages of https://khandaq.org/")
@@ -137,6 +144,25 @@ def against_sums(manifest: dict, sums: dict[str, str]) -> list[str]:
         elif published != entry.get("sha256"):
             errors.append(f"{platform}: the manifest gives {str(entry.get('sha256'))[:16]}... for "
                           f"{name}, SHA256SUMS.txt {published[:16]}...")
+    return errors
+
+
+def against_live(manifest: dict, live: dict) -> list[str]:
+    """Why publishing manifest in place of the live one would take something back. Both are valid. A
+    lower serial is refused by every app that verified the live one, and a platform at a lower
+    version, or gone, holds its apps back; the same serial must mean the same manifest."""
+    errors = []
+    if manifest["serial"] < live["serial"]:
+        errors.append(f"serial {manifest['serial']} is below the live {live['serial']}: the live manifest "
+                      f"is newer than this checkout's (published from another checkout?)")
+    elif manifest["serial"] == live["serial"] and serialize(manifest) != serialize(live):
+        errors.append(f"serial {manifest['serial']} is the live manifest's, with other content")
+    for platform, entry in sorted(live["platforms"].items()):
+        mine = manifest["platforms"].get(platform)
+        if mine is None:
+            errors.append(f"{platform}: live at {entry['version']}, and this manifest drops it")
+        elif version_key(mine["version"]) < version_key(entry["version"]):
+            errors.append(f"{platform}: {mine['version']} is below the live {entry['version']}")
     return errors
 
 

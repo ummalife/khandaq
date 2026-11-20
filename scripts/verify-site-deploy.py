@@ -289,11 +289,12 @@ def check_ownership_files(base: str, published: str | None, pattern: re.Pattern[
             ok(f"/{name}: 200, {ctype}, no redirect, the {len(body)} committed bytes")
 
 
-def check_update_manifest(base: str, sums_body: bytes | None, exact: bool) -> None:
+def check_update_manifest(base: str, sums_body: bytes | None, exact: bool, kept: bool = False) -> None:
     """KHANDAQ (0.2.65): the manifest the desktop app updates from (scripts/generate-desktop-update-
     manifest.py), as the app gets it: the release key's signature must verify with the key from this
     repository, never one the site serves, and the manifest must name exactly the bytes the site
-    publishes, by SHA256SUMS.txt and by size."""
+    publishes, by SHA256SUMS.txt and by size. kept: the deploy left the live manifest as it was (it
+    staged no desktop download, or it is a rollback), so it need not be the copy in this checkout."""
     downloads = ROOT / "web" / "downloads"
     local = downloads / update_manifest.MANIFEST_NAME
     status, _, served = get(f"{base}/downloads/{update_manifest.MANIFEST_NAME}")
@@ -356,7 +357,11 @@ def check_update_manifest(base: str, sums_body: bytes | None, exact: bool) -> No
     else:
         ok("update manifest: every download it names is served at the size it gives")
     if exact and local.is_file() and local.read_bytes() != served:
-        fail("the served update manifest is not the one in this checkout")
+        if kept:
+            print("  note: the served update manifest is not the one in this checkout; this deploy "
+                  "left it as it was")
+        else:
+            fail("the served update manifest is not the one in this checkout")
 
 
 def main() -> int:
@@ -364,6 +369,9 @@ def main() -> int:
     ap.add_argument("--base", default=DEFAULT_BASE)
     ap.add_argument("--sha", default=None, help="ожидаемый git SHA (по умолчанию — HEAD этого checkout)")
     ap.add_argument("--skip-tls", action="store_true", help="пропустить проверку версий TLS")
+    ap.add_argument("--kept-update-manifest", action="store_true",
+                    help="the deploy left the live desktop update manifest as it was (it staged no "
+                         "desktop download, or it is a rollback): it need not be this checkout's")
     ap.add_argument("--any-sha", action="store_true",
                     help="не требовать конкретный коммит: проверить, что опубликованный SHA вообще "
                          "существует в репозитории, и сообщить, насколько сайт отстал. Режим для "
@@ -542,7 +550,7 @@ def main() -> int:
 
     # 5a. the manifest the desktop app updates from
     print("-- desktop update manifest")
-    check_update_manifest(base, sums_body, exact=expected_sha is not None)
+    check_update_manifest(base, sums_body, exact=expected_sha is not None, kept=args.kept_update_manifest)
 
     # 5b. the push relay, from outside
     #

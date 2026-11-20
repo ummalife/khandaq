@@ -77,7 +77,11 @@ if [[ "${1:-}" == "--rollback" ]]; then
     exit 1
   fi
   echo "    восстановленный сайт собран из $RB_SHA"
-  python3 "$ROOT/scripts/verify-site-deploy.py" --sha "$RB_SHA"
+  # KHANDAQ (0.2.65): the desktop update manifest served now is the snapshot's, not this checkout's.
+  # Apps that verified a newer one refuse it (its serial is lower) until a release publishes a
+  # manifest with a higher serial; the rest are offered what the snapshot offers.
+  echo "    desktop update manifest: the snapshot's; apps that saw a newer one wait for the next release"
+  python3 "$ROOT/scripts/verify-site-deploy.py" --sha "$RB_SHA" --kept-update-manifest
   exit $?
 fi
 
@@ -195,7 +199,8 @@ fi
 # generator reads each version from the program inside the artifact and refuses a build that is not
 # the exact release tag, a QA build, and a platform going back to an older version. Platforms not
 # staged in this run keep their entry while SHA256SUMS.txt still lists the same bytes for them. A
-# manifest that changes loses its old signature, so the signer below signs it in its own namespace.
+# manifest that changes gets a higher serial and loses its old signature, so the signer below signs
+# it in its own namespace. Only a run that wrote it here publishes it (below, last).
 if [[ ${#UPDATE_STAGED[@]} -gt 0 ]]; then
   echo "==> Desktop update manifest"
   python3 "$ROOT/scripts/generate-desktop-update-manifest.py" "${UPDATE_STAGED[@]}"
@@ -251,9 +256,6 @@ fi
     rm -f "$fresh"
   } )
 echo "    SHA256SUMS.txt: $(wc -l < "$DL/SHA256SUMS.txt" 2>/dev/null || echo 0) entries"
-# Every SHA-256 the update manifest gives must be the one the checksum list publishes, before either
-# leaves this machine. verify-site-deploy.py checks the same over public HTTPS after the upload.
-python3 "$ROOT/scripts/generate-desktop-update-manifest.py" --check
 
 # KHANDAQ (re-audit 2026-08-22, K-05): bring down anything already published that this checkout does
 # not hold, so it is signed too.
@@ -297,6 +299,28 @@ done
 export FETCHED_ARTIFACTS="${FETCHED_ARTIFACTS:-}"
 if [[ -n "${FETCHED_ARTIFACTS// /}" ]]; then
   echo "    доставлено с сервера (подписывать их нельзя):${FETCHED_ARTIFACTS}"
+fi
+
+# KHANDAQ (0.2.65, review of the desktop update): the update manifest goes up only from a run that
+# staged a desktop download and wrote the manifest from it. Otherwise the live one stays as it is: the
+# copy committed in this checkout can be older than the one live, and putting it back would hold the
+# apps on an older release. Before it goes up, every SHA-256 it gives must be the one SHA256SUMS.txt
+# publishes, and every download it names must be here, staged from dist/ or fetched just above, as
+# those bytes: nothing else is uploaded. Then it must take nothing back from the live manifest, read
+# from the server for this comparison and nothing else: not the serial, below which every app that
+# verified the live one refuses to go, and not the version of any platform.
+if [[ ${#UPDATE_STAGED[@]} -gt 0 ]]; then
+  echo "==> Desktop update manifest against the downloads here and the live one"
+  python3 "$ROOT/scripts/generate-desktop-update-manifest.py" --check --with-downloads
+  LIVE_UPDATE="$(mktemp -d "${TMPDIR:-/tmp}/khandaq-live-update.XXXXXX")"
+  trap 'rm -rf "$LIVE_UPDATE"' EXIT
+  # Empty when none is live yet; a copy that fails stops the deploy.
+  ssh "$REMOTE" "if [ -e '$REMOTE_SITE_DIR/downloads/khandaq-desktop-update.json' ]; then cat '$REMOTE_SITE_DIR/downloads/khandaq-desktop-update.json'; fi" > "$LIVE_UPDATE/live.json"
+  python3 "$ROOT/scripts/generate-desktop-update-manifest.py" --against-live "$LIVE_UPDATE/live.json"
+  rm -rf "$LIVE_UPDATE"
+  trap - EXIT
+else
+  echo "==> Desktop update manifest: nothing staged from dist/, the live one stays as it is"
 fi
 
 # KHANDAQ (re-audit 2026-08-22, K-05): sign what is about to be published, with a key that is not
@@ -401,11 +425,39 @@ scp -pr "$PUBLISHED"/* "$REMOTE:$INCOMING/"
 # verify-site-deploy.py checks the /ru/ pages and fails the deploy if this line goes missing.
 scp -pr "$WEB/ru" "$REMOTE:$INCOMING/"
 scp -p "$WEB/.well-known/security.txt" "$REMOTE:$INCOMING/.well-known/security.txt"
-scp -p "$DL"/* "$REMOTE:$INCOMING/downloads/" 2>/dev/null || true
+# KHANDAQ (0.2.65, review of the desktop update): a download that fails to go up stops the deploy;
+# this line used to end in 2>/dev/null || true, and a manifest naming bytes that never arrived would
+# have gone live. The update manifest and its signature are not among these: they go up last, below.
+DOWNLOADS=()
+for f in "$DL"/*; do
+  [[ -f "$f" ]] || continue
+  case "$(basename "$f")" in
+    khandaq-desktop-update.json|khandaq-desktop-update.json.sig) continue ;;
+  esac
+  DOWNLOADS+=("$f")
+done
+if [[ ${#DOWNLOADS[@]} -gt 0 ]]; then
+  scp -p "${DOWNLOADS[@]}" "$REMOTE:$INCOMING/downloads/"
+fi
 ssh "$REMOTE" "set -e
   mkdir -p '$REMOTE_SITE_DIR/downloads' '$REMOTE_SITE_DIR/.well-known'
   cp -a --remove-destination '$INCOMING/.' '$REMOTE_SITE_DIR/'
   rm -rf '$INCOMING'"
+# KHANDAQ (0.2.65, review of the desktop update): the update manifest last, once every download it
+# names is in place, so that an app that reads it finds those bytes. The signature first, then the
+# manifest, each renamed into place: a reader gets the old file or the new one, never half of one.
+# Between the two renames the old manifest meets the new signature, and an app checking just then
+# refuses it and tries again within the hour, which is the safe way to be wrong.
+if [[ ${#UPDATE_STAGED[@]} -gt 0 ]]; then
+  echo "==> Desktop update manifest, last"
+  UPDATE_INCOMING="$REMOTE_SITE_DIR.incoming-update"
+  ssh "$REMOTE" "rm -rf '$UPDATE_INCOMING' && mkdir -p '$UPDATE_INCOMING'"
+  scp -p "$DL/khandaq-desktop-update.json.sig" "$DL/khandaq-desktop-update.json" "$REMOTE:$UPDATE_INCOMING/"
+  ssh "$REMOTE" "set -e
+    mv -f '$UPDATE_INCOMING/khandaq-desktop-update.json.sig' '$REMOTE_SITE_DIR/downloads/khandaq-desktop-update.json.sig'
+    mv -f '$UPDATE_INCOMING/khandaq-desktop-update.json' '$REMOTE_SITE_DIR/downloads/khandaq-desktop-update.json'
+    rm -rf '$UPDATE_INCOMING'"
+fi
 scp -p "$ROOT/infra/nginx/khandaq-static-site.locations.conf" "$REMOTE:/tmp/khandaq-static-site.locations.conf"
 
 # Every location block includes this file, so it must exist BEFORE nginx -t runs or the reload
@@ -478,7 +530,13 @@ ssh "$REMOTE" "chown -R www-data:www-data '$REMOTE_SITE_DIR' && chmod -R a+r '$R
 # actually receives. It runs from this machine, not over ssh on the host, precisely so that it goes
 # through the same path a user's browser does.
 echo "==> Post-deploy verification over public HTTPS"
-if ! python3 "$ROOT/scripts/verify-site-deploy.py"; then
+# A run that staged no desktop download left the live update manifest as it was, which need not be
+# the copy in this checkout.
+VERIFY=(python3 "$ROOT/scripts/verify-site-deploy.py")
+if [[ ${#UPDATE_STAGED[@]} -eq 0 ]]; then
+  VERIFY+=(--kept-update-manifest)
+fi
+if ! "${VERIFY[@]}"; then
   echo "" >&2
   echo "DEPLOY FAILED VERIFICATION — the site is live but does not match this checkout." >&2
   echo "Fix the failures above and re-run; do not announce the release until this passes." >&2

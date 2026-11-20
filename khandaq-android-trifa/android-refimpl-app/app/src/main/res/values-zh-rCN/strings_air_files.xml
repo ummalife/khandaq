@@ -33,4 +33,10 @@
     <string name="air_file_prepare_failed">文件未发送，请重试</string>
     <!-- 0.2.57: a 1:1 file under way while its connection is gone; it goes on by itself -->
     <string name="air_file_waits_connection">等待连接</string>
+    <!-- Testers' ideas (0.2.67): a document picked to send is asked about first; the verb is air_compose_send -->
+    <string name="air_file_send_title">发送这个文件？</string>
+    <string name="air_file_send_what_format">%1$s，%2$s</string>
+    <!-- Testers' ideas (0.2.67): the speed pill of a voice note (1, 1.5 or 2 in the app's digits); a Latin x, not a multiplication sign -->
+    <string name="air_voice_speed_format">%1$sx</string>
+    <string name="air_voice_speed_a11y">播放速度 %1$s</string>
 </resources>

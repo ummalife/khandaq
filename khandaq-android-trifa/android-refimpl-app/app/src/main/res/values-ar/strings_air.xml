@@ -509,4 +509,10 @@
     <!-- E21 (stage 3b): deleting a group from the list asks from below, with its consequence. -->
     <string name="air_group_delete_title_format">حذف %1$s؟</string>
     <string name="air_group_delete_message">تُحذف المجموعة ورسائلها وملفاتها من هذا الجهاز. وإن كنت ما زلت فيها فستغادرها.</string>
+    <!-- Testers' ideas (0.2.67): over the first message that came while the chat was closed (AirUnreadMark); iOS unread_messages_separator -->
+    <string name="air_unread_mark">رسائل غير مقروءة</string>
+    <!-- KHANDAQ (testers' ideas, 0.2.67): Settings, Notifications: the row that opens the phone's settings of the background channel, where its notification can be hidden. -->
+    <string name="air_settings_background_notification">إشعار الخلفية</string>
+    <string name="air_settings_background_notification_note">يعمل Khandaq في الخلفية لاستقبال الرسائل. يمكنك إخفاء هذا الإشعار، وسيواصل التطبيق العمل.</string>
+    <string name="air_settings_background_notification_failed">لم يفتح الهاتف إعدادات الإشعارات. تجدها في إعدادات الهاتف: «التطبيقات» ثم «Khandaq» ثم «الإشعارات».</string>
 </resources>

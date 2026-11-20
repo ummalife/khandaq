@@ -980,7 +980,9 @@ public class MainActivity extends AppCompatActivity
             channelName = getString(R.string.notification_channel_toxservice);
             int importance = NotificationManager.IMPORTANCE_MIN;
             notification_channel_toxservice = new NotificationChannel(channelId_toxservice, channelName, importance);
-            notification_channel_toxservice.setDescription(channelId_toxservice);
+            // KHANDAQ (testers' ideas, 0.2.67): the description HelperToxNotification gives the channel; this second
+            // creation of it overwrote that with the channel's id.
+            notification_channel_toxservice.setDescription(getString(R.string.notification_channel_toxservice_desc));
             notification_channel_toxservice.setSound(null, null);
             notification_channel_toxservice.enableVibration(false);
             nmn3.createNotificationChannel(notification_channel_toxservice);
@@ -3799,6 +3801,12 @@ public class MainActivity extends AppCompatActivity
                     HelperMsgNotification.consume_pending_open_chat(MainActivity.this);
                     // KHANDAQ (redesign stage 4, E19): the third step of first launch, once, over Air.
                     final boolean idPageNext = AirIdReadyActivity.openIfPending(MainActivity.this);
+                    // KHANDAQ (testers' ideas, 0.2.67): New contact with the ID of a tox: link that came before the
+                    // unlock; after the ID page of a first launch, when Air resumes again.
+                    if (!idPageNext)
+                    {
+                        ToxLink.openPending(MainActivity.this);
+                    }
                     // KHANDAQ (redesign stage 5): the battery question, once, never over the first launch.
                     AirBatteryQuestion.askOnceIfDue(MainActivity.this, idPageNext, commandWanted);
                     if (is_tox_started)
@@ -9363,9 +9371,8 @@ public class MainActivity extends AppCompatActivity
         GroupInfoActivity.privacyChanged(group_identifier);
         update_group_in_friendlist(group_identifier);
         update_group_in_groupmessagelist(group_identifier);
-        add_system_message_to_group_chat(group_identifier, "privacy state changed to: " +
-                                                           ToxVars.TOX_GROUP_PRIVACY_STATE.value_str(
-                                                                   a_TOX_GROUP_PRIVACY_STATE));
+        // KHANDAQ (testers' ideas, 0.2.67): who can join now, in the app's words, not toxcore's name of the state.
+        add_system_message_to_group_chat(group_identifier, HelperGroup.group_privacy_line(a_TOX_GROUP_PRIVACY_STATE));
         update_savedata_file_wrapper();
     }
 
@@ -9695,7 +9702,8 @@ public class MainActivity extends AppCompatActivity
         final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
 
         set_group_active(group_identifier);
-        add_system_message_to_group_chat(group_identifier, "You joined the group");
+        // KHANDAQ (testers' ideas, 0.2.67): in the four languages, as the lines of other members joining are.
+        add_system_message_to_group_chat(group_identifier, HelperGroup.group_joined_line());
         update_savedata_file_wrapper();
         // KHANDAQ (0.2.57, SPEC-community item 1): connected, the group is in the saved state now; Khandaq Community
         // is the profile's for good then.
@@ -9768,9 +9776,10 @@ public class MainActivity extends AppCompatActivity
             {
                 update_group_peer_in_db(group_number, group_identifier, target_peer_id, group_peer_pubkey, target_role);
                 update_group_messages_peer_role(group_identifier, group_peer_pubkey, target_role);
+                // KHANDAQ (testers' ideas, 0.2.67): the member by name and the role in the app's words, where the
+                // line said "peer 3 changed role to" and toxcore's name of the event.
                 add_system_message_to_group_chat(group_identifier,
-                        "peer " + target_peer_id + " changed role to "
-                                + ToxVars.Tox_Group_Mod_Event.value_str(a_Tox_Group_Mod_Event));
+                        HelperGroup.group_role_line(group_number, target_peer_id, a_Tox_Group_Mod_Event));
             }
 
             update_group_in_groupmessagelist(group_identifier);
@@ -10924,7 +10933,7 @@ public class MainActivity extends AppCompatActivity
                         data.getStringExtra("group_name"),
                         R.string.add_private_group_success,
                         R.string.add_private_group_failed,
-                        "You created the Group (as Private [invite only] Group)",
+                        HelperGroup.group_created_line(true),
                         data.getStringExtra("group_password"));
                 if (created && chatsFragment != null)
                 {
@@ -10942,7 +10951,7 @@ public class MainActivity extends AppCompatActivity
                         data.getStringExtra("group_name"),
                         R.string.add_public_group_success,
                         R.string.add_public_group_failed,
-                        "You created the Group (as Public Group)");
+                        HelperGroup.group_created_line(false));
                 AirRepository.requestRefresh();
             }
         }

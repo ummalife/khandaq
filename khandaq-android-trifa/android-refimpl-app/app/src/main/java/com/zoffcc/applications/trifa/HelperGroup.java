@@ -53,9 +53,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.StringRes;
 import id.zelory.compressor.Compressor;
 
 import static com.zoffcc.applications.trifa.CombinedFriendsAndConferences.COMBINED_IS_CONFERENCE;
@@ -5413,6 +5416,15 @@ public class HelperGroup
             return "";
         }
 
+        // KHANDAQ (testers' ideas, 0.2.67): a line stored in English with toxcore's names in it, in the app's words.
+        final int legacy = legacy_group_line_res(raw);
+        if (legacy != 0)
+        {
+            final long peer = legacy_role_line_peer(raw);
+            return peer < 0 ? context.getString(legacy)
+                            : context.getString(legacy, context.getString(R.string.group_sys_peer_number, peer));
+        }
+
         if (raw.startsWith("You joined the group"))
         {
             return context.getString(R.string.group_sys_you_joined);
@@ -5449,6 +5461,157 @@ public class HelperGroup
         }
 
         return raw;
+    }
+
+    // KHANDAQ (testers' ideas, 0.2.67): the service lines that were stored in English, some with toxcore's names in
+    // them ("privacy state changed to: TOX_GROUP_PRIVACY_STATE_PUBLIC"), are stored in the app's words now, in the
+    // language of the phone, as the lines of members joining and leaving are. Lines stored before keep their English
+    // and are said the same way when shown (formatSystemMessageForDisplay, legacy_group_line_res).
+    private static final String LEGACY_CREATED_OPEN = "You created the Group (as Public Group)";
+    private static final String LEGACY_CREATED_INVITE_ONLY = "You created the Group (as Private [invite only] Group)";
+    private static final String LEGACY_PRIVACY_PREFIX = "privacy state changed to:";
+    private static final Pattern LEGACY_ROLE_LINE = Pattern.compile(
+            "^peer (\\d{1,10}) changed role to (TOX_GROUP_MOD_EVENT_[A-Z]+)$");
+
+    /** "You joined the group". */
+    @Nullable
+    static String group_joined_line()
+    {
+        return group_line(R.string.group_sys_you_joined);
+    }
+
+    /** The first line of a group we made: open to anyone with its key, or by invitation only. */
+    @Nullable
+    static String group_created_line(final boolean invite_only)
+    {
+        return group_line(invite_only ? R.string.group_sys_you_created_invite_only : R.string.group_sys_you_created_open);
+    }
+
+    /** Who can join the group now; null for a state toxcore does not name, which then adds no line. */
+    @Nullable
+    static String group_privacy_line(final int privacy_state)
+    {
+        final int words = group_privacy_line_res(privacy_state);
+        return words == 0 ? null : group_line(words);
+    }
+
+    /** A member's new role, with their name; null for an event that sets no role (a kick), which adds no line. */
+    @Nullable
+    static String group_role_line(final long group_number, final long peer_id, final int mod_event)
+    {
+        final int words = group_role_line_res(mod_event);
+        if (words == 0)
+        {
+            return null;
+        }
+        try
+        {
+            return groupNotifyContext().getString(words, resolveGroupPeerLabel(group_number, peer_id));
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "group_role_line:EE:" + e.getMessage());
+            return null;
+        }
+    }
+
+    @StringRes
+    static int group_privacy_line_res(final int privacy_state)
+    {
+        if (privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
+        {
+            return R.string.group_sys_privacy_open;
+        }
+        if (privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PRIVATE.value)
+        {
+            return R.string.group_sys_privacy_invite_only;
+        }
+        return 0;
+    }
+
+    @StringRes
+    static int group_role_line_res(final int mod_event)
+    {
+        if (mod_event == ToxVars.Tox_Group_Mod_Event.TOX_GROUP_MOD_EVENT_MODERATOR.value)
+        {
+            return R.string.group_sys_peer_now_moderator;
+        }
+        if (mod_event == ToxVars.Tox_Group_Mod_Event.TOX_GROUP_MOD_EVENT_USER.value)
+        {
+            return R.string.group_sys_peer_now_member;
+        }
+        if (mod_event == ToxVars.Tox_Group_Mod_Event.TOX_GROUP_MOD_EVENT_OBSERVER.value)
+        {
+            return R.string.group_sys_peer_now_observer;
+        }
+        return 0;
+    }
+
+    /** The words a line stored in English before 0.2.67 is said in now; 0 when it is none of those lines. */
+    @StringRes
+    static int legacy_group_line_res(@Nullable final String raw)
+    {
+        if (raw == null)
+        {
+            return 0;
+        }
+        if (raw.equals(LEGACY_CREATED_OPEN))
+        {
+            return R.string.group_sys_you_created_open;
+        }
+        if (raw.equals(LEGACY_CREATED_INVITE_ONLY))
+        {
+            return R.string.group_sys_you_created_invite_only;
+        }
+        if (raw.startsWith(LEGACY_PRIVACY_PREFIX))
+        {
+            final String state = raw.substring(LEGACY_PRIVACY_PREFIX.length()).trim();
+            for (final ToxVars.TOX_GROUP_PRIVACY_STATE known : ToxVars.TOX_GROUP_PRIVACY_STATE.values())
+            {
+                if (state.equals(ToxVars.TOX_GROUP_PRIVACY_STATE.value_str(known.value)))
+                {
+                    return group_privacy_line_res(known.value);
+                }
+            }
+            return 0;
+        }
+        final Matcher role = LEGACY_ROLE_LINE.matcher(raw);
+        if (role.matches())
+        {
+            for (final ToxVars.Tox_Group_Mod_Event event : ToxVars.Tox_Group_Mod_Event.values())
+            {
+                if (role.group(2).equals(ToxVars.Tox_Group_Mod_Event.value_str(event.value)))
+                {
+                    return group_role_line_res(event.value);
+                }
+            }
+        }
+        return 0;
+    }
+
+    /** The peer number a role line stored in English names, which is all it kept of the member; -1 for other lines. */
+    static long legacy_role_line_peer(@Nullable final String raw)
+    {
+        if (raw == null)
+        {
+            return -1;
+        }
+        final Matcher role = LEGACY_ROLE_LINE.matcher(raw);
+        return role.matches() ? Long.parseLong(role.group(1)) : -1;
+    }
+
+    @Nullable
+    private static String group_line(@StringRes final int words)
+    {
+        try
+        {
+            return groupNotifyContext().getString(words);
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "group_line:EE:" + e.getMessage());
+            return null;
+        }
     }
 
     private static String humanizeExitReason(final Context context, final String reason)

@@ -55,7 +55,7 @@
         android:id="@+id/status_bar_play"
         android:layout_width="45dp"
         android:layout_height="45dp"
-        android:contentDescription="Pause"
+        android:contentDescription="@string/air_voice_pause"
         android:padding="13dp"
         android:scaleType="fitCenter"
         android:src="@drawable/about_icon_google_play" />
@@ -71,7 +71,7 @@
         android:id="@+id/status_bar_stop"
         android:layout_width="45dp"
         android:layout_height="45dp"
-        android:contentDescription="Stop"
+        android:contentDescription="@string/notification_media_stop"
         android:padding="13dp"
         android:scaleType="fitCenter"
         android:src="@drawable/about_icon_instagram" />

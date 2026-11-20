@@ -61,6 +61,8 @@ import info.guardianproject.iocipher.RandomAccessFile;
     private SeekBar seekBar;
     private ProgressBar progressBar;
     private TextView txtProcess;
+    // KHANDAQ (testers' ideas, 0.2.67): the speed pill, on the note that plays.
+    private TextView txtSpeed;
     private MediaPlayer mediaPlayer;
     private ProgressBar pb_play;
 
@@ -192,6 +194,7 @@ import info.guardianproject.iocipher.RandomAccessFile;
         seekBar = this.findViewById(R.id.seekBar);
         progressBar = this.findViewById(R.id.progressBar);
         txtProcess = this.findViewById(R.id.txtTime);
+        txtSpeed = this.findViewById(R.id.txtSpeed);
         seekbarV = this.findViewById(R.id.seekBarV);
         pb_play = this.findViewById(R.id.pb_play);
 
@@ -258,6 +261,9 @@ import info.guardianproject.iocipher.RandomAccessFile;
         imgPlay.setOnClickListener(imgPlayClickListener);
         imgPause.setOnClickListener(imgPauseClickListener);
         imgShare.setOnClickListener(imgShareClickListener);
+        if (txtSpeed != null) {
+            txtSpeed.setOnClickListener(speedClickListener);
+        }
         if (seekbarV.getVisibility() == VISIBLE && vaudiopath != null){
             seekbarV.setOnSeekBarChangeListener(seekBarListener);
             seekbarV.vupdateVisualizer(new info.guardianproject.iocipher.File(vaudiopath));
@@ -276,10 +282,10 @@ import info.guardianproject.iocipher.RandomAccessFile;
         final boolean mine = com.zoffcc.applications.trifa.ChatVoicePlaybackManager.isActivePath(vaudiopath);
         final boolean playing = mine && com.zoffcc.applications.trifa.ChatVoicePlaybackManager.isPlaying();
         final int pos = com.zoffcc.applications.trifa.ChatVoicePlaybackManager.positionMs(vaudiopath);
-        applyPlaybackUi(playing, pos, dur);
+        applyPlaybackUi(mine, playing, pos, dur);
     }
 
-    private void applyPlaybackUi(final boolean playing, final int rawPos, final int dur) {
+    private void applyPlaybackUi(final boolean mine, final boolean playing, final int rawPos, final int dur) {
         if (dur > 0) {
             seekBar.setMax(dur);
             if (seekbarV.getVisibility() == VISIBLE) {
@@ -302,6 +308,27 @@ import info.guardianproject.iocipher.RandomAccessFile;
             // KHANDAQ (redesign, stage 3b): the length at rest, the time played while it plays (iOS).
             txtProcess.setText(playing && pos > 0 ? convertSecondsToHMmSs(pos / 1000) : convertSecondsToHMmSs(dur / 1000));
         }
+        applySpeedUi(playing || (mine && pos > 0));
+    }
+
+    // KHANDAQ (testers' ideas, 0.2.67): the speed pill stands on the note that plays, or that waits paused
+    // midway, with the speed every note plays at.
+    private void applySpeedUi(final boolean shown) {
+        if (txtSpeed == null) {
+            return;
+        }
+        if (shown) {
+            final String label = com.zoffcc.applications.trifa.ChatVoicePlaybackManager.speedLabel(getContext());
+            if (!label.contentEquals(txtSpeed.getText())) {
+                txtSpeed.setText(label);
+                txtSpeed.setContentDescription(
+                        com.zoffcc.applications.trifa.ChatVoicePlaybackManager.speedDescription(getContext()));
+            }
+        }
+        final int visibility = shown ? VISIBLE : GONE;
+        if (txtSpeed.getVisibility() != visibility) {
+            txtSpeed.setVisibility(visibility);
+        }
     }
 
     // KHANDAQ: manager tick (UI thread) — live progress if this bubble's file is the active one,
@@ -315,12 +342,27 @@ import info.guardianproject.iocipher.RandomAccessFile;
         final int dur = seekBar.getMax();
         final int pos = mine ? positionMs
                 : com.zoffcc.applications.trifa.ChatVoicePlaybackManager.positionMs(vaudiopath);
-        applyPlaybackUi(mine && playing, pos, dur);
+        applyPlaybackUi(mine, mine && playing, pos, dur);
     }
 
 
 
     //Components' listeners
+
+    // KHANDAQ (testers' ideas, 0.2.67): a tap on the pill goes to the next speed, for every voice note, and
+    // TalkBack says the new one.
+    OnClickListener speedClickListener = new OnClickListener() {
+        @Override
+        public void onClick(View v) {
+            try {
+                com.zoffcc.applications.trifa.ChatVoicePlaybackManager.cycleSpeed(getContext());
+                v.announceForAccessibility(
+                        com.zoffcc.applications.trifa.ChatVoicePlaybackManager.speedDescription(getContext()));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    };
 
     OnClickListener imgPlayClickListener = new OnClickListener() {
         @Override

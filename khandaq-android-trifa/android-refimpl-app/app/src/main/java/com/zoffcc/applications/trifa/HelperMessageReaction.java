@@ -980,6 +980,58 @@ public class HelperMessageReaction
         }
     }
 
+    // KHANDAQ (testers' ideas, 0.2.67): the reaction bar over a message held down (AirReactionBar) reads and
+    // toggles the reaction of one message by its id, a 1:1 row or a group row.
+
+    /** Our emoji on that message, null when we have none on it (or the row is gone). */
+    static String ownEmojiOf(final boolean group, final long id)
+    {
+        try
+        {
+            if (group)
+            {
+                final List<GroupMessage> rows = orma.selectFromGroupMessage().idEq(id).toList();
+                return (rows == null || rows.isEmpty()) ? null : actorEmoji(rows.get(0).reactions, OWN_MARKER);
+            }
+            final List<Message> rows = orma.selectFromMessage().idEq(id).toList();
+            return (rows == null || rows.isEmpty()) ? null : actorEmoji(rows.get(0).reactions, OWN_MARKER);
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "ownEmojiOf:EE:" + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * A pick on the bar: that reaction goes on the message, or comes off when it is already ours, as a pick in
+     * the dialog does. The row is read at the tap, so reactions that came in while the bar was up are kept.
+     */
+    static void toggleOwnReaction(final boolean group, final long id, final String emoji)
+    {
+        try
+        {
+            if (group)
+            {
+                final List<GroupMessage> rows = orma.selectFromGroupMessage().idEq(id).toList();
+                if (rows != null && !rows.isEmpty())
+                {
+                    toggleOwnGroupReaction(rows.get(0), emoji);
+                }
+                return;
+            }
+            final List<Message> rows = orma.selectFromMessage().idEq(id).toList();
+            if (rows != null && !rows.isEmpty())
+            {
+                toggleOwnFriendReaction(rows.get(0), emoji);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "toggleOwnReaction:EE:" + e.getMessage());
+        }
+    }
+
     interface OnReactionPicked
     {
         void onPicked(String emoji);

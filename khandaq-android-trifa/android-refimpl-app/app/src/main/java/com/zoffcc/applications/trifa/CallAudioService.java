@@ -307,8 +307,16 @@ public class CallAudioService extends Service
         views.setTextViewText(R.id.status_bar_artist_name, "...");
         bigViews.setTextViewText(R.id.status_bar_artist_name, "...");
 
-        views.setTextViewText(R.id.status_bar_track_name, "Tox:" + "Call"); // bold
-        bigViews.setTextViewText(R.id.status_bar_track_name, "Tox:" + "Call"); // bold
+        // KHANDAQ (testers' ideas, 0.2.67): the words in the four languages and without "Tox". TalkBack names the two
+        // buttons by what they do in a call, the microphone and End, not by the pause and stop of the shared layout.
+        final String call_title = getString(R.string.notification_call_title);
+        views.setTextViewText(R.id.status_bar_track_name, call_title); // bold
+        bigViews.setTextViewText(R.id.status_bar_track_name, call_title); // bold
+        for (final RemoteViews shown : new RemoteViews[]{views, bigViews})
+        {
+            shown.setContentDescription(R.id.status_bar_play, getString(R.string.air_call_mic));
+            shown.setContentDescription(R.id.status_bar_stop, getString(R.string.air_call_end));
+        }
 
         NotificationCompat.Builder b;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)
@@ -326,7 +334,7 @@ public class CallAudioService extends Service
         b.setColor(getResources().getColor(R.color.colorPrimary));
         b.setSmallIcon(R.drawable.ic_stat_khandaq); // KHANDAQ: monochrome silhouette, not the square launcher icon
         b.setLargeIcon((Bitmap) null);
-        b.setContentText("Tox:" + "Call ...");
+        b.setContentText(getString(R.string.notification_call_text));
         b.setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
         b.setAutoCancel(false);
         b.setOngoing(true);

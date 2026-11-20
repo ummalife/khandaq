@@ -76,6 +76,30 @@
             android:textAppearance="@style/TextAppearance.KQ.Caption"
             android:textColor="@color/kq_ink_3" />
 
+        <!-- Testers' ideas (0.2.67): the speed of voice notes, 1x, 1.5x or 2x, on the note that plays or waits
+             paused midway; a tap goes to the next one for every note (VoicePlaybackSpeed). A raised pill with a
+             line, drawn 28dp high in the 48dp target, growing with the text size. -->
+        <TextView
+            android:id="@+id/txtSpeed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/kq_space_6"
+            android:background="@drawable/air_bg_voice_speed"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFeatureSettings="tnum"
+            android:gravity="center"
+            android:maxLines="1"
+            android:minWidth="@dimen/kq_size_target_android"
+            android:minHeight="@dimen/kq_size_target_android"
+            android:paddingStart="@dimen/kq_space_10"
+            android:paddingTop="@dimen/kq_space_12"
+            android:paddingEnd="@dimen/kq_space_10"
+            android:paddingBottom="@dimen/kq_space_12"
+            android:textAppearance="@style/TextAppearance.KQ.Air.CaptionStrong"
+            android:textColor="@color/kq_ink_2"
+            android:visibility="gone" />
+
         <ImageView
             android:id="@+id/imgShare"
             android:layout_width="0dp"

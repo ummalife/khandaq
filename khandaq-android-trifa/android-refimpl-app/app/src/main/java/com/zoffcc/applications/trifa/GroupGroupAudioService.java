@@ -95,8 +95,14 @@ public class GroupGroupAudioService extends Service
         try
         {
             // update the notification text
-            views.setTextViewText(R.id.status_bar_track_name, "#G1"); // bold
-            bigViews.setTextViewText(R.id.status_bar_track_name, "#G2"); // bold
+            // KHANDAQ (testers' ideas, 0.2.67): the group's name in bold, in place of the placeholders #G1 and #G2.
+            if (group_id != null)
+            {
+                final String group_title = HelperGroup.get_effective_group_title(
+                        HelperGroup.tox_group_by_groupid__wrapper(group_id), group_id);
+                views.setTextViewText(R.id.status_bar_track_name, group_title); // bold
+                bigViews.setTextViewText(R.id.status_bar_track_name, group_title); // bold
+            }
             ngc_noti_and_builder.n = ngc_noti_and_builder.b.build();
             ngc_nm3.notify(ONGOING_NGC_AUDIO_NOTIFICATION_ID, ngc_noti_and_builder.n);
         }
@@ -427,8 +433,9 @@ public class GroupGroupAudioService extends Service
         views.setTextViewText(R.id.status_bar_track_name, "..."); // bold
         bigViews.setTextViewText(R.id.status_bar_track_name, "..."); // bold
 
-        views.setTextViewText(R.id.status_bar_artist_name, "Tox:" + "GroupAudio");
-        bigViews.setTextViewText(R.id.status_bar_artist_name, "Tox:" + "GroupAudio");
+        // KHANDAQ (testers' ideas, 0.2.67): the words in the four languages and without "Tox".
+        views.setTextViewText(R.id.status_bar_artist_name, getString(R.string.notification_channel_group_video));
+        bigViews.setTextViewText(R.id.status_bar_artist_name, getString(R.string.notification_channel_group_video));
 
         NotificationCompat.Builder b;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)
@@ -446,7 +453,7 @@ public class GroupGroupAudioService extends Service
         b.setColor(getResources().getColor(R.color.colorPrimary));
         b.setSmallIcon(R.drawable.ic_stat_khandaq); // KHANDAQ: monochrome silhouette, not the square launcher icon
         b.setLargeIcon((Bitmap) null);
-        b.setContentText("Tox:" + "GroupAudio playing ...");
+        b.setContentText(getString(R.string.notification_group_video_text));
         b.setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
         b.setAutoCancel(false);
         b.setOngoing(true);

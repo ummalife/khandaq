@@ -484,7 +484,9 @@ final class HelperMessageSeen
         void offer(final String publicKey, final Candidate newest, final long seenSec)
         {
             final String key = normalize(publicKey);
-            if (key == null || newest == null)
+            // KHANDAQ (testers' ideas, 0.2.67): with Send read receipts off nothing is named, so once the
+            // switch is on again the conversation on screen names its newest item as usual.
+            if (key == null || newest == null || !PrivacyPreference.sendsSeenReceipts)
             {
                 return;
             }
@@ -560,6 +562,15 @@ final class HelperMessageSeen
         {
             if (f.due == null)
             {
+                return;
+            }
+            // KHANDAQ (testers' ideas, 0.2.67): Send read receipts is off. An anchor named before it was
+            // turned off, and one an earlier run left waiting for the person, goes nowhere: it is dropped.
+            if (!PrivacyPreference.sendsSeenReceipts)
+            {
+                port.log("dropped (read receipts off) " + f.due);
+                f.due = null;
+                release(key, f);
                 return;
             }
             if (!port.connected(key))
@@ -950,7 +961,7 @@ final class HelperMessageSeen
     private static void lookNow(final String key)
     {
         final Context context = appContext;
-        if (context == null || TrifaToxService.orma == null)
+        if (context == null || TrifaToxService.orma == null || !PrivacyPreference.sendsSeenReceipts)
         {
             return;
         }

@@ -25,6 +25,7 @@ import org.khandaq.messenger.R;
 import android.app.Activity;
 import android.content.ClipData;
 import android.content.ContentResolver;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.database.Cursor;
@@ -553,6 +554,22 @@ public class ProfileContentFragment extends Fragment
     // select new avatar image
     private void launchAvatarPicker()
     {
+        final Intent intent = avatar_picker_intent();
+        // KHANDAQ (#avatar-pin): the system photo picker is an external app, so it backgrounds us and
+        // the app-lock would prompt for the PIN on return from an intentional in-app action. Suppress
+        // the lock for exactly this one foreground return (same flag the chat photo/file pickers use;
+        // the gate consumes+clears it whether the user picks or cancels). Only here, NOT before the
+        // in-app uCrop/field-edit launches, which never background the app.
+        AppLockHelper.suppressNextLock();
+        startActivityForResult(intent, MEDIAPICK_ID_002);
+    }
+
+    /**
+     * KHANDAQ (testers' ideas, 0.2.67): the system picker of our photo, images only; the first launch
+     * (AirFirstLaunchActivity) opens the same one.
+     */
+    static Intent avatar_picker_intent()
+    {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("image/*");
@@ -565,13 +582,7 @@ public class ProfileContentFragment extends Fragment
             // (bounce to PIN → back to profile, avatar unchanged). Restrict to images only.
             intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*"});
         }
-        // KHANDAQ (#avatar-pin): the system photo picker is an external app, so it backgrounds us and
-        // the app-lock would prompt for the PIN on return from an intentional in-app action. Suppress
-        // the lock for exactly this one foreground return (same flag the chat photo/file pickers use;
-        // the gate consumes+clears it whether the user picks or cancels). Only here — NOT before the
-        // in-app uCrop/field-edit launches, which never background the app.
-        AppLockHelper.suppressNextLock();
-        startActivityForResult(intent, MEDIAPICK_ID_002);
+        return intent;
     }
 
     private void removeOwnAvatar()
@@ -976,21 +987,10 @@ public class ProfileContentFragment extends Fragment
 sayPhotoFailure(R.string.profile_avatar_error_generic);
                 return;
             }
-            // KHANDAQ: belt-and-suspenders — reject a non-image pick (e.g. a video from a picker that
-            // ignored the image/* filter). A video URI can't be cropped, which previously bounced the
-            // user through the PIN screen back to the profile with the avatar unchanged.
-            try
+            if (!picked_avatar_is_image(requireContext(), data.getData()))
             {
-                final String picked_mime = requireContext().getContentResolver().getType(data.getData());
-                if ((picked_mime != null) && !picked_mime.startsWith("image/"))
-                {
-                    Log.i(TAG, "profile_avatar:FAIL:step=1b:not an image mime=" + picked_mime.replaceAll("\\R", "_"));
-                    sayPhotoFailure(R.string.profile_avatar_error_unsupported);
-                    return;
-                }
-            }
-            catch (Exception ignored)
-            {
+                sayPhotoFailure(R.string.profile_avatar_error_unsupported);
+                return;
             }
             // KHANDAQ (#8): let the user crop/zoom (square) before we save the avatar.
             launch_avatar_crop(data.getData());
@@ -1006,6 +1006,50 @@ sayPhotoFailure(R.string.profile_avatar_error_generic);
             }
             apply_avatar_from_uri(cropped);
         }
+    }
+
+    /**
+     * KHANDAQ: belt-and-suspenders, a non-image pick is refused (e.g. a video from a picker that ignored the
+     * image/* filter). A video URI can't be cropped, which previously bounced the user through the PIN
+     * screen back to the profile with the avatar unchanged. False only when the system names another type;
+     * the first launch (AirFirstLaunchActivity) asks the same (testers' ideas, 0.2.67).
+     */
+    static boolean picked_avatar_is_image(final Context context, final Uri picked)
+    {
+        try
+        {
+            final String picked_mime = context.getContentResolver().getType(picked);
+            if ((picked_mime != null) && !picked_mime.startsWith("image/"))
+            {
+                Log.i(TAG, "profile_avatar:FAIL:step=1b:not an image mime=" + picked_mime.replaceAll("\\R", "_"));
+                return false;
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        return true;
+    }
+
+    /**
+     * KHANDAQ (#8): the uCrop square (1:1) editor for a picked image, writing to {@code dest}; the first
+     * launch (AirFirstLaunchActivity) crops with the same one (testers' ideas, 0.2.67).
+     */
+    static Intent avatar_crop_intent(final Context context, final Uri source, final Uri dest)
+    {
+        final com.yalantis.ucrop.UCrop.Options crop_options = new com.yalantis.ucrop.UCrop.Options();
+        crop_options.setToolbarColor(context.getResources().getColor(R.color.colorPrimaryDark));
+        crop_options.setStatusBarColor(context.getResources().getColor(R.color.colorPrimaryDark));
+        crop_options.setActiveControlsWidgetColor(context.getResources().getColor(R.color.colorPrimary));
+        // KHANDAQ: route through AvatarCropActivity (uCrop subclass), which keeps the toolbar clear of
+        // the status bar on edge-to-edge devices and adds a big confirm button at the bottom.
+        final android.content.Intent crop_intent = com.yalantis.ucrop.UCrop.of(source, dest)
+                .withAspectRatio(1f, 1f)
+                .withMaxResultSize(1024, 1024)
+                .withOptions(crop_options)
+                .getIntent(context);
+        crop_intent.setClass(context, AvatarCropActivity.class);
+        return crop_intent;
     }
 
     /**
@@ -1030,19 +1074,8 @@ sayPhotoFailure(R.string.profile_avatar_error_generic);
         {
             final Uri dest = Uri.fromFile(new java.io.File(requireContext().getCacheDir(),
                     "avatar_crop_" + System.currentTimeMillis() + ".jpg"));
-            final com.yalantis.ucrop.UCrop.Options crop_options = new com.yalantis.ucrop.UCrop.Options();
-            crop_options.setToolbarColor(getResources().getColor(R.color.colorPrimaryDark));
-            crop_options.setStatusBarColor(getResources().getColor(R.color.colorPrimaryDark));
-            crop_options.setActiveControlsWidgetColor(getResources().getColor(R.color.colorPrimary));
-            // KHANDAQ: route through AvatarCropActivity (uCrop subclass) — fixes the toolbar
-            // colliding with the status bar on edge-to-edge devices and adds a big bottom ✓.
-            final android.content.Intent crop_intent = com.yalantis.ucrop.UCrop.of(source, dest)
-                    .withAspectRatio(1f, 1f)
-                    .withMaxResultSize(1024, 1024)
-                    .withOptions(crop_options)
-                    .getIntent(requireContext());
-            crop_intent.setClass(requireContext(), AvatarCropActivity.class);
-            startActivityForResult(crop_intent, com.yalantis.ucrop.UCrop.REQUEST_CROP);
+            startActivityForResult(avatar_crop_intent(requireContext(), source, dest),
+                                   com.yalantis.ucrop.UCrop.REQUEST_CROP);
         }
         catch (Exception e)
         {
@@ -1055,10 +1088,52 @@ sayPhotoFailure(R.string.profile_avatar_error_generic);
     // KHANDAQ (#8): existing avatar save pipeline, now fed the cropped square image uri.
     private void apply_avatar_from_uri(final Uri uri)
     {
+        // KHANDAQ (testers' ideas, 0.2.67): the saving is save_own_avatar, shared with the photo chosen on the first
+        // launch (AirFirstPhoto); what this screen shows of it follows here.
+        final int failure = save_own_avatar(requireContext(), uri);
+        if (failure != 0)
+        {
+            sayPhotoFailure(failure);
+            return;
+        }
+        try
+        {
+            final String vfs_avatar_path =
+                    VFS_PREFIX + VFS_OWN_AVATAR_DIR + "/" + VFS_OWN_AVATAR_DIR_FILENAME_WITH_EXTENSION;
+            final Drawable d2 = new IconicsDrawable(requireContext()).icon(GoogleMaterial.Icon.gmd_face).color(
+                    getResources().getColor(R.color.colorPrimaryDark)).sizeDp(200);
+            put_vfs_image_on_imageview_real(requireContext(), profile_icon, d2, vfs_avatar_path, true, false,
+                                            null);
+
+            send_avatar_to_all_friends();
+            update_avatar_remove_button_visibility();
+            MainActivity.update_main_profile_bar();
+            if (you != null)
+            {
+                you.endPhotoNote();
+            }
+            Toast.makeText(requireContext(), getString(R.string.profile_avatar_saved_toast), Toast.LENGTH_SHORT).show();
+        }
+        catch (Throwable e)
+        {
+            e.printStackTrace();
+            Log.i(TAG, "profile_avatar:FAIL:step=9");
+            sayPhotoFailure(R.string.profile_avatar_error_generic);
+        }
+    }
+
+    /**
+     * KHANDAQ (testers' ideas, 0.2.67): the save pipeline of apply_avatar_from_uri without the screen: the image at
+     * {@code uri} becomes our photo in the file store. 0 when it did, else the words of why not. Needs the profile
+     * open (its database and file store); runs on any thread.
+     */
+    @StringRes
+    static int save_own_avatar(final Context context, final Uri uri)
+    {
         {
             try
             {
-                final String fileName_ = resolve_picked_image_display_name(uri);
+                final String fileName_ = resolve_picked_image_display_name(context, uri);
 
                 long file_size = -1;
                 try
@@ -1071,7 +1146,7 @@ sayPhotoFailure(R.string.profile_avatar_error_generic);
                     }
                     else
                     {
-                        DocumentFile documentFile = DocumentFile.fromSingleUri(requireContext().getApplicationContext(), uri);
+                        DocumentFile documentFile = DocumentFile.fromSingleUri(context.getApplicationContext(), uri);
                         if (documentFile != null)
                         {
                             file_size = documentFile.length();
@@ -1085,8 +1160,7 @@ sayPhotoFailure(R.string.profile_avatar_error_generic);
 
                 if (file_size > 10 * 1024 * 1024)
                 {
-                    sayPhotoFailure(R.string.profile_avatar_error_too_large);
-                    return;
+                    return R.string.profile_avatar_error_too_large;
                 }
 
                 // DocumentFile.length() returns -1 or 0 when it can't query the uri (e.g. file://
@@ -1094,8 +1168,7 @@ sayPhotoFailure(R.string.profile_avatar_error_generic);
                 if ((file_size > 0) && (file_size < 100))
                 {
                     Log.i(TAG, "profile_avatar:FAIL:step=4");
-sayPhotoFailure(R.string.profile_avatar_error_generic);
-                    return;
+                    return R.string.profile_avatar_error_generic;
                 }
 
                 MessageListActivity.outgoing_file_wrapped ofw = copy_outgoing_file_to_sdcard_dir(uri.toString(),
@@ -1104,28 +1177,24 @@ sayPhotoFailure(R.string.profile_avatar_error_generic);
                 if (ofw == null)
                 {
                     Log.i(TAG, "profile_avatar:FAIL:step=5");
-sayPhotoFailure(R.string.profile_avatar_error_generic);
-                    return;
+                    return R.string.profile_avatar_error_generic;
                 }
 
                 if (ofw.file_size_wrapped < 100)
                 {
                     Log.i(TAG, "profile_avatar:FAIL:step=6");
-sayPhotoFailure(R.string.profile_avatar_error_generic);
-                    return;
+                    return R.string.profile_avatar_error_generic;
                 }
 
                 if (ofw.file_size_wrapped > 10 * 1024 * 1024)
                 {
-                    sayPhotoFailure(R.string.profile_avatar_error_too_large);
-                    return;
+                    return R.string.profile_avatar_error_too_large;
                 }
 
                 final String local_image_path = ofw.filepath_wrapped + "/" + ofw.filename_wrapped;
                 Bitmap b = decode_downsampled_bitmap(local_image_path, 1600);
                 if (b == null)
                 {
-                    sayPhotoFailure(R.string.profile_avatar_error_unsupported);
                     try
                     {
                         // KHANDAQ (QA live, F4): the folder of its own the copy lies in goes with it.
@@ -1134,7 +1203,7 @@ sayPhotoFailure(R.string.profile_avatar_error_generic);
                     catch (Exception ignored)
                     {
                     }
-                    return;
+                    return R.string.profile_avatar_error_unsupported;
                 }
 
                 Bitmap out;
@@ -1162,8 +1231,7 @@ sayPhotoFailure(R.string.profile_avatar_error_generic);
                 {
                     e.printStackTrace();
                     Log.i(TAG, "profile_avatar:FAIL:step=7");
-sayPhotoFailure(R.string.profile_avatar_error_generic);
-                    return;
+                    return R.string.profile_avatar_error_generic;
                 }
 
                 Log.i(TAG, "select_avatar:p=" + ofw.filepath_wrapped + " f=" + ofw.filename_wrapped);
@@ -1185,26 +1253,12 @@ sayPhotoFailure(R.string.profile_avatar_error_generic);
                 if ((!vfs_avatar.exists()) || (vfs_avatar.length() < 100))
                 {
                     Log.i(TAG, "profile_avatar:FAIL:step=8");
-sayPhotoFailure(R.string.profile_avatar_error_generic);
-                    return;
+                    return R.string.profile_avatar_error_generic;
                 }
 
                 set_g_opts("VFS_OWN_AVATAR_FNAME", vfs_avatar_path);
                 set_g_opts("VFS_OWN_AVATAR_FILE_EXTENSION", VFS_OWN_AVATAR_DIR_FILE_EXTENSION);
-
-                final Drawable d2 = new IconicsDrawable(requireContext()).icon(GoogleMaterial.Icon.gmd_face).color(
-                        getResources().getColor(R.color.colorPrimaryDark)).sizeDp(200);
-                put_vfs_image_on_imageview_real(requireContext(), profile_icon, d2, vfs_avatar_path, true, false,
-                                                null);
-
-                send_avatar_to_all_friends();
-                update_avatar_remove_button_visibility();
-                MainActivity.update_main_profile_bar();
-                if (you != null)
-                {
-                    you.endPhotoNote();
-                }
-                Toast.makeText(requireContext(), getString(R.string.profile_avatar_saved_toast), Toast.LENGTH_SHORT).show();
+                return 0;
             }
             // KHANDAQ (#159): Throwable, not Exception — a full-resolution avatar can OOM inside the
             // decode/scale/compress steps, and OutOfMemoryError is an Error. Catching only Exception
@@ -1213,7 +1267,7 @@ sayPhotoFailure(R.string.profile_avatar_error_generic);
             {
                 e.printStackTrace();
                 Log.i(TAG, "profile_avatar:FAIL:step=9");
-sayPhotoFailure(R.string.profile_avatar_error_generic);
+                return R.string.profile_avatar_error_generic;
             }
         }
     }
@@ -1222,7 +1276,7 @@ sayPhotoFailure(R.string.profile_avatar_error_generic);
     // OutOfMemoryError (an Error) on large photos / low-RAM devices — a likely cause of avatar-save
     // failures. Read the bounds first, downsample to a sane cap, and treat any decode failure (incl.
     // OOM) as a soft null rather than a crash. The result is later scaled to 640px anyway.
-    private static Bitmap decode_downsampled_bitmap(final String path, final int maxDim)
+    static Bitmap decode_downsampled_bitmap(final String path, final int maxDim)
     {
         try
         {
@@ -1263,19 +1317,19 @@ sayPhotoFailure(R.string.profile_avatar_error_generic);
         }
     }
 
-    private String resolve_picked_image_display_name(final Uri uri)
+    private static String resolve_picked_image_display_name(final Context context, final Uri uri)
     {
         String fileName1 = null;
 
         try
         {
-            DocumentFile documentFile = DocumentFile.fromSingleUri(requireContext().getApplicationContext(), uri);
+            DocumentFile documentFile = DocumentFile.fromSingleUri(context.getApplicationContext(), uri);
             if (documentFile != null)
             {
                 fileName1 = documentFile.getName();
             }
 
-            ContentResolver cr = requireContext().getApplicationContext().getContentResolver();
+            ContentResolver cr = context.getApplicationContext().getContentResolver();
             Cursor metaCursor = cr.query(uri, null, null, null, null);
             if (metaCursor != null)
             {

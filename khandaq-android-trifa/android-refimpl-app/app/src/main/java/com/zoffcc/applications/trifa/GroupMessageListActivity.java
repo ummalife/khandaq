@@ -665,12 +665,15 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)
         {
-            String channelName = "Tox NGC Group Audio Play";
+            // KHANDAQ (testers' ideas, 0.2.67): the channel is named in the four languages and without "Tox"; its
+            // description said its id.
+            String channelName = getString(R.string.notification_channel_group_video);
             int importance = NotificationManager.IMPORTANCE_DEFAULT;
             ngc_channelId = "trifa_ngc_audio_play";
             ngc_notification_channel_group_audio_play_service = new NotificationChannel(ngc_channelId, channelName,
                                                                                         importance);
-            ngc_notification_channel_group_audio_play_service.setDescription(ngc_channelId);
+            ngc_notification_channel_group_audio_play_service.setDescription(
+                    getString(R.string.notification_channel_group_video_desc));
             ngc_notification_channel_group_audio_play_service.setSound(null, null);
             ngc_notification_channel_group_audio_play_service.enableVibration(false);
             ngc_nmn3.createNotificationChannel(ngc_notification_channel_group_audio_play_service);
@@ -5477,8 +5480,10 @@ public class GroupMessageListActivity extends AppCompatActivity
             pending_camera_capture_uri = null;
             if (captured != null)
             {
-                MediaSendPreviewHelper.dispatchAttachments(this, java.util.Collections.singletonList(captured),
-                        MediaSendPreviewHelper.TARGET_GROUP, -1, group_id, true);
+                // KHANDAQ (testers' ideas, 0.2.67): a shot opens the media preview, as a gallery pick does,
+                // instead of going the moment the camera closes.
+                prepareGroupMediaSendContext();
+                sendPickedMediaToGroup(java.util.Collections.singletonList(captured));
             }
         }
         else if (requestCode == MEDIAPICK_ID_001 && resultCode == Activity.RESULT_OK)
@@ -5524,7 +5529,11 @@ public class GroupMessageListActivity extends AppCompatActivity
                     return;
                 }
 
-                add_attachment_ngc(this, data, data, group_id, true);
+                // KHANDAQ (testers' ideas, 0.2.67): a document is asked about first, with its name and size.
+                AirFileSendQuestion.ask(this, data.getData(), () -> {
+                    prepareGroupMediaSendContext();
+                    add_attachment_ngc(this, data, data, group_id, true);
+                });
             }
         }
         else if (requestCode == MediaSendPreviewHelper.REQUEST_PREVIEW && resultCode == Activity.RESULT_OK)

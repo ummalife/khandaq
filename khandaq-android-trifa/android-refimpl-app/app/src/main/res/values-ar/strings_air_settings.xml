@@ -108,4 +108,8 @@
         <item>عالية الدقة (HD)</item>
         <item>عالية الدقة الكاملة (Full HD)</item>
     </string-array>
+    <!-- Testers' ideas (0.2.67): Settings > Privacy, what this phone tells others; the desktop's words for typing -->
+    <string name="air_privacy_read_receipts">إرسال إشعارات القراءة</string>
+    <string name="air_privacy_read_receipts_note">عند الإيقاف لا يرى الآخرون أنك قرأت رسائلهم.</string>
+    <string name="air_privacy_typing">إظهار أنني أكتب</string>
 </resources>

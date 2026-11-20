@@ -1080,4 +1080,24 @@
     <string name="plaintext_export_typed_confirm_word">تصدير</string>
     <!-- KHANDAQ (0.2.58): what a tap on the author over a member's message in a group does, read by TalkBack -->
     <string name="group_msg_author_hint">يفتح الملف الشخصي للعضو</string>
+    <!-- KHANDAQ (testers' ideas, 0.2.67): the call and group video notifications, the crash screen and the group service lines that were hard-coded in English, some with "Tox" in them. -->
+    <string name="notification_channel_call">المكالمة الجارية</string>
+    <string name="notification_channel_call_desc">يظهر أثناء المكالمة</string>
+    <string name="notification_call_title">مكالمة</string>
+    <string name="notification_call_text">مكالمة جارية</string>
+    <string name="notification_channel_group_video">فيديو المجموعة</string>
+    <string name="notification_channel_group_video_desc">يظهر أثناء فيديو المجموعة</string>
+    <string name="notification_group_video_text">فيديو المجموعة جارٍ</string>
+    <string name="notification_media_stop">إيقاف</string>
+    <string name="crash_title">تعطّل Khandaq</string>
+    <string name="crash_restart">انقر في أي مكان لإعادة تشغيل Khandaq</string>
+    <string name="crash_send_email">إرسال تقرير العطل بالبريد الإلكتروني</string>
+    <string name="crash_send_later">بعد إعادة التشغيل يمكن إرسال تقرير العطل من «الإعدادات» ثم «حول التطبيق».</string>
+    <string name="group_sys_you_created_open">أنشأت المجموعة (مفتوحة لكل من لديه مفتاحها)</string>
+    <string name="group_sys_you_created_invite_only">أنشأت المجموعة (بالدعوة فقط)</string>
+    <string name="group_sys_privacy_open">أصبحت المجموعة مفتوحة لكل من لديه مفتاحها</string>
+    <string name="group_sys_privacy_invite_only">أصبح الانضمام إلى المجموعة بالدعوة فقط</string>
+    <string name="group_sys_peer_now_moderator">أصبح %1$s مشرفًا</string>
+    <string name="group_sys_peer_now_member">أصبح %1$s عضوًا</string>
+    <string name="group_sys_peer_now_observer">أصبح %1$s مراقبًا</string>
 </resources>

@@ -63,6 +63,8 @@ public class ToolbarActionMode implements ActionMode.Callback
     private boolean action_active = false;
     // KHANDAQ (0.2.60): the chat bar, hidden while the selection bar lies over it.
     private View hidden_toolbar = null;
+    // KHANDAQ (testers' ideas, 0.2.67): the seven quick reactions over the message held down (AirReactionBar).
+    private AirReactionBar reaction_bar = null;
 
     public ToolbarActionMode(Context context)
     {
@@ -76,6 +78,7 @@ public class ToolbarActionMode implements ActionMode.Callback
         mode.getMenuInflater().inflate(R.menu.toolbar_message_activity, menu); // Inflate the menu over action mode
         action_active = false;
         hide_chat_toolbar();
+        reaction_bar = new AirReactionBar(context);
         return true;
     }
 
@@ -152,10 +155,17 @@ public class ToolbarActionMode implements ActionMode.Callback
         }
 
         // KHANDAQ (#192): "Реакция" — exactly one message that can hold a reaction
+        final boolean can_react = HelperMessageReaction.canReactToCurrentSelection();
         final MenuItem reactItem = menu.findItem(R.id.action_react);
         if (reactItem != null)
         {
-            reactItem.setVisible(HelperMessageReaction.canReactToCurrentSelection());
+            reactItem.setVisible(can_react);
+        }
+        // KHANDAQ (testers' ideas, 0.2.67): the same reactions one tap away, in a bar over the message; asked
+        // again after every change of the selection (the chats invalidate this mode then). A pick ends it.
+        if (reaction_bar != null)
+        {
+            reaction_bar.update(can_react, mode::finish);
         }
 
         // KHANDAQ (0.2.57, SPEC-community item 5): Report — exactly one message someone else wrote in a group
@@ -443,6 +453,11 @@ public class ToolbarActionMode implements ActionMode.Callback
     public void onDestroyActionMode(ActionMode mode)
     {
         show_chat_toolbar();
+        if (reaction_bar != null)
+        {
+            reaction_bar.dismiss();
+            reaction_bar = null;
+        }
         try
         {
             // KHANDAQ: ALWAYS clear the selection + redraw when the action mode ends. This used to be

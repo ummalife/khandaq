@@ -57,4 +57,6 @@
     <string name="air_import_failed_title">لم يُنقل الملف الشخصي</string>
     <!-- Stage 4: how a moved-in profile opens on Android -->
     <string name="air_import_device_key">على هذا الهاتف يُفتح الملف الشخصي دون كلمة مرور، بمفتاح محفوظ هنا. يمكن تعيين كلمة مرور لاحقًا من «الملف الشخصي» ثم «كلمة المرور ورمز PIN».</string>
+    <!-- KHANDAQ (testers' ideas, 0.2.67): what a tap on the empty photo tile beside the name does; the photo can be skipped. -->
+    <string name="air_first_photo_add">إضافة صورة (اختياري)</string>
 </resources>

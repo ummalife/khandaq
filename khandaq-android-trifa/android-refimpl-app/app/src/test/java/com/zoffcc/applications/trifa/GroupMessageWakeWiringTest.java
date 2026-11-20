@@ -14,20 +14,36 @@ import static org.junit.Assert.assertTrue;
 public class GroupMessageWakeWiringTest
 {
     @Test
-    public void a_group_text_wakes_when_toxcore_gives_it_its_id_and_nowhere_else() throws Exception
+    public void a_group_text_wakes_when_toxcore_gives_it_its_id_or_at_once_when_it_has_to_wait() throws Exception
     {
         final String group = code("HelperGroup.java");
-        final String send = body(group, "static long send_group_text_message_resilient(");
+        final String send = body(group, "private static long send_group_text_message_tries(");
         final int sent = send.indexOf("if (HelperFriend.is_group_text_send_success(message_id))");
         final int wake = send.indexOf(
                 "PushPreviewSender.wakeForGroupText(group_num, group_identifier, message, message_id);");
         assertTrue(sent > 0);
         assertTrue(wake > sent);
         assertTrue(wake < send.indexOf("return message_id;", sent));
-        // Every text of ours goes out there (a queued one too, once it goes); a private message, an edit and a row of
-        // history sync go other ways and wake nobody.
+        assertTrue(bare(send).contains("if(wakes){PushPreviewSender.wakeForGroupText("));
+        // A text that has to wait (nobody else connected, or the group not connected) wakes at once; one sent now
+        // wakes, one that waited and goes now does not: it woke when it began to wait.
+        final String all = bare(group);
+        assertTrue(all.contains(
+                "returnsend_group_text_message_resilient(group_identifier,group_number,message,true);"));
+        assertTrue(all.contains("finallongmessage_id=send_group_text_message_tries(group_identifier,group_number,"
+                                + "message,wakes);if(wakes&&(message_id==GROUP_SEND_QUEUE_WHEN_UNCONNECTED)){"
+                                + "PushPreviewSender.wakeForWaitingGroupText(group_identifier,message);}"
+                                + "returnmessage_id;"));
+        assertTrue(bare(body(group, "private static void flush_pending_group_messages_pass(")).contains(
+                "send_group_text_message_resilient(group_identifier,group_num,pending_msg.text,false);"));
+        // Every text of ours goes out there; a private message, an edit and a row of history sync go other ways and
+        // wake nobody.
         assertEquals(1, count(group, "tox_group_send_message("));
         assertEquals(1, count(group, "PushPreviewSender.wakeForGroupText("));
+        assertEquals(1, count(group, "PushPreviewSender.wakeForWaitingGroupText("));
+        final String waiting = bare(body(code("PushPreviewSender.java"), "static void wakeForWaitingGroupText("));
+        assertTrue(waiting.contains("PushPreviewPayload.waitingGroupText(previewText(text),ownPeerKey,"));
+        assertTrue(waiting.contains("wakeGroupMembers(groupIdentifier,ownPeerKey,payload,\"gw:\"+UUID.randomUUID());"));
         for (final String other : new String[]{"GroupMessageListActivity.java", "MediaSendPreviewHelper.java"})
         {
             assertEquals(other, 0, count(code(other), "tox_group_send_message("));
@@ -75,7 +91,7 @@ public class GroupMessageWakeWiringTest
         assertTrue(members.contains("if(isOffline(contact)&&(keyFor(contact)!=null)"
                                     + "&&(HelperFriend.wake_url_for_friend(contact)!=null))"));
         assertTrue(members.contains("if(!connectedNow.contains(wake.getValue())&&isOffline(wake.getKey())){"
-                                    + "sendOneWake(wake.getKey(),payload);}"));
+                                    + "sendOneWake(wake.getKey(),payload,pidSource);}"));
         assertTrue(members.contains("},GROUP_MESSAGE_WAKE_DELAY_MS);"));
         // The members it knows: those toxcore lists now and the saved ones, less those that left.
         assertTrue(members.contains("orma.selectFromGroupPeerDB()."));
@@ -141,12 +157,15 @@ public class GroupMessageWakeWiringTest
     {
         final String group = code("HelperGroup.java");
         final String live = bare(body(group, "static void android_tox_callback_group_message_cb_method_wrapper("));
+        // By its event key, and by what it says for a text that waited (its wake had no event key).
         assertTrue(live.contains("finalPushPreviewSeen.Eventevent=is_private_message?null"
-                                 + ":PushPreviewSeen.forGroupText(message_id,peer_pubkey);"));
+                                 + ":PushPreviewSeen.forGroupText(message_id,peer_pubkey,"
+                                 + "PushPreviewSender.previewText(m.text),m.text);"));
         assertTrue(live.contains("m.sent_timestamp,peer_pubkey,event);"));
         // A row from history sync notifies while it is fresh (AirBandRule.LATE_DELIVERY_MS), so it asks too.
         assertTrue(bare(body(group, "static void group_message_add_from_sync(")).contains(
-                "PushPreviewSeen.forGroupText(m.message_id_tox,m.tox_group_peer_pubkey));"));
+                "PushPreviewSeen.forGroupText(m.message_id_tox,m.tox_group_peer_pubkey,"
+                + "PushPreviewSender.previewText(m.text),m.text));"));
         for (final String head : new String[]{"private static void notify_incoming_group_file(",
                                               "static void handle_incoming_group_file_complete(",
                                               "static void handle_incoming_group_file(long group_number,",

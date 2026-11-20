@@ -41,6 +41,8 @@ final class PushPreviewPayload
     String senderName;
     String groupName;
     String groupId;
+    /** gp: the sender's key in the group, given with a group text that has no event key (waitingGroupText). */
+    String groupPeerKey;
     long ts;
     String eventKey;
 
@@ -106,6 +108,19 @@ final class PushPreviewPayload
     {
         final PushPreviewPayload p = text(text, null, senderName, tsSeconds);
         p.eventKey = groupTextEventKey(messageId, senderPeerPubkey);
+        return p;
+    }
+
+    /**
+     * KHANDAQ (0.2.69, group message wakes): a text to a group that has to wait on this device, since nobody else is
+     * connected there. toxcore gives a text its message id only when it goes, so there is no h; gp, the sender's key
+     * in the group, goes instead, and with b the recipient knows the text when it comes (PushPreviewSeen.forPreview).
+     */
+    static PushPreviewPayload waitingGroupText(final String text, final String senderPeerPubkey,
+                                               final String senderName, final long tsSeconds)
+    {
+        final PushPreviewPayload p = text(text, null, senderName, tsSeconds);
+        p.groupPeerKey = isHex64(senderPeerPubkey) ? senderPeerPubkey.toUpperCase(Locale.ROOT) : null;
         return p;
     }
 
@@ -326,6 +341,7 @@ final class PushPreviewPayload
         appendString(json, "n", senderName);
         appendString(json, "g", groupName);
         appendString(json, "gid", groupId);
+        appendString(json, "gp", groupPeerKey);
         json.append(",\"ts\":").append(ts);
         appendString(json, "h", eventKey);
         json.append('}');
@@ -439,6 +455,8 @@ final class PushPreviewPayload
         final String gid = string(fields, "gid");
         p.groupId = (gid != null && PushPreviewCrypto.unhex(gid, PushPreviewCrypto.CHAT_ID_BYTES) != null)
                     ? gid.toUpperCase(Locale.ROOT) : null;
+        final String gp = string(fields, "gp");
+        p.groupPeerKey = isHex64(gp) ? gp.toUpperCase(Locale.ROOT) : null;
         final Object ts = fields.get("ts");
         p.ts = (ts instanceof Long) ? (Long) ts : 0L;
         p.eventKey = string(fields, "h");

@@ -121,6 +121,30 @@ public class PushPreviewPayloadTest
     }
 
     @Test
+    public void a_group_text_that_waits_has_no_event_key_and_names_its_sender_in_the_group()
+    {
+        // KHANDAQ (0.2.69, group message wakes): toxcore gives a text that has to wait its id only when it goes, so
+        // its preview has no h, and gp, the sender's key in the group, instead.
+        final PushPreviewPayload p = PushPreviewPayload.waitingGroupText(
+                "hi all", PEER_PK.toLowerCase(java.util.Locale.ROOT), "Isa", 7L).inGroup("Team", CHAT_ID);
+        assertEquals("{\"v\":1,\"k\":\"text\",\"b\":\"hi all\",\"n\":\"Isa\",\"g\":\"Team\",\"gid\":\""
+                     + repeat("0F", 32) + "\",\"gp\":\"" + PEER_PK + "\",\"ts\":7}",
+                     new String(p.toJson(), StandardCharsets.UTF_8));
+        final PushPreviewPayload read = PushPreviewPayload.parse(p.toJson());
+        assertEquals(PEER_PK, read.groupPeerKey);
+        assertNull(read.eventKey);
+        assertEquals("hi all", read.body);
+        assertTrue(read.isGroupEvent());
+        // Anything but a 64-hex key is no key: not written, and not read.
+        assertNull(PushPreviewPayload.waitingGroupText("hi", "abcd", null, 1L).groupPeerKey);
+        assertNull(PushPreviewPayload.waitingGroupText("hi", null, null, 1L).groupPeerKey);
+        assertNull(PushPreviewPayload.parse(("{\"v\":1,\"k\":\"text\",\"gp\":\"" + repeat("zz", 32) + "\",\"ts\":1}")
+                                                    .getBytes(StandardCharsets.UTF_8)).groupPeerKey);
+        // Any other preview says none.
+        assertNull(PushPreviewPayload.groupText("hi", 1L, PEER_PK, null, 1L).groupPeerKey);
+    }
+
+    @Test
     public void a_group_file_is_a_file_with_its_group_and_its_group_event_key()
     {
         final String fileHash = repeat("cd", 32);

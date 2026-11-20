@@ -1627,6 +1627,29 @@ public class HelperGroup
     static long send_group_text_message_resilient(@NonNull final String group_identifier, final long group_number,
                                                 @NonNull final String message)
     {
+        return send_group_text_message_resilient(group_identifier, group_number, message, true);
+    }
+
+    /**
+     * KHANDAQ (0.2.69, group message wakes): {@code wakes} is false for a text that waited on this device and goes
+     * now (flush_pending_group_messages_pass): it woke the members away when it began to wait, and wakes nobody again.
+     * A text sent now wakes them when it goes, or at once when it has to wait (PushPreviewSender).
+     */
+    static long send_group_text_message_resilient(@NonNull final String group_identifier, final long group_number,
+                                                @NonNull final String message, final boolean wakes)
+    {
+        final long message_id = send_group_text_message_tries(group_identifier, group_number, message, wakes);
+        if (wakes && (message_id == GROUP_SEND_QUEUE_WHEN_UNCONNECTED))
+        {
+            PushPreviewSender.wakeForWaitingGroupText(group_identifier, message);
+        }
+        return message_id;
+    }
+
+    private static long send_group_text_message_tries(@NonNull final String group_identifier,
+                                                      final long group_number, @NonNull final String message,
+                                                      final boolean wakes)
+    {
         long group_num = group_number;
         for (int attempt = 0; attempt < GROUP_SEND_MAX_ATTEMPTS; attempt++)
         {
@@ -1691,9 +1714,12 @@ public class HelperGroup
                         + " peers=" + tox_group_peer_count(group_num) + " attempt=" + attempt
                         + " conn=" + tox_group_is_connected(group_num) + " msg_id=" + message_id);
                 schedule_group_message_resync(group_num);
-                // KHANDAQ (0.2.69, group message wakes): the text went, now that toxcore gave it its id (a text queued
-                // for the group's connection gets here when it goes): the members away who are our contacts wake.
-                PushPreviewSender.wakeForGroupText(group_num, group_identifier, message, message_id);
+                // KHANDAQ (0.2.69, group message wakes): the text went, now that toxcore gave it its id: the members
+                // away who are our contacts wake. Not for a text that waited: it woke them when it began to wait.
+                if (wakes)
+                {
+                    PushPreviewSender.wakeForGroupText(group_num, group_identifier, message, message_id);
+                }
                 return message_id;
             }
 
@@ -6173,10 +6199,13 @@ public class HelperGroup
             {
                 notificationText = context_s.getString(R.string.group_mention_notification_prefix) + notificationText;
             }
-            // KHANDAQ (0.2.69, group message wakes): the event key a wake for this text carried, so that the alert a
-            // push preview already gave is not given again. A private message wakes nobody.
+            // KHANDAQ (0.2.69, group message wakes): the event key a wake for this text carried, or what it says for
+            // a text that had to wait, so that the alert a push preview already gave is not given again. A private
+            // message wakes nobody.
             final PushPreviewSeen.Event event = is_private_message ? null
-                                                : PushPreviewSeen.forGroupText(message_id, peer_pubkey);
+                                                : PushPreviewSeen.forGroupText(message_id, peer_pubkey,
+                                                                               PushPreviewSender.previewText(m.text),
+                                                                               m.text);
             change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, notificationText,
                                     m.sent_timestamp, peer_pubkey, event);
         }
@@ -6516,7 +6545,8 @@ public class HelperGroup
             // sync while it is still fresh enough to notify (above): the push preview already alerted for it.
             change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, m.text,
                                     m.sent_timestamp, m.tox_group_peer_pubkey,
-                                    PushPreviewSeen.forGroupText(m.message_id_tox, m.tox_group_peer_pubkey));
+                                    PushPreviewSeen.forGroupText(m.message_id_tox, m.tox_group_peer_pubkey,
+                                                                 PushPreviewSender.previewText(m.text), m.text));
         }
     }
 
@@ -9230,7 +9260,8 @@ public class HelperGroup
                 {
                     continue;
                 }
-                final long message_id = send_group_text_message_resilient(group_identifier, group_num, pending_msg.text);
+                final long message_id = send_group_text_message_resilient(group_identifier, group_num, pending_msg.text,
+                                                                          false);
                 if (HelperFriend.is_group_text_send_success(message_id))
                 {
                     orma.updateGroupMessage().idEq(pending_msg.id).

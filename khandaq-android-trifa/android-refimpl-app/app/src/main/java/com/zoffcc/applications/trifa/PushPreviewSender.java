@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -282,8 +283,8 @@ final class PushPreviewSender
 
     /**
      * KHANDAQ (0.2.69, group message wakes): a text of ours went to a group, toxcore gave it its message id
-     * (HelperGroup.send_group_text_message_resilient, which a text queued while the group was not connected goes
-     * through too, once it goes). Private messages, edits and history sync go other ways and wake nobody.
+     * (HelperGroup.send_group_text_message_resilient). Private messages, edits and history sync go other ways and wake
+     * nobody, and so does a text that waited, when it goes: it woke when it began to wait (wakeForWaitingGroupText).
      */
     static void wakeForGroupText(final long groupNumber, final String groupIdentifier, final String text,
                                  final long messageId)
@@ -297,7 +298,33 @@ final class PushPreviewSender
         final String ownPeerKey = HelperGroup.tox_group_self_get_public_key__wrapper(groupNumber);
         final PushPreviewPayload payload = PushPreviewPayload.groupText(previewText(text), messageId, ownPeerKey,
                                                                         ownName(), System.currentTimeMillis() / 1000L);
-        wakeGroupMembers(groupIdentifier, ownPeerKey, payload);
+        wakeGroupMembers(groupIdentifier, ownPeerKey, payload, payload.eventKey);
+    }
+
+    /**
+     * KHANDAQ (0.2.69, group message wakes): a text of ours has to wait on this device, since nobody else is connected
+     * in the group or the group is not (HelperGroup.send_group_text_message_resilient). That is how a text to a small
+     * group whose members are away goes, so the away contacts wake now, under the same rules; when the text goes later
+     * nobody wakes again. toxcore gives it its id only when it goes: the preview has no event key and says our key in
+     * the group instead (PushPreviewPayload.waitingGroupText), and the pid is one of its own, as the wake is one.
+     */
+    static void wakeForWaitingGroupText(final String groupIdentifier, final String text)
+    {
+        if (!PushPreviewPeers.usable() || (groupIdentifier == null))
+        {
+            return;
+        }
+        final long groupNumber = HelperGroup.tox_group_by_groupid__wrapper(groupIdentifier);
+        final String ownPeerKey = (groupNumber < 0) ? null
+                                                    : HelperGroup.tox_group_self_get_public_key__wrapper(groupNumber);
+        final PushPreviewPayload payload = PushPreviewPayload.waitingGroupText(previewText(text), ownPeerKey,
+                                                                               ownName(),
+                                                                               System.currentTimeMillis() / 1000L);
+        if (payload.groupPeerKey == null)
+        {
+            return;
+        }
+        wakeGroupMembers(groupIdentifier, ownPeerKey, payload, "gw:" + UUID.randomUUID());
     }
 
     /**
@@ -321,19 +348,20 @@ final class PushPreviewSender
         final PushPreviewPayload payload = PushPreviewPayload.groupFile(messageKind(g), shownFileName(g.file_name),
                                                                         g.msg_id_hash, ownName(),
                                                                         System.currentTimeMillis() / 1000L);
-        wakeGroupMembers(g.group_identifier, ownPeerKey, payload);
+        wakeGroupMembers(g.group_identifier, ownPeerKey, payload, payload.eventKey);
     }
 
     /**
      * The contacts a message of ours to the group wakes (GroupMessageWakes.contactsToWake), each one away with its K
      * and push address known. Three seconds later its member's connection in the group and its own are asked again,
      * then one wake each and no retries: the contact's app brings the message by the group's history sync when it
-     * connects. Off the caller's thread: it reads toxcore and the database.
+     * connects. Off the caller's thread: it reads toxcore and the database. {@code pidSource} gives the wake its pid:
+     * the event key, or for a text without one a value of its own.
      */
     private static void wakeGroupMembers(final String groupIdentifier, final String ownPeerKey,
-                                         final PushPreviewPayload message)
+                                         final PushPreviewPayload message, final String pidSource)
     {
-        if ((ownPeerKey == null) || (message.eventKey == null))
+        if ((ownPeerKey == null) || (pidSource == null))
         {
             return;
         }
@@ -391,7 +419,7 @@ final class PushPreviewSender
                 {
                     if (!connectedNow.contains(wake.getValue()) && isOffline(wake.getKey()))
                     {
-                        sendOneWake(wake.getKey(), payload);
+                        sendOneWake(wake.getKey(), payload, pidSource);
                     }
                 }
             }, GROUP_MESSAGE_WAKE_DELAY_MS);
@@ -429,13 +457,19 @@ final class PushPreviewSender
 
     private static void sendOneWake(final String friendPubkey, final PushPreviewPayload payload)
     {
+        sendOneWake(friendPubkey, payload, payload.eventKey);
+    }
+
+    private static void sendOneWake(final String friendPubkey, final PushPreviewPayload payload,
+                                    final String pidSource)
+    {
         final String pushUrl = HelperFriend.wake_url_for_friend(friendPubkey);
         final byte[] key = keyFor(friendPubkey);
-        if ((pushUrl == null) || (key == null) || (payload.eventKey == null))
+        if ((pushUrl == null) || (key == null) || (pidSource == null))
         {
             return;
         }
-        final Preview preview = seal(key, payload, payload.eventKey);
+        final Preview preview = seal(key, payload, pidSource);
         if (preview != null)
         {
             // Not counted against the message's wakes (sent_push), and not retried: one event, one wake.
@@ -552,7 +586,7 @@ final class PushPreviewSender
         return (context == null) ? null : PushPreviewStore.peerKey(context, friendPubkey);
     }
 
-    private static Preview seal(final byte[] key, final PushPreviewPayload payload, final String eventKey)
+    private static Preview seal(final byte[] key, final PushPreviewPayload payload, final String pidSource)
     {
         final byte[] json = payload.toJson();
         if (json == null)
@@ -560,7 +594,7 @@ final class PushPreviewSender
             return null;
         }
         final String sealed = PushPreviewCrypto.seal(key, json);
-        final String pid = PushPreviewCrypto.eventId(key, eventKey);
+        final String pid = PushPreviewCrypto.eventId(key, pidSource);
         return (KhandaqPush.isPreview(sealed) && KhandaqPush.isPreviewId(pid)) ? new Preview(sealed, pid) : null;
     }
 

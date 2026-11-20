@@ -21,6 +21,7 @@ package com.zoffcc.applications.trifa;
 
 import org.khandaq.messenger.R;
 
+import android.app.Activity;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -28,6 +29,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.provider.Settings;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
@@ -76,6 +78,43 @@ public class HelperToxNotification
         }
         nm.createNotificationChannel(channel);
         MainActivity.channelId_toxservice = CHANNEL_ID_TOX_SERVICE;
+    }
+
+    /**
+     * KHANDAQ (testers' ideas, 0.2.67): whether the phone has a settings page for the background channel, where the
+     * person can hide its notification (Settings, Notifications): Android 8 and later, where notifications come in
+     * channels.
+     */
+    static boolean hasChannelSettings(final int sdk)
+    {
+        return sdk >= Build.VERSION_CODES.O;
+    }
+
+    /**
+     * KHANDAQ (testers' ideas, 0.2.67): the phone's settings of the background channel, where its notification can
+     * be hidden while Khandaq keeps running; on a phone without a page for one channel, those of all the app's
+     * notifications. False when neither opens.
+     */
+    static boolean openChannelSettings(final Activity activity)
+    {
+        final Intent channel = new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, activity.getPackageName())
+                .putExtra(Settings.EXTRA_CHANNEL_ID, CHANNEL_ID_TOX_SERVICE);
+        final Intent app = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, activity.getPackageName());
+        for (final Intent page : new Intent[]{channel, app})
+        {
+            try
+            {
+                activity.startActivity(page);
+                return true;
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "openChannelSettings:EE:" + e.getMessage());
+            }
+        }
+        return false;
     }
 
     /** Minimal silent notification required for the foreground Tox service. No connection status. */

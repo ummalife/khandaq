@@ -446,4 +446,8 @@
     <string name="air_group_delete_message">群组及其消息和文件会从本设备删除。如果你仍在群组中，就会退出该群组。</string>
     <!-- Testers' ideas (0.2.67): over the first message that came while the chat was closed (AirUnreadMark); iOS unread_messages_separator -->
     <string name="air_unread_mark">未读消息</string>
+    <!-- KHANDAQ (testers' ideas, 0.2.67): Settings, Notifications: the row that opens the phone's settings of the background channel, where its notification can be hidden. -->
+    <string name="air_settings_background_notification">后台通知</string>
+    <string name="air_settings_background_notification_note">Khandaq 会在后台运行以接收消息。你可以隐藏此通知，应用仍会正常运行。</string>
+    <string name="air_settings_background_notification_failed">手机未能打开通知设置。可在手机的“设置”中依次进入“应用”、“Khandaq”、“通知”。</string>
 </resources>

@@ -462,4 +462,8 @@
     <string name="air_group_delete_message">The group, its messages and its files are deleted from this device. If you are still in the group, you leave it.</string>
     <!-- Testers' ideas (0.2.67): over the first message that came while the chat was closed (AirUnreadMark); iOS unread_messages_separator -->
     <string name="air_unread_mark">Unread messages</string>
+    <!-- KHANDAQ (testers' ideas, 0.2.67): Settings, Notifications: the row that opens the phone's settings of the background channel, where its notification can be hidden. -->
+    <string name="air_settings_background_notification">Background notification</string>
+    <string name="air_settings_background_notification_note">Khandaq keeps running in the background to receive messages. You can hide this notification, and the app keeps working.</string>
+    <string name="air_settings_background_notification_failed">The phone did not open its notification settings. They are in the phone\'s Settings: Apps, Khandaq, Notifications.</string>
 </resources>

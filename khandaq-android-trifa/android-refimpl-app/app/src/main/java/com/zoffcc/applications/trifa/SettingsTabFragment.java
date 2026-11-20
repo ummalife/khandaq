@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Resources;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.util.Log;
@@ -67,6 +68,9 @@ public class SettingsTabFragment extends Fragment
     /** E21: the plate of Export and Import; what came of a move stands under it. */
     @Nullable
     private View transferPlate;
+    /** E21: the plate of the notification rows; a system page that does not open is said under it. */
+    @Nullable
+    private View notificationsPlate;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState)
@@ -139,8 +143,18 @@ public class SettingsTabFragment extends Fragment
         // KHANDAQ (0.2.64): the switch shows the default the notifications use (on), not off.
         preview.withSwitch(prefs.getBoolean("notification_show_content", true),
                            (button, checked) -> prefs.edit().putBoolean("notification_show_content", checked).apply());
-        AirScreenKit.addSection(column, getString(R.string.air_settings_notifications), null,
-                                AirScreenKit.plateOf(context, preview));
+        // KHANDAQ (testers' ideas, 0.2.67): the notification the background service has to show can be hidden in the
+        // phone's settings of its channel, and Khandaq keeps receiving messages without it. Before Android 8 there
+        // are no channels and no such page, so there is no row either.
+        AirSettingRow background = null;
+        if (HelperToxNotification.hasChannelSettings(Build.VERSION.SDK_INT))
+        {
+            background = navigationRow(context, R.string.air_settings_background_notification,
+                                       this::openBackgroundNotificationSettings);
+            background.detail(getString(R.string.air_settings_background_notification_note));
+        }
+        notificationsPlate = AirScreenKit.plateOf(context, preview, background);
+        AirScreenKit.addSection(column, getString(R.string.air_settings_notifications), null, notificationsPlate);
 
         // Privacy: what this phone tells others (PrivacyPreference), then the keys blocked on this device
         // (design/DESIGN.md, "Block, on every client"), whose note closes the section under their plate.
@@ -510,6 +524,23 @@ public class SettingsTabFragment extends Fragment
         AirUi.endUnder(transferPlate);
         ToxProfileImportHelper.showReplaceImportConfirmation(activity,
                 () -> importProfileLauncher.launch(ToxProfileImportHelper.TOX_IMPORT_MIME_TYPES));
+    }
+
+    /** The phone's settings of the background channel; when the phone opens none, that is said under the plate. */
+    private void openBackgroundNotificationSettings()
+    {
+        final Activity activity = getActivity();
+        if (activity == null)
+        {
+            return;
+        }
+        if (HelperToxNotification.openChannelSettings(activity))
+        {
+            AirUi.endUnder(notificationsPlate);
+            return;
+        }
+        AirSheet.sayUnderOrTell(notificationsPlate, activity, getString(R.string.air_settings_background_notification),
+                                getString(R.string.air_settings_background_notification_failed), true);
     }
 
     private void openFaq()

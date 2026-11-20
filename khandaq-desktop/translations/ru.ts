@@ -4093,6 +4093,16 @@ Opening it can run a program on your computer. Links in messages come from other
         <translation>Перенести профиль с другого устройства</translation>
     </message>
     <message>
+        <source>Add a photo (optional)</source>
+        <comment>first launch, step 1: what a click on the photo tile at the start of the name does; the photo can be skipped</comment>
+        <translation>Добавить фото (необязательно)</translation>
+    </message>
+    <message>
+        <source>The photo wasn&apos;t added</source>
+        <comment>first launch, step 1: title of the error when the chosen picture could not be read</comment>
+        <translation>Фото не добавилось</translation>
+    </message>
+    <message>
         <source>Profile</source>
         <comment>start window: name of the profile file when the name typed leaves nothing a file may be called</comment>
         <translation>Профиль</translation>

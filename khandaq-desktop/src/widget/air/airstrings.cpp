@@ -627,6 +627,8 @@ const Source sources[] = {
     {Text::StartNameFirst, QT_TRANSLATE_NOOP3("Air", "Type a name first.", "first launch, step 1: why Next waits")},
     {Text::StartNext, QT_TRANSLATE_NOOP3("Air", "Next", "start window: the main button that goes on to the next step")},
     {Text::StartMoveProfile, QT_TRANSLATE_NOOP3("Air", "Move a profile from another device", "start window: quiet button that moves a profile file in")},
+    {Text::StartPhotoHint, QT_TRANSLATE_NOOP3("Air", "Add a photo (optional)", "first launch, step 1: what a click on the photo tile at the start of the name does; the photo can be skipped")},
+    {Text::StartPhotoFailedTitle, QT_TRANSLATE_NOOP3("Air", "The photo wasn't added", "first launch, step 1: title of the error when the chosen picture could not be read")},
     {Text::StartDefaultFolder, QT_TRANSLATE_NOOP3("Air", "Profile", "start window: name of the profile file when the name typed leaves nothing a file may be called")},
     {Text::StartPasswordTitle, QT_TRANSLATE_NOOP3("Air", "Profile password", "first launch, step 2: title")},
     {Text::StartPasswordBody, QT_TRANSLATE_NOOP3("Air", "A password cannot be recovered: there are no servers. Without a password, the profile on this device is not encrypted.", "first launch, step 2: under the title, said before the choice")},

@@ -240,6 +240,12 @@ bool AirYouPhoto::hasPhoto() const
     return !photo.isNull();
 }
 
+void AirYouPhoto::setOffersPhoto(bool offers)
+{
+    offersPhoto = offers;
+    update();
+}
+
 QSize AirYouPhoto::sizeHint() const
 {
     return QSize(photoSide, photoSide);
@@ -270,6 +276,16 @@ void AirYouPhoto::paintEvent(QPaintEvent*)
         }
         painter.restore();
         AirPaint::box(painter, tile, Radius::card, QColor(), air().color(Color::Line));
+    } else if (offersPhoto) {
+        // A place for a photo that can stay empty: quiet, and darker under the pointer.
+        const bool active = hovered || isDown();
+        AirPaint::box(painter, tile, Radius::card, air().color(Color::Sunken),
+                      air().color(active ? Color::LineStrong : Color::Line));
+        const int icon = Size::icon;
+        const QPixmap glyph = air().icon(QStringLiteral("plus"),
+                                         air().color(active ? Color::Ink : Color::Ink2), icon,
+                                         devicePixelRatioF());
+        painter.drawPixmap(QPointF((width() - icon) / 2.0, (height() - icon) / 2.0), glyph);
     } else {
         // Your own tile is ink, as in the "you" block, and answers the pointer as an ink button.
         const Color ground = isDown() ? Color::InkPressed : hovered ? Color::InkHover : Color::Ink;

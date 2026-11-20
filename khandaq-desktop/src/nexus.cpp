@@ -355,9 +355,10 @@ Profile* Nexus::getProfile()
  * @brief Creates a new profile and replaces the current one.
  * @param name New username
  * @param pass New password
+ * @param photo The photo chosen at first launch, ready to set; empty for none.
  */
 void Nexus::onCreateNewProfile(const QString& fileName, const QString& selfName,
-                               const QString& pass, bool autoLogin)
+                               const QString& pass, bool autoLogin, const QByteArray& photo)
 {
     Air::OpenFailure failure;
     Profile* p = Profile::createProfile(fileName, pass, settings, parser, cameraSource,
@@ -380,6 +381,11 @@ void Nexus::onCreateNewProfile(const QString& fileName, const QString& selfName,
         clearLoggedOut();
     }
     setProfile(p, failure, true);
+    // KHANDAQ (beta ideas 2026-11-20): the photo chosen with the name, set as You sets one now that
+    // the profile and its core are there: kept with the profile, encrypted when it has a password.
+    if (p && !photo.isEmpty()) {
+        p->setAvatar(photo);
+    }
     parser = nullptr; // only apply cmdline proxy settings once
 }
 

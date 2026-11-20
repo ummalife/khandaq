@@ -22,6 +22,7 @@
 
 #include "src/core/core.h"
 #include "src/model/air/airyou.h"
+#include "src/model/profile/profileinfo.h"
 #include "src/persistence/credentialstore.h"
 #include "src/persistence/paths.h"
 #include "src/persistence/profile.h"
@@ -50,6 +51,7 @@
 #include <QFileInfo>
 #include <QGraphicsOpacityEffect>
 #include <QGuiApplication>
+#include <QImageReader>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -390,7 +392,16 @@ void LoginScreen::buildNamePage()
     QWidget* const holder = namePage->content;
     nameField = new AirTextField(AirTextField::Kind::Line, holder);
     nameField->setObjectName(QStringLiteral("startNameField"));
-    namePage->column->addWidget(nameField);
+    // KHANDAQ (beta ideas 2026-11-20): a photo can come with the name, at its start as on You, both
+    // standing on the foot of the field. Made after the field, so Tab goes from the name to it.
+    namePhoto = new AirYouPhoto(holder);
+    namePhoto->setObjectName(QStringLiteral("startPhoto"));
+    namePhoto->setOffersPhoto(true);
+    auto* const nameRow = new QHBoxLayout();
+    nameRow->setSpacing(Space::s12);
+    nameRow->addWidget(namePhoto, 0, Qt::AlignBottom);
+    nameRow->addWidget(nameField, 1, Qt::AlignBottom);
+    namePage->column->addLayout(nameRow);
     nameMoveButton = new AirButton(AirButton::Kind::Quiet, holder);
     nameMoveButton->setObjectName(QStringLiteral("startMove"));
     namePage->column->addWidget(nameMoveButton, 0, Qt::AlignLeading);
@@ -400,6 +411,7 @@ void LoginScreen::buildNamePage()
         refreshMain(namePage);
     });
     connect(nameField, &AirTextField::submitted, this, [this] { submit(namePage); });
+    connect(namePhoto, &AirYouPhoto::clicked, this, &LoginScreen::offerPhoto);
     connect(nameMoveButton, &AirButton::clicked, this, &LoginScreen::chooseFile);
     namePage->refusal = [this] {
         return nameField->text().trimmed().isEmpty() ? words(Text::StartNameFirst) : QString();
@@ -808,6 +820,7 @@ void LoginScreen::startFirstLaunch(bool replaceHistory)
 {
     nameField->setText(QString());
     typedName.clear();
+    keepPhoto(QByteArray());
     setRow->setChecked(true);
     createAutoLogin->setChecked(false);
     createNote->clear();
@@ -831,6 +844,81 @@ void LoginScreen::keepNameWithin()
         nameField->edit()->setTextCursor(cursor);
     }
     typedName = fitted.text;
+}
+
+void LoginScreen::offerPhoto()
+{
+    if (growing || busyPage) {
+        return;
+    }
+    if (chosenPhoto.isEmpty()) {
+        choosePhoto();
+        return;
+    }
+    // With a photo, as on You: another one, or none.
+    auto* const menu = new QMenu(this);
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    menu->setObjectName(QStringLiteral("startPhotoMenu"));
+    QAction* const choose = menu->addAction(words(Text::YouPhotoChoose));
+    connect(choose, &QAction::triggered, this, &LoginScreen::choosePhoto);
+    QAction* const remove = menu->addAction(words(Text::YouPhotoRemove));
+    connect(remove, &QAction::triggered, this, [this] { keepPhoto(QByteArray()); });
+    // Under the photo, from its start edge.
+    const QRect tile = namePhoto->rect();
+    const QPoint start =
+        layoutDirection() == Qt::RightToLeft ? tile.bottomRight() : tile.bottomLeft();
+    menu->popup(namePhoto->mapToGlobal(start + QPoint(0, Space::s4)));
+}
+
+void LoginScreen::choosePhoto()
+{
+    QStringList patterns;
+    for (const QByteArray& format : QImageReader::supportedImageFormats()) {
+        patterns.append(QStringLiteral("*.") + QString::fromLatin1(format));
+    }
+    const QPointer<LoginScreen> self(this);
+    const QString path = QFileDialog::getOpenFileName(
+        this, words(Text::YouPhotoChoose), QDir::homePath(),
+        words(Text::YouPhotoFilter).arg(patterns.join(QLatin1Char(' '))));
+    // The dialog runs its own loop.
+    if (!self || path.isEmpty()) {
+        return;
+    }
+    QByteArray photo;
+    switch (ProfileInfo::readAvatar(path, photo)) {
+    case IProfileInfo::SetAvatarResult::OK:
+        keepPhoto(photo);
+        return;
+    case IProfileInfo::SetAvatarResult::EmptyPath:
+        return;
+    case IProfileInfo::SetAvatarResult::CanNotOpen:
+    case IProfileInfo::SetAvatarResult::CanNotRead:
+        AirDialog::notice(this, words(Text::StartPhotoFailedTitle),
+                          words(Text::YouPhotoUnreadable));
+        return;
+    case IProfileInfo::SetAvatarResult::TooLarge:
+        AirDialog::notice(this, words(Text::StartPhotoFailedTitle), words(Text::YouPhotoTooLarge));
+        return;
+    }
+}
+
+void LoginScreen::keepPhoto(const QByteArray& photo)
+{
+    chosenPhoto = photo;
+    refreshPhoto();
+}
+
+void LoginScreen::refreshPhoto()
+{
+    QPixmap shown;
+    if (!chosenPhoto.isEmpty()) {
+        shown.loadFromData(chosenPhoto);
+    }
+    namePhoto->setPerson(QString(), shown);
+    const QString hint = words(chosenPhoto.isEmpty() ? Text::StartPhotoHint : Text::YouPhotoHint);
+    namePhoto->setAccessibleName(words(Text::YouPhoto));
+    namePhoto->setAccessibleDescription(hint);
+    namePhoto->setToolTip(hint);
 }
 
 void LoginScreen::refreshPasswordChoice()
@@ -862,8 +950,9 @@ void LoginScreen::create()
     passwordPage->main->repaint();
     const QString fileName = createdFile;
     const QString selfName = createdName;
-    QTimer::singleShot(0, this, [this, fileName, selfName, password, autoLogin] {
-        emit createNewProfile(fileName, selfName, password, autoLogin);
+    const QByteArray photo = chosenPhoto;
+    QTimer::singleShot(0, this, [this, fileName, selfName, password, autoLogin, photo] {
+        emit createNewProfile(fileName, selfName, password, autoLogin, photo);
     });
 }
 
@@ -1473,6 +1562,7 @@ void LoginScreen::retranslateUi()
     nameField->setPlaceholder(words(Text::StartNamePlaceholder));
     nameField->edit()->setAccessibleName(words(Text::StartNamePlaceholder));
     nameMoveButton->setText(words(Text::StartMoveProfile));
+    refreshPhoto();
 
     passwordPage->title->setText(words(Text::StartPasswordTitle));
     passwordPage->body->setText(words(Text::StartPasswordBody));

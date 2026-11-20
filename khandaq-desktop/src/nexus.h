@@ -113,7 +113,7 @@ signals:
 
 public slots:
     void onCreateNewProfile(const QString& fileName, const QString& selfName, const QString& pass,
-                            bool autoLogin);
+                            bool autoLogin, const QByteArray& photo);
     void onLoadProfile(const QString& name, const QString& pass, bool withoutProxy);
     int showLogin(const QString& profileName = QString());
     void removeProfile();

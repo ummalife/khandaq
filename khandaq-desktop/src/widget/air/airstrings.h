@@ -589,6 +589,9 @@ enum class Text
     StartNameFirst,
     StartNext,
     StartMoveProfile,
+    // KHANDAQ (beta ideas 2026-11-20): the photo that can come with the name.
+    StartPhotoHint,
+    StartPhotoFailedTitle,
     StartDefaultFolder,
     StartPasswordTitle,
     StartPasswordBody,

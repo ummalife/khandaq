@@ -91,6 +91,8 @@ auto_test(model airstart "" "")
 auto_test(model airvoicedecoder "" "")
 auto_test(model airvoiceencoder "" "")
 auto_test(model airyou "" "")
+# KHANDAQ (beta ideas 2026-11-20): a photo made as You makes it, also the one chosen at first launch.
+auto_test(model profileinfo "" "")
 # The generated design files (airtokens.h, icons, fonts, palettes) must match design/system.
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/../design/system/tokens.json")

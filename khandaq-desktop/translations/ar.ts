@@ -4165,6 +4165,16 @@ Opening it can run a program on your computer. Links in messages come from other
         <translation>نقل ملف شخصي من جهاز آخر</translation>
     </message>
     <message>
+        <source>Add a photo (optional)</source>
+        <comment>first launch, step 1: what a click on the photo tile at the start of the name does; the photo can be skipped</comment>
+        <translation>إضافة صورة (اختياري)</translation>
+    </message>
+    <message>
+        <source>The photo wasn&apos;t added</source>
+        <comment>first launch, step 1: title of the error when the chosen picture could not be read</comment>
+        <translation>لم تُضَف الصورة</translation>
+    </message>
+    <message>
         <source>Profile</source>
         <comment>start window: name of the profile file when the name typed leaves nothing a file may be called</comment>
         <translation>الملف الشخصي</translation>

@@ -1,10 +1,15 @@
 package com.zoffcc.applications.trifa;
 
+import android.content.Context;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.media.PlaybackParams;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.preference.PreferenceManager;
+
+import org.khandaq.messenger.R;
 
 import java.lang.ref.WeakReference;
 import java.util.Iterator;
@@ -82,6 +87,7 @@ public final class ChatVoicePlaybackManager
                 {
                     mp.start();
                 }
+                applySpeed();
                 startTicker();
                 notifyTick();
                 return;
@@ -166,6 +172,7 @@ public final class ChatVoicePlaybackManager
                 }
             }
             mp.start();
+            applySpeed();
             startTicker();
             notifyTick();
         }
@@ -260,6 +267,61 @@ public final class ChatVoicePlaybackManager
         activePath = null;
         activeVfs = false;
         prepared = false;
+    }
+
+    // ---------------------------------------------------------------- speed
+
+    // KHANDAQ (testers' ideas, 0.2.67): voice notes play at 1x, 1.5x or 2x (VoicePlaybackSpeed), the pill on
+    // the note that plays goes to the next; the bubbles of both directions call these.
+
+    /** A tap on the speed pill: the next speed, kept, and at once on the note that plays. */
+    public static float cycleSpeed(final Context context)
+    {
+        final float speed = VoicePlaybackSpeed.cycle(PreferenceManager.getDefaultSharedPreferences(context));
+        synchronized (ChatVoicePlaybackManager.class)
+        {
+            applySpeed();
+        }
+        notifyTickOnUi();
+        return speed;
+    }
+
+    /** What the pill shows: "1.5x", in the digits of the app's language. */
+    public static String speedLabel(final Context context)
+    {
+        return context.getString(R.string.air_voice_speed_format, speedNumber(context));
+    }
+
+    /** What TalkBack says of the pill: "Playback speed 1.5". */
+    public static String speedDescription(final Context context)
+    {
+        return context.getString(R.string.air_voice_speed_a11y, speedNumber(context));
+    }
+
+    private static String speedNumber(final Context context)
+    {
+        return VoicePlaybackSpeed.number(AirUi.locale(context), VoicePlaybackSpeed.current);
+    }
+
+    /**
+     * The speed on the player while it plays, with the pitch kept. Only while it plays: on a paused player a
+     * speed in setPlaybackParams starts it, so play() sets the speed after each start instead.
+     */
+    private static void applySpeed()
+    {
+        try
+        {
+            if (mp != null && prepared && mp.isPlaying())
+            {
+                mp.setPlaybackParams(new PlaybackParams().allowDefaults()
+                                                         .setSpeed(VoicePlaybackSpeed.current)
+                                                         .setPitch(1f));
+            }
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "applySpeed:EE:" + e.getMessage());
+        }
     }
 
     // ---------------------------------------------------------------- state queries

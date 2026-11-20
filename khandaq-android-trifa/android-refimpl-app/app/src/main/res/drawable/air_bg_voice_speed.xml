@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Testers' ideas (0.2.67): the voice note's speed pill, the raised filter pill with its line and states, drawn
+     10dp in from the top and the bottom of its 48dp target. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/air_bg_pill"
+    android:insetTop="@dimen/kq_space_10"
+    android:insetBottom="@dimen/kq_space_10" />

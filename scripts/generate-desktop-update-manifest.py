@@ -12,8 +12,9 @@ The version of each entry is read from the artifact itself: from the GIT_DESCRIB
 compiled into the program, which Qt stores as UTF-16 (QStringLiteral). Never from the command line or
 from VERSION, because an app must never be told a version its download does not carry. A program
 not built from an exact release tag ("v0.2.64-3-gabc1234"; "Nightly" when there was no git) is
-refused, and so is a QA build (UPDATE_CHECK_QA), the only kind that contains the name of the variable
-that points the check elsewhere. The installer's payload is compressed, so its version comes from its
+refused, and so are one built from a tree with changes nobody committed ("v0.2.64-dirty") and a
+QA build (UPDATE_CHECK_QA), the only kind that contains the name of the variable that points the
+check elsewhere. The installer's payload is compressed, so its version comes from its
 version resource (VIProductVersion in qtox64.nsi) and is believed only when the portable zip of the
 same build is given too and agrees.
 
@@ -74,6 +75,9 @@ def program_version(data: bytes, where: str) -> str:
     for match in DESCRIBE_UTF16.finditer(data):
         version = match.group(1).decode("utf-16-le")
         suffix = match.group(2).decode("utf-16-le")
+        if suffix.endswith("-dirty"):
+            raise Refused(f"{where}: built from a tree with changes nobody committed (v{version}{suffix}); "
+                          f"build the release from a clean checkout of the tag")
         if suffix:
             raise Refused(f"{where}: built after the tag, not from it (v{version}{suffix}); only a "
                           f"build of the exact release tag may be offered")
@@ -524,6 +528,9 @@ def self_test() -> int:
         # 3. What must never be offered.
         refusals = [
             ("after the tag", {"windows": fake_program("v0.2.65-3-gabc1234")}, "built after the tag"),
+            ("changes not committed", {"linux": fake_program("v0.2.65-dirty")}, "changes nobody committed"),
+            ("after the tag, changed", {"deb": fake_program("v0.2.65-3-gabc1234-dirty")},
+             "changes nobody committed"),
             ("Nightly", {"linux": fake_program("Nightly")}, "no release version"),
             ("two versions", {"macos": fake_program("v0.2.65", "v0.2.64")}, "more than one version"),
             ("QA build", {"macos": fake_program("v0.2.65", extra=QA_MARKER + b"\0")}, "a QA build"),

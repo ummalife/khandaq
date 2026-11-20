@@ -233,9 +233,10 @@ Running running(const QString& describeExact, const QString& describe)
         build.release = true;
         return build;
     }
-    // Off a tag: "v0.2.64-3-gabc1234", the version it was built after.
+    // Off a tag, "v0.2.64-3-gabc1234", or from a tree with changes not committed, "v0.2.64-dirty"
+    // and "v0.2.64-3-gabc1234-dirty": the version it was built after. Never a release.
     static const QRegularExpression afterTag(
-        QStringLiteral("\\A(v[0-9]+\\.[0-9]+\\.[0-9]+)-[0-9]+-g[0-9a-f]+\\z"));
+        QStringLiteral("\\A(v[0-9]+\\.[0-9]+\\.[0-9]+)(?:-[0-9]+-g[0-9a-f]+)?(?:-dirty)?\\z"));
     const QRegularExpressionMatch match = afterTag.match(describe);
     build.known = match.hasMatch() && parseVersion(match.captured(1), build.version);
     return build;

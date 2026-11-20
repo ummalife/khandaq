@@ -52,8 +52,9 @@ jobs:
         run: |
           set -euo pipefail
           KHANDAQ_GIT_VERSION="$(git rev-parse HEAD)"
-          KHANDAQ_GIT_DESCRIBE="$(git describe --tags 2>/dev/null || true)"
-          KHANDAQ_GIT_DESCRIBE_EXACT="$(git describe --exact-match --tags HEAD 2>/dev/null || true)"
+          # --dirty, as in cmake/Dependencies.cmake; nothing above changes a tracked file.
+          KHANDAQ_GIT_DESCRIBE="$(git describe --tags --dirty 2>/dev/null || true)"
+          KHANDAQ_GIT_DESCRIBE_EXACT="$(git describe --exact-match --tags --dirty 2>/dev/null || true)"
           [[ "$KHANDAQ_GIT_VERSION" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::unexpected commit id: $KHANDAQ_GIT_VERSION"; exit 1; }
           for value in "$KHANDAQ_GIT_DESCRIBE" "$KHANDAQ_GIT_DESCRIBE_EXACT"; do
             [[ -z "$value" || "$value" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::unexpected git describe: $value"; exit 1; }

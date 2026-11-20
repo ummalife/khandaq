@@ -160,12 +160,23 @@ void TestUpdateManifest::readsTheRunningBuild()
     QVERIFY(!after.release);
     QCOMPARE(UpdateManifest::toString(after.version), QStringLiteral("0.2.64"));
 
+    // Built from the tag, or after it, in a tree with changes not committed: the version it was
+    // built from or after, and never a release.
+    for (const auto& pair : {qMakePair(QStringLiteral("v0.2.64-dirty"), QStringLiteral("v0.2.64-dirty")),
+                             qMakePair(QStringLiteral("Nightly"), QStringLiteral("v0.2.64-3-gabc1234-dirty"))}) {
+        const UpdateManifest::Running dirty = UpdateManifest::running(pair.first, pair.second);
+        QVERIFY2(dirty.known, qPrintable(pair.second));
+        QVERIFY2(!dirty.release, qPrintable(pair.first));
+        QCOMPARE(UpdateManifest::toString(dirty.version), QStringLiteral("0.2.64"));
+    }
+
     for (const auto& pair : {qMakePair(QStringLiteral("Nightly"), QStringLiteral("Nightly")),
                              qMakePair(QStringLiteral("0.2.64"), QStringLiteral("0.2.64")),
                              qMakePair(QStringLiteral("v0.2.64-rc1"), QStringLiteral("v0.2.64-rc1")),
                              qMakePair(QStringLiteral(""), QStringLiteral("")),
+                             qMakePair(QStringLiteral("Nightly"), QStringLiteral("v0.2.64-dirty-3")),
                              qMakePair(QStringLiteral("Nightly"),
-                                       QStringLiteral("v0.2.64-3-gabc1234-dirty"))}) {
+                                       QStringLiteral("v0.2.64-3-gabc1234-dirty\n"))}) {
         const UpdateManifest::Running build = UpdateManifest::running(pair.first, pair.second);
         QVERIFY2(!build.release, qPrintable(pair.first));
         QVERIFY2(!build.known, qPrintable(pair.second));

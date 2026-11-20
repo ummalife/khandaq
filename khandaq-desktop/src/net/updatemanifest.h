@@ -107,7 +107,8 @@ struct Running
 };
 
 /** The running build from GIT_DESCRIBE_EXACT ("v0.2.64", or "Nightly" off a tag) and GIT_DESCRIBE
- * ("v0.2.64-3-gabc1234" off a tag), the version a QA build counts itself as. */
+ * ("v0.2.64-3-gabc1234" off a tag), the version a QA build counts itself as. Either ends in
+ * "-dirty" for a tree with changes not committed, which is never a release. */
 Running running(const QString& describeExact, const QString& describe);
 
 struct Decision

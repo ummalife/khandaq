@@ -1305,6 +1305,15 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
             abstract.groupPendingSend = YES;
         }];
         OCTLogInfo(@"NGC group file queued — group not ready, will retry chat=%@", chat.uniqueIdentifier);
+        // KHANDAQ (0.2.69, group message wakes): that is how a photo or a voice message to a small group whose members
+        // are away goes, so the away contacts wake now, as for a text that waits. A file wakes once in a run
+        // (groupFileWakesSent): its first offer after the flush (offerSentBlock) wakes nobody again.
+        __weak typeof(self) weakSelfForWake = self;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [weakSelfForWake wakeAwayContactsForGroupFileWithMsgIdHex:msgIdHex
+                                                             fileName:fileName
+                                                          groupNumber:groupNumber];
+        });
         if (successBlock) {
             successBlock(message);
         }
@@ -1391,6 +1400,13 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                        file.groupTransferProgress = 0.0f;
                                    }];
                                    OCTLogInfo(@"NGC group file queued (not ready) chat=%@", chat.uniqueIdentifier);
+                                   // KHANDAQ (0.2.69, group message wakes): it waits now, and the away contacts wake,
+                                   // unless its first offer woke them already (groupFileWakesSent).
+                                   dispatch_async(dispatch_get_main_queue(), ^{
+                                       [weakSelf wakeAwayContactsForGroupFileWithMsgIdHex:msgIdHex
+                                                                                 fileName:fileName
+                                                                              groupNumber:groupNumber];
+                                   });
 
                                    if (successBlock) {
                                        successBlock(message);
@@ -3539,8 +3555,9 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     });
 }
 
-/// KHANDAQ (0.2.69, group message wakes): the first offer of a file of ours went to the group. Once per file: a file
-/// whose sending starts again offers itself again. Main queue.
+/// KHANDAQ (0.2.69, group message wakes): the first offer of a file of ours went to the group, or the file began to
+/// wait for it (-sendFileAtPath:toChat:...). Once per file in a run: a file whose sending starts again, or that
+/// waited, wakes nobody again. Main queue.
 - (void)wakeAwayContactsForGroupFileWithMsgIdHex:(NSString *)msgIdHex
                                         fileName:(NSString *)fileName
                                      groupNumber:(OCTToxGroupNumber)groupNumber

@@ -424,6 +424,29 @@ extension ChatInputViewManager: UIDocumentPickerDelegate {
             return
         }
 
+        // KHANDAQ (ideas 1): it leaves on Send under its name and size (AirPickedFile). Saved Messages
+        // above keeps it on this device, so nothing is sent by mistake there.
+        guard let source = (inputView as UIView?) ?? presentingViewController?.view else {
+            return
+        }
+        let sheet = AirPickedFile.confirmation(for: url, source: source) { [weak self] in
+            self?.sendPickedFile(at: url)
+        }
+        presentingViewController.present(sheet, animated: true, completion: nil)
+    }
+
+    /// The file picked with File or Audio, once Send was tapped under its name.
+    private func sendPickedFile(at url: URL) {
+        // The contact may have been removed while the question was up.
+        guard !chat.isInvalidated else {
+            return
+        }
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer {
+            if accessed {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
         submanagerFiles.sendFile(atPath: url.path, moveToUploads: true, to: chat) { error in
             handleErrorWithType(.sendFileToFriend, error: error as NSError)
         }

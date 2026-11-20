@@ -220,6 +220,29 @@ extension ChatGroupInputViewManager: UIDocumentPickerDelegate {
             }
         }
 
+        // KHANDAQ (ideas 1): it leaves on Send under its name and size (AirPickedFile).
+        guard let source = (inputView as UIView?) ?? presentingViewController?.view else {
+            return
+        }
+        let sheet = AirPickedFile.confirmation(for: url, source: source) { [weak self] in
+            self?.sendPickedFile(at: url)
+        }
+        presentingViewController.present(sheet, animated: true, completion: nil)
+    }
+
+    /// The file picked with File, once Send was tapped under its name.
+    private func sendPickedFile(at url: URL) {
+        // The group may have been left while the question was up.
+        guard submanagerGroups != nil, !chat.isInvalidated else {
+            return
+        }
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer {
+            if accessed {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
         if isVideoFileURL(url) {
             enqueueVideoSend(from: url)
             return
@@ -392,7 +415,22 @@ private extension ChatGroupInputViewManager {
 
     func sendMovie(imagePickerInfo: [String: Any]) {
         if let url = imagePickerInfo[UIImagePickerControllerMediaURL] as? URL {
-            presentMediaPreview(items: [.video(url, fileName: url.lastPathComponent)])
+            // KHANDAQ (ideas 1): to the preview as in a chat with one person (ChatInputViewManager
+            // .loadPreviewItems): copied into the app's storage first, off the main queue, as the file is
+            // the camera's. The preview had been handed the camera's own file, and a video too large to
+            // prepare was refused only after Send.
+            let originalName = url.lastPathComponent
+            DispatchQueue.global(qos: .userInitiated).async {
+                let staged = Result { try VideoSendPreprocessor.shared.stagePickerVideo(at: url) }
+                DispatchQueue.main.async { [weak self] in
+                    switch staged {
+                    case .success(let stagedURL):
+                        self?.presentMediaPreview(items: [.video(stagedURL, fileName: originalName)])
+                    case .failure(let error):
+                        self?.showVideoSendError(error, retryURL: nil)
+                    }
+                }
+            }
             return
         }
 

@@ -28,7 +28,8 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
     weak var delegate: MediaSendPreviewControllerDelegate?
 
     // KHANDAQ (iOS photo editor): `var` so the crop editor can write the edited image back in place.
-    private var items: [MediaSendPreviewItem]
+    // Readable from outside (ideas 1): what a picker handed over is checked in the tests.
+    private(set) var items: [MediaSendPreviewItem]
     private var currentIndex = 0
     private var previewRequestToken = UUID()
 
@@ -39,7 +40,6 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
     private static let brandTeal = UIColor(red: 0.01, green: 0.61, blue: 0.49, alpha: 1)
 
     private let closeButton = UIButton(type: .system)
-    private let checkButton = UIButton(type: .system)
     // KHANDAQ (iOS photo editor): crop/rotate/aspect-ratio editor (TOCropViewController), parity with
     // Android's uCrop. Shown only for photos.
     private let editButton = UIButton(type: .system)
@@ -54,6 +54,9 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
     private var bottomBarBottomConstraint: Constraint?
     private var bottomBarSafeInsetConstraint: Constraint?
     private var captionHeightConstraint: Constraint?
+    /// KHANDAQ (ideas 1): Send hands the items over once. A second tap while the screen was going away
+    /// could hand them over again.
+    private var didConfirm = false
 
     init(items: [MediaSendPreviewItem]) {
         self.items = items
@@ -112,15 +115,11 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
         closeButton.backgroundColor = UIColor.black.withAlphaComponent(0.35)
         closeButton.layer.cornerRadius = 22
 
-        // KHANDAQ (Figma): round teal confirm-check, top-right.
-        checkButton.setImage(AirIcon.image("check"), for: .normal)
-        checkButton.tintColor = .white
-        checkButton.accessibilityLabel = String(localized: "air_compose_send")
-        checkButton.accessibilityIdentifier = "media.preview.check"
-        checkButton.backgroundColor = Self.brandTeal
-        checkButton.layer.cornerRadius = 22
+        // KHANDAQ (ideas 1): Send is only the arrow by the caption. The round check at the top right
+        // (Figma, 04.07) sent the same, and sat where the photo picker has its own button to finish
+        // the choice: one tap too many on the picker sent the photos before a caption could be written.
 
-        // KHANDAQ (iOS photo editor): round dark "crop" button, top-right next to the confirm check.
+        // KHANDAQ (iOS photo editor): round dark "crop" button, top-right.
         if #available(iOS 13.0, *) {
             let config = UIImage.SymbolConfiguration(pointSize: 18, weight: .medium)
             editButton.setImage(UIImage(systemName: "crop.rotate", withConfiguration: config), for: .normal)
@@ -177,7 +176,6 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
         view.addSubview(imageView)
         view.addSubview(playIconView)
         view.addSubview(closeButton)
-        view.addSubview(checkButton)
         view.addSubview(editButton)
         view.addSubview(counterLabel)
         view.addSubview(bottomBar)
@@ -209,15 +207,9 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
             make.width.height.equalTo(44)
         }
 
-        checkButton.snp.makeConstraints { make in
+        editButton.snp.makeConstraints { make in
             make.top.equalTo(view.safeAreaLayoutGuide.snp.top).offset(8)
             make.trailing.equalToSuperview().offset(-8)
-            make.width.height.equalTo(44)
-        }
-
-        editButton.snp.makeConstraints { make in
-            make.centerY.equalTo(checkButton)
-            make.trailing.equalTo(checkButton.snp.leading).offset(-10)
             make.width.height.equalTo(44)
         }
 
@@ -269,7 +261,6 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
 
     private func wireActions() {
         closeButton.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
-        checkButton.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
         sendButton.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
         emojiButton.addTarget(self, action: #selector(emojiTapped), for: .touchUpInside)
         editButton.addTarget(self, action: #selector(editTapped), for: .touchUpInside)
@@ -394,6 +385,10 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
     }
 
     @objc private func sendTapped() {
+        guard !didConfirm else {
+            return
+        }
+        didConfirm = true
         dismissKeyboard()
         let caption = captionField.text.trimmingCharacters(in: .whitespacesAndNewlines)
         delegate?.mediaSendPreviewController(self, didConfirm: items, caption: caption)

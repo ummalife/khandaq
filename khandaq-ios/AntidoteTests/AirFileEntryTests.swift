@@ -4,6 +4,7 @@
 
 import AVFoundation
 import ImageIO
+import MobileCoreServices
 import XCTest
 @testable import Antidote
 
@@ -681,5 +682,228 @@ class VideoSendOwnershipTests: XCTestCase {
 
     private func progressViews(in view: UIView) -> [UIProgressView] {
         return view.subviews.compactMap { $0 as? UIProgressView } + view.subviews.flatMap { progressViews(in: $0) }
+    }
+}
+
+/**
+ KHANDAQ (ideas 1): no file leaves by mistake. A file picked with File or Audio leaves only on Send under
+ its name and size; a group's camera video goes to the preview as in a chat with one person, copied into
+ the app's storage first.
+ */
+class PickedFileConfirmationTests: XCTestCase {
+    private var directories: [URL] = []
+    /// The input managers, let go before what they hold weakly: their deinit still reaches the submanagers.
+    private var screens: [AnyObject] = []
+    /// What the input managers hold weakly: their submanagers and their screen.
+    private var kept: [AnyObject] = []
+    private var window: UIWindow?
+    private var savedLanguage: Any?
+    private var savedAppleLanguages: Any?
+
+    override func setUp() {
+        super.setUp()
+        savedLanguage = UserDefaults.standard.object(forKey: AppLanguage.storageKey)
+        savedAppleLanguages = UserDefaults.standard.object(forKey: "AppleLanguages")
+        AppLanguage.set("en")
+    }
+
+    override func tearDown() {
+        window?.rootViewController?.dismiss(animated: false, completion: nil)
+        window?.isHidden = true
+        window = nil
+        directories.forEach { try? FileManager.default.removeItem(at: $0) }
+        directories = []
+        screens = []
+        kept = []
+        UserDefaults.standard.set(savedLanguage, forKey: AppLanguage.storageKey)
+        UserDefaults.standard.set(savedAppleLanguages, forKey: "AppleLanguages")
+        AppLanguage.applyAtLaunch()
+        super.tearDown()
+    }
+
+    func testTheQuestionSaysTheNameAndTheSizeAndOffersSend() throws {
+        let file = try pickedFile(named: "minutes.pdf", bytes: 2_400_000)
+        let sheet = AirPickedFile.confirmation(for: file, source: UIView()) {}
+
+        XCTAssertEqual(sheet.preferredStyle, .actionSheet)
+        XCTAssertEqual(sheet.title, "minutes.pdf")
+        // "2.4 MB", with the decimal mark of the app's locale.
+        XCTAssertEqual(sheet.message, AirByteSize.text(2_400_000))
+        XCTAssertEqual(sheet.message?.hasSuffix("MB"), true)
+        XCTAssertEqual(sheet.actions.map { $0.title ?? "" }, ["Send", "Cancel"])
+        XCTAssertNil(AirPickedFile.sizeText(of: file.deletingLastPathComponent().appendingPathComponent("gone.pdf")),
+                     "a size for a file that is not there")
+    }
+
+    func testAFilePickedInAChatLeavesOnlyOnSend() throws {
+        let (screen, files, presenter) = try chatScreen()
+        let file = try pickedFile(named: "minutes.pdf", bytes: 2_400_000)
+
+        screen.documentPicker(documentPicker(), didPickDocumentsAt: [file])
+
+        XCTAssertEqual(files.sentFilePaths, [], "the file left before Send")
+        let sheet = try XCTUnwrap(presenter.presentedViewController as? UIAlertController, "nothing asked")
+        XCTAssertEqual(sheet.title, "minutes.pdf")
+        XCTAssertEqual(sheet.message, AirByteSize.text(2_400_000))
+
+        try tap("Send", on: sheet)
+        XCTAssertEqual(files.sentFilePaths, [file.path])
+    }
+
+    func testAFileForAChatThatIsCancelledStays() throws {
+        let (screen, files, presenter) = try chatScreen()
+        let file = try pickedFile(named: "song.m4a", bytes: 90_000)
+
+        screen.documentPicker(documentPicker(), didPickDocumentsAt: [file])
+        let sheet = try XCTUnwrap(presenter.presentedViewController as? UIAlertController, "nothing asked")
+        try tap("Cancel", on: sheet)
+
+        XCTAssertEqual(files.sentFilePaths, [])
+    }
+
+    func testAFilePickedInAGroupLeavesOnlyOnSend() throws {
+        let (screen, groups, presenter) = try groupScreen()
+        let file = try pickedFile(named: "plan.txt", bytes: 1_200)
+
+        screen.documentPicker(documentPicker(), didPickDocumentsAt: [file])
+
+        XCTAssertEqual(groups.sentFilePaths, [], "the file left before Send")
+        let sheet = try XCTUnwrap(presenter.presentedViewController as? UIAlertController, "nothing asked")
+        XCTAssertEqual(sheet.title, "plan.txt")
+        XCTAssertEqual(sheet.message, AirByteSize.text(1_200))
+
+        try tap("Send", on: sheet)
+        XCTAssertEqual(groups.sentFilePaths, [file.path])
+    }
+
+    func testAGroupCameraVideoGoesToThePreviewAsACopy() throws {
+        let (screen, groups, presenter) = try groupScreen()
+        let clip = try pickedFile(named: "capture.mov", bytes: 64 * 1024)
+
+        screen.imagePickerController(UIImagePickerController(), didFinishPickingMediaWithInfo: [
+            UIImagePickerControllerMediaType: kUTTypeMovie as String,
+            UIImagePickerControllerMediaURL: clip,
+        ])
+
+        let shown = expectation(description: "the preview came")
+        func check() {
+            if presenter.presentedViewController is MediaSendPreviewController {
+                shown.fulfill()
+            }
+            else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: check)
+            }
+        }
+        check()
+        wait(for: [shown], timeout: 5)
+
+        let preview = try XCTUnwrap(presenter.presentedViewController as? MediaSendPreviewController)
+        guard preview.items.count == 1, case .video(let staged, let name) = preview.items[0] else {
+            return XCTFail("the preview holds \(preview.items)")
+        }
+        directories.append(staged)
+        XCTAssertNotEqual(staged, clip, "the preview was handed the camera's own file")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: staged.path))
+        XCTAssertEqual(name, "capture.mov")
+        XCTAssertEqual(groups.sentFilePaths, [], "the video left before the preview")
+    }
+
+    // MARK: - Helpers
+
+    /// A file as the Files browser hands it over, `bytes` long.
+    private func pickedFile(named name: String, bytes: Int) throws -> URL {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("picked-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
+        directories.append(directory)
+        let url = directory.appendingPathComponent(name)
+        try Data(repeating: 0x5A, count: bytes).write(to: url)
+        return url
+    }
+
+    private func documentPicker() -> UIDocumentPickerViewController {
+        return UIDocumentPickerViewController(documentTypes: [kUTTypeItem as String], in: .import)
+    }
+
+    /// A screen in a window of its own, so that what it presents is shown.
+    private func presenter() -> UIViewController {
+        let presenter = UIViewController()
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = presenter
+        window.isHidden = false
+        self.window = window
+        return presenter
+    }
+
+    /// The input manager of a 1:1 chat, over the mocks of the UI tests and a profile of its own.
+    private func chatScreen() throws -> (ChatInputViewManager, OCTSubmanagerFilesMock, UIViewController) {
+        let (chat, realm) = try profileWithChat()
+        let theme = try defaultTheme()
+        let input = ChatInputView(theme: theme)
+        let chats = OCTSubmanagerChatsMock(realm: realm)
+        let files = OCTSubmanagerFilesMock()
+        let objects = OCTSubmanagerObjectsMock(realm: realm)
+        let presenter = self.presenter()
+        kept += [input, chats, files, objects, presenter]
+        let screen = ChatInputViewManager(inputView: input,
+                                          theme: theme,
+                                          chat: chat,
+                                          submanagerChats: chats,
+                                          submanagerFiles: files,
+                                          submanagerObjects: objects,
+                                          presentingViewController: presenter)
+        screens.append(screen)
+        return (screen, files, presenter)
+    }
+
+    /// The input manager of a group, over the mocks of the UI tests and a profile of its own.
+    private func groupScreen() throws -> (ChatGroupInputViewManager, OCTSubmanagerGroupsMock, UIViewController) {
+        let (chat, realm) = try profileWithChat()
+        let input = ChatInputView(theme: try defaultTheme())
+        let groups = OCTSubmanagerGroupsMock()
+        let objects = OCTSubmanagerObjectsMock(realm: realm)
+        let presenter = self.presenter()
+        kept += [input, groups, objects, presenter]
+        let screen = ChatGroupInputViewManager(inputView: input,
+                                               chat: chat,
+                                               submanagerGroups: groups,
+                                               submanagerObjects: objects,
+                                               presentingViewController: presenter)
+        screens.append(screen)
+        return (screen, groups, presenter)
+    }
+
+    private func profileWithChat() throws -> (OCTChat, RLMRealm) {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("picked-file-owner-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
+        directories.append(directory)
+        let realmManagerClass = try appClass("OCTRealmManager", as: OCTRealmManager.Type.self)
+        let realmManager = try XCTUnwrap(realmManagerClass.init(databaseFileURL: directory.appendingPathComponent("profile.realm"),
+                                                                encryptionKey: nil))
+        let chat = try appClass("OCTChat", as: OCTChat.Type.self).init()
+        realmManager.add(chat)
+        kept.append(realmManager)
+        return (chat, realmManager.realm)
+    }
+
+    private func defaultTheme() throws -> Theme {
+        let path = try XCTUnwrap(Bundle.main.path(forResource: "default-theme", ofType: "yaml"))
+        return try Theme(yamlString: String(contentsOfFile: path, encoding: .utf8))
+    }
+
+    /// Taps the action titled `title` as a person would: UIAlertAction keeps its handler to itself, and
+    /// Cancel has none.
+    private func tap(_ title: String, on sheet: UIAlertController, file: StaticString = #file, line: UInt = #line) throws {
+        let action = try XCTUnwrap(sheet.actions.first { $0.title == title }, "no \(title)", file: file, line: line)
+        guard let block = action.value(forKey: "handler") as AnyObject? else {
+            return
+        }
+        typealias Handler = @convention(block) (UIAlertAction) -> Void
+        unsafeBitCast(block, to: Handler.self)(action)
+    }
+
+    private func appClass<T>(_ name: String, as type: T.Type) throws -> T {
+        let cls: AnyClass = try XCTUnwrap(NSClassFromString(name), "no class \(name)")
+        return unsafeBitCast(cls, to: type)
     }
 }

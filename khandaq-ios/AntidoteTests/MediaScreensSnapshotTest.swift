@@ -32,6 +32,21 @@ class MediaScreensSnapshotTest: SnapshotBaseTest {
         verifyView(controller.view)
     }
 
+    /// KHANDAQ (ideas 1): one Send, the arrow by the caption (the round check at the top sat where the
+    /// photo picker has its own button), and it hands the items over once however often it is tapped.
+    func testThePreviewSendsFromItsArrowOnlyAndOnce() {
+        let controller = MediaSendPreviewController(items: [.image(MediaScreensSnapshotTest.photo(), fileName: "north-exit.jpg")])
+        let delegate = CountingPreviewDelegate()
+        controller.delegate = delegate
+        host(controller)
+
+        let sends = controller.view.buttons.filter { $0.accessibilityLabel == String(localized: "air_compose_send") }
+        XCTAssertEqual(sends.map { $0.accessibilityIdentifier ?? "" }, ["media.preview.send"])
+        sends.first?.sendActions(for: .touchUpInside)
+        sends.first?.sendActions(for: .touchUpInside)
+        XCTAssertEqual(delegate.confirmed, 1, "a second tap sent the photo again")
+    }
+
     /// No snapshot: the gallery's date follows the app language and the time zone of the machine.
     func testTheGalleryClosesWithAnIconThatHasAName() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("media-screens-test.png")
@@ -85,6 +100,19 @@ class MediaScreensSnapshotTest: SnapshotBaseTest {
             UIColor(red: 0.93, green: 0.80, blue: 0.55, alpha: 1).setFill()
             context.fill(CGRect(x: 0, y: 260, width: 300, height: 140))
         }
+    }
+}
+
+/// Counts what the preview hands over, and leaves it on screen.
+private final class CountingPreviewDelegate: MediaSendPreviewControllerDelegate {
+    private(set) var confirmed = 0
+
+    func mediaSendPreviewControllerDidCancel(_ controller: MediaSendPreviewController) {}
+
+    func mediaSendPreviewController(_ controller: MediaSendPreviewController,
+                                    didConfirm items: [MediaSendPreviewItem],
+                                    caption: String) {
+        confirmed += 1
     }
 }
 

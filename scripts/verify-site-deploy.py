@@ -523,18 +523,31 @@ def main() -> int:
     if status != 200:
         fail(f"/downloads/SHA256SUMS.txt вернул {status}")
     else:
-        names = [m.group(1) for m in re.finditer(r"^[0-9a-fA-F]{64}\s+\*?(\S+)\s*$",
-                                                 body.decode("utf-8", "replace"), re.M)]
+        listed = {m.group(2): m.group(1).lower()
+                  for m in re.finditer(r"^([0-9a-fA-F]{64})\s+\*?(\S+)\s*$",
+                                       body.decode("utf-8", "replace"), re.M)}
+        names = list(listed)
         if not names:
             fail("SHA256SUMS.txt опубликован, но не содержит ни одной записи")
         # A signature file is not an artifact that needs a signature of its own. It ends up in
         # SHA256SUMS.txt because that list is built from whatever is in the directory.
         names = [n for n in names if not n.endswith(".sig")]
         missing = []
+        # KHANDAQ (0.2.66, review of the first deploy from dist/): the list went out with the hashes of
+        # the old signatures of five downloads and no line for a new one, and every check here passed.
+        # The signatures are small and fetched here anyway, so each one served must be listed, with the
+        # SHA-256 of the bytes served.
+        unlisted, differing = [], []
         for name in names:
-            st, _, _ = get(f"{base}/downloads/{name}.sig")
+            st, _, sig = get(f"{base}/downloads/{name}.sig")
             if st != 200:
                 missing.append(name)
+                continue
+            want = listed.get(f"{name}.sig")
+            if want is None:
+                unlisted.append(f"{name}.sig")
+            elif hashlib.sha256(sig).hexdigest() != want:
+                differing.append(f"{name}.sig")
         if missing:
             # Not fatal on its own — the artifacts predate the signing work and are re-signed on the
             # next deploy that stages them — but it must be visible, because "there is a signature"
@@ -542,6 +555,13 @@ def main() -> int:
             fail("нет опубликованной подписи для: " + ", ".join(missing))
         else:
             ok(f"подписи на месте для всех {len(names)} артефактов")
+        if differing:
+            fail("SHA256SUMS.txt gives another SHA-256 for the signature served: " + ", ".join(differing))
+        if unlisted:
+            fail("SHA256SUMS.txt has no line for the signature served: " + ", ".join(unlisted))
+        if not differing and not unlisted:
+            served = len(names) - len(missing)
+            ok(f"SHA256SUMS.txt: the {served} signatures served are listed with their SHA-256")
         st, _, _ = get(f"{base}/downloads/allowed_signers")
         if st != 200:
             fail("/downloads/allowed_signers недоступен — проверить подпись нечем")

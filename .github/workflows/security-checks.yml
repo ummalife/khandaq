@@ -141,6 +141,11 @@ jobs:
       # a release signature on the next ordinary deploy. This proves the signer refuses.
       - name: The release key must refuse bytes from the download channel
         run: python3 scripts/check-signing-refuses-untrusted.py
+      # KHANDAQ (0.2.66): the deploy made SHA256SUMS.txt before it signed the downloads it staged, so
+      # v0.2.66 went out listing the old signatures. This runs the deploy's own merge through that
+      # sequence and checks that the list is made again after signing and held to the bytes.
+      - name: The published checksum list must match the signatures the deploy made
+        run: python3 scripts/check-deploy-checksums.py
       # KHANDAQ (0.2.66): the desktop app installs what a manifest signed by the release key names.
       # The app must trust that key and no other, agree with the release scripts on what it reads,
       # and every release build must have the update on and the QA mode off. The generator reads each

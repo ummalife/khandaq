@@ -1416,6 +1416,59 @@ Decided 12.11.2026 for all clients (stage 3, item 10); iOS has it, and Android s
   never shown. The forward header keeps its mark at the start of the message text, since the other
   clients look for it there; the strings carry only the words.
 
+### Testers' ideas, batch 1, on every client
+
+Decided 20.11.2026 from the testers' «Идеи/Предложения» topic (the list taken is in message 8220);
+in 0.2.67 on the clients named in each rule.
+
+- **Privacy switches.** Settings > Privacy has "Send read receipts" on every client and "Show that
+  I'm typing" on the phones (the desktop had it), both on by default. With receipts off no read
+  receipt goes to anyone, and nothing read meanwhile is owed one later; the receipts of others still
+  show. With typing off neither the start nor the end of typing goes. The delivery receipt that
+  resends wait for is not a read receipt and is not switched off (Android's `pref_send_read_receipts`).
+- **Nothing goes by accident.** A file, a document or a camera shot is shown before it goes, with
+  Send and Cancel; Cancel, Back, Esc or a swipe send nothing. The desktop lists the files under "Send
+  N files?" with a thumbnail for photos, the name and the size; iOS asks with a sheet that names the
+  file and its size, for File and Audio in a chat and File in a group; Android opens the preview for
+  camera shots and asks before a document. A media preview has one Send: the round check at its top
+  right is gone on iOS. A web address dropped on a desktop conversation goes into the field.
+- **"Unread messages."** A conversation that got messages while it was closed opens at a line over
+  the first of them, in chats and in groups, on every client. iOS finds it past the first 50 rows,
+  TalkBack reads it out, and on the desktop it stays while the conversation is open.
+- **Voice speed.** On the phones a pill on the note that plays goes 1x, 1.5x, 2x and back to 1x,
+  written with the decimal sign of the app's language ("1,5x" in Russian). The choice holds for every
+  note in the app. The desktop plays at 1x for now.
+- **Reaction bar on Android.** Holding a message down shows a bar of reactions over it and one tap
+  reacts, as on iOS; it is drawn flat, without a shadow.
+- **tox: links.** `tox:<ID>` and `tox://<ID>` (and `khandaq://add?id=<ID>` on iOS) open New contact
+  with the ID filled in and checked; nothing goes until the person sends the request. A link opened
+  before sign-in or behind the PIN waits until the person is in. On Android a 64-character group key
+  goes to Join group, and the ID is no longer written to the log. On macOS links and `.tox` files
+  arrive through the system's open event, the one the app starts with included.
+- **Language on iOS** is the second row of the first screen of Settings, under Appearance, with the
+  same sheet. The iOS build carries only the four languages the app speaks (en, ru, ar, zh): the old
+  Antidote translations made iOS take the app for German or French and show system texts in them.
+- **A photo at first launch.** The name step has an optional photo tile at the start of the name,
+  with the picker and the crop of You. The photo becomes the avatar once the profile exists, so it is
+  kept with the profile (on the desktop, encrypted with it); on Android a profile wiped before that
+  deletes the waiting photo.
+- **Edits.** Your own texts can be edited from the long-press menu of a group too, as with one person
+  (iOS; Android had it). An edit carries at most 1300 bytes of UTF-8, so that it fits one Tox custom
+  packet of 1373 bytes after its header (40 bytes between two people, 16 in a group). Android counts
+  what is left in the field and refuses past it; iOS brings the editor back with the words and "Too
+  long to change: shorten the text, or send it as a new message." A longer edit changes nothing on
+  either side. The desktop shows edits and sends none (Desktop stage 3).
+- **Android: the background notification** has a row in Settings > Notifications, "Background
+  notification", that opens the channel's page in the phone's settings, where it can be hidden;
+  messages still arrive, and the note under the row says so.
+- **Android: service texts** are in the app's four languages: the call and group video
+  notifications and their buttons, the crash screen, and the group lines (created, who can join,
+  roles). A group line names the group instead of "#G1"; lines stored in English before show in the
+  app's words.
+- **Desktop: "Draft: "** and the words stand in the list row of a conversation with words typed and
+  not sent (ru «Черновик: »). Drafts stay in memory only, since there is no always-encrypted store
+  for them, and an empty field takes the row back to the last message.
+
 ## Deviations from the B prototype, with reasons
 
 | In the prototype | Now | Why |

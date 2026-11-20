@@ -89,12 +89,20 @@ enum WakeBanners {
     /// KHANDAQ (notification parity, 2026-11-20): every local notification removed every generic banner, so a
     /// Community message took away the only trace of a 1:1 message whose wake had shown one, before that message
     /// itself came in. A generic banner now goes only for a local notification about its own conversation, `owner`
-    /// being a contact's public key or a group's chat id; one that names nobody (our own wake, sendOwnPush) stays.
+    /// being a contact's public key or a group's chat id. One that names nobody (our own wake, sendOwnPush, or the wake
+    /// of a relay that gave no sender) cannot be told apart from any conversation's: any local notification takes its
+    /// place, as every one did before, or the banner of our own wake would stay until swiped.
     static func isReplaced(_ content: UNNotificationContent, byNotificationAbout owner: String?) -> Bool {
-        guard let owner = owner, !owner.isEmpty, isGeneric(title: content.title, body: content.body) else {
+        guard isGeneric(title: content.title, body: content.body) else {
             return false
         }
-        return self.owner(of: content) == owner.uppercased()
+        guard let named = self.owner(of: content) else {
+            return true
+        }
+        guard let owner = owner, !owner.isEmpty else {
+            return false
+        }
+        return named == owner.uppercased()
     }
 }
 
@@ -629,11 +637,9 @@ private extension NotificationCoordinator {
 
     /// KHANDAQ (#G6): remove delivered generic wake-push banners from the notification-service
     /// extension, so they don't duplicate the contentful Tox-driven local notification.
-    /// KHANDAQ (notification parity, 2026-11-20): only the banners of `owner` (WakeBanners.isReplaced).
+    /// KHANDAQ (notification parity, 2026-11-20): only the banners of `owner` and those that name nobody
+    /// (WakeBanners.isReplaced).
     private func removeGenericPushNotifications(about owner: String?) {
-        guard owner != nil else {
-            return
-        }
         let center = UNUserNotificationCenter.current()
         center.getDeliveredNotifications { delivered in
             let genericIds = delivered.filter { n in

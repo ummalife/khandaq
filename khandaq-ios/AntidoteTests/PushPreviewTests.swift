@@ -318,7 +318,8 @@ final class PushPreviewTests: XCTestCase {
 
     /// KHANDAQ (notification parity, 2026-11-20): every local notification took away every generic wake banner, so a
     /// Community message removed the only trace of a 1:1 message that had not come in yet. A local notification now
-    /// takes the place of the generic banners of its own conversation only, and a banner that names nobody stays.
+    /// takes the place of the generic banners of its own conversation only; a banner that names nobody (our own wake)
+    /// cannot be told apart, and any local notification takes its place, as before.
     func testALocalNotificationReplacesTheGenericBannersOfItsOwnConversationOnly() {
         let other = String(repeating: "22", count: 32)
         let group = String(repeating: "C3", count: 32)
@@ -341,11 +342,15 @@ final class PushPreviewTests: XCTestCase {
         XCTAssertTrue(WakeBanners.isReplaced(banner(["from": publicKey.lowercased()]), byNotificationAbout: publicKey),
                       "the legacy FCM API names the sender in from")
 
-        // Our own wake (sendOwnPush) names nobody.
+        // Our own wake (sendOwnPush) names nobody: any local notification takes its place, or it would stay until
+        // swiped.
         let own = banner(["wake": "1"])
         XCTAssertNil(WakeBanners.owner(of: own))
-        XCTAssertFalse(WakeBanners.isReplaced(own, byNotificationAbout: publicKey))
-        XCTAssertFalse(WakeBanners.isReplaced(own, byNotificationAbout: group))
+        XCTAssertTrue(WakeBanners.isReplaced(own, byNotificationAbout: publicKey))
+        XCTAssertTrue(WakeBanners.isReplaced(own, byNotificationAbout: group))
+        XCTAssertTrue(WakeBanners.isReplaced(own, byNotificationAbout: nil))
+        XCTAssertFalse(WakeBanners.isReplaced(banner(title: "Isa", body: "See you at six", [:]), byNotificationAbout: nil),
+                       "one that says what came stays, whoever it is from")
 
         // A preview that opened with the previews off says "New message" under the sender's name, and is the
         // contact's.

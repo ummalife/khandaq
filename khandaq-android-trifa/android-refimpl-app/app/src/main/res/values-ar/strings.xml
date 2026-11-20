@@ -217,7 +217,7 @@
     <string name="MainActivity_notification_new_message4">رسالة جديدة</string>
     <string name="MainActivity_notification_new_message5">رسالة جديدة</string>
     <string name="Aboutpage_0">Khandaq سجل الأعطال</string>
-    <string name="Aboutpage_2">إرسال تقرير الأعطال عبر البريد الإلكتروني</string>
+    <string name="Aboutpage_2">إرسال تقرير العطل</string>
     <string name="Aboutpage_4">جاري قراءة تقرير العطل</string>
     <string name="Aboutpage_5a">Khandaq Messenger</string>
     <string name="Aboutpage_5b">الإصدار:</string>
@@ -949,7 +949,7 @@
     <string name="about_copy_diagnostics_done">تم نسخ معلومات التشخيص</string>
     <string name="about_send_feedback">إرسال ملاحظات</string>
     <string name="about_feedback_subject">ملاحظات حول Khandaq</string>
-    <string name="about_crash_report_unavailable">افتح Khandaq من قائمة المحادثات ثم أعد المحاولة.</string>
+    <string name="about_crash_report_unavailable">تعذّر إرسال تقرير العطل. أعد المحاولة.</string>
     <string name="about_upstream_commit">commit مشروع TRIfA الأصلي</string>
     <string name="about_jni_commit">commit الخاص بـ JNI</string>
     <string name="about_toxcore_commit">commit الخاص بـ c-toxcore</string>

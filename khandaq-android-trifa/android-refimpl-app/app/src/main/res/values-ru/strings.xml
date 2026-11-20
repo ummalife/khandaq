@@ -573,7 +573,7 @@
     <string name="about_copy_diagnostics_done">Диагностика скопирована</string>
     <string name="about_send_feedback">Написать в поддержку</string>
     <string name="about_feedback_subject">Обратная связь Khandaq</string>
-    <string name="about_crash_report_unavailable">Откройте Khandaq из списка чатов и повторите.</string>
+    <string name="about_crash_report_unavailable">Не удалось передать отчёт о сбое. Попробуйте ещё раз.</string>
     <string name="about_upstream_commit">Коммит upstream TRIfA</string>
     <string name="about_jni_commit">Коммит JNI</string>
     <string name="about_toxcore_commit">Коммит c-toxcore</string>

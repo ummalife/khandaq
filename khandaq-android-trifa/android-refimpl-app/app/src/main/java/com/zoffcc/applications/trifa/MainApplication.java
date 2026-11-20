@@ -434,15 +434,13 @@ public class MainApplication extends Application
             // getExternalFilesDir(null) is scoped to this app, so the user can still retrieve a
             // crash file from the app's own folder, but no other app can. That is what the line
             // commented out just below has said all along; it simply was not the one in use.
-            File externalPrivate = getExternalFilesDir(null);
-            File myDir = (externalPrivate != null)
-                         ? new File(externalPrivate.getAbsolutePath() + "/crashes")
-                         // External storage can be absent or unmounted; internal is always there and
-                         // is also private. Losing the crash file would be worse than either.
-                         : new File(getFilesDir().getAbsolutePath() + "/crashes");
+            // External storage can be absent or unmounted; internal is always there and is also private.
+            // Losing the crash file would be worse than either. The report on the About page sends it from
+            // the same folder (CrashReportFiles), so both take it from one place.
+            File myDir = CrashReportFiles.dir(this);
 
             myDir.mkdirs();
-            File myFile = new File(myDir.getAbsolutePath() + "/crash_" + formattedDate + ".txt");
+            File myFile = new File(myDir, CrashReportFiles.CRASH_PREFIX + formattedDate + CrashReportFiles.SUFFIX);
             Log.i(TAG, "MainApplication:" + randnum + ":" + "crash file=" + myFile.getAbsolutePath());
             myFile.createNewFile();
             FileOutputStream fOut = new FileOutputStream(myFile);

@@ -1,4 +1,8 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <external-files-path path="/vfs_export/" name="std" />
     <external-files-path path="/tmpdir/" name="tmpdir" />
+    <!-- KHANDAQ (beta 2026-11-20): the crash files and the report of the About page (CrashReportFiles), in the
+         external files of the app or, when those are absent, in its internal ones. -->
+    <external-files-path path="/crashes/" name="crashes" />
+    <files-path path="/crashes/" name="crashes_internal" />
 </paths>

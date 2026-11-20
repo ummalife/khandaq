@@ -70,6 +70,7 @@ A compact UTF-8 JSON object, at most **900 bytes**. Receivers ignore fields they
 | `n` | string, optional | the sender's own display name (first 48 characters) |
 | `g` | string, group events only | the group's name as the sender sees it (first 48 characters) |
 | `gid` | string, group events only | the group's chat id, 64 uppercase hex |
+| `gp` | string, a group text without `h` only | the sender's public key in that group, 64 uppercase hex (a text that waits, see "Group message wakes") |
 | `ts` | int | sender's clock, unix seconds |
 | `h` | string, optional | event key, for de-duplication on the recipient (below) |
 
@@ -87,7 +88,8 @@ arrives later over Tox:
 * file: `f:` + the Tox file id (64 uppercase hex)
 * reaction: `r:` + the reaction anchor (uppercase hex, as on the wire) + `:` + the emoji
 * group text: `gt:` + the message id (8 uppercase hex, big-endian) + `:` + the sender's public key in
-  that group (64 uppercase hex)
+  that group (64 uppercase hex); omitted for a text that waits on the sender's device, which has no
+  message id yet and carries `gp` instead (see "Group message wakes")
 * group file: `gf:` + the file's 32-byte hash (64 uppercase hex), the one a reaction to it anchors on
 
 A file queued for an offline friend takes its Tox file id when it is queued, not at its first offer
@@ -155,7 +157,8 @@ The extension cannot read the app's settings, so the app mirrors two of them int
 (service `org.khandaq.push.preview`): account `show`, the "show message preview" setting (`1`/`0`;
 missing means `1`), and account `lang`, the app's language (`en`, `ru`, `ar` or `zh`; missing means
 the phone's language when the app speaks it, else English). The app's own notification of a message
-or a reaction is skipped when a delivered notification already carries its event key in `khq_ev`.
+or a reaction is skipped when a delivered notification already carries its event key in `khq_ev`,
+or, for a group text, its mark in `khq_tm` (see "Group message wakes").
 
 **Android `FirebaseMessagingService`.**
 * `khq_pv` present: decrypt; on success post the notification on the chat's own notification id
@@ -258,9 +261,9 @@ The set goes with the friend (deleted or blocked), as the presence set does. A f
 from another, and it has not said it handles a group message preview.
 
 **Who is woken.** When this device sends a message to group G (a text when `tox_group_send_message`
-returns its id, a file when its first offer goes out), it takes each member key it knows in G (the
-members there now and the saved ones, not a key that has left), computes the presence hash of G and
-that key, and wakes contact C when all of these hold:
+returns its id, or at once when it has to wait, below; a file when its first offer goes out), it
+takes each member key it knows in G (the members there now and the saved ones, not a key that has
+left), computes the presence hash of G and that key, and wakes contact C when all of these hold:
 
 1. C's 190/03 set holds the hash, and no other contact's 190/03 set holds the same hash (two claimants:
    one replayed the other's, and neither is woken);
@@ -274,18 +277,29 @@ Three seconds later conditions 2 and 3 are checked again, then **one** wake goes
 * `n` the sender's own name;
 * `g` the group's name as the sender sees it;
 * `gid` the group's chat id;
-* `h` the group text or group file event key.
+* `h` the group text or group file event key; for a text that waits, no `h` and `gp` instead.
 
 No retries: C's app brings the message by the group's history sync when it connects. Each toxcore
 message is one message here: a long text that goes in several parts wakes once per part, each part
 with its own event key.
+
+**A text that waits.** A text that cannot go yet, because nobody else is connected in G or G is not
+connected, waits on the sender's device until a member is there (Android
+`send_group_text_message_resilient`, iOS `-sendMessageToChat:text:type:successBlock:failureBlock:`).
+That is the usual case of a small group whose members are away, so the wake goes as the text begins to
+wait, under the same conditions (with nobody connected in G, condition 2 holds for every member). Its
+preview has no `h`, since toxcore gives the text its id only when it goes, and carries `gp`, the
+sender's key in G. When the text goes later, nobody is woken for it again. A wake that cannot go at
+that moment (the sender's device has no internet) is not tried again: the text reaches the members by
+Tox when one is there together with the sender, as before 0.2.69.
 
 No wake goes for:
 
 * a private message to one member;
 * an edit;
 * a row brought by history sync;
-* a message still queued because the group is not connected. It wakes when it is actually sent.
+* a text that waited, when it finally goes: it woke when it began to wait. A text queued by a client
+  before 0.2.69 wakes nobody.
 
 **The recipient** shows it as any group preview: title `g`, body `n: ` + the body. Android drops it, as
 it drops any preview, when the group is muted, notifications are off or the group is on screen. A group
@@ -293,6 +307,16 @@ message that arrives over Tox computes the same event key, and the app skips its
 already showed that key, as for a direct message. That holds for a row the history sync brings as well,
 where a client still alerts for one that is recent enough (Android); the others keep such rows silent
 (0.2.65).
+
+A preview without `h`, of a text that waited, is known by what it says, as a direct text without `h`
+is: a group text that arrives from the member key `gp`, whose first 140 characters as the chat shows
+them or as they came are `b`, both on one line (CR LF, LF and CR as spaces, then trimmed), is that
+event, and the app skips its own alert for it once. A match uses the mark up, so that the next text
+saying the same alerts. Android keeps the mark as for a direct text: in memory for 30 minutes and on
+the notification it posted. iOS puts it in `userInfo["khq_tm"]`: 32 lowercase hex, the first 16
+bytes of SHA-256 over the UTF-8 of `gp` in upper case, a line feed and `b` on one line. A text that
+waited longer than that window may alert a second time when it comes, as a direct text that waited
+may.
 
 **Khandaq Community** follows the same rules: a contact who writes there wakes the contacts who have the
 Community's notifications on. A member who is not a contact of the writer is not woken.
@@ -316,6 +340,9 @@ Community's notifications on. A member who is not a contact of the writer is not
 
     group text event key of message id 0x0000ABCD from peer_pk above:
     h         gt:0000ABCD:A1A2A3A4A5A6A7A8A9AAABACADAEAFB0B1B2B3B4B5B6B7B8B9BABBBCBDBEBFC0
+
+    a text that waited, gp = peer_pk above, b = "Wake  test\none " (one line: "Wake  test one"):
+    khq_tm    dda36f64ff2a17499a893ea2042bacad
 
 The plaintext is serialised exactly as shown (no spaces, `ensure_ascii=false`); a decrypting test
 compares the parsed object, an encrypting test compares the bytes with this nonce.

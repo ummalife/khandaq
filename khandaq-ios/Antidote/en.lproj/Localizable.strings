@@ -875,9 +875,9 @@
 "air_compose_voice" = "Voice message";
 "air_day_a11y_format" = "online %@";
 "air_day_a11y_none" = "no marks";
-"air_day_best_format" = "usually %d:00 to %d:00";
+"air_day_best_format" = "usually online %d:00 to %d:00";
 "air_day_empty" = "no marks yet";
-"air_day_hint_ranges_format" = "past day: %@";
+"air_day_hint_ranges_format" = "online in the past day: %@";
 "air_day_note" = "This phone marks the hours it sees the person online. The marks stay only here, for seven days.";
 "air_day_now_online" = "Online now";
 "air_day_range_format" = "%d:00 to %d:00";

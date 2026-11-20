@@ -877,9 +877,9 @@
 "air_compose_voice" = "Голосовое сообщение";
 "air_day_a11y_format" = "в сети %@";
 "air_day_a11y_none" = "отметок нет";
-"air_day_best_format" = "обычно с %d до %d";
+"air_day_best_format" = "обычно в сети с %d до %d";
 "air_day_empty" = "отметок пока нет";
-"air_day_hint_ranges_format" = "за сутки: %@";
+"air_day_hint_ranges_format" = "в сети за сутки: %@";
 "air_day_note" = "Отметки ставит этот телефон, когда видит человека в сети. Они хранятся только здесь, семь дней.";
 "air_day_now_online" = "Сейчас в сети";
 "air_day_range_format" = "с %d до %d";

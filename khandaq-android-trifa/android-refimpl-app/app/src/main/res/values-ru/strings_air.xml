@@ -128,9 +128,9 @@
     <string name="air_day_a11y_format">в сети %1$s</string>
     <string name="air_day_a11y_none">отметок нет</string>
     <string name="air_day_now_online">Сейчас в сети</string>
-    <string name="air_day_best_format">обычно с %1$d до %2$d</string>
+    <string name="air_day_best_format">обычно в сети с %1$d до %2$d</string>
     <string name="air_day_empty">отметок пока нет</string>
-    <string name="air_day_hint_ranges_format">за сутки: %1$s</string>
+    <string name="air_day_hint_ranges_format">в сети за сутки: %1$s</string>
     <string name="air_day_note">Отметки ставит этот телефон, когда видит человека в сети. Они хранятся только здесь, семь дней.</string>
     <string name="air_delivery_sending">отправляется</string>
     <string name="air_delivery_failed">не отправлено</string>

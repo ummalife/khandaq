@@ -864,9 +864,9 @@
 "air_compose_voice" = "语音消息";
 "air_day_a11y_format" = "在线时段：%@";
 "air_day_a11y_none" = "没有记录";
-"air_day_best_format" = "通常 %d:00 至 %d:00";
+"air_day_best_format" = "通常在线 %d:00 至 %d:00";
 "air_day_empty" = "暂无记录";
-"air_day_hint_ranges_format" = "过去 24 小时：%@";
+"air_day_hint_ranges_format" = "过去 24 小时在线：%@";
 "air_day_note" = "此手机会记下看到对方在线的小时。记录只保存在这里，保留七天。";
 "air_day_now_online" = "现在在线";
 "air_day_range_format" = "%d:00 至 %d:00";

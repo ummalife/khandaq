@@ -877,14 +877,14 @@
         <translation>отметок пока нет</translation>
     </message>
     <message>
-        <source>usually %1:00 to %2:00</source>
+        <source>usually online %1:00 to %2:00</source>
         <comment>beside the day strip; %1 and %2 are hours of the clock</comment>
-        <translation>обычно с %1 до %2</translation>
+        <translation>обычно в сети с %1 до %2</translation>
     </message>
     <message>
-        <source>past day: %1</source>
+        <source>online in the past day: %1</source>
         <comment>beside the day strip; %1 lists runs of hours like 7:00 to 9:00</comment>
-        <translation>за сутки: %1</translation>
+        <translation>в сети за сутки: %1</translation>
     </message>
     <message>
         <source>%1:00 to %2:00</source>

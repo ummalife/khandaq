@@ -96,6 +96,28 @@ final class PushPreviewPayload
         return p;
     }
 
+    /**
+     * KHANDAQ (0.2.69, group message wakes): a text to a group, b as for a text; h names it by toxcore's message id
+     * and the sender's key in the group (groupTextEventKey), since a group text has no msgV3 hash. g and gid come
+     * with inGroup.
+     */
+    static PushPreviewPayload groupText(final String text, final long messageId, final String senderPeerPubkey,
+                                        final String senderName, final long tsSeconds)
+    {
+        final PushPreviewPayload p = text(text, null, senderName, tsSeconds);
+        p.eventKey = groupTextEventKey(messageId, senderPeerPubkey);
+        return p;
+    }
+
+    /** KHANDAQ (0.2.69, group message wakes): a file to a group, k and b as for a file, h its group file key. */
+    static PushPreviewPayload groupFile(final String kind, final String fileName, final String fileHashHex,
+                                        final String senderName, final long tsSeconds)
+    {
+        final PushPreviewPayload p = file(kind, fileName, null, senderName, tsSeconds);
+        p.eventKey = groupFileEventKey(fileHashHex);
+        return p;
+    }
+
     /** The same event in a group: g (its name as the sender sees it) and gid (its chat id). */
     PushPreviewPayload inGroup(final String name, final String chatIdHex)
     {
@@ -120,6 +142,25 @@ final class PushPreviewPayload
     static String fileEventKey(final String fileIdHex)
     {
         return isHex64(fileIdHex) ? "f:" + fileIdHex.toUpperCase(Locale.ROOT) : null;
+    }
+
+    /**
+     * KHANDAQ (0.2.69, group message wakes): "gt:" + toxcore's 32-bit message id (8 uppercase hex, big-endian) + ":" +
+     * the sender's key in that group. The id alone repeats across members; with the key it names one message.
+     */
+    static String groupTextEventKey(final long messageId, final String senderPeerPubkey)
+    {
+        if (messageId < 0L || messageId > 0xFFFFFFFFL || !isHex64(senderPeerPubkey))
+        {
+            return null;
+        }
+        return String.format(Locale.ROOT, "gt:%08X:%s", messageId, senderPeerPubkey.toUpperCase(Locale.ROOT));
+    }
+
+    /** KHANDAQ (0.2.69, group message wakes): "gf:" + the file's 32-byte hash, the anchor a reaction to it takes. */
+    static String groupFileEventKey(final String fileHashHex)
+    {
+        return isHex64(fileHashHex) ? "gf:" + fileHashHex.toUpperCase(Locale.ROOT) : null;
     }
 
     static String reactionEventKey(final String anchorHex, final String emoji)

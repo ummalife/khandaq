@@ -143,6 +143,34 @@ final class PushPreviewSeen
         return new Event(list, false);
     }
 
+    /**
+     * KHANDAQ (0.2.69, group message wakes): a group text that came over Tox, by toxcore's message id and its sender's
+     * key in the group. Known by its event key only, as a group preview is (forPreview).
+     */
+    static Event forGroupText(final long messageId, final String senderPeerKey)
+    {
+        final List<String> list = new ArrayList<>(1);
+        add(list, eventMark(PushPreviewPayload.groupTextEventKey(messageId, senderPeerKey)));
+        return new Event(list, false);
+    }
+
+    /** As above, with the message id as a row keeps it (message_id_tox: 8 hex); no mark for any other. */
+    static Event forGroupText(final String messageIdHex, final String senderPeerKey)
+    {
+        // Checked as 4 bytes of hex first: parseLong takes a sign and any number of digits too.
+        final long messageId = (PushPreviewCrypto.unhex(messageIdHex, 4) == null)
+                               ? -1L : Long.parseLong(messageIdHex, 16);
+        return forGroupText(messageId, senderPeerKey);
+    }
+
+    /** KHANDAQ (0.2.69, group message wakes): a group file that came over Tox, by its 32-byte hash. */
+    static Event forGroupFile(final String fileHashHex)
+    {
+        final List<String> list = new ArrayList<>(1);
+        add(list, eventMark(PushPreviewPayload.groupFileEventKey(fileHashHex)));
+        return new Event(list, false);
+    }
+
     /** A reaction that came over Tox, its anchor as on the wire. */
     static Event forReaction(final String anchorHex, final String emoji)
     {

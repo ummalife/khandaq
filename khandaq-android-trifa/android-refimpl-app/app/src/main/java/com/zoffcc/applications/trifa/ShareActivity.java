@@ -39,7 +39,6 @@ import static com.zoffcc.applications.trifa.GroupMessageListActivity.add_attachm
 import static com.zoffcc.applications.trifa.HelperGeneric.collect_shared_text_from_intent;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperGeneric.filter_out_non_hex_chars;
-import static com.zoffcc.applications.trifa.HelperGeneric.normalize_tox_address;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__allow_file_sharing_to_trifa_via_intent;
 import static com.zoffcc.applications.trifa.MainActivity.SelectFriendSingleActivity_ID;
 import static com.zoffcc.applications.trifa.MessageListActivity.add_attachment;
@@ -164,24 +163,26 @@ public class ShareActivity extends AppCompatActivity
                 String shareWith = dataString.substring(dataString.lastIndexOf('/') + 1);
                 // HelperGeneric.logI(TAG, "onCreate:shareWith=" + shareWith);
 
-                // handle tox:......... URL
-                if ((dataString != null) && (dataString.length() > 5) && (dataString.startsWith("tox:")))
+                // KHANDAQ (testers' ideas, 0.2.67): a tox: link, tox:ID or tox://ID in any case, opens New contact
+                // with the ID filled in (ToxLink); it used to be read here and dropped. A 64-character key is a
+                // group's: normalize_tox_address took it for an ID first, so Join group was never reached.
+                if (ToxLink.isToxLink(dataString))
                 {
-                    t1.setText(getString(R.string.share_id_label) + dataString.substring(4));
-
-                    // TODO:
-                    // check if app is running and unlocked -> otherwise start and unlock it
-                    // then open "add" screen and fill in this ToxID
-                    final String key_only = dataString.replaceFirst("tox:", "");
-                    final String key_only_sanitzied = filter_out_non_hex_chars(key_only);
-                    final String normalized_friend_address = normalize_tox_address(key_only_sanitzied);
-                    if (normalized_friend_address != null)
+                    final ToxLink.Parsed link = ToxLink.parse(dataString);
+                    if (link.kind == ToxLink.Kind.CONTACT)
                     {
-                        handleToxFriendInvite(normalized_friend_address);
+                        t1.setText(getString(R.string.share_id_label) + link.hex);
+                        handleToxFriendInvite(link.hex);
                     }
-                    else if (key_only_sanitzied.length() == (TOX_GROUP_CHAT_ID_SIZE * 2))
+                    else if (link.kind == ToxLink.Kind.GROUP)
                     {
-                        handleToxNGCPublicGroupInvite(key_only_sanitzied);
+                        handleToxNGCPublicGroupInvite(link.hex);
+                    }
+                    else
+                    {
+                        // Nothing in it reads as an ID.
+                        HelperGeneric.logI(TAG, "onCreate:tox link without an ID");
+                        this.finish();
                     }
                 }
                 else if (dataString != null)
@@ -379,10 +380,25 @@ public class ShareActivity extends AppCompatActivity
         }
     }
 
-    void handleToxFriendInvite(final String friend_pubkey)
+    /**
+     * KHANDAQ (testers' ideas, 0.2.67): New contact with the ID of a tox: link filled in; this only logged the ID
+     * before. With the profile not open yet (a cold start: the password or the PIN still to come), the ID waits and
+     * the main screen opens New contact with it after the unlock (ToxLink.openPending). The ID is not logged.
+     */
+    void handleToxFriendInvite(final String friend_address)
     {
-        HelperGeneric.logI(TAG, "handleToxFriendInvite:friend_pubkey=" + friend_pubkey);
-        // ** // MessageListActivity.show_messagelist_for_friend(this, friend_pubkey);
+        HelperGeneric.logI(TAG, "handleToxFriendInvite");
+        if (TrifaToxService.orma == null)
+        {
+            ToxLink.storePending(friend_address, System.currentTimeMillis());
+            final Intent start_app = new Intent(this, StartMainActivityWrapper.class);
+            start_app.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(start_app);
+        }
+        else
+        {
+            ToxLink.openNewContact(this, friend_address);
+        }
         // close this share activity
         this.finish();
     }

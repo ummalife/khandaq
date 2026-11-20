@@ -3799,6 +3799,12 @@ public class MainActivity extends AppCompatActivity
                     HelperMsgNotification.consume_pending_open_chat(MainActivity.this);
                     // KHANDAQ (redesign stage 4, E19): the third step of first launch, once, over Air.
                     final boolean idPageNext = AirIdReadyActivity.openIfPending(MainActivity.this);
+                    // KHANDAQ (testers' ideas, 0.2.67): New contact with the ID of a tox: link that came before the
+                    // unlock; after the ID page of a first launch, when Air resumes again.
+                    if (!idPageNext)
+                    {
+                        ToxLink.openPending(MainActivity.this);
+                    }
                     // KHANDAQ (redesign stage 5): the battery question, once, never over the first launch.
                     AirBatteryQuestion.askOnceIfDue(MainActivity.this, idPageNext, commandWanted);
                     if (is_tox_started)

@@ -45,10 +45,10 @@ TOP_FIELDS = {"notesUrl", "platforms", "schema"}
 
 
 def version_key(text: str) -> tuple[int, int, int]:
-    match = VERSION.match(text)
-    if not match:
+    found = VERSION.match(text)
+    if not found:
         raise ValueError(f"not a version: {text!r}")
-    return int(match.group(1)), int(match.group(2)), int(match.group(3))
+    return int(found.group(1)), int(found.group(2)), int(found.group(3))
 
 
 def platform_of(file_name: str) -> str | None:
@@ -120,9 +120,9 @@ def parse_sums(text: str) -> dict[str, str]:
     """SHA256SUMS.txt as file -> lowercase hex, in either tool's format ("HASH  name", "HASH *name")."""
     sums = {}
     for line in text.splitlines():
-        match = SUMS_LINE.match(line)
-        if match:
-            sums[match.group(2)] = match.group(1).lower()
+        found = SUMS_LINE.match(line)
+        if found:
+            sums[found.group(2)] = found.group(1).lower()
     return sums
 
 

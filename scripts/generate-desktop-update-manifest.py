@@ -190,15 +190,15 @@ def linux_deb(path: Path) -> str:
     members = ar_members(path.read_bytes(), path.name)
     with deb_tar(members, "control.tar", path.name) as control:
         text = tar_member(control, "control", path.name).decode("utf-8", "replace")
-    match = re.search(r"^Version:\s*(\S+)\s*$", text, re.M)
-    if not match:
+    found = re.search(r"^Version:\s*(\S+)\s*$", text, re.M)
+    if not found:
         raise Refused(f"{path.name}: its control file has no Version")
     # [epoch:]upstream[-revision]
-    package = match.group(1).split(":", 1)[-1].split("-", 1)[0]
+    package = found.group(1).split(":", 1)[-1].split("-", 1)[0]
     with deb_tar(members, "data.tar", path.name) as data:
         version = program_version(tar_member(data, DEB_PROGRAM, path.name), f"{path.name}:{DEB_PROGRAM}")
     if package != version:
-        raise Refused(f"{path.name}: the package says {match.group(1)}, its program {version}")
+        raise Refused(f"{path.name}: the package says {found.group(1)}, its program {version}")
     return version
 
 

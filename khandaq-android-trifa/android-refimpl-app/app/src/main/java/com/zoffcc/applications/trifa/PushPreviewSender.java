@@ -5,12 +5,19 @@ import android.util.Log;
 
 import com.zoffcc.applications.sorm.GroupDB;
 import com.zoffcc.applications.sorm.GroupMessage;
+import com.zoffcc.applications.sorm.GroupPeerDB;
 import com.zoffcc.applications.sorm.Message;
 
 import org.khandaq.messenger.KhandaqPush;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -26,6 +33,8 @@ import static com.zoffcc.applications.trifa.TrifaToxService.orma;
  * reaction added to a friend's message while the friend is offline, or to a group message whose author is a friend
  * who is offline: one wake of its own, no retries. All of it needs the key K the friend handed us (PushPreviewPeers);
  * without one a message's wake goes as it always did, and a reaction wakes nobody. Calls never carry a preview.
+ * KHANDAQ (0.2.69, group message wakes): a text or a file of ours to a group wakes once each member away who is our
+ * contact and listed the group in its 190/03 set.
  */
 final class PushPreviewSender
 {
@@ -41,6 +50,22 @@ final class PushPreviewSender
                 final Thread thread = new Thread(runnable, "khandaq-reaction-wake");
                 thread.setDaemon(true);
                 return thread;
+            });
+    /**
+     * KHANDAQ (0.2.69, group message wakes): a member and its contact are asked again this long after the message
+     * went, and only then is the contact woken.
+     */
+    private static final long GROUP_MESSAGE_WAKE_DELAY_MS = 3000L;
+    /** KHANDAQ (0.2.69, group message wakes): our files whose first offer went, in this run; each wakes once. */
+    private static final int MAX_OFFERED_FILES = 512;
+    private static final Map<String, Boolean> OFFERED_FILES = Collections.synchronizedMap(
+            new LinkedHashMap<String, Boolean>()
+            {
+                @Override
+                protected boolean removeEldestEntry(final Map.Entry<String, Boolean> eldest)
+                {
+                    return size() > MAX_OFFERED_FILES;
+                }
             });
 
     /** A sealed preview with the id the relay tells the retries of one event by. */
@@ -201,7 +226,7 @@ final class PushPreviewSender
             final PushPreviewPayload payload = PushPreviewPayload.reaction(
                     emoji, messageKind(now), previewText(now.text), anchorHex, ownName(),
                     System.currentTimeMillis() / 1000L);
-            sendReactionWake(friendPubkey, payload);
+            sendOneWake(friendPubkey, payload);
         });
     }
 
@@ -249,11 +274,160 @@ final class PushPreviewSender
             final PushPreviewPayload payload = PushPreviewPayload.reaction(
                     emoji, messageKind(now), previewText(now.text), wireAnchorHex, ownName(),
                     System.currentTimeMillis() / 1000L).inGroup(groupName(now.group_identifier), now.group_identifier);
-            sendReactionWake(author, payload);
+            sendOneWake(author, payload);
         });
     }
 
-    private static void sendReactionWake(final String friendPubkey, final PushPreviewPayload payload)
+    // ---- the wake of a group message ----
+
+    /**
+     * KHANDAQ (0.2.69, group message wakes): a text of ours went to a group, toxcore gave it its message id
+     * (HelperGroup.send_group_text_message_resilient, which a text queued while the group was not connected goes
+     * through too, once it goes). Private messages, edits and history sync go other ways and wake nobody.
+     */
+    static void wakeForGroupText(final long groupNumber, final String groupIdentifier, final String text,
+                                 final long messageId)
+    {
+        if (!PushPreviewPeers.usable() || (groupIdentifier == null)
+            || !HelperFriend.is_group_text_send_success(messageId))
+        {
+            return;
+        }
+        // Our key in the group names the message (its event key), read while the number is surely the group's.
+        final String ownPeerKey = HelperGroup.tox_group_self_get_public_key__wrapper(groupNumber);
+        final PushPreviewPayload payload = PushPreviewPayload.groupText(previewText(text), messageId, ownPeerKey,
+                                                                        ownName(), System.currentTimeMillis() / 1000L);
+        wakeGroupMembers(groupIdentifier, ownPeerKey, payload);
+    }
+
+    /**
+     * KHANDAQ (0.2.69, group message wakes): a file of ours was offered to a group: its BEGIN went to a member
+     * (NgcGroupFileTransfer.sendChunkedFrom) or its one packet to the group (HelperGroup.send_group_image). Only the
+     * first offer wakes: the same file offered again in this run (sent again, or resumed after a wait) wakes nobody.
+     */
+    static void wakeForGroupFile(final GroupMessage g, final long groupNumber)
+    {
+        if (!PushPreviewPeers.usable() || (g == null) || (g.group_identifier == null) || (g.msg_id_hash == null))
+        {
+            return;
+        }
+        final String file = g.group_identifier.toLowerCase(Locale.ROOT) + "|" + g.msg_id_hash.toUpperCase(Locale.ROOT);
+        if (OFFERED_FILES.put(file, Boolean.TRUE) != null)
+        {
+            return;
+        }
+        final String ownPeerKey = HelperGroup.tox_group_self_get_public_key__wrapper(groupNumber);
+        // ts is when it goes, as for a text: a file that waited days for a member is no stale preview (48 hours).
+        final PushPreviewPayload payload = PushPreviewPayload.groupFile(messageKind(g), shownFileName(g.file_name),
+                                                                        g.msg_id_hash, ownName(),
+                                                                        System.currentTimeMillis() / 1000L);
+        wakeGroupMembers(g.group_identifier, ownPeerKey, payload);
+    }
+
+    /**
+     * The contacts a message of ours to the group wakes (GroupMessageWakes.contactsToWake), each one away with its K
+     * and push address known. Three seconds later its member's connection in the group and its own are asked again,
+     * then one wake each and no retries: the contact's app brings the message by the group's history sync when it
+     * connects. Off the caller's thread: it reads toxcore and the database.
+     */
+    private static void wakeGroupMembers(final String groupIdentifier, final String ownPeerKey,
+                                         final PushPreviewPayload message)
+    {
+        if ((ownPeerKey == null) || (message.eventKey == null))
+        {
+            return;
+        }
+        schedule(() -> {
+            final Map<String, Set<String>> wakeSets = PushPreviewStore.wakeSets(MainActivity.context_s);
+            if (wakeSets.isEmpty() || (orma == null))
+            {
+                return;
+            }
+            final Set<String> members = new LinkedHashSet<>();
+            final Set<String> connected = new HashSet<>();
+            liveMembers(HelperGroup.tox_group_by_groupid__wrapper(groupIdentifier), members, connected);
+            final List<GroupPeerDB> saved = orma.selectFromGroupPeerDB().
+                    group_identifierEq(groupIdentifier.toLowerCase(Locale.ROOT)).toList();
+            if (saved != null)
+            {
+                for (final GroupPeerDB peer : saved)
+                {
+                    if (peer.tox_group_peer_pubkey != null)
+                    {
+                        members.add(peer.tox_group_peer_pubkey.toUpperCase(Locale.ROOT));
+                    }
+                }
+            }
+            final Set<String> left = new HashSet<>(GroupPeerKeys.leavingKeys(groupIdentifier,
+                                                                             System.currentTimeMillis()));
+            for (final String member : members)
+            {
+                if (HelperGroup.is_group_peer_departed(groupIdentifier, member))
+                {
+                    left.add(member);
+                }
+            }
+            final Map<String, String> away = new LinkedHashMap<>();
+            for (final Map.Entry<String, String> wake : GroupMessageWakes.contactsToWake(
+                    groupIdentifier, ownPeerKey, members, left, connected, wakeSets).entrySet())
+            {
+                final String contact = wake.getKey();
+                if (isOffline(contact) && (keyFor(contact) != null)
+                    && (HelperFriend.wake_url_for_friend(contact) != null))
+                {
+                    away.put(contact, wake.getValue());
+                }
+            }
+            if (away.isEmpty())
+            {
+                return;
+            }
+            final PushPreviewPayload payload = message.inGroup(groupName(groupIdentifier), groupIdentifier);
+            schedule(() -> {
+                final Set<String> connectedNow = new HashSet<>();
+                liveMembers(HelperGroup.tox_group_by_groupid__wrapper(groupIdentifier), new HashSet<String>(),
+                            connectedNow);
+                for (final Map.Entry<String, String> wake : away.entrySet())
+                {
+                    if (!connectedNow.contains(wake.getValue()) && isOffline(wake.getKey()))
+                    {
+                        sendOneWake(wake.getKey(), payload);
+                    }
+                }
+            }, GROUP_MESSAGE_WAKE_DELAY_MS);
+        }, 0L);
+    }
+
+    /** The keys toxcore lists in the group now, upper case, and those of them connected (they get it over Tox). */
+    private static void liveMembers(final long groupNumber, final Set<String> members, final Set<String> connected)
+    {
+        if (groupNumber < 0)
+        {
+            return;
+        }
+        final long[] peers = MainActivity.tox_group_get_peerlist(groupNumber);
+        if (peers == null)
+        {
+            return;
+        }
+        for (final long peerId : peers)
+        {
+            final String key = HelperGroup.tox_group_peer_get_public_key__wrapper(groupNumber, peerId);
+            if (key == null)
+            {
+                continue;
+            }
+            final String member = key.toUpperCase(Locale.ROOT);
+            members.add(member);
+            final int status = MainActivity.tox_group_peer_get_connection_status(groupNumber, peerId);
+            if (HelperGroup.is_group_peer_online(status))
+            {
+                connected.add(member);
+            }
+        }
+    }
+
+    private static void sendOneWake(final String friendPubkey, final PushPreviewPayload payload)
     {
         final String pushUrl = HelperFriend.wake_url_for_friend(friendPubkey);
         final byte[] key = keyFor(friendPubkey);
@@ -264,7 +438,7 @@ final class PushPreviewSender
         final Preview preview = seal(key, payload, payload.eventKey);
         if (preview != null)
         {
-            // Not counted against the message's wakes (sent_push), and not retried: one reaction, one wake.
+            // Not counted against the message's wakes (sent_push), and not retried: one event, one wake.
             HelperFriend.send_wake_request(pushUrl, preview);
         }
     }
@@ -425,6 +599,11 @@ final class PushPreviewSender
 
     private static void schedule(final Runnable task)
     {
+        schedule(task, REACTION_WAKE_DELAY_MS);
+    }
+
+    private static void schedule(final Runnable task, final long delayMs)
+    {
         try
         {
             REACTION_WAKES.schedule(() -> {
@@ -436,7 +615,7 @@ final class PushPreviewSender
                 {
                     Log.i(TAG, "reaction wake:EE:" + e.getClass().getSimpleName());
                 }
-            }, REACTION_WAKE_DELAY_MS, TimeUnit.MILLISECONDS);
+            }, delayMs, TimeUnit.MILLISECONDS);
         }
         catch (RejectedExecutionException e)
         {

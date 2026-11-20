@@ -824,6 +824,13 @@ public final class NgcGroupFileTransfer
             endUnsent(g, ownSend, beginRes, "BEGIN");
             return;
         }
+        if (ownSend && (startChunk == 0))
+        {
+            // KHANDAQ (0.2.69, group message wakes): the file's first offer went: the members away who are our
+            // contacts wake. A resume offered the file before (its resume point says so, across restarts too), and a
+            // member's request is no offer of ours.
+            PushPreviewSender.wakeForGroupFile(g, groupNum);
+        }
 
         if (startChunk > 0)
         {

@@ -897,6 +897,8 @@ public final class AirGroupDossierActivity extends AirScreenActivity
                 TrifaToxService.orma.updateGroupDB().group_identifierEq(id).notification_silent(muted).execute();
                 // KHANDAQ (0.2.64): and the copy of it the push preview handler reads.
                 PushPreviewPeers.refreshMutedChats();
+                // KHANDAQ (0.2.69, group message wakes): and our 190/03 sets, which leave a muted group out.
+                PushPreviewPeers.wakeSetsChanged();
                 // KHANDAQ (0.2.57, review): the person's choice for Khandaq Community outlasts a new row of it.
                 CommunityAutoJoin.noteSoundChoice(groupId, muted);
             }

@@ -29,6 +29,8 @@ We aim to acknowledge reports within **72 hours**.
 
 - Khandaq client source in this repository
 - Documented public endpoints (`push.khandaq.org` wake relay; clients bootstrap from the public Tox DHT — the self-hosted `bootstrap*.khandaq.org` nodes have been retired)
+- The desktop update channel: the signed manifest on `khandaq.org/downloads/` and the app code that
+  verifies and applies it (see [Desktop updates](#desktop-updates))
 - Build and release integrity (checksums, supply chain)
 
 **Out of scope:**
@@ -68,6 +70,25 @@ It may receive:
 
 It does **not** receive receiver Tox ID or message plaintext. See `config/khandaq_push.json` and [docs/PUSH_RELAY.md](docs/PUSH_RELAY.md).
 
+## Desktop updates
+
+The desktop app checks khandaq.org for a newer release and installs one only when the person
+presses Update. What it rests on (details in [docs/DESKTOP-SIGNING.md](docs/DESKTOP-SIGNING.md)):
+
+- The app believes a manifest only once an Ed25519 SSHSIG signature by the release key, in the
+  namespace `khandaq-desktop-update`, verifies with the key compiled into it. TLS carries it and is
+  not what the app trusts: a forged certificate or a taken-over web server yields a manifest the app
+  refuses.
+- A download is used only if its size and SHA-256 are the signed ones. A version is offered only if
+  it is newer than the running one and not lower than the highest verified version seen before, so
+  an old signed manifest served again takes nobody back.
+- No new version is downloaded or run without that click. The Windows installer asks for elevation;
+  a portable Windows folder and a macOS bundle are swapped by a script that puts the old copy back
+  if any step fails; Linux keeps the verified file and shows what to do with it.
+
+A way around any of these (a signature that should fail and passes, a downgrade, the app running a
+file it has not verified) is in scope.
+
 ## Firebase client keys (Android)
 
 `google-services.json` contains a Firebase **client** API key. This is expected for Android builds (the same key is embedded in the APK). Restrict the key in [Firebase Console](https://console.firebase.google.com/) → Project settings → API restrictions (Android app + Firebase APIs only). iOS `GoogleService-Info.plist` is **not** committed (see `khandaq-ios/.gitignore`).
@@ -100,6 +121,12 @@ and emits the CycloneDX SBOM that ships with the release artifacts.
 Currently waived, both expiring 2027-02-08 (renewed 2026-11-10): **OpenSSL 1.1.1w** and
 **Qt 5.12.12**, blocked on the Qt 6 migration.
 
+With the desktop update check (the release after 0.2.65), the Windows build makes TLS client
+connections with this stack: HTTPS GETs to khandaq.org. The OpenSSL waivers in
+`security-waivers.json` say which advisories that makes reachable (CVE-2026-35189: a
+man-in-the-middle can make the app use a lot of memory during the check). What an update installs
+does not rest on the connection: the app trusts the signature and the SHA-256, not TLS.
+
 The third waiver is gone. **libexpat** was bumped 2.4.1 → 2.8.3 on 2026-08-21 in response to the
 re-audit, clearing the CVE-2024-8176 floor unwaived. Nothing structural had blocked it: expat is its
 own Docker layer built immediately before gdb and consumed by nothing else, so it serves the bundled
@@ -123,5 +150,7 @@ measurement stops:
 ## Recommended verification
 
 - Compare release `SHA256SUMS.txt` with downloaded binaries
+- Verify the desktop update manifest against the release key:
+  `ssh-keygen -Y verify -f allowed_signers -I releases@khandaq.org -n khandaq-desktop-update -s khandaq-desktop-update.json.sig < khandaq-desktop-update.json`
 - Build clients from source and compare behaviour
 - Review `config/khandaq_push.json` and bootstrap registry for network transparency

@@ -59,12 +59,12 @@
   <main id="main">
     <article class="wrap doc">
   <h1>Privacy Policy</h1>
-  <p class="doc-date">Last updated: 19 November 2026</p>
+  <p class="doc-date">Last updated: 20 November 2026</p>
 
   <p>Khandaq is a free, open-source, peer-to-peer messenger built on the <a href="https://tox.chat/" target="_blank" rel="noopener">Tox</a> protocol. It is engineered so that <strong>we cannot read your messages even if we wanted to</strong>. This policy explains, in plain language, what that means.</p>
 
   <div class="doc-note">
-    <strong>The short version.</strong> No account. No phone number. No email. No advertising. No behavioural analytics. Your messages, calls, and files are end-to-end encrypted and travel directly between you and the people you talk to. Khandaq operates no central server that stores your conversations. The one exception to “no servers” is notifications: waking a phone requires Google’s push service and a small Khandaq wake relay, which see delivery data but never message content they can read (see <a href="#push">Push notifications</a>). All of this is about the app. The website, khandaq.org, counts its visits with Yandex Metrica and Google Analytics, and only if you allow it (see <a href="#website">This website</a>).
+    <strong>The short version.</strong> No account. No phone number. No email. No advertising. No behavioural analytics. Your messages, calls, and files are end-to-end encrypted and travel directly between you and the people you talk to. Khandaq operates no central server that stores your conversations. The exceptions to “no servers” are notifications and desktop updates. Waking a phone requires Google’s push service and a small Khandaq wake relay, which see delivery data but never message content they can read (see <a href="#push">Push notifications</a>). The desktop app asks khandaq.org whether a new version is out, an anonymous request you can switch off (see <a href="#updates">Desktop updates</a>). All of this is about the app. The website, khandaq.org, counts its visits with Yandex Metrica and Google Analytics, and only if you allow it (see <a href="#website">This website</a>).
   </div>
 
   <!-- DEPLOY ORDER: the "Firebase diagnostics is switched off" claim below is true only from the NEXT
@@ -104,6 +104,13 @@
   <p>The relay keeps one piece of state: a truncated hash of the push token together with the time it last woke that device. This is used only to suppress duplicates: without it, a sender retrying delivery produces a stream of identical banners. These rows are deleted once they are older than 24 hours, are not linked to an account or a Tox ID, and are not used for statistics. A wake that carries a preview is de-duplicated per event instead: the relay keeps a truncated hash of the push token with a hash of the event id the sender attached, for at most six hours, so that a retry of the same event does not show the same preview twice. Separately, the relay’s web server writes ordinary access logs (the calling IP address, the time, the request and its result), as any web server does. The server is configured to strip secret parameters out of the logged line. From Android 0.2.42 and iOS build 142986 the apps send the wake as a POST whose body carries the token and whose signature travels in a header, so the token is not part of the request line a web server writes down at all. Installations still on an older build use the earlier form, where the token and the sender’s public key sit in the URL and therefore do appear in that log line; that endpoint is scheduled for retirement and the schedule is published in the project repository. These logs are rotated off the server in the normal course, are never joined to the wake table, and are used only for fault-finding and abuse handling.</p>
   <p>You can turn notifications off at any time in your device’s system settings.</p>
 
+  <!-- DEPLOY ORDER: the section below is true from the first desktop release built with
+       UPDATE_CHECK=ON (the release after 0.2.65). Publish it with that release, not before. -->
+  <h2 id="updates">Desktop updates</h2>
+  <p>The desktop app for Windows, macOS and Linux checks whether a newer version is out: a few minutes after it starts, and then once a day (an hour later, if a check did not go through). It downloads two small files from khandaq.org, a description of the latest desktop release and its signature. The request is anonymous: it carries no account, no Tox ID, no contact and no identifier of your device, and it names the app only as “Khandaq”, without its version. Like any website, khandaq.org sees the IP address the request comes from (your proxy’s, if you set one in the app) and when it came. The visit statistics of the website play no part in it: the app fetches two files, not a page.</p>
+  <p>The app installs nothing on its own. It shows that a new version is available, and only when you press Update does it download that version from khandaq.org. Before the download is used, the app checks it against the description, which must carry the signature of the Khandaq release key.</p>
+  <p>To stop the check, open Settings, then About, and switch off “Check for updates”. “Check now” beside it checks at once, even when the switch is off. Test builds do not check at all.</p>
+
   <h2>Device permissions</h2>
   <p>Khandaq asks for a permission only when you use the feature that needs it. The full list of permissions you are prompted for:</p>
   <ul>
@@ -127,6 +134,7 @@
     <li><strong>Google (Firebase Cloud Messaging)</strong>: delivers notifications on Android and iOS. Handles a per-device registration token, your IP address, and the sender’s Tox public key carried inside the wake push; no message content it can read (a preview travels end-to-end encrypted). Governed by Google’s own privacy policy. Google’s ML Kit barcode scanner is also in the Android app, but it runs on-device and sends nothing.</li>
     <li><strong>Apple (APNs)</strong>: the final delivery hop for notifications on iOS, reached through FCM. Same limits: no message content.</li>
     <li><strong>The Khandaq wake relay</strong> (push.khandaq.org): see <a href="#push">Push notifications</a> for exactly what it receives and keeps. Run by us, not by a third party.</li>
+    <li><strong>khandaq.org</strong>: the desktop app asks it whether a new version is out, and downloads an update from it when you ask; see <a href="#updates">Desktop updates</a>. Run by us, not by a third party.</li>
     <li><strong>Legacy wake relays and optional push servers</strong>: the upstream relay addresses listed under <a href="#push">Push notifications</a>, and, on Android only if you switch one on yourself, ntfy / UnifiedPush / Mozilla’s push service. They receive the same wake call the Khandaq relay would, and nothing more.</li>
     <li><strong>OpenStreetMap and Apple Maps</strong>: only when a location message is displayed, to fetch the map preview. They see the requested coordinates and your IP address.</li>
     <li><strong>Tox bootstrap and relay nodes</strong>: run by volunteers, not by us. They help devices find each other and cannot read end-to-end encrypted traffic.</li>

@@ -1,0 +1,122 @@
+{
+  "version": "0.2.67",
+  "date": "2026-11-20",
+  "title": "Ideas from the testers: privacy switches, files that wait for Send, unread messages first",
+  "summary": "The first batch of ideas from the testers' group. Read receipts can be turned off on every app, and typing on the phones. A photo from the camera, a document or a file waits for Send instead of going at once. A chat or a group opens at the first message you have not read, under the line “Unread messages”. Voice messages play at 1.5x and 2x on the phones, Android gets a reaction bar, tox: links open New contact, and a new profile can take a photo on its first screen.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "Read receipts and typing can be turned off",
+      "description": "Settings › Privacy has “Send read receipts” on every app, and “Show that I'm typing” on Android and iPhone; the desktop had that one. Both are on until you turn them off. With read receipts off, your contacts don't see that you have read their messages; you still see that they have read yours. With typing off, nobody sees that you are typing.",
+      "platforms": [
+        "android",
+        "ios",
+        "windows",
+        "macos",
+        "linux"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Nothing is sent by accident",
+      "description": "A photo from the camera, a document or a file now waits for Send. Android shows a camera shot in the preview and asks before a document goes. iPhone asks with a sheet that names the file and its size, and the photo preview has one Send button instead of two. The desktop lists the files you pick, paste or drop, with their names and sizes: Enter sends them, Esc keeps them back. Cancel, Back and a swipe send nothing.",
+      "platforms": [
+        "android",
+        "ios",
+        "windows",
+        "macos",
+        "linux"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Chats open at “Unread messages”",
+      "description": "A chat or a group that got messages while it was closed opens at the first of them, under the line “Unread messages”. iPhone did this in chats with one person and now does it in groups too.",
+      "platforms": [
+        "android",
+        "ios",
+        "windows",
+        "macos",
+        "linux"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Voice messages at 1.5x and 2x",
+      "description": "The voice message that plays has a pill that switches between 1x, 1.5x and 2x. The app keeps your choice for the next ones.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Android: reactions in one tap",
+      "description": "Hold a message and a bar of reactions appears over it; one tap reacts, as on iPhone.",
+      "platforms": [
+        "android"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "tox: links open New contact",
+      "description": "A tox: link opened from a browser, another app or a QR code opens New contact with the ID filled in and checked; the request goes only when you send it. A link opened before you sign in waits until you are in. On Android a link with a group key opens Join group. On a Mac, links and .tox profile files now reach the app too.",
+      "platforms": [
+        "android",
+        "ios",
+        "macos"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "A photo for a new profile",
+      "description": "The first screen of a new profile, where you choose your name, has a place for a photo. It is optional and uses the same picker and crop as You.",
+      "platforms": [
+        "android",
+        "ios",
+        "windows",
+        "macos",
+        "linux"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "iPhone: Language in Settings, and edits in groups",
+      "description": "Language is now the second row of Settings. The app carries only the four languages it speaks, English, Russian, Arabic and Chinese, so the system no longer shows its own texts in German or French. Your own messages in a group can be edited from the menu, as in a chat with one person. An edit longer than one message can carry (1300 bytes, about 650 Cyrillic letters) used to change the text on your phone only; now the editor asks you to shorten it or to send it as a new message.",
+      "platforms": [
+        "ios"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "Android: your language in calls and notifications",
+      "description": "The call notification and its buttons, the crash screen and the lines a group writes (created, who can join, roles) are now in Russian, Arabic and Chinese too, and a group line names the group instead of “#G1”. Settings › Notifications has “Background notification”: it opens the phone's settings, where that notification can be hidden while messages still arrive.",
+      "platforms": [
+        "android"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "Desktop: drafts in the list",
+      "description": "A chat with words typed and not sent shows “Draft:” and the words in the list, until you send them, clear the field or close the app.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "The day strip says its hours are hours online",
+      "description": "The hint beside a contact's day strip now says what its hours are: “online in the past day: 7:00 to 9:00”, “usually online 19:00 to 22:00”. On Android the line under your name, which says whether you are online, sits right under it again.",
+      "platforms": [
+        "android",
+        "ios",
+        "windows",
+        "macos",
+        "linux"
+      ]
+    }
+  ]
+}

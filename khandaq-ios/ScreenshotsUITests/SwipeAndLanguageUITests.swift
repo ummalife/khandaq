@@ -63,6 +63,9 @@ final class SwipeAndLanguageUITests: XCTestCase {
         // Any test about real behaviour (reactions, sending) must run WITHOUT it.
         if useMockBackend {
             app.launchArguments.append("UI_TESTING")
+        } else {
+            // A real profile on a simulator with a network: it must not join the real Khandaq Community.
+            app.launchArguments.append("UI_TESTING_REAL")
         }
         // Start from a known system language so the onboarding buttons are predictable; the in-app
         // language (what this test is about) is switched from Settings later on.

@@ -293,8 +293,10 @@ class ActiveSessionCoordinator: NSObject {
     /// KHANDAQ (0.2.57, SPEC-community part B): Khandaq Community, joined once per profile by itself while
     /// the node is online, and tried again at every start and connection until the group is here. The demo
     /// world of the UI tests joins nothing. KHANDAQ (0.2.60): the sound an earlier join turned off is on again.
+    /// KHANDAQ (ideas 1): neither does a UI test of the real messenger (UI_TESTING_REAL): its first launch
+    /// makes a real profile on a simulator with a network, which would otherwise join the real Community.
     fileprivate func joinCommunityIfDue() {
-        guard !(toxManager is OCTManagerMock) else {
+        guard !(toxManager is OCTManagerMock), !ProcessInfo.processInfo.arguments.contains("UI_TESTING_REAL") else {
             return
         }
         KhandaqCommunity.restoreSoundIfDue(manager: toxManager)

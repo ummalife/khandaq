@@ -345,7 +345,9 @@ class ChatGroupController: PortraitChatController {
         // opened from the header; search waits behind its button.
         updateGroupInfoBarButton()
         installMessageToolsUI()
-        flickBack = ChatFlickBack(controller: self, view: tableView)
+        let flickBack = ChatFlickBack(controller: self, view: tableView)
+        flickBack.isCovered = { [weak self] in self?.reactionPopup.isVisible == true }
+        self.flickBack = flickBack
         chatInputView.onTextChanged = { [weak self] _ in
             self?.updateGroupComposeLimit()
         }

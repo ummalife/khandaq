@@ -369,7 +369,9 @@ class ChatPrivateController: PortraitChatController {
         createNavigationViews()
         addFriendNotification()
         if let tableView = tableView {
-            flickBack = ChatFlickBack(controller: self, view: tableView)
+            let flickBack = ChatFlickBack(controller: self, view: tableView)
+            flickBack.isCovered = { [weak self] in self?.reactionPopup.isVisible == true }
+            self.flickBack = flickBack
         }
         // KHANDAQ (redesign stage 2): search waits behind the button in the header (searchButtonPressed).
         startAirConversation()

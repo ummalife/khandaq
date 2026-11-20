@@ -21,13 +21,23 @@ enum ChatFlickBackGeometry {
     static let farShare: CGFloat = 0.5
     /// How much more sideways than up or down the movement has to be: scrolling the messages is not leaving.
     static let sidewaysRatio: CGFloat = 1.5
+    /// How far toward the start edge a drag may go on its way and still leave: past it, the drag began as
+    /// the swipe to reply, and coming back over the start only takes the reply back.
+    static let reverseAllowance: CGFloat = 20.0
 
-    /// Whether a release with this movement and speed leaves the conversation.
-    static func goesBack(translation: CGPoint, velocity: CGPoint, width: CGFloat, isRightToLeft: Bool) -> Bool {
+    /// How far a movement went toward the end edge, in points; below zero toward the start edge.
+    static func along(_ translation: CGPoint, isRightToLeft: Bool) -> CGFloat {
+        return isRightToLeft ? -translation.x : translation.x
+    }
+
+    /// Whether a release with this movement and speed leaves the conversation. `furthestBack` is the least
+    /// `along` the drag reached on its way, zero for one that never went toward the start edge.
+    static func goesBack(translation: CGPoint, velocity: CGPoint, width: CGFloat, isRightToLeft: Bool,
+                         furthestBack: CGFloat = 0) -> Bool {
         let toward: CGFloat = isRightToLeft ? -1 : 1
         let along = translation.x * toward
         let speed = velocity.x * toward
-        guard along > 0, along > abs(translation.y) * sidewaysRatio else {
+        guard furthestBack >= -reverseAllowance, along > 0, along > abs(translation.y) * sidewaysRatio else {
             return false
         }
         if width > 0, along >= width * farShare, speed > -minimumVelocity {
@@ -44,11 +54,18 @@ enum ChatFlickBackGeometry {
 /// that something in the conversation kept from starting. The screen does not follow the finger: it goes
 /// back with the usual animation once the finger is lifted. Views that take sideways drags themselves keep
 /// them: the wave of a voice note (replySwipeExcludedViews), sliders, switches, anything that scrolls
-/// sideways and text with a selection, whose handles are dragged. Kept alive by its conversation, which
-/// owns it.
+/// sideways and text with a selection, whose handles are dragged. A drag that went toward the start edge
+/// first (a swipe to reply taken back) does not leave, nor does one made while the menu of a message is
+/// open (isCovered). Kept alive by its conversation, which owns it.
 final class ChatFlickBack: NSObject, UIGestureRecognizerDelegate {
+    /// Whether something stands over the messages that the flick must leave alone: the menu of a message,
+    /// which a long press opens and the same finger may then drag across.
+    var isCovered: () -> Bool = { false }
+
     private weak var controller: UIViewController?
     private let pan = UIPanGestureRecognizer()
+    /// The least distance toward the end edge the current drag has reached (ChatFlickBackGeometry.along).
+    private var furthestBack: CGFloat = 0
 
     /// - parameter view: the view of the messages the flick starts on (the table of the conversation).
     init(controller: UIViewController, view: UIView) {
@@ -85,7 +102,8 @@ final class ChatFlickBack: NSObject, UIGestureRecognizerDelegate {
     }
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        guard let controller = controller,
+        guard !isCovered(),
+              let controller = controller,
               let navigationController = controller.navigationController,
               navigationController.topViewController === controller,
               navigationController.viewControllers.count > 1,
@@ -109,21 +127,37 @@ final class ChatFlickBack: NSObject, UIGestureRecognizerDelegate {
         return true
     }
 
-    @objc private func panned(_ recognizer: UIPanGestureRecognizer) {
-        guard recognizer.state == .ended,
-              let controller = controller,
-              let navigationController = controller.navigationController,
-              navigationController.topViewController === controller,
-              navigationController.transitionCoordinator == nil else {
+    /// The action of the pan; internal so that a test can play a drag through it.
+    @objc func panned(_ recognizer: UIPanGestureRecognizer) {
+        guard let controller = controller else {
             return
         }
         // Measured in the screen's own view: the table of a group is drawn upside down.
         let space: UIView = controller.view
         let isRightToLeft = space.effectiveUserInterfaceLayoutDirection == .rightToLeft
-        guard ChatFlickBackGeometry.goesBack(translation: recognizer.translation(in: space),
+        let translation = recognizer.translation(in: space)
+        let along = ChatFlickBackGeometry.along(translation, isRightToLeft: isRightToLeft)
+        switch recognizer.state {
+            case .began:
+                furthestBack = min(0, along)
+                return
+            case .changed:
+                furthestBack = min(furthestBack, along)
+                return
+            case .ended:
+                break
+            default:
+                return
+        }
+        guard !isCovered(),
+              let navigationController = controller.navigationController,
+              navigationController.topViewController === controller,
+              navigationController.transitionCoordinator == nil,
+              ChatFlickBackGeometry.goesBack(translation: translation,
                                              velocity: recognizer.velocity(in: space),
                                              width: space.bounds.width,
-                                             isRightToLeft: isRightToLeft) else {
+                                             isRightToLeft: isRightToLeft,
+                                             furthestBack: min(furthestBack, along)) else {
             return
         }
         navigationController.popViewController(animated: true)

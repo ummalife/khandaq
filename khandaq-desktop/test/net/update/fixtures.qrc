@@ -1,0 +1,10 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<!-- KHANDAQ (0.2.65): a manifest signed with a throwaway test key, in the shapes the tests need. -->
+<qresource prefix="/update">
+    <file>update-test.pub</file>
+    <file>khandaq-desktop-update.json</file>
+    <file>khandaq-desktop-update.json.sig</file>
+    <file>khandaq-desktop-update.json.sha256.sig</file>
+    <file>khandaq-desktop-update.json.release.sig</file>
+</qresource>
+</RCC>

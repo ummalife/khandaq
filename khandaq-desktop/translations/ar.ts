@@ -382,6 +382,81 @@
         <translation>عاد الاتصال</translation>
     </message>
     <message>
+        <source>Khandaq %1 is available</source>
+        <comment>update band at the top of the window: a newer version is out; %1 is its number</comment>
+        <translation>يتوفر Khandaq %1</translation>
+    </message>
+    <message>
+        <source>Khandaq %1 is downloaded</source>
+        <comment>update band at the top of the window: the checked file waits to be installed by hand; %1 is the version</comment>
+        <translation>تم تنزيل Khandaq %1</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <comment>update band at the top of the window and Settings, About: button that downloads and installs the new version</comment>
+        <translation>تحديث</translation>
+    </message>
+    <message>
+        <source>What&apos;s new</source>
+        <comment>update band at the top of the window: button that opens the release notes</comment>
+        <translation>ما الجديد</translation>
+    </message>
+    <message>
+        <source>Hide until the next start</source>
+        <comment>update band at the top of the window: tooltip of the cross</comment>
+        <translation>إخفاء حتى التشغيل التالي</translation>
+    </message>
+    <message>
+        <source>Downloading: %1%</source>
+        <comment>update band at the top of the window: %1 is how much has come, in percent</comment>
+        <translation>جارٍ التنزيل: %1%</translation>
+    </message>
+    <message>
+        <source>Preparing the update</source>
+        <comment>update band at the top of the window: the download is checked and being unpacked</comment>
+        <translation>جارٍ تجهيز التحديث</translation>
+    </message>
+    <message>
+        <source>Restarting</source>
+        <comment>update band at the top of the window: Khandaq quits so the new version takes its place</comment>
+        <translation>جارٍ إعادة التشغيل</translation>
+    </message>
+    <message>
+        <source>The download did not finish</source>
+        <comment>update band at the top of the window: error</comment>
+        <translation>لم يكتمل التنزيل</translation>
+    </message>
+    <message>
+        <source>The file did not pass the check and was deleted</source>
+        <comment>update band at the top of the window: error, the download is not the signed release</comment>
+        <translation>لم يجتز الملف التحقق فحُذف</translation>
+    </message>
+    <message>
+        <source>The update could not be unpacked</source>
+        <comment>update band at the top of the window: error</comment>
+        <translation>تعذّر فك ضغط التحديث</translation>
+    </message>
+    <message>
+        <source>Not installed: permission was not given</source>
+        <comment>update band at the top of the window: Windows asked for permission to install and it was refused</comment>
+        <translation>لم يُثبَّت التحديث: لم يُمنح الإذن</translation>
+    </message>
+    <message>
+        <source>The update could not start</source>
+        <comment>update band at the top of the window: error</comment>
+        <translation>تعذّر بدء التحديث</translation>
+    </message>
+    <message>
+        <source>Install it with this command: %1</source>
+        <comment>update band at the top of the window: Linux package; %1 is the command</comment>
+        <translation>ثبّته بهذا الأمر: %1</translation>
+    </message>
+    <message>
+        <source>Quit Khandaq and put the new version in place of this one</source>
+        <comment>update band at the top of the window: this copy cannot be replaced by Khandaq itself</comment>
+        <translation>أغلق Khandaq واستبدل هذا الإصدار بالإصدار الجديد</translation>
+    </message>
+    <message>
         <source>Find a chat or paste an ID</source>
         <comment>placeholder of the command line</comment>
         <translation>ابحث عن محادثة أو الصق معرّفًا</translation>
@@ -3499,9 +3574,34 @@
         <translation>التحقق من التحديثات</translation>
     </message>
     <message>
-        <source>Download the update</source>
-        <comment>Settings, About: button once a newer version is out</comment>
-        <translation>تنزيل التحديث</translation>
+        <source>Check now</source>
+        <comment>Settings, About: button that checks for a newer version at once</comment>
+        <translation>تحقق الآن</translation>
+    </message>
+    <message>
+        <source>Checking</source>
+        <comment>Settings, About: beside Check now, while it checks</comment>
+        <translation>جارٍ التحقق</translation>
+    </message>
+    <message>
+        <source>You have the latest version</source>
+        <comment>Settings, About: beside Check now</comment>
+        <translation>لديك أحدث إصدار</translation>
+    </message>
+    <message>
+        <source>Version %1 is available</source>
+        <comment>Settings, About: beside Check now; %1 is the version</comment>
+        <translation>يتوفر الإصدار %1</translation>
+    </message>
+    <message>
+        <source>Could not check</source>
+        <comment>Settings, About: beside Check now, when khandaq.org could not be reached or its answer was refused</comment>
+        <translation>تعذّر التحقق</translation>
+    </message>
+    <message>
+        <source>This build does not update itself</source>
+        <comment>Settings, About: beside Check now, in development builds and copies a package manager keeps</comment>
+        <translation>هذا الإصدار لا يُحدَّث تلقائيًا</translation>
     </message>
     <message>
         <source>Owner and developer: Isa Dagestani</source>

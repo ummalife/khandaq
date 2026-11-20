@@ -1,4 +1,6 @@
 Unicode True
+!include "FileFunc.nsh"
+!include "LogicLib.nsh"
 ###################
 #META
 ###################
@@ -15,6 +17,9 @@ Unicode True
 !define UNINSTALL_PATH "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 !define REG_START_MENU "Start Menu Folder"
 var SM_Folder
+; KHANDAQ (0.2.65): 1 when the app runs this installer to update itself:
+; /S /UPDATE /WAITPID=<the app's process> /D=<the install folder>
+var UpdateMode
 
 Name "${APP_NAME}"
 Caption "${APP_NAME}"
@@ -189,6 +194,41 @@ FunctionEnd
 Function Launch_Khandaq_without_Admin
    SetOutPath $INSTDIR
    ShellExecAsUser::ShellExecAsUser "" "$INSTDIR\${MAIN_APP_EXE}" ""
+FunctionEnd
+
+; KHANDAQ (0.2.65): the update the app starts. /WAITPID waits up to two minutes for the app to quit
+; before anything is written, and gives up without touching the install if it has not. /UPDATE with
+; /S starts the updated app as the person once the files are in place, as the Finish page does.
+; Without these options the installer runs exactly as before.
+Function .onInit
+  StrCpy $UpdateMode 0
+  ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "/WAITPID=" $R1
+  ${IfNot} ${Errors}
+    IntOp $R1 $R1 + 0
+    ; SYNCHRONIZE: enough to wait for the process, nothing more.
+    System::Call "kernel32::OpenProcess(i 0x00100000, i 0, i $R1) p .R2"
+    ${If} $R2 != 0
+      System::Call "kernel32::WaitForSingleObject(p $R2, i 120000) i .R3"
+      System::Call "kernel32::CloseHandle(p $R2)"
+      ${If} $R3 <> 0
+        Abort
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+  ClearErrors
+  ${GetOptions} $R0 "/UPDATE" $R1
+  ${IfNot} ${Errors}
+  ${AndIf} ${Silent}
+    StrCpy $UpdateMode 1
+  ${EndIf}
+FunctionEnd
+
+Function .onInstSuccess
+  ${If} $UpdateMode == 1
+    Call Launch_Khandaq_without_Admin
+  ${EndIf}
 FunctionEnd
 
 !define MUI_UNABORTWARNING

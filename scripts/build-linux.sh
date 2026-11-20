@@ -137,7 +137,8 @@ export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig:${PK
 echo "==> Configuring (Release)..."
 cmake "$SRC" \
   -DCMAKE_BUILD_TYPE=Release \
-  -DUPDATE_CHECK=OFF \
+  -DUPDATE_CHECK=ON \
+  -DUPDATE_CHECK_QA=OFF \
   -DSPELL_CHECK=OFF \
   -DDESKTOP_NOTIFICATIONS=OFF
 

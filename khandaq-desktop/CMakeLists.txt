@@ -24,7 +24,13 @@ cmake_minimum_required(VERSION 3.7.2)
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 option(PLATFORM_EXTENSIONS "Enable platform specific extensions, requires extra dependencies" ON)
-option(UPDATE_CHECK "Enable automatic update check" OFF)
+option(UPDATE_CHECK "Enable the update check and the update band" ON)
+# KHANDAQ (0.2.65): for testing the update from end to end on one machine, never for a release:
+# KHANDAQ_UPDATE_MANIFEST_URL may point the check at another manifest (http only to 127.0.0.1),
+# and the key in UPDATE_CHECK_QA_KEY may sign it as well as the release key.
+option(UPDATE_CHECK_QA "QA builds only, never a release: a test manifest address and key" OFF)
+set(UPDATE_CHECK_QA_KEY "" CACHE FILEPATH
+  "UPDATE_CHECK_QA only: the OpenSSH Ed25519 public key (.pub) of a test key")
 option(USE_CCACHE "Use ccache when available" ON)
 option(SPELL_CHECK "Enable spell cheching support" ON)
 option(SVGZ_ICON "Compress the SVG icon of qTox" ON)
@@ -387,6 +393,16 @@ set(${PROJECT_NAME}_SOURCES
   src/model/toxclientstandards.h
   src/net/bootstrapnodeupdater.cpp
   src/net/bootstrapnodeupdater.h
+  src/net/sshsig.cpp
+  src/net/sshsig.h
+  src/net/updatecheck.cpp
+  src/net/updatecheck.h
+  src/net/updateinstaller.cpp
+  src/net/updateinstaller.h
+  src/net/updatemanifest.cpp
+  src/net/updatemanifest.h
+  src/net/updateplatform.cpp
+  src/net/updateplatform.h
   src/net/avatarbroadcaster.cpp
   src/net/avatarbroadcaster.h
   src/persistence/db/rawdatabase.cpp
@@ -403,6 +419,8 @@ set(${PROJECT_NAME}_SOURCES
   src/persistence/igroupsettings.h
   src/persistence/inotificationsettings.cpp
   src/persistence/inotificationsettings.h
+  src/persistence/iupdatesettings.cpp
+  src/persistence/iupdatesettings.h
   src/persistence/ismileysettings.cpp
   src/persistence/ismileysettings.h
   src/persistence/offlinemsgengine.cpp
@@ -477,6 +495,8 @@ set(${PROJECT_NAME}_SOURCES
   src/widget/air/airmediaparts.h
   src/widget/air/airnetworkband.cpp
   src/widget/air/airnetworkband.h
+  src/widget/air/airupdateband.cpp
+  src/widget/air/airupdateband.h
   src/widget/air/airnewcontact.cpp
   src/widget/air/airnewcontact.h
   src/widget/air/airnewgroup.cpp
@@ -731,15 +751,27 @@ if(AVFOUNDATION_FOUND)
     src/platform/camera/avfoundation.h)
 endif()
 
+# The update sources are always built, and tested; UPDATE_CHECK says whether the app uses them.
 if(${UPDATE_CHECK})
     add_definitions(-DUPDATE_CHECK_ENABLED=1)
-    set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
-        src/net/updatecheck.cpp
-        src/net/updatecheck.h)
     message(STATUS "using update check")
 else()
     add_definitions(-DUPDATE_CHECK_ENABLED=0)
     message(STATUS "NOT using update check")
+endif()
+
+if(UPDATE_CHECK_QA)
+    if(NOT UPDATE_CHECK_QA_KEY OR NOT EXISTS "${UPDATE_CHECK_QA_KEY}")
+        message(FATAL_ERROR "UPDATE_CHECK_QA needs UPDATE_CHECK_QA_KEY, the .pub file of a test key")
+    endif()
+    file(READ "${UPDATE_CHECK_QA_KEY}" UPDATE_CHECK_QA_KEY_LINE)
+    if(NOT UPDATE_CHECK_QA_KEY_LINE MATCHES "^ssh-ed25519 (AAAAC3NzaC1lZDI1NTE5[A-Za-z0-9+/]+=*)")
+        message(FATAL_ERROR "UPDATE_CHECK_QA_KEY is not an OpenSSH Ed25519 public key")
+    endif()
+    add_definitions(-DUPDATE_CHECK_QA=1 -DUPDATE_CHECK_QA_KEY="${CMAKE_MATCH_1}")
+    message(WARNING "UPDATE_CHECK_QA is on: a QA build, which must never be released")
+else()
+    add_definitions(-DUPDATE_CHECK_QA=0)
 endif()
 
 if (${DESKTOP_NOTIFICATIONS})
@@ -807,7 +839,8 @@ if(APPLE)
     ${KHANDAQ_APPKIT_FRAMEWORK})
 endif()
 if(WIN32)
-  target_link_libraries(${PROJECT_NAME}_static advapi32)
+  # shell32: ShellExecuteExW, which starts the update installer with elevation.
+  target_link_libraries(${PROJECT_NAME}_static advapi32 shell32)
 endif()
 
 add_executable(${PROJECT_NAME}

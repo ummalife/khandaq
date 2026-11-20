@@ -1,0 +1,39 @@
+{
+  "notesUrl": {
+    "en": "https://khandaq.org/changelog",
+    "ru": "https://khandaq.org/ru/changelog.html"
+  },
+  "platforms": {
+    "linux-deb-amd64": {
+      "file": "khandaq-messenger_amd64.deb",
+      "sha256": "f541874101876255b4baf3a739778d04cb9cba25ffa38b30bc1fb8b0701f2a45",
+      "size": 3000,
+      "version": "0.2.64"
+    },
+    "linux-portable-x86_64": {
+      "file": "khandaq-linux-x86_64-portable.tar.gz",
+      "sha256": "f541874101876255b4baf3a739778d04cb9cba25ffa38b30bc1fb8b0701f2a45",
+      "size": 3000,
+      "version": "0.2.65"
+    },
+    "macos-zip": {
+      "file": "khandaq-macos.zip",
+      "sha256": "f541874101876255b4baf3a739778d04cb9cba25ffa38b30bc1fb8b0701f2a45",
+      "size": 3000,
+      "version": "0.2.65"
+    },
+    "windows-x86_64-installer": {
+      "file": "khandaq-windows-installer.exe",
+      "sha256": "f541874101876255b4baf3a739778d04cb9cba25ffa38b30bc1fb8b0701f2a45",
+      "size": 3000,
+      "version": "0.2.65"
+    },
+    "windows-x86_64-zip": {
+      "file": "khandaq-windows-x86_64.zip",
+      "sha256": "f541874101876255b4baf3a739778d04cb9cba25ffa38b30bc1fb8b0701f2a45",
+      "size": 3000,
+      "version": "0.2.65"
+    }
+  },
+  "schema": "khandaq-desktop-update/1"
+}

@@ -101,7 +101,8 @@ docker run --rm --platform "$PLATFORM" \
     done
     cmake /build/src \
       -DCMAKE_BUILD_TYPE=Release \
-      -DUPDATE_CHECK=OFF \
+      -DUPDATE_CHECK=ON \
+      -DUPDATE_CHECK_QA=OFF \
       -DSPELL_CHECK=OFF \
       -DDESKTOP_NOTIFICATIONS=OFF \
       "${version_args[@]}"

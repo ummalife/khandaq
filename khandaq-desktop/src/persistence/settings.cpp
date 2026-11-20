@@ -174,6 +174,8 @@ void Settings::loadGlobal()
         }
         autoAwayTime = s.value("autoAwayTime", 10).toInt();
         checkUpdates = s.value("checkUpdates", true).toBool();
+        updateLastCheck = s.value("updateLastCheck", 0).toLongLong();
+        updateHighestSeen = s.value("updateHighestSeen", QString()).toString();
         // note: notifySound and busySound UI elements are now under UI settings
         // page, but kept under General in settings file to be backwards compatible
         notifySound = s.value("notifySound", true).toBool();
@@ -707,6 +709,8 @@ void Settings::saveGlobal()
         s.setValue("currentProfile", currentProfile);
         s.setValue("autoAwayTime", autoAwayTime);
         s.setValue("checkUpdates", checkUpdates);
+        s.setValue("updateLastCheck", updateLastCheck);
+        s.setValue("updateHighestSeen", updateHighestSeen);
         s.setValue("notifySound", notifySound);
         s.setValue("notifyHide", notifyHide);
         s.setValue("busySound", busySound);
@@ -1664,6 +1668,28 @@ void Settings::setCheckUpdates(bool newValue)
     if (setVal(checkUpdates, newValue)) {
         emit checkUpdatesChanged(newValue);
     }
+}
+
+qint64 Settings::getUpdateLastCheck() const
+{
+    QMutexLocker locker{&bigLock};
+    return updateLastCheck;
+}
+
+void Settings::setUpdateLastCheck(qint64 secondsSinceEpoch)
+{
+    setVal(updateLastCheck, secondsSinceEpoch);
+}
+
+QString Settings::getUpdateHighestSeen() const
+{
+    QMutexLocker locker{&bigLock};
+    return updateHighestSeen;
+}
+
+void Settings::setUpdateHighestSeen(const QString& version)
+{
+    setVal(updateHighestSeen, version);
 }
 
 bool Settings::getNotify() const

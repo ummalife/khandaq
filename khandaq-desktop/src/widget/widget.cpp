@@ -105,6 +105,7 @@
 #include "src/model/profile/profileinfo.h"
 #include "src/model/status.h"
 #include "src/net/updatecheck.h"
+#include "src/net/updateinstaller.h"
 #include "src/nexus.h"
 #include "src/persistence/offlinemsgengine.h"
 #include "src/persistence/profile.h"
@@ -123,6 +124,7 @@
 #include "src/widget/air/airoverlay.h"
 #include "src/widget/air/airsettingspage.h"
 #include "src/widget/air/airsource.h"
+#include "src/widget/air/airupdateband.h"
 #include "src/widget/air/airstrings.h"
 #include "src/widget/air/airstyle.h"
 #include "src/widget/air/airtokens.h"
@@ -206,6 +208,10 @@ constexpr int joinedGroupOpenWaitMs = 10000;
  */
 constexpr int outgoingInviteRetryMs = 60 * 1000;
 constexpr int outgoingInviteAfterOnlineMs = 3000;
+
+/** KHANDAQ (0.2.65): how long after the start what an earlier update left goes; the first update
+ * check comes a minute later at the soonest. */
+constexpr int updateCleanUpDelayMs = 10 * 1000;
 
 const QString activateHandlerKey("activate");
 const QString saveHandlerKey("save");
@@ -499,12 +505,24 @@ void Widget::init()
     addFriendForm = new AddFriendForm(core->getSelfId(), settings, style,
         *messageBoxManager, *core);
     groupInviteForm = new GroupInviteForm(settings, *core);
-    setupAir();
-
 #if UPDATE_CHECK_ENABLED
+    // Before the Air screen, which puts the band of a new version under the band of no network.
     updateCheck = std::unique_ptr<UpdateCheck>(new UpdateCheck(settings));
     connect(updateCheck.get(), &UpdateCheck::updateAvailable, this, &Widget::onUpdateAvailable);
+    {
+        UpdateInstaller::Setup installSetup;
+        installSetup.manifest = updateCheck->manifestUrl();
+        installSetup.layout = updateCheck->layout();
+        installSetup.running = updateCheck->runningVersion();
+        installSetup.portable = settings.getPaths().isPortable();
+        installSetup.downloads = UpdateInstaller::downloadsFolder(installSetup.portable);
+        updateInstaller =
+            std::unique_ptr<UpdateInstaller>(new UpdateInstaller(settings, installSetup));
+        connect(updateInstaller.get(), &UpdateInstaller::quitRequested, this,
+                &Widget::quitForUpdate);
+    }
 #endif
+    setupAir();
     profileInfo = new ProfileInfo(core, &profile, settings, nexus);
     youPage = new AirYouPage(*profileInfo);
     // Your photo as the "you" block has it: your initials on the ink tile while you have none.
@@ -515,7 +533,9 @@ void Widget::init()
     // Made before the check runs, so that an update it finds reaches About.
     settingsScreen();
 #if UPDATE_CHECK_ENABLED
-    updateCheck->checkForUpdate();
+    updateCheck->start();
+    // What an earlier update left behind goes once the window is up, before any download can start.
+    QTimer::singleShot(updateCleanUpDelayMs, updateInstaller.get(), &UpdateInstaller::cleanUp);
 #endif
 
     notificationGenerator.reset(new NotificationGenerator(settings, &profile));
@@ -888,6 +908,8 @@ Widget::~Widget()
     delete youPage;
     // The page holds profileInfo, so it goes first.
     delete settingsPage.data();
+    // The band holds the update check and the installer, which go with the members.
+    delete updateBand.data();
     delete profileInfo;
     delete addFriendForm;
     delete groupInviteForm;
@@ -1338,6 +1360,21 @@ AirSettingsPage& Widget::settingsScreen()
         connect(settingsPage, &AirSettingsPage::trayIconChanged, this, &Widget::updateIcons);
         connect(settingsPage, &AirSettingsPage::restartRequested, this,
                 &Widget::restartApplication);
+#if UPDATE_CHECK_ENABLED
+        connect(settingsPage, &AirSettingsPage::updateCheckRequested, this, [this] {
+            if (updateBand) {
+                updateBand->reopen();
+            }
+        });
+        connect(settingsPage, &AirSettingsPage::updateInstallRequested, this, [this] {
+            if (updateBand) {
+                updateBand->reopen();
+            }
+            if (updateCheck->hasOffer()) {
+                updateInstaller->install(updateCheck->offer());
+            }
+        });
+#endif
         // Connect again goes to the thread the node runs on.
         const QPointer<Core> node(core);
         settingsPage->setNode(airSource, [node] {
@@ -4126,6 +4163,14 @@ void Widget::saveWindowGeometry()
     settings.setWindowState(saveState());
 }
 
+void Widget::quitForUpdate()
+{
+    // The installer or the helper waits for this process to end, then starts the new version.
+    saveWindowGeometry();
+    saveSplitterGeometry();
+    qApp->quit();
+}
+
 void Widget::restartApplication()
 {
     saveWindowGeometry();
@@ -4511,6 +4556,11 @@ void Widget::setupAir()
     airSource = new AirSource(*core, profile, settings, *friendList, *groupList, this);
     // KHANDAQ (0.2.57): over the list and the conversation, which it pushes down.
     topLayout->addWidget(new AirNetworkBand(*airSource, top));
+#if UPDATE_CHECK_ENABLED
+    // KHANDAQ (0.2.65): and under it, the band of a new version.
+    updateBand = new AirUpdateBand(*updateCheck, *updateInstaller, top);
+    topLayout->addWidget(updateBand);
+#endif
     airController = new AirController(*airSource, *airBand, *airList, settings, this);
     airLocal = new AirLocal(settings, this);
     // Requests and invitations wait in the local store until they are answered (E12).

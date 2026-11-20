@@ -66,6 +66,46 @@ enum NotificationFreshness {
     }
 }
 
+/// KHANDAQ (notification parity, 2026-11-20): the generic banner of #G6, which the notification service extension
+/// leaves in the relay's own words ("Khandaq", "New message"; "New activity" for an empty one) when no preview opens,
+/// and which a local notification about the same message takes the place of.
+enum WakeBanners {
+    static func isGeneric(title: String, body: String) -> Bool {
+        return title == "Khandaq" || body == "New activity" || body == "New message" || body.isEmpty
+    }
+
+    /// Whom a delivered banner is about, uppercased: the group of a preview that opened (`khq_gid`), else the contact
+    /// whose wake it was (`sender_pubkey`, or `from` from the legacy FCM API, as ActiveSessionCoordinator reads them),
+    /// else its thread, which the extension sets to one of the two; nil for a banner that names nobody.
+    static func owner(of content: UNNotificationContent) -> String? {
+        for key in ["khq_gid", "sender_pubkey", "from"] {
+            if let value = content.userInfo[key] as? String, !value.isEmpty {
+                return value.uppercased()
+            }
+        }
+        return content.threadIdentifier.isEmpty ? nil : content.threadIdentifier.uppercased()
+    }
+
+    /// KHANDAQ (notification parity, 2026-11-20): every local notification removed every generic banner, so a
+    /// Community message took away the only trace of a 1:1 message whose wake had shown one, before that message
+    /// itself came in. A generic banner now goes only for a local notification about its own conversation, `owner`
+    /// being a contact's public key or a group's chat id. One that names nobody (our own wake, sendOwnPush, or the wake
+    /// of a relay that gave no sender) cannot be told apart from any conversation's: any local notification takes its
+    /// place, as every one did before, or the banner of our own wake would stay until swiped.
+    static func isReplaced(_ content: UNNotificationContent, byNotificationAbout owner: String?) -> Bool {
+        guard isGeneric(title: content.title, body: content.body) else {
+            return false
+        }
+        guard let named = self.owner(of: content) else {
+            return true
+        }
+        guard let owner = owner, !owner.isEmpty else {
+            return false
+        }
+        return named == owner.uppercased()
+    }
+}
+
 class NotificationCoordinator: NSObject {
     weak var delegate: NotificationCoordinatorDelegate?
 
@@ -111,10 +151,17 @@ class NotificationCoordinator: NSObject {
     // distinguished by groupSenderPeerId > 0 (mirrors OCTMessageAbstract.isOutgoing).
     // KHANDAQ (0.2.57): a group whose notifications are off, muted by hand (Khandaq Community too: since 0.2.60
     // its join no longer mutes it), adds nothing to the tab or the app icon; its row in the list keeps its own counter.
+    // KHANDAQ (notification parity, 2026-11-20): a row the history sync brought from a member who is not in the group
+    // at that moment has peer id 0, and in Khandaq Community, where members come and go all day, so did most of them:
+    // new messages added nothing. Such a row names its author by the public key frozen on it at insert, and counts
+    // as the message of a member who is there does (ChatListContent.countsAsUnread); a legacy synced row with no key
+    // still does not.
     static let unreadChatsPredicate = NSPredicate(format:
         "lastMessage.dateInterval > lastReadDateInterval"
         + " AND lastMessage.groupSystemMessage == NO"
-        + " AND (lastMessage.groupSenderPeerId > 0 OR lastMessage.senderUniqueIdentifier != nil)"
+        + " AND (lastMessage.groupSenderPeerId > 0 OR lastMessage.senderUniqueIdentifier != nil"
+        + " OR (lastMessage.groupHistorySync == YES"
+        + " AND (lastMessage.messageText.groupSenderPubkey != nil OR lastMessage.messageFile.groupSenderPubkey != nil)))"
         + " AND NOT (isGroup == YES AND groupNotificationsSilent == YES)")
 
     init(theme: Theme, submanagerObjects: OCTSubmanagerObjects) {
@@ -216,7 +263,9 @@ class NotificationCoordinator: NSObject {
                 icon: avatarManager.avatarFromString(caller, diameter: 44, type: .Call),
                 tile: nil)
 
-        showLocalNotificationObject(object)
+        // KHANDAQ (notification parity, 2026-11-20): it stands in for the wake banner of the caller alone.
+        let call = submanagerObjects.object(withUniqueIdentifier: userInfo, for: .call) as? OCTCall
+        showLocalNotificationObject(object, owner: call?.caller?.publicKey)
     }
 
     func registerInAppNotificationAppId(_ appId: String, icon: UIImage? = nil) {
@@ -286,6 +335,26 @@ extension NotificationCoordinator {
     static func groupName(of chat: OCTChat?) -> String {
         return KhandaqCommunity.displayName(for: chat) ?? chat?.groupName ?? String(localized: "group_chat_default_title")
     }
+
+    /// KHANDAQ (notification parity, 2026-11-20): which inserted row of the messages, newest first, a change notifies.
+    /// Realm hands the rows written together over in one change, and the newest alone was looked at: a muted
+    /// Community message, a synced row, a notice or our own message on top kept the message under it, a 1:1 one too,
+    /// from notifying. Now it is the newest that `notifies` passes, of the rows inserted above everything stored
+    /// before (an insert below a stored row, a synced one with its old date, is not new, as before); one at most, as
+    /// before, so a change never sets off a run of bands.
+    static func indexToNotify(insertions: [Int], notifies: (Int) -> Bool) -> Int? {
+        var expected = 0
+        for index in insertions.sorted() {
+            guard index == expected else {
+                break
+            }
+            if notifies(index) {
+                return index
+            }
+            expected += 1
+        }
+        return nil
+    }
 }
 
 private extension NotificationCoordinator {
@@ -303,14 +372,13 @@ private extension NotificationCoordinator {
                     guard let messages = messages else {
                         break
                     }
-                    if insertions.contains(0) {
-                        let message = messages[0]
-
+                    // KHANDAQ (notification parity, 2026-11-20): not only the newest row of the change (indexToNotify).
+                    let picked = NotificationCoordinator.indexToNotify(insertions: insertions) { row in
+                        return messages.object(at: row).map { self.shouldEnqueueMessage($0) } ?? false
+                    }
+                    if let row = picked, let message = messages.object(at: row) {
                         self.playSoundForMessageIfNeeded(message)
-
-                        if self.shouldEnqueueMessage(message) {
-                            self.enqueueNotification(.newMessage(message))
-                        }
+                        self.enqueueNotification(.newMessage(message))
                     }
                 case .error(let error):
                     os_log("NotificationCoordinator:messages:realm:error:%{public}@", String(describing: error))
@@ -456,7 +524,7 @@ private extension NotificationCoordinator {
             }
         }
         else {
-            showLocalNotificationObject(object, eventKey: eventKey(of: notification))
+            showLocalNotificationObject(object, eventKey: eventKey(of: notification), owner: bannerOwner(of: notification))
         }
     }
 
@@ -483,6 +551,31 @@ private extension NotificationCoordinator {
         }
     }
 
+    /// KHANDAQ (notification parity, 2026-11-20): whom a notification is about, as a delivered banner names it
+    /// (WakeBanners.owner): a group by its chat id, a contact by their public key.
+    func bannerOwner(of notification: NotificationType) -> String? {
+        switch notification {
+            case .newMessage(let message):
+                return bannerOwner(ofChat: message.chatUniqueIdentifier)
+            case .reaction(let notice):
+                return bannerOwner(ofChat: notice.message.chatUniqueIdentifier)
+            case .friendRequest(let request):
+                return request.publicKey
+            case .groupInvite(let invite):
+                return invite.inviterKey
+        }
+    }
+
+    func bannerOwner(ofChat chatUniqueIdentifier: String) -> String? {
+        guard let chat = submanagerObjects.object(withUniqueIdentifier: chatUniqueIdentifier, for: .chat) as? OCTChat else {
+            return nil
+        }
+        if chat.isGroup {
+            return chat.groupChatIdHex
+        }
+        return (chat.friends.lastObject() as? OCTFriend)?.publicKey
+    }
+
     func showInAppNotificationObject(_ object: NotificationObject, chatUniqueIdentifier: String?) {
         // KHANDAQ: custom safe-area banner instead of LNNotificationsUI (which rendered under the
         // Dynamic Island / notch and got clipped). Presented in the existing NotificationWindow.
@@ -494,7 +587,8 @@ private extension NotificationCoordinator {
         showNextNotification()
     }
 
-    func showLocalNotificationObject(_ object: NotificationObject, eventKey: String? = nil) {
+    /// `owner`: whom it is about (bannerOwner), the generic wake banners of whom it stands in for.
+    func showLocalNotificationObject(_ object: NotificationObject, eventKey: String? = nil, owner: String?) {
         let body = "\(object.title): \(object.body)"
 
         // KHANDAQ (#G6): drop a duplicate of the SAME contentful notification fired within a short
@@ -508,7 +602,7 @@ private extension NotificationCoordinator {
         lastLocalNotificationTime = now
 
         guard let eventKey = eventKey else {
-            presentLocalNotification(object, body: body)
+            presentLocalNotification(object, body: body, owner: owner)
             showNextNotification()
             return
         }
@@ -520,14 +614,14 @@ private extension NotificationCoordinator {
             let shown = delivered.contains { ($0.request.content.userInfo["khq_ev"] as? String) == eventKey }
             DispatchQueue.main.async {
                 if !shown {
-                    self?.presentLocalNotification(object, body: body)
+                    self?.presentLocalNotification(object, body: body, owner: owner)
                 }
             }
         }
         showNextNotification()
     }
 
-    func presentLocalNotification(_ object: NotificationObject, body: String) {
+    func presentLocalNotification(_ object: NotificationObject, body: String, owner: String?) {
         let local = UILocalNotification()
         local.alertBody = body
         local.userInfo = object.action.archive()
@@ -538,18 +632,18 @@ private extension NotificationCoordinator {
         // KHANDAQ (#G6): the push-extension already delivered a GENERIC wake banner ("Khandaq" /
         // "New activity" / empty) for this same message; clear those so the contentful one we just
         // posted isn't shadowed by a "New message" duplicate.
-        removeGenericPushNotifications()
+        removeGenericPushNotifications(about: owner)
     }
 
     /// KHANDAQ (#G6): remove delivered generic wake-push banners from the notification-service
     /// extension, so they don't duplicate the contentful Tox-driven local notification.
-    private func removeGenericPushNotifications() {
+    /// KHANDAQ (notification parity, 2026-11-20): only the banners of `owner` and those that name nobody
+    /// (WakeBanners.isReplaced).
+    private func removeGenericPushNotifications(about owner: String?) {
         let center = UNUserNotificationCenter.current()
         center.getDeliveredNotifications { delivered in
             let genericIds = delivered.filter { n in
-                let title = n.request.content.title
-                let text = n.request.content.body
-                return title == "Khandaq" || text == "New activity" || text == "New message" || text.isEmpty
+                return WakeBanners.isReplaced(n.request.content, byNotificationAbout: owner)
             }.map { $0.request.identifier }
             if !genericIds.isEmpty {
                 center.removeDeliveredNotifications(withIdentifiers: genericIds)

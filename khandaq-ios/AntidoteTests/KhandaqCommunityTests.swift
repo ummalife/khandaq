@@ -240,6 +240,79 @@ class KhandaqCommunityTests: XCTestCase {
         XCTAssertEqual(objects.chats(predicate: NotificationCoordinator.unreadChatsPredicate).count, 3)
     }
 
+    /// KHANDAQ (notification parity, 2026-11-20): what the history sync brings from a member who is not in the group at
+    /// that moment, gone or offline as the Community's members are all day, has peer id 0 and its author's key alone.
+    /// A text or a file of theirs counts unread in its row and on the badges as a message of a member who is there
+    /// does; a legacy synced row that names nobody, a notice and our own message still do not, and a muted group still
+    /// adds nothing to the badges while its row keeps its counter.
+    func testWhatTheHistoryBringsFromAMemberWhoIsGoneCountsUnread() throws {
+        let directory = makeDirectory()
+        let realmManagerClass = try appClass("OCTRealmManager", as: OCTRealmManager.Type.self)
+        let realmManager = try XCTUnwrap(realmManagerClass.init(databaseFileURL: directory.appendingPathComponent("profile.realm"),
+                                                                encryptionKey: nil))
+        let objects = OCTSubmanagerObjectsMock(realm: realmManager.realm)
+        let groups = OCTSubmanagerGroupsMock()
+        let author = String(repeating: "A1", count: 32)
+        let lastRead = Date().timeIntervalSince1970 - 600
+        var made = 0
+        func group(muted: Bool = false) throws -> OCTChat {
+            made += 1
+            let chat = try groupChat("group-\(made)", chatIdHex: String(repeating: "C", count: 63) + "\(made)", name: "Group \(made)", topic: nil)
+            chat.groupNotificationsSilent = muted
+            chat.lastReadDateInterval = lastRead
+            realmManager.add(chat)
+            return chat
+        }
+        func syncedText(in chat: OCTChat, author: String?) throws -> OCTMessageAbstract {
+            return try XCTUnwrap(realmManager.addGroupSyncedMessage(withText: "Salam", type: .normal, chat: chat, peerId: 0,
+                                                                    peerName: "Amina", senderPubkeyHex: author, messageId: 7,
+                                                                    dateInterval: lastRead + 60))
+        }
+        func unreadCount(_ chat: OCTChat) -> Int {
+            return ChatListContent.unreadCount(for: chat, submanagerGroups: groups, submanagerObjects: objects)
+        }
+        func badged(_ chat: OCTChat) -> Bool {
+            return objects.chats(predicate: NotificationCoordinator.unreadChatsPredicate).indexOfObject(chat) >= 0
+        }
+
+        let texted = try group()
+        let text = try syncedText(in: texted, author: author)
+        XCTAssertEqual(text.groupSenderPeerId, 0)
+        XCTAssertFalse(text.isOutgoing())
+        XCTAssertTrue(ChatListContent.countsAsUnread(text))
+        XCTAssertEqual(unreadCount(texted), 1, "its row")
+        XCTAssertTrue(badged(texted), "the Chats tab and the app icon")
+
+        let filed = try group()
+        let file = try XCTUnwrap(realmManager.addGroupSyncedMessage(withFileName: "photo.jpg", fileSize: 4,
+                                                                    filePath: directory.appendingPathComponent("photo.jpg").path,
+                                                                    fileType: .ready, chat: filed, peerId: 0, peerName: "Amina",
+                                                                    senderPubkeyHex: author, fileUTI: nil,
+                                                                    groupMsgIdHashHex: String(repeating: "B2", count: 32),
+                                                                    dateInterval: lastRead + 60))
+        XCTAssertTrue(ChatListContent.countsAsUnread(file))
+        XCTAssertEqual(unreadCount(filed), 1)
+        XCTAssertTrue(badged(filed))
+
+        // A synced row stored before the author's key was kept names nobody, and stays out as before.
+        let legacy = try group()
+        XCTAssertFalse(ChatListContent.countsAsUnread(try syncedText(in: legacy, author: nil)))
+        XCTAssertEqual(unreadCount(legacy), 0)
+        XCTAssertFalse(badged(legacy))
+
+        let muted = try group(muted: true)
+        _ = try syncedText(in: muted, author: author)
+        XCTAssertEqual(unreadCount(muted), 1, "its row keeps its counter")
+        XCTAssertFalse(badged(muted), "a muted group adds nothing to the badges")
+
+        let notice = try appClass("OCTMessageAbstract", as: OCTMessageAbstract.Type.self).init()
+        notice.groupSystemMessage = true
+        XCTAssertFalse(ChatListContent.countsAsUnread(notice), "Amina joined")
+        let ours = try appClass("OCTMessageAbstract", as: OCTMessageAbstract.Type.self).init()
+        ours.groupSenderPeerId = 0
+        XCTAssertFalse(ChatListContent.countsAsUnread(ours), "our own message")
+    }
+
     // MARK: Its name and its place in the list (owner, 2026-11-16)
 
     /// Its founder's topic was "Official Khandaq community · Be kind, no spam or ads · …", the list showed the

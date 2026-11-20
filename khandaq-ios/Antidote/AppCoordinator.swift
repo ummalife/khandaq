@@ -9,11 +9,16 @@ class AppCoordinator {
     var activeCoordinator: TopCoordinatorProtocol? {
         didSet {
             deliverPendingInboxURL()
+            deliverPendingContactLink()
         }
     }
     /// A file or link handed over while no coordinator is up yet: at launch the profile opens in the
     /// background, so a file opened in Khandaq from another app waits for it instead of being dropped.
     fileprivate var pendingInboxURL: URL?
+    /// KHANDAQ (ideas 1): a link that adds someone (AirContactLink) waits for a profile that is open and not
+    /// behind the PIN screen: one opened on the sign-in pages opens New contact once the person is in, one
+    /// opened on a locked phone once it is unlocked. The last link wins.
+    fileprivate var pendingContactLink: URL?
     fileprivate var theme: Theme
     fileprivate var pendingToxRestartOptions: CoordinatorOptions?
     fileprivate var toxRestartWorkItem: DispatchWorkItem?
@@ -74,10 +79,22 @@ class AppCoordinator {
         ToxOptionsRestartScheduler.setContinueRecreateHandler { [weak self] in
             self?.performToxRecreateIfReady()
         }
+
+        // KHANDAQ (ideas 1): a contact link that came behind the PIN screen opens New contact once it goes.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleLockScreenDidHide),
+            name: .khandaqLockScreenDidHide,
+            object: nil
+        )
     }
 
     @objc func handleAppearanceChange() {
         reloadAppearance()
+    }
+
+    @objc func handleLockScreenDidHide() {
+        deliverPendingContactLink()
     }
 
     @objc func handleThemePreferenceChange() {
@@ -178,11 +195,34 @@ extension AppCoordinator: TopCoordinatorProtocol {
     }
 
     func handleInboxURL(_ url: URL) {
+        if AirContactLink.matches(url) {
+            pendingContactLink = url
+            deliverPendingContactLink()
+            return
+        }
         guard let coordinator = activeCoordinator else {
             pendingInboxURL = url
             return
         }
         coordinator.handleInboxURL(url)
+    }
+
+    /// Hands a waiting contact link to the open profile once nothing covers it, on the next turn of the main
+    /// loop, so its screens are in the window.
+    fileprivate func deliverPendingContactLink() {
+        guard pendingContactLink != nil, activeCoordinator is RunningCoordinator, !PinAuthorizationCoordinator.isLockScreenShown else {
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self,
+                  let url = self.pendingContactLink,
+                  let coordinator = self.activeCoordinator as? RunningCoordinator,
+                  !PinAuthorizationCoordinator.isLockScreenShown else {
+                return
+            }
+            self.pendingContactLink = nil
+            coordinator.handleInboxURL(url)
+        }
     }
 
     /// Hands a waiting file to the coordinator that has just come up, once its screens are in the

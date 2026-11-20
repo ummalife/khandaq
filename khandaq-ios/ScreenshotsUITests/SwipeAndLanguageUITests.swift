@@ -3524,6 +3524,60 @@ final class SwipeAndLanguageUITests: XCTestCase {
         XCTAssertGreaterThan(header.buttons.count, 1, "group header lost its action buttons")
     }
 
+    // MARK: - Links that add someone (ideas 1)
+
+    /// KHANDAQ (ideas 1): a tox: link opened before there is a profile waits for one, and New contact opens
+    /// with its ID once the profile is made; a khandaq://add link opens New contact at once. The name has
+    /// "FirstLaunch" in it so setUp leaves the first launch to the test, which goes through it without the
+    /// pasteboard: digits for the name and no password.
+    func testFirstLaunchKeepsAContactLinkForNewContact() throws {
+        guard #available(iOS 16.4, *) else {
+            throw XCTSkip("XCUIApplication.open(_:) needs iOS 16.4")
+        }
+        // An ID with a correct check (AirNewContactModelTests), and one New contact only has to show.
+        let first = "56A1ADE4B65B86BCD51CC73E2CD4E542179F47959FE3E0E21B4B0ACDADE51855D34D34D37CB5"
+        let second = "7F3A91C05D2E8B4416A9C3E07D5F2B8164E0A3C9D7B25F1E8A4C6D0B3F9E2A71000000007F3A"
+        let name = app.textFields["air.first.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 30), "the first launch did not start:\n\(app.debugDescription)")
+
+        app.open(try XCTUnwrap(URL(string: "tox:" + first.lowercased())))
+        XCTAssertTrue(name.waitForExistence(timeout: 10), "the link left the first launch")
+        XCTAssertFalse(app.textViews["air.newContact.id"].exists, "New contact opened without a profile")
+
+        name.tap()
+        name.typeText("9001")
+        app.buttons["air.step.main"].tap()
+        let skip = app.descendants(matching: .any)["air.first.password.skip"]
+        XCTAssertTrue(skip.waitForExistence(timeout: 10), "no password page")
+        skip.tap()
+        app.buttons["air.step.main"].tap()
+        XCTAssertTrue(app.buttons["air.first.share"].waitForExistence(timeout: 45), "no ID page")
+        app.buttons["air.step.main"].tap()
+
+        let field = app.textViews["air.newContact.id"]
+        XCTAssertTrue(field.waitForExistence(timeout: 30), "New contact did not open with the profile:\n\(app.debugDescription)")
+        XCTAssertEqual(field.value as? String, groupedById(first))
+        XCTAssertTrue(app.buttons["air.newContact.send"].isEnabled, "the ID of the link was not taken as good")
+        try? XCUIScreen.main.screenshot().pngRepresentation
+                .write(to: URL(fileURLWithPath: Self.artifactsDir + "contact-link-first-launch.png"))
+
+        XCTAssertTrue(app.returnToAir(), "could not come back to Air")
+        app.open(try XCTUnwrap(URL(string: "khandaq://add?id=" + second)))
+        XCTAssertTrue(field.waitForExistence(timeout: 15), "khandaq://add did not open New contact")
+        XCTAssertEqual(field.value as? String, groupedById(second))
+    }
+
+    /// An ID in groups of four, as the ID field shows it.
+    private func groupedById(_ hex: String) -> String {
+        var groups: [String] = []
+        var rest = Substring(hex)
+        while !rest.isEmpty {
+            groups.append(String(rest.prefix(4)))
+            rest = rest.dropFirst(4)
+        }
+        return groups.joined(separator: " ")
+    }
+
     // MARK: - Swipe to reply
 
     /// KHANDAQ (0.2.56, owner decision 3): swipe a message toward the start edge to answer it, as in

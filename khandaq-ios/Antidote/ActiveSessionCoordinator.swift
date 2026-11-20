@@ -575,6 +575,18 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
     }
 
     func handleInboxURL(_ url: URL) {
+        // KHANDAQ (ideas 1): tox:<ID>, tox://<ID> and khandaq://add?id=<ID> open New contact with the ID. While
+        // the profile is closed or locked, AppCoordinator keeps the link until it is open in front of the person.
+        if AirContactLink.matches(url) {
+            if let address = AirContactLink.address(from: url) {
+                showNewContact(prefilledAddress: address)
+            }
+            else {
+                NSLog("Khandaq: ignored a contact link with no ID in it")
+            }
+            return
+        }
+
         guard url.scheme?.lowercased() == "khandaq" else {
             handleNonKhandaqInboxURL(url)
             return
@@ -786,6 +798,19 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
             case .iPad:
                 iPad.chatsCoordinator.joinGroupFromExternal(chatIdHex: chatIdHex)
         }
+    }
+
+    /// KHANDAQ (ideas 1): New contact with the ID of a link from another app, right over the Air list (the
+    /// contacts on the iPad), as a chat opened from a notification is over the list.
+    func showNewContact(prefilledAddress address: String) {
+        switch InterfaceIdiom.current() {
+            case .iPhone:
+                iPhone.navigationController.popToRootViewController(animated: false)
+            case .iPad:
+                primaryIpadControllerShowFriends(iPad.primaryController)
+                friendsCoordinator.navigationController.popToRootViewController(animated: false)
+        }
+        friendsCoordinator.showAddFriend(prefilledAddress: address, animated: false)
     }
 }
 

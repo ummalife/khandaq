@@ -28,6 +28,8 @@
 #include <QJsonValue>
 #include <QRegularExpression>
 
+#include <cmath>
+
 namespace {
 constexpr char productionManifest[] = "https://khandaq.org/downloads/khandaq-desktop-update.json";
 constexpr char notesHost[] = "khandaq.org";
@@ -181,6 +183,16 @@ bool parse(const QByteArray& json, Release& out, QString& error)
     }
 
     Release release;
+    // A double, as every JSON number: a whole one, at least 1, that a double holds exactly.
+    const QJsonValue serial = root.value(QStringLiteral("serial"));
+    const double serialNumber = serial.toDouble(-1);
+    if (!serial.isDouble() || !(serialNumber >= 1)
+        || serialNumber > static_cast<double>(serialLimit)
+        || std::floor(serialNumber) != serialNumber) {
+        return refuse(error, QStringLiteral("no serial"));
+    }
+    release.serial = static_cast<qint64>(serialNumber);
+
     const QJsonValue notes = root.value(QStringLiteral("notesUrl"));
     if (!notes.isObject()
         || !readNotes(notes.toObject().value(QStringLiteral("en")), release.notesEnglish)

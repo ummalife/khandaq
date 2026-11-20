@@ -22,7 +22,8 @@
 #include <QNetworkProxy>
 #include <QString>
 
-/** KHANDAQ (0.2.65): what the update check reads and keeps (General in khandaq.ini). */
+/** KHANDAQ (0.2.65): what the update check reads and keeps (General and UpdateHighestSeen in
+ * khandaq.ini). */
 class IUpdateSettings
 {
 public:
@@ -40,9 +41,14 @@ public:
     /** When a check last went through, in seconds since the epoch; 0 for never. */
     virtual qint64 getUpdateLastCheck() const = 0;
     virtual void setUpdateLastCheck(qint64 secondsSinceEpoch) = 0;
-    /** The highest version a verified manifest has shown ("0.2.65"); empty for none. */
-    virtual QString getUpdateHighestSeen() const = 0;
-    virtual void setUpdateHighestSeen(const QString& version) = 0;
+    /** The highest version a verified manifest has shown for platform, a key of the manifest
+     * ("0.2.65"); empty for none. Copies of more than one kind can share these settings, a .deb and
+     * a portable folder on one Linux, and the platforms of a manifest need not carry one version. */
+    virtual QString getUpdateHighestSeen(const QString& platform) const = 0;
+    virtual void setUpdateHighestSeen(const QString& platform, const QString& version) = 0;
+    /** The highest serial of a verified manifest; 0 for none. */
+    virtual qint64 getUpdateManifestSerial() const = 0;
+    virtual void setUpdateManifestSerial(qint64 serial) = 0;
     /** Writes the settings to disk. */
     virtual void saveGlobal() = 0;
 };

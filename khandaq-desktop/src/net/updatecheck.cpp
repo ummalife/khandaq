@@ -271,14 +271,26 @@ void UpdateCheck::conclude(const QByteArray& manifest, const QByteArray& signatu
         return;
     }
 
-    UpdateManifest::Version highest;
-    UpdateManifest::parseVersion(settings.getUpdateHighestSeen(), highest);
+    // A manifest older than one verified before carries the release key's signature all the same:
+    // served again, by a stale cache or by whoever would keep the apps from hearing of a newer
+    // release. It is refused, and nothing of it is kept.
+    const qint64 seenSerial = settings.getUpdateManifestSerial();
+    if (verified.serial < seenSerial) {
+        fail(QStringLiteral("the signed manifest %1 is older than %2, verified before")
+                 .arg(verified.serial)
+                 .arg(seenSerial));
+        return;
+    }
+
     const QString platform = UpdatePlatform::key(setup.layout.kind);
+    UpdateManifest::Version highest;
+    UpdateManifest::parseVersion(settings.getUpdateHighestSeen(platform), highest);
     const UpdateManifest::Decision decision =
         UpdateManifest::decide(verified, platform, setup.running.version, highest);
     if (UpdateManifest::compare(decision.highestSeen, UpdateManifest::Version{}) > 0) {
-        settings.setUpdateHighestSeen(UpdateManifest::toString(decision.highestSeen));
+        settings.setUpdateHighestSeen(platform, UpdateManifest::toString(decision.highestSeen));
     }
+    settings.setUpdateManifestSerial(verified.serial);
     settings.setUpdateLastCheck(QDateTime::currentSecsSinceEpoch());
     settings.saveGlobal();
 

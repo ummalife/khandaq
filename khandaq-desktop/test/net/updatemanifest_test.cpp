@@ -20,6 +20,7 @@
 #include "src/net/updatemanifest.h"
 
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QtTest/QtTest>
@@ -43,6 +44,7 @@ private slots:
     void readsTheRunningBuild();
     void readsTheSignedFixture();
     void refusesAnotherSchema();
+    void refusesWithoutASerial();
     void refusesNotesOffTheSite();
     void refusesAFileOfAnotherPlatform();
     void refusesBadEntries_data();
@@ -188,6 +190,7 @@ void TestUpdateManifest::readsTheSignedFixture()
              QStringLiteral("0.2.64"));
     QCOMPARE(release.notesEnglish, QUrl(QStringLiteral("https://khandaq.org/changelog")));
     QCOMPARE(release.notesRussian, QUrl(QStringLiteral("https://khandaq.org/ru/changelog.html")));
+    QCOMPARE(release.serial, qint64{1795145410});
 }
 
 void TestUpdateManifest::refusesAnotherSchema()
@@ -206,6 +209,34 @@ void TestUpdateManifest::refusesAnotherSchema()
     UpdateManifest::Release release;
     QString error;
     QVERIFY(!UpdateManifest::parse(bytes(object), release, error));
+}
+
+void TestUpdateManifest::refusesWithoutASerial()
+{
+    for (const QJsonValue& serial :
+         {QJsonValue(0), QJsonValue(-1), QJsonValue(1.5), QJsonValue(QStringLiteral("1795145410")),
+          QJsonValue(true), QJsonValue(), QJsonValue(9007199254740992.0), QJsonValue(1e300),
+          QJsonValue(QJsonArray{1})}) {
+        QJsonObject object = fixtureObject();
+        object.insert(QStringLiteral("serial"), serial);
+        UpdateManifest::Release release;
+        QString error;
+        QVERIFY2(!UpdateManifest::parse(bytes(object), release, error),
+                 qPrintable(QString::fromUtf8(QJsonDocument(QJsonArray{serial}).toJson())));
+        QCOMPARE(error, QStringLiteral("no serial"));
+    }
+    QJsonObject object = fixtureObject();
+    object.remove(QStringLiteral("serial"));
+    UpdateManifest::Release release;
+    QString error;
+    QVERIFY(!UpdateManifest::parse(bytes(object), release, error));
+    // The whole range, from 1 to the largest whole number a double holds exactly.
+    for (const double serial : {1.0, 9007199254740991.0}) {
+        object.insert(QStringLiteral("serial"), serial);
+        QVERIFY2(UpdateManifest::parse(bytes(object), release, error), qPrintable(error));
+        QCOMPARE(release.serial, static_cast<qint64>(serial));
+    }
+    QCOMPARE(UpdateManifest::serialLimit, qint64{9007199254740991});
 }
 
 void TestUpdateManifest::refusesNotesOffTheSite()

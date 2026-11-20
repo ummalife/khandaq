@@ -35,5 +35,6 @@
       "version": "0.2.65"
     }
   },
-  "schema": "khandaq-desktop-update/1"
+  "schema": "khandaq-desktop-update/1",
+  "serial": 1795145410
 }

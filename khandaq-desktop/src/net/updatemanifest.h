@@ -43,6 +43,8 @@ constexpr char schema[] = "khandaq-desktop-update/1";
 constexpr char signatureNameSpace[] = "khandaq-desktop-update";
 /** The largest download a manifest may name. */
 constexpr qint64 artifactLimit = qint64{1} << 30;
+/** The largest serial: the largest whole number every JSON reader holds exactly (2^53 - 1). */
+constexpr qint64 serialLimit = (qint64{1} << 53) - 1;
 
 struct Version
 {
@@ -73,6 +75,9 @@ struct Release
     QMap<QString, Entry> platforms;
     QUrl notesEnglish;
     QUrl notesRussian;
+    /** Grows with every manifest the release scripts write (the UTC time it was written, in
+     * seconds): one below the highest an app has verified is an old manifest served again. */
+    qint64 serial = 0;
 };
 
 /** The platform keys this app knows, each with the one file its entry may name. */
@@ -81,8 +86,9 @@ QString fileFor(const QString& platform);
 
 /**
  * Reads a manifest whose signature has been verified. Strict about everything the app uses: the
- * schema, each known platform's version, file (the one named for that platform), size and SHA-256,
- * and the release notes, which must be pages of https://khandaq.org/. A field or platform the app
+ * schema, the serial (a whole number from 1 to serialLimit), each known platform's version, file
+ * (the one named for that platform), size and SHA-256, and the release notes, which must be pages
+ * of https://khandaq.org/. A field or platform the app
  * does not know is passed over, so that adding one never stops the apps in the field from updating.
  * error says why a manifest was refused.
  */

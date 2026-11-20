@@ -54,13 +54,21 @@ public:
     {
         lastCheck = secondsSinceEpoch;
     }
-    QString getUpdateHighestSeen() const override
+    QString getUpdateHighestSeen(const QString& platform) const override
     {
-        return highestSeen;
+        return highestSeen.value(platform);
     }
-    void setUpdateHighestSeen(const QString& version) override
+    void setUpdateHighestSeen(const QString& platform, const QString& version) override
     {
-        highestSeen = version;
+        highestSeen.insert(platform, version);
+    }
+    qint64 getUpdateManifestSerial() const override
+    {
+        return manifestSerial;
+    }
+    void setUpdateManifestSerial(qint64 serial) override
+    {
+        manifestSerial = serial;
     }
     void saveGlobal() override
     {
@@ -70,7 +78,8 @@ public:
     bool checkUpdates = true;
     QNetworkProxy proxy{QNetworkProxy::NoProxy};
     qint64 lastCheck = 0;
-    QString highestSeen;
+    QMap<QString, QString> highestSeen;
+    qint64 manifestSerial = 0;
     int saves = 0;
 };
 
@@ -202,6 +211,9 @@ private slots:
     void refusesOversizedAnswers();
     void givesUpOnASilentServer();
     void neverGoesBelowTheHighestSeen();
+    void refusesAManifestOlderThanOneSeen();
+    void takesTheSameManifestAgain();
+    void keepsTheHighestVersionOfEachPlatform();
     void checksOnlyReleaseBuilds();
     void sendsNothingWithoutAUsableProxy();
     void checksAgainOnlyAfterADay();
@@ -227,6 +239,8 @@ private:
     QByteArray testKey;
     QByteArray manifest;
     QByteArray signature;
+    /** The serial of the signed fixture. */
+    qint64 fixtureSerial = 0;
     LocalServer* server = nullptr;
     QTemporaryDir* temp = nullptr;
     FakeUpdateSettings settings;
@@ -236,6 +250,8 @@ namespace {
 const QString manifestPath = QStringLiteral("/downloads/khandaq-desktop-update.json");
 const QString portablePath = QStringLiteral("/downloads/khandaq-linux-x86_64-portable.tar.gz");
 const QString debPath = QStringLiteral("/downloads/khandaq-messenger_amd64.deb");
+const QString portableKey = QStringLiteral("linux-portable-x86_64");
+const QString debKey = QStringLiteral("linux-deb-amd64");
 } // namespace
 
 void TestUpdateCheck::initTestCase()
@@ -248,6 +264,11 @@ void TestUpdateCheck::initTestCase()
     manifest = fixture(QStringLiteral("khandaq-desktop-update.json"));
     signature = fixture(QStringLiteral("khandaq-desktop-update.json.sig"));
     QVERIFY(!manifest.isEmpty() && !signature.isEmpty());
+    UpdateManifest::Release release;
+    QString error;
+    QVERIFY2(UpdateManifest::parse(manifest, release, error), qPrintable(error));
+    fixtureSerial = release.serial;
+    QVERIFY(fixtureSerial > 1);
     QCOMPARE(QCryptographicHash::hash(artifact(), QCryptographicHash::Sha256).toHex(),
              QByteArray("f541874101876255b4baf3a739778d04cb9cba25ffa38b30bc1fb8b0701f2a45"));
 }
@@ -338,7 +359,8 @@ void TestUpdateCheck::offersTheVersionTheSignedManifestNames()
     QCOMPARE(available.first().first().toString(), QStringLiteral("0.2.65"));
     QVERIFY(check.hasOffer());
     QCOMPARE(check.offer().file, QStringLiteral("khandaq-linux-x86_64-portable.tar.gz"));
-    QCOMPARE(settings.highestSeen, QStringLiteral("0.2.65"));
+    QCOMPARE(settings.highestSeen, (QMap<QString, QString>{{portableKey, QStringLiteral("0.2.65")}}));
+    QCOMPARE(settings.manifestSerial, fixtureSerial);
     QVERIFY(settings.lastCheck >= before);
     QVERIFY(settings.saves >= 1);
     QCOMPARE(check.release().notesRussian, QUrl(QStringLiteral("https://khandaq.org/ru/changelog.html")));
@@ -354,7 +376,7 @@ void TestUpdateCheck::saysUpToDate()
     QVERIFY(!offered(check));
     QCOMPARE(current.count(), 1);
     QVERIFY(!check.hasOffer());
-    QCOMPARE(settings.highestSeen, QStringLiteral("0.2.64"));
+    QCOMPARE(settings.highestSeen, (QMap<QString, QString>{{debKey, QStringLiteral("0.2.64")}}));
     QVERIFY(settings.lastCheck > 0);
 }
 
@@ -391,6 +413,7 @@ void TestUpdateCheck::refusesATamperedManifest()
     QVERIFY(!check.hasOffer());
     // Nothing of what came is kept.
     QVERIFY(settings.highestSeen.isEmpty());
+    QCOMPARE(settings.manifestSerial, qint64{0});
     QCOMPARE(settings.lastCheck, qint64{0});
     QCOMPARE(settings.saves, 0);
 }
@@ -470,12 +493,52 @@ void TestUpdateCheck::givesUpOnASilentServer()
 
 void TestUpdateCheck::neverGoesBelowTheHighestSeen()
 {
-    settings.highestSeen = QStringLiteral("0.2.66");
+    settings.highestSeen.insert(portableKey, QStringLiteral("0.2.66"));
     UpdateCheck check(settings, setup(UpdatePlatform::Kind::LinuxPortable, "v0.2.63"));
     QSignalSpy current(&check, &UpdateCheck::upToDate);
     QVERIFY(!offered(check));
     QCOMPARE(current.count(), 1);
-    QCOMPARE(settings.highestSeen, QStringLiteral("0.2.66"));
+    QCOMPARE(settings.highestSeen.value(portableKey), QStringLiteral("0.2.66"));
+}
+
+void TestUpdateCheck::refusesAManifestOlderThanOneSeen()
+{
+    // Signed by the key, and older than a manifest this copy has verified: served again, it would
+    // hold back the newer release, or bring back the older bytes of a version.
+    settings.manifestSerial = fixtureSerial + 1;
+    UpdateCheck check(settings, setup(UpdatePlatform::Kind::LinuxPortable, "v0.2.64"));
+    QSignalSpy failed(&check, &UpdateCheck::updateCheckFailed);
+    QVERIFY(!offered(check));
+    QCOMPARE(failed.count(), 1);
+    QVERIFY(!check.hasOffer());
+    QCOMPARE(settings.manifestSerial, fixtureSerial + 1);
+    QVERIFY(settings.highestSeen.isEmpty());
+    QCOMPARE(settings.lastCheck, qint64{0});
+    QCOMPARE(settings.saves, 0);
+}
+
+void TestUpdateCheck::takesTheSameManifestAgain()
+{
+    settings.manifestSerial = fixtureSerial;
+    UpdateCheck check(settings, setup(UpdatePlatform::Kind::LinuxPortable, "v0.2.64"));
+    QVERIFY(offered(check));
+    QCOMPARE(settings.manifestSerial, fixtureSerial);
+}
+
+void TestUpdateCheck::keepsTheHighestVersionOfEachPlatform()
+{
+    // A portable folder and a .deb on one computer share the settings; the fixture offers the
+    // folder 0.2.65 and the package 0.2.64. What the folder saw must not hold the package back.
+    {
+        UpdateCheck portable(settings, setup(UpdatePlatform::Kind::LinuxPortable, "v0.2.64"));
+        QVERIFY(offered(portable));
+    }
+    UpdateCheck package(settings, setup(UpdatePlatform::Kind::LinuxDeb, "v0.2.63"));
+    QSignalSpy available(&package, &UpdateCheck::updateAvailable);
+    QVERIFY(offered(package));
+    QCOMPARE(available.first().first().toString(), QStringLiteral("0.2.64"));
+    QCOMPARE(settings.highestSeen, (QMap<QString, QString>{{portableKey, QStringLiteral("0.2.65")},
+                                                          {debKey, QStringLiteral("0.2.64")}}));
 }
 
 void TestUpdateCheck::checksOnlyReleaseBuilds()
